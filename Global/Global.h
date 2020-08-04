@@ -1,0 +1,271 @@
+#ifndef GLOBAL_HEADER
+#define GLOBAL_HEADER
+
+//===========================================================================
+// 
+// Global information. Keep info about MPI/OMP parallelizations and the domain
+// decomposition, type information, macros etc.
+//
+// Compile time defines:
+// USE_MPI               : Use MPI
+// NO_AUTO_MPI_SETUP     : Do not initialize MPI automatically
+// USE_OMP               : Use OpenMP
+// USE_FFTW              : Use FFTW (here its just for initialization for MPI/threads)
+// NO_AUTO_FFTW_SETUP    : Do not initialize FFTW automatically
+// MEMORY_LOGGING        : Log all (big) allocations with the standard container (see MemoryLogging.h)
+//    MIN_BYTES_TO_LOG   : How many bytes to enable logging of allocation
+//    MAX_ALLOCATIONS_IN_MEMORY : Maximum number of allocations to keep (above which we give up)
+//
+//===========================================================================
+
+#include <cstring>
+#include <complex>
+#include <vector>
+#include <cmath>
+#include <algorithm>
+
+#ifdef USE_MPI
+#include <mpi.h>
+#endif
+
+#ifdef USE_OMP
+#include <omp.h>
+#endif
+
+#ifdef MEMORY_LOGGING
+#include <FML/MemoryLogging/MemoryLogging.h>
+#endif
+
+namespace FML {
+
+  // MPI and OpenMP information
+  extern int ThisTask;
+  extern int NTasks;
+  extern int NThreads;
+  extern bool MPIThreadsOK;
+  extern bool FFTWThreadsOK;
+
+  // The local extent of the domain (global domain goes from 0 to 1)
+  extern double xmin_domain;
+  extern double xmax_domain;
+
+  //================================================
+  // Allocator to allow for logging of memory
+  // usage
+  //================================================
+  template<class T>
+#ifdef MEMORY_LOGGING
+    using Allocator = FML::LogAllocator<T>;
+#else
+  using Allocator = std::allocator<T>;
+#endif
+
+  //================================================
+  // Standard container 
+  //================================================
+  template<class T>
+    using Vector = std::vector<T, Allocator<T>>;
+
+  //================================================
+  // Integer type for array indices
+  //================================================
+  using IndexIntType = long long int;
+
+  //================================================
+  // MPI functions
+  //================================================
+  void init_mpi(int *argc, char ***argv);
+  void abort_mpi(int exit_code);
+  void finalize_mpi();
+  void printf_mpi(const char *fmt, ...);
+  
+  template<class T>
+    void MaxOverTasks(T * value){
+#ifdef USE_MPI
+      std::vector<T> values(FML::NTasks);
+      MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, MPI_COMM_WORLD);
+      T maxvalue = *value;
+      for(auto v: values)
+        if(maxvalue > v) maxvalue = v;
+      *value = maxvalue;
+#endif
+    }
+  template<class T>
+    void MinOverTasks(T * value){
+#ifdef USE_MPI
+      std::vector<T> values(FML::NTasks);
+      MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, MPI_COMM_WORLD);
+      T minvalue = *value;
+      for(auto v: values)
+        if(minvalue < v) minvalue = v;
+      *value = minvalue;
+#endif
+    }
+  template<class T>
+    void SumOverTasks(T * value){
+#ifdef USE_MPI
+      std::vector<T> values(FML::NTasks,0);
+      MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, MPI_COMM_WORLD);
+      T sum = 0;
+      for(auto v: values){
+        if(FML::ThisTask == 0) std::cout << "Got:" << v << " " << typeid(T).name() << "\n";
+        sum += v;
+      }
+      *value = sum;
+#endif
+    }
+
+  //================================================
+  // Assert function that calls MPI_Abort if assertion 
+  // fails, but gives info about where the assertion 
+  // is thrown from
+  //================================================
+  void __assert_mpi(const char* expr_str, bool expr, const char* file, int line, const char* msg);
+#define assert_mpi(Expr, Msg) __assert_mpi(#Expr, Expr, __FILE__, __LINE__, Msg)
+
+  //============================================
+  // Simple integer a^b power-function by squaring
+  //============================================
+  inline long long int power(int base, int exponent){
+    if(exponent == 0) return 1;
+    if(exponent % 2 == 0){
+      auto result = power(base, exponent/2);
+      return result * result;
+    } else {
+      auto result = power(base, (exponent-1)/2);
+      return base * result * result;
+    }
+  }
+  
+  constexpr long long int ppower(int base, int exponent){
+    return exponent == 0 ? 1 : base * ppower(base, exponent-1); 
+  }
+
+  //============================================
+  // Initialize and finalize MPI automatically on 
+  // startup and exit. MPI can only be initialized 
+  // and finalized once so add it as a singleton
+  // Disable with define NO_AUTO_MPI_SETUP
+  //============================================
+  struct MPISetup {
+    static MPISetup & init(int *argc = NULL, char *** argv = NULL){
+      static MPISetup instance(argc,argv);
+      return instance;
+    }
+
+    private:
+
+    MPISetup(int *argc = NULL, char *** argv = NULL){
+      init_mpi(argc, argv);
+    }
+
+    ~MPISetup(){
+      finalize_mpi();
+    }
+  };
+
+  //============================================
+  // Overloads of arithmetic operations for the 
+  // container plus elementary math functions
+  // using some simple macros
+  //============================================
+
+#define OPS(OP)   \
+  template<class T> \
+  Vector<T> operator OP (const Vector<T>& lhs, const Vector<T>& rhs){                        \
+    const size_t nlhs = lhs.size();                                                          \
+    const size_t nrhs = rhs.size();                                                          \
+    if(nlhs != nrhs) throw std::runtime_error("Error vectors need to have the same size:");  \
+    Vector<T> y(nlhs);                                                                       \
+    for(size_t i = 0; i < nlhs; i++){                                                        \
+      y[i] = lhs[i] OP rhs[i];                                                               \
+    }                                                                                        \
+    return y;                                                                                \
+  }
+  OPS(+) OPS(-) OPS(*) OPS(/)
+#undef OPS
+
+#define OPS(OP)   \
+    template<class T> \
+    Vector<T> operator OP (const Vector<T>& lhs, const double& rhs){       \
+      const size_t nlhs = lhs.size();                                      \
+      Vector<T> y(nlhs);                                                   \
+      for(size_t i = 0; i < nlhs; i++){                                    \
+        y[i] = lhs[i] OP rhs;                                              \
+      }                                                                    \
+      return y;                                                            \
+    }
+    OPS(+) OPS(-) OPS(*) OPS(/)
+#undef OPS
+
+#define OPS(OP)   \
+    template<class T> \
+    Vector<T> operator OP (const double& lhs, const Vector<T>& rhs){    \
+      const size_t nrhs = rhs.size();                                   \
+      Vector<T> y(nrhs);                                                \
+      for(size_t i = 0; i < nrhs; i++){                                 \
+        y[i] = lhs OP rhs[i];                                           \
+      }                                                                 \
+      return y;                                                         \
+    }
+    OPS(+) OPS(-) OPS(*) OPS(/)
+#undef OPS
+
+    template<class T>
+    Vector<T> pow(const Vector<T>& x, const double exp){
+      const size_t n = x.size();
+      Vector<T> y(n);
+      for(size_t i = 0; i < n; i++){
+        y[i] = std::pow(x[i], exp);
+      }
+      return y;
+    }
+
+#define FUNS(FUN)                                            \
+  template<class T>                                          \
+  Vector<T> FUN(const Vector<T>& x){                         \
+    auto op_##FUN = [](double x){ return std::FUN(x); };     \
+    Vector<T> y(x.size());                                   \
+    std::transform(x.begin(), x.end(), y.begin(), op_##FUN); \
+    return y;                                                \
+  }
+  FUNS(exp) FUNS(log) FUNS(cos) FUNS(sin) FUNS(tan) FUNS(fabs) FUNS(atan)
+#undef FUNS
+}
+
+//=============================================================
+// Singleton for initializing and cleaning up FFTW 
+// with MPI and with threads automatically
+// If you don't want this use the define NO_AUTO_FFTW_MPI_INIT
+//=============================================================
+#ifdef USE_FFTW
+namespace FML {
+
+  namespace GRID {
+#include <FML/FFTWGrid/FFTWGlobal.h>
+    void init_fftw(int *argc, char ***argv);
+    void finalize_fftw();
+    void set_fftw_nthreads(int nthreads);
+  }
+
+  struct FFTWSetup {
+    static FFTWSetup & init(int *argc = nullptr, char ***argv = nullptr){
+      static FFTWSetup instance(argc,argv);
+      return instance;
+    }
+
+    private:
+
+    FFTWSetup(int *argc, char ***argv){
+      FML::GRID::init_fftw(argc, argv);
+    }
+
+    ~FFTWSetup(){
+      FML::GRID::finalize_fftw();
+    }
+  };
+
+}
+#endif
+
+#endif
