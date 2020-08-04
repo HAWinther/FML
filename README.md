@@ -1,1 +1,42 @@
 # FML
+
+For documentation and more info about the library see the [website](https://fml.wintherscoming.no/).
+
+# About
+A C++ library for working with particles and grids and solving PDEs in parallel with up to thousands of tasks. The library uses MPI, OpenMP (or both) for the parallelization, though everything also works without a MPI compiler. We take care of most of the communication between tasks under the cover so the user don't have to deal too much with that. It is made mainly for analyzing the large scale structure of the Universe, but it is written in general so it can be useful outside of cosmology. It is not meant to be a replacement for common cosmology codes that does similar things (like initial condition generation, simple N-body simuations, halo and void finders, reconstruction etc.) although these things are very easy to do with the library. The goal of the library is rather provide users with the basic tools needed to working in parallel so that one don't have to start by making the tools before doing the science. The philosophy of the library is to implement general algorithms without making (too many) assumptions about how they are to be used and let the user take all these decitions thus making it easier to do new things without having to modify the whole code. The classes we provide are therefore templated on dimension (well knowing that nobody is going to use it for anything else than N=2 or N=3) and the types and the algorithms are templated on classes that determine how to process and compile up the data it computes. To be able to do Fourier transforms we settle for a simple slab-based domain decomposition for the parallelization. The library contains algorithms for assigning particles to grids, linking particles together in groups, general watershed, tesselations, fourier transforms, computing correlation function a general multigrid solver and many more things. We also provide wrappers of methods in libraries like GSL, CGAL and LUA to more easily being able to perform various tasks.
+
+# Requirements
+You will need a C++11 compatible compiler to compile the library. A few (non essential) parts require C++17. Parts of the code can also be compiled without any external libraries, but to take full advantage of the features in the code you should atleast have the FFTW3 library (with MPI support) and GSL installed. In addition to this the other two libraries we sometimes use are CGAL and LUA. You should also have a MPI complient compiler though the code can be compiled and run in serial.
+
+ - [FFTW](http://www.fftw.org/download.html) version 3+ : Required to be able to do Fourier transforms and the related algorithms that use Fourier transforms. The grid class FFTWGrid can be compiled without it.
+ - [CGAL](https://www.cgal.org/download.html) version 5+ : Required to do tesselations and the related algorithms that rely on this.
+ - [GSL](ftp://ftp.gnu.org/gnu/gsl/) version 2+ : Required to solve ODEs, make splines, random numbers (though if we don't have this we use C++ <random> instead) and linear algebra (just a few places).
+ - [LUA](https://www.lua.org/download.html) version 5+ : Required to use LuaFileParser to read parameterfiles. We don't use this much.
+
+# Compiling
+
+Most of the library is in forms of header files that you just need to include in your code. A few of these needs to be compiled. We could have compiled this up to a shared library, but given the options the user have (with MPI or without, with some external libraries or without, etc.) its better to compiler these files together with your code. For this see the included Makefiles for how to do this. Having tons of define statements in the code sucks, but its the only good/normal way of being able to use the code without having all the features. In the general Makefile you have alot of options to choose from, here is a list of the most important ones:
+
+ - USE\_MPI : Compile with MPI support. You will need to have a MPI compiler to use this.
+ - USE\_OMP : Compile with OpenMP support. Can be used together with MPI for which each MPI task will use OMP\_NUM\_THREADS threads in certain loops.
+ - USE\_FFTW : If you have the FFTW3 library. You will have to provide the include and lib paths in the Makefile. If used together with USE\_MPI you will need to have compiled the FFTW3 library with MPI support.
+ - USE\_FFTW\_THREADS : If you have the FFTW3 library. Use threads to parallelize the FFTs. Can be used together with USE\_MPI.
+ - USE\_GSL : If you have the GSL library. You will have to provide the include and lib paths in the Makefile.
+ - USE\_CGAL : If you have the CGAL library. You will have to provide the include and lib paths in the Makefile.
+ - USE\_LUA : If you have the LUA library. You will have to provide the include and lib paths in the Makefile.
+ - USE\_PYTHON : If you have Python with Matplotlib installed. You will have to provide the include and lib paths in the Makefile.
+
+In addition to these we have some other options that can be useful:
+
+ - USE\_SANITIZER : Compile with -fsanitize=address to check for bad memory accesses. Useful for debugging.
+ - USE\_DEBUG : Do some extra asserts, print some more info from the algorithms while running.
+ - USE\_MEMORYLOG : Log allocations over a certain size (see the MemoryLog header). Useful to map out the memory footprint of the code. Currently only a few classes implement this.
+
+Some define statements that can be added to change how the code works:
+
+ - SINGLE\_PRECISION\_FFTW : Use float instead of double for FFTWGrid and FFTs in general. FFTW needs to be compiled with float support to use this.
+ - LONG\_DOUBLE\_PRECISION\_FFTW : Use long double instead of double for FFTWGrid and FFTs in general. FFTW needs to be compiled with long double support to use this.
+ - NO\_AUTO\_MPI\_SETUP : MPI is automatically initialized and finalized in the code. If you don't want this add this define. NB: if you use this you should know how FFTW should be initialized with MPI and/or threads to avoid issues.
+ - NO\_AUTO\_FFTW\_SETUP : FFTW is automatically initialized in the code. If you don't want this add this define.
+
+You will also have to provide the include path to the folder containing FML/ and in VPATH provide the path to the *.cpp files that needs to be compiled with the code.
