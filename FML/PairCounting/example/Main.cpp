@@ -43,7 +43,7 @@ struct Galaxy{
 void readData(std::string filename, std::vector<Galaxy> &galaxies){
   std::ifstream fp(filename.c_str());
   while(1){
-    double RA, DEC, z, w;
+    double RA, DEC, z;
     fp >> DEC;
     if(fp.eof()) break;
     fp >> RA;
@@ -120,10 +120,10 @@ void TestPeriodic(){
   // Options
   const int nbins     = 10;
   const double rmax   = 0.1;
-  const bool periodic = true;
   const bool verbose  = true;
 
   // Compute pair counts directly
+  // const bool periodic = true;
   // auto res_auto = AutoPairCount(particles, nbins, rmax, periodic, verbose);
   // auto r          = res_auto.r;
   // auto DD_auto    = res_auto.paircount;

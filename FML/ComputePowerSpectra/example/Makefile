@@ -6,8 +6,8 @@ SHELL := /bin/bash
 # Set c++11 compliant compiler. If USE_MPI we use MPICC 
 #===================================================
 
-CC      = g++-mp-7 -std=c++1z
-MPICC   = mpicxx-openmpi-gcc7 -std=c++1z
+CC      = g++-mp-7 -std=c++1z -Wall
+MPICC   = mpicxx-openmpi-gcc7 -std=c++1z -Wall
 
 #===================================================
 # Options
@@ -33,7 +33,7 @@ USE_DEBUG        = false
 #===================================================
 
 # Main library include (path to folder containin FML/)
-FML_INCLUDE    = $(HOME)/local
+FML_INCLUDE    = $(HOME)/local/FML/
 
 # FFTW : only needed if USE_FFTW = true
 FFTW_INCLUDE   = $(HOME)/local/include
@@ -92,8 +92,8 @@ endif
 # Object files to be compiled
 #===================================================
 
-VPATH := $(FML_INCLUDE)/FML/ComputePowerSpectra/:$(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/FileUtils/
-OBJS = Main.o ComputePowerSpectrum.o Global.o FileUtils.o
+VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/FileUtils/
+OBJS = Main.o Global.o FileUtils.o
 
 TARGETS := powspec
 all: $(TARGETS)

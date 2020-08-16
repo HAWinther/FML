@@ -26,6 +26,7 @@ struct MyType {
     for(int i = 0; i < N; i++){             \
       this->y[i] OP rhs.y[i];               \
     }                                       \
+    return *this;                           \
   } 
 OPS(*=); OPS(/=); OPS(+=); OPS(-=);
 #undef OPS

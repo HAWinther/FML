@@ -81,15 +81,21 @@ namespace FML {
           auto Local_nx = grid.get_local_nx();
           auto Local_x_start = grid.get_local_x_start();
           int Nmesh = grid.get_nmesh();
-          const IndexIntType NmeshTotTotal = power(Nmesh,N-1) * (Nmesh/2+1);
+          const IndexIntType NmeshTotTotal = FML::power(Nmesh,N-1) * (Nmesh/2+1);
           const IndexIntType factor = NmeshTotTotal / Nmesh;
 
           // Set up seeds for the random number generator
-          IndexIntType num_seeds = power(Nmesh,N-1);
+          // and ensure that all tasks use the same seed
+          IndexIntType num_seeds = FML::power(Nmesh,N-1);
           std::vector<unsigned int> seedtable(num_seeds, 0);
-          for(IndexIntType i = 0; i < num_seeds; i++) {
-            seedtable[i] = (unsigned int)(INT_MAX * rng->generate_uniform());
+          if(FML::ThisTask == 0){
+            for(IndexIntType i = 0; i < num_seeds; i++) {
+              seedtable[i] = (unsigned int)(INT_MAX * rng->generate_uniform());
+            }
           }
+#ifdef USE_MPI
+          MPI_Allreduce(MPI_IN_PLACE,seedtable.data(),num_seeds,MPI_UNSIGNED,MPI_SUM,MPI_COMM_WORLD);
+#endif
 
           // Generate gaussian random field in k-space
           std::vector<int> coord(N,0), mirrorcoord(N,0);
@@ -224,16 +230,21 @@ endloop:;
           // The strange way it's done here (instead of just filling the N^2 table directly) 
           // is just to keep compatibility with PICOLA which allows for creating exactly the same IC when rng is GSL and we use the same seed
           std::vector<unsigned int> seedtable(Nmesh * Nmesh, 0);
-          for(int i = 0; i < Nmesh / 2; i++) {
-            for(int j = 0; j < i    ; j++) seedtable[i * Nmesh + j]                             = (unsigned int)(INT_MAX * rng->generate_uniform());
-            for(int j = 0; j < i + 1; j++) seedtable[j * Nmesh + i]                             = (unsigned int)(INT_MAX * rng->generate_uniform());
-            for(int j = 0; j < i    ; j++) seedtable[(Nmesh - 1 - i) * Nmesh + j]               = (unsigned int)(INT_MAX * rng->generate_uniform());
-            for(int j = 0; j < i + 1; j++) seedtable[(Nmesh - 1 - j) * Nmesh + i]               = (unsigned int)(INT_MAX * rng->generate_uniform());
-            for(int j = 0; j < i    ; j++) seedtable[i * Nmesh + (Nmesh - 1 - j)]               = (unsigned int)(INT_MAX * rng->generate_uniform());
-            for(int j = 0; j < i + 1; j++) seedtable[j * Nmesh + (Nmesh - 1 - i)]               = (unsigned int)(INT_MAX * rng->generate_uniform());
-            for(int j = 0; j < i    ; j++) seedtable[(Nmesh - 1 - i) * Nmesh + (Nmesh - 1 - j)] = (unsigned int)(INT_MAX * rng->generate_uniform());
-            for(int j = 0; j < i + 1; j++) seedtable[(Nmesh - 1 - j) * Nmesh + (Nmesh - 1 - i)] = (unsigned int)(INT_MAX * rng->generate_uniform());
-          }
+          if(FML::ThisTask == 0)
+            for(int i = 0; i < Nmesh / 2; i++) {
+              for(int j = 0; j < i    ; j++) seedtable[i * Nmesh + j]                             = (unsigned int)(INT_MAX * rng->generate_uniform());
+              for(int j = 0; j < i + 1; j++) seedtable[j * Nmesh + i]                             = (unsigned int)(INT_MAX * rng->generate_uniform());
+              for(int j = 0; j < i    ; j++) seedtable[(Nmesh - 1 - i) * Nmesh + j]               = (unsigned int)(INT_MAX * rng->generate_uniform());
+              for(int j = 0; j < i + 1; j++) seedtable[(Nmesh - 1 - j) * Nmesh + i]               = (unsigned int)(INT_MAX * rng->generate_uniform());
+              for(int j = 0; j < i    ; j++) seedtable[i * Nmesh + (Nmesh - 1 - j)]               = (unsigned int)(INT_MAX * rng->generate_uniform());
+              for(int j = 0; j < i + 1; j++) seedtable[j * Nmesh + (Nmesh - 1 - i)]               = (unsigned int)(INT_MAX * rng->generate_uniform());
+              for(int j = 0; j < i    ; j++) seedtable[(Nmesh - 1 - i) * Nmesh + (Nmesh - 1 - j)] = (unsigned int)(INT_MAX * rng->generate_uniform());
+              for(int j = 0; j < i + 1; j++) seedtable[(Nmesh - 1 - j) * Nmesh + (Nmesh - 1 - i)] = (unsigned int)(INT_MAX * rng->generate_uniform());
+            }
+
+#ifdef USE_MPI
+          MPI_Allreduce(MPI_IN_PLACE,seedtable.data(),Nmesh*Nmesh,MPI_UNSIGNED,MPI_SUM,MPI_COMM_WORLD);
+#endif
 
           // Generate gaussian random field in k-space
           double kvec[3];

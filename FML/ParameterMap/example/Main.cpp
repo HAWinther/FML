@@ -31,7 +31,7 @@ int main(){
   //...and if no default value exists throw an error
   try {
     std::cout << "Trying to fetch a value not in the map:\n";
-    auto NonExistentDouble = p.get<double>("NonExistentDoouble");
+    [[maybe_unused]] auto NonExistentDouble = p.get<double>("NonExistentDoouble");
   } catch(std::runtime_error & e){
     std::cout << e.what();
     p.info();

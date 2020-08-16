@@ -395,7 +395,8 @@ namespace FML {
 #endif
 
         // Initialize MPI
-        int mpi_rank = 0, mpi_size = 1;
+        [[maybe_unused]] int mpi_rank = 0;
+        [[maybe_unused]] int mpi_size = 1;
 #if defined(USE_MPI)
         MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
         MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
@@ -410,7 +411,6 @@ namespace FML {
         // Fetch data from grid
         auto &cells         = grid.get_cells();
         const int ngrid     = grid.get_ngrid();
-        const int ngalaxies = grid.get_npart();
         int max_ix    = ngrid-1;
         int max_iy    = ngrid-1;
         int max_iz    = ngrid-1;
@@ -458,7 +458,8 @@ namespace FML {
         // looping over cells that we know are empty
         //==========================================================
 
-        int ix0, num_processed = 0;
+        int ix0;
+        [[maybe_unused]] int num_processed = 0;
         int istart = 0, iend = max_ix + 1;
 #if defined(USE_OMP) && !defined(USE_MPI)
 #pragma omp parallel for private(id) schedule(dynamic)
@@ -651,7 +652,8 @@ namespace FML {
 #endif
 
         // Initialize MPI
-        int mpi_rank = 0, mpi_size = 1;
+        [[maybe_unused]] int mpi_rank = 0;
+        [[maybe_unused]] int mpi_size = 1;
 #if defined(USE_MPI)
         MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
         MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
@@ -667,7 +669,6 @@ namespace FML {
         // Fetch data from the grid
         auto &cells          = grid.get_cells();
         const int ngrid      = grid.get_ngrid();
-        const int ngalaxies  = grid.get_npart();
         int max_ix           = ngrid-1;
         int max_iy           = ngrid-1;
         int max_iz           = ngrid-1;
@@ -675,7 +676,6 @@ namespace FML {
         // Fetch data from the grid2
         auto &cells2         = grid2.get_cells();
         const int ngrid2     = grid2.get_ngrid();
-        const int ngalaxies2 = grid2.get_npart();
         int max_ix2          = ngrid2-1;
         int max_iy2          = ngrid2-1;
         int max_iz2          = ngrid2-1;
@@ -740,7 +740,8 @@ namespace FML {
         // looping over cells that we know are empty
         //==========================================================
 
-        int ix0, num_processed = 0;
+        int ix0;
+        [[maybe_unused]] int num_processed = 0;
         int istart = 0, iend = max_ix + 1;
 #if defined(USE_OMP) && !defined(USE_MPI) 
 #pragma omp parallel for private(id) schedule(dynamic)
@@ -1003,7 +1004,7 @@ namespace FML {
           MPI_Allgather(grid.data(), nsize, MPI_DOUBLE, recv.data(), nsize, MPI_DOUBLE, MPI_COMM_WORLD);
           std::vector<double> reduced_grid(nsize, 0.0);
           for(int task = 0; task < mpi_size; task++)
-            for(int i = 0; i < nsize; i++)
+            for(size_t i = 0; i < nsize; i++)
               reduced_grid[i] += recv[task * nsize + i];
           return reduced_grid;
         };
@@ -1144,7 +1145,7 @@ namespace FML {
           MPI_Allgather(grid.data(), nsize, MPI_DOUBLE, recv.data(), nsize, MPI_DOUBLE, MPI_COMM_WORLD);
           std::vector<double> reduced_grid(nsize, 0.0);
           for(int task = 0; task < mpi_size; task++)
-            for(int i = 0; i < nsize; i++)
+            for(size_t i = 0; i < nsize; i++)
               reduced_grid[i] += recv[task * nsize + i];
           return reduced_grid;
         };

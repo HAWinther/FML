@@ -235,24 +235,24 @@ namespace FML {
             "[MPIGrid] We need Ngrid > 0\n");
         assert_mpi(n_extra_slices_left >= 0 and n_extra_slices_right >= 0, 
             "[MPIGrid] Number of extra slices cannot be negative\n");
-        if(N % NTasks != 0 and ThisTask == 0)
-          std::cout << "[MPIGrid] Warning: NTasks should divide N to be compatible with other MPI methods\n";
+        if(N % FML::NTasks != 0 and FML::ThisTask == 0)
+          std::cout << "[MPIGrid] Warning: FML::NTasks should divide N to be compatible with other MPI methods\n";
 
         // Compute slices for task
-        std::vector<int> slices_per_task(NTasks, N / NTasks);
-        int nmore = N % NTasks;
+        std::vector<int> slices_per_task(FML::NTasks, N / FML::NTasks);
+        int nmore = N % FML::NTasks;
         int sumslicesbeforethistask = 0;
-        for(int task = 0; task < NTasks; task++){
+        for(int task = 0; task < FML::NTasks; task++){
           if(task < nmore)
             slices_per_task[task] += 1;
 
-          if(task < ThisTask)
+          if(task < FML::ThisTask)
             sumslicesbeforethistask += slices_per_task[task];
         }
 
         _periodic       = periodic;
         _N              = N;
-        _NLocal         = slices_per_task[ThisTask];
+        _NLocal         = slices_per_task[FML::ThisTask];
         _xStartLocal    = sumslicesbeforethistask;
         _n_extra_slices_left  = n_extra_slices_left;
         _n_extra_slices_right = n_extra_slices_right;
@@ -262,22 +262,22 @@ namespace FML {
         _NtotLocal      = _NperSlice * _NLocal;
         _Ntot           = _NperSlice * _N;
         _NtotLocalAlloc = _NtotLocalLeft + _NtotLocal + _NtotLocalRight;
-        _RightTask      = (ThisTask + 1) % NTasks;
-        _LeftTask       = (ThisTask - 1 + NTasks) % NTasks;
+        _RightTask      = (FML::ThisTask + 1) % FML::NTasks;
+        _LeftTask       = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
 
         if(_NLocal == 0){
           // Tasks with 0 cells does nothing
-          _RightTask = _LeftTask = ThisTask;
+          _RightTask = _LeftTask = FML::ThisTask;
           _n_extra_slices_left = _n_extra_slices_right = 0;
           _NtotLocalLeft = _NtotLocalRight = _NtotLocal = _NtotLocalAlloc = 0;
         } else {
           // Find right CPU with cells
           while( slices_per_task[_RightTask] == 0){
-            _RightTask = (_RightTask + 1) % NTasks;
+            _RightTask = (_RightTask + 1) % FML::NTasks;
           }
           // Find left CPU with cells
           while( slices_per_task[_LeftTask] == 0){
-            _LeftTask = (_LeftTask - 1 + NTasks) % NTasks;
+            _LeftTask = (_LeftTask - 1 + FML::NTasks) % FML::NTasks;
           }
 
           // This is maybe something we should have... but fails with multigrid
@@ -291,9 +291,9 @@ namespace FML {
 
         // Show some info
 #ifdef DEBUG
-        if(ThisTask == 0){
+        if(FML::ThisTask == 0){
           std::cout << "\n=======================\nCreating Grid:\n";
-          std::cout << "ThisTask: " << ThisTask << " NLocal: " << _NLocal << " xStartLocal: " << _xStartLocal 
+          std::cout << "FML::ThisTask: " << FML::ThisTask << " NLocal: " << _NLocal << " xStartLocal: " << _xStartLocal 
             << " LeftTask: " << _LeftTask << " RightTask: " << _RightTask << "\n" << std::flush;
         }
 #endif
@@ -505,8 +505,9 @@ namespace FML {
 
     template<int NDIM, class T>
       void MPIGrid<NDIM,T>::send_slice_right(int ix, std::vector<T> &recv_slice){
-        if(NTasks == 1) return;
+        if(FML::NTasks == 1) return;
 
+#ifdef USE_MPI
         const int bytes_slice = _NperSlice * sizeof(T);
         recv_slice.resize(bytes_slice);
 
@@ -516,7 +517,6 @@ namespace FML {
         T *slice_torecv = recv_slice.data();
         char *recvbuf = reinterpret_cast<char*> (slice_torecv); 
 
-#ifdef USE_MPI
         MPI_Status status;
         MPI_Sendrecv(
             sendbuf, bytes_slice, MPI_CHAR, _RightTask, 0, 
@@ -527,8 +527,9 @@ namespace FML {
 
     template<int NDIM, class T>
       void MPIGrid<NDIM,T>::send_slice_left(int ix, std::vector<T> &recv_slice){
-        if(NTasks == 1) return;
+        if(FML::NTasks == 1) return;
 
+#ifdef USE_MPI
         const int bytes_slice = _NperSlice * sizeof(T);
         recv_slice.resize(bytes_slice);
 
@@ -538,7 +539,6 @@ namespace FML {
         T *slice_torecv = recv_slice.data();
         char *recvbuf = reinterpret_cast<char*> (slice_torecv); 
 
-#ifdef USE_MPI
         MPI_Status status;
         MPI_Sendrecv(
             sendbuf, bytes_slice, MPI_CHAR, _LeftTask,  0, 
@@ -557,7 +557,7 @@ namespace FML {
 
         // Send rightmost slices right and store in extra left slices
         for(int i = 0; i < nsend_to_right; i++){
-          const bool do_not_store = not _periodic and ThisTask == 0;
+          const bool do_not_store = not _periodic and FML::ThisTask == 0;
           T *slice_left_torecv  = _y.data() + _NperSlice * i;
           send_slice_right(_NLocal - nsend_to_right + i, recv_array);
           if(not do_not_store) memcpy(slice_left_torecv, recv_array.data(), _NperSlice * sizeof(T));
@@ -565,7 +565,7 @@ namespace FML {
 
         // Send leftmost slices left and store in extra right slices
         for(int i = 0; i < nsend_to_left; i++){
-          const bool do_not_store = not _periodic and ThisTask == NTasks-1;
+          const bool do_not_store = not _periodic and FML::ThisTask == FML::NTasks-1;
           T *slice_right_torecv = _y.data() + _NtotLocalLeft + _NtotLocal + _NperSlice * i;
           send_slice_left(i, recv_array);
           if(not do_not_store) memcpy(slice_right_torecv, recv_array.data(), _NperSlice * sizeof(T));
@@ -605,11 +605,11 @@ namespace FML {
         for(int idim = NDIM-1; idim >= 0; idim--, Npow *= _N){
           int coord_minus = coord[idim] - 1;
           int coord_plus  = coord[idim] + 1;
-          if(_periodic and not (idim == 0 and NTasks > 1)){
+          if(_periodic and not (idim == 0 and FML::NTasks > 1)){
             coord_minus = (coord_minus + _N) % _N;
             coord_plus  = coord_plus % _N;
           }
-          if(idim == 0 and NTasks > 1){
+          if(idim == 0 and FML::NTasks > 1){
             index_list[2*idim+1] = index - Npow;
             index_list[2*idim+2] = index + Npow;
           } else {
@@ -626,7 +626,7 @@ namespace FML {
         std::vector<T> gradient(NDIM);
         for(int idim = 0; idim < NDIM; idim++){
           gradient[idim] = ( _y[ _NtotLocalLeft + index_list[2*idim+2] ] 
-              - _y[ _NtotLocalLeft + index_list[2*idim+1] ] ) / 2.0;
+              - _y[ _NtotLocalLeft + index_list[2*idim+1] ] ) / 2.0 * double(_N);
         }
         return gradient;
       }

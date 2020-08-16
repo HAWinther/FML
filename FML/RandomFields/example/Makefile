@@ -6,19 +6,19 @@ SHELL := /bin/bash
 # Set c++11 compliant compiler. If USE_MPI we use MPICC 
 #===================================================
 
-CC      = g++-mp-7 -std=c++1z
-MPICC   = mpicxx-openmpi-gcc7 -std=c++1z
+CC      = g++-mp-7 -std=c++1z -O3 -Wall
+MPICC   = mpicxx-openmpi-gcc7 -std=c++1z -O3 -Wall
 
 #===================================================
 # Options
 #===================================================
 
 # Use MPI
-USE_MPI          = false
+USE_MPI          = true
 # Use OpenMP threads
-USE_OMP          = false
+USE_OMP          = true
 # Use the FFTW library
-USE_FFTW         = false
+USE_FFTW         = true
 # Use threads in FFTW
 USE_FFTW_THREADS = false
 # Use the GSL library (Spline, ODESolver)
@@ -35,7 +35,7 @@ USE_DEBUG        = false
 #===================================================
 
 # Main library include (path to folder containin FML/)
-FML_INCLUDE    = /Users/hansw/local
+FML_INCLUDE    = /Users/hansw/local/FML
 
 # GSL : only needed if USE_GSL = true
 GSL_INCLUDE    = $(HOME)/local/include
@@ -73,7 +73,7 @@ CC      += -fopenmp
 endif
 
 ifeq ($(USE_SANITIZER),true)
-CC      += -fsanitize=address
+CC      += -g -fsanitize=address
 endif
 
 ifeq ($(USE_FFTW),true)
@@ -106,8 +106,8 @@ endif
 # Object files to be compiled
 #===================================================
 
-VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/RandomGenerator/:$(FML_INCLUDE)/FML/ComputePowerSpectra/
-OBJS = Main.o Global.o RandomGenerator.o ComputePowerSpectrum.o
+VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/RandomGenerator/
+OBJS = Main.o Global.o RandomGenerator.o
 
 TARGETS := gaussian
 all: $(TARGETS)

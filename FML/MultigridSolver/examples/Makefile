@@ -6,17 +6,17 @@ SHELL := /bin/bash
 # Set c++11 compliant compiler. If USE_MPI we use MPICC 
 #===================================================
 
-CC      = g++-mp-7 -std=c++1z
-MPICC   = mpicxx-openmpi-gcc7 -std=c++1z
+CC      = g++-mp-7 -std=c++1z -Wall
+MPICC   = mpicxx-openmpi-gcc7 -std=c++1z -Wall
 
 #===================================================
 # Options
 #===================================================
 
 # Use MPI
-USE_MPI          = false
+USE_MPI          = true
 # Use OpenMP threads
-USE_OMP          = false
+USE_OMP          = true
 # Log allocations in the library
 USE_MEMORYLOG    = false
 # Check for bad memory accesses
@@ -27,7 +27,7 @@ USE_SANITIZER    = false
 #===================================================
 
 # Main library include (path to folder containin FML/)
-FML_INCLUDE    = /Users/hansw/local
+FML_INCLUDE    = /Users/hansw/local/FML
 
 #===================================================
 # Compile up all library defines from options above

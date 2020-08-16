@@ -821,7 +821,7 @@ namespace FML {
         }
 
         // Count number of minima
-        int nminima = 0;
+        size_t nminima = 0;
         for(size_t i = 0; i < NumPart; i++){
           if(is_minimum[i] == 1){
             nminima++;
@@ -837,9 +837,9 @@ namespace FML {
         int id_start = 0;
         for(int i = 0; i < FML::ThisTask; i++)
           id_start += nminima_per_task[i];
-        int ntotal_minima = 0;
+        size_t ntotal_minima = 0;
         for(int i = 0; i < FML::NTasks; i++)
-          ntotal_minima += nminima_per_task[i];
+          ntotal_minima += size_t(nminima_per_task[i]);
 
         if(FML::ThisTask == 0)
           std::cout << "[WatershedGeneral] We found " << ntotal_minima << " minimum points\n";
@@ -864,7 +864,7 @@ namespace FML {
           auto v = vs[i];
           std::vector<Vertex_handle> vertices;
           dt.adjacent_vertices(v, std::back_inserter(vertices));
-          auto quantity = v->info().quantity;
+          //auto quantity = v->info().quantity;
           auto min_quantity = Infinity;
           for(auto &vnew : vertices){
             if(vnew->info().point_type == GUARD_POINT) continue;
@@ -1093,7 +1093,7 @@ namespace FML {
             MPI_Recv(watershed_groups_from_other_task.data(), bytes, MPI_BYTE, i, 0, MPI_COMM_WORLD, &status); 
 
             // Merge in the groups
-            for(int j = 0; j < ntotal_minima; j++){
+            for(size_t j = 0; j < ntotal_minima; j++){
               watershed_groups[j].merge(watershed_groups_from_other_task[j]);
             }
           } else if(FML::ThisTask == i){
@@ -1210,7 +1210,7 @@ namespace FML {
           std::cout << "[WatershedDensity] Computing tesselation\n";
         MPIPeriodicDelaunay<T, VertexDataWatershed> D;
         D.create(p, NumPart, buffer_fraction, random_fraction, vertex_assignment_function);
-        double dx_buffer = D.get_dx_buffer();
+        //double dx_buffer = D.get_dx_buffer();
 
         // Compute Voronoi volumes
         if(FML::ThisTask == 0)

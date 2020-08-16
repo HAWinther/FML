@@ -61,10 +61,9 @@ namespace FML {
 
           auto nleft           = phi.get_n_extra_slices_left();
           auto nright          = phi.get_n_extra_slices_right();
-          auto Local_nx        = phi.get_local_nx();
           auto Local_x_start   = phi.get_local_x_start();
           auto Nmesh           = phi.get_nmesh();
-          auto NmeshTotFourier = phi.get_ntot_fourier();
+          size_t NmeshTotFourier = phi.get_ntot_fourier();
 
           // Create the output grids if they don't exist already
           for(int idim = 0; idim < N; idim++){
@@ -115,10 +114,9 @@ namespace FML {
 
           auto nleft           = phi.get_n_extra_slices_left();
           auto nright          = phi.get_n_extra_slices_right();
-          auto Local_nx        = phi.get_local_nx();
           auto Local_x_start   = phi.get_local_x_start();
           auto Nmesh           = phi.get_nmesh();
-          auto NmeshTotFourier = phi.get_ntot_fourier();
+          size_t NmeshTotFourier = phi.get_ntot_fourier();
 
           // Create the output grids if they don't exist already
           psi.resize(N);
@@ -168,15 +166,13 @@ namespace FML {
             std::cout << "Compute 1LPT potential\n";
 #endif
 
-          auto Nmesh_delta = delta.get_nmesh();
           auto Nmesh_phi   = phi_1LPT.get_nmesh();
 
           auto nleft           = delta.get_n_extra_slices_left();
           auto nright          = delta.get_n_extra_slices_right();
-          auto Local_nx        = delta.get_local_nx();
           auto Local_x_start   = delta.get_local_x_start();
           auto Nmesh           = delta.get_nmesh();
-          auto NmeshTotFourier = delta.get_ntot_fourier();
+          size_t NmeshTotFourier = delta.get_ntot_fourier();
 
           // Create 1LPT grid
           if(Nmesh_phi == 0){
@@ -214,11 +210,9 @@ namespace FML {
 
           auto nleft           = delta.get_n_extra_slices_left();
           auto nright          = delta.get_n_extra_slices_right();
-          auto Local_nx        = delta.get_local_nx();
           auto Local_x_start   = delta.get_local_x_start();
           auto Nmesh           = delta.get_nmesh();
-          auto NmeshTotFourier = delta.get_ntot_fourier();
-          auto NmeshTotReal    = delta.get_ntot_real();
+          size_t NmeshTotFourier = delta.get_ntot_fourier();
 
           // Create grids
           FFTWGrid<N> phi_1LPT_ii[N];

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iomanip>
+#include <stdarg.h>
 #include "Global.h"
 
 namespace FML {
@@ -22,13 +23,13 @@ namespace FML {
   //============================================
 #ifndef NO_AUTO_FFTW_SETUP
 #ifdef USE_FFTW
-  FFTWSetup & fftwsetup = FFTWSetup::init();
+  [[maybe_unused]] FFTWSetup & fftwsetup = FFTWSetup::init();
 #endif
 #endif
 
 #ifdef MEMORY_LOGGING
   // If we use memory logging initialize it
-  MemoryLog *MemoryLog::instance = nullptr;
+  [[maybe_unused]] MemoryLog *MemoryLog::instance = nullptr;
 #endif
 
   // Number of MPI tasks and (max) OpenMP threads
@@ -91,6 +92,7 @@ namespace FML {
 #ifdef USE_FFTW
 #ifndef NO_AUTO_FFTW_SETUP
     FML::FFTWSetup & fftwsetup = FML::FFTWSetup::init();
+    (void) fftwsetup;
 #endif
 #endif
 

@@ -18,22 +18,36 @@
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h> // Only for compute_multipoles from particles
 
-//=====================================================================
-//=====================================================================
+// The classes that define how to bin and return the data
+#include <FML/ComputePowerSpectra/PowerSpectrumBinning.h>
+#include <FML/ComputePowerSpectra/BispectrumBinning.h>
+#include <FML/ComputePowerSpectra/PolyspectrumBinning.h>
 
 namespace FML {
   namespace CORRELATIONFUNCTIONS {
 
     using namespace FML::INTERPOLATION;
-    
+
     template<int N>
       using FFTWGrid = FML::GRID::FFTWGrid<N>;
 
     // Keep track of everything we need for a binned power-spectrum
     // The k-spacing (linear or log or ...), the count in each bin,
     // the power in each bin etc. Its through this interface the results
-    // of the methods below are given
-    struct PowerSpectrumBinning;
+    // of the methods below are given. See PowerSpectrumBinning.h for how it works
+    template<int N> 
+      class PowerSpectrumBinning;
+
+    // The bispectrum result, see BispectrumBinning.h
+    template<int N> 
+      class BispectrumBinning;
+
+    // General polyspectrum result, see PolyspectrumBinning.h
+    template<int N, int ORDER>
+      class PolyspectrumBinning;
+
+    //=====================================================================
+    //=====================================================================
 
     // Assign particles to grid using density_assignment_method = NGP,CIC,TSC,PCS,...
     // Fourier transform, decolvolve the window function for the assignement above,
@@ -44,9 +58,9 @@ namespace FML {
           T *part,
           size_t NumPart,
           size_t NumPartTotal,
-          PowerSpectrumBinning &pofk,
+          PowerSpectrumBinning<N> &pofk,
           std::string density_assignment_method);
-    
+
     // Assign particles to grid using density_assignment_method = NGP,CIC,TSC,PCS,...
     // Assign particles to an interlaced grid (displaced by dx/2 in all directions)
     // Fourier transform both and add the together to cancel the leading aliasing contributions
@@ -58,7 +72,7 @@ namespace FML {
           T *part,
           size_t NumPart,
           size_t NumPartTotal,
-          PowerSpectrumBinning &pofk,
+          PowerSpectrumBinning<N> &pofk,
           std::string density_assignment_method);
 
     // Brute force. Add particles to the grid using direct summation
@@ -68,13 +82,13 @@ namespace FML {
           int Ngrid, 
           T *part, 
           size_t NumPart, 
-          PowerSpectrumBinning &pofk);
+          PowerSpectrumBinning<N> &pofk);
 
     // Bin up the power-spectrum of a given fourier grid
     template <int N>
       void bin_up_power_spectrum(
           FFTWGrid<N> &fourier_grid,
-          PowerSpectrumBinning &pofk);
+          PowerSpectrumBinning<N> &pofk);
 
     // Compute power-spectrum multipoles P0,P1,...,Pn-1 for the case
     // where we have a fixed line_of_sight_direction (typical coordinate axes like (0,0,1))
@@ -82,9 +96,9 @@ namespace FML {
     template <int N>
       void compute_power_spectrum_multipoles(
           FFTWGrid<N> &fourier_grid, 
-          std::vector<PowerSpectrumBinning> &Pell,
+          std::vector< PowerSpectrumBinning<N> > &Pell,
           std::vector<double> line_of_sight_direction);
-   
+
     // Simple method to estimate multipoles from simulation data
     // Take particles in realspace and use their velocity to put them into
     // redshift space. Fourier transform and compute multipoles from this like in the method above.
@@ -96,77 +110,40 @@ namespace FML {
           int Ngrid,
           FML::PARTICLE::MPIParticles<T> & part,
           double velocity_to_displacement,
-          std::vector<PowerSpectrumBinning> &Pell,
-          std::string density_assignment_method) ;
+          std::vector< PowerSpectrumBinning<N> > &Pell,
+          std::string density_assignment_method);
 
-    //=====================================================================
-    //=====================================================================
+    // Computes the bispectrum B(k1,k2,k3) from particles
+    template<int N, class T>
+      void compute_bispectrum(
+          int Ngrid,
+          T *part,
+          size_t NumPart,
+          size_t NumPartTotal,
+          BispectrumBinning<N> &bofk,
+          std::string density_assignment_method);
 
-    // This class is thread-safe, but cannot be created or normalized inside a OMP parallel region
-    // Summation over MPI tasks is done in normalize()
-    typedef struct PowerSpectrumBinning {
-      enum BinningType {
-        LINEAR_SPACING,
-        LOG_SPACING
-      };
+    // Computes the bispectrum B(k1,k2,k3) from a fourier grid
+    template<int N>
+      void compute_bispectrum(
+          FFTWGrid<N> & density_k,
+          BispectrumBinning<N> &bofk);
 
-      std::vector<double> k;
-      std::vector<double> count; 
-      std::vector<double> pofk; 
-      std::vector<double> kbin; 
+    // Computes the polyspectrum P(k1,k2,k3,...) from particles
+    template<int N, class T, int ORDER>
+      void compute_polyspectrum(
+          int Ngrid,
+          T *part,
+          size_t NumPart,
+          size_t NumPartTotal,
+          PolyspectrumBinning<N,ORDER> &polyofk,
+          std::string density_assignment_method);
 
-#ifdef USE_OMP
-      std::vector< std::vector<double> > count_thread; 
-      std::vector< std::vector<double> > pofk_thread; 
-      std::vector< std::vector<double> > kbin_thread; 
-#endif
-
-      int n;
-      int bin_type;
-      double kmin;
-      double kmax;
-
-      PowerSpectrumBinning();
-      PowerSpectrumBinning(const int n);
-      PowerSpectrumBinning(const double kmin, const double kmax, const int n, const int bin_type);
-
-      // Add two binnings together
-      PowerSpectrumBinning & operator +=(const PowerSpectrumBinning & rhs){
-        assert(k.size() == rhs.k.size());
-        assert(count.size() == rhs.count.size());
-        assert(pofk.size() == rhs.pofk.size());
-        assert(kbin.size() == rhs.kbin.size());
-        assert(bin_type == rhs.bin_type);
-        assert(kmin == rhs.kmin);
-        assert(kmax == rhs.kmax);
-        for(int i = 0; i < n; i++){
-          count[i] += rhs.count[i];
-          pofk[i] += rhs.pofk[i];
-          kbin[i] += rhs.kbin[i];
-        }
-        return *this;
-      }
-      
-      // Reset everything. Call before starting to bim
-      void reset();
-
-      // Add a new point to a bin
-      void add_to_bin(double kvalue, double power, double weight = 1.0);
-      
-      // Normalize (i.e. find mean in each bin) Do summation over MPI tasks
-      void normalize();
-
-      // Scale to physical units kscale = 1/Box and pofkscale = Box^N
-      void scale(const double kscale, const double pofkscale);
-
-      // For controlling the bins
-      int get_bin_index(const double kvalue, const double kmin, const double kmax, const int n, const int bin_type);
-      double get_k_from_bin_index(const int index, const double kmin, const double kmax, const int n, const int bin_type);
-      
-      // Print some info
-      void print_info();
-
-    } PowerSpectrumBinning;
+    // Compute the polyspectrum <F1 F2 ... Forder> from a fourier grid
+    template<int N, int ORDER>
+      void compute_polyspectrum(
+          FFTWGrid<N> & density_k,
+          PolyspectrumBinning<N,ORDER> &polyofk);
 
     //=====================================================================
     //=====================================================================
@@ -181,7 +158,7 @@ namespace FML {
     template <int N>
       void compute_power_spectrum_multipoles(
           FFTWGrid<N> &fourier_grid, 
-          std::vector<PowerSpectrumBinning> &Pell,
+          std::vector<PowerSpectrumBinning<N>> &Pell,
           std::vector<double> line_of_sight_direction) { 
 
         assert_mpi(line_of_sight_direction.size() == N,
@@ -193,7 +170,7 @@ namespace FML {
 
         int Nmesh           = fourier_grid.get_nmesh();
         auto Local_nx       = fourier_grid.get_local_nx();
-        auto NmeshTotTotal  = Local_nx * power(Nmesh,N-2) * (Nmesh/2+1);//fourier_grid.get_ntot_fourier();
+        auto NmeshTotTotal  = size_t(Local_nx) * FML::power(size_t(Nmesh),N-2) * size_t(Nmesh/2+1);//fourier_grid.get_ntot_fourier();
         auto *cdelta = fourier_grid.get_fourier_grid();
 
         // Norm of LOS vector
@@ -205,7 +182,7 @@ namespace FML {
             "[compute_power_spectrum_multipoles] Line of sight vector has zero length\n");
 
         // Initialize binning just in case
-        for (int ell = 0; ell < Pell.size(); ell++)
+        for (size_t ell = 0; ell < Pell.size(); ell++)
           Pell[ell].reset();
 
         // Bin up mu^k |delta|^2
@@ -222,7 +199,7 @@ namespace FML {
           std::vector<double> kvec(N);
           fourier_grid.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag);
           double power = std::norm(cdelta[ind]);
-          
+
           // Compute mu = k_vec*r_vec
           double mu = 0.0;
           for(int idim = 0; idim < N; idim++)
@@ -231,7 +208,7 @@ namespace FML {
 
           // Add to bin |delta|^2, |delta|^2mu^2, |delta^2|mu^4, ...
           double mutoell = 1.0;
-          for (int ell = 0; ell < Pell.size(); ell++) {
+          for (size_t ell = 0; ell < Pell.size(); ell++) {
             Pell[ell].add_to_bin(kmag, power * mutoell, weight);
             mutoell *= mu;
             //Pell[ell].add_to_bin(kmag, power * std::pow(mu, ell), weight);
@@ -239,7 +216,7 @@ namespace FML {
         }
 
 #ifdef USE_MPI
-        for (int ell = 0; ell < Pell.size(); ell++) {
+        for (size_t ell = 0; ell < Pell.size(); ell++) {
           MPI_Allreduce(MPI_IN_PLACE, Pell[ell].pofk.data(),  Pell[ell].n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
           MPI_Allreduce(MPI_IN_PLACE, Pell[ell].count.data(), Pell[ell].n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
           MPI_Allreduce(MPI_IN_PLACE, Pell[ell].kbin.data(),  Pell[ell].n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
@@ -247,7 +224,7 @@ namespace FML {
 #endif
 
         // Normalize
-        for (int ell = 0; ell < Pell.size(); ell++)
+        for (size_t ell = 0; ell < Pell.size(); ell++)
           Pell[ell].normalize();
 
         // Binomial coefficient
@@ -268,9 +245,9 @@ namespace FML {
 
         // Go from <mu^k |delta|^2> to <L_ell(mu) |delta|^2>
         std::vector<std::vector<double>> temp;
-        for (int ell = 0; ell < Pell.size(); ell++) {
+        for (size_t ell = 0; ell < Pell.size(); ell++) {
           std::vector<double> sum(Pell[0].pofk.size(), 0.0);
-          for (int k = 0; k <= ell / 2; k++) {
+          for (size_t k = 0; k <= ell / 2; k++) {
             std::vector<double> mu_power = Pell[ell - 2 * k].pofk;
             for(size_t i = 0; i < sum.size(); i++)
               sum[i] += mu_power[i] * summand_legendre_polynomial(k, ell);
@@ -279,7 +256,7 @@ namespace FML {
         }
 
         // Copy over data. We now have P0,P1,... in Pell
-        for (int ell = 0; ell < Pell.size(); ell++) {
+        for (size_t ell = 0; ell < Pell.size(); ell++) {
           Pell[ell].pofk = temp[ell];
         }
       }
@@ -292,7 +269,7 @@ namespace FML {
     template <int N>
       void bin_up_power_spectrum(
           FFTWGrid<N> &fourier_grid,
-          PowerSpectrumBinning &pofk) {
+          PowerSpectrumBinning<N> &pofk) {
 
         assert_mpi(fourier_grid.get_nmesh() > 0, 
             "[bin_up_power_spectrum] grid must have Nmesh > 0\n");
@@ -302,7 +279,7 @@ namespace FML {
         auto *cdelta = fourier_grid.get_fourier_grid();
         int Nmesh = fourier_grid.get_nmesh();
         auto Local_nx = fourier_grid.get_local_nx();
-        auto NmeshTotLocal = Local_nx * power(Nmesh,N-2) * (Nmesh/2+1);//fourier_grid.get_ntot_fourier();
+        auto NmeshTotLocal = size_t(Local_nx) * FML::power(size_t(Nmesh),N-2) * size_t(Nmesh/2+1);//fourier_grid.get_ntot_fourier();
 
         // Initialize binning just in case
         pofk.reset();
@@ -341,7 +318,7 @@ namespace FML {
           int Ngrid, 
           T *part, 
           size_t NumPart, 
-          PowerSpectrumBinning &pofk)
+          PowerSpectrumBinning<N> &pofk)
       {
 
         assert_mpi(Ngrid > 0, 
@@ -386,7 +363,7 @@ namespace FML {
         for(int i = 0; i < pofk.n; i++)
           pofk.pofk[i] -= 1.0 / double(NumPart);
       }
-    
+
     //================================================================================
     // A simple power-spectrum estimator for multipoles in simulations - nothing fancy
     // Displacing particles from realspace to redshift-space using their velocities
@@ -402,20 +379,20 @@ namespace FML {
           int Ngrid,
           FML::PARTICLE::MPIParticles<T> & part,
           double velocity_to_displacement,
-          std::vector<PowerSpectrumBinning> &Pell,
+          std::vector< PowerSpectrumBinning<N> > &Pell,
           std::string density_assignment_method) {
 
         // Set how many extra slices we need for the density assignment to go smoothly
         auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
         const int nleft  = nleftright.first;
         const int nright = nleftright.second;
-        
+
         // Initialize binning just in case
-        for (int ell = 0; ell < Pell.size(); ell++)
+        for (size_t ell = 0; ell < Pell.size(); ell++)
           Pell[ell].reset();
 
         // Set a binning for each axes
-        std::vector<std::vector<PowerSpectrumBinning>> Pell_all(N);
+        std::vector<std::vector< PowerSpectrumBinning<N> >> Pell_all(N);
         for(int dir = 0; dir < N; dir++) {
           Pell_all[dir] = Pell;
         }
@@ -423,20 +400,23 @@ namespace FML {
         // Loop over all the axes we are going to put the particles
         // into redshift space
         for(int dir = 0; dir < N; dir++) {
-        
+
           // Set up binning for current axis
-          std::vector<PowerSpectrumBinning> Pell_current = Pell_all[dir];
-          for (int ell = 0; ell < Pell_current.size(); ell++)
+          std::vector< PowerSpectrumBinning<N> > Pell_current = Pell_all[dir];
+          for (size_t ell = 0; ell < Pell_current.size(); ell++)
             Pell_current[ell].reset();
 
           // Make line of sight direction unit vector
           std::vector<double> line_of_sight_direction(N,0.0);
           line_of_sight_direction[dir] = 1.0;
 
-          // Displace particles XXX add OMP
-          for(auto &p : part){
-            auto *pos = p.get_pos();
-            auto *vel = p.get_vel();
+          // Displace particles
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+          for(size_t i = 0; i < part.get_npart(); i++){
+            auto *pos = part[i].get_pos();
+            auto *vel = part[i].get_vel();
             double vdotr = 0.0;
             for(int idim = 0; idim < N; idim++) {
               vdotr += vel[idim] * line_of_sight_direction[idim];
@@ -462,7 +442,7 @@ namespace FML {
               part.get_npart_total(),
               density_k,
               density_assignment_method);
-          
+
           // Displace particles XXX add OMP
           for(auto &p : part){
             auto *pos = p.get_pos();
@@ -484,7 +464,7 @@ namespace FML {
 
           // Fourier transform
           density_k.fftw_r2c();
-          
+
           // Deconvolve window function
           deconvolve_window_function_fourier<N>(density_k,  density_assignment_method);
 
@@ -493,25 +473,25 @@ namespace FML {
               density_k,
               Pell_current,
               line_of_sight_direction);
-          
+
           // Assign back
           Pell_all[dir] = Pell_current;
         }
-       
+
         // Normalize
-        for (int ell = 0; ell < Pell.size(); ell++){
+        for (size_t ell = 0; ell < Pell.size(); ell++){
           for(int dir = 0; dir < N; dir++) {
             Pell[ell] += Pell_all[dir][ell];
           }
         }
-        for (int ell = 0; ell < Pell.size(); ell++){
+        for (size_t ell = 0; ell < Pell.size(); ell++){
           for(int i = 0; i < Pell[ell].n; i++){
             Pell[ell].pofk[i] /= double(N);
             Pell[ell].count[i] /= double(N);
             Pell[ell].kbin[i] /= double(N);
           }
         }
-        
+
         // XXX Compute variance of pofk
 
         // Subtract shotnoise for monopole
@@ -530,7 +510,7 @@ namespace FML {
           T *part,
           size_t NumPart,
           size_t NumPartTotal,
-          PowerSpectrumBinning &pofk,
+          PowerSpectrumBinning<N> &pofk,
           std::string density_assignment_method) {
 
         // Set how many extra slices we need for the density assignment to go smoothly
@@ -574,7 +554,7 @@ namespace FML {
           T *part,
           size_t NumPart,
           size_t NumPartTotal,
-          PowerSpectrumBinning &pofk,
+          PowerSpectrumBinning<N> &pofk,
           std::string density_assignment_method) {
 
         // Set how many extra slices we need for the density assignment to go smoothly
@@ -660,7 +640,627 @@ namespace FML {
           pofk.pofk[i] -= 1.0/double(NumPartTotal);
         }
       }
+
+    // https://arxiv.org/pdf/1506.02729.pdf
+    // The general quadrupole estimator Eq. 20
+    // P(k) = <delta0(k)delta2^*(k>>
+    // We compute delta0 and delta2
+    //template<int N>
+    //  void quadrupole_estimator_3D(FFTWGrid<N> & density_real)
+    //  {
+
+    //    FFTWGrid<N> Q_xx, Q_yy, Q_zz, Q_xy, Q_yz, Q_zx;
+
+    //    compute_multipole_Q_term(density_real, Q_xx, {0,0}, origin);
+    //    compute_multipole_Q_term(density_real, Q_xy, {0,1}, origin);
+    //    compute_multipole_Q_term(density_real, Q_yy, {1,1}, origin);
+    //    Q_xx.fftw_r2c();
+    //    Q_xy.fftw_r2c();
+    //    Q_yy.fftw_r2c();
+    //    if constexpr (N > 2){
+    //      compute_multipole_Q_term(density_real, Q_yz, {1,2}, origin);
+    //      compute_multipole_Q_term(density_real, Q_zx, {2,0}, origin);
+    //      compute_multipole_Q_term(density_real, Q_zz, {2,2}, origin);
+    //      Q_yz.fftw_r2c();
+    //      Q_zx.fftw_r2c();
+    //      Q_zz.fftw_r2c();
+    //    }
+
+    //    // Density to fourier space
+    //    density_real.fftw_r2c();
+
+    //    FFTWGrid<N> delta2 =  density_real;
+
+    //    double kmag;
+    //    std::vector<double> kvec(N);
+    //    for(auto & fourier_index : density_real.get_fourier_range()){
+    //      density_real.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag2);
+
+    //      // Unit kvector
+    //      if(kmag > 0.0)
+    //        for(auto & k : kvec)
+    //          k /= kmag;
+
+    //      auto Q_xx_of_k = Q_xx.get_fourier_from_index(fourier_index);
+    //      auto Q_xy_of_k = Q_xy.get_fourier_from_index(fourier_index);
+    //      auto Q_yy_of_k = Q_yy.get_fourier_from_index(fourier_index);
+
+    //      auto Q_yz_of_k = Q_yz.get_fourier_from_index(fourier_index);
+    //      auto Q_zx_of_k = Q_zx.get_fourier_from_index(fourier_index);
+    //      auto Q_zz_of_k = Q_zz.get_fourier_from_index(fourier_index);
+    //      auto delta0    = density_real.get_fourier_from_index(fourier_index);
+
+    //      auto res = Q_xx_of_k * kvec[0] * kvec[0] + Q_yy_of_k * kvec[1] * kvec[1] +  2.0 * (Q_xy_of_k * kvec[0] * kvec[1])
+    //        if constexpr (N > 2) res += Q_zz_of_k * kvec[2] * kvec[2] + 2.0 * (Q_yz_of_k * kvec[1] * kvec[2] + Q_zx_of_k * kvec[2] * kvec[0]);
+    //      res = 1.5 * res - 0.5 * delta0;
+
+    //      delta2.set_real_from_fourier(fourier_index, res);
+    //    }
+    //  }
+
+    // Compute delta(x) -> delta(x) * xi * xj * xk * .... (i,j,k,... in Qindex)
+    // where xi's being the i'th component of the unit norm line of sight direction
+    // For the quadrupole we put Qindex = {ii,jj} and we need the 6 combinations xx,yy,zz,xy,yz,zx
+    // For the hexadecapole we need {ii,jj,kk,ll} for 15 different combinations
+    // xxxx + cyc (3), xxxy + cyc, xxyy + cyc and xxyz + cyc
+    template<int N>
+      void compute_multipole_Q_term(
+          FFTWGrid<N> & density_real,
+          FFTWGrid<N> & Q_real,
+          std::vector<int> Qindex,
+          std::vector<double> origin)
+      {
+        assert(Qindex.size() > 0);
+        assert(origin.size() == N);
+
+        for(auto & real_index : density_real.get_real_range()){
+          auto coord = density_real.get_coord_from_index(real_index);
+          auto pos = density_real.get_real_position(coord);
+
+          double norm = 0.0;
+          for(int idim = 0; idim < N; idim++){
+            pos[idim] -= origin[idim];
+            norm += pos[idim]*pos[idim];
+          }
+          norm = std::sqrt(norm);
+          for(int idim = 0; idim < N; idim++){
+            pos[idim] /= norm;
+          }
+          auto value = density_real.get_real_from_index(real_index);
+          for(auto ii: Qindex)
+            value *= pos[ii];
+
+          Q_real.set_real_from_index(real_index, value);
+        }
+      }
+
+
+    // Computes the bispectrum B(k1,k2,k3) for *all* k1,k2,k3
+    // One can make this much faster if one *just* wants say k1=k2=k3
+    template<int N, class T>
+      void compute_bispectrum(
+          int Ngrid,
+          T *part,
+          size_t NumPart,
+          size_t NumPartTotal,
+          BispectrumBinning<N> &bofk,
+          std::string density_assignment_method) {
+
+        // Set how many extra slices we need for the density assignment to go smoothly
+        auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
+        int nleft  = nleftright.first;
+        int nright = nleftright.second;
+
+        // Bin particles to grid
+        FFTWGrid<N> density_k(Ngrid, nleft, nright);
+        density_k.add_memory_label("FFTWGrid::compute_bispectrum::density_k");
+        particles_to_grid<N,T>(
+            part,
+            NumPart,
+            NumPartTotal,
+            density_k,
+            density_assignment_method);
+
+        // To fourier space
+        density_k.fftw_r2c();
+
+        // Deconvolve window function
+        deconvolve_window_function_fourier<N>(density_k,  density_assignment_method);
+
+        // Compute bispectrum
+        compute_bispectrum<N>(density_k, bofk);
+
+      }
+
+    // Computes the polyspectrum P(k1,k2,k3,...) 
+    template<int N, class T, int ORDER>
+      void compute_polyspectrum(
+          int Ngrid,
+          T *part,
+          size_t NumPart,
+          size_t NumPartTotal,
+          PolyspectrumBinning<N,ORDER> & polyofk,
+          std::string density_assignment_method) {
+
+        // Set how many extra slices we need for the density assignment to go smoothly
+        auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
+        int nleft  = nleftright.first;
+        int nright = nleftright.second;
+
+        // Bin particles to grid
+        FFTWGrid<N> density_k(Ngrid, nleft, nright);
+        density_k.add_memory_label("FFTWGrid::compute_bispectrum::density_k");
+        particles_to_grid<N,T>(
+            part,
+            NumPart,
+            NumPartTotal,
+            density_k,
+            density_assignment_method);
+
+        // To fourier space
+        density_k.fftw_r2c();
+
+        // Deconvolve window function
+        deconvolve_window_function_fourier<N>(density_k,  density_assignment_method);
+
+        // Compute bispectrum
+        compute_polyspectrum<N,ORDER>(density_k, polyofk);
+      }
+
+    template<int N>
+      void compute_bispectrum(
+          FFTWGrid<N> & density_k,
+          BispectrumBinning<N> &bofk) {
+
+        const int Nmesh = density_k.get_nmesh();
+        const int nbins = bofk.n;
+        assert(nbins > 0);
+        assert(Nmesh > 0);
+
+        // Now loop over bins and do FFTs
+        std::vector< FFTWGrid<N> > F_k(nbins);
+        std::vector< FFTWGrid<N> > N_k(nbins);
+
+        // Set ranges for which we will compute F_k
+        std::vector<double> khigh(nbins);
+        std::vector<double> k_bin(nbins);
+        std::vector<double> klow(nbins);
+        double deltak = (bofk.k[1] - bofk.k[0]);
+        for(int i = 0; i < nbins; i++){
+          F_k[i] = density_k;
+          N_k[i] = density_k;
+          N_k[i].fill_fourier_grid(0.0);
+
+          if(i == 0){
+            klow[i]  = bofk.k[0];
+            khigh[i] = bofk.k[0] + (bofk.k[1] - bofk.k[0])/2.0;
+          } else if(i < nbins-1){
+            klow[i]  = khigh[i-1];
+            khigh[i] = bofk.k[i] + (bofk.k[i+1] - bofk.k[i])/2.0;
+          } else {
+            klow[i] = khigh[i-1];
+            khigh[i] = bofk.k[nbins-1];
+          }
+          k_bin[i] = (khigh[i]+klow[i])/2.0;
+        }
+
+        // Compute how many configurations we have to store
+        // This is (n+ORDER choose ORDER)
+        //nbins_tot = 1;
+        //int faculty = 1;
+        //for(int i = 0; i < order-1; i++){
+        //  nbins_tot *= (nbins+i);
+        //  faculty *= (1+i);
+        //}
+        //nbins_tot /= faculty;
+        //We just store all the symmmetry configurations as written
+
+        // Set up results vector
+        size_t nbins_tot = FML::power(size_t(nbins), 3);
+        std::vector<double> N123(nbins_tot,0.0);
+        std::vector<double> B123(nbins_tot,0.0);
+        std::vector<double> kmean_bin(nbins,0.0);
+        std::vector<double> pofk_bin(nbins,0.0);
+
+        for(int i = 0; i < nbins; i++){
+#ifdef DEBUG_BISPECTRUM
+          if(FML::ThisTask == 0)
+            std::cout << "Computing bispectrum " << i+1 << " / " << nbins << " kbin: " << klow[i] / (2.0*M_PI) << " -> " << khigh[i] / (2.0*M_PI) << "\n";;
+#endif
+
+          FFTWGrid<N> & grid = F_k[i];
+          FFTWGrid<N> & count_grid = N_k[i];
+
+          // For each bin get klow, khigh and deltak
+          const double kmag_max  = khigh[i];
+          const double kmag_min  = klow[i];
+          const double kmag2_max = kmag_max*kmag_max;
+          const double kmag2_min = kmag_min*kmag_min;
+
+          //=====================================================
+          // Bin weights, currently not in use. Basically some averaging about 
+          // k for each bin. Not tested so well, but gives very good results for local
+          // nn-gaussianity (much less noisy estimates), but not so much in general
+          //=====================================================
+          //double sigma2 = 8.0 * std::pow( deltak ,2);
+          //auto weight = [&](double kmag, double kbin){
+          //  //return std::fabs(kmag - kbin) < deltak/2 ? 1.0 : 0.0;
+          //  return 1.0/std::sqrt(2.0 * M_PI * sigma2) * std::exp( -0.5*(kmag - kbin)*(kmag - kbin)/sigma2 );
+          //};
+
+          // Loop over all cells
+          double kmean = 0.0;
+          double nk = 0;
+          double kmag2;
+          std::vector<double> kvec(N);
+          for(auto & fourier_index : grid.get_fourier_range()){
+            grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+
+            //=====================================================
+            // Set to zero outside the bin (N_k already init to 0)
+            //=====================================================
+            if(kmag2 >= kmag2_max or kmag2 < kmag2_min){
+              grid.set_fourier_from_index(fourier_index, 0.0);
+              count_grid.set_fourier_from_index(fourier_index, 0.0);
+            } else {
+              // Compute mean k in the bin
+              kmean += std::sqrt(kmag2);
+              pofk_bin[i] += std::norm(grid.get_fourier_from_index(fourier_index));
+              nk += 1.0;
+              count_grid.set_fourier_from_index(fourier_index, 1.0);
+            }
+
+            //=====================================================
+            // Alternative to the above: add with weights
+            //=====================================================
+            //double kmag = std::sqrt(kmag2);
+            //double fac = weight(kmag, k_bin[i]);
+            //kmean += kmag * fac;
+            //pofk_bin[i] += std::norm(grid.get_fourier_from_index(fourier_index)) * fac;
+            //nk += fac;
+            //grid.set_fourier_from_index(fourier_index, grid.get_fourier_from_index(fourier_index) * fac);
+            //count_grid.set_fourier_from_index(fourier_index, fac);
+          }
+#ifdef USE_MPI
+          MPI_Allreduce(MPI_IN_PLACE,&kmean,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+          MPI_Allreduce(MPI_IN_PLACE,&pofk_bin[i],1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+          MPI_Allreduce(MPI_IN_PLACE,&nk,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+#endif
+          // The mean k in the bin
+          kmean_bin[i] = (nk == 0) ? k_bin[i] : kmean / double(nk);
+          // Power spectrum in the bin
+          pofk_bin[i] = (nk == 0) ? 0.0 : pofk_bin[i] / double(nk);
+
+#ifdef DEBUG_BISPECTRUM
+          if(FML::ThisTask == 0)
+            std::cout << "kmean: " << kmean_bin[i] / (2.0*M_PI) << "\n";
+#endif
+
+          // Transform to real space
+          grid.fftw_c2r();
+          count_grid.fftw_c2r();
+        }
+
+        // We now have F_k and N_k for all bins
+        for(size_t i = 0; i < nbins_tot; i++){
+#ifdef DEBUG_BISPECTRUM
+          if(FML::ThisTask == 0)
+            if( (i*10)/nbins_tot != ((i+1)*10)/nbins_tot )
+              std::cout << "Integrating up " << 100*(i+1)/nbins_tot << " %\n";;
+#endif
+
+          // Current values of k1,k2,k3
+          int ik[3];
+          for(int ii = 0, n = 1; ii < 3; ii++, n *= nbins){
+            ik[ii] = i / n % nbins;
+          }
+          // Only compute stuff for k1 <= k2 <= k3
+          if(ik[0] > ik[1] or ik[1] > ik[2]) {
+            continue;
+          }
+
+          // No valid triangles if k1+k2 < k3 so just set too zero right away
+          if(k_bin[ik[0]] + k_bin[ik[1]] < k_bin[ik[2]] - 3*deltak/2.){
+            N123[i] = 0.0;
+            B123[i] = 0.0;
+            continue;
+          }
+
+          // Compute number of triangles in current bin (norm insignificant below)
+          double N123_current = 0.0;
+          for(auto & real_index : N_k[0].get_real_range()){
+            double N1 = N_k[ik[0]].get_real_from_index(real_index);
+            double N2 = N_k[ik[1]].get_real_from_index(real_index);
+            double N3 = N_k[ik[2]].get_real_from_index(real_index);
+            N123_current += N1 * N2 * N3;
+          }
+#ifdef USE_MPI
+          MPI_Allreduce(MPI_IN_PLACE,&N123_current,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+#endif
+
+          // Compute sum over triangles
+          double F123_current = 0.0;
+          for(auto & real_index : F_k[0].get_real_range()){
+            auto F1 = F_k[ik[0]].get_real_from_index(real_index);
+            auto F2 = F_k[ik[1]].get_real_from_index(real_index);
+            auto F3 = F_k[ik[2]].get_real_from_index(real_index);
+            F123_current += F1 * F2 * F3;
+          }
+#ifdef USE_MPI
+          MPI_Allreduce(MPI_IN_PLACE,&F123_current,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+#endif
+          // Normalize dx^N / (2pi)^N
+          F123_current *= std::pow(1.0 / double(Nmesh) / (2.0 * M_PI), N);
+          N123_current *= std::pow(1.0 / double(Nmesh) / (2.0 * M_PI), N);
+
+          // Set the result
+          B123[i] = (N123_current > 0.0) ? F123_current / N123_current : 0.0;
+          N123[i] = (N123_current > 0.0) ? N123_current : 0.0;
+
+          // Return the reduced bispectrum
+          double norm = pofk_bin[ik[0]] * pofk_bin[ik[1]] + pofk_bin[ik[1]] * pofk_bin[ik[2]] + pofk_bin[ik[2]] * pofk_bin[ik[0]];
+          if(norm > 0.0) B123[i] /= norm;
+        }
+
+        // Set the values we didn't compute by using symmetry
+        for(int i = 0; i < nbins; i++){
+          for(int j = 0; j < nbins; j++){
+            for(int k = 0; k < nbins; k++){
+              size_t index = (i*nbins + j)*nbins + k;
+
+              std::vector<int> inds{i,j,k};
+              std::sort(inds.begin(), inds.end(), std::less<int>());
+
+              size_t index0 = (inds[0]*nbins+inds[1])*nbins+inds[2];
+              size_t index1 = (inds[0]*nbins+inds[2])*nbins+inds[1];
+              size_t index2 = (inds[1]*nbins+inds[2])*nbins+inds[0];
+              size_t index3 = (inds[1]*nbins+inds[0])*nbins+inds[2];
+              size_t index4 = (inds[2]*nbins+inds[0])*nbins+inds[1];
+              size_t index5 = (inds[2]*nbins+inds[1])*nbins+inds[0];
+
+              if(B123[index0] == 0.0) B123[index0] = B123[index];
+              if(B123[index1] == 0.0) B123[index1] = B123[index];
+              if(B123[index2] == 0.0) B123[index2] = B123[index];
+              if(B123[index3] == 0.0) B123[index3] = B123[index];
+              if(B123[index4] == 0.0) B123[index4] = B123[index];
+              if(B123[index5] == 0.0) B123[index5] = B123[index];
+            }
+          }
+        }
+
+        // Copy results over
+        bofk.B123 = B123;
+        bofk.N123 = N123;
+        bofk.kbin = k_bin;
+        bofk.pofk = pofk_bin;
+
+      }
+
+    template<int N, int order>
+      void compute_polyspectrum(
+          FFTWGrid<N> & density_k,
+          PolyspectrumBinning<N,order> &polyofk) {
+
+        const int Nmesh = density_k.get_nmesh();
+        const int nbins = polyofk.n;
+        assert(nbins > 0);
+        assert(Nmesh > 0);
+        static_assert(order > 1);
+
+        // Now loop over bins and do FFTs
+        std::vector< FFTWGrid<N> > F_k(nbins);
+        std::vector< FFTWGrid<N> > N_k(nbins);
+
+        // Set ranges for which we will compute F_k
+        std::vector<double> khigh(nbins);
+        std::vector<double> k_bin(nbins);
+        std::vector<double> klow(nbins);
+        double deltak = (polyofk.k[1] - polyofk.k[0]);
+        for(int i = 0; i < nbins; i++){
+          F_k[i] = density_k;
+          N_k[i] = density_k;
+          N_k[i].fill_fourier_grid(0.0);
+
+          if(i == 0){
+            klow[i]  = polyofk.k[0];
+            khigh[i] = polyofk.k[0] + (polyofk.k[1] - polyofk.k[0])/2.0;
+          } else if(i < nbins-1){
+            klow[i]  = khigh[i-1];
+            khigh[i] = polyofk.k[i] + (polyofk.k[i+1] - polyofk.k[i])/2.0;
+          } else {
+            klow[i] = khigh[i-1];
+            khigh[i] = polyofk.k[nbins-1];
+          }
+          k_bin[i] = (khigh[i]+klow[i])/2.0;
+        }
+
+        // Set up results vector
+        size_t nbins_tot = FML::power(size_t(nbins),order);
+        std::vector<double> P123(nbins_tot,0.0);
+        std::vector<double> N123(nbins_tot,0.0);
+        std::vector<double> kmean_bin(nbins,0.0);
+        std::vector<double> pofk_bin(nbins,0.0);
+
+        for(int i = 0; i < nbins; i++){
+#ifdef DEBUG_BISPECTRUM
+          if(FML::ThisTask == 0)
+            std::cout << "Computing polyspectrum " << i+1 << " / " << nbins << " kbin: " << klow[i] / (2.0*M_PI) << " -> " << khigh[i] / (2.0*M_PI) << "\n";;
+#endif
+
+          FFTWGrid<N> & grid = F_k[i];
+          FFTWGrid<N> & count_grid = N_k[i];
+
+          // For each bin get klow, khigh and deltak
+          const double kmag_max  = khigh[i];
+          const double kmag_min  = klow[i];
+          const double kmag2_max = kmag_max*kmag_max;
+          const double kmag2_min = kmag_min*kmag_min;
+
+          //=====================================================
+          // Bin weights, currently not in use. Basically some averaging about 
+          // k for each bin. Not tested so well, but gives very good results for local
+          // nn-gaussianity (much less noisy estimates), but not so much in general
+          //=====================================================
+          //double sigma2 = 8.0 * std::pow( deltak ,2);
+          //auto weight = [&](double kmag, double kbin){
+          //  //return std::fabs(kmag - kbin) < deltak/2 ? 1.0 : 0.0;
+          //  return 1.0/std::sqrt(2.0 * M_PI * sigma2) * std::exp( -0.5*(kmag - kbin)*(kmag - kbin)/sigma2 );
+          //};
+
+          // Loop over all cells
+          double kmean = 0.0;
+          double nk = 0;
+          double kmag2;
+          std::vector<double> kvec(N);
+          for(auto & fourier_index : grid.get_fourier_range()){
+            grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+
+            //=====================================================
+            // Set to zero outside the bin (N_k already init to 0)
+            //=====================================================
+            if(kmag2 >= kmag2_max or kmag2 < kmag2_min){
+              grid.set_fourier_from_index(fourier_index, 0.0);
+              count_grid.set_fourier_from_index(fourier_index, 0.0);
+            } else {
+              // Compute mean k in the bin
+              kmean += std::sqrt(kmag2);
+              pofk_bin[i] += std::norm(grid.get_fourier_from_index(fourier_index));
+              nk += 1.0;
+              count_grid.set_fourier_from_index(fourier_index, 1.0);
+            }
+
+            //=====================================================
+            // Alternative to the above: add with weights
+            //=====================================================
+            //double kmag = std::sqrt(kmag2);
+            //double fac = weight(kmag, k_bin[i]);
+            //kmean += kmag * fac;
+            //pofk_bin[i] += std::norm(grid.get_fourier_from_index(fourier_index)) * fac;
+            //nk += fac;
+            //grid.set_fourier_from_index(fourier_index, grid.get_fourier_from_index(fourier_index) * fac);
+            //count_grid.set_fourier_from_index(fourier_index, fac);
+          }
+#ifdef USE_MPI
+          MPI_Allreduce(MPI_IN_PLACE,&kmean,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+          MPI_Allreduce(MPI_IN_PLACE,&pofk_bin[i],1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+          MPI_Allreduce(MPI_IN_PLACE,&nk,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+#endif
+          // The mean k in the bin
+          kmean_bin[i] = (nk == 0) ? k_bin[i] : kmean / double(nk);
+          // Power spectrum in the bin
+          pofk_bin[i] = (nk == 0) ? 0.0 : pofk_bin[i] / double(nk);
+
+#ifdef DEBUG_BISPECTRUM
+          if(FML::ThisTask == 0)
+            std::cout << "kmean: " << kmean_bin[i] / (2.0*M_PI) << "\n";
+#endif
+
+          // Transform to real space
+          grid.fftw_c2r();
+          count_grid.fftw_c2r();
+        }
+
+        // We now have F_k and N_k for all bins
+        for(int i = 0; i < nbins_tot; i++){
+#ifdef DEBUG_BISPECTRUM
+          if(FML::ThisTask == 0)
+            if( (i*10)/nbins_tot != ((i+1)*10)/nbins_tot )
+              std::cout << "Integrating up " << 100*(i+1)/nbins_tot << " %\n";;
+#endif
+
+          // Current values of ik1,ik2,ik3,...
+          int ik[order];
+          for(int ii = order-1, n = 1; ii >= 0; ii--, n *= nbins){
+            ik[ii] = i / n % nbins;
+          }
+
+          // Symmetry: only do ik1 <= ik2 <= ...
+          bool valid = true;
+          double ksum = 0.0;
+          for(int ii = 1; ii < order; ii++){
+            if(ik[ii] > ik[ii-1]) valid = false;
+            ksum += k_bin[ik[ii-1]];
+          }
+          if(!valid) continue;
+
+          // No valid 'triangles' if k1+k2+... < kN so just set too zero right away
+          if(ksum < k_bin[ik[order-1]] - order*deltak/2.){
+            N123[i] = 0.0;
+            P123[i] = 0.0;
+            continue;
+          }
+
+          // Compute number of triangles in current bin (norm insignificant below)
+          double N123_current = 0.0;
+          for(auto & real_index : N_k[0].get_real_range()){
+            double Nproduct = 1.0;
+            for(int ii = 0; ii < order; ii++)
+              Nproduct *= N_k[ik[ii]].get_real_from_index(real_index);
+            N123_current += Nproduct;
+          }
+#ifdef USE_MPI
+          MPI_Allreduce(MPI_IN_PLACE,&N123_current,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+#endif
+
+          // Compute sum over triangles
+          double F123_current = 0.0;
+          for(auto & real_index : F_k[0].get_real_range()){
+            double Fproduct = 1.0;
+            for(int ii = 0; ii < order; ii++)
+              Fproduct *= F_k[ik[ii]].get_real_from_index(real_index);
+            F123_current += Fproduct;
+          }
+#ifdef USE_MPI
+          MPI_Allreduce(MPI_IN_PLACE,&F123_current,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+#endif
+          // Normalize dx^N / (2pi)^N
+          F123_current *= std::pow(1.0 / double(Nmesh) / (2.0 * M_PI), N);
+          N123_current *= std::pow(1.0 / double(Nmesh) / (2.0 * M_PI), N);
+
+          // Set the result
+          P123[i] = (N123_current > 0.0) ? F123_current / N123_current : 0.0;
+          N123[i] = (N123_current > 0.0) ? N123_current : 0.0;
+        }
+
+        // Set stuff not computed
+        for(int i = 0; i < nbins_tot; i++){
+
+          // Current values of k1,k2,k3
+          std::vector<int> ik(order);
+          for(int ii = 0, n = 1; ii < order; ii++, n *= nbins){
+            ik[ii] = i / n % nbins;
+          }
+
+          // Symmetry: only do ik1 <= ik2 <= ...
+          bool valid = true;
+          for(int ii = 1; ii < order; ii++){
+            if(ik[ii] > ik[ii-1]) valid = false;
+          }
+          if(!valid) continue;
+
+          // Find a cell given by symmetry that we have computed
+          // by sorting ik in increasing order
+          std::sort(ik.begin(), ik.end(), std::less<int>());
+
+          // Compute cell index
+          size_t index = 0;
+          for(int ii = 0; ii < order; ii++)
+            index = index * nbins + ik[ii];
+
+          // Set value (if it has not been set before just in case we fucked up)
+          if(P123[index] == 0.0) P123[index] = P123[i];
+          if(N123[index] == 0.0) N123[index] = N123[i];
+        }
+
+        // Copy results over
+        polyofk.P123 = P123;
+        polyofk.N123 = N123;
+        polyofk.kbin = k_bin;
+        polyofk.pofk = pofk_bin;
+
+      }
   }
 }
 
 #endif
+

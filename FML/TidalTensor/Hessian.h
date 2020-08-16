@@ -95,7 +95,7 @@ namespace FML {
 
         assert(tensor_real.size() > 0);
         assert(tensor_real[0].get_nmesh() > 0);
-        for(int i = 1; i < tensor_real.size(); i++)
+        for(size_t i = 1; i < tensor_real.size(); i++)
           assert(tensor_real[i].get_nmesh() == tensor_real[i-1].get_nmesh());
 
         // N eigenvalues

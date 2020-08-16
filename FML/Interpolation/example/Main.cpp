@@ -108,7 +108,7 @@ void ExamplesInterpolation(){
     auto & part =  p.get_particles();
     std::cout << "Output [x interpol exact] to data.txt\n";
     std::ofstream fp("data.txt");
-    for(int i = 0 ; i < p.get_npart(); i++){
+    for(size_t i = 0 ; i < p.get_npart(); i++){
       std::vector<double> pos(NDIM);
       double xyz = 0.0;
       for(int idim = 0; idim < NDIM; idim++){

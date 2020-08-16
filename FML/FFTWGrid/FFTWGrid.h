@@ -85,20 +85,20 @@ namespace FML {
           ptrdiff_t Local_x_start;
 
           // The total number of grid-cells we allocate
-          ptrdiff_t NmeshTotComplexAlloc;
           ptrdiff_t NmeshTotRealAlloc;
+          ptrdiff_t NmeshTotComplexAlloc;
 
           // The number of grid-cells that is active in the main part of the grid 
-          ptrdiff_t NmeshTotComplex;
           ptrdiff_t NmeshTotReal;
+          ptrdiff_t NmeshTotComplex;
 
           // XXX Add below and remove non-needed things
           // NComplexCellsBeforeMain
           // NComplexCellsBeforeRight
 
           // Number of extra cells per slice
-          ptrdiff_t NmeshTotComplexSlice;
           ptrdiff_t NmeshTotRealSlice;
+          ptrdiff_t NmeshTotComplexSlice;
 
           // Number of extra slices to the left and right of the grid
           int n_extra_x_slices_left;
@@ -288,7 +288,7 @@ namespace FML {
     // some cells when looping through it
     class LoopIteratorReal {
       private:
-        int index, real_index, Nmesh, odd;
+        int real_index, index, Nmesh, odd;
       public:
 
         LoopIteratorReal(int _index, int _Nmesh) 
@@ -570,8 +570,10 @@ namespace FML {
         }
 #endif
 
+#ifdef USE_MPI
         int rightcpu = (FML::ThisTask + 1         ) % FML::NTasks;
         int leftcpu  = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
+#endif
         int bytes_slice = NmeshTotRealSlice * sizeof(FloatType);
 
         for(int i = 0; i < n_to_recv_right; i++){
@@ -1183,8 +1185,6 @@ namespace FML {
         const int nover2plus1 = Nmesh/2+1;
         const int nover2 = Nmesh/2;
         std::vector<double> fcoord(N);
-
-        // XXX < or <= ?
 
         if(N == 3){
           int iz = index % nover2plus1;;

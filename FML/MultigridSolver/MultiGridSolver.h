@@ -92,8 +92,8 @@ namespace FML {
             int _N;                        // The number of cells per dim in the main grid
             int _Nlevel;                   // Number of levels
             IndexInt _NtotLocal;           // Total number of cells in the main grid
-            bool _verbose;                 // Turn on verbose while solving
             bool _periodic { true };       // Periodic grid?
+            bool _verbose;                 // Turn on verbose while solving
 
             MPIMultiGrid<NDIM, T> _f;      // The solution
             MPIMultiGrid<NDIM, T> _res;    // The residual
@@ -265,7 +265,7 @@ namespace FML {
         if(Nlevels > -1){
           if(power(2, Nlevels) > N){
             Nlevels = -1;
-            if(ThisTask == 0) std::cout << "The number of levels specified is too large. Letting the solver decide this!\n";
+            if(FML::ThisTask == 0) std::cout << "The number of levels specified is too large. Letting the solver decide this!\n";
           }
         }
 
@@ -274,7 +274,7 @@ namespace FML {
           assert_mpi(pos_max[idim] > pos_min[idim], "");
         }
 
-        _verbose = verbose and (ThisTask == 0);
+        _verbose = verbose and (FML::ThisTask == 0);
         _f      = MPIMultiGrid<NDIM,T>(_N, Nlevels, _periodic, n_extra_slices_left, n_extra_slices_right);
         _source = MPIMultiGrid<NDIM,T>(_N, Nlevels, _periodic, 0, 0);
         _res    = MPIMultiGrid<NDIM,T>(_N, Nlevels, _periodic, 0, 0);
@@ -355,7 +355,7 @@ namespace FML {
               if(id == 0) nthreads = omp_get_num_threads();
             }
 #endif
-            std::cout << "Working with " << NTasks << " MPI tasks and " << nthreads << " OpenMP threads\n" << std::endl;
+            std::cout << "Working with " << FML::NTasks << " MPI tasks and " << nthreads << " OpenMP threads\n" << std::endl;
           }
 
           // Pre-solve on domaingrid
@@ -531,12 +531,12 @@ namespace FML {
           for(int idim = NDIM-1, Npow = 1; idim >= 0; idim--, Npow *= N){
             for(int i = -order; i <= order; i++){
               int coord_new = coord[idim] + i;
-              if(_periodic and not (idim == 0 and NTasks > 1)){
+              if(_periodic and not (idim == 0 and FML::NTasks > 1)){
                 coord_new = (coord_new + N) % N;
                 coord_new  = coord_new % N;
               }
               IndexInt index_cell = index;
-              if(idim == 0 and NTasks > 1){
+              if(idim == 0 and FML::NTasks > 1){
                 index_cell += - Npow;
               } else {
                 index_cell += (coord_new - coord[idim]) * Npow;
@@ -565,12 +565,12 @@ namespace FML {
             gradient[idim] = 0.0;
             for(int i = -order; i <= order; i++){
               int coord_new = coord[idim] + i;
-              if(_periodic and not (idim == 0 and NTasks > 1)){
+              if(_periodic and not (idim == 0 and FML::NTasks > 1)){
                 coord_new = (coord_new + N) % N;
                 coord_new  = coord_new % N;
               }
               IndexInt index_cell = index;
-              if(idim == 0 and NTasks > 1){
+              if(idim == 0 and FML::NTasks > 1){
                 index_cell += -Npow;
               } else {
                 index_cell += (coord_new - coord[idim]) * Npow;
@@ -607,11 +607,11 @@ namespace FML {
           for(int idim = NDIM-1; idim >= 0; idim--, Npow *= N){
             int coord_minus = coord[idim] - 1;
             int coord_plus  = coord[idim] + 1;
-            if(_periodic and not (idim == 0 and NTasks > 1)){
+            if(_periodic and not (idim == 0 and FML::NTasks > 1)){
               coord_minus = (coord_minus + N) % N;
               coord_plus  = coord_plus  % N;
             }
-            if(idim == 0 and NTasks > 1){
+            if(idim == 0 and FML::NTasks > 1){
               index_list[2*idim+1] = index - Npow;
               index_list[2*idim+2] = index + Npow;
             } else {
@@ -687,7 +687,7 @@ namespace FML {
             auto coord = center_coord;
             for(int idim = 0; idim < NDIM; idim++){
               coord[idim] += add[idim];
-              if(_periodic and not (idim == 0 and NTasks > 1)){
+              if(_periodic and not (idim == 0 and FML::NTasks > 1)){
                 if(coord[idim] < 0 ) coord[idim] += N;
                 if(coord[idim] >= N) coord[idim] -= N;
               }
@@ -706,7 +706,6 @@ namespace FML {
 
       template<int NDIM, class T>
         double MultiGridSolver<NDIM,T>::calculate_residual(int level, MPIGrid<NDIM,T> &res){
-          int N    = get_N(level);
           IndexInt NtotLocal = get_NtotLocal(level);
 
           // Calculate and store (minus) the residual in each cell
@@ -762,7 +761,7 @@ namespace FML {
 
           // Define converged if istep exceeds maxsteps to avoid infinite loop...
           if(_istep_vcycle >= _maxsteps){
-            if(ThisTask == NTasks){
+            if(FML::ThisTask == 0){
               std::cout << "    WARNING: MultigridSolver failed to converge! Reached istep = maxsteps = " << _maxsteps << std::endl;
               std::cout << "    res = " << _rms_res << " res_old = " << _rms_res_old << " res_i = " << _rms_res_i << std::endl;
             }
@@ -791,8 +790,8 @@ namespace FML {
             nBottomPow[idim] = nBottomPow[idim+1] * NBottom;
           }
 
-          IndexInt ixStartLocalBottom = Bottom.get_xStartLocal();
-          IndexInt ixStartLocalTop    = Top.get_xStartLocal();
+          //IndexInt ixStartLocalBottom = Bottom.get_xStartLocal();
+          //IndexInt ixStartLocalTop    = Top.get_xStartLocal();
 
           // Trilinear prolongation
 #ifdef USE_OMP
@@ -819,7 +818,7 @@ namespace FML {
             for(int idim = NDIM-1; idim >= 0; idim--){
               fac[idim] = coord_top[idim] % 2 == 0 ? 0.0 : 1.0;
               iplus[idim] = 1;
-              if(_periodic and not (idim == 0 and NTasks > 1)){
+              if(_periodic and not (idim == 0 and FML::NTasks > 1)){
                 iplus[idim] = (coord_bottom[idim] + 1 < NBottom ? 1 : 1 - NBottom);
               }
               iplus[idim] *= nBottomPow[idim];
@@ -860,7 +859,6 @@ namespace FML {
 
       template<int NDIM, class T>
         void MultiGridSolver<NDIM,T>::GaussSeidelSweep(int level, int curcolor, T *f){
-          int N    = get_N(level);
           IndexInt NtotLocal = get_NtotLocal(level);
           auto &grid = _f.get_grid(level);
 
@@ -1021,7 +1019,6 @@ namespace FML {
 
       template<int NDIM, class T>
         void MultiGridSolver<NDIM,T>::make_new_source(int level){
-          int N              = get_N(level);
           IndexInt NtotLocal = get_NtotLocal(level);
 
           // Calculate the new source

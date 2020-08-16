@@ -461,7 +461,7 @@ namespace FML {
         std::vector<double> Pos(ndim,0.0);
         std::vector<int> coord(ndim,0);
         coord[0] = Local_p_start;
-        for(int i = 0; i < NpartLocal_in_use; i++){
+        for(size_t i = 0; i < NpartLocal_in_use; i++){
           auto *Pos = p[i].get_pos();
 
           // Position regular grid

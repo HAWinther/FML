@@ -98,7 +98,7 @@ int main(int argc, char **argv){
       double mean_density = double(ntot);
       double mass = watershed_groups[i].mass;
       double volume = watershed_groups[i].volume;
-      double volume_min = watershed_groups[i].volume_min;
+      //double volume_min = watershed_groups[i].volume_min;
       double density_avg = mass / volume;
       double density_min = watershed_groups[i].density_min;
       double delta_avg = density_avg / mean_density  - 1.0;

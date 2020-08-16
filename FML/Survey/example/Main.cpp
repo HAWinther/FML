@@ -29,7 +29,6 @@ using namespace FML;
 int main(){
   
   // Read ascii file with [RA, DEC, z, w]
-  const double box = 1024.0;
   const std::string filename = "../../TestData/Randoms.txt";
   const int ncols = 3;
   const int nskip_header = 0;

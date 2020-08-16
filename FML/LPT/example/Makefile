@@ -6,8 +6,8 @@ SHELL := /bin/bash
 # Set c++11 compliant compiler. If USE_MPI we use MPICC 
 #===================================================
 
-CC      = g++-mp-7 -std=c++1z
-MPICC   = mpicxx-openmpi-gcc7 -std=c++1z
+CC      = g++-mp-7 -std=c++1z -Wall
+MPICC   = mpicxx-openmpi-gcc7 -std=c++1z -Wall
 
 #===================================================
 # Options
@@ -33,7 +33,7 @@ USE_DEBUG        = false
 #===================================================
 
 # Main library include (path to folder containin FML/)
-FML_INCLUDE    = /Users/hansw/local
+FML_INCLUDE    = /Users/hansw/local/FML
 
 # FFTW : only needed if USE_FFTW = true
 FFTW_INCLUDE   = $(HOME)/local/include
@@ -92,8 +92,8 @@ endif
 # Object files to be compiled
 #===================================================
 
-VPATH := $(FML_INCLUDE)/FML/ComputePowerSpectra/:$(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/RandomGenerator/
-OBJS = Main.o Global.o RandomGenerator.o ComputePowerSpectrum.o
+VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/RandomGenerator/
+OBJS = Main.o Global.o RandomGenerator.o 
 
 TARGETS := lpt
 all: $(TARGETS)

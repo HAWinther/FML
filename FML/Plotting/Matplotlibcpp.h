@@ -1,6 +1,9 @@
 #ifndef MATPLOTLIBCXX_HEADER
 #define MATPLOTLIBCXX_HEADER
 #pragma once
+#if __cplusplus > 199711L
+#define register      // Deprecated in C++11.
+#endif  // #if __cplusplus > 199711L
 
 //====================================================================
 //
@@ -386,8 +389,8 @@ http://bytes.com/topic/python/answers/793370-multiple-independent-python-interpr
           return reinterpret_cast<PyObject*>(varray);
         }
 
-#else // fallback if we don't have numpy: copy every element of the given \
-      // vector
+#else 
+      // fallback if we don't have numpy: copy every element of the given vector
 
       template <typename Numeric>
         PyObject* get_array(const std::vector<Numeric>& v)

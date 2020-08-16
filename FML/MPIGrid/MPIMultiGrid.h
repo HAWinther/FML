@@ -35,8 +35,8 @@ namespace FML {
           std::vector< MPIGrid<NDIM,T> > _y;           // The grid data
 
           bool _periodic { true };                     // Periodic box
-          int _n_extra_slices_right;                   // Extra x-slices on the left 
           int _n_extra_slices_left;                    // Extra x-slices on the right
+          int _n_extra_slices_right;                   // Extra x-slices on the left 
 
         public:
 
@@ -203,15 +203,15 @@ namespace FML {
     {
 
       //==================================================================================
-      // Check that NTasks is a power of 2 if we have more than 1 task
+      // Check that FML::NTasks is a power of 2 if we have more than 1 task
       // If its not then the parallelization becomes much harder
       // Also check that N is a power of 2
       //==================================================================================
-      assert_mpi( N > 0 and power(2, intlog2(N)) == N ,
+      assert_mpi( N > 0 and FML::power(2, intlog2(N)) == N ,
           "[MPIMultiGrid] N must be positive and a power of 2 for this class too work\n"); 
-      if(NTasks > 1){
-        assert_mpi( power(2, intlog2(NTasks)) == NTasks,
-            "[MPIMultiGrid] NTasks must be a power of 2 for this class too work with MPI\n"); 
+      if(FML::NTasks > 1){
+        assert_mpi( FML::power(2, intlog2(FML::NTasks)) == FML::NTasks,
+            "[MPIMultiGrid] FML::NTasks must be a power of 2 for this class too work with MPI\n"); 
       }
 
       //==================================================================================
@@ -220,8 +220,8 @@ namespace FML {
       // might lie several CPUs apart
       //==================================================================================
       if(Nlevel < 0){
-        if(NTasks > 1) {
-          Nlevel = intlog2(_N) - intlog2(NTasks) + 1;
+        if(FML::NTasks > 1) {
+          Nlevel = intlog2(_N) - intlog2(FML::NTasks) + 1;
         } else {
           Nlevel = intlog2(_N);
         }
@@ -233,8 +233,8 @@ namespace FML {
       // Check that _Nlevel is OK
       assert_mpi( _Nlevel > 0 ,
           "[MPIMultiGrid] Nlevel must be > 1 (otherwise its no multigrid)\n"); 
-      if(NTasks > 0){
-        assert_mpi( _Nlevel <= intlog2(N) - intlog2(NTasks) + 1,
+      if(FML::NTasks > 0){
+        assert_mpi( _Nlevel <= intlog2(N) - intlog2(FML::NTasks) + 1,
             "[MPIMultiGrid] Nlevel is too large. With MPI the smallest level corresponds to each task having jus 2 cell each\n");
       } else {
         assert_mpi( _Nlevel <= intlog2(_N), 
@@ -267,7 +267,7 @@ namespace FML {
             "[MPIMultiGrid::restrict_down] Grid we restrict down to has wrong size\n");
 
         // One over number of cells averaged over  [ = 1 / 2^Ndim ]
-        T oneovernumcells = T ( 1.0/double(power(2,NDIM)) );
+        T oneovernumcells = T ( 1.0/double(FML::power(2,NDIM)) );
 
         // Pointers to Top and Bottom grid
         auto& TopGrid    = _y[from_level];

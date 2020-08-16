@@ -14,8 +14,8 @@
 // From this we compute the LPT displacement field to 
 // second order
 //
-// We use this (just the 1LPT field some simlicity) 
-// to generate particle positions
+// We use this to generate particle positions
+// The 2LPT thing is cosmology specific
 //
 // Then we compute the power-spectrum of this particle
 // distribution and compare it to the input P(k)
@@ -25,7 +25,7 @@
 //
 //=====================================================
 
-const int Ndim = 2;
+const int Ndim = 3;
 template<class T>
   using MPIParticles = FML::PARTICLE::MPIParticles<T>;
 template<int N>
@@ -69,8 +69,8 @@ int main(){
   auto * mem = FML::MemoryLog::get();
 #endif
 
-  const int Nmesh = 256;
-  const int Npart_1D = 256;
+  const int Nmesh = 512;
+  const int Npart_1D = 512;
   const double buffer_factor = 1.25;
   std::string interpolation_method = "CIC";
 
@@ -98,6 +98,11 @@ int main(){
   FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(
       delta,
       phi_2LPT);
+  
+  //=====================================================
+  // We no longer need delta so we can free up memory
+  //=====================================================
+  delta.free();
 
   //=====================================================
   // Generate displacement field Psi = Dphi
@@ -107,18 +112,13 @@ int main(){
   FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector(
       phi_1LPT,
       Psi_1LPT_vector);
+  phi_1LPT.free();
+  
   std::vector<FFTWGrid<Ndim>> Psi_2LPT_vector;
   FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector(
       phi_2LPT,
       Psi_2LPT_vector);
-
-  //=====================================================
-  // We no longer need delta and the displacemnt fields
-  // so we can free up memory
-  //=====================================================
-  delta.free();
-  phi_1LPT.free();
-  //phi_2LPT.free();
+  phi_2LPT.free();
 
   //===============================Y======================
   // Make a regular particle grid (with Npart_1D^NDIM 
@@ -126,42 +126,44 @@ int main(){
   //=====================================================
   MPIParticles<Particle> part;
   part.create_particle_grid(Npart_1D, buffer_factor, FML::xmin_domain, FML::xmax_domain);
+  part.info();
 
   //=====================================================
   // Interpolate displacement field to particle positions
-  // (Note: if Npart_1D = Nmesh then we could assign directly 
-  // without interpolation using the disp fields)
+  // (Note: if Npart_1D = Nmesh then we can assign directly 
+  // without interpolation using the disp fields as the
+  // cell is at the particle position and save time though
+  // we don't do this here)
   //=====================================================
   std::vector<std::vector<FML::GRID::FloatType>> displacements_1LPT(Ndim);
-  std::vector<std::vector<FML::GRID::FloatType>> displacements_2LPT(Ndim);
   for(int idim = Ndim-1; idim >= 0; idim--){
    if(FML::ThisTask == 0) std::cout << "Assigning particles for idim = " << idim << "\n";
-    std::vector<FML::GRID::FloatType> & interpolated_values_1LPT = displacements_1LPT[idim];
     FML::INTERPOLATION::interpolate_grid_to_particle_positions(
         Psi_1LPT_vector[idim],
         part.get_particles_ptr(),
         part.get_npart(),
-        interpolated_values_1LPT,
+        displacements_1LPT[idim],
         interpolation_method);
-    std::vector<FML::GRID::FloatType> & interpolated_values_2LPT = displacements_2LPT[idim];
+    Psi_1LPT_vector[idim].free();
+  }
+  
+  //=====================================================
+  // Interpolate displacement field to particle positions
+  //=====================================================
+  std::vector<std::vector<FML::GRID::FloatType>> displacements_2LPT(Ndim);
+  for(int idim = Ndim-1; idim >= 0; idim--){
     FML::INTERPOLATION::interpolate_grid_to_particle_positions(
         Psi_2LPT_vector[idim],
         part.get_particles_ptr(),
         part.get_npart(),
-        interpolated_values_2LPT,
+        displacements_2LPT[idim],
         interpolation_method);
-  }
-  
-  //=====================================================
-  // We no longer need Psi
-  //=====================================================
-  for(int idim = Ndim-1; idim >= 0; idim--){
-    Psi_1LPT_vector[idim].free();
     Psi_2LPT_vector[idim].free();
   }
 
   //=====================================================
-  // Add displacement to particle position
+  // Add 1LPT displacement to particle position
+  // Add 2LPT displacement to particle position
   // Note the -3/7 factor. This is because growth factors
   // are defined to be == 1 at the initial time, however
   // the physically relevant solution has D2 = -3/7 D1^2
@@ -182,35 +184,37 @@ int main(){
       if(pos[idim] < 0.0) pos[idim] += 1.0;
     }
   }
+  
+  //=====================================================
+  // We no longer need Psi
+  //=====================================================
+  for(int idim = Ndim-1; idim >= 0; idim--){
+    displacements_1LPT[idim].clear();
+    displacements_1LPT[idim].shrink_to_fit();
+    displacements_2LPT[idim].clear();
+    displacements_2LPT[idim].shrink_to_fit();
+  }
+  
+
   FML::MaxOverTasks(&max_disp_1LPT);
   FML::MaxOverTasks(&max_disp_2LPT);
-  if(FML::ThisTask == 0) std::cout << "Maximum displacements: " << max_disp_1LPT * Nmesh << " grid cells\n";
-  if(FML::ThisTask == 0) std::cout << "Maximum displacements: " << max_disp_2LPT * Nmesh << " grid cells\n";
+  if(FML::ThisTask == 0) 
+    std::cout << "Maximum displacements: " << max_disp_1LPT * Nmesh << " grid cells\n";
+  if(FML::ThisTask == 0) 
+    std::cout << "Maximum displacements: " << max_disp_2LPT * Nmesh << " grid cells\n";
   
   //=====================================================
   // We no longer need displacements
   //=====================================================
-  displacements_1LPT.clear();
-  displacements_2LPT.clear();
-  displacements_1LPT.shrink_to_fit();
-  displacements_2LPT.shrink_to_fit();
   part.communicate_particles();
   
-  /*
-  // Output particles
-  for(size_t ind = 0; ind < part.get_npart(); ind++) {
-  auto *pos = part_ptr[ind].get_pos();
-  std::cout << pos[0] << " " << pos[1] << " " << pos[2] << "\n";
-  }
-   */
-
   //=====================================================
   // Lets test that it works as expected
   // Compute power-spectrum with a larger grid
   //=====================================================
-  FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning pofk(Nmesh/2);
+  FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim> pofk(Nmesh/2);
   FML::CORRELATIONFUNCTIONS::compute_power_spectrum_interlacing<Ndim>(
-      2*Nmesh,
+      Nmesh,
       part.get_particles_ptr(),
       part.get_npart(),
       part.get_npart_total(),
@@ -228,7 +232,9 @@ int main(){
   //=====================================================
   // Convert to physical units
   //=====================================================
-  pofk.scale(1.0/box, pow(box,Ndim));
+  if(FML::ThisTask == 0)
+    std::cout << "Pofk / Pofk_input\n";
+  pofk.scale(box);
   if(FML::ThisTask == 0){
     for(int i = 0; i < pofk.n; i++){
       double k = pofk.k[i];

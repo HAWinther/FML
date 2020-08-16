@@ -123,12 +123,13 @@ namespace FML {
 
               // Read header
               int ncpu_loc      = read_int(fp);
+              (void) ncpu_loc;
               int ndim_loc      = read_int(fp);
               int npart_loc     = read_int(fp);
               fclose(fp);
 
               // Allocate particles
-              if(p.size() < npart_loc) p.resize(npart_loc);
+              if(p.size() < size_t(npart_loc)) p.resize(npart_loc);
 
               // Check that dimensions match
               int ndim = p[0].get_ndim();
@@ -330,6 +331,7 @@ namespace FML {
               read_int_vec(fp, mstar_tot_loc, 2);
               read_int_vec(fp, mstar_lost_loc, 2);
               nsink_loc     = read_int(fp);
+              (void) nstar_tot_loc;
 
               // Store npcu globally
               if(!infofileread)

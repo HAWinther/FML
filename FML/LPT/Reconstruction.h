@@ -62,6 +62,8 @@ namespace FML {
           const std::string interpolation_method = density_assignment_method;
           size_t NumPart = part.get_npart();
 
+          const bool periodic_box = true;
+
           // Normalize the los_direction to a unit vector
           assert(los_direction.size() == N);
           double norm = 0.0;
@@ -98,7 +100,7 @@ namespace FML {
             density.free();
 
             // The 1LPT displacement field
-            std::vector<FFTWGrid<N> > Psi;
+            std::vector<FFTWGrid<N> > Psi(N);
             from_LPT_potential_to_displacement_vector(
                 phi_1LPT,
                 Psi);
@@ -107,7 +109,7 @@ namespace FML {
             phi_1LPT.free();
 
             // Interpolate Psi to particle positions
-            std::vector<std::vector<FloatType>> Psi_particle_positions;
+            std::vector<std::vector<FloatType>> Psi_particle_positions(N);
             for(int idim = 0; idim < N; idim++){
               FML::INTERPOLATION::interpolate_grid_to_particle_positions(
                   Psi[idim], 
@@ -117,9 +119,8 @@ namespace FML {
                   interpolation_method);
 
               // Free some memory
-              for(int idim = 0; idim < N; idim++){
-                Psi[idim].free();
-              }
+              Psi[idim].free();
+
 
               // Subtract the RSD component (Psi*r)*r / (1+beta) for each particle
               // Do periodic wrap and communicate particles in case they have left
@@ -157,8 +158,13 @@ namespace FML {
                 // For survey we need to have a box big enough so that we don't wrap around
                 for(int idim = 0; idim < N; idim++){
                   pos[idim] -= Psi_rsd[idim];
-                  if(pos[idim] < 0.0) pos[idim]  += 1.0;
-                  if(pos[idim] >= 1.0) pos[idim] -= 1.0;
+                  if(periodic_box){
+                    if(pos[idim] < 0.0) pos[idim]  += 1.0;
+                    if(pos[idim] >= 1.0) pos[idim] -= 1.0;
+                  } else {
+                    if(pos[idim] < 0.0 or pos[idim] >= 1.0)
+                      assert_mpi(false, "The particles are outside the box and we are set not to periodically wrap");
+                  }
                 }
               }
               part.communicate_particles();
@@ -166,6 +172,56 @@ namespace FML {
           }
         }
     }
+    
+    // NAMESPACE FML::COSMOLOGY
+
+    //================================================================================
+    // This takes a set of particles and displace them from realspace to redshiftspace
+    // Using a fixed line of sight direction
+    // DeltaX = (v * r)r * velocity_to_displacement
+    // If velocities are peculiar then velocity_to_displacement = 1/(aH)
+    //================================================================================
+    template<class T>
+      void particles_to_redshiftspace(
+          FML::PARTICLE::MPIParticles<T> & part,
+          std::vector<double> line_of_sight_direction,
+          double velocity_to_displacement){
+
+        // Make sure line_of_sight_direction is a unit vector
+        double norm = 0.0;
+        for(int idim = 0; idim < N; idim++) {
+          norm +=  line_of_sight_direction[idim] * line_of_sight_direction[idim];
+        }
+        norm = std::sqrt(norm);
+        assert(norm > 0.0);
+        for(int idim = 0; idim < N; idim++) {
+          line_of_sight_direction[idim] /= norm;
+        }
+
+        auto NumPart = part.get_npart();
+        auto *p = part.get_particles_ptr();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+        for(size_t i = 0; i < NumPart; i++){
+          auto *pos = p[i].get_pos();
+          auto *vel = p[i].get_vel();
+          double vdotr = 0.0;
+          for(int idim = 0; idim < N; idim++) {
+            vdotr += vel[idim] * line_of_sight_direction[idim];
+          }
+          for(int idim = 0; idim < N; idim++) {
+            pos[idim] +=  vdotr * line_of_sight_direction[idim] * velocity_to_displacement;
+            // Periodic boundary conditions
+            if(periodic_box){
+              if(pos[idim] <  0.0) pos[idim] += 1.0;
+              if(pos[idim] >= 1.0) pos[idim] -= 1.0;
+            }
+          }
+        }
+        part.communicate_particles();
+      }
+
   }
 }
 #endif

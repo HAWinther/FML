@@ -58,7 +58,7 @@ namespace FML {
         fp.read((char*)&bytes_start,sizeof(bytes_start));
         if(endian_swap) bytes_start = swap_endian(bytes_start);
         if(buffer.size() > 0){
-          if(buffer.size() < bytes_start){
+          if(buffer.size() < size_t(bytes_start)){
             std::string errormessage = "[GadgetReader::read_section] Buffersize is too small\n";
             throw_error(errormessage);
           }
@@ -131,7 +131,7 @@ namespace FML {
           std::string errormessage = "[GadgetWriter::write_section] File is not open\n";
           throw_error(errormessage);
         }
-        if(buffer.size() < bytes){
+        if(buffer.size() < size_t(bytes)){
           std::string errormessage = "[GadgetWriter::write_section] Buffersize too small\n";
           throw_error(errormessage);
         }

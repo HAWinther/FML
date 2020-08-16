@@ -45,6 +45,8 @@ namespace FML {
       // fNL value at the redshift the power-spectrum is defined at
       // See 1108.5512 for more info
       //
+      // There is a sign between the Bardeen potential and the gravitational potential
+      // which leads to a sign difference in fNL!
       //======================================================================
       
       template<int N>
@@ -59,6 +61,8 @@ namespace FML {
             std::vector<double> kernel_values = {}) {
         
           // Ensure that <phi> = 0 in the end (this costs 2 extra FT)
+          // This is not really needed as all terms apart from phi^2 mean to zero
+          // and we take care of phi^2 seperately
           const double subtract_mean = false;
 
           // Set up the kernel values: 
@@ -87,9 +91,6 @@ namespace FML {
           for(auto &val : kernel_values)
             val *= fNL;
 
-          // XXX There is a sign between the Bardeen potential and the gravitational potential
-          // which leads to a sign difference in fNL
-
           const int Nmesh = phi_fourier.get_nmesh();
           assert_mpi(Nmesh > 0, 
               "[generate_nonlocal_gaussian_random_field_fourier] Grid must already be allocated");
@@ -101,6 +102,9 @@ namespace FML {
           if(FML::ThisTask == 0) 
             phi_fourier.set_fourier_from_index(0, 0.0);
 
+          // If fNL = 0 no point to continue
+          if(fNL == 0.0) return;
+
           // Get phi in real space
           FFTWGrid<N> phi_real = phi_fourier;
           phi_real.fftw_c2r();
@@ -108,22 +112,30 @@ namespace FML {
           // Compute phi^2 - <phi>^2 in real space and store in source
           FFTWGrid<N> source(Nmesh);
           double phi_squared_mean = 0.0;
+          double phi_mean = 0.0;
           for(auto & real_index : phi_real.get_real_range()){
             auto phi = phi_real.get_real_from_index(real_index);
             auto value = phi * phi;
             source.set_real_from_index(real_index, value);
             phi_squared_mean += value;
+            phi_mean += phi;
           }
 
 #ifdef USE_MPI
           MPI_Allreduce(MPI_IN_PLACE, &phi_squared_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+          MPI_Allreduce(MPI_IN_PLACE, &phi_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 #endif
+          phi_squared_mean /= std::pow(Nmesh,N);
+          phi_mean /= std::pow(Nmesh,N);
+          
+          if(FML::ThisTask == 0)
+            std::cout << "Generating fNL Phi_squared_mean: " << phi_squared_mean << " Phi_mean: " << phi_mean << "\n";
 
           // Subtract <phi^2>
           for(auto & real_index : source.get_real_range()){
             auto phi2 = source.get_real_from_index(real_index);
             auto phi  = phi_real.get_real_from_index(real_index); 
-            auto value = phi + kernel_values[0] * (phi2 - phi_squared_mean);
+            auto value = (phi - phi_mean) + kernel_values[0] * (phi2 - phi_squared_mean);
             source.set_real_from_index(real_index, value);
           }
 
@@ -137,28 +149,6 @@ namespace FML {
           // If we only want standard local phi + fNL[phi^2 - <phi^2>] then we can return now
           if(kernel_values[1] == 0.0 and kernel_values[2] == 0.0 and kernel_values[3] == 0.0){
             phi_fourier = source;
-
-            if(subtract_mean){
-              // Back and forth and subtract mean
-              phi_fourier.fftw_c2r();
-              double phi_mean = 0.0;
-              for(auto & real_index : phi_fourier.get_real_range()){
-                auto value = phi_fourier.get_real_from_index(real_index);
-                phi_mean += value;
-              }
-#ifdef USE_MPI
-              MPI_Allreduce(MPI_IN_PLACE, &phi_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-#endif
-              phi_mean /= std::pow(Nmesh, N);
-              for(auto & real_index : phi_fourier.get_real_range()){
-                auto phi = phi_fourier.get_real_from_index(real_index);
-                phi_fourier.set_real_from_index(real_index, phi - phi_mean);
-              }
-              phi_fourier.fftw_r2c();
-
-              if(FML::ThisTask == 0)
-                phi_fourier.set_fourier_from_index(0, 0.0);
-            }
             return;
           }
 
@@ -264,6 +254,10 @@ namespace FML {
             MPI_Allreduce(MPI_IN_PLACE, &phi_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 #endif
             phi_mean /= std::pow(Nmesh,N);
+          
+            if(FML::ThisTask == 0)
+              std::cout << "Subtracting mean: " << phi_mean << "\n";
+            
             for(auto & real_index : phi_fourier.get_real_range()){
               auto phi = phi_fourier.get_real_from_index(real_index);
               phi_fourier.set_real_from_index(real_index, phi - phi_mean);

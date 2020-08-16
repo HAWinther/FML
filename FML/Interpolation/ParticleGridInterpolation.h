@@ -127,6 +127,7 @@ namespace FML {
       if(density_assignment_method.compare("PQS") == 0) return 5;
       assert_mpi(false, 
           "[interpolation_order_from_name] Unknown density assignment method\n");
+      return 0;
     }
 
     inline std::pair<int,int> get_extra_slices_needed_for_density_assignment(std::string density_assignment_method){
@@ -146,6 +147,7 @@ namespace FML {
       if(p % 2 == 1) return {p / 2    , p / 2 + 1};
       if(p % 2 == 0) return {p / 2 - 1, p / 2    };
 #endif
+      return {0, 0};
     }
 
     template<int ORDER>
@@ -158,6 +160,7 @@ namespace FML {
         if(ORDER % 2 == 1) return {ORDER / 2    , ORDER / 2 + 1};
         if(ORDER % 2 == 0) return {ORDER / 2 - 1, ORDER / 2    };
 #endif
+        return {0, 0};
       }
 
     //==================================================================================
@@ -264,7 +267,7 @@ namespace FML {
         std::vector<int> xstart(N,-ORDER/2);
 
         // Info about the grid
-        const auto Local_nx      = density.get_local_nx();
+        //const auto Local_nx      = density.get_local_nx();
         const auto Local_x_start = density.get_local_x_start();
         const int Nmesh          = density.get_nmesh();
 

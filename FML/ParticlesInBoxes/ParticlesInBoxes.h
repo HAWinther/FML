@@ -158,7 +158,6 @@ namespace FML {
           ntot += cell.np;
         }
         double fraction_empty = nempty / double(ntot);
-        double nmean = ntot / double(cells.size());
 
         std::cout << "ParticlesInBoxes Ngrid:     " << Ngrid << " Ndim: " << Ndim << "\n";
         std::cout << "Total elements in grid: " << ntot  << "\n";

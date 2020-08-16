@@ -1,0 +1,110 @@
+#ifndef BISPECTRUMBINNING_HEADER
+#define BISPECTRUMBINNING_HEADER
+
+namespace FML {
+  namespace CORRELATIONFUNCTIONS {
+
+    // For storing the results from the bispectrum
+    // Currently only linear bins
+    template<int N> 
+      class BispectrumBinning {
+        public:
+          enum BinningType {
+            LINEAR_SPACING,
+          };
+
+          int n;
+          double kmin;
+          double kmax;
+
+          std::vector<double> B123;
+          std::vector<double> N123;
+          std::vector<double> pofk;
+          std::vector<double> k;
+          std::vector<double> kbin;
+
+          BispectrumBinning() : n(0) {}
+
+          BispectrumBinning(double kmin, double kmax, int nbins){
+            n = nbins;
+            B123.resize(n*n*n);
+            N123.resize(n*n*n);
+            pofk.resize(n);
+            k.resize(n);
+            kbin.resize(n);
+            this->kmin = kmin;
+            this->kmax = kmax;
+            for(size_t i = 0; i < k.size(); i++)
+              k[i] = kmin + (kmax - kmin) * i / double(n);
+          }
+
+          // kscale = 1/boxsize bofkscale = boxsize^(2 NDIM)
+          void scale(const double boxsize){
+            for(size_t i = 0; i < k.size(); i++){
+              k[i] *= 1.0 / boxsize;
+              kbin[i] *= 1.0 / boxsize;
+            }
+            double scale = std::pow(boxsize, 2*N);
+
+            // Bispectrum
+            for(auto &b : B123)
+              b *= scale;
+            
+            // Power-spectrum
+            scale = std::pow(boxsize, N);
+            for(auto &p : pofk)
+              p *= scale;
+          }
+
+          void free(){
+            B123.clear();
+            B123.shrink_to_fit();
+            N123.clear();
+            N123.shrink_to_fit();
+          }
+
+          double get_spectrum(int i, int j, int k){
+            assert(i >= 0 and j >= 0 and k >= 0);
+            assert(i < n and j < n and k < n);
+            return B123[(i*n + j)*n + k];
+          }
+          
+          double get_reduced_spectrum(int i, int j, int k){
+            double B = get_spectrum(i,j,k);
+            double p1 = pofk[i];
+            double p2 = pofk[j];
+            double p3 = pofk[k];
+            double pij = p1*p2 + p2*p3 + p3*p1;
+            return B/pij;
+          }
+
+          double get_bincount(int i, int j, int k){
+            assert(i >= 0 and j >= 0 and k >= 0);
+            assert(i < n and j < n and k < n);
+            return N123[(i*n + j)*n + k];
+          }
+          
+          // This is just to make it easier to add binnings
+          // of several spectra... just for testing
+          int nbinnings = 0;
+          void combine(struct BispectrumBinning &rhs){
+            assert(n == rhs.n);
+            if(nbinnings == 0){
+              B123 = rhs.B123;
+              N123 = rhs.N123;
+              pofk = rhs.pofk;
+              kbin = rhs.kbin;
+            } else {
+              for(size_t i = 0; i < B123.size(); i++)
+                B123[i] = (B123[i]*nbinnings + rhs.B123[i])/(nbinnings+1.0);
+              for(size_t i = 0; i < N123.size(); i++)
+                N123[i] += rhs.N123[i];
+              for(size_t i = 0; i < pofk.size(); i++)
+                pofk[i] = (pofk[i]*nbinnings + rhs.pofk[i])/(nbinnings+1.0);
+            }
+            nbinnings++;
+          }
+      };
+  }
+}
+#endif
