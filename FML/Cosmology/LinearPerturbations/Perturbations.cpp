@@ -1,5 +1,4 @@
 #include "Perturbations.h"
-//#include "span.hpp"
 
 namespace FML {
   namespace COSMOLOGY {
@@ -73,7 +72,6 @@ namespace FML {
       }
       x_array_integration.push_back(0.0);
       n_x_total = x_array_integration.size();
-      std::cout << "Size of x-array: " << n_x_total << "\n";
 
       // Show what every index is
       // psinfo_tight_coupling.debug_print();
@@ -291,6 +289,7 @@ namespace FML {
 
       //=============================================================================
       // Modifications for curvature and vector/tensor modes
+      // XXX This is not finished so curvature not working properly currently XXX
       //=============================================================================
       DVector kappa ( std::max(n_ell_nu, n_ell_theta) + 1, 1.0);
       DVector kappa2( std::max(n_ell_nu, n_ell_theta) + 1, 1.0);

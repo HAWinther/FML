@@ -37,7 +37,7 @@ int main(){
   param_map["n_ell_theta"]  = 12;                    // Number of temperature multipoles to keep in the Boltzmann hierarchy
   param_map["n_ell_nu"]     = 12;                    // Number of Nu multipoles to keep in the Boltzmann hierarchy
   param_map["keta_min"]     = 0.1;                   // Integrate k from k_min*eta0 -> k_max*eta0
-  param_map["keta_max"]     = 3000.0;
+  param_map["keta_max"]     = 5000.0;
   
   // Add power spectrum parameters
   param_map["A_s"]        = 2e-9;
@@ -77,5 +77,9 @@ int main(){
   // Solve for power spectra
   auto power = std::make_shared<FML::COSMOLOGY::PowerSpectrum>(lcdm, rec, pert, p);
   power->solve();
+
+  // Output Cells (tons of other things we can output also)
+  // We use a low keta_max above so only good up until ~2000
+  power->output_angular_power_spectra("cell.txt");
 
 }
