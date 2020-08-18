@@ -237,7 +237,7 @@ namespace FML {
         DVector& x_array,
         DVector& k_array,
         std::function<double(double, double)>& source_function,
-        std::function<double(double, double)>& aux_norm)
+        [[maybe_unused]] std::function<double(double, double)>& aux_norm)
     {
       //Utils::StartTiming("POW::LOS integration");
 
@@ -352,7 +352,7 @@ namespace FML {
           return exptau0 * pert->get_Source_T(x, k); 
         };
         // Normalize while solving to make sure all ells have similar order of magnitude
-        std::function<double(double,double)> solve_T_norm = [](double k, double ell){ 
+        std::function<double(double,double)> solve_T_norm = []([[maybe_unused]] double k, double ell){ 
           return ell/200.0; 
         };
         DVector2D thetaT_ell_of_k = line_of_sight_integration_single(x_array_photons, k_array, source_function_T, solve_T_norm);
@@ -370,7 +370,7 @@ namespace FML {
           return exptau0 * pert->get_Source_E(x, k);
         };
         // Normalize while solving to make sure all ells have similar order of magnitude
-        std::function<double(double,double)> solve_E_norm = [](double k, double ell){ 
+        std::function<double(double,double)> solve_E_norm = []([[maybe_unused]] double k, double ell){ 
           return 1e2 * (ell/200.0)*(ell/200.0); 
         };
         DVector2D thetaE_ell_of_k = line_of_sight_integration_single(x_array_photons, k_array, source_function_E, solve_E_norm);
@@ -394,7 +394,7 @@ namespace FML {
           return 2.0 * pert->get_Psi(x, k) * lensing_source(x, x_cell);
         };
         // Normalize while solving to make sure all ells have similar order of magnitude
-        std::function<double(double,double)> solve_lens_norm = [](double k, double ell){ 
+        std::function<double(double,double)> solve_lens_norm = []([[maybe_unused]] double k, double ell){ 
           return (ell/100.0) * (ell/100.0); 
         };
         DVector2D lens_ell_of_k = line_of_sight_integration_single(x_array, k_array, source_function_L, solve_lens_norm);
@@ -412,7 +412,7 @@ namespace FML {
           return pert->get_Source_N(x, k); 
         };
         // Normalize while solving to make sure all ells have similar order of magnitude
-        std::function<double(double,double)> solve_nu_norm = [](double k, double ell){ 
+        std::function<double(double,double)> solve_nu_norm = []([[maybe_unused]] double k, double ell){ 
           return (ell/200.0); 
         };
         DVector2D Nu_ell_of_k = line_of_sight_integration_single(x_array, k_array, source_function_N, solve_nu_norm);
@@ -422,7 +422,7 @@ namespace FML {
       std::cout << "Done line of sight integration!\n";
     }
 
-    DVector PowerSpectrum::solve_for_cell_single(DVector &log_k_array, std::function<double(double,int)> &integrand, double accuracy_limit){
+    DVector PowerSpectrum::solve_for_cell_single(DVector &log_k_array, std::function<double(double,int)> &integrand, [[maybe_unused]] double accuracy_limit){
       const int nells = ells.size();
 
 #ifdef USE_ODESOLVER_CELL
@@ -462,7 +462,7 @@ namespace FML {
       return data;
     }
 
-    void PowerSpectrum::compute_all_correlation_functions(double xmin, double xmax, int nx){
+    void PowerSpectrum::compute_all_correlation_functions([[maybe_unused]] double xmin, [[maybe_unused]] double xmax, [[maybe_unused]] int nx){
 #ifdef USE_FFTW
       //Utils::StartTiming("POW::Correlation function wth FFTW");
       const double rmin = 1.0   * Constants.Mpc;
@@ -875,7 +875,7 @@ namespace FML {
     // over [kmin, kmax]
     double correlation_function_single(double r, std::function<double(double)>& Delta_P, double kmin, double kmax){ 
 
-      ODEFunction dxidlogk_func = [&](double logkr, const double* y, double* dxidlogkr) {
+      ODEFunction dxidlogk_func = [&](double logkr, [[maybe_unused]] const double* y, double* dxidlogkr) {
         double kr    = std::exp(logkr);
         dxidlogkr[0] = sin(kr)/(kr) * Delta_P(kr / r);
         return GSL_SUCCESS;

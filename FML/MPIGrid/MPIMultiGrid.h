@@ -10,18 +10,19 @@
 
 #include "MPIGrid.h"
 
-//=========================================
-//                                       // 
-// A stack of _Nlevel grids with         //
-// N^NDIM / 2^Level cells in each level  //
-//                                       //
-// Compile time defines:                 //
-// BOUNDSCHECK  : Bounds checks          //
-//                                       //
-//=========================================
-
 namespace FML {
   namespace GRID {
+
+    //==========================================
+    ///                                       // 
+    /// A stack of _Nlevel MPIGrids with      //
+    /// N^NDIM / 2^Level cells in each level  //
+    ///                                       //
+    /// Compile time defines:                 //
+    ///                                       //
+    /// BOUNDSCHECK  : Bounds checks          //
+    ///                                       //
+    //==========================================
 
     template<int NDIM, class T>
       class MPIMultiGrid {

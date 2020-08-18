@@ -103,6 +103,7 @@ void ExamplesInterpolation(){
 
   //=======================================================
   // Output interpolation together with exact result
+  // (Output here only outputs it all when NTasks=1)
   //=======================================================
   if(FML::ThisTask == 0){
     auto & part =  p.get_particles();

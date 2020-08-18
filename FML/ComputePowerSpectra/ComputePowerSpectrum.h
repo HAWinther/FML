@@ -31,10 +31,12 @@ namespace FML {
     template<int N>
       using FFTWGrid = FML::GRID::FFTWGrid<N>;
 
+    //================================================================================
     // Keep track of everything we need for a binned power-spectrum
     // The k-spacing (linear or log or ...), the count in each bin,
     // the power in each bin etc. Its through this interface the results
     // of the methods below are given. See PowerSpectrumBinning.h for how it works
+    //================================================================================
     template<int N> 
       class PowerSpectrumBinning;
 
@@ -46,12 +48,20 @@ namespace FML {
     template<int N, int ORDER>
       class PolyspectrumBinning;
 
-    //=====================================================================
-    //=====================================================================
-
-    // Assign particles to grid using density_assignment_method = NGP,CIC,TSC,PCS,...
-    // Fourier transform, decolvolve the window function for the assignement above,
-    // bin up power-spectrum and subtract shot-noise 1/NumPartTotal
+    //================================================================================
+    /// @brief Assign particles to grid using density_assignment_method = NGP,CIC,TSC,PCS,...
+    /// Fourier transform, decolvolve the window function for the assignement above,
+    /// bin up power-spectrum and subtract shot-noise 1/NumPartTotal
+    /// @tparam N The dimension of the particles.
+    /// @tparam T The particle class. Must have a get_pos() method.
+    /// @param[in] Ngrid Size of the grid to use.
+    /// @param[in] part Pointer to the first particle.
+    /// @param[in] NumPart Number of particles on the local task.
+    /// @param[in] NumPartTotal Total number of particles on all tasks.
+    /// @param[out] pofk The binned power-spectrum. We required it to be initialized with the number of bins, kmin and kmax.
+    /// @param[in] density_assignment_method The density assignment method (NGP, CIC, TSC, PCS or PQS)
+    /// 
+    //================================================================================
     template<int N, class T>
       void compute_power_spectrum(
           int Ngrid,
@@ -61,11 +71,21 @@ namespace FML {
           PowerSpectrumBinning<N> &pofk,
           std::string density_assignment_method);
 
-    // Assign particles to grid using density_assignment_method = NGP,CIC,TSC,PCS,...
-    // Assign particles to an interlaced grid (displaced by dx/2 in all directions)
-    // Fourier transform both and add the together to cancel the leading aliasing contributions
-    // Decolvolve the window function for the assignements above,
-    // bin up power-spectrum and subtract shot-noise 1/NumPartTotal
+    //================================================================================
+    /// @brief Assign particles to a grid and an interlaced grid (displaced by dx/2 in all directions)
+    /// Fourier transform both and add the together to cancel the leading aliasing contributions
+    /// Decolvolve the window function for the assignements above,
+    /// bin up power-spectrum and subtract shot-noise 1/NumPartTotal
+    /// @tparam N The dimension of the particles.
+    /// @tparam T The particle class. Must have a get_pos() method.
+    /// @param[in] Ngrid Size of the grid to use.
+    /// @param[in] part Pointer to the first particle.
+    /// @param[in] NumPart Number of particles on the local task.
+    /// @param[in] NumPartTotal Total number of particles on all tasks.
+    /// @param[out] pofk The binned power-spectrum. We required it to be initialized with the number of bins, kmin and kmax.
+    /// @param[in] density_assignment_method The density assignment method (NGP, CIC, TSC, PCS or PQS)
+    /// 
+    //================================================================================
     template<int N, class T>
       void compute_power_spectrum_interlacing(
           int Ngrid,
@@ -75,8 +95,18 @@ namespace FML {
           PowerSpectrumBinning<N> &pofk,
           std::string density_assignment_method);
 
-    // Brute force. Add particles to the grid using direct summation
-    // This gives alias free P(k), but scales as O(Npart)*O(Nmesh^N)
+    //================================================================================
+    /// @brief Brute force (but aliasing free) computation of the power spectrum. 
+    /// Loop over all grid-cells and all particles and add up contribution and subtracts shot-noise term. 
+    /// Since we need to combine all particles with all cells this is not easiy parallelizable with MPI
+    /// so we assume all CPUs have exactly the same particles when this is run on more than 1 MPI tasks (so best run just using OpenMP). 
+    /// @tparam N The dimension of the particles.
+    /// @tparam T The particle class. Must have a get_pos() method.
+    /// @param[in] Ngrid Size of the grid to use.
+    /// @param[in] part Pointer to the first particle.
+    /// @param[in] NumPart Number of particles on the local task. With MPI assumes all tasks have the same particles.
+    /// @param[out] pofk The binned power-spectrum. We required it to be initialized with the number of bins, kmin and kmax.
+    //================================================================================
     template<int N, class T>
       void compute_power_spectrum_direct_summation(
           int Ngrid, 
@@ -84,27 +114,52 @@ namespace FML {
           size_t NumPart, 
           PowerSpectrumBinning<N> &pofk);
 
-    // Bin up the power-spectrum of a given fourier grid
+    //==========================================================================================
+    /// @brief Compute the power-spectrum of a fourier grid. The result has no scales. Get
+    /// scales by calling pofk.scale(boxsize) which does k *= 1/Boxsize and
+    /// pofk *= Boxsize^N once spectrum has been computed.
+    /// 
+    //==========================================================================================
     template <int N>
       void bin_up_power_spectrum(
           FFTWGrid<N> &fourier_grid,
           PowerSpectrumBinning<N> &pofk);
 
-    // Compute power-spectrum multipoles P0,P1,...,Pn-1 for the case
-    // where we have a fixed line_of_sight_direction (typical coordinate axes like (0,0,1))
-    // Pell contains P0,P1,P2,...Pell_max where ell_max = n-1 is the size of Pell
+    //================================================================================
+    /// @brief Compute power-spectrum multipoles (P0,P1,...,Pn-1) from a Fourier grid
+    /// where we have a fixed line_of_sight_direction (typical coordinate axes like (0,0,1)). 
+    /// Pell contains P0,P1,P2,...Pell_max where ell_max = n-1 is the size of Pell
+    /// @tparam N The dimension of the particles.
+    /// @tparam T The particle class. Must have a get_pos() method.
+    /// @param[in] fourier_grid The fourier grid to compute the multipoles from. 
+    /// @param[out] Pell Vector of power-spectrum binnings. The size of Pell is the maximum ell to compute. 
+    /// All binnings has to have nbins, kmin and kmax set. At the end Pell[ ell ] is a binning of P_ell(k).
+    /// @param[in] line_of_sight_direction The line of sight direction, e.g. (0,0,1) for the z-axis.
+    /// 
+    //================================================================================
     template <int N>
       void compute_power_spectrum_multipoles(
           FFTWGrid<N> &fourier_grid, 
           std::vector< PowerSpectrumBinning<N> > &Pell,
           std::vector<double> line_of_sight_direction);
 
-    // Simple method to estimate multipoles from simulation data
-    // Take particles in realspace and use their velocity to put them into
-    // redshift space. Fourier transform and compute multipoles from this like in the method above.
-    // We do this for all coordinate axes and return the mean P0,P1,... we get from this
-    // velocity_to_displacement is factor to convert your velocity to a coordinate shift in [0,1)
-    // e.g. c/(a H Box) with H ~ 100 h km/s/Mpc and Box boxsize in Mpc/h if velocities are peculiar
+    //================================================================================
+    /// @brief A simple power-spectrum estimator for multipoles in simulations - nothing fancy. 
+    /// Displacing particles from realspace to redshift-space using their velocities
+    /// along each of the coordinate axes. Result is the mean of this. 
+    /// Deconvolving the window-function and subtracting shot-noise (1/NumPartTotal) for monopole.
+    /// @tparam N The dimension of the particles.
+    /// @tparam T The particle class. Must have a get_pos() method.
+    /// @param[in] Ngrid Size of the grid to use.
+    /// @param[in] Particles in the form of a MPIParticle container
+    /// @param[in] velocity_to_displacement Factor to convert a velocity to a displacement. 
+    /// This is c / ( aH(a) Boxsize ) for peculiar and c / (H(a)Boxsize) for comoving velocities
+    /// At z = 0 velocity_to_displacement = 1.0/(100 * Boxsize) when Boxsize is in Mpc/h
+    /// @param[out] Pell Vector of power-spectrum binnings. The size of Pell is the maximum ell to compute. 
+    /// All binnings has to have nbins, kmin and kmax set. At the end Pell[ ell ] is a binning of P_ell(k).
+    /// @param[in] density_assignment_method The density assignment method (NGP, CIC, TSC, PCS or PQS) to use. 
+    ///
+    //================================================================================
     template<int N, class T>
       void compute_power_spectrum_multipoles(
           int Ngrid,
@@ -113,7 +168,18 @@ namespace FML {
           std::vector< PowerSpectrumBinning<N> > &Pell,
           std::string density_assignment_method);
 
-    // Computes the bispectrum B(k1,k2,k3) from particles
+    //================================================================================
+    /// @brief Computes the bispectrum B(k1,k2,k3) from particles
+    /// @tparam N The dimension of the particles.
+    /// @tparam T The particle class. Must have a get_pos() method.
+    /// @param[in] Ngrid Size of the grid to use.
+    /// @param[in] part Pointer to the first particle.
+    /// @param[in] NumPart Number of particles on the local task.
+    /// @param[in] NumPartTotal Total number of particles on all tasks.
+    /// @param[out] bofk The binned bispectrum. We required it to be initialized with the number of bins, kmin and kmax.
+    /// @param[in] density_assignment_method The density assignment method (NGP, CIC, TSC, PCS or PQS)
+    ///
+    //================================================================================
     template<int N, class T>
       void compute_bispectrum(
           int Ngrid,
@@ -123,13 +189,31 @@ namespace FML {
           BispectrumBinning<N> &bofk,
           std::string density_assignment_method);
 
-    // Computes the bispectrum B(k1,k2,k3) from a fourier grid
+    //================================================================================
+    /// @brief Computes the bispectrum B(k1,k2,k3) from a fourier grid
+    /// @tparam N The dimension of the particles.
+    /// @tparam T The particle class. Must have a get_pos() method.
+    /// @param[in] fourier_grid A fourier grid.
+    /// @param[out] bofk The binned bispectrum. We required it to be initialized with the number of bins, kmin and kmax.
+    ///
+    //================================================================================
     template<int N>
       void compute_bispectrum(
-          FFTWGrid<N> & density_k,
+          FFTWGrid<N> & fourier_grid,
           BispectrumBinning<N> &bofk);
 
-    // Computes the polyspectrum P(k1,k2,k3,...) from particles
+    //================================================================================
+    /// @brief Computes the polyspectrum P(k1,k2,k3,...) from particles.
+    /// @tparam N The dimension of the particles.
+    /// @tparam ORDER The order. 2 is the power-spectrum, 3 is the bispectrum, 4 is the trispectrum.
+    /// @param[in] Ngrid Size of the grid to use.
+    /// @param[in] part Pointer to the first particle.
+    /// @param[in] NumPart Number of particles on the local task.
+    /// @param[in] NumPartTotal Total number of particles on all tasks.
+    /// @param[out] polyofk The binned polyspectrum. We required it to be initialized with the number of bins, kmin and kmax.
+    /// @param[in] density_assignment_method The density assignment method (NGP, CIC, TSC, PCS or PQS)
+    ///
+    //================================================================================
     template<int N, class T, int ORDER>
       void compute_polyspectrum(
           int Ngrid,
@@ -139,10 +223,15 @@ namespace FML {
           PolyspectrumBinning<N,ORDER> &polyofk,
           std::string density_assignment_method);
 
-    // Compute the polyspectrum <F1 F2 ... Forder> from a fourier grid
+    //================================================================================
+    /// @brief Computes the polyspectrum P(k1,k2,k3,...) from a fourier grid
+    /// @tparam N The dimension of the particles.
+    /// @tparam ORDER The order. 2 is the power-spectrum, 3 is the bispectrum, 4 is the trispectrum.
+    ///
+    //================================================================================
     template<int N, int ORDER>
       void compute_polyspectrum(
-          FFTWGrid<N> & density_k,
+          FFTWGrid<N> & fourier_grid,
           PolyspectrumBinning<N,ORDER> &polyofk);
 
     //=====================================================================
@@ -158,7 +247,7 @@ namespace FML {
     template <int N>
       void compute_power_spectrum_multipoles(
           FFTWGrid<N> &fourier_grid, 
-          std::vector<PowerSpectrumBinning<N>> &Pell,
+          std::vector< PowerSpectrumBinning<N> > &Pell,
           std::vector<double> line_of_sight_direction) { 
 
         assert_mpi(line_of_sight_direction.size() == N,
@@ -261,11 +350,7 @@ namespace FML {
         }
       }
 
-    //==========================================================================================
-    // Compute the power-spectrum of a fourier grid. The result has no scales. Get
-    // scales by calling pofk.scale(kscale, pofkscale) with kscale = 1/Boxsize and
-    // pofkscale = Boxsize^N once spectrum has been computed
-    //==========================================================================================
+    // Bin up the power-spectrum of a given fourier grid
     template <int N>
       void bin_up_power_spectrum(
           FFTWGrid<N> &fourier_grid,
@@ -306,13 +391,8 @@ namespace FML {
         pofk.normalize();
       }
 
-    //==============================================================================================
-    // Brute force (but aliasing free) computation of the power spectrum
-    // Loop over all grid-cells and all particles and add up contribution and subtracts shot-noise term
-    // Since we need to combine all particles with all cells this is not easiy parallelizable with MPI
-    // so we assume all CPUs have exactly the same particles when this is run on more than 1 MPI tasks
-    //==============================================================================================
-
+    // Brute force. Add particles to the grid using direct summation
+    // This gives alias free P(k), but scales as O(Npart)*O(Nmesh^N)
     template<int N, class T>
       void compute_power_spectrum_direct_summation(
           int Ngrid, 
@@ -320,6 +400,22 @@ namespace FML {
           size_t NumPart, 
           PowerSpectrumBinning<N> &pofk)
       {
+
+#ifdef USE_MPI
+        // Simple check to see if all tasks do have the same particles
+        if(FML::NTasks > 1){
+          long long int tmp1 = NumPart;
+          MPI_Allreduce(MPI_IN_PLACE, &tmp1, 1, MPI_LONG_LONG, MPI_MIN, MPI_COMM_WORLD);
+          long long int tmp2 = NumPart;
+          MPI_Allreduce(MPI_IN_PLACE, &tmp2, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
+          double x = part[0].get_pos()[0]; 
+          MPI_Allreduce(MPI_IN_PLACE, &x, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+          double y = part[0].get_pos()[0]; 
+          MPI_Allreduce(MPI_IN_PLACE, &y, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+          assert_mpi(tmp1 == tmp2 and std::abs(x-y) < 1e-10, 
+              "[direct_summation_power_spectrum] All tasks must have the same particles for this method to work\n");
+        }
+#endif
 
         assert_mpi(Ngrid > 0, 
             "[direct_summation_power_spectrum] Ngrid > 0 required\n");
@@ -364,16 +460,12 @@ namespace FML {
           pofk.pofk[i] -= 1.0 / double(NumPart);
       }
 
-    //================================================================================
-    // A simple power-spectrum estimator for multipoles in simulations - nothing fancy
-    // Displacing particles from realspace to redshift-space using their velocities
-    // along each of the coordinate axes. Result is the mean of this
-    // Deconvolving the window-function and subtracting shot-noise (1/NumPartTotal) (for monopole)
-    //
-    // velocity_to_distance is the factor to convert a velocity to a displacement in units
-    // of the boxsize. This is c / ( aH(a) Boxsize ) for peculiar and c / (H(a)Boxsize) for comoving velocities 
-    // At z = 0 velocity_to_displacement = 1.0/(100 * Boxsize) when Boxsize is in Mpc/h
-    //================================================================================
+    // Simple method to estimate multipoles from simulation data
+    // Take particles in realspace and use their velocity to put them into
+    // redshift space. Fourier transform and compute multipoles from this like in the method above.
+    // We do this for all coordinate axes and return the mean P0,P1,... we get from this
+    // velocity_to_displacement is factor to convert your velocity to a coordinate shift in [0,1)
+    // e.g. c/(a H Box) with H ~ 100 h km/s/Mpc and Box boxsize in Mpc/h if velocities are peculiar
     template<int N, class T>
       void compute_power_spectrum_multipoles(
           int Ngrid,
@@ -428,7 +520,7 @@ namespace FML {
               if(pos[idim] >= 1.0) pos[idim] -= 1.0;
             }
           }
-          // Only displacements along the x-axis can trigger communication needs so we can avoid one call
+          // Only displacements along the x-axis can trigger communication needs so we can avoid some calls
           // if(dir == 0) part.communicate_particles();
           part.communicate_particles();
 
@@ -443,10 +535,13 @@ namespace FML {
               density_k,
               density_assignment_method);
 
-          // Displace particles XXX add OMP
-          for(auto &p : part){
-            auto *pos = p.get_pos();
-            auto *vel = p.get_vel();
+          // Displace particles
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+          for(size_t i = 0; i < part.get_npart(); i++){
+            auto *pos = part[i].get_pos();
+            auto *vel = part[i].get_vel();
             double vdotr = 0.0;
             for(int idim = 0; idim < N; idim++) {
               vdotr += vel[idim] * line_of_sight_direction[idim];
@@ -703,36 +798,36 @@ namespace FML {
     // For the quadrupole we put Qindex = {ii,jj} and we need the 6 combinations xx,yy,zz,xy,yz,zx
     // For the hexadecapole we need {ii,jj,kk,ll} for 15 different combinations
     // xxxx + cyc (3), xxxy + cyc, xxyy + cyc and xxyz + cyc
-    template<int N>
-      void compute_multipole_Q_term(
-          FFTWGrid<N> & density_real,
-          FFTWGrid<N> & Q_real,
-          std::vector<int> Qindex,
-          std::vector<double> origin)
-      {
-        assert(Qindex.size() > 0);
-        assert(origin.size() == N);
+    //template<int N>
+    //  void compute_multipole_Q_term(
+    //      FFTWGrid<N> & density_real,
+    //      FFTWGrid<N> & Q_real,
+    //      std::vector<int> Qindex,
+    //      std::vector<double> origin)
+    //  {
+    //    assert(Qindex.size() > 0);
+    //    assert(origin.size() == N);
 
-        for(auto & real_index : density_real.get_real_range()){
-          auto coord = density_real.get_coord_from_index(real_index);
-          auto pos = density_real.get_real_position(coord);
+    //    for(auto & real_index : density_real.get_real_range()){
+    //      auto coord = density_real.get_coord_from_index(real_index);
+    //      auto pos = density_real.get_real_position(coord);
 
-          double norm = 0.0;
-          for(int idim = 0; idim < N; idim++){
-            pos[idim] -= origin[idim];
-            norm += pos[idim]*pos[idim];
-          }
-          norm = std::sqrt(norm);
-          for(int idim = 0; idim < N; idim++){
-            pos[idim] /= norm;
-          }
-          auto value = density_real.get_real_from_index(real_index);
-          for(auto ii: Qindex)
-            value *= pos[ii];
+    //      double norm = 0.0;
+    //      for(int idim = 0; idim < N; idim++){
+    //        pos[idim] -= origin[idim];
+    //        norm += pos[idim]*pos[idim];
+    //      }
+    //      norm = std::sqrt(norm);
+    //      for(int idim = 0; idim < N; idim++){
+    //        pos[idim] /= norm;
+    //      }
+    //      auto value = density_real.get_real_from_index(real_index);
+    //      for(auto ii: Qindex)
+    //        value *= pos[ii];
 
-          Q_real.set_real_from_index(real_index, value);
-        }
-      }
+    //      Q_real.set_real_from_index(real_index, value);
+    //    }
+    //  }
 
 
     // Computes the bispectrum B(k1,k2,k3) for *all* k1,k2,k3
@@ -751,7 +846,7 @@ namespace FML {
         int nleft  = nleftright.first;
         int nright = nleftright.second;
 
-        // Bin particles to grid
+        // Bin particles to grid (XXX We should add interlacing here)
         FFTWGrid<N> density_k(Ngrid, nleft, nright);
         density_k.add_memory_label("FFTWGrid::compute_bispectrum::density_k");
         particles_to_grid<N,T>(
@@ -761,7 +856,7 @@ namespace FML {
             density_k,
             density_assignment_method);
 
-        // To fourier space
+        // To fourier space 
         density_k.fftw_r2c();
 
         // Deconvolve window function
@@ -787,7 +882,7 @@ namespace FML {
         int nleft  = nleftright.first;
         int nright = nleftright.second;
 
-        // Bin particles to grid
+        // Bin particles to grid (XXX We should do interlacing here)
         FFTWGrid<N> density_k(Ngrid, nleft, nright);
         density_k.add_memory_label("FFTWGrid::compute_bispectrum::density_k");
         particles_to_grid<N,T>(
@@ -811,6 +906,9 @@ namespace FML {
       void compute_bispectrum(
           FFTWGrid<N> & density_k,
           BispectrumBinning<N> &bofk) {
+
+        // Reset binning
+        bofk.reset();
 
         const int Nmesh = density_k.get_nmesh();
         const int nbins = bofk.n;
@@ -857,10 +955,10 @@ namespace FML {
 
         // Set up results vector
         size_t nbins_tot = FML::power(size_t(nbins), 3);
-        std::vector<double> N123(nbins_tot,0.0);
-        std::vector<double> B123(nbins_tot,0.0);
-        std::vector<double> kmean_bin(nbins,0.0);
-        std::vector<double> pofk_bin(nbins,0.0);
+        std::vector<double> &B123      = bofk.B123;
+        std::vector<double> &N123      = bofk.N123;
+        std::vector<double> &kmean_bin = bofk.kbin;
+        std::vector<double> &pofk_bin  = bofk.pofk;
 
         for(int i = 0; i < nbins; i++){
 #ifdef DEBUG_BISPECTRUM
@@ -996,10 +1094,6 @@ namespace FML {
           // Set the result
           B123[i] = (N123_current > 0.0) ? F123_current / N123_current : 0.0;
           N123[i] = (N123_current > 0.0) ? N123_current : 0.0;
-
-          // Return the reduced bispectrum
-          double norm = pofk_bin[ik[0]] * pofk_bin[ik[1]] + pofk_bin[ik[1]] * pofk_bin[ik[2]] + pofk_bin[ik[2]] * pofk_bin[ik[0]];
-          if(norm > 0.0) B123[i] /= norm;
         }
 
         // Set the values we didn't compute by using symmetry
@@ -1027,25 +1121,21 @@ namespace FML {
             }
           }
         }
-
-        // Copy results over
-        bofk.B123 = B123;
-        bofk.N123 = N123;
-        bofk.kbin = k_bin;
-        bofk.pofk = pofk_bin;
-
       }
 
-    template<int N, int order>
+    template<int N, int ORDER>
       void compute_polyspectrum(
-          FFTWGrid<N> & density_k,
-          PolyspectrumBinning<N,order> &polyofk) {
+          FFTWGrid<N> & fourier_grid,
+          PolyspectrumBinning<N,ORDER> &polyofk) {
+        
+        // Reset the binning
+        polyofk.reset();
 
-        const int Nmesh = density_k.get_nmesh();
+        const int Nmesh = fourier_grid.get_nmesh();
         const int nbins = polyofk.n;
         assert(nbins > 0);
         assert(Nmesh > 0);
-        static_assert(order > 1);
+        static_assert(ORDER > 1);
 
         // Now loop over bins and do FFTs
         std::vector< FFTWGrid<N> > F_k(nbins);
@@ -1057,8 +1147,8 @@ namespace FML {
         std::vector<double> klow(nbins);
         double deltak = (polyofk.k[1] - polyofk.k[0]);
         for(int i = 0; i < nbins; i++){
-          F_k[i] = density_k;
-          N_k[i] = density_k;
+          F_k[i] = fourier_grid;
+          N_k[i] = fourier_grid;
           N_k[i].fill_fourier_grid(0.0);
 
           if(i == 0){
@@ -1075,11 +1165,11 @@ namespace FML {
         }
 
         // Set up results vector
-        size_t nbins_tot = FML::power(size_t(nbins),order);
-        std::vector<double> P123(nbins_tot,0.0);
-        std::vector<double> N123(nbins_tot,0.0);
-        std::vector<double> kmean_bin(nbins,0.0);
-        std::vector<double> pofk_bin(nbins,0.0);
+        size_t nbins_tot = FML::power(size_t(nbins),ORDER);
+        std::vector<double> &P123      = polyofk.P123;
+        std::vector<double> &N123      = polyofk.N123;
+        std::vector<double> &kmean_bin = polyofk.kbin;
+        std::vector<double> &pofk_bin  = polyofk.pofk;
 
         for(int i = 0; i < nbins; i++){
 #ifdef DEBUG_BISPECTRUM
@@ -1161,7 +1251,7 @@ namespace FML {
         }
 
         // We now have F_k and N_k for all bins
-        for(int i = 0; i < nbins_tot; i++){
+        for(size_t i = 0; i < nbins_tot; i++){
 #ifdef DEBUG_BISPECTRUM
           if(FML::ThisTask == 0)
             if( (i*10)/nbins_tot != ((i+1)*10)/nbins_tot )
@@ -1169,22 +1259,22 @@ namespace FML {
 #endif
 
           // Current values of ik1,ik2,ik3,...
-          int ik[order];
-          for(int ii = order-1, n = 1; ii >= 0; ii--, n *= nbins){
+          int ik[ORDER];
+          for(int ii = ORDER-1, n = 1; ii >= 0; ii--, n *= nbins){
             ik[ii] = i / n % nbins;
           }
 
           // Symmetry: only do ik1 <= ik2 <= ...
           bool valid = true;
           double ksum = 0.0;
-          for(int ii = 1; ii < order; ii++){
+          for(int ii = 1; ii < ORDER; ii++){
             if(ik[ii] > ik[ii-1]) valid = false;
             ksum += k_bin[ik[ii-1]];
           }
           if(!valid) continue;
 
           // No valid 'triangles' if k1+k2+... < kN so just set too zero right away
-          if(ksum < k_bin[ik[order-1]] - order*deltak/2.){
+          if(ksum < k_bin[ik[ORDER-1]] - ORDER*deltak/2.){
             N123[i] = 0.0;
             P123[i] = 0.0;
             continue;
@@ -1194,7 +1284,7 @@ namespace FML {
           double N123_current = 0.0;
           for(auto & real_index : N_k[0].get_real_range()){
             double Nproduct = 1.0;
-            for(int ii = 0; ii < order; ii++)
+            for(int ii = 0; ii < ORDER; ii++)
               Nproduct *= N_k[ik[ii]].get_real_from_index(real_index);
             N123_current += Nproduct;
           }
@@ -1206,7 +1296,7 @@ namespace FML {
           double F123_current = 0.0;
           for(auto & real_index : F_k[0].get_real_range()){
             double Fproduct = 1.0;
-            for(int ii = 0; ii < order; ii++)
+            for(int ii = 0; ii < ORDER; ii++)
               Fproduct *= F_k[ik[ii]].get_real_from_index(real_index);
             F123_current += Fproduct;
           }
@@ -1223,17 +1313,17 @@ namespace FML {
         }
 
         // Set stuff not computed
-        for(int i = 0; i < nbins_tot; i++){
+        for(size_t i = 0; i < nbins_tot; i++){
 
-          // Current values of k1,k2,k3
-          std::vector<int> ik(order);
-          for(int ii = 0, n = 1; ii < order; ii++, n *= nbins){
+          // Current values of ik1,ik2,ik3
+          std::vector<int> ik(ORDER);
+          for(int ii = 0, n = 1; ii < ORDER; ii++, n *= nbins){
             ik[ii] = i / n % nbins;
           }
 
           // Symmetry: only do ik1 <= ik2 <= ...
           bool valid = true;
-          for(int ii = 1; ii < order; ii++){
+          for(int ii = 1; ii < ORDER; ii++){
             if(ik[ii] > ik[ii-1]) valid = false;
           }
           if(!valid) continue;
@@ -1244,23 +1334,15 @@ namespace FML {
 
           // Compute cell index
           size_t index = 0;
-          for(int ii = 0; ii < order; ii++)
+          for(int ii = 0; ii < ORDER; ii++)
             index = index * nbins + ik[ii];
 
           // Set value (if it has not been set before just in case we fucked up)
           if(P123[index] == 0.0) P123[index] = P123[i];
           if(N123[index] == 0.0) N123[index] = N123[i];
         }
-
-        // Copy results over
-        polyofk.P123 = P123;
-        polyofk.N123 = N123;
-        polyofk.kbin = k_bin;
-        polyofk.pofk = pofk_bin;
-
       }
   }
 }
 
 #endif
-

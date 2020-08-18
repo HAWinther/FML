@@ -5,11 +5,11 @@ using DVector = FML::SOLVERS::FFTLog::DVector;
 
 DVector generate_pofk(DVector &k){
 
-  //===========================================
+  //=====================================================
   // Generate something that looks like the
   // matter power-spectrum with a something to give
   // a very sharp BAO peak as a test function to transform
-  //===========================================
+  //=====================================================
 
   // Fitting formula for the transfer function
   auto bbks_fit = [&](double k){
@@ -36,13 +36,13 @@ DVector generate_pofk(DVector &k){
   return pk;
 }
 
-int main(int argc, char** argv){
+int main(){
   
-  //===========================================
+  //=====================================================
   // Example on how to use FFTLog to compute
   // the correlation function from a power-spectrum
   // The other way around is completely analogous
-  //===========================================
+  //=====================================================
 
   // Generate a k-array
   const double kmin = 1e-5;

@@ -19,46 +19,6 @@
 
 #include <FML/Global/Global.h>
 
-//==========================================================================
-//
-// Class for holding grids and performing real-to-complex and complex-to-real 
-// FFTs using FFTW with MPI. Templated on dimension.
-// The real and fourier grid is stored in the same array to save memory
-// and all transforms are done in-place. Keeps track of the status of the grid, i.e.
-// if its in real-space or fourier-space (set with set_grid_status_real)
-//
-// FFTWGrid<N> (Nmesh, n_extra_left, n_extra_right)
-//   N                : Dimension of the grid
-//   Nmesh            : Number of grid-nodes per dimension (assuming the same)
-//   n_extra          : Alloc extra slices of the grid in the x-dimension (left and/or right)
-//
-// Compile-time defines:
-//   NO_AUTO_FFTW_MPI_INIT      : Do not automatically initialize FFTW, handle this yourself
-//   BOUNDSCHECK_FFTWGRID       : bound checks when setting and getting values
-//   SINGLE_PRECISION_FFTW      : use float instead of double
-//   LONG_DOUBLE_PRECISION_FFTW : use load double instead of double
-//   DEBUG_FFTWGRID             : Show some info while running
-//   USE_MPI                    : Use MPI
-//   USE_OMP                    : Use OpenMP
-//   USE_FFTW_THREADS           : Use threads if possible. With this we assume the maximum number of threads
-//                                If you want to use fewer then you can call create_wisdom(..., nthreads) to change this
-//
-// External variables/methods we need from global:
-//    ThisTask             : The MPI task number
-//    NTasks               : Number of MPI tasks
-//    using IndexIntType   = long long int;
-//    using FloatType      = double;
-//    using ComplexType    = std::complex<FloatType>;
-//    #define assert_mpi(Expr, Msg) __assert_mpi(#Expr, Expr, __FILE__, __LINE__, Msg)
-//    inline void __assert_mpi(const char* expr_str, bool expr, const char* file, int line, const char* msg);
-//    inline long long int power(int base, int exponent);
-//
-// The grid-stucture is only compatible with in-place FFTW transforms so
-// for using the methods that FT from one grid to another we copy the grid and
-// transforms that
-//
-//==========================================================================
-
 namespace FML {
   namespace GRID {
 
@@ -69,9 +29,66 @@ namespace FML {
     class FourierRange;
     class RealRange;
 
+    //==========================================================================
+    ///
+    /// Class for holding grids and performing real-to-complex and complex-to-real 
+    /// FFTs using FFTW with MPI. Templated on dimension.
+    /// 
+    /// The real and fourier grid is stored in the same array to save memory 
+    /// and all transforms are done in-place. Keeps track of the status of the grid, i.e.
+    /// if its in real-space or fourier-space (set with set_grid_status_real)
+    ///
+    /// The default constructor arguments in (Nmesh, n_extra_left, n_extra_right) is:
+    ///   
+    ///   N                : Dimension of the grid
+    ///   
+    ///   Nmesh            : Number of grid-nodes per dimension (assuming the same)
+    ///   
+    ///   n_extra          : Alloc extra slices of the grid in the x-dimension (left and/or right)
+    ///
+    /// Compile-time defines:
+    ///   
+    ///   NO_AUTO_FFTW_MPI_INIT      : Do not automatically initialize FFTW, handle this yourself
+    ///
+    ///   BOUNDSCHECK_FFTWGRID       : bound checks when setting and getting values
+    ///
+    ///   SINGLE_PRECISION_FFTW      : use float instead of double
+    ///
+    ///   LONG_DOUBLE_PRECISION_FFTW : use load double instead of double
+    ///
+    ///   DEBUG_FFTWGRID             : Show some info while running
+    ///
+    ///   USE_MPI                    : Use MPI
+    ///
+    ///   USE_OMP                    : Use OpenMP
+    ///
+    ///   USE_FFTW_THREADS           : Use threads if possible. With this we assume the maximum number of threads
+    ///                                If you want to use fewer then you can call create_wisdom(..., nthreads) to change this
+    /// 
+    /// See FFTWGlobal.h for type definitions and the defines that deal with the precision we want.
+    ///
+    /// External variables/methods we rely on:
+    ///
+    ///    ThisTask             : The MPI task number
+    ///
+    ///    NTasks               : Number of MPI tasks
+    ///
+    ///    assert_mpi(Expr, Msg)
+    ///
+    ///    T power(T base, int exponent);
+    ///
+    /// The grid-stucture is only compatible with in-place FFTW transforms so
+    /// for using the methods that FT from one grid to another we copy the grid and
+    /// transforms that.
+    ///
+    //==========================================================================
+
     template<int N>
       class FFTWGrid{
         private:
+
+          // Index for local cells. Using long long int as standard
+          using IndexIntType = FML::IndexIntType;
 
           // The raw data vectors. These have the format [extra slices left][main grid][extra slices right] 
           // Vector = std::vector<ComplexType> with possible custom allocator
@@ -239,7 +256,7 @@ namespace FML {
           void communicate_boundaries();
 
           // This creates wisdom (but overwrites the arrays so must be done before setting the arrays)
-          void create_wisdow(int planner_flag, int use_nthreads);
+          void create_wisdow(int planner_flag, int numthreads = FML::NThreads);
           void load_wisdow(std::string filename) const;
           void save_wisdow(std::string filename) const;
 
@@ -264,7 +281,7 @@ namespace FML {
       };
 
     template<int N> 
-      void FFTWGrid<N>::add_memory_label(std::string label){
+      void FFTWGrid<N>::add_memory_label([[maybe_unused]] std::string label){
 #ifdef MEMORY_LOGGING
         FML::MemoryLog::get()->add_label(fourier_grid_raw.data(), fourier_grid_raw.capacity() * sizeof(ComplexType), label);
 #endif
@@ -371,7 +388,7 @@ namespace FML {
             std::cout << "Warning: [FFTWGrid::get_fourier_range] The grid status is [Realspace]\n";
         }
 #endif
-        return FourierRange(0, power(Nmesh,N-2)*(Nmesh/2+1)*Local_nx);  
+        return FourierRange(0, FML::power(size_t(Nmesh),N-2)*size_t(Nmesh/2+1)*size_t(Local_nx));  
         //return FourierRange(0, NmeshTotComplex);  
       }
 
@@ -659,7 +676,7 @@ namespace FML {
       // If we don't have FFTW, but want to use this class
       Local_nx = Nmesh / FML::NTasks;
       Local_x_start = FML::ThisTask * Local_nx;
-      NmeshTotComplex = (Nmesh/2+1) * FML::power(Nmesh, N-1) / FML::NTasks;
+      NmeshTotComplex = ptrdiff_t(Nmesh/2+1) * FML::power(ptrdiff_t(Nmesh), N-1) / ptrdiff_t(FML::NTasks);
 #endif
 #else
       NmeshTotComplex = 1;
@@ -669,9 +686,9 @@ namespace FML {
 
       // Total number of real gridcells in the local grid. 
       // NB: This will differ from the number of real cells we allocate!
-      NmeshTotReal = Local_nx * power(ptrdiff_t(Nmesh), N - 1);
+      NmeshTotReal = ptrdiff_t(Local_nx) * FML::power(ptrdiff_t(Nmesh), N - 1);
       // Number of cells for one extra slice
-      NmeshTotComplexSlice = (Nmesh/2+1) * power(ptrdiff_t(Nmesh),N-2);
+      NmeshTotComplexSlice = ptrdiff_t(Nmesh/2+1) * FML::power(ptrdiff_t(Nmesh),N-2);
       NmeshTotRealSlice    = 2 * NmeshTotComplexSlice;
       // Total number of grid-nodes we allocate including extra slices
       NmeshTotComplexAlloc = NmeshTotComplex + NmeshTotComplexSlice * (n_extra_x_slices_left + n_extra_x_slices_right);

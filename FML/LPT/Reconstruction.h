@@ -187,6 +187,13 @@ namespace FML {
           std::vector<double> line_of_sight_direction,
           double velocity_to_displacement){
 
+        // Fetch how many dimensjons we are working in
+        T tmp;
+        const int N = tmp.get_ndim();
+        
+        // Periodic box? Yes
+        const bool periodic_box = true;
+
         // Make sure line_of_sight_direction is a unit vector
         double norm = 0.0;
         for(int idim = 0; idim < N; idim++) {

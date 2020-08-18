@@ -20,7 +20,7 @@ namespace FML {
       //==================================================================
 
       ODEFunctionJacobian no_jacobian =
-        [](double t, const double* y, double* dfdy, double* dfdt) {
+        []([[maybe_unused]] double t, [[maybe_unused]] const double* y, [[maybe_unused]] double* dfdy, [[maybe_unused]] double* dfdt) {
           return GSL_SUCCESS;
         };
 

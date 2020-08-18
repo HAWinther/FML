@@ -22,6 +22,7 @@ int main(){
   // The RHS of the ODE y'' + y = 0 
   // We write it as y0' = y1 ; y1' = -y0
   ODEFunction deriv = [&](double x, const double* y, double* dydx) {
+    (void) x;
     dydx[0] =  y[1];
     dydx[1] = -y[0];
     return GSL_SUCCESS;

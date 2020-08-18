@@ -139,7 +139,7 @@ void TestPeriodic(){
   CorrelationFunctionSimulationBox(particles, nbins, rmax, verbose);
 }
 
-int main(int argc, char **argv){
+int main(){
   TestSurvey(); exit(1);
 
   //TestPeriodic(); exit(1);

@@ -5,7 +5,7 @@
 template<class T>
 using Vector = FML::Vector<T>;
 
-int main(int argc, char **argv){
+int main(){
 
   // The stuff we store in global
   std::cout << FML::ThisTask << " " << FML::NTasks << "\n";

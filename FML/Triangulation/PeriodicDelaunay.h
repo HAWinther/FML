@@ -684,9 +684,7 @@ namespace FML {
           T *p,
           size_t NumPart,
           std::vector<double> & quantity,
-          std::vector<U> & watershed_groups,
-          double buffer_fraction = 0.30,
-          double random_fraction = 0.5){
+          std::vector<U> & watershed_groups) {
 
         assert(quantity.size() == NumPart);
         const double dx_buffer = D.get_dx_buffer();
@@ -1242,9 +1240,7 @@ namespace FML {
             p,
             NumPart,
             density,
-            watershed_groups,
-            buffer_fraction,
-            random_fraction);
+            watershed_groups);
       }
 
   }

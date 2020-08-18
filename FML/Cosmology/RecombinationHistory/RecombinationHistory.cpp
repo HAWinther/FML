@@ -524,7 +524,7 @@ namespace FML {
       }
 
       // The ODE system dtau/dx, dtau_noreion/dx and dtau_baryon/dx
-      ODEFunction deriv_tau = [&](double x, const double* y, double* dydx) {
+      ODEFunction deriv_tau = [&](double x, [[maybe_unused]] const double* y, double* dydx) {
         const double OmegaB = cosmo->get_OmegaB();
 
         // If we don't have baryons then tau = 0
@@ -618,7 +618,7 @@ namespace FML {
       DVector x_array = FML::MATH::linspace(x_start, x_end, npts);
 
       // The sound horizon ODE dr_s/dx = cs(x) / Hp(x)
-      ODEFunction deriv_sound = [&](double x, const double* y, double* dydx) {
+      ODEFunction deriv_sound = [&](double x, [[maybe_unused]] const double* y, double* dydx) {
         if (cosmo->get_OmegaB() == 0.0) {
           dydx[0] = 0.0;
         } else {
@@ -640,7 +640,7 @@ namespace FML {
       sound_horizon_of_x_spline.create(x_array, r_array, "sound_horizon_of_x");
 
       // Compute the diffusion scale
-      ODEFunction deriv_kd = [&](double x, const double* y, double* dydx) {
+      ODEFunction deriv_kd = [&](double x, [[maybe_unused]] const double* y, double* dydx) {
         double a = exp(x);
         double R = 4.0 / 3.0 * cosmo->get_OmegaR() / cosmo->get_OmegaB() / a;
         double Hp = cosmo->Hp_of_x(x);

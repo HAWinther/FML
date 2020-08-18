@@ -8,40 +8,45 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/MPIParticles/MPIParticles.h>
 
-//============================================================================
-// 
-// Assign particles to a grid to compute the density contrast
-// All particles are assumed to have the same mass unless PARTICLES_WITH_DIFFERENT_MASS
-// is set. The assignment function is a B spline kernel of any order, 
-// i.e. H*H*...*H with H being a tophat and * convolution. 
-// The fourier space window functions of these are just sinc(pi/2 * k / kny)^ORDER
-// Order 1=NGP, 2=CIC, 3=TSC, 4=PCS, 5=PQS and higher orders are easily added if you
-// for some strange reason needs this (just add the kernel function). 
-//
-// Interpolate a grid to any given position using the same
-// B spline kernels (this is basically a convolution of the kernels with the grid). 
-// This kind of interpolation is useful for computing forces from a density
-// field of particles. Using the interpolation method corresponding to the
-// density assignment help prevent unphysical self-forces.
-// 
-// Also contains a method for doing a convolution of a grid with a general kernel.
-//
-// Compile time defines:
-// DEBUG_INTERPOL           : Check that the interpolation weights
-//                            sum to unity for density assignment
-// 
-// CELLCENTERSHIFTED        : Shift the position of the cell (located at center of cell
-//                            vs at the corners). Use with care. Not using this option
-//                            saves a slice for even order interpoation and using it
-//                            saves a slice for odd ordered interpolation (TSC+).
-//                            Only relevant if memory is really tight and you need to use
-//                            TSC or PQS
-//
-// PARTICLES_WITH_DIFFERENT_MASS : In case the particles have mass, i.e. has
-//                                 get_mass()
-//============================================================================
-
 namespace FML {
+
+  //============================================================================
+  /// This namespace deals with interpolation and density assignment.
+  ///
+  /// We give methods to assign particles to a grid to compute the density contrast 
+  /// and to interpolate a grid to any given position using the same
+  /// B spline kernels (this is basically a convolution of the kernels with the grid). 
+  /// This kind of interpolation is useful for computing forces from a density
+  /// field of particles. Using the interpolation method corresponding to the
+  /// density assignment help prevent unphysical self-forces.
+  /// 
+  /// All particles are assumed to have the same mass unless PARTICLES_WITH_DIFFERENT_MASS
+  /// is set. 
+  ///
+  /// The assignment function is a B spline kernel of any order, 
+  /// i.e. H*H*...*H with H being a tophat and * convolution. 
+  /// The fourier space window functions of these are just sinc(pi/2 * k / kny)^ORDER
+  /// Order 1=NGP, 2=CIC, 3=TSC, 4=PCS, 5=PQS and higher orders are easily added if you
+  /// for some strange reason needs this (just add the kernel function). 
+  ///
+  /// Also contains a method for doing a convolution of a grid with a general kernel.
+  ///
+  /// Compile time defines:
+  ///
+  /// DEBUG_INTERPOL           : Check that the interpolation weights
+  ///                            sum to unity for density assignment
+  /// 
+  /// CELLCENTERSHIFTED        : Shift the position of the cell (located at center of cell
+  ///                            vs at the corners). Use with care. Not using this option
+  ///                            saves a slice for even order interpoation and using it
+  ///                            saves a slice for odd ordered interpolation (TSC+).
+  ///                            Only relevant if memory is really tight and you need to use
+  ///                            TSC or PQS
+  ///
+  /// PARTICLES_WITH_DIFFERENT_MASS : In case the particles have mass, i.e. has
+  ///                                 get_mass()
+  //============================================================================
+
   namespace INTERPOLATION {
 
     // The float type that we use for FFTE
@@ -50,7 +55,17 @@ namespace FML {
     template<int N>
       using FFTWGrid = FML::GRID::FFTWGrid<N>;
 
-    // Interpolate a grid to a set of positions given by the positions of particles
+    /// @brief Interpolate a grid to a set of positions given by the positions of particles.
+    ///
+    /// @tparam N The dimension of the grid
+    /// @tparam T The particle class. Must have a get_pos() method.
+    /// @tparam ORDER The order of the B-spline interpolation (1=NGP, 2=CIC, 3=TSC, 4=PCS, 5=PQS, ...)
+    ///
+    /// @param[in] grid A grid.
+    /// @param[in] part A pointer the first particle.
+    /// @param[in] NumPart How many particles/positions we have that we want to interpolate the grid to.
+    /// @param[out] interpolated_values A vector with the interpolated values, one per particle. Allocated in the method.
+    ///
     template<int N, int ORDER, class T>
       void interpolate_grid_to_particle_positions(
           const FFTWGrid<N> &grid, 
@@ -58,6 +73,17 @@ namespace FML {
           size_t NumPart,
           std::vector<FloatType> &interpolated_values);
 
+    /// @brief Interpolate a grid to a set of positions given by the positions of particles.
+    ///
+    /// @tparam N The dimension of the grid
+    /// @tparam T The particle class. Must have a get_pos() method.
+    ///
+    /// @param[in] grid A grid.
+    /// @param[in] part A pointer the first particle.
+    /// @param[in] NumPart How many particles/positions we have that we want to interpolate the grid to.
+    /// @param[out] interpolated_values A vector with the interpolated values, one per particle. Allocated in the method.
+    /// @param[in] interpolation_method The interpolation method: NGP, CIC, TSC, PCS or PQS.
+    ///
     template<int N, class T>
       void interpolate_grid_to_particle_positions(
           const FFTWGrid<N> &grid, 
@@ -66,6 +92,17 @@ namespace FML {
           std::vector<FloatType> &interpolated_values,
           std::string interpolation_method);
 
+    /// @brief Assign particles to a grid to compute the over density field delta. 
+    ///
+    /// @tparam N The dimension of the grid
+    /// @tparam T The particle class. Must have a get_pos() method and if PARTICLES_WITH_DIFFERENT_MASS is defined then a get_mass function.
+    ///
+    /// @param[in] part A pointer the first particle.
+    /// @param[in] NumPart How many particles/positions we have that we want to interpolate the grid to.
+    /// @param[in] NumPartTotal How many particles/positions we have in total over all tasks.
+    /// @param[out] density The overdensity field.
+    /// @param[in] density_assignment_method The assignment method: NGP, CIC, TSC, PCS or PQS.
+    ///
     template<int N, class T>
       void particles_to_grid(
           T *part, 
@@ -74,13 +111,44 @@ namespace FML {
           FFTWGrid<N> &density, 
           std::string density_assignment_method);
 
-    // Density assignment from a set of particles
+    /// @brief Assign particles to a grid to compute the over density field delta. 
+    ///
+    /// @tparam N The dimension of the grid
+    /// @tparam T The particle class. Must have a get_pos() method and if PARTICLES_WITH_DIFFERENT_MASS is defined then a get_mass function.
+    /// @tparam ORDER The order of the B-spline interpolation (1=NGP, 2=CIC, 3=TSC, 4=PCS, 5=PQS, ...). If larger than 5 then you must implement
+    /// kernel<ORDER> yourself (a simple Mathematica calculation), see the source.
+    ///
+    /// @param[in] part A pointer the first particle.
+    /// @param[in] NumPart How many particles/positions we have that we want to interpolate the grid to.
+    /// @param[in] NumPartTotal How many particles/positions we have in total over all tasks.
+    /// @param[out] density The overdensity field.
+    ///
     template<int N, int ORDER, class T>
       void particles_to_grid(
           T *part, 
           size_t NumPart, 
           size_t NumPartTot, 
           FFTWGrid<N> &density);
+
+    /// @brief Convolve a grid with a kernel
+    ///
+    /// @tparam N The dimension of the grid
+    /// @tparam ORDER The width of the kernel in units of the cell-size. We consider the \f$ {\rm ORDER}^{\rm N} \f$ closest grid-cells, 
+    /// so ORDER/2 cells to the left and right in each dimension.
+    ///
+    /// @param[in] grid_in The grid we want to convolve.
+    /// @param[out] grid_out The in grid convolved with the kernel.
+    /// @param[in] convolution_kernel A function taking in the distance to a given cell (in units of the cell size) and returns the kernel. 
+    /// For example the NGP kernel would be the function Prod_i ( |dx[i]| < 0.5 ), i.e. 1 if all positions are within half a grid cell of the cell center.
+    ///
+    template<int N, int ORDER>
+      void convolve_grid_with_kernel(
+          const FFTWGrid<N> &grid_in, 
+          FFTWGrid<N> &grid_out,
+          std::function<FloatType(std::vector<double> &)> &convolution_kernel);
+  
+    //===================================================================================================
+    //===================================================================================================
 
     template<int N, class T>
       void particles_to_grid(
@@ -109,16 +177,8 @@ namespace FML {
         if(interpolation_method.compare("PCS") == 0) interpolate_grid_to_particle_positions<N,4,T>(grid, part, NumPart, interpolated_values);
         if(interpolation_method.compare("PQS") == 0) interpolate_grid_to_particle_positions<N,5,T>(grid, part, NumPart, interpolated_values);
       }
-    
-    template<int N, int ORDER, class T>
-      void convolve_grid_with_kernel(
-          const FFTWGrid<N> &grid_in, 
-          FFTWGrid<N> &grid_out,
-          std::function<FloatType(std::vector<double> &)> &convolution_kernel);
 
-    //==================================================================================
-    // The interpolation order from the label. Needed for the Fourier-space window function
-    //==================================================================================
+    /// @brief Get the interpolation order from a string holding the density_assignment_method (NGP, CIC, ...). Needed for the Fourier-space window function
     inline int interpolation_order_from_name(std::string density_assignment_method){
       if(density_assignment_method.compare("NGP") == 0) return 1;
       if(density_assignment_method.compare("CIC") == 0) return 2;
@@ -130,6 +190,16 @@ namespace FML {
       return 0;
     }
 
+    /// @brief Compute how many extra slices we need in the FFTWGrid for a given density assignement / interpolation method.
+    /// @param[in] density_assignment_method The density assignement method (NGP, CIC, TSC, PCS or PQS).
+    /// @return The number of left and right slices.
+    /// @details
+    /// Example usage:
+    ///
+    /// auto nleftright = get_extra_slices_needed_for_density_assignment("CIC");
+    ///
+    /// FFTWGrid<N> grid (Nmesh, nleftright.first, nleftright.second);
+    ///
     inline std::pair<int,int> get_extra_slices_needed_for_density_assignment(std::string density_assignment_method){
       int p = 0;
       if(density_assignment_method.compare("NGP") == 0) p = 1;
@@ -150,6 +220,10 @@ namespace FML {
       return {0, 0};
     }
 
+    /// @brief Compute how many extra slices we need in the FFTWGrid for a given density assignment order.
+    /// @tparam ORDER The order of the B-spline assignment kernel (NGP=1, CIC=2, TSC=3, PCS=4, PQS=5, ...)
+    /// @return The number of left and right slices.
+    ///
     template<int ORDER>
       inline std::pair<int,int> get_extra_slices_needed_by_order(){
         if(ORDER == 1) return {0, 0};
@@ -163,39 +237,47 @@ namespace FML {
         return {0, 0};
       }
 
-    //==================================================================================
-    // Specify the interpolation kernels for a given order
-    // H^(p) = H * H * ... * H where H is the tophat H = [ |dx| < 0.5 ? 1 : 0 ]
-    // and * is a convolution (easily computed with Mathematica)
-    //==================================================================================
-
+    /// @brief Internal method. The B-spline interpolation kernels for a given order
+    /// \f$ H^{(p)} = H * H * \ldots * H \f$ where H is the tophat \f$ H = [ |dx| < 0.5 ? 1 : 0 ] \f$
+    /// and * is a convolution (easily computed with Mathematica)
+    ///
     template<int ORDER>
       inline double kernel(double x){
         static_assert(ORDER > 0 and ORDER <= 5, "Error: kernel order is not implemented\n");
         return 0.0/0.0;
       }
+    /// @brief The NGP kernel
     template<> inline double kernel<1>(double x){
       return (x <= 0.5) ? 1.0 : 0.0;
     }
+    /// @brief The CIC kernel
     template<> inline double kernel<2>(double x){
       return (x < 1.0) ? 1.0 - x : 0.0;
     }
+    /// @brief The TSC kernel
     template<> inline double kernel<3>(double x){
       return (x < 0.5) ? 0.75 - x*x : ( x < 1.5 ? 0.5 * (1.5-x)*(1.5-x) : 0.0 );
     }
+    /// @brief The PCS kernel
     template<> inline double kernel<4>(double x){
       return (x < 1.0) ? 2.0/3.0 + x*x*(-1.0 + 0.5*x) : ( (x < 2.0) ? (2-x)*(2-x)*(2-x)/6.0 : 0.0 );
     }
+    /// @brief The PQS kernel
     template<> inline double kernel<5>(double x){
       return (x < 0.5) ? 115.0/192.0 + 0.25*x*x*(x*x-2.5) : ( (x < 1.5) ? (55 + 4*x*(5-2*x*(15+2*(-5+x)*x)))/96.0 :
           ( (x < 2.5) ? (5-2.0*x)*(5-2.0*x)*(5-2.0*x)*(5-2.0*x)/384. : 0.0) );
     }
 
-    // For communication between tasks needed when adding particles to grid
+    /// @brief Internal method. For communication between tasks needed when adding particles to grid
     template<int N>
       void add_contribution_from_extra_slices(FFTWGrid<N> &density);
 
-    // The FT of the density assignment kernels FT[ H*H*H*...*H ] = FT[H]^p = sinc^p
+    /// @brief Deconvolves the density assignement kernel in Fourier space. We divide the fourier grid by the 
+    /// FFT of the density assignment kernels FFT[ H*H*H*...*H ] = FT[H]^p = sinc^p.
+    /// @tparam N The dimension of the grid
+    /// @param[out] fourier_grid The Fourier grid of the density contrast that we will deconvolve.
+    /// @param[in] density_assignment_method The density assignment method (NGP, CIC, ...) we used when making the density contrast.
+    ///
     template<int N>
       void deconvolve_window_function_fourier(
           FFTWGrid<N> &fourier_grid, 
@@ -580,7 +662,7 @@ namespace FML {
     // work done in the methods above so it comes for free. Not tested!
     //=========================================================================================
     
-    template<int N, int ORDER, class T>
+    template<int N, int ORDER>
       void convolve_grid_with_kernel(
           const FFTWGrid<N> &grid_in, 
           FFTWGrid<N> &grid_out,

@@ -47,7 +47,7 @@ namespace FML {
   //============================================
   // Initialize MPI
   //============================================
-  void init_mpi(int *argc, char ***argv){
+  void init_mpi([[maybe_unused]] int *argc, [[maybe_unused]] char ***argv){
     ThisTask = 0;
     NTasks   = 1;
     xmin_domain = 0.0;
@@ -178,7 +178,7 @@ namespace FML {
 namespace FML {
   namespace GRID {
 
-    void init_fftw(int *argc, char ***argv){
+    void init_fftw([[maybe_unused]] int *argc, [[maybe_unused]] char ***argv){
       // We are assuming MPI has already been initialized
 #ifdef USE_FFTW
 #ifdef USE_FFTW_THREADS
@@ -203,7 +203,7 @@ namespace FML {
 #endif
     }
 
-    void set_fftw_nthreads(int nthreads){
+    void set_fftw_nthreads([[maybe_unused]] int nthreads){
 #ifdef USE_FFTW
 #ifdef USE_FFTW_THREADS
       if(FML::FFTWThreadsOK)

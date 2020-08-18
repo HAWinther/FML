@@ -58,7 +58,7 @@
 namespace FML {
   namespace CORRELATIONFUNCTIONS {
 
-    // The result struct for auto pair counting
+    /// @brief The result struct for auto pair counting
     struct AutoPairCountData{
       std::vector<double> r;
       std::vector<double> r_edge;
@@ -68,7 +68,7 @@ namespace FML {
       double norm;
     };
 
-    // The result struct for cross pair counting
+    /// @brief The result struct for cross pair counting
     struct CrossPairCountData{
       std::vector<double> r;
       std::vector<double> r_edge;
@@ -937,10 +937,9 @@ namespace FML {
             const double weight2 = p2.get_weight();
 
             // Compute squared distance between pairs
-            double dist2;
-            if(ndim == 1) dist2 = dist[0]*dist[0];
-            if(ndim == 2) dist2 = dist[0]*dist[0] + dist[1]*dist[1];
-            if(ndim == 3) dist2 = dist[0]*dist[0] + dist[1]*dist[1] + dist[2]*dist[2];
+            double dist2 = dist[0]*dist[0];
+            if(ndim >= 2) dist2 += dist[1]*dist[1];
+            if(ndim >= 3) dist2 += dist[2]*dist[2];
             if(dist2 >= rmax2) return;
             if(dist2 == 0.0) return;
 
@@ -1066,10 +1065,9 @@ namespace FML {
             const double weight2 = p2.get_weight();
 
             // Compute squared distance between pairs
-            double dist2;
-            if(ndim == 1) dist2 = dist[0]*dist[0];
-            if(ndim == 2) dist2 = dist[0]*dist[0] + dist[1]*dist[1];
-            if(ndim == 3) dist2 = dist[0]*dist[0] + dist[1]*dist[1] + dist[2]*dist[2];
+            double dist2 = dist[0]*dist[0];
+            if(ndim >= 2) dist2 += dist[1]*dist[1];
+            if(ndim >= 3) dist2 += dist[2]*dist[2];
             if(dist2 >= rmax2) return;
 
             // Compute bin index and add to bin
@@ -1110,7 +1108,8 @@ namespace FML {
         }
         r_edge[nbins] = rmax;
 
-        // Compute sum of weights
+        // Compute sum of weights NB: No MPI comm needed here
+        // as we assume all tasks have all the particles
         double sum_weights = 0.0;
         double sum_weights_squared = 0.0;
         auto &cells1 = grid1.get_cells();

@@ -46,7 +46,7 @@ struct Particle {
 
 };
 
-int main(int argc, char **argv){
+int main(){
 
   //=======================================================================================
   // Read particles from file 

@@ -193,7 +193,7 @@ namespace FML {
       DVector x_array = FML::MATH::linspace(x_min_background, x_max_background, n_pts_splines);
 
       // The ODE system deta/dx = c/Hp and dt/dx = c/H
-      ODEFunction deriv = [&](double x, const double* y, double* dydx) {
+      ODEFunction deriv = [&](double x, [[maybe_unused]] const double* y, double* dydx) {
         double HpoverH0 = Hp_of_x(x) / H0;
 
         // Conformal time deta/dx in units of c/H0

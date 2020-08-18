@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iterator>
 #include <map>
+#include <array>
 
 #include <FML/Global/Global.h>
 
@@ -90,8 +91,10 @@ namespace FML {
           size_t id {0};
           size_t np {0};
           double mass{0.0};
-          double pos[NDIM];
-          double vel[NDIM];
+          std::array<double,NDIM> pos;
+          std::array<double,NDIM> vel;
+          //double pos[NDIM];
+          //double vel[NDIM];
           double vel2; // <v^2>
           bool shared {false};
           bool merged {false};
@@ -120,7 +123,9 @@ namespace FML {
             }
 
             // Update center of mass
-            double dx[NDIM], v2 = 0;
+            std::array<double,NDIM> dx;
+            //double dx[NDIM];
+            double v2 = 0;
             for(int idim = 0; idim < NDIM; idim++){
               dx[idim] = _pos[idim] - pos[idim];
               if(periodic){
@@ -152,7 +157,7 @@ namespace FML {
             }
 
             // Merge the two centers of mass
-            double dx[NDIM];
+            std::array<double,NDIM> dx;
             for(int idim = 0; idim < NDIM; idim++){
               dx[idim] = g.pos[idim] - pos[idim];
               if(periodic){
@@ -699,7 +704,8 @@ namespace FML {
 
             // Loop over all 3^NDIM neighbor cells (center cell is included)
             for(int nbcell = 0; nbcell < threetondim; nbcell++){
-              int icoord[NDIM];
+              std::array<int,NDIM> icoord;
+              //int icoord[NDIM];
               for(int idim = 0, threepow = 1; idim < NDIM; idim++, threepow *= nblocksearchpartgrid){
                 int go_left_right_of_stay = -nblocksearchpartgrid/2 + (nbcell/threepow % nblocksearchpartgrid);
                 icoord[idim] = coord[idim] + go_left_right_of_stay;
@@ -811,7 +817,7 @@ namespace FML {
 
         }
 
-      template<class T, int NDIM, class FoFHaloClass = FoFHalo<T,NDIM>>
+      template<class T, int NDIM, class FoFHaloClass>
         void FriendsOfFriends(
             T *part, 
             size_t NumPart, 

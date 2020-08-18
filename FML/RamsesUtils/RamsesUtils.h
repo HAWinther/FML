@@ -122,8 +122,7 @@ namespace FML {
               npart_read = 0;
 
               // Read header
-              int ncpu_loc      = read_int(fp);
-              (void) ncpu_loc;
+              [[maybe_unused]] int ncpu_loc      = read_int(fp);
               int ndim_loc      = read_int(fp);
               int npart_loc     = read_int(fp);
               fclose(fp);
@@ -314,7 +313,14 @@ namespace FML {
               std::vector<RamsesDoubleType> buffer;
 
               // Local variables used to read into
-              int ncpu_loc, ndim_loc, npart_loc, localseed_loc[4], nstar_tot_loc, mstar_tot_loc[2], mstar_lost_loc[2], nsink_loc;
+              int ncpu_loc;
+              int ndim_loc;
+              int npart_loc;
+              int localseed_loc[4];
+              [[maybe_unused]] int nstar_tot_loc;
+              int mstar_tot_loc[2];
+              int mstar_lost_loc[2];
+              int nsink_loc;
 
               // Open file
               if( (fp = fopen(partfile.c_str(), "r")) == NULL){
@@ -331,7 +337,6 @@ namespace FML {
               read_int_vec(fp, mstar_tot_loc, 2);
               read_int_vec(fp, mstar_lost_loc, 2);
               nsink_loc     = read_int(fp);
-              (void) nstar_tot_loc;
 
               // Store npcu globally
               if(!infofileread)

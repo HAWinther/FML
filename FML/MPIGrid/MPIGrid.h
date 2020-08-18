@@ -17,26 +17,9 @@
 
 #include <FML/Global/Global.h>
 
-//==========================================================================================
-//                                        
-// A simple multidimensional grid-class for any type that works over MPI                   
-// Bounds-check for array lookups: #define BOUNDSCHECK                  
-// Every index is an index in the local main grid unless specified otherwise
-// e.g. index = ix*N^2 + iy*N + iz corresponds to (ix + xStartLocal, iy, iz, ...) in the global grid
-// Every coord is a local coordinate unless specified otherwise
-// e.g. (ix, iy, iz, ...) corresponds to (ix + xStartLocal, iy, iz, ...) in the global grid
-// 
-// We require:
-// using IndexInt = long long int;
-// double AbsoluteValue(T &x);
-// inline IndexInt power(int a, int b);
-// Vector
-//
-//==========================================================================================
-
 namespace FML {
   namespace GRID {
-
+ 
     using IndexInt = long long int;
 
     // The absolute value of the type, must be implemented for non-standard types
@@ -44,6 +27,25 @@ namespace FML {
       double AbsoluteValue(T &x){
         return std::abs(x);
       }
+
+    //==========================================================================================
+    //                                        
+    // A simple multidimensional grid-class for any type that works over MPI                   
+    // Bounds-check for array lookups: #define BOUNDSCHECK                  
+    // Every index is an index in the local main grid unless specified otherwise
+    // e.g. index = ix*N^2 + iy*N + iz corresponds to (ix + xStartLocal, iy, iz, ...) in the global grid
+    // Every coord is a local coordinate unless specified otherwise
+    // e.g. (ix, iy, iz, ...) corresponds to (ix + xStartLocal, iy, iz, ...) in the global grid
+    // 
+    // We require:
+    // 
+    //   using IndexInt = long long int;
+    //   
+    //   double AbsoluteValue(T &x);
+    //   
+    //   T power(T base, int exponent);
+    //
+    //==========================================================================================
 
     template<int NDIM, class T>
       class MPIGrid {
@@ -163,12 +165,12 @@ namespace FML {
             MPIGrid<NDIM,T>& operator*=(const U & rhs);
           template<class U>
             MPIGrid<NDIM,T>& operator/=(const U & rhs);
-      
+
           void add_memory_label(std::string label);
       };
-          
+
     template<int NDIM, class T>
-      void MPIGrid<NDIM,T>::add_memory_label(std::string label){
+      void MPIGrid<NDIM,T>::add_memory_label([[maybe_unused]] std::string label){
 #ifdef MEMORY_LOGGING
         FML::MemoryLog::get()->add_label(_y.data(), _y.capacity() * sizeof(ComplexType), label);
 #endif
@@ -256,7 +258,7 @@ namespace FML {
         _xStartLocal    = sumslicesbeforethistask;
         _n_extra_slices_left  = n_extra_slices_left;
         _n_extra_slices_right = n_extra_slices_right;
-        _NperSlice      = power(_N, NDIM-1); 
+        _NperSlice      = FML::power(_N, NDIM-1); 
         _NtotLocalLeft  = _NperSlice * _n_extra_slices_left;
         _NtotLocalRight = _NperSlice * _n_extra_slices_right;
         _NtotLocal      = _NperSlice * _NLocal;

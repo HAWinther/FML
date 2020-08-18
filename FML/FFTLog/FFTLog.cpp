@@ -4,7 +4,7 @@ namespace FML {
   namespace SOLVERS {
     namespace FFTLog {
 
-      // Computes the Gamma function using the Lanczos approximation
+      /// @brief Computes the Gamma function using the Lanczos approximation
       static CDouble gamma(CDouble z) {
 
         if(z.real() < 0.5){
@@ -14,7 +14,7 @@ namespace FML {
         // We get here when called as gamma(1-z) so remove 1 to get -z
         z -= 1;
 
-        // Lanczos coefficients for g = 7
+        // Lanczos coefficients for g = 7 with way too many digits
         static double p[] = {
           0.999999999999809932276847,
           676.5203681218850985670091,
@@ -32,11 +32,7 @@ namespace FML {
         }
 
         const CDouble t = z + 7.5;
-        return sqrt(2*M_PI) * pow(t, z + 0.5) * exp(-t) * x;
-      }
-
-      static CDouble polar(double r, double phi) {
-        return {r*cos(phi), r*sin(phi)};
+        return std::sqrt(2*M_PI) * std::pow(t, z + 0.5) * std::exp(-t) * x;
       }
 
       static void lngamma_4(double x, double y, double* lnr, double* arg) {
@@ -45,6 +41,7 @@ namespace FML {
         if(arg) *arg = w.imag();
       }
 
+      /// @brief Internal method. Compute a "good" value of k*r
       static double goodkr(int N, double mu, double q, double L, double kr) {
         const double xp = (mu+1+q)/2;
         const double xm = (mu+1-q)/2;
@@ -57,14 +54,15 @@ namespace FML {
         const double arg = log(2/kr) * N/L + (argp + argm)/M_PI;
         const double iarg = round(arg);
         if(arg != iarg){
-          kr *= exp((arg - iarg)*L/N);
+          kr *= std::exp((arg - iarg)*L/N);
         }
         return kr;
       }
 
+      /// @brief Internal method. Compute the u coefficients
       CVector ComputeCoefficients(int N, double mu, double q, double L, double kcrc) {
         const double y = M_PI/L;
-        const double k0r0 = kcrc * exp(-L);
+        const double k0r0 = kcrc * std::exp(-L);
         const double t = -2*y*log(k0r0/2);
         CVector u(N);
 
@@ -73,7 +71,7 @@ namespace FML {
           double lnr, phi;
           for(int m = 0; m <= N/2; m++) {
             lngamma_4(x, m*y, &lnr, &phi);
-            u[m] = polar(1.0,m*t + 2*phi);
+            u[m] = std::polar(1.0,m*t + 2*phi);
           }
         } else {
           const double xp = (mu+1+q)/2;
@@ -82,7 +80,7 @@ namespace FML {
           for(int m = 0; m <= N/2; m++) {
             lngamma_4(xp, m*y, &lnrp, &phip);
             lngamma_4(xm, m*y, &lnrm, &phim);
-            u[m] = polar(exp(q*log(2) + lnrp - lnrm), m*t + phip - phim);
+            u[m] = std::polar(std::exp(q*log(2) + lnrp - lnrm), m*t + phip - phim);
           }
         }
 
@@ -146,11 +144,11 @@ namespace FML {
         }
 
         // Compute k's corresponding to input r's (or vice versa)
-        const double k0r0 = kcrc * exp(-L);
+        const double k0r0 = kcrc * std::exp(-L);
         DVector k(N);
         k[0] = k0r0 / r[0];
         for(int n = 1; n < N; n++){
-          k[n] = k[0] * exp(n*L/N);
+          k[n] = k[0] * std::exp(n*L/N);
         }
         return {k, b};
       }
@@ -161,7 +159,7 @@ namespace FML {
         // Set the integrand
         CVector a(k.size());
         for(size_t i = 0; i < k.size(); i++){
-          a[i] = pow(k[i], m - 0.5) * pk[i];
+          a[i] = std::pow(k[i], m - 0.5) * pk[i];
         }
 
         // Transform
@@ -172,7 +170,7 @@ namespace FML {
         // Set output and normalize
         DVector xi(k.size());
         for(size_t i = 0; i < xi.size(); i++){
-          xi[i] = pow(2*M_PI*r[i], -1.5) * b[i].real();
+          xi[i] = std::pow(2*M_PI*r[i], -1.5) * b[i].real();
         }
 
         return {r, xi};

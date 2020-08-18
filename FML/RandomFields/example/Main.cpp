@@ -6,12 +6,13 @@
 template<int N>
 using FFTWGrid = FML::GRID::FFTWGrid<N>;
 
+// Size of box and dimensions
 const double box = 1.0;
 const int Ndim   = 3;
-const bool fix_amplitude = false;
 
 //=========================================================================
 // Naive way of estimating fNL (just for testing)
+// We basically compute fNL = <B/B_theory> (with B_theory for fNL=1)
 //=========================================================================
 template<int N>
 std::pair<double,double> estimate_fnl(FML::CORRELATIONFUNCTIONS::BispectrumBinning<N> &bofk, std::string fnl_type);
@@ -21,6 +22,7 @@ std::pair<double,double> estimate_fnl(FML::CORRELATIONFUNCTIONS::BispectrumBinni
 //=========================================================================
 template<int N>
 void compute_power_spectrum(int Nmesh, FML::RANDOM::RandomGenerator *rng, std::function<double(double)> & Powspec, FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<N> & pofk){
+  const bool fix_amplitude = false;
   FFTWGrid<N> grid(Nmesh); 
   FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier(grid, rng, Powspec, fix_amplitude);
   FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(grid, pofk);
@@ -69,12 +71,13 @@ int main(){
   //=========================================================================
   FML::RANDOM::RandomGenerator *rng = new FML::RANDOM::RandomGenerator;
   
-  const int Nmesh = 256;
+  const int Nmesh = 64;
   FFTWGrid<Ndim> grid(Nmesh);
   
   // Non-gaussianity
   const double fNL = 100.0;
-  const std::string type_of_fnl = "equilateral";
+  const std::string type_of_fnl = "local";
+  const bool fix_amplitude = false;
   
   // Binning in k (kmin should be 0)
   const int nbin = 16;
@@ -96,16 +99,14 @@ int main(){
     return pofk / volume; // Dimensionless P/V
   };
 
-  // Generate 100 spectra and take the mean
+  // Generate 100 gaussian spectra and take the mean
   // generate_mean_over_realisations<Ndim>(100, Nmesh, Powspec);
   // exit(1);
-
-  //rng->set_seed(time(NULL));
-  const int nreal = 100;
   
   //=========================================================================
   // Generate nreal realisation
   //=========================================================================
+  const int nreal = 100;
   double running_mean = 0.0;
   double running_std = 0.0;
   for (int s = 0; s < nreal; s++){
@@ -125,7 +126,7 @@ int main(){
     FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim> pofk(nbin);
     FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(grid, pofk);
     pofk.scale(box);
-    
+
     //=========================================================================
     // Compare to input
     //=========================================================================
@@ -134,7 +135,8 @@ int main(){
       for(int i = 0; i < pofk.n; i++){
         double integer_k = pofk.k[i] * box / (2.0*M_PI);
         double pofk_over_pofk_input = pofk.pofk[i] / (Powspec(pofk.kbin[i] * box) * std::pow(box,Ndim) );
-        std::cout << integer_k << " " << pofk_over_pofk_input << "\n";
+        std::vector<int> coord{i,i};
+        std::cout << integer_k << " " << pofk_over_pofk_input << " " << "\n";
       }
     }
 
@@ -143,10 +145,13 @@ int main(){
     //=========================================================================
     FML::CORRELATIONFUNCTIONS::BispectrumBinning<Ndim> bofk(kmin, kmax, nbin);
     FML::CORRELATIONFUNCTIONS::compute_bispectrum(grid, bofk);
-    //bofk.scale(box);
+    bofk.scale(box);
     
-    //FML::CORRELATIONFUNCTIONS::PolyspectrumBinning<3> polyofk(kmin, kmax, nbin);
-    //FML::CORRELATIONFUNCTIONS::compute_polyspectrum(grid, polyofk);
+    // The general method (here for pofk)
+    // FML::CORRELATIONFUNCTIONS::PolyspectrumBinning<Ndim,2> polyofk(nbin);
+    // FML::CORRELATIONFUNCTIONS::PolyspectrumBinning<Ndim,2> polyofk22;
+    // FML::CORRELATIONFUNCTIONS::compute_polyspectrum(grid, polyofk);
+    // polyofk.scale(box);
 
     //=========================================================================
     // Estimate fNL as a test that is works
@@ -155,8 +160,10 @@ int main(){
     running_mean += res.first;
     running_std += res.second;
     if(FML::ThisTask == 0)
-      std::cout << res.first << " " << res.second / std::sqrt(s+1) 
-        << " Running means: " << running_mean / (s+1.0) << " " << running_std / (s+1.0) / std::sqrt(s+1) << "\n";
+      std::cout << "Estimate of fNL current: " << res.first 
+        << "  Std: " << res.second / std::sqrt(s+1) 
+        << " Estimate of fNL all: " << running_mean / (s+1.0) 
+        << " Std: " << running_std / (s+1.0) / std::sqrt(s+1) << "\n";
 
     //=========================================================================
     // In case we do many realisations add up
@@ -169,41 +176,46 @@ int main(){
   //=========================================================================
   // Output 
   //=========================================================================
-  
+ 
+  // This is B123 / (2p1p2 + 2p2p3 + 2p3p1)
   auto analytic = [&](int i, int j, int k, std::string _fnl_type){
     double pk1 = bofk_all.pofk[i];
     double pk2 = bofk_all.pofk[j];
     double pk3 = bofk_all.pofk[k];
 
-    pk1 = Powspec(bofk_all.k[i]);
-    pk2 = Powspec(bofk_all.k[j]);
-    pk3 = Powspec(bofk_all.k[k]);
+    pk1 = Powspec(bofk_all.kbin[i]);
+    pk2 = Powspec(bofk_all.kbin[j]);
+    pk3 = Powspec(bofk_all.kbin[k]);
 
-    double fac = 2.0 * (pk1 * pk2 + pk2 * pk3 + pk3 * pk1);
+    double res = 0.0;
     if(_fnl_type == "local"){
-      return 1.0;
+      res = 2.0 * (pk1 * pk2 + pk2 * pk3 + pk3 * pk1);
     } else if(_fnl_type == "equilateral"){ 
-      return (-6.0 * (pk1 * pk2 + pk2 * pk3 + pk3 * pk1)
+      res = (-6.0 * (pk1 * pk2 + pk2 * pk3 + pk3 * pk1)
         + 6.0 * std::pow(pk1,1/3.) * std::pow(pk3,2/3.) * std::pow(pk2,3/3.)
         + 6.0 * std::pow(pk1,1/3.) * std::pow(pk2,2/3.) * std::pow(pk3,3/3.)
         + 6.0 * std::pow(pk2,1/3.) * std::pow(pk1,2/3.) * std::pow(pk3,3/3.)
         + 6.0 * std::pow(pk2,1/3.) * std::pow(pk3,2/3.) * std::pow(pk1,3/3.)
         + 6.0 * std::pow(pk3,1/3.) * std::pow(pk2,2/3.) * std::pow(pk1,3/3.)
         + 6.0 * std::pow(pk3,1/3.) * std::pow(pk1,2/3.) * std::pow(pk2,3/3.)
-        - 12.0 * std::pow(pk1*pk2*pk3,2/3.))/fac;
+        - 12.0 * std::pow(pk1*pk2*pk3,2/3.));
     } else if(_fnl_type == "orthogonal"){
-      return (-18.0 * (pk1 * pk2 + pk2 * pk3 + pk3 * pk1)
+      res = (-18.0 * (pk1 * pk2 + pk2 * pk3 + pk3 * pk1)
         + 18.0 * std::pow(pk1,1/3.) * std::pow(pk3,2/3.) * std::pow(pk2,3/3.)
         + 18.0 * std::pow(pk1,1/3.) * std::pow(pk2,2/3.) * std::pow(pk3,3/3.)
         + 18.0 * std::pow(pk2,1/3.) * std::pow(pk1,2/3.) * std::pow(pk3,3/3.)
         + 18.0 * std::pow(pk2,1/3.) * std::pow(pk3,2/3.) * std::pow(pk1,3/3.)
         + 18.0 * std::pow(pk3,1/3.) * std::pow(pk2,2/3.) * std::pow(pk1,3/3.)
         + 18.0 * std::pow(pk3,1/3.) * std::pow(pk1,2/3.) * std::pow(pk2,3/3.)
-        - 48.0 * std::pow(pk1*pk2*pk3,2/3.))/fac;
+        - 48.0 * std::pow(pk1*pk2*pk3,2/3.));
     } else {
       assert(false);
-      return 0.0;
     }
+    
+    // Transform to reduced bispectrum
+    res /= (pk1 * pk2 + pk2 * pk3 + pk3 * pk1);
+
+    return res;
   };
 
   if(FML::ThisTask == 0){
@@ -211,17 +223,32 @@ int main(){
     for(int i = 0; i < bofk_all.n; i++){
       for(int j = 0; j < bofk_all.n; j++){
         for(int k = 0; k < bofk_all.n; k++){
-          if(bofk_all.get_spectrum(i,j,k) == 0.0) continue;
-          double anal = analytic(i,j,k,type_of_fnl);
-          fp << bofk_all.kbin[i] << " " << bofk_all.kbin[j] << " " << bofk_all.kbin[k] << " " 
-            << bofk_all.get_spectrum(i,j,k) / (2.0) << " " << fNL * anal << "\n";
+          
+          double pij = (
+              Powspec(bofk_all.kbin[i]) * Powspec(bofk_all.kbin[j]) + 
+              Powspec(bofk_all.kbin[j]) * Powspec(bofk_all.kbin[k]) +
+              Powspec(bofk_all.kbin[k]) * Powspec(bofk_all.kbin[i])
+              );
+
+          // The binned bispectrum divided by (p1p2+...) with pi binned up in the same way as B
+          double q = bofk_all.get_reduced_spectrum(i,j,k);
+          // The same as above just a different way of computing it
+          double q2 = bofk_all.get_spectrum(i,j,k)  / (2.0 * pij);
+          
+          if(q == 0.0 or pij == 0.0) continue;
+          double anal = fNL * analytic(i,j,k,type_of_fnl);
+          fp << bofk_all.kbin[i] << " " 
+            << bofk_all.kbin[j] << " " 
+            << bofk_all.kbin[k] << " " 
+            << q / anal << " " 
+            << q2 / fNL << "\n";
         }
       }
     }
   }
 
   //=========================================================================
-  // Compute density PDF
+  // Compute density PDF for the last realization
   //=========================================================================
   
   // To real space
@@ -289,7 +316,7 @@ std::pair<double,double> estimate_fnl(FML::CORRELATIONFUNCTIONS::BispectrumBinni
   auto analytic = [&](int i, int j, int k, std::string _fnl_type){
     double fac = (bofk.pofk[i] * bofk.pofk[j] + bofk.pofk[j] * bofk.pofk[k] + bofk.pofk[k] * bofk.pofk[i]);;
     if(_fnl_type == "local"){
-      return 2.0;
+      return 2.0 * fac;
     } else if(_fnl_type == "equilateral"){
       return (-6.0 * (bofk.pofk[i] * bofk.pofk[j] + bofk.pofk[j] * bofk.pofk[k] + bofk.pofk[k] * bofk.pofk[i])
         + 6.0 * std::pow(bofk.pofk[i],1/3.) * std::pow(bofk.pofk[j],2/3.) * std::pow(bofk.pofk[k],3/3.)
@@ -298,7 +325,7 @@ std::pair<double,double> estimate_fnl(FML::CORRELATIONFUNCTIONS::BispectrumBinni
         + 6.0 * std::pow(bofk.pofk[k],1/3.) * std::pow(bofk.pofk[j],2/3.) * std::pow(bofk.pofk[i],3/3.)
         + 6.0 * std::pow(bofk.pofk[k],1/3.) * std::pow(bofk.pofk[i],2/3.) * std::pow(bofk.pofk[j],3/3.)
         + 6.0 * std::pow(bofk.pofk[i],1/3.) * std::pow(bofk.pofk[k],2/3.) * std::pow(bofk.pofk[j],3/3.)
-        - 12.0 * std::pow(bofk.pofk[i]*bofk.pofk[j]*bofk.pofk[k],2/3.))/fac;
+        - 12.0 * std::pow(bofk.pofk[i]*bofk.pofk[j]*bofk.pofk[k],2/3.));
     } else if(_fnl_type == "orthogonal"){
       return (-18.0 * (bofk.pofk[i] * bofk.pofk[j] + bofk.pofk[j] * bofk.pofk[k] + bofk.pofk[k] * bofk.pofk[i])
         + 18.0 * std::pow(bofk.pofk[i],1/3.) * std::pow(bofk.pofk[j],2/3.) * std::pow(bofk.pofk[k],3/3.)
@@ -307,7 +334,7 @@ std::pair<double,double> estimate_fnl(FML::CORRELATIONFUNCTIONS::BispectrumBinni
         + 18.0 * std::pow(bofk.pofk[k],1/3.) * std::pow(bofk.pofk[j],2/3.) * std::pow(bofk.pofk[i],3/3.)
         + 18.0 * std::pow(bofk.pofk[k],1/3.) * std::pow(bofk.pofk[i],2/3.) * std::pow(bofk.pofk[j],3/3.)
         + 18.0 * std::pow(bofk.pofk[i],1/3.) * std::pow(bofk.pofk[k],2/3.) * std::pow(bofk.pofk[j],3/3.)
-        - 48.0 * std::pow(bofk.pofk[i]*bofk.pofk[j]*bofk.pofk[k],2/3.))/fac;
+        - 48.0 * std::pow(bofk.pofk[i]*bofk.pofk[j]*bofk.pofk[k],2/3.));
     } else {
       assert(false);
       return 0.0;

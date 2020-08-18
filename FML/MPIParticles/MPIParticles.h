@@ -12,56 +12,60 @@
 #include <mpi.h>
 #endif
 
-//===========================================================
-// 
-// A container class for holding particles that are distributed
-// across many CPUs and to easily deal with communication
-// of these particles if they cross the domain boundary (simply
-// class communicate_particles() at any time to do this)
-//
-// Contains methods for setting up MPIParticles from a set of particles
-// or creating regular grids of particles and so on
-//
-// Templated on particle class. Particle must at a minimum have the methods:
-// auto *get_pos()                         : Ptr to position
-// int get_ndim()                          : How many dimensions pos have
-// get_particle_byte_size()                : How many bytes does the particle store
-// append_to_buffer(char *)   : append all the particle data to a char array moving buffer forward as we read
-// assign_from_buffer(char *) : assign data to a particle after it has been recieved moving buffer forward as we do this
-//
-// Compile time defines:
-// USE_MPI  : Use MPI
-// USE_OMP  : Use OpenMP
-// DEBUG_MPIPARTICLES    : Show some info when running
-//
-// External variables/methods we need:
-// int ThisTask;
-// int NTasks;
-// assert_mpi(Expr, Msg) __assert_mpi(#Expr, Expr, __FILE__, __LINE__, Msg)
-// inline void __assert_mpi(const char* expr_str, bool expr, const char* file, int line, const char* msg);
-// inline long long int power(int base, int exponent);
-//
-//===========================================================
-
 #include <FML/Global/Global.h>
 
 namespace FML {
   namespace PARTICLE {
 
+    //===========================================================
+    /// 
+    /// A container class for holding particles that are distributed
+    /// across many CPUs and to easily deal with communication
+    /// of these particles if they cross the domain boundary (simply
+    /// class communicate_particles() at any time to do this)
+    ///
+    /// Contains methods for setting up MPIParticles from a set of particles
+    /// or creating regular grids of particles and so on
+    ///
+    /// Templated on particle class. Particle must at a minimum have the methods:
+    ///
+    ///    auto *get_pos()                         : Ptr to position
+    ///
+    ///    int get_ndim()                          : How many dimensions pos have
+    ///
+    ///    get_particle_byte_size()                : How many bytes does the particle store
+    ///
+    ///    append_to_buffer(char *)   : append all the particle data to a char array moving buffer forward as we read
+    ///
+    ///    assign_from_buffer(char *) : assign data to a particle after it has been recieved moving buffer forward as we do this
+    ///
+    /// Compile time defines:
+    ///
+    ///    USE_MPI  : Use MPI
+    ///
+    ///    USE_OMP  : Use OpenMP
+    ///
+    ///    DEBUG_MPIPARTICLES    : Show some info when running
+    ///
+    /// External variables/methods we rely on:
+    ///
+    ///    int ThisTask;
+    ///
+    ///    int NTasks;
+    ///
+    ///    assert_mpi(Expr, Msg)
+    ///
+    ///    T power(T base, int exponent);
+    ///
+    //===========================================================
+
     template<class T>
       class MPIParticles {
         private:
 
-          //===========================================
-          // Container of particles distibuted across
-          // several tasks with MPI
-          //===========================================
-
           // Particle container
           //std::vector<T> p;
           Vector<T> p;
-      
-          // Save / read from file
 
           // Info about the particle distribution
           size_t NpartTotal;          // Total number of particles across all tasks
@@ -156,7 +160,7 @@ namespace FML {
           // Write / read from file
           void dump_to_file(std::string fileprefix, size_t max_bytesize_buffer = 100 * 1000 * 1000);
           void load_from_file(std::string fileprefix, size_t max_bytesize_buffer = 100 * 1000 * 1000);
-      
+
           // Show some info
           void info();
       };
@@ -178,7 +182,7 @@ namespace FML {
       }
 
     template<class T>
-      void MPIParticles<T>::add_memory_label(std::string name){
+      void MPIParticles<T>::add_memory_label([[maybe_unused]] std::string name){
 #ifdef MEMORY_LOGGING
         FML::MemoryLog::get()->add_label(p.data(), p.capacity(), name);
 #endif
@@ -668,7 +672,7 @@ namespace FML {
         copy_over_recieved_data(recv_buffer, ntot_to_recv);
 #endif
       }
-    
+
     template<class T>
       void MPIParticles<T>::dump_to_file(std::string fileprefix, size_t max_bytesize_buffer){
         std::ios_base::sync_with_stdio(false);
@@ -682,7 +686,7 @@ namespace FML {
           std::cout << error << "\n";
           return;
         }
-        
+
         T a;
         int bytes_per_particle = a.get_particle_byte_size();
         int ndim = a.get_ndim();
@@ -730,15 +734,12 @@ namespace FML {
             + std::to_string(FML::ThisTask) + " Filename: " + filename;
           assert_mpi(false, error.c_str());
         }
-        
+
         T a;
         int bytes_per_particle_expected = a.get_particle_byte_size();
         int ndim_expected = a.get_ndim();
         int bytes_per_particle;
         int ndim;
-
-        // XXX Compute x_min_per_task etc instead of reading it.
-        // Write NTasks. Allow NTasks to be different and accomodate that
 
         // Read header data
         myfile.read((char*)&bytes_per_particle,   sizeof(bytes_per_particle));
@@ -753,7 +754,7 @@ namespace FML {
         x_max_per_task.resize(FML::NTasks);
         myfile.read((char*)x_min_per_task.data(), sizeof(double) * FML::NTasks);
         myfile.read((char*)x_max_per_task.data(), sizeof(double) * FML::NTasks);
-        
+
         // Allocate memory
         p.resize(NpartTotal);
 

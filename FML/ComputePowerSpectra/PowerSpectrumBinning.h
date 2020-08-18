@@ -93,13 +93,12 @@ namespace FML {
         return *this;
       }
 
+    template<int N> 
+      PowerSpectrumBinning<N>::PowerSpectrumBinning() : n(0) {}
 
     template<int N> 
-      PowerSpectrumBinning<N>::PowerSpectrumBinning() : PowerSpectrumBinning(128) {}
-
-    template<int N> 
-      PowerSpectrumBinning<N>::PowerSpectrumBinning(const int n)
-      : PowerSpectrumBinning(2.0 * M_PI, 2.0 * M_PI * n, n, LINEAR_SPACING) {}
+      PowerSpectrumBinning<N>::PowerSpectrumBinning(int nbins)
+      : PowerSpectrumBinning(0.0, 2.0 * M_PI * (nbins-1), nbins, LINEAR_SPACING) {}
 
     template<int N> 
       PowerSpectrumBinning<N>::PowerSpectrumBinning(

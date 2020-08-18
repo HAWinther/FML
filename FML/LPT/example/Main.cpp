@@ -69,8 +69,8 @@ int main(){
   auto * mem = FML::MemoryLog::get();
 #endif
 
-  const int Nmesh = 512;
-  const int Npart_1D = 512;
+  const int Nmesh = 128;
+  const int Npart_1D = 128;
   const double buffer_factor = 1.25;
   std::string interpolation_method = "CIC";
 
@@ -143,7 +143,7 @@ int main(){
         part.get_particles_ptr(),
         part.get_npart(),
         displacements_1LPT[idim],
-        interpolation_method);
+        "CIC");
     Psi_1LPT_vector[idim].free();
   }
   
@@ -157,7 +157,7 @@ int main(){
         part.get_particles_ptr(),
         part.get_npart(),
         displacements_2LPT[idim],
-        interpolation_method);
+        "CIC");
     Psi_2LPT_vector[idim].free();
   }
 
@@ -194,7 +194,6 @@ int main(){
     displacements_2LPT[idim].clear();
     displacements_2LPT[idim].shrink_to_fit();
   }
-  
 
   FML::MaxOverTasks(&max_disp_1LPT);
   FML::MaxOverTasks(&max_disp_2LPT);
@@ -237,7 +236,8 @@ int main(){
   pofk.scale(box);
   if(FML::ThisTask == 0){
     for(int i = 0; i < pofk.n; i++){
-      double k = pofk.k[i];
+      double k = pofk.kbin[i];
+      if(k == 0.0) continue;
       std::cout << k << " " << pofk.pofk[i] / power_spectrum(k) << "\n";
     }
   }

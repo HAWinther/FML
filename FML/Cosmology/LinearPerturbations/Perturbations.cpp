@@ -118,7 +118,7 @@ namespace FML {
     // Factor in Bolzmann hierarchy to modify for curvature
     // Temperature:  kappa_factor(ell, 0.0, 0.0, q2, K);
     // Polarization: kappa_factor(ell, 0.0, 2.0*2.0, q2, K);
-    double kappa_factor(double ell2, double m2, double s2, double q2, double K){
+    double kappa_factor(double ell2, double m2, [[maybe_unused]] double s2, double q2, double K){
       double fac = (1.0 - ell2/q2 * K);
       if(fac < 0.0) return 0.0;
       // If spin factor is included in the hierarchy instead of
@@ -298,7 +298,7 @@ namespace FML {
       const double qoverk   = sqrt(1.0 + K/(k*k));
       const double q        = k * qoverk;
       const double q2       = q*q;
-      const double cqoverHp = ckoverHp * qoverk;
+      [[maybe_unused]] const double cqoverHp = ckoverHp * qoverk;
       const double Kfac_delta = (1.0 - 3.0 * K /(k*k));
       for(size_t ell = 2; ell < kappa.size(); ell++){
         kappa[ell]  = kappa_factor(ell*ell, m_type*m_type, 0.0*0.0, q2, K);

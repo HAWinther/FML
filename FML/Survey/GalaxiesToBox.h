@@ -89,7 +89,7 @@ namespace FML {
         using ODESolver   = FML::SOLVERS::ODESOLVER::ODESolver;
         using ODEFunction = FML::SOLVERS::ODESOLVER::ODEFunction;
         using DVector     = FML::SOLVERS::ODESOLVER::DVector;
-        ODEFunction deriv = [&](double z, const double* y, double* dydx) {
+        ODEFunction deriv = [&](double z, [[maybe_unused]] const double* y, double* dydx) {
           dydx[0] = 1.0 / hubble_over_c_of_z(z);
           return GSL_SUCCESS;
         };

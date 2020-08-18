@@ -52,7 +52,7 @@ struct Particle {
   
 };
 
-int main(int argc, char **argv){
+int main(){
   
   //==================================================
   // Make a regular particle grid with Npart_1D^NDIM

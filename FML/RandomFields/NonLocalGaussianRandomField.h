@@ -62,7 +62,7 @@ namespace FML {
         
           // Ensure that <phi> = 0 in the end (this costs 2 extra FT)
           // This is not really needed as all terms apart from phi^2 mean to zero
-          // and we take care of phi^2 seperately
+          // and we take care of phi^2 seperately. Also it is not observable anyway
           const double subtract_mean = false;
 
           // Set up the kernel values: 
@@ -129,7 +129,7 @@ namespace FML {
           phi_mean /= std::pow(Nmesh,N);
           
           if(FML::ThisTask == 0)
-            std::cout << "Generating fNL Phi_squared_mean: " << phi_squared_mean << " Phi_mean: " << phi_mean << "\n";
+            std::cout << "[generate_nonlocal_gaussian_random_field_fourier] <Phi^2>: " << phi_squared_mean << " <Phi>: " << phi_mean << "\n";
 
           // Subtract <phi^2>
           for(auto & real_index : source.get_real_range()){

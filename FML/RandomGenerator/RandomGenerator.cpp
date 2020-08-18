@@ -110,7 +110,7 @@ namespace FML {
       free();
     }
 
-    GSLRandomGenerator::GSLRandomGenerator(const GSLRandomGenerator &rhs){
+    GSLRandomGenerator::GSLRandomGenerator(const GSLRandomGenerator &rhs) : RandomGenerator(rhs) {
       if(rhs.allocated){ 
         if(allocated) free();
         random_generator = gsl_rng_alloc(gsl_random_generator_type); 

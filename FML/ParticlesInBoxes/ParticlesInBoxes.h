@@ -12,13 +12,14 @@
 // auto *get_pos() : Pointer to first element in position
 // int *get_ndim() : Number of dimensions in position
 //
-// This is not parallelized in any way!
+// NB: This is not parallelized in any way!
 // 
 // Its mainly used for paircounting and for that the way we parallelize it is
 // that all tasks make their own grid and does work only on their parts of the grid
 // This can be improved
 //
 // The index of a cell is [iz + iy * N + ix*N^2 + ...], i.e. last coord varies first
+// We use a variant of this in Friend of Friend which should really be merged with this
 //
 //======================================================================
 
