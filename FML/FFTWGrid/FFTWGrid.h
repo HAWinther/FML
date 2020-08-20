@@ -1039,7 +1039,7 @@ namespace FML {
           kvec[0] = twopi * ((Local_x_start+ix) <= nover2 ? (Local_x_start+ix) : (Local_x_start+ix) - Nmesh);
           kmag2 = kvec[0]*kvec[0];
         } else {
-          int coord[N];
+          std::array<int,N> coord;
           coord[N-1] = index % nover2plus1;
           for(int idim = N-2, n = nover2plus1; idim >=0; idim--, n *= Nmesh){
             coord[idim] = (index / n) % Nmesh;

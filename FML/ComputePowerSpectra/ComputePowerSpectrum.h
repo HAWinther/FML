@@ -1152,7 +1152,6 @@ namespace FML {
           N_k[i] = fourier_grid;
           N_k[i].fill_fourier_grid(0.0);
 
-          /*
           if(i == 0){
             klow[i]  = polyofk.k[0];
             khigh[i] = polyofk.k[0] + (polyofk.k[1] - polyofk.k[0])/2.0;
@@ -1164,10 +1163,6 @@ namespace FML {
             khigh[i] = polyofk.k[nbins-1];
           }
           k_bin[i] = (khigh[i]+klow[i])/2.0;
-          */
-          klow[i]  = polyofk.k[i];
-          if(i== nbins-1) khigh[i] = polyofk.k[i]+( polyofk.k[i]- polyofk.k[i-1]);
-          else khigh[i] = polyofk.k[i+1];
         }
 
         // Set up results vector

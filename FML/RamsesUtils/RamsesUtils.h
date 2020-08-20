@@ -8,6 +8,7 @@
 #include <sstream>
 #include <cstring>
 #include <vector>
+#include <array>
 #include <iomanip>
 
 namespace FML {
@@ -313,10 +314,10 @@ namespace FML {
               int ncpu_loc;
               int ndim_loc;
               int npart_loc;
-              int localseed_loc[4];
+              std::array<int,4> localseed_loc;
               [[maybe_unused]] int nstar_tot_loc;
-              int mstar_tot_loc[2];
-              int mstar_lost_loc[2];
+              std::array<int,2> mstar_tot_loc;
+              std::array<int,2> mstar_lost_loc;
               int nsink_loc;
 
               // Open file
@@ -329,10 +330,10 @@ namespace FML {
               ncpu_loc      = read_int(fp);
               ndim_loc      = read_int(fp);
               npart_loc     = read_int(fp);
-              read_int_vec(fp, localseed_loc, 4);
+              read_int_vec(fp, localseed_loc.data(), 4);
               nstar_tot_loc = read_int(fp);
-              read_int_vec(fp, mstar_tot_loc, 2);
-              read_int_vec(fp, mstar_lost_loc, 2);
+              read_int_vec(fp, mstar_tot_loc.data(), 2);
+              read_int_vec(fp, mstar_lost_loc.data(), 2);
               nsink_loc     = read_int(fp);
 
               // Store npcu globally

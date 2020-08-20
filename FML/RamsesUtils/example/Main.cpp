@@ -35,7 +35,7 @@ int main(){
   // File info
   const int output_number = 8;
   const bool verbose = true;
-  std::string outfolder = "../../TestData/";
+  std::string outfolder = "../../../TestData/";
   std::vector<ParticleType> p;
  
   // Set up reader

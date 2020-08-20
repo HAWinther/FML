@@ -489,13 +489,13 @@ namespace FML {
 
           // Positions in global grid in units of [Nmesh]
           auto *pos = part[ind].get_pos();
-          double x[N];
+          std::array<double,N> x;
           for(int idim = 0; idim < N; idim++)
             x[idim] = pos[idim] * Nmesh;
 
           // Nearest grid-node in grid
           // Also do some santity checks. Probably better to throw here if these tests kick in
-          int ix[N], ix_nbor[N];
+          std::array<int,N> ix, ix_nbor;
           for(int idim = 0; idim < N; idim++){
             ix[idim] = int(x[idim]);
             if(idim == 0){
@@ -697,7 +697,7 @@ namespace FML {
           auto ix = grid_in.coord_from_index(ind);
 
           // Neighbor coord
-          int ix_nbor[N];
+          std::array<int,N> ix_nbor;
           ix_nbor[0] = ix[0];
           for(int idim = 1; idim < N; idim++){
             ix_nbor[idim] = ix[idim] + 1;

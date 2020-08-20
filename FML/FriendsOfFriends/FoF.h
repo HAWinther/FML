@@ -95,8 +95,6 @@ namespace FML {
           double mass{0.0};
           std::array<double,NDIM> pos;
           std::array<double,NDIM> vel;
-          //double pos[NDIM];
-          //double vel[NDIM];
           double vel2; // <v^2>
           bool shared {false};
           bool merged {false};
@@ -414,7 +412,7 @@ namespace FML {
                 }
 
                 for(int nbcell = 0; nbcell < threetondim; nbcell++){
-                  int icoord[NDIM];
+                  std::array<int,NDIM> icoord;
                   for(int idim = 0, threepow = 1; idim < NDIM; idim++, threepow *= nblocksearchpartgrid){
                     int go_left_right_of_stay = -nblocksearchpartgrid/2 + (nbcell/threepow % nblocksearchpartgrid);
                     icoord[idim] = coord[idim] + go_left_right_of_stay;
@@ -708,7 +706,6 @@ namespace FML {
             // Loop over all 3^NDIM neighbor cells (center cell is included)
             for(int nbcell = 0; nbcell < threetondim; nbcell++){
               std::array<int,NDIM> icoord;
-              //int icoord[NDIM];
               for(int idim = 0, threepow = 1; idim < NDIM; idim++, threepow *= nblocksearchpartgrid){
                 int go_left_right_of_stay = -nblocksearchpartgrid/2 + (nbcell/threepow % nblocksearchpartgrid);
                 icoord[idim] = coord[idim] + go_left_right_of_stay;

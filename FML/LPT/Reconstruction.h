@@ -1,6 +1,7 @@
 #ifndef RECONSTRUCTION_HEADER
 #define RECONSTRUCTION_HEADER
 #include <vector>
+#include <array>
 #include <complex>
 #include <numeric>
 #include <functional>
@@ -130,7 +131,7 @@ namespace FML {
               for(size_t i = 0; i < NumPart; i++){
                 auto *pos = p->get_pos();
 
-                FloatType r[N];
+                std::array<FloatType,N> r;
                 if(survey_data){
                   double norm = 0.0;
                   for(int idim = 0; idim < N; idim++){
@@ -147,7 +148,7 @@ namespace FML {
                   }
                 }
 
-                FloatType Psi_rsd[N];
+                std::array<FloatType,N> Psi_rsd;
                 FloatType Psidotr = 0.0;
                 for(int idim = 0; idim < N; idim++){
                   Psidotr += los_direction[idim] * Psi_particle_positions[idim][i];
