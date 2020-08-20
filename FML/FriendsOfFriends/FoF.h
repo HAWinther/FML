@@ -1,3 +1,5 @@
+#ifndef FOF_HEADER
+#define FOF_HEADER
 #include <iostream>
 #include <cassert>
 #include <algorithm>
@@ -150,7 +152,7 @@ namespace FML {
           }
 
           // Merge the groups
-          void merge(struct FoFHalo &g, bool periodic){
+          void merge(FoFHalo &g, bool periodic){
             if(g.np == 0) return;
             if(np == 0){
               assert(false); // Should not happen
@@ -184,11 +186,12 @@ namespace FML {
     // A gridcell in a grid used for speeding up the linking of particles
     // The ID of the particles is their position in the particle list
     //=========================================================================
-    typedef struct FoFCells{
-      int np{0};
-      std::vector<size_t> ParticleIndex;
-      FoFCells() : np(0){}
-    } FoFCells;
+    class FoFCells{
+      public:
+        int np{0};
+        std::vector<size_t> ParticleIndex;
+        FoFCells() : np(0){}
+    };
 
     //=========================================================================
     // Bin local particles to cells in a grid
@@ -1182,3 +1185,4 @@ namespace FML {
         }
       }
   }
+#endif

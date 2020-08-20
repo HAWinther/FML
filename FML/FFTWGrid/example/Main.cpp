@@ -1,4 +1,3 @@
-/// \file
 #include <numeric>
 #include <FML/FFTWGrid/FFTWGrid.h>
 

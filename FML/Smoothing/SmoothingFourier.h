@@ -15,9 +15,6 @@
 namespace FML {
   namespace GRID {
 
-    template<int N>
-      using FFTWGrid = FML::GRID::FFTWGrid<N>;
-
     // Take a fourier grid and divide each mode by its norm
     // so f(k) -> f(k) / |f(k)|
     template<int N>
@@ -25,7 +22,7 @@ namespace FML {
           FFTWGrid<N> & fourier_grid)
       {
         std::vector<double> kvec(N);
-        double kmag2;
+        [[maybe_unused]] double kmag2;
         for(auto & index : fourier_grid.get_fourier_range()){
           auto value = fourier_grid.get_fourier_from_index(index); 
           double norm = std::sqrt(std::norm(value));

@@ -1,5 +1,7 @@
 #include <cmath>
 #include <iostream>
+#include <random>
+
 #include <FML/Spline/Spline.h>
 
 //using namespace FML::SPLINE;
@@ -7,6 +9,8 @@ using Spline  = FML::INTERPOLATION::SPLINE::Spline;
 using DVector = FML::INTERPOLATION::SPLINE::DVector;
 
 int main(){
+  std::mt19937 generator;
+  auto udist = std::uniform_real_distribution<double>(0.0,1.0);
 
   //======================================
   // Make a spline and use it
@@ -35,7 +39,7 @@ int main(){
 
   // Output the error at random points close to the ones we sampled
   for(int i = 0; i < npts; i++){
-    const double x = x_array[i] + (rand() % 100) / 100. / double(npts);
+    const double x = x_array[i] + udist(generator) / double(npts);
     const double y = y_spline(x);
     const double ytrue = function(x);
     std::cout << x << " " << y << " " << ytrue << " Error %: " << abs(y-ytrue) / abs(ytrue) * 100. << "\n";

@@ -1,5 +1,8 @@
 #ifndef BISPECTRUMBINNING_HEADER
 #define BISPECTRUMBINNING_HEADER
+#include <vector>
+#include <cmath>
+#include <FML/Global/Global.h>
 
 namespace FML {
   namespace CORRELATIONFUNCTIONS {
@@ -44,7 +47,7 @@ namespace FML {
           // This is just to make it easier to add binnings
           // of several spectra... just for testing
           int nbinnings = 0;
-          void combine(struct BispectrumBinning &rhs);
+          void combine(BispectrumBinning &rhs);
       };
 
     template<int N>
@@ -126,7 +129,7 @@ namespace FML {
       }
 
     template<int N>
-      void BispectrumBinning<N>::combine(struct BispectrumBinning &rhs){
+      void BispectrumBinning<N>::combine(BispectrumBinning &rhs){
         assert(n == rhs.n);
         if(nbinnings == 0){
           B123 = rhs.B123;

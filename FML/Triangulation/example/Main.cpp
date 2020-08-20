@@ -34,14 +34,12 @@ struct Particle {
     memcpy(buffer, Pos, bytes);
     buffer += bytes;
     memcpy(buffer, &volume, sizeof(volume));
-    buffer += sizeof(volume);
   }
   void assign_from_buffer(char *buffer){
     int bytes = sizeof(Pos[0]) * NDIM;
     memcpy(Pos, buffer, bytes);
     buffer += bytes;
     memcpy(&volume, buffer, sizeof(volume));
-    buffer += sizeof(volume);
   }
 
 };
@@ -52,7 +50,7 @@ int main(){
   // Read particles from file 
   //=======================================================================================
   FML::PARTICLE::MPIParticles<Particle> part;
-  std::ifstream fp("../../TestData/particles_B1024.txt");
+  std::ifstream fp("../../../TestData/particles_B1024.txt");
   if(!fp) exit(1);
   const int ntot = 351265;
   const double boxsize = 1024.0;

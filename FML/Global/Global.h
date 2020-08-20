@@ -44,10 +44,14 @@ namespace FML {
   extern int NThreads;
   extern bool MPIThreadsOK;
   extern bool FFTWThreadsOK;
+  extern std::string processor_name;
 
   // The local extent of the domain (global domain goes from 0 to 1)
   extern double xmin_domain;
   extern double xmax_domain;
+
+  // XXX
+  auto uniform_random() -> double;
 
   //================================================
   // Allocator to allow for logging of memory
@@ -148,14 +152,14 @@ namespace FML {
   // Disable with define NO_AUTO_MPI_SETUP
   //============================================
   struct MPISetup {
-    static MPISetup & init(int *argc = NULL, char *** argv = NULL){
+    static MPISetup & init(int *argc = nullptr, char *** argv = nullptr){
       static MPISetup instance(argc,argv);
       return instance;
     }
 
     private:
 
-    MPISetup(int *argc = NULL, char *** argv = NULL){
+    MPISetup(int *argc = nullptr, char *** argv = nullptr){
       init_mpi(argc, argv);
     }
 

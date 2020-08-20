@@ -1,4 +1,5 @@
 #include <iostream>
+#include <random>
 #include "../GeneralParticle.h"
 
 // General particle
@@ -22,13 +23,16 @@ using Particle = GeneralParticle<NDIM,
 
 int main(){
   Particle p;
+  
+  std::mt19937 generator;
+  auto udist = std::uniform_real_distribution<double>(0.0,1.0);
 
   PositionType pos[NDIM];
   for(int idim = 0; idim < NDIM; idim++)
-    pos[idim] = (rand() % 100)/100.;
+    pos[idim] = udist(generator);
   VelocityType vel[NDIM];
   for(int idim = 0; idim < NDIM; idim++)
-    vel[idim] = 10.0 + (rand() % 100)/100.;
+    vel[idim] = 10.0 + udist(generator);
   IDType id = 538;
   MassType mass = 752.0;
   VolType vol = 123.0;

@@ -43,9 +43,9 @@ namespace FML {
     namespace GADGET {
       
       // This is Mpl^2/(H0 Msun/h) used to set the mass of particles
-      const double MplMpl_over_H0Msunh = 2.49264e21;
+      extern const double MplMpl_over_H0Msunh;
       // This is 1/H0 in units of Mpc/h used to set the mass of particles 
-      const double HubbleLengthInMpch = 2997.92458;
+      extern const double HubbleLengthInMpch;
 
       // The ID type we use
 #ifdef GADGET_LONG_INT_IDS

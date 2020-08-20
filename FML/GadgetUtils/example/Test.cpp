@@ -1,6 +1,6 @@
-#include "../../GadgetUtils/GadgetUtils.h"
-#include "../../Global/Global.h"
-#include "../../FileUtils/FileUtils.h"
+#include <FML/GadgetUtils/GadgetUtils.h>
+#include <FML/Global/Global.h>
+#include <FML/FileUtils/FileUtils.h>
 
 //=========================================================
 // Read an ascii file with particles. Write it as a gadget file
@@ -11,7 +11,7 @@
 struct Particle {
   double pos[3];
   double vel[3];
-  int id;
+  int id {0};
 
   Particle(){}
   Particle(double * x, double *v){
@@ -36,7 +36,8 @@ using GadgetWriter = FML::FILEUTILS::GADGET::GadgetWriter;
 
 int main(){
 
-  if(FML::ThisTask == 0) std::cout << "Reading particles from file\n";
+  if(FML::ThisTask == 0) 
+    std::cout << "Reading particles from file\n";
 
   //=========================================================
   // Read ascii file with [x,y,z]

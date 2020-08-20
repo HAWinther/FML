@@ -1,6 +1,7 @@
 #include <FML/PairCounting/PairCount.h>
 #include <FML/ParticlesInBoxes/ParticlesInBoxes.h>
 #include <FML/Survey/GalaxiesToBox.h>
+#include <FML/Global/Global.h>
 
 #include <vector>
 #include <fstream>
@@ -110,7 +111,7 @@ void TestPeriodic(){
   for(int i = 0; i < npart; i++){
     auto Pos = particles[i].get_pos();
     for(int j = 0; j < NDIM; j++){
-      Pos[j] = (rand() % RAND_MAX)/double(RAND_MAX);
+      Pos[j] = FML::uniform_random();
       fp << Pos[j] << " ";
     }
     fp << "\n";

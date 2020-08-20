@@ -247,7 +247,7 @@ namespace FML {
       // to avoid any issues with this
       const double arg_max_libcxx = 14000.0;
       if(arg > arg_max_libcxx) return 0.0;
-      return std::sph_bessel(ell, arg);
+      return std::sph_bessel(ell, arg); // NOLINT
     }
 #endif
 

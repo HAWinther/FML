@@ -1,5 +1,5 @@
+# This is the style file for clang-format in FML
 Language:        Cpp
-# BasedOnStyle:  LLVM
 AccessModifierOffset: -2
 AlignAfterOpenBracket: Align
 AlignConsecutiveAssignments: false
@@ -16,27 +16,27 @@ AllowShortLoopsOnASingleLine: false
 AlwaysBreakAfterDefinitionReturnType: None
 AlwaysBreakAfterReturnType: None
 AlwaysBreakBeforeMultilineStrings: false
-AlwaysBreakTemplateDeclarations: true # false
-BinPackArguments: false
+AlwaysBreakTemplateDeclarations: true
+BinPackArguments:  false
 BinPackParameters: false
 BraceWrapping:   
-  AfterClass:      false # false
-  AfterControlStatement: false # false
-  AfterEnum:       false # false
-  AfterFunction:   false # false
-  AfterNamespace:  false # false
-  AfterObjCDeclaration: false # false
-  AfterStruct:     false # false
-  AfterUnion:      false # false
-  AfterExternBlock: false # false
-  BeforeCatch:     false # false
-  BeforeElse:      false # false
-  IndentBraces:    false # false
-  SplitEmptyFunction: true
-  SplitEmptyRecord: true
+  AfterClass:       false
+  AfterControlStatement: false 
+  AfterEnum:        false 
+  AfterFunction:    false 
+  AfterNamespace:   false 
+  AfterObjCDeclaration:  false
+  AfterStruct:      false 
+  AfterUnion:       false 
+  AfterExternBlock: false
+  BeforeCatch:      false 
+  BeforeElse:       false 
+  IndentBraces:     false 
+  SplitEmptyFunction:  true
+  SplitEmptyRecord:    true
   SplitEmptyNamespace: true
 BreakBeforeBinaryOperators: None
-BreakBeforeBraces: Custom # Attach
+BreakBeforeBraces: Custom 
 BreakBeforeInheritanceComma: false
 BreakBeforeTernaryOperators: false
 BreakConstructorInitializersBeforeComma: false
@@ -67,9 +67,9 @@ IncludeCategories:
   - Regex:           '.*'
     Priority:        1
 IncludeIsMainRegex: '(Test)?$'
-IndentCaseLabels: true # false
+IndentCaseLabels: true 
 IndentPPDirectives: None
-IndentWidth:   4  #2
+IndentWidth:   4  
 IndentWrappedFunctionNames: false
 JavaScriptQuotes: Leave
 JavaScriptWrapImports: true
@@ -88,7 +88,7 @@ PenaltyBreakFirstLessLess: 120
 PenaltyBreakString: 1000
 PenaltyExcessCharacter: 1000000
 PenaltyReturnTypeOnItsOwnLine: 60
-PointerAlignment: Middle # Right
+PointerAlignment: Middle
 RawStringFormats: 
  -  Language:        TextProto
     BasedOnStyle:    google

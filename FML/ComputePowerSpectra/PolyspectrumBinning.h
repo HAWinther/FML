@@ -1,8 +1,8 @@
 #ifndef POLYSPECTRUMBINNING_HEADER
 #define POLYSPECTRUMBINNING_HEADER
-
-//=====================================================================
-//=====================================================================
+#include <vector>
+#include <cmath>
+#include <FML/Global/Global.h>
 
 namespace FML {
   namespace CORRELATIONFUNCTIONS {

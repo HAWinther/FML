@@ -458,7 +458,7 @@ namespace FML {
         // looping over cells that we know are empty
         //==========================================================
 
-        int ix0;
+        int ix0 = 0;
         [[maybe_unused]] int num_processed = 0;
         int istart = 0, iend = max_ix + 1;
 #if defined(USE_OMP) && !defined(USE_MPI)
@@ -488,7 +488,7 @@ namespace FML {
             for(int iz0 = 0; iz0 <= max_iz; iz0++){
 
               // Index of current cell
-              int index;
+              int index = 0;
               if(ndim == 1) index = ix0;
               if(ndim == 2) index = (ix0*ngrid + iy0);
               if(ndim == 3) index = (ix0*ngrid + iy0)*ngrid + iz0;
@@ -740,7 +740,7 @@ namespace FML {
         // looping over cells that we know are empty
         //==========================================================
 
-        int ix0;
+        int ix0 = 0;
         [[maybe_unused]] int num_processed = 0;
         int istart = 0, iend = max_ix + 1;
 #if defined(USE_OMP) && !defined(USE_MPI) 
@@ -954,7 +954,7 @@ namespace FML {
         // 8 cells to get to rmax
         // 2 particles per cells on average
         // Minimum 10 cells per dim
-        int ngrid = std::min(int(8.0/rmax), int(pow(particles.size()/2.0, 1./double(ndim))));
+        int ngrid = std::min(int(8.0/rmax), int(std::pow(particles.size()/2.0, 1./double(ndim))));
         if(ngrid < 10) ngrid = 10;                          
 
         // Add particles to a grid
@@ -1081,9 +1081,9 @@ namespace FML {
         // 8 cells to get to rmax
         // 2 particles per cells on average
         // Minimum 10 cells per dim
-        int ngrid1 = std::min( int(8.0/rmax), int(pow(particles1.size() / 2.0,1./double(ndim))) );
+        int ngrid1 = std::min( int(8.0/rmax), int(std::pow(particles1.size() / 2.0,1./double(ndim))) );
         if(ngrid1 < 10) ngrid1 = 10;                       
-        int ngrid2 = std::min( int(8.0/rmax), int(pow(particles2.size() / 2.0,1./double(ndim))) );
+        int ngrid2 = std::min( int(8.0/rmax), int(std::pow(particles2.size() / 2.0,1./double(ndim))) );
         if(ngrid2 < 10) ngrid2 = 10;                       
 
         // Assign particles to a grid

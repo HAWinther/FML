@@ -30,22 +30,20 @@ struct Particle {
     // Print what we append just to see what is happening
     std::cout << "Sending x = " << Pos[0] << " from task " << FML::ThisTask << "\n";
     int bytes = sizeof(double) * NDIM;
-    memcpy(buffer, Pos, bytes);
+    std::memcpy(buffer, Pos, bytes);
     buffer += bytes;
 
     bytes = sizeof(double) * NDIM;
-    memcpy(buffer, Vel, bytes);
-    buffer += bytes;
+    std::memcpy(buffer, Vel, bytes);
   }
   
   void assign_from_buffer(char *buffer){
     int bytes = sizeof(double) * NDIM;
-    memcpy(Pos, buffer, bytes);
+    std::memcpy(Pos, buffer, bytes);
     buffer += bytes;
 
     bytes = sizeof(double) * NDIM;
-    memcpy(Vel, buffer, bytes);
-    buffer += bytes;
+    std::memcpy(Vel, buffer, bytes);
     // Print what we assign just to see what is happening
     std::cout << "Recieving x = " << Pos[0] << " at task " << FML::ThisTask << "\n";
   }
@@ -84,7 +82,7 @@ int main(){
   auto& p = part.get_particles(); 
   int i = 0;
   while(i < 5){
-    p[i++].Pos[0] = (rand() % 1000)/1000.0;
+    p[i++].Pos[0] = FML::uniform_random();
   }
 
   //==================================================
@@ -106,7 +104,7 @@ int main(){
   //==================================================
   i = 0;
   while(i < 5){
-    p[i++].Pos[0] = (rand() % 1000)/1000.0;
+    p[i++].Pos[0] = FML::uniform_random();
   }
   
   //==================================================

@@ -2,6 +2,7 @@
 #define COMPUTEPOWERSPECTRUM_HEADER
 
 #include <vector>
+#include <array>
 #include <iostream>
 #include <cassert>
 
@@ -1048,7 +1049,7 @@ namespace FML {
 #endif
 
           // Current values of k1,k2,k3
-          int ik[3];
+          std::array<int,3> ik;
           for(int ii = 0, n = 1; ii < 3; ii++, n *= nbins){
             ik[ii] = i / n % nbins;
           }
@@ -1103,7 +1104,7 @@ namespace FML {
               size_t index = (i*nbins + j)*nbins + k;
 
               std::vector<int> inds{i,j,k};
-              std::sort(inds.begin(), inds.end(), std::less<int>());
+              std::sort(inds.begin(), inds.end(), std::less<>());
 
               size_t index0 = (inds[0]*nbins+inds[1])*nbins+inds[2];
               size_t index1 = (inds[0]*nbins+inds[2])*nbins+inds[1];
@@ -1151,6 +1152,7 @@ namespace FML {
           N_k[i] = fourier_grid;
           N_k[i].fill_fourier_grid(0.0);
 
+          /*
           if(i == 0){
             klow[i]  = polyofk.k[0];
             khigh[i] = polyofk.k[0] + (polyofk.k[1] - polyofk.k[0])/2.0;
@@ -1162,6 +1164,10 @@ namespace FML {
             khigh[i] = polyofk.k[nbins-1];
           }
           k_bin[i] = (khigh[i]+klow[i])/2.0;
+          */
+          klow[i]  = polyofk.k[i];
+          if(i== nbins-1) khigh[i] = polyofk.k[i]+( polyofk.k[i]- polyofk.k[i-1]);
+          else khigh[i] = polyofk.k[i+1];
         }
 
         // Set up results vector
@@ -1259,7 +1265,7 @@ namespace FML {
 #endif
 
           // Current values of ik1,ik2,ik3,...
-          int ik[ORDER];
+          std::array<int,ORDER> ik;
           for(int ii = ORDER-1, n = 1; ii >= 0; ii--, n *= nbins){
             ik[ii] = i / n % nbins;
           }
@@ -1330,7 +1336,7 @@ namespace FML {
 
           // Find a cell given by symmetry that we have computed
           // by sorting ik in increasing order
-          std::sort(ik.begin(), ik.end(), std::less<int>());
+          std::sort(ik.begin(), ik.end(), std::less<>());
 
           // Compute cell index
           size_t index = 0;

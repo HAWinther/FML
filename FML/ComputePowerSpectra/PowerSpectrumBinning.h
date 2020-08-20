@@ -1,5 +1,8 @@
 #ifndef POWERSPECTRUMBINNING_HEADER
 #define POWERSPECTRUMBINNING_HEADER
+#include <vector>
+#include <cmath>
+#include <FML/Global/Global.h>
 
 namespace FML {
   namespace CORRELATIONFUNCTIONS {
@@ -59,11 +62,11 @@ namespace FML {
 
           // Combine with another binning (just for testing to make it easier to bin up over realisations)
           int nbinnings = 0;
-          void combine(struct PowerSpectrumBinning &rhs);
+          void combine(PowerSpectrumBinning &rhs);
       };
           
     template<int N> 
-      void PowerSpectrumBinning<N>::combine(struct PowerSpectrumBinning &rhs){
+      void PowerSpectrumBinning<N>::combine(PowerSpectrumBinning &rhs){
         if(nbinnings == 0){
           count = rhs.count;
           pofk = rhs.pofk;
@@ -98,7 +101,7 @@ namespace FML {
 
     template<int N> 
       PowerSpectrumBinning<N>::PowerSpectrumBinning(int nbins)
-      : PowerSpectrumBinning(0.0, 2.0 * M_PI * (nbins-1), nbins, LINEAR_SPACING) {}
+      : PowerSpectrumBinning(2.0 * M_PI, 2.0 * M_PI * nbins, nbins, LINEAR_SPACING) {}
 
     template<int N> 
       PowerSpectrumBinning<N>::PowerSpectrumBinning(

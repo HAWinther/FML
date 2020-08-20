@@ -3,6 +3,9 @@
 namespace FML {
   namespace FILEUTILS {
     namespace GADGET {
+      
+      const double MplMpl_over_H0Msunh = 2.49264e21;
+      const double HubbleLengthInMpch = 2997.92458;
 
       // Handle errors
       void GadgetReader::throw_error(std::string errormessage) const{

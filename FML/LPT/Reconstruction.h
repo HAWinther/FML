@@ -12,6 +12,7 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/LPT/DisplacementFields.h>
+#include <FML/Interpolation/ParticleGridInterpolation.h>
 
 namespace FML {
   namespace COSMOLOGY {

@@ -1,4 +1,5 @@
 #include "FFTLog.h"
+#include <array>
 
 namespace FML {
   namespace SOLVERS {
@@ -15,7 +16,7 @@ namespace FML {
         z -= 1;
 
         // Lanczos coefficients for g = 7 with way too many digits
-        static double p[] = {
+        static std::array<double,9> p = {
           0.999999999999809932276847,
           676.5203681218850985670091,
           -1259.13921672240287047156,

@@ -1112,7 +1112,6 @@ namespace FML {
     template<int N>
       std::vector<int> FFTWGrid<N>::get_fourier_coord_from_index(const IndexIntType index) {
         const int nover2plus1 = Nmesh/2+1;
-        const int nover2 = Nmesh/2;
         std::vector<int> coord(N);
         coord[N-1] = index % nover2plus1;
         for(int idim = N-2, n = nover2plus1; idim >=0; idim--, n *= Nmesh){
@@ -1125,7 +1124,7 @@ namespace FML {
       void FFTWGrid<N>::get_fourier_wavevector_and_norm2_by_index(const IndexIntType index, std::vector<double> &kvec, double &kmag2) const{
         const double twopi = 2.0 * M_PI;
         const int nover2plus1 = Nmesh/2+1;
-        const int nover2 = Nmesh/2;
+        [[maybe_unused]] const int nover2 = Nmesh/2;
 
 #ifdef BOUNDSCHECK_FFTWGRID
         assert_mpi(kvec.size() == N, 

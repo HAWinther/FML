@@ -1,6 +1,8 @@
 #include <iostream>
 #include <iomanip>
+#include <random>
 #include <stdarg.h>
+
 #include "Global.h"
 
 namespace FML {
@@ -36,6 +38,8 @@ namespace FML {
   int ThisTask = 0;
   int NTasks   = 1;
   int NThreads = 1;
+  
+  std::string processor_name{"NameNotKnown"};
 
   bool FFTWThreadsOK = false;
   bool MPIThreadsOK = false;
@@ -43,6 +47,13 @@ namespace FML {
   // The local extent of the domain (global domain goes from 0 to 1)
   double xmin_domain = 0.0;
   double xmax_domain = 1.0;
+  
+  // A simple random [0,1) generator
+  std::mt19937 generator;
+  double uniform_random(){
+    auto udist = std::uniform_real_distribution<double>(0.0,1.0);
+    return udist(generator);
+  }
 
   //============================================
   // Initialize MPI
@@ -64,6 +75,10 @@ namespace FML {
 #endif
     MPI_Comm_rank(MPI_COMM_WORLD,&ThisTask);
     MPI_Comm_size(MPI_COMM_WORLD,&NTasks);
+  
+    int plen; char pname[MPI_MAX_PROCESSOR_NAME];
+    MPI_Get_processor_name(pname, &plen);
+    processor_name = std::string(pname);
 #endif
 
     // Set range for local domain
@@ -119,10 +134,12 @@ namespace FML {
 #else
       std::cout << "# Not using FFTW\n"; 
 #endif
-      for(int i = 0; i < NTasks; i++)
-        std::cout << "# Task " << std::setw(4) << i << " in charge of x-domain [" 
+      for(int i = 0; i < NTasks; i++){
+        std::cout << "# Task " << std::setw(4) << i << " [" << processor_name << "]\n";
+        std::cout << "In charge of x-domain [" 
           << std::setw(8) << xmin_over_tasks[i] << " , " 
           << std::setw(8) << xmax_over_tasks[i] << ")\n";
+      }
       std::cout << "#=====================================================\n";
       std::cout << "\n";
     }

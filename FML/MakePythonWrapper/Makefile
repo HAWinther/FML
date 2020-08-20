@@ -69,7 +69,7 @@ $(FILE1) : Main.cpp
 
 # Run swig and generate a library that can be called from python
 test: $(OBJS)
-	swig -python $(OPTIONS) $(SWIGFILE)
+	swig -c++ -python $(OPTIONS) $(SWIGFILE)
 	$(CC) -fPIC -c $(SWIGWRAPPER) $(INC)
 	$(CC) -fPIC -shared $(OPTIONS) $(OBJS) $(SWIGWRAPPERO) -o $(PYTHONLIBNAME) $(INC) $(LIB) $(LINK)
 

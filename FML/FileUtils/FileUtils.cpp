@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sstream>
 #include <cassert>
+#include <random>
 
 namespace FML {
   namespace FILEUTILS {
@@ -97,7 +98,8 @@ namespace FML {
         double fraction_to_read,
         unsigned int randomSeed)
     {
-      srand(randomSeed);
+      std::mt19937 generator(randomSeed);
+      auto udist = std::uniform_real_distribution<double>(0.0,1.0);
 
       // Sanity check
       assert(cols_to_keep.size() > 0 and nskip >= 0 and ncols > 0);
@@ -163,7 +165,7 @@ namespace FML {
 #endif
         if(fraction_to_read >= 1.0) 
           result.push_back(newline);
-        else if( (rand() % 10000) / 10000.0 < fraction_to_read)
+        else if( udist(generator) < fraction_to_read)
           result.push_back(newline);
       }
       return result;

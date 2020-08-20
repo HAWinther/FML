@@ -1,6 +1,6 @@
 #ifndef MATPLOTLIBCXX_HEADER
 #define MATPLOTLIBCXX_HEADER
-#pragma once
+//#pragma once
 #if __cplusplus > 199711L
 #define register      // Deprecated in C++11.
 #endif  // #if __cplusplus > 199711L
@@ -2181,7 +2181,7 @@ http://bytes.com/topic/python/answers/793370-multiple-independent-python-interpr
                 if (line)
                   set_data_fct = PyObject_GetAttrString(line, "set_data");
                 else
-                  Py_DECREF(line);
+                  Py_DECREF(line); // NOLINT
                 Py_DECREF(res);
               }
             }

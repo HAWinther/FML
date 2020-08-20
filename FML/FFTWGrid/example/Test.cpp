@@ -60,12 +60,11 @@ void RunTests(){
   assert(ncellperslice >= FML::power(Nmesh, Ndim-1));
   assert(grid.get_ntot_real() >= local_nx * FML::power(Nmesh, Ndim-1));
 
-  std::srand(1);
   for(auto real_index : grid.get_real_range()){
     auto coord = grid.get_coord_from_index(real_index);
     auto index = grid.get_index_real(coord);
     assert(index == real_index);
-    auto value = (rand() % 1000) / 500.0 - 1.0;
+    auto value = 0.5 * FML::uniform_random() - 1.0;
     grid.set_real_from_index(real_index, value);
     assert( grid.get_real_from_index(real_index) == value );
     assert( grid.get_real(coord) == value );

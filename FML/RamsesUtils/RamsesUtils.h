@@ -64,7 +64,6 @@ namespace FML {
 
           // Book-keeping variables
           bool infofileread;
-          bool partfilesread;
           int npart_read;
           int nsink_read;
 
@@ -86,7 +85,6 @@ namespace FML {
             filepath(""),
             outputnr(0),
             infofileread(false),
-            partfilesread(false),
             npart_read(0),
             nsink_read(0) {}
 
@@ -94,7 +92,6 @@ namespace FML {
             filepath(_filepath), 
             outputnr(_outputnr), 
             infofileread(false),
-            partfilesread(false),
             npart_read(0),
             nsink_read(0),
             verbose(_verbose){

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cmath>
+#include <array>
 #include <FML/MultigridSolver/MultiGridSolver.h>
 
 //======================================================================
@@ -10,7 +11,7 @@
 
 struct MyType {
   static const int N = 1; // 2 components/equation
-  double y[N];            // The solution variables
+  std::array<double,N> y;            // The solution variables
   // We need to initialize the variable from a double
   MyType(double x = 0.0) {
     for(int i = 0; i < N; i++) 

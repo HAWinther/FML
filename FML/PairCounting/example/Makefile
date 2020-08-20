@@ -75,7 +75,7 @@ endif
 #===================================================
 
 VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/Spline/:$(FML_INCLUDE)/FML/ODESolver/
-OBJS = Main.o Spline.o ODESolver.o
+OBJS = Main.o Spline.o ODESolver.o Global.o
 
 TARGETS := paircount
 all: $(TARGETS)

@@ -1,6 +1,8 @@
 #ifndef FFTWGLOBAL_HEADER
 #define FFTWGLOBAL_HEADER
 
+#include<complex>
+
 #ifdef USE_FFTW
 #include <fftw3.h>
 #endif

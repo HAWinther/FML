@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <vector>
+#include <random>
+
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
 
@@ -30,6 +32,10 @@
 #define CGAL_NDIM 3
 #endif
 
+// save diagnostic state
+#pragma GCC diagnostic push
+// turn off the specific warning
+#pragma GCC diagnostic ignored "-Wunused-but-set-parameter"
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Kernel/global_functions.h>
 #if CGAL_NDIM == 3
@@ -44,6 +50,8 @@
 #else
 "Error CGAL_NDIM has to be 2 or 3"
 #endif
+// turn the warnings back on
+#pragma GCC diagnostic pop
 
 namespace FML {
   namespace TRIANGULATION {
@@ -394,14 +402,15 @@ namespace FML {
 
             // Random shuffle of positions (to speed up tesselation)
             if(tesselation_random_shuffle){
+              std::random_device rd;
+              std::mt19937 rng(rd());
+
               if(FML::ThisTask == 0) 
                 std::cout << "[MPIPeriodicDelaunay::create_total_point_set] Random shuffle of points\n";
-              std::srand(1);
-              std::random_shuffle (points.begin(), points.end(), [](int i){ return std::rand() % i;} );
+              std::shuffle (points.begin(), points.end(), rng);
 
               // Do exactly the same shuffle as above to preserve the point-id ordering
-              std::srand(1);
-              std::random_shuffle (id.begin(), id.end(), [](int i){ return std::rand() % i;});
+              std::shuffle (id.begin(), id.end(), rng);
             }
           }
 
@@ -687,21 +696,18 @@ namespace FML {
           std::vector<U> & watershed_groups) {
 
         assert(quantity.size() == NumPart);
-        const double dx_buffer = D.get_dx_buffer();
+        [[maybe_unused]] const double dx_buffer = D.get_dx_buffer();
 
         // Fetch tesselation
         auto dt = D.get_delaunay_triangulation();
         using Vertex_handle = typename decltype(dt)::Vertex_handle;
 
         // For boundaries and communication
-        size_t count_left  = 0;
-        size_t count_right = 0;
-        size_t recv_left   = 0;
-        size_t recv_right  = 0;
-        size_t nboundary   = 0;
-
-        int LeftTask = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
-        int RightTask = (FML::ThisTask + 1) % FML::NTasks;
+        [[maybe_unused]] size_t count_left  = 0;
+        [[maybe_unused]] size_t count_right = 0;
+        [[maybe_unused]] size_t recv_left   = 0;
+        [[maybe_unused]] size_t recv_right  = 0;
+        [[maybe_unused]] size_t nboundary   = 0;
 
         // Assign quantity to particles 
         // Here we fetch the vertex handles from the tesselation
@@ -714,6 +720,8 @@ namespace FML {
 
         // Deal with the boundary
 #ifdef USE_MPI
+        int LeftTask = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
+        int RightTask = (FML::ThisTask + 1) % FML::NTasks;
         if(FML::NTasks > 1) {
 
           // Count how many particles we have on the left and right
