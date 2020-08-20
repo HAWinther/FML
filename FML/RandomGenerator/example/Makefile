@@ -18,7 +18,7 @@ USE_MPI          = false
 # Use OpenMP threads
 USE_OMP          = false
 # Use the GSL library (Spline, ODESolver)
-USE_GSL          = false
+USE_GSL          = true
 # Check for bad memory accesses
 USE_SANITIZER    = false
 
@@ -73,9 +73,9 @@ endif
 #===================================================
 
 # Add path to all the directories with .cpp files in FML to be compiled here
-VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/RandomGenerator/
+VPATH := $(FML_INCLUDE)/FML/Global/
 
-OBJS = Main.o RandomGenerator.o
+OBJS = Main.o
 
 TARGETS := random
 all: $(TARGETS)

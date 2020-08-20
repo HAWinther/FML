@@ -106,8 +106,8 @@ endif
 # Object files to be compiled
 #===================================================
 
-VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/RandomGenerator/
-OBJS = Main.o Global.o RandomGenerator.o
+VPATH := $(FML_INCLUDE)/FML/Global/
+OBJS = Main.o Global.o
 
 TARGETS := gaussian
 all: $(TARGETS)
