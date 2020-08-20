@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <vector>
+#include <array>
 
 #include <FML/Global/Global.h>
 #include <FML/FFTWGrid/FFTWGrid.h>
@@ -292,7 +293,7 @@ namespace FML {
 
         // Just sinc to the power = order to the method
         const double knyquist = M_PI * Ngrid;
-        auto window_function = [&](std::vector<double> &kvec){
+        auto window_function = [&](std::array<double,N> &kvec){
           double w = 1.0;
           for(int idim = 0; idim < N; idim++){
             const double koverkny = M_PI/2. * (kvec[idim] / knyquist);
@@ -358,9 +359,9 @@ namespace FML {
 
         // Stuff we need below
         std::vector<double> x(N);
-        std::vector<int> ix(N);
-        std::vector<int> ix_nbor(N);
-        std::vector<int> icoord(N);
+        std::array<int,N> ix;
+        std::array<int,N> ix_nbor;
+        std::array<int,N> icoord;
 
         // Factor to normalize density to the mean density
         const double norm_fac = std::pow((double)Nmesh, N) / double(NumPartTot);  
@@ -556,7 +557,7 @@ namespace FML {
             }
 
             // Periodic BC
-            std::vector<int> icoord(N);
+            std::array<int,N> icoord;
             icoord[0] = ix_nbor[0];
             for(int idim = 1; idim < N; idim++){
               icoord[idim] = ix_nbor[idim];
@@ -715,7 +716,7 @@ namespace FML {
             auto w = convolution_kernel(dx);
 
             // Periodic BC
-            std::vector<int> icoord(N);
+            std::array<int,N> icoord;
             icoord[0] = ix_nbor[0];
             for(int idim = 1; idim < N; idim++){
               icoord[idim] = ix_nbor[idim];

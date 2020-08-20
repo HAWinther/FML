@@ -7,6 +7,7 @@
 #include <fstream>
 #include <complex>
 #include <vector>
+#include <array>
 #include <climits>
 #ifdef USE_MPI
 #include <mpi.h>
@@ -72,7 +73,7 @@ namespace FML {
 
           // Helper functions for bounds-checking
           void assert_index(IndexInt index) const;
-          void assert_coord(const std::vector<int> &coord) const;
+          void assert_coord(const std::array<int,NDIM> &coord) const;
 
         public:
 
@@ -97,30 +98,30 @@ namespace FML {
           void set_y(IndexInt index, const T &value);
 
           // Assign value in the grid by coordinate
-          void set_y(std::vector<int> &coord, const T &value);
+          void set_y(std::array<int,NDIM> &coord, const T &value);
 
           // Assign the whole grid from a function
-          void set_y(std::function<T(std::vector<double>&)> &func);
+          void set_y(std::function<T(std::array<double,NDIM>&)> &func);
 
           // Grid-index -> Local coordinate list 
           // e.g. index = ix1_local * N^2 + ix2 * N + ix3 -> (ix1_local, ix2, ix3)
-          std::vector<int> coord_from_index(IndexInt index) const;
+          std::array<int,NDIM> coord_from_index(IndexInt index) const;
 
           // Local coordiates -> Grid-index
           // e.g. index = ix1_local * N^2 + ix2 * N + ix3 
-          IndexInt index_from_coord(const std::vector<int> &coord) const;
+          IndexInt index_from_coord(const std::array<int,NDIM> &coord) const;
 
           // From local index to global coordinates
-          std::vector<int> globalcoord_from_index(IndexInt index) const;
+          std::array<int,NDIM> globalcoord_from_index(IndexInt index) const;
 
           // From global coordinates to local index
-          IndexInt index_from_globalcoord(const std::vector<int> &globalcoord) const;
+          IndexInt index_from_globalcoord(const std::array<int,NDIM> &globalcoord) const;
 
           // The closest 2NDIM+1 cells to a given cell (including the cell itself at 0)
-          std::vector<IndexInt> get_neighbor_gridindex(IndexInt index) const;
+          std::array<IndexInt,2*NDIM+1> get_neighbor_gridindex(IndexInt index) const;
 
           // Gradient at a given cell (simple 2-point symmetric stensil) 
-          std::vector<T> get_gradient(IndexInt index) const;
+          std::array<T,NDIM> get_gradient(IndexInt index) const;
 
           // Get some info about the grid
           IndexInt get_Ntot();
@@ -132,11 +133,11 @@ namespace FML {
           int get_n_extra_slices_right();
 
           // Returns the position of the cell in the global grid
-          std::vector<double> get_pos(IndexInt index);
-          std::vector<double> get_pos(const std::vector<int> &coord);
+          std::array<double,NDIM> get_pos(IndexInt index);
+          std::array<double,NDIM> get_pos(const std::array<int,NDIM> &coord);
 
           // Distance from a point to the cell. Fiducial choice is center of the box
-          double get_radial_distance(IndexInt index, std::vector<double> &point);
+          double get_radial_distance(IndexInt index, std::array<double,NDIM> &point);
 
           // The rms of the main grid sqrt(Sum y^2/N)
           double norm();
@@ -332,14 +333,14 @@ namespace FML {
 
     // Set a cell denoted by a coordinate in the grid 
     template<int NDIM, class T>
-      void MPIGrid<NDIM,T>::set_y(std::vector<int> &coord, const T &value){
+      void MPIGrid<NDIM,T>::set_y(std::array<int,NDIM> &coord, const T &value){
         IndexInt index = index_from_coord(coord);
         set_y(index, value);
       }
 
     // Set the whole grid with a function
     template<int NDIM, class T>
-      void MPIGrid<NDIM,T>::set_y(std::function<T(std::vector<double>&)> &func){
+      void MPIGrid<NDIM,T>::set_y(std::function<T(std::array<double,NDIM>&)> &func){
         T *y = get_y();
         for(IndexInt index = 0; index < _NtotLocal; index++){
           auto pos = get_pos(index); 
@@ -349,12 +350,12 @@ namespace FML {
       }
 
     template<int NDIM, class T>
-      std::vector<int> MPIGrid<NDIM,T>::coord_from_index(IndexInt index) const{
+      std::array<int,NDIM> MPIGrid<NDIM,T>::coord_from_index(IndexInt index) const{
 #ifdef BOUNDSCHECK
         assert_index(index);
 #endif
         index += _NtotLocalLeft;
-        std::vector<int> coord(NDIM);
+        std::array<int,NDIM> coord;
         for(int idim = NDIM-1; idim >= 1; idim--){
           coord[idim] = index % _N;
           index = (index / _N);
@@ -364,7 +365,7 @@ namespace FML {
       }
 
     template<int NDIM, class T>
-      std::vector<int> MPIGrid<NDIM,T>::globalcoord_from_index(IndexInt index) const{
+      std::array<int,NDIM> MPIGrid<NDIM,T>::globalcoord_from_index(IndexInt index) const{
 #ifdef BOUNDSCHECK
         assert_index(index);
 #endif
@@ -374,7 +375,7 @@ namespace FML {
       }
 
     template<int NDIM, class T>
-      IndexInt MPIGrid<NDIM,T>::index_from_globalcoord(const std::vector<int> &globalcoord) const{
+      IndexInt MPIGrid<NDIM,T>::index_from_globalcoord(const std::array<int,NDIM> &globalcoord) const{
 #ifdef BOUNDSCHECK
         auto coord = globalcoord;
         coord[0] -= _xStartLocal;
@@ -389,7 +390,7 @@ namespace FML {
       }
 
     template<int NDIM, class T>
-      IndexInt MPIGrid<NDIM,T>::index_from_coord(const std::vector<int> &coord) const{
+      IndexInt MPIGrid<NDIM,T>::index_from_coord(const std::array<int,NDIM> &coord) const{
 #ifdef BOUNDSCHECK
         assert_coord(coord);
 #endif
@@ -400,12 +401,12 @@ namespace FML {
       }
 
     template<int NDIM, class T>
-      std::vector<double> MPIGrid<NDIM,T>::get_pos(IndexInt index){
+      std::array<double,NDIM> MPIGrid<NDIM,T>::get_pos(IndexInt index){
         return get_pos( coord_from_index(index) );
       }
 
     template<int NDIM, class T>
-      double MPIGrid<NDIM,T>::get_radial_distance(IndexInt index, std::vector<double> &point){
+      double MPIGrid<NDIM,T>::get_radial_distance(IndexInt index, std::array<double,NDIM> &point){
         auto pos = get_pos( coord_from_index(index) );
         double r2 = 0;
         for(int idim = 0; idim < NDIM; idim++){
@@ -429,7 +430,7 @@ namespace FML {
       }
 
     template<int NDIM, class T>
-      void MPIGrid<NDIM,T>::assert_coord(const std::vector<int> &coord) const{
+      void MPIGrid<NDIM,T>::assert_coord(const std::array<int,NDIM> &coord) const{
         assert_mpi(coord.size() == NDIM, "");
         for(int idim = NDIM-1; idim >= 1; idim--){
           assert_mpi(coord[idim] >= 0, 
@@ -444,11 +445,11 @@ namespace FML {
       }
 
     template<int NDIM, class T>
-      std::vector<double> MPIGrid<NDIM,T>::get_pos(const std::vector<int> &coord){
+      std::array<double,NDIM> MPIGrid<NDIM,T>::get_pos(const std::array<int,NDIM> &coord){
 #ifdef BOUNDSCHECK
         assert_coord(coord);
 #endif
-        std::vector<double> pos(NDIM);
+        std::array<double,NDIM> pos;
         for(int idim = NDIM-1; idim >= 1; idim--){
           pos[idim] = coord[idim] / double(_N);
         }
@@ -597,8 +598,8 @@ namespace FML {
 
     // The closted 2NDIM+1 cells (including the cell itself at 0) to a given cell
     template<int NDIM, class T>
-      std::vector<IndexInt> MPIGrid<NDIM,T>::get_neighbor_gridindex(IndexInt index) const{
-        std::vector<IndexInt> index_list(2*NDIM+1);
+      std::array<IndexInt,2*NDIM+1>MPIGrid<NDIM,T>::get_neighbor_gridindex(IndexInt index) const{
+        std::array<IndexInt,2*NDIM+1> index_list;
         index_list[0] = index;
 
         // Local coordinates
@@ -623,9 +624,9 @@ namespace FML {
       }
 
     template<int NDIM, class T>
-      std::vector<T> MPIGrid<NDIM,T>::get_gradient(IndexInt index) const{
+      std::array<T,NDIM> MPIGrid<NDIM,T>::get_gradient(IndexInt index) const{
         auto index_list = get_neighbor_gridindex(index);
-        std::vector<T> gradient(NDIM);
+        std::array<T,NDIM> gradient;
         for(int idim = 0; idim < NDIM; idim++){
           gradient[idim] = ( _y[ _NtotLocalLeft + index_list[2*idim+2] ] 
               - _y[ _NtotLocalLeft + index_list[2*idim+1] ] ) / 2.0 * double(_N);

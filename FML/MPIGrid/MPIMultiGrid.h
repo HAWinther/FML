@@ -5,6 +5,7 @@
 #include <cassert>
 #include <iostream>
 #include <vector>
+#include <array>
 #include <climits>
 #include <complex>
 
@@ -68,10 +69,10 @@ namespace FML {
           T& get_y(int level, IndexInt index);
 
           // Fetch the value in the grid at a given level and coordinates (ix,iy...)
-          T& get_y(int level, const std::vector<int>& coord);
+          T& get_y(int level, const std::array<int,NDIM>& coord);
 
           // Set the value of y at given level and index (save way to define value)
-          void set_y(int level, const std::vector<int>& coord, const T& value);
+          void set_y(int level, const std::array<int,NDIM>& coord, const T& value);
           void set_y(int level, IndexInt index, const T& value);
 
           // Fetch info about the grid
@@ -81,10 +82,10 @@ namespace FML {
           int get_Nlevel() const;
 
           // Gridindex from coordinate and vice versa
-          IndexInt index_from_coord(int level, const std::vector<int>& coord) const;
-          std::vector<int> coord_from_index(int level, IndexInt index) const;
-          IndexInt index_from_globalcoord(int level, const std::vector<int>& coord) const;
-          std::vector<int> globalcoord_from_index(int level, IndexInt index) const;
+          IndexInt index_from_coord(int level, const std::array<int,NDIM>& coord) const;
+          std::array<int,NDIM> coord_from_index(int level, IndexInt index) const;
+          IndexInt index_from_globalcoord(int level, const std::array<int,NDIM>& coord) const;
+          std::array<int,NDIM> globalcoord_from_index(int level, IndexInt index) const;
 
           // Restrict down a grid from a finer level to a coarser level
           void restrict_down(int from_level); 
@@ -132,7 +133,7 @@ namespace FML {
       }
 
     template<int NDIM, class T>
-      T& MPIMultiGrid<NDIM,T>::get_y(int level, const std::vector<int>& coord){
+      T& MPIMultiGrid<NDIM,T>::get_y(int level, const std::array<int,NDIM>& coord){
 #ifdef BOUNDSCHECK
         assert_mpi(level < _Nlevel and level >= 0, 
             "[MPIMultiGrid::get_y] Level do not exist\n");
@@ -306,22 +307,22 @@ namespace FML {
       }
 
     template<int NDIM, class T>
-      std::vector<int> MPIMultiGrid<NDIM,T>::coord_from_index(int level, IndexInt index) const{
+      std::array<int,NDIM> MPIMultiGrid<NDIM,T>::coord_from_index(int level, IndexInt index) const{
         return _y[level].coord_from_index(index);
       }
 
     template<int NDIM, class T>
-      std::vector<int> MPIMultiGrid<NDIM,T>::globalcoord_from_index(int level, IndexInt index) const{
+      std::array<int,NDIM> MPIMultiGrid<NDIM,T>::globalcoord_from_index(int level, IndexInt index) const{
         return _y[level].globalcoord_from_index(index);
       }
 
     template<int NDIM, class T>
-      IndexInt MPIMultiGrid<NDIM,T>::index_from_coord(int level, const std::vector<int>& coord) const{
+      IndexInt MPIMultiGrid<NDIM,T>::index_from_coord(int level, const std::array<int,NDIM>& coord) const{
         return _y[level].index_from_coord(coord);
       }
 
     template<int NDIM, class T>
-      IndexInt MPIMultiGrid<NDIM,T>::index_from_globalcoord(int level, const std::vector<int>& coord) const{
+      IndexInt MPIMultiGrid<NDIM,T>::index_from_globalcoord(int level, const std::array<int,NDIM>& coord) const{
         return _y[level].index_from_globalcoord(coord);
       }
 

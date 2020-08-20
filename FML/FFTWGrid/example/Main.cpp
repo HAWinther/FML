@@ -47,14 +47,14 @@ int main(){
 
   // The solution of D^2f = source with source given below
   const int n = 2;
-  auto solution = [&](std::vector<double> &pos) -> double {
+  auto solution = [&](std::array<double,Ndim> &pos) -> double {
     auto value = 0.0;
     for(auto &x: pos)
       value += sin(n * 2*M_PI*x);
     return value;
   };
   // Some function we want to fill the grid with
-  auto source = [&](std::vector<double> &pos) -> double {
+  auto source = [&](std::array<double,Ndim> &pos) -> double {
     return -(n * 2 * M_PI) * (n * 2 * M_PI) * solution(pos);
   };
 

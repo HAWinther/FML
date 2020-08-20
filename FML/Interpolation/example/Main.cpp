@@ -46,7 +46,7 @@ void ExamplesInterpolation(){
   //=======================================================
   // Function to fill the grid with
   //=======================================================
-  std::function<FML::GRID::FloatType(std::vector<double>&)> func = [](std::vector<double>& pos){
+  std::function<FML::GRID::FloatType(std::array<double,NDIM>&)> func = [](std::array<double,NDIM>& pos){
     FML::GRID::FloatType value = 0.0;
     for(auto &x : pos){
       if(x < 0.5) continue;
@@ -110,7 +110,7 @@ void ExamplesInterpolation(){
     std::cout << "Output [x interpol exact] to data.txt\n";
     std::ofstream fp("data.txt");
     for(size_t i = 0 ; i < p.get_npart(); i++){
-      std::vector<double> pos(NDIM);
+      std::array<double,NDIM> pos;
       double xyz = 0.0;
       for(int idim = 0; idim < NDIM; idim++){
         pos[idim] = part[i].get_pos()[idim];

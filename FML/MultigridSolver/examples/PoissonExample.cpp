@@ -31,7 +31,7 @@ void PoissonSolver(){
   // NB: solution only defined up to a constant. The mean in the initial
   // guess will be this constant
   //======================================================================
-  auto sol_analytic = [=](std::vector<double> &x) -> SolverType {
+  auto sol_analytic = [=](std::array<double,Ndim> &x) -> SolverType {
       SolverType sol = 1.0;
       for(int idim = 0; idim < Ndim; idim++)
         sol *= sin(4 * 2.0 * M_PI * x[idim]);
@@ -39,7 +39,7 @@ void PoissonSolver(){
       // Test complex source in Ndim = 1 (SolverType = std::complex<double>)
       // sol = std::exp( std::complex<double>(0,1) * 2.0 * M_PI * x[0]);
   };
-  auto source_analytic = [&](std::vector<double> &x) -> SolverType {
+  auto source_analytic = [&](std::array<double,Ndim> &x) -> SolverType {
     return (-4.0 * M_PI * M_PI) * 16 * Ndim * sol_analytic(x);  
     // Test complex source in Ndim=1
     //return -4.0*M_PI*M_PI*std::exp( std::complex<double>(0,1) * 2.0 * M_PI * x[0]);
@@ -85,7 +85,6 @@ void PoissonSolver(){
 
   // Print the solution together with analytical solution
   for(IndexInt index = 0; index < sol.get_NtotLocal(); index++){
-    auto coord = sol.coord_from_index(index);
     auto pos   = sol.get_pos(index);
     if(FML::ThisTask == 0) {
       if(index % N == 0 and index > 0) std::cout << "\n";

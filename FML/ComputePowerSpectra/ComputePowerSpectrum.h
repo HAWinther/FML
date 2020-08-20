@@ -286,7 +286,7 @@ namespace FML {
 
           // Compute kvec, |kvec| and |delta|^2
           double kmag;
-          std::vector<double> kvec(N);
+          std::array<double,N> kvec;
           fourier_grid.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag);
           double power = std::norm(cdelta[ind]);
 
@@ -383,7 +383,7 @@ namespace FML {
 
           // Add norm to bin
           double kmag;
-          std::vector<double> kvec(N);
+          std::array<double,N> kvec;
           fourier_grid.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag);
           pofk.add_to_bin(kmag, delta_norm, weight);
         }
@@ -768,7 +768,7 @@ namespace FML {
     //    FFTWGrid<N> delta2 =  density_real;
 
     //    double kmag;
-    //    std::vector<double> kvec(N);
+    //    std::array<double,N> kvec;
     //    for(auto & fourier_index : density_real.get_fourier_range()){
     //      density_real.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag2);
 
@@ -991,7 +991,7 @@ namespace FML {
           double kmean = 0.0;
           double nk = 0;
           double kmag2;
-          std::vector<double> kvec(N);
+          std::array<double,N> kvec;
           for(auto & fourier_index : grid.get_fourier_range()){
             grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
@@ -1207,7 +1207,7 @@ namespace FML {
           double kmean = 0.0;
           double nk = 0;
           double kmag2;
-          std::vector<double> kvec(N);
+          std::array<double,N> kvec;
           for(auto & fourier_index : grid.get_fourier_range()){
             grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 

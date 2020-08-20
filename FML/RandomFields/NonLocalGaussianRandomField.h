@@ -156,7 +156,7 @@ namespace FML {
           FFTWGrid<N> phi_m13(Nmesh);
           FFTWGrid<N> phi_m23(Nmesh);
           FFTWGrid<N> phi_m33(Nmesh);
-          std::vector<double> kvec(N);
+          std::array<double,N> kvec;
           double kmag;
           for(auto & fourier_index : phi_fourier.get_fourier_range()){
             phi_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);

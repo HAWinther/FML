@@ -41,7 +41,7 @@ void ContinuitySolver(){
   //======================================================================
   // The overdensity field (just a sine wave)
   //======================================================================
-  auto delta_analytic = [](const std::vector<double> &x){
+  auto delta_analytic = [](const std::array<double,Ndim> &x){
     return 0.9 * sin(2.0*M_PI*x[0] + M_PI/4);
   };
 
@@ -90,22 +90,22 @@ void ContinuitySolver(){
 
     //======================================================================
     // Calculate the kinetic term: D[ b[f] Df ] with b = exp(x)
-    // (Faster to not use the built in function and code this directly  
-    // as we do a lot of double work)
+    // (Faster to not use the built in functions and code this directly  
+    // as we do a lot of double work, but whatever)
     //======================================================================
     std::function<SolverType(int,IndexInt)>  b = [&](int lev, IndexInt ind){
       auto coord = sol->get_Coordinate(lev, ind);
       return std::max( (1.0 + delta_analytic(coord)) , 0.1);
     };
-    std::function<SolverType(int,IndexInt)> db = [&](int lev, IndexInt ind){
+    std::function<SolverType(int,IndexInt)> db = [&]([[maybe_unused]] int lev, [[maybe_unused]] IndexInt ind){
       return 0.0;
     };
-    //auto kinetic  = sol->get_BLaplacian(level, index_list, b);
-    //auto dkinetic = sol->get_derivBLaplacian(level, index_list, b, db);
+    auto kinetic  = sol->get_BLaplacian(level, index_list, b);
+    auto dkinetic = sol->get_derivBLaplacian(level, index_list, b, db);
     
     // Fully linear
-    auto kinetic  = sol->get_Laplacian(level, index_list);
-    auto dkinetic = sol->get_derivLaplacian(level, index_list);
+    //auto kinetic  = sol->get_Laplacian(level, index_list);
+    //auto dkinetic = sol->get_derivLaplacian(level, index_list);
 
     //======================================================================
     // The right hand side source and the derivative of it
@@ -125,7 +125,6 @@ void ContinuitySolver(){
 
   // Print the solution (x,y,...,vx,vy,..., phi, delta)
   for(IndexInt index = 0; index < sol.get_NtotLocal(); index++){
-    auto coord = sol.coord_from_index(index);
     auto pos   = sol.get_pos(index);
     auto vel = sol.get_gradient(index);
     if(FML::ThisTask == 0) {

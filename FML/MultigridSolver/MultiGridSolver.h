@@ -116,10 +116,6 @@ namespace FML {
 
             double _eps_converge = 1e-4;   // Fiducial convergence criterion for residual or error 
 
-            // The size of the box
-            std::vector<double> pos_min = std::vector<double>(NDIM, 0.0);
-            std::vector<double> pos_max = std::vector<double>(NDIM, 1.0);
-
             // Residual information
             double _rms_res;               // The residual on domain grid
             double _rms_res_i;             // The initial residual
@@ -173,12 +169,11 @@ namespace FML {
             // Set the initial guess (uniform or from a grid)
             void set_initial_guess(const T &guess);
             void set_initial_guess(const T *guess);
-            void set_initial_guess(std::function<T(std::vector<double>&)> &func);
+            //XXXvoid set_initial_guess(std::function<T(std:array<double,NDIM> &)> &func);
             void set_initial_guess(const MPIGrid<NDIM,T>& guess);
 #ifdef USE_MASK
             void set_mask(const MPIGrid<NDIM,T>& mask);
 #endif
-            void set_domain(const std::vector<double> &posmin, const std::vector<double> &posmax);
 
             // The method that does all the work. Solve the PDE
             void solve(
@@ -198,29 +193,29 @@ namespace FML {
 
             // Functions for simplify defining your equation
             // Below nbor_index_list is what get_neighbor_index return which is the closest 2NDIM cells
-            // Gridspacing in each direction 
-            double get_Gridspacing (int level, int idim);
+            // Gridspacing  
+            double get_Gridspacing (int level);
             // The solution in a given cell
             T get_Field                        (int level, IndexInt index);
             // The closest 2NDIM cells (plus the cell itself)
-            std::vector<IndexInt> get_neighbor_gridindex(int level, IndexInt index);
+            std::array<IndexInt,2*NDIM+1> get_neighbor_gridindex(int level, IndexInt index);
             // Get all 3^NDIM cells around a given cell
-            std::vector<IndexInt> get_cube_gridindex    (int level, IndexInt index);
+            std::vector<IndexInt>  get_cube_gridindex    (int level, IndexInt index);
             // Physical position of a cell
-            std::vector<double>   get_Coordinate        (int level, IndexInt index);
+            std::array<double,NDIM>    get_Coordinate        (int level, IndexInt index);
             // The gradent Df 
-            std::vector<T>  get_Gradient       (int level, const std::vector<IndexInt>& nbor_index_list);
-            std::vector<T>  get_derivGradient  (int level, const std::vector<IndexInt>& nbor_index_list);
+            std::array<T,NDIM>   get_Gradient       (int level, const std::array<IndexInt,2*NDIM+1> & nbor_index_list);
+            std::array<T,NDIM>   get_derivGradient  (int level, const std::array<IndexInt,2*NDIM+1> & nbor_index_list);
             // The Laplacian operator D^2f
-            T get_Laplacian                    (int level, const std::vector<IndexInt>& nbor_index_list);
-            T get_derivLaplacian               (int level, const std::vector<IndexInt>& nbor_index_list);
+            T get_Laplacian                    (int level, const std::array<IndexInt,2*NDIM+1> & nbor_index_list);
+            T get_derivLaplacian               (int level, const std::array<IndexInt,2*NDIM+1> & nbor_index_list);
             // D[ b(f) Df ]
-            T get_BLaplacian(int level, const std::vector<IndexInt>& nbor_index_list, std::function<T(int,IndexInt)> &b);
-            T get_derivBLaplacian(int level, const std::vector<IndexInt>& nbor_index_list, std::function<T(int,IndexInt)> &b, std::function<T(int,IndexInt)> &db);
+            T get_BLaplacian(int level, const std::array<IndexInt,2*NDIM+1> & nbor_index_list, std::function<T(int,IndexInt)> &b);
+            T get_derivBLaplacian(int level, const std::array<IndexInt,2*NDIM+1> & nbor_index_list, std::function<T(int,IndexInt)> &b, std::function<T(int,IndexInt)> &db);
             // Compute df/dx_i and d^2f/dx_i^2 for a given accuracy for a given cell ( O(h^(2order) )
             // Assumes equal grid-spacing in all directions
-            std::vector<T>  get_Gradient(int level, IndexInt index, int order);
-            std::vector<T>  get_Gradient2(int level, IndexInt index, int order);
+            std::array<T,NDIM>   get_Gradient(int level, IndexInt index, int order);
+            std::array<T,NDIM>   get_Gradient2(int level, IndexInt index, int order);
 
             // Some common convergence criterions we can use
             // Residual on domain grid < epsilon
@@ -272,11 +267,6 @@ namespace FML {
             Nlevels = -1;
             if(FML::ThisTask == 0) std::cout << "The number of levels specified is too large. Letting the solver decide this!\n";
           }
-        }
-
-        // The position of the box
-        for(int idim = 0; idim < NDIM; idim++) {
-          assert_mpi(pos_max[idim] > pos_min[idim], "");
         }
 
         _verbose = verbose and (FML::ThisTask == 0);
@@ -435,15 +425,6 @@ namespace FML {
         }
 
       template<int NDIM, class T>
-        void MultiGridSolver<NDIM,T>::set_domain(const std::vector<double> &posmin, const std::vector<double> &posmax){
-          for(int idim = 0; idim < NDIM; idim++) {
-            assert_mpi(posmax[idim] > posmin[idim], "");
-          }
-          pos_min = posmin;
-          pos_max = posmax;
-        }
-
-      template<int NDIM, class T>
         int  MultiGridSolver<NDIM,T>::get_N(int level){ 
           return _f.get_N(level); 
         }
@@ -491,10 +472,12 @@ namespace FML {
           std::copy( &guess[0], &guess[0] + _NtotLocal, &f[0] );
         }
 
+      /*XXX
       template<int NDIM, class T>
-        void MultiGridSolver<NDIM,T>::set_initial_guess(std::function<T(std::vector<double>&)> &func){
+        void MultiGridSolver<NDIM,T>::set_initial_guess(std::function<T(std::array<double,NDIM> &)> &func){
           _f.get_grid(0).set_y(func);
         }
+        */
 
       // For computing dfdx
       inline const double* derivative_stencil_weights_deriv1(int order){
@@ -524,11 +507,12 @@ namespace FML {
 
       // Compute the gradient using a general order stencil (accuracy = 2 * order)
       template<int NDIM, class T>
-        std::vector<T> MultiGridSolver<NDIM,T>::get_Gradient(int level, IndexInt index, int order){
+        std::array<T,NDIM> MultiGridSolver<NDIM,T>::get_Gradient(int level, IndexInt index, int order){
           // Check that we have enough slices
           assert_mpi(_f.get_grid(level).get_n_extra_slices_left() >= order and _f.get_grid(level).get_n_extra_slices_right() >= order, 
               "[get_Gradient] We don't have enough extra slices (must be >= order of the derivative method)\n");
-          std::vector<T> gradient(NDIM, 0.0);
+          std::array<T,NDIM> gradient;
+          gradient.fill(0.0);
           auto coord = _f.get_grid(level).coord_from_index(index);
           double norm = double(get_N(level));
           int N = _f.get_grid(level).get_N();
@@ -555,11 +539,12 @@ namespace FML {
 
       // Compute the second derivatives (xx,yy,zz,...) using a general order stencil (accuracy = 2 * order)
       template<int NDIM, class T>
-        std::vector<T> MultiGridSolver<NDIM,T>::get_Gradient2(int level, IndexInt index, int order){
+        std::array<T,NDIM>  MultiGridSolver<NDIM,T>::get_Gradient2(int level, IndexInt index, int order){
           // Check that we have enough slices
           assert_mpi(_f.get_grid(level).get_n_extra_slices_left() >= order and _f.get_grid(level).get_n_extra_slices_right() >= order, 
               "[get_Gradient2] We don't have enough extra slices (must be >= order of the derivative method)\n");
-          std::vector<T> gradient(NDIM, 0.0);
+          std::array<T,NDIM> gradient;
+          gradient.fill(0.0);
           auto coord = _f.get_grid(level).coord_from_index(index);
           double norm = double(get_N(level));
           norm = norm*norm;
@@ -601,8 +586,8 @@ namespace FML {
       //================================================
 
       template<int NDIM, class T>
-        std::vector<IndexInt> MultiGridSolver<NDIM,T>::get_neighbor_gridindex(int level, IndexInt index){
-          std::vector<IndexInt> index_list(2*NDIM+1);
+        std::array<IndexInt,2*NDIM+1> MultiGridSolver<NDIM,T>::get_neighbor_gridindex(int level, IndexInt index){
+          std::array<IndexInt,2*NDIM+1> index_list;
           index_list[0] = index;
 
           // Local coordinates
@@ -677,7 +662,8 @@ namespace FML {
           // (Global) coordinate of cell
           const auto center_coord = _f.get_grid(level).globalcoord_from_index(index);
 
-          std::vector<int> add(NDIM,-1);
+          std::array<int,NDIM> add;
+          add.fill(-1);
           std::vector<IndexInt> index_list(ncells);
           for(int k = 0; k < ncells; k++){
             // Do addition with carry with elements of 'add' as digits to compute all indices
@@ -790,7 +776,8 @@ namespace FML {
           IndexInt NtotLocalTop = Top.get_NtotLocal();
 
           // Compute NTop, Ntop^2, ... , Ntop^{Ndim-1} and similar for Nbottom
-          std::vector<IndexInt> nBottomPow(NDIM, 1);
+          std::array<IndexInt,NDIM> nBottomPow;
+          nBottomPow[NDIM-1] = 1;
           for(int idim = NDIM-2; idim >= 0; idim--){
             nBottomPow[idim] = nBottomPow[idim+1] * NBottom;
           }
@@ -806,8 +793,9 @@ namespace FML {
 #ifdef USE_MASK
             if(_bmask[to_level][i] <= 0.0) continue;
 #endif
-            std::vector<double> fac(NDIM, 0.0);
-            std::vector<int> iplus(NDIM, 0);
+            
+            std::array<double,NDIM> fac;
+            std::array<int,NDIM> iplus;
 
             //  Global coordinate of top and bottom cell
             auto coord_top    = Top.globalcoord_from_index(i);
@@ -1098,15 +1086,14 @@ namespace FML {
       // Laplacian operator Sum_dim [f_(i+1) + f_(i-1) - 2*f_(i)] / h^2
       // Assumed: index_list is the same as produced by get_neighbor_gridindex
       template<int NDIM, class T>
-        T MultiGridSolver<NDIM,T>::get_Laplacian(int level, const std::vector<IndexInt>& index_list) {
+        T MultiGridSolver<NDIM,T>::get_Laplacian(int level, const std::array<IndexInt,2*NDIM+1> & index_list) {
           T f = _f[level][ index_list[0] ];
           T laplacian { 0.0 };
           const double h = 1.0 / double(get_N(level));
           for(int idim = 0; idim < NDIM; idim++){
-            const double hh = (pos_max[idim] - pos_min[idim]) * h;
-            laplacian += (_f[level][ index_list[2*idim+1] ] + _f[level][ index_list[2*idim+2] ] - f - f) /(hh * hh);
+            laplacian += (_f[level][ index_list[2*idim+1] ] + _f[level][ index_list[2*idim+2] ] - f - f);
           }
-          return laplacian;
+          return laplacian / (h*h);
         }
 
       // The "B-Laplacian": D[ b D f ]
@@ -1114,7 +1101,7 @@ namespace FML {
       template<int NDIM, class T>
         T MultiGridSolver<NDIM,T>::get_BLaplacian(
             int level, 
-            const std::vector<IndexInt>& index_list, 
+            const std::array<IndexInt,2*NDIM+1> & index_list, 
             std::function<T(int,IndexInt)> &b) {
 
           T f = _f[level][ index_list[0] ];
@@ -1122,14 +1109,13 @@ namespace FML {
           T bcenter = b( level, index_list[0] );
           const double h = 1.0 / double(get_N(level));
           for(int idim = 0; idim < NDIM; idim++){
-            const double hh = (pos_max[idim] - pos_min[idim]) * h;
             T fminus = _f[level][ index_list[2*idim+1] ];
             T fplus  = _f[level][ index_list[2*idim+2] ];
             T bminus = 0.5 * ( b( level, index_list[2*idim+1] ) + bcenter );
             T bplus  = 0.5 * ( b( level, index_list[2*idim+2]  ) + bcenter );
-            result += ( bplus * ( fplus - f) - bminus * ( f - fminus ) ) / (hh*hh);
+            result += ( bplus * ( fplus - f) - bminus * ( f - fminus ) );
           }
-          return result;
+          return result / (h*h);
         }
 
       // Derivative of the "B-Laplacian" D[ b D f ]
@@ -1137,7 +1123,7 @@ namespace FML {
       template<int NDIM, class T>
         T MultiGridSolver<NDIM,T>::get_derivBLaplacian(
             int level, 
-            const std::vector<IndexInt>& index_list, 
+            const std::array<IndexInt,2*NDIM+1> & index_list, 
             std::function<T(int,IndexInt)> &b, 
             std::function<T(int,IndexInt)> &db) {
 
@@ -1147,37 +1133,31 @@ namespace FML {
           T dbcenter = db( level, index_list[0] );
           const double h = 1.0 / double(get_N(level));
           for(int idim = 0; idim < NDIM; idim++){
-            const double hh = (pos_max[idim] - pos_min[idim]) * h;
             T fminus = _f[level][ index_list[2*idim+1] ];
             T fplus  = _f[level][ index_list[2*idim+2] ];
             T bminus = 0.5 * ( b( level, index_list[2*idim+1] ) + bcenter );
             T bplus  = 0.5 * ( b( level, index_list[2*idim+2]  ) + bcenter );
-            result += (0.5 * dbcenter * ( fplus + fminus - 2.0 * f) - (bplus + bminus)) / (hh*hh);
+            result += (0.5 * dbcenter * ( fplus + fminus - 2.0 * f) - (bplus + bminus));
           }
-          return result;
+          return result / (h*h);
         }
 
       // Derivative of the Laplacian d/df_i (D^2 f)
       // Assumed: index_list is the same as produced by get_neighbor_gridindex
       template<int NDIM, class T>
-        T MultiGridSolver<NDIM,T>::get_derivLaplacian(int level, [[maybe_unused]] const std::vector<IndexInt>& index_list) {
+        T MultiGridSolver<NDIM,T>::get_derivLaplacian(int level, [[maybe_unused]] const std::array<IndexInt,2*NDIM+1> & index_list) {
           const double h = 1.0 / double(get_N(level));
-          T derivlaplacian { 0.0 };
-          for(int idim = 0; idim < NDIM; idim++){
-            const double hh = (pos_max[idim] - pos_min[idim]) * h;
-            derivlaplacian += -2.0/(hh * hh);
-          }
-          return derivlaplacian;
+          return -2.0 * NDIM / (h*h);
         }
 
       // Symmetric gradient [f_(i+1) - f_(i-1)] / 2h
       // Assumed: index_list is the same as produced by get_neighbor_gridindex
       template<int NDIM, class T>
-        inline std::vector<T> MultiGridSolver<NDIM,T>::get_Gradient(int level, const std::vector<IndexInt>& index_list) {
-          std::vector<T> gradient(NDIM);
-          double norm = double(get_N(level)) / 2.0;
+        inline std::array<T,NDIM> MultiGridSolver<NDIM,T>::get_Gradient(int level, const std::array<IndexInt,2*NDIM+1> & index_list) {
+          std::array<T,NDIM> gradient;
+          const double h = 1.0 / double(get_N(level));
           for(int idim = 0; idim < NDIM; idim++){
-            gradient[idim] = (_f[level][ index_list[2*idim+2] ] -  _f[level][ index_list[2*idim+1] ]) * norm / (pos_max[idim] - pos_min[idim]);
+            gradient[idim] = (_f[level][ index_list[2*idim+2] ] -  _f[level][ index_list[2*idim+1] ]) / (2*h);
           }
           return gradient;
         }
@@ -1185,8 +1165,10 @@ namespace FML {
       // d/df_i of the gradient. This is zero as f_i is not part of the formula
       // Assumed: index_list is the same as produced by get_neighbor_gridindex
       template<int NDIM, class T>
-        inline std::vector<T> MultiGridSolver<NDIM,T>::get_derivGradient(int level, const std::vector<IndexInt>& index_list) {
-          return std::vector<T>(NDIM, 0.0);
+        inline std::array<T,NDIM> MultiGridSolver<NDIM,T>::get_derivGradient(int level, const std::array<IndexInt,2*NDIM+1> & index_list) {
+          std::array<T,NDIM> res;
+          res.fill(0.0);
+          return res;
         }
 
       // The solution (i is the index in index_list containing neighbor cells and i=0 is the current cell)
@@ -1195,21 +1177,16 @@ namespace FML {
           return _f[level][ index ];
         }
 
-      // Gridspacing in direction idim at a given level. If set_domain is not called
-      // then dx=dy=dz=1/N i.e. the box is [0,1]^NDIM
+      // Gridspacing in direction idim at a given level
       template<int NDIM, class T>
-        inline double MultiGridSolver<NDIM,T>::get_Gridspacing(int level, int idim) {
-          return (pos_max[idim] - pos_min[idim]) / double(get_N(level));
+        inline double MultiGridSolver<NDIM,T>::get_Gridspacing(int level) {
+          return 1.0 / double(get_N(level));
         }
 
       // (Global) position of a cell in the box
       template<int NDIM, class T>
-        inline std::vector<double> MultiGridSolver<NDIM,T>::get_Coordinate(int level, IndexInt index) {
-          auto pos = _f.get_grid(level).get_pos(index);
-          for(int idim = 0; idim < NDIM; idim++) {
-            pos[idim] = pos_min[idim] + (pos_max[idim] - pos_min[idim])*pos[idim];
-          }
-          return pos;
+        inline std::array<double,NDIM> MultiGridSolver<NDIM,T>::get_Coordinate(int level, IndexInt index) {
+          return _f.get_grid(level).get_pos(index);
         }
     }
   }

@@ -37,7 +37,7 @@ namespace FML {
         // Assuing we have f(k) in grid
         auto ComputeSecondDerivative = [&](FFTWGrid<N> & grid, int i1, int i2){
           if(FML::ThisTask == 0) std::cout << "[ComputeHessianWithFT::ComputeSecondDerivative] Computing phi_" << i1 << "," << i2 << "\n";
-          std::vector<double> kvec(N);
+          std::array<double,N> kvec;
           double kmag2;
           for(auto & fourier_index : grid.get_fourier_range()){
             grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);

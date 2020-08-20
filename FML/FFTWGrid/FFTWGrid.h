@@ -1,6 +1,7 @@
 #ifndef FFTWGRIDMPI_HEADER
 #define FFTWGRIDMPI_HEADER
 #include <vector>
+#include <array>
 #include <complex>
 #include <cassert>
 #include <iostream>
@@ -161,57 +162,41 @@ namespace FML {
           void fill_fourier_grid(const ComplexType val);
 
           // Fill the main grid from a function specifying the value at a given position
-          void fill_real_grid(std::function<FloatType(std::vector<double>&)> & func);
-          void fill_fourier_grid(std::function<ComplexType(std::vector<double>&)> & func);
+          void fill_real_grid(std::function<FloatType(std::array<double,N>&)> & func);
+          void fill_fourier_grid(std::function<ComplexType(std::array<double,N>&)> & func);
 
           // Get the cell coordinates from the index
-          std::vector<int> get_coord_from_index(const IndexIntType index_real);
-          std::vector<int> get_fourier_coord_from_index(const IndexIntType index_fourier);
+          std::array<int,N> get_coord_from_index(const IndexIntType index_real);
+          std::array<int,N> get_fourier_coord_from_index(const IndexIntType index_fourier);
 
           // From integer position in grid in [0,Nmesh)^Ndim to index in allocated grid
-          IndexIntType get_index_real_2d(const int i, const int j) const;
-          IndexIntType get_index_real_3d(const int i, const int j, const int k) const;
-          IndexIntType get_index_real(const std::vector<int> &coord) const;
+          IndexIntType get_index_real(const std::array<int,N> &coord) const;
 
           // From integer position in fourier grid in [0,Nmesh)^Ndim-1 x [0,Nmesh/2+1) to index in allocated grid
-          IndexIntType get_index_fourier_2d(const int i, const int j) const;
-          IndexIntType get_index_fourier_3d(const int i, const int j, const int k) const;
-          IndexIntType get_index_fourier(const std::vector<int> &coord) const;
+          IndexIntType get_index_fourier(const std::array<int,N> &coord) const;
 
           // Fetch value in grid by integer coordinate
-          FloatType get_real_2d(const int i, const int j) const;
-          FloatType get_real_3d(const int i, const int j, const int k) const;
-          FloatType get_real(const std::vector<int> &coord) const;
+          FloatType get_real(const std::array<int,N> &coord) const;
           FloatType get_real_from_index(const IndexIntType index) const;
 
           // Fetch value in fourier grid by integer coordinate
-          ComplexType get_fourier_2d(const int i, const int j) const;
-          ComplexType get_fourier_3d(const int i, const int j, const int k) const;
-          ComplexType get_fourier(const std::vector<int> &coord) const;
+          ComplexType get_fourier(const std::array<int,N> &coord) const;
           ComplexType get_fourier_from_index(const IndexIntType index) const;
 
           // The position of a real grid-node in [0,1)^Ndim
-          std::vector<double> get_real_position_2d(const int i, const int j) const;
-          std::vector<double> get_real_position_3d(const int i, const int j, const int k) const;
-          std::vector<double> get_real_position(const std::vector<int> &coord) const;
+          std::array<double,N> get_real_position(const std::array<int,N> &coord) const;
 
           // The  wave-vector of a grid-node in Fourier space (For physical [k] multiply by 1/Boxsize)
-          std::vector<double> get_fourier_wavevector_2d(const int i, const int j) const;
-          std::vector<double> get_fourier_wavevector_3d(const int i, const int j, const int k) const;
-          std::vector<double> get_fourier_wavevector(const std::vector<int> &coord) const;
-          std::vector<double> get_fourier_wavevector_from_index(const IndexIntType index) const;
+          std::array<double,N> get_fourier_wavevector(const std::array<int,N> &coord) const;
+          std::array<double,N> get_fourier_wavevector_from_index(const IndexIntType index) const;
 
           // Set value in grid using integer coordinate in [0,Nmesh)^Ndim
-          void set_real_2d(const int i, const int j, const FloatType value);
-          void set_real_3d(const int i, const int j, const int k, const FloatType value);
-          void set_real(const std::vector<int> &coord, const FloatType value);
+          void set_real(const std::array<int,N> &coord, const FloatType value);
           void set_real_from_index(const IndexIntType ind, const FloatType value);
-          void add_real(const std::vector<int> &coord, const FloatType value);
+          void add_real(const std::array<int,N> &coord, const FloatType value);
 
           // Set value in fourier grid using coordinate in [0,Nmesh)^Ndim-1 x [0,Nmesh/2+1)
-          void set_fourier_2d(const int i, const int j, const ComplexType value);
-          void set_fourier_3d(const int i, const int j, const int k, const ComplexType value);
-          void set_fourier(const std::vector<int> &coord, const ComplexType value);
+          void set_fourier(const std::array<int,N> &coord, const ComplexType value);
           void set_fourier_from_index(const IndexIntType ind, const ComplexType value);
 
           // How many extra slices we have allocated to the left
@@ -237,9 +222,9 @@ namespace FML {
 
           // From index in the grid get the k-vector and the norm
           void get_fourier_wavevector_and_norm_by_index(
-              const IndexIntType ind, std::vector<double> &kvec, double &kmag) const;
+              const IndexIntType ind, std::array<double,N> &kvec, double &kmag) const;
           void get_fourier_wavevector_and_norm2_by_index(
-              const IndexIntType ind, std::vector<double> &kvec, double &kmag2) const;
+              const IndexIntType ind, std::array<double,N> &kvec, double &kmag2) const;
 
           // Range iterator for going through all active cells in the main real/complex grid by index
           // [ e.g. for(auto and real_index: grid.real_range()) ]
@@ -530,7 +515,7 @@ namespace FML {
       }
 
     template<int N>
-      void FFTWGrid<N>::fill_real_grid(std::function<FloatType(std::vector<double>&)> & func){
+      void FFTWGrid<N>::fill_real_grid(std::function<FloatType(std::array<double,N>&)> & func){
 #ifdef DEBUG_FFTWGRID
         if(not grid_is_in_real_space){
           if(FML::ThisTask == 0) 
@@ -559,7 +544,7 @@ namespace FML {
       }
 
     template<int N>
-      void FFTWGrid<N>::fill_fourier_grid(std::function<ComplexType(std::vector<double>&)> & func){
+      void FFTWGrid<N>::fill_fourier_grid(std::function<ComplexType(std::array<double,N>&)> & func){
 #ifdef DEBUG_FFTWGRID
         if(grid_is_in_real_space){
           if(FML::ThisTask == 0) 
@@ -717,36 +702,18 @@ namespace FML {
     }
 
     template<int N>
-      IndexIntType FFTWGrid<N>::get_index_real_2d(const int i, const int j) const{
-#ifdef BOUNDSCHECK_FFTWGRID
-        assert_mpi(-n_extra_x_slices_left <= i and i < Local_nx+n_extra_x_slices_right and 0 <= j and j < Nmesh and N == 2, 
-            "[FFTWGrid::get_index_real_2d] Bounds check failed\n");
-#endif
-        return i * 2 * (Nmesh/2+1) + j;
-      }
-
-    template<int N>
-      IndexIntType FFTWGrid<N>::get_index_real_3d(const int i, const int j, const int k) const{
-#ifdef BOUNDSCHECK_FFTWGRID
-        assert_mpi(-n_extra_x_slices_left <= i and i < Local_nx+n_extra_x_slices_right and 0 <= j and j < Nmesh and 0 <= k and k < Nmesh and N == 3, 
-            "[FFTWGrid::get_index_real_3d] Bounds check failed\n");
-#endif
-        return (Nmesh * i + j)*2*(Nmesh/2+1) + k;
-      }
-
-    template<int N>
-      std::vector<int> FFTWGrid<N>::get_coord_from_index(const IndexIntType index_real){
+      std::array<int,N> FFTWGrid<N>::get_coord_from_index(const IndexIntType index_real){
 #ifdef BOUNDSCHECK_FFTWGRID
         assert_mpi(index_real >= -NmeshTotRealSlice * n_extra_x_slices_left and index_real < NmeshTotRealSlice * (Local_nx + n_extra_x_slices_right),
             "[FFTWGrid::get_coord_from_index] Bounds check failed\n");
 #endif
-        std::vector<int> coord(N);
+        std::array<int,N> coord;
         int nmesh_plus_padding = (2 * (Nmesh / 2 + 1));
         IndexIntType index = index_real;
         coord[N-1] = index % nmesh_plus_padding;
         index /= nmesh_plus_padding;
 
-        if(N == 2){
+        if constexpr(N == 2){
           coord[0] = index;
         } else if (N == 3){
           coord[1] = index % Nmesh;
@@ -762,15 +729,10 @@ namespace FML {
       }
 
     template<int N>
-      IndexIntType FFTWGrid<N>::get_index_real(const std::vector<int> &coord) const{
+      IndexIntType FFTWGrid<N>::get_index_real(const std::array<int,N> &coord) const{
 #ifdef BOUNDSCHECK_FFTWGRID
         assert_mpi(coord.size() == N, 
             "[FFTWGrid::get_index_real] Coord has wrong size\n");
-#endif
-        if(N == 2) return get_index_real_2d(coord[0],coord[1]);
-        if(N == 3) return get_index_real_3d(coord[0],coord[1],coord[2]);
-
-#ifdef BOUNDSCHECK_FFTWGRID
         assert_mpi(-n_extra_x_slices_left <= coord[0] and coord[0] < Local_nx+n_extra_x_slices_right,
             "[FFTWGrid::get_index_real] Bounds check failed (first coordinate)\n");
         for(int idim = 1; idim < N; idim++){
@@ -779,36 +741,23 @@ namespace FML {
         }
 #endif
 
-        IndexIntType index = coord[0];
-        for(int idim = 1; idim < N-1; idim++){
-          index = index * Nmesh + coord[idim];
+        if constexpr(N == 2) {
+          return coord[0] * (2 * (Nmesh / 2 + 1)) + coord[1];
+        } else if(N == 3) {
+          return (coord[0] * Nmesh + coord[1]) * (2 * (Nmesh / 2 + 1)) + coord[2];
+        } else {
+
+          IndexIntType index = coord[0];
+          for(int idim = 1; idim < N-1; idim++){
+            index = index * Nmesh + coord[idim];
+          }
+          index = index * (2 * (Nmesh / 2 + 1)) + coord[N-1];
+          return index;
         }
-        index = index * (2 * (Nmesh / 2 + 1)) + coord[N-1];
-        return index;
       }
 
     template<int N>
-      IndexIntType FFTWGrid<N>::get_index_fourier_2d(const int i, const int j) const{
-#ifdef BOUNDSCHECK_FFTWGRID
-        assert_mpi(0 <= i and i < Local_nx and 0 <= j and j < Nmesh/2+1 and N == 2, 
-            "[FFTWGrid::get_index_fourier_2d] Bounds check failed\n");
-#endif
-        return i*(Nmesh/2+1) + j;
-      }
-
-    template<int N>
-      IndexIntType FFTWGrid<N>::get_index_fourier_3d(const int i, const int j, const int k) const{
-#ifdef BOUNDSCHECK_FFTWGRID
-        assert_mpi(0 <= i and i < Local_nx and 0 <= j and j < Nmesh and 0 <= k and k < Nmesh/2+1 and N == 3, 
-            "[FFTWGrid::get_index_fourier_3d] Bounds check failed\n");
-#endif
-        return (Nmesh * i + j)*(Nmesh/2+1) + k;
-      }
-
-    template<int N>
-      IndexIntType FFTWGrid<N>::get_index_fourier(const std::vector<int> &coord) const{
-        if(N == 2) return get_index_fourier_2d(coord[0],coord[1]);
-        if(N == 3) return get_index_fourier_3d(coord[0],coord[1],coord[2]);
+      IndexIntType FFTWGrid<N>::get_index_fourier(const std::array<int,N> &coord) const{
 
 #ifdef BOUNDSCHECK_FFTWGRID
         assert_mpi(0 <= coord[0] and coord[0] < Local_nx, 
@@ -819,12 +768,18 @@ namespace FML {
         }
 #endif
 
-        IndexIntType index = coord[0];
-        for(int idim = 1; idim < N-1; idim++){
-          index = index * Nmesh + coord[idim];
+        if constexpr(N == 2){ 
+          return coord[0]*(Nmesh/2+1) + coord[1];
+        } else if(N == 3) {
+          return (coord[0]*Nmesh + coord[1])*(Nmesh/2+1) + coord[2];
+        } else {
+          IndexIntType index = coord[0];
+          for(int idim = 1; idim < N-1; idim++){
+            index = index * Nmesh + coord[idim];
+          }
+          index = index * (Nmesh / 2 + 1) + coord[N-1];
+          return index;
         }
-        index = index * (Nmesh / 2 + 1) + coord[N-1];
-        return index;
       }
 
     template<int N>
@@ -935,46 +890,20 @@ namespace FML {
       }
 
     template<int N>
-      FloatType FFTWGrid<N>::get_real_2d(const int i, const int j) const{
-        IndexIntType index = get_index_real_2d(i,j);
-        const FloatType *grid = reinterpret_cast<const FloatType*>( fourier_grid_raw.data() ) + NmeshTotRealSlice * n_extra_x_slices_left;
-        return grid[index];
-      }
-
-    template<int N>
-      FloatType FFTWGrid<N>::get_real_3d(const int i, const int j, const int k) const{
-        IndexIntType index = get_index_real_3d(i,j,k);
-        const FloatType *grid = reinterpret_cast<const FloatType*>( fourier_grid_raw.data() ) + NmeshTotRealSlice * n_extra_x_slices_left;
-        return grid[index];
-      }
-
-    template<int N>
-      FloatType FFTWGrid<N>::get_real(const std::vector<int> &coord) const{
+      FloatType FFTWGrid<N>::get_real(const std::array<int,N> &coord) const{
         IndexIntType index = get_index_real(coord);
         const FloatType *grid = reinterpret_cast<const FloatType*>( fourier_grid_raw.data() ) + NmeshTotRealSlice * n_extra_x_slices_left;
         return grid[index];
       }
 
     template<int N>
-      void FFTWGrid<N>::set_real_3d(const int i, const int j, const int k, const FloatType value){
-        IndexIntType index = get_index_real_3d(i,j,k);
-        get_real_grid()[index] = value;
-      }
-
-    template<int N>
-      void FFTWGrid<N>::set_real_2d(const int i, const int j, const FloatType value){
-        IndexIntType index = get_index_real_2d(i,j);
-        get_real_grid()[index] = value;
-      }
-
-    template<int N>
-      void FFTWGrid<N>::set_real(const std::vector<int> &coord, const FloatType value){
+      void FFTWGrid<N>::set_real(const std::array<int,N> &coord, const FloatType value){
         IndexIntType index = get_index_real(coord);
         get_real_grid()[index] = value;
       }
 
     template<int N>
-      void FFTWGrid<N>::add_real(const std::vector<int> &coord, const FloatType value){
+      void FFTWGrid<N>::add_real(const std::array<int,N> &coord, const FloatType value){
         IndexIntType index = get_index_real(coord);
         get_real_grid()[index] += value;
       }
@@ -985,19 +914,7 @@ namespace FML {
       }
 
     template<int N>
-      ComplexType FFTWGrid<N>::get_fourier_2d(const int i, const int j) const{
-        IndexIntType index = get_index_fourier_2d(i,j);
-        return fourier_grid_raw[NmeshTotComplexSlice * n_extra_x_slices_left + index];
-      }
-
-    template<int N>
-      ComplexType FFTWGrid<N>::get_fourier_3d(const int i, const int j, const int k) const{
-        IndexIntType index = get_index_fourier_3d(i,j,k);
-        return fourier_grid_raw[NmeshTotComplexSlice * n_extra_x_slices_left + index];
-      }
-
-    template<int N>
-      ComplexType FFTWGrid<N>::get_fourier(const std::vector<int> &coord) const{
+      ComplexType FFTWGrid<N>::get_fourier(const std::array<int,N> &coord) const{
         IndexIntType index = get_index_fourier(coord);
         return fourier_grid_raw[NmeshTotComplexSlice * n_extra_x_slices_left + index];
       }
@@ -1013,20 +930,8 @@ namespace FML {
       }
 
     template<int N>
-      void FFTWGrid<N>::set_fourier(const std::vector<int> &coord, const ComplexType value){
+      void FFTWGrid<N>::set_fourier(const std::array<int,N> &coord, const ComplexType value){
         IndexIntType index = get_index_fourier(coord);
-        get_fourier_grid()[index] = value;
-      }
-
-    template<int N>
-      void FFTWGrid<N>::set_fourier_3d(const int i, const int j, const int k, const ComplexType value){
-        IndexIntType index = get_index_fourier_3d(i,j,k);
-        get_fourier_grid()[index] = value;
-      }
-
-    template<int N>
-      void FFTWGrid<N>::set_fourier_2d(const int i, const int j, const ComplexType value){
-        IndexIntType index = get_index_fourier_2d(i,j);
         get_fourier_grid()[index] = value;
       }
 
@@ -1073,25 +978,8 @@ namespace FML {
       }
 
     template<int N>
-      std::vector<double> FFTWGrid<N>::get_real_position_2d(const int i, const int j) const{
-        std::vector<double> xcoord(2);
-        xcoord[0] = (Local_x_start+i)/double(Nmesh);
-        xcoord[1] = j/double(Nmesh);
-        return xcoord;
-      }
-
-    template<int N>
-      std::vector<double> FFTWGrid<N>::get_real_position_3d(const int i, const int j, const int k) const{
-        std::vector<double> xcoord(3);
-        xcoord[0] = (Local_x_start+i)/double(Nmesh);
-        xcoord[1] = j/double(Nmesh);
-        xcoord[2] = k/double(Nmesh);
-        return xcoord;
-      }
-
-    template<int N>
-      std::vector<double> FFTWGrid<N>::get_real_position(const std::vector<int> &coord) const{
-        std::vector<double> xcoord(N);
+      std::array<double,N> FFTWGrid<N>::get_real_position(const std::array<int,N> &coord) const{
+        std::array<double,N> xcoord;
 #ifdef CELLCENTERSHIFTED
         const constexpr double shift = 0.5;
 #else
@@ -1104,15 +992,15 @@ namespace FML {
       }
 
     template<int N>
-      void FFTWGrid<N>::get_fourier_wavevector_and_norm_by_index(const IndexIntType index, std::vector<double> &kvec, double &kmag) const{
+      void FFTWGrid<N>::get_fourier_wavevector_and_norm_by_index(const IndexIntType index, std::array<double,N> &kvec, double &kmag) const{
         get_fourier_wavevector_and_norm2_by_index(index, kvec, kmag);
         kmag = std::sqrt(kmag);
       }
     
     template<int N>
-      std::vector<int> FFTWGrid<N>::get_fourier_coord_from_index(const IndexIntType index) {
+      std::array<int,N> FFTWGrid<N>::get_fourier_coord_from_index(const IndexIntType index) {
         const int nover2plus1 = Nmesh/2+1;
-        std::vector<int> coord(N);
+        std::array<int,N> coord;
         coord[N-1] = index % nover2plus1;
         for(int idim = N-2, n = nover2plus1; idim >=0; idim--, n *= Nmesh){
           coord[idim] = (index / n) % Nmesh;
@@ -1121,7 +1009,7 @@ namespace FML {
       }
 
     template<int N>
-      void FFTWGrid<N>::get_fourier_wavevector_and_norm2_by_index(const IndexIntType index, std::vector<double> &kvec, double &kmag2) const{
+      void FFTWGrid<N>::get_fourier_wavevector_and_norm2_by_index(const IndexIntType index, std::array<double,N> &kvec, double &kmag2) const{
         const double twopi = 2.0 * M_PI;
         const int nover2plus1 = Nmesh/2+1;
         [[maybe_unused]] const int nover2 = Nmesh/2;
@@ -1167,28 +1055,9 @@ namespace FML {
       }
 
     template<int N>
-      std::vector<double> FFTWGrid<N>::get_fourier_wavevector_2d(const int i, const int j) const{
+      std::array<double,N> FFTWGrid<N>::get_fourier_wavevector(const std::array<int,N> &coord) const{
         const double twopi = 2.0 * M_PI;
-        std::vector<double> fcoord(2);
-        fcoord[0] = twopi * ( (Local_x_start+i) <= Nmesh/2 ? (Local_x_start+i) : (Local_x_start+i) - Nmesh);
-        fcoord[1] = twopi * ( j <= Nmesh/2 ? j : j - Nmesh);
-        return fcoord;
-      }
-
-    template<int N>
-      std::vector<double> FFTWGrid<N>::get_fourier_wavevector_3d(const int i, const int j, const int k) const{
-        const double twopi = 2.0 * M_PI;
-        std::vector<double> fcoord(3);
-        fcoord[0] = twopi * ((Local_x_start+i) <= Nmesh/2 ? (Local_x_start+i) : (Local_x_start+i) - Nmesh);
-        fcoord[1] = twopi * (j <= Nmesh/2 ? j : j - Nmesh);
-        fcoord[2] = twopi * (k <= Nmesh/2 ? k : k - Nmesh);
-        return fcoord;
-      }
-
-    template<int N>
-      std::vector<double> FFTWGrid<N>::get_fourier_wavevector(const std::vector<int> &coord) const{
-        const double twopi = 2.0 * M_PI;
-        std::vector<double> fcoord(N);
+        std::array<double,N> fcoord;
         fcoord[0] = twopi * ((Local_x_start+coord[0]) <= Nmesh/2 ? (Local_x_start+coord[0]) : (Local_x_start+coord[0]) - Nmesh);
         for(int idim = 1; idim < N; idim++)
           fcoord[idim] = twopi * (coord[idim] <= Nmesh/2 ? coord[idim] : coord[idim] - Nmesh);
@@ -1196,13 +1065,13 @@ namespace FML {
       }
 
     template<int N>
-      std::vector<double> FFTWGrid<N>::get_fourier_wavevector_from_index(const IndexIntType index) const{
+      std::array<double,N> FFTWGrid<N>::get_fourier_wavevector_from_index(const IndexIntType index) const{
         const double twopi = 2.0 * M_PI;
         const int nover2plus1 = Nmesh/2+1;
         const int nover2 = Nmesh/2;
-        std::vector<double> fcoord(N);
+        std::array<double,N> fcoord;
 
-        if(N == 3){
+        if constexpr(N == 3){
           int iz = index % nover2plus1;;
           int iy = index / nover2plus1;
           int ix = iy / Nmesh;

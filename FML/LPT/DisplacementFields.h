@@ -73,7 +73,8 @@ namespace FML {
             }
           }
 
-          std::vector<double> kvec(N); double kmag;
+          std::array<double,N> kvec;
+          double kmag;
           std::complex<double> I(0,1);
           for(size_t ind = 0; ind < NmeshTotFourier; ind++){
             if(Local_x_start == 0 && ind == 0) continue;
@@ -127,7 +128,8 @@ namespace FML {
             }
           }
 
-          std::vector<double> kvec(N); double kmag;
+          std::array<double,N> kvec; 
+          double kmag;
           std::complex<double> I(0,1);
           for(size_t ind = 0; ind < NmeshTotFourier; ind++){
             if(Local_x_start == 0 && ind == 0) continue;
@@ -181,7 +183,8 @@ namespace FML {
           }
 
           // Divide grid by k^2. Assuming delta was created in fourier-space so no FFTW normalization needed
-          std::vector<double> kvec(N); double kmag2;
+          std::array<double,N> kvec; 
+          double kmag2;
           for(size_t ind = 0; ind < NmeshTotFourier; ind++){
             if(Local_x_start == 0 && ind == 0) continue;
 
@@ -225,7 +228,8 @@ namespace FML {
             std::cout << "Compute [DiDi phi_1LPT] in fourier space\n";
 #endif
           // Compute phi_xx, phi_yy, ...
-          std::vector<double> kvec(N); double kmag;
+          std::array<double,N> kvec; 
+          double kmag;
           for(size_t ind = 0; ind < NmeshTotFourier; ind++){
             if(Local_x_start == 0 && ind == 0) continue;
 

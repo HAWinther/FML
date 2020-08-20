@@ -101,7 +101,7 @@ namespace FML {
           std::vector<int> coord(N,0), mirrorcoord(N,0);
           const int imin_local = Local_x_start;
           const int imax_local = Local_x_start + Local_nx;
-          std::vector<double> kvec(N);
+          std::array<double,N> kvec;
           double kmag;
 
           // We loop over all cells in the global grid. We can cut this down
@@ -247,7 +247,7 @@ endloop:;
 #endif
 
           // Generate gaussian random field in k-space
-          double kvec[3];
+          std::array<double,3> kvec;
           for(int i = 0; i < Nmesh; i++) {
             int ii = i == 0 ? 0 : Nmesh - i;
 

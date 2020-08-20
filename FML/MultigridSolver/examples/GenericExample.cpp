@@ -92,13 +92,13 @@ void TestMultiGridSolver(){
   //======================================================================
   // The analytical solution and corresponding source this corresponds to
   //======================================================================
-  auto sol_analytic = [=](std::vector<double> &x){
+  auto sol_analytic = [=](std::array<double,Ndim> &x) -> double{
       double sol = 1.0;
       for(int idim = 0; idim < Ndim; idim++)
         sol *= sin(4 * 2.0 * M_PI * x[idim]);
       return sol;
   };
-  auto source_analytic = [&](std::vector<double> &x){
+  auto source_analytic = [&](std::array<double,Ndim> &x) -> double{
     return (-4.0 * M_PI * M_PI) * 16 * Ndim * sol_analytic(x);  
   };
 
@@ -117,7 +117,7 @@ void TestMultiGridSolver(){
   g.set_initial_guess( SolverType(0.0) );
   
   // Set it from a function
-  // std::function<SolverType(std::vector<double>&)> func = [&](std::vector<double> &x){
+  // std::function<SolverType(std::array<double,Ndim>&)> func = [&](std::array<double,Ndim> &x){
   //   ...
   // };
   // g.set_initial_guess( func );
@@ -135,7 +135,7 @@ void TestMultiGridSolver(){
       //======================================================================
       // Gridspacing h (we assume a square box so only fetch dx)
       //======================================================================
-      const auto h = sol->get_Gridspacing(level, 0);
+      const auto h = sol->get_Gridspacing(level);
 
       //======================================================================
       // Compute the laplacian [D^2 f]

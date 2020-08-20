@@ -50,7 +50,7 @@ void FofrSolver(){
   //======================================================================
   // The overdensity field from a formula (as peak in the center of the box)
   //======================================================================
-  auto delta_analytic = [](const std::vector<double> &x){
+  auto delta_analytic = [](const std::array<double,Ndim> &x){
       double r2 = 0.0;
       for(int idim = 0; idim < Ndim; idim++){
         r2 += (x[idim]-0.5)*(x[idim]-0.5);
@@ -139,9 +139,9 @@ void FofrSolver(){
   auto sol = g.get_grid(0);
 
   // Print the solution (x,y,...,r, f_R/f_R0, delta)
-  std::vector<double> center(Ndim,0.5);
+  std::array<double,Ndim> center;
+  center.fill(0.5);
   for(IndexInt index = 0; index < sol.get_NtotLocal(); index++){
-    auto coord = sol.coord_from_index(index);
     auto pos   = sol.get_pos(index);
     if(FML::ThisTask == 0) {
       if(index % N == 0 and index > 0) std::cout << "\n";

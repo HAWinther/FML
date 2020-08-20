@@ -86,13 +86,14 @@ void RunTests(){
 
     auto k1_vec = grid2.get_fourier_wavevector(coord);
     auto k2_vec = grid2.get_fourier_wavevector_from_index(fourier_index);
-    for(int idim = 0; idim < Ndim; idim++)
+    for(int idim = 0; idim < Ndim; idim++){
       assert( std::fabs(k1_vec[idim] - k2_vec[idim]) < 1e-10 );
+    }
 
     auto value = grid2.get_fourier(coord);
     value *= 2;
     grid2.set_fourier(coord, value);
-    assert( grid2.get_fourier(coord) == value );
+    assert( std::abs( grid2.get_fourier(coord) - value ) < 1e-10 );
     value /= 2;
     grid2.set_fourier_from_index(fourier_index, value);
 
@@ -100,8 +101,9 @@ void RunTests(){
     grid2.get_fourier_wavevector_and_norm_by_index(fourier_index, k1_vec, kmag);
     grid2.get_fourier_wavevector_and_norm2_by_index(fourier_index, k2_vec, kmag2);
     assert( std::fabs(kmag - std::sqrt(kmag2)) < 1e-10 ); 
-    for(int idim = 0; idim < Ndim; idim++)
+    for(int idim = 0; idim < Ndim; idim++){
       assert( std::fabs(k1_vec[idim] - k2_vec[idim]) < 1e-10 );
+    }
   }
 
   grid2.fftw_c2r();
@@ -112,25 +114,27 @@ void RunTests(){
     assert(std::fabs(value1 - value2) < 1e-10);
   }
 
+  // Test dumping to file and reading it back in
+  grid2.fill_real_grid(0.0);
   grid2.dump_to_file("output_grid");
   grid.load_from_file("output_grid");
-
   for(auto real_index : grid.get_real_range()){
     auto value1 = grid.get_real_from_index(real_index);
     auto value2 = grid2.get_real_from_index(real_index);
     assert(std::fabs(value1 - value2) < 1e-10);
   }
 
+  // Test fourier transforms
   grid.fill_real_grid(0.0);
 
   const int n = 2;
-  auto solution = [&](std::vector<double> &pos) -> double {
+  auto solution = [&](std::array<double,N> &pos) -> double {
     auto value = 0.0;
     for(auto &x: pos)
       value += sin(n * 2*M_PI*x);
     return value;
   };
-  auto source = [&](std::vector<double> &pos) -> double {
+  auto source = [&](std::array<double,N> &pos) -> double {
     return -(n * 2 * M_PI) * (n * 2 * M_PI) * solution(pos);
   };
 
