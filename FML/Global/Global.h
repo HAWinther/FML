@@ -130,21 +130,17 @@ namespace FML {
   //============================================
   // Simple integer a^b power-function by squaring
   //============================================
-  inline long long int power(int base, int exponent){
+  constexpr long long int power(int base, int exponent){
     if(exponent == 0) return 1;
     if(exponent % 2 == 0){
       auto result = power(base, exponent/2);
       return result * result;
     } else {
       auto result = power(base, (exponent-1)/2);
-      return base * result * result;
+      return (long long int)(base) * result * result;
     }
   }
   
-  constexpr long long int ppower(int base, int exponent){
-    return exponent == 0 ? 1 : base * ppower(base, exponent-1); 
-  }
-
   //============================================
   // Initialize and finalize MPI automatically on 
   // startup and exit. MPI can only be initialized 

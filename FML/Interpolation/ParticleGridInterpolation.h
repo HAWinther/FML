@@ -346,7 +346,7 @@ namespace FML {
         //==========================================================
 
         // For the kernel above we need to go kernel_width/2 cells to the left and right
-        const int widthtondim = power(ORDER, N);
+        const constexpr int widthtondim = FML::power(ORDER, N);
         std::vector<int> xstart(N,-ORDER/2);
 
         // Info about the grid
@@ -474,7 +474,7 @@ namespace FML {
             "[interpolate_grid_to_particle_positions] Too few extra slices\n");
 
         // We need to look at width^N cells in total
-        const int widthtondim = power(ORDER, N);
+        const constexpr int widthtondim = FML::power(ORDER, N);
         std::vector<int> xstart(N,-ORDER/2);
 
         // Fetch grid information
@@ -677,7 +677,7 @@ namespace FML {
             "[convolve_grid_with_kernel] Grid has to be already allocated!\n");
 
         // We need to look at width^N cells in total
-        const int widthtondim = power(ORDER, N);
+        const constexpr int widthtondim = FML::power(ORDER, N);
         std::vector<int> xstart(N,-ORDER/2);
         if(ORDER % 2 == 0) 
           xstart = std::vector<int>(N,-ORDER/2+1);

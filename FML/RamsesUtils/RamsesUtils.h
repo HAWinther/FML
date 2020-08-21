@@ -36,39 +36,39 @@ namespace FML {
 
         private:
 
-          static const int MAXLEVEL = 50;
+          static const int MAXLEVEL {50};
 
           // File description
-          std::string filepath;
-          int outputnr;
+          std::string filepath{};
+          int outputnr{0};
 
           // Data obtained from info-file
-          int ncpu;
-          int npart;
-          int levelmin;
-          int levelmax;
-          int ngridmax;
-          int nstep_coarse;
-          double aexp;
-          double time;
-          double boxlen;
-          double h0;
-          double omega_m;
-          double omega_l;
-          double omega_k;
-          double omega_b;
-          double unit_l;
-          double unit_d;
-          double unit_t;
-          double boxlen_ini;
-          std::vector<int> npart_file;
+          int ncpu{0};
+          int npart{0};
+          int levelmin{0};
+          int levelmax{0};
+          int ngridmax{0};
+          int nstep_coarse{0};
+          double aexp{0.0};
+          double time{0.0};
+          double boxlen{0.0};
+          double h0{0.0};
+          double omega_m{0.0};
+          double omega_l{0.0};
+          double omega_k{0.0};
+          double omega_b{0.0};
+          double unit_l{0.0};
+          double unit_d{0.0};
+          double unit_t{0.0};
+          double boxlen_ini{0.0};
+          std::vector<int> npart_file{};
 
           // Book-keeping variables
-          bool infofileread;
-          int npart_read;
-          int nsink_read;
+          bool infofileread{false};
+          int npart_read{0};
+          int nsink_read{0};
 
-          bool verbose { false };
+          bool verbose {false};
           
           void throw_error(std::string errormessage) const{
 #ifdef USE_MPI
@@ -82,25 +82,16 @@ namespace FML {
 
         public:
 
-          RamsesReader() : 
-            filepath(""),
-            outputnr(0),
-            infofileread(false),
-            npart_read(0),
-            nsink_read(0) {}
+          RamsesReader() = default;
 
           RamsesReader(std::string _filepath, int _outputnr, bool _verbose = false) : 
             filepath(_filepath), 
             outputnr(_outputnr), 
-            infofileread(false),
             npart_read(0),
             nsink_read(0),
             verbose(_verbose){
               read_info();
             }
-
-          RamsesReader(RamsesReader& rhs) = delete;
-          RamsesReader operator=(const RamsesReader& rhs) = delete;
 
           template<class T>
             void read_ramses_single(int ifile, std::vector<T> &p){
@@ -111,7 +102,7 @@ namespace FML {
                 partfile = filepath + "/";
               partfile = partfile + "output_" + numberfolder + "/part_" + numberfolder + ".out" + numberfile;
               FILE *fp;
-              if( (fp = fopen(partfile.c_str(), "r")) == NULL){
+              if( (fp = fopen(partfile.c_str(), "r")) == nullptr){
                 std::string error =  "[RamsesReader::read_ramses_single] Error opening particle file " + partfile;
                 throw_error(error);
               }
@@ -321,7 +312,7 @@ namespace FML {
               int nsink_loc;
 
               // Open file
-              if( (fp = fopen(partfile.c_str(), "r")) == NULL){
+              if( (fp = fopen(partfile.c_str(), "r")) == nullptr){
                 std::string error = "Error opening particle file " + partfile;
                 exit(0);
               }
@@ -405,7 +396,7 @@ namespace FML {
         tmp = (5+NDIM)*sizeof(float) + NDIM*sizeof(int);
 
         // Open file
-        if( (fp = fopen(filename.c_str(), "w")) == NULL){
+        if( (fp = fopen(filename.c_str(), "w")) == nullptr){
           std::string error = "[write_icdeltab] Error opening file " + filename;
           throw std::runtime_error(error);
         }

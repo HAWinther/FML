@@ -259,9 +259,6 @@ namespace FML {
         }
 
     };
-
-    // Global units
-    // extern ConstantsAndUnits GlobalConstants;
   }
 }
 

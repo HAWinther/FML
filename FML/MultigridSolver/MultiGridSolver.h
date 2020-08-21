@@ -10,6 +10,7 @@
 #include <complex>
 #include <functional>
 
+#include <FML/Global/Global.h>
 #include <FML/MPIGrid/MPIGrid.h>
 #include <FML/MPIGrid/MPIMultiGrid.h>
 
@@ -263,7 +264,7 @@ namespace FML {
       {
         // The maximum number of levels is log2(N)
         if(Nlevels > -1){
-          if(power(2, Nlevels) > N){
+          if(FML::power(2, Nlevels) > N){
             Nlevels = -1;
             if(FML::ThisTask == 0) std::cout << "The number of levels specified is too large. Letting the solver decide this!\n";
           }
@@ -311,7 +312,7 @@ namespace FML {
             int n = mainmask.get_N();
             for(IndexInt i = 0; i < mainmask.get_NtotLocal(); i++){
               auto coord = mainmask.globalcoord_from_index(i);
-              std::cout << std::setw( (count>0?power(2,level+1): power(2,level))) << (mainmask[i] > 0.0 ? "." : "#") << "";
+              std::cout << std::setw( (count > 0 ? FML::power(2,level+1) : FML::power(2,level))) << (mainmask[i] > 0.0 ? "." : "#") << "";
               count++;
               count = count % n;
               if(count == 0) {
@@ -654,7 +655,7 @@ namespace FML {
 
       template<int NDIM, class T>
         std::vector<IndexInt> MultiGridSolver<NDIM,T>::get_cube_gridindex(int level, IndexInt index){
-          const int ncells = power(3,NDIM);
+          constexpr int ncells = FML::power(3,NDIM);
           const int N = _f.get_grid(level).get_N();
 
           // (Global) coordinate of cell
@@ -767,7 +768,7 @@ namespace FML {
 
       template<int NDIM, class T>
         void MultiGridSolver<NDIM,T>::prolonge_up_array(int to_level, MPIGrid<NDIM,T>& Bottom, MPIGrid<NDIM,T>& Top){
-          int twotondim = power(2, NDIM);
+          constexpr int twotondim = FML::power(2, NDIM);
           int NTop      = get_N(to_level);
           int NBottom   = NTop/2;
 

@@ -440,8 +440,8 @@ namespace FML {
 
         // Total number of particles
         int Ndim = p.data()->get_ndim();
-        NpartTotal = power(size_t(Npart_1D),Ndim);
-        NpartLocal_in_use = Local_Npart_1D * power(size_t(Npart_1D),Ndim-1);
+        NpartTotal = FML::power(Npart_1D,Ndim);
+        NpartLocal_in_use = Local_Npart_1D * FML::power(Npart_1D,Ndim-1);
 
         // Allocate particle struct
         size_t NpartToAllocate = size_t(NpartLocal_in_use * buffer_factor);

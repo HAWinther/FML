@@ -9,7 +9,8 @@
 #include <climits>
 #include <complex>
 
-#include "MPIGrid.h"
+#include <FML/Global/Global.h>
+#include <FML/MPIGrid/MPIGrid.h>
 
 namespace FML {
   namespace GRID {

@@ -275,7 +275,7 @@ namespace FML {
 
         const double fof_distance2 = fof_distance * fof_distance;
         const constexpr int nblocksearchpartgrid = 3;
-        const int threetondim = FML::power(nblocksearchpartgrid,NDIM);
+        const constexpr int threetondim = FML::power(nblocksearchpartgrid,NDIM);
 
         // Count boundary particles
         size_t nboundary_right = 0;
@@ -647,7 +647,7 @@ namespace FML {
           const double fof_distance2 = fof_distance * fof_distance;
           const size_t NgridTot = size_t(Local_nx) * FML::power(Ngrid,NDIM-1);
           const constexpr int nblocksearchpartgrid = 3;
-          const int threetondim = FML::power(nblocksearchpartgrid,NDIM);
+          const constexpr int threetondim = FML::power(nblocksearchpartgrid,NDIM);
 
           // Some basic checks
           assert(part[0].get_ndim() == NDIM);
