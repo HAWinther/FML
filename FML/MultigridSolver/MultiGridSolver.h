@@ -169,7 +169,7 @@ namespace FML {
             // Set the initial guess (uniform or from a grid)
             void set_initial_guess(const T &guess);
             void set_initial_guess(const T *guess);
-            //XXXvoid set_initial_guess(std::function<T(std:array<double,NDIM> &)> &func);
+            void set_initial_guess(std::function<T(std::array<double,NDIM> &)> &func);
             void set_initial_guess(const MPIGrid<NDIM,T>& guess);
 #ifdef USE_MASK
             void set_mask(const MPIGrid<NDIM,T>& mask);
@@ -472,12 +472,10 @@ namespace FML {
           std::copy( &guess[0], &guess[0] + _NtotLocal, &f[0] );
         }
 
-      /*XXX
       template<int NDIM, class T>
         void MultiGridSolver<NDIM,T>::set_initial_guess(std::function<T(std::array<double,NDIM> &)> &func){
           _f.get_grid(0).set_y(func);
         }
-        */
 
       // For computing dfdx
       inline const double* derivative_stencil_weights_deriv1(int order){

@@ -102,16 +102,20 @@ namespace FML {
           set_seed(seed);
         }
 
-        void set_seed(unsigned int seed){
+        void set_seed(unsigned int seed) override{
           Seed = std::vector<unsigned int>(1,seed);
           gsl_rng_set(rng.random_generator, seed);
         }
+        
+        void set_seed(std::vector<unsigned int> seed) override{
+          set_seed(seed[0]);
+        }
 
-        double generate_uniform(){
+        double generate_uniform() override{
           return gsl_rng_uniform(rng.random_generator);
         }
 
-        double generate_normal(){
+        double generate_normal() override{
           return gsl_ran_gaussian(rng.random_generator,1.0);
         }
     
