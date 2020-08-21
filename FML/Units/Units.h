@@ -52,38 +52,38 @@ namespace FML {
         double K   = 1.0;
         double Co  = 1.0;
 
-        // Physical constants
-        double k_b; 
-        double k_e;        
-        double G;          
-        double hbar;       
-        double c;          
-        double m_e;        
-        double m_H;        
-        double sigma_T;   
-        double lambda_2s1s;
-        double epsilon_0;  
-        double H0_over_h;  
-        double xhi0;       
-        double xhi1;       
-        double yr;         
-        double Gyr;        
+        // Physical constants set by the units
+        double k_b{0.0}; 
+        double k_e{0.0};        
+        double G{0.0};          
+        double hbar{0.0};       
+        double c{0.0};          
+        double m_e{0.0};        
+        double m_H{0.0};        
+        double sigma_T{0.0};   
+        double lambda_2s1s{0.0};
+        double epsilon_0{0.0};  
+        double H0_over_h{0.0};  
+        double xhi0{0.0};       
+        double xhi1{0.0};       
+        double yr{0.0};         
+        double Gyr{0.0};        
 
         // Derived units
-        double mm;   
-        double cm;   
-        double km;   
-        double N;    
-        double J;    
-        double W;    
-        double eV;   
-        double MeV;   
-        double Mpc;  
-        double kpc;  
-        double Gpc;  
-        double Msun; 
-        double velocity;
-        double density;
+        double mm{0.0};   
+        double cm{0.0};   
+        double km{0.0};   
+        double N{0.0};    
+        double J{0.0};    
+        double W{0.0};    
+        double eV{0.0};   
+        double MeV{0.0};   
+        double Mpc{0.0};  
+        double kpc{0.0};  
+        double Gpc{0.0};  
+        double Msun{0.0}; 
+        double velocity{0.0};
+        double density{0.0};
 
         ConstantsAndUnits(std::string type = "SI"){
           init(type);

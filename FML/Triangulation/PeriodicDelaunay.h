@@ -97,14 +97,14 @@ namespace FML {
       class MPIPeriodicDelaunay {
         private:
 
-          // Random shuffle the particles before tesselating (always a good idea)
-          const bool tesselation_random_shuffle = true;
-
           using PeriodicDelaunay = PeriodicDelaunayWithInfo<VD>;
           using Point            = typename PeriodicDelaunay::Point;
           using Periodic_point   = typename PeriodicDelaunay::Periodic_point;
           using Vertex_handle    = typename PeriodicDelaunay::Vertex_handle;
           using Vertex_iterator  = typename PeriodicDelaunay::Vertex_iterator;
+          
+          // Random shuffle the particles before tesselating (always a good idea)
+          const bool tesselation_random_shuffle {true};
 
           // The CGAL tesselation structure
           PeriodicDelaunay dt;
@@ -113,13 +113,13 @@ namespace FML {
           double dx_buffer {0.0};
 
           // Info about the tesselation
-          std::vector<Vertex_handle> vs;
-          std::vector<Vertex_handle> vs_boundary;
+          std::vector<Vertex_handle> vs{};
+          std::vector<Vertex_handle> vs_boundary{};
 
           // Info about boundary particles
           // where they are from and their index
           // on the local task
-          std::vector<T> p_boundary;
+          std::vector<T> p_boundary{};
 
         public:
 
@@ -142,7 +142,7 @@ namespace FML {
             return vs_boundary;
           }
 
-          MPIPeriodicDelaunay(){}
+          MPIPeriodicDelaunay() = default;
 
           void free(){
             dt.clear();
@@ -601,12 +601,12 @@ namespace FML {
       struct WatershedBasin {
         double pos_min[CGAL_NDIM];
         double pos_barycenter[CGAL_NDIM];
-        double volume;
-        double volume_min;
-        double density_min;
-        double mass;
-        double mean_quantity;
-        int ningroup;
+        double volume{0.0};
+        double volume_min{0.0};
+        double density_min{0.0};
+        double mass{0.0};
+        double mean_quantity{0.0};
+        int ningroup{0};
 
         // Initialize with the position of the minimum particle
         void init(double *pos){

@@ -67,13 +67,15 @@ namespace FML {
           const bool periodic_box = true;
 
           // Normalize the los_direction to a unit vector
-          assert(los_direction.size() == N);
+          assert_mpi(los_direction.size() == N,
+              "[RSDReconstructionFourierMethod] Line of sight direction has wrong dimension\n");
           double norm = 0.0;
           for(int idim = 0; idim < N; idim++){
             norm += los_direction[idim]*los_direction[idim];
           }
           norm = 1.0 / std::sqrt(norm);
-          assert(norm > 0.0);
+          assert_mpi(norm > 0.0,
+              "[RSDReconstructionFourierMethod] Line of sight vector cannot be the zero vector\n");
           for(int idim = 0; idim < N; idim++){
             los_direction[idim] *= norm;
           }
@@ -165,7 +167,8 @@ namespace FML {
                     if(pos[idim] >= 1.0) pos[idim] -= 1.0;
                   } else {
                     if(pos[idim] < 0.0 or pos[idim] >= 1.0)
-                      assert_mpi(false, "The particles are outside the box and we are set not to periodically wrap");
+                      assert_mpi(false, 
+                          "[RSDReconstructionFourierMethod] The particles are outside the box and we are set not to periodically wrap");
                   }
                 }
               }
@@ -202,7 +205,8 @@ namespace FML {
           norm +=  line_of_sight_direction[idim] * line_of_sight_direction[idim];
         }
         norm = std::sqrt(norm);
-        assert(norm > 0.0);
+        assert_mpi(norm > 0.0
+            "[particles_to_redshiftspace] Line of sight vector cannot be the zero vector\n");
         for(int idim = 0; idim < N; idim++) {
           line_of_sight_direction[idim] /= norm;
         }

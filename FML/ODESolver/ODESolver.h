@@ -89,8 +89,8 @@ namespace FML {
           int nequations = 1;
           int num_x_points = 0;
 
-          std::vector<DVector> data;
-          std::vector<DVector> derivative_data;
+          std::vector<DVector> data{};
+          std::vector<DVector> derivative_data{};
 
           void throw_error(std::string errormessage) const;
 

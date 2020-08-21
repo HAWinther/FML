@@ -17,10 +17,10 @@ namespace FML {
             LOG_SPACING
           };
 
-          int n;
-          int bin_type;
-          double kmin;
-          double kmax;
+          int n{0};
+          int bin_type{LINEAR_SPACING};
+          double kmin{0.0};
+          double kmax{0.0};
 
           std::vector<double> k;
           std::vector<double> count; 
@@ -34,7 +34,7 @@ namespace FML {
           std::vector< std::vector<double> > kbin_thread; 
 #endif
 
-          PowerSpectrumBinning();
+          PowerSpectrumBinning() = default;
           PowerSpectrumBinning(const int n);
           PowerSpectrumBinning(const double kmin, const double kmax, const int n, const int bin_type);
 
@@ -81,13 +81,20 @@ namespace FML {
 
     template<int N> 
       PowerSpectrumBinning<N> & PowerSpectrumBinning<N>::operator +=(const PowerSpectrumBinning<N> & rhs){
-        assert(k.size() == rhs.k.size());
-        assert(count.size() == rhs.count.size());
-        assert(pofk.size() == rhs.pofk.size());
-        assert(kbin.size() == rhs.kbin.size());
-        assert(bin_type == rhs.bin_type);
-        assert(kmin == rhs.kmin);
-        assert(kmax == rhs.kmax);
+        assert_mpi(k.size() == rhs.k.size(), 
+            "[PowerSpectrumBinning::operator +=] k has wrong size\n");
+        assert_mpi(count.size() == rhs.count.size(), 
+            "[PowerSpectrumBinning::operator +=] count has wrong size\n");
+        assert_mpi(pofk.size() == rhs.pofk.size(), 
+            "[PowerSpectrumBinning::operator +=] pofk has wrong size\n");
+        assert_mpi(kbin.size() == rhs.kbin.size(), 
+            "[PowerSpectrumBinning::operator +=] kbin has wrong size\n");
+        assert_mpi(bin_type == rhs.bin_type, 
+            "[PowerSpectrumBinning::operator +=] bin_type differs\n");
+        assert_mpi(kmin == rhs.kmin, 
+            "[PowerSpectrumBinning::operator +=] kmin differs\n");
+        assert_mpi(kmax == rhs.kmax, 
+            "[PowerSpectrumBinning::operator +=] kmax differs\n");
         for(int i = 0; i < n; i++){
           count[i] += rhs.count[i];
           pofk[i] += rhs.pofk[i];
@@ -95,9 +102,6 @@ namespace FML {
         }
         return *this;
       }
-
-    template<int N> 
-      PowerSpectrumBinning<N>::PowerSpectrumBinning() : n(0) {}
 
     template<int N> 
       PowerSpectrumBinning<N>::PowerSpectrumBinning(int nbins)

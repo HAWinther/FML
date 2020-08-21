@@ -139,7 +139,7 @@ http://bytes.com/topic/python/answers/793370-multiple-independent-python-interpr
           void* import_numpy()
           {
             import_array(); // initialize C-API
-            return NULL;
+            return nullptr;
           }
 
 #else

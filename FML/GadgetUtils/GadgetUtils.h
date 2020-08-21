@@ -56,23 +56,23 @@ namespace FML {
 
       // Do not change the order of the fields below as this is read as one piece of memory from file
       typedef struct {
-        unsigned int npart[6];               // npart[1] gives the number of particles in the file, other particle types are ignored
-        double mass[6];                      // mass[1] gives the particle mass
-        double time;                         // Cosmological scale factor of snapshot
-        double redshift;                     // Redshift of snapshot
-        int flag_sfr;                        // Flags whether star formation is used
-        int flag_feedback;                   // Flags whether feedback from star formation is included
-        unsigned int npartTotal[6];          // If npartTotal[1] > 2^32, then total is this plus 2^32 * npartTotalHighWord[1]
-        int flag_cooling;                    // Flags whether radiative cooling is included
-        int num_files;                       // The number of files that are used for a snapshot
-        double BoxSize;                      // Simulation box size (in code units)
-        double Omega0;                       // Matter density parameter
-        double OmegaLambda;                  // Lambda density parameter
-        double HubbleParam;                  // Hubble Parameter
-        int flag_stellarage;                 // flags whether the age of newly formed stars is recorded and saved
-        int flag_metals;                     // flags whether metal enrichment is included
-        unsigned int npartTotalHighWord[6];  // High word of the total number of particles of each type
-        int flag_entropy_instead_u;          // Flags that IC-file contains entropy instead of u
+        unsigned int npart[6];                 // npart[1] gives the number of particles in the file, other particle types are ignored
+        double mass[6];                        // mass[1] gives the particle mass
+        double time{0.0};                       // Cosmological scale factor of snapshot
+        double redshift{0.0};                   // Redshift of snapshot
+        int flag_sfr{0};                        // Flags whether star formation is used
+        int flag_feedback{0};                   // Flags whether feedback from star formation is included
+        unsigned int npartTotal[6];             // If npartTotal[1] > 2^32, then total is this plus 2^32 * npartTotalHighWord[1]
+        int flag_cooling{0};                    // Flags whether radiative cooling is included
+        int num_files{0};                       // The number of files that are used for a snapshot
+        double BoxSize{0.0};                    // Simulation box size (in code units)
+        double Omega0{0.0};                     // Matter density parameter
+        double OmegaLambda{0.0};                // Lambda density parameter
+        double HubbleParam{0.0};                // Hubble Parameter
+        int flag_stellarage{0};                 // flags whether the age of newly formed stars is recorded and saved
+        int flag_metals{0};                     // flags whether metal enrichment is included
+        unsigned int npartTotalHighWord[6];     // High word of the total number of particles of each type
+        int flag_entropy_instead_u{0};          // Flags that IC-file contains entropy instead of u
         char fill[256 - sizeof(unsigned int)*18 - sizeof(int)*7 - sizeof(double)*12]; // Fills to 256 Bytes
       } GadgetHeader;
       static_assert(sizeof(GadgetHeader) == 256);
@@ -83,19 +83,21 @@ namespace FML {
         private:
 
           GadgetHeader header;
-          bool endian_swap    = false;
-          bool header_is_read = false;
+
+          bool endian_swap    {false};
+          bool header_is_read {false};
 
           // Mpc/h / Units_in_file, i.e. if the positions are in Mpc/h its 1
           // if kpc/h then 1000
-          double gadget_pos_factor = 1.0;
+          double gadget_pos_factor {1.0};
 
-          int NDIM = 3;
+          int NDIM {3};
 
           void throw_error(std::string errormessage) const;
 
         public:
 
+          GadgetReader() = default;
           GadgetReader(double pos_factor = 1.0, int ndim = 3);
 
           template<class T>
@@ -117,7 +119,7 @@ namespace FML {
 
           GadgetHeader header;
 
-          int NDIM = 3;
+          int NDIM {3};
 
           void throw_error(std::string errormessage) const;
 
@@ -258,7 +260,7 @@ namespace FML {
               read_section(fp, buffer);
 
               // Check if positions exists in Particle
-              bool pos_exists = part[istart].get_pos() != NULL;
+              bool pos_exists = part[istart].get_pos() != nullptr;
 
               if(pos_exists)
                 for(int i = 0; i < NumPart; i++){
@@ -278,7 +280,7 @@ namespace FML {
               read_section(fp, buffer);
 
               // Check if velocities exists in Particle
-              bool vel_exists = part[istart].get_vel() != NULL;
+              bool vel_exists = part[istart].get_vel() != nullptr;
 
               if(vel_exists)
                 for(int i = 0; i < NumPart; i++){

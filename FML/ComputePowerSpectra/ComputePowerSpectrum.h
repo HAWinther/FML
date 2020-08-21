@@ -913,8 +913,10 @@ namespace FML {
 
         const int Nmesh = density_k.get_nmesh();
         const int nbins = bofk.n;
-        assert(nbins > 0);
-        assert(Nmesh > 0);
+        assert_mpi(nbins > 0,
+            "[compute_bispectrum] nbins has to be >= 0\n");
+        assert_mpi(Nmesh > 0, 
+            "[compute_bispectrum] grid is not allocated\n");
 
         // Now loop over bins and do FFTs
         std::vector< FFTWGrid<N> > F_k(nbins);
@@ -1134,8 +1136,10 @@ namespace FML {
 
         const int Nmesh = fourier_grid.get_nmesh();
         const int nbins = polyofk.n;
-        assert(nbins > 0);
-        assert(Nmesh > 0);
+        assert_mpi(nbins > 0,
+            "[compute_polyspectrum] nbins has to be >=0\n");
+        assert_mpi(Nmesh > 0,
+            "[compute_polyspectrum] grid is not allocated\n");
         static_assert(ORDER > 1);
 
         // Now loop over bins and do FFTs

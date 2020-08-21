@@ -52,24 +52,24 @@ namespace FML {
       class MPIGrid {
         private:
 
-          bool _periodic { true };   // Is the box periodic or not
-          int _N;                    // Gridcells per dimension in the global grid
-          int _NLocal;               // Gridcells in the x-dimension for current task
-          int _xStartLocal;          // The ix-index the local task starts at
-          int _LeftTask;             // The id of the task on the right
-          int _RightTask;            // The id of the task on the left
-          int _n_extra_slices_left;  // Extra x-slices to the left
-          int _n_extra_slices_right; // Extra x-slices to the right
+          bool _periodic { true };      // Is the box periodic or not
+          int _N{0};                    // Gridcells per dimension in the global grid
+          int _NLocal{0};               // Gridcells in the x-dimension for current task
+          int _xStartLocal{0};          // The ix-index the local task starts at
+          int _LeftTask{0};             // The id of the task on the right
+          int _RightTask{0};            // The id of the task on the left
+          int _n_extra_slices_left{0};  // Extra x-slices to the left
+          int _n_extra_slices_right{0}; // Extra x-slices to the right
 
-          IndexInt _Ntot;            // How many cells in main grid in total
-          IndexInt _NtotLocalLeft;   // Total cells in extra left slices
-          IndexInt _NtotLocalRight;  // Total cells in extra right slices
-          IndexInt _NtotLocal;       // How many cells in main grid on local task
-          IndexInt _NtotLocalAlloc;  // How many cells we have allocated locally (includes extra slices)
-          IndexInt _NperSlice;       // How many cells per x-slice
+          IndexInt _Ntot{0};            // How many cells in main grid in total
+          IndexInt _NtotLocalLeft{0};   // Total cells in extra left slices
+          IndexInt _NtotLocalRight{0};  // Total cells in extra right slices
+          IndexInt _NtotLocal{0};       // How many cells in main grid on local task
+          IndexInt _NtotLocalAlloc{0};  // How many cells we have allocated locally (includes extra slices)
+          IndexInt _NperSlice{0};       // How many cells per x-slice
 
-          //std::vector<T> _y;         // The grid data 
-          Vector<T> _y;                // The grid data 
+          //std::vector<T> _y;           // The grid data 
+          Vector<T> _y{};                // The grid data 
 
           // Helper functions for bounds-checking
           void assert_index(IndexInt index) const;
@@ -78,7 +78,7 @@ namespace FML {
         public:
 
           // Constructors
-          MPIGrid() {}
+          MPIGrid() = default,
           MPIGrid(
               int N, 
               bool periodic, 

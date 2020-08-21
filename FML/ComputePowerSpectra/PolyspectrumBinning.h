@@ -12,9 +12,9 @@ namespace FML {
     template<int N, int ORDER>
       class PolyspectrumBinning {
         public:
-          int n;
-          double kmin;
-          double kmax;
+          int n{0};
+          double kmin{0.0};
+          double kmax{0.0};
 
           std::vector<double> P123;
           std::vector<double> N123;
@@ -22,7 +22,7 @@ namespace FML {
           std::vector<double> k;
           std::vector<double> kbin;
 
-          PolyspectrumBinning();
+          PolyspectrumBinning() = default;
           PolyspectrumBinning(double _kmin, double _kmax, int nbins);
           PolyspectrumBinning(int nbins);
 
@@ -46,9 +46,6 @@ namespace FML {
           double get_bincount(std::vector<int> & ik);
 
       };
-
-    template<int N, int ORDER>
-      PolyspectrumBinning<N,ORDER>::PolyspectrumBinning() : n(0), kmin(0), kmax(0) {}
 
     template<int N, int ORDER>
       PolyspectrumBinning<N,ORDER>::PolyspectrumBinning(double _kmin, double _kmax, int nbins){
@@ -96,7 +93,8 @@ namespace FML {
 
     template<int N, int ORDER>
       double PolyspectrumBinning<N,ORDER>::get_spectrum(std::vector<int> &ik){
-        assert(ik.size() == ORDER);
+        assert_mpi(ik.size() == ORDER,
+            "[PolyspectrumBinning::get_spectrum] ik != ORDER has the wrong size\n");
         size_t index = 0;
         for(int i = 0; i < ORDER; i++)
           index = index * n + ik[i];
@@ -126,14 +124,16 @@ namespace FML {
         // The general case
         // <d1d2...d2n> / (Pi1Pi2...Pin + cyc) ~ 1 if gaussian 
         // This will never be used so we don't implement it
-        assert(false);
+        assert_mpi(false,
+            "[PolyspectrumBinning::get_reduced_spectrum] Not implemented\n");
 
         return 0.0;
       }
 
     template<int N, int ORDER>
       double PolyspectrumBinning<N,ORDER>::get_bincount(std::vector<int> & ik){
-        assert(ik.size() == ORDER);
+        assert_mpi(ik.size() == ORDER,
+            "[PolyspectrumBinning::get_bincount] ik != ORDER has the wrong size\n");
         size_t index = 0;
         for(int i = 0; i < ORDER; i++)
           index = index * n + ik[i];

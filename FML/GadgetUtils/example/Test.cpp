@@ -17,7 +17,7 @@ struct Particle {
   Particle(double * x, double *v){
     for(int idim = 0; idim < 3; idim++)
       pos[idim] = x[idim];
-    if(v != NULL)
+    if(v != nullptr)
       for(int idim = 0; idim < 3; idim++)
         vel[idim] = v[idim];
   }
@@ -55,7 +55,7 @@ int main(){
   std::vector<Particle> part;
   for(auto& pos: data){
     for(auto &x : pos) x /= box;
-    part.push_back(Particle(pos.data(), NULL));
+    part.push_back(Particle(pos.data(), nullptr));
   }
   for(int i = 0; i < part.size(); i++)
     part[i].set_id(i);

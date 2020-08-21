@@ -63,9 +63,9 @@ namespace FML {
       std::vector<double> r;
       std::vector<double> r_edge;
       std::vector<double> paircount;
-      double sum_weights;
-      double sum_weights_squared;
-      double norm;
+      double sum_weights{0.0};
+      double sum_weights_squared{0.0};
+      double norm{0.0};
     };
 
     /// @brief The result struct for cross pair counting
@@ -73,11 +73,11 @@ namespace FML {
       std::vector<double> r;
       std::vector<double> r_edge;
       std::vector<double> paircount;
-      double sum_weights;
-      double sum_weights_squared;
-      double sum2_weights;
-      double sum2_weights_squared;
-      double norm;
+      double sum_weights{0.0};
+      double sum_weights_squared{0.0};
+      double sum2_weights{0.0};
+      double sum2_weights_squared{0.0};
+      double norm{0.0};
     };
 
     // Do paircount of a set of particles

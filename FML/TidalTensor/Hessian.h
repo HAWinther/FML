@@ -31,7 +31,8 @@ namespace FML {
           double norm = 1.0,
           bool hessian_of_potential_of_f = false){
 
-        assert(f_real.get_nmesh() > 0);
+        assert_mpi(f_real.get_nmesh() > 0,
+            "[ComputeHessianWithFT] f_real grid is not allocated\n");
 
         // Helper function to go from f(k) -> DiDj f
         // Assuing we have f(k) in grid
@@ -93,10 +94,13 @@ namespace FML {
           std::vector< FFTWGrid<N> > & eigenvectors,
           bool compute_eigenvectors = false){
 
-        assert(tensor_real.size() > 0);
-        assert(tensor_real[0].get_nmesh() > 0);
+        assert_mpi(tensor_real.size() > 0,
+            "[SymmetricTensorEigensystem] tensor_real is not allocated\n");
+        assert_mpi(tensor_real[0].get_nmesh() > 0,
+            "[SymmetricTensorEigensystem] tensor_real[0] is not allocated\n");
         for(size_t i = 1; i < tensor_real.size(); i++)
-          assert(tensor_real[i].get_nmesh() == tensor_real[i-1].get_nmesh());
+          assert_mpi(tensor_real[i].get_nmesh() == tensor_real[i-1].get_nmesh(),
+              "[SymmetricTensorEigensystem] tensor_real[i] is not allocated\n");
 
         // N eigenvalues
         eigenvalues.resize(N);

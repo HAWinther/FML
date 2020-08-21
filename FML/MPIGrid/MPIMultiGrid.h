@@ -29,21 +29,21 @@ namespace FML {
       class MPIMultiGrid {
         private:
 
-          int _N;                                      // Number of cells per dim in domain-grid [0]
-          int _NtotLocal;                              // Total number of cells in domain-grid [0]
-          int _Nlevel;                                 // Number of levels
-          std::vector<int> _NinLevel;                  // Number of cells per dim in each level
-          std::vector<IndexInt> _NtotLocalinLevel;     // Total number of cells in each level
-          std::vector< MPIGrid<NDIM,T> > _y;           // The grid data
+          int _N{0};                                      // Number of cells per dim in domain-grid [0]
+          int _NtotLocal{0};                              // Total number of cells in domain-grid [0]
+          int _Nlevel{0};                                 // Number of levels
+          std::vector<int> _NinLevel{};                   // Number of cells per dim in each level
+          std::vector<IndexInt> _NtotLocalinLevel{};      // Total number of cells in each level
+          std::vector< MPIGrid<NDIM,T> > _y{};            // The grid data
 
-          bool _periodic { true };                     // Periodic box
-          int _n_extra_slices_left;                    // Extra x-slices on the right
-          int _n_extra_slices_right;                   // Extra x-slices on the left 
+          bool _periodic { true };                        // Periodic box
+          int _n_extra_slices_left{0};                    // Extra x-slices on the right
+          int _n_extra_slices_right{0};                   // Extra x-slices on the left 
 
         public:
 
           // Constructors
-          MPIMultiGrid() {}
+          MPIMultiGrid() = default;
           MPIMultiGrid(
               int N, 
               int Nlevel = -1, 

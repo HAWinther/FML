@@ -115,18 +115,6 @@ namespace FML {
       std::cout << "============================================\n\n";
     }
 
-    // Factor in Bolzmann hierarchy to modify for curvature
-    // Temperature:  kappa_factor(ell, 0.0, 0.0, q2, K);
-    // Polarization: kappa_factor(ell, 0.0, 2.0*2.0, q2, K);
-    double kappa_factor(double ell2, double m2, [[maybe_unused]] double s2, double q2, double K){
-      double fac = (1.0 - ell2/q2 * K);
-      if(fac < 0.0) return 0.0;
-      // If spin factor is included in the hierarchy instead of
-      // in the normalization of C_ell^EE
-      //return sqrt( (1.0 - m2/ell2) * (1.0 - s2/ell2) * fac);
-      return sqrt( (1.0 - m2/ell2) * fac);
-    }
-
     DVector Perturbations::set_ic_after_tight_coupling(
         const DVector& y_tight_coupling,
         const double x,
@@ -288,31 +276,11 @@ namespace FML {
       const double ckoverHpdtaudx = cosmo->get_OmegaB() > 0.0 ? ckoverHp / dtaudx : 0.0;
 
       //=============================================================================
-      // Modifications for curvature and vector/tensor modes
-      // XXX This is not finished so curvature not working properly currently XXX
-      //=============================================================================
-      DVector kappa ( std::max(n_ell_nu, n_ell_theta) + 1, 1.0);
-      DVector kappa2( std::max(n_ell_nu, n_ell_theta) + 1, 1.0);
-      const double m_type   = 0;
-      const double K        = cosmo->get_K();
-      const double qoverk   = sqrt(1.0 + K/(k*k));
-      const double q        = k * qoverk;
-      const double q2       = q*q;
-      [[maybe_unused]] const double cqoverHp = ckoverHp * qoverk;
-      const double Kfac_delta = (1.0 - 3.0 * K /(k*k));
-      for(size_t ell = 2; ell < kappa.size(); ell++){
-        kappa[ell]  = kappa_factor(ell*ell, m_type*m_type, 0.0*0.0, q2, K);
-        kappa2[ell] = kappa_factor(ell*ell, m_type*m_type, 2.0*2.0, q2, K);
-      }
-
-      //=============================================================================
-
-      //=============================================================================
       // SET: Scalar quantities (Gravitational potential, baryons and CDM)
       //=============================================================================
       const double Psi = -1.0 / (1.5 + 2.0 * f_nu / 5.0);
       Phi = -(1.0 + 2.0 / 5.0 * f_nu) * Psi;
-      delta_cdm = delta_b = -3.0 / 2.0 * Psi * Kfac_delta;
+      delta_cdm = delta_b = -3.0 / 2.0 * Psi;
       v_cdm = v_b = -ckoverHp / 2.0 * Psi;
 
       //=============================================================================
@@ -322,7 +290,7 @@ namespace FML {
       const double Theta2 = -theta2fac * ckoverHpdtaudx * (ckoverHp / 6.0 * Psi);
       for (int ell = 0; ell < n_ell_theta; ell++) {
         if (ell == 0) {
-          Theta[ell] = -Psi / 2.0 * Kfac_delta;
+          Theta[ell] = -Psi / 2.0;
         } else if (ell == 1) {
           Theta[ell] = ckoverHp / 6.0 * Psi;
         } else if (ell == 2) {
@@ -354,7 +322,7 @@ namespace FML {
         * ( OmegaNu == 0.0 ? -2.0/5.0 * Psi/OmegaRtot : (Phi + Psi)/OmegaNu );
       for (int ell = 0; ell < n_ell_nu; ell++) {
         if (ell == 0) {
-          Nu[ell] = -Psi / 2.0 * Kfac_delta;
+          Nu[ell] = -Psi / 2.0;
         } else if (ell == 1) {
           Nu[ell] = ckoverHp / 6.0 * Psi;
         } else if (ell == 2) {
@@ -1066,7 +1034,6 @@ namespace FML {
       const double OmegaCDM = cosmo->get_OmegaCDM();
       const double OmegaR   = cosmo->get_OmegaR();
       const double OmegaNu  = cosmo->get_OmegaNu();
-      const double OmegaK   = cosmo->get_OmegaK();
       const double H0    = cosmo->get_H0();
       const double Hp    = cosmo->Hp_of_x(x);
       const double dHpdx = cosmo->dHpdx_of_x(x);
@@ -1083,22 +1050,6 @@ namespace FML {
       const double ckoverH0 = Constants.c * k / H0;
       const double ckoverHpdtaudx = OmegaB > 0.0 ? ckoverHp / dtaudx : 0.0;
       const double theta2fac = polarization ? 8.0 / 15.0 : 20.0 / 45.0;
-
-      //=============================================================================
-      // Modifications for curvature and vector/tensor modes
-      //=============================================================================
-      DVector kappa ( std::max(n_ell_nu, n_ell_theta) + 1, 1.0);
-      DVector kappa2( std::max(n_ell_nu, n_ell_theta) + 1, 1.0);
-      const double m_type   = 0;
-      const double K        = cosmo->get_K();
-      const double qoverk   = sqrt(1.0 + K/(k*k));
-      const double q        = k * qoverk;
-      const double q2       = q*q;
-      const double cqoverHp = ckoverHp * qoverk;
-      for(size_t ell = 2; ell < kappa.size(); ell++){
-        kappa[ell]  = kappa_factor(ell*ell, m_type*m_type, 0.0*0.0, q2, K);
-        kappa2[ell] = kappa_factor(ell*ell, m_type*m_type, 2.0*2.0, q2, K);
-      }
 
       //=============================================================================
       // The lowest multipoles
@@ -1119,18 +1070,17 @@ namespace FML {
       //=============================================================================
       // SET: Derivative of Phi
       //=============================================================================
-      const double ckoverHp2_curvature = (ckoverHp * ckoverHp + 3.0 * OmegaK * (H0/Hp)*(H0/Hp));
-      dPhidx = Psi - ckoverHp2_curvature / 3.0 * Phi + 0.5 * (H0 * H0) / (Hp * Hp * a * a) * 
+      dPhidx = Psi - ckoverHp * ckoverHp / 3.0 * Phi + 0.5 * (H0 * H0) / (Hp * Hp * a * a) * 
         (OmegaCDM * delta_cdm * a + OmegaB * delta_b * a + 4.0 * (OmegaR * Theta[0] + OmegaNu * Nu0));
 
       // The tight coupling factor q_tc
       const double R = OmegaB > 0.0 ? 4.0 / 3.0 * OmegaR / OmegaB / a : 0.0;
       const double sound_speed_squared = rec->get_baryon_sound_speed_squared(x);
-      const double dTheta0dx = -cqoverHp * Theta[1] - dPhidx;
-      const double dTheta2dx = cqoverHp / 5.0 * (2.0 * Theta[1]) + dtaudx * (Theta2 - Pi / 10.0);
+      const double dTheta0dx = -ckoverHp * Theta[1] - dPhidx;
+      const double dTheta2dx = ckoverHp / 5.0 * (2.0 * Theta[1]) + dtaudx * (Theta2 - Pi / 10.0);
       const double q_tc = (-((1.0 - R) * dtaudx + (1.0 + R) * ddtauddx) * (3.0 * Theta[1] + v_b) - ckoverHp * Psi 
-          + (1.0 - dHpdx / Hp) * cqoverHp * (-Theta[0] + 2.0 * Theta2) + cqoverHp * (-dTheta0dx + dTheta2dx)) / ((1.0 + R) * dtaudx + dHpdx / Hp - 1.0);
-      const double q_vb_tc = (-v_b - ckoverHp * sound_speed_squared * delta_b + R * (q_tc + cqoverHp * (-Theta[0] + 2.0 * Theta2))) / (1.0 + R);
+          + (1.0 - dHpdx / Hp) * ckoverHp * (-Theta[0] + 2.0 * Theta2) + ckoverHp * (-dTheta0dx + dTheta2dx)) / ((1.0 + R) * dtaudx + dHpdx / Hp - 1.0);
+      const double q_vb_tc = (-v_b - ckoverHp * sound_speed_squared * delta_b + R * (q_tc + ckoverHp * (-Theta[0] + 2.0 * Theta2))) / (1.0 + R);
 
       //=============================================================================
       // SET: Baryons and CDM
@@ -1143,7 +1093,7 @@ namespace FML {
       //=============================================================================
       // SET: Photons multipoles (Theta_ell)
       //=============================================================================
-      dThetadx[0] = -cqoverHp * Theta[1];
+      dThetadx[0] = -ckoverHp * Theta[1];
       dThetadx[1] = (q_tc - q_vb_tc) / 3.0;
 
       // Add sources
@@ -1154,13 +1104,13 @@ namespace FML {
       // SET: Neutrinos multipoles (Nu_ell)
       //=============================================================================
       for (int ell = 0; ell < n_ell_nu; ell++) {
-        const double prefac = cqoverHp / (2.0 * ell + 1);
+        const double prefac = ckoverHp / (2.0 * ell + 1);
         if (ell == 0) {
           dNudx[ell] = prefac * ( - (ell + 1) * Nu[ell+1] );
         } else if (ell < n_ell_nu - 1) {
-          dNudx[ell] = prefac * (ell * kappa[ell] * Nu[ell - 1] - (ell + 1) * kappa[ell+1] * Nu[ell + 1]);
+          dNudx[ell] = prefac * (ell * Nu[ell - 1] - (ell + 1) * Nu[ell + 1]);
         } else {
-          dNudx[ell] = cqoverHp * kappa[ell] * Nu[ell - 1] - (ell + 1) / (etaHp) * kappa[ell+1] * Nu[ell];
+          dNudx[ell] = ckoverHp * Nu[ell - 1] - (ell + 1) / (etaHp) * Nu[ell];
         }
 
         // Add sources
@@ -1502,22 +1452,6 @@ namespace FML {
       const double ckoverH0 = Constants.c * k / H0;
 
       //=============================================================================
-      // Modifications for curvature
-      //=============================================================================
-      DVector kappa ( std::max(n_ell_nu, n_ell_theta) + 1, 1.0);
-      DVector kappa2( std::max(n_ell_nu, n_ell_theta) + 1, 1.0);
-      const double m_type   = 0;
-      const double K        = cosmo->get_K();
-      const double qoverk   = sqrt(1.0 + K/(k*k));
-      const double q        = k * qoverk;
-      const double q2       = q*q;
-      const double cqoverHp = ckoverHp * qoverk;
-      for(size_t ell = 2; ell < kappa.size(); ell++){
-        kappa[ell]  = kappa_factor(ell*ell, m_type*m_type, 0.0*0.0, q2, K);
-        kappa2[ell] = kappa_factor(ell*ell, m_type*m_type, 2.0*2.0, q2, K);
-      }
-
-      //=============================================================================
       // The lowest multipoles (some of them might not be present)
       //=============================================================================
       const double Nu0 = n_ell_nu > 0 ? Nu[0] : 0.0;
@@ -1539,8 +1473,7 @@ namespace FML {
       //=============================================================================
       // SET: Gravitational potential
       //=============================================================================
-      const double ckoverHp2_curvature = (ckoverHp * ckoverHp - 3.0*K/(Hp*Hp));
-      dPhidx = Psi - ckoverHp2_curvature / 3.0 * Phi + 0.5 * (H0 * H0) / (Hp * Hp * a * a) * 
+      dPhidx = Psi - ckoverHp * ckoverHp / 3.0 * Phi + 0.5 * (H0 * H0) / (Hp * Hp * a * a) * 
         (OmegaCDM * delta_cdm * a + OmegaB * delta_b * a + 4.0 * (OmegaR * Theta[0] + OmegaNu * Nu0));
 
       //=============================================================================
@@ -1555,13 +1488,13 @@ namespace FML {
       // SET: Photon multipoles (Theta_ell)
       //=============================================================================
       for (int ell = 0; ell < n_ell_theta; ell++) {
-        const double prefac = cqoverHp / (2.0 * ell + 1);
+        const double prefac = ckoverHp / (2.0 * ell + 1);
         if (ell == 0) {
           dThetadx[ell] = prefac * ( - (ell + 1) * Theta[ell + 1] );
         } else if (ell < n_ell_theta - 1) {
-          dThetadx[ell] = prefac * (ell * kappa[ell] * Theta[ell - 1] - (ell + 1) * kappa[ell+1] * Theta[ell + 1]);
+          dThetadx[ell] = prefac * (ell * Theta[ell - 1] - (ell + 1) * Theta[ell + 1]);
         } else {
-          dThetadx[ell] = cqoverHp * kappa[ell] * Theta[ell - 1] - (ell + 1) / (etaHp) * kappa[ell] * Theta[ell];
+          dThetadx[ell] = ckoverHp * Theta[ell - 1] - (ell + 1) / (etaHp) * Theta[ell];
         }
 
         // Add general sources
@@ -1581,9 +1514,9 @@ namespace FML {
         if (ell == 0) {
           dTheta_pdx[ell] = prefac * ( - (ell + 1) * Theta_p[ell + 1] );
         } else if (ell < n_ell_theta_p - 1) {
-          dTheta_pdx[ell] = prefac * (ell * kappa2[ell] * Theta_p[ell - 1] - (ell + 1) * kappa2[ell+1] * Theta_p[ell + 1]);
+          dTheta_pdx[ell] = prefac * (ell * Theta_p[ell - 1] - (ell + 1) * Theta_p[ell + 1]);
         } else {
-          dTheta_pdx[ell] = ckoverHp * kappa2[ell] * Theta_p[ell - 1] - (ell + 1) / (etaHp) * kappa2[ell] * Theta_p[ell];
+          dTheta_pdx[ell] = ckoverHp * Theta_p[ell - 1] - (ell + 1) / (etaHp) * Theta_p[ell];
         }
 
         // Add general sources
@@ -1599,13 +1532,13 @@ namespace FML {
       // SET: Neutrino mutlipoles (Nu_ell)
       //=============================================================================
       for (int ell = 0; ell < n_ell_nu; ell++) {
-        const double prefac = cqoverHp / (2.0 * ell + 1);
+        const double prefac = ckoverHp / (2.0 * ell + 1);
         if (ell == 0) {
           dNudx[ell] = prefac * ( - (ell + 1) * Nu[ell + 1] );
         } else if (ell < n_ell_nu - 1) {
-          dNudx[ell] = prefac * (ell * kappa[ell] * Nu[ell - 1] - (ell + 1) * kappa[ell+1] * Nu[ell + 1]);
+          dNudx[ell] = prefac * (ell * Nu[ell - 1] - (ell + 1) * Nu[ell + 1]);
         } else {
-          dNudx[ell] = cqoverHp * kappa[ell] * Nu[ell - 1] - (ell + 1) / (etaHp) * kappa[ell] * Nu[ell];
+          dNudx[ell] = ckoverHp * Nu[ell - 1] - (ell + 1) / (etaHp) * Nu[ell];
         }
 
         // Add sources

@@ -65,8 +65,8 @@ namespace FML {
       // The minimum allocation size in bytes to log
       size_t min_bytes_to_log = MIN_BYTES_TO_LOG; 
       size_t max_allocations_to_log = MAX_ALLOCATIONS_IN_MEMORY;
-      size_t nallocation = 0;
-      bool stop_logging = false;
+      size_t nallocation{0};
+      bool stop_logging{false};
 
       // Private constructor and destructor
       MemoryLog(){

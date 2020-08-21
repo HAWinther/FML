@@ -65,23 +65,23 @@ namespace FML {
 
           // Particle container
           //std::vector<T> p;
-          Vector<T> p;
+          Vector<T> p{};
 
           // Info about the particle distribution
-          size_t NpartTotal;          // Total number of particles across all tasks
-          size_t NpartLocal_in_use;   // Number of particles in use (total allocated given by p.size())
+          size_t NpartTotal{0};          // Total number of particles across all tasks
+          size_t NpartLocal_in_use{0};   // Number of particles in use (total allocated given by p.size())
 
           // The range of x-values in [0,1] that belongs to each task
-          std::vector<double> x_min_per_task; 
-          std::vector<double> x_max_per_task;
+          std::vector<double> x_min_per_task{}; 
+          std::vector<double> x_max_per_task{};
 
           // If we create particles from scratch according to a grid
-          double buffer_factor;       // Allocate a factor of this more particles than needed
+          double buffer_factor{1.0};       // Allocate a factor of this more particles than needed
 
           // If we created a uniform grid of particles
-          int Npart_1D;               // Total number of particles slices
-          int Local_Npart_1D;         // Number of slices in current task
-          int Local_p_start;          // Start index of local particle slice in [0,Npart_1D)
+          int Npart_1D{0};               // Total number of particles slices
+          int Local_Npart_1D{0};         // Number of slices in current task
+          int Local_p_start{0};          // Start index of local particle slice in [0,Npart_1D)
 
         public:
 
@@ -116,7 +116,7 @@ namespace FML {
           // This method only sets the positions of the particles not id or vel or anything else
           void create_particle_grid(int Npart_1D, double buffer_factor, double xmin_local, double xmax_local);
 
-          MPIParticles();
+          MPIParticles() = default;
 
           // Get reference to particle vector. NB: due to we allow a buffer the size of the vector returned is 
           // not equal to the 
@@ -379,18 +379,6 @@ namespace FML {
         a = b;
         b = tmp;
       }
-
-    template<class T>
-      MPIParticles<T>::MPIParticles() : 
-        p(0),
-        NpartTotal(0), 
-        NpartLocal_in_use(0), 
-        buffer_factor(1.0), 
-        Npart_1D(0), 
-        Local_Npart_1D(0), 
-        Local_p_start(0)
-    {
-    }
 
     template<class T>
       void MPIParticles<T>::create_particle_grid(int Npart_1D, double buffer_factor, double xmin_local, double xmax_local){
@@ -704,7 +692,8 @@ namespace FML {
           ? NpartTotal * bytes_per_particle : max_bytesize_buffer;
         std::vector<char> buffer_data(buffer_size);
         size_t n_per_batch = buffer_size / bytes_per_particle-1;
-        assert(n_per_batch > 0);
+        assert_mpi(n_per_batch > 0,
+            "[MPIParticles::dump_to_file] Batch size cannot be zero\n");
 
         // Write in chunks
         size_t nwritten = 0;
@@ -763,7 +752,8 @@ namespace FML {
           ? NpartTotal * bytes_per_particle : max_bytesize_buffer;
         std::vector<char> buffer_data(buffer_size);
         size_t n_per_batch = buffer_size / bytes_per_particle;
-        assert(n_per_batch > 0);
+        assert_mpi(n_per_batch > 0,
+            "[MPIParticles::load_from_file] Batch size cannot be zero\n");
 
         // Read in chunks
         size_t nread = 0;

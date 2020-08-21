@@ -82,4 +82,6 @@ int main(){
   // We use a low keta_max above so only good up until ~2000
   power->output_angular_power_spectra("cell.txt");
 
+  // Output matter power-spectrum at z = 0.0
+  power->output_matter_power_spectrum(log(1.0 / (1.0 + 0.0)), "pofk.txt");
 }

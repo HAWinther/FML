@@ -17,7 +17,7 @@ const int NDIM = 3;
 struct Particle{
   double x[NDIM], v[NDIM];
   Particle(){}
-  Particle(double *_x, double *_v = NULL){
+  Particle(double *_x, double *_v = nullptr){
     std::memcpy(x, _x, NDIM*sizeof(double));
     if(_v){
       std::memcpy(v, _v, NDIM*sizeof(double));

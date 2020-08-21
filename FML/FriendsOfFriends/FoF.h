@@ -95,7 +95,7 @@ namespace FML {
           double mass{0.0};
           std::array<double,NDIM> pos;
           std::array<double,NDIM> vel;
-          double vel2; // <v^2>
+          double vel2{0.0}; // <v^2>
           bool shared {false};
           bool merged {false};
 
@@ -187,8 +187,8 @@ namespace FML {
     class FoFCells{
       public:
         int np{0};
-        std::vector<size_t> ParticleIndex;
-        FoFCells() : np(0){}
+        std::vector<size_t> ParticleIndex{};
+        FoFCells() = default;
     };
 
     //=========================================================================

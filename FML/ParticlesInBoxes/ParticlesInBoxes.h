@@ -32,7 +32,7 @@ namespace FML {
     template<class T>
       struct Cell {
         size_t np {0};
-        std::vector<T> ps;
+        std::vector<T> ps{};
 
         // Increase np by 1. For counting particles
         void operator++();
@@ -62,7 +62,7 @@ namespace FML {
       class ParticlesInBoxes {
         private:
 
-          std::vector< Cell<T> > cells;
+          std::vector< Cell<T> > cells{};
           int Ngrid{0};
           int Ndim{0};
           size_t Npart{0};
@@ -186,11 +186,6 @@ namespace FML {
         cells.resize(ncells);
         for(auto &cell : cells) 
           cell.init();
-
-        // XXX Compute xmin,xmax among the particles
-        // Make the cells start at xmin and end at xmax
-        // This however requires changing how the Paircounts
-        // methods are currently done
 
         // Count number of particles in each cell
         for(size_t i = 0; i < nparticles; i++){

@@ -93,42 +93,42 @@ namespace FML {
 
           // The raw data vectors. These have the format [extra slices left][main grid][extra slices right] 
           // Vector = std::vector<ComplexType> with possible custom allocator
-          Vector<ComplexType> fourier_grid_raw;
+          Vector<ComplexType> fourier_grid_raw{};
 
           // Mesh size and the dimension of the grid
-          int Nmesh;
+          int Nmesh{0};
           // Number of local slices in real and Fourier space (the same)
-          ptrdiff_t Local_nx;
+          ptrdiff_t Local_nx{0};
           // The index in the global grid the local grid starts at
-          ptrdiff_t Local_x_start;
+          ptrdiff_t Local_x_start{0};
 
           // The total number of grid-cells we allocate
-          ptrdiff_t NmeshTotRealAlloc;
-          ptrdiff_t NmeshTotComplexAlloc;
+          ptrdiff_t NmeshTotRealAlloc{0};
+          ptrdiff_t NmeshTotComplexAlloc{0};
 
           // The number of grid-cells that is active in the main part of the grid 
-          ptrdiff_t NmeshTotReal;
-          ptrdiff_t NmeshTotComplex;
+          ptrdiff_t NmeshTotReal{0};
+          ptrdiff_t NmeshTotComplex{0};
 
           // XXX Add below and remove non-needed things
           // NComplexCellsBeforeMain
           // NComplexCellsBeforeRight
 
           // Number of extra cells per slice
-          ptrdiff_t NmeshTotRealSlice;
-          ptrdiff_t NmeshTotComplexSlice;
+          ptrdiff_t NmeshTotRealSlice{0};
+          ptrdiff_t NmeshTotComplexSlice{0};
 
           // Number of extra slices to the left and right of the grid
-          int n_extra_x_slices_left;
-          int n_extra_x_slices_right;
+          int n_extra_x_slices_left{0};
+          int n_extra_x_slices_right{0};
 
           // If you want to keep track of the field is in real space or in Fourier space
-          bool grid_is_in_real_space = true;
+          bool grid_is_in_real_space{true};
 
         public:
 
           // Constructors
-          FFTWGrid();
+          FFTWGrid() = default;
           FFTWGrid(
               int Nmesh, 
               int n_extra_x_slices_left = 0, 
@@ -613,32 +613,9 @@ namespace FML {
       }
 
     template<int N>
-      FFTWGrid<N>::FFTWGrid() : 
-        Nmesh(0), 
-        Local_nx(0),
-        Local_x_start(0),
-        NmeshTotRealAlloc(0), 
-        NmeshTotComplexAlloc(0), 
-        NmeshTotReal(0),      
-        NmeshTotComplex(0), 
-        NmeshTotRealSlice(0), 
-        NmeshTotComplexSlice(0), 
-        n_extra_x_slices_left(0), 
-        n_extra_x_slices_right(0)
-    {
-    }
-
-    template<int N>
       FFTWGrid<N>::FFTWGrid(int Nmesh, int n_extra_x_slices_left, int n_extra_x_slices_right) : 
         Nmesh(Nmesh), 
         Local_nx(Nmesh),
-        Local_x_start(0),
-        NmeshTotRealAlloc(0), 
-        NmeshTotComplexAlloc(0), 
-        NmeshTotReal(0),      
-        NmeshTotComplex(0), 
-        NmeshTotRealSlice(0), 
-        NmeshTotComplexSlice(0), 
         n_extra_x_slices_left(n_extra_x_slices_left), 
         n_extra_x_slices_right(n_extra_x_slices_right)
     {

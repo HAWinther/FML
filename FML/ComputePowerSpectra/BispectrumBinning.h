@@ -12,9 +12,9 @@ namespace FML {
     template<int N> 
       class BispectrumBinning {
         public:
-          int n;
-          double kmin;
-          double kmax;
+          int n{0};
+          double kmin{0.0};
+          double kmax{0.0};
 
           std::vector<double> B123;
           std::vector<double> N123;
@@ -22,7 +22,7 @@ namespace FML {
           std::vector<double> k;
           std::vector<double> kbin;
 
-          BispectrumBinning();
+          BispectrumBinning() = default;
           BispectrumBinning(int nbins);
           BispectrumBinning(double kmin, double kmax, int nbins);
 
@@ -50,9 +50,6 @@ namespace FML {
           void combine(BispectrumBinning &rhs);
       };
 
-    template<int N>
-      BispectrumBinning<N>::BispectrumBinning() : n(0) {}
-    
     template<int N>
       BispectrumBinning<N>::BispectrumBinning(int nbins) : BispectrumBinning(0.0, 2.0*M_PI*(nbins-1), nbins) {}
 
@@ -106,8 +103,10 @@ namespace FML {
 
     template<int N>
       double BispectrumBinning<N>::get_spectrum(int i, int j, int k){
-        assert(i >= 0 and j >= 0 and k >= 0);
-        assert(i < n and j < n and k < n);
+        assert_mpi(i >= 0 and j >= 0 and k >= 0,
+            "[BispectrumBinning::get_spectrum] i,j,k has to be >= 0\n");
+        assert_mpi(i < n and j < n and k < n,
+            "[BispectrumBinning::get_spectrum] i,j,k has to be < n\n");
         return B123[(i*n + j)*n + k];
       }
 
@@ -123,14 +122,17 @@ namespace FML {
 
     template<int N>
       double BispectrumBinning<N>::get_bincount(int i, int j, int k){
-        assert(i >= 0 and j >= 0 and k >= 0);
-        assert(i < n and j < n and k < n);
+        assert_mpi(i >= 0 and j >= 0 and k >= 0,
+            "[BispectrumBinning::get_spectrum] i,j,k has to be >= 0\n");
+        assert_mpi(i < n and j < n and k < n,
+            "[BispectrumBinning::get_spectrum] i,j,k has to be < n\n");
         return N123[(i*n + j)*n + k];
       }
 
     template<int N>
       void BispectrumBinning<N>::combine(BispectrumBinning &rhs){
-        assert(n == rhs.n);
+        assert_mpi(n == rhs.n,
+            "[BispectrumBinning::combine] Incompatible binnings\n");
         if(nbinnings == 0){
           B123 = rhs.B123;
           N123 = rhs.N123;
