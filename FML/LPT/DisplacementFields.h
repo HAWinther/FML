@@ -21,25 +21,25 @@ namespace FML {
             using FFTWGrid = FML::GRID::FFTWGrid<N>;
 
             template <int N>
-            void from_LPT_potential_to_displacement_vector(const FFTWGrid<N> & phi, std::vector<FFTWGrid<N>> & psi);
+            void from_LPT_potential_to_displacement_vector(const FFTWGrid<N> & phi_fourier, std::vector<FFTWGrid<N>> & psi_real);
 
             template <int N>
-            void compute_1LPT_potential_fourier(const FFTWGrid<N> & delta, FFTWGrid<N> & phi_1LPT);
+            void compute_1LPT_potential_fourier(const FFTWGrid<N> & delta_fourier, FFTWGrid<N> & phi_1LPT_fourier);
 
             template <int N>
-            void compute_2LPT_potential_fourier(const FFTWGrid<N> & delta, FFTWGrid<N> & phi_2LPT);
+            void compute_2LPT_potential_fourier(const FFTWGrid<N> & delta_fourier, FFTWGrid<N> & phi_2LPT_fourier);
 
             template <int N>
             void from_LPT_potential_to_displacement_vector_scaledependent(
-                const FFTWGrid<N> & phi,
-                std::vector<FFTWGrid<N>> & psi,
+                const FFTWGrid<N> & phi_fourier,
+                std::vector<FFTWGrid<N>> & psi_real,
                 std::function<double(double)> & growth_function_ratio);
 
             //=================================================================================
 
-            // Function is the ratio of the scale-dependent growth-factor at
-            // the time we want to generate particles to the time where phi was generated at
-            // as function of k
+            /// Function is the ratio of the scale-dependent growth-factor at
+            /// the time we want to generate particles to the time where phi was generated at
+            /// as function of k
             template <int N>
             void from_LPT_potential_to_displacement_vector_scaledependent(const FFTWGrid<N> & phi,
                                                                           std::vector<FFTWGrid<N>> & psi,
@@ -98,6 +98,7 @@ namespace FML {
                 }
             }
 
+            /// Generate the displaceement field \f$ \Psi = \nabla \phi \f$ from the LPT potential \f$ \phi \f$.
             template <int N>
             void from_LPT_potential_to_displacement_vector(const FFTWGrid<N> & phi, std::vector<FFTWGrid<N>> & psi) {
 
@@ -153,6 +154,7 @@ namespace FML {
                 }
             }
 
+            /// Generate the 1LPT potential defined as \f$ \Psi^{\rm 1LPT} = \nabla \phi^{\rm 1LPT} \f$ and \f$ \nabla^2 \phi^{\rm 1LPT} = -\delta \f$. Returns it in Fourier space.
             template <int N>
             void compute_1LPT_potential_fourier(const FFTWGrid<N> & delta, FFTWGrid<N> & phi_1LPT) {
 
@@ -195,6 +197,7 @@ namespace FML {
                 }
             }
 
+            /// Generate the 2LPT potential defined as \f$ \Psi^{\rm 2LPT} = \nabla \phi^{\rm 2LPT} \f$ and \f$ \nabla^2 \phi^{\rm 2LPT} = \ldots \f$. Returns the grid in Fourier space.
             template <int N>
             void compute_2LPT_potential_fourier(const FFTWGrid<N> & delta, FFTWGrid<N> & phi_2LPT) {
 

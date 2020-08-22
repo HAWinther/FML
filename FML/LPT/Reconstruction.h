@@ -14,6 +14,7 @@
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/LPT/DisplacementFields.h>
 #include <FML/MPIParticles/MPIParticles.h>
+#include <FML/Smoothing/SmoothingFourier.h>
 
 namespace FML {
     namespace COSMOLOGY {
@@ -59,7 +60,10 @@ namespace FML {
                                                 double beta,
                                                 std::pair<std::string, double> smoothing_options,
                                                 bool survey_data) {
-                const std::string interpolation_method = density_assignment_method;
+
+                // Use N-linear interpolation
+                const std::string interpolation_method = "CIC";
+
                 size_t NumPart = part.get_npart();
 
                 const bool periodic_box = true;
@@ -80,6 +84,9 @@ namespace FML {
 
                 // Do this iteratively
                 for (int i = 0; i < niterations; i++) {
+                    if (FML::ThisTask == 0)
+                        std::cout << "[RSDReconstructionFourierMethod] Iteration: " << i + 1 << " / " << niterations
+                                  << "\n";
 
                     // This is the density field for the observed galaxies
                     // i.e. with RSD in it
@@ -90,6 +97,12 @@ namespace FML {
                                                           part.get_npart_total(),
                                                           density,
                                                           density_assignment_method);
+
+                    density.fftw_r2c();
+
+                    // Perform a smoothing 
+                    FML::GRID::smoothing_filter_fourier_space(
+                        density, smoothing_options.second, smoothing_options.first);
 
                     // The 1LPT potential
                     FFTWGrid<N> phi_1LPT;
@@ -116,57 +129,73 @@ namespace FML {
 
                         // Free some memory
                         Psi[idim].free();
+                    }
 
-                        // Subtract the RSD component (Psi*r)*r / (1+beta) for each particle
-                        // Do periodic wrap and communicate particles in case they have left
-                        // the current domain
-                        auto * p = part.get_particles_ptr();
-                        for (size_t i = 0; i < NumPart; i++) {
-                            auto * pos = p->get_pos();
+                    // Subtract the RSD component (Psi*r)*r / (1+beta) for each particle
+                    // Do periodic wrap and communicate particles in case they have left
+                    // the current domain
+                    std::array<double, N> Psi_max;
+                    Psi_max.fill(0.0);
+                    auto * p = part.get_particles_ptr();
+                    for (size_t i = 0; i < NumPart; i++) {
+                        auto * pos = p->get_pos();
 
-                            std::array<FloatType, N> r;
-                            if (survey_data) {
-                                double norm = 0.0;
-                                for (int idim = 0; idim < N; idim++) {
-                                    r[idim] = pos[idim] - los_direction[idim];
-                                    norm += r[idim] * r[idim];
-                                }
-                                norm = 1.0 / std::sqrt(norm);
-                                for (int idim = 0; idim < N; idim++) {
-                                    r[idim] *= norm;
-                                }
-                            } else {
-                                for (int idim = 0; idim < N; idim++) {
-                                    r[idim] = los_direction[idim];
-                                }
-                            }
-
-                            std::array<FloatType, N> Psi_rsd;
-                            FloatType Psidotr = 0.0;
+                        std::array<FloatType, N> r;
+                        if (survey_data) {
+                            double norm = 0.0;
                             for (int idim = 0; idim < N; idim++) {
-                                Psidotr += los_direction[idim] * Psi_particle_positions[idim][i];
+                                r[idim] = pos[idim] - los_direction[idim];
+                                norm += r[idim] * r[idim];
                             }
+                            norm = 1.0 / std::sqrt(norm);
                             for (int idim = 0; idim < N; idim++) {
-                                Psi_rsd[idim] = Psidotr * los_direction[idim] / (1.0 + beta);
+                                r[idim] *= norm;
                             }
-
-                            // For survey we need to have a box big enough so that we don't wrap around
+                        } else {
                             for (int idim = 0; idim < N; idim++) {
-                                pos[idim] -= Psi_rsd[idim];
-                                if (periodic_box) {
-                                    if (pos[idim] < 0.0)
-                                        pos[idim] += 1.0;
-                                    if (pos[idim] >= 1.0)
-                                        pos[idim] -= 1.0;
-                                } else {
-                                    if (pos[idim] < 0.0 or pos[idim] >= 1.0)
-                                        assert_mpi(false,
-                                                   "[RSDReconstructionFourierMethod] The particles are outside the box "
-                                                   "and we are set not to periodically wrap");
-                                }
+                                r[idim] = los_direction[idim];
                             }
                         }
-                        part.communicate_particles();
+
+                        std::array<FloatType, N> Psi_rsd;
+                        FloatType Psidotr = 0.0;
+                        for (int idim = 0; idim < N; idim++) {
+                            Psidotr += los_direction[idim] * Psi_particle_positions[idim][i];
+                        }
+                        for (int idim = 0; idim < N; idim++) {
+                            Psi_rsd[idim] = Psidotr * los_direction[idim] / (1.0 + beta);
+
+                            // Maximum shift
+                            if (std::abs(Psi_rsd[idim]) > Psi_max[idim])
+                                Psi_max[idim] = std::abs(Psi_rsd[idim]);
+                        }
+
+                        // For survey we need to have a box big enough so that we don't wrap around
+                        for (int idim = 0; idim < N; idim++) {
+                            pos[idim] -= Psi_rsd[idim];
+                            if (periodic_box) {
+                                if (pos[idim] < 0.0)
+                                    pos[idim] += 1.0;
+                                if (pos[idim] >= 1.0)
+                                    pos[idim] -= 1.0;
+                            } else {
+                                if (pos[idim] < 0.0 or pos[idim] >= 1.0)
+                                    assert_mpi(false,
+                                               "[RSDReconstructionFourierMethod] The particles are outside the box "
+                                               "and we are set not to periodically wrap");
+                            }
+                        }
+                    }
+
+                    // Particles might have moved out so communicate them
+                    part.communicate_particles();
+
+                    // Show maximum shift
+                    if (FML::ThisTask == 0) {
+                        std::cout << "Maximum shift: ";
+                        for (int idim = 0; idim < N; idim++)
+                            std::cout << Psi_max[idim] << "    ";
+                        std::cout << "\n";
                     }
                 }
             }
@@ -189,7 +218,10 @@ namespace FML {
             T tmp;
             const int N = tmp.get_ndim();
 
-            // Periodic box? Yes
+            // Check that velocities really exists (i.e. get_vel is not just set to return a nullptr)
+            // assert(tmp.get_vel() != nullptr);
+
+            // Periodic box? Yes, this is only meant to be used with simulation boxes
             const bool periodic_box = true;
 
             // Make sure line_of_sight_direction is a unit vector
