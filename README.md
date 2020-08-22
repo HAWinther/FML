@@ -43,4 +43,4 @@ You will also have to provide the include path to the folder containing FML and 
 
 # Examples
 
-See the example folders, e.g. [FFTWGrid/example](FML/FFTWGrid/example), [MultiGridSolver/examples](FML/MultiGridSolver/examples) for examples on how to use the different methods and classes. 
+Almost every folders within FML contains examples, e.g. [FFTWGrid/example](FML/FFTWGrid/example) ; [MultigridSolver/examples](FML/MultigridSolver/examples) ; [MPIParticles/example](FM/MPIParticles/example) etc., for examples on how to use the different methods and classes. 
