@@ -67,7 +67,6 @@ ifeq ($(USE_FFTW),true)
 OPTIONS += -DUSE_FFTW
 INC     += -I$(FFTW_INCLUDE)
 LIB     += -L$(FFTW_LIB)
-LINK    += $(FFTW_LINK)
 ifeq ($(USE_MPI),true)
 LINK    += $(FFTW_MPI_LINK)
 endif
@@ -76,6 +75,7 @@ ifeq ($(USE_FFTW_THREADS),true)
 LINK    += $(FFTW_OMP_LINK)
 endif
 endif
+LINK    += $(FFTW_LINK)
 endif
 
 ifeq ($(USE_MEMORYLOG),true)
