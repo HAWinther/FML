@@ -13,12 +13,18 @@ int main() {
     // left and right that is used for having the boundary
     // when doing operations. These cells are filled by
     // running communicate_boundaries()
-    //          ____________________________
+    //
+    //                Local gridslices
+    //       ...____________________________...
     //          |    |                |    |
     //          |    |                |    |
     //          |    |                |    |
+    //          |    |                |    |  
+    //          |    |                |    | 
     //          |    |                |    |
-    //          |____|________________|____|
+    //          |    |                |    |
+    //          |    |                |    |
+    //       ...|____|________________|____|...
     //
     //          nleft     main grid    nright
     //

@@ -155,7 +155,7 @@ namespace FML {
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
         /// @param[in] Ngrid Size of the grid to use.
-        /// @param[in] Particles in the form of a MPIParticle container
+        /// @param[in] part Particles in the form of a MPIParticle container
         /// @param[in] velocity_to_displacement Factor to convert a velocity to a displacement.
         /// This is c / ( aH(a) Boxsize ) for peculiar and c / (H(a)Boxsize) for comoving velocities
         /// At z = 0 velocity_to_displacement = 1.0/(100 * Boxsize) when Boxsize is in Mpc/h

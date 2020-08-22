@@ -30,14 +30,13 @@ namespace FML {
         }
 
         //==========================================================================================
+        /// A simple multidimensional grid-class for any type that works over MPI
         ///
-        /// @brief A simple multidimensional grid-class for any type that works over MPI
-        /// 
-        /// Bounds-check for array lookups: #define BOUNDSCHECK
-        /// 
+        /// Bounds-check for array lookups: BOUNDSCHECK
+        ///
         /// Every index is an index in the local main grid unless specified otherwise
         /// e.g. index = ix*N^2 + iy*N + iz corresponds to (ix + xStartLocal, iy, iz, ...) in the global grid
-        /// 
+        ///
         /// Every coord is a local coordinate unless specified otherwise
         /// e.g. (ix, iy, iz, ...) corresponds to (ix + xStartLocal, iy, iz, ...) in the global grid
         ///

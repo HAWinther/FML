@@ -83,7 +83,7 @@ namespace FML {
             /// ODESOLVER_FIDUCIAL_STEPPER : The choice of stepper
             ///
             //===================================================
-            
+
             class ODESolver {
               private:
                 // Fiducial accuracy parameters

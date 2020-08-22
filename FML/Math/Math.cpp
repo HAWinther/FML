@@ -269,10 +269,11 @@ namespace FML {
         DVector linspace(double xmin, double xmax, int num) {
             DVector res(num);
             double delta_x = (xmax - xmin) / double(num - 1);
-            for (int i = 0; i < num; i++) {
+            for (int i = 0; i < num-1; i++) {
                 res[i] = xmin + delta_x * i;
             }
-            res[num - 1] = xmax; // Just to make sure its exactly xmax!
+            // Just to make sure its exactly xmax at the endpoint
+            res[num - 1] = xmax; 
             return res;
         }
 

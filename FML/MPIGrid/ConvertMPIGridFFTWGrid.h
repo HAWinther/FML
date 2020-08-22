@@ -17,10 +17,13 @@ void ConvertToFFTWGrid(FML::GRID::MPIGrid<N, T> & from_grid, FML::GRID::FFTWGrid
     auto nleft = from_grid.get_n_extra_slices_left();
     auto nright = from_grid.get_n_extra_slices_right();
 
+
+    std::cout << nleft << " " << nright << "\n";
+
     to_grid = FML::GRID::FFTWGrid<N>(Nmesh, nleft, nright);
 
     auto Ntot = from_grid.get_NtotLocal();
-    for (size_t index = 0; index < Ntot; index++) {
+    for (long long int index = 0; index < Ntot; index++) {
         auto coord = from_grid.coord_from_index(index);
         auto value = from_grid.get_y(index);
         to_grid.set_real(coord, value);

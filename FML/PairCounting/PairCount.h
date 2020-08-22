@@ -80,14 +80,12 @@ namespace FML {
             double norm{0.0};
         };
 
-        // Do paircount of a set of particles
-        // This shows how to use this method
+        /// Do paircount of a set of particles. The source of this shows how to use the other methods.
         template <class T>
         AutoPairCountData
         AutoPairCount(std::vector<T> & particles, int nbins, double rmax, bool periodic, bool verbose);
 
-        // Do cross paircount of a set of particles
-        // This shows how to use this method
+        /// Do cross paircount of a set of particles. The source of this shows how to use the other methods.
         template <class T, class U>
         CrossPairCountData CrossPairCount(std::vector<T> & particles1,
                                           std::vector<U> & particles2,
@@ -96,10 +94,10 @@ namespace FML {
                                           bool periodic,
                                           bool verbose);
 
-        // The general algorithm. Called by the methods above
-        // This is the method that does the hard work
-        // bin is the binning function telling us what to do
-        // with every pair
+        /// The general algorithm. Called by the other methods. 
+        /// This is the method that does the hard work. 
+        /// bin is the binning function telling us what to do
+        /// with every pair
         template <class T>
         void AutoPairCountGridMethod(FML::PARTICLE::ParticlesInBoxes<T> & grid,
                                      std::function<void(int, double *, T &, T &)> & bin,
@@ -107,10 +105,10 @@ namespace FML {
                                      bool periodic,
                                      bool verbose);
 
-        // The general algorithm. Called by the methods above
-        // This is the method that does the hard work
-        // bin is the binning function telling us what to do
-        // with every pair
+        /// The general algorithm. Called by the other methods.
+        /// This is the method that does the hard work.
+        /// bin is the binning function telling us what to do
+        /// with every pair
         template <class T, class U>
         void CrossPairCountGridMethod(FML::PARTICLE::ParticlesInBoxes<T> & grid,
                                       FML::PARTICLE::ParticlesInBoxes<U> & grid2,
@@ -119,7 +117,10 @@ namespace FML {
                                       bool periodic,
                                       bool verbose);
 
-        // Some estimators for correlation functions in surveys
+        /// Some estimators for correlation functions in surveys
+        /// The paircounts is the number of pairs divided by the the total number of pairs
+        /// If one of the paircounts are not needed for an estimator and you dont have it just
+        /// pass nullptr in place of it
         std::vector<double>
         AutoCorrelationEstimator(double * DD, double * DR, double * RR, int nbins, std::string estimator);
         std::vector<double> CrossCorrelationEstimator(double * D1D2,
@@ -131,9 +132,6 @@ namespace FML {
 
         //===========================================================================
 
-        // The paircounts is the number of pairs divided by the the total number of pairs
-        // If one of the paircounts are not needed for an estimator and you dont have it just
-        // pass nullptr in place of it
         std::vector<double>
         AutoCorrelationEstimator(double * DD, double * DR, double * RR, int nbins, std::string estimator) {
             std::vector<double> corr(nbins);
@@ -177,7 +175,7 @@ namespace FML {
             return corr;
         }
 
-        // Same as above but for cross correlations
+        /// Some estimators for cross correlation functions in surveys (see AutoCorrelationEstimator for more info).
         std::vector<double> CrossCorrelationEstimator(double * D1D2,
                                                       double * D1R2,
                                                       double * R1D2,
@@ -218,7 +216,7 @@ namespace FML {
             return corr;
         }
 
-        // Compute the correlation function for particles in a periodic box
+        /// Compute the correlation function for particles in a periodic box
         template <class T>
         void CorrelationFunctionSimulationBox(std::vector<T> & particles, int nbins, double rmax, bool verbose) {
 
@@ -250,8 +248,8 @@ namespace FML {
             }
         }
 
-        // Compute the correlation function for galaxies from a survey
-        // Using the LZ estimator as standard
+        /// Compute the correlation function for galaxies from a survey. 
+        /// Using the LZ estimator as standard
         template <class T>
         void CorrelationFunctionSurvey(std::vector<T> & particles_xyz,
                                        std::vector<T> & randoms_xyz,
@@ -305,8 +303,8 @@ namespace FML {
             }
         }
 
-        // Compute the cross correlation function for galaxies from a survey
-        // Assuming all catalogues are different
+        /// Compute the cross correlation function for galaxies from a survey. 
+        /// Assuming all catalogues are different
         template <class T>
         void CrossCorrelationFunctionSurvey(std::vector<T> & particles1_xyz,
                                             std::vector<T> & particles2_xyz,

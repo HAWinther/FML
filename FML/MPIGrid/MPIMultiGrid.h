@@ -16,13 +16,13 @@ namespace FML {
     namespace GRID {
 
         //===========================================================================================
-        ///                                       
-        /// A stack of _Nlevel MPIGrids with \f$ N^{\rm NDIM} / 2^{\rm Level} \f$ cells in each level  
-        ///                                       
-        /// Compile time defines:                 
-        ///                                       
-        /// BOUNDSCHECK  : Bounds checks          
-        ///                                       
+        ///
+        /// A stack of _Nlevel MPIGrids with \f$ N^{\rm NDIM} / 2^{\rm Level} \f$ cells in each level
+        ///
+        /// Compile time defines:
+        ///
+        /// BOUNDSCHECK  : Bounds checks
+        ///
         //===========================================================================================
 
         template <int NDIM, class T>

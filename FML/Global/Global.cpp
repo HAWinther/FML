@@ -5,7 +5,7 @@
 
 #include "Global.h"
     
-static std::string processor_name {"IsOnlyKnownWithMPI"};
+static std::string processor_name {"NameIsOnlyKnownWithMPI"};
 
 namespace FML {
 

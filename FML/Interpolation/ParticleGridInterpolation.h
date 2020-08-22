@@ -101,7 +101,7 @@ namespace FML {
         ///
         /// @param[in] part A pointer the first particle.
         /// @param[in] NumPart How many particles/positions we have that we want to interpolate the grid to.
-        /// @param[in] NumPartTotal How many particles/positions we have in total over all tasks.
+        /// @param[in] NumPartTot How many particles/positions we have in total over all tasks.
         /// @param[out] density The overdensity field.
         /// @param[in] density_assignment_method The assignment method: NGP, CIC, TSC, PCS or PQS.
         ///
@@ -122,7 +122,7 @@ namespace FML {
         ///
         /// @param[in] part A pointer the first particle.
         /// @param[in] NumPart How many particles/positions we have that we want to interpolate the grid to.
-        /// @param[in] NumPartTotal How many particles/positions we have in total over all tasks.
+        /// @param[in] NumPartTot How many particles/positions we have in total over all tasks.
         /// @param[out] density The overdensity field.
         ///
         template <int N, int ORDER, class T>
@@ -138,7 +138,7 @@ namespace FML {
         /// then a get_mass function.
         ///
         /// @param[out] density_grid_fourier a fourier grid (does not need to be initialized).
-        /// @param[in] Nmesh The size of the grid we want to use.
+        /// @param[in] Ngrid The size of the grid we want to use.
         /// @param[in] part A pointer the first particle.
         /// @param[in] NumPart How many particles/positions we have that we want to interpolate the grid to.
         /// @param[in] NumPartTotal How many particles/positions we have in total over all tasks.

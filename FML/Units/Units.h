@@ -10,7 +10,8 @@
 namespace FML {
     namespace UTILS {
 
-        /// Class for dealing with physical units. Contains physical constants and conversion factors from SI to whatever units you want.
+        /// Class for dealing with physical units. Contains physical constants and conversion factors from SI to
+        /// whatever units you want.
         class ConstantsAndUnits {
           private:
             // Constants in SI units (do not change)

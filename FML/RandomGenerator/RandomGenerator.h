@@ -16,7 +16,6 @@
 namespace FML {
 
     /// This namespace deals with generating random numbers and random fields.
-
     namespace RANDOM {
 
         // Select the type of random generator and specify the seed size

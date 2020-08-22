@@ -53,14 +53,14 @@ namespace FML {
         bool ParameterMap::contains(std::string name) const { return parameters.count(name) != 0; }
 
         // Explicit template instantiation
-        template std::string ParameterMap::get<std::string>(std::string name) const;
-        template double ParameterMap::get<double>(std::string name) const;
-        template int ParameterMap::get<int>(std::string name) const;
-        template bool ParameterMap::get<bool>(std::string name) const;
+        template std::string ParameterMap::get<std::string>(std::string) const;
+        template double ParameterMap::get<double>(std::string) const;
+        template int ParameterMap::get<int>(std::string) const;
+        template bool ParameterMap::get<bool>(std::string) const;
 
-        template std::string ParameterMap::get<std::string>(std::string name, std::string) const;
-        template double ParameterMap::get<double>(std::string name, double) const;
-        template int ParameterMap::get<int>(std::string name, int) const;
-        template bool ParameterMap::get<bool>(std::string name, bool) const;
+        template std::string ParameterMap::get<std::string>(std::string, std::string) const;
+        template double ParameterMap::get<double>(std::string, double) const;
+        template int ParameterMap::get<int>(std::string, int) const;
+        template bool ParameterMap::get<bool>(std::string, bool) const;
     } // namespace UTILS
 } // namespace FML

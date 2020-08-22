@@ -15,13 +15,16 @@ namespace FML {
         using FFTWGrid = FML::GRID::FFTWGrid<N>;
 
         //=================================================================================
-        // Computes the Hessian matrix of a grid [norm * f] via Fourier transforms.
-        // If hessian_of_potential_of_f is true then we compute the Hessian
-        // phi_ij where D^2 phi = norm * f_real
-        // Since f_ij = f_ji we only compute the elements for j >= i and they are stored in
-        // the order fxx fxy ... fyy fyz ... etc. in hessian_real
-        // In 2D: [fxx fxy fyy]
-        // In 3D: [fxx fxy fxz fyy fyz fzz]
+        /// Computes the Hessian matrix of a grid [norm * f] via Fourier transforms.
+        /// If hessian_of_potential_of_f is true then we compute the Hessian
+        /// \f$ \phi_{ij} \f$ where \f$ \nabla^2 \phi = norm * f_{\rm real} \f$
+        /// Since \f$ f_{ij} = f_{ji} \f$ we only compute the elements for \f$ j \geq i \f$ and they are stored in
+        /// the order fxx fxy ... fyy fyz ... etc. in hessian_real
+        /// 
+        /// In 2D: [fxx fxy fyy]
+        /// 
+        /// In 3D: [fxx fxy fxz fyy fyz fzz]
+        /// 
         //=================================================================================
 
         template <int N>
@@ -80,12 +83,15 @@ namespace FML {
         }
 
         //=================================================================================
-        // For each point in the grid compute eigenvectors and eigenvalues of the tensor
-        // H_ij where tensor_real contains the N(N-1)/2 grids [ 00,01,02,..,11,12,...,NN ]
-        //
-        // Eigenvalues are ordered in descending order
-        // Eigenvectors are stored in row major order in the grid vector
-        // This allocates N grids if compute_eigenvectors = false and N(N+1) grids otherwise
+        /// For each point in the grid compute eigenvectors and eigenvalues of the tensor
+        /// \f$ H_{ij} \f$ where tensor_real contains the \f$ N(N-1)/2 \f$ grids [ 00,01,02,..,11,12,...,NN ]
+        ///
+        /// Eigenvalues are ordered in descending order
+        ///
+        /// Eigenvectors are stored in row major order in the grid vector
+        ///
+        /// This allocates N grids if compute_eigenvectors = false and N(N+1) grids otherwise
+        ///
         //=================================================================================
 
         template <int N>

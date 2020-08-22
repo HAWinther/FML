@@ -748,6 +748,7 @@ namespace FML {
                 index = index * (2 * (Nmesh / 2 + 1)) + coord[N - 1];
                 return index;
             }
+            return 0;
         }
 
         template <int N>
