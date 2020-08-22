@@ -15,41 +15,10 @@
 #include <mpi.h>
 #endif
 
-//====================================================
-//
-// This is a wrapper class for easy use of GSL splines
-// It is (OpenMP) thread safe as long as splines are
-// not created by a subthread and later tried to be used
-// by more than that thread!
-//
-// The fiducial splines are cubic splines for 1D and
-// bicubic for 2D assuming natural (y''=0) boundary
-// conditions at the end-points
-//
-// The fiducial choice allows to get the function value
-// and up to second order derivatives. NB: if you change
-// the fiducial choice to a lower order spline,
-// e.g to gsl_interp_linear, then the second derivative
-// deriv_xx etc. will not work
-//
-// If evaluating out of bounds it will return the closest
-// value. To get a warning when this happens call
-// set_out_of_bounds_warning(true) before using the spline
-// or set the define SPLINE_FIDUCIAL_SPLINE_WARNING to be true
-//
-// Errors are handled via the throw_error function
-//
-// Compile time defines:
-// USE_MPI                           : Use MPI (only effect is in on how errors are handled)
-// USE_OMP                           : Use OpenMP
-// SPLINE_FIDUCIAL_INTERPOL_TYPE     : Cubic spline is the fiducial choice
-// SPLINE_FIDUCIAL_INTERPOL_TYPE_2D  : Bicubic is the fiducial choice
-// SPLINE_FIDUCIAL_SPLINE_WARNING    : Show warnings if we evaluate out of bounds
-//
-//====================================================
-
 namespace FML {
     namespace INTERPOLATION {
+
+        /// This namespace deals with creating and using splines
         namespace SPLINE {
 
             // Type aliases
@@ -69,6 +38,44 @@ namespace FML {
 #ifndef SPLINE_FIDUCIAL_SPLINE_WARNING
 #define SPLINE_FIDUCIAL_SPLINE_WARNING false
 #endif
+
+            //====================================================
+            ///
+            /// This is a wrapper class for easy use of GSL splines
+            /// It is (OpenMP) thread safe as long as splines are
+            /// not created by a subthread and later tried to be used
+            /// by more than that thread!
+            ///
+            /// The fiducial splines are cubic splines for 1D and
+            /// bicubic for 2D assuming natural (y''=0) boundary
+            /// conditions at the end-points
+            ///
+            /// The fiducial choice allows to get the function value
+            /// and up to second order derivatives. NB: if you change
+            /// the fiducial choice to a lower order spline,
+            /// e.g to gsl_interp_linear, then the second derivative
+            /// deriv_xx etc. will not work
+            ///
+            /// If evaluating out of bounds it will return the closest
+            /// value. To get a warning when this happens call
+            /// set_out_of_bounds_warning(true) before using the spline
+            /// or set the define SPLINE_FIDUCIAL_SPLINE_WARNING to be true
+            ///
+            /// Errors are handled via the throw_error function
+            ///
+            /// Compile time defines:
+            ///
+            /// USE_MPI                           : Use MPI (only effect is in on how errors are handled)
+            ///
+            /// USE_OMP                           : Use OpenMP
+            ///
+            /// SPLINE_FIDUCIAL_INTERPOL_TYPE     : Cubic spline is the fiducial choice
+            ///
+            /// SPLINE_FIDUCIAL_INTERPOL_TYPE_2D  : Bicubic is the fiducial choice
+            ///
+            /// SPLINE_FIDUCIAL_SPLINE_WARNING    : Show warnings if we evaluate out of bounds
+            ///
+            //====================================================
 
             class GSLSpline {
               private:
@@ -147,6 +154,7 @@ namespace FML {
                 void free();
             };
 
+            /// Create 2D splines
             class GSLSpline2D {
               private:
                 // GSL spline

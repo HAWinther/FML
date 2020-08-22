@@ -1,7 +1,7 @@
 #ifndef SIMPLEGALAXY_HEADER
 #define SIMPLEGALAXY_HEADER
 
-// A minimal class for holding basic info about a galaxy
+/// A minimal class for holding basic info about a galaxy
 class SimpleGalaxy {
   public:
     double RA;

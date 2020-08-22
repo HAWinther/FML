@@ -25,6 +25,12 @@
 #include <FML/ComputePowerSpectra/PowerSpectrumBinning.h>
 
 namespace FML {
+
+    //================================================================================
+    /// This namespace deals with computing correlations functions (N-point functions)
+    /// in real and fourier space.
+    //================================================================================
+
     namespace CORRELATIONFUNCTIONS {
 
         using namespace FML::INTERPOLATION;

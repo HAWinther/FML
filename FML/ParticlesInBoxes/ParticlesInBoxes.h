@@ -5,29 +5,11 @@
 #include <iostream>
 #include <vector>
 
-//======================================================================
-//
-// Take a set of objects T with positions in [0,1) and bin them to a grid
-// The objects must have the two methods:
-// auto *get_pos() : Pointer to first element in position
-// int *get_ndim() : Number of dimensions in position
-//
-// NB: This is not parallelized in any way!
-//
-// Its mainly used for paircounting and for that the way we parallelize it is
-// that all tasks make their own grid and does work only on their parts of the grid
-// This can be improved
-//
-// The index of a cell is [iz + iy * N + ix*N^2 + ...], i.e. last coord varies first
-// We use a variant of this in Friend of Friend which should really be merged with this
-//
-//======================================================================
-
 namespace FML {
     namespace PARTICLE {
 
         //======================================================================
-        // Cell class
+        /// Class for binning objects into cells. Useful for speeding up algorithms.
         //======================================================================
         template <class T>
         struct Cell {
@@ -56,8 +38,23 @@ namespace FML {
         };
 
         //======================================================================
-        // ParticlesInBoxes class
+        ///
+        /// Take a set of objects T with positions in [0,1) and bin them to a grid
+        /// The objects must have the two methods:
+        /// auto *get_pos() : Pointer to first element in position
+        /// int *get_ndim() : Number of dimensions in position
+        ///
+        /// NB: This is not parallelized in any way!
+        ///
+        /// Its mainly used for paircounting and for that the way we parallelize it is
+        /// that all tasks make their own grid and does work only on their parts of the grid
+        /// This can be improved
+        ///
+        /// The index of a cell is [iz + iy * N + ix*N^2 + ...], i.e. last coord varies first
+        /// We use a variant of this in Friend of Friend which should really be merged with this
+        ///
         //======================================================================
+
         template <class T>
         class ParticlesInBoxes {
           private:

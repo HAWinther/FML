@@ -7,8 +7,8 @@
 namespace FML {
     namespace CORRELATIONFUNCTIONS {
 
-        // For storing the results from general polyspectrum
-        // Currently only linear bins
+        /// For storing the results from general polyspectrum
+        /// Currently only linear spaced bins.
         template <int N, int ORDER>
         class PolyspectrumBinning {
           public:

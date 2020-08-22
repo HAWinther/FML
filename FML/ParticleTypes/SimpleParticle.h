@@ -2,8 +2,8 @@
 #define SIMPLEPARTICLE_HEADER
 #include <cstring>
 
-// Simple particle with all the methods needed to be used with MPIParticles
-// Some algorithms might require more field like get_vol, id etc.
+/// Simple particle with all the methods needed to be used with MPIParticles
+/// Some algorithms might require more field like get_vol, id etc.
 template <int NDIM>
 struct SimpleParticle {
 

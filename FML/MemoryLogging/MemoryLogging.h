@@ -34,9 +34,9 @@ namespace FML {
     using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
 
     //=======================================================
-    // Logs all heap allocations in the code that are larger
-    // than min_bytes_to_log. Implemented as a singleton so only
-    // one instance of this object exists. Thread safe
+    /// Logs all heap allocations in the code that are larger
+    /// than min_bytes_to_log. Implemented as a singleton so only
+    /// one instance of this object exists. Thread safe.
     //=======================================================
     class MemoryLog {
       private:
@@ -218,7 +218,7 @@ namespace FML {
         }
     };
 
-    // Custom allocator with logging
+    /// Custom allocator that logs allocations
     template <typename T>
     struct LogAllocator {
         using value_type = T;

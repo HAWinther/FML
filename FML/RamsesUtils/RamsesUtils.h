@@ -13,26 +13,24 @@
 
 namespace FML {
     namespace FILEUTILS {
+
+        /// Reading RAMSES files (DM only).
         namespace RAMSES {
 
             using RamsesDoubleType = double;
 
-            class RamsesReader {
+            //===========================================
+            ///
+            /// Read (and write) files related to RAMSES
+            /// snapshots
+            ///
+            /// Implemented write of:
+            ///
+            ///  ic_deltab IC file
+            ///
+            //===========================================
 
-                //===========================================
-                //
-                // Read (and write) files related to RAMSES
-                // snapshots
-                //
-                // So far implemented read of:
-                //  info-file
-                //  particle-file -> reads and stores particle
-                //                   data to Particle *p
-                //
-                // Implemented write of:
-                //  ic_deltab IC file
-                //
-                //===========================================
+            class RamsesReader {
 
               private:
                 static const int MAXLEVEL{50};

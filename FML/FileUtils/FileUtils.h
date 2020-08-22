@@ -4,6 +4,12 @@
 #include <vector>
 
 namespace FML {
+
+    //================================================================================
+    /// This namespace deals with reading and writing files to disc.
+    ///
+    //================================================================================
+
     namespace FILEUTILS {
 
         using DVector = std::vector<double>;

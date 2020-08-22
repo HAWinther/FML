@@ -36,6 +36,8 @@ namespace FML {
         using DVector = std::vector<double>;
         using DVector2D = std::vector<DVector>;
 
+        /// Struct for keeping track over what quantities we have at what index when solving the linear
+        /// Einstein-Boltzmann system.
         typedef struct _PerturbationSystemInfo {
             int n_scalar{5};
 
@@ -88,6 +90,8 @@ namespace FML {
             }
         } PerturbationSystemInfo;
 
+        /// Class for solving the linear perturbations (LCDM) in temperature, baryon, CDM, massless neutrinos etc. and
+        /// computing source functions needed for computing power-spectra. Holds transfer functions.
         class Perturbations {
           private:
             // The cosmology to use

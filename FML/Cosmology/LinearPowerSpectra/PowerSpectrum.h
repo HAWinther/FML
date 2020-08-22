@@ -44,6 +44,7 @@ namespace FML {
         using DVector = std::vector<double>;
         using DVector2D = std::vector<DVector>;
 
+        /// Computing power-spectra (matter, CMB, correlation functions etc.) in linear perturbation theory
         class PowerSpectrum {
           private:
             // The cosmology to use

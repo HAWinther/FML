@@ -13,54 +13,12 @@
 #include <mpi.h>
 #endif
 
-//===================================================
-//
-// This is a wrapper around the GSL library to easily
-// solve ODEs and return the data in whatever format
-// you want. Safe to use within OpenMP threads as
-// long as spline is not created within a thread!
-//
-// Supplying an x-array the solution will be stored at
-// each of the points in the array (must be monotonic)
-//
-// Example use:
-// Solve the system dy0/dx=y1, dy1/dx=-y0 with
-// y0 = 2.0 and y1 = -2.0 on the interval [0,1]
-// and store the solution at x = 0.0, 0.25, 0.5 and 1.0
-//---------------------------------------------------
-// ODEFunction dydx = [&](double x, const double *y, double *dydx){
-//   dydx[0] =  y[1];
-//   dydx[1] = -y[0];
-//   return GSL_SUCCESS;
-// };
-// DVector yini{2.0, -2.0}
-// DVector x_array{0.0, 0.25, 0.5, 1.0};
-// ODESolver ode;
-// ode.solve(dydx, x_array, yini);
-// auto solution = ode.get_data();
-//---------------------------------------------------
-//
-// Choices of steppers (fiducial one set below):
-// gsl_odeiv2_step_rk2;
-// gsl_odeiv2_step_rk4;
-// gsl_odeiv2_step_rkf45;
-// gsl_odeiv2_step_rkck;
-// gsl_odeiv2_step_rk8pd;
-// gsl_odeiv2_step_rk2imp;
-// gsl_odeiv2_step_rk4imp;
-// gsl_odeiv2_step_bsimp;
-// gsl_odeiv2_step_rk1imp;
-// gsl_odeiv2_step_msadams;
-// gsl_odeiv2_step_msbdf;
-//
-// Compile time defines:
-// USE_MPI                    : Use MPI (only change is in how errors are handled)
-// ODESOLVER_FIDUCIAL_STEPPER : The choice of stepper
-//
-//===================================================
-
 namespace FML {
+
+    /// This nanespace contains various solvers
     namespace SOLVERS {
+
+        /// This namespace contains solvers for (coupled) ordinary differential equations.
         namespace ODESOLVER {
 
             // The fiducial stepper if not provided by the user
@@ -77,6 +35,55 @@ namespace FML {
 
             extern ODEFunctionJacobian * no_jacobian_ptr;
 
+            //===================================================
+            ///
+            /// This is a wrapper around the GSL library to easily
+            /// solve ODEs and return the data in whatever format
+            /// you want. Safe to use within OpenMP threads as
+            /// long as spline is not created within a thread!
+            ///
+            /// Supplying an x-array the solution will be stored at
+            /// each of the points in the array (must be monotonic)
+            ///
+            /// Example use:
+            /// Solve the system dy0/dx=y1, dy1/dx=-y0 with
+            /// y0 = 2.0 and y1 = -2.0 on the interval [0,1]
+            /// and store the solution at x = 0.0, 0.25, 0.5 and 1.0
+            ///
+            ///---------------------------------------------------
+            /// ODEFunction dydx = [&](double x, const double *y, double *dydx){
+            ///   dydx[0] =  y[1];
+            ///   dydx[1] = -y[0];
+            ///   return GSL_SUCCESS;
+            /// };
+            /// DVector yini{2.0, -2.0}
+            /// DVector x_array{0.0, 0.25, 0.5, 1.0};
+            /// ODESolver ode;
+            /// ode.solve(dydx, x_array, yini);
+            /// auto solution = ode.get_data();
+            ///---------------------------------------------------
+            ///
+            /// Choices of steppers (fiducial one set below):
+            /// gsl_odeiv2_step_rk2;
+            /// gsl_odeiv2_step_rk4;
+            /// gsl_odeiv2_step_rkf45;
+            /// gsl_odeiv2_step_rkck;
+            /// gsl_odeiv2_step_rk8pd;
+            /// gsl_odeiv2_step_rk2imp;
+            /// gsl_odeiv2_step_rk4imp;
+            /// gsl_odeiv2_step_bsimp;
+            /// gsl_odeiv2_step_rk1imp;
+            /// gsl_odeiv2_step_msadams;
+            /// gsl_odeiv2_step_msbdf;
+            ///
+            /// Compile time defines:
+            ///
+            /// USE_MPI                    : Use MPI (only change is in how errors are handled)
+            ///
+            /// ODESOLVER_FIDUCIAL_STEPPER : The choice of stepper
+            Y///
+            //===================================================
+            
             class ODESolver {
               private:
                 // Fiducial accuracy parameters

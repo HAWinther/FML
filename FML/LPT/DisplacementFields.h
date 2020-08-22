@@ -13,6 +13,8 @@
 
 namespace FML {
     namespace COSMOLOGY {
+        /// This namespace contains things related to Lagrangian Perturbation Theory (displacement fields,
+        /// reconstruction, initial conditions etc.)
         namespace LPT {
 
             template <int N>

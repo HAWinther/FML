@@ -3,6 +3,7 @@
 #include <cstring>
 #include <stdlib.h>
 
+/// A general customizable particle that can have (or not have) pos,vel,mass,vol,id etc.
 template <int NDIM,
           typename PosType,
           bool HASPOS,

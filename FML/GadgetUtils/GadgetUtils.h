@@ -40,6 +40,8 @@
 
 namespace FML {
     namespace FILEUTILS {
+
+        /// Reading and writing GADGET files (DM only).
         namespace GADGET {
 
             // This is Mpl^2/(H0 Msun/h) used to set the mass of particles
@@ -54,6 +56,8 @@ namespace FML {
             using gadget_particle_id_type = int;
 #endif
 
+
+            /// The GADGET1 header format
             // Do not change the order of the fields below as this is read as one piece of memory from file
             typedef struct {
                 unsigned int
@@ -82,6 +86,7 @@ namespace FML {
 
             void print_header_info(GadgetHeader & header);
 
+            /// Class for reading Gadget files. Checks and corrects for different endian-ness.
             class GadgetReader {
               private:
                 GadgetHeader header;
@@ -89,10 +94,10 @@ namespace FML {
                 bool endian_swap{false};
                 bool header_is_read{false};
 
-                // Mpc/h / Units_in_file, i.e. if the positions are in Mpc/h its 1
-                // if kpc/h then 1000
+                /// Mpc/h / Units_in_file, i.e. if the positions are in Mpc/h its 1 if kpc/h then 1000
                 double gadget_pos_factor{1.0};
 
+                /// The dimensions of the positions and velocities in the files.
                 int NDIM{3};
 
                 void throw_error(std::string errormessage) const;
@@ -114,6 +119,7 @@ namespace FML {
                 int get_num_files(std::string filename = "");
             };
 
+            /// Write files in GADGET format
             class GadgetWriter {
               private:
                 GadgetHeader header;

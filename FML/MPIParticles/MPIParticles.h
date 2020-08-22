@@ -15,6 +15,9 @@
 #include <FML/Global/Global.h>
 
 namespace FML {
+
+    /// This namespace contains things related to particles: different types, containers for holding shared particles
+    /// across tasks and algorithms for doing stuff with particles.
     namespace PARTICLE {
 
         //===========================================================
@@ -85,8 +88,7 @@ namespace FML {
             int Local_p_start{0};  // Start index of local particle slice in [0,Npart_1D)
 
           public:
-            // Iterator for loopping through all the active particles
-            // i.e. allow for(auto &&p: mpiparticles)
+            /// Iterator for loopping through all the active particles i.e. allow for(auto &&p: mpiparticles)
             class iterator {
               public:
                 iterator(T * ptr) : ptr(ptr) {}

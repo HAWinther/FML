@@ -7,8 +7,9 @@
 namespace FML {
     namespace CORRELATIONFUNCTIONS {
 
-        // This class is thread-safe, but cannot be created or normalized inside a OMP parallel region
-        // Summation over MPI tasks is done in normalize()
+        /// Class for holding the results after binning up a power-spectrum.
+        /// This class is thread-safe, but cannot be created or normalized inside a OMP parallel region
+        /// Summation over MPI tasks is done in normalize()
         template <int N>
         class PowerSpectrumBinning {
           public:

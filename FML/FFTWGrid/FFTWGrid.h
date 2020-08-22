@@ -21,6 +21,8 @@
 #include <FML/Global/Global.h>
 
 namespace FML {
+
+    /// This namespace contains various grids for holding data shared across different tasks.
     namespace GRID {
 
         // Include type definitions
@@ -283,8 +285,8 @@ namespace FML {
         // that we need to skip when looping through all the real cells
         //===================================================================================
 
-        // An iterator that deal with the fact that the grid has padding so we need to skip
-        // some cells when looping through it
+        /// An iterator that deal with looping through a real grid. The real grid has padding so we need to skip
+        /// some cells when looping through the real grid
         class LoopIteratorReal {
           private:
             int real_index, index, Nmesh, odd;
@@ -303,7 +305,7 @@ namespace FML {
             }
         };
 
-        // Loops over all active real cells in the main grid
+        /// For range based for-loops over the real-grid. Loop over all local cells.
         class RealRange {
           private:
             const int from, to, Nmesh;
@@ -314,7 +316,7 @@ namespace FML {
             LoopIteratorReal end() const { return {to, Nmesh}; }
         };
 
-        // For range based loop over the fourier grid
+        /// An iterator that deal with looping through the fourier grid
         class LoopIteratorFourier {
           private:
             IndexIntType index;
@@ -329,6 +331,7 @@ namespace FML {
             }
         };
 
+        /// For range based for-loops over the fourier-grid. Loop over all local cells.
         class FourierRange {
           private:
             const IndexIntType from, to;

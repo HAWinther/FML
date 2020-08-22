@@ -20,12 +20,11 @@ namespace FML {
     namespace FILEUTILS {
 
         //===============================================================
-        //
-        // Read Lua scripts. Useful to use Lua scripts as parameterfiles
-        // and in conjunction with ParameterMap
-        //
+        ///
+        /// Read Lua scripts. Useful to use Lua scripts as parameterfiles
+        /// and in conjunction with ParameterMap
+        ///
         //===============================================================
-
         class LuaFileParser {
           private:
             lua_State * L{nullptr};

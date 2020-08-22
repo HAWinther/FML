@@ -14,6 +14,9 @@
 #endif
 
 namespace FML {
+
+    /// This namespace deals with generating random numbers and random fields.
+
     namespace RANDOM {
 
         // Select the type of random generator and specify the seed size
@@ -26,6 +29,9 @@ namespace FML {
 #define gsl_random_generator_type gsl_rng_ranlxd1
 #endif
 
+        /// This is a class for having a unified interface for random numbers in the library.
+        /// If you want to use a different RNG other than c++ random (fiducial: mt19937) or GSL then make a class
+        /// that inherits from this class and implement the 3-4 methods it has.
         class RandomGenerator {
           protected:
             std::vector<unsigned int> Seed;
@@ -74,6 +80,7 @@ namespace FML {
             }
         };
 
+        /// Generate random numbers using the GSL library (fiducial: gsl_rng_ranlxd1)
         class GSLRandomGenerator : public RandomGenerator {
           private:
             GSLRNG rng;

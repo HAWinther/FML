@@ -11,6 +11,11 @@
 #include <FML/Global/Global.h>
 
 namespace FML {
+
+    //========================================================================================
+    /// This namespace deals how to link together particles in groups
+    //========================================================================================
+
     namespace FOF {
 
         // If a particle belongs to no FoF group it is given this FoF ID

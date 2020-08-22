@@ -41,6 +41,8 @@ namespace FML {
         using Spline = FML::INTERPOLATION::SPLINE::Spline;
         using DVector = std::vector<double>;
 
+        /// For computing the recombination history of our Universe. Optical depth, free electron fraction, baryon
+        /// temperature, reionization, etc.
         class RecombinationHistory {
           private:
             // The cosmology to use

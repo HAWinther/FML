@@ -142,10 +142,10 @@ namespace FML {
     }
 
     //============================================
-    // Initialize and finalize MPI automatically on
-    // startup and exit. MPI can only be initialized
-    // and finalized once so add it as a singleton
-    // Disable with define NO_AUTO_MPI_SETUP
+    /// Initialize and finalize MPI automatically on
+    /// startup and exit. MPI can only be initialized
+    /// and finalized once so add it as a singleton
+    /// Disable with define NO_AUTO_MPI_SETUP
     //============================================
     struct MPISetup {
         static MPISetup & init(int * argc = nullptr, char *** argv = nullptr) {
@@ -179,7 +179,8 @@ namespace FML {
         return y;                                                                                                      \
     }
     OPS(+)
-    OPS(-) OPS(*) OPS(/)
+    OPS(-)
+    OPS(*) OPS(/)
 #undef OPS
 
 #define OPS(OP)                                                                                                        \
@@ -230,11 +231,6 @@ namespace FML {
 #undef FUNS
 } // namespace FML
 
-//=============================================================
-// Singleton for initializing and cleaning up FFTW
-// with MPI and with threads automatically
-// If you don't want this use the define NO_AUTO_FFTW_MPI_INIT
-//=============================================================
 #ifdef USE_FFTW
 namespace FML {
 
@@ -245,6 +241,11 @@ namespace FML {
         void set_fftw_nthreads(int nthreads);
     } // namespace GRID
 
+    //=============================================================
+    /// Singleton for initializing and cleaning up FFTW
+    /// with MPI and with threads automatically
+    /// If you don't want this use the define NO_AUTO_FFTW_MPI_INIT
+    //=============================================================
     struct FFTWSetup {
         static FFTWSetup & init(int * argc = nullptr, char *** argv = nullptr) {
             static FFTWSetup instance(argc, argv);

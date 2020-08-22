@@ -16,6 +16,8 @@
 
 namespace FML {
     namespace SOLVERS {
+
+        /// This namespace contains a general multigrid solver for non-linear PDEs.
         namespace MULTIGRIDSOLVER {
 
             // Type aliases used below
@@ -33,63 +35,62 @@ namespace FML {
             using MultiGridConvCrit = std::function<bool(double, double, int)>;
 
             //=============================================
-            ///                                           //
-            /// A general multigrid solver to solve       //
-            /// PDEs on a compact domain in any dimension //
-            /// with periodic or Dirichlet boundary       //
-            /// conditions.                               //
-            ///                                           //
-            /// The main implemention is for periodic     //
-            /// boundary conditions. However the user has //
-            /// an option of providing a mask-field       //
-            /// which specifies the boundary and the      //
-            /// value of the field is held fixed to that  //
-            /// of the initial conditions when solving    //
-            /// Use set_mask to provide the mask. This is //
-            /// a grid with +1 if the cell is active and  //
-            /// -1 if its a boundary cell and the boundary//
-            /// value is that provided in the initial     //
-            /// guess.                                    //
-            /// Currently this is a quite simplistic      //
-            /// implemention so on a general domain       //
-            /// make sure you use a big enough mask so    //
-            /// that the lowest level is masked out.      //
-            /// To try this compile with USE_MASK         //
-            ///                                           //
-            /// User needs to provide the equation in the //
-            /// form L(y) = 0 and dL/dy                   //
-            /// and the convergence criterion (we provide //
-            /// two common ones as fiducial options)      //
-            /// For defining the equation one can use     //
-            /// some helper functions get_Field,          //
-            /// get_Gradient, get_Laplacian etc.          //
-            /// Currently the list of cells provided      //
-            /// only contains the closest 2*NDIM cells    //
-            /// so one will have to compute by hand index //
-            /// of other cells if needed (and make sure   //
-            /// that n_extra_slices are set right so that //
-            /// the cells from neighboring cpus exists)   //
-            ///                                           //
-            /// _PERIODIC is the box periodic or not?     //
-            /// The standard is periodic                  //
-            /// If not provide a mask field or the edges  //
-            /// of the box is by standard the boundary    //
-            ///                                           //
-            /// _MAXSTEPS defines how many V-cycles we    //
-            /// do before giving up if convergence is not //
-            /// reached. Change by running [set_maxsteps] //
-            ///                                           //
-            /// _EPS_CONVERGE is a parameter defining     //
-            /// convergence if you use on of the fiducial //
-            /// criteria                                  //
-            /// Change by running [set_epsilon]           //
-            ///                                           //
-            /// _NGRIDCOLOURS defines in which order we   //
-            /// sweep through the grid: sum of int-coord  //
-            /// mod _NGRIDCOLOURS. For 2 we have standard //
-            /// chess-board ordering                      //
-            ///                                           //
-            //===========================================//
+            ///
+            /// A general multigrid solver to solve
+            /// PDEs on a compact domain in any dimension
+            /// with periodic or Dirichlet boundary
+            /// conditions.
+            ///
+            /// The main implemention is for periodic
+            /// boundary conditions. However the user has
+            /// an option of providing a mask-field
+            /// which specifies the boundary and the
+            /// value of the field is held fixed to that
+            /// of the initial conditions when solving
+            /// Use set_mask to provide the mask. This is
+            /// a grid with +1 if the cell is active and
+            /// -1 if its a boundary cell and the boundary
+            /// value is that provided in the initial
+            /// guess.
+            /// Currently this is a quite simplistic
+            /// implemention so on a general domain
+            /// make sure you use a big enough mask so
+            /// that the lowest level is masked out.
+            /// To try this compile with USE_MASK
+            ///
+            /// User needs to provide the equation in the
+            /// form L(y) = 0 and dL/dy
+            /// and the convergence criterion (we provide
+            /// two common ones as fiducial options)
+            /// For defining the equation one can use
+            /// some helper functions get_Field,
+            /// get_Gradient, get_Laplacian etc.
+            /// Currently the list of cells provided
+            /// only contains the closest 2*NDIM cells
+            /// so one will have to compute by hand index
+            /// of other cells if needed (and make sure
+            /// that n_extra_slices are set right so that
+            /// the cells from neighboring cpus exists)
+            ///
+            /// _PERIODIC is the box periodic or not?
+            /// The standard is periodic
+            /// If not provide a mask field or the edges
+            /// of the box is by standard the boundary
+            ///
+            /// _MAXSTEPS defines how many V-cycles we
+            /// do before giving up if convergence is not
+            /// reached. Change by running [set_maxsteps]
+            ///
+            /// _EPS_CONVERGE is a parameter defining
+            /// convergence if you use on of the fiducial
+            /// criteria
+            /// Change by running [set_epsilon]
+            ///
+            /// _NGRIDCOLOURS defines in which order we
+            /// sweep through the grid: sum of int-coord
+            /// mod _NGRIDCOLOURS. For 2 we have standard
+            /// chess-board ordering
+            //=============================================
 
             template <int NDIM, class T>
             class MultiGridSolver {

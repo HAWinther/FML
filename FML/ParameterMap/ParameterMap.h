@@ -7,19 +7,6 @@
 #include <map>
 #include <variant>
 
-//============================================================================
-//
-// For holding a map of parameters of different types with easy set and get's
-// allowing for fiducial values if the parameter is not in the map
-// Uses std::variant which requires a C++17 compiler
-//
-// Errors handled via the throw_error function
-//
-// Compile time defines:
-// USE_MPI : Use MPI (only difference is in how errors are handled)
-//
-//============================================================================
-
 namespace FML {
     namespace UTILS {
 
@@ -32,6 +19,21 @@ namespace FML {
 
         // All the types we can have in the parameter file
         using ParameterTypes = std::variant<std::string, int, bool, double>;
+
+        //============================================================================
+        ///
+        /// For holding a map of parameters of different types with easy set and get's
+        /// allowing for fiducial values if the parameter is not in the map
+        ///
+        /// Uses std::variant which requires a C++17 compatible compiler.
+        ///
+        /// Errors handled via the throw_error function.
+        ///
+        /// Compile time defines:
+        ///
+        /// USE_MPI : Use MPI (only difference is in how errors are handled)
+        ///
+        //============================================================================
 
         class ParameterMap {
           private:

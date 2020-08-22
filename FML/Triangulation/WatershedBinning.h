@@ -7,8 +7,8 @@
 namespace FML {
     namespace TRIANGULATION {
 
-        // This is a general binning class for doing watershed based on [quantity] (typically volume)
-        // When we bin particles to the watershed basins we compute stuff based on what is in this class
+        /// This is a general binning class for doing watershed based on [quantity] (typically volume)
+        /// When we bin particles to the watershed basins we compute stuff based on what is in this class
         template <class T, int NDIM>
         struct WatershedBasin {
             double pos_min[NDIM];

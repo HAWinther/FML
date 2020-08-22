@@ -35,6 +35,11 @@
 #pragma GCC diagnostic pop
 
 namespace FML {
+
+    //========================================================================================
+    /// This namespace deals with performin triangulations (Delaunay and Voronoi)
+    //========================================================================================
+
     namespace TRIANGULATION {
 
         //========================================================================================
@@ -94,34 +99,34 @@ namespace FML {
         //====================================================================
 
         template <class T, class VD = VD_FIDUCIAL>
-          class MPIPeriodicDelaunay {
-            private:
-              using PeriodicDelaunay = PeriodicDelaunayWithInfo<VD>;
-              using Point = typename PeriodicDelaunay::Point;
-              using Periodic_point = typename PeriodicDelaunay::Periodic_point;
-              using Vertex_handle = typename PeriodicDelaunay::Vertex_handle;
-              using Vertex_iterator = typename PeriodicDelaunay::Vertex_iterator;
+        class MPIPeriodicDelaunay {
+          private:
+            using PeriodicDelaunay = PeriodicDelaunayWithInfo<VD>;
+            using Point = typename PeriodicDelaunay::Point;
+            using Periodic_point = typename PeriodicDelaunay::Periodic_point;
+            using Vertex_handle = typename PeriodicDelaunay::Vertex_handle;
+            using Vertex_iterator = typename PeriodicDelaunay::Vertex_iterator;
 
-              // Random shuffle the particles before tesselating (always a good idea)
-              const bool tesselation_random_shuffle{true};
+            // Random shuffle the particles before tesselating (always a good idea)
+            const bool tesselation_random_shuffle{true};
 
-              // The CGAL tesselation structure
-              PeriodicDelaunay dt;
+            // The CGAL tesselation structure
+            PeriodicDelaunay dt;
 
-              // The size of the buffer
-              double dx_buffer{0.0};
+            // The size of the buffer
+            double dx_buffer{0.0};
 
-              // Info about the tesselation
-              std::vector<Vertex_handle> vs{};
-              std::vector<Vertex_handle> vs_boundary{};
+            // Info about the tesselation
+            std::vector<Vertex_handle> vs{};
+            std::vector<Vertex_handle> vs_boundary{};
 
-              // Info about boundary particles
-              // where they are from and their index
-              // on the local task
-              std::vector<T> p_boundary{};
+            // Info about boundary particles
+            // where they are from and their index
+            // on the local task
+            std::vector<T> p_boundary{};
 
-            public:
-              std::vector<T> & get_boundary_particles() { return p_boundary; }
+          public:
+            std::vector<T> & get_boundary_particles() { return p_boundary; }
 
             double get_dx_buffer() { return dx_buffer; }
 

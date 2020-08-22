@@ -12,10 +12,13 @@
 #endif
 
 namespace FML {
+
+    /// This namespace contains useful things that don't fit anywhere else
     namespace UTILS {
 
         using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
 
+        /// Class for performing timings of the code using std::chrono
         class Timings {
           private:
             // For keeping timings

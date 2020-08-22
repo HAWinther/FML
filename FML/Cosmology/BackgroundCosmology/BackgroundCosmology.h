@@ -13,6 +13,9 @@
 #include <FML/Units/Units.h>
 
 namespace FML {
+
+    /// This namespace deals with various cosmology specific things: background evolution, perturbation theory,
+    /// recombination history etc.
     namespace COSMOLOGY {
 
         // Accuracy settings for ODE solver for the eta ODE
@@ -35,6 +38,8 @@ namespace FML {
         // Global units
         extern FML::UTILS::ConstantsAndUnits Constants;
 
+        /// Computing the background evolution of our Universe (LCDM). Holds various functions related to the
+        /// background: Hubble, distances, growth functions etc.
         class BackgroundCosmology {
           private:
             // The Hubble parameter today in units of 1/sec

@@ -52,6 +52,7 @@
 
 namespace FML {
     namespace UTILS {
+        /// Make plots with matplotlib from within C++
         namespace Matplotlib {
             namespace detail {
 
