@@ -46,7 +46,7 @@ int main() {
     //=========================================================
     // Read a gadget file and fill the data in part
     //=========================================================
-    std::string fileprefix = "../../TestData/gadget";
+    std::string fileprefix = "../../../TestData/gadget";
     g.read_gadget(fileprefix, part, true);
 
     //=========================================================

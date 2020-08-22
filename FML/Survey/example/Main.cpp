@@ -28,7 +28,7 @@ using namespace FML;
 int main() {
 
     // Read ascii file with [RA, DEC, z, w]
-    const std::string filename = "../../TestData/Randoms.txt";
+    const std::string filename = "../../../TestData/Randoms.txt";
     const int ncols = 3;
     const int nskip_header = 0;
     const std::vector<int> cols_to_keep{0, 1, 2};

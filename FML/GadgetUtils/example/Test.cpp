@@ -43,7 +43,7 @@ int main() {
     // Read ascii file with [x,y,z]
     //=========================================================
     const double box = 1024.0;
-    const std::string filename = "../../TestData/particles_B1024.txt";
+    const std::string filename = "../../../TestData/particles_B1024.txt";
     const int ncols = 3;
     const int nskip_header = 0;
     const std::vector<int> cols_to_keep{0, 1, 2};

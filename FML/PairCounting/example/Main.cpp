@@ -52,10 +52,10 @@ void TestSurvey() {
 
     // Read data
     std::vector<Galaxy> galaxies;
-    readData("../../TestData/Galaxies.txt", galaxies);
+    readData("../../../TestData/Galaxies.txt", galaxies);
 
     std::vector<Galaxy> randoms;
-    readData("../../TestData/Randoms.txt", randoms);
+    readData("../../../TestData/Randoms.txt", randoms);
 
     // The Hubble function H/c needed to compute the comoving distance
     std::function<double(double)> hubble_over_c_of_z = [&](double z) -> double {
@@ -130,7 +130,6 @@ void TestPeriodic() {
 
 int main() {
     TestSurvey();
-    exit(1);
 
     // TestPeriodic(); exit(1);
 }
