@@ -21,6 +21,8 @@ USE_OMP          = true
 USE_MEMORYLOG    = false
 # Check for bad memory accesses
 USE_SANITIZER    = false
+# Use the FFTW library (needed for Reconstruction.cpp)
+USE_FFTW         = false
 
 #===================================================
 # Include and library paths
@@ -34,9 +36,16 @@ FML_INCLUDE    = /Users/hansw/local/FML
 #===================================================
 
 INC     = -I$(FML_INCLUDE) 
-LIB     =
-LINK    = 
-OPTIONS = 
+LIB     = 
+LINK    =
+OPTIONS =
+
+# FFTW : only needed if USE_FFTW = true
+FFTW_INCLUDE   = $(HOME)/local/include
+FFTW_LIB       = $(HOME)/local/lib
+FFTW_LINK      = -lfftw3
+FFTW_MPI_LINK  = -lfftw3_mpi
+FFTW_OMP_LINK  = -lfftw3_threads
 
 ifeq ($(USE_MPI),true)
 CC       = $(MPICC)
@@ -46,6 +55,21 @@ endif
 ifeq ($(USE_OMP),true)
 OPTIONS += -DUSE_OMP
 CC      += -fopenmp
+endif
+
+ifeq ($(USE_FFTW),true)
+OPTIONS += -DUSE_FFTW
+INC     += -I$(FFTW_INCLUDE)
+LIB     += -L$(FFTW_LIB)
+ifeq ($(USE_MPI),true)
+LINK    += $(FFTW_MPI_LINK)
+endif
+ifeq ($(USE_OMP),true)
+ifeq ($(USE_FFTW_THREADS),true)
+LINK    += $(FFTW_OMP_LINK)
+endif
+endif
+LINK    += $(FFTW_LINK)
 endif
 
 ifeq ($(USE_SANITIZER),true)
@@ -60,11 +84,12 @@ endif
 # Object files to be compiled
 #===================================================
 
-VPATH = $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/MultigridSolver/
+VPATH = $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/MultigridSolver/:$(FML_INCLUDE)/FML/FileUtils/
 OBJS      = GenericExample.o    Global.o
 OBJS_CONT = ContinuityExample.o Global.o
 OBJS_POIS = PoissonExample.o    Global.o
 OBJS_FOFR = FofrExample.o       Global.o
+OBJS_REC  = Reconstruction.o    Global.o FileUtils.o
 
 TARGETS := mgsolver
 all: $(TARGETS)
@@ -83,6 +108,9 @@ poissonsolver: $(OBJS_POIS)
 	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
 
 fofrsolver: $(OBJS_FOFR)
+	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+
+recon: $(OBJS_REC)
 	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
 
 %.o: %.cpp 
