@@ -59,7 +59,7 @@ int main() {
     // Read ascii file with [x,y,z]
     //==================================================================
     const double box = 1024.0;
-    const std::string filename = "../../TestData/particles_B1024.txt";
+    const std::string filename = "../../../TestData/particles_B1024.txt";
     const int ncols = 3;
     const int nskip_header = 0;
     const std::vector<int> cols_to_keep{0, 1, 2};
@@ -111,12 +111,13 @@ int main() {
 
     //==================================================================
     // Output (as currently written task 0 has all the halos at this point)
+    // (We don't read velocities to these will just be 0)
     //==================================================================
     for (auto & g : FoFGroups) {
         if (g.np > 0) {
             std::cout << g.np << " ";
             for (int idim = 0; idim < NDIM; idim++)
-                std::cout << g.pos[idim] << " ";
+                std::cout << g.pos[idim] * box << " ";
             for (int idim = 0; idim < NDIM; idim++)
                 std::cout << g.vel[idim] << " ";
             std::cout << "\n";
