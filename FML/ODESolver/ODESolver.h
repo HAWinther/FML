@@ -81,7 +81,7 @@ namespace FML {
             /// USE_MPI                    : Use MPI (only change is in how errors are handled)
             ///
             /// ODESOLVER_FIDUCIAL_STEPPER : The choice of stepper
-            Y///
+            ///
             //===================================================
             
             class ODESolver {
