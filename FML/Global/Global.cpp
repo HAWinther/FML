@@ -56,7 +56,8 @@ namespace FML {
     }
 
     //============================================
-    // Initialize MPI
+    /// Initialize MPI. This function is automatically
+    /// called unless NO_AUTO_MPI_SETUP is defined 
     //============================================
     void init_mpi([[maybe_unused]] int * argc, [[maybe_unused]] char *** argv) {
         ThisTask = 0;
@@ -179,8 +180,8 @@ namespace FML {
     }
 
     //============================================
-    // An assert function that calls MPI_Abort
-    // instead of just abort to avoid deadlock
+    //// An assert function that calls MPI_Abort
+    //// instead of just abort to avoid deadlock
     //============================================
     void __assert_mpi(const char * expr_str, bool expr, const char * file, int line, const char * msg) {
         if (!expr) {
@@ -198,7 +199,6 @@ namespace FML {
     namespace GRID {
 
         void init_fftw([[maybe_unused]] int * argc, [[maybe_unused]] char *** argv) {
-            // We are assuming MPI has already been initialized
 #ifdef USE_FFTW
 #ifdef USE_FFTW_THREADS
             if (FML::MPIThreadsOK) {

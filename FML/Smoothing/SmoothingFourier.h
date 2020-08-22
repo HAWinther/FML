@@ -15,7 +15,15 @@
 namespace FML {
     namespace GRID {
 
+
+        //===================================================================================
         /// Take a fourier grid and divide each mode by its norm: \f$ f(k) \to f(k) / |f(k)| \f$
+        ///
+        /// @tparam N The dimension of the grid
+        ///
+        /// @param[out] fourier_grid The fourier grid we do the whitening on
+        ///
+        //===================================================================================
         template <int N>
         void whitening_fourier_space(FFTWGrid<N> & fourier_grid) {
             std::vector<double> kvec(N);
@@ -29,7 +37,16 @@ namespace FML {
             }
         }
 
+        //===================================================================================
         /// Low-pass filters (tophat, gaussian, sharpk)
+        ///
+        /// @tparam N The dimension of the grid
+        ///
+        /// @param[out] fourier_grid The fourier grid we do the smoothing of
+        /// @param[in] smoothing_scale The smoothing radius of the filter (in units of the boxsize)
+        /// @param[in] smoothing_method The smoothing filter (tophat, gaussian, sharpk)
+        ///
+        //===================================================================================
         template <int N>
         void smoothing_filter_fourier_space(FFTWGrid<N> & fourier_grid,
                                             double smoothing_scale,

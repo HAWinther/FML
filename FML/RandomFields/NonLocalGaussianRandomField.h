@@ -12,41 +12,55 @@
 #include <FML/RandomFields/GaussianRandomField.h>
 #include <FML/RandomGenerator/RandomGenerator.h>
 
-//=================================================================================
-//
-// Generate a non-local gaussian random field in real or fourier space from a given
-// power-spectrum and a source of random numbers. Templated on dimension.
-//
-// The type of fNL is local, orthogonal, equilateral and generic (supply kernel values
-// youself. See 1108.5512 for more info)
-//
-// fix_amplitude means we fix the amplitude of the modes in the gaussian random field
-// we generate to start with
-//
-//=================================================================================
-
 namespace FML {
     namespace RANDOM {
+
+        //=================================================================================
+        ///
+        /// Generate a non-local gaussian random field in real or fourier space from a given
+        /// power-spectrum and a source of random numbers. Templated on dimension.
+        ///
+        /// The type of fNL is local, orthogonal, equilateral and generic (supply kernel values
+        /// youself. See 1108.5512 for more info)
+        ///
+        /// fix_amplitude means we fix the amplitude of the modes in the gaussian random field
+        /// we generate to start with
+        ///
+        //=================================================================================
+
         namespace NONGAUSSIAN {
 
             template <int N>
             using FFTWGrid = FML::GRID::FFTWGrid<N>;
 
             //======================================================================
-            //
-            // P(k) -> phi_gaussian -> phi = phi_gaussian + fNL phi_gaussian^2
-            // or fNL K(phi_gaussian,phi_gaussian) in general
-            //
-            // This requires in general 6 grids to be allocated at the same time
-            // and up to 8 fourier transforms
-            //
-            // NB: for generating IC for cosmological simulations DeltaPofk is the
-            // power-spectrum of the gravitational potential and the fNL value is the
-            // fNL value at the redshift the power-spectrum is defined at
-            // See 1108.5512 for more info
-            //
-            // There is a sign between the Bardeen potential and the gravitational potential
-            // which leads to a sign difference in fNL!
+            ///
+            /// P(k) -> phi_gaussian -> phi = phi_gaussian + fNL phi_gaussian^2
+            /// or fNL K(phi_gaussian,phi_gaussian) in general
+            ///
+            /// This requires in general 6 grids to be allocated at the same time
+            /// and up to 8 fourier transforms
+            ///
+            /// NB: for generating IC for cosmological simulations DeltaPofk is the
+            /// power-spectrum of the gravitational potential and the fNL value is the
+            /// fNL value at the redshift the power-spectrum is defined at
+            /// See 1108.5512 for more info
+            ///
+            /// There is a sign between the Bardeen potential and the gravitational potential
+            /// which leads to a sign difference in fNL!
+            ///
+            /// @tparam N The dimension of the grid
+            ///
+            /// @param[out] phi_fourier The fourier grid we generate
+            /// @param[in] rng The random number generator
+            /// @param[in] DeltaPofk This is \f$ P(kB) / V \f$ where $kB$ is the dimesnionless wavenumber (B the
+            /// boxsize) and \f$ V = B^{\rm N} \f$ is the volume of the box.
+            /// @param[in] fix_amplitude Fix the amplitude of the norm of \f$ \delta(k) \f$.
+            /// @param[in] fNL The value of fNL you want
+            /// @param[in] type_of_fnl The type of fNL (local, equilaterial, orthogonal, generic)
+            /// @param[in] u Optional advanced option. See 1108.5512 for more info.
+            /// @param[in] kernel_values Optional. If you specify generic fNL then this gives the kernel values.
+            ///
             //======================================================================
 
             template <int N>

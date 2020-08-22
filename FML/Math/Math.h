@@ -59,15 +59,15 @@ namespace FML {
         /// Spherical bessel functions using recursion formula
         DVector j_ell_array(int lmax, const double x);
 
-        /// Spherical bessel functions from CXX or GSL with fix for very small or large arguments
+        /// Spherical bessel function \f$ j_\ell(x) \f$ from CXX or GSL with fix for very small or large arguments.
         double j_ell(const int ell, const double arg);
 
 #ifdef USE_GSL
-        /// Airy function (requires GSL)
+        /// Airy function \f$ {\rm Ai}(x) \f$ (requires GSL). Found by solving and splining \f$ y'' - xy = 0 \f$.
         double Airy_Ai(double z);
 #endif
 
-        /// General method for evaluating continued fraction. Gives back the result and if it converged
+        // General method for evaluating continued fraction
         std::pair<double, bool> GeneralizedLentzMethod(std::function<double(int)> & a,
                                                        std::function<double(int)> & b,
                                                        double epsilon,

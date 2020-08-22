@@ -11,31 +11,54 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/RandomGenerator/RandomGenerator.h>
 
-//=================================================================================
-//
-// Generate a gaussian random field in real or fourier space from a given
-// power-spectrum and a source of random numbers. Templated on dimension.
-//
-// fix_amplitude means we fix the amplitude of each mode (so not
-// really a gaussian random field anymore, but very similar in many respects and
-// it gets around sample variance) so only phases are random. This option guarantees
-// more or less that the power-spectrum is the same as the input power-spectrum
-//
-//=================================================================================
-
 namespace FML {
     namespace RANDOM {
+
+        //=================================================================================
+        ///
+        /// Generate a gaussian random field in real or fourier space from a given
+        /// power-spectrum and a source of random numbers. Templated on dimension.
+        ///
+        /// fix_amplitude means we fix the amplitude of each mode (so not
+        /// really a gaussian random field anymore, but very similar in many respects and
+        /// it gets around sample variance) so only phases are random. This option guarantees
+        /// more or less that the power-spectrum is the same as the input power-spectrum
+        ///
+        //=================================================================================
+
         namespace GAUSSIAN {
 
             template <int N>
             using FFTWGrid = FML::GRID::FFTWGrid<N>;
 
+            //=================================================================================
+            ///
+            /// @tparam N The dimension we are it
+            ///
+            /// @param[out] grid The real grid we generate.
+            /// @param[in] rng The random number generator.
+            /// @param[in] DeltaPofk This is \f$ P(kB) / V \f$ where $kB$ is the dimesnionless wavenumber (B the
+            /// boxsize) and \f$ V = B^{\rm N} \f$ is the volume of the box.
+            /// @param[in] fix_amplitude If true then we only draw phases and set \f$ |\delta(k)| \f$ directly from the input power-spectrum.
+            ///
+            //=================================================================================
             template <int N>
             void generate_gaussian_random_field_real(FFTWGrid<N> & grid,
                                                      RandomGenerator * rng,
                                                      std::function<double(double)> & DeltaPofk,
                                                      bool fix_amplitude);
 
+            //=================================================================================
+            ///
+            /// @tparam N The dimension we are it
+            ///
+            /// @param[out] grid The fourier grid we generate.
+            /// @param[in] rng The random number generator.
+            /// @param[in] DeltaPofk This is \f$ P(kB) / V \f$ where $kB$ is the dimesnionless wavenumber (B the
+            /// boxsize) and \f$ V = B^{\rm N} \f$ is the volume of the box.
+            /// @param[in] fix_amplitude If true then we only draw phases and set \f$ |\delta(k)| \f$ directly from the input power-spectrum.
+            ///
+            //=================================================================================
             template <int N>
             void generate_gaussian_random_field_fourier(FFTWGrid<N> & grid,
                                                         RandomGenerator * rng,

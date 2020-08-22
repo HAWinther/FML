@@ -80,7 +80,7 @@ namespace FML {
             read_string_array(std::string name, std::vector<std::string> default_value, bool required = true);
         };
 
-        // How to handle errors
+        /// How to handle errors
         void LuaFileParser::throw_error(std::string errormessage) const {
 #ifdef USE_MPI
             std::cout << errormessage << std::flush;

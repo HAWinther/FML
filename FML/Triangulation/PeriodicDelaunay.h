@@ -43,6 +43,7 @@ namespace FML {
     namespace TRIANGULATION {
 
         //========================================================================================
+        // CGAL aliases
         //========================================================================================
         typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
 #if CGAL_NDIM == 3
@@ -71,10 +72,9 @@ namespace FML {
         using VD_FIDUCIAL = CGAL::Periodic_2_triangulation_vertex_base_2<Gt>;
 #endif
         //========================================================================================
-        //========================================================================================
 
-        // Fiducial assignment function for when we have info at vertices
-        // (the fiducial choice is no info)
+        /// Fiducial assignment function for when we have info at vertices
+        /// (the fiducial choice is no info)
         template <class VD, class T>
         void fiducial_assignment_function(VD * v, T * p) {}
 
@@ -612,10 +612,9 @@ namespace FML {
         using IDType = int;
         using QuantityType = float;
         const IDType NoWatershedID = std::numeric_limits<IDType>::max();
-        ;
         const QuantityType Infinity = std::numeric_limits<QuantityType>::infinity();
 
-        // The vertex base for the CGAL tesselation needed for the Watershed algorithm
+        /// The vertex base for the CGAL tesselation needed for the Watershed algorithm.
         typedef struct {
             void * part_ptr;
             QuantityType quantity{Infinity};
@@ -625,19 +624,26 @@ namespace FML {
         } VertexDataWatershed;
 
         //===============================================================================
-        // In this method we perform a tesselation, then we assign [quantity] to vertices
-        // and walk the tesselation assigning the particles to Watershed basins
-        // Quantity is a vector of size NumPart. When quantity is the density or inverse
-        // density of the particle then we get a Void or Cluster finder
-        //
-        // If the buffer is too small the results will not be perfect, we give warnings
-        // when this is the case (instead of just throwing) as some times this is fine.
-        // To be sure of the result its a good idea to try with a smaller number of CPUs
-        // or large buffer and check that the results match
-        //
-        // Template parameters:
-        // T : particle class
-        // U : WatershedBasin binning class
+        /// In this method we perform a tesselation, then we assign [quantity] to vertices
+        /// and walk the tesselation assigning the particles to Watershed basins
+        /// Quantity is a vector of size NumPart. When quantity is the density or inverse
+        /// density of the particle then we get a Void or Cluster finder
+        ///
+        /// If the buffer is too small the results will not be perfect, we give warnings
+        /// when this is the case (instead of just throwing) as some times this is fine.
+        /// To be sure of the result its a good idea to try with a smaller number of CPUs
+        /// or large buffer and check that the results match
+        ///
+        /// @tparam T The particle class
+        /// @tparam U The watershed binning class
+        ///
+        /// @param[in] D MPIPeriodicDelaunay tesselation (already created).
+        /// @param[in] p Pointer to the particles.
+        /// @param[in] NumPart Number of local particles.
+        /// @param[in] quantity Vector with the quantity to watershed on (e.g. the density of the particles).
+        /// quantity[i] corresponds to the quantity for particle i.
+        /// @param[out] watershed_groups The result of the watershed: a list of watershed groups.
+        ///
         //===============================================================================
 
         template <class T, class U>
@@ -1192,15 +1198,23 @@ namespace FML {
         }
 
         //==========================================================================================
-        // In this method we perform a tesselation, compute voronoi volumes and
-        // assign density to each cell mass_of_part/volume and then we locate the density minima (or maxima)
-        // and walk the tesselation assigning the particles to Watershed basins
-        // If density_maximum = true then we assign 1/density to the particles and run the same algorithm so
-        // we locate density peaks instead of density minima
-        //
-        // Template parameters:
-        // T : particle class
-        // U : WatershedBasin binning class
+        /// In this method we perform a tesselation, compute voronoi volumes and
+        /// assign density to each cell mass_of_part/volume and then we locate the density minima (or maxima)
+        /// and walk the tesselation assigning the particles to Watershed basins
+        /// If density_maximum = true then we assign 1/density to the particles and run the same algorithm so
+        /// we locate density peaks instead of density minima
+        ///
+        /// @tparam T The particle class
+        /// @tparam U The watershed binning class
+        ///
+        /// @param[in] p Pointer to the particles
+        /// @param[in] NumPart Number of local particles.
+        /// @param[out] watershed_groups The result of the watershed: a list of watershed groups.
+        /// @param[in] buffer_fraction Optional. How big part of the neighbor domain do we include as the buffer.
+        /// @param[in] random_fraction Optional. How many (as fraction of the normal particles) random particles do we
+        /// add (this is to help speed up the tesslation).
+        /// @param[in] do_density_maximum Optional. Watershed based on the density (false) or 1/density (true).
+        ///
         //==========================================================================================
 
         template <class T, class U>

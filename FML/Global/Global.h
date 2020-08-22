@@ -49,7 +49,6 @@ namespace FML {
     extern double xmin_domain;
     extern double xmax_domain;
 
-    // XXX
     auto uniform_random() -> double;
 
     //================================================
@@ -193,7 +192,10 @@ namespace FML {
         }                                                                                                              \
         return y;                                                                                                      \
     }
-        OPS(+) OPS(-) OPS(*) OPS(/)
+    OPS(+)
+    OPS(-)
+    OPS(*)
+    OPS(/)
 #undef OPS
 
 #define OPS(OP)                                                                                                        \
@@ -206,11 +208,14 @@ namespace FML {
         }                                                                                                              \
         return y;                                                                                                      \
     }
-            OPS(+) OPS(-) OPS(*) OPS(/)
+    OPS(+)
+    OPS(-)
+    OPS(*)
+    OPS(/)
 #undef OPS
 
-                template <class T>
-                Vector<T> pow(const Vector<T> & x, const double exp) {
+    template <class T>
+    Vector<T> pow(const Vector<T> & x, const double exp) {
         const size_t n = x.size();
         Vector<T> y(n);
         for (size_t i = 0; i < n; i++) {
@@ -227,7 +232,13 @@ namespace FML {
         std::transform(x.begin(), x.end(), y.begin(), op_##FUN);                                                       \
         return y;                                                                                                      \
     }
-    FUNS(exp) FUNS(log) FUNS(cos) FUNS(sin) FUNS(tan) FUNS(fabs) FUNS(atan)
+    FUNS(exp)
+    FUNS(log) 
+    FUNS(cos) 
+    FUNS(sin) 
+    FUNS(tan) 
+    FUNS(fabs) 
+    FUNS(atan)
 #undef FUNS
 } // namespace FML
 

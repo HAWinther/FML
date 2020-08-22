@@ -44,6 +44,8 @@ namespace FML {
         // the power in each bin etc. Its through this interface the results
         // of the methods below are given. See PowerSpectrumBinning.h for how it works
         //================================================================================
+        
+        // The powerspectrum result, see PowerspectrumBinning.h
         template <int N>
         class PowerSpectrumBinning;
 
@@ -59,8 +61,10 @@ namespace FML {
         /// @brief Assign particles to grid using density_assignment_method = NGP,CIC,TSC,PCS,...
         /// Fourier transform, decolvolve the window function for the assignement above,
         /// bin up power-spectrum and subtract shot-noise 1/NumPartTotal
+        ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
+        ///
         /// @param[in] Ngrid Size of the grid to use.
         /// @param[in] part Pointer to the first particle.
         /// @param[in] NumPart Number of particles on the local task.
@@ -83,8 +87,10 @@ namespace FML {
         /// Fourier transform both and add the together to cancel the leading aliasing contributions
         /// Decolvolve the window function for the assignements above,
         /// bin up power-spectrum and subtract shot-noise 1/NumPartTotal
+        ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
+        ///
         /// @param[in] Ngrid Size of the grid to use.
         /// @param[in] part Pointer to the first particle.
         /// @param[in] NumPart Number of particles on the local task.
@@ -108,14 +114,17 @@ namespace FML {
         /// Since we need to combine all particles with all cells this is not easiy parallelizable with MPI
         /// so we assume all CPUs have exactly the same particles when this is run on more than 1 MPI tasks (so best run
         /// just using OpenMP).
+        ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
+        ///
         /// @param[in] Ngrid Size of the grid to use.
         /// @param[in] part Pointer to the first particle.
         /// @param[in] NumPart Number of particles on the local task. With MPI assumes all tasks have the same
         /// particles.
         /// @param[out] pofk The binned power-spectrum. We required it to be initialized with the number of bins, kmin
         /// and kmax.
+        ///
         //================================================================================
         template <int N, class T>
         void
@@ -126,6 +135,11 @@ namespace FML {
         /// scales by calling pofk.scale(boxsize) which does k *= 1/Boxsize and
         /// pofk *= Boxsize^N once spectrum has been computed.
         ///
+        /// @tparam N Dimension of the grid
+        ///
+        /// @param[in] fourier_grid Grid in fourier space
+        /// @param[out] pofk Binned power-spectrum
+        ///
         //==========================================================================================
         template <int N>
         void bin_up_power_spectrum(FFTWGrid<N> & fourier_grid, PowerSpectrumBinning<N> & pofk);
@@ -134,8 +148,10 @@ namespace FML {
         /// @brief Compute power-spectrum multipoles (P0,P1,...,Pn-1) from a Fourier grid
         /// where we have a fixed line_of_sight_direction (typical coordinate axes like (0,0,1)).
         /// Pell contains P0,P1,P2,...Pell_max where ell_max = n-1 is the size of Pell
+        ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
+        ///
         /// @param[in] fourier_grid The fourier grid to compute the multipoles from.
         /// @param[out] Pell Vector of power-spectrum binnings. The size of Pell is the maximum ell to compute.
         /// All binnings has to have nbins, kmin and kmax set. At the end Pell[ ell ] is a binning of P_ell(k).
@@ -152,8 +168,10 @@ namespace FML {
         /// Displacing particles from realspace to redshift-space using their velocities
         /// along each of the coordinate axes. Result is the mean of this.
         /// Deconvolving the window-function and subtracting shot-noise (1/NumPartTotal) for monopole.
+        ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
+        ///
         /// @param[in] Ngrid Size of the grid to use.
         /// @param[in] part Particles in the form of a MPIParticle container
         /// @param[in] velocity_to_displacement Factor to convert a velocity to a displacement.
@@ -173,8 +191,10 @@ namespace FML {
 
         //================================================================================
         /// @brief Computes the bispectrum B(k1,k2,k3) from particles
+        ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
+        ///
         /// @param[in] Ngrid Size of the grid to use.
         /// @param[in] part Pointer to the first particle.
         /// @param[in] NumPart Number of particles on the local task.
@@ -194,8 +214,10 @@ namespace FML {
 
         //================================================================================
         /// @brief Computes the bispectrum B(k1,k2,k3) from a fourier grid
+        ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
+        ///
         /// @param[in] fourier_grid A fourier grid.
         /// @param[out] bofk The binned bispectrum. We required it to be initialized with the number of bins, kmin and
         /// kmax.
@@ -206,8 +228,10 @@ namespace FML {
 
         //================================================================================
         /// @brief Computes the polyspectrum P(k1,k2,k3,...) from particles.
+        ///
         /// @tparam N The dimension of the particles.
         /// @tparam ORDER The order. 2 is the power-spectrum, 3 is the bispectrum, 4 is the trispectrum.
+        ///
         /// @param[in] Ngrid Size of the grid to use.
         /// @param[in] part Pointer to the first particle.
         /// @param[in] NumPart Number of particles on the local task.
@@ -227,8 +251,12 @@ namespace FML {
 
         //================================================================================
         /// @brief Computes the polyspectrum P(k1,k2,k3,...) from a fourier grid
+        ///
         /// @tparam N The dimension of the particles.
         /// @tparam ORDER The order. 2 is the power-spectrum, 3 is the bispectrum, 4 is the trispectrum.
+        ///
+        /// @param[in] fourier_grid Grid in fourier space
+        /// @param[out] polyofk The binned polyspectrum.
         ///
         //================================================================================
         template <int N, int ORDER>

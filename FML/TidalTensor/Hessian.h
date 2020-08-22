@@ -9,6 +9,8 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 
 namespace FML {
+
+    /// This namespace deals with computing the Hessian of a grid and related algorithms that rely on this.
     namespace HESSIAN {
 
         template <int N>

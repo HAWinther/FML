@@ -27,28 +27,39 @@ namespace FML {
             using FloatType = FML::GRID::FloatType;
 
             //============================================================================
-            //
-            // RSD removal for particles in a periodic box
-            // We use a fixed line of sight direction los_direction, typically
-            // coordinate axes (e.g. los_direction = {0,0,1} )
-            // We are solving the equation LPT equation
-            //  D(bPsi) + beta D((bPsi*r)r) = -delta_observed
-            // and assuming zero-curl (which is not perfectly true) of the second term
-            // so we can use Fourier methods
-            // Then we subtract the RSD which is given by Psi_rsd = beta (bPsi*r)r
-            // We then iterate this procedure niterations times
-            // Here beta = f / b growth-rate over galaxy bias
-            // smoothing_options = {smoother_filter, smothing_scale} with smothing_scale is units of the box
-            // The smoothing filter is an (optional) filter we apply to the density field in
-            // k-space. Options here are sharpk, tophat, gaussian. If R < gridspacing then no
-            // smoothing will be done
-            //
+            ///
+            /// RSD removal for particles in a periodic box
+            /// We use a fixed line of sight direction los_direction, typically
+            /// coordinate axes (e.g. los_direction = {0,0,1} )
+            /// We are solving the equation LPT equation
+            ///  \f$ \nabla(b\Psi) + \beta \nabla((b\Psi\cdot r)r) = -\delta_{\rm tracer} \f$
+            /// and assuming zero-curl (which is not perfectly true) of the second term
+            /// so we can use Fourier methods. 
+            /// Then we subtract the RSD which is given by \f$ \Psi_{\rm rsd} = \beta (b\Psi\cdot r)r) \f$
+            /// Here \f$ \beta = f / b \f$ growth-rate over galaxy bias.
+            /// The smoothing filter is an (optional) filter we apply to the density field in
+            /// k-space. If R < gridspacing then no smoothing will be done
+            ///
             // This also works for a survey. Then los_direction is the observer position
             // and we need to have a box big enough so that particles don't wrap around
             // when shifted!
-            //
-            // This method assumes scale-independent growth factor, but that is easily changed
-            //
+            ///
+            /// This method assumes scale-independent growth factor, but that is easily changed
+            ///
+            /// @tparam N The dimension of the grid
+            /// @tparam T The particle class
+            ///
+            /// @param[out] part MPIParticles. Particles gets updated.
+            /// @param[in] density_assignment_method The density assignment method (NGP, CIC, TSC, PCS, PQS)
+            /// @param[in] los_direction The fixed line of sight direction, e.g. (0,0,1) for the z-axis
+            /// @param[in] Nmesh The size of the grid we use
+            /// @param[in] niterations How many iterations to do (not too many and not too few, 3 is good)
+            /// @param[in] beta This is beta = f/b the growth-rate over the bias
+            /// @param[in] smoothing_options The smoothing filter (gaussian, tophat, sharph) and the smothing scale (in
+            /// units of the boxsize)
+            /// @param[in] survey_data If survey data we don't wrap around the box if the particles move too far. For
+            /// survey data make sure you use padding to prevent any issues..
+            ///
             //============================================================================
 
             template <int N, class T>
@@ -100,7 +111,7 @@ namespace FML {
 
                     density.fftw_r2c();
 
-                    // Perform a smoothing 
+                    // Perform a smoothing
                     FML::GRID::smoothing_filter_fourier_space(
                         density, smoothing_options.second, smoothing_options.first);
 
@@ -204,10 +215,10 @@ namespace FML {
         // NAMESPACE FML::COSMOLOGY
 
         //================================================================================
-        // This takes a set of particles and displace them from realspace to redshiftspace
-        // Using a fixed line of sight direction
-        // DeltaX = (v * r)r * velocity_to_displacement
-        // If velocities are peculiar then velocity_to_displacement = 1/(aH)
+        /// This takes a set of particles and displace them from realspace to redshiftspace
+        /// Using a fixed line of sight direction
+        /// DeltaX = (v * r)r * velocity_to_displacement
+        /// If velocities are peculiar then velocity_to_displacement = 1/(aH)
         //================================================================================
         template <class T>
         void particles_to_redshiftspace(FML::PARTICLE::MPIParticles<T> & part,

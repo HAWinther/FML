@@ -269,11 +269,11 @@ namespace FML {
         DVector linspace(double xmin, double xmax, int num) {
             DVector res(num);
             double delta_x = (xmax - xmin) / double(num - 1);
-            for (int i = 0; i < num-1; i++) {
+            for (int i = 0; i < num - 1; i++) {
                 res[i] = xmin + delta_x * i;
             }
             // Just to make sure its exactly xmax at the endpoint
-            res[num - 1] = xmax; 
+            res[num - 1] = xmax;
             return res;
         }
 
@@ -400,9 +400,16 @@ namespace FML {
         //  std::cout << -res.first << " " << j_ell(ell, x) / j_ell(ell-1, x) << "\n";
         //===========================================================================
 
-        // Evaluate continued fraction (b0 + a1/(b1 + a2 /( ... )))
-        // Provide a(i) and b(i) as functions
-        // maxsteps denotes the maximum j before we deem it not to converge
+        /// Evaluate continued fraction: (b0 + a1/(b1 + a2 /( ... ))). For example useful for computing ratios of
+        /// spherical bessel functions.
+        ///
+        /// @param[in] a The function a[i]
+        /// @param[in] b The function b[i]
+        /// @param[in] epsilon Convergence criterion
+        /// @param[in] maxsteps The maximum steps before we deem it not to converge
+        ///
+        /// \return The result and if it has converged or not
+        ///
         std::pair<double, bool> GeneralizedLentzMethod(std::function<double(int)> & a,
                                                        std::function<double(int)> & b,
                                                        double epsilon,

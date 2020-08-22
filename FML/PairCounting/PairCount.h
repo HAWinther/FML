@@ -81,11 +81,35 @@ namespace FML {
         };
 
         /// Do paircount of a set of particles. The source of this shows how to use the other methods.
+        ///
+        /// @tparam T The particle class
+        ///
+        /// @param[in] particles List of particles
+        /// @param[in] nbins The number of bins
+        /// @param[in] rmax Maximum radius we want the paircount up to
+        /// @param[in] periodic Periodic box?
+        /// @param[in] verbose Show info while running
+        ///
+        /// \return AutoPairCountData containing the result of the binning.
+        ///
         template <class T>
         AutoPairCountData
         AutoPairCount(std::vector<T> & particles, int nbins, double rmax, bool periodic, bool verbose);
 
         /// Do cross paircount of a set of particles. The source of this shows how to use the other methods.
+        ///
+        /// @tparam T The particle class for the first set of particles
+        /// @tparam U The particle class for the second set of particles
+        ///
+        /// @param[in] particles1 List of particles
+        /// @param[in] particles2 List of particles
+        /// @param[in] nbins The number of bins
+        /// @param[in] rmax Maximum radius we want the paircount up to
+        /// @param[in] periodic Periodic box?
+        /// @param[in] verbose Show info while running
+        ///
+        /// \return CrossPairCountData containing the result of the binning.
+        ///
         template <class T, class U>
         CrossPairCountData CrossPairCount(std::vector<T> & particles1,
                                           std::vector<U> & particles2,

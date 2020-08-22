@@ -51,12 +51,32 @@
 //==============================================================================
 
 namespace FML {
+
+    /// This namespace contains methods for dealing with surveys. So far its not much here just some conversion from
+    /// equitorial to cartesian coordinates.
     namespace SURVEY {
 
-        // Take a set of galaxies galaxies_ra_dec_z with (RA,DEC,z) and convert them to
-        // cartesian coordinates (x,y,z) stored in particles_xyz
-        // The positions will be in the same units as the 1.0/hubble_over_c_of_z
-        // Gives back the min/max of the positions (useful for boxing the catalog)
+        //==============================================================================
+        /// Take a set of galaxies galaxies_ra_dec_z with (RA,DEC,z) and convert them to
+        /// cartesian coordinates (x,y,z) stored in particles_xyz
+        ///
+        /// The positions will be in the same units as the 1.0/hubble_over_c_of_z
+        /// Gives back the min/max of the positions (useful for boxing the catalog)
+        ///
+        /// @tparam T Particle class for the galaxies
+        /// @tparam U Particle class for the particles we make from the galaxies
+        ///
+        /// @param[in] galaxies_ra_dec_z Particles with RA, DEC and Z.
+        /// @param[in] ngalaxies Number of galaxies
+        /// @param[out] particles_xyz Vector with galaxies as particles with cartesian coordinates.
+        /// @param[in] hubble_over_c_of_z This is the function \f$ H(z)/c \f$ used to compute the redshift-comobing
+        /// distance relationship. Postions units is the same as those of \f$ c/H(z) \f$ (so e.g. if you want Mpc/h then
+        /// we need H0 = 100, if you want kpc/s then use H0 = 10^5 and so on.
+        /// @param[out] min_max_x The min/max values of x-postions
+        /// @param[out] min_max_y The min/max values of x-postions
+        /// @param[out] min_max_z The min/max values of x-postions
+        ///
+        //==============================================================================
         template <class T, class U>
         void EquitorialToCartesianCoordinates(T * galaxies_ra_dec_z,
                                               size_t ngalaxies,
@@ -152,6 +172,25 @@ namespace FML {
             min_max_z = {min_z, max_z};
         }
 
+        //==============================================================================
+        /// @brief Transform galaxies with positions defined by RA,DEC,Z and transform these to
+        /// cartesian positions in [0,1).
+        ///
+        /// @tparam T Particle class for the galaxies
+        /// @tparam U Particle class for the particles we make from the galaxies
+        ///
+        /// @param[in] galaxies_ra_dec_z Particles with RA, DEC and Z.
+        /// @param[in] ngalaxies Number of galaxies
+        /// @param[out] particles_xyz Vector with galaxies as particles with cartesian coordinates.
+        /// @param[in] hubble_over_c_of_z This is the function \f$ H(z)/c \f$ used to compute the redshift-comobing
+        /// distance relationship. Postions units is the same as those of \f$ c/H(z) \f$ (so e.g. if you want Mpc/h then
+        /// we need H0 = 100, if you want kpc/s then use H0 = 10^5 and so on.
+        /// @param[out] boxsize The boxsize we need to place the particles in a cubic box.
+        /// @param[in] shiftPositions Shift the positions such that all are >=0
+        /// @param[in] scalePositions Scale positions so that all are in [0,1). This requires also shifting positions.
+        /// @param[in] verbose Print info while doing this.
+        ///
+        //==============================================================================
         template <class T, class U>
         void GalaxiesToBox(const T * galaxies_ra_dec_z,
                            size_t ngalaxies,
@@ -225,8 +264,29 @@ namespace FML {
             }
         }
 
-        // If we have more catalogues like galaxy + randoms
-        // we should use the same shift and same boxsize so do it together
+        //==============================================================================
+        /// @brief Transform galaxies and randos with positions defined by RA,DEC,Z and transform these to
+        /// cartesian positions in [0,1. Useful if we have more catalogues like galaxy + randoms
+        /// we should use the same shift and same boxsize so do it together.
+        ///
+        /// @tparam T Particle class for the galaxies/randoms
+        /// @tparam U Particle class for the particles we make from the galaxies/randoms
+        ///
+        /// @param[in] galaxies_ra_dec_z Galaxies with RA, DEC and Z.
+        /// @param[in] ngalaxies Number of galaxies
+        /// @param[in] randoms_ra_dec_z Random galaxies with RA, DEC and Z.
+        /// @param[in] nrandoms Number of random galaxies
+        /// @param[out] particles_xyz Vector with galaxies as particles with cartesian coordinates.
+        /// @param[out] randoms_xyz Vector with random galaxies as particles with cartesian coordinates.
+        /// @param[in] hubble_over_c_of_z This is the function \f$ H(z)/c \f$ used to compute the redshift-comobing
+        /// distance relationship. Postions units is the same as those of \f$ c/H(z) \f$ (so e.g. if you want Mpc/h then
+        /// we need H0 = 100, if you want kpc/s then use H0 = 10^5 and so on.
+        /// @param[out] boxsize The boxsize we need to place the galaxies and randoms in a cubic box.
+        /// @param[in] shiftPositions Shift the positions such that all are >=0
+        /// @param[in] scalePositions Scale positions so that all are in [0,1). This requires also shifting positions.
+        /// @param[in] verbose Print info while doing this.
+        ///
+        //==============================================================================
         template <class T, class U>
         void GalaxiesRandomsToBox(const T * galaxies_ra_dec_z,
                                   size_t ngalaxies,
