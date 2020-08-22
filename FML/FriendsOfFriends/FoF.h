@@ -7,6 +7,7 @@
 #include <iterator>
 #include <map>
 
+#include <FML/FriendsOfFriends/FoFBinning.h>
 #include <FML/Global/Global.h>
 
 namespace FML {
@@ -28,10 +29,6 @@ namespace FML {
         // For communicating boundary particles. Use float to reduce communication cost
         // at no big precision loss
         using FoFPosType = double;
-
-        class FoFCells;
-        template <class T, int NDIM>
-        class FoFHalo;
 
         template <class T, int NDIM, class FoFHaloClass = FoFHalo<T, NDIM>>
         void FriendsOfFriends(T * part,
@@ -66,132 +63,6 @@ namespace FML {
                              std::vector<char> & isShared,
                              bool periodic,
                              bool merging_in_parallel);
-
-        //=========================================================================
-        // This class defines how to compute the halos from the particles
-        // NB: no things that needs to be dynamically allocated in this class as currently
-        // we simply use sizeof(FoFHalo) to get the memory layout when communicating
-        // If you want to compute more things then make your own class like this one
-        // and supply as template parameter to the FriendsOfFriends method.
-        //
-        // The computation below is incremental: we add up the mean values as we go
-        // along instead of doing it in the end.
-        //
-        // NB: must have public bool merged for book-keeping when merging
-        //=========================================================================
-
-        template <class T, int NDIM>
-        class FoFHalo {
-          public:
-            size_t id{0};
-            size_t np{0};
-            double mass{0.0};
-            std::array<double, NDIM> pos;
-            std::array<double, NDIM> vel;
-            double vel2{0.0}; // <v^2>
-            bool shared{false};
-            bool merged{false};
-
-            FoFHalo() = default;
-            FoFHalo(size_t _id, bool _shared) {
-                id = _id;
-                shared = _shared;
-            }
-
-            // Add a new particle to the group
-            // Update data
-            void add(T & particle, bool periodic) {
-                double _mass = particle.get_mass();
-                auto * _pos = particle.get_pos();
-                auto * _vel = particle.get_vel();
-
-                // Initialize
-                if (np == 0) {
-                    for (int idim = 0; idim < NDIM; idim++) {
-                        pos[idim] = 0.0;
-                        vel[idim] = 0.0;
-                    }
-                    mass = 0.0;
-                    vel2 = 0.0;
-                }
-
-                // Update center of mass
-                std::array<double, NDIM> dx;
-                // double dx[NDIM];
-                double v2 = 0;
-                for (int idim = 0; idim < NDIM; idim++) {
-                    dx[idim] = _pos[idim] - pos[idim];
-                    if (periodic) {
-                        if (dx[idim] < -0.5)
-                            dx[idim] += 1;
-                        if (dx[idim] >= 0.5)
-                            dx[idim] -= 1;
-                    }
-                    pos[idim] += dx[idim] * _mass / (mass + _mass);
-                    if (periodic) {
-                        if (pos[idim] < 0.0)
-                            pos[idim] += 1;
-                        if (pos[idim] >= 1.0)
-                            pos[idim] -= 1;
-                    }
-                    // Add velocity if particle has velocity
-                    if (_vel != nullptr) {
-                        vel[idim] = (vel[idim] * mass + _vel[idim] * _mass) / (mass + _mass);
-                        v2 += vel[idim] * vel[idim];
-                    }
-                }
-                // Update <v^2>
-                vel2 = (vel2 * mass + _mass * v2) / (mass + _mass);
-                np++;
-                mass += _mass;
-            }
-
-            // Merge the groups
-            void merge(FoFHalo & g, bool periodic) {
-                if (g.np == 0)
-                    return;
-                if (np == 0) {
-                    assert(false); // Should not happen
-                }
-
-                // Merge the two centers of mass
-                std::array<double, NDIM> dx;
-                for (int idim = 0; idim < NDIM; idim++) {
-                    dx[idim] = g.pos[idim] - pos[idim];
-                    if (periodic) {
-                        if (dx[idim] < -0.5)
-                            dx[idim] += 1;
-                        if (dx[idim] >= 0.5)
-                            dx[idim] -= 1;
-                    }
-                    // Update center of mass
-                    pos[idim] += dx[idim] * g.mass / double(mass + g.mass);
-                    if (periodic) {
-                        if (pos[idim] < 0.0)
-                            pos[idim] += 1;
-                        if (pos[idim] >= 1.0)
-                            pos[idim] -= 1;
-                    }
-                    // Update COM velocity
-                    vel[idim] = (vel[idim] * mass + g.vel[idim] * g.mass) / (mass + g.mass);
-                }
-                // Update <v^2>
-                vel2 = (vel2 * mass + g.vel2 * g.mass) / (mass + g.mass);
-                np += g.np;
-                g.np = 0;
-            }
-        };
-
-        //=========================================================================
-        // A gridcell in a grid used for speeding up the linking of particles
-        // The ID of the particles is their position in the particle list
-        //=========================================================================
-        class FoFCells {
-          public:
-            int np{0};
-            std::vector<size_t> ParticleIndex{};
-            FoFCells() = default;
-        };
 
         //=========================================================================
         // Bin local particles to cells in a grid
