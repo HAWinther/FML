@@ -17,7 +17,7 @@
 //
 // This is a wrapper around the GSL library to easily
 // solve ODEs and return the data in whatever format
-// you want. Safe to use within OpenMP threads as 
+// you want. Safe to use within OpenMP threads as
 // long as spline is not created within a thread!
 //
 // Supplying an x-array the solution will be stored at
@@ -60,86 +60,84 @@
 //===================================================
 
 namespace FML {
-  namespace SOLVERS {
-    namespace ODESOLVER {
+    namespace SOLVERS {
+        namespace ODESOLVER {
 
-      // The fiducial stepper if not provided by the user
+            // The fiducial stepper if not provided by the user
 #ifndef ODESOLVER_FIDUCIAL_STEPPER
 #define ODESOLVER_FIDUCIAL_STEPPER gsl_odeiv2_step_rk2
 #endif
 
-      using DVector = std::vector<double>;
-      using DVector2D = std::vector<DVector>;
-      using ODEFunctionPointer = int (*)(double, const double[], double[], void*);
-      using ODEFunctionPointerJacobian = int (*)(double, const double[], double[], double[], void*);
-      using ODEFunction = std::function<int(double, const double*, double*)>;
-      using ODEFunctionJacobian = std::function<int(double, const double*, double*, double*)>;
+            using DVector = std::vector<double>;
+            using DVector2D = std::vector<DVector>;
+            using ODEFunctionPointer = int (*)(double, const double[], double[], void *);
+            using ODEFunctionPointerJacobian = int (*)(double, const double[], double[], double[], void *);
+            using ODEFunction = std::function<int(double, const double *, double *)>;
+            using ODEFunctionJacobian = std::function<int(double, const double *, double *, double *)>;
 
-      extern ODEFunctionJacobian* no_jacobian_ptr;
+            extern ODEFunctionJacobian * no_jacobian_ptr;
 
-      class ODESolver {
-        private:
-          // Fiducial accuracy parameters
-          double hstart = 1e-3;
-          double abserr = 1e-7;
-          double relerr = 1e-7;
+            class ODESolver {
+              private:
+                // Fiducial accuracy parameters
+                double hstart = 1e-3;
+                double abserr = 1e-7;
+                double relerr = 1e-7;
 
-          bool verbose = false;
+                bool verbose = false;
 
-          int nequations = 1;
-          int num_x_points = 0;
+                int nequations = 1;
+                int num_x_points = 0;
 
-          std::vector<DVector> data{};
-          std::vector<DVector> derivative_data{};
+                std::vector<DVector> data{};
+                std::vector<DVector> derivative_data{};
 
-          void throw_error(std::string errormessage) const;
+                void throw_error(std::string errormessage) const;
 
-        public:
-          ODESolver() = default;
-          ODESolver(double hstart, double abserr, double relerr);
-          ODESolver(const ODESolver& rhs) = delete;
-          ODESolver& operator=(const ODESolver& rhs) = delete;
+              public:
+                ODESolver() = default;
+                ODESolver(double hstart, double abserr, double relerr);
+                ODESolver(const ODESolver & rhs) = delete;
+                ODESolver & operator=(const ODESolver & rhs) = delete;
 
-          void solve(ODEFunctionPointer ode_equation,
-              void* parameters,
-              DVector& xarr,
-              DVector& yinitial,
-              const gsl_odeiv2_step_type* stepper = ODESOLVER_FIDUCIAL_STEPPER,
-              ODEFunctionPointerJacobian jacobian = nullptr);
-          void solve(ODEFunction& ode_equation,
-              DVector& xarr,
-              DVector& yinitial,
-              const gsl_odeiv2_step_type* stepper = ODESOLVER_FIDUCIAL_STEPPER,
-              ODEFunctionJacobian& jacobian = *no_jacobian_ptr);
+                void solve(ODEFunctionPointer ode_equation,
+                           void * parameters,
+                           DVector & xarr,
+                           DVector & yinitial,
+                           const gsl_odeiv2_step_type * stepper = ODESOLVER_FIDUCIAL_STEPPER,
+                           ODEFunctionPointerJacobian jacobian = nullptr);
+                void solve(ODEFunction & ode_equation,
+                           DVector & xarr,
+                           DVector & yinitial,
+                           const gsl_odeiv2_step_type * stepper = ODESOLVER_FIDUCIAL_STEPPER,
+                           ODEFunctionJacobian & jacobian = *no_jacobian_ptr);
 
-          void set_verbose(bool onoff);
-          void set_accuracy(const double hstart,
-              const double abserr,
-              const double relerr);
+                void set_verbose(bool onoff);
+                void set_accuracy(const double hstart, const double abserr, const double relerr);
 
-          // Get the solution at the end point
-          DVector get_final_data() const;
-          double get_final_data_by_component(int icomponent) const;
+                // Get the solution at the end point
+                DVector get_final_data() const;
+                double get_final_data_by_component(int icomponent) const;
 
-          // Get all the data z_ij = ( y_i(xarr_j) )
-          DVector2D get_data() const;
+                // Get all the data z_ij = ( y_i(xarr_j) )
+                DVector2D get_data() const;
 
-          // Get all the data transposed z_ji = ( y_i(xarr_j) )
-          DVector2D get_data_transpose() const;
+                // Get all the data transposed z_ji = ( y_i(xarr_j) )
+                DVector2D get_data_transpose() const;
 
-          // Get the data for a particular component y_i(xarr)
-          DVector get_data_by_component(int icomponent) const;
+                // Get the data for a particular component y_i(xarr)
+                DVector get_data_by_component(int icomponent) const;
 
-          // Get the data at a particular x-index y(xarr_i)
-          DVector get_data_by_xindex(int ix) const;
+                // Get the data at a particular x-index y(xarr_i)
+                DVector get_data_by_xindex(int ix) const;
 
-          // Get all the data for the derivatives ( dy_i/dx(xarr) )_i=1^nequations
-          DVector2D get_derivative_data() const;
+                // Get all the data for the derivatives ( dy_i/dx(xarr) )_i=1^nequations
+                DVector2D get_derivative_data() const;
 
-          // Get the data dy_i/dx(xarr) for the derivatives for a particular component
-          DVector get_derivative_data_by_component(int icomponent) const;
-      };
-    }
-  }
-}
+                // Get the data dy_i/dx(xarr) for the derivatives for a particular component
+                DVector get_derivative_data_by_component(int icomponent) const;
+            };
+        } // namespace ODESOLVER
+    }     // namespace SOLVERS
+} // namespace FML
 #endif
