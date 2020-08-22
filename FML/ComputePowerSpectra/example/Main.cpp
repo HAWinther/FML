@@ -40,7 +40,7 @@ int main() {
 
 void ExamplesPower() {
 
-    const bool TEST_POFK = true;
+    const bool TEST_POFK = false;
     const bool TEST_POFK_INTERLACING = true;
     const bool TEST_POFK_BRUTEFORCE = false;
     const bool TEST_MULTIPOLES = false;

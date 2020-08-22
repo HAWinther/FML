@@ -635,72 +635,10 @@ namespace FML {
                                                 PowerSpectrumBinning<N> & pofk,
                                                 std::string density_assignment_method) {
 
-            // Set how many extra slices we need for the density assignment to go smoothly
-            auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
-            int nleft = nleftright.first;
-            int nright = nleftright.second;
-
-            // One extra slice in general as we need to shift the particle half a grid-cell
-            nright += 1;
-
-            // Bin particles to grid
-            FFTWGrid<N> density_k(Ngrid, nleft, nright);
-            density_k.add_memory_label("FFTWGrid::compute_power_spectrum_interlacing::density_k");
-            particles_to_grid<N, T>(part, NumPart, NumPartTotal, density_k, density_assignment_method);
-
-            // Shift particles
-            const double shift = 1.0 / double(2 * Ngrid);
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-            for (size_t i = 0; i < NumPart; i++) {
-                auto * pos = part[i].get_pos();
-                pos[0] += shift;
-                for (int idim = 1; idim < N; idim++) {
-                    pos[idim] += shift;
-                    if (pos[idim] >= 1.0)
-                        pos[idim] -= 1.0;
-                }
-            }
-
-            // Bin shifted particles to grid
-            FFTWGrid<N> density_k2(Ngrid, nleft, nright);
-            density_k2.add_memory_label("FFTWGrid::compute_power_spectrum_interlacing::density_k2");
-            particles_to_grid<N, T>(part, NumPart, NumPartTotal, density_k2, density_assignment_method);
-
-            // Shift particles back as not to ruin anything
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-            for (size_t i = 0; i < NumPart; i++) {
-                auto * pos = part[i].get_pos();
-                pos[0] -= shift;
-                for (int idim = 1; idim < N; idim++) {
-                    pos[idim] -= shift;
-                    if (pos[idim] < 0.0)
-                        pos[idim] += 1.0;
-                }
-            }
-
-            // Fourier transform
-            density_k.fftw_r2c();
-            density_k2.fftw_r2c();
-
-            // The mean of the two grids
-            auto ff = density_k.get_fourier_grid();
-            auto gg = density_k2.get_fourier_grid();
-            const std::complex<double> I(0, 1);
-            for (auto && complex_index : density_k.get_fourier_range()) {
-                auto kvec = density_k.get_fourier_wavevector_from_index(complex_index);
-                double ksum = 0.0;
-                for (int idim = 0; idim < N; idim++)
-                    ksum += kvec[idim];
-                auto norm = std::exp(I * ksum * shift);
-                ff[complex_index] = (ff[complex_index] + norm * gg[complex_index]) / 2.0;
-            }
-
-            // Deconvolve window function
-            deconvolve_window_function_fourier<N>(density_k, density_assignment_method);
+            // Compute delta(k) using interlacing to reduce alias
+            FFTWGrid<N> density_k;
+            FML::INTERPOLATION::particles_to_fourier_grid_interlacing(
+                density_k, Ngrid, part, NumPart, NumPartTotal, density_assignment_method);
 
             // Bin up power-spectrum
             bin_up_power_spectrum<N>(density_k, pofk);
@@ -816,21 +754,10 @@ namespace FML {
                                 BispectrumBinning<N> & bofk,
                                 std::string density_assignment_method) {
 
-            // Set how many extra slices we need for the density assignment to go smoothly
-            auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
-            int nleft = nleftright.first;
-            int nright = nleftright.second;
-
-            // Bin particles to grid (XXX We should add interlacing here)
-            FFTWGrid<N> density_k(Ngrid, nleft, nright);
-            density_k.add_memory_label("FFTWGrid::compute_bispectrum::density_k");
-            particles_to_grid<N, T>(part, NumPart, NumPartTotal, density_k, density_assignment_method);
-
-            // To fourier space
-            density_k.fftw_r2c();
-
-            // Deconvolve window function
-            deconvolve_window_function_fourier<N>(density_k, density_assignment_method);
+            // Bin particles to grid (use interlaced to reduce alias) and deconvolve window
+            FFTWGrid<N> density_k;
+            FML::INTERPOLATION::particles_to_fourier_grid_interlacing(
+                density_k, Ngrid, part, NumPart, NumPartTotal, density_assignment_method);
 
             // Compute bispectrum
             compute_bispectrum<N>(density_k, bofk);
@@ -845,23 +772,12 @@ namespace FML {
                                   PolyspectrumBinning<N, ORDER> & polyofk,
                                   std::string density_assignment_method) {
 
-            // Set how many extra slices we need for the density assignment to go smoothly
-            auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
-            int nleft = nleftright.first;
-            int nright = nleftright.second;
+            // Bin particles to grid (use interlaced to reduce alias) and deconvolve window
+            FFTWGrid<N> density_k;
+            FML::INTERPOLATION::particles_to_fourier_grid_interlacing(
+                density_k, Ngrid, part, NumPart, NumPartTotal, density_assignment_method);
 
-            // Bin particles to grid (XXX We should do interlacing here)
-            FFTWGrid<N> density_k(Ngrid, nleft, nright);
-            density_k.add_memory_label("FFTWGrid::compute_bispectrum::density_k");
-            particles_to_grid<N, T>(part, NumPart, NumPartTotal, density_k, density_assignment_method);
-
-            // To fourier space
-            density_k.fftw_r2c();
-
-            // Deconvolve window function
-            deconvolve_window_function_fourier<N>(density_k, density_assignment_method);
-
-            // Compute bispectrum
+            // Compute polyspectrum
             compute_polyspectrum<N, ORDER>(density_k, polyofk);
         }
 
