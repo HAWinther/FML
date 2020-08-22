@@ -151,7 +151,7 @@ namespace FML {
                 int n_extra_slices_left, 
                 int n_extra_slices_right);
             MultiGridSolver(int N) : MultiGridSolver(N, -1, true, true, 1, 1) {}
-            MultiGridSolver() {}
+            MultiGridSolver() = default;
 
             // Get a pointer to the solution array / grid
             T *get_y(int level = 0);

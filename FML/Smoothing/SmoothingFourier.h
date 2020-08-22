@@ -41,24 +41,24 @@ namespace FML {
       {
 
         // Sharp cut off kR = 1
-        std::function<double(double)> filter_sharpk = [=](double k2){
+        std::function<double(double)> filter_sharpk = [=](double k2) -> double {
           double kR2 = k2*smoothing_scale*smoothing_scale;
           if(kR2 < 1.0) return 1.0;
           return 0.0;
         };
         // Gaussian exp(-kR^2/2)
-        std::function<double(double)> filter_gaussian = [=](double k2){
+        std::function<double(double)> filter_gaussian = [=](double k2) -> double {
           double kR2 = k2*smoothing_scale*smoothing_scale;
           return std::exp( -0.5*kR2);
         };
         // Top-hat F[ (|x| < R) ]. Implemented only for 2D and 3D
-        std::function<double(double)> filter_tophat_2D = [=](double k2){
+        std::function<double(double)> filter_tophat_2D = [=](double k2) -> double {
           double kR2 = k2*smoothing_scale*smoothing_scale;
           double kR  = std::sqrt(kR2);
           if(kR2 < 1e-8) return 1.0;
           return 2.0/(kR2) * (1.0 - std::cos(kR));
         };
-        std::function<double(double)> filter_tophat_3D = [=](double k2){
+        std::function<double(double)> filter_tophat_3D = [=](double k2) -> double {
           double kR2 = k2*smoothing_scale*smoothing_scale;
           double kR  = std::sqrt(kR2);
           if(kR2 < 1e-8) return 1.0;

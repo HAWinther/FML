@@ -56,7 +56,7 @@ void generate_delta(FFTWGrid<Ndim> &delta){
   const bool fix_amplitude = true;
 
   // Function P(kBox / Box) / Volume  
-  Powspec = [&](double kBox){
+  Powspec = [&](double kBox) -> double {
     return power_spectrum( kBox / box ) / std::pow(box,Ndim);
   };
 

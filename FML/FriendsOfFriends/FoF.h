@@ -211,7 +211,7 @@ namespace FML {
         PartCells.resize(NgridTot); 
 
         // Get index of the cell the particle lives in
-        auto get_cell_index = [&](size_t ipart, std::vector<int> & coord){
+        auto get_cell_index = [&](size_t ipart, std::vector<int> & coord) -> size_t {
           auto *pos = part[ipart].get_pos();
           size_t index_cell = 0;
           for(int idim = 0; idim < NDIM; idim++){
@@ -664,7 +664,7 @@ namespace FML {
           assert(1.0/Ngrid > fof_distance);
 
           // Get index of the cell the particle lives in
-          auto get_cell_index = [&](size_t ipart, std::vector<int> & coord){
+          auto get_cell_index = [&](size_t ipart, std::vector<int> & coord) -> size_t {
             auto *pos = part[ipart].get_pos();
             size_t index_cell = 0;
             for(int idim = 0; idim < NDIM; idim++){

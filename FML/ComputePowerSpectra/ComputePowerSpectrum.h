@@ -318,7 +318,7 @@ namespace FML {
           Pell[ell].normalize();
 
         // Binomial coefficient
-        auto binomial = [](const double n, const double k){
+        auto binomial = [](const double n, const double k) -> double {
           double res = 1.0;
           for (int i = 0; i < k; i++) {
             res *= double(n - i) / double(k - i);
@@ -327,7 +327,7 @@ namespace FML {
         };
 
         // P_ell(x) = Sum_{k=0}^{ell/2} summand_legendre_polynomial * x^(ell - 2k)
-        auto summand_legendre_polynomial = [&](const int k, const int ell) {
+        auto summand_legendre_polynomial = [&](const int k, const int ell) -> double {
           double sign = (k % 2) == 0 ? 1.0 : -1.0;
           return sign * binomial(ell, k) * binomial(2 * ell - 2 * k, ell) /
             std::pow(2.0, ell);
@@ -1106,7 +1106,7 @@ namespace FML {
               size_t index = (i*nbins + j)*nbins + k;
 
               std::vector<int> inds{i,j,k};
-              std::sort(inds.begin(), inds.end(), std::less<>());
+              std::sort(inds.begin(), inds.end(), std::less<int>());
 
               size_t index0 = (inds[0]*nbins+inds[1])*nbins+inds[2];
               size_t index1 = (inds[0]*nbins+inds[2])*nbins+inds[1];
@@ -1335,7 +1335,7 @@ namespace FML {
 
           // Find a cell given by symmetry that we have computed
           // by sorting ik in increasing order
-          std::sort(ik.begin(), ik.end(), std::less<>());
+          std::sort(ik.begin(), ik.end(), std::less<int>());
 
           // Compute cell index
           size_t index = 0;

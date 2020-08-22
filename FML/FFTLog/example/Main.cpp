@@ -12,7 +12,7 @@ DVector generate_pofk(DVector &k){
   //=====================================================
 
   // Fitting formula for the transfer function
-  auto bbks_fit = [&](double k){
+  auto bbks_fit = [&](double k) -> double {
     const double keq = 0.01;
     const double arg = k / keq;
     double T = log(1.0 + 0.171*arg)/(0.171*arg)*pow(
@@ -22,7 +22,7 @@ DVector generate_pofk(DVector &k){
   };
 
   // Some thing that looks like the power-spectrum
-  auto pk_func = [&](double k){
+  auto pk_func = [&](double k) -> double {
     double T = bbks_fit(k);
     const double ns = 0.96;
     return 1e6 * k * T * T * pow(k/0.05, ns-1);

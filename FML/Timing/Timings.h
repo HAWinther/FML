@@ -36,7 +36,7 @@ namespace FML {
 
       public:
 
-        Timings(){}
+        Timings() = default;
 
         // Output all the recorded timings
         void PrintAllTimings(){

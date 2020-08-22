@@ -14,7 +14,7 @@ int main() {
   const char* filename = "plot.png";
 
   // A test function to plot
-  auto function = [](double x){
+  auto function = [](double x) -> double {
     return 2.0 + sin(2.0 * M_PI * x);
   };
 

@@ -17,7 +17,7 @@ int main(){
   //======================================
 
   // A test function to spline
-  auto function = [](double x){
+  auto function = [](double x) -> double {
     return 2.0 + sin(2.0 * M_PI * x);
   };
 

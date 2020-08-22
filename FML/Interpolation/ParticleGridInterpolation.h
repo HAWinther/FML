@@ -293,7 +293,7 @@ namespace FML {
 
         // Just sinc to the power = order to the method
         const double knyquist = M_PI * Ngrid;
-        auto window_function = [&](std::array<double,N> &kvec){
+        auto window_function = [&](std::array<double,N> &kvec) -> double {
           double w = 1.0;
           for(int idim = 0; idim < N; idim++){
             const double koverkny = M_PI/2. * (kvec[idim] / knyquist);

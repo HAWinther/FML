@@ -205,7 +205,7 @@ namespace FML {
           norm +=  line_of_sight_direction[idim] * line_of_sight_direction[idim];
         }
         norm = std::sqrt(norm);
-        assert_mpi(norm > 0.0
+        assert_mpi(norm > 0.0,
             "[particles_to_redshiftspace] Line of sight vector cannot be the zero vector\n");
         for(int idim = 0; idim < N; idim++) {
           line_of_sight_direction[idim] /= norm;

@@ -22,25 +22,25 @@ struct MyType {
       y[i] = rhs.y[i];
   }
   // We need to define all the arithmetic functions
-#define OPS(OP)                             \
-  MyType& operator OP (const MyType & rhs){ \
-    for(int i = 0; i < N; i++){             \
-      this->y[i] OP rhs.y[i];               \
-    }                                       \
-    return *this;                           \
+#define OPS(OP)                                      \
+  auto operator OP (const MyType & rhs) -> MyType& { \
+    for(int i = 0; i < N; i++){                      \
+      this->y[i] OP rhs.y[i];                        \
+    }                                                \
+    return *this;                                    \
   } 
 OPS(*=); OPS(/=); OPS(+=); OPS(-=);
 #undef OPS
 };
 
 // We need to define all the arithmetic functions
-#define OPS(OP)                                             \
-  MyType operator OP (const MyType lhs, const MyType &rhs){ \
-    MyType res;                                             \
-    for(int i = 0; i < res.N; i++){                         \
-      res.y[i] = lhs.y[i] OP rhs.y[i];                      \
-    }                                                       \
-    return res;                                             \
+#define OPS(OP)                                                      \
+  auto operator OP (const MyType lhs, const MyType &rhs) -> MyType { \
+    MyType res;                                                      \
+    for(int i = 0; i < res.N; i++){                                  \
+      res.y[i] = lhs.y[i] OP rhs.y[i];                               \
+    }                                                                \
+    return res;                                                      \
   }
 OPS(*); OPS(/); OPS(+); OPS(-);
 #undef OPS

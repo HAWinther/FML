@@ -46,7 +46,7 @@ void ExamplesInterpolation(){
   //=======================================================
   // Function to fill the grid with
   //=======================================================
-  std::function<FML::GRID::FloatType(std::array<double,NDIM>&)> func = [](std::array<double,NDIM>& pos){
+  std::function<FML::GRID::FloatType(std::array<double,NDIM>&)> func = [](std::array<double,NDIM>& pos) -> FML::GRID::FloatType {
     FML::GRID::FloatType value = 0.0;
     for(auto &x : pos){
       if(x < 0.5) continue;

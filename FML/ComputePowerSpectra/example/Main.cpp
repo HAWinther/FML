@@ -18,7 +18,7 @@ template<int N>
 const int NDIM = 3;
 struct Particle{
   double x[NDIM];
-  Particle(){}
+  Particle() = default;
   Particle(double *_x){
     std::memcpy(x, _x, NDIM*sizeof(double));
   }

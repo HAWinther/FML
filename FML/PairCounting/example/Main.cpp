@@ -69,7 +69,7 @@ void TestSurvey(){
   readData("../../TestData/Randoms.txt", randoms);
 
   // The Hubble function H/c needed to compute the comoving distance
-  std::function<double(double)> hubble_over_c_of_z = [&](double z){
+  std::function<double(double)> hubble_over_c_of_z = [&](double z) -> double {
     return 1.0 / 2997.92458 * sqrt(0.315 * (1+z)*(1+z)*(1+z) + 0.685);
   };
 

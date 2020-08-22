@@ -78,7 +78,7 @@ namespace FML {
         public:
 
           // Constructors
-          MPIGrid() = default,
+          MPIGrid() = default;
           MPIGrid(
               int N, 
               bool periodic, 
@@ -177,43 +177,43 @@ namespace FML {
 #endif
       }
 
-#define OPS(OP)                                                               \
-    template<int NDIM, class T>                                                 \
-    MPIGrid<NDIM,T>& MPIGrid<NDIM,T>::operator OP (const MPIGrid<NDIM,T>& rhs){ \
-      assert_mpi(_NtotLocal == rhs._NtotLocal, "");                             \
-      for(IndexInt i = 0; i < _NtotLocal; i++) {                                \
-        this->_y[_NtotLocalLeft+i] OP rhs._y[rhs._NtotLocalLeft+i];             \
-      }                                                                         \
-      return *this;                                                             \
+#define OPS(OP)                                                                          \
+    template<int NDIM, class T>                                                          \
+    auto MPIGrid<NDIM,T>::operator OP (const MPIGrid<NDIM,T>& rhs) -> MPIGrid<NDIM,T>& { \
+      assert_mpi(_NtotLocal == rhs._NtotLocal, "");                                      \
+      for(IndexInt i = 0; i < _NtotLocal; i++) {                                         \
+        this->_y[_NtotLocalLeft+i] OP rhs._y[rhs._NtotLocalLeft+i];                      \
+      }                                                                                  \
+      return *this;                                                                      \
     } 
     OPS(+=); OPS(-=); OPS(*=); OPS(/=)
 #undef OPS
 
-#define OPS(OP)                                               \
-      template<int NDIM, class T>                                 \
-      template<class U>                                             \
-      MPIGrid<NDIM,T>& MPIGrid<NDIM,T>::operator OP (const U& rhs){ \
-        for(IndexInt i = 0; i < _NtotLocal; i++)                    \
-        this->_y[_NtotLocalLeft+i] OP rhs;                        \
-        return *this;                                               \
+#define OPS(OP)                                                              \
+      template<int NDIM, class T>                                            \
+      template<class U>                                                      \
+      auto MPIGrid<NDIM,T>::operator OP (const U& rhs) -> MPIGrid<NDIM,T>& { \
+        for(IndexInt i = 0; i < _NtotLocal; i++)                             \
+        this->_y[_NtotLocalLeft+i] OP rhs;                                   \
+        return *this;                                                        \
       } 
       OPS(+=); OPS(-=); OPS(*=); OPS(/=)
 #undef OPS
 
-#define OPS(OP)                                                                \
-      template<int NDIM, class T>                                                    \
-      MPIGrid<NDIM,T> operator OP (MPIGrid<NDIM,T> lhs, const MPIGrid<NDIM,T>& rhs){ \
-        lhs OP##= rhs;                                                               \
-        return lhs;                                                                  \
+#define OPS(OP)                                                                                \
+      template<int NDIM, class T>                                                              \
+      auto operator OP (MPIGrid<NDIM,T> lhs, const MPIGrid<NDIM,T>& rhs) -> MPIGrid<NDIM,T>& { \
+        lhs OP##= rhs;                                                                         \
+        return lhs;                                                                            \
       }
       OPS(+); OPS(-); OPS(*); OPS(/)
 #undef OPS
 
-#define OPS(OP)                                                  \
-      template<int NDIM, class T>                                      \
-      MPIGrid<NDIM,T> operator OP (MPIGrid<NDIM,T> lhs, const T& rhs){ \
-        lhs OP##= rhs;                                                 \
-        return lhs;                                                    \
+#define OPS(OP)                                                                \
+      template<int NDIM, class T>                                              \
+      auto operator OP (MPIGrid<NDIM,T> lhs, const T& rhs) -> MPIGrid<NDIM,T>{ \
+        lhs OP##= rhs;                                                         \
+        return lhs;                                                            \
       }
       OPS(+); OPS(-); OPS(*); OPS(/)
 #undef OPS

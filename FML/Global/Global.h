@@ -131,14 +131,9 @@ namespace FML {
   // Simple integer a^b power-function by squaring
   //============================================
   constexpr long long int power(int base, int exponent){
-    if(exponent == 0) return 1;
-    if(exponent % 2 == 0){
-      auto result = power(base, exponent/2);
-      return result * result;
-    } else {
-      auto result = power(base, (exponent-1)/2);
-      return (long long int)(base) * result * result;
-    }
+    return exponent == 0 ? 1 : 
+      (exponent % 2 == 0 ? power(base, exponent/2) * power(base, exponent/2) : 
+       (long long int)(base) * power(base, (exponent-1)/2) * power(base, (exponent-1)/2));
   }
   
   //============================================
@@ -172,7 +167,7 @@ namespace FML {
 
 #define OPS(OP)   \
   template<class T> \
-  Vector<T> operator OP (const Vector<T>& lhs, const Vector<T>& rhs){                        \
+  auto operator OP (const Vector<T>& lhs, const Vector<T>& rhs) -> Vector<T> {               \
     const size_t nlhs = lhs.size();                                                          \
     const size_t nrhs = rhs.size();                                                          \
     if(nlhs != nrhs) throw std::runtime_error("Error vectors need to have the same size:");  \
@@ -187,26 +182,26 @@ namespace FML {
 
 #define OPS(OP)   \
     template<class T> \
-    Vector<T> operator OP (const Vector<T>& lhs, const double& rhs){       \
-      const size_t nlhs = lhs.size();                                      \
-      Vector<T> y(nlhs);                                                   \
-      for(size_t i = 0; i < nlhs; i++){                                    \
-        y[i] = lhs[i] OP rhs;                                              \
-      }                                                                    \
-      return y;                                                            \
+    auto operator OP (const Vector<T>& lhs, const double& rhs) -> Vector<T> { \
+      const size_t nlhs = lhs.size();                                         \
+      Vector<T> y(nlhs);                                                      \
+      for(size_t i = 0; i < nlhs; i++){                                       \
+        y[i] = lhs[i] OP rhs;                                                 \
+      }                                                                       \
+      return y;                                                               \
     }
     OPS(+) OPS(-) OPS(*) OPS(/)
 #undef OPS
 
 #define OPS(OP)   \
     template<class T> \
-    Vector<T> operator OP (const double& lhs, const Vector<T>& rhs){    \
-      const size_t nrhs = rhs.size();                                   \
-      Vector<T> y(nrhs);                                                \
-      for(size_t i = 0; i < nrhs; i++){                                 \
-        y[i] = lhs OP rhs[i];                                           \
-      }                                                                 \
-      return y;                                                         \
+    auto operator OP (const double& lhs, const Vector<T>& rhs) -> Vector<T> {   \
+      const size_t nrhs = rhs.size();                                           \
+      Vector<T> y(nrhs);                                                        \
+      for(size_t i = 0; i < nrhs; i++){                                         \
+        y[i] = lhs OP rhs[i];                                                   \
+      }                                                                         \
+      return y;                                                                 \
     }
     OPS(+) OPS(-) OPS(*) OPS(/)
 #undef OPS
@@ -221,13 +216,13 @@ namespace FML {
       return y;
     }
 
-#define FUNS(FUN)                                            \
-  template<class T>                                          \
-  Vector<T> FUN(const Vector<T>& x){                         \
-    auto op_##FUN = [](double x){ return std::FUN(x); };     \
-    Vector<T> y(x.size());                                   \
-    std::transform(x.begin(), x.end(), y.begin(), op_##FUN); \
-    return y;                                                \
+#define FUNS(FUN)                                                      \
+  template<class T>                                                    \
+  auto FUN(const Vector<T>& x) -> Vector<T> {                          \
+    auto op_##FUN = [](double x) -> Vector<T> { return std::FUN(x); }; \
+    Vector<T> y(x.size());                                             \
+    std::transform(x.begin(), x.end(), y.begin(), op_##FUN);           \
+    return y;                                                          \
   }
   FUNS(exp) FUNS(log) FUNS(cos) FUNS(sin) FUNS(tan) FUNS(fabs) FUNS(atan)
 #undef FUNS

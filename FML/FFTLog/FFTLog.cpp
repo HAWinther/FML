@@ -164,7 +164,7 @@ namespace FML {
         }
 
         // Transform
-        auto result = DiscreteHankelTransform(k, a, ell + 0.5, 0, 1, 1, NULL);
+        auto result = DiscreteHankelTransform(k, a, ell + 0.5, 0, 1, 1, nullptr);
         auto &r = result.first;
         auto &b = result.second;
 

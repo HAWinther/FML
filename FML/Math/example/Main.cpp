@@ -11,11 +11,10 @@ int main(){
   for(auto x : xarr) std::cout << x << " ";
   std::cout << std::endl;
 
-
   //==============================================
   // Find a root of a function
   //==============================================
-  std::function<double(double)> function = [](double x){
+  std::function<double(double)> function = [](double x) -> double {
     return x*x - x - 1;
   };
   std::pair<double,double> range = {1.0, 2.0};
@@ -42,10 +41,10 @@ int main(){
   // Evaluate Continued fraction 
   // (b0 + a1/(b1 + a2 /( ... )))
   //==============================================
-  std::function<double(int)> a = [](int i){
+  std::function<double(int)> a = [](int i) -> double {
     return (2.0*i-1)*(2.0*i-1);
   };
-  std::function<double(int)> b = [](int i){
+  std::function<double(int)> b = [](int i) -> double {
     if(i == 0) return 3.0;
     return 6.0;
   };
@@ -57,6 +56,5 @@ int main(){
       eps,
       maxsteps);
   std::cout << "Pi = " << res.first << " Converged? " << res.second << "\n"; 
-
 
 }

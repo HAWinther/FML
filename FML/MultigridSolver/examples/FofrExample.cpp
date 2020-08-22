@@ -50,13 +50,13 @@ void FofrSolver(){
   //======================================================================
   // The overdensity field from a formula (as peak in the center of the box)
   //======================================================================
-  auto delta_analytic = [](const std::array<double,Ndim> &x){
+  auto delta_analytic = [](const std::array<double,Ndim> &x) -> double {
       double r2 = 0.0;
       for(int idim = 0; idim < Ndim; idim++){
         r2 += (x[idim]-0.5)*(x[idim]-0.5);
       }
       const double sigma = 1.0/double(N), s2 = sigma * sigma; 
-      const double delta = 1.0/sqrt(2.0*M_PI*s2) * exp( -0.5*r2/s2 ) - 1.0;
+      const double delta = 1.0/sqrt(2.0*M_PI*s2) * std::exp( -0.5*r2/s2 ) - 1.0;
       return delta;
   };
 
@@ -113,11 +113,11 @@ void FofrSolver(){
     // (Faster to not use the built in function and code this directly  
     // as we do a lot of double work)
     //======================================================================
-    std::function<SolverType(int,IndexInt)>  b = [&](int lev, IndexInt ind){
-      return exp(sol->get_Field(lev, ind));
+    std::function<SolverType(int,IndexInt)>  b = [&](int lev, IndexInt ind) -> double {
+      return std::exp(sol->get_Field(lev, ind));
     };
-    std::function<SolverType(int,IndexInt)> db = [&](int lev, IndexInt ind){
-      return exp(sol->get_Field(lev, ind));
+    std::function<SolverType(int,IndexInt)> db = [&](int lev, IndexInt ind) -> double {
+      return std::exp(sol->get_Field(lev, ind));
     };
     auto kinetic  = sol->get_BLaplacian(level, index_list, b);
     auto dkinetic = sol->get_derivBLaplacian(level, index_list, b, db);
@@ -125,8 +125,8 @@ void FofrSolver(){
     //======================================================================
     // The right hand side source and the derivative of it
     //======================================================================
-    double source = _prefac * ( delta + _fac1 - _fac2 * exp(-f/(_nfofr+1.0)) );
-    double dsource = _prefac * ( _fac2 * exp(- f / (_nfofr+1.0) ) ) / (1.0+_nfofr);
+    double source = _prefac * ( delta + _fac1 - _fac2 * std::exp(-f/(_nfofr+1.0)) );
+    double dsource = _prefac * ( _fac2 * std::exp(- f / (_nfofr+1.0) ) ) / (1.0+_nfofr);
     
     //======================================================================
     // Returns the equation and the derivative to the solver
@@ -148,7 +148,7 @@ void FofrSolver(){
       for(int idim = 0; idim < Ndim; idim++)
         std::cout << pos[idim] << " ";
       double r = sol.get_radial_distance(index,center);
-      std::cout << r << " " << exp(sol[index])/_fofr0 << " " << delta_analytic(pos) << "\n";
+      std::cout << r << " " << std::exp(sol[index])/_fofr0 << " " << delta_analytic(pos) << "\n";
     }
   }
 }

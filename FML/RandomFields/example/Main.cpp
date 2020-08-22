@@ -91,7 +91,7 @@ int main(){
   // Analytical P(k)
   // This is P(k) / Volume with P(k) = 1/k^NDIM  and Delta = k^NDIM P(k) ~ 1e-6
   //=========================================================================
-  std::function<double(double)> Powspec = [&](double kBox){
+  std::function<double(double)> Powspec = [&](double kBox) -> double {
     if(kBox == 0.0) return 0.0;
     double k = kBox / box; // k in physical units
     double volume = std::pow(box,Ndim); // Volume of the box in physical units
@@ -178,7 +178,7 @@ int main(){
   //=========================================================================
  
   // This is B123 / (2p1p2 + 2p2p3 + 2p3p1)
-  auto analytic = [&](int i, int j, int k, std::string _fnl_type){
+  auto analytic = [&](int i, int j, int k, std::string _fnl_type) -> double {
     double pk1 = bofk_all.pofk[i];
     double pk2 = bofk_all.pofk[j];
     double pk3 = bofk_all.pofk[k];
@@ -313,7 +313,7 @@ std::pair<double,double> estimate_fnl(FML::CORRELATIONFUNCTIONS::BispectrumBinni
   std::vector<double> & k_bin = bofk.k;
 
   // Q123 = B123/(P1P2+cyc) = fNL * analytic(i,j,k)
-  auto analytic = [&](int i, int j, int k, std::string _fnl_type){
+  auto analytic = [&](int i, int j, int k, std::string _fnl_type) -> double {
     double fac = (bofk.pofk[i] * bofk.pofk[j] + bofk.pofk[j] * bofk.pofk[k] + bofk.pofk[k] * bofk.pofk[i]);;
     if(_fnl_type == "local"){
       return 2.0 * fac;

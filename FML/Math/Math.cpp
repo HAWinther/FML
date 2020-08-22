@@ -136,7 +136,7 @@ namespace FML {
       }
       xrange.first = x_low;
 
-      auto function = [&](double x) { return (y(x) - y_value); };
+      auto function = [&](double x) -> double { return (y(x) - y_value); };
       return find_root_bisection(function, xrange, epsilon);
     }
 #endif

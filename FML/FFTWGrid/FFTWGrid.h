@@ -373,7 +373,7 @@ namespace FML {
             std::cout << "Warning: [FFTWGrid::get_fourier_range] The grid status is [Realspace]\n";
         }
 #endif
-        return FourierRange(0, FML::power(size_t(Nmesh),N-2)*size_t(Nmesh/2+1)*size_t(Local_nx));  
+        return FourierRange(0, FML::power(Nmesh,N-2) * IndexIntType(Nmesh/2+1) * IndexIntType(Local_nx));  
         //return FourierRange(0, NmeshTotComplex);  
       }
 
@@ -638,7 +638,7 @@ namespace FML {
       // If we don't have FFTW, but want to use this class
       Local_nx = Nmesh / FML::NTasks;
       Local_x_start = FML::ThisTask * Local_nx;
-      NmeshTotComplex = ptrdiff_t(Nmesh/2+1) * FML::power(ptrdiff_t(Nmesh), N-1) / ptrdiff_t(FML::NTasks);
+      NmeshTotComplex = ptrdiff_t(Nmesh/2+1) * ptrdiff_t(FML::power(Nmesh, N-1)) / ptrdiff_t(FML::NTasks);
 #endif
 #else
       NmeshTotComplex = 1;
@@ -648,9 +648,9 @@ namespace FML {
 
       // Total number of real gridcells in the local grid. 
       // NB: This will differ from the number of real cells we allocate!
-      NmeshTotReal = ptrdiff_t(Local_nx) * FML::power(ptrdiff_t(Nmesh), N - 1);
+      NmeshTotReal = ptrdiff_t(Local_nx) * ptrdiff_t(FML::power(Nmesh, N - 1));
       // Number of cells for one extra slice
-      NmeshTotComplexSlice = ptrdiff_t(Nmesh/2+1) * FML::power(ptrdiff_t(Nmesh),N-2);
+      NmeshTotComplexSlice = ptrdiff_t(Nmesh/2+1) * ptrdiff_t(FML::power(Nmesh,N-2));
       NmeshTotRealSlice    = 2 * NmeshTotComplexSlice;
       // Total number of grid-nodes we allocate including extra slices
       NmeshTotComplexAlloc = NmeshTotComplex + NmeshTotComplexSlice * (n_extra_x_slices_left + n_extra_x_slices_right);
@@ -1208,9 +1208,6 @@ namespace FML {
         myfile.close();
       }
 
-
-    //template class FFTWGrid<2>;
-    //template class FFTWGrid<3>;
   }
 }
 #endif
