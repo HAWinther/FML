@@ -44,7 +44,6 @@ namespace FML {
     extern int NThreads;
     extern bool MPIThreadsOK;
     extern bool FFTWThreadsOK;
-    extern std::string processor_name;
 
     // The local extent of the domain (global domain goes from 0 to 1)
     extern double xmin_domain;
@@ -180,7 +179,8 @@ namespace FML {
     }
     OPS(+)
     OPS(-)
-    OPS(*) OPS(/)
+    OPS(*)
+    OPS(/)
 #undef OPS
 
 #define OPS(OP)                                                                                                        \

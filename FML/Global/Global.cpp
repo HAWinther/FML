@@ -4,6 +4,8 @@
 #include <stdarg.h>
 
 #include "Global.h"
+    
+static std::string processor_name {"IsOnlyKnownWithMPI"};
 
 namespace FML {
 
@@ -38,8 +40,6 @@ namespace FML {
     int ThisTask = 0;
     int NTasks = 1;
     int NThreads = 1;
-
-    std::string processor_name{"NameNotKnown"};
 
     bool FFTWThreadsOK = false;
     bool MPIThreadsOK = false;
