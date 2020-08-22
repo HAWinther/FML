@@ -39,4 +39,8 @@ Some define statements that can be added to change how the code works:
  - NO\_AUTO\_MPI\_SETUP : MPI is automatically initialized and finalized in the code. If you don't want this add this define. NB: if you use this you should know how FFTW should be initialized with MPI and/or threads to avoid issues.
  - NO\_AUTO\_FFTW\_SETUP : FFTW is automatically initialized in the code. If you don't want this add this define.
 
-You will also have to provide the include path to the folder containing FML/ and in VPATH provide the path to the *.cpp files that needs to be compiled with the code.
+You will also have to provide the include path to the folder containing FML and in VPATH provide the path to the cpp files that needs to be compiled with the code.
+
+# Examples
+
+See the example folders, e.g. [FFTWGrid/example](FML/FFTWGrid/example), [MultiGridSolver/examples](FML/MultiGridSolver/examples) for examples on how to use the different methods and classes. 
