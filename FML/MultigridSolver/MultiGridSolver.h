@@ -197,7 +197,7 @@ namespace FML {
                 // The closest 2NDIM cells (plus the cell itself)
                 std::array<IndexInt, 2 * NDIM + 1> get_neighbor_gridindex(int level, IndexInt index);
                 // Get all 3^NDIM cells around a given cell
-                std::vector<IndexInt> get_cube_gridindex(int level, IndexInt index);
+                std::array<IndexInt, FML::power(3, NDIM)> get_cube_gridindex(int level, IndexInt index);
                 // Physical position of a cell
                 std::array<double, NDIM> get_Coordinate(int level, IndexInt index);
                 // The gradent Df
@@ -646,43 +646,43 @@ namespace FML {
             // This starts with the cell relative to current at
             // (-1,-1,-1,...) and with this as 'digits' adds 1
             // with a carry going left to right until we get to
-            // (1,1,1,...) given the list (which is all cells for NDIM=2):
-            //
-            // (-1,-1,-1,...) 0
-            // ( 0,-1,-1,...) 1  x
-            // ( 1,-1,-1,...) 2
-            // (-1, 0,-1,...) 3  x
-            // ( 0, 0,-1,...) 4  o
-            // ( 1, 0,-1,...) 5  x
-            // (-1, 1,-1,...) 6
-            // ( 0, 1,-1,...) 7  x
-            // ( 1, 1,-1,...) 8
-            // (-1,-1, 0,...) 9  x
-            // ( 0,-1, 0,...) 10 o
-            // ( 1,-1, 0,...) 11 x
-            // (-1, 0, 0,...) 12 o
-            // ( 0, 0, 0,...) 13 -
-            // ( 1, 0, 0,...) 14 o
-            // (-1, 1, 0,...) 15 x
-            // ( 0, 1, 0,...) 16 o
-            // ( 1, 1, 0,...) 17 x
-            // (-1,-1, 1,...) 18
-            // ( 0,-1, 1,...) 19 x
-            // ( 1,-1, 1,...) 20
-            // (-1, 0, 1,...) 21 x
-            // ( 0, 0, 1,...) 22 o
-            // ( 1, 0, 1,...) 23 x
-            // (-1, 1, 1,...) 24
-            // ( 0, 1, 1,...) 25 x
-            // ( 1, 1, 1,...) 26
-            //  ...
+            // (1,1,1,...) 
+            // 
+            // For NDIM=3 this gives
+            // (-1, -1, -1) 0
+            // ( 0, -1, -1) 1
+            // ( 1, -1, -1) 2
+            // (-1,  0, -1) 3
+            // ( 0,  0, -1) 4
+            // ( 1,  0, -1) 5
+            // (-1,  1, -1) 6
+            // ( 0,  1, -1) 7
+            // ( 1,  1, -1) 8
+            // (-1, -1,  0) 9
+            // ( 0, -1,  0) 10
+            // ( 1, -1,  0) 11
+            // (-1,  0,  0) 12
+            // ( 0,  0,  0) 13
+            // ( 1,  0,  0) 14
+            // (-1,  1,  0) 15
+            // ( 0,  1,  0) 16
+            // ( 1,  1,  0) 17
+            // (-1, -1,  1) 18
+            // ( 0, -1,  1) 19
+            // ( 1, -1,  1) 20
+            // (-1,  0,  1) 21
+            // ( 0,  0,  1) 22
+            // ( 1,  0,  1) 23
+            // (-1,  1,  1) 24
+            // ( 0,  1,  1) 25
+            // ( 1,  1,  1) 26
             //
             //  The index of center cell is at index=(3^(NDIM)-1)/2
             //================================================
 
             template <int NDIM, class T>
-            std::vector<IndexInt> MultiGridSolver<NDIM, T>::get_cube_gridindex(int level, IndexInt index) {
-                constexpr int ncells = FML::power(3, NDIM);
+            std::array<IndexInt, FML::power(3, NDIM)> MultiGridSolver<NDIM, T>::get_cube_gridindex(int level,
+                                                                                                   IndexInt index) {
                 const int N = _f.get_grid(level).get_N();
 
                 // (Global) coordinate of cell
@@ -690,17 +690,13 @@ namespace FML {
 
                 std::array<int, NDIM> add;
                 add.fill(-1);
-                std::vector<IndexInt> index_list(ncells);
+
+                constexpr int ncells = FML::power(3, NDIM);
+                std::array<IndexInt, ncells> index_list;
                 for (int k = 0; k < ncells; k++) {
-                    // Do addition with carry with elements of 'add' as digits to compute all indices
-                    int i = 0;
-                    while (i < NDIM) {
-                        ++add[i];
-                        if (add[i] < 2)
-                            break;
-                        add[i] = -1;
-                        i++;
-                    }
+                    // Output the list for NDIM=3 (exit after the loop to prevent endless printing):
+                    //std::cout << "(" << std::setw(2) << add[0] << ", " << std::setw(2) << add[1] << ", " << std::setw(2)
+                    //          << add[2] << ")\n";
 
                     auto coord = center_coord;
                     for (int idim = 0; idim < NDIM; idim++) {
@@ -714,6 +710,16 @@ namespace FML {
                     }
                     // std::cout << ccoord[0] << " " << ccoord[1] << " -> " << coord[0] << " " << coord[1] << "\n";
                     index_list[k] = _f.get_grid(level).index_from_globalcoord(coord);
+                    
+                    // Do addition with carry with elements of 'add' as digits to compute all indices
+                    int i = 0;
+                    while (i < NDIM) {
+                        ++add[i];
+                        if (add[i] < 2)
+                            break;
+                        add[i] = -1;
+                        i++;
+                    }
                 }
                 return index_list;
             }

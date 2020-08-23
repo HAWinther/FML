@@ -7,7 +7,7 @@ SHELL := /bin/bash
 #===================================================
 
 CC      = g++-mp-7 -std=c++1z -O3 -Wall -Wextra -march=native
-MPICC   = mpicxx-openmpi-gcc7 -std=c++1z -O3 -Wall -Wextra -march=native
+MPICC   = mpicxx-openmpi-gcc7 -std=c++1z -O3 -g -Wall -Wextra -march=native
 
 #===================================================
 # Options
@@ -90,6 +90,7 @@ OBJS_CONT = ContinuityExample.o Global.o
 OBJS_POIS = PoissonExample.o    Global.o
 OBJS_FOFR = FofrExample.o       Global.o
 OBJS_SYM  = SymmetronExample.o  Global.o 
+OBJS_DGP  = dgpExample.o        Global.o
 OBJS_REC  = Reconstruction.o    Global.o FileUtils.o
 
 TARGETS := mgsolver
@@ -115,6 +116,9 @@ recon: $(OBJS_REC)
 	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
 
 symm: $(OBJS_SYM)
+	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+
+dgp: $(OBJS_DGP)
 	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
 
 %.o: %.cpp 
