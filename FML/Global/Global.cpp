@@ -4,8 +4,8 @@
 #include <stdarg.h>
 
 #include "Global.h"
-    
-static std::string processor_name {"NameIsOnlyKnownWithMPI"};
+
+static std::string processor_name{"NameIsOnlyKnownWithMPI"};
 
 namespace FML {
 
@@ -57,7 +57,7 @@ namespace FML {
 
     //============================================
     /// Initialize MPI. This function is automatically
-    /// called unless NO_AUTO_MPI_SETUP is defined 
+    /// called unless NO_AUTO_MPI_SETUP is defined
     //============================================
     void init_mpi([[maybe_unused]] int * argc, [[maybe_unused]] char *** argv) {
         ThisTask = 0;

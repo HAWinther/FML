@@ -118,8 +118,8 @@ namespace FML {
                                           bool periodic,
                                           bool verbose);
 
-        /// The general algorithm. Called by the other methods. 
-        /// This is the method that does the hard work. 
+        /// The general algorithm. Called by the other methods.
+        /// This is the method that does the hard work.
         /// bin is the binning function telling us what to do
         /// with every pair
         template <class T>
@@ -272,7 +272,7 @@ namespace FML {
             }
         }
 
-        /// Compute the correlation function for galaxies from a survey. 
+        /// Compute the correlation function for galaxies from a survey.
         /// Using the LZ estimator as standard
         template <class T>
         void CorrelationFunctionSurvey(std::vector<T> & particles_xyz,
@@ -327,7 +327,7 @@ namespace FML {
             }
         }
 
-        /// Compute the cross correlation function for galaxies from a survey. 
+        /// Compute the cross correlation function for galaxies from a survey.
         /// Assuming all catalogues are different
         template <class T>
         void CrossCorrelationFunctionSurvey(std::vector<T> & particles1_xyz,

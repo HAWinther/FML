@@ -17,7 +17,6 @@ void ConvertToFFTWGrid(FML::GRID::MPIGrid<N, T> & from_grid, FML::GRID::FFTWGrid
     auto nleft = from_grid.get_n_extra_slices_left();
     auto nright = from_grid.get_n_extra_slices_right();
 
-
     std::cout << nleft << " " << nright << "\n";
 
     to_grid = FML::GRID::FFTWGrid<N>(Nmesh, nleft, nright);

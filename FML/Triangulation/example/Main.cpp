@@ -69,7 +69,7 @@ int main() {
 
     const double random_fraction = 0.5;
     const double buffer_fraction = 0.75;
-    using WatershedBasin = FML::TRIANGULATION::WatershedBasin<Particle,NDIM>;
+    using WatershedBasin = FML::TRIANGULATION::WatershedBasin<Particle, NDIM>;
     std::vector<WatershedBasin> watershed_groups;
     FML::TRIANGULATION::WatershedDensity(
         part.get_particles_ptr(), part.get_npart(), watershed_groups, buffer_fraction, random_fraction);

@@ -15,7 +15,6 @@
 namespace FML {
     namespace GRID {
 
-
         //===================================================================================
         /// Take a fourier grid and divide each mode by its norm: \f$ f(k) \to f(k) / |f(k)| \f$
         ///
@@ -98,7 +97,7 @@ namespace FML {
             }
 
             // Do the smoothing
-            std::array<double,N> kvec;
+            std::array<double, N> kvec;
             double kmag2;
             for (auto & index : fourier_grid.get_fourier_range()) {
                 fourier_grid.get_fourier_wavevector_and_norm2_by_index(index, kvec, kmag2);

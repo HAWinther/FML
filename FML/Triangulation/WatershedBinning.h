@@ -1,8 +1,8 @@
 #ifndef WATERSHEDBINNING_HEADER
 #define WATERSHEDBINNING_HEADER
 
-#include <vector>
 #include <FML/Global/Global.h>
+#include <vector>
 
 namespace FML {
     namespace TRIANGULATION {

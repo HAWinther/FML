@@ -56,7 +56,6 @@ namespace FML {
             using gadget_particle_id_type = int;
 #endif
 
-
             /// The GADGET1 header format
             // Do not change the order of the fields below as this is read as one piece of memory from file
             typedef struct {

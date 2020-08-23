@@ -22,11 +22,11 @@ namespace FML {
         /// \f$ \phi_{ij} \f$ where \f$ \nabla^2 \phi = norm * f_{\rm real} \f$
         /// Since \f$ f_{ij} = f_{ji} \f$ we only compute the elements for \f$ j \geq i \f$ and they are stored in
         /// the order fxx fxy ... fyy fyz ... etc. in hessian_real
-        /// 
+        ///
         /// In 2D: [fxx fxy fyy]
-        /// 
+        ///
         /// In 3D: [fxx fxy fxz fyy fyz fzz]
-        /// 
+        ///
         //=================================================================================
 
         template <int N>

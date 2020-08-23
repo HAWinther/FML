@@ -44,7 +44,7 @@ namespace FML {
         // the power in each bin etc. Its through this interface the results
         // of the methods below are given. See PowerSpectrumBinning.h for how it works
         //================================================================================
-        
+
         // The powerspectrum result, see PowerspectrumBinning.h
         template <int N>
         class PowerSpectrumBinning;

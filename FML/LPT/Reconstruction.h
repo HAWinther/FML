@@ -34,7 +34,7 @@ namespace FML {
             /// We are solving the equation LPT equation
             ///  \f$ \nabla(b\Psi) + \beta \nabla((b\Psi\cdot r)r) = -\delta_{\rm tracer} \f$
             /// and assuming zero-curl (which is not perfectly true) of the second term
-            /// so we can use Fourier methods. 
+            /// so we can use Fourier methods.
             /// Then we subtract the RSD which is given by \f$ \Psi_{\rm rsd} = \beta (b\Psi\cdot r)r) \f$
             /// Here \f$ \beta = f / b \f$ growth-rate over galaxy bias.
             /// The smoothing filter is an (optional) filter we apply to the density field in

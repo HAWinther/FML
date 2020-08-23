@@ -34,7 +34,6 @@ namespace FML {
             void parameter_not_found(std::string name, bool found, bool required) const;
 
           public:
-            
             // For more verbose lookup, i.e.  lfp.read_int("myint", default_value, lfp.parameter_is_optional);
             const bool required = true;
             const bool optional = false;
@@ -74,7 +73,7 @@ namespace FML {
             /// Read arrays of numbers
             template <class T>
             std::vector<T> read_number_array(std::string name, std::vector<T> default_value, bool required = true);
-            
+
             /// Read arrays of strings
             std::vector<std::string>
             read_string_array(std::string name, std::vector<std::string> default_value, bool required = true);

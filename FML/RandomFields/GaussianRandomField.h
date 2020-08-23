@@ -39,7 +39,8 @@ namespace FML {
             /// @param[in] rng The random number generator.
             /// @param[in] DeltaPofk This is \f$ P(kB) / V \f$ where $kB$ is the dimesnionless wavenumber (B the
             /// boxsize) and \f$ V = B^{\rm N} \f$ is the volume of the box.
-            /// @param[in] fix_amplitude If true then we only draw phases and set \f$ |\delta(k)| \f$ directly from the input power-spectrum.
+            /// @param[in] fix_amplitude If true then we only draw phases and set \f$ |\delta(k)| \f$ directly from the
+            /// input power-spectrum.
             ///
             //=================================================================================
             template <int N>
@@ -56,7 +57,8 @@ namespace FML {
             /// @param[in] rng The random number generator.
             /// @param[in] DeltaPofk This is \f$ P(kB) / V \f$ where $kB$ is the dimesnionless wavenumber (B the
             /// boxsize) and \f$ V = B^{\rm N} \f$ is the volume of the box.
-            /// @param[in] fix_amplitude If true then we only draw phases and set \f$ |\delta(k)| \f$ directly from the input power-spectrum.
+            /// @param[in] fix_amplitude If true then we only draw phases and set \f$ |\delta(k)| \f$ directly from the
+            /// input power-spectrum.
             ///
             //=================================================================================
             template <int N>

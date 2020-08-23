@@ -233,11 +233,11 @@ namespace FML {
         return y;                                                                                                      \
     }
     FUNS(exp)
-    FUNS(log) 
-    FUNS(cos) 
-    FUNS(sin) 
-    FUNS(tan) 
-    FUNS(fabs) 
+    FUNS(log)
+    FUNS(cos)
+    FUNS(sin)
+    FUNS(tan)
+    FUNS(fabs)
     FUNS(atan)
 #undef FUNS
 } // namespace FML
