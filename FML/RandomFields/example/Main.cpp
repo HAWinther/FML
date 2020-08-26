@@ -120,7 +120,6 @@ int main() {
 
         //=========================================================================
         // Make a random field in fourier space
-        // FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier(grid, rng, Powspec, fix_amplitude);
         // Test generating non-gaussian potential Phi
         //=========================================================================
         FML::RANDOM::NONGAUSSIAN::generate_nonlocal_gaussian_random_field_fourier(
@@ -156,7 +155,6 @@ int main() {
 
         // The general method (here for pofk)
         // FML::CORRELATIONFUNCTIONS::PolyspectrumBinning<Ndim,2> polyofk(nbin);
-        // FML::CORRELATIONFUNCTIONS::PolyspectrumBinning<Ndim,2> polyofk22;
         // FML::CORRELATIONFUNCTIONS::compute_polyspectrum(grid, polyofk);
         // polyofk.scale(box);
 
