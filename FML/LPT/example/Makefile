@@ -85,7 +85,7 @@ LINK    += $(FFTW_LINK)
 endif
 
 ifeq ($(USE_MEMORYLOG),true)
-OPTIONS += -DMEMORY_LOGGING -DMIN_BYTES_TO_LOG=1000
+OPTIONS += -DMEMORY_LOGGING -DMIN_BYTES_TO_LOG=0
 endif
 
 #===================================================
