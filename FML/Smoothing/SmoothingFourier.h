@@ -25,13 +25,15 @@ namespace FML {
         //===================================================================================
         template <int N>
         void whitening_fourier_space(FFTWGrid<N> & fourier_grid) {
-            std::vector<double> kvec(N);
+            [[maybe_unused]] std::array<double, N> kvec;
             [[maybe_unused]] double kmag2;
             for (auto & index : fourier_grid.get_fourier_range()) {
                 auto value = fourier_grid.get_fourier_from_index(index);
                 double norm = std::sqrt(std::norm(value));
                 if (norm == 0.0)
                     norm = 0.0;
+                else
+                    norm = 1.0 / norm;
                 fourier_grid.set_fourier_from_index(index, value * norm);
             }
         }
@@ -105,6 +107,98 @@ namespace FML {
                 value *= filter(kmag2);
                 fourier_grid.set_fourier_from_index(index, value);
             }
+        }
+
+        //===================================================================================
+        /// @brief From two fourier grids, f and g, compute the convolution
+        /// \f$ f(k) * g(k) = \int d^{\rm N}q f(q) g(k-q) \f$ This is done via multuplication in reals-space. We
+        /// allocate one temporary grid and perform 3 fourier tranforms.
+        ///
+        /// @tparam N dimension of the grid
+        ///
+        /// @param[in] fourier_grid_f The fourier grid f
+        /// @param[in] fourier_grid_g The fourier grid g
+        /// @param[out] fourier_grid_result Fourier grid containing the convolution of the two gridsf
+        ///
+        //===================================================================================
+        template <int N>
+        void convolution_fourier_space(const FFTWGrid<N> & fourier_grid_f,
+                                       const FFTWGrid<N> & fourier_grid_g,
+                                       FFTWGrid<N> & fourier_grid_result) {
+
+            bool f_and_g_are_the_same_grid = (&fourier_grid_f == &fourier_grid_g);
+
+            // Make copies: tmp contains f and result contains g
+            // unless f = g for which we can don't need the copy
+            // and save doing 1 FFT
+            FFTWGrid<N> tmp;
+            fourier_grid_result = fourier_grid_g;
+
+            // Fourier transform to real space
+            fourier_grid_result.fftw_c2r();
+            if (!f_and_g_are_the_same_grid) {
+                tmp = fourier_grid_f;
+                tmp.fftw_c2r();
+            }
+
+            // Multiply the two grids in real space
+            for (auto & real_index : fourier_grid_result.get_real_range()) {
+                auto g_real = fourier_grid_result.get_real_from_index(real_index);
+                auto f_real = g_real;
+                if (!f_and_g_are_the_same_grid)
+                    f_real = tmp.get_real_from_index(real_index);
+                fourier_grid_result.set_real_from_index(real_index, f_real * g_real);
+            }
+
+            // Transform back to obtain the desired convolution
+            fourier_grid_result.fftw_r2c();
+        }
+
+        //===================================================================================
+        /// @brief From two real grids, f and g, compute the convolution
+        /// \f$ f(x) * g(x) = \int d^{\rm N}y f(y) g(x-y) \f$ This is done via multiplication in fourier-space. We
+        /// allocate one temporary grid and perform 3 fourier tranforms. We can merge this with
+        /// convolution_fourier_space and just have one method and get do the real or fourier space convolution depening
+        /// on the status of the grids, but its easy to forget to set the status so we have two methods for this.
+        ///
+        /// @tparam N dimension of the grid
+        ///
+        /// @param[in] real_grid_f The real grid f
+        /// @param[in] real_grid_g The real grid g
+        /// @param[out] real_grid_result Real grid containing the convolution of the two grids.
+        ///
+        //===================================================================================
+        template <int N>
+        void convolution_real_space(const FFTWGrid<N> & real_grid_f,
+                                    const FFTWGrid<N> & real_grid_g,
+                                    FFTWGrid<N> & real_grid_result) {
+
+            bool f_and_g_are_the_same_grid = (&real_grid_f == &real_grid_g);
+
+            // Make copies: tmp contains f and result contains g
+            // unless f = g for which we can don't need the copy
+            // and save doing 1 FFT
+            FFTWGrid<N> tmp;
+            real_grid_result = real_grid_g;
+
+            // Fourier transform to real space
+            real_grid_result.fftw_r2c();
+            if (!f_and_g_are_the_same_grid) {
+                tmp = real_grid_f;
+                tmp.fftw_r2c();
+            }
+
+            // Multiply the two grids in real space
+            for (auto & fourier_index : real_grid_result.get_fourier_range()) {
+                auto g_fourier = real_grid_result.get_fourier_from_index(fourier_index);
+                auto f_fourier = g_fourier;
+                if (!f_and_g_are_the_same_grid)
+                    f_fourier = tmp.get_fourier_from_index(fourier_index);
+                real_grid_result.set_fourier_from_index(fourier_index, f_fourier * g_fourier);
+            }
+
+            // Transform back to obtain the desired convolution
+            real_grid_result.fftw_c2r();
         }
     } // namespace GRID
 } // namespace FML
