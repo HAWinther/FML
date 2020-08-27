@@ -39,6 +39,8 @@ namespace FML {
             std::normal_distribution<double> normal_dist{0.0, 1.0};
             std::string name{STDRANDOM_NAME};
 
+            double sigma = 1.0;
+
           public:
             RandomGenerator() = default;
             virtual ~RandomGenerator() = default;
@@ -52,11 +54,17 @@ namespace FML {
 
             RandomGenerator(std::vector<unsigned int> seed) { set_seed(seed); }
 
+            void set_normal_sigma(double sigma){
+              normal_dist = std::normal_distribution<double>{0.0, sigma};
+            }
+
             virtual void set_seed(std::vector<unsigned int> seed) {
                 Seed = seed;
                 std::seed_seq seeds(begin(Seed), end(Seed));
                 generator = std_random_generator_type(seeds);
             }
+
+            virtual RandomGenerator* clone(){ return new RandomGenerator(*this); }
 
             virtual void set_seed(unsigned int Seed) { set_seed(std::vector<unsigned int>(624, Seed)); }
 
@@ -96,12 +104,14 @@ namespace FML {
                 Seed = std::vector<unsigned int>(1, seed);
                 gsl_rng_set(rng.random_generator, seed);
             }
+            
+            virtual RandomGenerator* clone(){ return new GSLRandomGenerator(*this); }
 
             void set_seed(std::vector<unsigned int> seed) override { set_seed(seed[0]); }
 
             double generate_uniform() override { return gsl_rng_uniform(rng.random_generator); }
 
-            double generate_normal() override { return gsl_ran_gaussian(rng.random_generator, 1.0); }
+            double generate_normal() override { return gsl_ran_gaussian(rng.random_generator, sigma); }
         };
 
 #endif

@@ -521,6 +521,7 @@ namespace FML {
 
         template <class T>
         void MPIParticles<T>::communicate_particles() {
+            if(FML::NTasks == 1) return;
 #ifdef USE_MPI
 
             // The number of particles we start with

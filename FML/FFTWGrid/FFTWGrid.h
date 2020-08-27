@@ -229,7 +229,8 @@ namespace FML {
 
             // Range iterator for going through all active cells in the main real/complex grid by index
             // [ e.g. for(auto and real_index: grid.real_range()) ]
-            RealRange get_real_range();
+            // If you add the slice numbers we only loop over the given slice range
+            RealRange get_real_range(int islice_begin = 0, int islice_end = 0);
             FourierRange get_fourier_range();
 
             // The number of cells per slice that we alloc. Useful to jump from slice to slice
@@ -289,13 +290,14 @@ namespace FML {
         /// some cells when looping through the real grid
         class LoopIteratorReal {
           private:
-            int real_index, index, Nmesh, odd;
+            IndexIntType real_index, index;
+            int Nmesh, odd;
 
           public:
-            LoopIteratorReal(int _index, int _Nmesh)
+            LoopIteratorReal(IndexIntType _index, int _Nmesh)
                 : real_index(_index + 2 * (_index / _Nmesh)), index(_index), Nmesh(_Nmesh), odd(_Nmesh % 2) {}
             bool operator!=(LoopIteratorReal const & other) const { return index != other.index; }
-            int const & operator*() const { return real_index; }
+            const IndexIntType & operator*() const { return real_index; }
             LoopIteratorReal & operator++() {
                 ++index;
                 if (index % Nmesh == 0)
@@ -308,10 +310,11 @@ namespace FML {
         /// For range based for-loops over the real-grid. Loop over all local cells.
         class RealRange {
           private:
-            const int from, to, Nmesh;
+            const IndexIntType from, to;
+            const int Nmesh;
 
           public:
-            RealRange(int _from, int _to, int _Nmesh) : from(_from), to(_to), Nmesh(_Nmesh) {}
+            RealRange(IndexIntType _from, IndexIntType _to, int _Nmesh) : from(_from), to(_to), Nmesh(_Nmesh) {}
             LoopIteratorReal begin() const { return {from, Nmesh}; }
             LoopIteratorReal end() const { return {to, Nmesh}; }
         };
@@ -343,7 +346,12 @@ namespace FML {
         };
 
         template <int N>
-        RealRange FFTWGrid<N>::get_real_range() {
+        RealRange FFTWGrid<N>::get_real_range(int islice_begin, int islice_end) {
+
+            // If fiducial parameters are used then we loop over all cells
+            if (islice_begin == 0 and islice_end == 0)
+                islice_end = Local_nx;
+
 #ifdef DEBUG_FFTWGRID
             if (not grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
@@ -351,7 +359,7 @@ namespace FML {
             }
 #endif
             // Here NmeshTotReal = LocalNx * Nmesh^N-1
-            return RealRange(0, NmeshTotReal, Nmesh);
+            return RealRange((NmeshTotReal * islice_begin / Local_nx), (NmeshTotReal * islice_end / Local_nx), Nmesh);
         }
 
         template <int N>

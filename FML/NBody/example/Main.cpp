@@ -12,8 +12,8 @@
 // This example shows how to make a very simple and
 // naive N-body solver from a given P(k).
 //
-// We generate particles using 1LPPT and step from the 
-// initial time til z = 0 and compute the power-spectrum 
+// We generate particles using 1LPPT and step from the
+// initial time til z = 0 and compute the power-spectrum
 // and compare to the input.
 //
 // This is just meant to illustrate how one can do this
@@ -24,7 +24,7 @@
 // The dimension we are working in (e.g. Ndim=2 is nice
 // to use for testing as its much faster) and the
 // boxsize in your physical units (say Mpc/h)
-// This only enters in converting the power-spectum 
+// This only enters in converting the power-spectum
 // to dimensionless units
 //=====================================================
 
@@ -33,8 +33,8 @@ const double box = 1000.0;
 const double z_ini = 20.0;
 const bool fix_amplitude = true;
 const double OmegaM = 1.0;
-const int Nmesh = 256*4;
-const int Npart_1D = 256*4;
+const int Nmesh = 256;
+const int Npart_1D = 256;
 const double buffer_factor = 2;
 const int nsteps = 40;
 std::string interpolation_method = "CIC";
@@ -240,15 +240,12 @@ int main() {
         if (FML::ThisTask == 0)
             std::cout << i + 1 << " / " << nsteps << " done! a: " << apos_new << "\n";
     }
-
-    // Velocities are here out of sync with positions (we don't bother fixing this)
+    // Velocities are here da/2 out of sync with positions (we don't bother fixing this in this example)
 
     // Compute power-spectrum
     FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim> pofk(Nmesh / 2);
     FML::CORRELATIONFUNCTIONS::compute_power_spectrum_interlacing<Ndim>(
         Nmesh, part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), pofk, "PQS");
-    //for (int i = 0; i < pofk.n; i++)
-    //    pofk.pofk[i] += 1.0 / double(part.get_npart_total());
     pofk.scale(box);
     if (FML::ThisTask == 0) {
         for (int i = 0; i < pofk.n; i++) {

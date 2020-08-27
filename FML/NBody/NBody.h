@@ -254,6 +254,8 @@ namespace FML {
         /// @tparam N The dimension of the grid
         /// @tparam T The particle class
         ///
+        /// @param[in] force_grid The force \f$ \nabla \Phi \f$. This grid is deallocated after use. Set
+        /// free_force_grids = false in the source to chansource to change this.
         /// @param[out] p Pointer to the first particle.
         /// @param[in] NumPart The number of local particles.
         /// @param[in] delta_time The size of the timestep.

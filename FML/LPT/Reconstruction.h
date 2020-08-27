@@ -132,6 +132,7 @@ namespace FML {
                     // Interpolate Psi to particle positions
                     std::vector<std::vector<FloatType>> Psi_particle_positions(N);
                     for (int idim = 0; idim < N; idim++) {
+                        Psi[idim].communicate_boundaries();
                         FML::INTERPOLATION::interpolate_grid_to_particle_positions(Psi[idim],
                                                                                    part.get_particles_ptr(),
                                                                                    part.get_npart(),

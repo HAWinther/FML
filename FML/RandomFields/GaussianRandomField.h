@@ -32,6 +32,63 @@ namespace FML {
             using FFTWGrid = FML::GRID::FFTWGrid<N>;
 
             //=================================================================================
+            /// This generates gaussian white noise in real-space. It is normalized such that
+            /// the power-spectrum of the field is unity, so the amplitude in real-space is
+            /// Nmesh^(N/2.)
+            ///
+            /// @tparam N The dimension we are it
+            ///
+            /// @param[out] grid The real grid we generate.
+            /// @param[in] rng The random generator.
+            ///
+            //=================================================================================
+            template <int N>
+            void generate_white_noise_field_real(FFTWGrid<N> & grid, RandomGenerator * rng) {
+
+                auto Nmesh = grid.get_nmesh();
+                auto local_x_start = grid.get_local_x_start();
+                auto local_nx = grid.get_local_nx();
+
+                // The norm is to get unit power-spectrum
+                const double norm = std::pow(grid.get_nmesh(), N / 2.0);
+
+                // Communicate the seeds for each slice over tasks to ensure we get the
+                // same result no matter how many tasks we use
+                std::vector<unsigned int> seedtable(Nmesh, 0);
+                if (FML::ThisTask == 0) {
+                    for (int i = 0; i < Nmesh; i++) {
+                        seedtable[i] = (unsigned int)(INT_MAX * rng->generate_uniform());
+                    }
+                }
+#ifdef USE_MPI
+                MPI_Allreduce(MPI_IN_PLACE, seedtable.data(), Nmesh, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD);
+#endif
+                // Make random generators for each slice to ensure we get the same
+                // result no matter how many threads we use
+                std::vector<RandomGenerator *> rngs(local_nx);
+                for (int i = 0; i < local_nx; i++)
+                    rngs[i] = rng->clone();
+
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                // Loop over slices
+                for (int slice = 0; slice < local_nx; slice++) {
+                    // Seed the rng
+                    auto _rng = rngs[slice];
+                    _rng->set_seed(seedtable[slice + local_x_start]);
+
+                    // Loop over cells
+                    for (auto & real_index : grid.get_real_range(slice, slice + 1)) {
+                        auto value = _rng->generate_normal() * norm;
+                        grid.set_real_from_index(real_index, value);
+                        if (slice + local_x_start == 0)
+                            std::cout << value << "\n";
+                    }
+                }
+            }
+
+            //=================================================================================
             ///
             /// @tparam N The dimension we are it
             ///

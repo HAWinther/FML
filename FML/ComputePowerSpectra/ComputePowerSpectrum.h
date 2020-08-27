@@ -815,7 +815,8 @@ namespace FML {
             // Reset binning
             bofk.reset();
 
-            const int Nmesh = density_k.get_nmesh();
+            const auto local_nx = density_k.get_local_nx();
+            const auto Nmesh = density_k.get_nmesh();
             const int nbins = bofk.n;
             assert_mpi(nbins > 0, "[compute_bispectrum] nbins has to be >= 0\n");
             assert_mpi(Nmesh > 0, "[compute_bispectrum] grid is not allocated\n");
@@ -974,11 +975,16 @@ namespace FML {
 
                 // Compute number of triangles in current bin (norm insignificant below)
                 double N123_current = 0.0;
-                for (auto & real_index : N_k[0].get_real_range()) {
-                    double N1 = N_k[ik[0]].get_real_from_index(real_index);
-                    double N2 = N_k[ik[1]].get_real_from_index(real_index);
-                    double N3 = N_k[ik[2]].get_real_from_index(real_index);
-                    N123_current += N1 * N2 * N3;
+#ifdef USE_OMP
+#pragma omp parallel for reduction(+: N123_current)
+#endif
+                for (int islice = 0; islice < local_nx; islice++) {
+                    for (auto & real_index : N_k[0].get_real_range(islice, islice + 1)) {
+                        double N1 = N_k[ik[0]].get_real_from_index(real_index);
+                        double N2 = N_k[ik[1]].get_real_from_index(real_index);
+                        double N3 = N_k[ik[2]].get_real_from_index(real_index);
+                        N123_current += N1 * N2 * N3;
+                    }
                 }
 #ifdef USE_MPI
                 MPI_Allreduce(MPI_IN_PLACE, &N123_current, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
@@ -986,11 +992,16 @@ namespace FML {
 
                 // Compute sum over triangles
                 double F123_current = 0.0;
-                for (auto & real_index : F_k[0].get_real_range()) {
-                    auto F1 = F_k[ik[0]].get_real_from_index(real_index);
-                    auto F2 = F_k[ik[1]].get_real_from_index(real_index);
-                    auto F3 = F_k[ik[2]].get_real_from_index(real_index);
-                    F123_current += F1 * F2 * F3;
+#ifdef USE_OMP
+#pragma omp parallel for reduction(+: F123_current)
+#endif
+                for (int islice = 0; islice < local_nx; islice++) {
+                    for (auto & real_index : F_k[0].get_real_range(islice, islice + 1)) {
+                        auto F1 = F_k[ik[0]].get_real_from_index(real_index);
+                        auto F2 = F_k[ik[1]].get_real_from_index(real_index);
+                        auto F3 = F_k[ik[2]].get_real_from_index(real_index);
+                        F123_current += F1 * F2 * F3;
+                    }
                 }
 #ifdef USE_MPI
                 MPI_Allreduce(MPI_IN_PLACE, &F123_current, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
@@ -1043,7 +1054,8 @@ namespace FML {
             // Reset the binning
             polyofk.reset();
 
-            const int Nmesh = fourier_grid.get_nmesh();
+            const auto local_nx = fourier_grid.get_local_nx();
+            const auto Nmesh = fourier_grid.get_nmesh();
             const int nbins = polyofk.n;
             assert_mpi(nbins > 0, "[compute_polyspectrum] nbins has to be >=0\n");
             assert_mpi(Nmesh > 0, "[compute_polyspectrum] grid is not allocated\n");
@@ -1199,11 +1211,16 @@ namespace FML {
 
                 // Compute number of triangles in current bin (norm insignificant below)
                 double N123_current = 0.0;
-                for (auto & real_index : N_k[0].get_real_range()) {
-                    double Nproduct = 1.0;
-                    for (int ii = 0; ii < ORDER; ii++)
-                        Nproduct *= N_k[ik[ii]].get_real_from_index(real_index);
-                    N123_current += Nproduct;
+#ifdef USE_OMP
+#pragma omp parallel for reduction(+: N123_current)
+#endif
+                for (int islice = 0; islice < local_nx; islice++) {
+                    for (auto & real_index : N_k[0].get_real_range()) {
+                        double Nproduct = 1.0;
+                        for (int ii = 0; ii < ORDER; ii++)
+                            Nproduct *= N_k[ik[ii]].get_real_from_index(real_index);
+                        N123_current += Nproduct;
+                    }
                 }
 #ifdef USE_MPI
                 MPI_Allreduce(MPI_IN_PLACE, &N123_current, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
@@ -1211,11 +1228,16 @@ namespace FML {
 
                 // Compute sum over triangles
                 double F123_current = 0.0;
-                for (auto & real_index : F_k[0].get_real_range()) {
-                    double Fproduct = 1.0;
-                    for (int ii = 0; ii < ORDER; ii++)
-                        Fproduct *= F_k[ik[ii]].get_real_from_index(real_index);
-                    F123_current += Fproduct;
+#ifdef USE_OMP
+#pragma omp parallel for reduction(+: F123_current)
+#endif
+                for (int islice = 0; islice < local_nx; islice++) {
+                    for (auto & real_index : F_k[0].get_real_range(islice,islice+1)) {
+                        double Fproduct = 1.0;
+                        for (int ii = 0; ii < ORDER; ii++)
+                            Fproduct *= F_k[ik[ii]].get_real_from_index(real_index);
+                        F123_current += Fproduct;
+                    }
                 }
 #ifdef USE_MPI
                 MPI_Allreduce(MPI_IN_PLACE, &F123_current, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);

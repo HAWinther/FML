@@ -147,15 +147,14 @@ namespace FML {
                 double kmag;
                 std::complex<double> I(0, 1);
                 for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
-                    if (Local_x_start == 0 && ind == 0)
-                        continue;
 
                     // Get wavevector and magnitude
                     phi.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag);
 
                     // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi]
                     auto value = phi.get_fourier_from_index(ind);
-
+                    if (Local_x_start && ind == 0)
+                        value = 0.0;
                     for (int idim = 0; idim < N; idim++) {
                         psi[idim].set_fourier_from_index(ind, I * value * kvec[idim]);
                     }
@@ -210,14 +209,14 @@ namespace FML {
                 std::array<double, N> kvec;
                 double kmag2;
                 for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
-                    if (Local_x_start == 0 && ind == 0)
-                        continue;
 
                     // Get wavevector and magnitude
                     phi_1LPT.get_fourier_wavevector_and_norm2_by_index(ind, kvec, kmag2);
 
                     // D^2 Phi_1LPT = -delta => F[Phi_1LPT] = F[delta] / k^2
                     auto value = delta.get_fourier_from_index(ind) / kmag2;
+                    if (Local_x_start == 0 && ind == 0)
+                        value = 0.0;
                     phi_1LPT.set_fourier_from_index(ind, value);
                 }
             }
@@ -248,6 +247,7 @@ namespace FML {
                 auto nright = delta.get_n_extra_slices_right();
                 auto Local_x_start = delta.get_local_x_start();
                 auto Nmesh = delta.get_nmesh();
+                auto local_nx = delta.get_local_nx();
                 size_t NmeshTotFourier = delta.get_ntot_fourier();
 
                 // Create grids
@@ -265,14 +265,14 @@ namespace FML {
                 std::array<double, N> kvec;
                 double kmag;
                 for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
-                    if (Local_x_start == 0 && ind == 0)
-                        continue;
 
                     // Get wavevector and magnitude xxx Get norm here
                     delta.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag);
 
                     // D^2Phi = -delta => F[DiDj Phi] = F[delta] kikj/k^2
                     auto value = delta.get_fourier_from_index(ind) / (kmag * kmag);
+                    if (Local_x_start == 0 && ind == 0)
+                        value = 0.0;
 
                     for (int idim = 0; idim < N; idim++) {
                         phi_1LPT_ii[idim].set_fourier_from_index(ind, value * kvec[idim] * kvec[idim]);
@@ -299,15 +299,21 @@ namespace FML {
                     std::cout
                         << "Add 0.5[(D^2 phi_1LPT)^2 - DiDi phi_1LPT^2] to real space grid containing (D^2phi_2LPT) \n";
 #endif
-                for (auto & real_index : phi_2LPT.get_real_range()) {
-                    auto laplacian = 0.0, sum_squared = 0.0;
-                    for (int idim = 0; idim < N; idim++) {
-                        auto curpsi = phi_1LPT_ii[idim].get_real_from_index(real_index);
-                        laplacian += curpsi;
-                        sum_squared += curpsi * curpsi;
+
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < local_nx; islice++) {
+                    for (auto & real_index : phi_2LPT.get_real_range(islice, islice + 1)) {
+                        auto laplacian = 0.0, sum_squared = 0.0;
+                        for (int idim = 0; idim < N; idim++) {
+                            auto curpsi = phi_1LPT_ii[idim].get_real_from_index(real_index);
+                            laplacian += curpsi;
+                            sum_squared += curpsi * curpsi;
+                        }
+                        auto value = 0.5 * (laplacian * laplacian - sum_squared);
+                        phi_2LPT.set_real_from_index(real_index, value);
                     }
-                    auto value = 0.5 * (laplacian * laplacian - sum_squared);
-                    phi_2LPT.set_real_from_index(real_index, value);
                 }
 
                 // Free memory
@@ -329,13 +335,13 @@ namespace FML {
                     std::cout << "Compute [DiDj phi_1LPT] in fourier space\n";
 #endif
                 for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
-                    if (Local_x_start == 0 && ind == 0)
-                        continue;
 
                     // Get wavevector and magnitude
                     delta.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag);
 
                     auto value = delta.get_fourier_from_index(ind) / (kmag * kmag);
+                    if (Local_x_start == 0 && ind == 0)
+                        value = 0.0;
 
                     int pair = 0;
                     for (int idim1 = 0; idim1 < N; idim1++) {
@@ -360,15 +366,21 @@ namespace FML {
                 if (FML::ThisTask == 0)
                     std::cout << "Add [-DiDjphi_1LPT^2] to real space grid containing (D^2phi_2LPT) \n";
 #endif
-                for (auto & real_index : phi_2LPT.get_real_range()) {
-                    auto sum_squared = 0.0;
-                    for (int pair = 0; pair < num_pairs; pair++) {
-                        auto curpsi = phi_1LPT_ij[pair].get_real_from_index(real_index);
-                        sum_squared += curpsi * curpsi;
-                    }
-                    auto value = (phi_2LPT.get_real_from_index(real_index) - sum_squared);
 
-                    phi_2LPT.set_real_from_index(real_index, value);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < local_nx; islice++) {
+                    for (auto & real_index : phi_2LPT.get_real_range(islice, islice + 1)) {
+                        auto sum_squared = 0.0;
+                        for (int pair = 0; pair < num_pairs; pair++) {
+                            auto curpsi = phi_1LPT_ij[pair].get_real_from_index(real_index);
+                            sum_squared += curpsi * curpsi;
+                        }
+                        auto value = (phi_2LPT.get_real_from_index(real_index) - sum_squared);
+
+                        phi_2LPT.set_real_from_index(real_index, value);
+                    }
                 }
 
                 // Free memory
@@ -389,14 +401,14 @@ namespace FML {
                     std::cout << "Computing phi_2LPT in fourier space\n";
 #endif
                 for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
-                    if (Local_x_start == 0 && ind == 0)
-                        continue;
 
                     // Get wavevector and magnitude
                     phi_2LPT.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag);
 
                     auto value = phi_2LPT.get_fourier_from_index(ind);
                     value *= -1.0 / (kmag * kmag);
+                    if (Local_x_start == 0 && ind == 0)
+                        value = 0.0;
 
                     phi_2LPT.set_fourier_from_index(ind, value);
                 }
