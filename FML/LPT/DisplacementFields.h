@@ -182,8 +182,8 @@ namespace FML {
             ///
             /// @tparam N The dimension of the grid
             ///
-            /// @param[in] delta The density contrast in fourier space
-            /// @param[out] phi_1LPT The LPT potential in fourier space
+            /// @param[in] delta_fourier The density contrast in fourier space
+            /// @param[out] phi_1LPT_fourier The LPT potential in fourier space
             ///
             //=================================================================================
             template <int N>
@@ -271,16 +271,19 @@ namespace FML {
                 if (FML::ThisTask == 0)
                     std::cout << "Compute [DiDi phi_1LPT] in fourier space\n";
 #endif
-                // Compute phi_xx, phi_yy, ...
-                std::array<double, N> kvec;
-                double kmag;
+                    // Compute phi_xx, phi_yy, ...
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
                 for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
+                    std::array<double, N> kvec;
+                    double kmag2;
 
                     // Get wavevector and magnitude xxx Get norm here
-                    delta.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag);
+                    delta.get_fourier_wavevector_and_norm2_by_index(ind, kvec, kmag2);
 
                     // D^2Phi = -delta => F[DiDj Phi] = F[delta] kikj/k^2
-                    auto value = delta.get_fourier_from_index(ind) / (kmag * kmag);
+                    auto value = delta.get_fourier_from_index(ind) / kmag2;
                     if (Local_x_start == 0 && ind == 0)
                         value = 0.0;
 
@@ -349,11 +352,13 @@ namespace FML {
 #pragma omp parallel for
 #endif
                 for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
+                    std::array<double, N> kvec;
+                    double kmag2;
 
                     // Get wavevector and magnitude
-                    delta.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag);
+                    delta.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag2);
 
-                    auto value = delta.get_fourier_from_index(ind) / (kmag * kmag);
+                    auto value = delta.get_fourier_from_index(ind) / kmag2;
                     if (Local_x_start == 0 && ind == 0)
                         value = 0.0;
 
@@ -414,14 +419,20 @@ namespace FML {
                 if (FML::ThisTask == 0)
                     std::cout << "Computing phi_2LPT in fourier space\n";
 #endif
+
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
                 for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
+                    std::array<double, N> kvec;
+                    double kmag2;
 
                     // Get wavevector and magnitude
-                    phi_2LPT.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag);
+                    phi_2LPT.get_fourier_wavevector_and_norm2_by_index(ind, kvec, kmag2);
 
                     // Add in the -3/7 factor
                     auto value = prefactor_2LPT * phi_2LPT.get_fourier_from_index(ind);
-                    value *= -1.0 / (kmag * kmag);
+                    value *= -1.0 / kmag2;
                     if (Local_x_start == 0 && ind == 0)
                         value = 0.0;
 
@@ -525,25 +536,20 @@ namespace FML {
 #endif
                 for (int islice = 0; islice < local_nx; islice++) {
                     for (auto & real_index : phi_2LPT_fourier.get_real_range(islice, islice + 1)) {
-                        if constexpr (N == 2) {
-                            auto psi1_xx = phi_1LPT_ij[0].get_real_from_index(real_index);
-                            auto psi1_yy = phi_1LPT_ij[1].get_real_from_index(real_index);
-                            auto psi1_xy = phi_1LPT_ij[2].get_real_from_index(real_index);
-                            auto value = psi1_xx * psi1_yy - psi1_xy * psi1_xy;
-                            phi_2LPT_fourier.set_real_from_index(real_index, value);
+                        // Compute laplacian and sum of squares to get Sum_i,j Phi_iiPhi_jj Phi_ij^2
+                        double laplacian = 0.0;
+                        double sum_squared = 0.0;
+                        int pair = 0;
+                        for (int idim1 = 0; idim1 < N; idim1++) {
+                            auto phi_ij = phi_1LPT_ij[pair++].get_real_from_index(real_index);
+                            laplacian += phi_ij;
+                            sum_squared += phi_ij * phi_ij;
+                            for (int idim2 = idim1 + 1; idim2 < N; idim2++) {
+                                phi_ij = phi_1LPT_ij[pair++].get_real_from_index(real_index);
+                                sum_squared += 2.0 * phi_ij * phi_ij;
+                            }
                         }
-                        if constexpr (N == 3) {
-                            auto psi1_xx = phi_1LPT_ij[0].get_real_from_index(real_index);
-                            auto psi1_yy = phi_1LPT_ij[1].get_real_from_index(real_index);
-                            auto psi1_zz = phi_1LPT_ij[2].get_real_from_index(real_index);
-                            auto psi1_xy = phi_1LPT_ij[3].get_real_from_index(real_index);
-                            auto psi1_yz = phi_1LPT_ij[4].get_real_from_index(real_index);
-                            auto psi1_zx = phi_1LPT_ij[5].get_real_from_index(real_index);
-                            auto value = psi1_xx * psi1_yy - psi1_xy * psi1_xy;
-                            value += psi1_yy * psi1_zz - psi1_yz * psi1_yz;
-                            value += psi1_zz * psi1_xx - psi1_zx * psi1_zx;
-                            phi_2LPT_fourier.set_real_from_index(real_index, value);
-                        }
+                        phi_2LPT_fourier.set_real_from_index(real_index, 0.5 * (laplacian * laplacian - sum_squared));
                     }
                 }
 
@@ -583,10 +589,6 @@ namespace FML {
                     }
                 }
 
-                // We now have phi_1LPT, phi_2LPT plus all the phi_1LPT_ij and phi_2LPT_ij terms we need (in
-                // real-space) This now amounts to 15 grids in 3D and 9 in 2D. That is alot. We can save some grids
-                // by doing it in chunks Make helper lamdas to avoid this blowing up code size
-
                 // Compute phi_3LPT_a
                 FFTWGrid<N> phi_3LPT_fourier(Nmesh, nleft, nright);
                 phi_3LPT_fourier.add_memory_label(
@@ -610,13 +612,14 @@ namespace FML {
 #endif
                 for (int islice = 0; islice < local_nx; islice++) {
                     for (auto & real_index : phi_2LPT_fourier.get_real_range(islice, islice + 1)) {
+
                         if constexpr (N == 2) {
                             auto psi1_xx = phi_1LPT_ij[0].get_real_from_index(real_index);
-                            auto psi1_yy = phi_1LPT_ij[1].get_real_from_index(real_index);
-                            auto psi1_xy = phi_1LPT_ij[2].get_real_from_index(real_index);
+                            auto psi1_xy = phi_1LPT_ij[1].get_real_from_index(real_index);
+                            auto psi1_yy = phi_1LPT_ij[2].get_real_from_index(real_index);
                             auto psi2_xx = phi_2LPT_ij[0].get_real_from_index(real_index);
-                            auto psi2_yy = phi_2LPT_ij[1].get_real_from_index(real_index);
-                            auto psi2_xy = phi_2LPT_ij[2].get_real_from_index(real_index);
+                            auto psi2_xy = phi_2LPT_ij[1].get_real_from_index(real_index);
+                            auto psi2_yy = phi_2LPT_ij[2].get_real_from_index(real_index);
 
                             auto value_a = psi1_xx * psi1_yy - psi1_xy * psi1_xy;
 
@@ -631,17 +634,18 @@ namespace FML {
                         }
                         if constexpr (N == 3) {
                             auto psi1_xx = phi_1LPT_ij[0].get_real_from_index(real_index);
-                            auto psi1_yy = phi_1LPT_ij[1].get_real_from_index(real_index);
-                            auto psi1_zz = phi_1LPT_ij[2].get_real_from_index(real_index);
-                            auto psi1_xy = phi_1LPT_ij[3].get_real_from_index(real_index);
+                            auto psi1_xy = phi_1LPT_ij[1].get_real_from_index(real_index);
+                            auto psi1_zx = phi_1LPT_ij[2].get_real_from_index(real_index);
+                            auto psi1_yy = phi_1LPT_ij[3].get_real_from_index(real_index);
                             auto psi1_yz = phi_1LPT_ij[4].get_real_from_index(real_index);
-                            auto psi1_zx = phi_1LPT_ij[5].get_real_from_index(real_index);
+                            auto psi1_zz = phi_1LPT_ij[5].get_real_from_index(real_index);
+
                             auto psi2_xx = phi_2LPT_ij[0].get_real_from_index(real_index);
-                            auto psi2_yy = phi_2LPT_ij[1].get_real_from_index(real_index);
-                            auto psi2_zz = phi_2LPT_ij[2].get_real_from_index(real_index);
-                            auto psi2_xy = phi_2LPT_ij[3].get_real_from_index(real_index);
+                            auto psi2_xy = phi_2LPT_ij[1].get_real_from_index(real_index);
+                            auto psi2_zx = phi_2LPT_ij[2].get_real_from_index(real_index);
+                            auto psi2_yy = phi_2LPT_ij[3].get_real_from_index(real_index);
                             auto psi2_yz = phi_2LPT_ij[4].get_real_from_index(real_index);
-                            auto psi2_zx = phi_2LPT_ij[5].get_real_from_index(real_index);
+                            auto psi2_zz = phi_2LPT_ij[5].get_real_from_index(real_index);
 
                             auto value_a = psi1_xx * psi1_yy * psi1_zz;
                             value_a += 2.0 * psi1_xy * psi1_yz * psi1_zx;
@@ -668,6 +672,29 @@ namespace FML {
                                 phi_3LPT_Avec[2].set_real_from_index(real_index, value_Avec_z);
                             }
                         }
+
+                        /* General method for the b term... but determinant is messy so we do it explicit
+                        // Compute laplacian and sum of squares
+                        double laplacian1 = 0.0;
+                        double laplacian2 = 0.0;
+                        double sum_squared = 0.0;
+                        int pair1 = 0, pair2 = 0;
+                        for (int idim1 = 0; idim1 < N; idim1++) {
+                            auto phi1_ij =
+                                phi_1LPT_ij[pair1++].get_real_from_index(real_index);
+                            auto phi2_ij =
+                                phi_2LPT_ij[pair2++].get_real_from_index(real_index);
+                            laplacian1 += phi1_ij;
+                            laplacian2 += phi2_ij;
+                            sum_squared += phi1_ij * phi2_ij;
+                            for (int idim2 = idim1+1; idim2 < N; idim2++) {
+                                phi1_ij = phi_1LPT_ij[pair1++].get_real_from_index(real_index);
+                                phi2_ij = phi_2LPT_ij[pair2++].get_real_from_index(real_index);
+                                sum_squared += 2.0 * phi1_ij * phi2_ij;
+                            }
+                        }
+                        phi_3LPT_b.set_real_from_index(real_index, 0.5 * (laplacian1 * laplacian2 - sum_squared));
+                        */
                     }
                 }
 
@@ -750,7 +777,7 @@ namespace FML {
                             (-I * kvec[0] * value + I * DoverDini3 / 7.0 * (kvec[1] * A[2] - kvec[2] * A[1])) * fac);
                         Psi[1].set_fourier_from_index(
                             ind,
-                            (-I * kvec[2] * value + I * DoverDini3 / 7.0 * (kvec[2] * A[0] - kvec[0] * A[2])) * fac);
+                            (-I * kvec[1] * value + I * DoverDini3 / 7.0 * (kvec[2] * A[0] - kvec[0] * A[2])) * fac);
                         Psi[2].set_fourier_from_index(
                             ind,
                             (-I * kvec[2] * value + I * DoverDini3 / 7.0 * (kvec[0] * A[1] - kvec[1] * A[0])) * fac);
@@ -762,7 +789,7 @@ namespace FML {
                                 fac);
                         dPsidt[1].set_fourier_from_index(
                             ind,
-                            (-I * kvec[2] * dvaluedt + 3.0 * I * DoverDini3 / 7.0 * (kvec[2] * A[0] - kvec[0] * A[2])) *
+                            (-I * kvec[1] * dvaluedt + 3.0 * I * DoverDini3 / 7.0 * (kvec[2] * A[0] - kvec[0] * A[2])) *
                                 fac);
                         dPsidt[2].set_fourier_from_index(
                             ind,
