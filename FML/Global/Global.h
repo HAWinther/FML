@@ -88,7 +88,7 @@ namespace FML {
         MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, MPI_COMM_WORLD);
         T maxvalue = *value;
         for (auto v : values)
-            if (maxvalue > v)
+            if (maxvalue < v)
                 maxvalue = v;
         *value = maxvalue;
 #endif
@@ -100,7 +100,7 @@ namespace FML {
         MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, MPI_COMM_WORLD);
         T minvalue = *value;
         for (auto v : values)
-            if (minvalue < v)
+            if (minvalue > v)
                 minvalue = v;
         *value = minvalue;
 #endif
