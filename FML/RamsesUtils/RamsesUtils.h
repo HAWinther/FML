@@ -11,37 +11,72 @@
 #include <stdlib.h>
 #include <vector>
 
+#include <FML/Global/Global.h>
+
+// To avoid having set_id, set_level etc. methods in
+// the particle class remove one of these
+#define PARTICLE_HAS_ID
+#define PARTICLE_HAS_VEL
+#define PARTICLE_HAS_MASS
+#define PARTICLE_HAS_LEVEL
+#define PARTICLE_HAS_FAMILY
+#define PARTICLE_HAS_TAG
+
 namespace FML {
     namespace FILEUTILS {
 
         /// Reading RAMSES files (DM only).
         namespace RAMSES {
 
-            using RamsesDoubleType = double;
+            // The types of the fields in the ramses output
+            // If you have nonstandard files then change it here
+            using RamsesPosType = double;
+            using RamsesVelType = double;
+            using RamsesMassType = double;
+            using RamsesLevelType = int;
+            using RamsesTagType = char;
+            using RamsesFamilyType = char;
+
+            // For ID we determine the size when reading
+            // one of these two
+            using RamsesIDType = int;
+            using RamsesLongIDType = size_t;
 
             //===========================================
             ///
             /// Read (and write) files related to RAMSES
             /// snapshots
             ///
-            /// Implemented write of:
-            ///
-            ///  ic_deltab IC file
+            /// Only implemented read of particle files
+            /// Only implemented write of ic_deltab IC file
             ///
             //===========================================
 
             class RamsesReader {
-
               private:
-                static const int MAXLEVEL{50};
+                // What is in the file and if we want to store it or not
+                std::vector<std::string> entries_in_file{"POS", "VEL", "MASS", "ID", "LEVEL", "FAMILY", "TAG"};
+                std::vector<bool> entries_to_store{true, true, true, true, true, true, true};
+
+                // What we store when we read the files
+                bool POS_STORE = true;
+                bool VEL_STORE = true;
+                bool MASS_STORE = false;
+                bool ID_STORE = false;
+                bool LEVEL_STORE = false;
+                bool FAMILY_STORE = false;
+                bool TAG_STORE = false;
 
                 // File description
                 std::string filepath{};
                 int outputnr{0};
 
+                // Total number of particles and particles in local domain
+                size_t npart{0};
+                size_t npart_in_domain{0};
+
                 // Data obtained from info-file
                 int ncpu{0};
-                int npart{0};
                 int levelmin{0};
                 int levelmax{0};
                 int ngridmax{0};
@@ -58,14 +93,16 @@ namespace FML {
                 double unit_d{0.0};
                 double unit_t{0.0};
                 double boxlen_ini{0.0};
-                std::vector<int> npart_file{};
 
                 // Book-keeping variables
                 bool infofileread{false};
-                int npart_read{0};
-                int nsink_read{0};
+                size_t npart_read{0};
 
+                bool keep_only_particles_in_domain{true};
                 bool verbose{false};
+
+                std::vector<int> npart_in_file{};
+                std::vector<int> npart_in_domain_in_file{};
 
                 void throw_error(std::string errormessage) const {
 #ifdef USE_MPI
@@ -80,42 +117,57 @@ namespace FML {
               public:
                 RamsesReader() = default;
 
-                RamsesReader(std::string _filepath, int _outputnr, bool _verbose = false)
-                    : filepath(_filepath), outputnr(_outputnr), npart_read(0), nsink_read(0), verbose(_verbose) {
+                RamsesReader(std::string _filepath,
+                             int _outputnr,
+                             bool _keep_only_particles_in_domain,
+                             bool _verbose = false)
+                    : filepath(_filepath), outputnr(_outputnr),
+                      keep_only_particles_in_domain(_keep_only_particles_in_domain),
+                      verbose(_verbose and FML::ThisTask == 0) {
                     read_info();
+                }
+
+                void set_file_format(std::vector<std::string> what_is_in_file, std::vector<bool> store_it_or_not) {
+                    assert(what_is_in_file.size() == store_it_or_not.size());
+                    for (auto e : what_is_in_file) {
+                        if (!(e == "POS" or e == "VEL" or e == "MASS" or e == "ID" or e == "LEVEL" or e == "FAMILY" or
+                              e == "TAG"))
+                            throw_error("[RamsesReader::set_file_format] Unknown field in file-entry (not "
+                                        "POS,VEL,MASS,ID,LEVEL,FAMILY,TAG): " +
+                                        e);
+                    }
+                    entries_in_file = what_is_in_file;
+                    entries_to_store = store_it_or_not;
                 }
 
                 template <class T>
                 void read_ramses_single(int ifile, std::vector<T> & p) {
+                    if (!infofileread)
+                        read_info();
+
                     std::string numberfolder = int_to_ramses_string(outputnr);
                     std::string numberfile = int_to_ramses_string(ifile + 1);
-                    std::string partfile = "";
-                    if (filepath.compare("") != 0)
-                        partfile = filepath + "/";
+                    std::string partfile = filepath == "" ? "" : filepath + "/";
                     partfile = partfile + "output_" + numberfolder + "/part_" + numberfolder + ".out" + numberfile;
                     FILE * fp;
                     if ((fp = fopen(partfile.c_str(), "r")) == nullptr) {
-                        std::string error =
-                            "[RamsesReader::read_ramses_single] Error opening particle file " + partfile;
-                        throw_error(error);
+                        throw_error("[RamsesReader::read_ramses_single] Error opening particle file " + partfile);
                     }
 
                     // When reading 1 by 1 we must put this to 0
                     npart_read = 0;
 
                     // Read header
-                    [[maybe_unused]] int ncpu_loc = read_int(fp);
-                    int ndim_loc = read_int(fp);
-                    int npart_loc = read_int(fp);
+                    auto header = read_particle_header(fp);
                     fclose(fp);
 
                     // Allocate particles
-                    if (p.size() < size_t(npart_loc))
-                        p.resize(npart_loc);
+                    if (p.size() < size_t(header.npart))
+                        p.resize(header.npart);
 
                     // Check that dimensions match
                     int ndim = p[0].get_ndim();
-                    assert(ndim == ndim_loc);
+                    assert(ndim == header.ndim);
 
                     // Read the data
                     read_particle_file(ifile, p);
@@ -126,6 +178,17 @@ namespace FML {
                     if (!infofileread)
                         read_info();
 
+                    if (keep_only_particles_in_domain)
+                        p = std::vector<T>(npart_in_domain);
+                    else
+                        p = std::vector<T>(npart);
+
+                    std::vector<long long int> npart_task(FML::NTasks);
+                    npart_task[FML::ThisTask] = npart_in_domain;
+#ifdef USE_MPI
+                    long long int n = npart_in_domain;
+                    MPI_Allgather(&n, 1, MPI_LONG_LONG, npart_task.data(), 1, MPI_LONG_LONG, MPI_COMM_WORLD);
+#endif
                     if (verbose) {
                         std::cout << "\n";
                         std::cout << "=================================="
@@ -136,17 +199,20 @@ namespace FML {
                                   << "\n";
                         std::cout << "Folder containing output: " << filepath << "\n";
                         std::cout << "Outputnumber: " << int_to_ramses_string(outputnr) << "\n";
-                        std::cout << "Allocate memory for " << npart << " particles\n";
+                        std::cout << "Npart total " << npart << " particles\n";
+                        if (keep_only_particles_in_domain)
+                            for (int i = 0; i < FML::NTasks; i++)
+                                std::cout << "On task " << i << " we will store " << npart_task[i] << " particles\n";
                     }
-                    p = std::vector<T>(npart);
 
                     // Loop and read all particle files
-                    npart_file = std::vector<int>(ncpu, 0);
-                    for (int i = 0; i < ncpu; i++)
+                    npart_read = 0;
+                    for (int i = 0; i < ncpu; i++) {
                         read_particle_file(i, p);
+                    }
 
                     if (verbose) {
-                        std::cout << "Done reading n = " << npart_read << " particles\n";
+                        std::cout << "Done reading particles\n";
                         std::cout << "==================================\n\n";
                     }
                 }
@@ -167,28 +233,20 @@ namespace FML {
                 //====================================================
 
                 int read_int(FILE * fp) {
-                    int tmp, skip1, skip2;
-                    fread(&skip1, sizeof(int), 1, fp);
-                    fread(&tmp, sizeof(int), 1, fp);
-                    fread(&skip2, sizeof(int), 1, fp);
-                    assert(skip1 == skip2);
-                    return tmp;
+                    int res;
+                    read_section(fp, (char *)&res, 1);
+                    return res;
                 }
 
-                void read_int_vec(FILE * fp, int * buffer, int n) {
+                int read_section(FILE * fp, char * buffer, int n) {
                     int skip1, skip2;
                     fread(&skip1, sizeof(int), 1, fp);
-                    fread(buffer, sizeof(int), n, fp);
+                    fread(buffer, sizeof(char), skip1, fp);
                     fread(&skip2, sizeof(int), 1, fp);
+                    int bytes_per_element = skip1 / n;
+                    assert(bytes_per_element * n == skip1);
                     assert(skip1 == skip2);
-                }
-
-                void read_double_vec(FILE * fp, double * buffer, int n) {
-                    int skip1, skip2;
-                    fread(&skip1, sizeof(int), 1, fp);
-                    fread(buffer, sizeof(double), n, fp);
-                    fread(&skip2, sizeof(int), 1, fp);
-                    assert(skip1 == skip2);
+                    return bytes_per_element;
                 }
 
                 //====================================================
@@ -198,17 +256,13 @@ namespace FML {
                 void read_info() {
                     int ndim_loc;
                     std::string numbers = int_to_ramses_string(outputnr);
-                    std::string infofile;
-                    if (filepath.compare("") != 0)
-                        infofile = filepath + "/";
+                    std::string infofile = filepath == "" ? "" : filepath + "/";
                     infofile = infofile + "output_" + numbers + "/info_" + numbers + ".txt";
                     FILE * fp;
 
                     // Open file
                     if ((fp = fopen(infofile.c_str(), "r")) == nullptr) {
-                        std::string error = "[RamsesReader::read_info] Error opening info file " + infofile;
-                        throw_error(error);
-                        exit(0);
+                        throw_error("[RamsesReader::read_info] Error opening info file " + infofile);
                     }
 
                     // Read the info-file
@@ -235,10 +289,14 @@ namespace FML {
                     // Calculate boxsize in Mpc/h
                     boxlen_ini = unit_l * h0 / 100.0 / aexp / 3.08567758e24;
 
-                    // Calculate number of particles [n = (2^levelmin) ^ ndim]
-                    npart = 1;
-                    for (int j = 0; j < ndim_loc; j++)
-                        npart = npart << levelmin;
+                    // Read how many particles there is in the files
+                    count_particles_in_files();
+                    npart = 0;
+                    npart_in_domain = 0;
+                    for (int i = 0; i < ncpu; i++) {
+                        npart += size_t(npart_in_file[i]);
+                        npart_in_domain += size_t(npart_in_domain_in_file[i]);
+                    }
 
                     if (verbose) {
                         std::cout << "\n";
@@ -262,17 +320,87 @@ namespace FML {
                     infofileread = true;
                 }
 
+                // Count how many particles are in each file and how many fall into the local domain
+                void count_particles_in_files() {
+                    npart_in_file.resize(ncpu);
+                    npart_in_domain_in_file.resize(ncpu);
+
+                    for (int i = 0; i < ncpu; i++) {
+                        FILE * fp;
+                        std::string numberfolder = int_to_ramses_string(outputnr);
+                        std::string numberfile = int_to_ramses_string(i + 1);
+                        std::string partfile = "";
+                        if (filepath.compare("") != 0)
+                            partfile = filepath + "/";
+                        partfile = partfile + "output_" + numberfolder + "/part_" + numberfolder + ".out" + numberfile;
+
+                        // Open file
+                        if ((fp = fopen(partfile.c_str(), "r")) == nullptr) {
+                            std::string error = "Error opening particle file " + partfile;
+                            exit(0);
+                        }
+
+                        // Read header
+                        auto header = read_particle_header(fp);
+
+                        // Read x position
+                        std::vector<char> buffer(header.npart * 8);
+                        read_section(fp, buffer.data(), header.npart);
+
+                        // Count how many positions fall into the local domain
+                        RamsesPosType * pos = (RamsesPosType *)buffer.data();
+                        int nindomain = 0;
+                        for (int i = 0; i < header.npart; i++) {
+                            if (pos[i] >= FML::xmin_domain and pos[i] < FML::xmax_domain)
+                                nindomain++;
+                        }
+                        npart_in_domain_in_file[i] = nindomain;
+                        npart_in_file[i] = header.npart;
+
+                        fclose(fp);
+                    }
+                }
+
+                struct ParticleFileHeader {
+                    int ncpu;
+                    int ndim;
+                    int npart;
+                    int localseed[4];
+                    int nstar_tot;
+                    int mstar_tot[2];
+                    int mstar_lost[2];
+                    int nsink;
+                };
+
+                ParticleFileHeader read_particle_header(FILE * fp) {
+                    ParticleFileHeader head;
+                    head.ncpu = read_int(fp);
+                    head.ndim = read_int(fp);
+                    head.npart = read_int(fp);
+                    read_section(fp, (char *)head.localseed, 4);
+                    head.nstar_tot = read_int(fp);
+                    read_section(fp, (char *)head.mstar_tot, 2);
+                    read_section(fp, (char *)head.mstar_lost, 2);
+                    head.nsink = read_int(fp);
+                    return head;
+                }
+
                 //====================================================
                 // Store the positions if particle has positions
                 //====================================================
 
                 template <class T>
-                void store_positions(RamsesDoubleType * pos, T * p, const int dim, const int npart) {
-                    if (p[0].get_pos() == nullptr)
+                void store_positions(RamsesPosType * pos, char * is_in_domain, T * p, const int dim, const int np) {
+                    T tmp;
+                    if (tmp.get_pos() == nullptr)
                         return;
-                    for (int i = 0; i < npart; i++) {
-                        auto * x = p[i].get_pos();
-                        x[dim] = pos[i];
+
+                    int count = 0;
+                    for (int i = 0; i < np; i++) {
+                        if (is_in_domain[i] == 1) {
+                            auto * x = p[count++].get_pos();
+                            x[dim] = pos[i];
+                        }
                     }
                 }
 
@@ -280,20 +408,115 @@ namespace FML {
                 // Store the velocities if particle has velocities
                 //====================================================
                 template <class T>
-                void store_velocity(RamsesDoubleType * vel, T * p, const int dim, const int npart) {
-                    if (p[0].get_vel() == nullptr)
+                void store_velocity(RamsesVelType * vel, char * is_in_domain, T * p, const int dim, const int np) {
+#ifdef PARTICLE_HAS_VEL
+                    T tmp;
+                    if (tmp.get_vel() == nullptr)
                         return;
-                    RamsesDoubleType velfac = 100.0 * boxlen_ini / aexp;
-                    for (int i = 0; i < npart; i++) {
-                        auto * v = p[i].get_vel();
-                        v[dim] = vel[i] * velfac;
+                    RamsesVelType velfac = 100.0 * boxlen_ini / aexp;
+                    int count = 0;
+                    for (int i = 0; i < np; i++) {
+                        if (is_in_domain[i] == 1) {
+                            auto * v = p[count++].get_vel();
+                            v[dim] = vel[i] * velfac;
+                        }
                     }
+#endif
+                }
+
+                //====================================================
+                // Store the mass if particle has mass
+                //====================================================
+                template <class T>
+                void store_mass(RamsesMassType * mass, char * is_in_domain, T * p, const int np) {
+#ifdef PARTICLE_HAS_MASS
+                    int count = 0;
+                    for (int i = 0; i < np; i++) {
+                        if (is_in_domain[i] == 1) {
+                            p[count++].set_mass(mass[i]);
+                        }
+                    }
+#endif
+                }
+
+                //====================================================
+                // Store the id if particle has id
+                //====================================================
+                template <class T>
+                void store_id(RamsesIDType * id, char * is_in_domain, T * p, const int np) {
+#ifdef PARTICLE_HAS_ID
+                    int count = 0;
+                    for (int i = 0; i < np; i++) {
+                        if (is_in_domain[i] == 1) {
+                            p[count++].set_id(id[i]);
+                        }
+                    }
+#endif
+                }
+
+                //====================================================
+                // Store the id if particle has id
+                //====================================================
+                template <class T>
+                void store_longid(RamsesLongIDType * id, char * is_in_domain, T * p, const int np) {
+#ifdef PARTICLE_HAS_ID
+                    int count = 0;
+                    for (int i = 0; i < np; i++) {
+                        if (is_in_domain[i] == 1) {
+                            p[count++].set_id(id[i]);
+                        }
+                    }
+#endif
+                }
+
+                //====================================================
+                // Store the family if particle has family
+                //====================================================
+                template <class T>
+                void store_family(RamsesFamilyType * family, char * is_in_domain, T * p, const int np) {
+#ifdef PARTICLE_HAS_FAMILY
+                    int count = 0;
+                    for (int i = 0; i < np; i++) {
+                        if (is_in_domain[i] == 1) {
+                            p[count++].set_family(family[i]);
+                        }
+                    }
+#endif
+                }
+
+                //====================================================
+                // Store the tag if particle has tag
+                //====================================================
+                template <class T>
+                void store_tag(RamsesTagType * tag, char * is_in_domain, T * p, const int np) {
+#ifdef PARTICLE_HAS_TAG
+                    int count = 0;
+                    for (int i = 0; i < np; i++) {
+                        if (is_in_domain[i] == 1) {
+                            p[count++].set_tag(tag[i]);
+                        }
+                    }
+#endif
+                }
+
+                //====================================================
+                // Store the level if particle has leve
+                //====================================================
+                template <class T>
+                void store_level(RamsesLevelType * level, char * is_in_domain, T * p, const int np) {
+#ifdef PARTICLE_HAS_LEVEL
+                    int count = 0;
+                    for (int i = 0; i < np; i++) {
+                        if (is_in_domain[i] == 1) {
+                            p[count++].set_level(level[i]);
+                        }
+                    }
+#endif
                 }
 
                 //====================================================
                 // Read a single particle file
                 //====================================================
-
                 template <class T>
                 void read_particle_file(const int i, std::vector<T> & p) {
                     std::string numberfolder = int_to_ramses_string(outputnr);
@@ -303,18 +526,8 @@ namespace FML {
                         partfile = filepath + "/";
                     partfile = partfile + "output_" + numberfolder + "/part_" + numberfolder + ".out" + numberfile;
                     FILE * fp;
-                    std::vector<RamsesDoubleType> buffer;
 
                     // Local variables used to read into
-                    int ncpu_loc;
-                    int ndim_loc;
-                    int npart_loc;
-                    std::array<int, 4> localseed_loc;
-                    [[maybe_unused]] int nstar_tot_loc;
-                    std::array<int, 2> mstar_tot_loc;
-                    std::array<int, 2> mstar_lost_loc;
-                    int nsink_loc;
-
                     // Open file
                     if ((fp = fopen(partfile.c_str(), "r")) == nullptr) {
                         std::string error = "Error opening particle file " + partfile;
@@ -322,44 +535,181 @@ namespace FML {
                     }
 
                     // Read header
-                    ncpu_loc = read_int(fp);
-                    ndim_loc = read_int(fp);
-                    npart_loc = read_int(fp);
-                    read_int_vec(fp, localseed_loc.data(), 4);
-                    nstar_tot_loc = read_int(fp);
-                    read_int_vec(fp, mstar_tot_loc.data(), 2);
-                    read_int_vec(fp, mstar_lost_loc.data(), 2);
-                    nsink_loc = read_int(fp);
+                    auto header = read_particle_header(fp);
 
                     // Store npcu globally
-                    if (!infofileread)
-                        ncpu = ncpu_loc;
-
-                    npart_file[i] = npart_loc;
+                    ncpu = header.ncpu;
 
                     // Allocate memory for buffer
-                    buffer.resize(npart_loc);
+                    std::vector<char> buffer(header.npart * 8);
+                    std::vector<char> is_in_domain(header.npart);
 
                     // Verbose
+                    assert(header.npart == npart_in_file[i]);
                     if (verbose)
-                        std::cout << "Reading " << partfile << " npart = " << npart_loc << std::endl;
+                        std::cout << "Reading " << partfile << " npart = " << header.npart
+                                  << " InDomain = " << npart_in_domain_in_file[i] << std::endl;
 
-                    // Read positions:
-                    for (int j = 0; j < ndim_loc; j++) {
-                        read_double_vec(fp, buffer.data(), npart_loc);
-                        store_positions(buffer.data(), &p[npart_read], j, npart_loc);
-                    }
+                    // Methods for reading each of the types
+                    auto read_pos = [&](bool store) {
+                        if (verbose)
+                            std::cout << "Read POS ";
 
-                    // Read velocities:
-                    for (int j = 0; j < ndim_loc; j++) {
-                        read_double_vec(fp, buffer.data(), npart_loc);
-                        store_velocity(buffer.data(), &p[npart_read], j, npart_loc);
+                        for (int j = 0; j < header.ndim; j++) {
+
+                            int bytes_per_element = read_section(fp, buffer.data(), header.npart);
+                            if (bytes_per_element != sizeof(RamsesVelType))
+                                throw_error("[RamsesReader::read_particle_file] Field POS has size " +
+                                            std::to_string(bytes_per_element) + " but size set to " +
+                                            std::to_string(sizeof(RamsesVelType)));
+
+                            // Set the book-keeping array that tells us if a particle is in the domain or not
+                            if (j == 0) {
+                                if (!keep_only_particles_in_domain) {
+                                    for (int i = 0; i < header.npart; i++) {
+                                        is_in_domain[i] = 1;
+                                    }
+                                } else {
+                                    RamsesPosType * pos = (RamsesPosType *)buffer.data();
+                                    for (int i = 0; i < header.npart; i++) {
+                                        is_in_domain[i] =
+                                            (pos[i] >= FML::xmin_domain and pos[i] < FML::xmax_domain) ? 1 : 0;
+                                    }
+                                }
+                            }
+
+                            if (store)
+                                store_positions((RamsesPosType *)buffer.data(),
+                                                is_in_domain.data(),
+                                                &p[npart_read],
+                                                j,
+                                                header.npart);
+                        }
+                    };
+
+                    auto read_vel = [&](bool store) {
+                        if (verbose)
+                            std::cout << " VEL ";
+                        for (int j = 0; j < header.ndim; j++) {
+                            int bytes_per_element = read_section(fp, buffer.data(), header.npart);
+                            if (bytes_per_element != sizeof(RamsesVelType))
+                                throw_error("[RamsesReader::read_particle_file] Field VEL has size " +
+                                            std::to_string(bytes_per_element) + " but size set to " +
+                                            std::to_string(sizeof(RamsesVelType)));
+                            if (store)
+                                store_velocity((RamsesVelType *)buffer.data(),
+                                               is_in_domain.data(),
+                                               &p[npart_read],
+                                               j,
+                                               header.npart);
+                        }
+                    };
+
+                    auto read_mass = [&](bool store) {
+                        if (verbose)
+                            std::cout << " MASS ";
+                        int bytes_per_element = read_section(fp, buffer.data(), header.npart);
+                        if (bytes_per_element != sizeof(RamsesMassType))
+                            throw_error("[RamsesReader::read_particle_file] Field MASS has size " +
+                                        std::to_string(bytes_per_element) + " but size set to " +
+                                        std::to_string(sizeof(RamsesMassType)));
+                        if (store)
+                            store_mass(
+                                (RamsesMassType *)buffer.data(), is_in_domain.data(), &p[npart_read], header.npart);
+                    };
+
+                    auto read_id = [&](bool store) {
+                        int bytes_per_element = read_section(fp, buffer.data(), header.npart);
+
+                        if (verbose)
+                            std::cout << " ID (" << bytes_per_element << " bytes) ";
+
+                        if (store) {
+                            if (bytes_per_element == 4)
+                                store_id(
+                                    (RamsesIDType *)buffer.data(), is_in_domain.data(), &p[npart_read], header.npart);
+                            else if (bytes_per_element == 8)
+                                store_longid((RamsesLongIDType *)buffer.data(),
+                                             is_in_domain.data(),
+                                             &p[npart_read],
+                                             header.npart);
+                            else {
+                                throw_error("[RamsesReader::read_particle_file] Field ID has size " +
+                                            std::to_string(bytes_per_element) + " but we expected 4 or 8\n");
+                            }
+                        }
+                    };
+
+                    auto read_level = [&](bool store) {
+                        if (verbose)
+                            std::cout << " LEVEL ";
+                        int bytes_per_element = read_section(fp, buffer.data(), header.npart);
+                        if (bytes_per_element != sizeof(RamsesLevelType))
+                            throw_error("[RamsesReader::read_particle_file] Field LEVEL has size " +
+                                        std::to_string(bytes_per_element) + " but size set to " +
+                                        std::to_string(sizeof(RamsesLevelType)));
+                        if (store)
+                            store_level(
+                                (RamsesLevelType *)buffer.data(), is_in_domain.data(), &p[npart_read], header.npart);
+                    };
+
+                    auto read_family = [&](bool store) {
+                        if (verbose)
+                            std::cout << " FAMILY ";
+                        int bytes_per_element = read_section(fp, buffer.data(), header.npart);
+                        if (bytes_per_element != sizeof(RamsesFamilyType))
+                            throw_error("[RamsesReader::read_particle_file] Field FAMILY has size " +
+                                        std::to_string(bytes_per_element) + " but size set to " +
+                                        std::to_string(sizeof(RamsesFamilyType)));
+                        if (store)
+                            store_family(
+                                (RamsesFamilyType *)buffer.data(), is_in_domain.data(), &p[npart_read], header.npart);
+                    };
+
+                    auto read_tag = [&](bool store) {
+                        if (verbose)
+                            std::cout << " TAG ";
+                        int bytes_per_element = read_section(fp, buffer.data(), header.npart);
+                        if (bytes_per_element != sizeof(RamsesTagType))
+                            throw_error("[RamsesReader::read_particle_file] Field TAG has size " +
+                                        std::to_string(bytes_per_element) + " but size set to " +
+                                        std::to_string(sizeof(RamsesTagType)));
+                        if (store)
+                            store_tag(
+                                (RamsesTagType *)buffer.data(), is_in_domain.data(), &p[npart_read], header.npart);
+                    };
+
+                    // Do the actual reading
+                    for (size_t i = 0; i < entries_in_file.size(); i++) {
+                        auto entry = entries_in_file[i];
+                        bool store_entry = entries_to_store[i];
+                        if (i == 0)
+                            assert(entry == "POS");
+                        if (entry == "POS")
+                            read_pos(store_entry);
+                        else if (entry == "VEL")
+                            read_vel(store_entry);
+                        else if (entry == "MASS")
+                            read_mass(store_entry);
+                        else if (entry == "ID")
+                            read_id(store_entry);
+                        else if (entry == "LEVEL")
+                            read_level(store_entry);
+                        else if (entry == "FAMILY")
+                            read_family(store_entry);
+                        else if (entry == "TAG")
+                            read_tag(store_entry);
+                        else
+                            throw_error("[RamsesReader::read_particle_file] Unknown file entry (not one of "
+                                        "POS,VEL,MASS,ID,LEVEL,FAMILY,TAG): " +
+                                        entry);
                     }
+                    if (verbose)
+                        std::cout << "\n";
 
                     // Update global variables
-                    nsink_read += nsink_loc;
-                    npart_read += npart_loc;
-
+                    npart_read +=
+                        keep_only_particles_in_domain ? size_t(npart_in_domain_in_file[i]) : size_t(npart_in_file[i]);
                     fclose(fp);
                 }
             };
@@ -382,14 +732,10 @@ namespace FML {
                 float xoff1, xoff2, xoff3, dx;
 
                 // Assume zero offset
-                xoff1 = 0.0;
-                xoff2 = 0.0;
-                xoff3 = 0.0;
+                xoff1 = xoff2 = xoff3 = 0.0;
 
                 // Assumes same in all directions
-                n1 = 1 << _levelmin;
-                n2 = 1 << _levelmin;
-                n3 = 1 << _levelmin;
+                n1 = n2 = n3 = 1 << _levelmin;
 
                 // dx in Mpc (CHECK THIS)
                 dx = _boxlen_ini / float(n1) * 100.0 / _h0;
@@ -399,8 +745,7 @@ namespace FML {
 
                 // Open file
                 if ((fp = fopen(filename.c_str(), "w")) == nullptr) {
-                    std::string error = "[write_icdeltab] Error opening file " + filename;
-                    throw std::runtime_error(error);
+                    throw std::runtime_error("[write_icdeltab] Error opening file " + filename);
                 }
 
                 // Write file

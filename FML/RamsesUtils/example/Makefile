@@ -14,7 +14,7 @@ MPICC   = mpicxx-openmpi-gcc7 -std=c++1z -O3 -Wall -Wextra -march=native
 #===================================================
 
 # Use MPI
-USE_MPI          = false
+USE_MPI          = true
 # Use OpenMP threads
 USE_OMP          = false
 # Check for bad memory accesses
