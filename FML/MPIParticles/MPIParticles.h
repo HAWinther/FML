@@ -7,6 +7,7 @@
 #include <ios>
 #include <iostream>
 #include <vector>
+#include <functional>
 
 #ifdef USE_MPI
 #include <mpi.h>
@@ -121,6 +122,10 @@ namespace FML {
                         double xmax_local,
                         bool all_tasks_has_the_same_particles);
 
+            // Create from a vector of particles with a given selection function
+            // This could for example be that xmin < x < xmax and if particles have a type only select a particular type
+            void create(std::vector<T> & part, size_t nallocate, std::function<bool(T &)> & selection_function);
+
             // Create Npart_1D^3 particles in a rectangular grid spread across all tasks
             // buffer_factor is how much extra to allocate in case particles moves
             // xmin, xmax specifies the domain in [0,1] that the current task is responsible for
@@ -188,7 +193,7 @@ namespace FML {
             std::cout << "MPIParticles Particles have Ndim: [" << NDIM << "]"
                       << "\n";
             std::cout << "We have allocated " << memory_in_mb << " MB of memory per task\n";
-            std::cout << "NParticles local task  " << NpartLocal_in_use << "\n";
+            std::cout << "NParticles local task  " << NpartLocal_in_use << " Capacity: " << p.size() << "\n";
             std::cout << "NParticles all tasks   " << NpartTotal << "\n";
             std::cout << "The buffer is " << NpartLocal_in_use / double(p.size()) * 100 << "% filled\n";
             std::cout << "========================================================\n\n";
@@ -207,6 +212,43 @@ namespace FML {
             p.shrink_to_fit();
         }
 
+        // Create from a vector of particles with a given selection function
+        template <class T>
+        void MPIParticles<T>::create(std::vector<T> & part,
+                                     size_t nallocate,
+                                     std::function<bool(T &)> & selection_function) {
+
+            // Set the xmin/xmax
+            x_min_per_task = std::vector<double>(NTasks, 0.0);
+            x_max_per_task = std::vector<double>(NTasks, 0.0);
+            x_min_per_task[ThisTask] = FML::xmin_domain;
+            x_max_per_task[ThisTask] = FML::xmax_domain;
+#ifdef USE_MPI
+            MPI_Allreduce(MPI_IN_PLACE, x_min_per_task.data(), NTasks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, x_max_per_task.data(), NTasks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+#endif
+            p.clear();
+            p.reserve(nallocate+1);
+
+            size_t count = 0;
+            for (auto & curpart : part) {
+                if (selection_function(curpart)) {
+                    p.push_back(curpart);
+                    count++;
+                    if (count > nallocate) {
+                        assert_mpi(false, "[MPIParticle::create] Reached allocation limit. Increase nallocate\n");
+                    }
+                }
+            }
+            NpartLocal_in_use = count;
+            NpartTotal = NpartLocal_in_use;
+#ifdef USE_MPI
+            long long int np = NpartLocal_in_use;
+            MPI_Allreduce(MPI_IN_PLACE, &np, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+            NpartTotal = np;
+#endif
+        }
+
         template <class T>
         void MPIParticles<T>::create(T * part,
                                      size_t NumPartinpart,
@@ -214,8 +256,7 @@ namespace FML {
                                      double xmin,
                                      double xmax,
                                      bool all_tasks_has_the_same_particles) {
-
-            if (NTasks == 1)
+            if (FML::NTasks == 1)
                 all_tasks_has_the_same_particles = true;
 
             // Set the xmin/xmax
@@ -259,6 +300,13 @@ namespace FML {
                 }
 
                 NpartLocal_in_use = count;
+
+                NpartTotal = NpartLocal_in_use;
+#ifdef USE_MPI
+                long long int np = NpartLocal_in_use;
+                MPI_Allreduce(MPI_IN_PLACE, &np, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+                NpartTotal = np;
+#endif
             }
 
 #ifdef USE_MPI
@@ -312,7 +360,7 @@ namespace FML {
 #ifdef USE_MPI
                     // The while loop continues until all tasks are done reading particles
                     int moretodo = more_to_process_locally ? 1 : 0;
-                    MPI_Allreduce(MPI_IN_PLACE, &moretodo, NTasks, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+                    MPI_Allreduce(MPI_IN_PLACE, &moretodo, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
                     more_to_process_globally = (moretodo == 1);
 #endif
                 }
@@ -521,7 +569,8 @@ namespace FML {
 
         template <class T>
         void MPIParticles<T>::communicate_particles() {
-            if(FML::NTasks == 1) return;
+            if (FML::NTasks == 1)
+                return;
 #ifdef USE_MPI
 
             // The number of particles we start with
