@@ -213,16 +213,19 @@ namespace FML {
                 }
 
                 // Divide grid by k^2. Assuming delta was created in fourier-space so no FFTW normalization needed
-                std::array<double, N> kvec;
-                double kmag2;
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
                 for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
+                    std::array<double, N> kvec;
+                    double kmag2;
 
                     // Get wavevector and magnitude
                     phi_1LPT_fourier.get_fourier_wavevector_and_norm2_by_index(ind, kvec, kmag2);
 
                     // D^2 Phi_1LPT = -delta => F[Phi_1LPT] = F[delta] / k^2
                     auto value = delta_fourier.get_fourier_from_index(ind) / kmag2;
-                    if (Local_x_start == 0 && ind == 0)
+                    if (Local_x_start == 0 and ind == 0)
                         value = 0.0;
                     phi_1LPT_fourier.set_fourier_from_index(ind, value);
                 }
@@ -279,12 +282,12 @@ namespace FML {
                     std::array<double, N> kvec;
                     double kmag2;
 
-                    // Get wavevector and magnitude xxx Get norm here
+                    // Get wavevector and magnitude
                     delta.get_fourier_wavevector_and_norm2_by_index(ind, kvec, kmag2);
 
                     // D^2Phi = -delta => F[DiDj Phi] = F[delta] kikj/k^2
                     auto value = delta.get_fourier_from_index(ind) / kmag2;
-                    if (Local_x_start == 0 && ind == 0)
+                    if (Local_x_start == 0 and ind == 0)
                         value = 0.0;
 
                     for (int idim = 0; idim < N; idim++) {
@@ -356,7 +359,7 @@ namespace FML {
                     double kmag2;
 
                     // Get wavevector and magnitude
-                    delta.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag2);
+                    delta.get_fourier_wavevector_and_norm2_by_index(ind, kvec, kmag2);
 
                     auto value = delta.get_fourier_from_index(ind) / kmag2;
                     if (Local_x_start == 0 && ind == 0)
@@ -431,9 +434,9 @@ namespace FML {
                     phi_2LPT.get_fourier_wavevector_and_norm2_by_index(ind, kvec, kmag2);
 
                     // Add in the -3/7 factor
-                    auto value = prefactor_2LPT * phi_2LPT.get_fourier_from_index(ind);
-                    value *= -1.0 / kmag2;
-                    if (Local_x_start == 0 && ind == 0)
+                    auto value = phi_2LPT.get_fourier_from_index(ind);
+                    value *= -prefactor_2LPT / kmag2;
+                    if (Local_x_start == 0 and ind == 0)
                         value = 0.0;
 
                     phi_2LPT.set_fourier_from_index(ind, value);
