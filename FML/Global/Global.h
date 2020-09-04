@@ -80,9 +80,10 @@ namespace FML {
     void abort_mpi(int exit_code);
     void finalize_mpi();
     void printf_mpi(const char * fmt, ...);
+    void info();
 
     template <class T>
-    void MaxOverTasks(T * value) {
+    void MaxOverTasks([[maybe_unused]] T * value) {
 #ifdef USE_MPI
         std::vector<T> values(FML::NTasks);
         MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, MPI_COMM_WORLD);
@@ -94,7 +95,7 @@ namespace FML {
 #endif
     }
     template <class T>
-    void MinOverTasks(T * value) {
+    void MinOverTasks([[maybe_unused]] T * value) {
 #ifdef USE_MPI
         std::vector<T> values(FML::NTasks);
         MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, MPI_COMM_WORLD);
@@ -106,14 +107,12 @@ namespace FML {
 #endif
     }
     template <class T>
-    void SumOverTasks(T * value) {
+    void SumOverTasks([[maybe_unused]] T * value) {
 #ifdef USE_MPI
         std::vector<T> values(FML::NTasks, 0);
         MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, MPI_COMM_WORLD);
         T sum = 0;
         for (auto v : values) {
-            if (FML::ThisTask == 0)
-                std::cout << "Got:" << v << " " << typeid(T).name() << "\n";
             sum += v;
         }
         *value = sum;
@@ -242,9 +241,9 @@ namespace FML {
 #undef FUNS
 } // namespace FML
 
-#ifdef USE_FFTW
 namespace FML {
 
+#ifdef USE_FFTW
     namespace GRID {
 #include <FML/FFTWGrid/FFTWGlobal.h>
         void init_fftw(int * argc, char *** argv);
@@ -268,8 +267,32 @@ namespace FML {
 
         ~FFTWSetup() { FML::GRID::finalize_fftw(); }
     };
-
-} // namespace FML
 #endif
+
+    //=============================================================
+    /// Singleton for initializing and cleaning up FML
+    //=============================================================
+    struct FMLSetup {
+        static FMLSetup & init(int * argc = nullptr, char *** argv = nullptr) {
+            static FMLSetup instance(argc, argv);
+            return instance;
+        }
+
+      private:
+        FMLSetup(int * argc, char *** argv) {
+#ifndef NO_AUTO_MPI_SETUP
+            [[maybe_unused]] MPISetup & m = MPISetup::init(argc, argv);
+#endif
+#ifdef USE_FFTW
+#ifndef NO_AUTO_FFTW_SETUP
+            [[maybe_unused]] FFTWSetup & f = FFTWSetup::init(argc, argv);
+#endif
+#endif
+            info();
+        }
+
+        ~FMLSetup() {}
+    };
+} // namespace FML
 
 #endif

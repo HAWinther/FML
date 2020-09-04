@@ -418,7 +418,7 @@ namespace FML {
             std::array<int, N> icoord;
 
             // Factor to normalize density to the mean density
-            const double norm_fac = std::pow((double)Nmesh, N) / double(NumPartTot);
+            double norm_fac = std::pow((double)Nmesh, N) / double(NumPartTot);
 
             // If particles can have different mass take this into account
 #ifdef PARTICLES_WITH_DIFFERENT_MASS

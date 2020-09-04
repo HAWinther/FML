@@ -9,27 +9,9 @@ static std::string processor_name{"NameIsOnlyKnownWithMPI"};
 
 namespace FML {
 
-#ifndef NO_AUTO_MPI_SETUP
-    //============================================
-    // Automatic init and cleanup of MPI
-    // If arguments are needed call it instead from main as:
-    // FML::MPISetup & mpisetup = FML::MPISetup::init(&argc, &argv);
-    //============================================
-    MPISetup & mpisetup = MPISetup::init();
-#endif
-
-    //============================================
-    // Automaticall init and cleanup of FFTW
-    // with MPI and/or threads. Use the define
-    // NO_AUTO_FFTW_SETUP to not do this and init
-    // it yourself. Can instead be called with arguments from main as:
-    // FML::FFTWSetup & fftwsetup = FML::FFTWSetup::init(&argv, &argv);
-    //============================================
-#ifndef NO_AUTO_FFTW_SETUP
-#ifdef USE_FFTW
-    [[maybe_unused]] FFTWSetup & fftwsetup = FFTWSetup::init();
-#endif
-#endif
+    // Initialize FML, set the few globals we have and init MPI
+    // and FFTW unless NO_AUTO_MPI_SETUP or NO_AUTO_FFTW_SETUP is set
+    FMLSetup & fmlsetup = FMLSetup::init();
 
 #ifdef MEMORY_LOGGING
     // If we use memory logging initialize it
@@ -87,15 +69,6 @@ namespace FML {
         xmin_domain = ThisTask / double(NTasks);
         xmax_domain = (ThisTask + 1) / double(NTasks);
 
-        std::vector<double> xmin_over_tasks(NTasks, 0);
-        std::vector<double> xmax_over_tasks(NTasks, 0);
-        xmin_over_tasks[ThisTask] = xmin_domain;
-        xmax_over_tasks[ThisTask] = xmax_domain;
-#ifdef USE_MPI
-        MPI_Allreduce(MPI_IN_PLACE, xmin_over_tasks.data(), NTasks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        MPI_Allreduce(MPI_IN_PLACE, xmax_over_tasks.data(), NTasks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-#endif
-
         // Initialize OpenMP
 #ifdef USE_OMP
 #pragma omp parallel
@@ -105,13 +78,16 @@ namespace FML {
                 NThreads = omp_get_num_threads();
         }
 #endif
+    }
 
-        // Initialize FFTW
-#ifdef USE_FFTW
-#ifndef NO_AUTO_FFTW_SETUP
-        FML::FFTWSetup & fftwsetup = FML::FFTWSetup::init();
-        (void)fftwsetup;
-#endif
+    void info() {
+        std::vector<double> xmin_over_tasks(NTasks, 0);
+        std::vector<double> xmax_over_tasks(NTasks, 0);
+        xmin_over_tasks[ThisTask] = xmin_domain;
+        xmax_over_tasks[ThisTask] = xmax_domain;
+#ifdef USE_MPI
+        MPI_Allreduce(MPI_IN_PLACE, xmin_over_tasks.data(), NTasks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(MPI_IN_PLACE, xmax_over_tasks.data(), NTasks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 #endif
 
         // Show some info
@@ -161,6 +137,10 @@ namespace FML {
     // End MPI
     //============================================
     void finalize_mpi() {
+#ifdef USE_FFTW
+        // If we have MPI and FFTW then FFTW takes care of finalizing
+        return;
+#endif
 #ifdef USE_MPI
         MPI_Finalize();
 #endif
@@ -218,6 +198,7 @@ namespace FML {
 #ifdef USE_FFTW
 #ifdef USE_MPI
             CLEANUP_FFTW_MPI();
+            MPI_Finalize();
 #endif
 #endif
         }
