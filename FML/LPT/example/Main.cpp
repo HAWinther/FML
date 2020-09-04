@@ -183,10 +183,6 @@ int main() {
     //=====================================================
     // Add 1LPT displacement to particle position
     // Add 2LPT displacement to particle position
-    // Note the -3/7 factor. This is because growth factors
-    // are defined to be == 1 at the initial time, however
-    // the physically relevant solution has D2 = -3/7 D1^2
-    // so we need to put this in by hand
     //=====================================================
     
     double max_disp_1LPT = 0.0;
@@ -203,7 +199,7 @@ int main() {
         auto * vel = part_ptr[ind].get_vel();
         for (int idim = Ndim - 1; idim >= 0; idim--) {
             const double dpos_1LPT = displacements_1LPT[idim][ind];
-            const double dpos_2LPT = -3.0 / 7.0 * displacements_2LPT[idim][ind];
+            const double dpos_2LPT = displacements_2LPT[idim][ind];
             pos[idim] += dpos_1LPT + dpos_2LPT;
             vel[idim] = vfac_1LPT * dpos_1LPT + vfac_2LPT * dpos_2LPT;
             if (std::fabs(dpos_1LPT) > max_disp_1LPT)
