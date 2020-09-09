@@ -64,7 +64,7 @@ namespace FML {
                 generator = std_random_generator_type(seeds);
             }
 
-            virtual RandomGenerator* clone(){ return new RandomGenerator(*this); }
+            virtual std::shared_ptr<RandomGenerator> clone(){ return std::make_shared<RandomGenerator>(*this); }
 
             virtual void set_seed(unsigned int Seed) { set_seed(std::vector<unsigned int>(624, Seed)); }
 
@@ -105,7 +105,7 @@ namespace FML {
                 gsl_rng_set(rng.random_generator, seed);
             }
             
-            virtual RandomGenerator* clone(){ return new GSLRandomGenerator(*this); }
+            virtual std::shared_ptr<RandomGenerator> clone(){ return std::make_shared<GSLRandomGenerator>(*this); }
 
             void set_seed(std::vector<unsigned int> seed) override { set_seed(seed[0]); }
 

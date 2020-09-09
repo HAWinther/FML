@@ -46,8 +46,8 @@ namespace FML {
             void generate_white_noise_field_real(FFTWGrid<N> & grid, RandomGenerator * rng) {
 
                 auto Nmesh = grid.get_nmesh();
-                auto local_x_start = grid.get_local_x_start();
-                auto local_nx = grid.get_local_nx();
+                auto Local_nx = grid.get_local_nx();
+                auto Local_x_start = grid.get_local_x_start();
 
                 // The norm is to get unit power-spectrum
                 const double norm = std::pow(grid.get_nmesh(), N / 2.0);
@@ -65,24 +65,24 @@ namespace FML {
 #endif
                 // Make random generators for each slice to ensure we get the same
                 // result no matter how many threads we use
-                std::vector<RandomGenerator *> rngs(local_nx);
-                for (int i = 0; i < local_nx; i++)
+                std::vector< std::shared_ptr<RandomGenerator> > rngs(Local_nx);
+                for (int i = 0; i < Local_nx; i++)
                     rngs[i] = rng->clone();
 
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
                 // Loop over slices
-                for (int slice = 0; slice < local_nx; slice++) {
+                for (int slice = 0; slice < Local_nx; slice++) {
                     // Seed the rng
                     auto _rng = rngs[slice];
-                    _rng->set_seed(seedtable[slice + local_x_start]);
+                    _rng->set_seed(seedtable[slice + Local_x_start]);
 
                     // Loop over cells
                     for (auto & real_index : grid.get_real_range(slice, slice + 1)) {
                         auto value = _rng->generate_normal() * norm;
                         grid.set_real_from_index(real_index, value);
-                        if (slice + local_x_start == 0)
+                        if (slice + Local_x_start == 0)
                             std::cout << value << "\n";
                     }
                 }
@@ -155,10 +155,11 @@ namespace FML {
                 // Zero out grid
                 grid.fill_fourier_grid(0.0);
 
-                auto * cdelta = grid.get_fourier_grid();
+                int Nmesh = grid.get_nmesh();
                 auto Local_nx = grid.get_local_nx();
                 auto Local_x_start = grid.get_local_x_start();
-                int Nmesh = grid.get_nmesh();
+                auto * cdelta = grid.get_fourier_grid();
+                
                 const IndexIntType NmeshTotTotal = FML::power(Nmesh, N - 1) * (Nmesh / 2 + 1);
                 const IndexIntType factor = NmeshTotTotal / Nmesh;
 
@@ -301,10 +302,10 @@ namespace FML {
                 // Zero out grid
                 grid.fill_fourier_grid(0.0);
 
-                auto * cdelta = grid.get_fourier_grid();
+                int Nmesh = grid.get_nmesh();
                 auto Local_nx = grid.get_local_nx();
                 auto Local_x_start = grid.get_local_x_start();
-                int Nmesh = grid.get_nmesh();
+                auto * cdelta = grid.get_fourier_grid();
 
                 const int imin_local = Local_x_start;
                 const int imax_local = Local_x_start + Local_nx;
