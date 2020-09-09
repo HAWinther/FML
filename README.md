@@ -8,14 +8,14 @@ A C++ library for working with particles and grids and solving PDEs in parallel 
 # Requirements
 You will need a C++11 compatible compiler to compile the library, but a few parts (ParameterMap, Triangulation) require more modern (C++1z) features. Parts of the code can also be compiled without any external libraries, but to take full advantage of the features in the code you should atleast have the FFTW3 library (with MPI support) and GSL installed. In addition to this the other two libraries we sometimes use are CGAL and LUA. You should also have a MPI complient compiler though the code can be compiled and run in serial.
 
- - [FFTW](http://www.fftw.org/download.html) version 3+ : Required to be able to do Fourier transforms and the related algorithms that use Fourier transforms. The grid class FFTWGrid can be compiled without it.
+ - [FFTW](http://www.fftw.org/download.html) version 3+ : Required to be able to do Fourier transforms and the related algorithms that use Fourier transforms. The grid class FFTWGrid can be compiled without it, but you won't be able to perform Fourier transforms or use any algorithms that relies on this.
  - [CGAL](https://www.cgal.org/download.html) version 5+ : Required to do tesselations and the related algorithms that rely on this.
  - [GSL](https://www.gnu.org/software/gsl/) version 2+ : Required to solve ODEs, make splines, random numbers (though if we don't have this we use C++ <random> instead) and linear algebra (just a few places).
  - [LUA](https://www.lua.org/download.html) version 5+ : Required to use LuaFileParser to read parameterfiles. We don't use this much.
 
 # Compiling
 
-Most of the library is in forms of header files that you just need to include in your code. A few of these needs to be compiled. We could have compiled this up to a shared library, but given the options the user have (with MPI or without, with some external libraries or without, etc.) its better to compiler these files together with your code. For this see the included Makefiles for how to do this. Having tons of define statements in the code sucks, but its the only good/normal way of being able to use the code without having all the features. In the general Makefile you have alot of options to choose from, here is a list of the most important ones:
+Most of the library is in forms of header files that you just need to include in your code. A few of these needs to be compiled. We could have compiled this up to a shared library, but given the options the user have (with MPI or without, with some external libraries or without, etc.) its better to compiler these files together with your code. For this see the included Makefiles for how to do this. Having tons of define statements in the code sucks, but its the only good/normal way (until C++ gets some proper introspection abilities) of being able to use the code without having all the features. In the general Makefile you have alot of options to choose from, here is a list of the most important ones:
 
  - USE\_MPI : Compile with MPI support. You will need to have a MPI compiler to use this.
  - USE\_OMP : Compile with OpenMP support. Can be used together with MPI for which each MPI task will use OMP\_NUM\_THREADS threads in certain loops.
@@ -36,11 +36,10 @@ Some define statements that can be added to change how the code works:
 
  - SINGLE\_PRECISION\_FFTW : Use float instead of double for FFTWGrid and FFTs in general. FFTW needs to be compiled with float support to use this.
  - LONG\_DOUBLE\_PRECISION\_FFTW : Use long double instead of double for FFTWGrid and FFTs in general. FFTW needs to be compiled with long double support to use this.
- - NO\_AUTO\_MPI\_SETUP : MPI is automatically initialized and finalized in the code. If you don't want this add this define. NB: if you use this you should know how FFTW should be initialized with MPI and/or threads to avoid issues.
- - NO\_AUTO\_FFTW\_SETUP : FFTW is automatically initialized in the code. If you don't want this add this define.
+ - NO\_AUTO\_FML\_SETUP : FML is automatically initialized and finalized in the code. This includes taking care of MPI and FFTW initialization. If you don't want this add this define. NB: if you use this you should know how FFTW should be initialized with MPI and/or threads to avoid issues. You will then also *need* to call FML::init\_fml() after initializing MPI and FFTW to ensure that the few global variables we use are set.
 
 You will also have to provide the include path to the folder containing FML and in VPATH provide the path to the cpp files that needs to be compiled with the code.
 
 # Examples
 
-Almost every folders within FML contains examples, e.g. [FFTWGrid/example](FML/FFTWGrid/example) ; [MultigridSolver/examples](FML/MultigridSolver/examples) ; [MPIParticles/example](FM/MPIParticles/example) etc., for examples on how to use the different methods and classes. 
+Almost every folders within FML contains examples, e.g. [FFTWGrid/example](https://github.com/HAWinther/FML/tree/master/FML/FFTWGrid/example) ; [MultigridSolver/examples](https://github.com/HAWinther/FML/tree/master/FML/MultigridSolver/examples) ; [MPIParticles/example](https://github.com/HAWinther/FML/tree/master/FML/MPIParticles/example) etc., for examples on how to use the different methods and classes. 
