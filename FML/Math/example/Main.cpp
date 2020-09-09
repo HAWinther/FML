@@ -36,7 +36,7 @@ int main() {
 #endif
 
     //==============================================
-    // Evaluate Continued fraction
+    // Evaluate Continued fraction converging to pi
     // (b0 + a1/(b1 + a2 /( ... )))
     //==============================================
     std::function<double(int)> a = [](int i) -> double { return (2.0 * i - 1) * (2.0 * i - 1); };

@@ -225,7 +225,7 @@ namespace FML {
                 const int sendTask = istep % FML::NTasks;
                 const int recvTask = ((istep + 1) % FML::NTasks);
 
-                if (FML::ThisTask == sendTask || FML::ThisTask == recvTask or merging_in_parallel) {
+                if (FML::ThisTask == sendTask or FML::ThisTask == recvTask or merging_in_parallel) {
 
 #ifdef DEBUG_FOF
                     if (FML::ThisTask == sendTask or merging_in_parallel) {
@@ -401,7 +401,7 @@ namespace FML {
 
                                             for (size_t jj = 0; jj < nboundary_left_recv; jj++) {
                                                 auto * tmp = get_fof_id(jj);
-                                                if (*tmp == original_fof_id1 || *tmp == original_fof_id2) {
+                                                if (*tmp == original_fof_id1 or *tmp == original_fof_id2) {
                                                     *tmp = new_fof_id;
                                                 }
                                             }
@@ -410,7 +410,7 @@ namespace FML {
 #pragma omp parallel for
 #endif
                                             for (size_t jj = 0; jj < NumPart; jj++)
-                                                if (particle_id_FoF[jj] == original_fof_id1 ||
+                                                if (particle_id_FoF[jj] == original_fof_id1 or
                                                     particle_id_FoF[jj] == original_fof_id2) {
                                                     particle_id_FoF[jj] = new_fof_id;
                                                 }
@@ -747,7 +747,7 @@ namespace FML {
 #pragma omp parallel for
 #endif
                                 for (size_t jj = 0; jj < NumPart; jj++)
-                                    if (particle_id_FoF[jj] == id_FoF_group ||
+                                    if (particle_id_FoF[jj] == id_FoF_group or
                                         particle_id_FoF[jj] == id_existing_FoF_group)
                                         particle_id_FoF[jj] = new_FoF_id;
 
@@ -804,7 +804,7 @@ namespace FML {
             // the FoF groups are too wide
             //============================================================================
 
-            const bool merging_in_parallel = merging_in_parallel_default;
+            [[maybe_unused]] const bool merging_in_parallel = merging_in_parallel_default;
 
             //============================================================================
             // Make a grid where the grid-size is atleast fof_distance to ease the linking
@@ -819,7 +819,6 @@ namespace FML {
                 Ngrid = (FoF_Ngrid_max / FML::NTasks) * FML::NTasks;
             if (Ngrid < 3 * FML::NTasks)
                 Ngrid = 3 * FML::NTasks;
-            assert(1.0 / Ngrid > fof_distance);
             const int Local_nx = Ngrid / FML::NTasks;
 
 #ifdef DEBUG_FOF
@@ -829,6 +828,7 @@ namespace FML {
                 std::cout << "FoF Gridsize Ngrid = " << Ngrid << " Local: " << Local_nx << "\n";
             }
 #endif
+            assert(1.0 / Ngrid > fof_distance);
 
             //=============================================================================
             // Add particles to cells to speed up the linking below
@@ -853,6 +853,7 @@ namespace FML {
             std::vector<size_t> BoundaryParticleIndex;
             std::vector<size_t> BoundaryParticleRightFoFIndex;
             std::vector<char> isShared(NumPart, 0);
+#ifdef USE_MPI
             BoundaryLinking<T, NDIM>(fof_distance,
                                      part,
                                      NumPart,
@@ -864,6 +865,7 @@ namespace FML {
                                      isShared,
                                      periodic,
                                      merging_in_parallel);
+#endif
 
             // Free memory no longer needed
             PartCells.clear();

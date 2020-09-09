@@ -276,7 +276,7 @@ namespace FML {
         /// @param[in] ngalaxies Number of galaxies
         /// @param[in] randoms_ra_dec_z Random galaxies with RA, DEC and Z.
         /// @param[in] nrandoms Number of random galaxies
-        /// @param[out] particles_xyz Vector with galaxies as particles with cartesian coordinates.
+        /// @param[out] galaxies_xyz Vector with galaxies as particles with cartesian coordinates.
         /// @param[out] randoms_xyz Vector with random galaxies as particles with cartesian coordinates.
         /// @param[in] hubble_over_c_of_z This is the function \f$ H(z)/c \f$ used to compute the redshift-comobing
         /// distance relationship. Postions units is the same as those of \f$ c/H(z) \f$ (so e.g. if you want Mpc/h then

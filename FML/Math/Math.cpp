@@ -150,19 +150,19 @@ namespace FML {
                 sincKchi = 1.0;
             } else if (K < 0.0) {
                 cotcKchi = chi > 1e-8 ? chi / tanh(chi) : 1.0;
-                sincKchi = chi > 1e-8 ? sinh(chi) / chi : 1.0;
+                sincKchi = chi > 1e-8 ? std::sinh(chi) / chi : 1.0;
             } else {
                 cotcKchi = chi > 1e-8 ? chi / tan(chi) : 1.0;
-                sincKchi = chi > 1e-8 ? sin(chi) / chi : 1.0;
+                sincKchi = chi > 1e-8 ? std::sin(chi) / chi : 1.0;
             }
 
             // Start the recursion at a large enough lmax such that j_ell/j_ell-1 ~ 0
             // and bring it down to lmax where we start to store the values
             int lstart = std::max(lmax, int(lmax < 10 ? 5 * chinu : (lmax < 100 ? 1.6 * chinu : 1.2 * chinu)));
             double h = 0.0;
-            double sqrtnu2chi2old = sqrt(chinu2 - chi * chi * K * (lstart + 1) * (lstart + 1));
+            double sqrtnu2chi2old = std::sqrt(chinu2 - chi * chi * K * (lstart + 1) * (lstart + 1));
             for (int k = lstart; k >= lmax + 1; k--) {
-                double sqrtnu2chi2 = sqrt(chinu2 - chi * chi * K * k * k);
+                double sqrtnu2chi2 = std::sqrt(chinu2 - chi * chi * K * k * k);
                 h = sqrtnu2chi2old / ((2 * k + 1) * cotcKchi - sqrtnu2chi2 * h);
                 sqrtnu2chi2old = sqrtnu2chi2;
             }
@@ -170,14 +170,14 @@ namespace FML {
             // Recursion relation for j_(n+1) / jn
             DVector res(lmax + 1, 0.0);
             for (int k = lmax; k >= 1; k--) {
-                double sqrtnu2chi2 = sqrt(chinu2 - chi * chi * K * k * k);
+                double sqrtnu2chi2 = std::sqrt(chinu2 - chi * chi * K * k * k);
                 h = sqrtnu2chi2old / ((2 * k + 1) * cotcKchi - sqrtnu2chi2 * h);
                 res[k] = h;
                 sqrtnu2chi2old = sqrtnu2chi2;
             }
 
             // Transform ratios into j_ell
-            res[0] = chinu == 0.0 ? (chi == 0.0 ? 1.0 : 1.0 / sincKchi) : sin(chinu) / (chinu * sincKchi);
+            res[0] = chinu == 0.0 ? (chi == 0.0 ? 1.0 : 1.0 / sincKchi) : std::sin(chinu) / (chinu * sincKchi);
             for (int ell = 1; ell <= lmax; ell++) {
                 res[ell] *= res[ell - 1];
             }
@@ -203,7 +203,7 @@ namespace FML {
             }
 
             // Transform ratios into j_ell
-            res[0] = x == 0.0 ? 1.0 : sin(x) / x;
+            res[0] = x == 0.0 ? 1.0 : std::sin(x) / x;
             for (int ell = 1; ell <= lmax; ell++) {
                 res[ell] *= res[ell - 1];
             }
@@ -248,7 +248,7 @@ namespace FML {
         double j_ell(const int ell, const double arg) {
             // In this regime the function is ~1e-6 times the maximum value so put it to zero
             // to avoid issues with the library functions failing to compute it
-            if (ell >= 10 && arg < (1.0 - 2.6 / sqrt(ell)) * ell)
+            if (ell >= 10 && arg < (1.0 - 2.6 / std::sqrt(ell)) * ell)
                 return 0.0;
 
 #if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || (__cplusplus >= 201703L))
@@ -319,16 +319,16 @@ namespace FML {
                 auto z_backward = linspace(0.0, -z_min, npts_backward);
 
                 // Solve forward equation
-                double Yini_forward = 1.0 / pow(3., 2. / 3.) / tgamma(2. / 3.);
-                double dYini_forward = -1.0 / pow(3., 1. / 3.) / tgamma(1. / 3.);
+                double Yini_forward = 1.0 / std::pow(3., 2. / 3.) / tgamma(2. / 3.);
+                double dYini_forward = -1.0 / std::pow(3., 1. / 3.) / tgamma(1. / 3.);
                 DVector Y_ini_forward{Yini_forward, dYini_forward};
                 ODESolver ode_forward(1e-3, 1e-8, 1e-8);
                 ode_forward.solve(deriv_forward, z_forward, Y_ini_forward, gsl_odeiv2_step_rk2);
                 auto Y_forward = ode_forward.get_data_by_component(0);
 
                 // Solve backward equation
-                double Yini_backward = 1.0 / pow(3., 2. / 3.) / tgamma(2. / 3.);
-                double dYini_backward = 1.0 / pow(3., 1. / 3.) / tgamma(1. / 3.);
+                double Yini_backward = 1.0 / std::pow(3., 2. / 3.) / tgamma(2. / 3.);
+                double dYini_backward = 1.0 / std::pow(3., 1. / 3.) / tgamma(1. / 3.);
                 DVector Y_ini_backward{Yini_backward, dYini_backward};
                 ODESolver ode_backward(1e-3, 1e-8, 1e-8);
                 ode_backward.solve(deriv_backward, z_backward, Y_ini_backward, gsl_odeiv2_step_rk2);
@@ -360,9 +360,9 @@ namespace FML {
             double Ai(double z) {
                 // Asymptotic values
                 if (z < z_min)
-                    return sin(2.0 / 3.0 * pow(-z, 1.5) + M_PI / 4.) / sqrt(M_PI * sqrt(-z));
+                    return std::sin(2.0 / 3.0 * std::pow(-z, 1.5) + M_PI / 4.) / std::sqrt(M_PI * std::sqrt(-z));
                 if (z > z_max)
-                    return exp(-2.0 / 3.0 * pow(z, 1.5)) / sqrt(4.0 * M_PI * sqrt(z));
+                    return std::exp(-2.0 / 3.0 * std::pow(z, 1.5)) / std::sqrt(4.0 * M_PI * std::sqrt(z));
                 // Return spline
                 return AiryFunction_spline(z);
             }
@@ -500,43 +500,43 @@ namespace FML {
             if (K == 0.0) {
                 sincKchi = 1.0;
             } else if (K < 0.0) {
-                sincKchi = chi > 1e-8 ? sinh(chi) / chi : 1.0;
+                sincKchi = chi > 1e-8 ? std::sinh(chi) / chi : 1.0;
             } else {
-                sincKchi = chi > 1e-8 ? sin(chi) / chi : 1.0;
+                sincKchi = chi > 1e-8 ? std::sin(chi) / chi : 1.0;
             }
 
             // For small curvatures then alpha -> infty
-            const double sqrtellellp1 = sqrt(ell * (ell + 1));
+            const double sqrtellellp1 = std::sqrt(ell * (ell + 1));
             const double alpha = nu / sqrtellellp1, a2 = alpha * alpha;
             const double w = alpha * chi * sincKchi, w2 = w * w;
             const double sign = w < 1.0 ? 1.0 : -1.0;
             double S;
-            const double sqrtw2m1 = sqrt(sign * (1 - w2));
+            const double sqrtw2m1 = std::sqrt(sign * (1 - w2));
             if (sign < 0.0) {
                 if (K == 0.0) {
-                    S = (atan(1.0 / sqrtw2m1) + sqrtw2m1 - M_PI / 2.);
+                    S = (std::atan(1.0 / sqrtw2m1) + sqrtw2m1 - M_PI / 2.);
                 } else if (K < 0.0) {
-                    const double sqrtw2pa2 = sqrt(w2 + a2);
-                    S = (alpha * log((sqrtw2m1 + sqrtw2pa2) / sqrt(1 + a2)) + atan(sqrtw2pa2 / sqrtw2m1) / alpha -
+                    const double sqrtw2pa2 = std::sqrt(w2 + a2);
+                    S = (alpha * std::log((sqrtw2m1 + sqrtw2pa2) / std::sqrt(1 + a2)) + std::atan(sqrtw2pa2 / sqrtw2m1) / alpha -
                          M_PI / 2.);
                 } else {
-                    const double v = sqrt(a2 - w2) / sqrtw2m1 / alpha;
-                    S = (atan(v) + alpha * atan(1.0 / (v * alpha)) - M_PI / 2.);
+                    const double v = std::sqrt(a2 - w2) / sqrtw2m1 / alpha;
+                    S = (std::atan(v) + alpha * std::atan(1.0 / (v * alpha)) - M_PI / 2.);
                 }
             } else {
                 if (K == 0.0) {
-                    S = atanh(sqrtw2m1) - sqrtw2m1;
+                    S = std::atanh(sqrtw2m1) - sqrtw2m1;
                 } else if (K < 0.0) {
-                    const double u = sqrtw2m1 * alpha / sqrt(a2 + w2);
-                    S = (atanh(u) - alpha * atan(u / alpha));
+                    const double u = sqrtw2m1 * alpha / std::sqrt(a2 + w2);
+                    S = (atanh(u) - alpha * std::atan(u / alpha));
                 } else {
-                    S = (atanh(sqrtw2m1 * alpha / sqrt(a2 - w2)) -
-                         alpha * log((sqrt(a2 - w2) + sqrtw2m1) / sqrt(a2 - 1)));
+                    S = (atanh(sqrtw2m1 * alpha / std::sqrt(a2 - w2)) -
+                         alpha * std::log((std::sqrt(a2 - w2) + sqrtw2m1) / std::sqrt(a2 - 1)));
                 }
             }
 
-            const double Zpow1over6 = pow(1.5 * fabs(S) * sqrtellellp1, 1. / 6.);
-            double result = sqrt(M_PI / (w * sqrtw2m1)) * Zpow1over6 / sqrtellellp1;
+            const double Zpow1over6 = std::pow(1.5 * std::fabs(S) * sqrtellellp1, 1. / 6.);
+            double result = std::sqrt(M_PI / (w * sqrtw2m1)) * Zpow1over6 / sqrtellellp1;
             result *= Airy_Ai(sign * Zpow1over6 * Zpow1over6 * Zpow1over6 * Zpow1over6);
             return result;
         }

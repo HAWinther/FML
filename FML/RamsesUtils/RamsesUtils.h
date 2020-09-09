@@ -42,6 +42,18 @@ namespace FML {
             using RamsesIDType = int;
             using RamsesLongIDType = size_t;
 
+            // The header of a particle file
+            struct ParticleFileHeader {
+                int ncpu;
+                int ndim;
+                int npart;
+                int localseed[4];
+                int nstar_tot;
+                int mstar_tot[2];
+                int mstar_lost[2];
+                int nsink;
+            };
+
             //===========================================
             ///
             /// Read (and write) files related to RAMSES
@@ -54,6 +66,7 @@ namespace FML {
 
             class RamsesReader {
               private:
+
                 // What is in the file and if we want to store it or not
                 std::vector<std::string> entries_in_file{"POS", "VEL", "MASS", "ID", "LEVEL", "FAMILY", "TAG"};
                 std::vector<bool> entries_to_store{true, true, true, true, true, true, true};
@@ -115,6 +128,7 @@ namespace FML {
                 }
 
               public:
+           
                 RamsesReader() = default;
 
                 RamsesReader(std::string _filepath,
@@ -360,17 +374,6 @@ namespace FML {
                         fclose(fp);
                     }
                 }
-
-                struct ParticleFileHeader {
-                    int ncpu;
-                    int ndim;
-                    int npart;
-                    int localseed[4];
-                    int nstar_tot;
-                    int mstar_tot[2];
-                    int mstar_lost[2];
-                    int nsink;
-                };
 
                 ParticleFileHeader read_particle_header(FILE * fp) {
                     ParticleFileHeader head;

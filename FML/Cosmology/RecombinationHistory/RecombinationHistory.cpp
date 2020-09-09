@@ -47,22 +47,22 @@ namespace FML {
             if (tau_of_x_spline) {
                 double r_star = get_sound_horizon(x_star);
                 double r_drag = get_sound_horizon(x_drag);
-                double DA = cosmo->dA_of_x(x_star) * exp(-x_star);
+                double DA = cosmo->dA_of_x(x_star) * std::exp(-x_star);
                 double theta_star = r_star / DA;
-                double tau_reion = reionization ? tau_of_x_spline(log(1.0 / (1.0 + z_reion))) : 0.0;
+                double tau_reion = reionization ? tau_of_x_spline(std::log(1.0 / (1.0 + z_reion))) : 0.0;
                 double kd_star = kd_of_x_spline(x_star);
-                std::cout << "Recombination (Xe = 0.5)           z       = " << exp(-x_recombination) - 1 << "\n";
-                std::cout << "Recombination (Xe = 0.5) with Saha z       = " << exp(-x_recombination_saha) - 1 << "\n";
-                std::cout << "Last scattering (tau = 1.0) with Saha      = " << exp(-x_star_saha) - 1
+                std::cout << "Recombination (Xe = 0.5)           z       = " << std::exp(-x_recombination) - 1 << "\n";
+                std::cout << "Recombination (Xe = 0.5) with Saha z       = " << std::exp(-x_recombination_saha) - 1 << "\n";
+                std::cout << "Last scattering (tau = 1.0) with Saha      = " << std::exp(-x_star_saha) - 1
                           << " Xe: " << Xe_of_x_saha(x_star_saha) << "\n";
-                std::cout << "Last scattering (dgdx = 0.0)       z       = " << exp(-x_star2) - 1 << "\n";
-                std::cout << "Last scattering (tau = 1.0)        zstar   = " << exp(-x_star) - 1
+                std::cout << "Last scattering (dgdx = 0.0)       z       = " << std::exp(-x_star2) - 1 << "\n";
+                std::cout << "Last scattering (tau = 1.0)        zstar   = " << std::exp(-x_star) - 1
                           << " Xe: " << Xe_of_x(x_star) << "\n";
                 std::cout << "                                   xstar   = " << x_star << "\n";
                 std::cout << "Sound horizon at decoupling        r_star  = " << r_star / Constants.Mpc << " Mpc\n";
                 std::cout << "                           100 theta_star  = " << 100.0 * theta_star << "\n";
                 std::cout << "                                  DA_star  = " << DA / Constants.Gpc << " Gpc\n";
-                std::cout << "Drag epoch (tau_baryon = 1.0)      zdrag   = " << exp(-x_drag) - 1 << "\n";
+                std::cout << "Drag epoch (tau_baryon = 1.0)      zdrag   = " << std::exp(-x_drag) - 1 << "\n";
                 std::cout << "Sound horizon at drag-epoch        r_zdrag = " << r_drag / Constants.Mpc << " Mpc\n";
                 std::cout << "Optical depth reionization             tau = " << tau_reion << "\n";
                 std::cout << "Damping scale at LSS:                  kD  = " << kd_star * Constants.Mpc << " 1/Mpc\n";
@@ -74,7 +74,7 @@ namespace FML {
         // Solve the Saha equation for H+ to get electon fraction
         std::pair<double, double>
         RecombinationHistory::electron_fraction_from_saha_equation_without_helium(double x) const {
-            const double a = exp(x);
+            const double a = std::exp(x);
 
             // Physical constants
             const double k_b = Constants.k_b;
@@ -96,7 +96,7 @@ namespace FML {
             const double n_b = (OmegaB * 3.0 * H0 * H0) / (8 * M_PI * G * m_H * a * a * a);
 
             // The rhs of Saha equation
-            const double saha_factor = pow(m_e * kT_b / (hbar * hbar * 2.0 * M_PI), 1.5) / n_b * exp(-epsilon_0 / kT_b);
+            const double saha_factor = std::pow(m_e * kT_b / (hbar * hbar * 2.0 * M_PI), 1.5) / n_b * std::exp(-epsilon_0 / kT_b);
 
             // The equation reads X_e = saha_fac/2.0 * ( -1 + sqrt(1.0 + 4.0/saha_fac) )
             double f_e = 1.0;
@@ -120,7 +120,7 @@ namespace FML {
         // Solve the Saha equations for He+, He++ and H+ to get electron fraction
         std::pair<double, double>
         RecombinationHistory::electron_fraction_from_saha_equation_with_helium(double x) const {
-            const double a = exp(x);
+            const double a = std::exp(x);
 
             // Physical constants
             const double k_b = Constants.k_b;
@@ -149,10 +149,10 @@ namespace FML {
             const double n_b = (OmegaB * 3.0 * H0 * H0) / (8 * M_PI * G * m_H * a * a * a);
 
             // Prefactor for rhs of Saha equations
-            const double saha_factor = pow(m_e * kT_b / (hbar * hbar * 2.0 * M_PI), 1.5) / n_b;
+            const double saha_factor = std::pow(m_e * kT_b / (hbar * hbar * 2.0 * M_PI), 1.5) / n_b;
 
             // No point of solving if the result is basically 0
-            double factor = sqrt(saha_factor * exp(-epsilon_0 / kT_b) / (1.0 - Yp));
+            double factor = sqrt(saha_factor * std::exp(-epsilon_0 / kT_b) / (1.0 - Yp));
             if (factor < 1e-5)
                 return {factor, (1.0 - Yp) * factor * n_b};
 
@@ -161,9 +161,9 @@ namespace FML {
             double f_e_old = 0.0;
             while (abs(f_e - f_e_old) > 1e-10) {
                 // R.h.s of the Saha equations for He++, He+ and H+ respectivily
-                const double rhs_x_He_plus = 2.0 * saha_factor * exp(-xhi0 / kT_b) / f_e;
-                const double rhs_x_He_plusplus = 4.0 * saha_factor * exp(-xhi1 / kT_b) / f_e;
-                const double rhs_x_H_plus = saha_factor * exp(-epsilon_0 / kT_b) / f_e;
+                const double rhs_x_He_plus = 2.0 * saha_factor * std::exp(-xhi0 / kT_b) / f_e;
+                const double rhs_x_He_plusplus = 4.0 * saha_factor * std::exp(-xhi1 / kT_b) / f_e;
+                const double rhs_x_H_plus = saha_factor * std::exp(-epsilon_0 / kT_b) / f_e;
 
                 // Abundances of He++, He+ and H+ respectivily
                 const double x_He_plus = rhs_x_He_plus / (1.0 + rhs_x_He_plus + rhs_x_He_plus * rhs_x_He_plusplus);
@@ -226,7 +226,7 @@ namespace FML {
             // Spline the results
             DVector xarr_RF(zarr_RF.size());
             for (size_t i = 0; i < zarr_RF.size(); i++)
-                xarr_RF[i] = log(1.0 / (1.0 + zarr_RF[i]));
+                xarr_RF[i] = std::log(1.0 / (1.0 + zarr_RF[i]));
             Spline Xe_tmpspline(xarr_RF, Xe_RF, "Xe - Recfast");
             Spline Tb_tmpspline(xarr_RF, TM_RF, "Tb - Recfast");
 
@@ -238,7 +238,7 @@ namespace FML {
                 double Tb = Tb_tmpspline(x);
                 double Xe = Xe_tmpspline(x);
                 if (x < xarr_RF[0]) {
-                    Tb = Tb_tmpspline(xarr_RF[0]) * exp(xarr_RF[0] - x);
+                    Tb = Tb_tmpspline(xarr_RF[0]) * std::exp(xarr_RF[0] - x);
                     Xe = Xe_tmpspline(xarr_RF[0]);
                 }
                 Xe_array[i] = Xe;
@@ -320,7 +320,7 @@ namespace FML {
                     for (int j = i; j < npts; j++) {
                         const double X_e = data[j - i];
                         Xe_array[j] = X_e;
-                        ne_array[j] = (1.0 - Yp) * X_e * (n_b0 * exp(-3 * x_array[j]));
+                        ne_array[j] = (1.0 - Yp) * X_e * (n_b0 * std::exp(-3 * x_array[j]));
                     }
 
                     // Fetch the computed baryon temperature
@@ -378,7 +378,7 @@ namespace FML {
 
         int RecombinationHistory::rhs_peebles_ode(double x, const double * y, double * dydx) {
             const double X_e = y[0];
-            const double a = exp(x);
+            const double a = std::exp(x);
 
             // Physical constants in SI units
             const double k_b = Constants.k_b;
@@ -415,13 +415,13 @@ namespace FML {
 
             // Factors in the Peebles equation
             const double eps_over_kT = epsilon_0 / kT_b;
-            const double exp_eps_over_kT = eps_over_kT < 200.0 ? exp(eps_over_kT) : exp(200.0);
-            const double phi_2 = 0.448 * log(eps_over_kT);
+            const double exp_eps_over_kT = eps_over_kT < 200.0 ? std::exp(eps_over_kT) : std::exp(200.0);
+            const double phi_2 = 0.448 * std::log(eps_over_kT);
             const double alpha_2 = phi_2 * (8.0 / sqrt(3.0 * M_PI)) * sigma_T * sqrt(eps_over_kT);
-            const double beta = alpha_2 * c * pow(m_e * kT_b / (2.0 * M_PI * hbar * hbar), 1.5) / exp_eps_over_kT;
-            const double beta_2 = beta * pow(exp_eps_over_kT, 0.75);
+            const double beta = alpha_2 * c * std::pow(m_e * kT_b / (2.0 * M_PI * hbar * hbar), 1.5) / exp_eps_over_kT;
+            const double beta_2 = beta * std::pow(exp_eps_over_kT, 0.75);
             const double n1s = (1.0 - X_e) * n_H;
-            const double lambda_a = H * pow(3.0 * epsilon_0 / (hbar * c), 3) / (64.0 * M_PI * M_PI * n1s);
+            const double lambda_a = H * std::pow(3.0 * epsilon_0 / (hbar * c), 3) / (64.0 * M_PI * M_PI * n1s);
             const double C_r = (lambda_2s1s + lambda_a) / (lambda_2s1s + lambda_a + beta_2);
 
             // Two different regimes to avoid numerical problems
@@ -478,8 +478,8 @@ namespace FML {
             const int npts_after_reion = npts_tau_after_reion;
             const int npts = npts_before_reion + npts_during_reion + npts_after_reion - 2;
             const double x_start = x_start_rec_array;
-            const double x_start_reion = log(1.0 / (1.0 + z_reion + 2 * delta_z_reion));
-            const double x_end_reion = log(1.0 / (1.0 + z_reion - 2 * delta_z_reion));
+            const double x_start_reion = std::log(1.0 / (1.0 + z_reion + 2 * delta_z_reion));
+            const double x_end_reion = std::log(1.0 / (1.0 + z_reion - 2 * delta_z_reion));
             const double x_end = x_end_rec_array;
 
             // Set up x-arrays to integrate over. We split into three regions as we need
@@ -523,7 +523,7 @@ namespace FML {
 
                 const double c = Constants.c;
                 const double sigma_T = Constants.sigma_T;
-                const double a = exp(x);
+                const double a = std::exp(x);
                 const double H = cosmo->H_of_x(x);
                 const double n_e = ne_of_x(x);
                 const double n_e_noreion = ne_of_x_noreion(x);
@@ -565,8 +565,8 @@ namespace FML {
             DVector g_tilde_array(npts);
             DVector g_tilde_noreion_array(npts);
             for (int i = 0; i < npts; i++) {
-                g_tilde_array[i] = -dtaudx_array[i] * exp(-tau_array[i]);
-                g_tilde_noreion_array[i] = -dtaudx_noreion_array[i] * exp(-tau_noreion_array[i]);
+                g_tilde_array[i] = -dtaudx_array[i] * std::exp(-tau_array[i]);
+                g_tilde_noreion_array[i] = -dtaudx_noreion_array[i] * std::exp(-tau_noreion_array[i]);
             }
 
             // Make tau and gsplines
@@ -625,7 +625,7 @@ namespace FML {
 
             // Compute the diffusion scale
             ODEFunction deriv_kd = [&](double x, [[maybe_unused]] const double * y, double * dydx) {
-                double a = exp(x);
+                double a = std::exp(x);
                 double R = 4.0 / 3.0 * cosmo->get_OmegaR() / cosmo->get_OmegaB() / a;
                 double Hp = cosmo->Hp_of_x(x);
                 double rhs = -1.0 / 6.0 * (R * R + 16.0 * (1.0 + R) / 15.0) / ((1.0 + R) * (1.0 + R));
@@ -706,27 +706,27 @@ namespace FML {
         double RecombinationHistory::Xe_of_x_saha_noreion(double x) const { return Xe_of_x_saha_spline(x); }
 
         double RecombinationHistory::ne_of_x(double x) const {
-            static const double factor = 3.0 * pow(Constants.H0_over_h, 2) / (8 * M_PI * Constants.G * Constants.m_H);
-            double n_b0 = factor * cosmo->get_OmegaB() * pow(cosmo->get_h(), 2);
-            return Xe_of_x(x) * (1.0 - Yp) * n_b0 * exp(-3.0 * x);
+            static const double factor = 3.0 * std::pow(Constants.H0_over_h, 2) / (8 * M_PI * Constants.G * Constants.m_H);
+            double n_b0 = factor * cosmo->get_OmegaB() * std::pow(cosmo->get_h(), 2);
+            return Xe_of_x(x) * (1.0 - Yp) * n_b0 * std::exp(-3.0 * x);
         }
 
         double RecombinationHistory::ne_of_x_saha(double x) const {
-            static const double factor = 3.0 * pow(Constants.H0_over_h, 2) / (8 * M_PI * Constants.G * Constants.m_H);
-            double n_b0 = factor * cosmo->get_OmegaB() * pow(cosmo->get_h(), 2);
-            return Xe_of_x_saha(x) * (1.0 - Yp) * n_b0 * exp(-3.0 * x);
+            static const double factor = 3.0 * std::pow(Constants.H0_over_h, 2) / (8 * M_PI * Constants.G * Constants.m_H);
+            double n_b0 = factor * cosmo->get_OmegaB() * std::pow(cosmo->get_h(), 2);
+            return Xe_of_x_saha(x) * (1.0 - Yp) * n_b0 * std::exp(-3.0 * x);
         }
 
         double RecombinationHistory::ne_of_x_noreion(double x) const {
-            static double factor = 3.0 * pow(Constants.H0_over_h, 2) / (8 * M_PI * Constants.G * Constants.m_H);
-            double n_b0 = factor * cosmo->get_OmegaB() * pow(cosmo->get_h(), 2);
-            return Xe_of_x_noreion(x) * (1.0 - Yp) * n_b0 * exp(-3.0 * x);
+            static double factor = 3.0 * std::pow(Constants.H0_over_h, 2) / (8 * M_PI * Constants.G * Constants.m_H);
+            double n_b0 = factor * cosmo->get_OmegaB() * std::pow(cosmo->get_h(), 2);
+            return Xe_of_x_noreion(x) * (1.0 - Yp) * n_b0 * std::exp(-3.0 * x);
         }
 
         double RecombinationHistory::ne_of_x_saha_noreion(double x) const {
-            static double factor = 3.0 * pow(Constants.H0_over_h, 2) / (8 * M_PI * Constants.G * Constants.m_H);
-            double n_b0 = factor * cosmo->get_OmegaB() * pow(cosmo->get_h(), 2);
-            return Xe_of_x_saha_noreion(x) * (1.0 - Yp) * n_b0 * exp(-3.0 * x);
+            static double factor = 3.0 * std::pow(Constants.H0_over_h, 2) / (8 * M_PI * Constants.G * Constants.m_H);
+            double n_b0 = factor * cosmo->get_OmegaB() * std::pow(cosmo->get_h(), 2);
+            return Xe_of_x_saha_noreion(x) * (1.0 - Yp) * n_b0 * std::exp(-3.0 * x);
         }
 
         // Implemention of reionization on Xe. This is the factor f in Xe = Xe^peebles + f
@@ -735,8 +735,8 @@ namespace FML {
                 return 0.0;
             }
 
-            const double y = exp(-1.5 * x);
-            const double yre = pow(1.0 + z_reion, 1.5);
+            const double y = std::exp(-1.5 * x);
+            const double yre = std::pow(1.0 + z_reion, 1.5);
             const double delta_y_reion = 1.5 * sqrt(1.0 + z_reion) * delta_z_reion;
             const double helium_fraction = 0.25 * Yp / (1.0 - Yp);
 
@@ -746,7 +746,7 @@ namespace FML {
             // Take into account that Helium probably gets doubly reionized at low
             // redshift
             if (helium_reionization) {
-                const double z = exp(-x) - 1.0;
+                const double z = std::exp(-x) - 1.0;
                 f += helium_fraction / 2.0 * (1.0 + tanh((z_helium_reion - z) / delta_z_helium_reion));
             }
             return f;
@@ -765,7 +765,7 @@ namespace FML {
 
         // (cs/c)^2 Photon-Baryon sound of speed (cs/c)^2
         double RecombinationHistory::get_sound_speed_squared(double x) const {
-            const double R = 4.0 / 3.0 * cosmo->get_OmegaR() / cosmo->get_OmegaB() * exp(-x);
+            const double R = 4.0 / 3.0 * cosmo->get_OmegaR() / cosmo->get_OmegaB() * std::exp(-x);
             return R / (1.0 + R) / 3.0;
         }
 

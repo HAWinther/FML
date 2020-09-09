@@ -284,7 +284,7 @@ namespace FML {
                         read_section(fp, buffer);
 
                         // Check if positions exists in Particle
-                        bool pos_exists = part[istart].get_pos() != nullptr;
+                        bool pos_exists = part[0].get_pos() != nullptr;
 
                         if (pos_exists)
                             for (int i = 0; i < NumPart; i++) {
@@ -307,7 +307,7 @@ namespace FML {
                         read_section(fp, buffer);
 
                         // Check if velocities exists in Particle
-                        bool vel_exists = part[istart].get_vel() != nullptr;
+                        bool vel_exists = part[0].get_vel() != nullptr;
 
                         if (vel_exists)
                             for (int i = 0; i < NumPart; i++) {

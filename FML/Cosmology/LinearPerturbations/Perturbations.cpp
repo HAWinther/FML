@@ -28,7 +28,7 @@ namespace FML {
             pert_spline_all_ells = p.get<bool>("pert_spline_all_ells");
 
             // Set up k-range and sample frequency
-            const double delta_log_k = log(10.0) / n_per_logint;
+            const double delta_log_k = std::log(10.0) / n_per_logint;
             k_min = keta_min / cosmo->eta_of_x(0.0);
             k_max = keta_max / cosmo->eta_of_x(0.0);
 
@@ -43,7 +43,7 @@ namespace FML {
                               << " (1/Mpc) keta = " << k_min * cosmo->eta_of_x(0.0) << "\n";
                 }
             }
-            n_k_total = int(log(k_max / k_min) / delta_log_k);
+            n_k_total = int(std::log(k_max / k_min) / delta_log_k);
 
             // Set up bookeeping system for perturbations
             psinfo = PerturbationSystemInfo(n_ell_theta, n_ell_theta * int(polarization), n_ell_nu * int(neutrinos));
@@ -257,7 +257,7 @@ namespace FML {
             const double f_nu = OmegaNu / OmegaRtot;
             const double H0 = cosmo->get_H0();
             const double Hp = cosmo->Hp_of_x(x);
-            const double a = exp(x);
+            const double a = std::exp(x);
 
             // Recombination variables
             const double dtaudx = rec->dtaudx_of_x(x);
@@ -307,7 +307,7 @@ namespace FML {
             //=============================================================================
             // SET: Neutrino perturbations (N_ell)
             //=============================================================================
-            const double Nu2 = -pow(ckoverHp * Hp / H0 * a, 2) / 12.0 *
+            const double Nu2 = -std::pow(ckoverHp * Hp / H0 * a, 2) / 12.0 *
                                (OmegaNu == 0.0 ? -2.0 / 5.0 * Psi / OmegaRtot : (Phi + Psi) / OmegaNu);
             for (int ell = 0; ell < n_ell_nu; ell++) {
                 if (ell == 0) {
@@ -328,7 +328,7 @@ namespace FML {
             bool verbose = false;
             const int n = 100;
             const double x_start_search = -15.0;
-            const double x_end = -log(4000.0);
+            const double x_end = -std::log(4000.0);
 
             // The larger the earlier we exit tight coupling
             // 10 is enough for ~% accuracy. 100 is enough for 0.1%
@@ -343,7 +343,7 @@ namespace FML {
             // If no baryons there is no tight coupling
             if (cosmo->get_OmegaB() == 0.0) {
                 if (verbose)
-                    std::cout << "k: " << k * Constants.Mpc << " z: " << exp(-x) - 1 << "\n";
+                    std::cout << "k: " << k * Constants.Mpc << " z: " << std::exp(-x) - 1 << "\n";
                 return x;
             }
 
@@ -354,14 +354,14 @@ namespace FML {
                 const double dtaudx = fabs(rec->dtaudx_of_x(x));
                 if (dtaudx < dtaudx_factor || dtaudx < dtaudx_factor * ckoverHp) {
                     if (verbose)
-                        std::cout << "k: " << k * Constants.Mpc << " z: " << exp(-x) - 1 << "\n";
+                        std::cout << "k: " << k * Constants.Mpc << " z: " << std::exp(-x) - 1 << "\n";
                     return x;
                 }
             }
             x = x_end;
 
             if (verbose)
-                std::cout << "k: " << k * Constants.Mpc << " z: " << exp(-x) - 1 << "\n";
+                std::cout << "k: " << k * Constants.Mpc << " z: " << std::exp(-x) - 1 << "\n";
             return x;
         }
 
@@ -484,7 +484,7 @@ namespace FML {
             //================================================================
             // Set up k-array
             //================================================================
-            auto k_array = FML::MATH::linspace(log(k_min), log(k_max), n_k_total);
+            auto k_array = FML::MATH::linspace(std::log(k_min), std::log(k_max), n_k_total);
             for (auto & k : k_array)
                 k = std::exp(k);
 
@@ -752,7 +752,7 @@ namespace FML {
             PnadTerm += (PprimeoverRhoprime-0.0 ) * get_delta_b(x,k)     * cosmo->get_OmegaB(x);
             PnadTerm += (PprimeoverRhoprime-1/3.) * 4.0*get_Theta(x,k,0) * cosmo->get_OmegaR(x);
             PnadTerm += (PprimeoverRhoprime-1/3.) * 4.0*get_Nu(x,k,0)    * cosmo->get_OmegaNu(x);
-            dzetadx_array[index] = -2.0/3.0/(1+weff) * PprimeoverRhoprime * Phi * pow(Constants.c * k / Hp,2) +
+            dzetadx_array[index] = -2.0/3.0/(1+weff) * PprimeoverRhoprime * Phi * std::pow(Constants.c * k / Hp,2) +
             PnadTerm/(1+weff);
             }
             }
@@ -767,7 +767,7 @@ namespace FML {
 
             // The x and k arrays to use to make the spline
             // For simplicity we jusy use the same array as used when integrating the perturbations
-            auto k_array = FML::MATH::linspace(log(k_min), log(k_max), n_k_total);
+            auto k_array = FML::MATH::linspace(std::log(k_min), std::log(k_max), n_k_total);
             for (auto & k : k_array)
                 k = std::exp(k);
             auto x_array = FML::MATH::linspace(x_start, x_end, n_x_total);
@@ -791,7 +791,7 @@ namespace FML {
                 Hp_array[ix] = cosmo->Hp_of_x(x);
                 dHpdxHp_array[ix] = cosmo->dHpdx_of_x(x) / Hp_array[ix];
                 ddHpddxHp_array[ix] = cosmo->ddHpddx_of_x(x) / Hp_array[ix];
-                exp_tau_array[ix] = exp(-rec->tau_of_x(x));
+                exp_tau_array[ix] = std::exp(-rec->tau_of_x(x));
                 chi_array[ix] = cosmo->eta_of_x(x_end) - cosmo->eta_of_x(x);
                 g_array[ix] = rec->g_tilde_of_x(x);
                 dgdx_array[ix] = rec->dgdx_tilde_of_x(x);
@@ -842,7 +842,7 @@ namespace FML {
                     POL_array[index] = polarization_term;
 
                     // Polarization source
-                    SE_array[index] = x > -0.001 ? 0.0 : 3.0 * g * Pi / 4.0 / pow(ckoverHp * Hp * chi / Constants.c, 2);
+                    SE_array[index] = x > -0.001 ? 0.0 : 3.0 * g * Pi / 4.0 / std::pow(ckoverHp * Hp * chi / Constants.c, 2);
 
                     // Neutrino source
                     SN_array[index] = (dPsidx - dPhidx);
@@ -948,12 +948,12 @@ namespace FML {
         void Perturbations::output_transfer(const double x, const std::string filename) const {
             std::ofstream fp(filename.c_str());
             const int npts = 1000;
-            auto k_array = FML::MATH::linspace(log(k_min), log(k_max), npts);
+            auto k_array = FML::MATH::linspace(std::log(k_min), std::log(k_max), npts);
             for (auto & k : k_array)
                 k = std::exp(k);
 
             const double norm_k = Constants.Mpc / cosmo->get_h();
-            const double norm = pow(cosmo->get_h() / Constants.Mpc, 2);
+            const double norm = std::pow(cosmo->get_h() / Constants.Mpc, 2);
             fp << "# k (h/Mpc)   Matter   Baryon   CDM  CB  R  Nu   Rtot    (Units: (Mpc/h)^2)\n";
             auto print_data = [&](const double k) {
                 fp << k * norm_k << " ";
@@ -1023,7 +1023,7 @@ namespace FML {
             const double dHpdx = cosmo->dHpdx_of_x(x);
             const double eta = cosmo->eta_of_x(x);
             const double etaHp = eta * Hp / Constants.c;
-            const double a = exp(x);
+            const double a = std::exp(x);
 
             //=============================================================================
             // Recombination variables
@@ -1049,7 +1049,7 @@ namespace FML {
             //=============================================================================
 
             // The second gravitational potential
-            const double Psi = -Phi - 12.0 * pow(1.0 / (ckoverH0 * a), 2) * (OmegaR * Theta2 + OmegaNu * Nu2);
+            const double Psi = -Phi - 12.0 * std::pow(1.0 / (ckoverH0 * a), 2) * (OmegaR * Theta2 + OmegaNu * Nu2);
 
             //=============================================================================
             // SET: Derivative of Phi
@@ -1145,7 +1145,7 @@ namespace FML {
             const double dlogHpdx = cosmo->dHpdx_of_x(x) / Hp;
             const double eta = cosmo->eta_of_x(x);
             const double etaHp = eta * Hp / Constants.c;
-            const double a = exp(x);
+            const double a = std::exp(x);
             const double doneoveretaHpdx = -1.0 / (etaHp) * (1.0 / etaHp + dlogHpdx);
 
             // Recombination variables
@@ -1435,7 +1435,7 @@ namespace FML {
             const double Hp = cosmo->Hp_of_x(x);
             const double eta = cosmo->eta_of_x(x);
             const double etaHp = eta * Hp / Constants.c;
-            const double a = exp(x);
+            const double a = std::exp(x);
 
             //=============================================================================
             // Recombination variables

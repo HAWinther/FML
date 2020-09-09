@@ -19,7 +19,7 @@ namespace FML {
             n_s = p.get<double>("n_s");
             kpivot = p.get<double>("kpivot_mpc") / Constants.Mpc;
             ell_max = p.get<int>("ell_max");
-            x_cell = log(1.0 / (1.0 + p.get<double>("CellOutputRedshift")));
+            x_cell = std::log(1.0 / (1.0 + p.get<double>("CellOutputRedshift")));
             compute_temperature_cells = p.get<bool>("compute_temperature_cells");
             compute_polarization_cells = p.get<bool>("compute_polarization_cells");
             compute_neutrino_cells = p.get<bool>("compute_neutrino_cells");
@@ -98,11 +98,11 @@ namespace FML {
         double PowerSpectrum::get_power_spectrum(double x, double k, std::string type) const {
             // BBKS fit used to interpolate outside of the k's we have
             static double aeq = cosmo->get_OmegaRtot() / cosmo->get_OmegaM();
-            static double keq = cosmo->Hp_of_x(log(aeq)) / Constants.c;
+            static double keq = cosmo->Hp_of_x(std::log(aeq)) / Constants.c;
             static auto bbks_fit = [](double k) {
                 const double arg = k / keq;
-                return log(1.0 + 0.171 * arg) / (0.171 * arg) *
-                       pow(1 + 0.284 * arg + pow(1.18 * arg, 2) + pow(0.399 * arg, 3) + pow(0.490 * arg, 4), -0.25);
+                return std::log(1.0 + 0.171 * arg) / (0.171 * arg) *
+                       std::pow(1 + 0.284 * arg + std::pow(1.18 * arg, 2) + std::pow(0.399 * arg, 3) + std::pow(0.490 * arg, 4), -0.25);
             };
 
             const double k_true = k;
@@ -157,7 +157,7 @@ namespace FML {
         // Evaluate P(k) for all k's we integrate perturbations on
         std::pair<DVector, DVector>
         PowerSpectrum::get_power_spectrum_array(double x, int npts, std::string type) const {
-            DVector k_array = FML::MATH::linspace(log(kmin), log(kmax), npts);
+            DVector k_array = FML::MATH::linspace(std::log(kmin), std::log(kmax), npts);
             for (auto & k : k_array)
                 k = std::exp(k);
             DVector pofk_array;
@@ -173,7 +173,7 @@ namespace FML {
         }
 
         double PowerSpectrum::primordial_power_spectrum_dimless(double k) const {
-            return A_s * pow(k / kpivot, n_s - 1.0);
+            return A_s * std::pow(k / kpivot, n_s - 1.0);
         }
 
         double PowerSpectrum::primordial_power_spectrum(double k) const {
@@ -216,8 +216,8 @@ namespace FML {
 #endif
             for (int i = 1; i < npts2; i++) {
                 double x = x_array2[i];
-                double s = sin(x);
-                double c = cos(x);
+                double s = std::sin(x);
+                double c = std::cos(x);
                 jell2[i] = ((3.0 - x * x) * s - 3.0 * x * c) / (x * x * x);
             }
             j_ell_splines[0].create(x_array2, jell2);
@@ -537,7 +537,7 @@ namespace FML {
             double rmin = yrange.first;
             double rmax = yrange.second;
             int npts = 1000;
-            auto r = FML::MATH::linspace(log(rmin), log(rmax), npts);
+            auto r = FML::MATH::linspace(std::log(rmin), std::log(rmax), npts);
             for (auto & rr : r)
                 rr = std::exp(rr);
 
@@ -570,7 +570,7 @@ namespace FML {
             //=========================================================================
             const double delta_logk = 2.0 * M_PI / cell_nsamples_per_osc / eta0;
             const int n_logk_total = int((kmax - kmin) / delta_logk);
-            auto log_k_array = FML::MATH::linspace(log(kmin), log(kmax), n_logk_total);
+            auto log_k_array = FML::MATH::linspace(std::log(kmin), std::log(kmax), n_logk_total);
 
             //=========================================================================
             // Compute the real space correlation functions
@@ -596,7 +596,7 @@ namespace FML {
 
             if (thetaT_ell_of_k_spline) {
                 // Utils::StartTiming("POW::integrating Cells - TT");
-                const double units = pow(1e6 * cosmo->get_TCMB(x_cell) / Constants.K, 2);
+                const double units = std::pow(1e6 * cosmo->get_TCMB(x_cell) / Constants.K, 2);
                 std::function<double(double, int)> D_ell_TT_integrand = [&](double k, int ell) {
                     const double normalization = ell * (ell + 1) / (2.0 * M_PI) * units;
                     const double thetaT_ell = thetaT_ell_of_k_spline(k, ell);
@@ -610,7 +610,7 @@ namespace FML {
 
             if (thetaE_ell_of_k_spline) {
                 // Utils::StartTiming("POW::integrating Cells - EE");
-                const double units = pow(1e6 * cosmo->get_TCMB(x_cell) / Constants.K, 2);
+                const double units = std::pow(1e6 * cosmo->get_TCMB(x_cell) / Constants.K, 2);
                 std::function<double(double, int)> D_ell_EE_integrand = [&](double k, int ell) {
                     const double normalization = ell * (ell + 1) / (2.0 * M_PI) * units;
                     const double thetaE_ell = thetaE_ell_of_k_spline(k, ell);
@@ -624,7 +624,7 @@ namespace FML {
 
             if (thetaT_ell_of_k_spline && thetaE_ell_of_k_spline) {
                 // Utils::StartTiming("POW::integrating Cells - TE");
-                const double units = pow(1e6 * cosmo->get_TCMB(x_cell) / Constants.K, 2);
+                const double units = std::pow(1e6 * cosmo->get_TCMB(x_cell) / Constants.K, 2);
                 std::function<double(double, int)> D_ell_TE_integrand = [&](double k, int ell) {
                     const double normalization = ell * (ell + 1) / (2.0 * M_PI) * units;
                     const double thetaT_ell = thetaT_ell_of_k_spline(k, ell);
@@ -640,7 +640,7 @@ namespace FML {
             if (Nu_ell_of_k_spline) {
                 // Utils::StartTiming("POW::integrating Cells - NN");
                 const double xini = -15.0;
-                const double units = pow(1e6 * cosmo->get_Tnu(x_cell) / Constants.K, 2);
+                const double units = std::pow(1e6 * cosmo->get_Tnu(x_cell) / Constants.K, 2);
                 std::function<double(double, int)> D_ell_NN_integrand = [&](double k, int ell) {
                     const double normalization = ell * (ell + 1) / (2.0 * M_PI) * units;
                     const double arg = k * eta0;
@@ -694,7 +694,7 @@ namespace FML {
         void PowerSpectrum::output_theta_ell(std::string filename) const {
             const int npts = 1000;
             std::ofstream fp(filename.c_str());
-            auto k_array = FML::MATH::linspace(log(pert->get_kmin()), log(pert->get_kmax()), npts);
+            auto k_array = FML::MATH::linspace(std::log(pert->get_kmin()), std::log(pert->get_kmax()), npts);
             for (auto & k : k_array)
                 k = std::exp(k);
 
@@ -792,7 +792,7 @@ namespace FML {
 
             fp << "# k (h/Mpc)   Matter   Baryon   CDM  CB  R  Nu   Rtot   (Units: (Mpc/h)^3)\n";
             const double norm_k = Constants.Mpc / cosmo->get_h();
-            const double norm = pow(cosmo->get_h() / Constants.Mpc, 3);
+            const double norm = std::pow(cosmo->get_h() / Constants.Mpc, 3);
             for (size_t i = 0; i < k_M.size(); i++) {
                 fp << k_M[i] * norm_k << " ";
                 fp << p_M[i] * norm << " ";
@@ -864,12 +864,12 @@ namespace FML {
 
             ODEFunction dxidlogk_func = [&](double logkr, [[maybe_unused]] const double * y, double * dxidlogkr) {
                 double kr = std::exp(logkr);
-                dxidlogkr[0] = sin(kr) / (kr)*Delta_P(kr / r);
+                dxidlogkr[0] = std::sin(kr) / (kr)*Delta_P(kr / r);
                 return GSL_SUCCESS;
             };
 
             DVector xi_ini{0.0};
-            DVector range{log(kmin * r), log(kmax * r)};
+            DVector range{std::log(kmin * r), std::log(kmax * r)};
             ODESolver xi_ode(1e-5, 1e-9, 1e-9);
             xi_ode.solve(dxidlogk_func, range, xi_ini);
 
@@ -893,14 +893,14 @@ namespace FML {
             // Set ranges and make a log-spaced k array
             const double kmin_fft = k0 * r0 / rmax / paddingfactor;
             const double kmax_fft = k0 * r0 / rmin * paddingfactor;
-            DVector k_array = FML::MATH::linspace(log(kmin_fft), log(kmax_fft), ngrid);
+            DVector k_array = FML::MATH::linspace(std::log(kmin_fft), std::log(kmax_fft), ngrid);
             for (auto & k : k_array)
                 k = std::exp(k);
 
             // Fill P(k) array
             DVector Pk_array(ngrid);
             for (int i = 0; i < ngrid; i++) {
-                Pk_array[i] = Delta_P(k_array[i]) / pow(k_array[i], 3) * (2.0 * M_PI * M_PI);
+                Pk_array[i] = Delta_P(k_array[i]) / std::pow(k_array[i], 3) * (2.0 * M_PI * M_PI);
             }
 
             // FFTLog algorithm

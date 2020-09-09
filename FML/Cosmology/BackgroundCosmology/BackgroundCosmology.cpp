@@ -104,7 +104,7 @@ namespace FML {
             std::cout << "h:           " << h << "\n";
             std::cout << "TCMB:        " << TCMB / Constants.K << " K\n";
             std::cout << "Mat-rad equality redshift " << 1.0 / aeq - 1.0 << "\n";
-            std::cout << "Equality scale: " << aeq * H_of_x(log(aeq)) / Constants.c * Constants.Mpc << " 1/Mpc\n";
+            std::cout << "Equality scale: " << aeq * H_of_x(std::log(aeq)) / Constants.c * Constants.Mpc << " 1/Mpc\n";
             if (eta_of_x_spline) {
                 std::cout << "The age of the universe    " << get_cosmic_time(0.0) / Constants.Gyr << " Gyr\n";
                 std::cout << "Conformal time today       " << eta_of_x(0.0) / (Constants.Gyr * Constants.c) << " Gyr\n";
@@ -134,19 +134,19 @@ namespace FML {
 
             // Define the Hubble functions we are to spline
             auto H_function = [&](double x) {
-                return H0 * sqrt(OmegaLambda + OmegaK * exp(-2 * x) + OmegaM * exp(-3 * x) + OmegaRtot * exp(-4 * x));
+                return H0 * sqrt(OmegaLambda + OmegaK * std::exp(-2 * x) + OmegaM * std::exp(-3 * x) + OmegaRtot * std::exp(-4 * x));
             };
-            auto Hp_function = [&](double x) { return exp(x) * H_function(x); };
+            auto Hp_function = [&](double x) { return std::exp(x) * H_function(x); };
             auto dHdx_function = [&](double x) {
                 return 1.0 / (2.0 * H_function(x)) * H0 * H0 *
-                       (-2 * OmegaK * exp(-2 * x) - 3 * OmegaM * exp(-3 * x) - 4 * OmegaRtot * exp(-4 * x));
+                       (-2 * OmegaK * std::exp(-2 * x) - 3 * OmegaM * std::exp(-3 * x) - 4 * OmegaRtot * std::exp(-4 * x));
             };
             auto dHpdx_function = [&](double x) {
                 return 1.0 / (2.0 * Hp_function(x)) * H0 * H0 *
-                       (2 * OmegaLambda * exp(2 * x) - OmegaM * exp(-x) - 2 * OmegaRtot * exp(-2 * x));
+                       (2 * OmegaLambda * std::exp(2 * x) - OmegaM * std::exp(-x) - 2 * OmegaRtot * std::exp(-2 * x));
             };
             auto w_function = [&](double x) {
-                return (OmegaRtot * exp(-4 * x) / 3.0 - OmegaLambda - OmegaK * exp(-2 * x) / 3.0) /
+                return (OmegaRtot * std::exp(-4 * x) / 3.0 - OmegaLambda - OmegaK * std::exp(-2 * x) / 3.0) /
                        pow(H_function(x) / H0, 2);
             };
 
@@ -197,14 +197,14 @@ namespace FML {
                 dydx[0] = 1.0 / HpoverH0;
 
                 // dt/dx (Age of the Universe) in units of 1/H0
-                dydx[1] = exp(x) / HpoverH0;
+                dydx[1] = std::exp(x) / HpoverH0;
                 return GSL_SUCCESS;
             };
 
             // The initial conditions
             DVector eta_initial{0.0, 0.0};
             if (OmegaRtot > 0.0)
-                eta_initial = {exp(x_array[0]) / sqrt(OmegaRtot), exp(2.0 * x_array[0]) / 2.0 / sqrt(OmegaRtot)};
+                eta_initial = {std::exp(x_array[0]) / sqrt(OmegaRtot), std::exp(2.0 * x_array[0]) / 2.0 / sqrt(OmegaRtot)};
 
             // Solve the ODE
             ODESolver eta_ode(
@@ -246,7 +246,7 @@ namespace FML {
 
             DVector x_array;
             if (cdm_growth_fac)
-                x_array = FML::MATH::linspace(-log(1000.0), x_max_background, n_pts_splines);
+                x_array = FML::MATH::linspace(-std::log(1000.0), x_max_background, n_pts_splines);
             else
                 x_array = FML::MATH::linspace(x_min_background, x_max_background, n_pts_splines);
 
@@ -257,7 +257,7 @@ namespace FML {
                 const double D2 = y[2];
                 const double V2 = y[3];
                 const double H = H_of_x(x) / H0;
-                const double a = exp(x), a2 = a * a;
+                const double a = std::exp(x), a2 = a * a;
                 const double Omega = get_OmegaM(x) + (cdm_growth_fac ? 0.0 : get_OmegaRtot(x));
                 dydx[0] = V1 / (H * a2);
                 dydx[1] = 1.5 * Omega * (H * a2) * D1;
@@ -268,7 +268,7 @@ namespace FML {
 
             // Initial conditions based on analytical solutions
             // D1 = a^n, D2 = prefac * D1^2
-            const double xeq = log(OmegaRtot / OmegaM);
+            const double xeq = std::log(OmegaRtot / OmegaM);
             const double xini = x_array[0];
             const double nindex = xini < xeq ? sqrt(1.5) : 1.0;
             const double prefac = xini < xeq ? -1.0 / 3.0 : -3.0 / 7.0;
@@ -276,8 +276,8 @@ namespace FML {
             const double dD1dxini = nindex * D1ini;
             const double D2ini = prefac * D1ini * D1ini;
             const double dD2dxini = 2.0 * prefac * D1ini * dD1dxini;
-            const double V1ini = dD1dxini * (H_of_x(xini) / H0 * exp(2.0 * xini));
-            const double V2ini = dD2dxini * (H_of_x(xini) / H0 * exp(2.0 * xini));
+            const double V1ini = dD1dxini * (H_of_x(xini) / H0 * std::exp(2.0 * xini));
+            const double V2ini = dD2dxini * (H_of_x(xini) / H0 * std::exp(2.0 * xini));
 
             // Solve the ODE
             DVector D_ini{D1ini, V1ini, D2ini, V2ini};
@@ -298,8 +298,8 @@ namespace FML {
                 V1[i] /= D1[x_array.size() - 1];
                 D2[i] /= D2[x_array.size() - 1];
                 V2[i] /= D2[x_array.size() - 1];
-                dD1dx[i] = V1[i] / (H_of_x(x_array[i]) / H_of_x(0.0) * exp(2.0 * x_array[i]));
-                dD2dx[i] = V2[i] / (H_of_x(x_array[i]) / H_of_x(0.0) * exp(2.0 * x_array[i]));
+                dD1dx[i] = V1[i] / (H_of_x(x_array[i]) / H_of_x(0.0) * std::exp(2.0 * x_array[i]));
+                dD2dx[i] = V2[i] / (H_of_x(x_array[i]) / H_of_x(0.0) * std::exp(2.0 * x_array[i]));
             }
 
             // Spline up
@@ -382,7 +382,7 @@ namespace FML {
         double BackgroundCosmology::get_TCMB(double x) const {
             if (x == 0.0)
                 return TCMB;
-            return TCMB * exp(-x);
+            return TCMB * std::exp(-x);
         }
 
         double BackgroundCosmology::get_Tnu(double x) const { return pow(4.0 / 11.0, 1.0 / 3.0) * get_TCMB(x); }
@@ -401,42 +401,42 @@ namespace FML {
             if (x == 0.0) {
                 return OmegaB;
             }
-            return OmegaB * exp(-3 * x) / pow(H_of_x(x) / H0, 2);
+            return OmegaB * std::exp(-3 * x) / pow(H_of_x(x) / H0, 2);
         }
 
         double BackgroundCosmology::get_OmegaM(double x) const {
             if (x == 0.0) {
                 return OmegaM;
             }
-            return OmegaM * exp(-3 * x) / pow(H_of_x(x) / H0, 2);
+            return OmegaM * std::exp(-3 * x) / pow(H_of_x(x) / H0, 2);
         }
 
         double BackgroundCosmology::get_OmegaR(double x) const {
             if (x == 0.0) {
                 return OmegaR;
             }
-            return OmegaR * exp(-4 * x) / pow(H_of_x(x) / H0, 2);
+            return OmegaR * std::exp(-4 * x) / pow(H_of_x(x) / H0, 2);
         }
 
         double BackgroundCosmology::get_OmegaRtot(double x) const {
             if (x == 0.0) {
                 return OmegaRtot;
             }
-            return OmegaRtot * exp(-4 * x) / pow(H_of_x(x) / H0, 2);
+            return OmegaRtot * std::exp(-4 * x) / pow(H_of_x(x) / H0, 2);
         }
 
         double BackgroundCosmology::get_OmegaNu(double x) const {
             if (x == 0.0) {
                 return OmegaNu;
             }
-            return OmegaNu * exp(-4 * x) / pow(H_of_x(x) / H0, 2);
+            return OmegaNu * std::exp(-4 * x) / pow(H_of_x(x) / H0, 2);
         }
 
         double BackgroundCosmology::get_OmegaCDM(double x) const {
             if (x == 0.0) {
                 return OmegaCDM;
             }
-            return OmegaCDM * exp(-3 * x) / pow(H_of_x(x) / H0, 2);
+            return OmegaCDM * std::exp(-3 * x) / pow(H_of_x(x) / H0, 2);
         }
 
         double BackgroundCosmology::get_OmegaLambda(double x) const {
@@ -450,7 +450,7 @@ namespace FML {
             if (x == 0.0) {
                 return OmegaK;
             }
-            return OmegaK * exp(-2 * x) / pow(H_of_x(x) / H0, 2);
+            return OmegaK * std::exp(-2 * x) / pow(H_of_x(x) / H0, 2);
         }
 
         std::string BackgroundCosmology::get_name() const { return name; }
@@ -495,17 +495,17 @@ namespace FML {
             if (fabs(OmegaK) < 1e-10)
                 return chi;
             double fac = sqrt(fabs(OmegaK)) * H0 / Constants.c;
-            return OmegaK < 0.0 ? sin(fac * chi) / fac : sinh(fac * chi) / fac;
+            return OmegaK < 0.0 ? std::sin(fac * chi) / fac : std::sinh(fac * chi) / fac;
         }
 
         // Radial comoving coordinate
         double BackgroundCosmology::r_of_x(double x) const { return r_of_chi(chi_of_x(x)); }
 
         // Angular diameter distance
-        double BackgroundCosmology::dA_of_x(double x) const { return r_of_x(x) * exp(x); }
+        double BackgroundCosmology::dA_of_x(double x) const { return r_of_x(x) * std::exp(x); }
 
         // Luminosity distance
-        double BackgroundCosmology::dL_of_x(double x) const { return r_of_x(x) * exp(-2.0 * x); }
+        double BackgroundCosmology::dL_of_x(double x) const { return r_of_x(x) * std::exp(-2.0 * x); }
 
     } // namespace COSMOLOGY
 } // namespace FML
