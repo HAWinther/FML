@@ -1,5 +1,5 @@
-#include "../FoF.h"
 #include <FML/FileUtils/FileUtils.h>
+#include <FML/FriendsOfFriends/FoF.h>
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/ParticleTypes/SimpleParticle.h>
@@ -102,7 +102,7 @@ int main() {
     //==================================================================
     const double linking_length = 0.3;
     const double fof_distance = linking_length / std::pow(p.get_npart_total(), 1.0 / NDIM);
-    const int n_min_FoF_group = 20;
+    const int n_min_FoF_group = 10;
     const bool periodic_box = false;
 
     std::vector<FoFHalo> FoFGroups;
@@ -113,14 +113,23 @@ int main() {
     // Output (as currently written task 0 has all the halos at this point)
     // (We don't read velocities to these will just be 0)
     //==================================================================
-    for (auto & g : FoFGroups) {
-        if (g.np > 0) {
-            std::cout << g.np << " ";
-            for (int idim = 0; idim < NDIM; idim++)
-                std::cout << g.pos[idim] * box << " ";
-            for (int idim = 0; idim < NDIM; idim++)
-                std::cout << g.vel[idim] << " ";
-            std::cout << "\n";
+    if (FML::ThisTask == 0) {
+      std::ofstream fp("fof.txt");
+        std::sort(
+            FoFGroups.begin(), FoFGroups.end(), [&](const FoFHalo & a, const FoFHalo & b) { return a.pos[0] > b.pos[0]; });
+        for (auto & g : FoFGroups) {
+            if (g.np > 0) {
+                std::cout << g.np << " ";
+                fp << g.np << " ";
+                for (int idim = 0; idim < NDIM; idim++)
+                    fp << g.pos[idim] * box << " ";
+                fp << "\n";
+                for (int idim = 0; idim < NDIM; idim++)
+                    std::cout << g.pos[idim] * box << " ";
+                for (int idim = 0; idim < NDIM; idim++)
+                    std::cout << g.vel[idim] << " ";
+                std::cout << "\n";
+            }
         }
     }
 }
