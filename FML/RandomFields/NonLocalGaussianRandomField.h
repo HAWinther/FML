@@ -106,7 +106,7 @@ namespace FML {
                     val *= fNL;
 
                 const auto Nmesh = phi_fourier.get_nmesh();
-                const auto local_nx = phi_fourier.get_local_nx();
+                const auto Local_nx = phi_fourier.get_local_nx();
                 assert_mpi(Nmesh > 0,
                            "[generate_nonlocal_gaussian_random_field_fourier] Grid must already be allocated");
 
@@ -124,17 +124,19 @@ namespace FML {
 
                 // Get phi in real space
                 FFTWGrid<N> phi_real = phi_fourier;
+                phi_real.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::phi_real");
                 phi_real.fftw_c2r();
 
                 // Compute phi^2 - <phi>^2 in real space and store in source
                 FFTWGrid<N> source(Nmesh);
+                source.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::source");
                 double phi_squared_mean = 0.0;
                 double phi_mean = 0.0;
 #ifdef USE_OMP
 #pragma omp parallel for reduction(+ : phi_squared_mean, phi_mean)
 #endif
-                for (int islice = 0; islice < local_nx; islice++) {
-                    for (auto & real_index : phi_real.get_real_range(islice, islice + 1)) {
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && real_index : phi_real.get_real_range(islice, islice + 1)) {
                         auto phi = phi_real.get_real_from_index(real_index);
                         auto value = phi * phi;
                         source.set_real_from_index(real_index, value);
@@ -158,8 +160,8 @@ namespace FML {
 #pragma omp parallel for
 #endif
                 // Subtract <phi^2>
-                for (int islice = 0; islice < local_nx; islice++) {
-                    for (auto & real_index : source.get_real_range(islice, islice + 1)) {
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && real_index : source.get_real_range(islice, islice + 1)) {
                         auto phi2 = source.get_real_from_index(real_index);
                         auto phi = phi_real.get_real_from_index(real_index);
                         auto value = (phi - phi_mean) + kernel_values[0] * (phi2 - phi_squared_mean);
@@ -184,24 +186,33 @@ namespace FML {
                 FFTWGrid<N> phi_m13(Nmesh);
                 FFTWGrid<N> phi_m23(Nmesh);
                 FFTWGrid<N> phi_m33(Nmesh); // XXX Not needed when u=0
-                std::array<double, N> kvec;
-                double kmag;
-                for (auto & fourier_index : phi_fourier.get_fourier_range()) {
-                    phi_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                phi_m13.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::phi_m13");
+                phi_m23.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::phi_m23");
+                phi_m33.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::phi_m33");
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    for (auto && fourier_index : phi_fourier.get_fourier_range(islice, islice + 1)) {
+                        phi_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
-                    double pofk_m13 = std::pow(DeltaPofk(kmag), -1.0 / 3.0);
-                    double pofk_m23 = pofk_m13 * pofk_m13;
-                    double pofk_m33 = pofk_m23 * pofk_m13; // XXX Not needed when u=0
+                        double pofk_m13 = std::pow(DeltaPofk(kmag), -1.0 / 3.0);
+                        double pofk_m23 = pofk_m13 * pofk_m13;
+                        double pofk_m33 = pofk_m23 * pofk_m13; // XXX Not needed when u=0
 
-                    auto phi = phi_fourier.get_fourier_from_index(fourier_index);
-                    auto value1 = phi * pofk_m13;
-                    auto value2 = phi * pofk_m23;
-                    auto value3 = phi * pofk_m33; // XXX Not needed when u=0
+                        auto phi = phi_fourier.get_fourier_from_index(fourier_index);
+                        auto value1 = phi * pofk_m13;
+                        auto value2 = phi * pofk_m23;
+                        auto value3 = phi * pofk_m33; // XXX Not needed when u=0
 
-                    phi_m13.set_fourier_from_index(fourier_index, value1);
-                    phi_m23.set_fourier_from_index(fourier_index, value2);
-                    phi_m33.set_fourier_from_index(fourier_index, value3); // XXX Not needed when u=0
+                        phi_m13.set_fourier_from_index(fourier_index, value1);
+                        phi_m23.set_fourier_from_index(fourier_index, value2);
+                        phi_m33.set_fourier_from_index(fourier_index, value3); // XXX Not needed when u=0
+                    }
                 }
+
                 // Set DC mode to 0
                 if (FML::ThisTask == 0) {
                     phi_m13.set_fourier_from_index(0, 0.0);
@@ -222,8 +233,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < local_nx; islice++) {
-                    for (auto & real_index : temp1.get_real_range(islice, islice + 1)) {
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && real_index : temp1.get_real_range(islice, islice + 1)) {
                         auto pm13 = phi_m13.get_real_from_index(real_index);
                         auto pm23 = phi_m23.get_real_from_index(real_index);
                         auto pm33 = phi_m33.get_real_from_index(real_index); // XXX Not needed when u=0
@@ -249,24 +260,31 @@ namespace FML {
                 }
 
                 // Add up to get phi + fNL K(phi,phi) in fourier space
-                for (auto & fourier_index : source.get_fourier_range()) {
-                    source.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    for (auto && fourier_index : source.get_fourier_range(islice, islice + 1)) {
+                        source.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
-                    double pofk_p13 = std::pow(DeltaPofk(kmag), 1.0 / 3.0);
-                    double pofk_p23 = pofk_p13 * pofk_p13;
-                    double pofk_p33 = pofk_p23 * pofk_p13;
+                        double pofk_p13 = std::pow(DeltaPofk(kmag), 1.0 / 3.0);
+                        double pofk_p23 = pofk_p13 * pofk_p13;
+                        double pofk_p33 = pofk_p23 * pofk_p13;
 
-                    auto term1 = temp1.get_fourier_from_index(fourier_index) * pofk_p13;
-                    auto term2 = temp2.get_fourier_from_index(fourier_index) * pofk_p23;
-                    auto term3 = temp3.get_fourier_from_index(fourier_index) * pofk_p33; // XXX Not needed when u=0
+                        auto term1 = temp1.get_fourier_from_index(fourier_index) * pofk_p13;
+                        auto term2 = temp2.get_fourier_from_index(fourier_index) * pofk_p23;
+                        auto term3 = temp3.get_fourier_from_index(fourier_index) * pofk_p33; // XXX Not needed when u=0
 
-                    auto old_source = source.get_fourier_from_index(fourier_index);
-                    auto value =
-                        old_source + kernel_values[1] * term1 + kernel_values[2] * term2 + kernel_values[3] * term3;
-                    if (kmag == 0.0) {
-                        value = 0.0;
+                        auto old_source = source.get_fourier_from_index(fourier_index);
+                        auto value =
+                            old_source + kernel_values[1] * term1 + kernel_values[2] * term2 + kernel_values[3] * term3;
+                        if (kmag == 0.0) {
+                            value = 0.0;
+                        }
+                        source.set_fourier_from_index(fourier_index, value);
                     }
-                    source.set_fourier_from_index(fourier_index, value);
                 }
 
                 // Set DC mode to 0
@@ -279,12 +297,13 @@ namespace FML {
                 // Ensure that <phi> = 0
                 if (subtract_mean) {
                     phi_fourier.fftw_c2r();
+
                     double phi_mean = 0.0;
 #ifdef USE_OMP
 #pragma omp parallel for reduction(+ : phi_mean)
 #endif
-                    for (int islice = 0; islice < local_nx; islice++) {
-                        for (auto & real_index : phi_fourier.get_real_range(islice, islice + 1)) {
+                    for (int islice = 0; islice < Local_nx; islice++) {
+                        for (auto && real_index : phi_fourier.get_real_range(islice, islice + 1)) {
                             auto value = phi_fourier.get_real_from_index(real_index);
                             phi_mean += value;
                         }
@@ -300,8 +319,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                    for (int islice = 0; islice < local_nx; islice++) {
-                        for (auto & real_index : phi_fourier.get_real_range(islice, islice + 1)) {
+                    for (int islice = 0; islice < Local_nx; islice++) {
+                        for (auto && real_index : phi_fourier.get_real_range(islice, islice + 1)) {
                             auto phi = phi_fourier.get_real_from_index(real_index);
                             phi_fourier.set_real_from_index(real_index, phi - phi_mean);
                         }

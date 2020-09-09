@@ -284,9 +284,6 @@ namespace FML {
 
             int Nmesh = fourier_grid.get_nmesh();
             auto Local_nx = fourier_grid.get_local_nx();
-            auto NmeshTotTotal = size_t(Local_nx) * FML::power(size_t(Nmesh), N - 2) *
-                                 size_t(Nmesh / 2 + 1); // fourier_grid.get_ntot_fourier();
-            auto * cdelta = fourier_grid.get_fourier_grid();
 
             // Norm of LOS vector
             double rnorm = 0.0;
@@ -303,29 +300,32 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (size_t ind = 0; ind < NmeshTotTotal; ind++) {
-                // Special treatment of k = 0 plane
-                int last_coord = ind % (Nmesh / 2 + 1);
-                double weight = last_coord > 0 && last_coord < Nmesh / 2 ? 2.0 : 1.0;
+            for (int islice = 0; islice < Local_nx; islice++) {
+                [[maybe_unused]] double kmag;
+                [[maybe_unused]] std::array<double, N> kvec;
+                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                    // Special treatment of k = 0 plane
+                    int last_coord = fourier_index % (Nmesh / 2 + 1);
+                    double weight = last_coord > 0 && last_coord < Nmesh / 2 ? 2.0 : 1.0;
 
-                // Compute kvec, |kvec| and |delta|^2
-                double kmag;
-                std::array<double, N> kvec;
-                fourier_grid.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag);
-                double power = std::norm(cdelta[ind]);
+                    // Compute kvec, |kvec| and |delta|^2
+                    fourier_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                    auto delta = fourier_grid.get_fourier_from_index(fourier_index);
+                    double power = std::norm(delta);
 
-                // Compute mu = k_vec*r_vec
-                double mu = 0.0;
-                for (int idim = 0; idim < N; idim++)
-                    mu += kvec[idim] * line_of_sight_direction[idim];
-                mu /= (kmag * rnorm);
+                    // Compute mu = k_vec*r_vec
+                    double mu = 0.0;
+                    for (int idim = 0; idim < N; idim++)
+                        mu += kvec[idim] * line_of_sight_direction[idim];
+                    mu /= (kmag * rnorm);
 
-                // Add to bin |delta|^2, |delta|^2mu^2, |delta^2|mu^4, ...
-                double mutoell = 1.0;
-                for (size_t ell = 0; ell < Pell.size(); ell++) {
-                    Pell[ell].add_to_bin(kmag, power * mutoell, weight);
-                    mutoell *= mu;
-                    // Pell[ell].add_to_bin(kmag, power * std::pow(mu, ell), weight);
+                    // Add to bin |delta|^2, |delta|^2mu^2, |delta^2|mu^4, ...
+                    double mutoell = 1.0;
+                    for (size_t ell = 0; ell < Pell.size(); ell++) {
+                        Pell[ell].add_to_bin(kmag, power * mutoell, weight);
+                        mutoell *= mu;
+                        // Pell[ell].add_to_bin(kmag, power * std::pow(mu, ell), weight);
+                    }
                 }
             }
 
@@ -382,11 +382,8 @@ namespace FML {
             assert_mpi(pofk.n > 0 && pofk.kmax > pofk.kmin && pofk.kmin >= 0.0,
                        "[bin_up_power_spectrum] Binning has inconsistent parameters\n");
 
-            auto * cdelta = fourier_grid.get_fourier_grid();
             int Nmesh = fourier_grid.get_nmesh();
             auto Local_nx = fourier_grid.get_local_nx();
-            auto NmeshTotLocal = size_t(Local_nx) * FML::power(size_t(Nmesh), N - 2) *
-                                 size_t(Nmesh / 2 + 1); // fourier_grid.get_ntot_fourier();
 
             // Initialize binning just in case
             pofk.reset();
@@ -395,18 +392,23 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (size_t ind = 0; ind < NmeshTotLocal; ind++) {
-                // Special treatment of k = 0 plane
-                int last_coord = ind % (Nmesh / 2 + 1);
-                double weight = last_coord > 0 && last_coord < Nmesh / 2 ? 2.0 : 1.0;
+            for (int islice = 0; islice < Local_nx; islice++) {
+                [[maybe_unused]] double kmag;
+                [[maybe_unused]] std::array<double, N> kvec;
+                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                    // Special treatment of k = 0 plane (Safer way: fetch coord)
+                    // auto coord = fourier_grid.get_fourier_coord_from_index(fourier_index);
+                    // int last_coord = coord[N-1];
+                    int last_coord = fourier_index % (Nmesh / 2 + 1);
+                    double weight = last_coord > 0 && last_coord < Nmesh / 2 ? 2.0 : 1.0;
 
-                auto delta_norm = std::norm(cdelta[ind]);
+                    auto delta = fourier_grid.get_fourier_from_index(fourier_index);
+                    auto delta_norm = std::norm(delta);
 
-                // Add norm to bin
-                double kmag;
-                std::array<double, N> kvec;
-                fourier_grid.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag);
-                pofk.add_to_bin(kmag, delta_norm, weight);
+                    // Add norm to bin
+                    fourier_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                    pofk.add_to_bin(kmag, delta_norm, weight);
+                }
             }
 
             // Normalize to get P(k) (this communicates over tasks)
@@ -448,8 +450,8 @@ namespace FML {
             density_k.add_memory_label("FFTWGrid::compute_power_spectrum_direct_summation::density_k");
 
             auto * f = density_k.get_fourier_grid();
-            for (auto && complex_index : density_k.get_fourier_range()) {
-                auto kvec = density_k.get_fourier_wavevector_from_index(complex_index);
+            for (auto && fourier_index : density_k.get_fourier_range()) {
+                auto kvec = density_k.get_fourier_wavevector_from_index(fourier_index);
                 double real = 0.0;
                 double imag = 0.0;
 #ifdef USE_OMP
@@ -466,9 +468,9 @@ namespace FML {
                     imag += val.imag();
                 }
                 std::complex<double> sum = {real, imag};
-                if (ThisTask == 0 and complex_index == 0)
+                if (ThisTask == 0 and fourier_index == 0)
                     sum -= 1.0;
-                f[complex_index] = sum * norm;
+                f[fourier_index] = sum * norm;
             }
 
             // Bin up the power-spectrum
@@ -726,8 +728,8 @@ namespace FML {
         //      auto Q_zz_of_k = Q_zz.get_fourier_from_index(fourier_index);
         //      auto delta0    = density_real.get_fourier_from_index(fourier_index);
 
-        //      auto res = Q_xx_of_k * kvec[0] * kvec[0] + Q_yy_of_k * kvec[1] * kvec[1] +  2.0 * (Q_xy_of_k * kvec[0] *
-        //      kvec[1])
+        //      auto res = Q_xx_of_k * kvec[0] * kvec[0] + Q_yy_of_k * kvec[1] * kvec[1] +  2.0 * (Q_xy_of_k *
+        //      kvec[0] * kvec[1])
         //        if constexpr (N > 2) res += Q_zz_of_k * kvec[2] * kvec[2] + 2.0 * (Q_yz_of_k * kvec[1] * kvec[2] +
         //        Q_zx_of_k * kvec[2] * kvec[0]);
         //      res = 1.5 * res - 0.5 * delta0;
@@ -751,7 +753,7 @@ namespace FML {
         //    assert(Qindex.size() > 0);
         //    assert(origin.size() == N);
 
-        //    for(auto & real_index : density_real.get_real_range()){
+        //    for(auto && real_index : density_real.get_real_range()){
         //      auto coord = density_real.get_coord_from_index(real_index);
         //      auto pos = density_real.get_real_position(coord);
 
@@ -815,9 +817,10 @@ namespace FML {
             // Reset binning
             bofk.reset();
 
-            const auto local_nx = density_k.get_local_nx();
             const auto Nmesh = density_k.get_nmesh();
+            const auto Local_nx = density_k.get_local_nx();
             const int nbins = bofk.n;
+
             assert_mpi(nbins > 0, "[compute_bispectrum] nbins has to be >= 0\n");
             assert_mpi(Nmesh > 0, "[compute_bispectrum] grid is not allocated\n");
 
@@ -833,6 +836,8 @@ namespace FML {
             for (int i = 0; i < nbins; i++) {
                 F_k[i] = density_k;
                 N_k[i] = density_k;
+                F_k[i].add_memory_label("FFTWGrid::compute_bispectrum::F_" + std::to_string(i));
+                N_k[i].add_memory_label("FFTWGrid::compute_bispectrum::N_" + std::to_string(i));
                 N_k[i].fill_fourier_grid(0.0);
 
                 if (i == 0) {
@@ -894,12 +899,12 @@ namespace FML {
                 //  return 1.0/std::sqrt(2.0 * M_PI * sigma2) * std::exp( -0.5*(kmag - kbin)*(kmag - kbin)/sigma2 );
                 //};
 
-                // Loop over all cells
+                // Loop over all cells XXX Add OpenMP
                 double kmean = 0.0;
                 double nk = 0;
                 double kmag2;
                 std::array<double, N> kvec;
-                for (auto & fourier_index : grid.get_fourier_range()) {
+                for (auto && fourier_index : grid.get_fourier_range()) {
                     grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
                     //=====================================================
@@ -976,10 +981,10 @@ namespace FML {
                 // Compute number of triangles in current bin (norm insignificant below)
                 double N123_current = 0.0;
 #ifdef USE_OMP
-#pragma omp parallel for reduction(+: N123_current)
+#pragma omp parallel for reduction(+ : N123_current)
 #endif
-                for (int islice = 0; islice < local_nx; islice++) {
-                    for (auto & real_index : N_k[0].get_real_range(islice, islice + 1)) {
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && real_index : N_k[0].get_real_range(islice, islice + 1)) {
                         double N1 = N_k[ik[0]].get_real_from_index(real_index);
                         double N2 = N_k[ik[1]].get_real_from_index(real_index);
                         double N3 = N_k[ik[2]].get_real_from_index(real_index);
@@ -993,10 +998,10 @@ namespace FML {
                 // Compute sum over triangles
                 double F123_current = 0.0;
 #ifdef USE_OMP
-#pragma omp parallel for reduction(+: F123_current)
+#pragma omp parallel for reduction(+ : F123_current)
 #endif
-                for (int islice = 0; islice < local_nx; islice++) {
-                    for (auto & real_index : F_k[0].get_real_range(islice, islice + 1)) {
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && real_index : F_k[0].get_real_range(islice, islice + 1)) {
                         auto F1 = F_k[ik[0]].get_real_from_index(real_index);
                         auto F2 = F_k[ik[1]].get_real_from_index(real_index);
                         auto F3 = F_k[ik[2]].get_real_from_index(real_index);
@@ -1054,9 +1059,10 @@ namespace FML {
             // Reset the binning
             polyofk.reset();
 
-            const auto local_nx = fourier_grid.get_local_nx();
             const auto Nmesh = fourier_grid.get_nmesh();
+            const auto Local_nx = fourier_grid.get_local_nx();
             const int nbins = polyofk.n;
+
             assert_mpi(nbins > 0, "[compute_polyspectrum] nbins has to be >=0\n");
             assert_mpi(Nmesh > 0, "[compute_polyspectrum] grid is not allocated\n");
             static_assert(ORDER > 1);
@@ -1073,6 +1079,8 @@ namespace FML {
             for (int i = 0; i < nbins; i++) {
                 F_k[i] = fourier_grid;
                 N_k[i] = fourier_grid;
+                F_k[i].add_memory_label("FFTWGrid::compute_polyspectrum::F_" + std::to_string(i));
+                N_k[i].add_memory_label("FFTWGrid::compute_polyspectrum::N_" + std::to_string(i));
                 N_k[i].fill_fourier_grid(0.0);
 
                 if (i == 0) {
@@ -1115,7 +1123,7 @@ namespace FML {
                 //=====================================================
                 // Bin weights, currently not in use. Basically some averaging about
                 // k for each bin. Not tested so well, but gives very good results for local
-                // nn-gaussianity (much less noisy estimates), but not so much in general
+                // non-gaussianity (much less noisy estimates), but not so much in general
                 //=====================================================
                 // double sigma2 = 8.0 * std::pow( deltak ,2);
                 // auto weight = [&](double kmag, double kbin){
@@ -1128,7 +1136,7 @@ namespace FML {
                 double nk = 0;
                 double kmag2;
                 std::array<double, N> kvec;
-                for (auto & fourier_index : grid.get_fourier_range()) {
+                for (auto && fourier_index : grid.get_fourier_range()) {
                     grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
                     //=====================================================
@@ -1212,10 +1220,10 @@ namespace FML {
                 // Compute number of triangles in current bin (norm insignificant below)
                 double N123_current = 0.0;
 #ifdef USE_OMP
-#pragma omp parallel for reduction(+: N123_current)
+#pragma omp parallel for reduction(+ : N123_current)
 #endif
-                for (int islice = 0; islice < local_nx; islice++) {
-                    for (auto & real_index : N_k[0].get_real_range()) {
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && real_index : N_k[0].get_real_range(islice, islice + 1)) {
                         double Nproduct = 1.0;
                         for (int ii = 0; ii < ORDER; ii++)
                             Nproduct *= N_k[ik[ii]].get_real_from_index(real_index);
@@ -1229,10 +1237,10 @@ namespace FML {
                 // Compute sum over triangles
                 double F123_current = 0.0;
 #ifdef USE_OMP
-#pragma omp parallel for reduction(+: F123_current)
+#pragma omp parallel for reduction(+ : F123_current)
 #endif
-                for (int islice = 0; islice < local_nx; islice++) {
-                    for (auto & real_index : F_k[0].get_real_range(islice,islice+1)) {
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && real_index : F_k[0].get_real_range(islice, islice + 1)) {
                         double Fproduct = 1.0;
                         for (int ii = 0; ii < ORDER; ii++)
                             Fproduct *= F_k[ik[ii]].get_real_from_index(real_index);

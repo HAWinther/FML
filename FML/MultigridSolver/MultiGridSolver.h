@@ -284,8 +284,11 @@ namespace FML {
 
                 _verbose = verbose and (FML::ThisTask == 0);
                 _f = MPIMultiGrid<NDIM, T>(_N, Nlevels, _periodic, n_extra_slices_left, n_extra_slices_right);
+                _f.add_memory_label("MultiGridSolver::MultiGridSolver::_f");
                 _source = MPIMultiGrid<NDIM, T>(_N, Nlevels, _periodic, 0, 0);
+                _source.add_memory_label("MultiGridSolver::MultiGridSolver::_source");
                 _res = MPIMultiGrid<NDIM, T>(_N, Nlevels, _periodic, 0, 0);
+                _res.add_memory_label("MultiGridSolver::MultiGridSolver::_res");
                 _Nlevel = _f.get_Nlevel();
                 _NtotLocal = _f.get_NtotLocal();
 
@@ -293,6 +296,7 @@ namespace FML {
                 // All cells are active cells when periodic so set the mask
                 // and restrict it down to all levels. Otherwise the user has to provide the mask
                 _bmask = MPIMultiGrid<NDIM, double>(_N, Nlevels, _periodic, n_extra_slices_left, n_extra_slices_right);
+                _bmask.add_memory_label("MultiGridSolver::MultiGridSolver::_bmask");
                 if (_periodic) {
                     std::fill_n(_bmask[0], _NtotLocal, 1.0);
                 } else {

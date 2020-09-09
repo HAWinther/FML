@@ -43,22 +43,33 @@ namespace FML {
                 if (FML::ThisTask == 0)
                     std::cout << "[ComputeHessianWithFT::ComputeSecondDerivative] Computing phi_" << i1 << "," << i2
                               << "\n";
-                std::array<double, N> kvec;
-                double kmag2;
-                for (auto & fourier_index : grid.get_fourier_range()) {
-                    grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
-                    // From f(k) -> -ika ikb f(k) / k^2 = (ka kb / k^2) f(k)
-                    auto value = grid.get_fourier_from_index(fourier_index);
-                    double factor = -norm * kvec[i1] * kvec[i2];
-                    if (hessian_of_potential_of_f)
-                        factor *= -1.0 / kmag2;
-                    value *= factor;
+                auto Local_nx = grid.get_local_nx();
+                auto Local_x_start = grid.get_local_x_start();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag2;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    for (auto && fourier_index : grid.get_fourier_range(islice, islice + 1)) {
+                        if(Local_x_start == 0 and fourier_index == 0)
+                          continue; // DC mode (k=0)
 
-                    grid.set_fourier_from_index(fourier_index, value);
+                        grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+
+                        // From f(k) -> -ika ikb f(k) / k^2 = (ka kb / k^2) f(k)
+                        auto value = grid.get_fourier_from_index(fourier_index);
+                        double factor = -norm * kvec[i1] * kvec[i2];
+                        if (hessian_of_potential_of_f)
+                            factor *= -1.0 / kmag2;
+                        value *= factor;
+
+                        grid.set_fourier_from_index(fourier_index, value);
+                    }
                 }
 
-                // Set DC mode to zero (we divide by 0 in the loop so fix this)
+                // Deal with the DC mode
                 if (FML::ThisTask == 0)
                     grid.set_fourier_from_index(0, 0.0);
 
@@ -150,40 +161,46 @@ namespace FML {
                 };
 
             // Loop over all cells
-            for (auto & real_index : tensor_real[0].get_real_range()) {
+            auto Local_nx = tensor_real[0].get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                for (auto && real_index : tensor_real[0].get_real_range(islice,islice+1)) {
 
-                // Set the matrix
-                int count = 0;
-                for (int idim = 0; idim < N; idim++) {
-                    auto value = tensor_real[count].get_real_from_index(real_index);
-                    gsl_matrix_set(matrix, idim, idim, value);
-                    count++;
-                    for (int idim2 = idim + 1; idim2 < N; idim2++) {
-                        value = tensor_real[count].get_real_from_index(real_index);
-                        gsl_matrix_set(matrix, idim, idim2, value);
-                        gsl_matrix_set(matrix, idim2, idim, value);
+                    // Set the matrix
+                    int count = 0;
+                    for (int idim = 0; idim < N; idim++) {
+                        auto value = tensor_real[count].get_real_from_index(real_index);
+                        gsl_matrix_set(matrix, idim, idim, value);
                         count++;
-                    }
-                }
-
-                // Compute eigenvectors+eigenvalues or just eigenvalues
-                // In the latter case we sort the eigenvalues
-                if (compute_eigenvectors) {
-                    SolveEigensystem(matrix, eval, evec, workspacev);
-
-                    // Set eigenvectors
-                    for (int i = 0; i < N * N; i++) {
-                        eigenvectors[i].set_real_from_index(real_index, evec->data[i]);
-                        // For column major order: gsl_matrix_get(evec, i / N, i % N);
+                        for (int idim2 = idim + 1; idim2 < N; idim2++) {
+                            value = tensor_real[count].get_real_from_index(real_index);
+                            gsl_matrix_set(matrix, idim, idim2, value);
+                            gsl_matrix_set(matrix, idim2, idim, value);
+                            count++;
+                        }
                     }
 
-                } else {
-                    SolveEigenvalues(matrix, eval, workspace);
-                }
+                    // Compute eigenvectors+eigenvalues or just eigenvalues
+                    // In the latter case we sort the eigenvalues
+                    if (compute_eigenvectors) {
+                        SolveEigensystem(matrix, eval, evec, workspacev);
 
-                // Store the eigenvalues
-                for (int idim = 0; idim < N; idim++)
-                    eigenvalues[idim].set_real_from_index(real_index, eval->data[idim]);
+                        // Set eigenvectors
+                        for (int i = 0; i < N * N; i++) {
+                            eigenvectors[i].set_real_from_index(real_index, evec->data[i]);
+                            // For column major order: gsl_matrix_get(evec, i / N, i % N);
+                        }
+
+                    } else {
+                        SolveEigenvalues(matrix, eval, workspace);
+                    }
+
+                    // Store the eigenvalues
+                    for (int idim = 0; idim < N; idim++)
+                        eigenvalues[idim].set_real_from_index(real_index, eval->data[idim]);
+                }
             }
 
             // Free up GSL allocations

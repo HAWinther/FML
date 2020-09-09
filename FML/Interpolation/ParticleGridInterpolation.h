@@ -167,7 +167,7 @@ namespace FML {
         template <int N, int ORDER>
         void convolve_grid_with_kernel(const FFTWGrid<N> & grid_in,
                                        FFTWGrid<N> & grid_out,
-                                       std::function<FloatType(std::vector<double> &)> & convolution_kernel);
+                                       std::function<FloatType(std::array<double,N> &)> & convolution_kernel);
 
         //===================================================================================================
         //===================================================================================================
@@ -342,7 +342,9 @@ namespace FML {
         template <int N>
         void deconvolve_window_function_fourier(FFTWGrid<N> & fourier_grid, std::string density_assignment_method) {
 
-            const int Ngrid = fourier_grid.get_nmesh();
+            const auto Ngrid = fourier_grid.get_nmesh();
+            const auto Local_nx = fourier_grid.get_local_nx();
+
             assert_mpi(Ngrid > 0, "[deconvolve_window_function_fourier] Ngrid must be positive\n");
 
             // The order of the method
@@ -363,11 +365,16 @@ namespace FML {
                 return res;
             };
 
-            auto * f = fourier_grid.get_fourier_grid();
-            for (auto && complex_index : fourier_grid.get_fourier_range()) {
-                auto kvec = fourier_grid.get_fourier_wavevector_from_index(complex_index);
-                double w = window_function(kvec);
-                f[complex_index] /= w;
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                    auto kvec = fourier_grid.get_fourier_wavevector_from_index(fourier_index);
+                    double w = window_function(kvec);
+                    auto value = fourier_grid.get_fourier_from_index(fourier_index);
+                    fourier_grid.set_fourier_from_index(fourier_index, value / w);
+                }
             }
         }
 
@@ -387,7 +394,7 @@ namespace FML {
         template <int N, int ORDER, class T>
         void particles_to_grid(T * part, size_t NumPart, size_t NumPartTot, FFTWGrid<N> & density) {
 
-            auto nextra = get_extra_slices_needed_by_order<ORDER>();
+            const auto nextra = get_extra_slices_needed_by_order<ORDER>();
             assert_mpi(density.get_n_extra_slices_left() >= nextra.first &&
                            density.get_n_extra_slices_right() >= nextra.second,
                        "[particles_to_grid] Too few extra slices\n");
@@ -401,7 +408,6 @@ namespace FML {
 
             // For the kernel above we need to go kernel_width/2 cells to the left and right
             const constexpr int widthtondim = FML::power(ORDER, N);
-            std::vector<int> xstart(N, -ORDER / 2);
 
             // Info about the grid
             // const auto Local_nx      = density.get_local_nx();
@@ -410,12 +416,6 @@ namespace FML {
 
             // Set whole grid (also extra slices) to -1.0
             density.fill_real_grid(-1.0);
-
-            // Stuff we need below
-            std::vector<double> x(N);
-            std::array<int, N> ix;
-            std::array<int, N> ix_nbor;
-            std::array<int, N> icoord;
 
             // Factor to normalize density to the mean density
             double norm_fac = std::pow((double)Nmesh, N) / double(NumPartTot);
@@ -429,19 +429,25 @@ namespace FML {
             SumOverTasks(&mean_mass);
             mean_mass /= double(NumPartTot);
             norm_fac /= mean_mass;
-            double mass;
+            double mass = 1.0;
 #else
             const constexpr double mass = 1.0;
 #endif
 
             // Loop over all particles and add them to the grid
+            // OpenMP will not be very good due to critical section needed in add_real
             for (size_t i = 0; i < NumPart; i++) {
+                
                 // Particle position
                 const auto * pos = part[i].get_pos();
 #ifdef PARTICLES_WITH_DIFFERENT_MASS
                 mass = part[i].get_mass();
 #endif
 
+                std::array<double,N> x;
+                std::array<int, N> ix;
+                std::array<int, N> ix_nbor;
+                std::array<int, N> icoord;
                 for (int idim = 0; idim < N; idim++) {
                     // Scale positions to be in [0, Nmesh]
                     x[idim] = pos[idim] * Nmesh;
@@ -460,6 +466,7 @@ namespace FML {
 
                 // If we are on the left or right of the cell determines how many cells
                 // we have to go left and right
+                std::array<int,N> xstart;
                 if (ORDER % 2 == 0) {
                     for (int idim = 0; idim < N; idim++) {
                         xstart[idim] = -ORDER / 2 + 1;
@@ -507,6 +514,7 @@ namespace FML {
                     // Add particle to grid
                     density.add_real(icoord, w * norm_fac * mass);
                     sumweights += w;
+
                 }
 
 #ifdef DEBUG_INTERPOL
@@ -535,7 +543,6 @@ namespace FML {
 
             // We need to look at width^N cells in total
             const constexpr int widthtondim = FML::power(ORDER, N);
-            std::vector<int> xstart(N, -ORDER / 2);
 
             // Fetch grid information
             const auto Local_nx = grid.get_local_nx();
@@ -545,6 +552,9 @@ namespace FML {
             // Allocate memory needed
             interpolated_values.resize(NumPart);
 
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
             for (size_t ind = 0; ind < NumPart; ind++) {
 
                 // Positions in global grid in units of [Nmesh]
@@ -587,6 +597,7 @@ namespace FML {
 
                 // If we are on the left or right of the cell determines how many cells
                 // we have to go left and right
+                std::array<int,N> xstart;
                 if (ORDER % 2 == 0) {
                     for (int idim = 0; idim < N; idim++) {
                         xstart[idim] = -ORDER / 2 + 1;
@@ -647,7 +658,6 @@ namespace FML {
 
                 // Store the interpolated value
                 interpolated_values[ind] = value;
-                // interpolated_values.push_back(value);
             }
         }
 
@@ -752,7 +762,7 @@ namespace FML {
         template <int N, int ORDER>
         void convolve_grid_with_kernel(const FFTWGrid<N> & grid_in,
                                        FFTWGrid<N> & grid_out,
-                                       std::function<FloatType(std::vector<double> &)> & convolution_kernel) {
+                                       std::function<FloatType(std::array<double,N> &)> & convolution_kernel) {
 
             auto nextra = get_extra_slices_needed_by_order<ORDER>();
             assert_mpi(grid_in.get_n_extra_slices_left() >= nextra.first &&
@@ -762,61 +772,68 @@ namespace FML {
 
             // We need to look at width^N cells in total
             const constexpr int widthtondim = FML::power(ORDER, N);
-            std::vector<int> xstart(N, -ORDER / 2);
+            std::array<int,N> xstart;
             if (ORDER % 2 == 0)
-                xstart = std::vector<int>(N, -ORDER / 2 + 1);
+                xstart.fill(-ORDER / 2 + 1);
+            else
+                xstart.fill(-ORDER / 2);
 
             // Fetch grid information
+            const int Nmesh = grid_in.get_nmesh();
             const auto Local_nx = grid_in.get_local_nx();
             const auto Local_x_start = grid_in.get_local_x_start();
-            const int Nmesh = grid_in.get_nmesh();
 
             // Make outputgrid (this initializes it to zero)
             grid_out = FFTWGrid<N>(Nmesh, grid_in.get_n_extra_slices_left(), grid_in.get_n_extra_slices_right());
 
             // Loop over all cells in in-grid
-            for (auto & ind : grid_in.get_real_range()) {
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                std::array<double,N> dx;
+                for (auto && real_index : grid_in.get_real_range(islice, islice + 1)) {
 
-                // Coordinate of cell
-                auto ix = grid_in.coord_from_index(ind);
+                    // Coordinate of cell
+                    auto ix = grid_in.coord_from_index(real_index);
 
-                // Neighbor coord
-                std::array<int, N> ix_nbor;
-                ix_nbor[0] = ix[0];
-                for (int idim = 1; idim < N; idim++) {
-                    ix_nbor[idim] = ix[idim] + 1;
-                    if (ix_nbor[idim] >= Nmesh)
-                        ix_nbor[idim] -= Nmesh;
-                }
-
-                // Interpolation
-                FloatType value = 0;
-                std::vector<double> dx(N);
-                for (int i = 0; i < widthtondim; i++) {
-                    for (int idim = 0, n = 1; idim < N; idim++, n *= ORDER) {
-                        int go_left_right_or_stay = ORDER == 1 ? 0 : xstart[idim] + (i / n % ORDER);
-                        ix_nbor[idim] = ix[idim] + go_left_right_or_stay;
-                        dx[idim] = go_left_right_or_stay;
-                    }
-                    auto w = convolution_kernel(dx);
-
-                    // Periodic BC
-                    std::array<int, N> icoord;
-                    icoord[0] = ix_nbor[0];
+                    // Neighbor coord
+                    std::array<int, N> ix_nbor;
+                    ix_nbor[0] = ix[0];
                     for (int idim = 1; idim < N; idim++) {
-                        icoord[idim] = ix_nbor[idim];
-                        if (icoord[idim] >= Nmesh)
-                            icoord[idim] -= Nmesh;
-                        if (icoord[idim] < 0)
-                            icoord[idim] += Nmesh;
+                        ix_nbor[idim] = ix[idim] + 1;
+                        if (ix_nbor[idim] >= Nmesh)
+                            ix_nbor[idim] -= Nmesh;
                     }
 
-                    // Add up
-                    value += w * grid_in.get_real(icoord);
-                }
+                    // Interpolation
+                    FloatType value = 0;
+                    for (int i = 0; i < widthtondim; i++) {
+                        for (int idim = 0, n = 1; idim < N; idim++, n *= ORDER) {
+                            int go_left_right_or_stay = ORDER == 1 ? 0 : xstart[idim] + (i / n % ORDER);
+                            ix_nbor[idim] = ix[idim] + go_left_right_or_stay;
+                            dx[idim] = go_left_right_or_stay;
+                        }
+                        auto w = convolution_kernel(dx);
 
-                // Store the interpolated value
-                grid_out.set_real(ix, value);
+                        // Periodic BC
+                        std::array<int, N> icoord;
+                        icoord[0] = ix_nbor[0];
+                        for (int idim = 1; idim < N; idim++) {
+                            icoord[idim] = ix_nbor[idim];
+                            if (icoord[idim] >= Nmesh)
+                                icoord[idim] -= Nmesh;
+                            if (icoord[idim] < 0)
+                                icoord[idim] += Nmesh;
+                        }
+
+                        // Add up
+                        value += w * grid_in.get_real(icoord);
+                    }
+
+                    // Store the interpolated value
+                    grid_out.set_real(ix, value);
+                }
             }
         }
 
@@ -859,7 +876,7 @@ namespace FML {
             // Bin shifted particles to grid
             FFTWGrid<N> density_grid_fourier2(Ngrid, nleft, nright);
             density_grid_fourier.add_memory_label(
-                "FFTWGrid::compute_power_spectrum_interlacing::density_grid_fourier2");
+                "FFTWGrid::particles_to_fourier_grid_interlacing::density_grid_fourier2");
             particles_to_grid<N, T>(part, NumPart, NumPartTotal, density_grid_fourier2, density_assignment_method);
 
             // Shift particles back as not to ruin anything
@@ -883,14 +900,21 @@ namespace FML {
             // The mean of the two grids (alias cancellation)
             auto ff = density_grid_fourier.get_fourier_grid();
             auto gg = density_grid_fourier2.get_fourier_grid();
-            const std::complex<double> I(0, 1);
-            for (auto && complex_index : density_grid_fourier.get_fourier_range()) {
-                auto kvec = density_grid_fourier.get_fourier_wavevector_from_index(complex_index);
-                auto ksum = kvec[0];
-                for (int idim = 1; idim < N; idim++)
-                    ksum += kvec[idim];
-                auto norm = std::exp(I * ksum * shift);
-                ff[complex_index] = (ff[complex_index] + norm * gg[complex_index]) / 2.0;
+            auto Local_nx = density_grid_fourier.get_local_nx();
+
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                const std::complex<double> I(0, 1);
+                for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
+                    auto kvec = density_grid_fourier.get_fourier_wavevector_from_index(fourier_index);
+                    auto ksum = kvec[0];
+                    for (int idim = 1; idim < N; idim++)
+                        ksum += kvec[idim];
+                    auto norm = std::exp(I * ksum * shift);
+                    ff[fourier_index] = (ff[fourier_index] + norm * gg[fourier_index]) / 2.0;
+                }
             }
 
             // Deconvolve window function

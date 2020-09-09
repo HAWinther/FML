@@ -25,16 +25,19 @@ namespace FML {
         //===================================================================================
         template <int N>
         void whitening_fourier_space(FFTWGrid<N> & fourier_grid) {
-            [[maybe_unused]] std::array<double, N> kvec;
-            [[maybe_unused]] double kmag2;
-            for (auto & index : fourier_grid.get_fourier_range()) {
-                auto value = fourier_grid.get_fourier_from_index(index);
-                double norm = std::sqrt(std::norm(value));
-                if (norm == 0.0)
-                    norm = 0.0;
-                else
-                    norm = 1.0 / norm;
-                fourier_grid.set_fourier_from_index(index, value * norm);
+            auto Local_nx = fourier_grid.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                [[maybe_unused]] double kmag2;
+                [[maybe_unused]] std::array<double, N> kvec;
+                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                    auto value = fourier_grid.get_fourier_from_index(fourier_index);
+                    double norm = std::sqrt(std::norm(value));
+                    norm = norm == 0.0 ? 0.0 : 1.0 / norm;
+                    fourier_grid.set_fourier_from_index(fourier_index, value * norm);
+                }
             }
         }
 
@@ -99,13 +102,19 @@ namespace FML {
             }
 
             // Do the smoothing
-            std::array<double, N> kvec;
-            double kmag2;
-            for (auto & index : fourier_grid.get_fourier_range()) {
-                fourier_grid.get_fourier_wavevector_and_norm2_by_index(index, kvec, kmag2);
-                auto value = fourier_grid.get_fourier_from_index(index);
-                value *= filter(kmag2);
-                fourier_grid.set_fourier_from_index(index, value);
+            auto Local_nx = fourier_grid.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                [[maybe_unused]] double kmag2;
+                [[maybe_unused]] std::array<double, N> kvec;
+                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                    fourier_grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                    auto value = fourier_grid.get_fourier_from_index(fourier_index);
+                    value *= filter(kmag2);
+                    fourier_grid.set_fourier_from_index(fourier_index, value);
+                }
             }
         }
 
@@ -133,21 +142,29 @@ namespace FML {
             // and save doing 1 FFT
             FFTWGrid<N> tmp;
             fourier_grid_result = fourier_grid_g;
+            fourier_grid_result.add_memory_label("FFTWGrid::convolution_fourier_space::fourier_grid_result");
 
             // Fourier transform to real space
             fourier_grid_result.fftw_c2r();
             if (!f_and_g_are_the_same_grid) {
                 tmp = fourier_grid_f;
+                tmp.add_memory_label("FFTWGrid::convolution_fourier_space::tmp");
                 tmp.fftw_c2r();
             }
 
             // Multiply the two grids in real space
-            for (auto & real_index : fourier_grid_result.get_real_range()) {
-                auto g_real = fourier_grid_result.get_real_from_index(real_index);
-                auto f_real = g_real;
-                if (!f_and_g_are_the_same_grid)
-                    f_real = tmp.get_real_from_index(real_index);
-                fourier_grid_result.set_real_from_index(real_index, f_real * g_real);
+            auto Local_nx = fourier_grid_result.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                for (auto && real_index : fourier_grid_result.get_real_range(islice, islice + 1)) {
+                    auto g_real = fourier_grid_result.get_real_from_index(real_index);
+                    auto f_real = g_real;
+                    if (!f_and_g_are_the_same_grid)
+                        f_real = tmp.get_real_from_index(real_index);
+                    fourier_grid_result.set_real_from_index(real_index, f_real * g_real);
+                }
             }
 
             // Transform back to obtain the desired convolution
@@ -156,10 +173,11 @@ namespace FML {
 
         //===================================================================================
         /// @brief From two real grids, f and g, compute the convolution
-        /// \f$ f(x) * g(x) = \int d^{\rm N}y f(y) g(x-y) \f$ This is done via multiplication in fourier-space. We
-        /// allocate one temporary grid and perform 3 fourier tranforms. We can merge this with
-        /// convolution_fourier_space and just have one method and get do the real or fourier space convolution depening
-        /// on the status of the grids, but its easy to forget to set the status so we have two methods for this.
+        /// \f$ f(x) * g(x) = \int d^{\rm N}y f(y) g(x-y) \f$ This is done via multiplication in fourier-space.
+        /// We allocate one temporary grid and perform 3 fourier tranforms. We can merge this with
+        /// convolution_fourier_space and just have one method and get do the real or fourier space convolution
+        /// depening on the status of the grids, but its easy to forget to set the status so we have two methods
+        /// for this.
         ///
         /// @tparam N dimension of the grid
         ///
@@ -180,21 +198,31 @@ namespace FML {
             // and save doing 1 FFT
             FFTWGrid<N> tmp;
             real_grid_result = real_grid_g;
+            real_grid_result.add_memory_label("FFTWGrid::convolution_real_space::real_grid_result");
 
-            // Fourier transform to real space
+            // Fourier transform to fourier space
             real_grid_result.fftw_r2c();
             if (!f_and_g_are_the_same_grid) {
                 tmp = real_grid_f;
+                tmp.add_memory_label("FFTWGrid::convolution_real_space::tmp");
                 tmp.fftw_r2c();
             }
 
-            // Multiply the two grids in real space
-            for (auto & fourier_index : real_grid_result.get_fourier_range()) {
-                auto g_fourier = real_grid_result.get_fourier_from_index(fourier_index);
-                auto f_fourier = g_fourier;
-                if (!f_and_g_are_the_same_grid)
-                    f_fourier = tmp.get_fourier_from_index(fourier_index);
-                real_grid_result.set_fourier_from_index(fourier_index, f_fourier * g_fourier);
+            // Multiply the two grids in fourier space
+            auto Local_nx = real_grid_result.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                [[maybe_unused]] double kmag2;
+                [[maybe_unused]] std::array<double, N> kvec;
+                for (auto && fourier_index : real_grid_result.get_fourier_range(islice, islice + 1)) {
+                    auto g_fourier = real_grid_result.get_fourier_from_index(fourier_index);
+                    auto f_fourier = g_fourier;
+                    if (!f_and_g_are_the_same_grid)
+                        f_fourier = tmp.get_fourier_from_index(fourier_index);
+                    real_grid_result.set_fourier_from_index(fourier_index, f_fourier * g_fourier);
+                }
             }
 
             // Transform back to obtain the desired convolution

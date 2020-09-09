@@ -231,7 +231,8 @@ namespace FML {
             // [ e.g. for(auto and real_index: grid.real_range()) ]
             // If you add the slice numbers we only loop over the given slice range
             RealRange get_real_range(int islice_begin = 0, int islice_end = 0);
-            FourierRange get_fourier_range();
+            // For the Fourier range islice denotes the ikx value
+            FourierRange get_fourier_range(int islice_begin = 0, int islice_end = 0);
 
             // The number of cells per slice that we alloc. Useful to jump from slice to slice
             ptrdiff_t get_ntot_real_slice_alloc() const;
@@ -359,18 +360,26 @@ namespace FML {
             }
 #endif
             // Here NmeshTotReal = LocalNx * Nmesh^N-1
-            return RealRange((NmeshTotReal * islice_begin / Local_nx), (NmeshTotReal * islice_end / Local_nx), Nmesh);
+            IndexIntType cellsperslice = NmeshTotReal / Local_nx;
+            return RealRange(cellsperslice * islice_begin, cellsperslice * islice_end, Nmesh);
         }
 
         template <int N>
-        FourierRange FFTWGrid<N>::get_fourier_range() {
+        FourierRange FFTWGrid<N>::get_fourier_range(int islice_begin, int islice_end) {
+
+            // If fiducial parameters are used then we loop over all cells
+            if (islice_begin == 0 and islice_end == 0)
+                islice_end = Local_nx;
+
 #ifdef DEBUG_FFTWGRID
             if (grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
                     std::cout << "Warning: [FFTWGrid::get_fourier_range] The grid status is [Realspace]\n";
             }
 #endif
-            return FourierRange(0, FML::power(Nmesh, N - 2) * IndexIntType(Nmesh / 2 + 1) * IndexIntType(Local_nx));
+
+            IndexIntType cellsperslice = FML::power(IndexIntType(Nmesh), N - 2) * IndexIntType(Nmesh / 2 + 1);
+            return FourierRange(cellsperslice * islice_begin, cellsperslice * islice_end);
             // return FourierRange(0, NmeshTotComplex);
         }
 
@@ -528,11 +537,17 @@ namespace FML {
                     std::cout << "Warning: [FFTWGrid::fill_real_grid] The grid status is [Fourierspace]\n";
             }
 #endif
-            for (auto && index : get_real_range()) {
-                auto coord = get_coord_from_index(index);
-                auto pos = get_real_position(coord);
-                auto value = func(pos);
-                set_real_from_index(index, value);
+
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                for (auto && real_index : get_real_range(islice, islice + 1)) {
+                    auto coord = get_coord_from_index(real_index);
+                    auto pos = get_real_position(coord);
+                    auto value = func(pos);
+                    set_real_from_index(real_index, value);
+                }
             }
 
             communicate_boundaries();
@@ -557,10 +572,16 @@ namespace FML {
                     std::cout << "Warning: [FFTWGrid::fill_real_grid] The grid status is [Realspace]\n";
             }
 #endif
-            for (auto && index : get_fourier_range()) {
-                auto kvec = get_fourier_wavevector_from_index(index);
-                auto value = func(kvec);
-                set_fourier_from_index(index, value);
+
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                for (auto && fourier_index : get_fourier_range(islice, islice + 1)) {
+                    auto kvec = get_fourier_wavevector_from_index(fourier_index);
+                    auto value = func(kvec);
+                    set_fourier_from_index(fourier_index, value);
+                }
             }
         }
 
@@ -827,8 +848,13 @@ namespace FML {
             // Normalize
             double norm = 1.0 / std::pow(double(Nmesh), N);
             auto * fourier_grid = get_fourier_grid();
-            for (auto && index : get_fourier_range()) {
-                fourier_grid[index] *= norm;
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                for (auto && fourier_index : get_fourier_range(islice, islice + 1)) {
+                    fourier_grid[fourier_index] *= norm;
+                }
             }
 
             //=================================================================================

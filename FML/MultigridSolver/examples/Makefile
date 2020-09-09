@@ -18,11 +18,11 @@ USE_MPI          = true
 # Use OpenMP threads
 USE_OMP          = true
 # Log allocations in the library
-USE_MEMORYLOG    = false
+USE_MEMORYLOG    = true
 # Check for bad memory accesses
 USE_SANITIZER    = false
 # Use the FFTW library (needed for Reconstruction.cpp)
-USE_FFTW         = false
+USE_FFTW         = true
 
 #===================================================
 # Include and library paths
@@ -66,6 +66,7 @@ LINK    += $(FFTW_MPI_LINK)
 endif
 ifeq ($(USE_OMP),true)
 ifeq ($(USE_FFTW_THREADS),true)
+OPTIONS += -DUSE_FFTW_THREADS
 LINK    += $(FFTW_OMP_LINK)
 endif
 endif
@@ -92,6 +93,7 @@ OBJS_FOFR = FofrExample.o       Global.o
 OBJS_SYM  = SymmetronExample.o  Global.o 
 OBJS_DGP  = dgpExample.o        Global.o
 OBJS_REC  = Reconstruction.o    Global.o FileUtils.o
+OBJS_TEST = Test.o              Global.o FileUtils.o
 
 TARGETS := mgsolver
 all: $(TARGETS)
@@ -113,6 +115,9 @@ fofrsolver: $(OBJS_FOFR)
 	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
 
 recon: $(OBJS_REC)
+	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+
+test: $(OBJS_TEST)
 	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
 
 symm: $(OBJS_SYM)

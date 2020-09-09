@@ -90,7 +90,18 @@ namespace FML {
 
             // Free up all memory and reset all variables
             void free();
+
+            // For memory logging
+            void add_memory_label(std::string label);
         };
+
+        template <int NDIM, class T>
+        void MPIMultiGrid<NDIM, T>::add_memory_label([[maybe_unused]] std::string label) {
+#ifdef MEMORY_LOGGING
+            for (size_t i = 0; i < _y.size(); i++)
+                _y[i].add_memory_label(label + "_level_" + std::to_string(i));
+#endif
+        }
 
         template <int NDIM, class T>
         MPIGrid<NDIM, T> & MPIMultiGrid<NDIM, T>::get_grid(int level) {

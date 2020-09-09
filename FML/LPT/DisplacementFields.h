@@ -72,9 +72,9 @@ namespace FML {
 
                 auto nleft = phi.get_n_extra_slices_left();
                 auto nright = phi.get_n_extra_slices_right();
-                auto Local_x_start = phi.get_local_x_start();
                 auto Nmesh = phi.get_nmesh();
-                size_t NmeshTotFourier = phi.get_ntot_fourier();
+                auto Local_nx = phi.get_local_nx();
+                auto Local_x_start = phi.get_local_x_start();
 
                 // Create the output grids if they don't exist already
                 for (int idim = 0; idim < N; idim++) {
@@ -86,24 +86,35 @@ namespace FML {
                     }
                 }
 
-                std::array<double, N> kvec;
-                double kmag;
-                std::complex<double> I(0, 1);
-                for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
-                    if (Local_x_start == 0 && ind == 0)
-                        continue;
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    std::complex<double> I(0, 1);
+                    for (auto && fourier_index : phi.get_fourier_range(islice, islice + 1)) {
+                        if (Local_x_start == 0 && fourier_index == 0)
+                            continue; // DC mode (k=0)
 
-                    // Get wavevector and magnitude
-                    phi.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag);
+                        // Get wavevector and magnitude
+                        phi.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
-                    // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi]
-                    auto value = phi.get_fourier_from_index(ind) * I * function(kmag);
+                        // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi]
+                        auto value = phi.get_fourier_from_index(fourier_index) * I * function(kmag);
 
-                    for (int idim = 0; idim < N; idim++) {
-                        psi[idim].set_fourier_from_index(ind, value * kvec[idim]);
+                        for (int idim = 0; idim < N; idim++) {
+                            psi[idim].set_fourier_from_index(fourier_index, value * kvec[idim]);
+                        }
                     }
                 }
 
+                // Deal with DC mode
+                if (Local_x_start == 0)
+                    for (int idim = 0; idim < N; idim++)
+                        psi[idim].set_fourier_from_index(0, 0.0);
+
+                // Fourier transform Psi
                 for (int idim = 0; idim < N; idim++) {
 #ifdef DEBUG_LPT
                     if (FML::ThisTask == 0)
@@ -136,9 +147,9 @@ namespace FML {
 
                 auto nleft = phi.get_n_extra_slices_left();
                 auto nright = phi.get_n_extra_slices_right();
-                auto Local_x_start = phi.get_local_x_start();
                 auto Nmesh = phi.get_nmesh();
-                size_t NmeshTotFourier = phi.get_ntot_fourier();
+                auto Local_nx = phi.get_local_nx();
+                auto Local_x_start = phi.get_local_x_start();
 
                 // Create the output grids if they don't exist already
                 psi.resize(N);
@@ -150,23 +161,34 @@ namespace FML {
                     }
                 }
 
-                std::array<double, N> kvec;
-                double kmag;
-                std::complex<double> I(0, 1);
-                for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    std::complex<double> I(0, 1);
+                    for (auto && fourier_index : psi[0].get_fourier_range(islice, islice + 1)) {
+                        if (Local_x_start == 0 and fourier_index == 0)
+                            continue; // DC mode (k=0)
 
-                    // Get wavevector and magnitude
-                    phi.get_fourier_wavevector_and_norm_by_index(ind, kvec, kmag);
+                        // Get wavevector and magnitude
+                        phi.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
-                    // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi]
-                    auto value = phi.get_fourier_from_index(ind);
-                    if (Local_x_start && ind == 0)
-                        value = 0.0;
-                    for (int idim = 0; idim < N; idim++) {
-                        psi[idim].set_fourier_from_index(ind, I * value * kvec[idim]);
+                        // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi]
+                        auto value = phi.get_fourier_from_index(fourier_index);
+                        for (int idim = 0; idim < N; idim++) {
+                            psi[idim].set_fourier_from_index(fourier_index, I * value * kvec[idim]);
+                        }
                     }
                 }
 
+                // Deal with DC mode
+                if (Local_x_start == 0)
+                    for (int idim = 0; idim < N; idim++)
+                        psi[idim].set_fourier_from_index(0, 0.0);
+
+                // Fourier transform Psi
                 for (int idim = 0; idim < N; idim++) {
 #ifdef DEBUG_LPT
                     if (FML::ThisTask == 0)
@@ -202,9 +224,9 @@ namespace FML {
 
                 auto nleft = delta_fourier.get_n_extra_slices_left();
                 auto nright = delta_fourier.get_n_extra_slices_right();
-                auto Local_x_start = delta_fourier.get_local_x_start();
                 auto Nmesh = delta_fourier.get_nmesh();
-                size_t NmeshTotFourier = delta_fourier.get_ntot_fourier();
+                auto Local_nx = delta_fourier.get_local_nx();
+                auto Local_x_start = delta_fourier.get_local_x_start();
 
                 // Create 1LPT grid
                 if (Nmesh_phi == 0) {
@@ -216,19 +238,25 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
-                    std::array<double, N> kvec;
-                    double kmag2;
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag2;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range(islice, islice + 1)) {
+                        if (Local_x_start == 0 and fourier_index == 0)
+                            continue; // DC mode (k=0)
 
-                    // Get wavevector and magnitude
-                    phi_1LPT_fourier.get_fourier_wavevector_and_norm2_by_index(ind, kvec, kmag2);
+                        // Get wavevector and magnitude
+                        phi_1LPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
-                    // D^2 Phi_1LPT = -delta => F[Phi_1LPT] = F[delta] / k^2
-                    auto value = delta_fourier.get_fourier_from_index(ind) / kmag2;
-                    if (Local_x_start == 0 and ind == 0)
-                        value = 0.0;
-                    phi_1LPT_fourier.set_fourier_from_index(ind, value);
+                        // D^2 Phi_1LPT = -delta => F[Phi_1LPT] = F[delta] / k^2
+                        auto value = delta_fourier.get_fourier_from_index(fourier_index) / kmag2;
+                        phi_1LPT_fourier.set_fourier_from_index(fourier_index, value);
+                    }
                 }
+
+                // Deal with DC mode
+                if (Local_x_start == 0)
+                    phi_1LPT_fourier.set_fourier_from_index(0, 0.0);
             }
 
             //=================================================================================
@@ -258,10 +286,9 @@ namespace FML {
 
                 auto nleft = delta.get_n_extra_slices_left();
                 auto nright = delta.get_n_extra_slices_right();
-                auto Local_x_start = delta.get_local_x_start();
                 auto Nmesh = delta.get_nmesh();
-                auto local_nx = delta.get_local_nx();
-                size_t NmeshTotFourier = delta.get_ntot_fourier();
+                auto Local_nx = delta.get_local_nx();
+                auto Local_x_start = delta.get_local_x_start();
 
                 // Create grids
                 FFTWGrid<N> phi_1LPT_ii[N];
@@ -278,22 +305,29 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
-                    std::array<double, N> kvec;
-                    double kmag2;
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag2;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    for (auto && fourier_index : phi_1LPT_ii[0].get_fourier_range(islice, islice + 1)) {
+                        if (Local_x_start == 0 and fourier_index == 0)
+                            continue; // DC mode (k=0)
 
-                    // Get wavevector and magnitude
-                    delta.get_fourier_wavevector_and_norm2_by_index(ind, kvec, kmag2);
+                        // Get wavevector and magnitude
+                        delta.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
-                    // D^2Phi = -delta => F[DiDj Phi] = F[delta] kikj/k^2
-                    auto value = delta.get_fourier_from_index(ind) / kmag2;
-                    if (Local_x_start == 0 and ind == 0)
-                        value = 0.0;
+                        // D^2Phi = -delta => F[DiDj Phi] = F[delta] kikj/k^2
+                        auto value = delta.get_fourier_from_index(fourier_index) / kmag2;
 
-                    for (int idim = 0; idim < N; idim++) {
-                        phi_1LPT_ii[idim].set_fourier_from_index(ind, value * kvec[idim] * kvec[idim]);
+                        for (int idim = 0; idim < N; idim++) {
+                            phi_1LPT_ii[idim].set_fourier_from_index(fourier_index, value * kvec[idim] * kvec[idim]);
+                        }
                     }
                 }
+
+                // Deal with DC mode
+                if (Local_x_start == 0)
+                    for (int idim = 0; idim < N; idim++)
+                        phi_1LPT_ii[idim].set_fourier_from_index(0, 0.0);
 
                 // Fourier transform
                 for (int idim = 0; idim < N; idim++) {
@@ -319,8 +353,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < local_nx; islice++) {
-                    for (auto & real_index : phi_2LPT.get_real_range(islice, islice + 1)) {
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && real_index : phi_2LPT.get_real_range(islice, islice + 1)) {
                         auto laplacian = 0.0, sum_squared = 0.0;
                         for (int idim = 0; idim < N; idim++) {
                             auto curpsi = phi_1LPT_ii[idim].get_real_from_index(real_index);
@@ -354,24 +388,32 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
-                    std::array<double, N> kvec;
-                    double kmag2;
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag2;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    for (auto && fourier_index : phi_1LPT_ij[0].get_fourier_range(islice, islice + 1)) {
+                        if (Local_x_start == 0 and fourier_index == 0)
+                            continue; // DC mode (k=0)
 
-                    // Get wavevector and magnitude
-                    delta.get_fourier_wavevector_and_norm2_by_index(ind, kvec, kmag2);
+                        // Get wavevector and magnitude
+                        delta.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
-                    auto value = delta.get_fourier_from_index(ind) / kmag2;
-                    if (Local_x_start == 0 && ind == 0)
-                        value = 0.0;
+                        auto value = delta.get_fourier_from_index(fourier_index) / kmag2;
 
-                    int pair = 0;
-                    for (int idim1 = 0; idim1 < N; idim1++) {
-                        for (int idim2 = idim1 + 1; idim2 < N; idim2++) {
-                            phi_1LPT_ij[pair++].set_fourier_from_index(ind, kvec[idim1] * kvec[idim2] * value);
+                        int pair = 0;
+                        for (int idim1 = 0; idim1 < N; idim1++) {
+                            for (int idim2 = idim1 + 1; idim2 < N; idim2++) {
+                                phi_1LPT_ij[pair++].set_fourier_from_index(fourier_index,
+                                                                           kvec[idim1] * kvec[idim2] * value);
+                            }
                         }
                     }
                 }
+
+                // Deal with DC mode
+                if (Local_x_start == 0)
+                    for (auto & g : phi_1LPT_ij)
+                        g.set_fourier_from_index(0, 0.0);
 
                 // Fourier transform
                 for (int pair = 0; pair < num_pairs; pair++) {
@@ -392,8 +434,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < local_nx; islice++) {
-                    for (auto & real_index : phi_2LPT.get_real_range(islice, islice + 1)) {
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && real_index : phi_2LPT.get_real_range(islice, islice + 1)) {
                         auto sum_squared = 0.0;
                         for (int pair = 0; pair < num_pairs; pair++) {
                             auto curpsi = phi_1LPT_ij[pair].get_real_from_index(real_index);
@@ -426,21 +468,27 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
-                    std::array<double, N> kvec;
-                    double kmag2;
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag2;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    for (auto && fourier_index : phi_2LPT.get_fourier_range(islice, islice + 1)) {
+                        if (Local_x_start == 0 and fourier_index == 0)
+                            continue; // DC mode (k=0)
 
-                    // Get wavevector and magnitude
-                    phi_2LPT.get_fourier_wavevector_and_norm2_by_index(ind, kvec, kmag2);
+                        // Get wavevector and magnitude
+                        phi_2LPT.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
-                    // Add in the -3/7 factor
-                    auto value = phi_2LPT.get_fourier_from_index(ind);
-                    value *= -prefactor_2LPT / kmag2;
-                    if (Local_x_start == 0 and ind == 0)
-                        value = 0.0;
+                        // Add in the -3/7 factor
+                        auto value = phi_2LPT.get_fourier_from_index(fourier_index);
+                        value *= -prefactor_2LPT / kmag2;
 
-                    phi_2LPT.set_fourier_from_index(ind, value);
+                        phi_2LPT.set_fourier_from_index(fourier_index, value);
+                    }
                 }
+
+                // Deal with DC mode
+                if (Local_x_start == 0)
+                    phi_2LPT.set_fourier_from_index(0, 0.0);
             }
 
             //===========================================================================================
@@ -479,10 +527,9 @@ namespace FML {
 
                 auto nleft = delta_fourier.get_n_extra_slices_left();
                 auto nright = delta_fourier.get_n_extra_slices_right();
-                auto local_x_start = delta_fourier.get_local_x_start();
                 auto Nmesh = delta_fourier.get_nmesh();
-                auto local_nx = delta_fourier.get_local_nx();
-                size_t NmeshTotFourier = delta_fourier.get_ntot_fourier();
+                auto Local_nx = delta_fourier.get_local_nx();
+                auto Local_x_start = delta_fourier.get_local_x_start();
 
                 // Store -k^2phi_1LPT
                 FFTWGrid<N> phi_1LPT_fourier = delta_fourier;
@@ -503,25 +550,33 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
-                    double kmag2;
-                    std::array<double, N> kvec;
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag2;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range(islice, islice + 1)) {
+                        if (Local_x_start == 0 and fourier_index == 0)
+                            continue; // DC mode (k=0)
 
-                    // Get wavevector and magnitude
-                    phi_1LPT_fourier.get_fourier_wavevector_and_norm2_by_index(ind, kvec, kmag2);
-                    auto value = -phi_1LPT_fourier.get_fourier_from_index(ind) / kmag2;
+                        // Get wavevector and magnitude
+                        phi_1LPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
-                    // Deal with DC mode
-                    if (ind == 0 and local_x_start == 0)
-                        value = 0.0;
+                        // phi_1LPT_fourier is delta so transform to LPT potential
+                        auto value = -phi_1LPT_fourier.get_fourier_from_index(fourier_index) / kmag2;
 
-                    int pair = 0;
-                    for (int idim1 = 0; idim1 < N; idim1++) {
-                        for (int idim2 = idim1; idim2 < N; idim2++) {
-                            phi_1LPT_ij[pair++].set_fourier_from_index(ind, -kvec[idim1] * kvec[idim2] * value);
+                        int pair = 0;
+                        for (int idim1 = 0; idim1 < N; idim1++) {
+                            for (int idim2 = idim1; idim2 < N; idim2++) {
+                                phi_1LPT_ij[pair++].set_fourier_from_index(fourier_index,
+                                                                           -kvec[idim1] * kvec[idim2] * value);
+                            }
                         }
                     }
                 }
+
+                // Deal with DC mode
+                if (Local_x_start == 0)
+                    for (auto & g : phi_1LPT_ij)
+                        g.set_fourier_from_index(0, 0.0);
 
                 // Fourier transform it all to real-space
                 for (int i = 0; i < num_pairs; i++)
@@ -537,8 +592,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < local_nx; islice++) {
-                    for (auto & real_index : phi_2LPT_fourier.get_real_range(islice, islice + 1)) {
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && real_index : phi_2LPT_fourier.get_real_range(islice, islice + 1)) {
                         // Compute laplacian and sum of squares to get Sum_i,j Phi_iiPhi_jj Phi_ij^2
                         double laplacian = 0.0;
                         double sum_squared = 0.0;
@@ -572,25 +627,31 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
-                    double kmag2;
-                    std::array<double, N> kvec;
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag2;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    for (auto && fourier_index : phi_2LPT_fourier.get_fourier_range(islice, islice + 1)) {
+                        if (Local_x_start == 0 and fourier_index == 0)
+                            continue; // DC mode (k=0)
 
-                    // Get wavevector and magnitude
-                    phi_2LPT_fourier.get_fourier_wavevector_and_norm2_by_index(ind, kvec, kmag2);
-                    auto value = -phi_2LPT_fourier.get_fourier_from_index(ind) / kmag2;
+                        // Get wavevector and magnitude
+                        phi_2LPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                        auto value = -phi_2LPT_fourier.get_fourier_from_index(fourier_index) / kmag2;
 
-                    // Deal with DC mode
-                    if (ind == 0 and local_x_start == 0)
-                        value = 0.0;
-
-                    int pair = 0;
-                    for (int idim1 = 0; idim1 < N; idim1++) {
-                        for (int idim2 = idim1; idim2 < N; idim2++) {
-                            phi_2LPT_ij[pair++].set_fourier_from_index(ind, -kvec[idim1] * kvec[idim2] * value);
+                        int pair = 0;
+                        for (int idim1 = 0; idim1 < N; idim1++) {
+                            for (int idim2 = idim1; idim2 < N; idim2++) {
+                                phi_2LPT_ij[pair++].set_fourier_from_index(fourier_index,
+                                                                           -kvec[idim1] * kvec[idim2] * value);
+                            }
                         }
                     }
                 }
+
+                // Deal with DC mode
+                if (Local_x_start == 0)
+                    for (auto & g : phi_2LPT_ij)
+                        g.set_fourier_from_index(0, 0.0);
 
                 // Compute phi_3LPT_a
                 FFTWGrid<N> phi_3LPT_fourier(Nmesh, nleft, nright);
@@ -613,8 +674,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < local_nx; islice++) {
-                    for (auto & real_index : phi_2LPT_fourier.get_real_range(islice, islice + 1)) {
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && real_index : phi_2LPT_fourier.get_real_range(islice, islice + 1)) {
 
                         if constexpr (N == 2) {
                             auto psi1_xx = phi_1LPT_ij[0].get_real_from_index(real_index);
@@ -736,69 +797,85 @@ namespace FML {
                 std::complex<double> I{0, 1};
                 const double DoverDini2 = DoverDini * DoverDini;
                 const double DoverDini3 = DoverDini * DoverDini * DoverDini;
+
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (size_t ind = 0; ind < NmeshTotFourier; ind++) {
-                    double kmag2;
-                    std::array<double, N> kvec;
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag2;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    std::complex<double> I(0, 1);
+                    for (auto && fourier_index : phi_3LPT_fourier.get_fourier_range(islice, islice + 1)) {
+                        if (Local_x_start == 0 and fourier_index == 0)
+                            continue; // DC mode (k=0)
 
-                    // Get wavevector and magnitude
-                    phi_3LPT_fourier.get_fourier_wavevector_and_norm2_by_index(ind, kvec, kmag2);
-                    double fac = -1.0 / kmag2;
+                        // Get wavevector and magnitude
+                        phi_3LPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                        double fac = -1.0 / kmag2;
 
-                    // Deal with DC mode
-                    if (local_x_start == 0 and ind == 0)
-                        fac = 0.0;
+                        auto value_1 = phi_1LPT_fourier.get_fourier_from_index(fourier_index);
+                        auto value_2 = phi_2LPT_fourier.get_fourier_from_index(fourier_index);
+                        auto value_3a = phi_3LPT_fourier.get_fourier_from_index(fourier_index);
+                        auto value_3b = phi_3LPT_b.get_fourier_from_index(fourier_index);
+                        auto value = -value_1 * DoverDini - 3.0 / 7.0 * value_2 * DoverDini2 +
+                                     (value_3a / 3.0 - 10.0 / 21.0 * value_3b) * DoverDini3;
+                        auto dvaluedt = -value_1 * DoverDini - 2.0 * 3.0 / 7.0 * value_2 * DoverDini2 +
+                                        3.0 * (value_3a / 3.0 - 10.0 / 21.0 * value_3b) * DoverDini3;
 
-                    auto value_1 = phi_1LPT_fourier.get_fourier_from_index(ind);
-                    auto value_2 = phi_2LPT_fourier.get_fourier_from_index(ind);
-                    auto value_3a = phi_3LPT_fourier.get_fourier_from_index(ind);
-                    auto value_3b = phi_3LPT_b.get_fourier_from_index(ind);
-                    auto value = -value_1 * DoverDini - 3.0 / 7.0 * value_2 * DoverDini2 +
-                                 (value_3a / 3.0 - 10.0 / 21.0 * value_3b) * DoverDini3;
-                    auto dvaluedt = -value_1 * DoverDini - 2.0 * 3.0 / 7.0 * value_2 * DoverDini2 +
-                                    3.0 * (value_3a / 3.0 - 10.0 / 21.0 * value_3b) * DoverDini3;
+                        if constexpr (N == 2) {
+                            Psi[0].set_fourier_from_index(fourier_index, -I * kvec[0] * value * fac);
+                            Psi[1].set_fourier_from_index(fourier_index, -I * kvec[1] * value * fac);
+                            dPsidt[0].set_fourier_from_index(fourier_index, -I * kvec[0] * dvaluedt * fac);
+                            dPsidt[1].set_fourier_from_index(fourier_index, -I * kvec[1] * dvaluedt * fac);
+                        } else if (N == 3) {
+                            std::array<std::complex<double>, N> A;
+                            if constexpr (include_curl_term) {
+                                A[0] = phi_3LPT_Avec[0].get_fourier_from_index(fourier_index);
+                                A[1] = phi_3LPT_Avec[1].get_fourier_from_index(fourier_index);
+                                A[2] = phi_3LPT_Avec[2].get_fourier_from_index(fourier_index);
+                            } else {
+                                A.fill(0.0);
+                            }
 
-                    if constexpr (N == 2) {
-                        Psi[0].set_fourier_from_index(ind, -I * kvec[0] * value * fac);
-                        Psi[1].set_fourier_from_index(ind, -I * kvec[1] * value * fac);
-                        dPsidt[0].set_fourier_from_index(ind, -I * kvec[0] * dvaluedt * fac);
-                        dPsidt[1].set_fourier_from_index(ind, -I * kvec[1] * dvaluedt * fac);
-                    } else if (N == 3) {
-                        std::array<std::complex<double>, N> A;
-                        if constexpr (include_curl_term) {
-                            A[0] = phi_3LPT_Avec[0].get_fourier_from_index(ind);
-                            A[1] = phi_3LPT_Avec[1].get_fourier_from_index(ind);
-                            A[2] = phi_3LPT_Avec[2].get_fourier_from_index(ind);
-                        } else {
-                            A.fill(0.0);
+                            Psi[0].set_fourier_from_index(
+                                fourier_index,
+                                (-I * kvec[0] * value + I * DoverDini3 / 7.0 * (kvec[1] * A[2] - kvec[2] * A[1])) *
+                                    fac);
+                            Psi[1].set_fourier_from_index(
+                                fourier_index,
+                                (-I * kvec[1] * value + I * DoverDini3 / 7.0 * (kvec[2] * A[0] - kvec[0] * A[2])) *
+                                    fac);
+                            Psi[2].set_fourier_from_index(
+                                fourier_index,
+                                (-I * kvec[2] * value + I * DoverDini3 / 7.0 * (kvec[0] * A[1] - kvec[1] * A[0])) *
+                                    fac);
+
+                            fac *= dlogDdt;
+                            dPsidt[0].set_fourier_from_index(
+                                fourier_index,
+                                (-I * kvec[0] * dvaluedt +
+                                 3.0 * I * DoverDini3 / 7.0 * (kvec[1] * A[2] - kvec[2] * A[1])) *
+                                    fac);
+                            dPsidt[1].set_fourier_from_index(
+                                fourier_index,
+                                (-I * kvec[1] * dvaluedt +
+                                 3.0 * I * DoverDini3 / 7.0 * (kvec[2] * A[0] - kvec[0] * A[2])) *
+                                    fac);
+                            dPsidt[2].set_fourier_from_index(
+                                fourier_index,
+                                (-I * kvec[2] * dvaluedt +
+                                 3.0 * I * DoverDini3 / 7.0 * (kvec[0] * A[1] - kvec[1] * A[0])) *
+                                    fac);
                         }
-
-                        Psi[0].set_fourier_from_index(
-                            ind,
-                            (-I * kvec[0] * value + I * DoverDini3 / 7.0 * (kvec[1] * A[2] - kvec[2] * A[1])) * fac);
-                        Psi[1].set_fourier_from_index(
-                            ind,
-                            (-I * kvec[1] * value + I * DoverDini3 / 7.0 * (kvec[2] * A[0] - kvec[0] * A[2])) * fac);
-                        Psi[2].set_fourier_from_index(
-                            ind,
-                            (-I * kvec[2] * value + I * DoverDini3 / 7.0 * (kvec[0] * A[1] - kvec[1] * A[0])) * fac);
-
-                        fac *= dlogDdt;
-                        dPsidt[0].set_fourier_from_index(
-                            ind,
-                            (-I * kvec[0] * dvaluedt + 3.0 * I * DoverDini3 / 7.0 * (kvec[1] * A[2] - kvec[2] * A[1])) *
-                                fac);
-                        dPsidt[1].set_fourier_from_index(
-                            ind,
-                            (-I * kvec[1] * dvaluedt + 3.0 * I * DoverDini3 / 7.0 * (kvec[2] * A[0] - kvec[0] * A[2])) *
-                                fac);
-                        dPsidt[2].set_fourier_from_index(
-                            ind,
-                            (-I * kvec[2] * dvaluedt + 3.0 * I * DoverDini3 / 7.0 * (kvec[0] * A[1] - kvec[1] * A[0])) *
-                                fac);
                     }
+                }
+
+                // Deal with DC mode
+                if (Local_x_start == 0) {
+                    for (auto & g : Psi)
+                        g.set_fourier_from_index(0, 0.0);
+                    for (auto & g : dPsidt)
+                        g.set_fourier_from_index(0, 0.0);
                 }
 
                 // Free up memory.. though not needed as we exit now anyway

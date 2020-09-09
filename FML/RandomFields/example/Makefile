@@ -85,6 +85,7 @@ LINK    += $(FFTW_MPI_LINK)
 endif
 ifeq ($(USE_OMP),true)
 ifeq ($(USE_FFTW_THREADS),true)
+OPTIONS += -DUSE_FFTW_THREADS
 LINK    += $(FFTW_OMP_LINK)
 endif
 endif
