@@ -72,6 +72,7 @@ LINK    += $(FFTW_MPI_LINK)
 endif
 ifeq ($(USE_OMP),true)
 ifeq ($(USE_FFTW_THREADS),true)
+OPTIONS += -DUSE_FFTW_THREADS
 LINK    += $(FFTW_OMP_LINK)
 endif
 endif
@@ -97,7 +98,7 @@ clean:
 	rm -rf $(TARGETS) *.o
 
 mpi: $(OBJS)
-	${CC} -o $@ $^ $(OPTIONS) $(LIBS) $(LINK)
+	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
 
 %.o: %.cpp 
 	${CC} -c -o $@ $< $(OPTIONS) $(INC) 

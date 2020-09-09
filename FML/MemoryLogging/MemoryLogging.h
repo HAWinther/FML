@@ -14,17 +14,21 @@
 #endif
 
 namespace FML {
+
+    extern int ThisTask;
     extern int NTasks;
+    extern std::pair<double, double> get_system_memory_use();
 
     //=======================================================
     // Do not log allocations smaller than a minimum size
-    // The standard size is 1MB
+    // The standard size is 0
     // Set a limit to how many items we can have in the log
     // at the same time to avoid it taking up too much memory
-    // If this limit is reached the logging will stop!
+    // If this limit is reached then we clear the memory
+    // and stop logging any more
     //=======================================================
 #ifndef MIN_BYTES_TO_LOG
-#define MIN_BYTES_TO_LOG 1000000
+#define MIN_BYTES_TO_LOG 0
 #endif
 #ifndef MAX_ALLOCATIONS_IN_MEMORY
 #define MAX_ALLOCATIONS_IN_MEMORY 1000000
@@ -92,6 +96,8 @@ namespace FML {
 
         // Add a new allocation label
         void add_label(void * ptr, std::string name) {
+            if (stop_logging)
+                return;
             if (allocations.find(ptr) == allocations.end()) {
                 std::cout << "[MemoryLogging] Warning could not find pointer in allocation list to add label " + name +
                                  " to\n";
@@ -101,15 +107,13 @@ namespace FML {
             labels[ptr] = name;
         }
         void add_label(void * ptr, size_t size, std::string name) {
-            if (size < min_bytes_to_log)
+            if (stop_logging or size < min_bytes_to_log)
                 return;
             add_label(ptr, name);
         }
 
         void add(void * ptr, size_t size) {
-            if (size < min_bytes_to_log)
-                return;
-            if (stop_logging)
+            if (stop_logging or size < min_bytes_to_log)
                 return;
             std::lock_guard<std::mutex> guard(mymutex);
             allocations[ptr] = size;
@@ -121,14 +125,19 @@ namespace FML {
             auto time = std::chrono::steady_clock::now();
             memory_vs_time[time] = memory_in_use;
             nallocation++;
+
+            // If we have saturated then stop logging
             stop_logging = nallocation >= max_allocations_to_log;
+        }
+
+        void clear() {
+            allocations.clear();
+            memory_vs_time.clear();
         }
 
         // Remove an allocation and log info
         void remove(void * ptr, size_t size) {
-            if (size < min_bytes_to_log)
-                return;
-            if (stop_logging)
+            if (stop_logging or size < min_bytes_to_log)
                 return;
             std::lock_guard<std::mutex> guard(mymutex);
             allocations.erase(ptr);
@@ -141,20 +150,60 @@ namespace FML {
 
         // Print the total memory in use
         void print() {
-            int ThisTask = 0;
-
-            if (stop_logging) {
-                std::cout << "Warning: This method has stopped working on task " << ThisTask
-                          << " due to max number of allocation having been reached\n";
-            }
 #ifdef USE_MPI
-            MPI_Comm_rank(MPI_COMM_WORLD, &ThisTask);
+            // Check if any task has saturated the allocation limit
+            char ok = stop_logging ? 0 : 1;
+            MPI_Allreduce(MPI_IN_PLACE, &ok, 1, MPI_CHAR, MPI_MIN, MPI_COMM_WORLD);
+            if (ok == 0) {
+                clear();
+                stop_logging = true;
+
+                if (ThisTask == 0)
+                    std::cout << "Warning: The memory log has stopped working "
+                              << " due to max number of allocation having been reached\n";
+                return;
+            }
+#endif
+
+            // Fetch system memory usage
+            auto sysmem = get_system_memory_use();
+            long long int min_sys_vmemory = sysmem.first;
+            long long int max_sys_vmemory = sysmem.first;
+            long long int mean_sys_vmemory = sysmem.first;
+            long long int min_sys_rssmemory = sysmem.second;
+            long long int max_sys_rssmemory = sysmem.second;
+            long long int mean_sys_rssmemory = sysmem.second;
+#ifdef USE_MPI
+            MPI_Allreduce(MPI_IN_PLACE, &min_sys_vmemory, 1, MPI_LONG_LONG, MPI_MIN, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &max_sys_vmemory, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &mean_sys_vmemory, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &min_sys_rssmemory, 1, MPI_LONG_LONG, MPI_MIN, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &max_sys_rssmemory, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &mean_sys_rssmemory, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+            mean_sys_vmemory /= NTasks;
+            mean_sys_rssmemory /= NTasks;
 #endif
             if (ThisTask == 0) {
-                std::cout << "\n#=====================================================\n\n";
-                std::cout << "We are only tracking allocation of standard container\n";
-                std::cout << "and only allocations larger than " << min_bytes_to_log << " bytes\n\n";
+                std::cout << "\n#=====================================================\n";
+                std::cout << "                   MemoryLogging\n";
+                std::cout << "#=====================================================\n\n";
+                std::cout << "Info fetched from /proc/self/stat (linux only):\n";
+                std::cout << "[Virtual memory]:\n";
+                std::cout << "Min over tasks:  " << std::setw(15) << min_sys_vmemory / 1.0e6 << " MB\n";
+                std::cout << "Mean over tasks: " << std::setw(15) << mean_sys_vmemory / 1.0e6 << " MB\n";
+                std::cout << "Max over tasks:  " << std::setw(15) << max_sys_vmemory / 1.0e6 << " MB\n";
+                std::cout << "[Resident set size]:\n";
+                std::cout << "Min over tasks:  " << std::setw(15) << min_sys_rssmemory / 1.0e6 << " MB\n";
+                std::cout << "Mean over tasks: " << std::setw(15) << mean_sys_rssmemory / 1.0e6 << " MB\n";
+                std::cout << "Max over tasks:  " << std::setw(15) << max_sys_rssmemory / 1.0e6 << " MB\n";
             }
+
+            if (ThisTask == 0) {
+                std::cout << "\n";
+                std::cout << "For info below we are only tracking allocation of standard\n";
+                std::cout << "container (Vector) and only allocations larger than " << min_bytes_to_log << " bytes\n\n";
+            }
+
 #ifdef USE_MPI
             long long int min_memory = memory_in_use;
             long long int max_memory = memory_in_use;
@@ -166,13 +215,13 @@ namespace FML {
             MPI_Allreduce(MPI_IN_PLACE, &peak_memory, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
             mean_memory /= NTasks;
             if (ThisTask == 0) {
-                std::cout << "Memory in use:   " << std::setw(15) << memory_in_use / 1.0e6 << " MB\n";
-                std::cout << "Min over tasks:  " << std::setw(15) << min_memory / 1.0e6 << " MB\n";
-                std::cout << "Mean over tasks: " << std::setw(15) << mean_memory / 1.0e6 << " MB\n";
-                std::cout << "Max over tasks:  " << std::setw(15) << max_memory / 1.0e6 << " MB\n";
+                std::cout << "Memory in use (Task 0):   " << std::setw(15) << memory_in_use / 1.0e6 << " MB\n";
+                std::cout << "Min over tasks:           " << std::setw(15) << min_memory / 1.0e6 << " MB\n";
+                std::cout << "Mean over tasks:          " << std::setw(15) << mean_memory / 1.0e6 << " MB\n";
+                std::cout << "Max over tasks:           " << std::setw(15) << max_memory / 1.0e6 << " MB\n";
                 std::cout << "\n";
-                std::cout << "Peak memory use: " << std::setw(15) << peak_memory_use / 1.0e6 << " MB\n";
-                std::cout << "Max over tasks:  " << std::setw(15) << peak_memory / 1.0e6 << " MB\n";
+                std::cout << "Peak memory use (Task 0): " << std::setw(15) << peak_memory_use / 1.0e6 << " MB\n";
+                std::cout << "Max over tasks:           " << std::setw(15) << peak_memory / 1.0e6 << " MB\n";
                 std::cout << "\n";
             }
 #else

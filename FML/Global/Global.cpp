@@ -1,7 +1,9 @@
+#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <random>
 #include <stdarg.h>
+#include <thread>
 
 #include "Global.h"
 
@@ -10,8 +12,11 @@ static std::string processor_name{"NameIsOnlyKnownWithMPI"};
 namespace FML {
 
     // Initialize FML, set the few globals we have and init MPI
-    // and FFTW unless NO_AUTO_MPI_SETUP or NO_AUTO_FFTW_SETUP is set
+    // and FFTW. If no auto setup you must init MPI and FFTW
+    // yourself and then call init_mpi
+#ifndef NO_AUTO_FML_SETUP
     FMLSetup & fmlsetup = FMLSetup::init();
+#endif
 
 #ifdef MEMORY_LOGGING
     // If we use memory logging initialize it
@@ -42,12 +47,6 @@ namespace FML {
     /// called unless NO_AUTO_MPI_SETUP is defined
     //============================================
     void init_mpi([[maybe_unused]] int * argc, [[maybe_unused]] char *** argv) {
-        ThisTask = 0;
-        NTasks = 1;
-        xmin_domain = 0.0;
-        xmax_domain = 1.0;
-
-        // Initialize MPI
 #ifdef USE_MPI
 #ifdef USE_OMP
         int provided;
@@ -56,18 +55,26 @@ namespace FML {
 #else
         MPI_Init(argc, argv);
 #endif
+#endif
+    }
+
+    //============================================
+    /// Initialize the global variables within FML
+    /// We here assume MPI has been initialized
+    //============================================
+    void init_fml() {
+#ifdef USE_MPI
         MPI_Comm_rank(MPI_COMM_WORLD, &ThisTask);
         MPI_Comm_size(MPI_COMM_WORLD, &NTasks);
-
         int plen;
         char pname[MPI_MAX_PROCESSOR_NAME];
         MPI_Get_processor_name(pname, &plen);
         processor_name = std::string(pname);
+#else
+        ThisTask = 0;
+        NTasks = 1;
+        processor_name = "ComputerNameNotAvailiable";
 #endif
-
-        // Set range for local domain
-        xmin_domain = ThisTask / double(NTasks);
-        xmax_domain = (ThisTask + 1) / double(NTasks);
 
         // Initialize OpenMP
 #ifdef USE_OMP
@@ -77,50 +84,78 @@ namespace FML {
             if (id == 0)
                 NThreads = omp_get_num_threads();
         }
+#else
+        NThreads = 1;
 #endif
+
+        // Set range for local domain
+        xmin_domain = ThisTask / double(NTasks);
+        xmax_domain = (ThisTask + 1) / double(NTasks);
     }
 
+    /// Show some info about FML
     void info() {
-        std::vector<double> xmin_over_tasks(NTasks, 0);
-        std::vector<double> xmax_over_tasks(NTasks, 0);
-        xmin_over_tasks[ThisTask] = xmin_domain;
-        xmax_over_tasks[ThisTask] = xmax_domain;
-#ifdef USE_MPI
-        MPI_Allreduce(MPI_IN_PLACE, xmin_over_tasks.data(), NTasks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        MPI_Allreduce(MPI_IN_PLACE, xmax_over_tasks.data(), NTasks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-#endif
-
-        // Show some info
         if (ThisTask == 0) {
-            std::cout << "\n#=====================================================\n";
-            std::cout << "# Initializing FML\n";
+
+            std::cout << "\n";
+            std::cout << "#=====================================================\n";
+            std::cout << "#           ________________  .____         \n";
+            std::cout << "#           \\_   _____/     \\ |    |      \n";
+            std::cout << "#            |    __)/  \\ /  \\|    |      \n";
+            std::cout << "#            |     \\/    Y    \\    |___   \n";
+            std::cout << "#            \\___  /\\____|__  /_______ \\ \n";
+            std::cout << "#                \\/         \\/        \\/ \n";
+            std::cout << "#\n";
+
+            std::cout << "# Initializing FML, MPI and FFTW\n";
 #ifdef USE_MPI
-            std::cout << "# MPI enabled. Running with " << NTasks << " MPI tasks\n";
+            std::cout << "# MPI is enabled. Running with " << NTasks << " MPI tasks\n";
 #else
-            std::cout << "# MPI not enabled. Running with " << NTasks << " MPI tasks\n";
+            std::cout << "# MPI is *not* enabled\n";
 #endif
 #ifdef USE_OMP
-            std::cout << "# OpenMP enabled. Main task has " << NThreads << " threads availiable\n";
+            std::cout << "# OpenMP is enabled. Main task has " << NThreads << " threads availiable\n";
 #else
-            std::cout << "# OpenMP not enabled. Main task has " << NThreads << " threads availiable\n";
+            std::cout << "# OpenMP is *not* enabled\n";
 #endif
 #if defined(USE_MPI) && defined(USE_OMP)
-            std::cout << "# MPI + Threads is" << (FML::MPIThreadsOK ? " " : " not ") << "working\n";
+            std::cout << "# MPI + Threads is" << (FML::MPIThreadsOK ? " " : " *not* ") << "working\n";
 #endif
 #ifdef USE_FFTW
-            std::cout << "# Using FFTW. ";
-            std::cout << "Thread support is" << (FML::FFTWThreadsOK ? " " : " not ") << "enabled.\n";
+            std::cout << "# FFTW is enabled. ";
+            std::cout << "Thread support is" << (FML::FFTWThreadsOK ? " " : " *not* ") << "enabled\n";
 #else
-            std::cout << "# Not using FFTW\n";
+            std::cout << "# FFTW is *not* enabled\n";
 #endif
-            for (int i = 0; i < NTasks; i++) {
+            std::cout << "#\n";
+            std::cout << "# List of tasks:\n";
+        }
+
+        for (int i = 0; i < NTasks; i++) {
+            if (FML::ThisTask == i) {
                 std::cout << "# Task " << std::setw(4) << i << " [" << processor_name << "]\n";
-                std::cout << "In charge of x-domain [" << std::setw(8) << xmin_over_tasks[i] << " , " << std::setw(8)
-                          << xmax_over_tasks[i] << ")\n";
+                std::cout << "#     x-domain [" << std::setw(8) << FML::xmin_domain << " , " << std::setw(8)
+                          << FML::xmax_domain << ")" << std::endl;
             }
+#ifdef USE_MPI
+            // Sleep to syncronize output to screen (this is not guaranteed to ensure syncronized output, but the only
+            // alternative is communiation and its not that important)
+            MPI_Barrier(MPI_COMM_WORLD);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+#endif
+        }
+
+        if (FML::ThisTask == 0) {
+            std::cout << std::flush;
+            std::cout << "#\n";
             std::cout << "#=====================================================\n";
             std::cout << "\n";
         }
+
+#ifdef USE_MPI
+        MPI_Barrier(MPI_COMM_WORLD);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+#endif
     }
 
     //============================================
@@ -150,7 +185,7 @@ namespace FML {
     // Print function for MPI. Only task 0 prints
     //============================================
     void printf_mpi(const char * fmt, ...) {
-        if (ThisTask == 0) {
+        if (FML::ThisTask == 0) {
             va_list argp;
             va_start(argp, fmt);
             std::vfprintf(stdout, fmt, argp);
@@ -173,6 +208,34 @@ namespace FML {
             abort();
         }
     }
+
+    //============================================
+    /// Fetch virtual memory and resident set 
+    /// from /proc/self/stat on a linux system.
+    /// On other systems it just returns (0,0)
+    //============================================
+    std::pair<double, double> get_system_memory_use() {
+        double vm_usage = 0.0;
+        double resident_set = 0.0;
+#if defined(__linux__)
+        unsigned long vsize;
+        long rss;
+        {
+            std::string no;
+            std::ifstream ifs("/proc/self/stat", std::ios_base::in);
+            if (ifs.is_open())
+                ifs >> no >> no >> no >> no >> no >> no >> no >> no >> no >> no >> no >> no >> no >> no >> no >> no >>
+                    no >> no >> no >> no >> no >> no >> vsize >> rss;
+        }
+
+        // In case x86-64 is configured to use 2MB pages
+        long page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024;
+        vm_usage = vsize / 1024.0;
+        resident_set = rss * page_size_kb;
+#endif
+        return {vm_usage, resident_set};
+    }
+
 } // namespace FML
 
 namespace FML {

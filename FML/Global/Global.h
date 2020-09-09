@@ -8,10 +8,9 @@
 //
 // Compile time defines:
 // USE_MPI               : Use MPI
-// NO_AUTO_MPI_SETUP     : Do not initialize MPI automatically
+// NO_AUTO_FML_SETUP     : Do not initialize FML/MPI/FFTW automatically
 // USE_OMP               : Use OpenMP
 // USE_FFTW              : Use FFTW (here its just for initialization for MPI/threads)
-// NO_AUTO_FFTW_SETUP    : Do not initialize FFTW automatically
 // MEMORY_LOGGING        : Log all (big) allocations with the standard container (see MemoryLogging.h)
 //    MIN_BYTES_TO_LOG   : How many bytes to enable logging of allocation
 //    MAX_ALLOCATIONS_IN_MEMORY : Maximum number of allocations to keep (above which we give up)
@@ -42,8 +41,8 @@ namespace FML {
     extern int ThisTask;
     extern int NTasks;
     extern int NThreads;
-    extern bool MPIThreadsOK;
-    extern bool FFTWThreadsOK;
+    extern bool MPIThreadsOK;  // Set by init_mpi
+    extern bool FFTWThreadsOK; // Set by init_fftw
 
     // The local extent of the domain (global domain goes from 0 to 1)
     extern double xmin_domain;
@@ -81,6 +80,14 @@ namespace FML {
     void finalize_mpi();
     void printf_mpi(const char * fmt, ...);
     void info();
+
+    //================================================
+    // Initialize the globals within FML
+    // Assumes MPI has been initialized
+    //================================================
+    void init_fml();
+    
+    std::pair<double, double> get_system_memory_use();
 
     template <class T>
     void MaxOverTasks([[maybe_unused]] T * value) {
@@ -137,24 +144,6 @@ namespace FML {
                         power(base, exponent / 2) * power(base, exponent / 2) :
                         (long long int)(base)*power(base, (exponent - 1) / 2) * power(base, (exponent - 1) / 2));
     }
-
-    //============================================
-    /// Initialize and finalize MPI automatically on
-    /// startup and exit. MPI can only be initialized
-    /// and finalized once so add it as a singleton
-    /// Disable with define NO_AUTO_MPI_SETUP
-    //============================================
-    struct MPISetup {
-        static MPISetup & init(int * argc = nullptr, char *** argv = nullptr) {
-            static MPISetup instance(argc, argv);
-            return instance;
-        }
-
-      private:
-        MPISetup(int * argc = nullptr, char *** argv = nullptr) { init_mpi(argc, argv); }
-
-        ~MPISetup() { finalize_mpi(); }
-    };
 
     //============================================
     // Overloads of arithmetic operations for the
@@ -243,6 +232,22 @@ namespace FML {
 
 namespace FML {
 
+    //=============================================================
+    /// Singleton for initializing and finalizing MPI automatically on
+    /// startup and exit
+    //=============================================================
+    struct MPISetup {
+        static MPISetup & init(int * argc = nullptr, char *** argv = nullptr) {
+            static MPISetup instance(argc, argv);
+            return instance;
+        }
+
+      private:
+        MPISetup(int * argc = nullptr, char *** argv = nullptr) { init_mpi(argc, argv); }
+
+        ~MPISetup() { finalize_mpi(); }
+    };
+
 #ifdef USE_FFTW
     namespace GRID {
 #include <FML/FFTWGrid/FFTWGlobal.h>
@@ -253,8 +258,7 @@ namespace FML {
 
     //=============================================================
     /// Singleton for initializing and cleaning up FFTW
-    /// with MPI and with threads automatically
-    /// If you don't want this use the define NO_AUTO_FFTW_MPI_INIT
+    /// with MPI and threads automatically
     //=============================================================
     struct FFTWSetup {
         static FFTWSetup & init(int * argc = nullptr, char *** argv = nullptr) {
@@ -271,6 +275,7 @@ namespace FML {
 
     //=============================================================
     /// Singleton for initializing and cleaning up FML
+    /// Takes care of automatically initializing MPI and FFTW
     //=============================================================
     struct FMLSetup {
         static FMLSetup & init(int * argc = nullptr, char *** argv = nullptr) {
@@ -279,19 +284,24 @@ namespace FML {
         }
 
       private:
+
         FMLSetup(int * argc, char *** argv) {
-#ifndef NO_AUTO_MPI_SETUP
+            // Initialize MPI
             [[maybe_unused]] MPISetup & m = MPISetup::init(argc, argv);
-#endif
+
 #ifdef USE_FFTW
-#ifndef NO_AUTO_FFTW_SETUP
+            // Initialize FFTW
             [[maybe_unused]] FFTWSetup & f = FFTWSetup::init(argc, argv);
 #endif
-#endif
+
+            // Initialize FML
+            init_fml();
+
+            // Show some info to see that all is ok
             info();
         }
 
-        ~FMLSetup() {}
+        ~FMLSetup() = default;
     };
 } // namespace FML
 
