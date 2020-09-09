@@ -20,7 +20,7 @@ USE_OMP          = true
 # Use the FFTW library
 USE_FFTW         = true
 # Use threads in FFTW
-USE_FFTW_THREADS = false
+USE_FFTW_THREADS = true
 # Log allocations in the library
 USE_MEMORYLOG    = true
 # Check for bad memory accesses
@@ -85,6 +85,7 @@ LINK    += $(FFTW_MPI_LINK)
 endif
 ifeq ($(USE_OMP),true)
 ifeq ($(USE_FFTW_THREADS),true)
+OPTIONS += -DUSE_FFTW_THREADS
 LINK    += $(FFTW_OMP_LINK)
 endif
 endif
@@ -106,8 +107,8 @@ endif
 # Object files to be compiled
 #===================================================
 
-VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/Spline/
-OBJS = Main.o Global.o Spline.o
+VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/Spline/:$(FML_INCLUDE)/FML/ODESolver/
+OBJS = Main.o Global.o Spline.o ODESolver.o
 
 TARGETS := lpt
 all: $(TARGETS)

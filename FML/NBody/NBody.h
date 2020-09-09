@@ -44,14 +44,17 @@ namespace FML {
                                         double norm_poisson_equation = 1.0);
 
         //===================================================================================
-        /// @brief Take a N-body step with a naive Kick-Drift method (thus this
-        /// methods should mainly serve as an example for how to do this and not be used for anything serious).
+        /// @brief Take a N-body step with a simple Kick-Drift-Kick method (this
+        /// method serves mainly as an example for how one can do this).
         /// 1. Particles to grid to get \f$ \delta \f$
         /// 2. Compute the Newtonian potential via \f$ \nabla^2 \Phi = {\rm norm} \cdot \delta \f$
         /// 3. Compute the force  \f$ F = \nabla \Phi \f$
         /// 4. Move the particles using \f$ x \to x + v \Delta t \f$ and \f$ v \to v + F \Delta t \f$
         /// This method assumes that the velocities are in units of (boxsize / time-step-unit), in other words that \f$
-        /// v\Delta t\f$ gives rise to a shift in [0,1).
+        /// v\Delta t\f$ gives rise to a shift in [0,1). For cosmological N-body norm_poisson_equation depends on a and
+        /// it should be set at the correct time. If one does simple sims with fixed time-step then the last kick of the
+        /// previous step can be combined with the first kick of the current step to save one force evaluation per step
+        /// (so basically two times as fast).
         ///
         /// @tparam N The dimension of the grid.
         /// @tparam T The particle class.
@@ -64,11 +67,11 @@ namespace FML {
         ///
         //===================================================================================
         template <int N, class T>
-        void KickDriftNBodyStep(int Nmesh,
-                                FML::PARTICLE::MPIParticles<T> & part,
-                                double delta_time,
-                                std::string density_assignment_method,
-                                double norm_poisson_equation) {
+        void KickDriftKickNBodyStep(int Nmesh,
+                                    FML::PARTICLE::MPIParticles<T> & part,
+                                    double delta_time,
+                                    std::string density_assignment_method,
+                                    double norm_poisson_equation) {
 
             const bool periodic_box = true;
 
@@ -76,6 +79,7 @@ namespace FML {
             auto nleftright =
                 FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(density_assignment_method);
             FFTWGrid<N> density_grid_real(Nmesh, nleftright.first, nleftright.second);
+            density_grid_real.add_memory_label("FFTWGrid::KickDriftKickNBodyStep::density_grid_real");
             FML::INTERPOLATION::particles_to_grid<N, T>(part.get_particles().data(),
                                                         part.get_npart(),
                                                         part.get_npart_total(),
@@ -87,10 +91,91 @@ namespace FML {
             compute_force_from_density(density_grid_real, force_real, norm_poisson_equation);
 
             // Update velocity of particles
-            KickParticles(force_real, part, delta_time, density_assignment_method);
+            KickParticles(force_real, part, delta_time * 0.5, density_assignment_method);
 
             // Move particles (this does communication)
             DriftParticles<N, T>(part, delta_time, periodic_box);
+
+            // Particles -> density field
+            FML::INTERPOLATION::particles_to_grid<N, T>(part.get_particles().data(),
+                                                        part.get_npart(),
+                                                        part.get_npart_total(),
+                                                        density_grid_real,
+                                                        density_assignment_method);
+
+            // Density field -> force
+            compute_force_from_density(density_grid_real, force_real, norm_poisson_equation);
+
+            // Update velocity of particles
+            KickParticles(force_real, part, delta_time * 0.5, density_assignment_method);
+        }
+
+        //===================================================================================
+        /// @brief Take a N-body step with a 4th order symplectic Yoshida method.
+        ///
+        /// @tparam N The dimension of the grid.
+        /// @tparam T The particle class.
+        ///
+        /// @param[in] Nmesh The gridsize to use for computing the density and force.
+        /// @param[out] part The particles
+        /// @param[in] delta_time The time \f$ \Delta t \f$ we move forward.
+        /// @param[in] density_assignment_method The density assignement method (NGP, CIC, TSC, PCS or PQS).
+        /// @param[in] norm_poisson_equation A possible prefactor to the Poisson equation
+        ///
+        //===================================================================================
+        template <int N, class T>
+        void YoshidaNBodyStep(int Nmesh,
+                              FML::PARTICLE::MPIParticles<T> & part,
+                              double delta_time,
+                              std::string density_assignment_method,
+                              double norm_poisson_equation) {
+
+            const bool periodic_box = true;
+
+            // The Yoshida coefficients
+            const double w1 = 1.0 / (2 - std::pow(2.0, 1.0 / 3.0));
+            const double w0 = 1.0 - 2.0 * w1;
+            const double c1 = w1 / 2.0, c4 = c1;
+            const double c2 = (w0 + w1) / 2.0, c3 = c2;
+            const double d1 = w1, d3 = d1;
+            const double d2 = w0;
+
+            // They must sum to unity
+            assert(std::fabs(c1 + c2 + c3 + c4 - 1.0) < 1e-10);
+            assert(std::fabs(d1 + d2 + d3 - 1.0) < 1e-10);
+
+            // Set up a density grid to use
+            auto nleftright =
+                FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(density_assignment_method);
+            FFTWGrid<N> density_grid_real(Nmesh, nleftright.first, nleftright.second);
+            density_grid_real.add_memory_label("FFTWGrid::YoshidaNBodyStep::density_grid_real");
+
+            // Perform one step: delta_time_pos is the advance for pos positions and delta_time_vel is for velocity
+            auto one_step = [&](double delta_time_pos, double delta_time_vel, double norm_poisson) {
+                // Move particles (this does communication)
+                DriftParticles<N, T>(part, delta_time_pos, periodic_box);
+
+                // Particles -> density field
+                FML::INTERPOLATION::particles_to_grid<N, T>(part.get_particles().data(),
+                                                            part.get_npart(),
+                                                            part.get_npart_total(),
+                                                            density_grid_real,
+                                                            density_assignment_method);
+                // Density field -> force
+                std::array<FFTWGrid<N>, N> force_real;
+                compute_force_from_density(density_grid_real, force_real, norm_poisson);
+
+                // Update velocity of particles
+                KickParticles(force_real, part, delta_time_vel, density_assignment_method);
+            };
+
+            // The norm_poisson_equation in a cosmo sim depends on [aexp] so this should be changed
+            one_step(delta_time * c1, delta_time * d1, norm_poisson_equation);
+            one_step(delta_time * c2, delta_time * d2, norm_poisson_equation);
+            one_step(delta_time * c3, delta_time * d3, norm_poisson_equation);
+
+            // Move particles (this does communication)
+            DriftParticles<N, T>(part, delta_time * c4, periodic_box);
         }
 
         //===================================================================================
@@ -110,37 +195,46 @@ namespace FML {
                                         double norm_poisson_equation) {
 
             // Copy over
-            for (int idim = 0; idim < N; idim++)
+            for (int idim = 0; idim < N; idim++) {
                 force_real[idim] = density_grid_real;
+                force_real[idim].add_memory_label("FFTWGrid::compute_force_from_density::force_real_" +
+                                                  std::to_string(idim));
+            }
 
             // Density grid to fourier space
             force_real[0].fftw_r2c();
 
+            auto Local_nx = density_grid_real.get_local_nx();
             auto Local_x_start = density_grid_real.get_local_x_start();
 
             // Loop over all local fourier grid cells
-            std::array<double, N> kvec;
-            double kmag2;
-            std::complex<double> I(0, 1);
-            for (auto & fourier_index : force_real[0].get_fourier_range()) {
-                force_real[0].get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
-                auto value = force_real[0].get_fourier_from_index(fourier_index);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                [[maybe_unused]] double kmag2;
+                [[maybe_unused]] std::array<double, N> kvec;
+                std::complex<double> I(0, 1);
+                for (auto && fourier_index : force_real[0].get_fourier_range(islice, islice + 1)) {
+                    if (Local_x_start == 0 and fourier_index == 0)
+                        continue; // DC mode (k=0)
 
-                // Multiply by -i/k^2
-                value *= -norm_poisson_equation * I / kmag2;
-                if (Local_x_start == 0 and fourier_index == 0)
-                    value = 0.0;
+                    force_real[0].get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                    auto value = force_real[0].get_fourier_from_index(fourier_index);
 
-                // Compute force -ik/k^2 delta(k)
-                for (int idim = 0; idim < N; idim++)
-                    force_real[idim].set_fourier_from_index(fourier_index, value * kvec[idim]);
+                    // Multiply by -i/k^2
+                    value *= -norm_poisson_equation * I / kmag2;
+
+                    // Compute force -ik/k^2 delta(k)
+                    for (int idim = 0; idim < N; idim++)
+                        force_real[idim].set_fourier_from_index(fourier_index, value * kvec[idim]);
+                }
             }
 
-            // DC mode
-            if (FML::ThisTask == 0) {
+            // Deal with DC mode
+            if (Local_x_start == 0)
                 for (int idim = 0; idim < N; idim++)
                     force_real[idim].set_fourier_from_index(0, 0.0);
-            }
 
             // Fourier transform back to real space
             for (int idim = 0; idim < N; idim++)
@@ -218,13 +312,13 @@ namespace FML {
             FML::MaxOverTasks(&max_disp);
 
             if (FML::ThisTask == 0)
-                std::cout << "[Drift] Max disp: " << max_disp << "\n";
+                std::cout << "[Drift] Max displacement: " << max_disp << "\n";
         }
 
         //===================================================================================
-        /// This moves the particle velocities according to \f$ v_{\rm new} = v + F \Delta t \f$. This method assumes
-        /// the force is normalized such that \f$ F \Delta t \f$ has the same units as your v. This method frees up
-        /// memory in the force grids after we have used them. Can be changed with a flag in the source.
+        /// This moves the particle velocities according to \f$ v_{\rm new} = v + F \Delta t \f$. This method
+        /// assumes the force is normalized such that \f$ F \Delta t \f$ has the same units as your v. This method
+        /// frees up memory in the force grids after we have used them. Can be changed with a flag in the source.
         ///
         /// @tparam N The dimension of the grid
         /// @tparam T The particle class
@@ -247,9 +341,9 @@ namespace FML {
         }
 
         //===================================================================================
-        /// This moves the particle velocities according to \f$ v_{\rm new} = v + F \Delta t \f$. This method assumes
-        /// the force is normalized such that \f$ F \Delta t \f$ has the same units as your v. This method frees up
-        /// memory in the force grids after we have used them. Can be changed with a flag in the source.
+        /// This moves the particle velocities according to \f$ v_{\rm new} = v + F \Delta t \f$. This method
+        /// assumes the force is normalized such that \f$ F \Delta t \f$ has the same units as your v. This method
+        /// frees up memory in the force grids after we have used them. Can be changed with a flag in the source.
         ///
         /// @tparam N The dimension of the grid
         /// @tparam T The particle class
@@ -270,8 +364,8 @@ namespace FML {
                            double delta_time,
                            std::string interpolation_method) {
 
-            // Deallocate the force grids (after interpolating to the particles we don't need it here and probably not
-            // elsewhere so lets save some memory)
+            // Deallocate the force grids (after interpolating to the particles we don't need it here and probably
+            // not elsewhere so lets save some memory)
             const bool free_force_grids = true;
 
             // Interpolate force to particle positions
@@ -300,7 +394,7 @@ namespace FML {
             FML::MaxOverTasks(&max_dvel);
 
             if (FML::ThisTask == 0)
-                std::cout << "[Kick] Max dvel disp: " << max_dvel * delta_time << "\n";
+                std::cout << "[Kick] Max change in vel-displacement : " << 0.5 * max_dvel * delta_time << "\n";
         }
 
     } // namespace NBODY
