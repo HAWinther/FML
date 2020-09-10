@@ -351,7 +351,7 @@ namespace FML {
                 }
 
                 // Add extra guards around the border
-                double one = 0.9999;
+                double one = 1.0 - 1e-10;
                 double xborder1 = FML::xmax_domain + one * dx_buffer;
                 if (xborder1 > 1.0)
                     xborder1 = one * dx_buffer;
@@ -369,6 +369,10 @@ namespace FML {
                         pos[2] = iz / double(nborder);
                         pos += CGAL_NDIM;
                     }
+#ifdef DEBUG_TESSELATION
+                std::cout << "Adding guards on " << FML::ThisTask << " x1: " << xborder1 << " x2: " << xborder2
+                          << " Domain: " << FML::xmin_domain << " -> " << FML::xmax_domain << "\n";
+#endif
             }
 
             // Combines the normal points with the boundary points and the randoms
@@ -431,13 +435,16 @@ namespace FML {
                 // Random shuffle of positions (to speed up tesselation)
                 if (tesselation_random_shuffle) {
                     std::random_device rd;
-                    std::mt19937 rng(rd());
+                    unsigned int seed = rd();
 
                     if (FML::ThisTask == 0)
                         std::cout << "[MPIPeriodicDelaunay::create_total_point_set] Random shuffle of points\n";
+                    
+                    std::mt19937 rng(seed);
                     std::shuffle(points.begin(), points.end(), rng);
 
                     // Do exactly the same shuffle as above to preserve the point-id ordering
+                    rng = std::mt19937(seed);
                     std::shuffle(id.begin(), id.end(), rng);
                 }
             }
@@ -460,8 +467,24 @@ namespace FML {
                 T tmp;
                 assert(tmp.get_ndim() == CGAL_NDIM);
 
-                if (FML::ThisTask == 0)
-                    std::cout << "[MPIPeriodicDelaunay::create] Creating periodic Delaunay tesselation\n";
+                if (FML::ThisTask == 0) {
+                    std::cout << "\n";
+                    std::cout << "#=====================================================\n";
+                    std::cout << "#\n";
+                    std::cout << "# ________         .__                                   \n";
+                    std::cout << "# \\______ \\   ____ |  | _____    ____   ____ ___.__.   \n";
+                    std::cout << "#  |    |  \\_/ __ \\|  | \\__  \\  /    \\_/ __ <   |  |\n";
+                    std::cout << "#  |    `   \\  ___/|  |__/ __ \\|   |  \\  ___/\\___  | \n";
+                    std::cout << "# /_______  /\\___  >____(____  /___|  /\\___  > ____|   \n";
+                    std::cout << "#         \\/     \\/          \\/     \\/     \\/\\/    \n";
+                    std::cout << "#\n";
+                    std::cout << "# Creating periodic Delaunay tesselation on " << NumPart << " parts\n";
+                    std::cout << "# Buffer fraction: " << buffer_fraction << "\n";
+                    std::cout << "# Random fraction: " << random_fraction << "\n";
+                    std::cout << "#\n";
+                    std::cout << "#=====================================================\n";
+                    std::cout << "\n";
+                }
 
                 // The buffersize we communicate particles from neighbor tasks
                 dx_buffer = buffer_fraction * (FML::xmax_domain - FML::xmin_domain);
@@ -543,6 +566,9 @@ namespace FML {
 
                 // Compute volumes of regular particles
                 double totvol = 0.0;
+#ifdef USE_OMP
+#pragma omp parallel for reduction(+ : totvol)
+#endif
                 for (size_t i = 0; i < npts; i++) {
 #if CGAL_NDIM == 2
                     // 2D: no built-in area function... fix this!
