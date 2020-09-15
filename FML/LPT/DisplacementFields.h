@@ -162,6 +162,8 @@ namespace FML {
             ///
             /// @param[in] phi The LPT potential in fourier space
             /// @param[out] psi The displacement vector in real space
+            /// @param[in] DoverDini The growth factor at the time you want the displacement field to the growth factor
+            /// at which phi is at
             ///
             //=================================================================================
             template <int N>
@@ -547,8 +549,6 @@ namespace FML {
             /// @param[out] dPsidt The derivative of the displacement field (units is that of the next factor)
             /// @param[in] dlogDdt The logarithmic derivative of D at the time we want Psi in whatever units you
             /// want it to be.
-            /// @param[in] DoverDini The ratio of D at the time we want Psi to itself at the time where delta is
-            /// generated.
             /// @param[in] ignore_curl_term
             ///
             //===========================================================================================
@@ -716,7 +716,8 @@ namespace FML {
             /// @param[out] phi_2LPT_fourier The 2LPT displacement potential
             /// @param[out] phi_3LPT_a_fourier The A 3LPT displacement potential
             /// @param[out] phi_3LPT_b_fourier The B 3LPT displacement potential
-            /// @param[out] phi_1LPT_fourier The 3LPT displacement vector potential
+            /// @param[out] phi_3LPT_Avec_fourier The 3LPT displacement vector potential
+            /// @param[in] ignore_curl_term Don't compute the vector potential
             ///
             //===========================================================================================
             template <int N>
@@ -1026,7 +1027,8 @@ namespace FML {
 
             //=================================================================================
             /// Take in an initial density field (generated at a redshift zini) and the corresponding ratio of growth
-            /// factors D(z)/D(zini) produces the approximate spherical collapse potential defined via D^2 phi_SC = 3( (1
+            /// factors D(z)/D(zini) produces the approximate spherical collapse potential defined via D^2 phi_SC = 3(
+            /// (1
             /// - 2/3 * phi_1LPT(x,z))^0.5 - 1) at the redshift z
             ///
             /// @tparam N The dimension of the grid
