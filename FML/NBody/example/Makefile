@@ -110,14 +110,14 @@ endif
 VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/Spline/:$(FML_INCLUDE)/FML/ODESolver/
 OBJS = Main.o Global.o Spline.o ODESolver.o
 
-TARGETS := lpt
+TARGETS := nbody
 all: $(TARGETS)
 .PHONY: all clean
 
 clean:
 	rm -rf $(TARGETS) *.o
 
-lpt: $(OBJS)
+nbody: $(OBJS)
 	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
 
 %.o: %.cpp 
