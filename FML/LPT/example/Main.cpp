@@ -23,7 +23,7 @@
 // 4. Compute the power-spectrum of this particle
 // distribution and compare it to the input P(k)
 //
-// So this test is basically a very simple IC generator 
+// So this test is basically a very simple IC generator
 // for N-body simulations.
 //
 // Relation between code units and physical units:
@@ -37,7 +37,7 @@
 
 //=====================================================
 // The dimension we are working in (e.g. Ndim=2 is nice
-// to use for testing as its much faster) and the 
+// to use for testing as its much faster) and the
 // boxsize in your physical units (say Mpc/h)
 //=====================================================
 const int Ndim = 3;
@@ -70,7 +70,7 @@ double power_spectrum(double k) {
 void generate_delta(FFTWGrid<Ndim> & delta) {
     FML::RANDOM::RandomGenerator * rng = new FML::RANDOM::RandomGenerator;
     std::function<double(double)> Powspec;
-    
+
     // Fix amplitude (so only random phases) or do a normal GRF if false
     const bool fix_amplitude = true;
 
@@ -88,7 +88,7 @@ int main() {
 #endif
 
     //=====================================================
-    // Setting: what grid to use to generate the IC on and 
+    // Setting: what grid to use to generate the IC on and
     // how many particles to generate
     //=====================================================
     const int Nmesh = 128;
@@ -135,7 +135,7 @@ int main() {
     phi_2LPT.free();
 
     //===============================Y======================
-    // Make a regular (Lagrangian) particle grid with 
+    // Make a regular (Lagrangian) particle grid with
     // Npart_1D^NDIM particles in total
     //=====================================================
     MPIParticles<Particle> part;
@@ -179,12 +179,12 @@ int main() {
     const double growth_rate2 = 2.0;
     const double vfac_1LPT = HoverH0 * growth_rate1;
     const double vfac_2LPT = HoverH0 * growth_rate2;
-    
+
     //=====================================================
     // Add 1LPT displacement to particle position
     // Add 2LPT displacement to particle position
     //=====================================================
-    
+
     double max_disp_1LPT = 0.0;
     double max_disp_2LPT = 0.0;
     double max_vel_1LPT = 0.0;
@@ -192,7 +192,7 @@ int main() {
 
     auto * part_ptr = part.get_particles_ptr();
 #ifdef USE_OMP
-#pragma omp parallel for
+#pragma omp parallel for reduction(max: max_disp_1LPT, max_disp_2LPT, max_vel_1LPT, max_vel_2LPT)
 #endif
     for (size_t ind = 0; ind < part.get_npart(); ind++) {
         auto * pos = part_ptr[ind].get_pos();
@@ -244,7 +244,7 @@ int main() {
         std::cout << "Maximum velocity: " << max_vel_2LPT * 100.0 * box << " km/s comoving\n";
 
     //=====================================================
-    // Communicate particles (they might have left the 
+    // Communicate particles (they might have left the
     // current task)
     //=====================================================
     part.communicate_particles();
@@ -261,7 +261,7 @@ int main() {
         Nmesh, part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), pofk, interpolation_method);
 
     //=====================================================
-    // ...and add back the shot-noise that was subtracted 
+    // ...and add back the shot-noise that was subtracted
     // in the routine above
     //=====================================================
     for (int i = 0; i < pofk.n; i++) {
