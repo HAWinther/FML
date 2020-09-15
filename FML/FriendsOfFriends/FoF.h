@@ -8,6 +8,7 @@
 #include <map>
 
 #include <FML/FriendsOfFriends/FoFBinning.h>
+#include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/Global/Global.h>
 
 namespace FML {
@@ -87,7 +88,7 @@ namespace FML {
 
             // Get index of the cell the particle lives in
             auto get_cell_index = [&](size_t ipart, std::vector<int> & coord) -> size_t {
-                auto * pos = part[ipart].get_pos();
+                auto * pos = FML::PARTICLE::GetPos(part[ipart]);
                 size_t index_cell = 0;
                 for (int idim = 0; idim < NDIM; idim++) {
                     coord[idim] = int((pos[idim] - FML::xmin_domain * (idim == 0 ? 1 : 0)) * Ngrid);
@@ -155,7 +156,7 @@ namespace FML {
             // Count boundary particles
             size_t nboundary_right = 0;
             for (size_t i = 0; i < NumPart; i++) {
-                const auto * pos = part[i].get_pos();
+                const auto * pos = FML::PARTICLE::GetPos(part[i]);
                 if (FML::xmax_domain - pos[0] < fof_distance)
                     nboundary_right++;
             }
@@ -169,12 +170,13 @@ namespace FML {
             // defined below to extract the data
             char * data = CommBufferSend.data();
             for (size_t i = 0; i < NumPart; i++) {
-                FoFPosType pos[NDIM];
-                if (FML::xmax_domain - part[i].get_pos()[0] < fof_distance) {
+                const auto * pos = FML::PARTICLE::GetPos(part[i]);
+                FoFPosType x[NDIM];
+                if (FML::xmax_domain - pos[0] < fof_distance) {
                     for (int idim = 0; idim < NDIM; idim++) {
-                        pos[idim] = FoFPosType(part[i].get_pos()[idim]);
+                        x[idim] = FoFPosType(pos[idim]);
                     }
-                    std::memcpy(data, pos, sizeof(FoFPosType) * NDIM);
+                    std::memcpy(data, x, sizeof(FoFPosType) * NDIM);
                     data += sizeof(FoFPosType) * NDIM;
                     std::memcpy(data, &i, sizeof(size_t));
                     data += sizeof(size_t);
@@ -345,7 +347,7 @@ namespace FML {
                                 const size_t np = size_t(PartCells[index_nbor_cell].np);
                                 for (size_t ii = 0; ii < np; ii++) {
                                     const auto pindex = PartCells[index_nbor_cell].ParticleIndex[ii];
-                                    const auto * pos1 = part[pindex].get_pos();
+                                    const auto * pos1 = FML::PARTICLE::GetPos(part[pindex]);
 
                                     double dist2 = 0.0;
                                     for (int idim = 0; idim < NDIM; idim++) {
@@ -624,7 +626,7 @@ namespace FML {
 
             // Get index of the cell the particle lives in
             auto get_cell_index = [&](size_t ipart, std::vector<int> & coord) -> size_t {
-                auto * pos = part[ipart].get_pos();
+                auto * pos = FML::PARTICLE::GetPos(part[ipart]);
                 size_t index_cell = 0;
                 for (int idim = 0; idim < NDIM; idim++) {
                     coord[idim] = int((pos[idim] - FML::xmin_domain * (idim == 0 ? 1 : 0)) * Ngrid);
@@ -647,7 +649,7 @@ namespace FML {
             for (size_t i = 0; i < NumPart; i++) {
 
                 // Current particle
-                const auto * pos1 = part[i].get_pos();
+                const auto * pos1 = FML::PARTICLE::GetPos(part[i]);
 
                 // Compute coord of cell particle is in
                 get_cell_index(i, coord);
@@ -708,7 +710,7 @@ namespace FML {
                         const auto pindex = PartCells[index_nbor_cell].ParticleIndex[ii];
                         if (pindex == i)
                             continue;
-                        const auto * pos2 = part[pindex].get_pos();
+                        const auto * pos2 = FML::PARTICLE::GetPos(part[pindex]);
 
                         // Do the linking
                         double dist2 = 0.0;
@@ -821,13 +823,26 @@ namespace FML {
                 Ngrid = 3 * FML::NTasks;
             const int Local_nx = Ngrid / FML::NTasks;
 
-#ifdef DEBUG_FOF
             if (FML::ThisTask == 0) {
-                std::cout << "FriendsOfFriends linking\n";
-                std::cout << "FoF Linking Distance: " << fof_distance << "\n";
-                std::cout << "FoF Gridsize Ngrid = " << Ngrid << " Local: " << Local_nx << "\n";
+                std::cout << "\n";
+                std::cout << "#=====================================================\n";
+                std::cout << "#\n";
+                std::cout << "#            ___________________  ___________     \n";
+                std::cout << "#            \\_   _____/\\_____  \\ \\_   _____/ \n";
+                std::cout << "#             |    __)   /   |   \\ |    __)      \n";
+                std::cout << "#             |     \\   /    |    \\|     \\     \n";
+                std::cout << "#             \\___  /   \\_______  /\\___  /     \n";
+                std::cout << "#                 \\/            \\/     \\/      \n";
+                std::cout << "#\n";
+                std::cout << "# FriendsOfFriends linking\n";
+                std::cout << "# FML::FOF::FoF_Ngrid_max: " << FoF_Ngrid_max << "\n";
+                std::cout << "# FML::FOF::merging_in_parallel_default: " << std::boolalpha << merging_in_parallel << "\n";
+                std::cout << "# FoF Linking Distance: " << fof_distance << "\n";
+                std::cout << "# FoF linking Gridsize = " << Ngrid << " Local_nx: " << Local_nx << "\n";
+                std::cout << "#\n";
+                std::cout << "#=====================================================\n";
+                std::cout << "\n";
             }
-#endif
             assert(1.0 / Ngrid > fof_distance);
 
             //=============================================================================

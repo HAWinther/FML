@@ -17,7 +17,6 @@ struct Particle {
     double Pos[N];
     double * get_pos() { return Pos; }
     int get_ndim() { return N; }
-    double get_weight() { return 1.0; }
 };
 
 struct Galaxy {
@@ -86,7 +85,7 @@ void TestSurvey() {
     // Options
     const int nbins = 30;
     const double rmax = 10.0 / boxsize;
-    CorrelationFunctionSurvey(galaxies_xyz, randoms_xyz, nbins, rmax, verbose);
+    CorrelationFunctionSurvey(galaxies_xyz, randoms_xyz, nbins, rmax, boxsize, verbose);
 }
 
 void TestPeriodic() {

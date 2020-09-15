@@ -12,15 +12,7 @@
 #include <vector>
 
 #include <FML/Global/Global.h>
-
-// To avoid having set_id, set_level etc. methods in
-// the particle class remove one of these
-#define PARTICLE_HAS_ID
-#define PARTICLE_HAS_VEL
-#define PARTICLE_HAS_MASS
-#define PARTICLE_HAS_LEVEL
-#define PARTICLE_HAS_FAMILY
-#define PARTICLE_HAS_TAG
+#include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 
 namespace FML {
     namespace FILEUTILS {
@@ -66,7 +58,6 @@ namespace FML {
 
             class RamsesReader {
               private:
-
                 // What is in the file and if we want to store it or not
                 std::vector<std::string> entries_in_file{"POS", "VEL", "MASS", "ID", "LEVEL", "FAMILY", "TAG"};
                 std::vector<bool> entries_to_store{true, true, true, true, true, true, true};
@@ -128,7 +119,6 @@ namespace FML {
                 }
 
               public:
-           
                 RamsesReader() = default;
 
                 RamsesReader(std::string _filepath,
@@ -141,8 +131,7 @@ namespace FML {
                     read_info();
                 }
 
-                void set_file_format(std::vector<std::string> what_is_in_file, std::vector<bool> store_it_or_not) {
-                    assert(what_is_in_file.size() == store_it_or_not.size());
+                void set_file_format(std::vector<std::string> what_is_in_file) {
                     for (auto e : what_is_in_file) {
                         if (!(e == "POS" or e == "VEL" or e == "MASS" or e == "ID" or e == "LEVEL" or e == "FAMILY" or
                               e == "TAG"))
@@ -151,7 +140,6 @@ namespace FML {
                                         e);
                     }
                     entries_in_file = what_is_in_file;
-                    entries_to_store = store_it_or_not;
                 }
 
                 template <class T>
@@ -394,14 +382,13 @@ namespace FML {
 
                 template <class T>
                 void store_positions(RamsesPosType * pos, char * is_in_domain, T * p, const int dim, const int np) {
-                    T tmp;
-                    if (tmp.get_pos() == nullptr)
+                    if constexpr (not FML::PARTICLE::has_get_pos<T>())
                         return;
 
                     int count = 0;
                     for (int i = 0; i < np; i++) {
                         if (is_in_domain[i] == 1) {
-                            auto * x = p[count++].get_pos();
+                            auto * x = FML::PARTICLE::GetPos(p[count++]);
                             x[dim] = pos[i];
                         }
                     }
@@ -412,19 +399,16 @@ namespace FML {
                 //====================================================
                 template <class T>
                 void store_velocity(RamsesVelType * vel, char * is_in_domain, T * p, const int dim, const int np) {
-#ifdef PARTICLE_HAS_VEL
-                    T tmp;
-                    if (tmp.get_vel() == nullptr)
+                    if constexpr (not FML::PARTICLE::has_get_vel<T>())
                         return;
                     RamsesVelType velfac = 100.0 * boxlen_ini / aexp;
                     int count = 0;
                     for (int i = 0; i < np; i++) {
                         if (is_in_domain[i] == 1) {
-                            auto * v = p[count++].get_vel();
+                            auto * v = FML::PARTICLE::GetVel(p[count++]);
                             v[dim] = vel[i] * velfac;
                         }
                     }
-#endif
                 }
 
                 //====================================================
@@ -432,14 +416,14 @@ namespace FML {
                 //====================================================
                 template <class T>
                 void store_mass(RamsesMassType * mass, char * is_in_domain, T * p, const int np) {
-#ifdef PARTICLE_HAS_MASS
+                    if constexpr (not FML::PARTICLE::has_set_mass<T>())
+                        return;
                     int count = 0;
                     for (int i = 0; i < np; i++) {
                         if (is_in_domain[i] == 1) {
-                            p[count++].set_mass(mass[i]);
+                            FML::PARTICLE::SetMass(p[count++], mass[i]);
                         }
                     }
-#endif
                 }
 
                 //====================================================
@@ -447,14 +431,14 @@ namespace FML {
                 //====================================================
                 template <class T>
                 void store_id(RamsesIDType * id, char * is_in_domain, T * p, const int np) {
-#ifdef PARTICLE_HAS_ID
+                    if constexpr (not FML::PARTICLE::has_set_id<T>())
+                        return;
                     int count = 0;
                     for (int i = 0; i < np; i++) {
                         if (is_in_domain[i] == 1) {
-                            p[count++].set_id(id[i]);
+                            FML::PARTICLE::SetID(p[count++], id[i]);
                         }
                     }
-#endif
                 }
 
                 //====================================================
@@ -462,14 +446,14 @@ namespace FML {
                 //====================================================
                 template <class T>
                 void store_longid(RamsesLongIDType * id, char * is_in_domain, T * p, const int np) {
-#ifdef PARTICLE_HAS_ID
+                    if constexpr (not FML::PARTICLE::has_set_id<T>())
+                        return;
                     int count = 0;
                     for (int i = 0; i < np; i++) {
                         if (is_in_domain[i] == 1) {
-                            p[count++].set_id(id[i]);
+                            FML::PARTICLE::SetID(p[count++], id[i]);
                         }
                     }
-#endif
                 }
 
                 //====================================================
@@ -477,14 +461,14 @@ namespace FML {
                 //====================================================
                 template <class T>
                 void store_family(RamsesFamilyType * family, char * is_in_domain, T * p, const int np) {
-#ifdef PARTICLE_HAS_FAMILY
+                    if constexpr (not FML::PARTICLE::has_set_family<T>())
+                        return;
                     int count = 0;
                     for (int i = 0; i < np; i++) {
                         if (is_in_domain[i] == 1) {
-                            p[count++].set_family(family[i]);
+                            FML::PARTICLE::SetFamily(p[count++], family[i]);
                         }
                     }
-#endif
                 }
 
                 //====================================================
@@ -492,29 +476,29 @@ namespace FML {
                 //====================================================
                 template <class T>
                 void store_tag(RamsesTagType * tag, char * is_in_domain, T * p, const int np) {
-#ifdef PARTICLE_HAS_TAG
+                    if constexpr (not FML::PARTICLE::has_set_tag<T>())
+                        return;
                     int count = 0;
                     for (int i = 0; i < np; i++) {
                         if (is_in_domain[i] == 1) {
-                            p[count++].set_tag(tag[i]);
+                            FML::PARTICLE::SetTag(p[count++], tag[i]);
                         }
                     }
-#endif
                 }
 
                 //====================================================
-                // Store the level if particle has leve
+                // Store the level if particle has level
                 //====================================================
                 template <class T>
                 void store_level(RamsesLevelType * level, char * is_in_domain, T * p, const int np) {
-#ifdef PARTICLE_HAS_LEVEL
+                    if constexpr (not FML::PARTICLE::has_set_level<T>())
+                        return;
                     int count = 0;
                     for (int i = 0; i < np; i++) {
                         if (is_in_domain[i] == 1) {
-                            p[count++].set_level(level[i]);
+                            FML::PARTICLE::SetLevel(p[count++], level[i]);
                         }
                     }
-#endif
                 }
 
                 //====================================================

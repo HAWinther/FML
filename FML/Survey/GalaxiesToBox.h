@@ -15,7 +15,9 @@
 #endif
 
 // We need these for the r(z) spline
+#include <FML/Global/Global.h>
 #include <FML/ODESolver/ODESolver.h>
+#include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/Spline/Spline.h>
 
 //==============================================================================
@@ -29,7 +31,7 @@
 // get_z()
 // and positions must have the methods:
 // auto * get_pos();
-// int get_ndim() ( which should return 3 )
+// int get_ndim() == 3
 //
 // We require the Hubble function H(z)/c to be provided by the user, e.g.
 // auto hubble_over_c_of_z = [](double z){
@@ -86,13 +88,18 @@ namespace FML {
                                               std::pair<double, double> & min_max_y,
                                               std::pair<double, double> & min_max_z) {
 
+            // Sanity check on the particle class, must have get_RA, etc. methods
+            static_assert(FML::PARTICLE::has_get_RA<T>());
+            static_assert(FML::PARTICLE::has_get_DEC<T>());
+            static_assert(FML::PARTICLE::has_get_z<T>());
+
             // Find maximum redshift
             double z_max = 0.0;
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
             for (size_t i = 0; i < ngalaxies; i++) {
-                const double z = galaxies_ra_dec_z[i].get_z();
+                const double z = FML::PARTICLE::GetRedshift(galaxies_ra_dec_z[i]);
                 z_max = std::max(z, z_max);
             }
 
@@ -123,7 +130,8 @@ namespace FML {
 
             // Fetch ndim from particles and check that we have the right dimensions
             U utemp;
-            assert(utemp.get_ndim() == 3);
+            assert_mpi(FML::PARTICLE::GetNDIM(utemp) == 3,
+                       "[EquitorialToCartesianCoordinates] Particles must have ndim = 3");
 
             // Make particles and convert to cartesian coordinates
             particles_xyz = std::vector<U>(ngalaxies);
@@ -139,10 +147,10 @@ namespace FML {
 #pragma omp parallel for reduction(max : max_x, max_y, max_z) reduction(min : min_x, min_y, min_z)
 #endif
             for (size_t i = 0; i < ngalaxies; i++) {
-                auto * Pos = particles_xyz[i].get_pos();
-                const double RA = galaxies_ra_dec_z[i].get_RA();
-                const double DEC = galaxies_ra_dec_z[i].get_DEC();
-                const double redshift = galaxies_ra_dec_z[i].get_z();
+                auto * Pos = FML::PARTICLE::GetPos(particles_xyz[i]);
+                const double RA = FML::PARTICLE::GetRA(galaxies_ra_dec_z[i]);
+                const double DEC = FML::PARTICLE::GetDEC(galaxies_ra_dec_z[i]);
+                const double redshift = FML::PARTICLE::GetRedshift(galaxies_ra_dec_z[i]);
                 const double r = r_of_z_spline(redshift);
 
                 const double cosTheta = std::cos((90.0 - RA) * degrees_to_radial);
@@ -207,7 +215,8 @@ namespace FML {
 
             // Fetch ndim from particles and check that we have the right dimensions
             U utemp;
-            assert(utemp.get_ndim() == 3);
+            assert_mpi(FML::PARTICLE::GetNDIM(utemp) == 3,
+                       "[GalaxiesToBox] Particles must have ndim = 3                ");
 
 #ifdef USE_MPI
             // If we run with MPI only print once
@@ -248,7 +257,7 @@ namespace FML {
 #pragma omp parallel for
 #endif
             for (size_t i = 0; i < ngalaxies; i++) {
-                auto * Pos = particles_xyz[i].get_pos();
+                auto * Pos = FML::PARTICLE::GetPos(particles_xyz[i]);
 
                 if (shiftPositions) {
                     Pos[0] -= min_x;
@@ -300,6 +309,8 @@ namespace FML {
                                   bool scalePositions,
                                   bool verbose) {
 
+            verbose = verbose and FML::ThisTask == 0;
+
             double boxsize1, boxsize2;
 
             GalaxiesToBox(
@@ -313,7 +324,7 @@ namespace FML {
 #pragma omp parallel for reduction(max : max_x, max_y, max_z) reduction(min : min_x, min_y, min_z)
 #endif
             for (size_t i = 0; i < galaxies_xyz.size(); i++) {
-                auto * Pos = galaxies_xyz[i].get_pos();
+                auto * Pos = FML::PARTICLE::GetPos(galaxies_xyz[i]);
                 max_x = std::max(Pos[0], max_x);
                 max_y = std::max(Pos[1], max_y);
                 max_z = std::max(Pos[2], max_z);
@@ -325,7 +336,7 @@ namespace FML {
 #pragma omp parallel for reduction(max : max_x, max_y, max_z) reduction(min : min_x, min_y, min_z)
 #endif
             for (size_t i = 0; i < randoms_xyz.size(); i++) {
-                auto * Pos = randoms_xyz[i].get_pos();
+                auto * Pos = FML::PARTICLE::GetPos(randoms_xyz[i]);
                 max_x = std::max(Pos[0], max_x);
                 max_y = std::max(Pos[1], max_y);
                 max_z = std::max(Pos[2], max_z);
@@ -343,13 +354,13 @@ namespace FML {
 
             if (shiftPositions) {
                 for (auto & p : galaxies_xyz) {
-                    auto * Pos = p.get_pos();
+                    auto * Pos = FML::PARTICLE::GetPos(p);
                     Pos[0] += min_x;
                     Pos[1] += min_y;
                     Pos[2] += min_z;
                 }
                 for (auto & p : randoms_xyz) {
-                    auto * Pos = p.get_pos();
+                    auto * Pos = FML::PARTICLE::GetPos(p);
                     Pos[0] += min_x;
                     Pos[1] += min_y;
                     Pos[2] += min_z;
@@ -358,17 +369,21 @@ namespace FML {
 
             if (scalePositions) {
                 for (auto & p : galaxies_xyz) {
-                    auto * Pos = p.get_pos();
+                    auto * Pos = FML::PARTICLE::GetPos(p);
                     Pos[0] /= boxsize;
                     Pos[1] /= boxsize;
                     Pos[2] /= boxsize;
                 }
                 for (auto & p : randoms_xyz) {
-                    auto * Pos = p.get_pos();
+                    auto * Pos = FML::PARTICLE::GetPos(p);
                     Pos[0] /= boxsize;
                     Pos[1] /= boxsize;
                     Pos[2] /= boxsize;
                 }
+            }
+
+            if (verbose) {
+                std::cout << "Boxsize for boxing galaxies and randoms: " << boxsize << "\n";
             }
         }
     } // namespace SURVEY

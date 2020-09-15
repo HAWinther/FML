@@ -13,40 +13,13 @@
 
 template <int NDIM>
 struct Particle {
-    double x[NDIM], v[NDIM];
-
+    double x[NDIM];
     Particle() = default;
-
-    Particle(double * _x, double * _v = nullptr) {
+    Particle(double * _x) {
         std::memcpy(x, _x, NDIM * sizeof(double));
-        if (_v) {
-            std::memcpy(v, _v, NDIM * sizeof(double));
-        } else {
-            for (int idim = 0; idim < NDIM; idim++)
-                v[idim] = 0.0;
-        }
     }
-
     int get_ndim() { return NDIM; }
-
     double * get_pos() { return x; }
-
-    double * get_vel() { return v; }
-
-    double get_mass() { return 1.0; }
-
-    // For communication between tasks
-    int get_particle_byte_size() { return 2 * NDIM * sizeof(double); }
-    void append_to_buffer(char * data) {
-        std::memcpy(data, x, NDIM * sizeof(double));
-        data += NDIM * sizeof(double);
-        std::memcpy(data, v, NDIM * sizeof(double));
-    }
-    void assign_from_buffer(char * data) {
-        std::memcpy(x, data, NDIM * sizeof(double));
-        data += NDIM * sizeof(double);
-        std::memcpy(v, data, NDIM * sizeof(double));
-    }
 };
 
 int main() {
@@ -75,7 +48,7 @@ int main() {
             if (x >= 1.0)
                 x -= 1.0;
         }
-        part.push_back(Particle<NDIM>(pos.data(), nullptr));
+        part.push_back(Particle<NDIM>(pos.data()));
     }
 
     //==================================================================

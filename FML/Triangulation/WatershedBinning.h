@@ -1,8 +1,9 @@
 #ifndef WATERSHEDBINNING_HEADER
 #define WATERSHEDBINNING_HEADER
 
-#include <FML/Global/Global.h>
 #include <vector>
+#include <FML/Global/Global.h>
+#include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 
 namespace FML {
     namespace TRIANGULATION {
@@ -37,23 +38,32 @@ namespace FML {
             // Add data from a particle belonging to the group
             // We measure distances relative to the minimum point
             void add_particle(T * p, double quantity) {
+                double curmass = 1.0;
+                if constexpr(FML::PARTICLE::has_get_mass<T>()){
+                  curmass = FML::PARTICLE::GetMass(*p);
+                }
+                double curvolume = 1.0;
+                if constexpr(FML::PARTICLE::has_get_volume<T>()){
+                  curvolume = FML::PARTICLE::GetVolume(*p);
+                }
+
+                auto *pos = FML::PARTICLE::GetPos(*p);
                 for (int idim = 0; idim < NDIM; idim++) {
-                    double dx = p->get_pos()[idim] - pos_min[idim];
+                    double dx = pos[idim] - pos_min[idim];
                     if (dx > 0.5)
                         dx -= 1.0;
                     if (dx < -0.5)
                         dx += 1.0;
                     // pos_barycenter[idim] += dx;
-                    pos_barycenter[idim] += dx * p->get_volume();
+                    pos_barycenter[idim] += dx * curvolume;
                 }
-                double v = p->get_volume();
-                if (v < volume_min)
-                    volume_min = v;
-                double d = p->get_mass() / v;
+                if (curvolume < volume_min)
+                    volume_min = curvolume;
+                double d = curmass / curvolume;
                 if (d < density_min)
                     density_min = d;
-                volume += v;
-                mass += p->get_mass();
+                volume += curvolume;
+                mass += curmass;
                 mean_quantity += quantity;
                 ningroup++;
             }

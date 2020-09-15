@@ -22,24 +22,21 @@ class RamsesParticle {
 
     int get_ndim() { return NDIM; }
 
-    // These must be present, but don't need to store the data
+    // If any of these methods are not present then we will ignore it when
+    // reading the file. So if you only have say get_pos then we will only
+    // store the positions
     double * get_pos() { return x; }
     double * get_vel() { return v; }
     double get_mass() { return mass; };
     void set_mass(double m) { mass = m; };
     int get_id() { return id; };
     void set_id(int i) { id = i; };
-    int get_level() { return 0; };
-    void set_level(int l) { (void)l; };
-    char get_family() { return 1; };
-    void set_family(char f) { (void)f; };
-    char get_tag() { return 0;; };
-    void set_tag(char t) { (void)t; };
-
-    // For communication of particless
-    int get_particle_byte_size() { return sizeof(*this); }
-    void append_to_buffer(char * buffer) { std::memcpy(buffer, *this, sizeof(*this)); }
-    void assign_from_buffer(char * buffer) { std::memcpy(*this, buffer, sizeof(*this)); }
+    //int get_level() { return 0; };
+    //void set_level(int l) { (void)l; };
+    //char get_family() { return 1; };
+    //void set_family(char f) { (void)f; };
+    //char get_tag() { return 0;; };
+    //void set_tag(char t) { (void)t; };
 };
 
 //====================================================
@@ -65,8 +62,7 @@ int main() {
     // if the format is different one can set it here and we can also set if we want
     // to store the resulting data or not
     std::vector<std::string> fileformat{"POS", "VEL", "MASS", "ID"};
-    std::vector<bool> store_it_or_not  {true,  true,  true,   true};
-    reader.set_file_format(fileformat, store_it_or_not);
+    reader.set_file_format(fileformat);
 
     // Read all particles and store it in p
     std::vector<Particle> part;

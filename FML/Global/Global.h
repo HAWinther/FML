@@ -21,6 +21,7 @@
 #include <cmath>
 #include <complex>
 #include <cstring>
+#include <iostream>
 #include <vector>
 
 #ifdef USE_MPI
@@ -86,52 +87,67 @@ namespace FML {
     // Assumes MPI has been initialized
     //================================================
     void init_fml();
-    
+
     std::pair<double, double> get_system_memory_use();
 
     template <class T>
-    void MaxOverTasks([[maybe_unused]] T * value) {
-#ifdef USE_MPI
+    std::vector<T> GatherFromAllTasks(T * value) {
         std::vector<T> values(FML::NTasks);
+#ifdef USE_MPI
         MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, MPI_COMM_WORLD);
+#else
+        values[0] = *value;
+#endif
+        return values;
+    }
+    template <class T>
+    void MaxOverTasks([[maybe_unused]] T * value) {
+        if (FML::NTasks == 1)
+            return;
+        std::vector<T> values = GatherFromAllTasks(value);
         T maxvalue = *value;
         for (auto v : values)
             if (maxvalue < v)
                 maxvalue = v;
         *value = maxvalue;
-#endif
     }
     template <class T>
     void MinOverTasks([[maybe_unused]] T * value) {
-#ifdef USE_MPI
-        std::vector<T> values(FML::NTasks);
-        MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, MPI_COMM_WORLD);
+        if (FML::NTasks == 1)
+            return;
+        std::vector<T> values = GatherFromAllTasks(value);
         T minvalue = *value;
         for (auto v : values)
             if (minvalue > v)
                 minvalue = v;
         *value = minvalue;
-#endif
     }
     template <class T>
     void SumOverTasks([[maybe_unused]] T * value) {
-#ifdef USE_MPI
-        std::vector<T> values(FML::NTasks, 0);
-        MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, MPI_COMM_WORLD);
+        if (FML::NTasks == 1)
+            return;
+        std::vector<T> values = GatherFromAllTasks(value);
         T sum = 0;
         for (auto v : values) {
             sum += v;
         }
         *value = sum;
-#endif
     }
 
-    //================================================
-    // Assert function that calls MPI_Abort if assertion
-    // fails, but gives info about where the assertion
-    // is thrown from
-    //================================================
-    void __assert_mpi(const char * expr_str, bool expr, const char * file, int line, const char * msg);
+    //============================================
+    //// An assert function that calls MPI_Abort
+    //// instead of just abort to avoid deadlock
+    //============================================
+    constexpr void __assert_mpi(const char * expr_str, bool expr, const char * file, int line, const char * msg) {
+        if (!expr) {
+            std::cout << "[assert_mpi] Assertion failed: [" << expr_str << "], File: [" << file << "], Line: [" << line
+                      << "], Message: [" << msg << "]" << std::endl;
+#ifdef USE_MPI
+            MPI_Abort(MPI_COMM_WORLD, 1);
+#endif
+            abort();
+        }
+    }
 #define assert_mpi(Expr, Msg) __assert_mpi(#Expr, Expr, __FILE__, __LINE__, Msg)
 
     //============================================
@@ -284,7 +300,6 @@ namespace FML {
         }
 
       private:
-
         FMLSetup(int * argc, char *** argv) {
             // Initialize MPI
             [[maybe_unused]] MPISetup & m = MPISetup::init(argc, argv);

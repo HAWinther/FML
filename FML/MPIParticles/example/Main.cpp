@@ -2,43 +2,13 @@
 #include <FML/MPIParticles/MPIParticles.h>
 
 //==================================================
-// An example particle class
+// A minimal particle class
 //==================================================
 const int NDIM = 2;
 struct Particle {
     double Pos[NDIM];
-    double Vel[NDIM];
-
-    int get_particle_byte_size() { return 2 * sizeof(double) * NDIM; }
-
     int get_ndim() { return NDIM; }
-
     double * get_pos() { return Pos; }
-
-    double * get_vel() { return Pos; }
-
-    // Methods needed for commmunication of particle
-    void append_to_buffer(char * buffer) {
-        // Print what we append just to see what is happening
-        std::cout << "Sending x = " << Pos[0] << " from task " << FML::ThisTask << "\n";
-        int bytes = sizeof(double) * NDIM;
-        std::memcpy(buffer, Pos, bytes);
-        buffer += bytes;
-
-        bytes = sizeof(double) * NDIM;
-        std::memcpy(buffer, Vel, bytes);
-    }
-
-    void assign_from_buffer(char * buffer) {
-        int bytes = sizeof(double) * NDIM;
-        std::memcpy(Pos, buffer, bytes);
-        buffer += bytes;
-
-        bytes = sizeof(double) * NDIM;
-        std::memcpy(Vel, buffer, bytes);
-        // Print what we assign just to see what is happening
-        std::cout << "Recieving x = " << Pos[0] << " at task " << FML::ThisTask << "\n";
-    }
 };
 
 int main() {
@@ -53,11 +23,16 @@ int main() {
     part.create_particle_grid(Npart_1D, buffer_factor, FML::xmin_domain, FML::xmax_domain);
 
     //==================================================
-    // Print particles
+    // Print particles on task 0
     //==================================================
     if (FML::ThisTask == 0)
-        for (auto & p : part)
-            std::cout << "Task " << FML::ThisTask << " has " << p.get_pos()[0] << " " << p.get_pos()[1] << "\n";
+        for (auto && p : part) {
+            auto pos = FML::PARTICLE::GetPos(p);
+            std::cout << "Task " << FML::ThisTask << " has x = " << pos[0] << " y = " << pos[1] << "\n";
+        }
+
+    // Show info
+    part.info();
 
     //==================================================
     // Alternative ways of looping through all active particles
@@ -70,10 +45,11 @@ int main() {
     //==================================================
     // Change x for some of the particles to trigger communication needs below
     //==================================================
-    auto & p = part.get_particles();
+    auto & pptr = part.get_particles();
     int i = 0;
     while (i < 5) {
-        p[i++].Pos[0] = FML::uniform_random();
+        auto pos = FML::PARTICLE::GetPos(pptr[i++]);
+        pos[0] = FML::uniform_random();
     }
 
     //==================================================
@@ -91,36 +67,38 @@ int main() {
         std::cout << "Communicating particles...\n";
     part.communicate_particles();
 
+    // Show info
+    part.info();
+
     //==================================================
     // Mix it up again
     //==================================================
+    pptr = part.get_particles();
     i = 0;
     while (i < 5) {
-        p[i++].Pos[0] = FML::uniform_random();
+        auto pos = FML::PARTICLE::GetPos(pptr[i++]);
+        pos[0] = FML::uniform_random();
     }
 
     //==================================================
     // Make MPI particles from already existing particles
     //==================================================
-    FML::PARTICLE::MPIParticles<Particle> q;
+    FML::PARTICLE::MPIParticles<Particle> part2;
     const bool all_tasks_have_the_same_particles = false;
     auto nallocate_local = part.get_npart() * 2;
-    q.create(part.get_particles_ptr(),
-             part.get_npart(),
-             nallocate_local,
-             FML::xmin_domain,
-             FML::xmax_domain,
-             all_tasks_have_the_same_particles);
-
-    // Show info about the particles
-    q.info();
+    part2.create(part.get_particles_ptr(),
+                 part.get_npart(),
+                 nallocate_local,
+                 FML::xmin_domain,
+                 FML::xmax_domain,
+                 all_tasks_have_the_same_particles);
 
     //==================================================
     // Print the particles we have
     //==================================================
     if (FML::ThisTask == 0)
-        for (auto && ps : q) {
-            auto pos = ps.get_pos();
-            std::cout << "Task " << FML::ThisTask << " has " << pos[0] << " " << pos[1] << "\n";
+        for (auto && p : part2) {
+            auto pos = FML::PARTICLE::GetPos(p);
+            std::cout << "Task " << FML::ThisTask << " has x = " << pos[0] << " y = " << pos[1] << "\n";
         }
 }

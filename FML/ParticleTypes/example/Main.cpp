@@ -1,81 +1,71 @@
-#include "../GeneralParticle.h"
+#include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <iostream>
 #include <random>
 
-// General particle
-const constexpr bool HasPOS = true;
-const constexpr bool HasVEL = true;
-const constexpr bool HasID = true;
-const constexpr bool HasMASS = true;
-const constexpr bool HasVOL = true;
-const constexpr int NDIM = 3;
-using PositionType = double;
-using VelocityType = double;
-using MassType = double;
-using VolType = double;
-using IDType = long long int;
-using Particle = GeneralParticle<NDIM,
-                                 PositionType,
-                                 HasPOS,
-                                 VelocityType,
-                                 HasVEL,
-                                 IDType,
-                                 HasID,
-                                 MassType,
-                                 HasMASS,
-                                 VolType,
-                                 HasVOL>;
+template <int NDIM>
+class TestParticle {
+    double pos[NDIM];
+    double vel[NDIM];
+    size_t id = 10;
+   
+    //double mass = 2.0;
+
+  public:
+    
+    constexpr int get_ndim() { return NDIM; }
+    double * get_pos() { return pos; }
+    double * get_vel() { return vel; }
+    size_t get_id() { return id; }
+    void set_id(size_t _id) { id = _id; }
+
+    // If the mass is not set here then the fiducial value 1 is used by algorithms
+    //double get_mass() { return mass; }
+    //void set_mass(double _mass) { mass = _mass; }
+};
 
 int main() {
+    using Particle = TestParticle<3>;
+
     Particle p;
 
-    std::mt19937 generator;
-    auto udist = std::uniform_real_distribution<double>(0.0, 1.0);
+    // Show info about the particle
+    FML::PARTICLE::info<Particle>();
 
-    PositionType pos[NDIM];
-    for (int idim = 0; idim < NDIM; idim++)
-        pos[idim] = udist(generator);
-    VelocityType vel[NDIM];
-    for (int idim = 0; idim < NDIM; idim++)
-        vel[idim] = 10.0 + udist(generator);
-    IDType id = 538;
-    MassType mass = 752.0;
-    VolType vol = 123.0;
+    std::cout << "The dimension of the particle is: " << FML::PARTICLE::GetNDIM(p) << "\n";
+    std::cout << "The size of the particle is: " << FML::PARTICLE::GetSize(p) << " bytes\n";
 
-    p.set_pos(pos);
-    p.set_vel(vel);
-    p.set_id(id);
-    p.set_mass(mass);
-    p.set_vol(vol);
-
-    std::cout << std::boolalpha;
-    std::cout << " Bytesize: " << p.get_particle_byte_size() << "\n";
-
-    std::cout << " Has pos:  " << p.has_pos() << "\n";
-    auto * ppos = p.get_pos();
-    if (ppos) {
-        for (int idim = 0; idim < NDIM; idim++)
-            std::cout << ppos[idim] << " ";
-        std::cout << std::endl;
+    // Check if we have get_pos in the class
+    if constexpr (FML::PARTICLE::has_get_pos<Particle>()) {
+        auto pos = FML::PARTICLE::GetPos(p);
+        std::cout << "Particle class has position x = " << pos[0] << "\n";
+    } else {
+        std::cout << "Particle class do not have position\n";
     }
 
-    std::cout << " Has vel:  " << p.has_vel() << "\n";
-    auto * pvel = p.get_vel();
-    if (pvel) {
-        for (int idim = 0; idim < NDIM; idim++)
-            std::cout << pvel[idim] << " ";
-        std::cout << std::endl;
+    // Check if we have get_vel in the class
+    if constexpr (FML::PARTICLE::has_get_vel<Particle>()) {
+        auto vel = FML::PARTICLE::GetVel(p);
+        std::cout << "Particle class has velocity vx = " << vel[0] << "\n";
+    } else {
+        std::cout << "Particle class do not have velocity\n";
     }
 
-    std::cout << " Has ID:   " << p.has_id() << "\n";
-    auto pid = p.get_id();
-    std::cout << pid << std::endl;
+    // Check if we have set_id and get_id in the class
+    if constexpr (FML::PARTICLE::has_get_id<Particle>() and FML::PARTICLE::has_set_id<Particle>()) {
+        auto id = FML::PARTICLE::GetID(p);
+        std::cout << "Particle class has id = " << id << "\n";
+    } else {
+        std::cout << "Particle class do not have position\n";
+    }
 
-    std::cout << " Has mass: " << p.has_mass() << "\n";
-    auto pmass = p.get_mass();
-    std::cout << pmass << std::endl;
+    // Check if we have set_mass and get_mass in the class
+    if constexpr (FML::PARTICLE::has_get_mass<Particle>() and FML::PARTICLE::has_set_mass<Particle>()) {
+        std::cout << "Particle class has mass\n";
+    } else {
+        std::cout << "Particle class do not have mass\n";
+    }
 
-    std::cout << " Has vol: " << p.has_vol() << "\n";
-    auto pvol = p.get_vol();
-    std::cout << pvol << std::endl;
+    //... but GetMass exist even if we don't define it (fiducial value = 1.0)
+    auto mass = FML::PARTICLE::GetMass(p);
+    std::cout << "Mass of particle: " << mass << "\n";
 }

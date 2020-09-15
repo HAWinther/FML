@@ -18,7 +18,7 @@ USE_MPI          = false
 # Use OpenMP threads
 USE_OMP          = false
 # Use the FFTW library
-USE_FFTW         = false
+USE_FFTW         = true
 # Use threads in FFTW
 USE_FFTW_THREADS = false
 # Use the GSL library (Spline, ODESolver)

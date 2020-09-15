@@ -19,6 +19,7 @@
 // The particles are binned to a grid and we do the correlation
 // by going over cells x cells
 //==============================================================
+#include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/ParticlesInBoxes/ParticlesInBoxes.h>
 
 //===========================================================================
@@ -246,7 +247,7 @@ namespace FML {
 
             // Fetch the number of dimensions we are working in
             T ptemp;
-            const int ndim = ptemp.get_ndim();
+            const int ndim = FML::PARTICLE::GetNDIM(ptemp);
 
             // Compute pair counts
             auto paircountdata = AutoPairCount(particles, nbins, rmax, true, verbose);
@@ -279,6 +280,7 @@ namespace FML {
                                        std::vector<T> & randoms_xyz,
                                        int nbins,
                                        double rmax,
+                                       double boxsize,
                                        bool verbose) {
 
             const bool periodic = false;
@@ -308,11 +310,14 @@ namespace FML {
 
             // Correlation function
             auto xi = AutoCorrelationEstimator(DD.data(), DR.data(), RR.data(), nbins, estimator);
-            ;
-            for (int j = 0; j < nbins; j++) {
-                std::cout << std::setw(10) << r[j] << " " << std::setw(10) << xi[j] << " " << std::setw(10)
-                          << DD[j] * norm_DD << " " << std::setw(10) << DR[j] * norm_DR << " " << std::setw(10)
-                          << RR[j] * norm_RR << "\n";
+
+            if (FML::ThisTask == 0) {
+                std::cout << "#r       xi_LZ(r)      DD       DR       RR\n";
+                for (int j = 0; j < nbins; j++) {
+                    std::cout << std::setw(10) << r[j] * boxsize << " " << std::setw(10) << xi[j] << " "
+                              << std::setw(10) << DD[j] * norm_DD << " " << std::setw(10) << DR[j] * norm_DR << " "
+                              << std::setw(10) << RR[j] * norm_RR << "\n";
+                }
             }
 
             // Comparison of other estimators
@@ -321,9 +326,13 @@ namespace FML {
             auto HEW = AutoCorrelationEstimator(DD.data(), DR.data(), RR.data(), nbins, "HEW");
             auto PH = AutoCorrelationEstimator(DD.data(), DR.data(), RR.data(), nbins, "PH");
             auto HAM = AutoCorrelationEstimator(DD.data(), DR.data(), RR.data(), nbins, "HAM");
-            for (int j = 0; j < nbins; j++) {
-                std::cout << r[j] << " " << LZ[j] << " " << DP[j] << " " << HEW[j] << " " << PH[j] << " " << HAM[j]
-                          << "\n";
+
+            if (FML::ThisTask == 0) {
+                std::cout << "#r       xi_LZ      xi_DP      xi_HEW       xi_PH      xi_HAM\n";
+                for (int j = 0; j < nbins; j++) {
+                    std::cout << r[j] * boxsize << " " << LZ[j] << " " << DP[j] << " " << HEW[j] << " " << PH[j] << " "
+                              << HAM[j] << "\n";
+                }
             }
         }
 
@@ -336,6 +345,7 @@ namespace FML {
                                             std::vector<T> & randoms2_xyz,
                                             int nbins,
                                             double rmax,
+                                            double boxsize,
                                             bool verbose) {
 
             const double periodic = false;
@@ -371,8 +381,11 @@ namespace FML {
 
             // Correlation function
             auto xi = CrossCorrelationEstimator(D1D2, D1R2, R1D2, R1R2, nbins, estimator);
-            for (int j = 0; j < nbins; j++) {
-                std::cout << r[j] << " " << xi[j] << "\n";
+            if (FML::ThisTask == 0) {
+                std::cout << "#r       xi(r)\n";
+                for (int j = 0; j < nbins; j++) {
+                    std::cout << r[j] * boxsize << " " << xi[j] << "\n";
+                }
             }
 
             // Comparison of other estimators
@@ -380,8 +393,12 @@ namespace FML {
             auto HAM = CrossCorrelationEstimator(D1D2, D1R2, R1D2, R1R2, nbins, "HAM");
             auto DP1 = CrossCorrelationEstimator(D1D2, D1R2, R1D2, R1R2, nbins, "DP_NO_R1");
             auto DP2 = CrossCorrelationEstimator(D1D2, D1R2, R1D2, R1R2, nbins, "DP_NO_R2");
-            for (int j = 0; j < nbins; j++) {
-                std::cout << r[j] << " " << LZ[j] << " " << DP1[j] << " " << DP2[j] << " " << HAM[j] << "\n";
+            if (FML::ThisTask == 0) {
+                std::cout << "#r       xi_LZ       xi_DP     xi_DP    xi_HAM\n";
+                for (int j = 0; j < nbins; j++) {
+                    std::cout << r[j] * boxsize << " " << LZ[j] << " " << DP1[j] << " " << DP2[j] << " " << HAM[j]
+                              << "\n";
+                }
             }
         }
 
@@ -413,8 +430,8 @@ namespace FML {
 
             // Only works for ndim <= 3
             T ptemp;
-            const int ndim = ptemp.get_ndim();
-            assert(ptemp.get_ndim() <= 3);
+            const int ndim = FML::PARTICLE::GetNDIM(ptemp);
+            assert(ndim <= 3);
 
             // Fetch data from grid
             auto & cells = grid.get_cells();
@@ -630,8 +647,8 @@ namespace FML {
                                             // ==================================================================
 
                                             // The distance between the two galaxies
-                                            auto pos = curpart_cell.get_pos();
-                                            auto pos_nbor = curpart_neighbor_cell.get_pos();
+                                            auto pos = FML::PARTICLE::GetPos(curpart_cell);
+                                            auto pos_nbor = FML::PARTICLE::GetPos(curpart_neighbor_cell);
                                             double dist[ndim];
                                             if (periodic) {
                                                 for (int idim = 0; idim < ndim; idim++) {
@@ -707,8 +724,8 @@ namespace FML {
             // Fetch ndim
             T ptemp;
             U utemp;
-            const int ndim = ptemp.get_ndim();
-            assert(ndim == utemp.get_ndim());
+            const int ndim = FML::PARTICLE::GetNDIM(ptemp);
+            assert(ndim == FML::PARTICLE::GetNDIM(utemp));
 
             // Fetch data from the grid
             auto & cells = grid.get_cells();
@@ -935,8 +952,8 @@ namespace FML {
                                             // ==================================================================
                                             // We now count up the pair [curpart_cell] x [curpart_neighbor_cell]
                                             // ==================================================================
-                                            auto pos = curpart_cell.get_pos();
-                                            auto pos_nbor = curpart_neighbor_cell.get_pos();
+                                            auto pos = FML::PARTICLE::GetPos(curpart_cell);
+                                            auto pos_nbor = FML::PARTICLE::GetPos(curpart_neighbor_cell);
                                             double dist[ndim];
                                             if (periodic) {
                                                 for (int idim = 0; idim < ndim; idim++) {
@@ -988,7 +1005,7 @@ namespace FML {
 
             // Fetch how many dimensions we are working in
             T ptemp;
-            const int ndim = ptemp.get_ndim();
+            const int ndim = FML::PARTICLE::GetNDIM(ptemp);
 
             // Get number of threads
             int nthreads = 1;
@@ -1008,8 +1025,12 @@ namespace FML {
             // Define the binning function
             //========================================
             std::function<void(int, double *, T &, T &)> binning = [&](int thread_id, double * dist, T & p1, T & p2) {
-                const double weight1 = p1.get_weight();
-                const double weight2 = p2.get_weight();
+                double weight1 = 1.0;
+                double weight2 = 1.0;
+                if constexpr (FML::PARTICLE::has_get_weight<T>()) {
+                    weight1 = FML::PARTICLE::GetWeight(p1);
+                    weight2 = FML::PARTICLE::GetWeight(p2);
+                }
 
                 // Compute squared distance between pairs
                 double dist2 = dist[0] * dist[0];
@@ -1064,7 +1085,9 @@ namespace FML {
             auto & cells = grid.get_cells();
             for (auto & cell : cells) {
                 for (auto & p : cell.get_part()) {
-                    double w = p.get_weight();
+                    double w = 1.0;
+                    if constexpr (FML::PARTICLE::has_get_weight<T>())
+                        w = FML::PARTICLE::GetWeight(p);
                     sum_weights += w;
                     sum_weights_squared += w * w;
                 }
@@ -1119,7 +1142,7 @@ namespace FML {
 
             // Fetch how many dimensions we are working in
             T ptemp;
-            const int ndim = ptemp.get_ndim();
+            const int ndim = FML::PARTICLE::GetNDIM(ptemp);
 
             // Get number of threads
             int nthreads = 1;
@@ -1139,8 +1162,12 @@ namespace FML {
             // Define the binning function
             //========================================
             std::function<void(int, double *, T &, U &)> binning = [&](int thread_id, double * dist, T & p1, U & p2) {
-                const double weight1 = p1.get_weight();
-                const double weight2 = p2.get_weight();
+                double weight1 = 1.0;
+                double weight2 = 1.0;
+                if constexpr (FML::PARTICLE::has_get_weight<T>()) {
+                    weight1 = FML::PARTICLE::GetWeight(p1);
+                    weight2 = FML::PARTICLE::GetWeight(p2);
+                }
 
                 // Compute squared distance between pairs
                 double dist2 = dist[0] * dist[0];
@@ -1198,7 +1225,9 @@ namespace FML {
             auto & cells1 = grid1.get_cells();
             for (auto & cell : cells1) {
                 for (auto & p : cell.get_part()) {
-                    double w = p.get_weight();
+                    double w = 1.0;
+                    if constexpr (FML::PARTICLE::has_get_weight<T>())
+                        w = FML::PARTICLE::GetWeight(p);
                     sum_weights += w;
                     sum_weights_squared += w * w;
                 }
@@ -1208,7 +1237,9 @@ namespace FML {
             auto & cells2 = grid2.get_cells();
             for (auto & cell : cells2) {
                 for (auto & p : cell.get_part()) {
-                    double w = p.get_weight();
+                    double w = 1.0;
+                    if constexpr (FML::PARTICLE::has_get_weight<T>())
+                        w = FML::PARTICLE::GetWeight(p);
                     sum2_weights += w;
                     sum2_weights_squared += w * w;
                 }

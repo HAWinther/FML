@@ -7,28 +7,12 @@
 const int NDIM = CGAL_NDIM;
 struct Particle {
     double Pos[NDIM];
-    double volume;
-
-    double * get_pos() { return Pos; }
-    double get_mass() { return 1.0; }
-    double get_volume() { return volume; }
+    double volume{0.0};
+    Particle() = default;
     int get_ndim() { return NDIM; }
+    double get_volume() { return volume; }
     void set_volume(double _volume) { volume = _volume; }
-
-    // Methods needed for commmunication of particle
-    int get_particle_byte_size() { return sizeof(double) * NDIM + sizeof(volume); }
-    void append_to_buffer(char * buffer) {
-        int bytes = sizeof(Pos[0]) * NDIM;
-        memcpy(buffer, Pos, bytes);
-        buffer += bytes;
-        memcpy(buffer, &volume, sizeof(volume));
-    }
-    void assign_from_buffer(char * buffer) {
-        int bytes = sizeof(Pos[0]) * NDIM;
-        memcpy(Pos, buffer, bytes);
-        buffer += bytes;
-        memcpy(&volume, buffer, sizeof(volume));
-    }
+    double * get_pos() { return Pos; }
 };
 
 int main() {
@@ -51,6 +35,9 @@ int main() {
         pos[0] /= boxsize;
         pos[1] /= boxsize;
         pos[2] /= boxsize;
+        assert(pos[0] < 1.0 and pos[0] >= 0.0);
+        assert(pos[1] < 1.0 and pos[1] >= 0.0);
+        assert(pos[2] < 1.0 and pos[2] >= 0.0);
     }
     fp.close();
     part.create(partvec.data(), partvec.size(), partvec.size(), FML::xmin_domain, FML::xmax_domain, true);
@@ -67,8 +54,8 @@ int main() {
     // the particles to their density minima)
     //=======================================================================================
 
-    const double random_fraction = 0.5;
-    const double buffer_fraction = 0.75;
+    const double random_fraction = 0.33;
+    const double buffer_fraction = 0.33;
     using WatershedBasin = FML::TRIANGULATION::WatershedBasin<Particle, NDIM>;
     std::vector<WatershedBasin> watershed_groups;
     FML::TRIANGULATION::WatershedDensity(

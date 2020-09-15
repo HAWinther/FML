@@ -13,7 +13,7 @@ namespace FML {
 
     // Initialize FML, set the few globals we have and init MPI
     // and FFTW. If no auto setup you must init MPI and FFTW
-    // yourself and then call init_mpi
+    // yourself and then call init_fml
 #ifndef NO_AUTO_FML_SETUP
     FMLSetup & fmlsetup = FMLSetup::init();
 #endif
@@ -195,21 +195,6 @@ namespace FML {
     }
 
     //============================================
-    //// An assert function that calls MPI_Abort
-    //// instead of just abort to avoid deadlock
-    //============================================
-    void __assert_mpi(const char * expr_str, bool expr, const char * file, int line, const char * msg) {
-        if (!expr) {
-            std::cout << "[assert_mpi] Assertion failed: [" << expr_str << "], File: [" << file << "], Line: [" << line
-                      << "], Message: [" << msg << "]\n";
-#ifdef USE_MPI
-            MPI_Abort(MPI_COMM_WORLD, 1);
-#endif
-            abort();
-        }
-    }
-
-    //============================================
     /// Fetch virtual memory and resident set 
     /// from /proc/self/stat on a linux system.
     /// On other systems it just returns (0,0)
@@ -242,8 +227,7 @@ namespace FML {
     namespace GRID {
 
         void init_fftw([[maybe_unused]] int * argc, [[maybe_unused]] char *** argv) {
-#ifdef USE_FFTW
-#ifdef USE_FFTW_THREADS
+#if defined(USE_FFTW) && defined(USE_FFTW_THREADS)
             if (FML::MPIThreadsOK) {
                 FML::FFTWThreadsOK = INIT_FFTW_THREADS();
                 if (FML::FFTWThreadsOK) {
@@ -251,27 +235,22 @@ namespace FML {
                 }
             }
 #endif
-#ifdef USE_MPI
+#if defined(USE_FFTW) && defined(USE_MPI)
             INIT_FFTW_MPI();
-#endif
 #endif
         }
 
         void finalize_fftw() {
-#ifdef USE_FFTW
-#ifdef USE_MPI
+#if defined(USE_FFTW) && defined(USE_MPI)
             CLEANUP_FFTW_MPI();
             MPI_Finalize();
-#endif
 #endif
         }
 
         void set_fftw_nthreads([[maybe_unused]] int nthreads) {
-#ifdef USE_FFTW
-#ifdef USE_FFTW_THREADS
+#if defined(USE_FFTW) && defined(USE_FFTW_THREADS)
             if (FML::FFTWThreadsOK)
                 SET_FFTW_NTHREADS(nthreads);
-#endif
 #endif
         }
     } // namespace GRID

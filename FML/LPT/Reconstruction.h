@@ -72,6 +72,9 @@ namespace FML {
                                                 std::pair<std::string, double> smoothing_options,
                                                 bool survey_data) {
 
+                static_assert(FML::PARTICLE::has_get_pos<T>(),
+                              "[RSDReconstructionFourierMethod] Particle must have a get_pos method");
+
                 // Use N-linear interpolation
                 const std::string interpolation_method = "CIC";
 
@@ -101,8 +104,11 @@ namespace FML {
 
                     // This is the density field for the observed galaxies
                     // i.e. with RSD in it
-                    FFTWGrid<N> density(Nmesh, 1, 1);
+                    auto nleftright =
+                        FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(density_assignment_method);
+                    FFTWGrid<N> density(Nmesh, nleftright.first, nleftright.second);
                     density.add_memory_label("FFTWGrid::RSDReconstructionFourierMethod::density");
+                    density.set_grid_status_real(true);
                     FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
                                                           part.get_npart(),
                                                           part.get_npart_total(),
@@ -149,8 +155,11 @@ namespace FML {
                     std::array<double, N> Psi_max;
                     Psi_max.fill(0.0);
                     auto * p = part.get_particles_ptr();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
                     for (size_t i = 0; i < NumPart; i++) {
-                        auto * pos = p->get_pos();
+                        auto * pos = FML::PARTICLE::GetPos(p[i]);
 
                         std::array<FloatType, N> r;
                         if (survey_data) {
@@ -177,6 +186,9 @@ namespace FML {
                         for (int idim = 0; idim < N; idim++) {
                             Psi_rsd[idim] = Psidotr * los_direction[idim] / (1.0 + beta);
 
+#ifdef USE_OMP
+#pragma omp critical
+#endif
                             // Maximum shift
                             if (std::abs(Psi_rsd[idim]) > Psi_max[idim])
                                 Psi_max[idim] = std::abs(Psi_rsd[idim]);
@@ -203,6 +215,8 @@ namespace FML {
                     part.communicate_particles();
 
                     // Show maximum shift
+                    for (int idim = 0; idim < N; idim++)
+                      FML::MaxOverTasks(&Psi_max[idim]);
                     if (FML::ThisTask == 0) {
                         std::cout << "Maximum shift: ";
                         for (int idim = 0; idim < N; idim++)
@@ -228,10 +242,13 @@ namespace FML {
 
             // Fetch how many dimensjons we are working in
             T tmp;
-            const int N = tmp.get_ndim();
+            const int N = FML::PARTICLE::GetNDIM(tmp);
 
             // Check that velocities really exists (i.e. get_vel is not just set to return a nullptr)
-            // assert(tmp.get_vel() != nullptr);
+            static_assert(FML::PARTICLE::has_get_pos<T>(),
+                       "[particles_to_redshiftspace] Partices must have positions to use this method");
+            static_assert(FML::PARTICLE::has_get_vel<T>(),
+                       "[particles_to_redshiftspace] Partices must have velocity to use this method");
 
             // Periodic box? Yes, this is only meant to be used with simulation boxes
             const bool periodic_box = true;
@@ -253,8 +270,8 @@ namespace FML {
 #pragma omp parallel for
 #endif
             for (size_t i = 0; i < NumPart; i++) {
-                auto * pos = p[i].get_pos();
-                auto * vel = p[i].get_vel();
+                auto * pos = FML::PARTICLE::GetPos(p[i]);
+                auto * vel = FML::PARTICLE::GetVel(p[i]);
                 double vdotr = 0.0;
                 for (int idim = 0; idim < N; idim++) {
                     vdotr += vel[idim] * line_of_sight_direction[idim];

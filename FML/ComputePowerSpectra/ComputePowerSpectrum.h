@@ -284,13 +284,14 @@ namespace FML {
 
             int Nmesh = fourier_grid.get_nmesh();
             auto Local_nx = fourier_grid.get_local_nx();
+            auto Local_x_start = fourier_grid.get_local_x_start();
 
             // Norm of LOS vector
-            double rnorm = 0.0;
+            double rmag = 0.0;
             for (int idim = 0; idim < N; idim++)
-                rnorm += line_of_sight_direction[idim] * line_of_sight_direction[idim];
-            rnorm = std::sqrt(rnorm);
-            assert_mpi(rnorm > 0.0, "[compute_power_spectrum_multipoles] Line of sight vector has zero length\n");
+                rmag += line_of_sight_direction[idim] * line_of_sight_direction[idim];
+            rmag = std::sqrt(rmag);
+            assert_mpi(rmag > 0.0, "[compute_power_spectrum_multipoles] Line of sight vector has zero length\n");
 
             // Initialize binning just in case
             for (size_t ell = 0; ell < Pell.size(); ell++)
@@ -304,9 +305,12 @@ namespace FML {
                 [[maybe_unused]] double kmag;
                 [[maybe_unused]] std::array<double, N> kvec;
                 for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                    if (Local_x_start == 0 and fourier_index == 0)
+                        continue; // DC mode( k=0)
+
                     // Special treatment of k = 0 plane
                     int last_coord = fourier_index % (Nmesh / 2 + 1);
-                    double weight = last_coord > 0 && last_coord < Nmesh / 2 ? 2.0 : 1.0;
+                    double weight = last_coord > 0 and last_coord < Nmesh / 2 ? 2.0 : 1.0;
 
                     // Compute kvec, |kvec| and |delta|^2
                     fourier_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
@@ -314,17 +318,17 @@ namespace FML {
                     double power = std::norm(delta);
 
                     // Compute mu = k_vec*r_vec
-                    double mu = 0.0;
+                    double mu2 = 0.0;
                     for (int idim = 0; idim < N; idim++)
-                        mu += kvec[idim] * line_of_sight_direction[idim];
-                    mu /= (kmag * rnorm);
+                        mu2 += kvec[idim] * line_of_sight_direction[idim];
+                    mu2 /= (kmag * rmag);
+                    mu2 = mu2 * mu2;
 
                     // Add to bin |delta|^2, |delta|^2mu^2, |delta^2|mu^4, ...
-                    double mutoell = 1.0;
-                    for (size_t ell = 0; ell < Pell.size(); ell++) {
-                        Pell[ell].add_to_bin(kmag, power * mutoell, weight);
-                        mutoell *= mu;
-                        // Pell[ell].add_to_bin(kmag, power * std::pow(mu, ell), weight);
+                    double mutotwoell = 1.0;
+                    for (size_t ell = 0; ell < Pell.size(); ell += 2) {
+                        Pell[ell].add_to_bin(kmag, power * mutotwoell, weight);
+                        mutotwoell *= mu2;
                     }
                 }
             }
@@ -356,14 +360,14 @@ namespace FML {
                 return sign * binomial(ell, k) * binomial(2 * ell - 2 * k, ell) / std::pow(2.0, ell);
             };
 
-            // Go from <mu^k |delta|^2> to <L_ell(mu) |delta|^2>
+            // Go from <mu^k |delta|^2> to (2ell+1) <L_ell(mu) |delta|^2>
             std::vector<std::vector<double>> temp;
             for (size_t ell = 0; ell < Pell.size(); ell++) {
                 std::vector<double> sum(Pell[0].pofk.size(), 0.0);
                 for (size_t k = 0; k <= ell / 2; k++) {
-                    std::vector<double> mu_power = Pell[ell - 2 * k].pofk;
+                    std::vector<double> & mu_power = Pell[ell - 2 * k].pofk;
                     for (size_t i = 0; i < sum.size(); i++)
-                        sum[i] += mu_power[i] * summand_legendre_polynomial(k, ell);
+                        sum[i] += mu_power[i] * summand_legendre_polynomial(k, ell) * (2 * ell + 1);
                 }
                 temp.push_back(sum);
             }
@@ -384,6 +388,7 @@ namespace FML {
 
             int Nmesh = fourier_grid.get_nmesh();
             auto Local_nx = fourier_grid.get_local_nx();
+            auto Local_x_start = fourier_grid.get_local_x_start();
 
             // Initialize binning just in case
             pofk.reset();
@@ -396,6 +401,9 @@ namespace FML {
                 [[maybe_unused]] double kmag;
                 [[maybe_unused]] std::array<double, N> kvec;
                 for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                    if (Local_x_start == 0 and fourier_index == 0)
+                        continue; // DC mode( k=0)
+
                     // Special treatment of k = 0 plane (Safer way: fetch coord)
                     // auto coord = fourier_grid.get_fourier_coord_from_index(fourier_index);
                     // int last_coord = coord[N-1];
@@ -421,6 +429,10 @@ namespace FML {
         void
         compute_power_spectrum_direct_summation(int Ngrid, T * part, size_t NumPart, PowerSpectrumBinning<N> & pofk) {
 
+            static_assert(
+                FML::PARTICLE::has_get_pos<T>(),
+                "[compute_power_spectrum_direct_summation] Particle class needs to have positions to use this method");
+
 #ifdef USE_MPI
             // Simple check to see if all tasks do have the same particles
             if (FML::NTasks > 1) {
@@ -428,9 +440,9 @@ namespace FML {
                 MPI_Allreduce(MPI_IN_PLACE, &tmp1, 1, MPI_LONG_LONG, MPI_MIN, MPI_COMM_WORLD);
                 long long int tmp2 = NumPart;
                 MPI_Allreduce(MPI_IN_PLACE, &tmp2, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
-                double x = part[0].get_pos()[0];
+                double x = FML::PARTICLE::GetPos(part[0])[0];
+                double y = x;
                 MPI_Allreduce(MPI_IN_PLACE, &x, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-                double y = part[0].get_pos()[0];
                 MPI_Allreduce(MPI_IN_PLACE, &y, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
                 assert_mpi(tmp1 == tmp2 and std::abs(x - y) < 1e-10,
                            "[direct_summation_power_spectrum] All tasks must have the same particles for this method "
@@ -448,17 +460,17 @@ namespace FML {
 
             FFTWGrid<N> density_k(Ngrid, 1, 1);
             density_k.add_memory_label("FFTWGrid::compute_power_spectrum_direct_summation::density_k");
+            density_k.set_grid_status_real(false);
 
-            auto * f = density_k.get_fourier_grid();
             for (auto && fourier_index : density_k.get_fourier_range()) {
                 auto kvec = density_k.get_fourier_wavevector_from_index(fourier_index);
                 double real = 0.0;
                 double imag = 0.0;
 #ifdef USE_OMP
-#pragma omp parallel for reduction(+ : real) reduction(+ : imag)
+#pragma omp parallel for reduction(+ : real, imag)
 #endif
                 for (size_t i = 0; i < NumPart; i++) {
-                    auto * x = part[i].get_pos();
+                    auto * x = FML::PARTICLE::GetPos(part[i]);
                     double kx = 0.0;
                     for (int idim = 0; idim < N; idim++) {
                         kx += kvec[idim] * x[idim];
@@ -467,10 +479,11 @@ namespace FML {
                     real += val.real();
                     imag += val.imag();
                 }
+
                 std::complex<double> sum = {real, imag};
                 if (ThisTask == 0 and fourier_index == 0)
                     sum -= 1.0;
-                f[fourier_index] = sum * norm;
+                density_k.set_fourier_from_index(fourier_index, sum * norm);
             }
 
             // Bin up the power-spectrum
@@ -494,6 +507,14 @@ namespace FML {
                                                std::vector<PowerSpectrumBinning<N>> & Pell,
                                                std::string density_assignment_method) {
 
+            // Sanity check
+            static_assert(FML::PARTICLE::has_get_pos<T>(),
+                          "[compute_power_spectrum_multipoles] Particle class needs to have positions to use "
+                          "this method");
+            static_assert(
+                FML::PARTICLE::has_get_vel<T>(),
+                "[compute_power_spectrum_multipoles] Particle class needs to have velocity to use this method");
+
             // Set how many extra slices we need for the density assignment to go smoothly
             auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
             const int nleft = nleftright.first;
@@ -509,6 +530,10 @@ namespace FML {
                 Pell_all[dir] = Pell;
             }
 
+            // Allocate density grid
+            FFTWGrid<N> density_k(Ngrid, nleft, nright);
+            density_k.add_memory_label("FFTWGrid::compute_power_spectrum_multipoles::density_k");
+
             // Loop over all the axes we are going to put the particles
             // into redshift space
             for (int dir = 0; dir < N; dir++) {
@@ -523,12 +548,13 @@ namespace FML {
                 line_of_sight_direction[dir] = 1.0;
 
                 // Displace particles
+                double max_disp = 0.0;
 #ifdef USE_OMP
-#pragma omp parallel for
+#pragma omp parallel for reduction(max : max_disp)
 #endif
                 for (size_t i = 0; i < part.get_npart(); i++) {
-                    auto * pos = part[i].get_pos();
-                    auto * vel = part[i].get_vel();
+                    auto * pos = FML::PARTICLE::GetPos(part[i]);
+                    auto * vel = FML::PARTICLE::GetVel(part[i]);
                     double vdotr = 0.0;
                     for (int idim = 0; idim < N; idim++) {
                         vdotr += vel[idim] * line_of_sight_direction[idim];
@@ -541,14 +567,20 @@ namespace FML {
                         if (pos[idim] >= 1.0)
                             pos[idim] -= 1.0;
                     }
+
+                    max_disp = std::max(max_disp, std::fabs(vdotr));
                 }
-                // Only displacements along the x-axis can trigger communication needs so we can avoid some calls
-                // if(dir == 0) part.communicate_particles();
-                part.communicate_particles();
+                max_disp *= velocity_to_displacement;
+                FML::MaxOverTasks(&max_disp);
+                if (FML::ThisTask == 0)
+                    std::cout << "Maximum displacement: " << max_disp << "\n";
+
+                // Only displacements along the x-axis can trigger communication needs so we can avoid some
+                // calls
+                if (dir == 0)
+                    part.communicate_particles();
 
                 // Bin particles to grid
-                FFTWGrid<N> density_k(Ngrid, nleft, nright);
-                density_k.add_memory_label("FFTWGrid::compute_power_spectrum_multipoles::density_k");
                 density_k.set_grid_status_real(true);
                 particles_to_grid<N, T>(part.get_particles_ptr(),
                                         part.get_npart(),
@@ -556,13 +588,13 @@ namespace FML {
                                         density_k,
                                         density_assignment_method);
 
-                // Displace particles
+                // Displace particles back
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
                 for (size_t i = 0; i < part.get_npart(); i++) {
-                    auto * pos = part[i].get_pos();
-                    auto * vel = part[i].get_vel();
+                    auto * pos = FML::PARTICLE::GetPos(part[i]);
+                    auto * vel = FML::PARTICLE::GetVel(part[i]);
                     double vdotr = 0.0;
                     for (int idim = 0; idim < N; idim++) {
                         vdotr += vel[idim] * line_of_sight_direction[idim];
@@ -577,8 +609,8 @@ namespace FML {
                     }
                 }
                 // Only displacements along the x-axis can trigger communication needs so we can avoid one call
-                // if(dir == 0) part.communicate_particles();
-                part.communicate_particles();
+                if (dir == 0)
+                    part.communicate_particles();
 
                 // Fourier transform
                 density_k.fftw_r2c();
@@ -730,8 +762,8 @@ namespace FML {
 
         //      auto res = Q_xx_of_k * kvec[0] * kvec[0] + Q_yy_of_k * kvec[1] * kvec[1] +  2.0 * (Q_xy_of_k *
         //      kvec[0] * kvec[1])
-        //        if constexpr (N > 2) res += Q_zz_of_k * kvec[2] * kvec[2] + 2.0 * (Q_yz_of_k * kvec[1] * kvec[2] +
-        //        Q_zx_of_k * kvec[2] * kvec[0]);
+        //        if constexpr (N > 2) res += Q_zz_of_k * kvec[2] * kvec[2] + 2.0 * (Q_yz_of_k * kvec[1] *
+        //        kvec[2] + Q_zx_of_k * kvec[2] * kvec[0]);
         //      res = 1.5 * res - 0.5 * delta0;
 
         //      delta2.set_real_from_fourier(fourier_index, res);
@@ -896,7 +928,8 @@ namespace FML {
                 // double sigma2 = 8.0 * std::pow( deltak ,2);
                 // auto weight = [&](double kmag, double kbin){
                 //  //return std::fabs(kmag - kbin) < deltak/2 ? 1.0 : 0.0;
-                //  return 1.0/std::sqrt(2.0 * M_PI * sigma2) * std::exp( -0.5*(kmag - kbin)*(kmag - kbin)/sigma2 );
+                //  return 1.0/std::sqrt(2.0 * M_PI * sigma2) * std::exp( -0.5*(kmag - kbin)*(kmag -
+                //  kbin)/sigma2 );
                 //};
 
                 // Loop over all cells XXX Add OpenMP
@@ -929,8 +962,8 @@ namespace FML {
                     // kmean += kmag * fac;
                     // pofk_bin[i] += std::norm(grid.get_fourier_from_index(fourier_index)) * fac;
                     // nk += fac;
-                    // grid.set_fourier_from_index(fourier_index, grid.get_fourier_from_index(fourier_index) * fac);
-                    // count_grid.set_fourier_from_index(fourier_index, fac);
+                    // grid.set_fourier_from_index(fourier_index, grid.get_fourier_from_index(fourier_index) *
+                    // fac); count_grid.set_fourier_from_index(fourier_index, fac);
                 }
 #ifdef USE_MPI
                 MPI_Allreduce(MPI_IN_PLACE, &kmean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
@@ -1128,7 +1161,8 @@ namespace FML {
                 // double sigma2 = 8.0 * std::pow( deltak ,2);
                 // auto weight = [&](double kmag, double kbin){
                 //  //return std::fabs(kmag - kbin) < deltak/2 ? 1.0 : 0.0;
-                //  return 1.0/std::sqrt(2.0 * M_PI * sigma2) * std::exp( -0.5*(kmag - kbin)*(kmag - kbin)/sigma2 );
+                //  return 1.0/std::sqrt(2.0 * M_PI * sigma2) * std::exp( -0.5*(kmag - kbin)*(kmag -
+                //  kbin)/sigma2 );
                 //};
 
                 // Loop over all cells
@@ -1161,8 +1195,8 @@ namespace FML {
                     // kmean += kmag * fac;
                     // pofk_bin[i] += std::norm(grid.get_fourier_from_index(fourier_index)) * fac;
                     // nk += fac;
-                    // grid.set_fourier_from_index(fourier_index, grid.get_fourier_from_index(fourier_index) * fac);
-                    // count_grid.set_fourier_from_index(fourier_index, fac);
+                    // grid.set_fourier_from_index(fourier_index, grid.get_fourier_from_index(fourier_index) *
+                    // fac); count_grid.set_fourier_from_index(fourier_index, fac);
                 }
 #ifdef USE_MPI
                 MPI_Allreduce(MPI_IN_PLACE, &kmean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);

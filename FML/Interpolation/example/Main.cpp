@@ -15,22 +15,12 @@ using FFTWGrid = FML::GRID::FFTWGrid<N>;
 //=======================================================
 const int NDIM = 3;
 struct Particle {
-    double x[NDIM], v[NDIM];
+    double x[NDIM];
     Particle() {}
-    Particle(double * _x, double * _v = nullptr) {
+    Particle(double * _x) {
         std::memcpy(x, _x, NDIM * sizeof(double));
-        if (_v) {
-            std::memcpy(v, _v, NDIM * sizeof(double));
-        } else {
-            for (int idim = 0; idim < NDIM; idim++)
-                v[idim] = 0.0;
-        }
     }
     double * get_pos() { return x; }
-    double * get_vel() { return v; }
-    int get_particle_byte_size() { return NDIM * sizeof(double); }
-    void append_to_buffer(char * data) { std::memcpy(data, x, NDIM * sizeof(double)); }
-    void assign_from_buffer(char * data) { std::memcpy(x, data, NDIM * sizeof(double)); }
 };
 
 void ExamplesInterpolation() {

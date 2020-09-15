@@ -8,6 +8,7 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
+#include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 
 namespace FML {
 
@@ -44,8 +45,6 @@ namespace FML {
     ///                            Only relevant if memory is really tight and you need to use
     ///                            TSC or PQS
     ///
-    /// PARTICLES_WITH_DIFFERENT_MASS : In case the particles have mass, i.e. has
-    ///                                 get_mass()
     //============================================================================
 
     namespace INTERPOLATION {
@@ -96,8 +95,8 @@ namespace FML {
         /// @brief Assign particles to a grid to compute the over density field delta.
         ///
         /// @tparam N The dimension of the grid
-        /// @tparam T The particle class. Must have a get_pos() method and if PARTICLES_WITH_DIFFERENT_MASS is defined
-        /// then a get_mass function.
+        /// @tparam T The particle class. Must have a get_pos() method. If the particle has a get_mass method then this
+        /// is used to weight the particle (we assign the particle with weight mass / mean_mass).
         ///
         /// @param[in] part A pointer the first particle.
         /// @param[in] NumPart How many particles/positions we have that we want to interpolate the grid to.
@@ -115,8 +114,8 @@ namespace FML {
         /// @brief Assign particles to a grid to compute the over density field delta.
         ///
         /// @tparam N The dimension of the grid
-        /// @tparam T The particle class. Must have a get_pos() method and if PARTICLES_WITH_DIFFERENT_MASS is defined
-        /// then a get_mass function.
+        /// @tparam T The particle class. Must have a get_pos() method. If the particle has a get_mass method then this
+        /// is used to weight the particle (we assign the particle with weight mass / mean_mass).
         /// @tparam ORDER The order of the B-spline interpolation (1=NGP, 2=CIC, 3=TSC, 4=PCS, 5=PQS, ...). If larger
         /// than 5 then you must implement kernel<ORDER> yourself (a simple Mathematica calculation), see the source.
         ///
@@ -134,8 +133,8 @@ namespace FML {
         /// We also deconvolve the window function for the density assignement.
         ///
         /// @tparam N The dimension of the grid
-        /// @tparam T The particle class. Must have a get_pos() method and if PARTICLES_WITH_DIFFERENT_MASS is defined
-        /// then a get_mass function.
+        /// @tparam T The particle class. Must have a get_pos() method. If the particle has a get_mass method then this
+        /// is used to weight the particle (we assign the particle with weight mass / mean_mass).
         ///
         /// @param[out] density_grid_fourier a fourier grid (does not need to be initialized).
         /// @param[in] Ngrid The size of the grid we want to use.
@@ -167,7 +166,7 @@ namespace FML {
         template <int N, int ORDER>
         void convolve_grid_with_kernel(const FFTWGrid<N> & grid_in,
                                        FFTWGrid<N> & grid_out,
-                                       std::function<FloatType(std::array<double,N> &)> & convolution_kernel);
+                                       std::function<FloatType(std::array<double, N> &)> & convolution_kernel);
 
         //===================================================================================================
         //===================================================================================================
@@ -407,7 +406,7 @@ namespace FML {
             //==========================================================
 
             // For the kernel above we need to go kernel_width/2 cells to the left and right
-            const constexpr int widthtondim = FML::power(ORDER, N);
+            constexpr int widthtondim = FML::power(ORDER, N);
 
             // Info about the grid
             // const auto Local_nx      = density.get_local_nx();
@@ -420,31 +419,32 @@ namespace FML {
             // Factor to normalize density to the mean density
             double norm_fac = std::pow((double)Nmesh, N) / double(NumPartTot);
 
-            // If particles can have different mass take this into account
-#ifdef PARTICLES_WITH_DIFFERENT_MASS
-            double mean_mass = 0.0;
-            for (size_t i = 0; i < NumPart; i++) {
-                mean_mass += part[i].get_mass();
+            // Check if particles has a get_mass method and if so
+            // compute the mean mass
+            constexpr bool has_mass = FML::PARTICLE::has_get_mass<T>();
+            if constexpr (has_mass) {
+                double mean_mass = 0.0;
+                for (size_t i = 0; i < NumPart; i++) {
+                    mean_mass += FML::PARTICLE::GetMass(part[i]);
+                }
+                SumOverTasks(&mean_mass);
+                mean_mass /= double(NumPartTot);
+                norm_fac /= mean_mass;
             }
-            SumOverTasks(&mean_mass);
-            mean_mass /= double(NumPartTot);
-            norm_fac /= mean_mass;
             double mass = 1.0;
-#else
-            const constexpr double mass = 1.0;
-#endif
 
             // Loop over all particles and add them to the grid
             // OpenMP will not be very good due to critical section needed in add_real
             for (size_t i = 0; i < NumPart; i++) {
-                
-                // Particle position
-                const auto * pos = part[i].get_pos();
-#ifdef PARTICLES_WITH_DIFFERENT_MASS
-                mass = part[i].get_mass();
-#endif
 
-                std::array<double,N> x;
+                // Particle position
+                const auto * pos = FML::PARTICLE::GetPos(part[i]);
+
+                // Fetch mass if this is availiable
+                if constexpr (has_mass)
+                    mass = FML::PARTICLE::GetMass(part[i]);
+
+                std::array<double, N> x;
                 std::array<int, N> ix;
                 std::array<int, N> ix_nbor;
                 std::array<int, N> icoord;
@@ -466,7 +466,7 @@ namespace FML {
 
                 // If we are on the left or right of the cell determines how many cells
                 // we have to go left and right
-                std::array<int,N> xstart;
+                std::array<int, N> xstart;
                 if (ORDER % 2 == 0) {
                     for (int idim = 0; idim < N; idim++) {
                         xstart[idim] = -ORDER / 2 + 1;
@@ -501,7 +501,8 @@ namespace FML {
                         w *= kernel<ORDER>(dx);
                     }
 
-                    // Periodic BC
+                    // Periodic BC for all but x (we have extra slices - XXX should assert that its not too large, but
+                    // covered by boundscheck in FFTWGrid if this is turned on)!
                     icoord[0] = ix_nbor[0];
                     for (int idim = 1; idim < N; idim++) {
                         icoord[idim] = ix_nbor[idim];
@@ -514,7 +515,6 @@ namespace FML {
                     // Add particle to grid
                     density.add_real(icoord, w * norm_fac * mass);
                     sumweights += w;
-
                 }
 
 #ifdef DEBUG_INTERPOL
@@ -542,7 +542,7 @@ namespace FML {
                        "[interpolate_grid_to_particle_positions] Too few extra slices\n");
 
             // We need to look at width^N cells in total
-            const constexpr int widthtondim = FML::power(ORDER, N);
+            constexpr int widthtondim = FML::power(ORDER, N);
 
             // Fetch grid information
             const auto Local_nx = grid.get_local_nx();
@@ -558,7 +558,7 @@ namespace FML {
             for (size_t ind = 0; ind < NumPart; ind++) {
 
                 // Positions in global grid in units of [Nmesh]
-                auto * pos = part[ind].get_pos();
+                auto * pos = FML::PARTICLE::GetPos(part[ind]);
                 std::array<double, N> x;
                 for (int idim = 0; idim < N; idim++)
                     x[idim] = pos[idim] * Nmesh;
@@ -597,7 +597,7 @@ namespace FML {
 
                 // If we are on the left or right of the cell determines how many cells
                 // we have to go left and right
-                std::array<int,N> xstart;
+                std::array<int, N> xstart;
                 if (ORDER % 2 == 0) {
                     for (int idim = 0; idim < N; idim++) {
                         xstart[idim] = -ORDER / 2 + 1;
@@ -762,7 +762,7 @@ namespace FML {
         template <int N, int ORDER>
         void convolve_grid_with_kernel(const FFTWGrid<N> & grid_in,
                                        FFTWGrid<N> & grid_out,
-                                       std::function<FloatType(std::array<double,N> &)> & convolution_kernel) {
+                                       std::function<FloatType(std::array<double, N> &)> & convolution_kernel) {
 
             auto nextra = get_extra_slices_needed_by_order<ORDER>();
             assert_mpi(grid_in.get_n_extra_slices_left() >= nextra.first &&
@@ -771,8 +771,8 @@ namespace FML {
             assert_mpi(grid_in.get_nmesh() > 0, "[convolve_grid_with_kernel] Grid has to be already allocated!\n");
 
             // We need to look at width^N cells in total
-            const constexpr int widthtondim = FML::power(ORDER, N);
-            std::array<int,N> xstart;
+            constexpr int widthtondim = FML::power(ORDER, N);
+            std::array<int, N> xstart;
             if (ORDER % 2 == 0)
                 xstart.fill(-ORDER / 2 + 1);
             else
@@ -791,7 +791,7 @@ namespace FML {
 #pragma omp parallel for
 #endif
             for (int islice = 0; islice < Local_nx; islice++) {
-                std::array<double,N> dx;
+                std::array<double, N> dx;
                 for (auto && real_index : grid_in.get_real_range(islice, islice + 1)) {
 
                     // Coordinate of cell
@@ -864,7 +864,7 @@ namespace FML {
 #pragma omp parallel for
 #endif
             for (size_t i = 0; i < NumPart; i++) {
-                auto * pos = part[i].get_pos();
+                auto * pos = FML::PARTICLE::GetPos(part[i]);
                 pos[0] += shift;
                 for (int idim = 1; idim < N; idim++) {
                     pos[idim] += shift;
@@ -875,7 +875,7 @@ namespace FML {
 
             // Bin shifted particles to grid
             FFTWGrid<N> density_grid_fourier2(Ngrid, nleft, nright);
-            density_grid_fourier.add_memory_label(
+            density_grid_fourier2.add_memory_label(
                 "FFTWGrid::particles_to_fourier_grid_interlacing::density_grid_fourier2");
             particles_to_grid<N, T>(part, NumPart, NumPartTotal, density_grid_fourier2, density_assignment_method);
 
@@ -884,7 +884,7 @@ namespace FML {
 #pragma omp parallel for
 #endif
             for (size_t i = 0; i < NumPart; i++) {
-                auto * pos = part[i].get_pos();
+                auto * pos = FML::PARTICLE::GetPos(part[i]);
                 pos[0] -= shift;
                 for (int idim = 1; idim < N; idim++) {
                     pos[idim] -= shift;
@@ -898,8 +898,6 @@ namespace FML {
             density_grid_fourier2.fftw_r2c();
 
             // The mean of the two grids (alias cancellation)
-            auto ff = density_grid_fourier.get_fourier_grid();
-            auto gg = density_grid_fourier2.get_fourier_grid();
             auto Local_nx = density_grid_fourier.get_local_nx();
 
 #ifdef USE_OMP
@@ -913,7 +911,9 @@ namespace FML {
                     for (int idim = 1; idim < N; idim++)
                         ksum += kvec[idim];
                     auto norm = std::exp(I * ksum * shift);
-                    ff[fourier_index] = (ff[fourier_index] + norm * gg[fourier_index]) / 2.0;
+                    auto grid1 = density_grid_fourier.get_fourier_from_index(fourier_index);
+                    auto grid2 = density_grid_fourier2.get_fourier_from_index(fourier_index);
+                    density_grid_fourier.set_fourier_from_index(fourier_index, (grid1 + norm * grid2) / 2.0);
                 }
             }
 

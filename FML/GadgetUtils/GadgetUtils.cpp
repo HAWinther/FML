@@ -46,6 +46,8 @@ namespace FML {
             //==============================================================================================
             //==============================================================================================
 
+            void GadgetReader::set_fields_in_file(std::vector<std::string> fields) { fields_in_file = fields; }
+
             GadgetReader::GadgetReader(double pos_factor, int ndim) : gadget_pos_factor(pos_factor), NDIM(ndim) {}
 
             GadgetHeader GadgetReader::get_header() { return header; }
@@ -163,7 +165,7 @@ namespace FML {
                 header.npart[1] = NumPart;
                 header.npartTotal[1] = (unsigned int)TotNumPart;
                 header.npartTotalHighWord[1] = (unsigned int)(TotNumPart >> 32);
-                header.mass[1] = 3.0 * OmegaM * MplMpl_over_H0Msunh * pow(Boxsize / HubbleLengthInMpch, 3) /
+                header.mass[1] = 3.0 * OmegaM * MplMpl_over_H0Msunh * std::pow(Boxsize / HubbleLengthInMpch, 3) /
                                  double(TotNumPart) / 1e10;
                 header.time = aexp;
                 header.redshift = 1.0 / aexp - 1.0;

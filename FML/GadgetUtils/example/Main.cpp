@@ -31,12 +31,16 @@ int main() {
     // The number of dimensions
     //=========================================================
     const int ndim = 3;
-
+                
     //=========================================================
     // Set up reader (if posnorm=1.0, ndim=3 then we don't
     // need to provide these numbers)
     //=Y========================================================
     GadgetReader g(gadget_pos_norm, ndim);
+   
+    // If we have elements stored in a different order or something else set it here
+    // std::vector<std::string> fields_in_file = {"POS", "VEL", "ID"};
+    // g.set_fields_in_file(fields_in_file);
 
     //=========================================================
     // Container to store it in. Particles will be added to the back of part

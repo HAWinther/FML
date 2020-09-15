@@ -1,6 +1,7 @@
 #ifndef PARTICLEGRID_HEADER
 #define PARTICLEGRID_HEADER
 
+#include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <cassert>
 #include <iostream>
 #include <vector>
@@ -155,10 +156,12 @@ namespace FML {
                 ntot += cell.np;
             }
             double fraction_empty = nempty / double(ntot);
-
-            std::cout << "ParticlesInBoxes Ngrid:     " << Ngrid << " Ndim: " << Ndim << "\n";
-            std::cout << "Total elements in grid: " << ntot << "\n";
-            std::cout << "Empty cells:            " << nempty << " = " << int(fraction_empty * 100) << "%\n";
+            
+            if (FML::ThisTask == 0) {
+                std::cout << "ParticlesInBoxes Ngrid:     " << Ngrid << " Ndim: " << Ndim << "\n";
+                std::cout << "Total elements in grid: " << ntot << "\n";
+                std::cout << "Empty cells:            " << nempty << " = " << int(fraction_empty * 100) << "%\n";
+            }
         }
 
         template <class T>
@@ -170,6 +173,9 @@ namespace FML {
         void ParticlesInBoxes<T>::create(T * particles, size_t nparticles, int ngrid) {
             if (nparticles == 0)
                 return;
+
+            assert_mpi(FML::PARTICLE::has_get_pos<T>(),
+                       "[ParticlesInBoxes] Particle class must have positions via a get_pos method");
 
             // Set class data
             Ngrid = ngrid;
@@ -186,7 +192,7 @@ namespace FML {
 
             // Count number of particles in each cell
             for (size_t i = 0; i < nparticles; i++) {
-                auto * Pos = particles[i].get_pos();
+                auto * Pos = FML::PARTICLE::GetPos(particles[i]);
 
                 // Index of cell particle belong to
                 size_t index = 0;
@@ -209,7 +215,7 @@ namespace FML {
 
             // Add particles to cell
             for (size_t i = 0; i < nparticles; i++) {
-                auto * Pos = particles[i].get_pos();
+                auto * Pos = FML::PARTICLE::GetPos(particles[i]);
 
                 // Index of cell particle belong to
                 size_t index = 0;

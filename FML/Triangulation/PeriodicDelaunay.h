@@ -7,6 +7,7 @@
 
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
+#include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/Triangulation/WatershedBinning.h>
 
 #ifndef CGAL_NDIM
@@ -163,12 +164,18 @@ namespace FML {
                 // Count how many particles we have on the left and right
                 size_t count_left = 0;
                 size_t count_right = 0;
+                size_t bytes_to_send_left = 0;
+                size_t bytes_to_send_right = 0;
                 for (size_t i = 0; i < NumPart; i++) {
-                    auto * pos = p[i].get_pos();
-                    if (pos[0] < FML::xmin_domain + dx_buffer)
+                    auto * pos = FML::PARTICLE::GetPos(p[i]);
+                    if (pos[0] < FML::xmin_domain + dx_buffer) {
                         count_left++;
-                    if (pos[0] > FML::xmax_domain - dx_buffer)
+                        bytes_to_send_left += FML::PARTICLE::GetSize(p[i]);
+                    }
+                    if (pos[0] > FML::xmax_domain - dx_buffer) {
                         count_right++;
+                        bytes_to_send_right += FML::PARTICLE::GetSize(p[i]);
+                    }
                 }
 #ifdef DEBUG_TESSELATION
                 std::cout << "Task " << FML::ThisTask << " will send " << count_left << " + " << count_right
@@ -176,24 +183,22 @@ namespace FML {
 #endif
 
                 // Gather positions to send
-                T tmp;
-                int bytes_per_particle = tmp.get_particle_byte_size();
-                std::vector<char> p_to_send_left(bytes_per_particle * count_left);
-                std::vector<char> p_to_send_right(bytes_per_particle * count_right);
+                std::vector<char> p_to_send_left(bytes_to_send_left);
+                std::vector<char> p_to_send_right(bytes_to_send_right);
                 char * left_buffer = p_to_send_left.data();
                 char * right_buffer = p_to_send_right.data();
                 count_left = 0;
                 count_right = 0;
                 for (size_t i = 0; i < NumPart; i++) {
-                    auto * pos = p[i].get_pos();
+                    auto * pos = FML::PARTICLE::GetPos(p[i]);
                     if (pos[0] < FML::xmin_domain + dx_buffer) {
-                        p[i].append_to_buffer(left_buffer);
-                        left_buffer += bytes_per_particle;
+                        FML::PARTICLE::AppendToBuffer(p[i], left_buffer);
+                        left_buffer += FML::PARTICLE::GetSize(p[i]);
                         count_left++;
                     }
                     if (pos[0] > FML::xmax_domain - dx_buffer) {
-                        p[i].append_to_buffer(right_buffer);
-                        right_buffer += bytes_per_particle;
+                        FML::PARTICLE::AppendToBuffer(p[i], right_buffer);
+                        right_buffer += FML::PARTICLE::GetSize(p[i]);
                         count_right++;
                     }
                 }
@@ -201,6 +206,8 @@ namespace FML {
                 // Communicate how many to send
                 size_t recv_left;
                 size_t recv_right;
+                size_t bytes_to_recv_left;
+                size_t bytes_to_recv_right;
                 MPI_Status status;
                 MPI_Sendrecv(&count_left,
                              sizeof(count_left),
@@ -226,6 +233,30 @@ namespace FML {
                              0,
                              MPI_COMM_WORLD,
                              &status);
+                MPI_Sendrecv(&bytes_to_send_left,
+                             sizeof(bytes_to_send_left),
+                             MPI_CHAR,
+                             LeftTask,
+                             0,
+                             &bytes_to_recv_right,
+                             sizeof(bytes_to_recv_right),
+                             MPI_CHAR,
+                             RightTask,
+                             0,
+                             MPI_COMM_WORLD,
+                             &status);
+                MPI_Sendrecv(&bytes_to_send_right,
+                             sizeof(bytes_to_send_right),
+                             MPI_CHAR,
+                             RightTask,
+                             0,
+                             &bytes_to_recv_left,
+                             sizeof(bytes_to_recv_left),
+                             MPI_CHAR,
+                             LeftTask,
+                             0,
+                             MPI_COMM_WORLD,
+                             &status);
 #ifdef DEBUG_TESSELATION
                 std::cout << "Task " << FML::ThisTask << " will recieve " << recv_left << " + " << recv_right
                           << " boundary particles\n";
@@ -233,27 +264,27 @@ namespace FML {
 
                 // Allocate buffers and communicate
                 size_t nboundary = recv_left + recv_right;
-                std::vector<char> p_to_recv_left(bytes_per_particle * recv_left);
-                std::vector<char> p_to_recv_right(bytes_per_particle * recv_right);
+                std::vector<char> p_to_recv_left(bytes_to_recv_left);
+                std::vector<char> p_to_recv_right(bytes_to_recv_right);
                 MPI_Sendrecv(p_to_send_left.data(),
-                             bytes_per_particle * count_left,
+                             bytes_to_send_left,
                              MPI_CHAR,
                              LeftTask,
                              0,
                              p_to_recv_right.data(),
-                             bytes_per_particle * recv_right,
+                             bytes_to_recv_right,
                              MPI_CHAR,
                              RightTask,
                              0,
                              MPI_COMM_WORLD,
                              &status);
                 MPI_Sendrecv(p_to_send_right.data(),
-                             bytes_per_particle * count_right,
+                             bytes_to_send_right,
                              MPI_CHAR,
                              RightTask,
                              0,
                              p_to_recv_left.data(),
-                             bytes_per_particle * recv_left,
+                             bytes_to_recv_left,
                              MPI_CHAR,
                              LeftTask,
                              0,
@@ -270,13 +301,14 @@ namespace FML {
                 p_to_recv.resize(nboundary);
                 left_buffer = p_to_recv_left.data();
                 for (size_t i = 0; i < recv_left; i++) {
-                    p_to_recv[i].assign_from_buffer(left_buffer);
-                    left_buffer += bytes_per_particle;
+                    FML::PARTICLE::AssignFromBuffer(p_to_recv[i], left_buffer);
+                    left_buffer += FML::PARTICLE::GetSize(p_to_recv[i]);
                 }
                 right_buffer = p_to_recv_right.data();
                 for (size_t i = 0; i < recv_right; i++) {
-                    p_to_recv[i + recv_left].assign_from_buffer(right_buffer);
-                    right_buffer += bytes_per_particle;
+                    FML::PARTICLE::AssignFromBuffer(p_to_recv[i + recv_left], right_buffer);
+                    right_buffer += FML::PARTICLE::GetSize(p_to_recv[i + recv_left]);
+                    ;
                 }
 #endif
             }
@@ -408,7 +440,7 @@ namespace FML {
 
                 // Add boundary points
                 for (size_t i = 0; i < nboundary; i++) {
-                    auto * pos = pboundary[i].get_pos();
+                    auto * pos = FML::PARTICLE::GetPos(pboundary[i]);
 #if CGAL_NDIM == 2
                     Point pt(pos[0], pos[1]);
 #elif CGAL_NDIM == 3
@@ -420,7 +452,7 @@ namespace FML {
 
                 // Add regular points
                 for (size_t i = 0; i < NumPart; i++) {
-                    auto * pos = p[i].get_pos();
+                    auto * pos = FML::PARTICLE::GetPos(p[i]);
 #if CGAL_NDIM == 2
                     Point pt(pos[0], pos[1]);
 #elif CGAL_NDIM == 3
@@ -439,7 +471,7 @@ namespace FML {
 
                     if (FML::ThisTask == 0)
                         std::cout << "[MPIPeriodicDelaunay::create_total_point_set] Random shuffle of points\n";
-                    
+
                     std::mt19937 rng(seed);
                     std::shuffle(points.begin(), points.end(), rng);
 
@@ -714,7 +746,7 @@ namespace FML {
                 count_left = 0;
                 count_right = 0;
                 for (size_t i = 0; i < NumPart; i++) {
-                    auto * pos = p[i].get_pos();
+                    auto * pos = FML::PARTICLE::GetPos(p[i]);
                     if (pos[0] < FML::xmin_domain + dx_buffer)
                         count_left++;
                     if (pos[0] > FML::xmax_domain - dx_buffer)
@@ -756,7 +788,7 @@ namespace FML {
                 count_left = 0;
                 count_right = 0;
                 for (size_t i = 0; i < NumPart; i++) {
-                    auto * pos = p[i].get_pos();
+                    auto * pos = FML::PARTICLE::GetPos(p[i]);
                     if (pos[0] < FML::xmin_domain + dx_buffer) {
                         quantity_to_send_left[count_left] = quantity[i];
                         count_left++;
@@ -971,7 +1003,7 @@ namespace FML {
                     count_right = 0;
                     for (size_t i = 0; i < NumPart; i++) {
                         auto id = vs[i]->info().WatershedID;
-                        auto * pos = p[i].get_pos();
+                        auto * pos = FML::PARTICLE::GetPos(p[i]);
                         if (pos[0] < FML::xmin_domain + dx_buffer) {
                             watershed_id_to_send_left[count_left] = id;
                             count_left++;
@@ -1251,6 +1283,9 @@ namespace FML {
                               double random_fraction = 0.5,
                               bool do_density_maximum = false) {
 
+            static_assert(FML::PARTICLE::has_set_volume<T>(),
+                          "[WatershedDensity] We require the particle to have a set_volume / get_volume method");
+
             if (FML::ThisTask == 0) {
                 if (do_density_maximum)
                     std::cout << "[WatershedDensity] We will locate minima of 1/(voronoid density) of particles\n";
@@ -1277,21 +1312,27 @@ namespace FML {
             D.VoronoiVolume(volumes);
 
             // Set the volume to the particles
-            for (size_t i = 0; i < NumPart; i++) {
-                p[i].set_volume(volumes[i]);
+            if constexpr (FML::PARTICLE::has_set_volume<T>()) {
+                for (size_t i = 0; i < NumPart; i++) {
+                    FML::PARTICLE::SetVolume(p[i], volumes[i]);
+                }
             }
 
             // Convert volumes to mass density
             // If you want to tesselated based on an other property then this is all we
             // need to change
             std::vector<double> & density = volumes;
+            double mass = 1.0;
             for (size_t i = 0; i < NumPart; i++) {
+                if constexpr (FML::PARTICLE::has_get_mass<T>()) {
+                    mass = FML::PARTICLE::GetMass(p[i]);
+                }
                 if (do_density_maximum)
                     // To find clusters use 1/density as the quantity to watershed
-                    density[i] = volumes[i] / p[i].get_mass();
+                    density[i] = volumes[i] / mass;
                 else
                     // To find voids use density as watershed quantity
-                    density[i] = p[i].get_mass() / volumes[i];
+                    density[i] = mass / volumes[i];
             }
 
             // Run general algorithm

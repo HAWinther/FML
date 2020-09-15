@@ -13,6 +13,8 @@
 #include <mpi.h>
 #endif
 
+#include <FML/ParticleTypes/ReflectOnParticleMethods.h>
+
 //====================================================================================
 //
 // Read Gadget files for DM particles. Checks and swaps endian if needed.
@@ -99,6 +101,9 @@ namespace FML {
                 /// The dimensions of the positions and velocities in the files.
                 int NDIM{3};
 
+                // The fields we assume is in the file
+                std::vector<std::string> fields_in_file = {"POS", "VEL", "ID"};
+
                 void throw_error(std::string errormessage) const;
 
               public:
@@ -116,6 +121,8 @@ namespace FML {
 
                 void set_endian_swap();
                 int get_num_files(std::string filename = "");
+
+                void set_fields_in_file(std::vector<std::string> fields);
             };
 
             /// Write files in GADGET format
@@ -213,9 +220,6 @@ namespace FML {
                 float * float_buffer;
                 gadget_particle_id_type * id_buffer;
 
-                // The fields we assume is in the file
-                const std::vector<std::string> fields_in_file = {"POS", "VEL", "ID"};
-
                 // Open file and get the number of bytes
                 std::ifstream fp(filename.c_str(), std::ios::binary);
                 int bytes_in_file;
@@ -249,15 +253,30 @@ namespace FML {
                 // Compute how many bytes per particle
                 const int bytes_per_particle = (bytes_in_file / header.npart[1]);
 
-                // Expected bytes if file has Pos + Vel + ID
-                const int bytes_per_particle_expected = (sizeof(gadget_particle_id_type) + 2 * NDIM * sizeof(float));
+                // Expected bytes if file based on the fields
+                int bytes_per_particle_expected = 0;
+                for (auto & field : fields_in_file) {
+                    if (field == "POS")
+                        bytes_per_particle_expected += NDIM * sizeof(float);
+                    else if (field == "VEL")
+                        bytes_per_particle_expected += NDIM * sizeof(float);
+                    else if (field == "ID")
+                        bytes_per_particle_expected += sizeof(gadget_particle_id_type);
+                    else {
+                        std::cout << "Warning: unknown field in file [" << field
+                                  << "]. Only POS, VEL and ID are read and implemented\n";
+                        assert(false);
+                    }
+                }
                 if (bytes_per_particle != bytes_per_particle_expected) {
                     std::string errormessage =
                         "[GadgetReader::read_gadget_single] BytesPerParticle = " + std::to_string(bytes_per_particle) +
                         " != ExpectedBytes =" + std::to_string(bytes_per_particle_expected) +
-                        ". Change the ID size in GadgetUtils?\n";
+                        ". Change the ID size in GadgetUtils? Otherwise check that "
+                        "fields_in_file in this file is correct!\n";
                     throw_error(errormessage);
                 }
+
                 // Number of particles in the current file
                 const int NumPart = header.npart[1];
 
@@ -274,8 +293,8 @@ namespace FML {
                 // Read the file
                 for (auto & field : fields_in_file) {
 
-                    // Read particle positions and assign to particles
                     if (field == "POS") {
+                        // Read particle positions and assign to particles
                         bytes = sizeof(float) * NDIM * NumPart;
                         if (verbose)
                             std::cout << "Reading POS bytes = " << bytes
@@ -284,21 +303,18 @@ namespace FML {
                         read_section(fp, buffer);
 
                         // Check if positions exists in Particle
-                        bool pos_exists = part[0].get_pos() != nullptr;
-
-                        if (pos_exists)
+                        if constexpr (FML::PARTICLE::has_get_pos<T>()) {
                             for (int i = 0; i < NumPart; i++) {
-                                auto * pos = part[istart + i].get_pos();
+                                auto * pos = FML::PARTICLE::GetPos(part[istart + i]);
                                 for (int idim = 0; idim < NDIM; idim++) {
                                     pos[idim] = float_buffer[NDIM * i + idim] * pos_norm;
                                     if (endian_swap)
                                         pos[idim] = swap_endian(pos[idim]);
                                 }
                             }
-                    }
-
-                    // Read particle velocities and assign to particles
-                    if (field == "VEL") {
+                        }
+                    } else if (field == "VEL") {
+                        // Read particle velocities and assign to particles
                         bytes = sizeof(float) * NDIM * NumPart;
                         if (verbose)
                             std::cout << "Reading VEL bytes = " << bytes
@@ -307,32 +323,33 @@ namespace FML {
                         read_section(fp, buffer);
 
                         // Check if velocities exists in Particle
-                        bool vel_exists = part[0].get_vel() != nullptr;
-
-                        if (vel_exists)
+                        if constexpr (FML::PARTICLE::has_get_vel<T>()) {
                             for (int i = 0; i < NumPart; i++) {
-                                auto * vel = part[istart + i].get_vel();
+                                auto * vel = FML::PARTICLE::GetVel(part[istart + i]);
                                 for (int idim = 0; idim < NDIM; idim++) {
                                     vel[idim] = float_buffer[NDIM * i + idim] * vel_norm;
                                     if (endian_swap)
                                         vel[idim] = swap_endian(vel[idim]);
                                 }
                             }
-                    }
-
-                    // Read particle IDs (if they exist) and assign to particles
-                    if (field == "ID") {
+                        }
+                    } else if (field == "ID") {
+                        // Read particle IDs (if they exist) and assign to particles
                         bytes = sizeof(gadget_particle_id_type) * NumPart;
                         if (verbose)
                             std::cout << "Reading ID bytes = " << bytes
                                       << " BytesPerParticle: " << sizeof(gadget_particle_id_type) << "\n";
                         buffer.resize(bytes);
                         read_section(fp, buffer);
-                        for (int i = 0; i < NumPart; i++) {
-                            if (endian_swap) {
-                                part[istart + i].set_id(swap_endian(id_buffer[i]));
-                            } else {
-                                part[istart + i].set_id(id_buffer[i]);
+
+                        // Check if particle has ID
+                        if constexpr (FML::PARTICLE::has_set_id<T>()) {
+                            for (int i = 0; i < NumPart; i++) {
+                                if (endian_swap) {
+                                    FML::PARTICLE::SetID(part[istart + i], swap_endian(id_buffer[i]));
+                                } else {
+                                    FML::PARTICLE::SetID(part[istart + i], id_buffer[i]);
+                                }
                             }
                         }
                     }
@@ -374,31 +391,37 @@ namespace FML {
                 // Gather particle positions and write
                 unsigned int bytes = NDIM * sizeof(float) * NumPart;
                 buffer = std::vector<char>(bytes);
-                float_buffer = reinterpret_cast<float *>(buffer.data());
-                for (unsigned int i = 0; i < NumPart; i++) {
-                    auto * pos = part[i].get_pos();
-                    for (int idim = 0; idim < NDIM; idim++)
-                        float_buffer[NDIM * i + idim] = float(pos[idim]) * Boxsize * pos_norm;
+                if constexpr (FML::PARTICLE::has_get_pos<T>()) {
+                    float_buffer = reinterpret_cast<float *>(buffer.data());
+                    for (unsigned int i = 0; i < NumPart; i++) {
+                        auto * pos = FML::PARTICLE::GetPos(part[i]);
+                        for (int idim = 0; idim < NDIM; idim++)
+                            float_buffer[NDIM * i + idim] = float(pos[idim]) * Boxsize * pos_norm;
+                    }
+                    write_section(fp, buffer, bytes);
                 }
-                write_section(fp, buffer, bytes);
 
                 // Gather particle velocities and write
-                float_buffer = reinterpret_cast<float *>(buffer.data());
-                for (unsigned int i = 0; i < NumPart; i++) {
-                    auto * vel = part[i].get_vel();
-                    for (int idim = 0; idim < NDIM; idim++)
-                        float_buffer[NDIM * i + idim] = float(vel[idim]);
+                if constexpr (FML::PARTICLE::has_get_vel<T>()) {
+                    float_buffer = reinterpret_cast<float *>(buffer.data());
+                    for (unsigned int i = 0; i < NumPart; i++) {
+                        auto * vel = FML::PARTICLE::GetVel(part[i]);
+                        for (int idim = 0; idim < NDIM; idim++)
+                            float_buffer[NDIM * i + idim] = float(vel[idim]);
+                    }
+                    write_section(fp, buffer, bytes);
                 }
-                write_section(fp, buffer, bytes);
 
                 // Gather particle IDs and write
-                bytes = sizeof(gadget_particle_id_type) * NumPart;
-                buffer.resize(bytes);
-                id_buffer = reinterpret_cast<gadget_particle_id_type *>(buffer.data());
-                for (unsigned int i = 0; i < NumPart; i++) {
-                    id_buffer[i] = (gadget_particle_id_type) * (part[i].get_id());
+                if constexpr (FML::PARTICLE::has_get_id<T>()) {
+                    bytes = sizeof(gadget_particle_id_type) * NumPart;
+                    buffer.resize(bytes);
+                    id_buffer = reinterpret_cast<gadget_particle_id_type *>(buffer.data());
+                    for (unsigned int i = 0; i < NumPart; i++) {
+                        id_buffer[i] = (gadget_particle_id_type)*FML::PARTICLE::GetID(part[i]);
+                    }
+                    write_section(fp, buffer, bytes);
                 }
-                write_section(fp, buffer, bytes);
             }
 
         } // namespace GADGET

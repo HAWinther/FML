@@ -127,6 +127,8 @@ namespace FML {
             // If you want to keep track of the field is in real space or in Fourier space
             bool grid_is_in_real_space{true};
 
+            std::string name{""};
+
           public:
             // Constructors
             FFTWGrid() = default;
@@ -267,6 +269,7 @@ namespace FML {
 
         template <int N>
         void FFTWGrid<N>::add_memory_label([[maybe_unused]] std::string label) {
+            name = label;
 #ifdef MEMORY_LOGGING
             FML::MemoryLog::get()->add_label(
                 fourier_grid_raw.data(), fourier_grid_raw.capacity() * sizeof(ComplexType), label);
@@ -356,7 +359,8 @@ namespace FML {
 #ifdef DEBUG_FFTWGRID
             if (not grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
-                    std::cout << "Warning: [FFTWGrid::get_real_range] The grid status is [Fourierspace]\n";
+                    std::cout << "Warning: [FFTWGrid::get_real_range] The grid status is [Fourierspace]. Label: " +
+                                     name + "\n";
             }
 #endif
             // Here NmeshTotReal = LocalNx * Nmesh^N-1
@@ -374,7 +378,8 @@ namespace FML {
 #ifdef DEBUG_FFTWGRID
             if (grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
-                    std::cout << "Warning: [FFTWGrid::get_fourier_range] The grid status is [Realspace]\n";
+                    std::cout << "Warning: [FFTWGrid::get_fourier_range] The grid status is [Realspace]. Label: " +
+                                     name + "\n";
             }
 #endif
 
@@ -434,21 +439,36 @@ namespace FML {
                 myfloattype = "[Double]";
             if (sizeof(FloatType) == sizeof(long double))
                 myfloattype = "[Long Double]";
-            double memory_in_mb = NmeshTotComplexAlloc * sizeof(ComplexType) / 1e6;
-            std::cout << "\n========================================================\n";
-            std::cout << "FFTWGrid is in " << status << " Ndim: [" << N << "] FloatType: " << myfloattype << "\n";
-            std::cout << "Grid has allocated " << memory_in_mb << " MB of memory per task\n";
-            std::cout << "Nmesh                  " << Nmesh << "\n";
-            std::cout << "Local_nx               " << Local_nx << "\n";
-            std::cout << "n_extra_x_slices_left  " << n_extra_x_slices_left << "\n";
-            std::cout << "n_extra_x_slices_right " << n_extra_x_slices_right << "\n";
-            std::cout << "NmeshTotComplexAlloc   " << NmeshTotComplexAlloc << "\n";
-            std::cout << "NmeshTotComplex        " << NmeshTotComplex << "\n";
-            std::cout << "NmeshTotComplexSlice   " << NmeshTotComplexSlice << "\n";
-            std::cout << "NmeshTotRealAlloc      " << NmeshTotRealAlloc << "\n";
-            std::cout << "NmeshTotReal           " << NmeshTotReal << "\n";
-            std::cout << "NmeshTotRealSlice      " << NmeshTotRealSlice << "\n";
-            std::cout << "========================================================\n\n";
+            double memory_in_mb = fourier_grid_raw.size() * sizeof(ComplexType) / 1e6;
+            if (FML::ThisTask == 0) {
+                std::cout << "\n";
+                std::cout << "#=====================================================\n";
+                std::cout << "#\n";
+                std::cout << "#            .___        _____          \n";
+                std::cout << "#            |   | _____/ ____\\____     \n";
+                std::cout << "#            |   |/    \\   __\\/  _ \\    \n";
+                std::cout << "#            |   |   |  \\  | (  <_> )   \n";
+                std::cout << "#            |___|___|  /__|  \\____/    \n";
+                std::cout << "#                     \\/                \n";
+                std::cout << "#\n";
+                std::cout << "# Info about FFTWGrid. Grid label: [" << name << "]\n";
+                std::cout << "# Status of grid: " << status << " NDIM: [" << N << "] FloatType: " << myfloattype
+                          << "\n";
+                std::cout << "# Grid has allocated " << memory_in_mb << " MB\n";
+                std::cout << "# Nmesh                  " << Nmesh << "\n";
+                std::cout << "# Local_nx               " << Local_nx << "\n";
+                std::cout << "# n_extra_x_slices_left  " << n_extra_x_slices_left << "\n";
+                std::cout << "# n_extra_x_slices_right " << n_extra_x_slices_right << "\n";
+                std::cout << "# NmeshTotComplexAlloc   " << NmeshTotComplexAlloc << "\n";
+                std::cout << "# NmeshTotComplex        " << NmeshTotComplex << "\n";
+                std::cout << "# NmeshTotComplexSlice   " << NmeshTotComplexSlice << "\n";
+                std::cout << "# NmeshTotRealAlloc      " << NmeshTotRealAlloc << "\n";
+                std::cout << "# NmeshTotReal           " << NmeshTotReal << "\n";
+                std::cout << "# NmeshTotRealSlice      " << NmeshTotRealSlice << "\n";
+                std::cout << "#\n";
+                std::cout << "#=====================================================\n";
+                std::cout << "\n";
+            }
         }
 
         // Make FFTW plans with FFTW_MEASURE, FFTW_PATIENT, FFTW_EXHAUSTIVE
@@ -462,7 +482,7 @@ namespace FML {
 #endif
 #ifdef DEBUG_FFTWGRID
             if (FML::ThisTask == 0) {
-                std::cout << "[FFTWGrid::create_wisdow] Planning flag " << planner_flag << "\n";
+                std::cout << "[FFTWGrid::create_wisdow] Planning flag " << planner_flag << ". Label: " + name + "\n";
             }
 #endif
 
@@ -476,7 +496,8 @@ namespace FML {
                 MAKE_PLAN_R2C(N, NmeshPerDim.data(), get_real_grid(), get_fftw_grid(), planner_flag);
 #endif
             if (FML::ThisTask == 0)
-                std::cout << "[FFTWGrid::create_wisdow] Warning this will clear data in the grids!\n";
+                std::cout << "[FFTWGrid::create_wisdow] Warning this will clear data in the grid. Label: " + name +
+                                 "\n";
             DESTROY_PLAN(plan_r2c);
 #endif
         }
@@ -486,7 +507,7 @@ namespace FML {
 #ifdef USE_FFTW
 #ifdef DEBUG_FFTWGRID
             if (FML::ThisTask == 0) {
-                std::cout << "[FFTWGrid::load_wisdow] Filename " << filename << "\n";
+                std::cout << "[FFTWGrid::load_wisdow] Filename " << filename << ". Label: " + name + "\n";
             }
 #endif
             if (FML::ThisTask == 0)
@@ -505,7 +526,7 @@ namespace FML {
                 fftw_export_wisdom_to_filename(filename.c_str());
 #ifdef DEBUG_FFTWGRID
             if (FML::ThisTask == 0) {
-                std::cout << "[FFTWGrid::save_wisdow] Filename " << filename << "\n";
+                std::cout << "[FFTWGrid::save_wisdow] Filename " << filename << ". Label: " + name + "\n";
             }
 #endif
 #endif
@@ -521,7 +542,8 @@ namespace FML {
 #ifdef DEBUG_FFTWGRID
             if (not grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
-                    std::cout << "Warning: [FFTWGrid::fill_real_grid] The grid status is [Fourierspace]\n";
+                    std::cout << "Warning: [FFTWGrid::fill_real_grid] The grid status is [Fourierspace]. Label: " +
+                                     name + "\n";
             }
 #endif
             FloatType * begin = (FloatType *)fourier_grid_raw.data();
@@ -534,7 +556,8 @@ namespace FML {
 #ifdef DEBUG_FFTWGRID
             if (not grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
-                    std::cout << "Warning: [FFTWGrid::fill_real_grid] The grid status is [Fourierspace]\n";
+                    std::cout << "Warning: [FFTWGrid::fill_real_grid] The grid status is [Fourierspace]. Label: " +
+                                     name + "\n";
             }
 #endif
 
@@ -558,7 +581,8 @@ namespace FML {
 #ifdef DEBUG_FFTWGRID
             if (grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
-                    std::cout << "Warning: [FFTWGrid::fill_real_grid] The grid status is [Realspace]\n";
+                    std::cout << "Warning: [FFTWGrid::fill_real_grid] The grid status is [Realspace]. Label: " + name +
+                                     "\n";
             }
 #endif
             std::fill(fourier_grid_raw.begin(), fourier_grid_raw.end(), val);
@@ -569,7 +593,8 @@ namespace FML {
 #ifdef DEBUG_FFTWGRID
             if (grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
-                    std::cout << "Warning: [FFTWGrid::fill_real_grid] The grid status is [Realspace]\n";
+                    std::cout << "Warning: [FFTWGrid::fill_real_grid] The grid status is [Realspace]. Label: " + name +
+                                     "\n";
             }
 #endif
 
@@ -598,7 +623,7 @@ namespace FML {
 #ifdef DEBUG_FFTWGRID
             if (FML::ThisTask == 0) {
                 std::cout << "[FFTWGrid::communicate_boundaries] Recieving " << n_to_recv_right
-                          << " from the right and " << n_to_recv_left << " slices from the left\n";
+                          << " from the right and " << n_to_recv_left << " slices from the left. Label: " + name + "\n";
             }
 #endif
 
@@ -811,7 +836,7 @@ namespace FML {
 
 #ifdef DEBUG_FFTWGRID
             if (FML::ThisTask == 0) {
-                std::cout << "[FFTWGrid::fftw_r2c] Transforming grid to fourier space\n";
+                std::cout << "[FFTWGrid::fftw_r2c] Transforming grid to fourier space. Label: " + name + "\n";
             }
             if (not grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
@@ -846,14 +871,13 @@ namespace FML {
             grid_is_in_real_space = false;
 
             // Normalize
-            double norm = 1.0 / std::pow(double(Nmesh), N);
-            auto * fourier_grid = get_fourier_grid();
+            const double norm = 1.0 / std::pow(double(Nmesh), N);
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
             for (int islice = 0; islice < Local_nx; islice++) {
                 for (auto && fourier_index : get_fourier_range(islice, islice + 1)) {
-                    fourier_grid[fourier_index] *= norm;
+                    set_fourier_from_index(fourier_index, norm * get_fourier_from_index(fourier_index));
                 }
             }
 

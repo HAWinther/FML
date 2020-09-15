@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <FML/Global/Global.h>
+#include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 
 namespace FML {
     namespace FOF {
@@ -44,9 +45,9 @@ namespace FML {
             // Add a new particle to the group
             // Update data
             void add(T & particle, bool periodic) {
-                double _mass = particle.get_mass();
-                auto * _pos = particle.get_pos();
-                auto * _vel = particle.get_vel();
+                double _mass = FML::PARTICLE::GetMass(particle);
+                static_assert(FML::PARTICLE::has_get_pos<T>());
+                auto * _pos = FML::PARTICLE::GetPos(particle);
 
                 // Initialize
                 if (np == 0) {
@@ -60,7 +61,6 @@ namespace FML {
 
                 // Update center of mass
                 std::array<double, NDIM> dx;
-                // double dx[NDIM];
                 double v2 = 0;
                 for (int idim = 0; idim < NDIM; idim++) {
                     dx[idim] = _pos[idim] - pos[idim];
@@ -77,12 +77,17 @@ namespace FML {
                         if (pos[idim] >= 1.0)
                             pos[idim] -= 1;
                     }
-                    // Add velocity if particle has velocity
-                    if (_vel != nullptr) {
+                }
+
+                // Add velocity if particle has velocity
+                if constexpr (FML::PARTICLE::has_get_vel<T>()) {
+                    auto _vel = FML::PARTICLE::GetVel(particle);
+                    for (int idim = 0; idim < NDIM; idim++) {
                         vel[idim] = (vel[idim] * mass + _vel[idim] * _mass) / (mass + _mass);
                         v2 += vel[idim] * vel[idim];
                     }
                 }
+
                 // Update <v^2>
                 vel2 = (vel2 * mass + _mass * v2) / (mass + _mass);
                 np++;
