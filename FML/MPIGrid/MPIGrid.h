@@ -165,8 +165,39 @@ namespace FML {
             template <class U>
             MPIGrid<NDIM, T> & operator/=(const U & rhs);
 
+            // For memory monitoring
             void add_memory_label(std::string label);
+
+            // Show some info
+            void info();
         };
+
+        template <int NDIM, class T>
+        void MPIGrid<NDIM, T>::info() {
+            if (FML::ThisTask == 0) {
+                std::cout << "\n";
+                std::cout << "#=====================================================\n";
+                std::cout << "#\n";
+                std::cout << "#            .___        _____          \n";
+                std::cout << "#            |   | _____/ ____\\____     \n";
+                std::cout << "#            |   |/    \\   __\\/  _ \\    \n";
+                std::cout << "#            |   |   |  \\  | (  <_> )   \n";
+                std::cout << "#            |___|___|  /__|  \\____/    \n";
+                std::cout << "#                     \\/                \n";
+                std::cout << "#\n";
+                std::cout << "# Info about MPIGrid NDIM [" << NDIM << "] Size of cells [" << sizeof(T) << "] bytes\n";
+                std::cout << "# Periodic?            : " << std::boolalpha << _periodic << "\n";
+                std::cout << "# N                    : " << _N << "\n";
+                std::cout << "# NLocal               : " << _NLocal << "\n";
+                std::cout << "# n_extra_slices_left  : " << _n_extra_slices_left << "\n";
+                std::cout << "# n_extra_slices_right : " << _n_extra_slices_right << "\n";
+                std::cout << "# Cells allocated      : " << _y.size() << " per task\n";
+                std::cout << "# Memory allocated     : " << _y.size() * sizeof(T) / 1e6 << " MB per task\n";
+                std::cout << "#\n";
+                std::cout << "#=====================================================\n";
+                std::cout << "\n";
+            }
+        }
 
         template <int NDIM, class T>
         void MPIGrid<NDIM, T>::add_memory_label([[maybe_unused]] std::string label) {
@@ -600,7 +631,7 @@ namespace FML {
                 T * slice_left_torecv = _y.data() + _NperSlice * i;
                 send_slice_right(_NLocal - nsend_to_right + i, recv_array);
                 if (not do_not_store)
-                    memcpy(slice_left_torecv, recv_array.data(), _NperSlice * sizeof(T));
+                    std::memcpy(slice_left_torecv, recv_array.data(), _NperSlice * sizeof(T));
             }
 
             // Send leftmost slices left and store in extra right slices
@@ -609,7 +640,7 @@ namespace FML {
                 T * slice_right_torecv = _y.data() + _NtotLocalLeft + _NtotLocal + _NperSlice * i;
                 send_slice_left(i, recv_array);
                 if (not do_not_store)
-                    memcpy(slice_right_torecv, recv_array.data(), _NperSlice * sizeof(T));
+                    std::memcpy(slice_right_torecv, recv_array.data(), _NperSlice * sizeof(T));
             }
         }
 

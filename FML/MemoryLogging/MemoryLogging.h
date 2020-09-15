@@ -139,8 +139,15 @@ namespace FML {
         void remove(void * ptr, size_t size) {
             if (stop_logging or size < min_bytes_to_log)
                 return;
+
+#ifdef DEBUG_MEMORYLOG
+            std::string name = labels[ptr];
+            if (ThisTask == 0)
+                std::cout << "===> MemoryLog::remove Freeing[" << name << "]" << std::endl;
+#endif
             std::lock_guard<std::mutex> guard(mymutex);
             allocations.erase(ptr);
+            labels.erase(ptr);
 
             memory_in_use -= size;
 
