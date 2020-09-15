@@ -18,6 +18,7 @@
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h> // Only for compute_multipoles from particles
+#include <FML/LPT/Reconstruction.h> // For particles->redshiftspace
 
 // The classes that define how to bin and return the data
 #include <FML/ComputePowerSpectra/BispectrumBinning.h>
@@ -534,51 +535,21 @@ namespace FML {
             FFTWGrid<N> density_k(Ngrid, nleft, nright);
             density_k.add_memory_label("FFTWGrid::compute_power_spectrum_multipoles::density_k");
 
-            // Loop over all the axes we are going to put the particles
+            // Loop over all the N axes we are going to put the particles
             // into redshift space
-            for (int dir = 0; dir < N; dir++) {
+            for (int idim = 0; idim < N; idim++) {
 
                 // Set up binning for current axis
-                std::vector<PowerSpectrumBinning<N>> Pell_current = Pell_all[dir];
+                std::vector<PowerSpectrumBinning<N>> Pell_current = Pell_all[idim];
                 for (size_t ell = 0; ell < Pell_current.size(); ell++)
                     Pell_current[ell].reset();
 
                 // Make line of sight direction unit vector
                 std::vector<double> line_of_sight_direction(N, 0.0);
-                line_of_sight_direction[dir] = 1.0;
+                line_of_sight_direction[idim] = 1.0;
 
-                // Displace particles
-                double max_disp = 0.0;
-#ifdef USE_OMP
-#pragma omp parallel for reduction(max : max_disp)
-#endif
-                for (size_t i = 0; i < part.get_npart(); i++) {
-                    auto * pos = FML::PARTICLE::GetPos(part[i]);
-                    auto * vel = FML::PARTICLE::GetVel(part[i]);
-                    double vdotr = 0.0;
-                    for (int idim = 0; idim < N; idim++) {
-                        vdotr += vel[idim] * line_of_sight_direction[idim];
-                    }
-                    for (int idim = 0; idim < N; idim++) {
-                        pos[idim] += vdotr * line_of_sight_direction[idim] * velocity_to_displacement;
-                        // Periodic boundary conditions
-                        if (pos[idim] < 0.0)
-                            pos[idim] += 1.0;
-                        if (pos[idim] >= 1.0)
-                            pos[idim] -= 1.0;
-                    }
-
-                    max_disp = std::max(max_disp, std::fabs(vdotr));
-                }
-                max_disp *= velocity_to_displacement;
-                FML::MaxOverTasks(&max_disp);
-                if (FML::ThisTask == 0)
-                    std::cout << "Maximum displacement: " << max_disp << "\n";
-
-                // Only displacements along the x-axis can trigger communication needs so we can avoid some
-                // calls
-                if (dir == 0)
-                    part.communicate_particles();
+                // Transform to redshift-space
+                FML::COSMOLOGY::particles_to_redshiftspace(part, line_of_sight_direction, velocity_to_displacement);
 
                 // Bin particles to grid
                 density_k.set_grid_status_real(true);
@@ -587,30 +558,6 @@ namespace FML {
                                         part.get_npart_total(),
                                         density_k,
                                         density_assignment_method);
-
-                // Displace particles back
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-                for (size_t i = 0; i < part.get_npart(); i++) {
-                    auto * pos = FML::PARTICLE::GetPos(part[i]);
-                    auto * vel = FML::PARTICLE::GetVel(part[i]);
-                    double vdotr = 0.0;
-                    for (int idim = 0; idim < N; idim++) {
-                        vdotr += vel[idim] * line_of_sight_direction[idim];
-                    }
-                    for (int idim = 0; idim < N; idim++) {
-                        pos[idim] -= vdotr * line_of_sight_direction[idim] * velocity_to_displacement;
-                        // Periodic boundary conditions
-                        if (pos[idim] < 0.0)
-                            pos[idim] += 1.0;
-                        if (pos[idim] >= 1.0)
-                            pos[idim] -= 1.0;
-                    }
-                }
-                // Only displacements along the x-axis can trigger communication needs so we can avoid one call
-                if (dir == 0)
-                    part.communicate_particles();
 
                 // Fourier transform
                 density_k.fftw_r2c();
@@ -621,14 +568,18 @@ namespace FML {
                 // Compute power-spectrum multipoles
                 compute_power_spectrum_multipoles(density_k, Pell_current, line_of_sight_direction);
 
-                // Assign back
-                Pell_all[dir] = Pell_current;
+                // Copy over binning we computed
+                Pell_all[idim] = Pell_current;
+                
+                // Transform particles back to real-space (we don't want to ruin the particles)
+                // Ideally we should have taken a copy, but this is fine
+                FML::COSMOLOGY::particles_to_redshiftspace(part, line_of_sight_direction, -velocity_to_displacement);
             }
 
             // Normalize
             for (size_t ell = 0; ell < Pell.size(); ell++) {
-                for (int dir = 0; dir < N; dir++) {
-                    Pell[ell] += Pell_all[dir][ell];
+                for (int idim = 0; idim < N; idim++) {
+                    Pell[ell] += Pell_all[idim][ell];
                 }
             }
             for (size_t ell = 0; ell < Pell.size(); ell++) {

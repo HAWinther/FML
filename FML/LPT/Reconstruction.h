@@ -216,7 +216,7 @@ namespace FML {
 
                     // Show maximum shift
                     for (int idim = 0; idim < N; idim++)
-                      FML::MaxOverTasks(&Psi_max[idim]);
+                        FML::MaxOverTasks(&Psi_max[idim]);
                     if (FML::ThisTask == 0) {
                         std::cout << "Maximum shift: ";
                         for (int idim = 0; idim < N; idim++)
@@ -233,7 +233,15 @@ namespace FML {
         /// This takes a set of particles and displace them from realspace to redshiftspace
         /// Using a fixed line of sight direction
         /// DeltaX = (v * r)r * velocity_to_displacement
-        /// If velocities are peculiar then velocity_to_displacement = 1/(aH)
+        /// If velocities are peculiar then velocity_to_displacement = 1/(100 * aH/H0 * box) with box in Mpc/h
+        /// You can revert back to real-space by calling the method again with velocity_to_displacement being negative
+        ///
+        /// @tparam T The particle class
+        ///
+        /// @param[out] part MPIParticle container
+        /// @param[in] line_of_sight_direction The fixed line of sight vector, e.g. (0,0,1) for the z-axis
+        /// @param[in] velocity_to_displacement Convert from user velocity to RSD shift.
+        ///
         //================================================================================
         template <class T>
         void particles_to_redshiftspace(FML::PARTICLE::MPIParticles<T> & part,
@@ -246,9 +254,9 @@ namespace FML {
 
             // Check that velocities really exists (i.e. get_vel is not just set to return a nullptr)
             static_assert(FML::PARTICLE::has_get_pos<T>(),
-                       "[particles_to_redshiftspace] Partices must have positions to use this method");
+                          "[particles_to_redshiftspace] Partices must have positions to use this method");
             static_assert(FML::PARTICLE::has_get_vel<T>(),
-                       "[particles_to_redshiftspace] Partices must have velocity to use this method");
+                          "[particles_to_redshiftspace] Partices must have velocity to use this method");
 
             // Periodic box? Yes, this is only meant to be used with simulation boxes
             const bool periodic_box = true;
@@ -264,10 +272,11 @@ namespace FML {
                 line_of_sight_direction[idim] /= norm;
             }
 
+            double max_disp = 0.0;
             auto NumPart = part.get_npart();
             auto * p = part.get_particles_ptr();
 #ifdef USE_OMP
-#pragma omp parallel for
+#pragma omp parallel for reduction(max : max_disp)
 #endif
             for (size_t i = 0; i < NumPart; i++) {
                 auto * pos = FML::PARTICLE::GetPos(p[i]);
@@ -276,6 +285,7 @@ namespace FML {
                 for (int idim = 0; idim < N; idim++) {
                     vdotr += vel[idim] * line_of_sight_direction[idim];
                 }
+                max_disp = std::max(max_disp, std::fabs(vdotr));
                 for (int idim = 0; idim < N; idim++) {
                     pos[idim] += vdotr * line_of_sight_direction[idim] * velocity_to_displacement;
                     // Periodic boundary conditions
@@ -287,7 +297,17 @@ namespace FML {
                     }
                 }
             }
-            part.communicate_particles();
+
+            // Only need to communicate if we have shifted along the x-axis
+            if (line_of_sight_direction[0] != 0.0)
+                part.communicate_particles();
+
+            // If velocity_to_displacement < 0 we are going the other way around
+            FML::MaxOverTasks(&max_disp);
+            max_disp *= velocity_to_displacement;
+            if (FML::ThisTask == 0)
+                std::cout << "[particles_to_redshiftspace] Maximum displacement "
+                          << (velocity_to_displacement < 0 ? "(reversing) : " : "            :  ") << max_disp << "\n";
         }
 
     } // namespace COSMOLOGY

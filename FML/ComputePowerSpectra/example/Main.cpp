@@ -18,37 +18,30 @@ using FFTWGrid = FML::GRID::FFTWGrid<N>;
 const int NDIM = 3;
 struct Particle {
     double x[NDIM];
+    double v[NDIM];
     Particle() = default;
     Particle(double * _x) { std::memcpy(x, _x, NDIM * sizeof(double)); }
+    Particle(double * _x, double * _v) {
+        std::memcpy(x, _x, NDIM * sizeof(double));
+        std::memcpy(v, _v, NDIM * sizeof(double));
+    }
+    constexpr int get_ndim() { return NDIM; }
     double * get_pos() { return x; }
-    // We don't need this in the tests, but the method must exist
-    double * get_vel() { return nullptr; }
-    int get_particle_byte_size() { return NDIM * sizeof(double); }
-    void append_to_buffer(char * data) { std::memcpy(data, x, NDIM * sizeof(double)); }
-    void assign_from_buffer(char * data) { std::memcpy(x, data, NDIM * sizeof(double)); }
+    double * get_vel() { return v; }
 };
-
-int main() {
-#ifdef MEMORY_LOGGING
-    auto * mem = FML::MemoryLog::get();
-    ExamplesPower();
-    mem->print();
-#else
-    ExamplesPower();
-#endif
-}
 
 void ExamplesPower() {
 
-    const bool TEST_POFK = false;
+    const bool TEST_POFK = true;
     const bool TEST_POFK_INTERLACING = true;
-    const bool TEST_POFK_BRUTEFORCE = false;
+    const bool TEST_POFK_BRUTEFORCE = true;
     const bool TEST_MULTIPOLES = false;
     const bool TEST_MULTIPOLES_GRID = false;
 
-    const int Nmesh = 64;
+    const int Nmesh = 32;
     const int ell_max = 4;
     const std::string density_assignment_method = "CIC";
+    const double box = 1024.0;
 
     //======================================================================================
     // Read particles from file
@@ -57,13 +50,12 @@ void ExamplesPower() {
         std::cout << "Reading particles from file\n";
 
     // Read ascii file with [x,y,z]
-    const double box = 1024.0;
     const std::string filename = "../../../TestData/particles_B1024.txt";
     const int ncols = 3;
-    const int nskip_header = 0;
     const std::vector<int> cols_to_keep{0, 1, 2};
+    const int nskip_header = 0;
     auto data = FML::FILEUTILS::read_regular_ascii(filename, ncols, cols_to_keep, nskip_header);
-
+    
     // Create particles and scale to [0,1)
     std::vector<Particle> part;
     for (auto & pos : data) {
@@ -71,6 +63,26 @@ void ExamplesPower() {
             x /= box;
         part.push_back(Particle(pos.data()));
     }
+
+    /*
+    // Read file with [x,y,z,vx,vy,vz] 
+    const std::string filename = "../../../TestData/galaxies_realspace_z0.42.txt";
+    const int ncols = 6;
+    const std::vector<int> cols_to_keep{0, 1, 2, 3, 4, 5};
+    const int nskip_header = 0;
+    auto data = FML::FILEUTILS::read_regular_ascii(filename, ncols, cols_to_keep, nskip_header);
+
+    // Create particles and scale to [0,1)
+    std::vector<Particle> part;
+    for (auto & line : data) {
+        double x[3], v[3];
+        for (int i = 0; i < 3; i++) {
+            x[i] = line[i] / box;
+            v[i] = line[3 + i];
+        }
+        part.push_back(Particle(x, v));
+    }
+    */
 
     // Create MPI particles by letting each task keep only the particles that falls in its domain
     FML::PARTICLE::MPIParticles<Particle> p;
@@ -155,6 +167,8 @@ void ExamplesPower() {
 
     //======================================================================================
     // Compute power-spectrum multipoles
+    // Takes real space particles and displace them along the coordinate axes to get particles
+    // in redshift space and use this to compute pofk multipoles
     //======================================================================================
 
     if (TEST_MULTIPOLES) {
@@ -162,15 +176,12 @@ void ExamplesPower() {
         if (FML::ThisTask == 0)
             std::cout << "Running compute_power_spectrum_multipoles\n";
 
-        // Density assignment method and the number of extra slices we need for this
-        auto nleftright = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(density_assignment_method);
-
-        // Make density grid (make sure we have enough slices)
-        FFTWGrid<NDIM> density_k(Nmesh, nleftright.first, nleftright.second);
-
         // Multipole computation
+        // velocity_to_displacement is used to convert our velocities (peculiar in km/s) to a displacement in [0,1)
+        const double a = 1.0 / (1.0 + 0.42);
+        const double aH = a * std::sqrt(0.3 / (a * a * a) + 0.7);
+        const double velocity_to_displacement = 1.0 / (100.0 * box * aH);
         std::vector<FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM>> Pells(ell_max + 1, Nmesh / 2);
-        double velocity_to_displacement = 1.0 / (100.0 * box);
         FML::CORRELATIONFUNCTIONS::compute_power_spectrum_multipoles<NDIM>(
             Nmesh, p, velocity_to_displacement, Pells, density_assignment_method);
 
@@ -206,12 +217,6 @@ void ExamplesPower() {
 
         // Make density grid (make sure we have enough slices)
         FFTWGrid<NDIM> density_k(Nmesh, nleftright.first, nleftright.second);
-
-#ifdef MEMORY_LOGGING
-        // Example of memory logging
-        density_k.add_memory_label("FFTWGrid::density_k");
-        FML::MemoryLog::get()->print();
-#endif
 
         // Interpolate particles to grid
         FML::INTERPOLATION::particles_to_grid<NDIM, Particle>(
@@ -254,3 +259,5 @@ void ExamplesPower() {
     //======================================================================================
     //======================================================================================
 }
+
+int main() { ExamplesPower(); }
