@@ -112,6 +112,9 @@ void TestMultiGridSolver() {
     // Set up the solver
     //======================================================================
     MultiGridSolver<Ndim, SolverType> g(N, Nlevels, verbose, periodic, nleft, nright);
+    
+    // Show info about the solver
+    g.info();
 
     // Set options (optional; for finer control)
     g.set_ngs_sweeps(ngs_fine, ngs_coarse, ngs_first);
@@ -188,6 +191,9 @@ void TestMultiGridSolver() {
     //======================================================================
     g.solve(Equation, ConvergenceCriterion);
     auto sol = g.get_grid(0);
+
+    // Show info about the grid
+    sol.info();
 
     //======================================================================
     // Fetch solution and compare to analytical solution

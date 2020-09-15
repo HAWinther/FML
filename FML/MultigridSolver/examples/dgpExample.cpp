@@ -5,6 +5,9 @@
 //======================================================================
 // Solve the nDGP equation
 // D^2phi + A((D^2phi)^2 - (Dij phi)^2) = B delta
+// Convergence of this kind of equation is not always smooth
+// What usually happens is that the residual saturates at some value
+// So experiment with what is a realistic convergence criterion
 //======================================================================
 
 using namespace FML::SOLVERS::MULTIGRIDSOLVER;
@@ -50,7 +53,9 @@ void DGPSolver() {
     const double vol_out = 1.0 - vol_in;
     const double rho_out = 0.1;
     const double rho_in = (1.0 - rho_out * vol_out) / vol_in;
-    std::cout << "Density of the sphere: " << rho_in << "\n";
+
+    if (FML::ThisTask == 0)
+        std::cout << "Density of the sphere: " << rho_in << "\n";
     auto delta_analytic = [=](const std::array<double, Ndim> & x) -> double {
         double r2 = 0.0;
         for (int idim = 0; idim < Ndim; idim++) {
@@ -148,10 +153,11 @@ void DGPSolver() {
             (cross + alpha / beta * OmegaM * aexp * delta - w * laplacian * laplacian) / (alpha * alpha);
         const double disc = 1.0 + 4.0 * (1 - w) * sigma;
         const double eq = laplacian - 0.5 * alpha * (std::sqrt(disc) - 1.0) / (1.0 - w);
-        const double deq = -2.0 * Ndim / (h * h); // * (1.0 + 2.0 * w * laplacian / alpha / sqrt(disc));
+        const double deq = -2.0 * Ndim / (h * h);
 
+        // Check for fatal error
         if (disc < 0.0) {
-            std::cout << disc << " negative" << std::endl;
+            std::cout << disc << " is negative! Solution fails to remain real" << std::endl;
             exit(1);
         }
 
