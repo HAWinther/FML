@@ -259,7 +259,44 @@ namespace FML {
                         auto dl = derivlaplacian;
                         return std::pair<T, T>{l, dl};
                     };
+
+                // Show some info
+                void info();
             };
+
+            template <int NDIM, class T>
+            void MultiGridSolver<NDIM, T>::info() {
+
+                // Compute memory consumption
+                size_t total_cells = 0;
+                for (int level = 0; level < _Nlevel; level++) {
+                    total_cells += _f.get_grid(level).get_NtotLocal();
+                }
+                // We have 3 grids: _f, _res, _source
+                total_cells *= 3 * sizeof(T);
+
+                if (FML::ThisTask == 0) {
+                    std::cout << "\n";
+                    std::cout << "#=====================================================\n";
+                    std::cout << "#\n";
+                    std::cout << "#            .___        _____          \n";
+                    std::cout << "#            |   | _____/ ____\\____     \n";
+                    std::cout << "#            |   |/    \\   __\\/  _ \\    \n";
+                    std::cout << "#            |   |   |  \\  | (  <_> )   \n";
+                    std::cout << "#            |___|___|  /__|  \\____/    \n";
+                    std::cout << "#                     \\/                \n";
+                    std::cout << "#\n";
+                    std::cout << "# Info about MultiGridSolver NDIM [" << NDIM << "] Size of solvertype [" << sizeof(T)
+                              << "] bytes\n";
+                    std::cout << "# Periodic?            : " << std::boolalpha << _periodic << "\n";
+                    std::cout << "# N                    : " << _N << "\n";
+                    std::cout << "# NLevel               : " << _Nlevel << "\n";
+                    std::cout << "# Memory allocated     : " << total_cells / 1e6 << " MB per task\n";
+                    std::cout << "#\n";
+                    std::cout << "#=====================================================\n";
+                    std::cout << "\n";
+                }
+            }
 
             //================================================
             // Constructor
@@ -640,8 +677,6 @@ namespace FML {
                     }
                 }
 
-                // We can add more here if needed without ruining anything...
-
                 return index_list;
             }
 
@@ -650,8 +685,8 @@ namespace FML {
             // This starts with the cell relative to current at
             // (-1,-1,-1,...) and with this as 'digits' adds 1
             // with a carry going left to right until we get to
-            // (1,1,1,...) 
-            // 
+            // (1,1,1,...)
+            //
             // For NDIM=3 this gives
             // (-1, -1, -1) 0
             // ( 0, -1, -1) 1
@@ -699,7 +734,8 @@ namespace FML {
                 std::array<IndexInt, ncells> index_list;
                 for (int k = 0; k < ncells; k++) {
                     // Output the list for NDIM=3 (exit after the loop to prevent endless printing):
-                    //std::cout << "(" << std::setw(2) << add[0] << ", " << std::setw(2) << add[1] << ", " << std::setw(2)
+                    // std::cout << "(" << std::setw(2) << add[0] << ", " << std::setw(2) << add[1] << ", " <<
+                    // std::setw(2)
                     //          << add[2] << ")\n";
 
                     auto coord = center_coord;
@@ -714,7 +750,7 @@ namespace FML {
                     }
                     // std::cout << ccoord[0] << " " << ccoord[1] << " -> " << coord[0] << " " << coord[1] << "\n";
                     index_list[k] = _f.get_grid(level).index_from_globalcoord(coord);
-                    
+
                     // Do addition with carry with elements of 'add' as digits to compute all indices
                     int i = 0;
                     while (i < NDIM) {
