@@ -12,6 +12,11 @@
 #include <FML/Global/Global.h>
 #include <FML/Smoothing/SmoothingFourier.h>
 
+#ifdef USE_GSL
+#include <FML/ODESolver/ODESolver.h>
+#include <FML/Spline/Spline.h>
+#endif
+
 namespace FML {
     namespace COSMOLOGY {
         /// This namespace contains things related to Lagrangian Perturbation Theory (displacement fields,
@@ -876,7 +881,7 @@ namespace FML {
                 phi_3LPT_b_fourier = FFTWGrid<N>(Nmesh, nleft, nright);
                 phi_3LPT_b_fourier.add_memory_label("FFTWGrid::compute_3LPT_potential_fourier::phi_3LPT_b_fourier");
                 // And then finally the A-terms (for N=2 we only have 1 component)
-                phi_3LPT_Avec_fourier = std::vector<FFTWGrid<N>>((N == 2 ? 1 : N));
+                phi_3LPT_Avec_fourier = std::vector<FFTWGrid<N>>(N);
                 if (not ignore_curl_term)
                     for (int idim = 0; idim < N; idim++) {
                         phi_3LPT_Avec_fourier[idim] = FFTWGrid<N>(Nmesh, nleft, nright);
@@ -1006,7 +1011,7 @@ namespace FML {
                             if constexpr (N == 2) {
                                 // For N=2 the curl is a scalar and we only store the "z" component
                                 auto value_Az = phi_3LPT_Avec_fourier[0].get_fourier_from_index(fourier_index);
-                                phi_3LPT_Avec_fourier[0].get_fourier_from_index(fourier_index,
+                                phi_3LPT_Avec_fourier[0].set_fourier_from_index(fourier_index,
                                                                                 prefactor_3LPT_Avec * value_Az * fac);
                             }
                             if constexpr (N == 3) {
@@ -1062,7 +1067,7 @@ namespace FML {
                     for (auto && real_index : phi_sc_fourier.get_real_range(islice, islice + 1)) {
                         auto delta_ini = phi_sc_fourier.get_real_from_index(real_index);
                         double value = 1.0 - 2.0 / 3.0 * delta_ini * DoverDini_1LPT;
-                        assert(value >= 0.0);
+                        value = std::max(value, 0.0);
                         phi_sc_fourier.set_real_from_index(real_index, 3.0 * (std::sqrt(value) - 1.0));
                     }
                 }
@@ -1155,8 +1160,118 @@ namespace FML {
                     }
                 }
             }
+
+#ifdef USE_GSL
+            //=================================================================================
+            /// Compute 1,2,3LPT growth-factors in LCDM and spline them
+            /// The growth factors are normalized such that D1LPT = 1 at zini
+            /// We assume initial conditions as in EdS: D1LPT=1, D2LPT = -3/7, D3LPTa = -1/3 and D3LPTb = 5/21
+            ///
+            /// @param[in] OmegaM Matter density parameter at z=0
+            /// @param[in] zini The redshift we want D1LPT = 1
+            /// @param[in] HoverH0_of_a The hubble function H(a)/H0
+            /// @param[out] D_1LPT_of_loga Spline of the 1LPT growth factor
+            /// @param[out] D_2LPT_of_loga Spline of the 2LPT growth factor
+            /// @param[out] D_3LPTa_of_loga Spline of the 3LPTb growth factor
+            /// @param[out] D_3LPTb_of_loga Spline of the 3LPTa growth factor
+            ///
+            //=================================================================================
+            void compute_LPT_growth_factors_LCDM(double OmegaM,
+                                                 double zini,
+                                                 std::function<double(double)> HoverH0_of_a,
+                                                 FML::INTERPOLATION::SPLINE::Spline & D_1LPT_of_loga,
+                                                 FML::INTERPOLATION::SPLINE::Spline & D_2LPT_of_loga,
+                                                 FML::INTERPOLATION::SPLINE::Spline & D_3LPTa_of_loga,
+                                                 FML::INTERPOLATION::SPLINE::Spline & D_3LPTb_of_loga) {
+
+                using DVector = std::vector<double>;
+
+                // Start at z = 1000 assuming no radiation, but this is fine because we want the solution to follow
+                // the matter attractor
+                const int npts = 2000;
+                const double aini = 1.0 / 1000.0;
+                const double aend = 1.0;
+
+                FML::SOLVERS::ODESOLVER::ODEFunction deriv = [&](double x, const double * y, double * dydx) {
+                    const double a = std::exp(x);
+                    const double H = HoverH0_of_a(a);
+                    const double dlogHdx = 1.0 / (2.0 * H * H) * (-3.0 * OmegaM / (a * a * a));
+                    const double factor = 1.5 * OmegaM / (H * H * a * a * a);
+                    const double D1 = y[0];
+                    const double dD1dx = y[1];
+                    const double D2 = y[2];
+                    const double dD2dx = y[3];
+                    const double D3a = y[4];
+                    const double dD3adx = y[5];
+                    const double D3b = y[6];
+                    const double dD3bdx = y[7];
+                    dydx[0] = dD1dx;
+                    dydx[1] = factor * D1 - (2.0 + dlogHdx) * dD1dx;
+                    dydx[2] = dD2dx;
+                    dydx[3] = factor * (D2 - D1 * D1) - (2.0 + dlogHdx) * dD2dx;
+                    dydx[4] = dD3adx;
+                    dydx[5] = factor * (D3a - 2.0 * D1 * D1 * D1) - (2.0 + dlogHdx) * dD3adx;
+                    dydx[6] = dD3bdx;
+                    dydx[7] = factor * (D3b + D1 * D1 * D1 - D2 * D1) - (2.0 + dlogHdx) * dD3bdx;
+                    return GSL_SUCCESS;
+                };
+
+                const double D1_ini = 1.0;
+                const double dD1dx_ini = 1.0 * 1.0;
+                const double D2_ini = -3.0 / 7.0;
+                const double dD2dx_ini = -3.0 / 7.0 * 2.0;
+                const double D3a_ini = -1.0 / 3.0;
+                const double dD3adx_ini = -1.0 / 3.0 * 3.0;
+                const double D3b_ini = 5.0 / 21.0;
+                const double dD3bdx_ini = 5.0 / 21.0 * 3.0;
+
+                // The initial conditions
+                // D1 = a/aini, D2 = -3/7 D1^2, D3a = -1/3 D1^3 and D3b = 5/21 D1^3 for growing mode in EdS
+                DVector yini{D1_ini, dD1dx_ini, D2_ini, dD2dx_ini, D3a_ini, dD3adx_ini, D3b_ini, dD3bdx_ini};
+                DVector xarr(npts);
+                for (int i = 0; i < npts; i++)
+                    xarr[i] = std::log(aini) + std::log(aend / aini) * i / double(npts);
+
+                // Solve the ODE
+                FML::SOLVERS::ODESOLVER::ODESolver ode;
+                ode.solve(deriv, xarr, yini);
+                auto D1 = ode.get_data_by_component(0);
+                auto D2 = ode.get_data_by_component(2);
+                auto D3a = ode.get_data_by_component(4);
+                auto D3b = ode.get_data_by_component(6);
+
+                FML::INTERPOLATION::SPLINE::Spline tmp;
+                tmp.create(xarr, D1, "D1(loga) Spline");
+                const double D = tmp(std::log(1.0 / (1.0 + zini)));
+
+                // Normalize such that D1LPT = 1 at zini
+                for (int i = 0; i < npts; i++) {
+                    D1[i] /= D;
+                    D2[i] /= D * D;
+                    D3a[i] /= D * D * D;
+                    D3b[i] /= D * D * D;
+                }
+
+                // Print some values
+                if (FML::ThisTask == 0) {
+                    std::cout << "[compute_LPT_growth_factors_LCDM]  Scalefactor   Growth factors (D1LPT / a,   "
+                                 "D2LPT / D1LPT^2,   D3LPTa / D1LPT^3,   D3LPTb / "
+                                 "D1LPT^3)\n";
+                    for (int i = 0; i < npts; i += npts / 15)
+                        std::cout << std::exp(xarr[i]) << " " << D1[i] / (1.0 + zini) / std::exp(xarr[i]) << " "
+                                  << D2[i] / (D1[i] * D1[i]) << " " << D3a[i] / (D1[i] * D1[i] * D1[i]) << " "
+                                  << D3b[i] / (D1[i] * D1[i] * D1[i]) << " "
+                                  << "\n";
+                }
+
+                // Spline it up
+                D_1LPT_of_loga.create(xarr, D1, "D1(loga) Spline");
+                D_2LPT_of_loga.create(xarr, D2, "D2(loga) Spline");
+                D_3LPTa_of_loga.create(xarr, D3a, "D3a(loga) Spline");
+                D_3LPTb_of_loga.create(xarr, D3b, "D3b(loga) Spline");
+            }
+#endif
         } // namespace LPT
     }     // namespace COSMOLOGY
 } // namespace FML
 #endif
-

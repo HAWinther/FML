@@ -256,9 +256,10 @@ int main() {
     // nyquist frequency (we can also just a larger grid)
     //=====================================================
     interpolation_method = "PQS";
+    const bool interlacing = true;
     FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim> pofk(Nmesh / 2);
-    FML::CORRELATIONFUNCTIONS::compute_power_spectrum_interlacing<Ndim>(
-        Nmesh, part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), pofk, interpolation_method);
+    FML::CORRELATIONFUNCTIONS::compute_power_spectrum<Ndim>(
+        Nmesh, part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), pofk, interpolation_method, interlacing);
 
     //=====================================================
     // ...and add back the shot-noise that was subtracted
