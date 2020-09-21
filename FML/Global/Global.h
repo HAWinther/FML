@@ -90,8 +90,9 @@ namespace FML {
 
     std::pair<double, double> get_system_memory_use();
 
+    /// Gather a single value from all tasks. Value from task ThisTask is stored in values[ThisTask]
     template <class T>
-    std::vector<T> GatherFromAllTasks(T * value) {
+    std::vector<T> GatherFromTasks(T * value) {
         std::vector<T> values(FML::NTasks);
 #ifdef USE_MPI
         MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, MPI_COMM_WORLD);
@@ -100,40 +101,56 @@ namespace FML {
 #endif
         return values;
     }
+
+    /// Inplace max over tasks of a single value
     template <class T>
     void MaxOverTasks([[maybe_unused]] T * value) {
         if (FML::NTasks == 1)
             return;
-        std::vector<T> values = GatherFromAllTasks(value);
+        std::vector<T> values = GatherFromTasks(value);
         T maxvalue = *value;
         for (auto v : values)
             if (maxvalue < v)
                 maxvalue = v;
         *value = maxvalue;
     }
+    
+    /// Inplace min over tasks of a single value
     template <class T>
     void MinOverTasks([[maybe_unused]] T * value) {
         if (FML::NTasks == 1)
             return;
-        std::vector<T> values = GatherFromAllTasks(value);
+        std::vector<T> values = GatherFromTasks(value);
         T minvalue = *value;
         for (auto v : values)
             if (minvalue > v)
                 minvalue = v;
         *value = minvalue;
     }
+    
+    /// Inplace sum over tasks of a single value
     template <class T>
     void SumOverTasks([[maybe_unused]] T * value) {
         if (FML::NTasks == 1)
             return;
-        std::vector<T> values = GatherFromAllTasks(value);
+        std::vector<T> values = GatherFromTasks(value);
         T sum = 0;
         for (auto v : values) {
             sum += v;
         }
         *value = sum;
     }
-
+    
+    /// Inplace sum over tasks of a contigious array of values
+    template <class T>
+    void SumArrayOverTasks([[maybe_unused]] T * value, int n) {
+        if (FML::NTasks == 1)
+            return;
+        for(int i = 0; i < n; i++){
+          SumOverTasks(&value[i]);
+        }
+    }
+    
     //============================================
     //// An assert function that calls MPI_Abort
     //// instead of just abort to avoid deadlock

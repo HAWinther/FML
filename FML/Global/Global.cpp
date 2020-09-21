@@ -195,7 +195,7 @@ namespace FML {
     }
 
     //============================================
-    /// Fetch virtual memory and resident set 
+    /// Fetch virtual memory and resident set
     /// from /proc/self/stat on a linux system.
     /// On other systems it just returns (0,0)
     //============================================
@@ -220,6 +220,24 @@ namespace FML {
 #endif
         return {vm_usage, resident_set};
     }
+
+    // Make sure the most common types we use for comm gets instansiated
+#define TYPES(TYPE)                                                                                                    \
+    template std::vector<TYPE> GatherFromTasks<TYPE>(TYPE *);                                                          \
+    template void MinOverTasks<TYPE>(TYPE *);                                                                          \
+    template void MaxOverTasks<TYPE>(TYPE *);                                                                          \
+    template void SumOverTasks<TYPE>(TYPE *);                                                                          \
+    template void SumArrayOverTasks<TYPE>(TYPE *, int);
+    TYPES(char);
+    TYPES(int);
+    TYPES(unsigned int);
+    TYPES(long long);
+    TYPES(size_t);
+    TYPES(ptrdiff_t);
+    TYPES(float);
+    TYPES(double);
+    TYPES(long double);
+#undef TYPES
 
 } // namespace FML
 
