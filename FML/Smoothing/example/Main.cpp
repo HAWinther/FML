@@ -59,4 +59,10 @@ int main() {
   if(FML::ThisTask == 0)
     std::cout << "Convolution in real space test passed. Maximum error: " << max_error <<"\n";
 
+  // Create a PDF of the grid
+  int nbins = 50;
+  std::vector<double> x, pdf;
+  FML::GRID::compute_grid_PDF(result, nbins, x, pdf);
+  for(int i = 0; i < nbins; i++)
+    std::cout << x[i] << " " << pdf[i] << "\n";
 }

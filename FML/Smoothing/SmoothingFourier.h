@@ -228,6 +228,81 @@ namespace FML {
             // Transform back to obtain the desired convolution
             real_grid_result.fftw_c2r();
         }
+
+        /// This computes the PDF of whatever quantity is in the grid (e.g. the density if its a density grid)
+        /// The binning is set to be linear. The range is set by the values we find in the grid
+        /// This realy belongs in the namespace CORRELATIONFUNCTIONS so should move it there
+        template <int N>
+        void
+        compute_grid_PDF(const FFTWGrid<N> & real_grid, int nbins, std::vector<double> & x, std::vector<double> & pdf) {
+
+            // Multiply the two grids in real space
+            auto Local_nx = real_grid.get_local_nx();
+
+            // Find minimum and maximum value in the grid
+            double grid_min = std::numeric_limits<double>::max();
+            double grid_max = -grid_min;
+#ifdef USE_OMP
+#pragma omp parallel for reduction(max : grid_max) reduction(min : grid_min)
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                for (auto && real_index : real_grid.get_real_range(islice, islice + 1)) {
+                    auto value = real_grid.get_real_from_index(real_index);
+                    grid_min = std::min(grid_min, value);
+                    grid_max = std::max(grid_max, value);
+                }
+            }
+            FML::MinOverTasks(&grid_min);
+            FML::MaxOverTasks(&grid_max);
+
+            // Set up binning
+            x.resize(nbins);
+            pdf.resize(nbins, 0.0);
+            for (int i = 0; i < nbins; i++) {
+                x[i] = grid_min + (grid_max - grid_min) / double(nbins) * (i + 0.5);
+            }
+
+            // For binning over threads
+            std::vector<std::vector<double>> pdfthreads(FML::NThreads, std::vector<double>(nbins, 0.0));
+
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                int id = 0;
+#ifdef USE_OMP
+                id = omp_get_thread_num();
+#endif
+                for (auto && real_index : real_grid.get_real_range(islice, islice + 1)) {
+                    auto value = real_grid.get_real_from_index(real_index);
+                    int ibin = int((value - grid_min) / (grid_max - grid_min) * nbins);
+                    if (ibin >= 0 and ibin < nbins)
+                        pdfthreads[id][ibin] += 1;
+                }
+            }
+
+            // Sum up over threads
+            for (int i = 0; i < FML::NThreads; i++) {
+                for (int j = 0; j < nbins; j++) {
+                    pdf[j] += pdfthreads[i][j];
+                }
+            }
+
+            // Sum over tasks
+#ifdef USE_MPI
+            MPI_Allreduce(MPI_IN_PLACE, pdf.data(), nbins, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+#endif
+
+            // Normalize so that the PDF integrates to unity
+            const double dx = (grid_max - grid_min) / double(nbins);
+            double integral = 0.0;
+            for (int i = 0; i < nbins; i++) {
+                integral += pdf[i] * dx;
+            }
+            for (int i = 0; i < nbins; i++) {
+                pdf[i] /= integral;
+            }
+        }
     } // namespace GRID
 } // namespace FML
 #endif
