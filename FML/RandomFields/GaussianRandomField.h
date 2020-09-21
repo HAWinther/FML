@@ -94,7 +94,7 @@ namespace FML {
             ///
             /// @param[out] grid The real grid we generate.
             /// @param[in] rng The random number generator.
-            /// @param[in] DeltaPofk This is \f$ P(kB) / V \f$ where $kB$ is the dimesnionless wavenumber (B the
+            /// @param[in] Pofk_of_kBox_over_volume This is \f$ P(kB) / V \f$ where $kB$ is the dimesnionless wavenumber (B the
             /// boxsize) and \f$ V = B^{\rm N} \f$ is the volume of the box.
             /// @param[in] fix_amplitude If true then we only draw phases and set \f$ |\delta(k)| \f$ directly from the
             /// input power-spectrum.
@@ -103,7 +103,7 @@ namespace FML {
             template <int N>
             void generate_gaussian_random_field_real(FFTWGrid<N> & grid,
                                                      RandomGenerator * rng,
-                                                     std::function<double(double)> & DeltaPofk,
+                                                     std::function<double(double)> Pofk_of_kBox_over_volume,
                                                      bool fix_amplitude);
 
             //=================================================================================
@@ -112,7 +112,7 @@ namespace FML {
             ///
             /// @param[out] grid The fourier grid we generate.
             /// @param[in] rng The random number generator.
-            /// @param[in] DeltaPofk This is \f$ P(kB) / V \f$ where $kB$ is the dimesnionless wavenumber (B the
+            /// @param[in] Pofk_of_kBox_over_volume This is \f$ P(kB) / V \f$ where $kB$ is the dimesnionless wavenumber (B the
             /// boxsize) and \f$ V = B^{\rm N} \f$ is the volume of the box.
             /// @param[in] fix_amplitude If true then we only draw phases and set \f$ |\delta(k)| \f$ directly from the
             /// input power-spectrum.
@@ -121,7 +121,7 @@ namespace FML {
             template <int N>
             void generate_gaussian_random_field_fourier(FFTWGrid<N> & grid,
                                                         RandomGenerator * rng,
-                                                        std::function<double(double)> & DeltaPofk,
+                                                        std::function<double(double)> Pofk_of_kBox_over_volume,
                                                         bool fix_amplitude);
 
             //=================================================================================
@@ -129,10 +129,10 @@ namespace FML {
             template <int N>
             void generate_gaussian_random_field_real(FFTWGrid<N> & grid,
                                                      RandomGenerator * rng,
-                                                     std::function<double(double)> & DeltaPofk,
+                                                     std::function<double(double)> Pofk_of_kBox_over_volume,
                                                      bool fix_amplitude) {
 
-                generate_gaussian_random_field_fourier(grid, rng, DeltaPofk, fix_amplitude);
+                generate_gaussian_random_field_fourier(grid, rng, Pofk_of_kBox_over_volume, fix_amplitude);
 
                 // Fourier transform
                 grid.fftw_c2r();
@@ -141,7 +141,7 @@ namespace FML {
             template <int N>
             void generate_gaussian_random_field_fourier(FFTWGrid<N> & grid,
                                                         RandomGenerator * rng,
-                                                        std::function<double(double)> & DeltaPofk,
+                                                        std::function<double(double)> Pofk_of_kBox_over_volume,
                                                         bool fix_amplitude) {
 
                 using IndexIntType = long long int;
@@ -149,7 +149,7 @@ namespace FML {
                 // We require an allocated grid, a random number generator and a power-spectrum to run
                 assert_mpi(grid.get_nmesh() > 0,
                            "[generate_gaussian_random_field_fourier] Grid is not allocated. Nmesh is zero\n");
-                assert_mpi(DeltaPofk.operator bool(),
+                assert_mpi(Pofk_of_kBox_over_volume.operator bool(),
                            "[generate_gaussian_random_field_fourier] PowerSpectrum function not callable\n");
 
                 // Zero out grid
@@ -244,7 +244,7 @@ namespace FML {
                         grid.get_fourier_wavevector_and_norm_by_index(index, kvec, kmag);
 
                         // Assign the field. Note kmag is dimensionless here. Units taken care of in Powerspectrum
-                        double delta_norm = sqrt(norm * DeltaPofk(kmag));
+                        double delta_norm = sqrt(norm * Pofk_of_kBox_over_volume(kmag));
                         std::complex<double> delta = delta_norm * std::exp(std::complex<double>(0, 1) * phase);
                         std::complex<double> delta_conj = std::conj(delta);
 
@@ -290,13 +290,13 @@ namespace FML {
             template <>
             void generate_gaussian_random_field_fourier(FFTWGrid<3> & grid,
                                                         RandomGenerator * rng,
-                                                        std::function<double(double)> & DeltaPofk,
+                                                        std::function<double(double)> Pofk_of_kBox_over_volume,
                                                         bool fix_amplitude) {
 
                 // We require an allocated grid, a random number generator and a power-spectrum to run
                 assert_mpi(grid.get_nmesh() > 0,
                            "[generate_gaussian_random_field_fourier<3>] Grid is not allocated. Nmesh is zero\n");
-                assert_mpi(DeltaPofk.operator bool(),
+                assert_mpi(Pofk_of_kBox_over_volume.operator bool(),
                            "[generate_gaussian_random_field_fourier<3>] PowerSpectrum function not callable\n");
 
                 // Zero out grid
@@ -382,7 +382,7 @@ namespace FML {
 
                                 // Assign the field. Note kmag is dimensionless here. Units taken care of in
                                 // Powerspectrum
-                                double delta_norm = sqrt(norm * DeltaPofk(kmag));
+                                double delta_norm = sqrt(norm * Pofk_of_kBox_over_volume(kmag));
 
                                 std::complex<double> delta = delta_norm * std::exp(std::complex<double>(0, 1) * phase);
                                 std::complex<double> delta_conj = std::conj(delta);

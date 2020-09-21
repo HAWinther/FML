@@ -149,10 +149,10 @@ namespace FML {
                 cotcKchi = 1.0;
                 sincKchi = 1.0;
             } else if (K < 0.0) {
-                cotcKchi = chi > 1e-8 ? chi / tanh(chi) : 1.0;
+                cotcKchi = chi > 1e-8 ? chi / std::tanh(chi) : 1.0;
                 sincKchi = chi > 1e-8 ? std::sinh(chi) / chi : 1.0;
             } else {
-                cotcKchi = chi > 1e-8 ? chi / tan(chi) : 1.0;
+                cotcKchi = chi > 1e-8 ? chi / std::tan(chi) : 1.0;
                 sincKchi = chi > 1e-8 ? std::sin(chi) / chi : 1.0;
             }
 
@@ -418,7 +418,7 @@ namespace FML {
             const double tiny = 1e-30;
 
             double b0 = b(0);
-            if (fabs(b0) < tiny)
+            if (std::fabs(b0) < tiny)
                 b0 = tiny;
             double f = b0;
             double C = b0;
@@ -428,10 +428,10 @@ namespace FML {
                 const double aa = a(j);
                 const double bb = b(j);
                 D = bb + aa * D;
-                if (fabs(D) < tiny)
+                if (std::fabs(D) < tiny)
                     D = tiny;
                 C = bb + aa / C;
-                if (fabs(C) < tiny)
+                if (std::fabs(C) < tiny)
                     C = tiny;
                 D = 1 / D;
                 const double delta = C * D;
@@ -439,7 +439,7 @@ namespace FML {
                 j++;
 
                 // Check for convergence
-                if (fabs(delta - 1) < epsilon)
+                if (std::fabs(delta - 1) < epsilon)
                     break;
 
                 // Did not converge
