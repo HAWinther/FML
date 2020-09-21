@@ -351,7 +351,7 @@ namespace FML {
             while (x < x_end) {
                 x += (x_end - x_start_search) / double(n);
                 const double ckoverHp = Constants.c * k / cosmo->Hp_of_x(x);
-                const double dtaudx = fabs(rec->dtaudx_of_x(x));
+                const double dtaudx = std::fabs(rec->dtaudx_of_x(x));
                 if (dtaudx < dtaudx_factor || dtaudx < dtaudx_factor * ckoverHp) {
                     if (verbose)
                         std::cout << "k: " << k * Constants.Mpc << " z: " << std::exp(-x) - 1 << "\n";

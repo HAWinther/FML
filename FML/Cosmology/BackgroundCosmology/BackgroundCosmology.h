@@ -25,8 +25,8 @@ namespace FML {
 
         // Number of points and x-range for the splines we make
 #define FIDUCIAL_COSMO_NPTS_SPLINES 10000
-#define FIDUCIAL_COSMO_X_START (log(1e-15))
-#define FIDUCIAL_COSMO_X_END (log(100.0))
+#define FIDUCIAL_COSMO_X_START (std::log(1e-15))
+#define FIDUCIAL_COSMO_X_END (std::log(100.0))
 
         // Type aliases
         using ParameterMap = FML::UTILS::ParameterMap;

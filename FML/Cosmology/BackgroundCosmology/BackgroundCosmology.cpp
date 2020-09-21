@@ -15,11 +15,11 @@ namespace FML {
             bool PhysicalParameters = p.get<bool>("PhysicalParameters");
 
             const double rhoc0_over_h2 = 3.0 * Constants.H0_over_h * Constants.H0_over_h / (8.0 * M_PI * Constants.G);
-            const double Tnu_over_TCMB = pow(4.0 / 11.0, 1.0 / 3.0);
+            const double Tnu_over_TCMB = std::pow(4.0 / 11.0, 1.0 / 3.0);
 
-            double OmegaRh2 = 2.0 * (M_PI * M_PI / 30.0) * pow(Constants.k_b * TCMB / Constants.hbar, 4) *
-                              Constants.hbar / pow(Constants.c, 5) / rhoc0_over_h2;
-            double OmegaNuh2 = (7.0 / 8.0) * Neff * pow(Tnu_over_TCMB, 4) * OmegaRh2;
+            double OmegaRh2 = 2.0 * (M_PI * M_PI / 30.0) * std::pow(Constants.k_b * TCMB / Constants.hbar, 4) *
+                              Constants.hbar / std::pow(Constants.c, 5) / rhoc0_over_h2;
+            double OmegaNuh2 = (7.0 / 8.0) * Neff * std::pow(Tnu_over_TCMB, 4) * OmegaRh2;
             double OmegaBh2, OmegaCDMh2, OmegaKh2, OmegaLambdah2, h2;
 
             if (PhysicalParameters) {
@@ -30,7 +30,7 @@ namespace FML {
                 h2 = OmegaBh2 + OmegaCDMh2 + OmegaKh2 + OmegaRh2 + OmegaNuh2 + OmegaLambdah2;
                 assert(h2 > 0.0);
             } else {
-                h2 = pow(p.get<double>("h"), 2);
+                h2 = std::pow(p.get<double>("h"), 2);
                 OmegaBh2 = p.get<double>("OmegaB") * h2;
                 OmegaCDMh2 = p.get<double>("OmegaCDM") * h2;
                 OmegaKh2 = p.get<double>("OmegaK") * h2;
@@ -39,7 +39,7 @@ namespace FML {
 
             // If OmegaKh2 is too negative then H = 0 at some point we need OmegaK > -(OmegaLambda OmegaM^2)^1/3
             const double min_OmegaKh2 =
-                -pow(OmegaLambdah2 * 27 / 4. * (OmegaCDMh2 + OmegaBh2) * (OmegaCDMh2 + OmegaBh2), 0.33333);
+                -std::pow(OmegaLambdah2 * 27 / 4. * (OmegaCDMh2 + OmegaBh2) * (OmegaCDMh2 + OmegaBh2), 0.33333);
             if (OmegaKh2 < min_OmegaKh2) {
                 throw std::runtime_error("OmegaKh2 = " + std::to_string(OmegaKh2) + " is too negative (must be > " +
                                          std::to_string(min_OmegaKh2) +
@@ -47,13 +47,13 @@ namespace FML {
             }
 
             // Tiny unobservable values of the curvature is simply set to zero
-            if (fabs(OmegaKh2 / h2) < 1e-6) {
+            if (std::fabs(OmegaKh2 / h2) < 1e-6) {
                 OmegaLambdah2 += OmegaKh2;
                 OmegaKh2 = 0.0;
             }
 
             // Tiny unobservable values of dark energy is simply set to zero
-            if (fabs(OmegaLambdah2 / h2) < 1e-6) {
+            if (std::fabs(OmegaLambdah2 / h2) < 1e-6) {
                 OmegaCDMh2 += OmegaLambdah2;
                 OmegaLambdah2 = 0.0;
             }
@@ -66,7 +66,7 @@ namespace FML {
             OmegaNu = OmegaNuh2 / (h2);
             OmegaRtot = OmegaR + OmegaNu;
             OmegaM = OmegaB + OmegaCDM;
-            h = sqrt(h2);
+            h = std::sqrt(h2);
             H0 = h * Constants.H0_over_h;
             K = -OmegaK * H0 * H0 / (Constants.c * Constants.c);
         }
@@ -87,12 +87,12 @@ namespace FML {
             std::cout << "OmegaCDM:    " << OmegaCDM << "\n";
             std::cout << "OmegaLambda: " << OmegaLambda << "\n";
             std::cout << "OmegaK:      " << OmegaK << "\n";
-            if (fabs(OmegaK) < 1e-6)
+            if (std::fabs(OmegaK) < 1e-6)
                 std::cout << "A flat Universe\n";
             else if (1.0 - OmegaK < 1.0)
-                std::cout << "An open Universe R = " << Constants.c / sqrt(-K) / Constants.Gpc << " Gpc\n";
+                std::cout << "An open Universe R = " << Constants.c / std::sqrt(-K) / Constants.Gpc << " Gpc\n";
             else
-                std::cout << "A closed Universe R = " << Constants.c / sqrt(K) / Constants.Gpc << " Gpc\n";
+                std::cout << "A closed Universe R = " << Constants.c / std::sqrt(K) / Constants.Gpc << " Gpc\n";
             std::cout << "OmegaNu:     " << OmegaNu << "\n";
             std::cout << "OmegaM:      " << OmegaM << "\n";
             std::cout << "OmegaR:      " << OmegaR << "\n";
@@ -134,7 +134,7 @@ namespace FML {
 
             // Define the Hubble functions we are to spline
             auto H_function = [&](double x) {
-                return H0 * sqrt(OmegaLambda + OmegaK * std::exp(-2 * x) + OmegaM * std::exp(-3 * x) + OmegaRtot * std::exp(-4 * x));
+                return H0 * std::sqrt(OmegaLambda + OmegaK * std::exp(-2 * x) + OmegaM * std::exp(-3 * x) + OmegaRtot * std::exp(-4 * x));
             };
             auto Hp_function = [&](double x) { return std::exp(x) * H_function(x); };
             auto dHdx_function = [&](double x) {
@@ -147,7 +147,7 @@ namespace FML {
             };
             auto w_function = [&](double x) {
                 return (OmegaRtot * std::exp(-4 * x) / 3.0 - OmegaLambda - OmegaK * std::exp(-2 * x) / 3.0) /
-                       pow(H_function(x) / H0, 2);
+                       std::pow(H_function(x) / H0, 2);
             };
 
             // Spline the Hubble function and derivatives
@@ -204,7 +204,7 @@ namespace FML {
             // The initial conditions
             DVector eta_initial{0.0, 0.0};
             if (OmegaRtot > 0.0)
-                eta_initial = {std::exp(x_array[0]) / sqrt(OmegaRtot), std::exp(2.0 * x_array[0]) / 2.0 / sqrt(OmegaRtot)};
+                eta_initial = {std::exp(x_array[0]) / std::sqrt(OmegaRtot), std::exp(2.0 * x_array[0]) / 2.0 / std::sqrt(OmegaRtot)};
 
             // Solve the ODE
             ODESolver eta_ode(
@@ -270,7 +270,7 @@ namespace FML {
             // D1 = a^n, D2 = prefac * D1^2
             const double xeq = std::log(OmegaRtot / OmegaM);
             const double xini = x_array[0];
-            const double nindex = xini < xeq ? sqrt(1.5) : 1.0;
+            const double nindex = xini < xeq ? std::sqrt(1.5) : 1.0;
             const double prefac = xini < xeq ? -1.0 / 3.0 : -3.0 / 7.0;
             const double D1ini = 1.0;
             const double dD1dxini = nindex * D1ini;
@@ -385,7 +385,7 @@ namespace FML {
             return TCMB * std::exp(-x);
         }
 
-        double BackgroundCosmology::get_Tnu(double x) const { return pow(4.0 / 11.0, 1.0 / 3.0) * get_TCMB(x); }
+        double BackgroundCosmology::get_Tnu(double x) const { return std::pow(4.0 / 11.0, 1.0 / 3.0) * get_TCMB(x); }
 
         double BackgroundCosmology::get_weff(double x) const {
             // return -( 1.0/3.0 + 2.0*dHpdx_of_x(x)/Hp_of_x(x)/3.0 );
@@ -393,7 +393,7 @@ namespace FML {
         }
 
         double BackgroundCosmology::get_dweffdx(double x) const {
-            // return -2.0*ddHpddx_of_x(x)/Hp_of_x(x)/3.0 + 2.0/3.0*pow(dHpdx_of_x(x)/Hp_of_x(x) ,2);
+            // return -2.0*ddHpddx_of_x(x)/Hp_of_x(x)/3.0 + 2.0/3.0*std::pow(dHpdx_of_x(x)/Hp_of_x(x) ,2);
             return w_spline.deriv_x(x);
         }
 
@@ -401,56 +401,56 @@ namespace FML {
             if (x == 0.0) {
                 return OmegaB;
             }
-            return OmegaB * std::exp(-3 * x) / pow(H_of_x(x) / H0, 2);
+            return OmegaB * std::exp(-3 * x) / std::pow(H_of_x(x) / H0, 2);
         }
 
         double BackgroundCosmology::get_OmegaM(double x) const {
             if (x == 0.0) {
                 return OmegaM;
             }
-            return OmegaM * std::exp(-3 * x) / pow(H_of_x(x) / H0, 2);
+            return OmegaM * std::exp(-3 * x) / std::pow(H_of_x(x) / H0, 2);
         }
 
         double BackgroundCosmology::get_OmegaR(double x) const {
             if (x == 0.0) {
                 return OmegaR;
             }
-            return OmegaR * std::exp(-4 * x) / pow(H_of_x(x) / H0, 2);
+            return OmegaR * std::exp(-4 * x) / std::pow(H_of_x(x) / H0, 2);
         }
 
         double BackgroundCosmology::get_OmegaRtot(double x) const {
             if (x == 0.0) {
                 return OmegaRtot;
             }
-            return OmegaRtot * std::exp(-4 * x) / pow(H_of_x(x) / H0, 2);
+            return OmegaRtot * std::exp(-4 * x) / std::pow(H_of_x(x) / H0, 2);
         }
 
         double BackgroundCosmology::get_OmegaNu(double x) const {
             if (x == 0.0) {
                 return OmegaNu;
             }
-            return OmegaNu * std::exp(-4 * x) / pow(H_of_x(x) / H0, 2);
+            return OmegaNu * std::exp(-4 * x) / std::pow(H_of_x(x) / H0, 2);
         }
 
         double BackgroundCosmology::get_OmegaCDM(double x) const {
             if (x == 0.0) {
                 return OmegaCDM;
             }
-            return OmegaCDM * std::exp(-3 * x) / pow(H_of_x(x) / H0, 2);
+            return OmegaCDM * std::exp(-3 * x) / std::pow(H_of_x(x) / H0, 2);
         }
 
         double BackgroundCosmology::get_OmegaLambda(double x) const {
             if (x == 0.0) {
                 return OmegaLambda;
             }
-            return OmegaLambda / pow(H_of_x(x) / H0, 2);
+            return OmegaLambda / std::pow(H_of_x(x) / H0, 2);
         }
 
         double BackgroundCosmology::get_OmegaK(double x) const {
             if (x == 0.0) {
                 return OmegaK;
             }
-            return OmegaK * std::exp(-2 * x) / pow(H_of_x(x) / H0, 2);
+            return OmegaK * std::exp(-2 * x) / std::pow(H_of_x(x) / H0, 2);
         }
 
         std::string BackgroundCosmology::get_name() const { return name; }
@@ -492,9 +492,9 @@ namespace FML {
 
         // Radial comoving coordinate as function of comoving distance
         double BackgroundCosmology::r_of_chi(double chi) const {
-            if (fabs(OmegaK) < 1e-10)
+            if (std::fabs(OmegaK) < 1e-10)
                 return chi;
-            double fac = sqrt(fabs(OmegaK)) * H0 / Constants.c;
+            double fac = std::sqrt(std::fabs(OmegaK)) * H0 / Constants.c;
             return OmegaK < 0.0 ? std::sin(fac * chi) / fac : std::sinh(fac * chi) / fac;
         }
 

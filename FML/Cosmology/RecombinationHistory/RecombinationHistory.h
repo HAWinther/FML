@@ -67,7 +67,7 @@ namespace FML {
 
             // The start and end points for recombination arrays
             double x_start_rec_array{-25.0};
-            double x_end_rec_array{log(1.0)};
+            double x_end_rec_array{std::log(1.0)};
 
             // Numbers of points of Xe,ne array
             int npts_Xe_array{1000};
