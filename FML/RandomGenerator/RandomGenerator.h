@@ -21,6 +21,7 @@ namespace FML {
         // Select the type of random generator and specify the seed size
         typedef std::mt19937 std_random_generator_type;
 #define STDRANDOM_NAME "mt19937"
+#define STDRANDOM_SEEDSIZE 624
 
         // Gsl defines
 #define GSLRANDOM_NAME "gsl_rng_ranlxd1"
@@ -45,28 +46,22 @@ namespace FML {
             RandomGenerator() = default;
             virtual ~RandomGenerator() = default;
 
-            RandomGenerator(unsigned int seed) {
-                Seed = std::vector<unsigned int>(624, seed);
-                ;
-                std::seed_seq seeds(begin(Seed), end(Seed));
-                generator = std_random_generator_type(seeds);
-            }
+            RandomGenerator(unsigned int seed) : RandomGenerator(std::vector<unsigned int>(STDRANDOM_SEEDSIZE, seed)) {}
 
-            RandomGenerator(std::vector<unsigned int> seed) { set_seed(seed); }
+            RandomGenerator(std::vector<unsigned int> seed) : RandomGenerator() { set_seed(seed); }
 
-            void set_normal_sigma(double sigma){
-              normal_dist = std::normal_distribution<double>{0.0, sigma};
-            }
+            void set_normal_sigma(double sigma) { normal_dist = std::normal_distribution<double>{0.0, sigma}; }
+
+            virtual std::unique_ptr<RandomGenerator> clone() const { return std::make_unique<RandomGenerator>(*this); }
 
             virtual void set_seed(std::vector<unsigned int> seed) {
+                assert(seed.size() > 0);
                 Seed = seed;
                 std::seed_seq seeds(begin(Seed), end(Seed));
                 generator = std_random_generator_type(seeds);
             }
 
-            virtual std::shared_ptr<RandomGenerator> clone(){ return std::make_shared<RandomGenerator>(*this); }
-
-            virtual void set_seed(unsigned int Seed) { set_seed(std::vector<unsigned int>(624, Seed)); }
+            virtual void set_seed(unsigned int seed) { set_seed(std::vector<unsigned int>(STDRANDOM_SEEDSIZE, seed)); }
 
             virtual double generate_uniform() { return uniform_dist(generator); }
 
@@ -78,40 +73,61 @@ namespace FML {
 
 #ifdef USE_GSL
 
-        struct GSLRNG {
-            gsl_rng * random_generator{nullptr};
-            GSLRNG() { random_generator = gsl_rng_alloc(gsl_random_generator_type); }
-            ~GSLRNG() {
-                if (random_generator != nullptr)
-                    gsl_rng_free(random_generator);
+        // A wrapper for holding the GSL data and making sure when we clone the object the state gets copied
+        // not just the pointer to the state
+        struct my_gsl_rng {
+
+            std::shared_ptr<gsl_rng> random_generator;
+
+            my_gsl_rng() {
+                random_generator = std::shared_ptr<gsl_rng>(gsl_rng_alloc(gsl_random_generator_type), gsl_rng_free);
             }
+
+            my_gsl_rng(const my_gsl_rng & rhs) {
+                // We cannot copy a random generator that has not been created (should never be the case)
+                assert(rhs.random_generator);
+                random_generator = std::shared_ptr<gsl_rng>(gsl_rng_clone(rhs.random_generator.get()), gsl_rng_free);
+            }
+
+            gsl_rng * get() { return random_generator.get(); }
         };
 
         /// Generate random numbers using the GSL library (fiducial: gsl_rng_ranlxd1)
         class GSLRandomGenerator : public RandomGenerator {
           private:
-            GSLRNG rng;
+            my_gsl_rng rng;
 
           public:
-            GSLRandomGenerator() { name = GSLRANDOM_NAME; }
+            GSLRandomGenerator() : RandomGenerator() { name = GSLRANDOM_NAME; }
 
-            GSLRandomGenerator(int seed) {
-                name = GSLRANDOM_NAME;
-                set_seed(seed);
+            GSLRandomGenerator(unsigned int seed) : GSLRandomGenerator() { set_seed_gsl(seed); }
+
+            GSLRandomGenerator(std::vector<unsigned int> seed) : GSLRandomGenerator() {
+                assert(seed.size() > 0);
+                set_seed_gsl(seed[0]);
             }
 
-            void set_seed(unsigned int seed) override {
+            virtual std::unique_ptr<RandomGenerator> clone() const override {
+                return std::make_unique<GSLRandomGenerator>(*this);
+            }
+
+            // To avoid calling a virtual function in the constructor
+            // and be sure the right method is called
+            void set_seed_gsl(unsigned int seed) {
                 Seed = std::vector<unsigned int>(1, seed);
-                gsl_rng_set(rng.random_generator, seed);
+                gsl_rng_set(rng.get(), seed);
             }
-            
-            virtual std::shared_ptr<RandomGenerator> clone(){ return std::make_shared<GSLRandomGenerator>(*this); }
 
-            void set_seed(std::vector<unsigned int> seed) override { set_seed(seed[0]); }
+            virtual void set_seed(unsigned int seed) override { set_seed_gsl(seed); }
 
-            double generate_uniform() override { return gsl_rng_uniform(rng.random_generator); }
+            virtual void set_seed(std::vector<unsigned int> seed) override {
+                assert(seed.size() > 0);
+                set_seed(seed[0]);
+            }
 
-            double generate_normal() override { return gsl_ran_gaussian(rng.random_generator, sigma); }
+            virtual double generate_uniform() override { return gsl_rng_uniform(rng.get()); }
+
+            virtual double generate_normal() override { return gsl_ran_gaussian(rng.get(), sigma); }
         };
 
 #endif
