@@ -967,10 +967,8 @@ namespace FML {
 
             // Sum up total number of local non-shared groups
             int non_shared_total = nnonshared;
+            FML::SumOverTasks(&non_shared_total);
 
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, &non_shared_total, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-#endif
 #ifdef DEBUG_FOF
             std::cout << FML::ThisTask << " has " << non_shared_total << " nonshared halos\n";
             std::cout << FML::ThisTask << " has " << count << " FoF groups before merging. The number of shared groups "

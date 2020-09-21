@@ -232,9 +232,9 @@ namespace FML {
             // Range iterator for going through all active cells in the main real/complex grid by index
             // [ e.g. for(auto and real_index: grid.real_range()) ]
             // If you add the slice numbers we only loop over the given slice range
-            RealRange get_real_range(int islice_begin = 0, int islice_end = 0);
+            RealRange get_real_range(int islice_begin = 0, int islice_end = 0) const;
             // For the Fourier range islice denotes the ikx value
-            FourierRange get_fourier_range(int islice_begin = 0, int islice_end = 0);
+            FourierRange get_fourier_range(int islice_begin = 0, int islice_end = 0) const;
 
             // The number of cells per slice that we alloc. Useful to jump from slice to slice
             ptrdiff_t get_ntot_real_slice_alloc() const;
@@ -350,7 +350,7 @@ namespace FML {
         };
 
         template <int N>
-        RealRange FFTWGrid<N>::get_real_range(int islice_begin, int islice_end) {
+        RealRange FFTWGrid<N>::get_real_range(int islice_begin, int islice_end) const {
 
             // If fiducial parameters are used then we loop over all cells
             if (islice_begin == 0 and islice_end == 0)
@@ -369,7 +369,7 @@ namespace FML {
         }
 
         template <int N>
-        FourierRange FFTWGrid<N>::get_fourier_range(int islice_begin, int islice_end) {
+        FourierRange FFTWGrid<N>::get_fourier_range(int islice_begin, int islice_end) const {
 
             // If fiducial parameters are used then we loop over all cells
             if (islice_begin == 0 and islice_end == 0)

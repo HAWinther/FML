@@ -22,15 +22,19 @@ namespace FML {
         /// \f$ \phi_{ij} \f$ where \f$ \nabla^2 \phi = norm * f_{\rm real} \f$
         /// Since \f$ f_{ij} = f_{ji} \f$ we only compute the elements for \f$ j \geq i \f$ and they are stored in
         /// the order fxx fxy ... fyy fyz ... etc. in hessian_real
-        ///
         /// In 2D: [fxx fxy fyy]
-        ///
         /// In 3D: [fxx fxy fxz fyy fyz fzz]
         ///
+        /// @tparam N The dimension we are working in
+        ///
+        /// @param[in] f_real The grid we are to compute the hessian of
+        /// @param[out] hessian_real The hessian of the grid (or its potential, see below)
+        /// @param[in] norm A number to scale the grid by if needed (default is 1.0)
+        /// @param[in] hessian_of_potential_of_f Compute the hessian of the potential of the grid (default is false)
+        ///
         //=================================================================================
-
         template <int N>
-        void ComputeHessianWithFT(FFTWGrid<N> & f_real,
+        void ComputeHessianWithFT(const FFTWGrid<N> & f_real,
                                   std::vector<FFTWGrid<N>> & hessian_real,
                                   double norm = 1.0,
                                   bool hessian_of_potential_of_f = false) {
@@ -77,9 +81,9 @@ namespace FML {
                 grid.fftw_c2r();
             };
 
-            // Fourier transform it
-            f_real.fftw_r2c();
-            FFTWGrid<N> & f_fourier = f_real;
+            // Take a copy and Fourier transform it
+            FFTWGrid<N> f_fourier = f_real;
+            f_fourier.fftw_r2c();
 
             // Allocate grids
             hessian_real.resize(N * (N - 1));

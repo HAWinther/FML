@@ -613,9 +613,7 @@ namespace FML {
                 }
 
                 // Communicate over tasks
-#ifdef USE_MPI
-                MPI_Allreduce(MPI_IN_PLACE, &totvol, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-#endif
+                FML::SumOverTasks(&totvol);
 
                 if (FML::ThisTask == 0)
                     std::cout << "[MPIPeriodicDelaunay::VoronoiVolume] Volume missing in the box: "
@@ -1068,7 +1066,7 @@ namespace FML {
                     std::cout << "In merging on " << FML::ThisTask << " we assigned " << ntot << "\n";
 #endif
                     // If no more particles gets assigned we stop
-                    MPI_Allreduce(MPI_IN_PLACE, &ntot, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+                    FML::SumOverTasks(&ntot);
                     if (ntot == 0)
                         break;
                     if (s == 2 and FML::ThisTask == 0)
@@ -1093,10 +1091,9 @@ namespace FML {
 #endif
 
             long long int npartotal = NumPart;
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, &assigned, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &npartotal, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
-#endif
+            FML::SumOverTasks(&assigned);
+            FML::SumOverTasks(&npartotal);
+
             if (FML::ThisTask == 0) {
                 std::cout << "[WatershedGeneral] Total particles assigned " << assigned << " / " << npartotal << "\n";
                 if (assigned < npartotal) {
@@ -1260,7 +1257,8 @@ namespace FML {
         /// assign density to each cell mass_of_part/volume and then we locate the density minima (or maxima)
         /// and walk the tesselation assigning the particles to Watershed basins
         /// If density_maximum = true then we assign 1/density to the particles and run the same algorithm so
-        /// we locate density peaks instead of density minima
+        /// we locate density peaks instead of density minima. The method sets the volume of each particle and
+        /// the particle must have a set_volume method.
         ///
         /// @tparam T The particle class
         /// @tparam U The watershed binning class

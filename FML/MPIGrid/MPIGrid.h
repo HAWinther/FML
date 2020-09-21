@@ -653,9 +653,7 @@ namespace FML {
             for (IndexInt i = 0; i < _NtotLocal; i++) {
                 norm2 += AbsoluteValue(get_y(i)) * AbsoluteValue(get_y(i));
             }
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, &norm2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-#endif
+            FML::SumOverTasks(&norm2);
             return sqrt(norm2 / double(_Ntot));
         }
 

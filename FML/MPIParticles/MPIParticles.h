@@ -251,14 +251,8 @@ namespace FML {
                                      std::function<bool(T &)> & selection_function) {
 
             // Set the xmin/xmax
-            x_min_per_task = std::vector<double>(NTasks, 0.0);
-            x_max_per_task = std::vector<double>(NTasks, 0.0);
-            x_min_per_task[ThisTask] = FML::xmin_domain;
-            x_max_per_task[ThisTask] = FML::xmax_domain;
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, x_min_per_task.data(), NTasks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, x_max_per_task.data(), NTasks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-#endif
+            x_min_per_task = FML::GatherFromTasks(&FML::xmin_domain);
+            x_max_per_task = FML::GatherFromTasks(&FML::xmax_domain);
             p.clear();
             p.reserve(nallocate + 1);
 
@@ -274,11 +268,7 @@ namespace FML {
             }
             NpartLocal_in_use = count;
             NpartTotal = NpartLocal_in_use;
-#ifdef USE_MPI
-            long long int np = NpartLocal_in_use;
-            MPI_Allreduce(MPI_IN_PLACE, &np, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
-            NpartTotal = np;
-#endif
+            FML::SumOverTasks(&NpartTotal);
         }
 
         template <class T>
@@ -292,14 +282,8 @@ namespace FML {
                 all_tasks_has_the_same_particles = true;
 
             // Set the xmin/xmax
-            x_min_per_task = std::vector<double>(NTasks, 0.0);
-            x_max_per_task = std::vector<double>(NTasks, 0.0);
-            x_min_per_task[ThisTask] = xmin;
-            x_max_per_task[ThisTask] = xmax;
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, x_min_per_task.data(), NTasks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, x_max_per_task.data(), NTasks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-#endif
+            x_min_per_task = FML::GatherFromTasks(&xmin);
+            x_max_per_task = FML::GatherFromTasks(&xmax);
 
 #ifdef DEBUG_MPIPARTICLES
             if (ThisTask == 0) {
@@ -334,11 +318,7 @@ namespace FML {
                 NpartLocal_in_use = count;
 
                 NpartTotal = NpartLocal_in_use;
-#ifdef USE_MPI
-                long long int np = NpartLocal_in_use;
-                MPI_Allreduce(MPI_IN_PLACE, &np, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
-                NpartTotal = np;
-#endif
+                FML::SumOverTasks(&NpartTotal);
             }
 
 #ifdef USE_MPI
@@ -389,22 +369,16 @@ namespace FML {
                     // Update how many particles we now have
                     count = NpartLocal_in_use;
 
-#ifdef USE_MPI
                     // The while loop continues until all tasks are done reading particles
                     int moretodo = more_to_process_locally ? 1 : 0;
-                    MPI_Allreduce(MPI_IN_PLACE, &moretodo, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+                    FML::SumOverTasks(&moretodo);
                     more_to_process_globally = (moretodo == 1);
-#endif
                 }
             }
 
             // Set total number of particles
             NpartTotal = NpartLocal_in_use;
-#ifdef USE_MPI
-            long long int np = NpartLocal_in_use;
-            MPI_Allreduce(MPI_IN_PLACE, &np, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
-            NpartTotal = np;
-#endif
+            FML::SumOverTasks(&NpartTotal);
 
 #ifdef DEBUG_MPIPARTICLES
             std::cout << "Task: " << ThisTask << " NpartLocal_in_use: " << NpartLocal_in_use << "\n";
@@ -494,11 +468,7 @@ namespace FML {
             Local_Npart_1D = imax - imin;
 
             // Sanity check
-            std::vector<int> Local_Npart_1D_per_task(NTasks, 0);
-            Local_Npart_1D_per_task[ThisTask] = Local_Npart_1D;
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, Local_Npart_1D_per_task.data(), NTasks, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-#endif
+            auto Local_Npart_1D_per_task = FML::GatherFromTasks(&Local_Npart_1D);
             int Local_p_start_computed = 0, Npart_1D_computed = 0;
             for (int i = 0; i < NTasks; i++) {
                 if (i < ThisTask)
@@ -519,12 +489,8 @@ namespace FML {
             // x_max_per_task[ThisTask] = (Local_p_start + Local_Npart_1D) / double(Npart_1D);
 
             // Fetch these values
-            x_min_per_task[ThisTask] = xmin_local;
-            x_max_per_task[ThisTask] = xmax_local;
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, x_min_per_task.data(), NTasks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, x_max_per_task.data(), NTasks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-#endif
+            x_min_per_task = FML::GatherFromTasks(&xmin_local);
+            x_max_per_task = FML::GatherFromTasks(&xmax_local);
 
 #ifdef DEBUG_MPIPARTICLES
             // Output some info
