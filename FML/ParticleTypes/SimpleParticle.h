@@ -26,6 +26,8 @@ struct COLAParticle {
     double Vel[NDIM];
     double D_1LPT[NDIM];
     double D_2LPT[NDIM];
+    double D_3LPTa[NDIM];
+    double D_3LPTb[NDIM];
 
     long long int id;
     long long int get_id() { return id; }
@@ -37,6 +39,8 @@ struct COLAParticle {
     double * get_q() { return q; }
     double * get_D_1LPT() { return D_1LPT; }
     double * get_D_2LPT() { return D_2LPT; }
+    double * get_D_3LPTa() { return D_3LPTa; }
+    double * get_D_3LPTb() { return D_3LPTb; }
 };
 
 #endif

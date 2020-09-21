@@ -203,7 +203,8 @@ namespace FML {
         //=====================================================================
         SFINAE_TEST_GET(GetD_1LPT, get_D_1LPT)
         SFINAE_TEST_GET(GetD_2LPT, get_D_2LPT)
-        SFINAE_TEST_GET(GetD_3LPT, get_D_3LPT)
+        SFINAE_TEST_GET(GetD_3LPTa, get_D_3LPTa)
+        SFINAE_TEST_GET(GetD_3LPTb, get_D_3LPTb)
         SFINAE_TEST_GET(GetLagrangianPos, get_q)
         constexpr double * GetD_1LPT(...) {
             assert_mpi(false, "Trying to get D_1LPT from a particle that has no get_D_1LPT method");
@@ -213,8 +214,12 @@ namespace FML {
             assert_mpi(false, "Trying to get D_2LPT from a particle that has no get_D_2LPT method");
             return nullptr;
         };
-        constexpr double * GetD_3LPT(...) {
-            assert_mpi(false, "Trying to get D_3LPT from a particle that has no get_D_3LPT method");
+        constexpr double * GetD_3LPTa(...) {
+            assert_mpi(false, "Trying to get D_3LPTa from a particle that has no get_D_3LPTa method");
+            return nullptr;
+        };
+        constexpr double * GetD_3LPTb(...) {
+            assert_mpi(false, "Trying to get D_3LPTb from a particle that has no get_D_3LPTb method");
             return nullptr;
         };
         constexpr double * GetLagrangianPos(...) {
@@ -312,20 +317,24 @@ namespace FML {
                 std::cout << "# Information about (an empty) particle of the given type:\n";
                 std::cout << "# Below we only show info about methods we have implemented support for\n";
 
-                if(FML::PARTICLE::has_append_to_buffer<T>())
-                  std::cout << "# Particle has custom communication append_to_buffer method\n";
+                if (FML::PARTICLE::has_append_to_buffer<T>())
+                    std::cout << "# Particle has custom communication append_to_buffer method\n";
                 else
-                  std::cout << "# Particle uses fiducial communication append_to_buffer method (assumes no dynamic alloc inside class)\n";
+                    std::cout << "# Particle uses fiducial communication append_to_buffer method (assumes no dynamic "
+                                 "alloc inside class)\n";
 
-                if(FML::PARTICLE::has_assign_from_buffer<T>())
-                  std::cout << "# Particle has custom communication assign_from_buffer method\n";
+                if (FML::PARTICLE::has_assign_from_buffer<T>())
+                    std::cout << "# Particle has custom communication assign_from_buffer method\n";
                 else
-                  std::cout << "# Particle uses fiducial communication assign_from_buffer method (assumes no dynamic alloc inside class)\n";
-                
-                if(FML::PARTICLE::has_get_particle_byte_size<T>())
-                  std::cout << "# Particle has custom size method. Size of an empty particle is " << FML::PARTICLE::GetSize(tmp) << " bytes\n";
+                    std::cout << "# Particle uses fiducial communication assign_from_buffer method (assumes no dynamic "
+                                 "alloc inside class)\n";
+
+                if (FML::PARTICLE::has_get_particle_byte_size<T>())
+                    std::cout << "# Particle has custom size method. Size of an empty particle is "
+                              << FML::PARTICLE::GetSize(tmp) << " bytes\n";
                 else
-                  std::cout << "# Particle uses fiducial size method. Size of particle is " << FML::PARTICLE::GetSize(tmp) << " bytes\n";
+                    std::cout << "# Particle uses fiducial size method. Size of particle is "
+                              << FML::PARTICLE::GetSize(tmp) << " bytes\n";
                 std::cout << "# Dimension is " << N << "\n";
 
                 if (FML::PARTICLE::has_get_pos<T>())
@@ -371,6 +380,12 @@ namespace FML {
                 if (FML::PARTICLE::has_get_D_2LPT<T>())
                     std::cout << "# Particle has [2LPT Displacement field] ("
                               << sizeof(FML::PARTICLE::GetD_1LPT(tmp)[0]) * N << " bytes)\n";
+                if (FML::PARTICLE::has_get_D_3LPTa<T>())
+                    std::cout << "# Particle has [3LPTa Displacement field] ("
+                              << sizeof(FML::PARTICLE::GetD_3LPTa(tmp)[0]) * N << " bytes)\n";
+                if (FML::PARTICLE::has_get_D_3LPTb<T>())
+                    std::cout << "# Particle has [3LPTb Displacement field] ("
+                              << sizeof(FML::PARTICLE::GetD_3LPTb(tmp)[0]) * N << " bytes)\n";
                 if (FML::PARTICLE::has_get_q<T>())
                     std::cout << "# Particle has [Lagrangian position] ("
                               << sizeof(FML::PARTICLE::GetLagrangianPos(tmp)[0]) * N << " bytes)\n";
