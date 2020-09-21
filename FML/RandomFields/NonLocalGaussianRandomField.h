@@ -41,10 +41,10 @@ namespace FML {
             /// This requires in general 6 grids to be allocated at the same time
             /// and up to 8 fourier transforms
             ///
-            /// NB: for generating IC for cosmological simulations DeltaPofk is the
+            /// NB: for generating IC for cosmological simulations Pofk_of_kBox_over_volume is the
             /// power-spectrum of the gravitational potential and the fNL value is the
             /// fNL value at the redshift the power-spectrum is defined at
-            /// See 1108.5512 for more info
+            /// See 1108.5512 for more info or see the _cosmology method below.
             ///
             /// There is a sign between the Bardeen potential and the gravitational potential
             /// which leads to a sign difference in fNL!
@@ -53,8 +53,8 @@ namespace FML {
             ///
             /// @param[out] phi_fourier The fourier grid we generate
             /// @param[in] rng The random number generator
-            /// @param[in] DeltaPofk This is \f$ P(kB) / V \f$ where $kB$ is the dimesnionless wavenumber (B the
-            /// boxsize) and \f$ V = B^{\rm N} \f$ is the volume of the box.
+            /// @param[in] Pofk_of_kBox_over_volume This is \f$ P(kB) / V \f$ where $kB$ is the dimesnionless wavenumber
+            /// (B the boxsize) and \f$ V = B^{\rm N} \f$ is the volume of the box.
             /// @param[in] fix_amplitude Fix the amplitude of the norm of \f$ \delta(k) \f$.
             /// @param[in] fNL The value of fNL you want
             /// @param[in] type_of_fnl The type of fNL (local, equilaterial, orthogonal, generic)
@@ -62,11 +62,10 @@ namespace FML {
             /// @param[in] kernel_values Optional. If you specify generic fNL then this gives the kernel values.
             ///
             //======================================================================
-
             template <int N>
             void generate_nonlocal_gaussian_random_field_fourier(FFTWGrid<N> & phi_fourier,
                                                                  RandomGenerator * rng,
-                                                                 std::function<double(double)> & DeltaPofk,
+                                                                 std::function<double(double)> Pofk_of_kBox_over_volume,
                                                                  bool fix_amplitude,
                                                                  double fNL,
                                                                  std::string type_of_fnl,
@@ -81,11 +80,15 @@ namespace FML {
                 // Set up the kernel values:
                 // 0 is coefficient of (phi^2 - <phi^2>), 1 is P13[ phi Pm13 ]
                 // 2 is P23[ phi Pm23 - Pm13^2 ], 3 is P1 [ phi Pm1 - Pm23 Pm13 ]
+                std::vector<double> kernel_values_gaussian = {0.0, 0.0, 0.0, 0.0};
                 std::vector<double> kernel_values_local = {+1.0, 0.0, 0.0, 0.0};
                 std::vector<double> kernel_values_orthogonal = {-9.0 * (1.0 - u), 10.0 - 9.0 * u, +8.0, -9.0 * u};
                 std::vector<double> kernel_values_equilateral = {-3.0 * (1.0 - u), 4.0 - 3.0 * u, +2.0, -3.0 * u};
 
-                if (type_of_fnl == "local") {
+                if (type_of_fnl == "gaussian") {
+                    kernel_values = kernel_values_gaussian;
+                    fNL = 0.0;
+                } else if (type_of_fnl == "local") {
                     kernel_values = kernel_values_local;
                 } else if (type_of_fnl == "equilateral") {
                     kernel_values = kernel_values_equilateral;
@@ -107,12 +110,14 @@ namespace FML {
 
                 const auto Nmesh = phi_fourier.get_nmesh();
                 const auto Local_nx = phi_fourier.get_local_nx();
+                const auto nleft = phi_fourier.get_n_extra_slices_left();
+                const auto nright = phi_fourier.get_n_extra_slices_right();
                 assert_mpi(Nmesh > 0,
                            "[generate_nonlocal_gaussian_random_field_fourier] Grid must already be allocated");
 
                 // Generate a gaussian random field in fourier space
                 FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier(
-                    phi_fourier, rng, DeltaPofk, fix_amplitude);
+                    phi_fourier, rng, Pofk_of_kBox_over_volume, fix_amplitude);
 
                 // Set DC mode to zero (this should be the case, but just to be sure)
                 if (FML::ThisTask == 0)
@@ -125,15 +130,17 @@ namespace FML {
                 // Get phi in real space
                 FFTWGrid<N> phi_real = phi_fourier;
                 phi_real.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::phi_real");
+                phi_real.set_grid_status_real(false);
                 phi_real.fftw_c2r();
 
                 // Compute phi^2 - <phi>^2 in real space and store in source
-                FFTWGrid<N> source(Nmesh);
+                FFTWGrid<N> source(Nmesh, nleft, nright);
                 source.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::source");
                 double phi_squared_mean = 0.0;
                 double phi_mean = 0.0;
+                long long int ncells = 0;
 #ifdef USE_OMP
-#pragma omp parallel for reduction(+ : phi_squared_mean, phi_mean)
+#pragma omp parallel for reduction(+ : phi_squared_mean, phi_mean, ncells)
 #endif
                 for (int islice = 0; islice < Local_nx; islice++) {
                     for (auto && real_index : phi_real.get_real_range(islice, islice + 1)) {
@@ -142,13 +149,16 @@ namespace FML {
                         source.set_real_from_index(real_index, value);
                         phi_squared_mean += value;
                         phi_mean += phi;
+                        ncells += 1;
                     }
                 }
 
-#ifdef USE_MPI
-                MPI_Allreduce(MPI_IN_PLACE, &phi_squared_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-                MPI_Allreduce(MPI_IN_PLACE, &phi_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-#endif
+                FML::SumOverTasks(&phi_squared_mean);
+                FML::SumOverTasks(&phi_mean);
+                FML::SumOverTasks(&ncells);
+                assert_mpi(ncells == FML::power((long long int)(Nmesh), N),
+                           "[generate_nonlocal_gaussian_random_field_fourier] Number of cells we have summed over does "
+                           "not agree with how many cells are in the grid");
                 phi_squared_mean /= std::pow(Nmesh, N);
                 phi_mean /= std::pow(Nmesh, N);
 
@@ -198,7 +208,7 @@ namespace FML {
                     for (auto && fourier_index : phi_fourier.get_fourier_range(islice, islice + 1)) {
                         phi_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
-                        double pofk_m13 = std::pow(DeltaPofk(kmag), -1.0 / 3.0);
+                        double pofk_m13 = std::pow(Pofk_of_kBox_over_volume(kmag), -1.0 / 3.0);
                         double pofk_m23 = pofk_m13 * pofk_m13;
                         double pofk_m33 = pofk_m23 * pofk_m13; // XXX Not needed when u=0
 
@@ -269,7 +279,7 @@ namespace FML {
                     for (auto && fourier_index : source.get_fourier_range(islice, islice + 1)) {
                         source.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
-                        double pofk_p13 = std::pow(DeltaPofk(kmag), 1.0 / 3.0);
+                        double pofk_p13 = std::pow(Pofk_of_kBox_over_volume(kmag), 1.0 / 3.0);
                         double pofk_p23 = pofk_p13 * pofk_p13;
                         double pofk_p33 = pofk_p23 * pofk_p13;
 
@@ -308,9 +318,7 @@ namespace FML {
                             phi_mean += value;
                         }
                     }
-#ifdef USE_MPI
-                    MPI_Allreduce(MPI_IN_PLACE, &phi_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-#endif
+                    FML::SumOverTasks(&phi_mean);
                     phi_mean /= std::pow(Nmesh, N);
 
                     if (FML::ThisTask == 0)
@@ -331,6 +339,68 @@ namespace FML {
                     if (FML::ThisTask == 0)
                         phi_fourier.set_fourier_from_index(0, 0.0);
                 }
+            }
+
+            //======================================================================
+            ///
+            /// This computes a non-gaussian density field at any redshift.
+            ///
+            /// @tparam N The dimension of the grid
+            ///
+            /// @param[out] delta_fourier The fourier grid we generate
+            /// @param[in] rng The random number generator
+            /// @param[in] Pofk_of_kBox_over_Pofk_primordal The ratio \f$ P_\delta(kB) / P_{\rm primordial}(kB) \f$
+            /// where $kB$ is the dimesnionless wavenumber and B the boxsize (i.e. the ratio of the power-spectrum at
+            /// the time you want to generate delta to the primordial one
+            /// @param[in] Pofk_of_kBox_over_volume_primordial The dimensionless primordial power-spectrum \f$ P_{\rm
+            /// primordial}(kB) / V\f$ where \f$ V = B^{\rm N} \f$ is the volume of the box. For the fiducial primordial
+            /// power-spectrum in 3D we have \f$ P_{\rm primordial}(kB) / V = \frac{2\pi^2}{(kB)^3} A_s (k/k_{\rm
+            /// pivot})^{n_s-1}\f$
+            /// @param[in] fix_amplitude Fix the amplitude of the norm of \f$ \delta(k) \f$.
+            /// @param[in] fNL The value of fNL you want
+            /// @param[in] type_of_fnl The type of fNL (local, equilaterial, orthogonal, generic)
+            /// @param[in] u Optional advanced option. See 1108.5512 for more info.
+            /// @param[in] kernel_values Optional. If you specify generic fNL then this gives the kernel values.
+            ///
+            //======================================================================
+            template <int N>
+            void generate_nonlocal_gaussian_random_field_fourier_cosmology(
+                FFTWGrid<N> & delta_fourier,
+                RandomGenerator * rng,
+                std::function<double(double)> Pofk_of_kBox_over_Pofk_primordal,
+                std::function<double(double)> Pofk_of_kBox_over_volume_primordial,
+                bool fix_amplitude,
+                double fNL,
+                std::string type_of_fnl,
+                double u = 0.0,
+                std::vector<double> kernel_values = {}) {
+
+                // Generate a gaussian random field delta using a primordial power-spectrum
+                FFTWGrid<N> & phi_fourier = delta_fourier;
+                generate_nonlocal_gaussian_random_field_fourier(phi_fourier,
+                                                                rng,
+                                                                Pofk_of_kBox_over_volume_primordial,
+                                                                fix_amplitude,
+                                                                fNL,
+                                                                type_of_fnl,
+                                                                u,
+                                                                kernel_values);
+
+                const auto Local_nx = phi_fourier.get_local_nx();
+
+                // Transform to delta by multiplying by sqrt(P(k) / Pprimodial(k))
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    for (auto && fourier_index : phi_fourier.get_fourier_range(islice, islice + 1)) {
+                        phi_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                        auto rescaling_factor = std::sqrt(Pofk_of_kBox_over_Pofk_primordal(kmag));
+                        auto value = phi_fourier.get_fourier_from_index(fourier_index);
+                        phi_fourier.set_fourier_from_index(fourier_index, value * rescaling_factor);
+                    }
+                }
+
+                // We now have delta(k,zini) in delta_fourier
             }
 
         } // namespace NONGAUSSIAN

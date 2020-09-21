@@ -6,9 +6,8 @@
 template <int N>
 using FFTWGrid = FML::GRID::FFTWGrid<N>;
 
-// Size of box and dimensions
-const double box = 1.0;
-const int Ndim = 3;
+const double box = 1.0; // Size of the box
+const int Ndim = 3;     // Number of dimensions we are working in
 
 //=========================================================================
 // Naive way of estimating fNL (just for testing)
@@ -23,7 +22,7 @@ std::pair<double, double> estimate_fnl(FML::CORRELATIONFUNCTIONS::BispectrumBinn
 template <int N>
 void compute_power_spectrum(int Nmesh,
                             FML::RANDOM::RandomGenerator * rng,
-                            std::function<double(double)> & Powspec,
+                            std::function<double(double)> Powspec,
                             FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<N> & pofk) {
     const bool fix_amplitude = false;
     FFTWGrid<N> grid(Nmesh);
@@ -36,8 +35,8 @@ void compute_power_spectrum(int Nmesh,
 // Compute mean power-spectrum over many realisations
 //=========================================================================
 template <int N>
-void generate_mean_over_realisations(int Nreal, int Nmesh, std::function<double(double)> & Powspec) {
-    FML::RANDOM::RandomGenerator * rng = new FML::RANDOM::RandomGenerator;
+void generate_mean_over_realisations(int Nreal, int Nmesh, std::function<double(double)> Powspec) {
+    std::shared_ptr<FML::RANDOM::RandomGenerator> rng = std::make_shared<FML::RANDOM::RandomGenerator>();
 
     FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<N> pofk_total(Nmesh / 2);
     for (int i = 0; i < Nreal; i++) {
@@ -49,12 +48,11 @@ void generate_mean_over_realisations(int Nreal, int Nmesh, std::function<double(
         ;
 
         FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<N> pofk(Nmesh / 2);
-        compute_power_spectrum<N>(Nmesh, rng, Powspec, pofk);
+        compute_power_spectrum<N>(Nmesh, rng.get(), Powspec, pofk);
 
         // Init/add up
         for (int j = 0; j < pofk_total.n; j++) {
             if (i == 0) {
-                pofk_total.k[j] = pofk.k[j];
                 pofk_total.kbin[j] = pofk.kbin[j];
                 pofk_total.pofk[j] = 0.0;
             }
@@ -75,27 +73,37 @@ int main() {
     //=========================================================================
     FML::RANDOM::RandomGenerator * rng = new FML::RANDOM::RandomGenerator;
 
-    const int Nmesh = 64;
+    const int Nmesh = 128;
     FFTWGrid<Ndim> grid(Nmesh);
 
     // Non-gaussianity
-    const double fNL = 100.0;
+    const double fNL = 200.0;
     const std::string type_of_fnl = "local";
-    const bool fix_amplitude = false;
+    const bool fix_amplitude = true;
 
-    // Binning in k (kmin should be 0)
-    const int nbin = 16;
+    // Binning in k (kmin should be 0 for linear spacing - we will anyway use klow=0 for the smallest bin)
+    const int nbin = 32;
     const double kmin = 0.0;
-    const double kmax = 2.0 * M_PI * nbin;
+    const double kmax = 2.0 * M_PI * Nmesh / 2;
 
-    FML::CORRELATIONFUNCTIONS::BispectrumBinning<Ndim> bofk_all(kmin, kmax, nbin);
-    FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim> pofk_all(kmin, kmax, nbin, 0);
+    // For binning up the power-spectrum
+    FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim> pofk_all(
+        kmin, kmax, nbin, FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim>::LINEAR_SPACING);
+
+    // For binning up the monospectrum P(k1,k2) and the bispectrum B(k1,k2,k3)
+    // (these are using the same algorithm)
+    FML::CORRELATIONFUNCTIONS::BispectrumBinning<Ndim> bofk_all(
+        kmin, kmax, nbin, FML::CORRELATIONFUNCTIONS::BispectrumBinning<Ndim>::LINEAR_SPACING);
+    FML::CORRELATIONFUNCTIONS::MonospectrumBinning<Ndim> monoofk_all(
+        kmin, kmax, nbin, FML::CORRELATIONFUNCTIONS::MonospectrumBinning<Ndim>::LINEAR_SPACING);
+    std::vector<double> N123; // To store bincount to help speed up bispectrum computation
 
     //=========================================================================
     // Analytical P(k)
     // This is P(k) / Volume with P(k) = 1/k^NDIM  and Delta = k^NDIM P(k) ~ 1e-6
+    // so scale-invariant spectrum in this example
     //=========================================================================
-    std::function<double(double)> Powspec = [&](double kBox) -> double {
+    auto Powspec = [&](double kBox) -> double {
         if (kBox == 0.0)
             return 0.0;
         double k = kBox / box;                        // k in physical units
@@ -111,7 +119,7 @@ int main() {
     //=========================================================================
     // Generate nreal realisation
     //=========================================================================
-    const int nreal = 100;
+    const int nreal = 10;
     double running_mean = 0.0;
     double running_std = 0.0;
     for (int s = 0; s < nreal; s++) {
@@ -150,13 +158,20 @@ int main() {
         // Compute bispectrum
         //=========================================================================
         FML::CORRELATIONFUNCTIONS::BispectrumBinning<Ndim> bofk(kmin, kmax, nbin);
+        if (N123.size() > 0) // Just for speeding it up with many real: only need to compute N123 once
+            bofk.set_bincount(N123);
         FML::CORRELATIONFUNCTIONS::compute_bispectrum(grid, bofk);
+        if (N123.size() == 0) // Just for speeding it up with many real: only need to compute N123 once
+            N123 = bofk.N123;
         bofk.scale(box);
 
-        // The general method (here for pofk)
-        // FML::CORRELATIONFUNCTIONS::PolyspectrumBinning<Ndim,2> polyofk(nbin);
-        // FML::CORRELATIONFUNCTIONS::compute_polyspectrum(grid, polyofk);
-        // polyofk.scale(box);
+        //=========================================================================
+        // Compute monospectrum (matrix <d(k1)d(k2)> so diagonal is just P(k)
+        // - this uses the same algorithm as the bispectrum so useful as a test)
+        //=========================================================================
+        FML::CORRELATIONFUNCTIONS::MonospectrumBinning<Ndim> monoofk(kmin, kmax, nbin);
+        FML::CORRELATIONFUNCTIONS::compute_monospectrum(grid, monoofk);
+        monoofk.scale(box);
 
         //=========================================================================
         // Estimate fNL as a test that is works
@@ -167,7 +182,7 @@ int main() {
         if (FML::ThisTask == 0)
             std::cout << "Estimate of fNL current: " << res.first << "  Std: " << res.second / std::sqrt(s + 1)
                       << " Estimate of fNL all: " << running_mean / (s + 1.0)
-                      << " Std: " << running_std / (s + 1.0) / std::sqrt(s + 1) << "\n";
+                      << " Error on the mean: " << running_std / (s + 1.0) / std::sqrt(s + 1) << "\n";
 
         //=========================================================================
         // In case we do many realisations add up
@@ -175,6 +190,7 @@ int main() {
         //=========================================================================
         bofk_all.combine(bofk);
         pofk_all.combine(pofk);
+        monoofk_all.combine(monoofk);
     }
 
     //=========================================================================
@@ -223,6 +239,16 @@ int main() {
     };
 
     if (FML::ThisTask == 0) {
+        std::ofstream fp("p12.txt");
+        for (int i = 0; i < monoofk_all.n; i++) {
+            for (int j = 0; j < monoofk_all.n; j++) {
+                fp << i << "  " << j << " " << monoofk_all.get_spectrum(i, j) << " "
+                   << monoofk_all.get_reduced_spectrum(i, j) << " " << monoofk_all.get_bincount(i, j) << "\n";
+            }
+        }
+    }
+
+    if (FML::ThisTask == 0) {
         std::ofstream fp("b123.txt");
         for (int i = 0; i < bofk_all.n; i++) {
             for (int j = 0; j < bofk_all.n; j++) {
@@ -232,16 +258,24 @@ int main() {
                                   Powspec(bofk_all.kbin[j]) * Powspec(bofk_all.kbin[k]) +
                                   Powspec(bofk_all.kbin[k]) * Powspec(bofk_all.kbin[i]));
 
+                    double B = bofk_all.get_spectrum(i, j, k);
+                    double N = bofk_all.get_bincount(i, j, k);
+
                     // The binned bispectrum divided by (p1p2+...) with pi binned up in the same way as B
                     double q = bofk_all.get_reduced_spectrum(i, j, k);
-                    // The same as above just a different way of computing it
+
+                    // The same as above just using the analytical result for P(k)
+                    // instead of the P(k) we estimated when computing the bispectrum
                     double q2 = bofk_all.get_spectrum(i, j, k) / (2.0 * pij);
 
-                    if (q == 0.0 or pij == 0.0)
+                    // Analytical estimate for the given fNL type (q / anal ~ fNL)
+                    double anal = analytic(i, j, k, type_of_fnl);
+
+                    if (pij == 0.0 or anal == 0.0)
                         continue;
-                    double anal = fNL * analytic(i, j, k, type_of_fnl);
+
                     fp << bofk_all.kbin[i] << " " << bofk_all.kbin[j] << " " << bofk_all.kbin[k] << " " << q / anal
-                       << " " << q2 / fNL << "\n";
+                       << " " << q2 / anal << " " << B << " " << q << " " << N << "\n";
                 }
             }
         }
@@ -296,11 +330,12 @@ int main() {
 #endif
 
     //=========================================================================
-    // Output PDF
+    // Output PDF of the density field
     //=========================================================================
     if (FML::ThisTask == 0) {
+        std::ofstream fp("pdf.txt");
         for (int i = 0; i < nbins; i++)
-            std::cout << delta_min + (delta_max - delta_min) * i / double(nbins) << " " << count[i] << "\n";
+            fp << delta_min + (delta_max - delta_min) * i / double(nbins) << " " << count[i] << "\n";
     }
 }
 
@@ -312,12 +347,12 @@ int main() {
 template <int N>
 std::pair<double, double> estimate_fnl(FML::CORRELATIONFUNCTIONS::BispectrumBinning<N> & bofk, std::string fnl_type) {
     int nbins = bofk.n;
-    std::vector<double> & k_bin = bofk.k;
+    std::vector<double> & k_bin = bofk.kbin;
 
     // Q123 = B123/(P1P2+cyc) = fNL * analytic(i,j,k)
     auto analytic = [&](int i, int j, int k, std::string _fnl_type) -> double {
         double fac = (bofk.pofk[i] * bofk.pofk[j] + bofk.pofk[j] * bofk.pofk[k] + bofk.pofk[k] * bofk.pofk[i]);
-        ;
+
         if (_fnl_type == "local") {
             return 2.0 * fac;
         } else if (_fnl_type == "equilateral") {
@@ -353,7 +388,7 @@ std::pair<double, double> estimate_fnl(FML::CORRELATIONFUNCTIONS::BispectrumBinn
 
     double mean = 0.0;
     double std = 0.0;
-    int count = 0;
+    double count = 0;
     for (int i = 0; i < nbins; i++) {
         for (int j = 0; j < nbins; j++) {
             for (int k = 0; k < nbins; k++) {
@@ -361,16 +396,22 @@ std::pair<double, double> estimate_fnl(FML::CORRELATIONFUNCTIONS::BispectrumBinn
                 std::sort(inds.begin(), inds.end(), std::less<double>());
                 if (inds[0] + inds[1] >= inds[2]) {
                     double norm = analytic(i, j, k, fnl_type);
+
                     if (norm > 0.0) {
                         double value = bofk.get_spectrum(i, j, k) / norm;
+                        double weight = 1.0;
+                        // weight = bofk.get_bincount(i, j, k);
+                        value *= weight;
                         mean += value;
                         std += value * value;
-                        count++;
+                        count += weight;
                     }
                 }
             }
         }
     }
+
+    // All tasks have the same data so no need for communication here
     mean /= double(count);
     std /= double(count);
     std = std::sqrt(std - mean * mean) / std::sqrt(count);
