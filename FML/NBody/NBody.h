@@ -14,6 +14,7 @@
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/RandomFields/GaussianRandomField.h>
+#include <FML/RandomFields/NonLocalGaussianRandomField.h>
 
 namespace FML {
     namespace NBODY {
@@ -42,9 +43,14 @@ namespace FML {
                            std::string interpolation_method);
 
         template <int N>
-        void compute_force_from_density(const FFTWGrid<N> & density_grid_real,
-                                        std::array<FFTWGrid<N>, N> & force_real,
-                                        double norm_poisson_equation = 1.0);
+        void compute_force_from_density_real(const FFTWGrid<N> & density_grid_real,
+                                             std::array<FFTWGrid<N>, N> & force_real,
+                                             double norm_poisson_equation = 1.0);
+
+        template <int N>
+        void compute_force_from_density_fourier(const FFTWGrid<N> & density_grid_fourier,
+                                                std::array<FFTWGrid<N>, N> & force_real,
+                                                double norm_poisson_equation = 1.0);
 
         //===================================================================================
         /// @brief Take a N-body step with a simple Kick-Drift-Kick method (this
@@ -92,7 +98,7 @@ namespace FML {
 
             // Density field -> force
             std::array<FFTWGrid<N>, N> force_real;
-            compute_force_from_density(density_grid_real, force_real, norm_poisson_equation);
+            compute_force_from_density_real(density_grid_real, force_real, norm_poisson_equation);
 
             // Update velocity of particles
             KickParticles(force_real, part, delta_time * 0.5, density_assignment_method);
@@ -108,7 +114,7 @@ namespace FML {
                                                         density_assignment_method);
 
             // Density field -> force
-            compute_force_from_density(density_grid_real, force_real, norm_poisson_equation);
+            compute_force_from_density_real(density_grid_real, force_real, norm_poisson_equation);
 
             // Update velocity of particles
             KickParticles(force_real, part, delta_time * 0.5, density_assignment_method);
@@ -168,7 +174,7 @@ namespace FML {
                                                             density_assignment_method);
                 // Density field -> force
                 std::array<FFTWGrid<N>, N> force_real;
-                compute_force_from_density(density_grid_real, force_real, norm_poisson);
+                compute_force_from_density_real(density_grid_real, force_real, norm_poisson);
 
                 // Update velocity of particles
                 KickParticles(force_real, part, delta_time_vel, density_assignment_method);
@@ -195,23 +201,43 @@ namespace FML {
         ///
         //===================================================================================
         template <int N>
-        void compute_force_from_density(const FFTWGrid<N> & density_grid_real,
-                                        std::array<FFTWGrid<N>, N> & force_real,
-                                        double norm_poisson_equation) {
+        void compute_force_from_density_real(const FFTWGrid<N> & density_grid_real,
+                                             std::array<FFTWGrid<N>, N> & force_real,
+                                             double norm_poisson_equation) {
+
+            FFTWGrid<N> density_grid_fourier = density_grid_real;
+            density_grid_fourier.add_memory_label("FFTWGrid::compute_force_from_density_real::density_grid_fourier");
+            density_grid_fourier.set_grid_status_real(true);
+            density_grid_fourier.fftw_r2c();
+            compute_force_from_density_fourier(density_grid_fourier, force_real, norm_poisson_equation);
+        }
+
+        //===================================================================================
+        /// Take a density grid in fourier space and returns the force \f$ \nabla \phi \f$  where
+        /// \f$ \nabla^2 \phi = {\rm norm} \cdot \delta \f$
+        ///
+        /// @tparam N The dimension of the grid
+        ///
+        /// @param[in] density_grid_fourier The density contrast in fourier space.
+        /// @param[out] force_real The force in real space.
+        /// @param[in] norm_poisson_equation The prefactor (norm) to the Poisson equation.
+        ///
+        //===================================================================================
+        template <int N>
+        void compute_force_from_density_fourier(const FFTWGrid<N> & density_grid_fourier,
+                                                std::array<FFTWGrid<N>, N> & force_real,
+                                                double norm_poisson_equation) {
 
             // Copy over
             for (int idim = 0; idim < N; idim++) {
-                force_real[idim] = density_grid_real;
+                force_real[idim] = density_grid_fourier;
                 force_real[idim].add_memory_label("FFTWGrid::compute_force_from_density::force_real_" +
                                                   std::to_string(idim));
                 force_real[idim].set_grid_status_real(idim == 0);
             }
 
-            // Density grid to fourier space
-            force_real[0].fftw_r2c();
-
-            auto Local_nx = density_grid_real.get_local_nx();
-            auto Local_x_start = density_grid_real.get_local_x_start();
+            auto Local_nx = density_grid_fourier.get_local_nx();
+            auto Local_x_start = density_grid_fourier.get_local_x_start();
 
             // Loop over all local fourier grid cells
 #ifdef USE_OMP
@@ -419,6 +445,19 @@ namespace FML {
                 std::cout << "[Kick] Max delta_vel * delta_time : " << max_dvel * delta_time << "\n";
         }
 
+        template <int N, class T>
+        void NBodyInitialConditions(FML::PARTICLE::MPIParticles<T> & part,
+                                    int Npart_1D,
+                                    double buffer_factor,
+
+                                    FFTWGrid<N> & delta_fourier,
+                                    int LPT_order,
+
+                                    double box,
+                                    double zini,
+                                    std::function<double(double)> H_over_H0_of_loga,
+                                    std::vector<std::function<double(double)>> & growth_rate_f_of_loga);
+
         ///=====================================================================
         /// Generate particles from a given power-spectrum using Lagrangian perturbation theory.
         /// We generate particles in [0,1) and velocities are given by v_code = a^2 dxdt / (H0 Box)
@@ -433,9 +472,13 @@ namespace FML {
         /// @param[in] Nmesh The grid to generate the IC on
         /// @param[in] fix_amplitude Amplitude fixed? Only random phases if true.
         /// @param[in] rng Random number generator
-        /// @param[in] Pofk_of_kBox_over_volume The dimensionless function P(k)/VolumeOfBox as function of the
-        /// dimensionless wavenumber k*Box
+        /// @param[in] Pofk_of_kBox_over_Pofk_primordal The ratio of the power-spectrum (for delta) at the time you
+        /// want the density field to be created at to the primordial one (the function above).
+        /// @param[in] Pofk_of_kBox_over_volume_primordial The dimensionless function P(k)/VolumeOfBox as function of the
+        /// dimensionless wavenumber k*Box where P(k) is the primordial power-spectrum for Phi.
         /// @param[in] LPT_order The LPT order (1 or 2)
+        /// @param[in] type_of_random_field What random field: gaussian, local, equilateral, orthogonal
+        /// @param[in] fNL If non-gaussianity the value of fNL
         /// @param[in] box The boxsize (only for prining maximum displacement)
         /// @param[in] zini The initial redshift
         /// @param[in] H_over_H0_of_loga The function H/H0 as function of x = log(a)
@@ -450,12 +493,68 @@ namespace FML {
                                     int Nmesh,
                                     bool fix_amplitude,
                                     FML::RANDOM::RandomGenerator * rng,
-                                    std::function<double(double)> & Pofk_of_kBox_over_volume,
+                                    std::function<double(double)> Pofk_of_kBox_over_Pofk_primordal,
+                                    std::function<double(double)> Pofk_of_kBox_over_volume_primordial,
+                                    int LPT_order,
+                                    std::string type_of_random_field,
+                                    double fNL,
+
+                                    double box,
+                                    double zini,
+                                    std::function<double(double)> H_over_H0_of_loga,
+                                    std::vector<std::function<double(double)>> & growth_rate_f_of_loga) {
+
+            // Some sanity checks
+            assert_mpi(Npart_1D > 0 and Nmesh > 0 and zini >= 0.0 and rng != nullptr and box > 0.0,
+                       "[NBodyInitialConditions] Invalid parameters");
+
+            // Generate the random field first
+            auto nextra = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment("CIC");
+            FFTWGrid<N> delta_fourier(Nmesh, nextra.first, nextra.second);
+            delta_fourier.add_memory_label("FFTWGrid::NBodyInitialConditions::delta_fourier");
+            delta_fourier.set_grid_status_real(false);
+
+            // Make a gaussian or non-local non-gaussian random field in fourier space
+            if (type_of_random_field == "gaussian") {
+                auto Pofk_of_kBox_over_volume = [&](double kBox) {
+                    return Pofk_of_kBox_over_Pofk_primordal(kBox) * Pofk_of_kBox_over_volume_primordial(kBox);
+                };
+                FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier(
+                    delta_fourier, rng, Pofk_of_kBox_over_volume, fix_amplitude);
+            } else {
+                FML::RANDOM::NONGAUSSIAN::generate_nonlocal_gaussian_random_field_fourier_cosmology(
+                    delta_fourier,
+                    rng,
+                    Pofk_of_kBox_over_Pofk_primordal,
+                    Pofk_of_kBox_over_volume_primordial,
+                    fix_amplitude,
+                    fNL,
+                    type_of_random_field);
+            }
+
+            // Generate IC from a given fourier grid
+            NBodyInitialConditions<N, T>(part,
+                                         Npart_1D,
+                                         buffer_factor,
+                                         delta_fourier,
+                                         LPT_order,
+                                         box,
+                                         zini,
+                                         H_over_H0_of_loga,
+                                         growth_rate_f_of_loga);
+        }
+
+        template <int N, class T>
+        void NBodyInitialConditions(FML::PARTICLE::MPIParticles<T> & part,
+                                    int Npart_1D,
+                                    double buffer_factor,
+
+                                    FFTWGrid<N> & delta_fourier,
                                     int LPT_order,
 
                                     double box,
                                     double zini,
-                                    std::function<double(double)> & H_over_H0_of_loga,
+                                    std::function<double(double)> H_over_H0_of_loga,
                                     std::vector<std::function<double(double)>> & growth_rate_f_of_loga) {
 
             T tmp;
@@ -471,7 +570,6 @@ namespace FML {
                 std::cout << "#                              \\/  \n";
                 std::cout << "#\n";
                 std::cout << "# Generating initial conditions for N-body\n";
-                std::cout << "# Gaussian random field " << (fix_amplitude ? "with fixed amplitude" : "") << "\n";
                 std::cout << "# Order in LPT = " << LPT_order << "\n";
                 std::cout << "# The boxsize is " << box << " comoving Mpc/h\n";
                 std::cout << "# The initial redshift zini = " << zini << "\n";
@@ -490,7 +588,13 @@ namespace FML {
                               << sizeof(FML::PARTICLE::GetD_1LPT(tmp)[0]) * N << " bytes)\n";
                 if (FML::PARTICLE::has_get_D_2LPT<T>())
                     std::cout << "# Particle has [2LPT Displacement field] ("
-                              << sizeof(FML::PARTICLE::GetD_1LPT(tmp)[0]) * N << " bytes)\n";
+                              << sizeof(FML::PARTICLE::GetD_2LPT(tmp)[0]) * N << " bytes)\n";
+                if (FML::PARTICLE::has_get_D_3LPTa<T>())
+                    std::cout << "# Particle has [3LPTa Displacement field] ("
+                              << sizeof(FML::PARTICLE::GetD_3LPTa(tmp)[0]) * N << " bytes)\n";
+                if (FML::PARTICLE::has_get_D_3LPTb<T>())
+                    std::cout << "# Particle has [3LPTb Displacement field] ("
+                              << sizeof(FML::PARTICLE::GetD_3LPTb(tmp)[0]) * N << " bytes)\n";
                 if (FML::PARTICLE::has_get_q<T>())
                     std::cout << "# Particle has [Lagrangian position] ("
                               << sizeof(FML::PARTICLE::GetLagrangianPos(tmp)[0]) * N << " bytes)\n";
@@ -507,8 +611,8 @@ namespace FML {
             }
 
             // Sanity checks
-            assert_mpi(Npart_1D > 0 and Nmesh > 0 and zini >= 0.0 and rng != nullptr,
-                       "[NBodyInitialConditions] Invalid parameters");
+            const auto Nmesh = delta_fourier.get_nmesh();
+            assert_mpi(Nmesh > 0, "[NBodyInitialConditions] delta_fourier has to be already allocated");
             assert_mpi(LPT_order == 1 or LPT_order == 2 or LPT_order == 3,
                        "[NBodyInitialConditions] Only 1LPT, 2LPT and 3LPT implemented so valid choices here are "
                        "LPT_order = 1, 2 or 3");
@@ -523,51 +627,34 @@ namespace FML {
             const double aini = 1.0 / (1.0 + zini);
             const double xini = std::log(aini);
 
-            // We provide the power-spectrum at the initial time
-            auto nextra = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment("CIC");
-            FFTWGrid<N> delta(Nmesh, nextra.first, nextra.second);
-            delta.set_grid_status_real(false);
-
-            // Make a random field in fourier space
-            FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier(
-                delta, rng, Pofk_of_kBox_over_volume, fix_amplitude);
-
             FFTWGrid<N> phi_1LPT;
             FFTWGrid<N> phi_2LPT;
-            FFTWGrid<N> phi_3LPT;
+            FFTWGrid<N> phi_3LPTa;
+            FFTWGrid<N> phi_3LPTb;
             if (LPT_order == 1) {
                 // Generate the 1LPT potential phi_1LPT = delta(k)/k^2
-                FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier(delta, phi_1LPT);
+                FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier(delta_fourier, phi_1LPT);
             } else if (LPT_order == 2) {
                 // Generate the 1LPT potential phi_1LPT = delta(k)/k^2
-                FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier(delta, phi_1LPT);
+                FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier(delta_fourier, phi_1LPT);
                 // Generate the 2LPT potential phi_2LPT = -1/2k^2 F[phi_ii phi_jj - phi_ij^2]
-                FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta, phi_2LPT);
+                FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_fourier, phi_2LPT);
             } else if (LPT_order == 3) {
-                // Generate the 3LPT potentials phi_3LPT_a, phi_3LPT_b plus 3LPT curl term
+                // Generate the 3LPT potentials phi_3LPTa, phi_3LPTb plus 3LPT curl term
                 // We ignore the curl term in this implementation for simplicity
                 const bool ignore_3LPT_curl_term = true;
-                FFTWGrid<N> & phi_3LPT_a = phi_3LPT;
-                FFTWGrid<N> phi_3LPT_b;
                 std::vector<FFTWGrid<N>> phi_3LPT_Avec_fourier;
-                FML::COSMOLOGY::LPT::compute_3LPT_potential_fourier(
-                    delta, phi_1LPT, phi_2LPT, phi_3LPT_a, phi_3LPT_b, phi_3LPT_Avec_fourier, ignore_3LPT_curl_term);
-
-                // Add up the two 3LPT potentials
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-                for (int islice = 0; islice < phi_3LPT.get_local_nx(); islice++) {
-                    for (auto && fourier_index : phi_3LPT.get_fourier_range(islice, islice + 1)) {
-                        auto value_a = phi_3LPT_a.get_fourier_from_index(fourier_index);
-                        auto value_b = phi_3LPT_b.get_fourier_from_index(fourier_index);
-                        phi_3LPT.set_fourier_from_index(fourier_index, value_a + value_b);
-                    }
-                }
+                FML::COSMOLOGY::LPT::compute_3LPT_potential_fourier(delta_fourier,
+                                                                    phi_1LPT,
+                                                                    phi_2LPT,
+                                                                    phi_3LPTa,
+                                                                    phi_3LPTb,
+                                                                    phi_3LPT_Avec_fourier,
+                                                                    ignore_3LPT_curl_term);
             }
 
             // Free memory no longer needed
-            delta.free();
+            delta_fourier.free();
 
             //================================================================
             // Function to compute the displacement from a LPT potential
@@ -593,6 +680,7 @@ namespace FML {
             };
 
             auto add_displacement = [&]([[maybe_unused]] int nLPT,
+                                        char type,
                                         std::vector<std::vector<FML::GRID::FloatType>> & displacements_nLPT,
                                         double vfac_nLPT) {
                 // Generate Psi from phi
@@ -631,7 +719,7 @@ namespace FML {
                     }
 
                     // Add to velocity (if it exists)
-                    if (FML::PARTICLE::has_get_vel<T>()) {
+                    if constexpr (FML::PARTICLE::has_get_vel<T>()) {
                         if (ind == 0 and FML::ThisTask == 0)
                             std::cout << "Adding " << std::to_string(nLPT) << "LPT velocity to particle\n";
                         auto * vel = FML::PARTICLE::GetVel(part_ptr[ind]);
@@ -645,8 +733,6 @@ namespace FML {
 
                     // Store displacement fields at particle (if it exists)
                     // This is needed if we want to do COLA
-                    // If the particles has get_D_1LPT and get_D_2LPT not being a nullptr we store it
-                    // If you don't want particles to have these methods just comment this out
                     if (nLPT == 1) {
                         if constexpr (FML::PARTICLE::has_get_D_1LPT<T>()) {
                             if (ind == 0 and FML::ThisTask == 0)
@@ -669,13 +755,24 @@ namespace FML {
                         }
                     }
 
-                    if (nLPT == 3) {
-                        if constexpr (FML::PARTICLE::has_get_D_3LPT<T>()) {
+                    if (nLPT == 3 and type == 'a') {
+                        if constexpr (FML::PARTICLE::has_get_D_3LPTa<T>()) {
                             if (ind == 0 and FML::ThisTask == 0)
-                                std::cout << "Storing 3LPT displacment field in particle\n";
-                            auto * D2 = FML::PARTICLE::GetD_3LPT(part_ptr[ind]);
+                                std::cout << "Storing 3LPTa displacment field in particle\n";
+                            auto * D3a = FML::PARTICLE::GetD_3LPTa(part_ptr[ind]);
                             for (int idim = 0; idim < N; idim++) {
-                                D2[idim] = disp[idim];
+                                D3a[idim] = disp[idim];
+                            }
+                        }
+                    }
+
+                    if (nLPT == 3 and type == 'b') {
+                        if constexpr (FML::PARTICLE::has_get_D_3LPTb<T>()) {
+                            if (ind == 0 and FML::ThisTask == 0)
+                                std::cout << "Storing 3LPTb displacment field in particle\n";
+                            auto * D3b = FML::PARTICLE::GetD_3LPTb(part_ptr[ind]);
+                            for (int idim = 0; idim < N; idim++) {
+                                D3b[idim] = disp[idim];
                             }
                         }
                     }
@@ -700,7 +797,7 @@ namespace FML {
                 if (FML::ThisTask == 0)
                     std::cout << "Storing unique ID in particle\n";
                 long long int npart_local = part.get_npart();
-                auto part_per_task = FML::GatherFromAllTasks(&npart_local);
+                auto part_per_task = FML::GatherFromTasks(&npart_local);
                 long long int id_start = 0;
                 for (int i = 0; i < FML::ThisTask; i++)
                     id_start += part_per_task[i];
@@ -732,46 +829,65 @@ namespace FML {
             }
 
             // Compute and add displacements
+            // NB: we must do this in one go as add_displacement changes the position of the particles
             std::vector<std::vector<FML::GRID::FloatType>> displacements_1LPT(N);
             if (LPT_order >= 1) {
                 const int nLPT = 1;
                 comp_displacement(nLPT, phi_1LPT, displacements_1LPT);
-                phi_1LPT.free();
             }
 
             std::vector<std::vector<FML::GRID::FloatType>> displacements_2LPT(N);
             if (LPT_order >= 2) {
                 const int nLPT = 2;
                 comp_displacement(nLPT, phi_2LPT, displacements_2LPT);
-                phi_2LPT.free();
             }
 
-            std::vector<std::vector<FML::GRID::FloatType>> displacements_3LPT(N);
+            std::vector<std::vector<FML::GRID::FloatType>> displacements_3LPTa(N);
             if (LPT_order >= 3) {
                 const int nLPT = 3;
-                comp_displacement(nLPT, phi_3LPT, displacements_3LPT);
-                phi_3LPT.free();
+                comp_displacement(nLPT, phi_3LPTa, displacements_3LPTa);
+            }
+
+            std::vector<std::vector<FML::GRID::FloatType>> displacements_3LPTb(N);
+            if (LPT_order >= 3) {
+                const int nLPT = 3;
+                comp_displacement(nLPT, phi_3LPTb, displacements_3LPTb);
             }
 
             if (LPT_order >= 1) {
                 const int nLPT = 1;
-                const double growth_rate1 = growth_rate_f_of_loga[nLPT - 1](xini);
+                const double growth_rate1 = growth_rate_f_of_loga[0](xini);
                 const double vfac_1LPT = std::exp(2 * xini) * H_over_H0_of_loga(xini) * growth_rate1;
-                add_displacement(nLPT, displacements_1LPT, vfac_1LPT);
+                add_displacement(nLPT, 0, displacements_1LPT, vfac_1LPT);
+                displacements_1LPT.clear();
+                displacements_1LPT.shrink_to_fit();
             }
 
             if (LPT_order >= 2) {
                 const int nLPT = 2;
-                const double growth_rate2 = growth_rate_f_of_loga[nLPT - 1](xini);
+                const double growth_rate2 = growth_rate_f_of_loga[1](xini);
                 const double vfac_2LPT = std::exp(2 * xini) * H_over_H0_of_loga(xini) * growth_rate2;
-                add_displacement(nLPT, displacements_2LPT, vfac_2LPT);
+                add_displacement(nLPT, 0, displacements_2LPT, vfac_2LPT);
+                displacements_2LPT.clear();
+                displacements_2LPT.shrink_to_fit();
             }
 
             if (LPT_order >= 3) {
                 const int nLPT = 3;
-                const double growth_rate3 = growth_rate_f_of_loga[nLPT - 1](xini);
-                const double vfac_3LPT = std::exp(2 * xini) * H_over_H0_of_loga(xini) * growth_rate3;
-                add_displacement(nLPT, displacements_3LPT, vfac_3LPT);
+                const double growth_rate3a = growth_rate_f_of_loga[2](xini);
+                const double vfac_3LPTa = std::exp(2 * xini) * H_over_H0_of_loga(xini) * growth_rate3a;
+                add_displacement(nLPT, 'a', displacements_3LPTa, vfac_3LPTa);
+                displacements_3LPTa.clear();
+                displacements_3LPTa.shrink_to_fit();
+            }
+
+            if (LPT_order >= 3) {
+                const int nLPT = 3;
+                const double growth_rate3b = growth_rate_f_of_loga[3](xini);
+                const double vfac_3LPTb = std::exp(2 * xini) * H_over_H0_of_loga(xini) * growth_rate3b;
+                add_displacement(nLPT, 'b', displacements_3LPTb, vfac_3LPTb);
+                displacements_3LPTb.clear();
+                displacements_3LPTb.shrink_to_fit();
             }
 
             // Communicate particles (they might have left the current task)
