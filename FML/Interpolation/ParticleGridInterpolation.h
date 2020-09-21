@@ -69,7 +69,7 @@ namespace FML {
         ///
         template <int N, int ORDER, class T>
         void interpolate_grid_to_particle_positions(const FFTWGrid<N> & grid,
-                                                    T * part,
+                                                    const T * part,
                                                     size_t NumPart,
                                                     std::vector<FloatType> & interpolated_values);
 
@@ -87,7 +87,7 @@ namespace FML {
         ///
         template <int N, class T>
         void interpolate_grid_to_particle_positions(const FFTWGrid<N> & grid,
-                                                    T * part,
+                                                    const T * part,
                                                     size_t NumPart,
                                                     std::vector<FloatType> & interpolated_values,
                                                     std::string interpolation_method);
@@ -105,7 +105,7 @@ namespace FML {
         /// @param[in] density_assignment_method The assignment method: NGP, CIC, TSC, PCS or PQS.
         ///
         template <int N, class T>
-        void particles_to_grid(T * part,
+        void particles_to_grid(const T * part,
                                size_t NumPart,
                                size_t NumPartTot,
                                FFTWGrid<N> & density,
@@ -125,30 +125,27 @@ namespace FML {
         /// @param[out] density The overdensity field.
         ///
         template <int N, int ORDER, class T>
-        void particles_to_grid(T * part, size_t NumPart, size_t NumPartTot, FFTWGrid<N> & density);
+        void particles_to_grid(const T * part, size_t NumPart, size_t NumPartTot, FFTWGrid<N> & density);
 
         /// @brief Assign particles to grid to compute the over density.
         /// Do this for a normal grid and an interlaced grid and return
         /// the alias-corrected fourier transform of the density field in fourier space.
-        /// We also deconvolve the window function for the density assignement.
+        /// This method does not deconvolve the window function
         ///
-        /// @tparam N The dimension of the grid
         /// @tparam T The particle class. Must have a get_pos() method. If the particle has a get_mass method then this
         /// is used to weight the particle (we assign the particle with weight mass / mean_mass).
         ///
-        /// @param[out] density_grid_fourier a fourier grid (does not need to be initialized).
-        /// @param[in] Ngrid The size of the grid we want to use.
         /// @param[in] part A pointer the first particle.
         /// @param[in] NumPart How many particles/positions we have that we want to interpolate the grid to.
         /// @param[in] NumPartTotal How many particles/positions we have in total over all tasks.
+        /// @param[out] density_grid_fourier The output density grid in fourier space (must be initialized)
         /// @param[in] density_assignment_method The density assignement method (NGP, CIC, TSC, PCS or PQS).
         ///
         template <int N, class T>
-        void particles_to_fourier_grid_interlacing(FFTWGrid<N> & density_grid_fourier,
-                                                   int Ngrid,
-                                                   T * part,
+        void particles_to_fourier_grid_interlacing(T * part,
                                                    size_t NumPart,
                                                    size_t NumPartTotal,
+                                                   FFTWGrid<N> & density_grid_fourier,
                                                    std::string density_assignment_method);
 
         /// @brief Convolve a grid with a kernel
@@ -172,7 +169,7 @@ namespace FML {
         //===================================================================================================
 
         template <int N, class T>
-        void particles_to_grid(T * part,
+        void particles_to_grid(const T * part,
                                size_t NumPart,
                                size_t NumPartTot,
                                FFTWGrid<N> & density,
@@ -191,7 +188,7 @@ namespace FML {
 
         template <int N, class T>
         void interpolate_grid_to_particle_positions(const FFTWGrid<N> & grid,
-                                                    T * part,
+                                                    const T * part,
                                                     size_t NumPart,
                                                     std::vector<FloatType> & interpolated_values,
                                                     std::string interpolation_method) {
@@ -391,7 +388,7 @@ namespace FML {
         //==============================================================================
 
         template <int N, int ORDER, class T>
-        void particles_to_grid(T * part, size_t NumPart, size_t NumPartTot, FFTWGrid<N> & density) {
+        void particles_to_grid(const T * part, size_t NumPart, size_t NumPartTot, FFTWGrid<N> & density) {
 
             const auto nextra = get_extra_slices_needed_by_order<ORDER>();
             assert_mpi(density.get_n_extra_slices_left() >= nextra.first &&
@@ -438,7 +435,7 @@ namespace FML {
             for (size_t i = 0; i < NumPart; i++) {
 
                 // Particle position
-                const auto * pos = FML::PARTICLE::GetPos(part[i]);
+                const auto * pos = FML::PARTICLE::GetPos( const_cast<T*>(part)[i] );
 
                 // Fetch mass if this is availiable
                 if constexpr (has_mass)
@@ -530,7 +527,7 @@ namespace FML {
 
         template <int N, int ORDER, class T>
         void interpolate_grid_to_particle_positions(const FFTWGrid<N> & grid,
-                                                    T * part,
+                                                    const T * part,
                                                     size_t NumPart,
                                                     std::vector<FloatType> & interpolated_values) {
 
@@ -558,7 +555,7 @@ namespace FML {
             for (size_t ind = 0; ind < NumPart; ind++) {
 
                 // Positions in global grid in units of [Nmesh]
-                auto * pos = FML::PARTICLE::GetPos(part[ind]);
+                const auto * pos = FML::PARTICLE::GetPos( const_cast<T*>(part)[ind] );
                 std::array<double, N> x;
                 for (int idim = 0; idim < N; idim++)
                     x[idim] = pos[idim] * Nmesh;
@@ -838,24 +835,29 @@ namespace FML {
         }
 
         template <int N, class T>
-        void particles_to_fourier_grid_interlacing(FFTWGrid<N> & density_grid_fourier,
-                                                   int Ngrid,
-                                                   T * part,
+        void particles_to_fourier_grid_interlacing(T * part,
                                                    size_t NumPart,
                                                    size_t NumPartTotal,
+                                                   FFTWGrid<N> & density_grid_fourier,
                                                    std::string density_assignment_method) {
 
+            auto Ngrid = density_grid_fourier.get_nmesh();
+
             // Set how many extra slices we need for the density assignment to go smoothly
+            // One extra slice in general as we need to shift the particle half a grid-cell
             auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
             int nleft = nleftright.first;
-            int nright = nleftright.second;
+            int nright = nleftright.second + 1;
 
-            // One extra slice in general as we need to shift the particle half a grid-cell
-            nright += 1;
+            // If the grid has too few slices then we must reallocate it
+            if (density_grid_fourier.get_n_extra_slices_left() < nleft or
+                density_grid_fourier.get_n_extra_slices_right() < nright) {
+                density_grid_fourier = FFTWGrid<N>(Ngrid, nleft, nright);
+                density_grid_fourier.add_memory_label(
+                    "FFTWGrid::particles_to_grid_interlacing::density_grid_fourier (reallocated)");
+            }
 
             // Bin particles to grid
-            density_grid_fourier = FFTWGrid<N>(Ngrid, nleft, nright);
-            density_grid_fourier.add_memory_label("FFTWGrid::particles_to_grid_interlacing::density_grid_fourier");
             particles_to_grid<N, T>(part, NumPart, NumPartTotal, density_grid_fourier, density_assignment_method);
 
             // Shift particles
@@ -916,9 +918,6 @@ namespace FML {
                     density_grid_fourier.set_fourier_from_index(fourier_index, (grid1 + norm * grid2) / 2.0);
                 }
             }
-
-            // Deconvolve window function
-            deconvolve_window_function_fourier<N>(density_grid_fourier, density_assignment_method);
         }
 
     } // namespace INTERPOLATION
