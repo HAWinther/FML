@@ -16,11 +16,20 @@ namespace FML {
             double kmin{0.0};
             double kmax{0.0};
 
+            // This the the bispectrum, the volume factor and the power-spectrum
             std::vector<double> B123;
             std::vector<double> N123;
             std::vector<double> pofk;
+
+            // k is linear spaced from kmin to kmax
+            // klow is lower bin edge, khigh is higher bin edge
+            // kbin is center of bin and kmean is the mean of wavenumbers
+            // added to the bin. k = kbin except for the first and last bin
             std::vector<double> k;
             std::vector<double> kbin;
+            std::vector<double> klow;
+            std::vector<double> khigh;
+            std::vector<double> kmean;
 
             BispectrumBinning() = default;
             BispectrumBinning(int nbins);
@@ -44,6 +53,15 @@ namespace FML {
             // Return N123
             double get_bincount(int i, int j, int k);
 
+            // The (k1,k2,k3) corresponding to a given index in the B123 vector
+            std::array<int, 3> get_coord_from_index(size_t index);
+            size_t get_index_from_coord(const std::array<int, 3> & ik);
+
+            // Symmetry: we only need to compute ik1 <= ik2 <= ...
+            // This function tells algorithms which configurations to compute and
+            // which to set by using symmetry from the configs we have computed
+            bool compute_this_configuration(const std::array<int, 3> & ik);
+
             // This is just to make it easier to add binnings
             // of several spectra... just for testing
             int nbinnings = 0;
@@ -58,13 +76,30 @@ namespace FML {
             n = nbins;
             B123.resize(n * n * n);
             N123.resize(n * n * n);
-            pofk.resize(n);
-            k.resize(n);
-            kbin.resize(n);
+            pofk.resize(n, 0.0);
+            k.resize(n, 0.0);
+            kbin.resize(n, 0.0);
+            kmean.resize(n, 0.0);
+            klow.resize(n, 0.0);
+            khigh.resize(n, 0.0);
             this->kmin = kmin;
             this->kmax = kmax;
             for (size_t i = 0; i < k.size(); i++)
                 k[i] = kmin + (kmax - kmin) * i / double(n);
+
+            for (int i = 0; i < n; i++) {
+                if (i == 0) {
+                    klow[i] = std::min(k[0], 0.0);
+                    khigh[i] = k[0] + (k[1] - k[0]) / 2.0;
+                } else if (i < n - 1) {
+                    klow[i] = khigh[i - 1];
+                    khigh[i] = k[i] + (k[i + 1] - k[i]) / 2.0;
+                } else {
+                    klow[i] = khigh[i - 1];
+                    khigh[i] = k[nbins - 1];
+                }
+                kbin[i] = (klow[i] + khigh[i]) / 2.0;
+            }
         }
 
         template <int N>
@@ -72,12 +107,19 @@ namespace FML {
             for (size_t i = 0; i < k.size(); i++) {
                 k[i] *= 1.0 / boxsize;
                 kbin[i] *= 1.0 / boxsize;
+                klow[i] *= 1.0 / boxsize;
+                khigh[i] *= 1.0 / boxsize;
+                kmean[i] *= 1.0 / boxsize;
             }
             double scale = std::pow(boxsize, 2 * N);
 
             // Bispectrum
             for (auto & b : B123)
                 b *= scale;
+
+            // In principle we should scale N123 by 1/boxsize^3
+            // however this is only used internally and then in  
+            // dimensionless units so we omit this here
 
             // Power-spectrum
             scale = std::pow(boxsize, N);
@@ -98,14 +140,47 @@ namespace FML {
             std::fill(B123.begin(), B123.end(), 0.0);
             std::fill(N123.begin(), N123.end(), 0.0);
             std::fill(pofk.begin(), pofk.end(), 0.0);
-            std::fill(kbin.begin(), kbin.end(), 0.0);
         }
 
         template <int N>
         double BispectrumBinning<N>::get_spectrum(int i, int j, int k) {
             assert_mpi(i >= 0 and j >= 0 and k >= 0, "[BispectrumBinning::get_spectrum] i,j,k has to be >= 0\n");
             assert_mpi(i < n and j < n and k < n, "[BispectrumBinning::get_spectrum] i,j,k has to be < n\n");
-            return B123[(i * n + j) * n + k];
+            std::array<int, 3> ik{i, j, k};
+            return B123[(ik[0] * n + ik[1]) * n + ik[2]];
+        }
+
+        template <int N>
+        std::array<int, 3> BispectrumBinning<N>::get_coord_from_index(size_t index) {
+            std::array<int, 3> ik;
+            for (int ii = 3 - 1, npow = 1; ii >= 0; ii--, npow *= n) {
+                ik[ii] = index / npow % n;
+            }
+            return ik;
+        }
+
+        template <int N>
+        size_t BispectrumBinning<N>::get_index_from_coord(const std::array<int, 3> & ik) {
+            size_t index = 0;
+            for (int i = 0; i < 3; i++)
+                index = index * n + ik[i];
+            return index;
+        }
+
+        // Symmetry: we only need to compute ik1 <= ik2 <= ...
+        template <int N>
+        bool BispectrumBinning<N>::compute_this_configuration(const std::array<int, 3> & ik) {
+            double ksum = 0.0;
+            for (int ii = 1; ii < 3; ii++) {
+                if (ik[ii - 1] > ik[ii])
+                    return false;
+                ksum += khigh[ik[ii - 1]];
+            }
+
+            // No valid 'triangles' if k1+k2+... < kN so just set too zero right away
+            if (ksum < klow[ik[3 - 1]])
+                return false;
+            return true;
         }
 
         template <int N>
@@ -122,7 +197,8 @@ namespace FML {
         double BispectrumBinning<N>::get_bincount(int i, int j, int k) {
             assert_mpi(i >= 0 and j >= 0 and k >= 0, "[BispectrumBinning::get_spectrum] i,j,k has to be >= 0\n");
             assert_mpi(i < n and j < n and k < n, "[BispectrumBinning::get_spectrum] i,j,k has to be < n\n");
-            return N123[(i * n + j) * n + k];
+            std::array<int, 3> ik{i, j, k};
+            return N123[(ik[0] * n + ik[1]) * n + ik[2]];
         }
 
         template <int N>
@@ -132,7 +208,7 @@ namespace FML {
                 B123 = rhs.B123;
                 N123 = rhs.N123;
                 pofk = rhs.pofk;
-                kbin = rhs.kbin;
+                kmean = rhs.kmean;
             } else {
                 for (size_t i = 0; i < B123.size(); i++)
                     B123[i] = (B123[i] * nbinnings + rhs.B123[i]) / (nbinnings + 1.0);
