@@ -373,7 +373,7 @@ namespace FML {
         // The Airy function Ai(z)
         // accelerator for the spline is generated). We do this below
         double Airy_Ai(double z) {
-            static AiryFunction * a = a->getInstance();
+            static AiryFunction * a = AiryFunction::getInstance();
             return a->Ai(z);
         }
 
@@ -517,8 +517,8 @@ namespace FML {
                     S = (std::atan(1.0 / sqrtw2m1) + sqrtw2m1 - M_PI / 2.);
                 } else if (K < 0.0) {
                     const double sqrtw2pa2 = std::sqrt(w2 + a2);
-                    S = (alpha * std::log((sqrtw2m1 + sqrtw2pa2) / std::sqrt(1 + a2)) + std::atan(sqrtw2pa2 / sqrtw2m1) / alpha -
-                         M_PI / 2.);
+                    S = (alpha * std::log((sqrtw2m1 + sqrtw2pa2) / std::sqrt(1 + a2)) +
+                         std::atan(sqrtw2pa2 / sqrtw2m1) / alpha - M_PI / 2.);
                 } else {
                     const double v = std::sqrt(a2 - w2) / sqrtw2m1 / alpha;
                     S = (std::atan(v) + alpha * std::atan(1.0 / (v * alpha)) - M_PI / 2.);
