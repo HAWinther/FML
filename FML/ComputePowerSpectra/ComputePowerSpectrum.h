@@ -208,6 +208,8 @@ namespace FML {
         /// integrals.
         /// If one is to compute many spectra with the same Ngrid and binning then one can precompute N123 in polyofk
         /// and set it using polyofk.set_bincount(N123). This speeds up the polyspectrum estimation by a factor of 2.
+        /// Shot-noise term is subtracted if ORDER=2 (power) or ORDER=3 (bi). Doing this for higher order requires all lower 
+        /// order correlators and we currently only bin up the polyspectrum and the power-spectrum.
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam ORDER The order. 2 is the power-spectrum, 3 is the bispectrum, 4 is the trispectrum.
@@ -268,7 +270,7 @@ namespace FML {
         /// particle positions, but when returning they should be in the same state as when we started. This method
         /// allocates nbins FFTWGrids at the same time and performs 2*nbins fourier transforms and does nbins^2
         /// integrals.
-        /// This is just an alias for compute_polyspectrum<N, 2>
+        /// This is just an alias for compute_polyspectrum<N, 2>. Shot-noise is subtracted
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
@@ -297,7 +299,7 @@ namespace FML {
         /// particle positions, but when returning they should be in the same state as when we started. This method
         /// allocates nbins FFTWGrids at the same time and performs 2*nbins fourier transforms and does nbins^3
         /// integrals.
-        /// This is just an alias for compute_polyspectrum<N, 3>
+        /// This is just an alias for compute_polyspectrum<N, 3>. Shot-noise is subtracted.
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
@@ -359,6 +361,8 @@ namespace FML {
         /// allocates nbins FFTWGrids at the same time and performs 2*nbins fourier transforms and does nbins^4
         /// integrals.
         /// This is just an alias for compute_polyspectrum<N, 4>
+        /// Shot-noise term (something like (B(123) + cyc)/n + (P1P2 + cyc)/n^2 + 1/n^3) is not subtracted as it
+        /// requires the bispectrum which we currently don't bin up together with the trispectrum
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
@@ -432,7 +436,7 @@ namespace FML {
                         continue; // DC mode( k=0)
 
                     // Special treatment of k = 0 plane
-                    int last_coord = fourier_index % (Nmesh / 2 + 1);
+                    auto last_coord = fourier_index % (Nmesh / 2 + 1);
                     double weight = last_coord > 0 and last_coord < Nmesh / 2 ? 2.0 : 1.0;
 
                     // Compute kvec, |kvec| and |delta|^2
@@ -469,7 +473,7 @@ namespace FML {
                 Pell[ell].normalize();
 
             // Binomial coefficient
-            auto binomial = [](const double n, const double k) -> double {
+            auto binomial = [](int n, int k) -> double {
                 double res = 1.0;
                 for (int i = 0; i < k; i++) {
                     res *= double(n - i) / double(k - i);
@@ -478,19 +482,19 @@ namespace FML {
             };
 
             // P_ell(x) = Sum_{k=0}^{ell/2} summand_legendre_polynomial * x^(ell - 2k)
-            auto summand_legendre_polynomial = [&](const int k, const int ell) -> double {
+            auto summand_legendre_polynomial = [&](int k, int ell) -> double {
                 double sign = (k % 2) == 0 ? 1.0 : -1.0;
                 return sign * binomial(ell, k) * binomial(2 * ell - 2 * k, ell) / std::pow(2.0, ell);
             };
 
             // Go from <mu^k |delta|^2> to (2ell+1) <L_ell(mu) |delta|^2>
             std::vector<std::vector<double>> temp;
-            for (size_t ell = 0; ell < Pell.size(); ell++) {
+            for (int ell = 0; ell < int(Pell.size()); ell++) {
                 std::vector<double> sum(Pell[0].pofk.size(), 0.0);
-                for (size_t k = 0; k <= ell / 2; k++) {
+                for (int k = 0; k <= ell / 2; k++) {
                     std::vector<double> & mu_power = Pell[ell - 2 * k].pofk;
                     for (size_t i = 0; i < sum.size(); i++)
-                        sum[i] += mu_power[i] * summand_legendre_polynomial(k, ell) * (2 * ell + 1);
+                        sum[i] += mu_power[i] * summand_legendre_polynomial(k, ell) * double(2 * ell + 1);
                 }
                 temp.push_back(sum);
             }
@@ -530,7 +534,7 @@ namespace FML {
                     // Special treatment of k = 0 plane (Safer way: fetch coord)
                     // auto coord = fourier_grid.get_fourier_coord_from_index(fourier_index);
                     // int last_coord = coord[N-1];
-                    int last_coord = fourier_index % (Nmesh / 2 + 1);
+                    auto last_coord = fourier_index % (Nmesh / 2 + 1);
                     double weight = last_coord > 0 && last_coord < Nmesh / 2 ? 2.0 : 1.0;
 
                     auto delta = fourier_grid.get_fourier_from_index(fourier_index);
@@ -583,7 +587,7 @@ namespace FML {
                     // Special treatment of k = 0 plane (Safer way: fetch coord)
                     // auto coord = fourier_grid.get_fourier_coord_from_index(fourier_index);
                     // int last_coord = coord[N-1];
-                    int last_coord = fourier_index % (Nmesh / 2 + 1);
+                    auto last_coord = fourier_index % (Nmesh / 2 + 1);
                     double weight = last_coord > 0 && last_coord < Nmesh / 2 ? 2.0 : 1.0;
 
                     auto delta_1 = fourier_grid_1.get_fourier_from_index(fourier_index);
@@ -607,7 +611,7 @@ namespace FML {
             for (int i = 0; i < pofk.n; i++) {
                 if (std::abs(pofk.pofk[i]) < 1e3 * std::abs(pofk_imag.pofk[i])) {
                     std::cout
-                        << "Warning: the imaginary part of the cross spectrum is > 0.1\% times the real part [ k: "
+                        << "Warning: the imaginary part of the cross spectrum is > 0.1%% times the real part [ k: "
                         << pofk.kbin[i] << " Real(d1d2): " << pofk.pofk[i] << " Imag(d1d2): " << pofk_imag.pofk[i]
                         << "]\n";
                 }
@@ -679,8 +683,9 @@ namespace FML {
             bin_up_power_spectrum<N>(density_k, pofk);
 
             // Subtract shot-noise
-            for (int i = 0; i < pofk.n; i++)
-                pofk.pofk[i] -= 1.0 / double(NumPart);
+            if (pofk.subtract_shotnoise)
+                for (int i = 0; i < pofk.n; i++)
+                    pofk.pofk[i] -= 1.0 / double(NumPart);
         }
 
         // Simple method to estimate multipoles from simulation data
@@ -793,9 +798,10 @@ namespace FML {
             // XXX Compute variance of pofk
 
             // Subtract shotnoise for monopole
-            for (int i = 0; i < Pell[0].n; i++) {
-                Pell[0].pofk[i] -= 1.0 / double(part.get_npart_total());
-            }
+            if (Pell[0].subtract_shotnoise)
+                for (int i = 0; i < Pell[0].n; i++) {
+                    Pell[0].pofk[i] -= 1.0 / double(part.get_npart_total());
+                }
         }
 
         //================================================================================
@@ -839,9 +845,10 @@ namespace FML {
             bin_up_power_spectrum<N>(density_k, pofk);
 
             // Subtract shotnoise
-            for (int i = 0; i < pofk.n; i++) {
-                pofk.pofk[i] -= 1.0 / double(NumPartTotal);
-            }
+            if (pofk.subtract_shotnoise)
+                for (int i = 0; i < pofk.n; i++) {
+                    pofk.pofk[i] -= 1.0 / double(NumPartTotal);
+                }
         }
 
         // https://arxiv.org/pdf/1506.02729.pdf
@@ -947,6 +954,8 @@ namespace FML {
                                   MonospectrumBinning<N> & pofk,
                                   std::string density_assignment_method,
                                   bool interlacing) {
+            
+            // This will subtract shot-noise if pofk.subtract_shotnoise = true
             compute_polyspectrum<N, T, 2>(
                 Ngrid, part, NumPart, NumPartTotal, pofk, density_assignment_method, interlacing);
         }
@@ -959,6 +968,8 @@ namespace FML {
                                 BispectrumBinning<N> & bofk,
                                 std::string density_assignment_method,
                                 bool interlacing) {
+            
+            // This will subtract shot-noise if bofk.subtract_shotnoise = true
             compute_polyspectrum<N, T, 3>(
                 Ngrid, part, NumPart, NumPartTotal, bofk, density_assignment_method, interlacing);
         }
@@ -1010,6 +1021,32 @@ namespace FML {
 
             // Compute polyspectrum
             compute_polyspectrum<N, ORDER>(density_k, polyofk);
+            
+            // Subtract shotnoise if ORDER = 2 or 3
+            if constexpr (ORDER == 2) {
+                // Subtract shot-noise (along the diagonal)
+                const double n = double(NumPartTotal);
+                if (polyofk.subtract_shotnoise)
+                    for (int i = 0; i < polyofk.n; i++) {
+                        polyofk.pofk[i] -= 1.0 / n;
+                        std::array<int, 2> ik{i, i};
+                        auto index = polyofk.get_index_from_coord(ik);
+                        polyofk.P123[index] -= 1.0 / n;
+                    }
+            } else if constexpr (ORDER == 3) {
+                // Subtract shot-noise for both P(k) and B(k1,k2,k3)
+                const double n = double(NumPartTotal);
+                if (polyofk.subtract_shotnoise) {
+                    for (int i = 0; i < polyofk.n; i++) {
+                        polyofk.pofk[i] -= 1.0 / n;
+                    }
+                    for (size_t i = 0; i < polyofk.P123.size(); i++) {
+                        auto ik = polyofk.get_coord_from_index(i);
+                        polyofk.P123[i] -=
+                            1.0 / n * (polyofk.pofk[ik[0]] + polyofk.pofk[ik[1]] + polyofk.pofk[ik[2]]) - 1.0 / (n * n);
+                    }
+                }
+            }
         }
 
         //================================================================================
@@ -1017,8 +1054,8 @@ namespace FML {
         /// generalized triangles of the bins needed to normalize the polyspectra up to symmetry (i.e. we only compute
         /// it for k1<=k2<=k3 and only for valid triangle configurations (k1+k2 >= k3) and then set rest using
         /// symmetry). If one is to compute many spectra with the same Nmesh and binning then one can precompute N123
-        /// and set it using polyofk.set_bincount(N123) (which sets polyofk.bincount_is_set = true and avoid a call to this function) 
-        /// This speeds up the polyspectrum estimation by a factor of 2.
+        /// and set it using polyofk.set_bincount(N123) (which sets polyofk.bincount_is_set = true and avoid a call to
+        /// this function) This speeds up the polyspectrum estimation by a factor of 2.
         ///
         /// @tparam N The dimension we work in
         /// @tparam ORDER The order (mono = 2, bi = 3, tri = 4)

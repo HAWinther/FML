@@ -20,6 +20,8 @@ namespace FML {
             double kmin{0.0};
             double kmax{0.0};
 
+            bool subtract_shotnoise{true};
+
             std::vector<double> k;
             std::vector<double> count;
             std::vector<double> pofk;

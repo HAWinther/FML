@@ -18,6 +18,8 @@ namespace FML {
             int bin_type{LINEAR_SPACING};
             double kmin{0.0};
             double kmax{0.0};
+            
+            bool subtract_shotnoise{true};
 
             // The polyspectrum, the volume factor and the power-spectrum
             std::vector<double> P123;
@@ -144,7 +146,7 @@ namespace FML {
         std::array<int, ORDER> PolyspectrumBinning<N, ORDER>::get_coord_from_index(size_t index) {
             std::array<int, ORDER> ik;
             for (int ii = ORDER - 1, npow = 1; ii >= 0; ii--, npow *= n) {
-                ik[ii] = index / npow % n;
+                ik[ii] = int(index / npow % n);
             }
             return ik;
         }

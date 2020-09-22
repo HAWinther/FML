@@ -87,7 +87,7 @@ void ExamplesPower() {
     // Create MPI particles by letting each task keep only the particles that falls in its domain
     FML::PARTICLE::MPIParticles<Particle> p;
     const bool all_tasks_have_the_same_particles = true;
-    const int nalloc_per_task = part.size() / FML::NTasks * 2;
+    const auto nalloc_per_task = part.size() / FML::NTasks * 2;
     p.create(part.data(),
              part.size(),
              nalloc_per_task,
@@ -108,7 +108,7 @@ void ExamplesPower() {
         const bool interlacing = false;
         FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> pofk(Nmesh / 2);
         FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM>(
-            Nmesh, p.get_particles().data(), p.get_npart(), p.get_npart_total(), pofk, density_assignment_method, interlacing);
+            Nmesh, p.get_particles_ptr(), p.get_npart(), p.get_npart_total(), pofk, density_assignment_method, interlacing);
 
         // To physical units and output
         pofk.scale(box);
@@ -133,7 +133,7 @@ void ExamplesPower() {
         const bool interlacing = true;
         FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> pofk(Nmesh / 2);
         FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM>(
-            Nmesh, p.get_particles().data(), p.get_npart(), p.get_npart_total(), pofk, density_assignment_method, interlacing);
+            Nmesh, p.get_particles_ptr(), p.get_npart(), p.get_npart_total(), pofk, density_assignment_method, interlacing);
 
         // To physical units and output
         pofk.scale(box);
@@ -223,7 +223,7 @@ void ExamplesPower() {
 
         // Interpolate particles to grid
         FML::INTERPOLATION::particles_to_grid<NDIM, Particle>(
-            p.get_particles().data(), p.get_npart(), p.get_npart_total(), density_k, density_assignment_method);
+            p.get_particles_ptr(), p.get_npart(), p.get_npart_total(), density_k, density_assignment_method);
 
         // Fourier transform it
         density_k.fftw_r2c();
