@@ -53,7 +53,7 @@ const bool COLA = true;                              // Use the COLA method. We 
 const int LPT_order_IC = 3;                          // The LPT order to use when making the IC
 const int n_min_FoF_group = 20;                      // Minimum number of particles per halo
 const double fof_distance = 0.2 / double(Npart_1D);  // Halo linking length
-const int nbin_bispectrum = 8;                       // Number of bins for computing the bispectrum
+const int nbin_bispectrum = 16;                      // Number of bins for computing the bispectrum
 const double apofk = 1.0;                            // Redshift for which P(k) is at
 const std::string filename = "pofk.txt";             // File with k (h/Mpc), P(k)  (Mpc/h)^3
 const std::string interpolation_method = "CIC";      // The grid-assignment method
@@ -196,7 +196,8 @@ int main() {
     // In the COLA frame v=0 so reset velocities
     //============================================================
     if (COLA) {
-        for (auto & p : part.get_particles()) {
+        // Loop over all active particles
+        for (auto & p : part){
             auto * vel = FML::PARTICLE::GetVel(p);
             for (int idim = 0; idim < NDIM; idim++) {
                 vel[idim] = 0.0;
@@ -262,7 +263,7 @@ int main() {
         // Particles -> density field(x) -> density fielk(k)
         auto nleftright = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(interpolation_method);
         FFTWGrid<NDIM> density_grid_fourier(Nmesh, nleftright.first, nleftright.second);
-        FML::INTERPOLATION::particles_to_grid(part.get_particles().data(),
+        FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
                                               part.get_npart(),
                                               part.get_npart_total(),
                                               density_grid_fourier,
@@ -274,10 +275,10 @@ int main() {
 
         // Density field -> force
         std::array<FFTWGrid<NDIM>, NDIM> force_real;
-        FML::NBODY::compute_force_from_density_fourier(density_grid_fourier, force_real, norm_poisson_equation);
+        FML::NBODY::compute_force_from_density_fourier<NDIM>(density_grid_fourier, force_real, norm_poisson_equation);
 
         // Update velocity of particles (frees force)
-        FML::NBODY::KickParticles(force_real, part, delta_time_vel, interpolation_method);
+        FML::NBODY::KickParticles<NDIM>(force_real, part, delta_time_vel, interpolation_method);
 
         // Add on COLA displacement and velocity
         if (COLA) {
@@ -307,7 +308,8 @@ int main() {
             const double fac3b_vel =
                 -norm_poisson_equation * (D3bold + D1old * D1old * D1old - D1old * D2old) / D3bini * delta_time_vel;
 
-            for (auto & p : part.get_particles()) {
+            // Loop over all active particles
+            for (auto & p : part){
                 auto * pos = FML::PARTICLE::GetPos(p);
                 auto * vel = FML::PARTICLE::GetVel(p);
 
@@ -382,7 +384,7 @@ int main() {
             D3bend / D3bini * growth_rate_f_3LPTb_of_loga(std::log(aend)) * aend * aend * HoverH0(aend);
 
         // Here we add on the COLA velocity kick
-        for (auto & p : part.get_particles()) {
+        for (auto & p : part) {
             auto * vel = FML::PARTICLE::GetVel(p);
 
             if constexpr (FML::PARTICLE::has_get_D_1LPT<Particle>())
@@ -504,12 +506,17 @@ int main() {
 
     if (FML::ThisTask == 0) {
         std::ofstream fp("bofk_out.txt");
+        fp << "# k1         k2         k3         B123         Q123         N123\n";
         for (int i = 0; i < nbin_bispectrum; i++) {
             for (int j = 0; j < nbin_bispectrum; j++) {
                 for (int k = 0; k < nbin_bispectrum; k++) {
-                    double B = bofk.get_spectrum(i, j, k);
-                    double Q = bofk.get_reduced_spectrum(i, j, k);
-                    fp << i << " " << j << " " << k << " " << B << " " << Q << "\n";
+                    double k1 = bofk.kmean[i];
+                    double k2 = bofk.kmean[j];
+                    double k3 = bofk.kmean[k];
+                    double B123 = bofk.get_spectrum(i, j, k);
+                    double Q123 = bofk.get_reduced_spectrum(i, j, k);
+                    double N123 = bofk.get_bincount(i, j, k);
+                    fp << k1 << " " << k2 << " " << k3 << " " << B123 << " " << Q123 << " " << N123 << "\n";
                 }
             }
         }
