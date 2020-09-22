@@ -17,6 +17,11 @@
 #include <FML/RandomFields/NonLocalGaussianRandomField.h>
 
 namespace FML {
+
+    //===================================================================================
+    /// This namespace deals with N-body simulations. Computing forces, moving particles
+    /// and generating initial conditions.
+    //===================================================================================
     namespace NBODY {
 
         // Type alias
@@ -90,7 +95,7 @@ namespace FML {
             FFTWGrid<N> density_grid_real(Nmesh, nleftright.first, nleftright.second);
             density_grid_real.add_memory_label("FFTWGrid::KickDriftKickNBodyStep::density_grid_real");
             density_grid_real.set_grid_status_real(true);
-            FML::INTERPOLATION::particles_to_grid<N, T>(part.get_particles().data(),
+            FML::INTERPOLATION::particles_to_grid<N, T>(part.get_particles_ptr(),
                                                         part.get_npart(),
                                                         part.get_npart_total(),
                                                         density_grid_real,
@@ -107,7 +112,7 @@ namespace FML {
             DriftParticles<N, T>(part, delta_time, periodic_box);
 
             // Particles -> density field
-            FML::INTERPOLATION::particles_to_grid<N, T>(part.get_particles().data(),
+            FML::INTERPOLATION::particles_to_grid<N, T>(part.get_particles_ptr(),
                                                         part.get_npart(),
                                                         part.get_npart_total(),
                                                         density_grid_real,
@@ -121,7 +126,8 @@ namespace FML {
         }
 
         //===================================================================================
-        /// @brief Take a N-body step with a 4th order symplectic Yoshida method.
+        /// @brief Take a N-body step with a 4th order symplectic Yoshida method. This method is mainly an illustration,
+        /// for using this with cosmology we should take into account that norm_poisson_equation is a function of time
         ///
         /// @tparam N The dimension of the grid.
         /// @tparam T The particle class.
@@ -167,7 +173,7 @@ namespace FML {
                 DriftParticles<N, T>(part, delta_time_pos, periodic_box);
 
                 // Particles -> density field
-                FML::INTERPOLATION::particles_to_grid<N, T>(part.get_particles().data(),
+                FML::INTERPOLATION::particles_to_grid<N, T>(part.get_particles_ptr(),
                                                             part.get_npart(),
                                                             part.get_npart_total(),
                                                             density_grid_real,
@@ -291,7 +297,7 @@ namespace FML {
                 return;
 
             // Sanity check on particle
-            T tmp;
+            T tmp{};
             assert_mpi(FML::PARTICLE::GetNDIM(tmp) == N,
                        "[DriftParticles] NDIM of particles and of grid does not match");
 
@@ -458,7 +464,7 @@ namespace FML {
                                     std::function<double(double)> H_over_H0_of_loga,
                                     std::vector<std::function<double(double)>> & growth_rate_f_of_loga);
 
-        ///=====================================================================
+        //=====================================================================
         /// Generate particles from a given power-spectrum using Lagrangian perturbation theory.
         /// We generate particles in [0,1) and velocities are given by v_code = a^2 dxdt / (H0 Box)
         ///
@@ -474,8 +480,8 @@ namespace FML {
         /// @param[in] rng Random number generator
         /// @param[in] Pofk_of_kBox_over_Pofk_primordal The ratio of the power-spectrum (for delta) at the time you
         /// want the density field to be created at to the primordial one (the function above).
-        /// @param[in] Pofk_of_kBox_over_volume_primordial The dimensionless function P(k)/VolumeOfBox as function of the
-        /// dimensionless wavenumber k*Box where P(k) is the primordial power-spectrum for Phi.
+        /// @param[in] Pofk_of_kBox_over_volume_primordial The dimensionless function P(k)/VolumeOfBox as function of
+        /// the dimensionless wavenumber k*Box where P(k) is the primordial power-spectrum for Phi.
         /// @param[in] LPT_order The LPT order (1 or 2)
         /// @param[in] type_of_random_field What random field: gaussian, local, equilateral, orthogonal
         /// @param[in] fNL If non-gaussianity the value of fNL
@@ -484,7 +490,7 @@ namespace FML {
         /// @param[in] H_over_H0_of_loga The function H/H0 as function of x = log(a)
         /// @param[in] growth_rate_f_of_loga The growth-rate f_1LPT, f_2LPT, ... as function of x = log(a)
         ///
-        ///=====================================================================
+        //=====================================================================
         template <int N, class T>
         void NBodyInitialConditions(FML::PARTICLE::MPIParticles<T> & part,
                                     int Npart_1D,
@@ -557,7 +563,7 @@ namespace FML {
                                     std::function<double(double)> H_over_H0_of_loga,
                                     std::vector<std::function<double(double)>> & growth_rate_f_of_loga) {
 
-            T tmp;
+            T tmp{};
             if (FML::ThisTask == 0) {
                 std::cout << "\n";
                 std::cout << "#=====================================================\n";
@@ -600,10 +606,10 @@ namespace FML {
                               << sizeof(FML::PARTICLE::GetLagrangianPos(tmp)[0]) * N << " bytes)\n";
                 std::cout << "# Total size of particle is " << FML::PARTICLE::GetSize(tmp) << " bytes\n";
                 std::cout << "# We will make " << Npart_1D << "^" << N << " particles\n";
-                std::cout << "# Plus a buffer with room for " << (buffer_factor - 1.0) * 100.0 << "\% more particles\n";
+                std::cout << "# Plus a buffer with room for " << (buffer_factor - 1.0) * 100.0 << "%% more particles\n";
                 std::cout << "# We will allocate ~"
-                          << buffer_factor * FML::PARTICLE::GetSize(tmp) * FML::power(double(Npart_1D), N) / 1e6 /
-                                 double(FML::NTasks)
+                          << buffer_factor * double(FML::PARTICLE::GetSize(tmp)) * double(FML::power(Npart_1D, N)) /
+                                 1e6 / double(FML::NTasks)
                           << " MB per task for the particles\n";
                 std::cout << "#\n";
                 std::cout << "#=====================================================\n";
@@ -892,6 +898,222 @@ namespace FML {
 
             // Communicate particles (they might have left the current task)
             part.communicate_particles();
+        }
+
+        //===================================================================================
+        /// This method computes the fifth-force potential for modified gravity models using the linear
+        /// approximation This computes \f$ \delta_{\rm MG}(k) \f$ where the total force in fourier space is \f$ F(k)
+        /// \propto \frac{\vec{k}}{k^2}[\delta(k) + \delta_{\rm MG}(k)] \f$ by solving \f$ \nabla^2 \phi = m^2 \phi +
+        /// F^{-1}[g(k) \delta(k)] \f$ where \f$ \delta_{\rm MG}(k) = -k^2\phi(k)\f$. For example in $f(R)$ gravity we
+        /// have \f$ g(k) = \frac{1}{3}\frac{k^2}{k^2 + m^2}\f$ and in DGP we have \f$ g(k) = \frac{1}{3\beta} \f$
+        /// (independent of scale).
+        ///
+        /// @tparam N The dimension we work in.
+        ///
+        /// @param[in] density_fourier The density contrast in fourier space.
+        /// @param[out] density_mg_fourier The force potential.
+        /// @param[in] coupling_factor_of_kBox The coupling factor \f$g(k)\f$
+        ///
+        //===================================================================================
+        template <int N>
+        void compute_delta_fifth_force(const FFTWGrid<N> & density_fourier,
+                              FFTWGrid<N> & density_mg_fourier,
+                              std::function<double(double)> coupling_factor_of_kBox) {
+
+            const auto Local_nx = density_fourier.get_local_nx();
+            density_mg_fourier = density_fourier;
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                [[maybe_unused]] double kmag;
+                [[maybe_unused]] std::array<double, N> kvec;
+                for (auto && fourier_index : density_mg_fourier.get_fourier_range(islice, islice + 1)) {
+                    auto value = density_mg_fourier.get_fourier_from_index(fourier_index);
+
+                    // Get wavevector and magnitude
+                    density_mg_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+
+                    // Compute coupling
+                    auto coupling = coupling_factor_of_kBox(kmag);
+
+                    // Multiply by coupling
+                    density_mg_fourier.set_fourier_from_index(fourier_index, value * coupling);
+                }
+            }
+        }
+
+        //===================================================================================
+        /// This method computes the fifth-force potential for modified gravity models which has a screening
+        /// mechanism using the approximate method of Winther & Ferreira 2015. This computes \f$ \delta_{\rm MG}(k) \f$
+        /// where the total force in fourier is given by \f$ F(k) \propto \frac{\vec{k}}{k^2}[\delta(k) + \delta_{\rm
+        /// MG}(k)] \f$ by solving \f$ \nabla^2 \phi = m^2 \phi + f(\Phi)F^{-1}[g(k) \delta(k)] \f$ where \f$
+        /// \delta_{\rm MG}(k) = -k^2\phi(k)\f$. For example in $f(R)$ gravity we have \f$ g(k) =
+        /// \frac{1}{3}\frac{k^2}{k^2 + m^2}\f$ and the screening function is \f$ f(\Phi) = \min(1,
+        /// \left|\frac{3f_R}{2\Phi}\right|) \f$. If you don't want screening then simpy pass the function \f$ f \equiv
+        /// 1\f$ and the equation reduces to the one in the linear regime
+        ///
+        /// @tparam N The dimension we work in.
+        ///
+        /// @param[in] density_fourier The density contrast in fourier space.
+        /// @param[out] density_mg_fourier The force potential.
+        /// @param[in] coupling_factor_of_kBox The coupling factor \f$g(k)\f$
+        /// @param[in] screening_factor_of_newtonian_potential The screening factor \f$f(\Phi_N)\f$. Should be in
+        /// \f$[0,1]\f$ and go to 1 for \f$ \Phi_N \to 0 \f$ and 0 for very large \f$ \Phi_N\f$.
+        /// @param[in] poisson_norm The factor \f$ C \f$ in \f$ \nabla^2\Phi = C\delta \f$
+        ///
+        //===================================================================================
+        template <int N>
+        void compute_delta_fifth_force_potential_screening(const FFTWGrid<N> & density_fourier,
+                                                  FFTWGrid<N> & density_mg_fourier,
+                                                  std::function<double(double)> coupling_factor_of_kBox,
+                                                  std::function<double(double)> screening_factor_of_newtonian_potential,
+                                                  double poisson_norm) {
+
+            const auto Local_nx = density_fourier.get_local_nx();
+            const auto Local_x_start = density_fourier.get_local_x_start();
+
+            // Make copy of density grid
+            density_mg_fourier = density_fourier;
+
+            // Transform to Newtonian potential
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                [[maybe_unused]] double kmag2;
+                [[maybe_unused]] std::array<double, N> kvec;
+                for (auto && fourier_index : density_mg_fourier.get_fourier_range(islice, islice + 1)) {
+
+                    auto value = density_mg_fourier.get_fourier_from_index(fourier_index);
+                    density_mg_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                    value *= -poisson_norm / kmag2;
+
+                    density_mg_fourier.set_fourier_from_index(fourier_index, value);
+                }
+            }
+
+            // Set DC mode
+            if (Local_x_start == 0)
+                density_mg_fourier.set_fourier_from_index(0, 0.0);
+
+            // Transform to real space: Phi(x)
+            density_mg_fourier.fftw_c2r();
+
+            // Apply screening function
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                for (auto && real_index : density_mg_fourier.get_real_range(islice, islice + 1)) {
+                    auto phi_newton = density_mg_fourier.get_real_from_index(real_index);
+                    auto delta = density_fourier.get_real_from_index(real_index);
+                    auto screening_factor = screening_factor_of_newtonian_potential(phi_newton);
+                    density_mg_fourier.set_real_from_index(real_index, delta * screening_factor);
+                }
+            }
+
+            // To fourier space: delta(k)
+            density_mg_fourier.fftw_r2c();
+
+            // Apply coupling
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                [[maybe_unused]] double kmag;
+                [[maybe_unused]] std::array<double, N> kvec;
+                for (auto && fourier_index : density_mg_fourier.get_fourier_range(islice, islice + 1)) {
+                    auto value = density_mg_fourier.get_fourier_from_index(fourier_index);
+
+                    // Get wavevector and magnitude
+                    density_mg_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+
+                    // Compute coupling
+                    auto coupling = coupling_factor_of_kBox(kmag);
+
+                    // Multiply by coupling
+                    density_mg_fourier.set_fourier_from_index(fourier_index, value * coupling);
+                }
+            }
+        }
+
+        //===================================================================================
+        /// This method computes the fifth-force potential for modified gravity models which has a screening
+        /// mechanism using the approximate method of Winther & Ferreira 2015. This computes \f$ \delta_{\rm MG}(k) \f$
+        /// where the total force in fourier space is \f$ F(k) \propto \frac{\vec{k}}{k^2}[\delta(k) + \delta_{\rm
+        /// MG}(k)] \f$ by solving \f$ \nabla^2 \phi = m^2 \phi + f(\rho)F^{-1}[g(k) \delta(k)]  \f$ where \f$
+        /// \delta_{\rm MG}(k) = -k^2\phi(k)\f$ and \f$\rho \f$ is the density in units of the mean density. For example
+        /// in DGP gravity we have \f$ g(k) = \frac{1}{3\beta}\f$ (independent of scale) and the screening function is
+        /// \f$ f(\rho) = 2\frac{\sqrt{1 + C} - 1}{C}\f$ where \f$ which \f$ C =
+        /// \frac{8\Omega_M(r_cH_0)^2}{9\beta^2}\rho \f$. If you don't want screening then simply pass the function \f$
+        /// f \equiv 1\f$ and the equation reduces to the one in the linear regime.
+        ///
+        /// @tparam N The dimension we work in.
+        ///
+        /// @param[in] density_fourier The density contrast in fourier space.
+        /// @param[out] density_mg_fourier The force potential.
+        /// @param[in] coupling_factor_of_kBox The coupling factor \f$g(k)\f$
+        /// @param[in] screening_factor_of_density The screening factor \f$f(\rho)\f$. Should be in
+        /// \f$[0,1]\f$ and go to 1 for \f$ \rho \to 0 \f$ and 0 for \f$ \rho \to \infty\f$.
+        /// @param[in] smoothing_scale The smoothing radius in units of the boxsize.
+        /// @param[in] smoothing_method The k-space smoothing filter (gaussian, tophat, sharpk).
+        ///
+        //===================================================================================
+        template <int N>
+        void compute_delta_fifth_force_density_screening(const FFTWGrid<N> & density_fourier,
+                                                FFTWGrid<N> & density_mg_fourier,
+                                                std::function<double(double)> coupling_factor_of_kBox,
+                                                std::function<double(double)> screening_factor_of_density,
+                                                double smoothing_scale,
+                                                std::string smoothing_method) {
+
+            const auto Local_nx = density_fourier.get_local_nx();
+
+            // Copy over
+            density_mg_fourier = density_fourier;
+
+            // Smooth density field
+            FML::GRID::smoothing_filter_fourier_space(density_mg_fourier, smoothing_scale, smoothing_method);
+
+            // To real space density field
+            density_mg_fourier.fftw_c2r();
+
+            // Apply screening function
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                for (auto && real_index : density_mg_fourier.get_real_range(islice, islice + 1)) {
+                    auto delta = density_mg_fourier.get_real_from_index(real_index);
+                    auto screening_factor = screening_factor_of_density(1.0 + delta);
+                    density_mg_fourier.set_real_from_index(real_index, delta * screening_factor);
+                }
+            }
+
+            // To fourier spacce
+            density_mg_fourier.fftw_r2c();
+
+            // Apply coupling
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                [[maybe_unused]] double kmag;
+                [[maybe_unused]] std::array<double, N> kvec;
+                for (auto && fourier_index : density_mg_fourier.get_fourier_range(islice, islice + 1)) {
+                    auto value = density_mg_fourier.get_fourier_from_index(fourier_index);
+
+                    // Get wavevector and magnitude
+                    density_mg_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+
+                    // Compute coupling
+                    auto coupling = coupling_factor_of_kBox(kmag);
+
+                    // Multiply by coupling
+                    density_mg_fourier.set_fourier_from_index(fourier_index, value * coupling);
+                }
+            }
         }
 
     } // namespace NBODY
