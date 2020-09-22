@@ -4,6 +4,7 @@
 #include <random>
 #include <stdarg.h>
 #include <thread>
+#include <unistd.h>
 
 #include "Global.h"
 
@@ -202,7 +203,7 @@ namespace FML {
     std::pair<double, double> get_system_memory_use() {
         double vm_usage = 0.0;
         double resident_set = 0.0;
-#if defined(__linux__)
+#if defined(__linux__) && defined(_SC_PAGE_SIZE)
         unsigned long vsize;
         long rss;
         {
