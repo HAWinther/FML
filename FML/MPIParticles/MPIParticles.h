@@ -92,7 +92,8 @@ namespace FML {
             int Local_p_start{0};  // Start index of local particle slice in [0,Npart_1D)
 
           public:
-            /// Iterator for loopping through all the active particles i.e. allow for(auto &&p: mpiparticles)
+
+            /// Iterator for looping through all the active particles i.e. allow for(auto &&p: mpiparticles)
             class iterator {
               public:
                 iterator(T * ptr) : ptr(ptr) {}
@@ -106,6 +107,7 @@ namespace FML {
               private:
                 T * ptr;
             };
+
             iterator begin() { return iterator(p.data()); }
             iterator end() { return iterator(p.data() + NpartLocal_in_use); }
 
@@ -164,7 +166,7 @@ namespace FML {
             int get_npart_1d() const;
 
             // Communicate particles across CPU boundaries
-            void copy_over_recieved_data(std::vector<char> & recv_buffer, int Npart_recieved);
+            void copy_over_recieved_data(std::vector<char> & recv_buffer, size_t Npart_recieved);
             void communicate_particles();
 
             // xmin and xmax for each task
@@ -198,7 +200,7 @@ namespace FML {
             FML::MaxOverTasks(&max_memory_in_mb);
             FML::MinOverTasks(&min_memory_in_mb);
             FML::SumOverTasks(&mean_memory_in_mb);
-            double fraction_filled = NpartLocal_in_use / double(p.size()) * 100;
+            double fraction_filled = double(NpartLocal_in_use) / double(p.size()) * 100;
             double max_fraction_filled = fraction_filled;
             double min_fraction_filled = fraction_filled;
             double mean_fraction_filled = fraction_filled / double(FML::NTasks);
@@ -223,8 +225,8 @@ namespace FML {
                 std::cout << "# Total particles across all tasks is " << NpartTotal << "\n";
                 std::cout << "# Task 0 has " << NpartLocal_in_use << " particles in use. Capacity is " << p.size()
                           << "\n";
-                std::cout << "# The buffer is " << mean_fraction_filled << "\% (mean), " << min_fraction_filled
-                          << " \% (min), " << max_fraction_filled << " \% (max) filled across tasks\n";
+                std::cout << "# The buffer is " << mean_fraction_filled << "%% (mean), " << min_fraction_filled
+                          << " %% (min), " << max_fraction_filled << " %% (max) filled across tasks\n";
                 std::cout << "#\n";
                 std::cout << "#=====================================================\n";
                 std::cout << "\n";
@@ -330,7 +332,7 @@ namespace FML {
             // just in case the total amount of particles are too large
             if (!all_tasks_has_the_same_particles) {
 
-                const int nmax_per_batch = nallocate;
+                const auto nmax_per_batch = nallocate;
                 // Read in batches
                 size_t start = 0;
                 size_t count = 0;
@@ -509,7 +511,9 @@ namespace FML {
             NpartLocal_in_use = Local_Npart_1D * FML::power(Npart_1D, ndim - 1);
 
             // Allocate particle struct
-            size_t NpartToAllocate = size_t(NpartLocal_in_use * buffer_factor);
+            size_t NpartToAllocate =
+                buffer_factor <= 1.0 ? NpartLocal_in_use : size_t(double(NpartLocal_in_use) * buffer_factor);
+            assert(NpartToAllocate >= NpartLocal_in_use);
             p.resize(NpartToAllocate);
             add_memory_label("MPIPartices::create_particle_grid");
 
@@ -558,13 +562,13 @@ namespace FML {
         }
 
         template <class T>
-        void MPIParticles<T>::copy_over_recieved_data(std::vector<char> & recv_buffer, int Npart_recv) {
+        void MPIParticles<T>::copy_over_recieved_data(std::vector<char> & recv_buffer, size_t Npart_recv) {
             assert_mpi(NpartLocal_in_use + Npart_recv <= p.size(),
                        "[MPIParticles::copy_over_recieved_data] Too many particles recieved! Increase buffer\n");
 
             char * buffer = recv_buffer.data();
             size_t bytes_processed = 0;
-            for (int i = 0; i < Npart_recv; i++) {
+            for (size_t i = 0; i < Npart_recv; i++) {
                 FML::PARTICLE::AssignFromBuffer(p[NpartLocal_in_use + i], buffer);
                 auto size = FML::PARTICLE::GetSize(p[NpartLocal_in_use + i]);
                 buffer += size;
@@ -811,7 +815,7 @@ namespace FML {
             myfile.write((char *)&NpartLocalAllocated, sizeof(NpartLocalAllocated));
             myfile.write((char *)x_min_per_task.data(), sizeof(double) * FML::NTasks);
             myfile.write((char *)x_max_per_task.data(), sizeof(double) * FML::NTasks);
-            
+
             if (NpartLocal_in_use == 0)
                 return;
 
@@ -819,7 +823,6 @@ namespace FML {
             std::vector<char> buffer_data(max_bytesize_buffer);
             assert_mpi(max_bytesize_buffer > size_t(100 * FML::PARTICLE::GetSize(p[0])),
                        "[MPIParticles::dump_to_file] Buffer size is likely too small, can't even fit 100 particles\n");
-           
 
             // Write in chunks
             size_t nwritten = 0;
@@ -900,7 +903,8 @@ namespace FML {
                 if (buffer_data.size() < nbytes_to_read)
                     buffer_data.resize(1.25 * nbytes_to_read);
                 char * buffer = buffer_data.data();
-                std::cout << "Reading " << n_to_read << " / "  << NpartLocal_in_use << " " << nbytes_to_read << " " << buffer_data.size() << std::endl;
+                std::cout << "Reading " << n_to_read << " / " << NpartLocal_in_use << " " << nbytes_to_read << " "
+                          << buffer_data.size() << std::endl;
                 myfile.read(buffer, nbytes_to_read);
                 for (size_t i = 0; i < n_to_read; i++) {
                     FML::PARTICLE::AssignFromBuffer(p[nread + i], buffer);
