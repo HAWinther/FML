@@ -9,7 +9,7 @@ SHELL := /bin/bash
 PYTHONLIBNAME = _MyLibrary.so
 SWIGFILE      = InterfaceFile.i
 # These are generated
-SWIGWRAPPER   = InterfaceFile_wrap.c
+SWIGWRAPPER   = InterfaceFile_wrap.cxx
 SWIGWRAPPERO  = InterfaceFile_wrap.o
 
 #===================================================
@@ -34,8 +34,15 @@ FML_INCLUDE    = /Users/hansw/local/FML
 
 # Python and numpy includes
 PYTHON_INCLUDE = /anaconda2/include/python2.7 
+PYTHON_LIB     = /anaconda2/lib
 NUMPY_INCLUDE  = /anaconda2/lib/python2.7/site-packages/numpy/core/include
 PYTHON_LINK    = -lpython2.7 -ldl -framework CoreFoundation
+
+# For Python 3
+#PYTHON_INCLUDE = /astro/local/anaconda3/include/python3.6m
+#PYTHON_LIB     = /astro/local/anaconda3/lib
+#NUMPY_INCLUDE  = /astro/local/anaconda3/lib/python3.6/site-packages/numpy/core/include
+#PYTHON_LINK    = -lpython3.6m -ldl
 
 #===================================================
 # Compile up all library defines from options above
@@ -48,6 +55,7 @@ OPTIONS =
 
 ifeq ($(USE_PYTHON),true)
 INC  += -I$(PYTHON_INCLUDE) -I$(NUMPY_INCLUDE)
+LIB  += -L$(PYTHON_LIB) 
 LINK += $(PYTHON_LINK)
 endif
 
