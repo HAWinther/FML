@@ -352,8 +352,8 @@ namespace FML {
                         // Count how many positions fall into the local domain
                         RamsesPosType * pos = (RamsesPosType *)buffer.data();
                         int nindomain = 0;
-                        for (int i = 0; i < header.npart; i++) {
-                            if (pos[i] >= FML::xmin_domain and pos[i] < FML::xmax_domain)
+                        for (int j = 0; j < header.npart; j++) {
+                            if (pos[j] >= FML::xmin_domain and pos[j] < FML::xmax_domain)
                                 nindomain++;
                         }
                         npart_in_domain_in_file[i] = nindomain;

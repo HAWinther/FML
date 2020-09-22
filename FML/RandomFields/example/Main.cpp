@@ -71,13 +71,13 @@ int main() {
     //=========================================================================
     // Set up stuff
     //=========================================================================
-    FML::RANDOM::RandomGenerator * rng = new FML::RANDOM::RandomGenerator;
+    std::shared_ptr<FML::RANDOM::RandomGenerator> rng = std::make_shared<FML::RANDOM::RandomGenerator>();
 
     const int Nmesh = 128;
     FFTWGrid<Ndim> grid(Nmesh);
 
     // Non-gaussianity
-    const double fNL = 200.0;
+    const double fNL = 100.0;
     const std::string type_of_fnl = "local";
     const bool fix_amplitude = true;
 
@@ -119,19 +119,19 @@ int main() {
     //=========================================================================
     // Generate nreal realisation
     //=========================================================================
-    const int nreal = 10;
+    const int nreal = 1;
     double running_mean = 0.0;
     double running_std = 0.0;
     for (int s = 0; s < nreal; s++) {
         if (FML::ThisTask == 0)
-            std::cout << s << "\n";
+            std::cout << "Doing real: " << s << "\n";
 
         //=========================================================================
         // Make a random field in fourier space
         // Test generating non-gaussian potential Phi
         //=========================================================================
         FML::RANDOM::NONGAUSSIAN::generate_nonlocal_gaussian_random_field_fourier(
-            grid, rng, Powspec, fix_amplitude, fNL, type_of_fnl);
+            grid, rng.get(), Powspec, fix_amplitude, fNL, type_of_fnl);
 
         //=========================================================================
         // Compute power-spectrum
@@ -197,7 +197,7 @@ int main() {
     // Output
     //=========================================================================
 
-    // This is B123 / (2p1p2 + 2p2p3 + 2p3p1)
+    // This is B123 / (p1p2 + p2p3 + p3p1)
     auto analytic = [&](int i, int j, int k, std::string _fnl_type) -> double {
         double pk1 = bofk_all.pofk[i];
         double pk2 = bofk_all.pofk[j];
@@ -266,7 +266,7 @@ int main() {
 
                     // The same as above just using the analytical result for P(k)
                     // instead of the P(k) we estimated when computing the bispectrum
-                    double q2 = bofk_all.get_spectrum(i, j, k) / (2.0 * pij);
+                    double q2 = bofk_all.get_spectrum(i, j, k) / pij;
 
                     // Analytical estimate for the given fNL type (q / anal ~ fNL)
                     double anal = analytic(i, j, k, type_of_fnl);
@@ -275,7 +275,7 @@ int main() {
                         continue;
 
                     fp << bofk_all.kbin[i] << " " << bofk_all.kbin[j] << " " << bofk_all.kbin[k] << " " << q / anal
-                       << " " << q2 / anal << " " << B << " " << q << " " << N << "\n";
+                       << " " << q2 / anal << " " << B << " " << q << " " << anal << " " << N << "\n";
                 }
             }
         }
@@ -394,13 +394,13 @@ std::pair<double, double> estimate_fnl(FML::CORRELATIONFUNCTIONS::BispectrumBinn
             for (int k = 0; k < nbins; k++) {
                 std::vector<double> inds{k_bin[i], k_bin[j], k_bin[k]};
                 std::sort(inds.begin(), inds.end(), std::less<double>());
-                if (inds[0] + inds[1] >= inds[2]) {
+                if (inds[0] + inds[1] >= inds[2] or true) {
                     double norm = analytic(i, j, k, fnl_type);
 
                     if (norm > 0.0) {
                         double value = bofk.get_spectrum(i, j, k) / norm;
                         double weight = 1.0;
-                        // weight = bofk.get_bincount(i, j, k);
+                        weight = bofk.get_bincount(i, j, k);
                         value *= weight;
                         mean += value;
                         std += value * value;

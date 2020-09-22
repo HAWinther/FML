@@ -56,7 +56,7 @@ int main() {
     //==================================================================
     FML::PARTICLE::MPIParticles<Particle<NDIM>> p;
     const bool all_tasks_have_the_same_particles = true;
-    const int nalloc_per_task = part.size() / FML::NTasks * 2;
+    const auto nalloc_per_task = part.size() / FML::NTasks * 2;
     p.create(part.data(),
              part.size(),
              nalloc_per_task,

@@ -79,10 +79,10 @@ void ExamplesInterpolation() {
     //=======================================================
     // Make MPIParticles out of these positions
     //=======================================================
-    FML::PARTICLE::MPIParticles<Particle> p;
+    FML::PARTICLE::MPIParticles<Particle> part;
     const bool all_tasks_have_the_same_particles = true;
     const int nalloc_per_task = 2 * npos;
-    p.create(positions.data(),
+    part.create(positions.data(),
              positions.size(),
              nalloc_per_task,
              FML::xmin_domain,
@@ -94,24 +94,24 @@ void ExamplesInterpolation() {
     //=======================================================
     std::vector<double> interpolated_values;
     FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, Particle>(
-        grid, p.get_particles().data(), p.get_npart(), interpolated_values, interpolation_method);
+        grid, part.get_particles_ptr(), part.get_npart(), interpolated_values, interpolation_method);
 
     //=======================================================
     // Output interpolation together with exact result
     // (Output here only outputs it all when NTasks=1)
     //=======================================================
     if (FML::ThisTask == 0) {
-        auto & part = p.get_particles();
         std::cout << "Output [x interpol exact] to data.txt\n";
         std::ofstream fp("data.txt");
-        for (size_t i = 0; i < p.get_npart(); i++) {
-            std::array<double, NDIM> pos;
+        for (size_t i = 0; i < part.get_npart(); i++) {
+            auto pos = FML::PARTICLE::GetPos(part[i]);
+            std::array<double, NDIM> x;
             double xyz = 0.0;
             for (int idim = 0; idim < NDIM; idim++) {
-                pos[idim] = part[i].get_pos()[idim];
-                xyz += pos[idim];
+                x[idim] = pos[idim];
+                xyz += x[idim];
             }
-            auto anal = func(pos);
+            auto anal = func(x);
             fp << xyz / 3.0 << " " << interpolated_values[i] << " " << anal << "\n";
         }
     }

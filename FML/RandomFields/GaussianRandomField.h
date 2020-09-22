@@ -178,8 +178,8 @@ namespace FML {
 
                 // Generate gaussian random field in k-space
                 std::vector<int> coord(N, 0), mirrorcoord(N, 0);
-                const int imin_local = Local_x_start;
-                const int imax_local = Local_x_start + Local_nx;
+                const auto imin_local = Local_x_start;
+                const auto imax_local = Local_x_start + Local_nx;
                 std::array<double, N> kvec;
                 double kmag;
 
@@ -307,8 +307,8 @@ namespace FML {
                 auto Local_x_start = grid.get_local_x_start();
                 auto * cdelta = grid.get_fourier_grid();
 
-                const int imin_local = Local_x_start;
-                const int imax_local = Local_x_start + Local_nx;
+                const auto imin_local = Local_x_start;
+                const auto imax_local = Local_x_start + Local_nx;
 
                 // Set up seeds for the random number generator
                 // The strange way it's done here (instead of just filling the N^2 table directly)

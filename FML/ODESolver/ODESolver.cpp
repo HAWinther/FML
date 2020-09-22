@@ -75,8 +75,8 @@ namespace FML {
                                   const gsl_odeiv2_step_type * stepper,
                                   ODEFunctionPointerJacobian jacobian) {
                 // Store the number of equations and size of x-array
-                nequations = yinitial.size();
-                num_x_points = xarr.size();
+                nequations = int(yinitial.size());
+                num_x_points = int(xarr.size());
                 if (num_x_points < 2) {
                     std::string errormessage = "[ODESolver::solve] The xarray needs to have atleast size 2\n";
                     throw_error(errormessage);

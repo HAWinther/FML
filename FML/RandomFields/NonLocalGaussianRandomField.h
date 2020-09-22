@@ -211,7 +211,7 @@ namespace FML {
                         double pofk_m13 = std::pow(Pofk_of_kBox_over_volume(kmag), -1.0 / 3.0);
                         double pofk_m23 = pofk_m13 * pofk_m13;
                         double pofk_m33 = pofk_m23 * pofk_m13; // XXX Not needed when u=0
-
+                
                         auto phi = phi_fourier.get_fourier_from_index(fourier_index);
                         auto value1 = phi * pofk_m13;
                         auto value2 = phi * pofk_m23;
@@ -287,13 +287,9 @@ namespace FML {
                         auto term2 = temp2.get_fourier_from_index(fourier_index) * pofk_p23;
                         auto term3 = temp3.get_fourier_from_index(fourier_index) * pofk_p33; // XXX Not needed when u=0
 
-                        auto old_source = source.get_fourier_from_index(fourier_index);
-                        auto value =
-                            old_source + kernel_values[1] * term1 + kernel_values[2] * term2 + kernel_values[3] * term3;
-                        if (kmag == 0.0) {
-                            value = 0.0;
-                        }
-                        source.set_fourier_from_index(fourier_index, value);
+                        auto s = source.get_fourier_from_index(fourier_index);
+                        s += kernel_values[1] * term1 + kernel_values[2] * term2 + kernel_values[3] * term3;
+                        source.set_fourier_from_index(fourier_index, s);
                     }
                 }
 

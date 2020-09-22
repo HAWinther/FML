@@ -22,8 +22,10 @@ namespace FML {
     /// field of particles. Using the interpolation method corresponding to the
     /// density assignment help prevent unphysical self-forces.
     ///
-    /// All particles are assumed to have the same mass unless PARTICLES_WITH_DIFFERENT_MASS
-    /// is set.
+    /// If the particle class has a get_mass method then we will use this mass (divided by the mean mass of all
+    /// particles so the absolute size of the masses does not matter) when assigning the particles to the grid.
+    /// Otherwise we will assume all particles have the same mass. The resulting density-field delta will always have
+    /// mean 0.
     ///
     /// The assignment function is a B spline kernel of any order,
     /// i.e. H*H*...*H with H being a tophat and * convolution.
@@ -435,7 +437,7 @@ namespace FML {
             for (size_t i = 0; i < NumPart; i++) {
 
                 // Particle position
-                const auto * pos = FML::PARTICLE::GetPos( const_cast<T*>(part)[i] );
+                const auto * pos = FML::PARTICLE::GetPos(const_cast<T *>(part)[i]);
 
                 // Fetch mass if this is availiable
                 if constexpr (has_mass)
@@ -455,7 +457,7 @@ namespace FML {
                 }
 
                 // Periodic BC
-                ix[0] -= Local_x_start;
+                ix[0] -= int(Local_x_start);
                 for (int idim = 1; idim < N; idim++) {
                     if (ix[idim] == Nmesh)
                         ix[idim] = 0;
@@ -555,7 +557,7 @@ namespace FML {
             for (size_t ind = 0; ind < NumPart; ind++) {
 
                 // Positions in global grid in units of [Nmesh]
-                const auto * pos = FML::PARTICLE::GetPos( const_cast<T*>(part)[ind] );
+                const auto * pos = FML::PARTICLE::GetPos(const_cast<T *>(part)[ind]);
                 std::array<double, N> x;
                 for (int idim = 0; idim < N; idim++)
                     x[idim] = pos[idim] * Nmesh;
@@ -567,9 +569,9 @@ namespace FML {
                     ix[idim] = int(x[idim]);
                     if (idim == 0) {
                         if (ix[0] == (Local_x_start + Local_nx))
-                            ix[0] = (Local_x_start + Local_nx) - 1;
+                            ix[0] = int(Local_x_start + Local_nx) - 1;
                         if (ix[0] < Local_x_start)
-                            ix[0] = Local_x_start;
+                            ix[0] = int(Local_x_start);
                     } else {
                         if (ix[idim] == Nmesh)
                             ix[idim] = Nmesh - 1;
@@ -582,7 +584,7 @@ namespace FML {
                 }
 
                 // From global ix to local ix
-                ix[0] -= Local_x_start;
+                ix[0] -= int(Local_x_start);
 
                 // Neighbor coord
                 ix_nbor[0] = ix[0];
@@ -666,7 +668,7 @@ namespace FML {
         void add_contribution_from_extra_slices(FFTWGrid<N> & density) {
 
             auto Local_nx = density.get_local_nx();
-            int num_cells_slice = density.get_ntot_real_slice_alloc();
+            auto num_cells_slice = density.get_ntot_real_slice_alloc();
             int n_extra_left = density.get_n_extra_slices_left();
             int n_extra_right = density.get_n_extra_slices_right();
             ;
@@ -686,14 +688,14 @@ namespace FML {
                 int recv_from = (ThisTask - 1 + NTasks) % NTasks;
 
                 MPI_Sendrecv(&(extra_slice_right[0]),
-                             sizeof(FloatType) * num_cells_slice,
+                             int(sizeof(FloatType) * num_cells_slice),
                              MPI_CHAR,
                              send_to,
                              0,
                              &(temp[0]),
-                             sizeof(FloatType) * num_cells_slice,
+                             int(sizeof(FloatType) * num_cells_slice),
                              MPI_CHAR,
-                             recv_from,
+                             int(recv_from),
                              0,
                              MPI_COMM_WORLD,
                              &status);
@@ -720,12 +722,12 @@ namespace FML {
                 int recv_from = (ThisTask + 1) % NTasks;
 
                 MPI_Sendrecv(&(extra_slice_left[0]),
-                             sizeof(FloatType) * num_cells_slice,
+                             int(sizeof(FloatType) * num_cells_slice),
                              MPI_CHAR,
                              send_to,
                              0,
                              &(temp[0]),
-                             sizeof(FloatType) * num_cells_slice,
+                             int(sizeof(FloatType) * num_cells_slice),
                              MPI_CHAR,
                              recv_from,
                              0,

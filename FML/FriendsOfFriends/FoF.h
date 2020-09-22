@@ -95,7 +95,7 @@ namespace FML {
                     index_cell = index_cell * Ngrid + coord[idim];
                     assert(coord[idim] >= 0 and coord[idim] < (idim == 0 ? Local_nx : Ngrid));
                 }
-                assert(index_cell >= 0 and index_cell < NgridTot);
+                assert(index_cell < NgridTot);
                 return index_cell;
             };
 
@@ -233,11 +233,11 @@ namespace FML {
                     if (FML::ThisTask == sendTask or merging_in_parallel) {
                         std::cout << "Sending boundary particles from " << FML::ThisTask << " to " << RightTask
                                   << " and merging FoF groups" << std::endl;
-                        std::cout << FML::ThisTask << " will send " << bytes_to_send / 1e3 << " kb of data to task "
+                        std::cout << FML::ThisTask << " will send " << double(bytes_to_send) / 1e3 << " kb of data to task "
                                   << RightTask << std::endl;
                     }
                     if (FML::ThisTask == RightTask or merging_in_parallel) {
-                        std::cout << FML::ThisTask << " will recieve " << bytes_to_recv / 1e3
+                        std::cout << FML::ThisTask << " will recieve " << double(bytes_to_recv) / 1e3
                                   << " kb of data from task " << LeftTask << std::endl;
                     }
 #endif
@@ -251,12 +251,12 @@ namespace FML {
 
                     if (merging_in_parallel) {
                         MPI_Sendrecv(CommBufferSend.data(),
-                                     bytes_to_send,
+                                     int(bytes_to_send),
                                      MPI_BYTE,
                                      RightTask,
                                      0,
                                      CommBufferRecv.data(),
-                                     bytes_to_recv,
+                                     int(bytes_to_recv),
                                      MPI_BYTE,
                                      LeftTask,
                                      0,
@@ -264,29 +264,29 @@ namespace FML {
                                      &status);
                     } else {
                         if (FML::ThisTask == sendTask)
-                            MPI_Send(CommBufferSend.data(), bytes_to_send, MPI_BYTE, RightTask, 0, MPI_COMM_WORLD);
+                            MPI_Send(CommBufferSend.data(), int(bytes_to_send), MPI_BYTE, RightTask, 0, MPI_COMM_WORLD);
                         if (FML::ThisTask == recvTask) {
                             MPI_Recv(
-                                CommBufferRecv.data(), bytes_to_recv, MPI_BYTE, LeftTask, 0, MPI_COMM_WORLD, &status);
+                                CommBufferRecv.data(), int(bytes_to_recv), MPI_BYTE, LeftTask, 0, MPI_COMM_WORLD, &status);
                         }
                     }
 
                     // Methods to extract data from the stuff we communicated
-                    auto get_pos = [&](int i) -> FoFPosType * {
+                    auto get_pos = [&](size_t i) -> FoFPosType * {
                         char * p = &CommBufferRecv[bytes_per_partice * i];
                         assert(FML::ThisTask == recvTask or merging_in_parallel);
-                        assert(size_t(i) >= 0 and size_t(i) < nboundary_left_recv);
+                        assert(size_t(i) < nboundary_left_recv);
                         return (FoFPosType *)p;
                     };
-                    auto get_fof_id = [&](int i) -> size_t * {
+                    auto get_fof_id = [&](size_t i) -> size_t * {
                         assert(FML::ThisTask == recvTask or merging_in_parallel);
-                        assert(size_t(i) >= 0 and size_t(i) < nboundary_left_recv);
+                        assert(size_t(i) < nboundary_left_recv);
                         return (size_t *)&CommBufferRecv[bytes_per_partice * i + sizeof(FoFPosType) * NDIM +
                                                          sizeof(size_t)];
                     };
-                    auto get_ind = [&](int i) -> size_t * {
+                    auto get_ind = [&](size_t i) -> size_t * {
                         assert(FML::ThisTask == recvTask or merging_in_parallel);
-                        assert(size_t(i) >= 0 and size_t(i) < nboundary_left_recv);
+                        assert(size_t(i) < nboundary_left_recv);
                         return (size_t *)&CommBufferRecv[bytes_per_partice * i + sizeof(FoFPosType) * NDIM];
                     };
 
@@ -488,8 +488,8 @@ namespace FML {
                     }
 
                     // Send back the final data
-                    const int bytes_send2 = count * sizeof(size_t);
-                    const int bytes_recv2 = count_recv * sizeof(size_t);
+                    const int bytes_send2 = int(count * sizeof(size_t));
+                    const int bytes_recv2 = int(count_recv * sizeof(size_t));
 
                     if (merging_in_parallel) {
                         MPI_Sendrecv(BoundaryDataToSendBack_pindex.data(),
@@ -633,7 +633,7 @@ namespace FML {
                     index_cell = index_cell * Ngrid + coord[idim];
                     assert(coord[idim] >= 0 and coord[idim] < (idim == 0 ? Local_nx : Ngrid));
                 }
-                assert(index_cell >= 0 and index_cell < NgridTot);
+                assert(index_cell < NgridTot);
                 return index_cell;
             };
 
@@ -994,7 +994,7 @@ namespace FML {
 
             // Gather data about shared groups
             std::vector<int> shared_groups_in_task(FML::NTasks, 0);
-            shared_groups_in_task[FML::ThisTask] = ninSharedGroup.size();
+            shared_groups_in_task[FML::ThisTask] = int(ninSharedGroup.size());
             MPI_Allreduce(MPI_IN_PLACE, shared_groups_in_task.data(), FML::NTasks, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
             std::vector<std::vector<size_t>> FoFIDSharedGroupFromOtherTasks(FML::NTasks);
             std::vector<std::vector<size_t>> ninSharedGroupFromOtherTasks(FML::NTasks);
@@ -1005,7 +1005,7 @@ namespace FML {
 
             // Send from task i and recieve in task 0, the rest just sit quiet and wait
             for (int i = 1; i < FML::NTasks; i++) {
-                const int bytes = sizeof(size_t) * shared_groups_in_task[i];
+                const int bytes = int(sizeof(size_t) * shared_groups_in_task[i]);
                 MPI_Barrier(MPI_COMM_WORLD);
                 if (FML::ThisTask == i) {
                     MPI_Send(FoFIDSharedGroup.data(), bytes, MPI_BYTE, 0, 0, MPI_COMM_WORLD);
@@ -1061,10 +1061,10 @@ namespace FML {
             FoFIDSharedGroupFromOtherTasks.shrink_to_fit();
 
             // Communicate number of groups to all tasks
-            int nsharedhalos = SharedHalos.size();
+            int nsharedhalos = int(SharedHalos.size());
             MPI_Bcast(&nsharedhalos, 1, MPI_INT, 0, MPI_COMM_WORLD);
             SharedHalos.resize(nsharedhalos);
-            MPI_Bcast(SharedHalos.data(), sizeof(size_t) * nsharedhalos, MPI_BYTE, 0, MPI_COMM_WORLD);
+            MPI_Bcast(SharedHalos.data(), int(sizeof(size_t) * nsharedhalos), MPI_BYTE, 0, MPI_COMM_WORLD);
 
             // Figure out which shared halos we have a part of on current task
             std::vector<size_t> LocalSharedHalos;
@@ -1121,16 +1121,16 @@ namespace FML {
             std::vector<FoFHaloClass> myhalos = halos;
 #ifdef USE_MPI
             std::vector<int> nhalosontask(FML::NTasks, 0);
-            nhalosontask[FML::ThisTask] = halos.size();
+            nhalosontask[FML::ThisTask] = int(halos.size());
             MPI_Allreduce(MPI_IN_PLACE, nhalosontask.data(), FML::NTasks, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
             for (int i = 1; i < FML::NTasks; i++) {
                 if (FML::ThisTask == i) {
-                    MPI_Send(halos.data(), sizeof(FoFHaloClass) * nhalosontask[i], MPI_BYTE, 0, 0, MPI_COMM_WORLD);
+                    MPI_Send(halos.data(), int(sizeof(FoFHaloClass) * nhalosontask[i]), MPI_BYTE, 0, 0, MPI_COMM_WORLD);
                 } else if (FML::ThisTask == 0) {
                     std::vector<FoFHaloClass> tmp(nhalosontask[i]);
                     MPI_Status status;
                     MPI_Recv(
-                        tmp.data(), sizeof(FoFHaloClass) * nhalosontask[i], MPI_BYTE, i, 0, MPI_COMM_WORLD, &status);
+                        tmp.data(), int(sizeof(FoFHaloClass) * nhalosontask[i]), MPI_BYTE, i, 0, MPI_COMM_WORLD, &status);
                     for (auto & g : tmp) {
                         myhalos.push_back(g);
                     }

@@ -20,6 +20,11 @@
 #endif
 
 namespace FML {
+   
+    //===================================================================================
+    /// This namespace deals with special math functions and general math algorithms
+    /// needed in the library
+    //===================================================================================
     namespace MATH {
 
 #ifdef USE_GSL

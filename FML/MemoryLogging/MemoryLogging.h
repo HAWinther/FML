@@ -157,10 +157,11 @@ namespace FML {
 
         // Print the total memory in use
         void print() {
-#ifdef USE_MPI
             // Check if any task has saturated the allocation limit
             char ok = stop_logging ? 0 : 1;
+#ifdef USE_MPI
             MPI_Allreduce(MPI_IN_PLACE, &ok, 1, MPI_CHAR, MPI_MIN, MPI_COMM_WORLD);
+#endif
             if (ok == 0) {
                 clear();
                 stop_logging = true;
@@ -170,26 +171,26 @@ namespace FML {
                               << " due to max number of allocation having been reached\n";
                 return;
             }
-#endif
 
             // Fetch system memory usage
             auto sysmem = get_system_memory_use();
-            long long int min_sys_vmemory = sysmem.first;
-            long long int max_sys_vmemory = sysmem.first;
-            long long int mean_sys_vmemory = sysmem.first;
-            long long int min_sys_rssmemory = sysmem.second;
-            long long int max_sys_rssmemory = sysmem.second;
-            long long int mean_sys_rssmemory = sysmem.second;
+            double min_sys_vmemory = sysmem.first;
+            double max_sys_vmemory = sysmem.first;
+            double mean_sys_vmemory = sysmem.first;
+            double min_sys_rssmemory = sysmem.second;
+            double max_sys_rssmemory = sysmem.second;
+            double mean_sys_rssmemory = sysmem.second;
+
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, &min_sys_vmemory, 1, MPI_LONG_LONG, MPI_MIN, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &max_sys_vmemory, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &mean_sys_vmemory, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &min_sys_rssmemory, 1, MPI_LONG_LONG, MPI_MIN, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &max_sys_rssmemory, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &mean_sys_rssmemory, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &min_sys_vmemory, 1,    MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &max_sys_vmemory, 1,    MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &mean_sys_vmemory, 1,   MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &min_sys_rssmemory, 1,  MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &max_sys_rssmemory, 1,  MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &mean_sys_rssmemory, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+#endif
             mean_sys_vmemory /= NTasks;
             mean_sys_rssmemory /= NTasks;
-#endif
             if (ThisTask == 0) {
                 std::cout << "\n#=====================================================\n";
                 std::cout << "                   MemoryLogging\n";
@@ -211,30 +212,27 @@ namespace FML {
                 std::cout << "container (Vector) and only allocations larger than " << min_bytes_to_log << " bytes\n\n";
             }
 
-#ifdef USE_MPI
             long long int min_memory = memory_in_use;
             long long int max_memory = memory_in_use;
             long long int mean_memory = memory_in_use;
             long long int peak_memory = peak_memory_use;
+#ifdef USE_MPI
             MPI_Allreduce(MPI_IN_PLACE, &min_memory, 1, MPI_LONG_LONG, MPI_MIN, MPI_COMM_WORLD);
             MPI_Allreduce(MPI_IN_PLACE, &max_memory, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
             MPI_Allreduce(MPI_IN_PLACE, &mean_memory, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
             MPI_Allreduce(MPI_IN_PLACE, &peak_memory, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
+#endif
             mean_memory /= NTasks;
             if (ThisTask == 0) {
-                std::cout << "Memory in use (Task 0):   " << std::setw(15) << memory_in_use / 1.0e6 << " MB\n";
-                std::cout << "Min over tasks:           " << std::setw(15) << min_memory / 1.0e6 << " MB\n";
-                std::cout << "Mean over tasks:          " << std::setw(15) << mean_memory / 1.0e6 << " MB\n";
-                std::cout << "Max over tasks:           " << std::setw(15) << max_memory / 1.0e6 << " MB\n";
+                std::cout << "Memory in use (Task 0):   " << std::setw(15) << double(memory_in_use) / 1.0e6 << " MB\n";
+                std::cout << "Min over tasks:           " << std::setw(15) << double(min_memory) / 1.0e6 << " MB\n";
+                std::cout << "Mean over tasks:          " << std::setw(15) << double(mean_memory) / 1.0e6 << " MB\n";
+                std::cout << "Max over tasks:           " << std::setw(15) << double(max_memory) / 1.0e6 << " MB\n";
                 std::cout << "\n";
-                std::cout << "Peak memory use (Task 0): " << std::setw(15) << peak_memory_use / 1.0e6 << " MB\n";
-                std::cout << "Max over tasks:           " << std::setw(15) << peak_memory / 1.0e6 << " MB\n";
+                std::cout << "Peak memory use (Task 0): " << std::setw(15) << double(peak_memory_use) / 1.0e6 << " MB\n";
+                std::cout << "Max over tasks:           " << std::setw(15) << double(peak_memory) / 1.0e6 << " MB\n";
                 std::cout << "\n";
             }
-#else
-            std::cout << "Memory in use:   " << std::setw(15) << memory_in_use / 1.0e6 << " MB\n";
-            std::cout << "Peak memory use: " << std::setw(15) << peak_memory_use / 1.0e6 << " MB\n";
-#endif
             if (!allocations.empty()) {
                 if (ThisTask == 0) {
                     std::cout << "\nWe have the following things allocated on task 0: \n";
@@ -246,7 +244,7 @@ namespace FML {
                             name = labels[a.first];
                         std::string bytelabel = " (MB)";
                         double factor = 1e6;
-                        std::cout << "Address: " << a.first << " Size: " << a.second / factor << bytelabel
+                        std::cout << "Address: " << a.first << " Size: " << double(a.second) / factor << bytelabel
                                   << " Label: " << name << "\n";
                     }
                 }
@@ -263,7 +261,7 @@ namespace FML {
                         std::cout << " Time (sec): " << std::setw(13) << time_in_sec;
                         std::string bytelabel = " (MB)";
                         double factor = 1e6;
-                        std::cout << " Memory: " << std::setw(13) << m.second / factor << bytelabel << "\n";
+                        std::cout << " Memory: " << std::setw(13) << double(m.second) / factor << bytelabel << "\n";
                     }
                 }
             }

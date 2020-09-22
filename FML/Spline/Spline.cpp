@@ -415,7 +415,7 @@ namespace FML {
                                                " have wrong number of elements nx*ny != nz\n";
                     throw_error(errormessage);
                 }
-                create(x.data(), y.data(), z.data(), x.size(), y.size(), splinename, interpoltype);
+                create(x.data(), y.data(), z.data(), int(x.size()), int(y.size()), splinename, interpoltype);
             }
 
             void GSLSpline2D::create(const DVector & x,
@@ -423,16 +423,16 @@ namespace FML {
                                      const DVector2D & z,
                                      std::string splinename,
                                      const gsl_interp2d_type * interpoltype) {
-                int nz_x = z.size();
-                int nz_y = nz_x == 0 ? 0 : z[0].size();
-                int nxy = x.size() * y.size();
+                int nz_x = int(z.size());
+                int nz_y = nz_x == 0 ? 0 : int(z[0].size());
+                int nxy = int(x.size() * y.size());
                 if (nz_x * nz_y != nxy) {
                     std::string errormessage =
                         "[GSLSpline2D::create] z array for spline " + name + " have wrong dimensions\n";
                     throw_error(errormessage);
                 }
                 for (int i = 0; i < nz_x; i++) {
-                    int n = z[i].size();
+                    int n = int(z[i].size());
                     if (n != nz_y) {
                         std::string errormessage =
                             "[GSLSpline2D::create] z array for spline " + name + " have wrong dimensions\n";
@@ -445,7 +445,7 @@ namespace FML {
                         f[ix + nz_x * iy] = z[ix][iy];
                     }
                 }
-                create(x.data(), y.data(), f.data(), x.size(), y.size(), splinename, interpoltype);
+                create(x.data(), y.data(), f.data(), int(x.size()), int(y.size()), splinename, interpoltype);
             }
 
             //====================================================

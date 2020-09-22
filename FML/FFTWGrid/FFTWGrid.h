@@ -354,7 +354,7 @@ namespace FML {
 
             // If fiducial parameters are used then we loop over all cells
             if (islice_begin == 0 and islice_end == 0)
-                islice_end = Local_nx;
+                islice_end = int(Local_nx);
 
 #ifdef DEBUG_FFTWGRID
             if (not grid_is_in_real_space) {
@@ -373,7 +373,7 @@ namespace FML {
 
             // If fiducial parameters are used then we loop over all cells
             if (islice_begin == 0 and islice_end == 0)
-                islice_end = Local_nx;
+                islice_end = int(Local_nx);
 
 #ifdef DEBUG_FFTWGRID
             if (grid_is_in_real_space) {
@@ -439,7 +439,7 @@ namespace FML {
                 myfloattype = "[Double]";
             if (sizeof(FloatType) == sizeof(long double))
                 myfloattype = "[Long Double]";
-            double memory_in_mb = fourier_grid_raw.size() * sizeof(ComplexType) / 1e6;
+            double memory_in_mb = double(fourier_grid_raw.size() * sizeof(ComplexType)) / 1e6;
             if (FML::ThisTask == 0) {
                 std::cout << "\n";
                 std::cout << "#=====================================================\n";
@@ -616,9 +616,9 @@ namespace FML {
             int n_to_recv_right = n_extra_x_slices_right;
             int n_to_recv_left = n_extra_x_slices_left;
             if (n_to_recv_right > Local_nx)
-                n_to_recv_right = Local_nx;
+                n_to_recv_right = int(Local_nx);
             if (n_to_recv_left > Local_nx)
-                n_to_recv_left = Local_nx;
+                n_to_recv_left = int(Local_nx);
 
 #ifdef DEBUG_FFTWGRID
             if (FML::ThisTask == 0) {
@@ -631,7 +631,7 @@ namespace FML {
             int rightcpu = (FML::ThisTask + 1) % FML::NTasks;
             int leftcpu = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
 #endif
-            int bytes_slice = NmeshTotRealSlice * sizeof(FloatType);
+            int bytes_slice = int(NmeshTotRealSlice * sizeof(FloatType));
 
             for (int i = 0; i < n_to_recv_right; i++) {
                 FloatType * slice_left_tosend = get_real_grid() + NmeshTotRealSlice * (i);
@@ -759,17 +759,17 @@ namespace FML {
             std::array<int, N> coord;
             int nmesh_plus_padding = (2 * (Nmesh / 2 + 1));
             IndexIntType index = index_real;
-            coord[N - 1] = index % nmesh_plus_padding;
+            coord[N - 1] = int(index % nmesh_plus_padding);
             index /= nmesh_plus_padding;
 
             if constexpr (N == 2) {
                 coord[0] = index;
             } else if (N == 3) {
-                coord[1] = index % Nmesh;
-                coord[0] = index / Nmesh;
+                coord[1] = int(index % Nmesh);
+                coord[0] = int(index / Nmesh);
             } else {
                 for (int idim = N - 2; idim >= 1; idim--) {
-                    coord[idim] = index % Nmesh;
+                    coord[idim] = int(index % Nmesh);
                     index /= Nmesh;
                 }
                 coord[0] = index;
@@ -1046,7 +1046,7 @@ namespace FML {
 #else
             const constexpr double shift = 0.0;
 #endif
-            xcoord[0] = (Local_x_start + coord[0] + shift) / double(Nmesh);
+            xcoord[0] = (double(Local_x_start + coord[0]) + shift) / double(Nmesh);
             for (int idim = 1; idim < N; idim++)
                 xcoord[idim] = (coord[idim] + shift) / double(Nmesh);
             return xcoord;
@@ -1085,27 +1085,26 @@ namespace FML {
 #endif
 
             if (N == 3) {
-                int iz = index % nover2plus1;
-                ;
-                int iy = index / nover2plus1;
-                int ix = iy / Nmesh;
+                auto iz = index % nover2plus1;
+                auto iy = index / nover2plus1;
+                auto ix = iy / Nmesh;
                 iy = iy % Nmesh;
                 kvec[0] =
-                    twopi * ((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
-                kvec[1] = twopi * (iy <= nover2 ? iy : iy - Nmesh);
-                kvec[2] = twopi * (iz <= nover2 ? iz : iz - Nmesh);
+                    twopi * double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
+                kvec[1] = twopi * double(iy <= nover2 ? iy : iy - Nmesh);
+                kvec[2] = twopi * double(iz <= nover2 ? iz : iz - Nmesh);
                 kmag2 = kvec[0] * kvec[0] + kvec[1] * kvec[1] + kvec[2] * kvec[2];
             } else if (N == 2) {
-                int iy = index % nover2plus1;
-                int ix = index / nover2plus1;
+                auto iy = index % nover2plus1;
+                auto ix = index / nover2plus1;
                 kvec[0] =
                     twopi * ((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
-                kvec[1] = twopi * (iy <= nover2 ? iy : iy - Nmesh);
+                kvec[1] = twopi * double(iy <= nover2 ? iy : iy - Nmesh);
                 kmag2 = kvec[0] * kvec[0] + kvec[1] * kvec[1];
             } else if (N == 1) {
-                int ix = index;
+                auto ix = index;
                 kvec[0] =
-                    twopi * ((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
+                    twopi * double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
                 kmag2 = kvec[0] * kvec[0];
             } else {
                 std::array<int, N> coord;
@@ -1114,11 +1113,11 @@ namespace FML {
                     coord[idim] = (index / n) % Nmesh;
                 }
 
-                kvec[0] = twopi * ((Local_x_start + coord[0]) <= nover2 ? (Local_x_start + coord[0]) :
+                kvec[0] = twopi * double((Local_x_start + coord[0]) <= nover2 ? (Local_x_start + coord[0]) :
                                                                           (Local_x_start + coord[0]) - Nmesh);
                 kmag2 = kvec[0] * kvec[0];
                 for (int idim = 1; idim < N; idim++) {
-                    kvec[idim] = twopi * (coord[idim] <= nover2 ? coord[idim] : coord[idim] - Nmesh);
+                    kvec[idim] = twopi * double(coord[idim] <= nover2 ? coord[idim] : coord[idim] - Nmesh);
                     kmag2 += kvec[idim] * kvec[idim];
                 }
             }
@@ -1143,34 +1142,33 @@ namespace FML {
             std::array<double, N> fcoord;
 
             if constexpr (N == 3) {
-                int iz = index % nover2plus1;
-                ;
-                int iy = index / nover2plus1;
-                int ix = iy / Nmesh;
+                auto iz = index % nover2plus1;
+                auto iy = index / nover2plus1;
+                auto ix = iy / Nmesh;
                 iy = iy % Nmesh;
                 fcoord[0] =
-                    twopi * ((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
-                fcoord[1] = twopi * (iy <= nover2 ? iy : iy - Nmesh);
-                fcoord[2] = twopi * (iz <= nover2 ? iz : iz - Nmesh);
+                    twopi * double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
+                fcoord[1] = twopi * double(iy <= nover2 ? iy : iy - Nmesh);
+                fcoord[2] = twopi * double(iz <= nover2 ? iz : iz - Nmesh);
             } else if (N == 2) {
-                int iy = index % nover2plus1;
-                int ix = index / nover2plus1;
+                auto iy = index % nover2plus1;
+                auto ix = index / nover2plus1;
                 fcoord[0] =
-                    twopi * ((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
+                    twopi * double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
                 fcoord[1] = twopi * (iy <= nover2 ? iy : iy - Nmesh);
             } else if (N == 1) {
-                int ix = index % nover2plus1;
+                auto ix = index % nover2plus1;
                 fcoord[0] =
-                    twopi * ((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
+                    twopi * double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
             } else {
                 fcoord[N - 1] = index % nover2plus1;
                 for (int idim = N - 2, n = nover2plus1; idim >= 0; idim--, n *= Nmesh) {
-                    fcoord[idim] = (index / n) % Nmesh;
+                    fcoord[idim] = double((index / n) % Nmesh);
                 }
-                fcoord[0] = twopi * ((Local_x_start + fcoord[0]) <= nover2 ? (Local_x_start + fcoord[0]) :
+                fcoord[0] = twopi * double((Local_x_start + fcoord[0]) <= nover2 ? (Local_x_start + fcoord[0]) :
                                                                              (Local_x_start + fcoord[0]) - Nmesh);
                 for (int idim = 1; idim < N; idim++) {
-                    fcoord[idim] = twopi * (fcoord[idim] <= nover2 ? fcoord[idim] : fcoord[idim] - Nmesh);
+                    fcoord[idim] = twopi * double(fcoord[idim] <= nover2 ? fcoord[idim] : fcoord[idim] - Nmesh);
                 }
             }
             return fcoord;

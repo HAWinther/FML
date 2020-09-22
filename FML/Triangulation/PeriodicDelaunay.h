@@ -18,6 +18,7 @@
 #pragma GCC diagnostic push
 // turn off the specific warning
 #pragma GCC diagnostic ignored "-Wunused-but-set-parameter"
+#pragma GCC diagnostic ignored "-Wconversion"
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Kernel/global_functions.h>
 #if CGAL_NDIM == 3
@@ -267,24 +268,24 @@ namespace FML {
                 std::vector<char> p_to_recv_left(bytes_to_recv_left);
                 std::vector<char> p_to_recv_right(bytes_to_recv_right);
                 MPI_Sendrecv(p_to_send_left.data(),
-                             bytes_to_send_left,
+                             int(bytes_to_send_left),
                              MPI_CHAR,
                              LeftTask,
                              0,
                              p_to_recv_right.data(),
-                             bytes_to_recv_right,
+                             int(bytes_to_recv_right),
                              MPI_CHAR,
                              RightTask,
                              0,
                              MPI_COMM_WORLD,
                              &status);
                 MPI_Sendrecv(p_to_send_right.data(),
-                             bytes_to_send_right,
+                             int(bytes_to_send_right),
                              MPI_CHAR,
                              RightTask,
                              0,
                              p_to_recv_left.data(),
-                             bytes_to_recv_left,
+                             int(bytes_to_recv_left),
                              MPI_CHAR,
                              LeftTask,
                              0,
@@ -490,13 +491,18 @@ namespace FML {
 
                 if (NumPart == 0)
                     return;
+                assert(buffer_fraction >= 0.0);
+                assert(random_fraction >= 0.0);
                 if (FML::NTasks == 1)
                     random_fraction = buffer_fraction = 0.0;
-                if (buffer_fraction >= 0.5 and FML::NTasks == 2)
+                if (buffer_fraction >= 0.5 and FML::NTasks == 2){
                     random_fraction = 0.0;
-                assert(buffer_fraction >= 0.0 and buffer_fraction <= 1.0);
-                assert(random_fraction >= 0.0);
-                T tmp;
+                    buffer_fraction = 0.5;
+                }
+                if(buffer_fraction >= 1.0){
+                  buffer_fraction = 1.0 - 1e-10;
+                }
+                T tmp{};
                 assert(tmp.get_ndim() == CGAL_NDIM);
 
                 if (FML::ThisTask == 0) {

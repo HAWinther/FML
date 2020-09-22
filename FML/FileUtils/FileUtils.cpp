@@ -29,7 +29,7 @@ namespace FML {
             }
 
             // Allocate memory for reading
-            int ntokeep = cols_to_keep.size();
+            int ntokeep = int(cols_to_keep.size());
             DVector2D result;
             result.reserve(nestimated_lines);
 
@@ -111,7 +111,7 @@ namespace FML {
             }
 
             // Allocate memory for reading
-            int ntokeep = cols_to_keep.size();
+            int ntokeep = int(cols_to_keep.size());
             DVector2D result;
             result.reserve(nestimated_lines);
 

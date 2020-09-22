@@ -214,8 +214,6 @@ namespace FML {
 #pragma omp parallel for
 #endif
             for (int islice = 0; islice < Local_nx; islice++) {
-                [[maybe_unused]] double kmag2;
-                [[maybe_unused]] std::array<double, N> kvec;
                 for (auto && fourier_index : real_grid_result.get_fourier_range(islice, islice + 1)) {
                     auto g_fourier = real_grid_result.get_fourier_from_index(fourier_index);
                     auto f_fourier = g_fourier;
