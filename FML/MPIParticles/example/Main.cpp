@@ -37,8 +37,9 @@ int main() {
     //==================================================
     // Alternative ways of looping through all active particles
     // for(auto i = 0; i < part.get_npart(); i++) or
-    // for(auto it = part.begin(); it != part.end(); it++)
-    // Don't do for(auto &p :  part.get_particles()) as this will iterator over *all* particles
+    // for(auto it = part.begin(); it != part.end(); ++it) or
+    // for(auto & p : part)
+    // Don't do for(auto &p :  part.get_particles()) as this will iterate over *all* particles
     // allocated, even uninitalized buffer particles, which is not what we usually want!
     //==================================================
 
