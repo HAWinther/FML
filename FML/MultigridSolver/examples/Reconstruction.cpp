@@ -12,6 +12,7 @@
 //======================================================================
 // Example on how to do RSD reconstruction on simulation data
 // We solve DPsi + f D((Psi*r)r) = -delta/b with r = (0,0,1)
+// RSD solver implemented by Haakon Tansem
 //======================================================================
 
 using namespace FML::SOLVERS::MULTIGRIDSOLVER;
@@ -25,13 +26,10 @@ struct Particle {
     Particle() {}
     Particle(double * _x) { std::memcpy(x, _x, NDIM * sizeof(double)); }
     double * get_pos() { return x; }
-    double * get_vel() { return nullptr; }
-    int get_particle_byte_size() { return NDIM * sizeof(double); }
-    void append_to_buffer(char * data) { std::memcpy(data, x, NDIM * sizeof(double)); }
-    void assign_from_buffer(char * data) { std::memcpy(x, data, NDIM * sizeof(double)); }
+    int get_ndim() { return NDIM; }
 };
 
-void PoissonSolver() {
+void ReconSolver() {
 
     //======================================================================
     // Solver parameters
@@ -52,20 +50,24 @@ void PoissonSolver() {
     // Read ascii file that has the format [x,y,z] and fetch the position
     // (This file has positions in real-space so no recon is needed, but fuck it its just to test it)
     //=================================================================================
-    const std::string filename = "../../../TestData/particles_B1024.txt"; // Filename of particles
-    const double box = 1024.0;                                            // The boxsize of the simulation data
-    const int ncols = 3;                                                  // Number of columns in file
-    const int nskip_header = 0;                                           // Number of header lines to skip
-    const std::vector<int> cols_to_keep{0, 1, 2};                         // The columns we want to store
+    const std::string filename = "../../../TestData/galaxies_redshiftspace_z0.42.txt"; // Filename of particles
+    const double box = 1024.0;                    // The boxsize of the simulation data
+    const int ncols = 3;                          // Number of columns in file
+    const int nskip_header = 0;                   // Number of header lines to skip
+    const std::vector<int> cols_to_keep{0, 1, 2}; // The columns we want to store
     auto data = FML::FILEUTILS::read_regular_ascii(filename, ncols, cols_to_keep, nskip_header);
 
     //======================================================================
     // Recon option
     //======================================================================
-    const double b = 1.0;       // Galaxy bias
-    const double f = 1.0;       // Growthrate
+    const double z = 0.42;       // Redshift
+    const double OmegaM = 0.267; // Matter density parameter
+    const double b = 1.0;        // Galaxy bias
+    const double f =
+        std::pow(OmegaM * (1 + z) * (1 + z) * (1 + z) / (1 - OmegaM + OmegaM * (1 + z) * (1 + z) * (1 + z)),
+                 5. / 9.);      // Growthrate (approximation for LCDM)
     const double beta = f / b;  // This is all the RSD recon depends on
-    const double radius = 10.0; // Smoothing radius in Mpc/h
+    const double radius = 10.0; // Smoothing radius in same units as boxsize
     const double smoothing_scale = radius / box;
     const std::string smoothing_filter = "gaussian";
 
@@ -107,7 +109,7 @@ void PoissonSolver() {
     FML::GRID::FFTWGrid<NDIM> density(N, 0, 1);
     // Bin particles to the grid
     FML::INTERPOLATION::particles_to_grid<NDIM, Particle>(
-        p.get_particles().data(), p.get_npart(), p.get_npart_total(), density, density_assignment_method);
+        p.get_particles_ptr(), p.get_npart(), p.get_npart_total(), density, density_assignment_method);
 
     //=================================================================================
     // Smoothing in Fourier space
@@ -185,11 +187,22 @@ void PoissonSolver() {
     // Compute the RSD shift
     // Psi_rsd = -beta[(Psi*r)r] = -beta phi_z in the z direction
     //======================================================================
-    MPIGrid<NDIM, double> rsd_shift(
-        N, true, 0, 1); // The extra slices we set here gets propagated to the FFTWGrid below
+    // The extra slices we set here gets propagated to the FFTWGrid below
+    MPIGrid<NDIM, double> rsd_shift(N, true, 0, 1);
+
+    // Density reconstruction:
+    // MPIGrid<NDIM, double> shiftx(N, true, 0, 1);
+    // MPIGrid<NDIM, double> shifty(N, true, 0, 1);
+    // MPIGrid<NDIM, double> shiftz(N, true, 0, 1);
+
     for (IndexInt index = 0; index < sol.get_NtotLocal(); index++) {
         auto gradient = sol.get_gradient(index);
         rsd_shift[index] = -beta * gradient[NDIM - 1];
+
+        // Density reconstruction:
+        // shiftx[index] = gradient[0];
+        // shifty[index] = gradient[1];
+        // shiftz[index] = gradient[2];
     }
 
     //======================================================================
@@ -198,32 +211,68 @@ void PoissonSolver() {
     FML::GRID::FFTWGrid<NDIM> rsd_shift_fftw;
     ConvertToFFTWGrid(rsd_shift, rsd_shift_fftw);
 
+    // Density reconstruction:
+    // FML::GRID::FFTWGrid<NDIM> shiftx_fftw, shifty_fftw, shiftz_fftw;
+    // ConvertToFFTWGrid(shiftx, shiftx_fftw);
+    // ConvertToFFTWGrid(shifty, shifty_fftw);
+    // ConvertToFFTWGrid(shiftz, shiftz_fftw);
+
     //======================================================================
     // Interpolate RSD shift to particle positions
     //======================================================================
     std::vector<double> interpolated_values;
+    rsd_shift_fftw.communicate_boundaries();
     FML::INTERPOLATION::interpolate_grid_to_particle_positions(
         rsd_shift_fftw, p.get_particles_ptr(), p.get_npart(), interpolated_values, "CIC");
+
+    // Density reconstruction:
+    // std::vector<double> interpolated_shiftx;
+    // FML::INTERPOLATION::interpolate_grid_to_particle_positions(
+    //     shiftx_fftw, p.get_particles_ptr(), p.get_npart(), interpolated_shiftx, "CIC");
+    // std::vector<double> interpolated_shifty;
+    // FML::INTERPOLATION::interpolate_grid_to_particle_positions(
+    //     shifty_fftw, p.get_particles_ptr(), p.get_npart(), interpolated_shifty, "CIC");
+    // std::vector<double> interpolated_shiftz;
+    // FML::INTERPOLATION::interpolate_grid_to_particle_positions(
+    //     shiftz_fftw, p.get_particles_ptr(), p.get_npart(), interpolated_shiftz, "CIC");
 
     //======================================================================
     // Subtract RSD
     //======================================================================
+
+    // We could alternatively have done this with a FFT method (its not exact, but makes up for it by
+    // doing it iteratively):
+    FML::PARTICLE::MPIParticles<Particle> p2 = p; // Take a copy
+    FML::COSMOLOGY::LPT::RSDReconstructionFourierMethod<NDIM, Particle>(
+        p2, "CIC", std::vector<double>{0.0, 0.0, 1.0}, N, 5, beta, {"gaussian", smoothing_scale}, false);
+
     double max_shift = 0.0;
     double avg_shift = 0.0;
+    std::ofstream fp("out.txt");
+#ifdef USE_OMP
+#pragma omp parallel for reduction(max : max_shift) reduction(+ : avg_shift)
+#endif
     for (size_t i = 0; i < p.get_npart(); i++) {
         auto * pos = p[i].get_pos();
         const double shift = interpolated_values[i];
         pos[NDIM - 1] -= shift;
         if (std::abs(shift) > max_shift)
             max_shift = std::abs(shift);
-        avg_shift += shift;
-    }
-    std::cout << "maximum shift " << max_shift << " avg shift " << avg_shift / double(p.get_npart()) << "\n";
+        avg_shift += std::abs(shift);
 
-    // We could alternatively have done this with an iterative fourier method (its not exact, but makes up for it by
-    // doing it iteratively):
-    // FML::COSMOLOGY::LPT::RSDReconstructionFourierMethod<NDIM, Particle>(
-    //    p, "CIC", std::vector<double>{0.0, 0.0, 1.0}, N, 3, beta, {"gaussian", smoothing_scale}, false);
+        // fp << pos[0] * box << " " << pos[1] * box << " " << pos[2] * box << "\n";
+        // fp << interpolated_shiftx[i] * box << " " << interpolated_shifty[i] * box << " " << interpolated_shiftz[i] *
+        // box << "\n";
+    }
+
+    FML::MaxOverTasks(&max_shift);
+    FML::SumOverTasks(&avg_shift);
+    if (FML::ThisTask == 0)
+        std::cout << "Maximum shift: " << max_shift << " Mean (abs) shift: " << avg_shift / double(p.get_npart_total())
+                  << "\n";
+
+    // Communicate particles so that they are on the right task
+    p.communicate_particles();
 }
 
-int main() { PoissonSolver(); }
+int main() { ReconSolver(); }
