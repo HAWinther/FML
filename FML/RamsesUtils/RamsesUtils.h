@@ -102,6 +102,7 @@ namespace FML {
                 bool infofileread{false};
                 size_t npart_read{0};
 
+                double buffer_factor{1.0};
                 bool keep_only_particles_in_domain{true};
                 bool verbose{false};
 
@@ -123,9 +124,10 @@ namespace FML {
 
                 RamsesReader(std::string _filepath,
                              int _outputnr,
+                             double _buffer_factor,
                              bool _keep_only_particles_in_domain,
                              bool _verbose = false)
-                    : filepath(_filepath), outputnr(_outputnr),
+                    : filepath(_filepath), outputnr(_outputnr), buffer_factor(_buffer_factor),
                       keep_only_particles_in_domain(_keep_only_particles_in_domain),
                       verbose(_verbose and FML::ThisTask == 0) {
                     read_info();
@@ -180,10 +182,13 @@ namespace FML {
                     if (!infofileread)
                         read_info();
 
-                    if (keep_only_particles_in_domain)
-                        p = std::vector<T>(npart_in_domain);
-                    else
-                        p = std::vector<T>(npart);
+                    if (keep_only_particles_in_domain) {
+                        size_t nallocate = buffer_factor > 1.0 ? size_t(double(npart_in_domain) * buffer_factor) : npart_in_domain;
+                        p.reserve(nallocate);
+                        p.resize(npart_in_domain);
+                    } else {
+                        p.reserve(npart * buffer_factor);
+                    }
 
                     std::vector<long long int> npart_task(FML::NTasks);
                     npart_task[FML::ThisTask] = npart_in_domain;
