@@ -129,6 +129,14 @@ namespace FML {
         template <int N, int ORDER, class T>
         void particles_to_grid(const T * part, size_t NumPart, size_t NumPartTot, FFTWGrid<N> & density);
 
+        /// Internal method
+        template <int N, class T>
+        void particles_to_fourier_grid_interlacing(T * part,
+                                                   size_t NumPart,
+                                                   size_t NumPartTot,
+                                                   FFTWGrid<N> & density_grid_fourier,
+                                                   std::string density_assignment_method);
+        
         /// @brief Assign particles to grid to compute the over density.
         /// Do this for a normal grid and an interlaced grid and return
         /// the alias-corrected fourier transform of the density field in fourier space.
@@ -139,16 +147,18 @@ namespace FML {
         ///
         /// @param[in] part A pointer the first particle.
         /// @param[in] NumPart How many particles/positions we have that we want to interpolate the grid to.
-        /// @param[in] NumPartTotal How many particles/positions we have in total over all tasks.
+        /// @param[in] NumPartTot How many particles/positions we have in total over all tasks.
         /// @param[out] density_grid_fourier The output density grid in fourier space (must be initialized)
         /// @param[in] density_assignment_method The density assignement method (NGP, CIC, TSC, PCS or PQS).
+        /// @param[in] interlacing If true use interlacing to reduce aliasing
         ///
         template <int N, class T>
-        void particles_to_fourier_grid_interlacing(T * part,
-                                                   size_t NumPart,
-                                                   size_t NumPartTotal,
-                                                   FFTWGrid<N> & density_grid_fourier,
-                                                   std::string density_assignment_method);
+        void particles_to_fourier_grid(T * part,
+                                       size_t NumPart,
+                                       size_t NumPartTot,
+                                       FFTWGrid<N> & density_grid_fourier,
+                                       std::string density_assignment_method,
+                                       bool interlacing);
 
         /// @brief Convolve a grid with a kernel
         ///
@@ -331,7 +341,7 @@ namespace FML {
         void add_contribution_from_extra_slices(FFTWGrid<N> & density);
 
         /// @brief Deconvolves the density assignement kernel in Fourier space. We divide the fourier grid by the
-        /// FFT of the density assignment kernels FFT[ H*H*H*...*H ] = FT[H]^p = sinc^p.
+        /// FFT of the density assignment kernels \f$ FFT[ H*H*H*...*H ] = FT[H]^p\f$.
         /// @tparam N The dimension of the grid
         /// @param[out] fourier_grid The Fourier grid of the density contrast that we will deconvolve.
         /// @param[in] density_assignment_method The density assignment method (NGP, CIC, ...) we used when making the
@@ -839,7 +849,7 @@ namespace FML {
         template <int N, class T>
         void particles_to_fourier_grid_interlacing(T * part,
                                                    size_t NumPart,
-                                                   size_t NumPartTotal,
+                                                   size_t NumPartTot,
                                                    FFTWGrid<N> & density_grid_fourier,
                                                    std::string density_assignment_method) {
 
@@ -860,7 +870,7 @@ namespace FML {
             }
 
             // Bin particles to grid
-            particles_to_grid<N, T>(part, NumPart, NumPartTotal, density_grid_fourier, density_assignment_method);
+            particles_to_grid<N, T>(part, NumPart, NumPartTot, density_grid_fourier, density_assignment_method);
 
             // Shift particles
             const double shift = 1.0 / double(2 * Ngrid);
@@ -881,7 +891,7 @@ namespace FML {
             FFTWGrid<N> density_grid_fourier2(Ngrid, nleft, nright);
             density_grid_fourier2.add_memory_label(
                 "FFTWGrid::particles_to_fourier_grid_interlacing::density_grid_fourier2");
-            particles_to_grid<N, T>(part, NumPart, NumPartTotal, density_grid_fourier2, density_assignment_method);
+            particles_to_grid<N, T>(part, NumPart, NumPartTot, density_grid_fourier2, density_assignment_method);
 
             // Shift particles back as not to ruin anything
 #ifdef USE_OMP
@@ -919,6 +929,23 @@ namespace FML {
                     auto grid2 = density_grid_fourier2.get_fourier_from_index(fourier_index);
                     density_grid_fourier.set_fourier_from_index(fourier_index, (grid1 + norm * grid2) / 2.0);
                 }
+            }
+        }
+
+        template <int N, class T>
+        void particles_to_fourier_grid(T * part,
+                                       size_t NumPart,
+                                       size_t NumPartTot,
+                                       FFTWGrid<N> & density_grid_fourier,
+                                       std::string density_assignment_method,
+                                       bool interlacing) {
+
+            if (interlacing) {
+                particles_to_fourier_grid_interlacing<N, T>(
+                    part, NumPart, NumPartTot, density_grid_fourier, density_assignment_method);
+            } else {
+                particles_to_grid<N, T>(part, NumPart, NumPartTot, density_grid_fourier, density_assignment_method);
+                density_grid_fourier.fftw_r2c();
             }
         }
 
