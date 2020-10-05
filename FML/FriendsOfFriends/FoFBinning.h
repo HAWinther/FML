@@ -36,6 +36,11 @@ namespace FML {
             bool shared{false};
             bool merged{false};
 
+            // To be able to use this with MPIParticles we need these methods
+            constexpr int get_ndim() { return NDIM; }
+            double * get_pos() { return pos.data(); }
+            double * get_vel() { return vel.data(); }
+
             FoFHalo() = default;
             FoFHalo(size_t _id, bool _shared) {
                 id = _id;
