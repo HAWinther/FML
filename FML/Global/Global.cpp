@@ -1,6 +1,7 @@
 #include <chrono>
 #include <iomanip>
 #include <iostream>
+#include <fstream>
 #include <random>
 #include <stdarg.h>
 #include <thread>
@@ -199,6 +200,7 @@ namespace FML {
     /// Fetch virtual memory and resident set
     /// from /proc/self/stat on a linux system.
     /// On other systems it just returns (0,0)
+    /// Returns number of bytes
     //============================================
     std::pair<double, double> get_system_memory_use() {
         double vm_usage = 0.0;
@@ -219,7 +221,7 @@ namespace FML {
         vm_usage = vsize / 1024.0;
         resident_set = rss * page_size_kb;
 #endif
-        return {vm_usage, resident_set};
+        return {vm_usage, 1e3 * resident_set};
     }
 
     // Make sure the most common types we use for comm gets instansiated
