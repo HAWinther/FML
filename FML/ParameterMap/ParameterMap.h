@@ -2,6 +2,7 @@
 #define PARAMETERMAP_HEADER
 
 #include <cmath>
+#include <vector>
 #include <iomanip>
 #include <iostream>
 #include <map>
@@ -9,6 +10,9 @@
 
 namespace FML {
     namespace UTILS {
+        
+        std::ostream & operator<<(std::ostream & s, std::vector<double> const & v);
+        std::ostream & operator<<(std::ostream & s, std::vector<int> const & v);
 
         // cout for a variant needed below
         template <typename T0, typename... Ts>
@@ -18,7 +22,7 @@ namespace FML {
         }
 
         // All the types we can have in the parameter file
-        using ParameterTypes = std::variant<std::string, int, bool, double>;
+        using ParameterTypes = std::variant<std::string, int, bool, double, std::vector<double>, std::vector<int>>;
 
         //============================================================================
         ///

@@ -246,7 +246,7 @@ namespace FML {
             // When the bessel-function is irrelevant
             DVector kcut(ells.size());
             for (size_t i = 0; i < ells.size(); i++) {
-                const double arg_min = ells[i] <= 10 ? 0.0 : (1.0 - 2.6 / sqrt(ells[i])) * ells[i];
+                const double arg_min = ells[i] <= 10 ? 0.0 : (1.0 - 2.6 / std::sqrt(ells[i])) * ells[i];
                 kcut[i] = arg_min / eta0;
             }
 
@@ -378,7 +378,7 @@ namespace FML {
                 // Add in the prefactor Sqrt((l+2)!/(l-2)!) for ThetaE
                 for (int ik = 0; ik < n_k_total; ik++) {
                     for (int i = 0; i < nells; i++) {
-                        thetaE_ell_of_k[ik][i] *= sqrt((ells[i] + 2) * (ells[i] + 1) * (ells[i] + 0) * (ells[i] - 1));
+                        thetaE_ell_of_k[ik][i] *= std::sqrt((ells[i] + 2) * (ells[i] + 1) * (ells[i] + 0) * (ells[i] - 1));
                     }
                 }
                 thetaE_ell_of_k_spline.create(k_array, ells, thetaE_ell_of_k, "thetaE_ell_of_k_spline");
@@ -762,7 +762,7 @@ namespace FML {
                     fp << cell_NN_spline(ell) << " ";
                 }
                 if (cell_TL_spline) {
-                    fp << cell_TL_spline(ell) / sqrt(cell_TT_spline(ell) * cell_LL_spline(ell)) << " ";
+                    fp << cell_TL_spline(ell) / std::sqrt(cell_TT_spline(ell) * cell_LL_spline(ell)) << " ";
                 }
                 fp << "\n";
             };
@@ -886,7 +886,7 @@ namespace FML {
             // to avoid ringing/aliasing close to the edges. A factor of 15 seems to be enough
             // The number of points sets the accuracy. The fiducial choice below is to ensure
             // 1% accuracy around the BAO peak
-            const double r0 = sqrt(rmin * rmax);
+            const double r0 = std::sqrt(rmin * rmax);
             const double paddingfactor = 15.0;
             const double k0 = 1.0 / r0;
 

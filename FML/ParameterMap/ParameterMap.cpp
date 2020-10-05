@@ -3,6 +3,22 @@
 namespace FML {
     namespace UTILS {
 
+        std::ostream & operator<<(std::ostream & s, std::vector<double> const & v) {
+            s << "[";
+            for (auto & e : v)
+                s << e << " ";
+            s << "]";
+            return s;
+        }
+        
+        std::ostream & operator<<(std::ostream & s, std::vector<int> const & v) {
+            s << "[";
+            for (auto & e : v)
+                s << e << " ";
+            s << "]";
+            return s;
+        }
+
         void ParameterMap::throw_error(std::string errormessage) const { throw std::runtime_error(errormessage); }
 
         // Print a parameter map
@@ -57,10 +73,14 @@ namespace FML {
         template double ParameterMap::get<double>(std::string) const;
         template int ParameterMap::get<int>(std::string) const;
         template bool ParameterMap::get<bool>(std::string) const;
+        template std::vector<double> ParameterMap::get<std::vector<double>>(std::string) const;
+        template std::vector<int> ParameterMap::get<std::vector<int>>(std::string) const;
 
         template std::string ParameterMap::get<std::string>(std::string, std::string) const;
         template double ParameterMap::get<double>(std::string, double) const;
         template int ParameterMap::get<int>(std::string, int) const;
         template bool ParameterMap::get<bool>(std::string, bool) const;
+        template std::vector<double> ParameterMap::get<std::vector<double>>(std::string, std::vector<double>) const;
+        template std::vector<int> ParameterMap::get<std::vector<int>>(std::string, std::vector<int>) const;
     } // namespace UTILS
 } // namespace FML

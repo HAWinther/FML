@@ -1,21 +1,25 @@
 #include "FFTLog.h"
 #include <array>
+#include <iostream>
+#include <tgmath.h>
 
 namespace FML {
     namespace SOLVERS {
         namespace FFTLog {
 
             /// @brief Computes the Gamma function using the Lanczos approximation
+            /// See https://en.wikipedia.org/wiki/Lanczos_approximation
             static CDouble gamma(CDouble z) {
 
                 if (z.real() < 0.5) {
-                    return M_PI / (sin(M_PI * z) * gamma(1. - z));
+                    return M_PI / (std::sin(M_PI * z) * gamma(1. - z));
                 }
 
-                // We get here when called as gamma(1-z) so remove 1 to get -z
+                // Formula below is for gamma(1+z) so remove 1 to get z
                 z -= 1;
 
                 // Lanczos coefficients for g = 7 with way too many digits
+                const double g = 7;
                 static std::array<double, 9> p = {0.999999999999809932276847,
                                                   676.5203681218850985670091,
                                                   -1259.13921672240287047156,
@@ -25,17 +29,16 @@ namespace FML {
                                                   -0.13857109526572011689554,
                                                   9.984369578019570859563e-6,
                                                   1.505632735149311558340e-7};
-                CDouble x = p[0];
-                for (int n = 1; n < 9; n++) {
-                    x += p[n] / (z + double(n));
+                CDouble Ag = p[0];
+                for (int n = 1; n < int(p.size()); n++) {
+                    Ag += p[n] / (z + double(n));
                 }
 
-                const CDouble t = z + 7.5;
-                return std::sqrt(2 * M_PI) * std::pow(t, z + 0.5) * std::exp(-t) * x;
+                return std::sqrt(2 * M_PI) * std::pow(z + g + 0.5, z + 0.5) * std::exp(-z - g - 0.5) * Ag;
             }
 
             static void lngamma_4(double x, double y, double * lnr, double * arg) {
-                const CDouble w = log(gamma(CDouble(x, y)));
+                const CDouble w = std::log(gamma(CDouble(x, y)));
                 if (lnr)
                     *lnr = w.real();
                 if (arg)
@@ -52,7 +55,7 @@ namespace FML {
                 lngamma_4(xp, y, &lnr, &argp);
                 lngamma_4(xm, y, &lnr, &argm);
 
-                const double arg = log(2 / kr) * N / L + (argp + argm) / M_PI;
+                const double arg = std::log(2 / kr) * N / L + (argp + argm) / M_PI;
                 const double iarg = round(arg);
                 if (arg != iarg) {
                     kr *= std::exp((arg - iarg) * L / N);
@@ -64,7 +67,7 @@ namespace FML {
             CVector ComputeCoefficients(int N, double mu, double q, double L, double kcrc) {
                 const double y = M_PI / L;
                 const double k0r0 = kcrc * std::exp(-L);
-                const double t = -2 * y * log(k0r0 / 2);
+                const double t = -2 * y * std::log(k0r0 / 2);
                 CVector u(N);
 
                 if (q == 0) {
@@ -81,7 +84,7 @@ namespace FML {
                     for (int m = 0; m <= N / 2; m++) {
                         lngamma_4(xp, m * y, &lnrp, &phip);
                         lngamma_4(xm, m * y, &lnrm, &phim);
-                        u[m] = std::polar(std::exp(q * log(2) + lnrp - lnrm), m * t + phip - phim);
+                        u[m] = std::polar(std::exp(q * std::log(2) + lnrp - lnrm), m * t + phip - phim);
                     }
                 }
 
@@ -102,7 +105,7 @@ namespace FML {
                                                                 int noring,
                                                                 CDouble * u) {
                 const int N = int(r.size());
-                const double L = log(r[N - 1] / r[0]) * N / (N - 1.);
+                const double L = std::log(r[N - 1] / r[0]) * N / (N - 1.);
                 CVector b(N);
                 CVector ulocal;
                 if (u == nullptr) {
