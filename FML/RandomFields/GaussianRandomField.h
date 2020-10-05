@@ -34,7 +34,7 @@ namespace FML {
             //=================================================================================
             /// This generates gaussian white noise in real-space. It is normalized such that
             /// the power-spectrum of the field is unity, so the amplitude in real-space is
-            /// Nmesh^(N/2.)
+            /// \f$ {\rm Nmesh}^{N/2} \f$
             ///
             /// @tparam N The dimension we are it
             ///
@@ -65,7 +65,7 @@ namespace FML {
 #endif
                 // Make random generators for each slice to ensure we get the same
                 // result no matter how many threads we use
-                std::vector< std::shared_ptr<RandomGenerator> > rngs(Local_nx);
+                std::vector<std::shared_ptr<RandomGenerator>> rngs(Local_nx);
                 for (int i = 0; i < Local_nx; i++)
                     rngs[i] = rng->clone();
 
@@ -94,8 +94,8 @@ namespace FML {
             ///
             /// @param[out] grid The real grid we generate.
             /// @param[in] rng The random number generator.
-            /// @param[in] Pofk_of_kBox_over_volume This is \f$ P(kB) / V \f$ where $kB$ is the dimesnionless wavenumber (B the
-            /// boxsize) and \f$ V = B^{\rm N} \f$ is the volume of the box.
+            /// @param[in] Pofk_of_kBox_over_volume This is \f$ P(kB) / V \f$ where \f$ kB \f$ is the dimesnionless
+            /// wavenumber where \f$ B \f$ is the boxsize) and \f$ V = B^{\rm N} \f$ is the volume of the box.
             /// @param[in] fix_amplitude If true then we only draw phases and set \f$ |\delta(k)| \f$ directly from the
             /// input power-spectrum.
             ///
@@ -112,8 +112,8 @@ namespace FML {
             ///
             /// @param[out] grid The fourier grid we generate.
             /// @param[in] rng The random number generator.
-            /// @param[in] Pofk_of_kBox_over_volume This is \f$ P(kB) / V \f$ where $kB$ is the dimesnionless wavenumber (B the
-            /// boxsize) and \f$ V = B^{\rm N} \f$ is the volume of the box.
+            /// @param[in] Pofk_of_kBox_over_volume This is \f$ P(kB) / V \f$ where \f$ kB \f$ is the dimesnionless
+            /// wavenumber where \f$ B \f$ is the boxsize and \f$ V = B^{\rm N} \f$ is the volume of the box.
             /// @param[in] fix_amplitude If true then we only draw phases and set \f$ |\delta(k)| \f$ directly from the
             /// input power-spectrum.
             ///
@@ -159,7 +159,7 @@ namespace FML {
                 auto Local_nx = grid.get_local_nx();
                 auto Local_x_start = grid.get_local_x_start();
                 auto * cdelta = grid.get_fourier_grid();
-                
+
                 const IndexIntType NmeshTotTotal = FML::power(Nmesh, N - 1) * (Nmesh / 2 + 1);
                 const IndexIntType factor = NmeshTotTotal / Nmesh;
 

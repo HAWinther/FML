@@ -35,29 +35,25 @@ namespace FML {
 
             //======================================================================
             ///
-            /// P(k) -> phi_gaussian -> phi = phi_gaussian + fNL phi_gaussian^2
-            /// or fNL K(phi_gaussian,phi_gaussian) in general
+            /// \f$ P(k) \to \phi_{\rm gaussian} \to \phi = \phi_{\rm gaussian} + f_{\rm NL} K(\phi_{\rm
+            /// gaussian},\phi_{\rm gaussian}) \f$ where the kernel is some quadratic form which in its simples form
+            /// (local) is just \f$ \phi_{\rm gaussian}^2 \f$.
             ///
             /// This requires in general 6 grids to be allocated at the same time
             /// and up to 8 fourier transforms
             ///
-            /// NB: for generating IC for cosmological simulations Pofk_of_kBox_over_volume is the
-            /// power-spectrum of the gravitational potential and the fNL value is the
-            /// fNL value at the redshift the power-spectrum is defined at
-            /// See 1108.5512 for more info or see the _cosmology method below.
-            ///
-            /// There is a sign between the Bardeen potential and the gravitational potential
-            /// which leads to a sign difference in fNL!
+            /// NB: for generating IC for cosmological simulations see the related method
+            /// and see 1108.5512 for more info about the algorithmm.
             ///
             /// @tparam N The dimension of the grid
             ///
             /// @param[out] phi_fourier The fourier grid we generate
             /// @param[in] rng The random number generator
-            /// @param[in] Pofk_of_kBox_over_volume This is \f$ P(kB) / V \f$ where $kB$ is the dimesnionless wavenumber
-            /// (B the boxsize) and \f$ V = B^{\rm N} \f$ is the volume of the box.
+            /// @param[in] Pofk_of_kBox_over_volume This is \f$ P(kB) / V \f$ where \f$ kB \f$ is the dimesnionless
+            /// wavenumber where \f$ B \f$ is the boxsize and \f$ V = B^{\rm N} \f$ is the volume of the box.
             /// @param[in] fix_amplitude Fix the amplitude of the norm of \f$ \delta(k) \f$.
-            /// @param[in] fNL The value of fNL you want
-            /// @param[in] type_of_fnl The type of fNL (local, equilaterial, orthogonal, generic)
+            /// @param[in] fNL The value of \f$ f_{\rm NL} \f$ you want
+            /// @param[in] type_of_fnl The type of \f$ f_{\rm NL} \f$ (local, equilaterial, orthogonal, generic)
             /// @param[in] u Optional advanced option. See 1108.5512 for more info.
             /// @param[in] kernel_values Optional. If you specify generic fNL then this gives the kernel values.
             ///
@@ -156,7 +152,7 @@ namespace FML {
                 FML::SumOverTasks(&phi_squared_mean);
                 FML::SumOverTasks(&phi_mean);
                 FML::SumOverTasks(&ncells);
-                assert_mpi(ncells == FML::power((long long int)(Nmesh), N),
+                assert_mpi(ncells == (long long int)(FML::power(Nmesh, N)),
                            "[generate_nonlocal_gaussian_random_field_fourier] Number of cells we have summed over does "
                            "not agree with how many cells are in the grid");
                 phi_squared_mean /= std::pow(Nmesh, N);
@@ -211,7 +207,7 @@ namespace FML {
                         double pofk_m13 = std::pow(Pofk_of_kBox_over_volume(kmag), -1.0 / 3.0);
                         double pofk_m23 = pofk_m13 * pofk_m13;
                         double pofk_m33 = pofk_m23 * pofk_m13; // XXX Not needed when u=0
-                
+
                         auto phi = phi_fourier.get_fourier_from_index(fourier_index);
                         auto value1 = phi * pofk_m13;
                         auto value2 = phi * pofk_m23;
@@ -340,21 +336,24 @@ namespace FML {
             //======================================================================
             ///
             /// This computes a non-gaussian density field at any redshift.
+            /// There is a sign between the Bardeen potential and the gravitational potential
+            /// which leads to a sign difference in \f$ f_{\rm NL} \f$ so check that its consistent with your
+            /// convention.
             ///
             /// @tparam N The dimension of the grid
             ///
             /// @param[out] delta_fourier The fourier grid we generate
             /// @param[in] rng The random number generator
             /// @param[in] Pofk_of_kBox_over_Pofk_primordal The ratio \f$ P_\delta(kB) / P_{\rm primordial}(kB) \f$
-            /// where $kB$ is the dimesnionless wavenumber and B the boxsize (i.e. the ratio of the power-spectrum at
-            /// the time you want to generate delta to the primordial one
+            /// where \f$ kB \f$ is the dimesnionless wavenumber and \f$ B \f$ the boxsize (i.e. the ratio of the
+            /// power-spectrum at the time you want to generate delta to the primordial one
             /// @param[in] Pofk_of_kBox_over_volume_primordial The dimensionless primordial power-spectrum \f$ P_{\rm
             /// primordial}(kB) / V\f$ where \f$ V = B^{\rm N} \f$ is the volume of the box. For the fiducial primordial
             /// power-spectrum in 3D we have \f$ P_{\rm primordial}(kB) / V = \frac{2\pi^2}{(kB)^3} A_s (k/k_{\rm
             /// pivot})^{n_s-1}\f$
             /// @param[in] fix_amplitude Fix the amplitude of the norm of \f$ \delta(k) \f$.
-            /// @param[in] fNL The value of fNL you want
-            /// @param[in] type_of_fnl The type of fNL (local, equilaterial, orthogonal, generic)
+            /// @param[in] fNL The value of \f$ f_{\rm NL} \f$ you want
+            /// @param[in] type_of_fnl The type of \f$ f_{\rm NL} \f$ (local, equilaterial, orthogonal, generic)
             /// @param[in] u Optional advanced option. See 1108.5512 for more info.
             /// @param[in] kernel_values Optional. If you specify generic fNL then this gives the kernel values.
             ///
