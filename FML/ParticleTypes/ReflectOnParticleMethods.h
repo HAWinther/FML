@@ -162,40 +162,26 @@ namespace FML {
         };
 
         //=====================================================================
-        // How many bytes the particles takes up
-        //=====================================================================
-        SFINAE_TEST_GET(GetSize, get_particle_byte_size)
-        template <class... Args>
-        constexpr int GetSize([[maybe_unused]] Args... args) {
-            // Fiducial method. Assumes no dynamic allocated memory in class
-            using ParticleType = NthTypeOf<0, Args...>;
-            return sizeof(ParticleType);
-        };
-
-        //=====================================================================
-        // Methods for communication
+        // Fiducial methods for communication
         // If you have dynamic allocated methods in a class then you must
         // provide these methods yourself in the class
         //=====================================================================
+        SFINAE_TEST_GET(GetSize, get_particle_byte_size)
         SFINAE_TEST_GET(AppendToBuffer, append_to_buffer)
         SFINAE_TEST_GET(AssignFromBuffer, assign_from_buffer)
-        template <class T, class... Args>
-        void AppendToBuffer(T & t, Args... args) {
-            // Fiducial method for communication. Assumes no dynamic allocated memory in class
-            static_assert(sizeof...(args) == 1);
-            using BufferType = NthTypeOf<0, Args...>;
-            static_assert(std::is_same<char *, BufferType>::value);
-            std::memcpy(get_NthArgOf<0>(args...), &t, GetSize(t));
-        };
-
-        template <class T, class... Args>
-        void AssignFromBuffer(T & t, Args... args) {
-            // Fiducial method for communication. Assumes no dynamic allocated memory in class
-            static_assert(sizeof...(args) == 1);
-            using BufferType = NthTypeOf<0, Args...>;
-            static_assert(std::is_same<char *, BufferType>::value);
-            std::memcpy(&t, get_NthArgOf<0>(args...), GetSize(t));
-        };
+        template <class T>
+        constexpr int GetSize([[maybe_unused]] T & t){
+          // How many bytes the particles takes up
+          return sizeof(T);
+        }
+        template <class T>
+        void AppendToBuffer(T & t, char *buffer) {
+            std::memcpy(buffer, &t, GetSize(t));
+        }
+        template <class T>
+        void AssignFromBuffer(T & t, char *buffer) {
+            std::memcpy(&t, buffer, GetSize(t));
+        }
 
         //=====================================================================
         // Lagrangian perturbation theory (Displacement fields and Lagrangian coord)
@@ -302,7 +288,7 @@ namespace FML {
         template <class T>
         void info() {
             if (FML::ThisTask == 0) {
-                T tmp;
+                T tmp{};
                 int N = FML::PARTICLE::GetNDIM(tmp);
                 std::cout << "\n";
                 std::cout << "#=====================================================\n";
@@ -403,6 +389,7 @@ namespace FML {
 #undef SFINAE_HAS
 #undef SFINAE_GET
 #undef SFINAE_SET
-#undef SFINAE_TEST
+#undef SFINAE_TEST_GET
+#undef SFINAE_TEST_SET
 
 #endif
