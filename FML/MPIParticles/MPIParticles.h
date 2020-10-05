@@ -27,20 +27,21 @@ namespace FML {
         /// A container class for holding particles that are distributed
         /// across many CPUs and to easily deal with communication
         /// of these particles if they cross the domain boundary (simply
-        /// class communicate_particles() at any time to do this)
+        /// call communicate_particles() at any time to do this)
         ///
         /// Contains methods for setting up MPIParticles from a set of particles
         /// or creating regular grids of particles and so on
         ///
         /// Templated on particle class. Particle must at a minimum have the methods
         ///
-        ///    auto *get_pos()                         : Ptr to position
+        ///    get_pos()            : Ptr to position
         ///
-        ///    int get_ndim()                          : How many dimensions pos have
+        ///    int get_ndim()       : How many dimensions pos have
         ///
         /// If the particle has any dynamical allocations you must also provide (these are automatically provided
         /// otherwise):
-        ///    get_particle_byte_size()                : How many bytes does the particle store
+        ///
+        ///    get_particle_byte_size()   : How many bytes does the particle store
         ///
         ///    append_to_buffer(char *)   : append all the particle data to a char array moving buffer forward as we
         ///    read
@@ -50,11 +51,7 @@ namespace FML {
         ///
         /// Compile time defines:
         ///
-        ///    USE_MPI  : Use MPI
-        ///
-        ///    USE_OMP  : Use OpenMP
-        ///
-        ///    DEBUG_MPIPARTICLES    : Show some info when running
+        ///    DEBUG_MPIPARTICLES : Show some info when running
         ///
         /// External variables/methods we rely on:
         ///
@@ -92,7 +89,6 @@ namespace FML {
             int Local_p_start{0};  // Start index of local particle slice in [0,Npart_1D)
 
           public:
-
             /// Iterator for looping through all the active particles i.e. allow for(auto &&p: mpiparticles)
             class iterator {
               public:
@@ -129,7 +125,14 @@ namespace FML {
 
             // Create from a vector of particles with a given selection function
             // This could for example be that xmin < x < xmax and if particles have a type only select a particular type
-            void create(std::vector<T> & part, size_t nallocate, std::function<bool(T &)> & selection_function);
+            void create(std::vector<T> & part, size_t nallocate, std::function<bool(T &)> selection_function);
+
+            // Moves a vector of particles into internal storage (so no copies are being done).
+            // The extra storage (if needed) needs to allready be in part!
+            // Assumes we have distinct particles on different tasks. This saves having to do allocations
+            // and copies, but its safer and flexible to just use create() so its best to not use this unless
+            // you really need to
+            void move_from(Vector<T> && part);
 
             // Create Npart_1D^3 particles in a rectangular grid spread across all tasks
             // buffer_factor is how much extra to allocate in case particles moves
@@ -140,7 +143,7 @@ namespace FML {
             MPIParticles() = default;
 
             // Get reference to particle vector. NB: due to we allow a buffer the size of the vector returned is
-            // not equal to the
+            // not equal to the number of active particles
             Vector<T> & get_particles();
             T * get_particles_ptr();
 
@@ -188,7 +191,7 @@ namespace FML {
 
         template <class T>
         void MPIParticles<T>::info() {
-            T tmp;
+            T tmp{};
             auto NDIM = FML::PARTICLE::GetNDIM(tmp);
             double memory_in_mb = 0;
             for (auto & part : p)
@@ -246,11 +249,25 @@ namespace FML {
             p.shrink_to_fit();
         }
 
+        template <class T>
+        void MPIParticles<T>::move_from(Vector<T> && part) {
+            // Set the xmin/xmax
+            x_min_per_task = FML::GatherFromTasks(&FML::xmin_domain);
+            x_max_per_task = FML::GatherFromTasks(&FML::xmax_domain);
+            // Move data from particles into internal storage
+            p = std::move(part);
+            // Set number of particles
+            NpartLocal_in_use = p.size();
+            NpartTotal = NpartLocal_in_use;
+            FML::SumOverTasks(&NpartTotal);
+            // Resize to capacity - we keep size in NpartLocal_in_use
+            p.resize(p.capacity());
+        }
+
         // Create from a vector of particles with a given selection function
         template <class T>
-        void MPIParticles<T>::create(std::vector<T> & part,
-                                     size_t nallocate,
-                                     std::function<bool(T &)> & selection_function) {
+        void
+        MPIParticles<T>::create(std::vector<T> & part, size_t nallocate, std::function<bool(T &)> selection_function) {
 
             // Set the xmin/xmax
             x_min_per_task = FML::GatherFromTasks(&FML::xmin_domain);
@@ -268,9 +285,12 @@ namespace FML {
                     }
                 }
             }
+            // Set number of particles
             NpartLocal_in_use = count;
             NpartTotal = NpartLocal_in_use;
             FML::SumOverTasks(&NpartTotal);
+            // Resize to capacity - we keep size in NpartLocal_in_use
+            p.resize(p.capacity());
         }
 
         template <class T>
@@ -374,7 +394,7 @@ namespace FML {
                     // The while loop continues until all tasks are done reading particles
                     int moretodo = more_to_process_locally ? 1 : 0;
                     FML::SumOverTasks(&moretodo);
-                    more_to_process_globally = (moretodo == 1);
+                    more_to_process_globally = (moretodo >= 1);
                 }
             }
 
@@ -505,7 +525,7 @@ namespace FML {
 #endif
 
             // Total number of particles
-            T tmp;
+            T tmp{};
             int ndim = FML::PARTICLE::GetNDIM(tmp);
             NpartTotal = FML::power(Npart_1D, ndim);
             NpartLocal_in_use = Local_Npart_1D * FML::power(Npart_1D, ndim - 1);
@@ -557,8 +577,7 @@ namespace FML {
 
         template <class T>
         size_t MPIParticles<T>::get_particle_byte_size(size_t ipart) {
-            auto size = FML::PARTICLE::GetSize(p[ipart]);
-            return size;
+            return FML::PARTICLE::GetSize(p[ipart]);
         }
 
         template <class T>
