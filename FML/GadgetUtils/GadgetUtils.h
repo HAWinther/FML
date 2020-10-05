@@ -27,10 +27,13 @@
 // void set_vel(floattype *)
 // void set_id(idtype)
 // together with get_ndim()
+// if you want to store the corresponding quantities. If you don't have say set_id
+// then we will ignore the IDs in the file
 //
 // We assume positions in the Particle class are in [0,1]. These are scaled to
-// [0,Boxsize] when writing to file. When we read we return positions in [0,1).
-// If GADGETUTILS_NO_BOXSIZE_SCALING then we write and read the positions are provided
+// [0,Boxsize] when writing to file.
+//
+// When we read we return positions in [0,1).
 //
 // Errors are handled via throw_error in the class below (with MPI it aborts and otherwise
 // throws a runtime error)
@@ -61,27 +64,28 @@ namespace FML {
             /// The GADGET1 header format
             // Do not change the order of the fields below as this is read as one piece of memory from file
             typedef struct {
-                unsigned int
-                    npart[6];   // npart[1] gives the number of particles in the file, other particle types are ignored
-                double mass[6]; // mass[1] gives the particle mass
-                double time{0.0};     // Cosmological scale factor of snapshot
-                double redshift{0.0}; // Redshift of snapshot
-                int flag_sfr{0};      // Flags whether star formation is used
-                int flag_feedback{0}; // Flags whether feedback from star formation is included
-                unsigned int
-                    npartTotal[6];   // If npartTotal[1] > 2^32, then total is this plus 2^32 * npartTotalHighWord[1]
-                int flag_cooling{0}; // Flags whether radiative cooling is included
-                int num_files{0};    // The number of files that are used for a snapshot
-                double BoxSize{0.0}; // Simulation box size (in code units)
-                double Omega0{0.0};  // Matter density parameter
-                double OmegaLambda{0.0};            // Lambda density parameter
-                double HubbleParam{0.0};            // Hubble Parameter
-                int flag_stellarage{0};             // flags whether the age of newly formed stars is recorded and saved
-                int flag_metals{0};                 // flags whether metal enrichment is included
-                unsigned int npartTotalHighWord[6]; // High word of the total number of particles of each type
-                int flag_entropy_instead_u{0};      // Flags that IC-file contains entropy instead of u
-                char
-                    fill[256 - sizeof(unsigned int) * 18 - sizeof(int) * 7 - sizeof(double) * 12]; // Fills to 256 Bytes
+                // npart[1] gives the number of DM particles in the file, other particle types are ignored
+                unsigned int npart[6]{0, 0, 0, 0, 0, 0};
+                double mass[6]{0., 0., 0., 0., 0., 0.}; // mass[1] gives the particle mass
+                double time{0.0};                       // Cosmological scale factor of snapshot
+                double redshift{0.0};                   // Redshift of snapshot
+                int flag_sfr{0};                        // Flags whether star formation is used
+                int flag_feedback{0};                   // Flags whether feedback from star formation is included
+                // If npartTotal[1] > 2^32, then total is this plus 2^32 * npartTotalHighWord[1]
+                unsigned int npartTotal[6]{0, 0, 0, 0, 0, 0};
+                int flag_cooling{0};     // Flags whether radiative cooling is included
+                int num_files{0};        // The number of files that are used for a snapshot
+                double BoxSize{0.0};     // Simulation box size (in code units)
+                double Omega0{0.0};      // Matter density parameter
+                double OmegaLambda{0.0}; // Lambda density parameter
+                double HubbleParam{0.0}; // Hubble Parameter
+                int flag_stellarage{0};  // flags whether the age of newly formed stars is recorded and saved
+                int flag_metals{0};      // flags whether metal enrichment is included
+                // High word of the total number of particles of each type
+                unsigned int npartTotalHighWord[6]{0, 0, 0, 0, 0, 0};
+                int flag_entropy_instead_u{0}; // Flags that IC-file contains entropy instead of u
+                // Fills to 256 Bytes
+                char fill[256 - sizeof(unsigned int) * 18 - sizeof(int) * 7 - sizeof(double) * 12];
             } GadgetHeader;
             static_assert(sizeof(GadgetHeader) == 256);
 
@@ -95,9 +99,6 @@ namespace FML {
                 bool endian_swap{false};
                 bool header_is_read{false};
 
-                /// Mpc/h / Units_in_file, i.e. if the positions are in Mpc/h its 1 if kpc/h then 1000
-                double gadget_pos_factor{1.0};
-
                 /// The dimensions of the positions and velocities in the files.
                 int NDIM{3};
 
@@ -108,12 +109,19 @@ namespace FML {
 
               public:
                 GadgetReader() = default;
-                GadgetReader(double pos_factor = 1.0, int ndim = 3);
+                GadgetReader(int ndim);
 
                 template <class T>
-                void read_gadget_single(std::string filename, std::vector<T> & part, bool verbose);
+                void read_gadget_single(std::string filename,
+                                        std::vector<T> & part,
+                                        bool only_keep_part_in_domain,
+                                        bool verbose);
                 template <class T>
-                void read_gadget(std::string filename, std::vector<T> & part, bool verbose);
+                void read_gadget(std::string filename,
+                                 std::vector<T> & part,
+                                 double buffer_factor,
+                                 bool only_keep_part_in_domain,
+                                 bool verbose);
                 void read_section(std::ifstream & fp, std::vector<char> & buffer);
                 void read_header(std::ifstream & fp);
 
@@ -135,24 +143,26 @@ namespace FML {
                 void throw_error(std::string errormessage) const;
 
               public:
-                GadgetWriter(int ndim = 3);
+                GadgetWriter() = default;
+                GadgetWriter(int ndim);
 
-                // pos_norm transforms from pos-units of particles to Mpc/h
                 template <class T>
                 void write_gadget_single(std::string filename,
-                                         std::vector<T> & part,
-                                         size_t TotNumPart,
+                                         T * part,
+                                         size_t NumPart,
+                                         size_t NumPartTot,
                                          int NumberOfFilesToWrite,
                                          double aexp,
                                          double Boxsize,
                                          double OmegaM,
                                          double OmegaLambda,
                                          double HubbleParam,
-                                         double pos_norm);
+                                         double pos_norm,
+                                         double vel_norm);
                 void write_section(std::ofstream & fp, std::vector<char> & buffer, int bytes);
                 void write_header(std::ofstream & fp,
                                   unsigned int NumPart,
-                                  size_t TotNumPart,
+                                  size_t NumPartTot,
                                   int NumberOfFilesToWrite,
                                   double aexp,
                                   double Boxsize,
@@ -185,7 +195,13 @@ namespace FML {
             }
 
             template <class T>
-            void GadgetReader::read_gadget(std::string fileprefix, std::vector<T> & part, bool verbose) {
+            void GadgetReader::read_gadget(std::string fileprefix,
+                                           std::vector<T> & part,
+                                           double buffer_factor,
+                                           bool only_keep_part_in_domain,
+                                           bool verbose) {
+
+                verbose = verbose and FML::ThisTask == 0;
 
                 // Read the number of particles and the number of files
                 std::string filename = fileprefix + ".0";
@@ -201,21 +217,32 @@ namespace FML {
                 const int nfiles = header.num_files;
 
                 // Allocate memory for particle vector and reset it
+                // If we only keep in domain we reserve for buffer_factor more particles
+                // (but will resize if that is too litte)
                 const size_t npartTotal = (size_t(header.npartTotalHighWord[1]) << 32) + size_t(header.npartTotal[1]);
-                part = std::vector<T>();
-                part.reserve(npartTotal);
+                size_t nalloc = npartTotal;
+                if (only_keep_part_in_domain)
+                    nalloc = size_t(double(npartTotal) * buffer_factor) / FML::NTasks;
+                part.clear();
+                part.reserve(nalloc);
 
                 // Read all the files
                 for (int i = 0; i < nfiles; i++) {
                     filename = fileprefix + "." + std::to_string(i);
                     if (verbose)
                         std::cout << "Reading file " << filename << "\n";
-                    read_gadget_single(filename, part, verbose);
+                    read_gadget_single(filename, part, only_keep_part_in_domain, verbose);
                 }
             }
 
             template <class T>
-            void GadgetReader::read_gadget_single(std::string filename, std::vector<T> & part, bool verbose) {
+            void GadgetReader::read_gadget_single(std::string filename,
+                                                  std::vector<T> & part,
+                                                  bool only_keep_part_in_domain,
+                                                  bool verbose) {
+
+                verbose = verbose and FML::ThisTask == 0;
+
                 std::vector<char> buffer;
                 float * float_buffer;
                 gadget_particle_id_type * id_buffer;
@@ -247,9 +274,6 @@ namespace FML {
                 // Velocities normalized to peculiar in km/s
                 const double vel_norm = sqrt(header.time);
 
-                // Boxsize might need to be scaled to Mpc/h
-                header.BoxSize /= gadget_pos_factor;
-
                 // Compute how many bytes per particle
                 const int bytes_per_particle = (bytes_in_file / header.npart[1]);
 
@@ -280,9 +304,10 @@ namespace FML {
                 // Number of particles in the current file
                 const int NumPart = header.npart[1];
 
-                // Allocate particles. Add to the back of the part array
-                int istart = part.size();
-                part.resize(part.size() + header.npart[1]);
+                // Check if the vector has enough capacity to store the elements if not
+                // reallcate it. We add the particles to the back of the part array
+                if (part.capacity() < part.size() + header.npart[1])
+                    part.reserve(part.size() + header.npart[1]);
 
                 // Allocate buffer
                 size_t bytes = NDIM * sizeof(float) * NumPart;
@@ -290,7 +315,16 @@ namespace FML {
                 float_buffer = reinterpret_cast<float *>(buffer.data());
                 id_buffer = reinterpret_cast<gadget_particle_id_type *>(buffer.data());
 
+                // Allocate temp storage for knowing if a particles is in the domain or not
+                std::vector<char> is_in_domain;
+                if (only_keep_part_in_domain) {
+                    is_in_domain = std::vector<char>(NumPart, 1);
+                    // We need to read POS first to know if a particle is in the domain
+                    assert(fields_in_file[0] == "POS");
+                }
+
                 // Read the file
+                size_t index_start = part.size();
                 for (auto & field : fields_in_file) {
 
                     if (field == "POS") {
@@ -303,13 +337,35 @@ namespace FML {
                         read_section(fp, buffer);
 
                         // Check if positions exists in Particle
-                        if constexpr (FML::PARTICLE::has_get_pos<T>()) {
-                            for (int i = 0; i < NumPart; i++) {
-                                auto * pos = FML::PARTICLE::GetPos(part[istart + i]);
+                        size_t index = index_start;
+                        for (int i = 0; i < NumPart; i++) {
+                            if (only_keep_part_in_domain) {
+                                auto x = float_buffer[NDIM * i] * pos_norm;
+                                if (x >= 1.0)
+                                    x -= 1.0;
+                                if (x < 0.0)
+                                    x += 1.0;
+                                assert_mpi(x >= 0.0 and x < 1.0,
+                                           "[read_gadet_single] Particle has x position outside the boxsize even after "
+                                           "periodic wrap");
+                                if (not(x >= FML::xmin_domain and x < FML::xmax_domain)) {
+                                    is_in_domain[i] = 0;
+                                    continue;
+                                }
+                            }
+
+                            part.push_back(T{});
+
+                            if constexpr (FML::PARTICLE::has_get_pos<T>()) {
+                                auto * pos = FML::PARTICLE::GetPos(part[index++]);
                                 for (int idim = 0; idim < NDIM; idim++) {
                                     pos[idim] = float_buffer[NDIM * i + idim] * pos_norm;
                                     if (endian_swap)
                                         pos[idim] = swap_endian(pos[idim]);
+                                    if (pos[idim] >= 1.0)
+                                        pos[idim] -= 1.0;
+                                    if (pos[idim] < 0.0)
+                                        pos[idim] += 1.0;
                                 }
                             }
                         }
@@ -324,8 +380,13 @@ namespace FML {
 
                         // Check if velocities exists in Particle
                         if constexpr (FML::PARTICLE::has_get_vel<T>()) {
+                            size_t index = index_start;
                             for (int i = 0; i < NumPart; i++) {
-                                auto * vel = FML::PARTICLE::GetVel(part[istart + i]);
+                                if (only_keep_part_in_domain) {
+                                    if (is_in_domain[i] == 0)
+                                        continue;
+                                }
+                                auto * vel = FML::PARTICLE::GetVel(part[index++]);
                                 for (int idim = 0; idim < NDIM; idim++) {
                                     vel[idim] = float_buffer[NDIM * i + idim] * vel_norm;
                                     if (endian_swap)
@@ -344,11 +405,16 @@ namespace FML {
 
                         // Check if particle has ID
                         if constexpr (FML::PARTICLE::has_set_id<T>()) {
+                            size_t index = index_start;
                             for (int i = 0; i < NumPart; i++) {
+                                if (only_keep_part_in_domain) {
+                                    if (is_in_domain[i] == 0)
+                                        continue;
+                                }
                                 if (endian_swap) {
-                                    FML::PARTICLE::SetID(part[istart + i], swap_endian(id_buffer[i]));
+                                    FML::PARTICLE::SetID(part[index++], swap_endian(id_buffer[i]));
                                 } else {
-                                    FML::PARTICLE::SetID(part[istart + i], id_buffer[i]);
+                                    FML::PARTICLE::SetID(part[index++], id_buffer[i]);
                                 }
                             }
                         }
@@ -358,24 +424,21 @@ namespace FML {
 
             template <class T>
             void GadgetWriter::write_gadget_single(std::string filename,
-                                                   std::vector<T> & part,
-                                                   size_t TotNumPart,
+                                                   T * part,
+                                                   size_t NumPart,
+                                                   size_t NumPartTot,
                                                    int NumberOfFilesToWrite,
                                                    double aexp,
                                                    double Boxsize,
                                                    double OmegaM,
                                                    double OmegaLambda,
                                                    double HubbleParam,
-                                                   double pos_norm) {
+                                                   double pos_norm,
+                                                   double vel_norm) {
 
                 std::vector<char> buffer;
                 float * float_buffer;
                 gadget_particle_id_type * id_buffer;
-                unsigned int NumPart = part.size();
-
-                // If we don't have particles to write return
-                if (NumPart == 0)
-                    return;
 
                 // Make filename using
                 std::ofstream fp(filename.c_str(), std::ios::binary | std::ios::out);
@@ -386,7 +449,7 @@ namespace FML {
 
                 // Write header
                 write_header(
-                    fp, NumPart, TotNumPart, NumberOfFilesToWrite, aexp, Boxsize, OmegaM, OmegaLambda, HubbleParam);
+                    fp, NumPart, NumPartTot, NumberOfFilesToWrite, aexp, Boxsize, OmegaM, OmegaLambda, HubbleParam);
 
                 // Gather particle positions and write
                 unsigned int bytes = NDIM * sizeof(float) * NumPart;
@@ -396,7 +459,7 @@ namespace FML {
                     for (unsigned int i = 0; i < NumPart; i++) {
                         auto * pos = FML::PARTICLE::GetPos(part[i]);
                         for (int idim = 0; idim < NDIM; idim++)
-                            float_buffer[NDIM * i + idim] = float(pos[idim]) * Boxsize * pos_norm;
+                            float_buffer[NDIM * i + idim] = float(pos[idim]) * pos_norm;
                     }
                     write_section(fp, buffer, bytes);
                 }
@@ -407,7 +470,7 @@ namespace FML {
                     for (unsigned int i = 0; i < NumPart; i++) {
                         auto * vel = FML::PARTICLE::GetVel(part[i]);
                         for (int idim = 0; idim < NDIM; idim++)
-                            float_buffer[NDIM * i + idim] = float(vel[idim]);
+                            float_buffer[NDIM * i + idim] = float(vel[idim]) * vel_norm;
                     }
                     write_section(fp, buffer, bytes);
                 }
@@ -418,7 +481,7 @@ namespace FML {
                     buffer.resize(bytes);
                     id_buffer = reinterpret_cast<gadget_particle_id_type *>(buffer.data());
                     for (unsigned int i = 0; i < NumPart; i++) {
-                        id_buffer[i] = (gadget_particle_id_type)*FML::PARTICLE::GetID(part[i]);
+                        id_buffer[i] = (gadget_particle_id_type) (FML::PARTICLE::GetID(part[i]));
                     }
                     write_section(fp, buffer, bytes);
                 }

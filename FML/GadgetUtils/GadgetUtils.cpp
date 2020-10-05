@@ -30,17 +30,19 @@ namespace FML {
             }
 
             void print_header_info(GadgetHeader & header) {
-                std::printf("\n");
-                std::printf("GadgetHeader:\n");
-                std::printf("aexp        %10.5f\n", header.time);
-                std::printf("Redshift    %10.5f\n", header.redshift);
-                std::printf("Boxsize     %10.5f Mpc/h\n", header.BoxSize);
-                std::printf("Omega0      %10.5f\n", header.Omega0);
-                std::printf("OmegaLambda %10.5f\n", header.OmegaLambda);
-                std::printf("HubbleParam %10.5f\n", header.HubbleParam);
-                std::printf("numFiles    %10i\n", header.num_files);
-                std::printf("npart       %10u\n", header.npart[1]);
-                std::printf("npartTotal  %10zu\n", (size_t(header.npartTotalHighWord[1]) << 32) + header.npartTotal[1]);
+                std::cout << "\n";
+                std::cout << "GadgetHeader:\n";
+                std::cout << "aexp        " << header.time << "\n";
+                std::cout << "Redshift    " << header.redshift << "\n";
+                std::cout << "Boxsize     " << header.BoxSize << "\n";
+                std::cout << "Omega0      " << header.Omega0 << "\n";
+                std::cout << "OmegaLambda " << header.OmegaLambda << "\n";
+                std::cout << "HubbleParam " << header.HubbleParam << "\n";
+                std::cout << "numFiles    " << header.num_files << "\n";
+                std::cout << "npart       " << header.npart[1] << "\n";
+                std::cout << "npartTotal  " << (size_t(header.npartTotalHighWord[1]) << 32) + header.npartTotal[1]
+                          << "\n";
+                std::cout << "\n";
             }
 
             //==============================================================================================
@@ -48,7 +50,7 @@ namespace FML {
 
             void GadgetReader::set_fields_in_file(std::vector<std::string> fields) { fields_in_file = fields; }
 
-            GadgetReader::GadgetReader(double pos_factor, int ndim) : gadget_pos_factor(pos_factor), NDIM(ndim) {}
+            GadgetReader::GadgetReader(int ndim) : NDIM(ndim) {}
 
             GadgetHeader GadgetReader::get_header() { return header; }
 
@@ -148,7 +150,7 @@ namespace FML {
 
             void GadgetWriter::write_header(std::ofstream & fp,
                                             unsigned int NumPart,
-                                            size_t TotNumPart,
+                                            size_t NumPartTot,
                                             int NumberOfFilesToWrite,
                                             double aexp,
                                             double Boxsize,
@@ -161,12 +163,17 @@ namespace FML {
                 }
 
                 // Mass in 10^10 Msun/h. Assumptions: Boxsize in Mpc/h
-
+                for (int i = 0; i < 6; i++) {
+                    header.npart[i] = 0;
+                    header.npartTotal[i] = 0;
+                    header.npartTotalHighWord[i] = 0;
+                    header.mass[i] = 0.0;
+                }
                 header.npart[1] = NumPart;
-                header.npartTotal[1] = (unsigned int)TotNumPart;
-                header.npartTotalHighWord[1] = (unsigned int)(TotNumPart >> 32);
+                header.npartTotal[1] = (unsigned int)NumPartTot;
+                header.npartTotalHighWord[1] = (unsigned int)(NumPartTot >> 32);
                 header.mass[1] = 3.0 * OmegaM * MplMpl_over_H0Msunh * std::pow(Boxsize / HubbleLengthInMpch, 3) /
-                                 double(TotNumPart) / 1e10;
+                                 double(NumPartTot) / 1e10;
                 header.time = aexp;
                 header.redshift = 1.0 / aexp - 1.0;
                 header.flag_sfr = 0;
