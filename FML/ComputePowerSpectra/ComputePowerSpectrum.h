@@ -100,7 +100,7 @@ namespace FML {
         /// Since we need to combine all particles with all cells this is not easiy parallelizable with MPI
         /// so we assume all CPUs have exactly the same particles when this is run on more than 1 MPI tasks (so best run
         /// just using OpenMP).
-        /// This method scales as O(Npart)*O(Nmesh^N) so will be slow!
+        /// This method scales as \f$ \mathcal{O}({\rm Npart}\cdot {\rm Nmesh}^N) \f$ so will be slow!
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
@@ -121,9 +121,9 @@ namespace FML {
 
         //==========================================================================================
         /// @brief Compute the power-spectrum of a fourier grid. The result has no scales. Get
-        /// scales by calling pofk.scale(boxsize) which does k *= 1/Boxsize and
-        /// pofk *= Boxsize^N once spectrum has been computed. The method assumes the two grids are
-        /// fourier transforms of real grids (i.e. f(-k) = f^*(k)).
+        /// scales by calling pofk.scale(boxsize) which does \f$ k \to k/B \f$ and
+        /// \f$ P(k) \to B^N P(k) \f$ where \f$ B\f$ is the boxsize once spectrum has been computed. The method assumes
+        /// the two grids are fourier transforms of real grids (i.e. \f$ f(-k) = f^*(k) \f$).
         ///
         /// @tparam N Dimension of the grid
         ///
@@ -136,11 +136,10 @@ namespace FML {
 
         //==========================================================================================
         /// @brief Compute the cross power-spectrum of two fourier grids. The result has no scales. Get
-        /// scales by calling pofk.scale(boxsize) which does k *= 1/Boxsize and
-        /// pofk *= Boxsize^N once spectrum has been computed. The method assumes the two grids are
-        /// fourier transforms of real grids (i.e. f(-k) = f^*(k)) and we only bin up the real part of f1(k)f2^*(k).
-        /// The imaginary part is also binned up, but not returned. Instead we check that it's indeed small and give a
-        /// warning if not.
+        /// scales by calling pofk.scale(boxsize) which does k\f$ k \to k/B \f$ and
+        /// \f$ P(k) \to B^N P(k) \f$ where \f$ B\f$ is the boxsize once spectrum has been computed. The method assumes
+        /// the two grids are fourier transforms of real grids (i.e. \f$ f(-k) = f^*(k) \f$) and we only bin up the real
+        /// part of \f$ f_1(k)f_2^*(k) \f$. The imaginary part is also binned up, but not returned.
         ///
         /// @tparam N Dimension of the grid
         ///
@@ -155,9 +154,10 @@ namespace FML {
                                          PowerSpectrumBinning<N> & pofk);
 
         //================================================================================
-        /// @brief Compute power-spectrum multipoles (P0,P1,...,Pn-1) from a Fourier grid
-        /// where we have a fixed line_of_sight_direction (typical coordinate axes like (0,0,1)).
-        /// Pell contains P0,P1,P2,...Pell_max where ell_max = n-1 is the size of Pell
+        /// @brief Compute power-spectrum multipoles from a Fourier grid
+        /// where we have a fixed line_of_sight_direction (typical coordinate axes like \f$ (0,0,1) \f$).
+        /// Pell contains \f$ P_0,P_1,P_2,\ldots,P_{\ell_{\rm max}} \f$ where \f$ \ell_{\rm max} = n-1 \f$ is the size
+        /// of Pell
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
@@ -165,7 +165,7 @@ namespace FML {
         /// @param[in] fourier_grid The fourier grid to compute the multipoles from.
         /// @param[out] Pell Vector of power-spectrum binnings. The size of Pell is the maximum ell to compute.
         /// All binnings has to have nbins, kmin and kmax set. At the end Pell[ ell ] is a binning of P_ell(k).
-        /// @param[in] line_of_sight_direction The line of sight direction, e.g. (0,0,1) for the z-axis.
+        /// @param[in] line_of_sight_direction The line of sight direction, e.g. \f$ (0,0,1) \f$ for the z-axis.
         ///
         //================================================================================
         template <int N>
@@ -174,7 +174,7 @@ namespace FML {
                                                        std::vector<double> line_of_sight_direction);
 
         //================================================================================
-        /// @brief A simple power-spectrum estimator for multipoles in simulations - nothing fancy.
+        /// @brief A simple power-spectrum estimator for multipoles in simulations.
         /// Displacing particles from realspace to redshift-space using their velocities
         /// along each of the coordinate axes. Result is the mean of this.
         /// Deconvolving the window-function and subtracting shot-noise (1/NumPartTotal) for monopole.
@@ -185,8 +185,9 @@ namespace FML {
         /// @param[in] Ngrid Size of the grid to use.
         /// @param[in] part Particles in the form of a MPIParticle container
         /// @param[in] velocity_to_displacement Factor to convert a velocity to a displacement.
-        /// This is c / ( aH(a) Boxsize ) for peculiar and c / (H(a)Boxsize) for comoving velocities
-        /// At z = 0 velocity_to_displacement = 1.0/(100 * Boxsize) when Boxsize is in Mpc/h
+        /// This is \f$ \frac{c}{aH(a)B} \f$ for peculiar and \f$ \frac{c}{H(a)B} \f$ (where \f$ B\f$ is the boxsize)
+        /// for comoving velocities At \f$ z = 0 \f$ velocity_to_displacement = \f$ \frac{1}{100 {\rm Boxsize}} \f$ when
+        /// Boxsize is in Mpc/h
         /// @param[out] Pell Vector of power-spectrum binnings. The size of Pell is the maximum ell to compute.
         /// All binnings has to have nbins, kmin and kmax set. At the end Pell[ ell ] is a binning of P_ell(k).
         /// @param[in] density_assignment_method The density assignment method (NGP, CIC, TSC, PCS or PQS) to use.
@@ -202,14 +203,14 @@ namespace FML {
                                                bool interlacing);
 
         //================================================================================
-        /// @brief Computes the polyspectrum P(k1,k2,k3,...,kORDER) from particles. Note that with interlacing we change
-        /// the particle positions, but when returning they should be in the same state as when we started. This method
-        /// allocates nbins FFTWGrids at the same time and performs 2*nbins fourier transforms and does nbins^ORDER
-        /// integrals.
-        /// If one is to compute many spectra with the same Ngrid and binning then one can precompute N123 in polyofk
-        /// and set it using polyofk.set_bincount(N123). This speeds up the polyspectrum estimation by a factor of 2.
-        /// Shot-noise term is subtracted if ORDER=2 (power) or ORDER=3 (bi). Doing this for higher order requires all lower 
-        /// order correlators and we currently only bin up the polyspectrum and the power-spectrum.
+        /// @brief Computes the polyspectrum \f$ P(k_1,k_2,\ldots,k_{\rm ORDER}) = \left<\delta(k_1)\cdots\delta(k_{\rm
+        /// ORDER})\right> \f$ from particles. Note that with interlacing we change the particle positions, but when
+        /// returning they should be in the same state as when we started. This method allocates nbins FFTWGrids at the
+        /// same time and performs \f$ 2{\rm nbins} \f$ fourier transforms and does \f$ {\rm nbins}^{\rm ORDER} \f$
+        /// integrals. If one is to compute many spectra with the same Ngrid and binning then one can precompute N123 in
+        /// polyofk and set it using polyofk.set_bincount(N123). This speeds up the polyspectrum estimation by a factor
+        /// of 2. Shot-noise term is subtracted if ORDER=2 (power) or ORDER=3 (bi). Doing this for higher order requires
+        /// all lower order correlators and we currently only bin up the polyspectrum and the power-spectrum.
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam ORDER The order. 2 is the power-spectrum, 3 is the bispectrum, 4 is the trispectrum.
@@ -234,10 +235,12 @@ namespace FML {
                                   bool interlacing);
 
         //================================================================================
-        /// @brief Computes the polyspectrum P(k1,k2,k3,...,kORDER) from a fourier grid. This method allocates
-        /// nbins FFTWGrids at the same time and performs 2*nbins fourier transforms and does nbins^ORDER integrals.
-        /// If one is to compute many spectra with the same Ngrid and binning then one can precompute N123 in polyofk
-        /// and set it using polyofk.set_bincount(N123). This speeds up the polyspectrum estimation by a factor of 2.
+        /// @brief Computes the polyspectrum \f$ P(k_1,k_2,\ldots,k_{\rm ORDER}) = \left<\delta(k_1)\cdots\delta(k_{\rm
+        /// ORDER})\right> \f$ from a fourier grid. This method allocates
+        /// nbins FFTWGrids at the same time and performs \f$ 2{\rm nbins} \f$ fourier transforms and does \f$ {\rm
+        /// nbins}^{\rm ORDER} \f$ integrals. If one is to compute many spectra with the same Ngrid and binning then one
+        /// can precompute N123 in polyofk and set it using polyofk.set_bincount(N123). This speeds up the polyspectrum
+        /// estimation by a factor of 2 by avoiding half of the fourier transforms.
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam ORDER The order. 2 is the power-spectrum, 3 is the bispectrum, 4 is the trispectrum.
@@ -250,9 +253,9 @@ namespace FML {
         void compute_polyspectrum(const FFTWGrid<N> & fourier_grid, PolyspectrumBinning<N, ORDER> & polyofk);
 
         //================================================================================
-        /// @brief Computes the monospectrum P(k1,k2) from a fourier grid. This method allocates
-        /// nbins FFTWGrids at the same time and performs 2*nbins fourier transforms and does nbins^2 integrals.
-        /// This is just an alias for compute_polyspectrum<N, 2>
+        /// @brief Computes the monospectrum \f$ P(k_1,k_2) = \left<\delta(k_1)\delta(k_2)\right> \f$ from a fourier
+        /// grid. This method allocates nbins FFTWGrids at the same time and performs \f$ 2{\rm nbins} \f$ fourier
+        /// transforms and does \f$ {\rm nbins}^{2} \f$ integrals. This is just an alias for compute_polyspectrum<N, 2>
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
@@ -266,11 +269,11 @@ namespace FML {
         void compute_monospectrum(const FFTWGrid<N> & fourier_grid, MonospectrumBinning<N> & pofk);
 
         //================================================================================
-        /// @brief Computes the monospectrum P(k1,k2) from particles. Note that with interlacing we change the
-        /// particle positions, but when returning they should be in the same state as when we started. This method
-        /// allocates nbins FFTWGrids at the same time and performs 2*nbins fourier transforms and does nbins^2
-        /// integrals.
-        /// This is just an alias for compute_polyspectrum<N, 2>. Shot-noise is subtracted
+        /// @brief Computes the monospectrum \f$ P(k_1,k_2) = \left<\delta(k_1)\delta(k_2)\right> \f$ from particles.
+        /// Note that with interlacing we change the particle positions, but when returning they should be in the same
+        /// state as when we started. This method allocates nbins FFTWGrids at the same time and performs \f$ 2{\rm
+        /// nbins} \f$ fourier transforms and does \f$ {\rm nbins}^{2} \f$ integrals. This is just an alias for
+        /// compute_polyspectrum<N, 2>. Shot-noise is subtracted
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
@@ -295,11 +298,11 @@ namespace FML {
                                   bool interlacing);
 
         //================================================================================
-        /// @brief Computes the bispectrum B(k1,k2,k3) from particles. Note that with interlacing we change the
-        /// particle positions, but when returning they should be in the same state as when we started. This method
-        /// allocates nbins FFTWGrids at the same time and performs 2*nbins fourier transforms and does nbins^3
-        /// integrals.
-        /// This is just an alias for compute_polyspectrum<N, 3>. Shot-noise is subtracted.
+        /// @brief Computes the bispectrum \f$ B(k_1,k_2,k_3) = \left<\delta(k_1)\delta(k_2)\delta(k_3)\right> \f$ from
+        /// particles. Note that with interlacing we change the particle positions, but when returning they should be in
+        /// the same state as when we started. This method allocates nbins FFTWGrids at the same time and performs \f$
+        /// 2{\rm nbins} \f$ fourier transforms and does \f$ {\rm nbins}^{3} \f$ integrals. This is just an alias for
+        /// compute_polyspectrum<N, 3>. Shot-noise is subtracted.
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
@@ -324,9 +327,10 @@ namespace FML {
                                 bool interlacing);
 
         //================================================================================
-        /// @brief Computes the bispectrum B(k1,k2,k3) from a fourier grid. This method allocates
-        /// nbins FFTWGrids at the same time and performs 2*nbins fourier transforms and does nbins^3 integrals.
-        /// This is just an alias for compute_polyspectrum<N, 3>
+        /// @brief Computes the bispectrum \f$ B(k_1,k_2,k_3) = \left<\delta(k_1)\delta(k_2)\delta(k_3)\right> \f$ from
+        /// a fourier grid. This method allocates nbins FFTWGrids at the same time and performs \f$ 2{\rm nbins} \f$
+        /// fourier transforms and does \f$ {\rm nbins}^{3} \f$ integrals. This is just an alias for
+        /// compute_polyspectrum<N, 3>
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
@@ -340,9 +344,10 @@ namespace FML {
         void compute_bispectrum(const FFTWGrid<N> & fourier_grid, BispectrumBinning<N> & bofk);
 
         //================================================================================
-        /// @brief Computes the trispectrum T(k1,k2,k3,k4) from a fourier grid. This method allocates
-        /// nbins FFTWGrids at the same time and performs 2*nbins fourier transforms and does nbins^4 integrals.
-        /// This is just an alias for compute_polyspectrum<N, 4>
+        /// @brief Computes the trispectrum \f$ T(k_1,k_2,k_3,k_4) =
+        /// \left<\delta(k_1)\delta(k_2)\delta(k_3)\delta(k_4)\right> \f$ from a fourier grid. This method allocates
+        /// nbins FFTWGrids at the same time and performs \f$ 2{\rm nbins} \f$ fourier transforms and does \f$ {\rm
+        /// nbins}^{4} \f$ integrals. This is just an alias for compute_polyspectrum<N, 4>
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
@@ -356,13 +361,13 @@ namespace FML {
         void compute_trispectrum(const FFTWGrid<N> & fourier_grid, TrispectrumBinning<N> & tofk);
 
         //================================================================================
-        /// @brief Computes the truspectrum T(k1,k2,k3,k4) from particles. Note that with interlacing we change the
-        /// particle positions, but when returning they should be in the same state as when we started. This method
-        /// allocates nbins FFTWGrids at the same time and performs 2*nbins fourier transforms and does nbins^4
-        /// integrals.
-        /// This is just an alias for compute_polyspectrum<N, 4>
-        /// Shot-noise term (something like (B(123) + cyc)/n + (P1P2 + cyc)/n^2 + 1/n^3) is not subtracted as it
-        /// requires the bispectrum which we currently don't bin up together with the trispectrum
+        /// @brief Computes the truspectrum \f$ T(k_1,k_2,k_3,k_4) =
+        /// \left<\delta(k_1)\delta(k_2)\delta(k_3)\delta(k_4)\right> \f$ from particles. Note that with interlacing we
+        /// change the particle positions, but when returning they should be in the same state as when we started. This
+        /// method allocates nbins FFTWGrids at the same time and performs \f$ 2{\rm nbins} \f$ fourier transforms and
+        /// does \f$ {\rm nbins}^{4} \f$ integrals. This is just an alias for compute_polyspectrum<N, 4> The shot-noise
+        /// term (something like (B(123) + cyc)/n + (P1P2 + cyc)/n^2 + 1/n^3) is not subtracted as it requires the
+        /// bispectrum which we currently don't bin up together with the trispectrum
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
@@ -392,7 +397,7 @@ namespace FML {
         //==========================================================================================
         // Compute the power-spectrum multipoles of a fourier grid assuming a fixed line of sight
         // direction (typically coordinate axes). Provide Pell with [ell+1] initialized binnings to compute
-        // the first 0,1,...,ell multipoles The result has no scales. Get scales by scaling
+        // the first \f$ 0,1,\ldots,\ell \f$ multipoles The result has no scales. Get scales by scaling
         // PowerSpectrumBinning using scale(kscale, pofkscale) with kscale = 1/Boxsize
         // and pofkscale = Boxsize^N once spectrum has been computed
         //==========================================================================================
@@ -608,12 +613,16 @@ namespace FML {
 
             // NB: we currently don't return the imaginary part. For real fields this should be zero
             // so we just check this and give a warning if its large
-            for (int i = 0; i < pofk.n; i++) {
-                if (std::abs(pofk.pofk[i]) < 1e3 * std::abs(pofk_imag.pofk[i])) {
-                    std::cout
-                        << "Warning: the imaginary part of the cross spectrum is > 0.1%% times the real part [ k: "
-                        << pofk.kbin[i] << " Real(d1d2): " << pofk.pofk[i] << " Imag(d1d2): " << pofk_imag.pofk[i]
-                        << "]\n";
+            const bool show_warning = false;
+            if (show_warning) {
+                for (int i = 0; i < pofk.n; i++) {
+                    if (std::abs(pofk.pofk[i]) < 1e3 * std::abs(pofk_imag.pofk[i]) and
+                        std::abs(pofk_imag.pofk[i]) > 1e-15) {
+                        std::cout
+                            << "Warning: the imaginary part of the cross spectrum is > 0.1%% times the real part [ k: "
+                            << pofk.kbin[i] << " Real(d1d2): " << pofk.pofk[i] << " Imag(d1d2): " << pofk_imag.pofk[i]
+                            << "]\n";
+                    }
                 }
             }
         }
@@ -954,7 +963,7 @@ namespace FML {
                                   MonospectrumBinning<N> & pofk,
                                   std::string density_assignment_method,
                                   bool interlacing) {
-            
+
             // This will subtract shot-noise if pofk.subtract_shotnoise = true
             compute_polyspectrum<N, T, 2>(
                 Ngrid, part, NumPart, NumPartTotal, pofk, density_assignment_method, interlacing);
@@ -968,7 +977,7 @@ namespace FML {
                                 BispectrumBinning<N> & bofk,
                                 std::string density_assignment_method,
                                 bool interlacing) {
-            
+
             // This will subtract shot-noise if bofk.subtract_shotnoise = true
             compute_polyspectrum<N, T, 3>(
                 Ngrid, part, NumPart, NumPartTotal, bofk, density_assignment_method, interlacing);
@@ -1021,7 +1030,7 @@ namespace FML {
 
             // Compute polyspectrum
             compute_polyspectrum<N, ORDER>(density_k, polyofk);
-            
+
             // Subtract shotnoise if ORDER = 2 or 3
             if constexpr (ORDER == 2) {
                 // Subtract shot-noise (along the diagonal)
@@ -1052,10 +1061,10 @@ namespace FML {
         //================================================================================
         /// @brief This method is used by compute_polyspectrum. It computes the number of
         /// generalized triangles of the bins needed to normalize the polyspectra up to symmetry (i.e. we only compute
-        /// it for k1<=k2<=k3 and only for valid triangle configurations (k1+k2 >= k3) and then set rest using
-        /// symmetry). If one is to compute many spectra with the same Nmesh and binning then one can precompute N123
-        /// and set it using polyofk.set_bincount(N123) (which sets polyofk.bincount_is_set = true and avoid a call to
-        /// this function) This speeds up the polyspectrum estimation by a factor of 2.
+        /// it for \f$ k_1 \leq k_2 \leq k_3 \f$ and only for valid triangle configurations \f$ k_1 + k_2 \geq k_3 \f$
+        /// and then set rest using symmetry). If one is to compute many spectra with the same Nmesh and binning then
+        /// one can precompute N123 and set it using polyofk.set_bincount(N123) (which sets polyofk.bincount_is_set =
+        /// true and avoid a call to this function) This speeds up the polyspectrum estimation by a factor of 2.
         ///
         /// @tparam N The dimension we work in
         /// @tparam ORDER The order (mono = 2, bi = 3, tri = 4)

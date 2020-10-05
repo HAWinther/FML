@@ -18,7 +18,7 @@ namespace FML {
             int bin_type{LINEAR_SPACING};
             double kmin{0.0};
             double kmax{0.0};
-            
+
             bool subtract_shotnoise{true};
 
             // The polyspectrum, the volume factor and the power-spectrum
@@ -79,13 +79,22 @@ namespace FML {
             double get_bincount(int i, int j, int k);
             double get_bincount(int i, int j, int k, int l);
 
+            /* Simpler ways of doing the methods above
+            template <typename... Ints>
+            double get_spectrum(Ints... is);
+            template <typename... Ints>
+            double get_reduced_spectrum(Ints... is);
+            template <typename... Ints>
+            double get_bincount(Ints... is);
+            */
+
             // Copy over N123 (useful to save computations if we do many calculations with
             // the same setup)
             void set_bincount(std::vector<double> & N123_external);
 
             // This is just to make it easier to add binnings
             // of several spectra... just for testing
-            int nbinnings = 0;
+            int nbinnings{0};
             void combine(PolyspectrumBinning & rhs);
         };
 
@@ -191,11 +200,11 @@ namespace FML {
             double scale = std::pow(boxsize, N * (ORDER - 1));
             for (auto & p : P123)
                 p *= scale;
-            
+
             // Scale power-spectrum
             scale = std::pow(boxsize, N);
             for (auto & p : pofk)
-              p *= scale;
+                p *= scale;
 
             // In principle we should scale N123 by 1/boxsize^ORDER
             // however this is only used internally and then in
@@ -219,6 +228,30 @@ namespace FML {
             N123.clear();
             N123.shrink_to_fit();
         }
+
+        /* Simpler way of doing the methods below
+        template <int N, int ORDER>
+        template<typename... Ints>
+        double PolyspectrumBinning<N, ORDER>::get_spectrum(Ints... is) {
+            static_assert(sizeof...(is) == ORDER,
+                  "Calling get_spectrum(i1, i2, ..., in) requires n == ORDER (e.g. get_spetrum(i,j,k) can only be called
+        when ORDER=3"); std::array<int, ORDER> ik{is...}; return get_spectrum(ik);
+        }
+        template <int N, int ORDER>
+        template<typename... Ints>
+        double PolyspectrumBinning<N, ORDER>::get_reduced_spectrum(Ints... is) {
+            static_assert(sizeof...(is) == ORDER,
+                  "Calling get_reduced_spectrum(i1, i2, ..., in) requires n == ORDER (e.g. get_reduced_spetrum(i,j,k)
+        can only be called when ORDER=3"); std::array<int, ORDER> ik{is...}; return get_reduced_spectrum(ik);
+        }
+        template <int N, int ORDER>
+        template<typename... Ints>
+        double PolyspectrumBinning<N, ORDER>::get_bincount(Ints... is) {
+            static_assert(sizeof...(is) == ORDER,
+                  "Calling get_bincount(i1, i2, ..., in) requires n == ORDER (e.g. get_bincount(i,j,k) can only be
+        called when ORDER=3"); std::array<int, ORDER> ik{is...}; return get_bincount(ik);
+        }
+        */
 
         template <int N, int ORDER>
         double PolyspectrumBinning<N, ORDER>::get_spectrum(int i, int j) {
