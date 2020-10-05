@@ -8,8 +8,10 @@
 #include <map>
 
 #include <FML/FriendsOfFriends/FoFBinning.h>
-#include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/Global/Global.h>
+#include <FML/ParticleTypes/ReflectOnParticleMethods.h>
+
+#include <FML/Timing/Timings.h>
 
 namespace FML {
 
@@ -19,18 +21,20 @@ namespace FML {
 
     namespace FOF {
 
+        using Timer = FML::UTILS::Timings;
+
         // If a particle belongs to no FoF group it is given this FoF ID
-        const constexpr size_t no_FoF_ID = SIZE_MAX;
+        const constexpr size_t no_FoF_ID = std::numeric_limits<size_t>::max();
 
         // The maximum grid we are allowed to use to bin the particle to
         // This is just to have a memory limit in what the algorithm is
         // allowed to allocate
-        int FoF_Ngrid_max = 256;
+        int FoF_Ngrid_max = 512;
 
         // If we are to merge FoF groups across boundaries in parallel or not
         // False is guaranteed to be save. True works as long as a FoF group
         // do not span more than 2 tasks
-        bool merging_in_parallel_default = false;
+        bool merging_in_parallel_default = true;
 
         // For communicating boundary particles. Use float to reduce communication cost
         // at no big precision loss
@@ -95,7 +99,6 @@ namespace FML {
                     index_cell = index_cell * Ngrid + coord[idim];
                     assert(coord[idim] >= 0 and coord[idim] < (idim == 0 ? Local_nx : Ngrid));
                 }
-                assert(index_cell < NgridTot);
                 return index_cell;
             };
 
@@ -233,8 +236,8 @@ namespace FML {
                     if (FML::ThisTask == sendTask or merging_in_parallel) {
                         std::cout << "Sending boundary particles from " << FML::ThisTask << " to " << RightTask
                                   << " and merging FoF groups" << std::endl;
-                        std::cout << FML::ThisTask << " will send " << double(bytes_to_send) / 1e3 << " kb of data to task "
-                                  << RightTask << std::endl;
+                        std::cout << FML::ThisTask << " will send " << double(bytes_to_send) / 1e3
+                                  << " kb of data to task " << RightTask << std::endl;
                     }
                     if (FML::ThisTask == RightTask or merging_in_parallel) {
                         std::cout << FML::ThisTask << " will recieve " << double(bytes_to_recv) / 1e3
@@ -266,8 +269,13 @@ namespace FML {
                         if (FML::ThisTask == sendTask)
                             MPI_Send(CommBufferSend.data(), int(bytes_to_send), MPI_BYTE, RightTask, 0, MPI_COMM_WORLD);
                         if (FML::ThisTask == recvTask) {
-                            MPI_Recv(
-                                CommBufferRecv.data(), int(bytes_to_recv), MPI_BYTE, LeftTask, 0, MPI_COMM_WORLD, &status);
+                            MPI_Recv(CommBufferRecv.data(),
+                                     int(bytes_to_recv),
+                                     MPI_BYTE,
+                                     LeftTask,
+                                     0,
+                                     MPI_COMM_WORLD,
+                                     &status);
                         }
                     }
 
@@ -606,7 +614,6 @@ namespace FML {
             //=========================================================================
 
             const double fof_distance2 = fof_distance * fof_distance;
-            const size_t NgridTot = size_t(Local_nx) * FML::power(Ngrid, NDIM - 1);
             const constexpr int nblocksearchpartgrid = 3;
             const constexpr int threetondim = FML::power(nblocksearchpartgrid, NDIM);
 
@@ -624,69 +631,54 @@ namespace FML {
             // Check that the grid is not too small
             assert(1.0 / Ngrid > fof_distance);
 
-            // Get index of the cell the particle lives in
-            auto get_cell_index = [&](size_t ipart, std::vector<int> & coord) -> size_t {
-                auto * pos = FML::PARTICLE::GetPos(part[ipart]);
-                size_t index_cell = 0;
-                for (int idim = 0; idim < NDIM; idim++) {
-                    coord[idim] = int((pos[idim] - FML::xmin_domain * (idim == 0 ? 1 : 0)) * Ngrid);
-                    index_cell = index_cell * Ngrid + coord[idim];
-                    assert(coord[idim] >= 0 and coord[idim] < (idim == 0 ? Local_nx : Ngrid));
-                }
-                assert(index_cell < NgridTot);
-                return index_cell;
-            };
-
-            // ID of the FoF groups
-            int nFoF = 0;
-
             // Allocate the FoF id for each particle
             particle_id_FoF = std::vector<size_t>(NumPart, no_FoF_ID);
 
-            // We now have cells with particles in them. Start linking
-            bool skip = false;
-            std::vector<int> coord(NDIM);
-            for (size_t i = 0; i < NumPart; i++) {
+            // Lookup table for going through cells
+            std::array<int, threetondim * NDIM> goleft;
+            for (int nbcell = 0; nbcell < threetondim; nbcell++) {
+                for (int idim = 0, threepow = 1; idim < NDIM; idim++, threepow *= nblocksearchpartgrid) {
+                    int go_left_right_of_stay = -nblocksearchpartgrid / 2 + (nbcell / threepow % nblocksearchpartgrid);
+                    goleft[NDIM * nbcell + idim] = go_left_right_of_stay;
+                }
+            }
 
-                // Current particle
-                const auto * pos1 = FML::PARTICLE::GetPos(part[i]);
+            // Function to locate and tag all closest friends
+            // This is then used recursively in the next method we have
+            auto FindAllFriends = [&](size_t particleIndex, size_t FoFID, std::vector<size_t> & friend_list) {
+                const auto * pos1 = FML::PARTICLE::GetPos(part[particleIndex]);
 
                 // Compute coord of cell particle is in
-                get_cell_index(i, coord);
-
-                size_t id_FoF_group = particle_id_FoF[i];
-
-                // If the current particle already have a FoF ID then we don't
-                // increase nFoF
-                if (id_FoF_group == no_FoF_ID) {
-                    id_FoF_group = nFoF;
-                    particle_id_FoF[i] = id_FoF_group;
-                    nFoF++;
-                }
+                std::array<int, NDIM> coord;
+                coord[0] = int((pos1[0] - FML::xmin_domain) * Ngrid);
+                for (int idim = 1; idim < NDIM; idim++)
+                    coord[idim] = int((pos1[idim]) * Ngrid);
 
                 // Loop over all 3^NDIM neighbor cells (center cell is included)
+                std::array<int, NDIM> icoord;
                 for (int nbcell = 0; nbcell < threetondim; nbcell++) {
-                    std::array<int, NDIM> icoord;
-                    for (int idim = 0, threepow = 1; idim < NDIM; idim++, threepow *= nblocksearchpartgrid) {
-                        int go_left_right_of_stay =
-                            -nblocksearchpartgrid / 2 + (nbcell / threepow % nblocksearchpartgrid);
-                        icoord[idim] = coord[idim] + go_left_right_of_stay;
+                    for (int idim = 0; idim < NDIM; idim++) {
+                        icoord[idim] = coord[idim] + goleft[NDIM * nbcell + idim];
                     }
 
                     // For boundary cells in the x direction we don't have a left or a right nbor
                     // unless we only have 1 task
                     if (FML::NTasks > 1) {
+                        if (icoord[0] < 0 or icoord[0] >= Local_nx)
+                            continue;
+                    } else {
                         if (icoord[0] < 0)
-                            continue;
-                        if (icoord[0] >= Local_nx)
-                            continue;
+                            icoord[0] += Ngrid;
+                        if (icoord[0] >= Ngrid)
+                            icoord[0] -= Ngrid;
                     }
 
                     // Compute cell-index or nbor cell
-                    size_t index_nbor_cell = 0;
+                    bool skip = true;
                     if (!periodic)
                         skip = false;
-                    for (int idim = 0; idim < NDIM; idim++) {
+                    size_t index_nbor_cell = icoord[0];
+                    for (int idim = 1; idim < NDIM; idim++) {
                         // Periodic boundary conditions
                         if (periodic) {
                             if (icoord[idim] < 0)
@@ -694,69 +686,73 @@ namespace FML {
                             if (icoord[idim] >= Ngrid)
                                 icoord[idim] -= Ngrid;
                         } else {
-                            if (icoord[idim] < 0)
-                                skip = true;
-                            if (icoord[idim] >= Ngrid)
+                            if (icoord[idim] < 0 or icoord[idim] >= Ngrid)
                                 skip = true;
                         }
                         index_nbor_cell = index_nbor_cell * Ngrid + icoord[idim];
                     }
+
                     if (!periodic and skip)
                         continue;
 
                     // Loop over all particles in nbor cell
                     const size_t np = PartCells[index_nbor_cell].np;
                     for (size_t ii = 0; ii < np; ii++) {
-                        const auto pindex = PartCells[index_nbor_cell].ParticleIndex[ii];
-                        if (pindex == i)
+                        const auto nborIndex = PartCells[index_nbor_cell].ParticleIndex[ii];
+                        if (nborIndex == particleIndex or particle_id_FoF[nborIndex] != no_FoF_ID)
                             continue;
-                        const auto * pos2 = FML::PARTICLE::GetPos(part[pindex]);
 
-                        // Do the linking
-                        double dist2 = 0.0;
-                        for (int idim = 0; idim < NDIM; idim++) {
-                            double dx = pos2[idim] - pos1[idim];
-                            if (periodic) {
-                                if (dx > 0.5)
-                                    dx -= 1.0;
-                                if (dx < -0.5)
-                                    dx += 1.0;
-                            }
-                            dist2 += dx * dx;
-                            if (dist2 > fof_distance2) {
-                                break;
-                            }
+                        const auto * pos2 = FML::PARTICLE::GetPos(part[nborIndex]);
+
+                        // Compute distance
+                        std::array<float, NDIM> dx2;
+                        dx2[0] = std::abs(pos2[0] - pos1[0]);
+                        if (dx2[0] > 0.5 and periodic)
+                            dx2[0] -= 1.0;
+                        dx2[0] *= dx2[0];
+                        for (int idim = 1; idim < NDIM; idim++) {
+                            dx2[idim] = std::abs(pos2[idim] - pos1[idim]);
+                            if (dx2[idim] > 0.5 and periodic)
+                                dx2[idim] -= 1.0;
+                            dx2[idim] *= dx2[idim];
                         }
+                        float dist2 = 0.0;
+                        for (int idim = 0; idim < NDIM; idim++)
+                            dist2 += dx2[idim];
 
-                        // Check if particle pair should be linked
+                        // We have found a link
                         if (dist2 < fof_distance2) {
-
-                            const auto id_existing_FoF_group = particle_id_FoF[pindex];
-
-                            if (id_existing_FoF_group == no_FoF_ID) {
-
-                                // The particle has not been touched before and is added to current FoF group
-                                particle_id_FoF[pindex] = id_FoF_group;
-
-                            } else {
-
-                                if (id_existing_FoF_group == id_FoF_group)
-                                    continue;
-
-                                // We merge the current FoF group with an existing one
-                                size_t new_FoF_id = std::min(id_FoF_group, id_existing_FoF_group);
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-                                for (size_t jj = 0; jj < NumPart; jj++)
-                                    if (particle_id_FoF[jj] == id_FoF_group or
-                                        particle_id_FoF[jj] == id_existing_FoF_group)
-                                        particle_id_FoF[jj] = new_FoF_id;
-
-                                // The current group is set to be the exisiting group
-                                id_FoF_group = new_FoF_id;
-                            }
+                            if (particle_id_FoF[particleIndex] == no_FoF_ID)
+                                particle_id_FoF[particleIndex] = FoFID;
+                            particle_id_FoF[nborIndex] = FoFID;
+                            friend_list.push_back(nborIndex);
                         }
+                    }
+                }
+            };
+
+            // ID of the FoF groups
+            unsigned int FoFID = 0;
+
+            // Recursively find all friends of friends
+            std::vector<size_t> friend_list(20);
+            for (size_t i = 0; i < NumPart; i++) {
+                int ninhalo = 1;
+                if (particle_id_FoF[i] == no_FoF_ID) {
+                    friend_list.clear();
+                    FindAllFriends(i, FoFID, friend_list);
+                    if (friend_list.size() > 0) {
+                        // We have found a group with 2 or more particles
+                        // Go through all friends and the friend of these friends
+                        // until we have found all local particles in the halo
+                        while (friend_list.size() > 0) {
+                            auto particleIndex = friend_list.back();
+                            friend_list.pop_back();
+                            FindAllFriends(particleIndex, FoFID, friend_list);
+                            ninhalo++;
+                        }
+                        assert(FoFID != no_FoF_ID);
+                        FoFID++;
                     }
                 }
             }
@@ -767,7 +763,7 @@ namespace FML {
             size_t FoF_id_start_local = 0;
 #ifdef USE_MPI
             std::vector<long long int> max_FoF_id_over_tasks(FML::NTasks, 0);
-            max_FoF_id_over_tasks[FML::ThisTask] = nFoF;
+            max_FoF_id_over_tasks[FML::ThisTask] = FoFID;
             MPI_Allreduce(
                 MPI_IN_PLACE, max_FoF_id_over_tasks.data(), FML::NTasks, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
 
@@ -788,7 +784,7 @@ namespace FML {
 
 #ifdef DEBUG_FOF
             std::cout << "FoFIndex on " << FML::ThisTask << " is in the range " << FoF_id_start_local << " -> "
-                      << FoF_id_start_local + nFoF - 1 << "\n";
+                      << FoF_id_start_local + FoFID - 1 << "\n";
 #endif
         }
 
@@ -799,6 +795,13 @@ namespace FML {
                               int nmin_FoF_group,
                               bool periodic,
                               std::vector<FoFHaloClass> & LocalFoFGroups) {
+
+            // Sort particles by x position
+            std::sort(part, part + NumPart, [](const T & a, const T & b) {
+                T * f = const_cast<T *>(&a);
+                T * g = const_cast<T *>(&b);
+                return g->get_pos()[0] > f->get_pos()[0];
+            });
 
             //============================================================================
             // If we can assume a FoF group do not span more than 2 tasks then
@@ -836,7 +839,8 @@ namespace FML {
                 std::cout << "#\n";
                 std::cout << "# FriendsOfFriends linking\n";
                 std::cout << "# FML::FOF::FoF_Ngrid_max: " << FoF_Ngrid_max << "\n";
-                std::cout << "# FML::FOF::merging_in_parallel_default: " << std::boolalpha << merging_in_parallel << "\n";
+                std::cout << "# FML::FOF::merging_in_parallel_default: " << std::boolalpha << merging_in_parallel
+                          << "\n";
                 std::cout << "# FoF Linking Distance: " << fof_distance << "\n";
                 std::cout << "# FoF linking Gridsize = " << Ngrid << " Local_nx: " << Local_nx << "\n";
                 std::cout << "#\n";
@@ -912,12 +916,12 @@ namespace FML {
                     tmp.push_back(i);
             std::sort(tmp.begin(), tmp.end(), [](const size_t & a, const size_t & b) -> bool { return a < b; });
 
-            size_t curFoFID = tmp[0];
+            size_t curFoFID = tmp.size() > 0 ? tmp[0] : 0;
             size_t count = 0;
             size_t groupsize = 1;
             std::vector<size_t> FoFIndex;
             std::vector<size_t> ningroup;
-            for (size_t i = 1; i < NumPart; i++) {
+            for (size_t i = 1; i < tmp.size(); i++) {
                 if (tmp[i] == no_FoF_ID)
                     continue;
                 if (tmp[i] == curFoFID and i != NumPart - 1) {
@@ -1129,8 +1133,13 @@ namespace FML {
                 } else if (FML::ThisTask == 0) {
                     std::vector<FoFHaloClass> tmp(nhalosontask[i]);
                     MPI_Status status;
-                    MPI_Recv(
-                        tmp.data(), int(sizeof(FoFHaloClass) * nhalosontask[i]), MPI_BYTE, i, 0, MPI_COMM_WORLD, &status);
+                    MPI_Recv(tmp.data(),
+                             int(sizeof(FoFHaloClass) * nhalosontask[i]),
+                             MPI_BYTE,
+                             i,
+                             0,
+                             MPI_COMM_WORLD,
+                             &status);
                     for (auto & g : tmp) {
                         myhalos.push_back(g);
                     }
