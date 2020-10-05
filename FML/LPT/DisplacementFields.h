@@ -341,10 +341,12 @@ namespace FML {
                     phi_1LPT_ii[i].set_grid_status_real(false);
                 }
 #ifdef DEBUG_LPT
-                if (FML::ThisTask == 0)
+                if (FML::ThisTask == 0) {
                     std::cout << "Compute [DiDi phi_1LPT] in fourier space\n";
+                }
 #endif
-                    // Compute phi_xx, phi_yy, ...
+
+                // Compute phi_xx, phi_yy, ...
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -1162,27 +1164,30 @@ namespace FML {
             }
 
 #ifdef USE_GSL
+
             //=================================================================================
-            /// Compute 1,2,3LPT growth-factors in LCDM and spline them
+            /// Compute 1,2,3LPT growth-factors in simple modified gravity models that have a GeffG(a) and spline them
             /// The growth factors are normalized such that D1LPT = 1 at zini
             /// We assume initial conditions as in EdS: D1LPT=1, D2LPT = -3/7, D3LPTa = -1/3 and D3LPTb = 5/21
             ///
             /// @param[in] OmegaM Matter density parameter at z=0
             /// @param[in] zini The redshift we want D1LPT = 1
             /// @param[in] HoverH0_of_a The hubble function H(a)/H0
+            /// @param[in] GeffoverG_of_a Newtons constant Geff/G as function of a
             /// @param[out] D_1LPT_of_loga Spline of the 1LPT growth factor
             /// @param[out] D_2LPT_of_loga Spline of the 2LPT growth factor
             /// @param[out] D_3LPTa_of_loga Spline of the 3LPTb growth factor
             /// @param[out] D_3LPTb_of_loga Spline of the 3LPTa growth factor
             ///
             //=================================================================================
-            void compute_LPT_growth_factors_LCDM(double OmegaM,
-                                                 double zini,
-                                                 std::function<double(double)> HoverH0_of_a,
-                                                 FML::INTERPOLATION::SPLINE::Spline & D_1LPT_of_loga,
-                                                 FML::INTERPOLATION::SPLINE::Spline & D_2LPT_of_loga,
-                                                 FML::INTERPOLATION::SPLINE::Spline & D_3LPTa_of_loga,
-                                                 FML::INTERPOLATION::SPLINE::Spline & D_3LPTb_of_loga) {
+            void compute_LPT_growth_factors_GeffGLCDM(double OmegaM,
+                                                      double zini,
+                                                      std::function<double(double)> HoverH0_of_a,
+                                                      std::function<double(double)> GeffOverG_of_a,
+                                                      FML::INTERPOLATION::SPLINE::Spline & D_1LPT_of_loga,
+                                                      FML::INTERPOLATION::SPLINE::Spline & D_2LPT_of_loga,
+                                                      FML::INTERPOLATION::SPLINE::Spline & D_3LPTa_of_loga,
+                                                      FML::INTERPOLATION::SPLINE::Spline & D_3LPTb_of_loga) {
 
                 using DVector = std::vector<double>;
 
@@ -1196,7 +1201,7 @@ namespace FML {
                     const double a = std::exp(x);
                     const double H = HoverH0_of_a(a);
                     const double dlogHdx = 1.0 / (2.0 * H * H) * (-3.0 * OmegaM / (a * a * a));
-                    const double factor = 1.5 * OmegaM / (H * H * a * a * a);
+                    const double factor = 1.5 * OmegaM * GeffOverG_of_a(a) / (H * H * a * a * a);
                     const double D1 = y[0];
                     const double dD1dx = y[1];
                     const double D2 = y[2];
@@ -1270,6 +1275,40 @@ namespace FML {
                 D_3LPTa_of_loga.create(xarr, D3a, "D3a(loga) Spline");
                 D_3LPTb_of_loga.create(xarr, D3b, "D3b(loga) Spline");
             }
+
+            //=================================================================================
+            /// Compute 1,2,3LPT growth-factors in LCDM and spline them
+            /// The growth factors are normalized such that D1LPT = 1 at zini
+            /// We assume initial conditions as in EdS: D1LPT=1, D2LPT = -3/7, D3LPTa = -1/3 and D3LPTb = 5/21
+            ///
+            /// @param[in] OmegaM Matter density parameter at z=0
+            /// @param[in] zini The redshift we want D1LPT = 1
+            /// @param[in] HoverH0_of_a The hubble function H(a)/H0
+            /// @param[out] D_1LPT_of_loga Spline of the 1LPT growth factor
+            /// @param[out] D_2LPT_of_loga Spline of the 2LPT growth factor
+            /// @param[out] D_3LPTa_of_loga Spline of the 3LPTb growth factor
+            /// @param[out] D_3LPTb_of_loga Spline of the 3LPTa growth factor
+            ///
+            //=================================================================================
+            void compute_LPT_growth_factors_LCDM(double OmegaM,
+                                                 double zini,
+                                                 std::function<double(double)> HoverH0_of_a,
+                                                 FML::INTERPOLATION::SPLINE::Spline & D_1LPT_of_loga,
+                                                 FML::INTERPOLATION::SPLINE::Spline & D_2LPT_of_loga,
+                                                 FML::INTERPOLATION::SPLINE::Spline & D_3LPTa_of_loga,
+                                                 FML::INTERPOLATION::SPLINE::Spline & D_3LPTb_of_loga) {
+
+                auto GeffOverG_of_a = []([[maybe_unused]] double a) { return 1.0; };
+                compute_LPT_growth_factors_GeffGLCDM(OmegaM,
+                                                     zini,
+                                                     HoverH0_of_a,
+                                                     GeffOverG_of_a,
+                                                     D_1LPT_of_loga,
+                                                     D_2LPT_of_loga,
+                                                     D_3LPTa_of_loga,
+                                                     D_3LPTb_of_loga);
+            }
+
 #endif
         } // namespace LPT
     }     // namespace COSMOLOGY

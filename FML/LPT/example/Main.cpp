@@ -21,15 +21,16 @@
 // (The velocity and 2LPT is cosmology specific)
 //
 // 4. Compute the power-spectrum of this particle
-// distribution and compare it to the input P(k)
+// distribution and the cross spectrum with the
+// initial density field and compare it to the input P(k)
 //
 // So this test is basically a very simple IC generator
 // for N-body simulations.
 //
-// Relation between code units and physical units:
-// t_code = t/T = tH0 where T = 1/H0
+// Relation between code units and physical units here:
+// dt_code = H0 dt/a^2
 // x_code = x/Box
-// v_code = dx/dt / (H0 Box)
+// v_code = a^2 dx/dt / (H0 Box) (see velfac below)
 // Thus positions are in [0,1) and the velocities are
 // comoving velocities in units of (100 * box) km/s
 //
@@ -60,7 +61,7 @@ using Particle = SimpleParticle<Ndim>;
 double power_spectrum(double k) {
     if (k == 0.0)
         return 0.0;
-    return 1e-4;
+    return 1e-4 / std::pow(k, Ndim);
 }
 
 //=====================================================
@@ -94,13 +95,15 @@ int main() {
     const int Nmesh = 128;
     const int Npart_1D = 128;
     const double buffer_factor = 1.25;
-    std::string interpolation_method = "CIC";
 
     //=====================================================
     // Generate density field (the extra slices we use in this grid
     // propagates to the grids we generate below)
+    // interpolation_method is how we interpolate from the grid
+    // to the particles (use NGP or CIC)
     //=====================================================
-    auto nextra = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(interpolation_method);
+    std::string interpolation_method = "CIC";
+    const auto nextra = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(interpolation_method);
     FFTWGrid<Ndim> delta(Nmesh, nextra.first, nextra.second);
     generate_delta(delta);
 
@@ -118,11 +121,6 @@ int main() {
     FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta, phi_2LPT);
 
     //=====================================================
-    // We no longer need delta so we can free up memory
-    //=====================================================
-    delta.free();
-
-    //=====================================================
     // Generate displacement field Psi = Dphi
     // 3+3 FFTS
     //=====================================================
@@ -134,7 +132,7 @@ int main() {
     FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector(phi_2LPT, Psi_2LPT_vector);
     phi_2LPT.free();
 
-    //===============================Y======================
+    //=====================================================
     // Make a regular (Lagrangian) particle grid with
     // Npart_1D^NDIM particles in total
     //=====================================================
@@ -153,8 +151,11 @@ int main() {
     for (int idim = Ndim - 1; idim >= 0; idim--) {
         if (FML::ThisTask == 0)
             std::cout << "Assigning particles for idim = " << idim << "\n";
-        FML::INTERPOLATION::interpolate_grid_to_particle_positions(
-            Psi_1LPT_vector[idim], part.get_particles_ptr(), part.get_npart(), displacements_1LPT[idim], "CIC");
+        FML::INTERPOLATION::interpolate_grid_to_particle_positions(Psi_1LPT_vector[idim],
+                                                                   part.get_particles_ptr(),
+                                                                   part.get_npart(),
+                                                                   displacements_1LPT[idim],
+                                                                   interpolation_method);
         Psi_1LPT_vector[idim].free();
     }
 
@@ -163,22 +164,27 @@ int main() {
     //=====================================================
     std::vector<std::vector<FML::GRID::FloatType>> displacements_2LPT(Ndim);
     for (int idim = Ndim - 1; idim >= 0; idim--) {
-        FML::INTERPOLATION::interpolate_grid_to_particle_positions(
-            Psi_2LPT_vector[idim], part.get_particles_ptr(), part.get_npart(), displacements_2LPT[idim], "CIC");
+        FML::INTERPOLATION::interpolate_grid_to_particle_positions(Psi_2LPT_vector[idim],
+                                                                   part.get_particles_ptr(),
+                                                                   part.get_npart(),
+                                                                   displacements_2LPT[idim],
+                                                                   interpolation_method);
         Psi_2LPT_vector[idim].free();
     }
 
     //=====================================================
-    // Set the velocities to be the dimensionless v_code = v  / (H0 Box)
+    // Set the velocities to be the dimensionless v_code = a^2 dxdt / (H0 Box)
     // For simplicity for the growth rate we just use the approx D1 = a => f1 = 1 and f2 = 2
+    // valid for OmegaM = 1
     // (easy to compute the exact values by just solving the ODE or using the approx f1 ~ OmegaM(a)^0.55)
     //=====================================================
     const double a_ini = 1.0 / (1.0 + 50.0);
-    const double HoverH0 = std::sqrt(1.0 / (a_ini * a_ini * a_ini));
+    const double OmegaM = 1.0;
+    const double HoverH0 = std::sqrt(OmegaM / (a_ini * a_ini * a_ini) + 1.0 - OmegaM);
     const double growth_rate1 = 1.0;
     const double growth_rate2 = 2.0;
-    const double vfac_1LPT = HoverH0 * growth_rate1;
-    const double vfac_2LPT = HoverH0 * growth_rate2;
+    const double vfac_1LPT = a_ini * a_ini * HoverH0 * growth_rate1;
+    const double vfac_2LPT = a_ini * a_ini * HoverH0 * growth_rate2;
 
     //=====================================================
     // Add 1LPT displacement to particle position
@@ -192,7 +198,7 @@ int main() {
 
     auto * part_ptr = part.get_particles_ptr();
 #ifdef USE_OMP
-#pragma omp parallel for reduction(max: max_disp_1LPT, max_disp_2LPT, max_vel_1LPT, max_vel_2LPT)
+#pragma omp parallel for reduction(max : max_disp_1LPT, max_disp_2LPT, max_vel_1LPT, max_vel_2LPT)
 #endif
     for (size_t ind = 0; ind < part.get_npart(); ind++) {
         auto * pos = part_ptr[ind].get_pos();
@@ -239,9 +245,9 @@ int main() {
     if (FML::ThisTask == 0)
         std::cout << "Maximum displacements: " << max_disp_2LPT * Nmesh << " grid cells\n";
     if (FML::ThisTask == 0)
-        std::cout << "Maximum velocity: " << max_vel_1LPT * 100.0 * box << " km/s comoving\n";
+        std::cout << "Maximum velocity: " << max_vel_1LPT * 100.0 * box / a_ini << " km/s peculiar\n";
     if (FML::ThisTask == 0)
-        std::cout << "Maximum velocity: " << max_vel_2LPT * 100.0 * box << " km/s comoving\n";
+        std::cout << "Maximum velocity: " << max_vel_2LPT * 100.0 * box / a_ini << " km/s peculiar\n";
 
     //=====================================================
     // Communicate particles (they might have left the
@@ -251,38 +257,47 @@ int main() {
 
     //=====================================================
     // Lets test that it works as expected
-    // Compute power-spectrum using a 5th order kernel to
-    // ensure we get subpercent accuracy in pofk up until the
-    // nyquist frequency (we can also just a larger grid)
+    // From particles to density field. Compute P(k) and cross spectrum wrt the random field used
+    // to generate particles. This shows that with interlacing and a high order kernel (PQS is 5th order)
+    // we are able to reconstruct the initial density field from the particles to
+    // high precision
     //=====================================================
-    interpolation_method = "PQS";
     const bool interlacing = true;
-    FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim> pofk(Nmesh / 2);
-    FML::CORRELATIONFUNCTIONS::compute_power_spectrum<Ndim>(
-        Nmesh, part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), pofk, interpolation_method, interlacing);
-
-    //=====================================================
-    // ...and add back the shot-noise that was subtracted
-    // in the routine above
-    //=====================================================
-    for (int i = 0; i < pofk.n; i++) {
-        pofk.pofk[i] += 1.0 / double(part.get_npart_total());
-    }
+    const std::string density_assignment_method = "PQS";
+    const auto nlr = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(density_assignment_method);
+    FFTWGrid<Ndim> delta_from_part(Nmesh, nlr.first, nlr.second);
+    FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim> pofk_cross(Nmesh / 2);
+    FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim> pofk_part(Nmesh / 2);
+    FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim> pofk_ini(Nmesh / 2);
+    FML::INTERPOLATION::particles_to_fourier_grid(part.get_particles_ptr(),
+                                                  part.get_npart(),
+                                                  part.get_npart_total(),
+                                                  delta_from_part,
+                                                  density_assignment_method,
+                                                  interlacing);
+    FML::INTERPOLATION::deconvolve_window_function_fourier<Ndim>(delta_from_part, density_assignment_method);
+    FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(delta_from_part, pofk_part);
+    FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(delta, pofk_ini);
+    FML::CORRELATIONFUNCTIONS::bin_up_cross_power_spectrum(delta, delta_from_part, pofk_cross);
 
     //=====================================================
     // Convert P(k) to physical units: inherits the same
     // units as the boxsize so h/Mpc for k and (Mpc/h)^NDIM for P(k)
     //=====================================================
-    if (FML::ThisTask == 0)
-        std::cout << "\n#  k (h/Mpc) Pofk / Pofk_input\n";
-    pofk.scale(box);
+    pofk_part.scale(box);
+    pofk_ini.scale(box);
+    pofk_cross.scale(box);
+
+    //=====================================================
+    // Output to screen
+    //=====================================================
     if (FML::ThisTask == 0) {
-        for (int i = 0; i < pofk.n; i++) {
-            // The mean value in the bin
-            const double k = pofk.kbin[i];
-            if (k == 0.0)
-                continue;
-            std::cout << k << " " << pofk.pofk[i] / power_spectrum(k) << "\n";
+        std::cout << "\n#  k (h/Mpc)   CorrelationCoeff      P_part / P       P / P_analytic\n";
+        for (int i = 0; i < pofk_ini.n; i++) {
+            double k = pofk_ini.kbin[i];
+            double cross_corr_coeff = pofk_cross.pofk[i] / std::sqrt(pofk_part.pofk[i] * pofk_ini.pofk[i]);
+            std::cout << k << " " << cross_corr_coeff << " " << pofk_part.pofk[i] / pofk_ini.pofk[i] << " "
+                      << pofk_ini.pofk[i] / power_spectrum(k) << "\n";
         }
     }
 
