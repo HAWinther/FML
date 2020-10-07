@@ -14,66 +14,67 @@ namespace FML {
           public:
             enum BinningType { LINEAR_SPACING, LOG_SPACING };
 
+            /// Number of bins
             int n{0};
+            /// Type of bins (LINEAR_SPACING or LOG_SPACING)
             int bin_type{LINEAR_SPACING};
+            /// The minimum k to bin from (should be 0!)
             double kmin{0.0};
+            /// The maximum k to bin to
             double kmax{0.0};
 
+            /// Subtract shotnoise? Algorithms (compute_polyspectrum) using this class checks this value
             bool subtract_shotnoise{true};
 
-            // The polyspectrum, the volume factor and the power-spectrum
+            /// The polyspectrum
             std::vector<double> P123;
+            /// The volume (number of generalized triangles) of each bin
             std::vector<double> N123;
+            /// The power-spectrum
             std::vector<double> pofk;
 
-            // klow is lower bin edge, khigh is higher bin edge
-            // kbin is center of bin and kmean is the mean of wavenumbers
-            // added to the bin
+            /// kbin is center of bin
             std::vector<double> kbin;
+            /// klow is lower bin edge
             std::vector<double> klow;
+            /// khigh is higher bin edge
             std::vector<double> khigh;
+            /// kmean is the mean of wavenumbers added to the bin
             std::vector<double> kmean;
 
-            // If N123 is already computed or not
+            /// If we have precomputed the volume factor (N123) or not and have it availiable for algorithms to use
             bool bincount_is_set{false};
 
             PolyspectrumBinning() = default;
             PolyspectrumBinning(double _kmin, double _kmax, int nbins, int bin_type = LINEAR_SPACING);
             PolyspectrumBinning(int nbins, int Nmesh, int bin_type = LINEAR_SPACING);
 
-            // k *= 1/boxsize and P *= boxsize^((ORDER-1) NDIM)
+            /// To physical units: k *= 1/boxsize and P *= boxsize^((ORDER-1) NDIM)
             void scale(const double boxsize);
 
-            // Clears the arrays
+            /// Clears the arrays
             void reset();
 
-            // Frees up the arrays
+            /// Free up all the memory
             void free();
 
-            // Get the polyspectra at (k[ik1], k[ik2], ...)
+            /// Get the polyspectra at (k[ik1], k[ik2], ...)
             double get_spectrum(const std::array<int, ORDER> & ik);
+            /// For ORDER = 2 get the monospectum P(i,j) with i,j index of bin in [0,nbins)
             double get_spectrum(int i, int j);
+            /// For ORDER = 3 get the bispectum B(i,j,k) with i,j,k index of bin in [0,nbins)
             double get_spectrum(int i, int j, int k);
+            /// For ORDER = 4 get the trispectum T(i,j,k,l) with i,j,k,l index of bin in [0,nbins)
             double get_spectrum(int i, int j, int k, int l);
 
-            // The coord (k1,k2,...) corresponding to a given index in the P123 and N123 array
-            // These methods determine how the data is stored and fetched
-            std::array<int, ORDER> get_coord_from_index(size_t index);
-            size_t get_index_from_coord(const std::array<int, ORDER> & ik);
-
-            // Symmetry: we only need to compute ik1 <= ik2 <= ...
-            // This function tells algorithms which configurations to compute and
-            // which to set by using symmetry from the configs we have computed
-            bool compute_this_configuration(const std::array<int, ORDER> & ik);
-
-            // Get the reduced polyspectrum: P / fac
-            // where fac = sqrt(P(k1)P(k2)) for order=2 and P(k1)P(k2) + cyc for ORDER=3,4
+            /// Get the reduced polyspectrum: P / fac
+            /// where fac = sqrt(P(k1)P(k2)) for order=2 and P(k1)P(k2) + cyc for ORDER=3,4
             double get_reduced_spectrum(const std::array<int, ORDER> & ik);
             double get_reduced_spectrum(int i, int j);
             double get_reduced_spectrum(int i, int j, int k);
             double get_reduced_spectrum(int i, int j, int k, int l);
 
-            // Returns N123
+            /// Returns the volume factor N123
             double get_bincount(const std::array<int, ORDER> & ik);
             double get_bincount(int i, int j);
             double get_bincount(int i, int j, int k);
@@ -88,14 +89,23 @@ namespace FML {
             double get_bincount(Ints... is);
             */
 
-            // Copy over N123 (useful to save computations if we do many calculations with
-            // the same setup)
+            /// Copy over the volume factor N123 (useful to save computations if we do many calculations with
+            /// the same setup)
             void set_bincount(std::vector<double> & N123_external);
 
-            // This is just to make it easier to add binnings
-            // of several spectra... just for testing
-            int nbinnings{0};
+            /// This is just to make it easier to add binning of several spectra... just for testing
             void combine(PolyspectrumBinning & rhs);
+            int nbinnings{0};
+
+            /// The coord (k1,k2,...) corresponding to a given index in the P123 and N123 array
+            /// These methods determine how the data is stored and fetched
+            std::array<int, ORDER> get_coord_from_index(size_t index);
+            size_t get_index_from_coord(const std::array<int, ORDER> & ik);
+
+            /// Symmetry: we only need to compute ik1 <= ik2 <= ...
+            /// This function tells algorithms which configurations to compute and
+            /// which to set by using symmetry from the configs we have computed
+            bool compute_this_configuration(const std::array<int, ORDER> & ik);
         };
 
         template <int N, int ORDER>

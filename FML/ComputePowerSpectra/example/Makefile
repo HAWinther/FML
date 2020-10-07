@@ -6,8 +6,8 @@ SHELL := /bin/bash
 # Set c++11 compliant compiler. If USE_MPI we use MPICC 
 #===================================================
 
-CC      = g++-mp-7 -std=c++1z -O3 -Wall -Wextra -march=native
-MPICC   = mpicxx-openmpi-gcc7 -O3 -std=c++1z -Wall -Wextra -march=native
+CC      = g++ -std=c++1z -O3 -Wall -Wextra -march=native
+MPICC   = mpicxx -O3 -std=c++1z -Wall -Wextra -march=native
 
 #===================================================
 # Options

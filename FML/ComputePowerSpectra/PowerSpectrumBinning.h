@@ -15,59 +15,64 @@ namespace FML {
           public:
             enum BinningType { LINEAR_SPACING, LOG_SPACING };
 
+            /// Number of bins
             int n{0};
+            /// Bin spacing (LINEAR_SPACING or LOG_SPACING)
             int bin_type{LINEAR_SPACING};
+            /// The kmin value to bin from
             double kmin{0.0};
+            /// The kmax value to bin up to
             double kmax{0.0};
-
+            /// Subtract shotnoise or not (used by algorithms)
             bool subtract_shotnoise{true};
 
+            /// The bin edges
             std::vector<double> k;
-            std::vector<double> count;
-            std::vector<double> pofk;
+            /// The mean k-value in the bin
             std::vector<double> kbin;
+            /// The bin count
+            std::vector<double> count;
+            /// The power-spectrum in the bin
+            std::vector<double> pofk;
 
 #ifdef USE_OMP
-            // Temporary storage for OMP parallization
+            // Temporary storage for OpenMP parallization
             std::vector<std::vector<double>> count_thread;
             std::vector<std::vector<double>> pofk_thread;
             std::vector<std::vector<double>> kbin_thread;
 #endif
 
             PowerSpectrumBinning() = default;
-            PowerSpectrumBinning(const int n);
-            PowerSpectrumBinning(const double kmin, const double kmax, const int n, const int bin_type);
+            PowerSpectrumBinning(int n);
+            PowerSpectrumBinning(double kmin, double kmax, int n, int bin_type);
 
-            // Add two binnings together
+            /// Add two binnings together
             PowerSpectrumBinning & operator+=(const PowerSpectrumBinning & rhs);
 
-            // Reset everything. Call before starting to bim
+            /// Reset everything. Call before starting to bim
             void reset();
 
-            // Add a new point to a bin
-            void add_to_bin(double kvalue, double power, double weight = 1.0);
-
-            // Normalize (i.e. find mean in each bin) Do summation over MPI tasks
-            void normalize();
-
-            // Scale to physical units: k *= 1/Box and pofk *= Box^N
+            /// Scale to physical units: k *= 1/Box and pofk *= Box^N
             void scale(const double boxsize);
 
-            // For controlling the bins
-            int
-            get_bin_index(const double kvalue, const double kmin, const double kmax, const int n, const int bin_type);
-            double get_k_from_bin_index(const int index,
-                                        const double kmin,
-                                        const double kmax,
-                                        const int n,
-                                        const int bin_type);
+            /// Print some info
+            void info();
 
-            // Print some info
-            void print_info();
-
-            // Combine with another binning (just for testing to make it easier to bin up over realisations)
-            int nbinnings = 0;
+            /// Combine with another binning (just for testing to make it easier to bin up over realisations)
             void combine(PowerSpectrumBinning & rhs);
+            int nbinnings{0};
+
+            /// Add a new point to a bin
+            void add_to_bin(double kvalue, double power, double weight = 1.0);
+
+            /// Normalize (i.e. find mean in each bin) Do summation over MPI tasks
+            void normalize();
+
+            /// From k to the index of the bin
+            int get_bin_index(double kvalue, double kmin, double kmax, int n, int bin_type);
+
+            /// From index of the bin get k
+            double get_k_from_bin_index(int index, double kmin, double kmax, int n, int bin_type);
         };
 
         template <int N>
@@ -106,12 +111,10 @@ namespace FML {
             : PowerSpectrumBinning(2.0 * M_PI, 2.0 * M_PI * nbins, nbins, LINEAR_SPACING) {}
 
         template <int N>
-        PowerSpectrumBinning<N>::PowerSpectrumBinning(const double kmin,
-                                                      const double kmax,
-                                                      const int n,
-                                                      const int bin_type)
+        PowerSpectrumBinning<N>::PowerSpectrumBinning(double kmin, double kmax, int n, int bin_type)
             : n(n), bin_type(bin_type), kmin(kmin), kmax(kmax), k(std::vector<double>(n, 0.0)),
-              count(std::vector<double>(n, 0.0)), pofk(std::vector<double>(n, 0.0)), kbin(std::vector<double>(n, 0.0)) {
+              kbin(std::vector<double>(n, 0.0)), count(std::vector<double>(n, 0.0)), pofk(std::vector<double>(n, 0.0)) {
+
             for (int i = 0; i < n; i++)
                 k[i] = get_k_from_bin_index(i, kmin, kmax, n, bin_type);
 
@@ -130,7 +133,7 @@ namespace FML {
         }
 
         template <int N>
-        void PowerSpectrumBinning<N>::print_info() {
+        void PowerSpectrumBinning<N>::info() {
             if (ThisTask == 0) {
                 printf("\n==================================\n");
                 printf("PowerSpectrumBinning Info:\n");
@@ -151,16 +154,16 @@ namespace FML {
             // Do not include zero-mode
             if (kvalue == 0.0)
                 return;
-            int index = get_bin_index(kvalue, kmin, kmax, n, bin_type);
+            const int index = get_bin_index(kvalue, kmin, kmax, n, bin_type);
 #ifdef USE_OMP
             const int myid = NThreads == 1 ? 0 : omp_get_thread_num();
-            if (0 <= index && index < n) {
+            if (0 <= index and index < n) {
                 count_thread[myid][index] += weight;
                 pofk_thread[myid][index] += power * weight;
                 kbin_thread[myid][index] += kvalue * weight;
             }
 #else
-            if (0 <= index && index < n) {
+            if (0 <= index and index < n) {
                 count[index] += weight;
                 pofk[index] += power * weight;
                 kbin[index] += kvalue * weight;
@@ -222,11 +225,7 @@ namespace FML {
 
         // This method can return values out of bounds
         template <int N>
-        int PowerSpectrumBinning<N>::get_bin_index(const double kvalue,
-                                                   const double kmin,
-                                                   const double kmax,
-                                                   const int n,
-                                                   const int bin_type) {
+        int PowerSpectrumBinning<N>::get_bin_index(double kvalue, double kmin, double kmax, int n, int bin_type) {
             int index = -1;
             if (bin_type == LINEAR_SPACING) {
                 index = int((kvalue - kmin) / (kmax - kmin) * (n - 1) + 0.5);
@@ -241,11 +240,7 @@ namespace FML {
         }
 
         template <int N>
-        double PowerSpectrumBinning<N>::get_k_from_bin_index(const int index,
-                                                             const double kmin,
-                                                             const double kmax,
-                                                             const int n,
-                                                             const int bin_type) {
+        double PowerSpectrumBinning<N>::get_k_from_bin_index(int index, double kmin, double kmax, int n, int bin_type) {
             double kvalue = 0.0;
             if (bin_type == LINEAR_SPACING) {
                 kvalue = kmin + (kmax - kmin) / double(n - 1) * index;
