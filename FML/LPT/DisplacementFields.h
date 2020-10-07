@@ -10,6 +10,7 @@
 
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
+#include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Smoothing/SmoothingFourier.h>
 
 #ifdef USE_GSL
@@ -25,6 +26,8 @@ namespace FML {
 
             template <int N>
             using FFTWGrid = FML::GRID::FFTWGrid<N>;
+            template <class T>
+            using MPIParticles = FML::PARTICLE::MPIParticles<T>;
 
             template <int N>
             void from_LPT_potential_to_displacement_vector(const FFTWGrid<N> & phi_fourier,
@@ -67,7 +70,7 @@ namespace FML {
             void from_LPT_potential_to_displacement_vector_scaledependent(
                 const FFTWGrid<N> & phi_fourier,
                 std::vector<FFTWGrid<N>> & psi_real,
-                std::function<double(double)> & growth_function_ratio);
+                std::function<double(double)> growth_function_ratio);
 
             // Computes it all for 3LPT as we need lower order results and return Psi and dPsidt
             template <int N>
@@ -76,6 +79,12 @@ namespace FML {
                                                  std::vector<FFTWGrid<N>> & dPsidt,
                                                  double dlogDdt,
                                                  bool ignore_curl_term);
+
+            template <int N, class T>
+            void assign_displacement_fields_scaledependent(MPIParticles<T> & part,
+                                                           FFTWGrid<N> & LPT_potential_fourier,
+                                                           std::function<double(double)> DoverDini_of_k,
+                                                           std::string LPT_potential_order);
 
             //=================================================================================
             /// Function is the ratio of the scale-dependent growth-factor at
@@ -86,13 +95,14 @@ namespace FML {
             ///
             /// @param[in] phi The LPT potential in fourier space
             /// @param[out] psi The displacement vector in real space
-            /// @param[in] function The function D(k,z)/D(k,zini) as function of k.
+            /// @param[in] DoverDini_of_k The function D(k,z)/D(k,zini) as function of k.
             ///
             //=================================================================================
             template <int N>
-            void from_LPT_potential_to_displacement_vector_scaledependent(const FFTWGrid<N> & phi,
-                                                                          std::vector<FFTWGrid<N>> & psi,
-                                                                          std::function<double(double)> & function) {
+            void
+            from_LPT_potential_to_displacement_vector_scaledependent(const FFTWGrid<N> & phi,
+                                                                     std::vector<FFTWGrid<N>> & psi,
+                                                                     std::function<double(double)> DoverDini_of_k) {
 
                 // We require phi to exist and if psi exists it must have the same size as phi
                 assert_mpi(phi.get_nmesh() > 0,
@@ -130,14 +140,14 @@ namespace FML {
                     [[maybe_unused]] std::array<double, N> kvec;
                     std::complex<double> I(0, 1);
                     for (auto && fourier_index : phi.get_fourier_range(islice, islice + 1)) {
-                        if (Local_x_start == 0 && fourier_index == 0)
+                        if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
 
                         // Get wavevector and magnitude
                         phi.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
                         // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi]
-                        auto value = phi.get_fourier_from_index(fourier_index) * I * function(kmag);
+                        auto value = phi.get_fourier_from_index(fourier_index) * I * DoverDini_of_k(kmag);
 
                         for (int idim = 0; idim < N; idim++) {
                             psi[idim].set_fourier_from_index(fourier_index, value * kvec[idim]);
@@ -599,8 +609,6 @@ namespace FML {
                                                   std::to_string(idim));
                 }
 
-                std::complex<double> I{0, 1};
-
                 // We compute the displacement field at the initial time
                 // so these factors are just 1
                 constexpr double DoverDini = 1.0;
@@ -989,7 +997,6 @@ namespace FML {
                 for (int islice = 0; islice < Local_nx; islice++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    std::complex<double> I(0, 1);
                     for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range(islice, islice + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
@@ -1137,7 +1144,7 @@ namespace FML {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : phi_ALPT_fourier.get_fourier_range(islice, islice + 1)) {
-                        if (Local_x_start == 0 && fourier_index == 0)
+                        if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
                         auto short_range = phi_sc_fourier.get_fourier_from_index(fourier_index);
                         auto p1LPT = delta_fourier.get_fourier_from_index(fourier_index) / kmag2;
@@ -1173,7 +1180,7 @@ namespace FML {
             /// @param[in] OmegaM Matter density parameter at z=0
             /// @param[in] zini The redshift we want D1LPT = 1
             /// @param[in] HoverH0_of_a The hubble function H(a)/H0
-            /// @param[in] GeffoverG_of_a Newtons constant Geff/G as function of a
+            /// @param[in] GeffOverG_of_a Newtons constant Geff/G as function of a
             /// @param[out] D_1LPT_of_loga Spline of the 1LPT growth factor
             /// @param[out] D_2LPT_of_loga Spline of the 2LPT growth factor
             /// @param[out] D_3LPTa_of_loga Spline of the 3LPTb growth factor
@@ -1310,6 +1317,138 @@ namespace FML {
             }
 
 #endif
+            
+            //===================================================================================
+            /// This method assigns the displacement fields to particles for the case where we have scaledependent
+            /// growth This is involved: we take phi_iLPT(zini,k) and use growth factors to go to phi_iLPT(z,k) and FFT
+            /// to get phi_iLPT(z,q). Then we transport the particles back to their original CPU given by the particles
+            /// Lagrangian position q and assign the displacement field before we move them back to their eulerian
+            /// positions. This can be done more efficiently (we don't need to do this much communiation) but this will
+            /// come at the expense of a lot more code so fuck it. The lesson here is: try to stay away from
+            /// scaledependent growth! The main use-case for this is COLA simulations and for many cases using the large
+            /// scale limit for the growth-factors (D(k~0,z)) is often good enough and will allow us to use
+            /// scale-independent growth factors - but this must be tested on a case by case basis.
+            ///
+            /// @tparam N The dimension we are working in
+            /// @tparam T The particle class. Must have a get_D_* with * being one or more of 1LPT, 2LPT, 3LPTa, 3LPTb
+            /// to use this method.
+            ///
+            /// @param[out] part The particle container. We assign the displacement fields to the particles we get in.
+            /// @param[in] LPT_potential_fourier The LPT potential phi(zini,k) at the initial redshift.
+            /// @param[in] DoverDini_of_k Ratio of the growth factors at the current time to that of the time of
+            /// LPT_potential_fourier.
+            /// @param[in] LPT_potential_order 1LPT, 2LPT, 3LPTa or 3LPTb. Tells us what field in the particles we
+            /// should store the data in
+            ///
+            //===================================================================================
+            template <int N, class T>
+            void assign_displacement_fields_scaledependent(MPIParticles<T> & part,
+                                                           FFTWGrid<N> & LPT_potential_fourier,
+                                                           std::function<double(double)> DoverDini_of_k,
+                                                           std::string LPT_potential_order) {
+                enum Order { _1LPT, _2LPT, _3LPTA, _3LPTB };
+                const std::string interpolation_method = "CIC";
+                int LPT_order{};
+
+                // Sanity checks
+                assert_mpi(
+                    FML::PARTICLE::has_get_q<T>(),
+                    "[assign_displacement_fields_scaledependent] Particle must have Lagrangian position to use this");
+                if (LPT_potential_order == "1LPT") {
+                    LPT_order = _1LPT;
+                    assert_mpi(FML::PARTICLE::has_get_D_1LPT<T>(),
+                               "[assign_displacement_fields_scaledependent] Particle must have D_1LPT to use this");
+                } else if (LPT_potential_order == "2LPT") {
+                    LPT_order = _2LPT;
+                    assert_mpi(FML::PARTICLE::has_get_D_2LPT<T>(),
+                               "[assign_displacement_fields_scaledependent] Particle must have D_2LPT to use this");
+                } else if (LPT_potential_order == "3LPTa") {
+                    LPT_order = _3LPTA;
+                    assert_mpi(FML::PARTICLE::has_get_D_3LPTa<T>(),
+                               "[assign_displacement_fields_scaledependent] Particle must have D_3LPTa to use this");
+                } else if (LPT_potential_order == "3LPTb") {
+                    LPT_order = _3LPTB;
+                    assert_mpi(FML::PARTICLE::has_get_D_3LPTb<T>(),
+                               "[assign_displacement_fields_scaledependent] Particle must have D_3LPTb to use this");
+                } else {
+                    assert_mpi(false,
+                               "[assign_displacement_fields_scaledependent] Unknown LPT_potential, options "
+                               "1LPT,2LPT,3LPTa,3LPTb");
+                }
+
+                // Swap positions with Lagrangian position
+                for (auto & p : part) {
+                    auto pos_eulerian = FML::PARTICLE::GetPos(p);
+                    auto pos_lagrangian = FML::PARTICLE::GetLagrangianPos(p);
+                    for (int idim = 0; idim < N; idim++) {
+                        auto tmp = pos_eulerian[idim];
+                        pos_eulerian[idim] = pos_lagrangian[idim];
+                        pos_lagrangian[idim] = tmp;
+                    }
+                }
+
+                // Bring particles to the task they started off from
+                part.communicate_particles();
+
+                // Use initial LPT potential + growth factor to compute displacement field at present time
+                std::vector<FFTWGrid<N>> psi_LPT_vector;
+                FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector_scaledependent(
+                    LPT_potential_fourier, psi_LPT_vector, DoverDini_of_k);
+
+                // Interpolate to particle positions after which we have Psi(q,t) in displacements
+                std::vector<std::vector<FML::GRID::FloatType>> displacements(N);
+                for (int idim = 0; idim < N; idim++) {
+                    if (FML::ThisTask == 0)
+                        std::cout << "Assigning particles for idim = " << idim << "\n";
+                    FML::INTERPOLATION::interpolate_grid_to_particle_positions(psi_LPT_vector[idim],
+                                                                               part.get_particles_ptr(),
+                                                                               part.get_npart(),
+                                                                               displacements[idim],
+                                                                               interpolation_method);
+                    psi_LPT_vector[idim].free();
+                }
+
+                // Assign displacment field to particles
+                const auto np = part.get_npart();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (size_t ind = 0; ind < np; ind++) {
+                    if (LPT_order == _1LPT) {
+                        auto * D = FML::PARTICLE::GetD_1LPT(part[ind]);
+                        for (int idim = 0; idim < N; idim++)
+                            D[idim] = displacements[idim][ind];
+                    } else if (LPT_order == _2LPT) {
+                        auto * D = FML::PARTICLE::GetD_2LPT(part[ind]);
+                        for (int idim = 0; idim < N; idim++)
+                            D[idim] = displacements[idim][ind];
+                    } else if (LPT_order == _3LPTA) {
+                        auto * D = FML::PARTICLE::GetD_3LPTa(part[ind]);
+                        for (int idim = 0; idim < N; idim++)
+                            D[idim] = displacements[idim][ind];
+                    } else if (LPT_order == _3LPTB) {
+                        auto * D = FML::PARTICLE::GetD_3LPTb(part[ind]);
+                        for (int idim = 0; idim < N; idim++)
+                            D[idim] = displacements[idim][ind];
+                    }
+                }
+
+                // Swap back positions
+                for (auto & p : part) {
+                    auto pos_eulerian = FML::PARTICLE::GetPos(p);
+                    auto pos_lagrangian = FML::PARTICLE::GetLagrangianPos(p);
+                    for (int idim = 0; idim < N; idim++) {
+                        auto tmp = pos_eulerian[idim];
+                        pos_eulerian[idim] = pos_lagrangian[idim];
+                        pos_lagrangian[idim] = tmp;
+                    }
+                }
+
+                // Bring particles back to the task the eulerian position belongs to
+                // The particles are now as they were just with the displacement field assigned
+                part.communicate_particles();
+            }
+
         } // namespace LPT
     }     // namespace COSMOLOGY
 } // namespace FML
