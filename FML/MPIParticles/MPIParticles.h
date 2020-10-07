@@ -88,6 +88,15 @@ namespace FML {
             int Local_Npart_1D{0}; // Number of slices in current task
             int Local_p_start{0};  // Start index of local particle slice in [0,Npart_1D)
 
+            // Swap particles
+            void swap_particles(T & a, T & b);
+
+            // The byte-size of particle ipart
+            size_t get_particle_byte_size(size_t ipart);
+
+            // For communication
+            void copy_over_recieved_data(std::vector<char> & recv_buffer, size_t Npart_recieved);
+
           public:
             /// Iterator for looping through all the active particles i.e. allow for(auto &&p: mpiparticles)
             class iterator {
@@ -104,18 +113,23 @@ namespace FML {
                 T * ptr;
             };
 
+            /// Iterator: points to the first local particle
             iterator begin() { return iterator(p.data()); }
+            /// Iterator: points to one past the last active local particle
             iterator end() { return iterator(p.data() + NpartLocal_in_use); }
 
-            // Create MPIParticles from a set of particles
-            // NumParts in the number of particles in part
-            // xmin and xmax corresponds to the x-range in [0,1] the current task is responsible for
-            // Set all_tasks_has_the_same_particles if all tasks has the same set of particles.
-            // If only one or more task has particles then set all_tasks_has_the_same_particles = false.
-            // NB: if all_tasks_has_the_same_particles is false then we assume all tasks that has particles has distinct
-            // particles We only keep the particles in part that are in the correct x-range if
-            // all_tasks_has_the_same_particles is true nallocate is the total amount of particles we allocate for
-            // locally (we do buffered read if only one task reads particles to avoid having to allocate too much).
+            /// Create MPIParticles from a set of particles. We only keep the particles in part that are in the correct
+            /// x-range if all_tasks_has_the_same_particles is true nallocate is the total amount of particles we
+            /// allocate for locally (we do buffered read if only one task reads particles to avoid having to allocate
+            /// too much).
+            /// @param[in] part Pointer to a set of particles
+            /// @param[in] NumParts Number of particles we have
+            /// @param[in] nallocate How many particles to allocate for locally (in case we want to have a buffer)
+            /// @param[in] xmin_local The min of the x-range in [0,1] the current task is responsible for
+            /// @param[in] xmax_local The max of the x-range in [0,1] the current task is responsible for
+            /// @param[in] all_tasks_has_the_same_particles Set this to be true if all tasks has the same set of
+            /// particles (e.g. they come from reading the same file). If false then we assume all tasks that has
+            /// particles has distinct particles
             void create(T * part,
                         size_t NumParts,
                         size_t nallocate,
@@ -123,69 +137,67 @@ namespace FML {
                         double xmax_local,
                         bool all_tasks_has_the_same_particles);
 
-            // Create from a vector of particles with a given selection function
-            // This could for example be that xmin < x < xmax and if particles have a type only select a particular type
+            /// Create from a vector of particles with a given selection function
+            /// This could for example be that xmin < x < xmax and if particles have a type only select a particular
+            /// type
             void create(std::vector<T> & part, size_t nallocate, std::function<bool(T &)> selection_function);
 
-            // Moves a vector of particles into internal storage (so no copies are being done).
-            // The extra storage (if needed) needs to allready be in part!
-            // Assumes we have distinct particles on different tasks. This saves having to do allocations
-            // and copies, but its safer and flexible to just use create() so its best to not use this unless
-            // you really need to
+            /// Moves a vector of particles into internal storage (so no copies are being done).
+            /// The extra storage (if needed) needs to allready be in part!
+            /// Assumes we have distinct particles on different tasks. This saves having to do allocations
+            /// and copies, but its safer and flexible to just use create() so its best to not use this unless
+            /// you really need to
             void move_from(Vector<T> && part);
 
-            // Create Npart_1D^3 particles in a rectangular grid spread across all tasks
-            // buffer_factor is how much extra to allocate in case particles moves
-            // xmin, xmax specifies the domain in [0,1] that the current task is responsible for
-            // This method only sets the positions of the particles not id or vel or anything else
+            /// Create \f$ {\rm Npart}_{1D}^{\rm NDIM} \f$ particles in a rectangular grid spread across all tasks
+            /// buffer_factor is how much extra to allocate in case particles moves
+            /// xmin, xmax specifies the domain in [0,1] that the current task is responsible for
+            /// This method only sets the positions of the particles not id or vel or anything else
             void create_particle_grid(int Npart_1D, double buffer_factor, double xmin_local, double xmax_local);
 
             MPIParticles() = default;
 
-            // Get reference to particle vector. NB: due to we allow a buffer the size of the vector returned is
-            // not equal to the number of active particles
+            /// Get reference to particle vector. NB: due to we allow a buffer the size of the vector returned is
+            /// not equal to the number of active particles!
             Vector<T> & get_particles();
+            /// Get a pointer to the first particle.
             T * get_particles_ptr();
 
-            // Access particles through indexing operator
+            /// Access particles through indexing operator
             T & operator[](size_t i);
+            /// Get a reference to the i'th particle
             T & get_part(int i);
 
-            // Swap particles
-            void swap_particles(T & a, T & b);
-
-            // Get position and velocity for particle ipart (if they have it)
+            /// Get the idim component of the position for particle ipart
             auto get_pos(size_t ipart, int idim);
+            /// Get the idim component of the velocity for particle ipart (if its availiable)
             auto get_vel(size_t ipart, int idim);
 
-            // Some useful info
+            /// Total number of active particles across all tasks
             size_t get_npart_total() const;
+            /// Number of active particles on the local task
             size_t get_npart() const;
-            size_t get_particle_byte_size(size_t ipart);
 
-            // If we created a uniform distribution of particles
-            int get_local_np() const;
-            int get_local_p_start() const;
-            int get_npart_1d() const;
-
-            // Communicate particles across CPU boundaries
-            void copy_over_recieved_data(std::vector<char> & recv_buffer, size_t Npart_recieved);
+            /// Communicate particles across CPU boundaries
             void communicate_particles();
 
-            // xmin and xmax for each task
+            /// Get a vector of xmin of the domain for each task
             std::vector<double> get_x_min_per_task();
+            /// Get a vector of xmax of the domain for each task
             std::vector<double> get_x_max_per_task();
 
+            /// Free all memory of the stored particles
             void free();
 
-            // For memory logging
+            /// For memory logging add a tag to the vector we have allocated
             void add_memory_label(std::string name);
 
-            // Write / read from file
+            /// Dump data to file (internal format)
             void dump_to_file(std::string fileprefix, size_t max_bytesize_buffer = 100 * 1000 * 1000);
+            /// Load data from file (internal format)
             void load_from_file(std::string fileprefix);
 
-            // Show some info
+            /// Show some info about the class
             void info();
         };
 
@@ -350,7 +362,7 @@ namespace FML {
 
             // If only one or more task has particles then read in batches and communicate as we go along
             // just in case the total amount of particles are too large
-            if (!all_tasks_has_the_same_particles) {
+            if (not all_tasks_has_the_same_particles) {
 
                 const auto nmax_per_batch = nallocate;
                 // Read in batches
@@ -420,21 +432,6 @@ namespace FML {
         template <class T>
         size_t MPIParticles<T>::get_npart_total() const {
             return NpartTotal;
-        }
-
-        template <class T>
-        int MPIParticles<T>::get_npart_1d() const {
-            return Npart_1D;
-        }
-
-        template <class T>
-        int MPIParticles<T>::get_local_np() const {
-            return Local_Npart_1D;
-        }
-
-        template <class T>
-        int MPIParticles<T>::get_local_p_start() const {
-            return Local_p_start;
         }
 
         template <class T>
@@ -810,7 +807,7 @@ namespace FML {
             auto myfile = std::fstream(filename, std::ios::out | std::ios::binary);
 
             // If we fail to write give a warning, but continue
-            if (!myfile.good()) {
+            if (not myfile.good()) {
                 std::string error = "[MPIParticles::dump_to_file] Failed to save the particle data on task " +
                                     std::to_string(FML::ThisTask) + " Filename: " + filename;
                 std::cout << error << "\n";
@@ -880,7 +877,7 @@ namespace FML {
             auto myfile = std::ifstream(filename, std::ios::binary);
 
             // If we fail to load a file throw an error
-            if (!myfile.good()) {
+            if (not myfile.good()) {
                 std::string error = "[MPIParticles::load_from_file] Failed to read the particles on task " +
                                     std::to_string(FML::ThisTask) + " Filename: " + filename;
                 assert_mpi(false, error.c_str());

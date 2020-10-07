@@ -14,14 +14,16 @@ namespace FML {
         std::ostream & operator<<(std::ostream & s, std::vector<double> const & v);
         std::ostream & operator<<(std::ostream & s, std::vector<int> const & v);
 
-        // cout for a variant needed below
+        /// cout for a variant
         template <typename T0, typename... Ts>
         std::ostream & operator<<(std::ostream & s, std::variant<T0, Ts...> const & v) {
             std::visit([&](auto && arg) { s << arg; }, v);
             return s;
         }
 
-        // All the types we can have in the parameter file
+        /// All the types we can have in the parameter file: string, int, boolean, double and vectors of double and ints
+        /// Can be extended if needed. Only thing that is required is that the type you add have a cout-overload for 
+        /// printing the value
         using ParameterTypes = std::variant<std::string, int, bool, double, std::vector<double>, std::vector<int>>;
 
         //============================================================================
@@ -58,15 +60,20 @@ namespace FML {
                 return x;
             }
 
+            /// Show info about the parameter map
             void info() const;
 
+            /// Check if a parameter map contains a value
             bool contains(std::string name) const;
 
+            /// Get a reference to the underlying map
             std::map<std::string, ParameterTypes> & get_map();
 
+            /// Fetch a value. If it doesn't exist we throw an error
             template <typename T>
             T get(std::string name) const;
 
+            /// Fetch a value. If it doesn't exist we use the provided fiducial value
             template <typename T>
             T get(std::string name, T fiducial_value) const;
         };

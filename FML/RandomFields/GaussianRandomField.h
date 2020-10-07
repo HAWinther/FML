@@ -191,8 +191,8 @@ namespace FML {
                     mirrorcoord[0] = coord[0] == 0 ? 0 : Nmesh - coord[0];
 
                     // Only modes that are on current CPU
-                    if ((coord[0] >= imin_local && coord[0] < imax_local) ||
-                        (mirrorcoord[0] >= imin_local && mirrorcoord[0] < imax_local)) {
+                    if ((coord[0] >= imin_local and coord[0] < imax_local) or
+                        (mirrorcoord[0] >= imin_local and mirrorcoord[0] < imax_local)) {
 
                         // Compute the rest of the coords
                         coord[N - 1] = ind % (Nmesh / 2 + 1);
@@ -249,7 +249,7 @@ namespace FML {
                         std::complex<double> delta_conj = std::conj(delta);
 
                         // The case [0 < k < Nmesh/2] for all the local model
-                        if (coord[N - 1] > 0 && imin_local <= coord[0] && coord[0] < imax_local) {
+                        if (coord[N - 1] > 0 and imin_local <= coord[0] and coord[0] < imax_local) {
                             cdelta[index] = delta;
                             continue;
                         } else if (coord[N - 1] > 0)
@@ -272,12 +272,12 @@ namespace FML {
                         }
 
                         // The case [0 < i < Nmesh/2], [0 < j < Nmesh] and [k = 0]
-                        if (imin_local <= coord[0] && coord[0] < imax_local) {
+                        if (imin_local <= coord[0] and coord[0] < imax_local) {
                             cdelta[index] = delta;
                         }
 
                         // The mirror mode
-                        if (imin_local <= mirrorcoord[0] && mirrorcoord[0] < imax_local) {
+                        if (imin_local <= mirrorcoord[0] and mirrorcoord[0] < imax_local) {
                             cdelta[mirrorindex] = delta_conj;
                         }
                     }
@@ -347,7 +347,7 @@ namespace FML {
                     int ii = i == 0 ? 0 : Nmesh - i;
 
                     // Only create modes that belong to current task
-                    if ((i >= imin_local && i < imax_local) || (ii >= imin_local && ii < imax_local)) {
+                    if ((i >= imin_local and i < imax_local) or (ii >= imin_local and ii < imax_local)) {
 
                         for (int j = 0; j < Nmesh; j++) {
                             int jj = j == 0 ? 0 : Nmesh - j;
@@ -364,13 +364,13 @@ namespace FML {
                                     norm = 1.0;
 
                                 // Skip modes that are zero or otherwise fixed by symmetry
-                                if (i == Nmesh / 2 || j == Nmesh / 2 || k == Nmesh / 2)
+                                if (i == Nmesh / 2 or j == Nmesh / 2 or k == Nmesh / 2)
                                     continue;
-                                if (i == 0 && j >= Nmesh / 2 && k == 0)
+                                if (i == 0 and j >= Nmesh / 2 and k == 0)
                                     continue;
-                                if (i == 0 && j == 0 && k == 0)
+                                if (i == 0 and j == 0 and k == 0)
                                     continue;
-                                if (i >= Nmesh / 2 && k == 0)
+                                if (i >= Nmesh / 2 and k == 0)
                                     continue;
 
                                 // The wave-vector and norm of current mode (norm in units of 1/Box)
@@ -388,7 +388,7 @@ namespace FML {
                                 std::complex<double> delta_conj = std::conj(delta);
 
                                 // The case [0 < k < Nmesh/2] for all the local model
-                                if (k > 0 && imin_local <= i && i < imax_local) {
+                                if (k > 0 and imin_local <= i and i < imax_local) {
                                     coord = ((i - imin_local) * Nmesh + j) * (Nmesh / 2 + 1) + k;
                                     cdelta[coord] = delta;
                                     continue;
@@ -409,13 +409,13 @@ namespace FML {
                                 }
 
                                 // The case [0 < i < Nmesh/2], [0 < j < Nmesh] and [k = 0]
-                                if (imin_local <= i && i < imax_local) {
+                                if (imin_local <= i and i < imax_local) {
                                     coord = ((i - imin_local) * Nmesh + j) * (Nmesh / 2 + 1) + k;
                                     cdelta[coord] = delta;
                                 }
 
                                 // The mirror mode
-                                if (imin_local <= ii && ii < imax_local) {
+                                if (imin_local <= ii and ii < imax_local) {
                                     coord = ((ii - Local_x_start) * Nmesh + jj) * (Nmesh / 2 + 1) + k;
                                     cdelta[coord] = delta_conj;
                                 }

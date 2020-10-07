@@ -61,7 +61,7 @@ namespace FML {
             using gadget_particle_id_type = int;
 #endif
 
-            /// The GADGET1 header format
+            /// The GADGET header format
             // Do not change the order of the fields below as this is read as one piece of memory from file
             typedef struct {
                 // npart[1] gives the number of DM particles in the file, other particle types are ignored
@@ -99,37 +99,50 @@ namespace FML {
                 bool endian_swap{false};
                 bool header_is_read{false};
 
-                /// The dimensions of the positions and velocities in the files.
+                // The dimensions of the positions and velocities in the files.
                 int NDIM{3};
 
                 // The fields we assume is in the file
                 std::vector<std::string> fields_in_file = {"POS", "VEL", "ID"};
 
                 void throw_error(std::string errormessage) const;
+                void set_endian_swap();
 
               public:
                 GadgetReader() = default;
                 GadgetReader(int ndim);
 
+                /// Read a single gadget file and store the data in part. If only_keep_part_in_domain then
+                /// we only keep the partiles that fall within the local domain 
                 template <class T>
                 void read_gadget_single(std::string filename,
                                         std::vector<T> & part,
                                         bool only_keep_part_in_domain,
                                         bool verbose);
+                
+                /// Read all gadget files and store the data in part. If only_keep_part_in_domain then
+                /// we only keep the partiles that fall within the local domain. If buffer_factor is > 1
+                /// then we allocate corresponding extra storage in part
                 template <class T>
                 void read_gadget(std::string filename,
                                  std::vector<T> & part,
                                  double buffer_factor,
                                  bool only_keep_part_in_domain,
                                  bool verbose);
+
+                /// Read a section of a gadget file
                 void read_section(std::ifstream & fp, std::vector<char> & buffer);
+                
+                /// Read the gadget header
                 void read_header(std::ifstream & fp);
 
+                /// Get the header (assumes it has been read)
                 GadgetHeader get_header();
 
-                void set_endian_swap();
+                /// Get the number of gadget files
                 int get_num_files(std::string filename = "");
 
+                /// If non-standard file, set the fields that are in the file (only POS,VEL,ID implmented)
                 void set_fields_in_file(std::vector<std::string> fields);
             };
 
@@ -146,6 +159,8 @@ namespace FML {
                 GadgetWriter() = default;
                 GadgetWriter(int ndim);
 
+                /// Write a single gadget file. pos_norm is to convert from user units to positions in [0, box)
+                /// vel_norm is to convert from user units to sqrt(a) dxdt in units of km/s
                 template <class T>
                 void write_gadget_single(std::string filename,
                                          T * part,
@@ -159,7 +174,11 @@ namespace FML {
                                          double HubbleParam,
                                          double pos_norm,
                                          double vel_norm);
+                
+                /// Write a gadget section
                 void write_section(std::ofstream & fp, std::vector<char> & buffer, int bytes);
+                
+                /// Write the gadget header
                 void write_header(std::ofstream & fp,
                                   unsigned int NumPart,
                                   size_t NumPartTot,
@@ -206,7 +225,7 @@ namespace FML {
                 // Read the number of particles and the number of files
                 std::string filename = fileprefix + ".0";
                 std::ifstream fp(filename.c_str(), std::ios::binary);
-                if (!fp.is_open()) {
+                if (not fp.is_open()) {
                     std::string errormessage = "[GadgetReader::read_gadget_all] File " + filename + " is not open\n";
                     throw_error(errormessage);
                 }
@@ -250,7 +269,7 @@ namespace FML {
                 // Open file and get the number of bytes
                 std::ifstream fp(filename.c_str(), std::ios::binary);
                 int bytes_in_file;
-                if (!fp.is_open()) {
+                if (not fp.is_open()) {
                     std::string errormessage = "[GadgetReader::read_gadget_single] File " + filename + " is not open\n";
                     throw_error(errormessage);
                 }
@@ -442,7 +461,7 @@ namespace FML {
 
                 // Make filename using
                 std::ofstream fp(filename.c_str(), std::ios::binary | std::ios::out);
-                if (!fp.is_open()) {
+                if (not fp.is_open()) {
                     std::string errormessage = "[GadgetWrite::write_gadget_single] File " + filename + " is not open\n";
                     throw_error(errormessage);
                 }

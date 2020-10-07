@@ -77,6 +77,13 @@ namespace FML {
 
         /// Fiducial assignment function for when we have info at vertices
         /// (the fiducial choice is no info)
+        ///
+        /// @tparam VD The vertex base
+        /// @tparam The particle class
+        ///
+        /// @param[in] v Pointer to the vertex
+        /// @param[in] p Pointer to the particle
+        ///
         template <class VD, class T>
         void fiducial_assignment_function(VD * v, T * p) {}
 
@@ -132,6 +139,7 @@ namespace FML {
 
             double get_dx_buffer() { return dx_buffer; }
 
+            /// Return the CGAL triangulation we have created
             PeriodicDelaunay & get_delaunay_triangulation() { return dt; }
 
             std::vector<Vertex_handle> & get_vertex_handles_regular() { return vs; }
@@ -139,6 +147,7 @@ namespace FML {
 
             MPIPeriodicDelaunay() = default;
 
+            /// Free all memory associated with this class
             void free() {
                 dt.clear();
                 vs.clear();
@@ -482,7 +491,16 @@ namespace FML {
                 }
             }
 
-            // Create the tesselation and check that it is good
+            /// Create the tesselation and check that it is good
+            ///
+            /// @param[in] p Pointer to the particles
+            /// @param[in] NumPart Number of local particles
+            /// @param[in] buffer_fraction Optional: what fraction of the neighboring domain(s) we include when making
+            /// the tesselation.
+            /// @param[in] random_fraction Optional: what fraction of random particles we use (just to speed up the
+            /// calculation)
+            /// @param[in] assignment_function Optional: function to tell what data to store at the vertices
+            ///
             void create(T * p,
                         size_t NumPart,
                         double buffer_fraction = 0.25,
@@ -495,12 +513,12 @@ namespace FML {
                 assert(random_fraction >= 0.0);
                 if (FML::NTasks == 1)
                     random_fraction = buffer_fraction = 0.0;
-                if (buffer_fraction >= 0.5 and FML::NTasks == 2){
+                if (buffer_fraction >= 0.5 and FML::NTasks == 2) {
                     random_fraction = 0.0;
                     buffer_fraction = 0.5;
                 }
-                if(buffer_fraction >= 1.0){
-                  buffer_fraction = 1.0 - 1e-10;
+                if (buffer_fraction >= 1.0) {
+                    buffer_fraction = 1.0 - 1e-10;
                 }
                 T tmp{};
                 assert(tmp.get_ndim() == CGAL_NDIM);
@@ -594,8 +612,11 @@ namespace FML {
                 id.shrink_to_fit();
             }
 
-            // Computes the voronoi volumes for the regular points
-            // which we have stored vertex handles for
+            /// Computes the voronoi volumes for the regular points which we have stored vertex handles for
+            ///
+            /// @param[out] List of volumes. The ith entry corresponds to the ith particle used to create the
+            /// tesselation
+            ///
             void VoronoiVolume(std::vector<double> & volumes) {
                 size_t npts = vs.size();
                 volumes.resize(npts);
@@ -670,7 +691,7 @@ namespace FML {
         //===============================================================================
         enum PointType { REGULAR_POINT, BOUNDARY_POINT, GUARD_POINT };
 
-        // Type definition
+        // Type definitions
         using IDType = int;
         using QuantityType = float;
         const IDType NoWatershedID = std::numeric_limits<IDType>::max();

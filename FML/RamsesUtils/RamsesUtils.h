@@ -34,7 +34,7 @@ namespace FML {
             using RamsesIDType = int;
             using RamsesLongIDType = size_t;
 
-            // The header of a particle file
+            /// The header of a RAMSES particle file
             struct ParticleFileHeader {
                 int ncpu;
                 int ndim;
@@ -122,6 +122,16 @@ namespace FML {
               public:
                 RamsesReader() = default;
 
+                /// Construct with paths to folder holding output_0000X and the output number.
+                /// If _keep_only_particles_in_domain then we will only store particles that fall into the local domain.
+                /// If _buffer_factor > 1 then we will allocate correspondingly more storage in for particles when we
+                /// later read This constructor only reads the info file and gets ready to read. You have to call
+                /// read_ramses to do the actual reading
+                /// @param[in] _filepath Path to the folder holding the RAMSES output_0000X folder
+                /// @param[in] _outputnr The X in the RAMSES output_0000X folder
+                /// @param[in] _keep_only_particles_in_domain Only store particles that fall into the local domain (for MPI use)
+                /// @param[in] _verbose Optional: show info while reading
+                ///
                 RamsesReader(std::string _filepath,
                              int _outputnr,
                              double _buffer_factor,
@@ -133,10 +143,14 @@ namespace FML {
                     read_info();
                 }
 
+                /// If we have non-standard (or older) file formats set it here
+                /// @param[in] what_is_in_file List of what the file contains in order, e.g. (POS, VEL, MASS, ID, LEVEL,
+                /// FAMILY)
+                ///
                 void set_file_format(std::vector<std::string> what_is_in_file) {
                     for (auto e : what_is_in_file) {
-                        if (!(e == "POS" or e == "VEL" or e == "MASS" or e == "ID" or e == "LEVEL" or e == "FAMILY" or
-                              e == "TAG"))
+                        if (not(e == "POS" or e == "VEL" or e == "MASS" or e == "ID" or e == "LEVEL" or e == "FAMILY" or
+                                e == "TAG"))
                             throw_error("[RamsesReader::set_file_format] Unknown field in file-entry (not "
                                         "POS,VEL,MASS,ID,LEVEL,FAMILY,TAG): " +
                                         e);
@@ -144,9 +158,12 @@ namespace FML {
                     entries_in_file = what_is_in_file;
                 }
 
+                /// Read a single ramses file and store the data in p
+                /// @param[out] p Container for storing the particles we read
+                ///
                 template <class T>
                 void read_ramses_single(int ifile, std::vector<T> & p) {
-                    if (!infofileread)
+                    if (not infofileread)
                         read_info();
 
                     std::string numberfolder = int_to_ramses_string(outputnr);
@@ -177,13 +194,17 @@ namespace FML {
                     read_particle_file(ifile, p);
                 }
 
+                /// Read all ramses files and store the data in p
+                /// @param[out] p Container for storing the particles we read
+                ///
                 template <class T>
                 void read_ramses(std::vector<T> & p) {
-                    if (!infofileread)
+                    if (not infofileread)
                         read_info();
 
                     if (keep_only_particles_in_domain) {
-                        size_t nallocate = buffer_factor > 1.0 ? size_t(double(npart_in_domain) * buffer_factor) : npart_in_domain;
+                        size_t nallocate =
+                            buffer_factor > 1.0 ? size_t(double(npart_in_domain) * buffer_factor) : npart_in_domain;
                         p.reserve(nallocate);
                         p.resize(npart_in_domain);
                     } else {
@@ -224,6 +245,7 @@ namespace FML {
                     }
                 }
 
+              private:
                 //====================================================
                 // Integer to ramses string
                 //====================================================
@@ -557,7 +579,7 @@ namespace FML {
 
                             // Set the book-keeping array that tells us if a particle is in the domain or not
                             if (j == 0) {
-                                if (!keep_only_particles_in_domain) {
+                                if (not keep_only_particles_in_domain) {
                                     for (int i = 0; i < header.npart; i++) {
                                         is_in_domain[i] = 1;
                                     }
@@ -710,7 +732,7 @@ namespace FML {
             // Write a ramses ic_deltab file for a given cosmology
             // and levelmin
             //====================================================
-
+                
             void write_icdeltab(const std::string filename,
                                 const float _astart,
                                 const float _omega_m,

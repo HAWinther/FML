@@ -146,7 +146,7 @@ namespace FML {
 
             // Fourier transform to real space
             fourier_grid_result.fftw_c2r();
-            if (!f_and_g_are_the_same_grid) {
+            if (not f_and_g_are_the_same_grid) {
                 tmp = fourier_grid_f;
                 tmp.add_memory_label("FFTWGrid::convolution_fourier_space::tmp");
                 tmp.fftw_c2r();
@@ -161,7 +161,7 @@ namespace FML {
                 for (auto && real_index : fourier_grid_result.get_real_range(islice, islice + 1)) {
                     auto g_real = fourier_grid_result.get_real_from_index(real_index);
                     auto f_real = g_real;
-                    if (!f_and_g_are_the_same_grid)
+                    if (not f_and_g_are_the_same_grid)
                         f_real = tmp.get_real_from_index(real_index);
                     fourier_grid_result.set_real_from_index(real_index, f_real * g_real);
                 }
@@ -202,7 +202,7 @@ namespace FML {
 
             // Fourier transform to fourier space
             real_grid_result.fftw_r2c();
-            if (!f_and_g_are_the_same_grid) {
+            if (not f_and_g_are_the_same_grid) {
                 tmp = real_grid_f;
                 tmp.add_memory_label("FFTWGrid::convolution_real_space::tmp");
                 tmp.fftw_r2c();
@@ -217,7 +217,7 @@ namespace FML {
                 for (auto && fourier_index : real_grid_result.get_fourier_range(islice, islice + 1)) {
                     auto g_fourier = real_grid_result.get_fourier_from_index(fourier_index);
                     auto f_fourier = g_fourier;
-                    if (!f_and_g_are_the_same_grid)
+                    if (not f_and_g_are_the_same_grid)
                         f_fourier = tmp.get_fourier_from_index(fourier_index);
                     real_grid_result.set_fourier_from_index(fourier_index, f_fourier * g_fourier);
                 }
@@ -227,9 +227,19 @@ namespace FML {
             real_grid_result.fftw_c2r();
         }
 
+        //===================================================================================
         /// This computes the PDF of whatever quantity is in the grid (e.g. the density if its a density grid)
         /// The binning is set to be linear. The range is set by the values we find in the grid
         /// This realy belongs in the namespace CORRELATIONFUNCTIONS so should move it there
+        ///
+        /// @tparam N The dimension of the grid
+        ///
+        /// @param[in] real_grid
+        /// @param[in] nbins Number of bins
+        /// @param[out] x Bins for the quantity we are computing the PDF of
+        /// @param[out] pdf The binned PDF normalized such that \f$ \int_{-\infty}^\infty p(x)dx = 1\f$.
+        ///
+        //===================================================================================
         template <int N>
         void
         compute_grid_PDF(const FFTWGrid<N> & real_grid, int nbins, std::vector<double> & x, std::vector<double> & pdf) {

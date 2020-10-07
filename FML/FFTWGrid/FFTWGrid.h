@@ -51,8 +51,6 @@ namespace FML {
         ///
         /// Compile-time defines:
         ///
-        ///   NO_AUTO_FFTW_MPI_INIT      : Do not automatically initialize FFTW, handle this yourself
-        ///
         ///   BOUNDSCHECK_FFTWGRID       : bound checks when setting and getting values
         ///
         ///   SINGLE_PRECISION_FFTW      : use float instead of double
@@ -60,10 +58,6 @@ namespace FML {
         ///   LONG_DOUBLE_PRECISION_FFTW : use load double instead of double
         ///
         ///   DEBUG_FFTWGRID             : Show some info while running
-        ///
-        ///   USE_MPI                    : Use MPI
-        ///
-        ///   USE_OMP                    : Use OpenMP
         ///
         ///   USE_FFTW_THREADS           : Use threads if possible. With this we assume the maximum number of threads
         ///                                If you want to use fewer then you can call create_wisdom(..., nthreads) to
@@ -130,141 +124,167 @@ namespace FML {
             std::string name{""};
 
           public:
-            // Constructors
             FFTWGrid() = default;
+
+            /// Constructor
+            /// @param[in] Nmesh Total number of grid-cells per dimension
+            /// @param[in] n_extra_x_slices_left Number of extra x-slices to the left of the grid (for keeping boundary
+            /// data from neighbor)
+            /// @param[in] n_extra_x_slices_right Number of extra x-slices to the right of the grid (for keeping
+            /// boundary data from neighbor)
             FFTWGrid(int Nmesh, int n_extra_x_slices_left = 0, int n_extra_x_slices_right = 0);
 
-            // Allow copying and assignment from grids with the same dimension only
+            // Copying and assignment from grids with the same dimension only is allowed
             FFTWGrid(const FFTWGrid & rhs) = default;
             FFTWGrid & operator=(const FFTWGrid & rhs) = default;
 
             // Pointers to various parts of the grid
-            FloatType * get_real_grid_left(); // The left most slice (slice ix = -nleft_extra,...,-2,-1)
-            FloatType * get_real_grid();      // The main grid       (slice ix = 0...NLocal_x-1)
+            FloatType * get_real_grid_left(); /// The left most slice (slice ix = -nleft_extra,...,-2,-1)
+            FloatType * get_real_grid();      /// The main grid       (slice ix = 0...NLocal_x-1)
             FloatType *
-            get_real_grid_right(); // The right grid      (slice ix = NLocal_x,NLocal_x+1,...,NLocal_x+nright_extra-1)
+            get_real_grid_right(); /// The right grid      (slice ix = NLocal_x,NLocal_x+1,...,NLocal_x+nright_extra-1)
             FloatType *
-            get_real_grid_by_slice(int slice); // Get the ix'th slice (i.e. -nleft_extra <= ix < NLocal_x+nright_extra)
-            ComplexType * get_fourier_grid();  // The Fourier grid (aligns with the main real grid)
+            get_real_grid_by_slice(int slice); /// Get the ix'th slice (i.e. -nleft_extra <= ix < NLocal_x+nright_extra)
+            ComplexType * get_fourier_grid();  /// The Fourier grid (aligns with the main real grid)
 #ifdef USE_FFTW
-            my_fftw_complex * get_fftw_grid(); // The fftw_complex cast of the ptr above
+            my_fftw_complex * get_fftw_grid(); /// The fftw_complex cast of get_fourier_gride
 #endif
-            // Clear the memory associated with the grid
+            /// Free all the memory associated with the grid
             void free();
 
-            // Perform real-to-complex fourier transform
+            /// Perform real-to-complex fourier transform
             void fftw_r2c();
 
-            // Perform complex-to-real fourier transform
+            /// Perform complex-to-real fourier transform
             void fftw_c2r();
 
-            // Fill the whole grid with a constant value
+            /// Fill the whole real-grid with a constant value
             void fill_real_grid(const FloatType val);
+            /// Fill the whole fourier-grid with a constant value
             void fill_fourier_grid(const ComplexType val);
 
-            // Fill the main grid from a function specifying the value at a given position
+            /// Fill the main grid from a function specifying the value at a given position
             void fill_real_grid(std::function<FloatType(std::array<double, N> &)> & func);
+            /// Fill the main grid from a function specifying the value at a given fourier wave-vector
             void fill_fourier_grid(std::function<ComplexType(std::array<double, N> &)> & func);
 
-            // Get the cell coordinates from the index
+            /// Get the (local) cell coordinates from a local index
             std::array<int, N> get_coord_from_index(const IndexIntType index_real);
+            /// Get the (local) cell coordinates from a local index
             std::array<int, N> get_fourier_coord_from_index(const IndexIntType index_fourier);
 
-            // From integer position in grid in [0,Nmesh)^Ndim to index in allocated grid
+            /// From integer (local) coordinate of a cell in Local_nx x [0,Nmesh)^(Ndim-1) to (local) index in allocated
+            /// grid
             IndexIntType get_index_real(const std::array<int, N> & coord) const;
 
-            // From integer position in fourier grid in [0,Nmesh)^Ndim-1 x [0,Nmesh/2+1) to index in allocated grid
+            /// From integer (local) coordinate in fourier grid in Local_nx x [0,Nmesh)^(Ndim-2) x [0,Nmesh/2+1) to
+            /// index in allocated grid
             IndexIntType get_index_fourier(const std::array<int, N> & coord) const;
 
-            // Fetch value in grid by integer coordinate
+            /// Fetch value in grid by (local) integer coordinate
             FloatType get_real(const std::array<int, N> & coord) const;
+            /// Fetch value in grid by (local) index
             FloatType get_real_from_index(const IndexIntType index) const;
 
-            // Fetch value in fourier grid by integer coordinate
+            /// Fetch value in fourier grid by (local) integer coordinate
             ComplexType get_fourier(const std::array<int, N> & coord) const;
+            /// Fetch value in fourier grid by (local) index
             ComplexType get_fourier_from_index(const IndexIntType index) const;
 
-            // The position of a real grid-node in [0,1)^Ndim
+            /// The (global) position of a real grid-cell in [0,1)^Ndim
             std::array<double, N> get_real_position(const std::array<int, N> & coord) const;
 
-            // The  wave-vector of a grid-node in Fourier space (For physical [k] multiply by 1/Boxsize)
+            /// Get the wave-vector of a grid-cell in Fourier space (for physical [k] multiply by 1/Boxsize)
             std::array<double, N> get_fourier_wavevector(const std::array<int, N> & coord) const;
+            /// Get the wave-vector of a grid-cell in Fourier space (for physical [k] multiply by 1/Boxsize)
             std::array<double, N> get_fourier_wavevector_from_index(const IndexIntType index) const;
 
-            // Set value in grid using integer coordinate in [0,Nmesh)^Ndim
+            /// Set value in grid from (local) integer coordinate in Local_nx x [0,Nmesh)^(Ndim-1)
             void set_real(const std::array<int, N> & coord, const FloatType value);
+            /// Set value in grid from (local) index
             void set_real_from_index(const IndexIntType ind, const FloatType value);
+            /// Add to value in grid
             void add_real(const std::array<int, N> & coord, const FloatType value);
 
-            // Set value in fourier grid using coordinate in [0,Nmesh)^Ndim-1 x [0,Nmesh/2+1)
+            /// Set value of cell in fourier grid using (local) coordinate in Local_nx x [0,Nmesh)^(Ndim-2) x
+            /// [0,Nmesh/2+1)
             void set_fourier(const std::array<int, N> & coord, const ComplexType value);
+            /// Set value of cell in fourier grid using (local) index
             void set_fourier_from_index(const IndexIntType ind, const ComplexType value);
 
-            // How many extra slices we have allocated to the left
+            /// How many extra slices we have allocated to the left
             int get_n_extra_slices_left() const;
-            // How many extra slices we have allocated to the right
+            /// How many extra slices we have allocated to the right
             int get_n_extra_slices_right() const;
-            // Number of grid-nodes per dimension
+            /// Number of grid-cells per dimension
             int get_nmesh() const;
-            // Number of dimension of the grid
+            /// Dimension of the grid
             int get_ndim() const;
 
-            // Number of local x-slices in the real grid
+            /// Number of local x-slices in the real grid
             ptrdiff_t get_local_nx() const;
-            // The index of the x-slice the first local slice is in the global grid
+            /// The x-slice the first local slice has in the global grid
             ptrdiff_t get_local_x_start() const;
 
-            // The number of active real cells (with padding)
+            /// The number of active real cells (with padding)
             ptrdiff_t get_ntot_real() const;
-            // Total number of active Fourier space grid-nodes [ e.g. Local_nx * N * N * ... * (N/2 + 1) ]
+            /// Total number of active Fourier space grid-nodes [ e.g. Local_nx * N * N * ... * (N/2 + 1) ]
             ptrdiff_t get_ntot_fourier() const;
-            // Total number of Fourier space grid-nodes we allocate (same as above + the extra slices)
+            /// Total number of Fourier space grid-nodes we allocate (same as above + the extra slices)
             ptrdiff_t get_ntot_fourier_alloc() const;
 
-            // From index in the grid get the k-vector and the norm
+            /// From index in the grid get the k-vector and the magnitude of it
             void get_fourier_wavevector_and_norm_by_index(const IndexIntType ind,
                                                           std::array<double, N> & kvec,
                                                           double & kmag) const;
+            /// From index in the grid get the k-vector and the norm of it (square magnitude)
             void get_fourier_wavevector_and_norm2_by_index(const IndexIntType ind,
                                                            std::array<double, N> & kvec,
                                                            double & kmag2) const;
 
-            // Range iterator for going through all active cells in the main real/complex grid by index
-            // [ e.g. for(auto and real_index: grid.real_range()) ]
-            // If you add the slice numbers we only loop over the given slice range
+            /// Range iterator for going through all active cells in the main real real grid by index
+            /// [ e.g. for(auto and real_index: grid.real_range()) ]
+            /// If you add the slice numbers we only loop over the given slice range
             RealRange get_real_range(int islice_begin = 0, int islice_end = 0) const;
-            // For the Fourier range islice denotes the ikx value
+            /// Range iterator for going through all active cells in the main fourier grid by index
+            /// [ e.g. for(auto and real_index: grid.real_range()) ]
+            /// If you add the slice numbers we only loop over the given slice range
+            /// For the Fourier range islice denotes the ikx value
             FourierRange get_fourier_range(int islice_begin = 0, int islice_end = 0) const;
 
-            // The number of cells per slice that we alloc. Useful to jump from slice to slice
+            /// The number of cells per slice that we alloc. Useful to jump from slice to slice
             ptrdiff_t get_ntot_real_slice_alloc() const;
 
-            // Check if we have NaN in any of the grids
+            /// Check if we have NaN in any of the grids
             bool nan_in_grids() const;
 
-            // Send extra slices to the neighboring CPUs
+            /// Send slices to the neighboring CPUs which stores them in the left and right extra slice storage
             void communicate_boundaries();
 
-            // This creates wisdom (but overwrites the arrays so must be done before setting the arrays)
+            /// This creates FFTW wisdom (but overwrites the arrays so must be done before setting the arrays)
             void create_wisdow(int planner_flag, int numthreads = FML::NThreads);
+            /// Load FFTW wisdom
             void load_wisdow(std::string filename) const;
+            /// Save FFTW wisdom
             void save_wisdow(std::string filename) const;
 
-            // Print some info about the grid
+            /// Print some info about the grid
             void info();
 
-            // Get/Set the status of the grid: is it currently a real grid or a fourier grid?
+            /// Get the status of the grid: is it currently a real grid or a fourier grid?
             bool get_grid_status_real();
+            /// Set the status of the grid: is it currently a real grid or a fourier grid?
             void set_grid_status_real(bool grid_is_a_real_grid);
 
-            // For memory logging
+            /// For memory logging: add a label to the grid
             void add_memory_label(std::string label);
 
-            void reallocate(int Nmesh, int nleft, int nright) { FFTWGrid(Nmesh, nleft, nright); }
-
-            // Save and read from file (adds .X to fileprefix where X is ThisTask)
-            void load_from_file(std::string fileprefix);
+            /// Save to file (adds .X to fileprefix where X is ThisTask)
             void dump_to_file(std::string fileprefix);
+            /// Load grid from file
+            void load_from_file(std::string fileprefix);
+
+            void reallocate(int Nmesh, int nleft, int nright) { FFTWGrid(Nmesh, nleft, nright); }
         };
 
         template <int N>
@@ -383,7 +403,7 @@ namespace FML {
             }
 #endif
 
-            IndexIntType cellsperslice = FML::power(IndexIntType(Nmesh), N - 2) * IndexIntType(Nmesh / 2 + 1);
+            IndexIntType cellsperslice = FML::power(Nmesh, N - 2) * IndexIntType(Nmesh / 2 + 1);
             return FourierRange(cellsperslice * islice_begin, cellsperslice * islice_end);
             // return FourierRange(0, NmeshTotComplex);
         }
@@ -473,7 +493,7 @@ namespace FML {
 
         // Make FFTW plans with FFTW_MEASURE, FFTW_PATIENT, FFTW_EXHAUSTIVE
         template <int N>
-        void FFTWGrid<N>::create_wisdow(int planner_flag, int nthreads) {
+        void FFTWGrid<N>::create_wisdow([[maybe_unused]] int planner_flag, [[maybe_unused]] int nthreads) {
 #ifdef USE_FFTW
             if (planner_flag == FFTW_ESTIMATE)
                 return;
@@ -1089,8 +1109,8 @@ namespace FML {
                 auto iy = index / nover2plus1;
                 auto ix = iy / Nmesh;
                 iy = iy % Nmesh;
-                kvec[0] =
-                    twopi * double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
+                kvec[0] = twopi *
+                          double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
                 kvec[1] = twopi * double(iy <= nover2 ? iy : iy - Nmesh);
                 kvec[2] = twopi * double(iz <= nover2 ? iz : iz - Nmesh);
                 kmag2 = kvec[0] * kvec[0] + kvec[1] * kvec[1] + kvec[2] * kvec[2];
@@ -1103,8 +1123,8 @@ namespace FML {
                 kmag2 = kvec[0] * kvec[0] + kvec[1] * kvec[1];
             } else if (N == 1) {
                 auto ix = index;
-                kvec[0] =
-                    twopi * double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
+                kvec[0] = twopi *
+                          double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
                 kmag2 = kvec[0] * kvec[0];
             } else {
                 std::array<int, N> coord;
@@ -1114,7 +1134,7 @@ namespace FML {
                 }
 
                 kvec[0] = twopi * double((Local_x_start + coord[0]) <= nover2 ? (Local_x_start + coord[0]) :
-                                                                          (Local_x_start + coord[0]) - Nmesh);
+                                                                                (Local_x_start + coord[0]) - Nmesh);
                 kmag2 = kvec[0] * kvec[0];
                 for (int idim = 1; idim < N; idim++) {
                     kvec[idim] = twopi * double(coord[idim] <= nover2 ? coord[idim] : coord[idim] - Nmesh);
@@ -1146,27 +1166,27 @@ namespace FML {
                 auto iy = index / nover2plus1;
                 auto ix = iy / Nmesh;
                 iy = iy % Nmesh;
-                fcoord[0] =
-                    twopi * double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
+                fcoord[0] = twopi * double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) :
+                                                                            (Local_x_start + ix) - Nmesh);
                 fcoord[1] = twopi * double(iy <= nover2 ? iy : iy - Nmesh);
                 fcoord[2] = twopi * double(iz <= nover2 ? iz : iz - Nmesh);
             } else if (N == 2) {
                 auto iy = index % nover2plus1;
                 auto ix = index / nover2plus1;
-                fcoord[0] =
-                    twopi * double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
+                fcoord[0] = twopi * double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) :
+                                                                            (Local_x_start + ix) - Nmesh);
                 fcoord[1] = twopi * (iy <= nover2 ? iy : iy - Nmesh);
             } else if (N == 1) {
                 auto ix = index % nover2plus1;
-                fcoord[0] =
-                    twopi * double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) : (Local_x_start + ix) - Nmesh);
+                fcoord[0] = twopi * double((Local_x_start + ix) <= nover2 ? (Local_x_start + ix) :
+                                                                            (Local_x_start + ix) - Nmesh);
             } else {
                 fcoord[N - 1] = index % nover2plus1;
                 for (int idim = N - 2, n = nover2plus1; idim >= 0; idim--, n *= Nmesh) {
                     fcoord[idim] = double((index / n) % Nmesh);
                 }
                 fcoord[0] = twopi * double((Local_x_start + fcoord[0]) <= nover2 ? (Local_x_start + fcoord[0]) :
-                                                                             (Local_x_start + fcoord[0]) - Nmesh);
+                                                                                   (Local_x_start + fcoord[0]) - Nmesh);
                 for (int idim = 1; idim < N; idim++) {
                     fcoord[idim] = twopi * double(fcoord[idim] <= nover2 ? fcoord[idim] : fcoord[idim] - Nmesh);
                 }
@@ -1239,7 +1259,7 @@ namespace FML {
             auto myfile = std::fstream(filename, std::ios::out | std::ios::binary);
 
             // If we fail to write give a warning, but continue
-            if (!myfile.good()) {
+            if (not myfile.good()) {
                 std::string error = "[FFTWGrid::dump_to_file] Failed to save the grid data on task " +
                                     std::to_string(FML::ThisTask) + " Filename: " + filename;
                 std::cout << error << "\n";
@@ -1275,7 +1295,7 @@ namespace FML {
             auto myfile = std::ifstream(filename, std::ios::binary);
 
             // If we fail to load a file throw an error
-            if (!myfile.good()) {
+            if (not myfile.good()) {
                 std::string error = "[FFTWGrid::load_from_file] Failed to read the grid from file on task " +
                                     std::to_string(FML::ThisTask) + " Filename: " + filename;
                 assert_mpi(false, error.c_str());

@@ -27,13 +27,21 @@ namespace FML {
         template <class T, int NDIM>
         class FoFHalo {
           public:
+            /// Id of the halo
             size_t id{0};
+            /// Number of particles in the halo
             size_t np{0};
+            /// Mass of the halo (units is the same as those in the particles; get_mass)
             double mass{0.0};
+            /// Center of the halo
             std::array<double, NDIM> pos;
+            /// Velocity of the halo
             std::array<double, NDIM> vel;
-            double vel2{0.0}; // <v^2>
+            /// <v^2> of the particles in the halo
+            double vel2{0.0};
+            /// Is the halo shared between tasks? (The FoF algorithms uses this)
             bool shared{false};
+            /// Is the halo merged yet? (The FoF algorithms uses this)
             bool merged{false};
 
             // To be able to use this with MPIParticles we need these methods
@@ -47,8 +55,7 @@ namespace FML {
                 shared = _shared;
             }
 
-            // Add a new particle to the group
-            // Update data
+            /// Add a new particle to the group
             void add(T & particle, bool periodic) {
                 double _mass = FML::PARTICLE::GetMass(particle);
                 static_assert(FML::PARTICLE::has_get_pos<T>());
@@ -99,7 +106,7 @@ namespace FML {
                 mass += _mass;
             }
 
-            // Merge the groups
+            /// Merge two groups
             void merge(FoFHalo & g, bool periodic) {
                 if (g.np == 0)
                     return;
@@ -142,7 +149,9 @@ namespace FML {
         //=========================================================================
         class FoFCells {
           public:
+            /// Number of particles in the cell
             int np{0};
+            /// List of indices of particles that are in the cell
             std::vector<size_t> ParticleIndex{};
             FoFCells() = default;
         };

@@ -34,8 +34,9 @@ namespace FML {
             void parameter_not_found(std::string name, bool found, bool required) const;
 
           public:
-            // For more verbose lookup, i.e.  lfp.read_int("myint", default_value, lfp.parameter_is_optional);
+            /// For more verbose lookup, i.e.  lfp.read_int("myint", default_value, lfp.required);
             const bool required = true;
+            /// For more verbose lookup, i.e.  lfp.read_int("myint", default_value, lfp.optional);
             const bool optional = false;
 
             LuaFileParser() = delete;
@@ -46,35 +47,56 @@ namespace FML {
             LuaFileParser(const LuaFileParser &) = delete;
             LuaFileParser & operator=(const LuaFileParser &) = delete;
 
-            // Open and close a file. If file is not open then close does nothing
+            /// Open a file
             void open(std::string filename);
+            /// Close a file. If file is not open then close does nothing
             void close();
 
+            //========================================================================================
+
             // Read different types (can be boiled down to one method with templates but too lazy to do it)
+            /// Read an integer. If it does not exist use the default_value unless required for which we throw and error
             int read_int(std::string name, int default_value, bool required);
+            /// Read a double. If it does not exist use the default_value unless required for which we throw and error
             double read_double(std::string name, double default_value, bool required);
+            /// Read a string. If it does not exist use the default_value unless required for which we throw and error
             std::string read_string(std::string name, std::string default_value, bool required);
+            /// Read a boolean. If it does not exist use the default_value unless required for which we throw and error
             bool read_bool(std::string name, bool default_value, bool required);
 
-            int read_int(std::string name, int default_value) { return read_int(name, default_value, false); };
+            //========================================================================================
+
+            /// Read an integer. If it does not exist use the default_value
+            int read_int(std::string name, int default_value) { return read_int(name, default_value, optional); };
+            /// Read a double. If it does not exist use the default_value
             double read_double(std::string name, double default_value) {
-                return read_double(name, default_value, false);
+                return read_double(name, default_value, optional);
             };
+            /// Read a string. If it does not exist use the default_value
             std::string read_string(std::string name, std::string default_value) {
-                return read_string(name, default_value, false);
+                return read_string(name, default_value, optional);
             };
-            bool read_bool(std::string name, bool default_value) { return read_bool(name, default_value, false); };
+            /// Read a boolean. If it does not exist use the default_value
+            bool read_bool(std::string name, bool default_value) { return read_bool(name, default_value, optional); };
 
-            int read_int(std::string name) { return read_int(name, 0, true); };
-            double read_double(std::string name) { return read_double(name, 0.0, true); };
-            std::string read_string(std::string name) { return read_string(name, "", true); };
-            bool read_bool(std::string name) { return read_bool(name, false, true); };
+            //========================================================================================
 
-            /// Read arrays of numbers
+            /// Read an integer. If it does not exist we throw an error
+            int read_int(std::string name) { return read_int(name, 0, required); };
+            /// Read a double. If it does not exist we throw an error
+            double read_double(std::string name) { return read_double(name, 0.0, required); };
+            /// Read a string. If it does not exist we throw an error
+            std::string read_string(std::string name) { return read_string(name, "", required); };
+            /// Read a boolean. If it does not exist we throw an error
+            bool read_bool(std::string name) { return read_bool(name, false, required); };
+
+            //========================================================================================
+
+            /// Read an arrays of numbers. If it does not exist use the default_value unless required for which we throw and error
             template <class T>
             std::vector<T> read_number_array(std::string name, std::vector<T> default_value, bool required = true);
 
-            /// Read arrays of strings
+            /// Read arrays of strings. If it does not exist use the default_value unless required for which we throw and error
             std::vector<std::string>
             read_string_array(std::string name, std::vector<std::string> default_value, bool required = true);
         };
@@ -97,7 +119,7 @@ namespace FML {
         void LuaFileParser::open(std::string filename) {
             L = luaL_newstate();
             luaL_openlibs(L);
-            if (luaL_loadfile(L, filename.c_str()) || lua_pcall(L, 0, 0, 0)) {
+            if (luaL_loadfile(L, filename.c_str()) or lua_pcall(L, 0, 0, 0)) {
                 std::string errormessage =
                     "[LuaFileParser::open] Cannot open parameterfile " + std::string(lua_tostring(L, -1)) + "\n";
                 throw_error(errormessage);
@@ -112,7 +134,7 @@ namespace FML {
         }
 
         void LuaFileParser::parameter_not_found(std::string name, bool found, bool required) const {
-            if (!found && required) {
+            if (not found and required) {
                 std::string errormessage =
                     "[LuaFileParser::read] Required parameter " + name + " not found in the parameter file\n";
                 throw_error(errormessage);

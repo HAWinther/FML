@@ -84,7 +84,7 @@ namespace FML {
 
       public:
         static MemoryLog * get() {
-            if (!instance)
+            if (not instance)
                 instance = new MemoryLog;
             return instance;
         }
@@ -233,7 +233,7 @@ namespace FML {
                 std::cout << "Max over tasks:           " << std::setw(15) << double(peak_memory) / 1.0e6 << " MB\n";
                 std::cout << "\n";
             }
-            if (!allocations.empty()) {
+            if (not allocations.empty()) {
                 if (ThisTask == 0) {
                     std::cout << "\nWe have the following things allocated on task 0: \n";
                 }
@@ -251,7 +251,7 @@ namespace FML {
                 if (ThisTask == 0)
                     std::cout << "\n";
             }
-            if (!memory_vs_time.empty()) {
+            if (not memory_vs_time.empty()) {
                 if (ThisTask == 0)
                     std::cout << "Total memory as function of time:\n";
                 for (auto && m : memory_vs_time) {
@@ -305,7 +305,7 @@ namespace FML {
 
     template <typename T, typename U>
     inline bool operator!=(const LogAllocator<T> & a, const LogAllocator<U> & b) {
-        return !(a == b);
+        return not (a == b);
     }
 } // namespace FML
 

@@ -39,14 +39,19 @@
 namespace FML {
 
     // MPI and OpenMP information
+    /// The MPI task number
     extern int ThisTask;
+    /// Total number of MPI tasks
     extern int NTasks;
+    /// Total number of threads availiable
     extern int NThreads;
+    /// If MPI and threads can work together with FFTW
     extern bool MPIThreadsOK;  // Set by init_mpi
     extern bool FFTWThreadsOK; // Set by init_fftw
 
-    // The local extent of the domain (global domain goes from 0 to 1)
+    /// The local extent of the domain (global domain goes from 0 to 1)
     extern double xmin_domain;
+    /// The local extent of the domain (global domain goes from 0 to 1)
     extern double xmax_domain;
 
     auto uniform_random() -> double;
@@ -152,11 +157,11 @@ namespace FML {
     }
     
     //============================================
-    //// An assert function that calls MPI_Abort
-    //// instead of just abort to avoid deadlock
+    /// An assert function that calls MPI_Abort
+    /// instead of just abort to avoid deadlock
     //============================================
     constexpr void __assert_mpi(const char * expr_str, bool expr, const char * file, int line, const char * msg) {
-        if (!expr) {
+        if (not expr) {
             std::cout << "[assert_mpi] Assertion failed: [" << expr_str << "], File: [" << file << "], Line: [" << line
                       << "], Message: [" << msg << "]" << std::endl;
 #ifdef USE_MPI
@@ -168,7 +173,7 @@ namespace FML {
 #define assert_mpi(Expr, Msg) __assert_mpi(#Expr, Expr, __FILE__, __LINE__, Msg)
 
     //============================================
-    // Simple integer a^b power-function by squaring
+    /// Simple integer a^b power-function by squaring
     //============================================
     constexpr long long int power(int base, int exponent) {
         return exponent == 0 ?

@@ -1,4 +1,5 @@
 #include <FML/ODESolver/ODESolver.h>
+#include <cmath>
 
 // using namespace FML::ODESOLVER;
 using DVector = FML::SOLVERS::ODESOLVER::DVector;

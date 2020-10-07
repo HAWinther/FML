@@ -113,35 +113,42 @@ namespace FML {
                            DVector & yinitial,
                            const gsl_odeiv2_step_type * stepper = ODESOLVER_FIDUCIAL_STEPPER,
                            ODEFunctionPointerJacobian jacobian = nullptr);
+                
+                /// Solve the ODE defined by the ode_equation. We solve it from the first to the last point in the xarr
+                /// and store the value of the solution in all points in xarr. The initial value is in yinitial and
+                /// we have the option to choose a stepper and provide the jacobian if the stepper requires that
                 void solve(ODEFunction & ode_equation,
                            DVector & xarr,
                            DVector & yinitial,
                            const gsl_odeiv2_step_type * stepper = ODESOLVER_FIDUCIAL_STEPPER,
                            ODEFunctionJacobian & jacobian = *no_jacobian_ptr);
 
+                /// Show info while solving or not
                 void set_verbose(bool onoff);
+                /// Set the accuracy parameters (first guess for the step-size, the absolute and relative error)
                 void set_accuracy(const double hstart, const double abserr, const double relerr);
 
-                // Get the solution at the end point
+                /// Get the solution at the end point
                 DVector get_final_data() const;
+                /// Get the solution for a given component at the end point
                 double get_final_data_by_component(int icomponent) const;
 
-                // Get all the data z_ij = ( y_i(xarr_j) )
+                /// Get all the data z_ij = ( y_i(xarr_j) )
                 DVector2D get_data() const;
 
-                // Get all the data transposed z_ji = ( y_i(xarr_j) )
+                /// Get all the data transposed z_ji = ( y_i(xarr_j) )
                 DVector2D get_data_transpose() const;
 
-                // Get the data for a particular component y_i(xarr)
+                /// Get the data for a particular component y_i(xarr)
                 DVector get_data_by_component(int icomponent) const;
 
-                // Get the data at a particular x-index y(xarr_i)
+                /// Get the data at a particular x-index y(xarr_i)
                 DVector get_data_by_xindex(int ix) const;
 
-                // Get all the data for the derivatives ( dy_i/dx(xarr) )_i=1^nequations
+                /// Get all the data for the derivatives ( dy_i/dx(xarr) )_i=1^nequations
                 DVector2D get_derivative_data() const;
 
-                // Get the data dy_i/dx(xarr) for the derivatives for a particular component
+                /// Get the data dy_i/dx(xarr) for the derivatives for a particular component
                 DVector get_derivative_data_by_component(int icomponent) const;
             };
         } // namespace ODESOLVER

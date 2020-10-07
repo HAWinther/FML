@@ -136,7 +136,7 @@ namespace FML {
                                                    size_t NumPartTot,
                                                    FFTWGrid<N> & density_grid_fourier,
                                                    std::string density_assignment_method);
-        
+
         /// @brief Assign particles to grid to compute the over density.
         /// Do this for a normal grid and an interlaced grid and return
         /// the alias-corrected fourier transform of the density field in fourier space.
@@ -301,7 +301,7 @@ namespace FML {
         /// and * is a convolution (easily computed with Mathematica)
         ///
         template <int ORDER>
-        inline double kernel(double x) {
+        inline double kernel([[maybe_unused]] double x) {
             static_assert(ORDER > 0 and ORDER <= 5, "Error: kernel order is not implemented\n");
             return 0.0 / 0.0;
         }
@@ -403,7 +403,7 @@ namespace FML {
         void particles_to_grid(const T * part, size_t NumPart, size_t NumPartTot, FFTWGrid<N> & density) {
 
             const auto nextra = get_extra_slices_needed_by_order<ORDER>();
-            assert_mpi(density.get_n_extra_slices_left() >= nextra.first &&
+            assert_mpi(density.get_n_extra_slices_left() >= nextra.first and
                            density.get_n_extra_slices_right() >= nextra.second,
                        "[particles_to_grid] Too few extra slices\n");
 
@@ -774,7 +774,7 @@ namespace FML {
                                        std::function<FloatType(std::array<double, N> &)> & convolution_kernel) {
 
             auto nextra = get_extra_slices_needed_by_order<ORDER>();
-            assert_mpi(grid_in.get_n_extra_slices_left() >= nextra.first &&
+            assert_mpi(grid_in.get_n_extra_slices_left() >= nextra.first and
                            grid_in.get_n_extra_slices_right() >= nextra.second,
                        "[convolve_grid_with_kernel] Too few extra slices\n");
             assert_mpi(grid_in.get_nmesh() > 0, "[convolve_grid_with_kernel] Grid has to be already allocated!\n");

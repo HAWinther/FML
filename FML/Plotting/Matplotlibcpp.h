@@ -892,7 +892,7 @@ namespace FML {
                         const std::vector<NumericU> & u,
                         const std::vector<NumericW> & w,
                         const std::map<std::string, std::string> & keywords = {}) {
-                assert(x.size() == y.size() && x.size() == u.size() && u.size() == w.size());
+                assert(x.size() == y.size() and x.size() == u.size() and u.size() == w.size());
 
                 PyObject * xarray = get_array(x);
                 PyObject * yarray = get_array(y);
@@ -1880,7 +1880,7 @@ namespace FML {
 
                         auto xs = distance(begin(x), end(x));
                         auto ys = distance(begin(y), end(y));
-                        assert(xs == ys && "x and y data must have the same number of elements!");
+                        assert(xs == ys and "x and y data must have the same number of elements!");
 
                         PyObject * xlist = PyList_New(xs);
                         PyObject * ylist = PyList_New(ys);

@@ -6,15 +6,15 @@ SHELL := /bin/bash
 # Set c++11 compliant compiler. If USE_MPI we use MPICC 
 #===================================================
 
-CC      = g++-mp-7 -std=c++1z -O3 -Wall -Wextra -march=native
-MPICC   = mpicxx-openmpi-gcc7 -std=c++1z -O3 -Wall -Wextra -march=native
+CC      = g++ -std=c++1z -O3 -Wall -Wextra -march=native
+MPICC   = mpicxx -std=c++1z -O3 -Wall -Wextra -march=native
 
 #===================================================
 # Options
 #===================================================
 
 # Use MPI
-USE_MPI          = false
+USE_MPI          = true
 # Use OpenMP threads
 USE_OMP          = false
 # Check for bad memory accesses

@@ -55,7 +55,7 @@ namespace FML {
             GadgetHeader GadgetReader::get_header() { return header; }
 
             void GadgetReader::read_section(std::ifstream & fp, std::vector<char> & buffer) {
-                if (!fp.is_open()) {
+                if (not fp.is_open()) {
                     std::string errormessage = "[GadgetReader::read_section] File is not open\n";
                     throw_error(errormessage);
                 }
@@ -82,7 +82,7 @@ namespace FML {
             }
 
             void GadgetReader::read_header(std::ifstream & fp) {
-                if (!fp.is_open()) {
+                if (not fp.is_open()) {
                     std::string errormessage = "[GadgetReader::read_header] File is not open\n";
                     throw_error(errormessage);
                 }
@@ -135,7 +135,7 @@ namespace FML {
             GadgetWriter::GadgetWriter(int ndim) : NDIM(ndim) {}
 
             void GadgetWriter::write_section(std::ofstream & fp, std::vector<char> & buffer, int bytes) {
-                if (!fp.is_open()) {
+                if (not fp.is_open()) {
                     std::string errormessage = "[GadgetWriter::write_section] File is not open\n";
                     throw_error(errormessage);
                 }
@@ -157,7 +157,7 @@ namespace FML {
                                             double OmegaM,
                                             double OmegaLambda,
                                             double HubbleParam) {
-                if (!fp.is_open()) {
+                if (not fp.is_open()) {
                     std::string errormessage = "[GadgetWriter::write_header] File is not open\n";
                     throw_error(errormessage);
                 }
@@ -199,9 +199,9 @@ namespace FML {
             void GadgetReader::set_endian_swap() { endian_swap = true; }
 
             int GadgetReader::get_num_files(std::string filename) {
-                if (!header_is_read) {
+                if (not header_is_read) {
                     std::ifstream fp(filename.c_str(), std::ios::binary);
-                    if (!fp.is_open()) {
+                    if (not fp.is_open()) {
                         std::string errormessage = "[GadgetReader::get_num_files] File " + filename + " is not open\n";
                         throw_error(errormessage);
                     }

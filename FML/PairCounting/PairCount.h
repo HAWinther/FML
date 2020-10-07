@@ -61,23 +61,37 @@ namespace FML {
 
         /// @brief The result struct for auto pair counting
         struct AutoPairCountData {
+            /// The center of the bins
             std::vector<double> r;
+            /// The bin edges
             std::vector<double> r_edge;
+            /// The paircounts
             std::vector<double> paircount;
+            /// Sum of weights (just the number of particles if we have no weight)
             double sum_weights{0.0};
+            /// Sum of weights squared
             double sum_weights_squared{0.0};
+            /// (Sum w)^2 - Sum w^2
             double norm{0.0};
         };
 
         /// @brief The result struct for cross pair counting
         struct CrossPairCountData {
+            /// The center of the bins
             std::vector<double> r;
+            /// The bin edges
             std::vector<double> r_edge;
+            /// The paircounts
             std::vector<double> paircount;
+            /// Sum of weights of first catalog (just the number of particles if we have no weight)
             double sum_weights{0.0};
+            /// Sum of weights squared of first catalog
             double sum_weights_squared{0.0};
+            /// Sum of weights of second catalog (just the number of particles if we have no weight)
             double sum2_weights{0.0};
+            /// Sum of weights squared of second catalog
             double sum2_weights_squared{0.0};
+            /// (Sum w1) (Sum w2)
             double norm{0.0};
         };
 
@@ -443,7 +457,7 @@ namespace FML {
             // Find maximum ix,iy,iz for which there are particles
             // in case for surveys where after boxing the particles
             // only occupy a part of the box
-            if (!periodic) {
+            if (not periodic) {
                 max_ix = max_iy = max_iz = 0;
                 for (int ix = ngrid - 1; ix >= 0; ix--) {
                     for (int iy = ngrid - 1; iy >= 0; iy--) {
@@ -592,7 +606,7 @@ namespace FML {
                                     } else {
                                         // Avoid double counting so we skip cells that have been correlated with this
                                         // one before
-                                        if (ix == ix0 && iy < iy0)
+                                        if (ix == ix0 and iy < iy0)
                                             continue;
                                     }
 
@@ -607,7 +621,7 @@ namespace FML {
                                         } else {
                                             // Avoid double counting so we skip cells that have been correlated with
                                             // this one before
-                                            if (ix == ix0 && iy == iy0 && iz < iz0)
+                                            if (ix == ix0 and iy == iy0 and iz < iz0)
                                                 continue;
                                         }
 
@@ -630,7 +644,7 @@ namespace FML {
                                         // we will overcount if we do all particles so only correlate with
                                         // partices we haven't touched yet
                                         int istart_nbor_cell = 0;
-                                        if (!periodic)
+                                        if (not periodic)
                                             if (index == index_neighbor_cell)
                                                 istart_nbor_cell = ipart_cell + 1;
 
@@ -744,7 +758,7 @@ namespace FML {
             // Find maximum ix,iy,iz for which there are particles
             // in case for surveys where after boxing the particles
             // only occupy a part of the box
-            if (!periodic) {
+            if (not periodic) {
                 max_ix = max_iy = max_iz = 0;
                 for (int ix = ngrid - 1; ix >= 0; ix--) {
                     for (int iy = ngrid - 1; iy >= 0; iy--) {

@@ -46,14 +46,19 @@ namespace FML {
             RandomGenerator() = default;
             virtual ~RandomGenerator() = default;
 
+            /// Construct and initialize random number generator
             RandomGenerator(unsigned int seed) : RandomGenerator(std::vector<unsigned int>(STDRANDOM_SEEDSIZE, seed)) {}
 
+            /// Construct and initialize random number generator
             RandomGenerator(std::vector<unsigned int> seed) : RandomGenerator() { set_seed(seed); }
 
+            /// Set the standard deviation sigma used when generating a normal distributed random number
             void set_normal_sigma(double sigma) { normal_dist = std::normal_distribution<double>{0.0, sigma}; }
 
+            /// Make a clone of the state of the random number generator
             virtual std::unique_ptr<RandomGenerator> clone() const { return std::make_unique<RandomGenerator>(*this); }
 
+            /// Set the seed (vector of numbers as some rngs have a large state)
             virtual void set_seed(std::vector<unsigned int> seed) {
                 assert(seed.size() > 0);
                 Seed = seed;
@@ -61,10 +66,13 @@ namespace FML {
                 generator = std_random_generator_type(seeds);
             }
 
+            /// Set the seed (single number)
             virtual void set_seed(unsigned int seed) { set_seed(std::vector<unsigned int>(STDRANDOM_SEEDSIZE, seed)); }
 
+            /// Generate a random number uniformly distributed in [0,1)
             virtual double generate_uniform() { return uniform_dist(generator); }
 
+            /// Generate a random number with a normal distribution N(0,sigma) where sigma by default is 1.
             virtual double generate_normal() { return normal_dist(generator); }
         };
 

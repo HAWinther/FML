@@ -108,12 +108,17 @@ namespace FML {
 
               public:
                 GSLSpline() = default;
+                
+                /// Construct giving the spline a name (useful for error/warning messages)
                 GSLSpline(std::string name);
+                
+                /// Construct a spline from pointers to x and y. Both must have nx elements.
                 GSLSpline(double * x,
                           double * y,
                           int nx,
                           std::string splinename = "NoName",
                           const gsl_interp_type * interpoltype = SPLINE_FIDUCIAL_INTERPOL_TYPE);
+                /// Construct a spline from vectors x and y. Both must have the same size.
                 GSLSpline(const DVector & x,
                           const DVector & y,
                           std::string splinename = "NoName",
@@ -122,35 +127,46 @@ namespace FML {
                 GSLSpline & operator=(const GSLSpline & rhs);
                 ~GSLSpline();
 
+                /// Is the spline created or not?
                 explicit operator bool() const;
 
-                // Methods that create the spline
+                /// Create a spline from pointers to x and y. Both must have nx elements.
                 void create(const double * x,
                             const double * y,
                             int nx,
                             std::string splinename = "NoName",
                             const gsl_interp_type * interpoltype = SPLINE_FIDUCIAL_INTERPOL_TYPE);
+                /// Create a spline from vectors x and y. Both must have the same size.
                 void create(const DVector & x,
                             const DVector & y,
                             std::string splinename = "NoName",
                             const gsl_interp_type * interpoltype = SPLINE_FIDUCIAL_INTERPOL_TYPE);
 
                 // Methods for spline lookup of function and its derivatives
+                /// Overload of the () operator for easy evaluation of the spline
                 double operator()(double x) const;
+                /// Get the value of the spline (if out of bounds we use the closest value)
                 double eval(double x) const;
                 double eval_deriv(double x, int deriv) const;
+                /// Get the value of the first derivative of the spline
                 double deriv_x(double x) const;
+                /// Get the value of the second derivative of the spline
                 double deriv_xx(double x) const;
 
                 // Some useful info
+                /// Get the range the spline was created on
                 std::pair<double, double> get_xrange() const;
+                /// Get the name of the spline
                 std::string get_name() const;
+                /// Turn on/off warnings if we try to evaluate out of bounds (we use closest value in that case)
                 void set_out_of_bounds_warning(bool v);
 
+                /// Get the raw GSL data for x used to create the spline
                 DVector get_x_data() { return DVector(spline->x, spline->x + spline->size); }
+                /// Get the raw GSL data for y used to create the spline
                 DVector get_y_data() { return DVector(spline->y, spline->y + spline->size); }
 
-                // Clean up
+                /// Free up memory associated with the spline
                 void free();
             };
 

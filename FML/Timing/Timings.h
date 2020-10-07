@@ -37,7 +37,7 @@ namespace FML {
           public:
             Timings() = default;
 
-            // Output all the recorded timings
+            /// Output all the recorded timings
             void PrintAllTimings() {
 #ifdef USE_MPI
                 int ThisTask = 0;
@@ -57,9 +57,12 @@ namespace FML {
                 std::cout << "\n";
             }
 
-            // Start timing
+            /// Start timing
+            /// @param[in] name The label to give to the timing
+            ///
             void StartTiming(const char * name) { StartTiming(std::string(name)); }
 
+            /// Start timing
             void StartTiming(std::string name) {
                 auto start_time = std::chrono::steady_clock::now();
                 std::lock_guard<std::mutex> guard(timings_mutex);
@@ -73,9 +76,16 @@ namespace FML {
                 }
             }
 
-            // End timing
+            /// End timing 
+            /// @param[in] name The label to give to the timing
+            /// @param[in] print Optional: print timing to screen right away
+            ///
             double EndTiming(const char * name, bool print = false) { return EndTiming(std::string(name), print); }
 
+            /// End timing and print to screen if print = true
+            /// @param[in] name The label to give to the timing
+            /// @param[in] print Optional: print timing to screen right away
+            ///
             double EndTiming(std::string name, bool print = false) {
                 auto end_time = std::chrono::steady_clock::now();
                 std::lock_guard<std::mutex> guard(timings_mutex);
@@ -116,9 +126,14 @@ namespace FML {
                 return time_sec;
             }
 
-            // Print total time for a given label
+            /// Print to screen total time for a given label
+            /// @param[in] name The label to print the time of
+            ///
             void PrintTotalTime(const char * name) { PrintTotalTime(std::string(name)); }
 
+            /// Print to screen total time for a given label
+            /// @param[in] name The label to print the time of
+            ///
             void PrintTotalTime(std::string name) {
                 auto it = elapsed_time_sec.find(name);
                 if (it != elapsed_time_sec.end()) {

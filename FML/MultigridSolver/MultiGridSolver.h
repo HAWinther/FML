@@ -349,7 +349,7 @@ namespace FML {
                             if (coord[idim] >= _N - 1)
                                 mask = -1.0;
                         }
-                        if (coord[0] >= _N / 2 && coord[1] >= _N / 2)
+                        if (coord[0] >= _N / 2 and coord[1] >= _N / 2)
                             mask = -1.0;
                         mainmask[i] = mask;
                     }
@@ -826,7 +826,7 @@ namespace FML {
                               << " istep = " << _istep_vcycle << "\n";
                 }
 
-                if (_verbose and (_rms_res > _rms_res_old && _istep_vcycle > 1)) {
+                if (_verbose and (_rms_res > _rms_res_old and _istep_vcycle > 1)) {
                     std::cout << "    Warning: Residual_old > Residual" << std::endl;
                 }
 
@@ -1006,14 +1006,14 @@ namespace FML {
 
                     // The residual calculation requires comm so do it outside of the print below
                     double residual = 0.0;
-                    if ((level > 0 && (i == 1 || i == ngs_sweeps - 1)) || (level == 0)) {
+                    if ((level > 0 and (i == 1 or i == ngs_sweeps - 1)) or (level == 0)) {
                         residual = calculate_residual(level, _res.get_grid(level));
                     }
 
                     // Calculate residual and output quite often.
                     // For debug, but this is quite useful so keep it for now
                     if (_verbose) {
-                        if ((level > 0 && (i == 1 || i == ngs_sweeps - 1)) || (level == 0)) {
+                        if ((level > 0 and (i == 1 or i == ngs_sweeps - 1)) or (level == 0)) {
                             std::cout << "        level = " << std::setw(5) << level << " NGS Sweep = " << std::setw(5)
                                       << i;
                             std::cout << " Residual = " << std::setw(10) << residual << std::endl;

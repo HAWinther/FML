@@ -27,7 +27,7 @@ struct Particle {
     //=========================================================
     double * get_pos() { return pos; }
     double * get_vel() { return vel; }
-    int * get_id() { return &id; }
+    int get_id() { return id; }
     void set_id(long long int _id) { id = _id; }
 };
 
@@ -58,26 +58,24 @@ int main() {
             x /= box;
         part.push_back(Particle(pos.data(), nullptr));
     }
-    for (int i = 0; i < part.size(); i++)
+    for (size_t i = 0; i < part.size(); i++)
         part[i].set_id(i);
-
-    //=========================================================
-    // Normalization from units in file to Mpc/h
-    //=========================================================
-    const double gadget_pos_norm = 1.0;
 
     //=========================================================
     // Write to file
     //=========================================================
     GadgetWriter gw;
     const int NumFiles = 1;
+    size_t NumPartTotal = part.size();
+    FML::SumOverTasks(&NumPartTotal);
     const double aexp = 1.0;
     const double Boxsize = box;
     const double OmegaM = 0.3;
     const double OmegaLambda = 0.7;
     const double h = 0.7;
-    const double posnorm = 1.0; // 1.0 for Mpc/h, 1000 for kpc/h
-    gw.write_gadget_single("test.0", part, part.size(), NumFiles, aexp, Boxsize, OmegaM, OmegaLambda, h, posnorm);
+    const double pos_norm = box;
+    const double vel_norm = std::sqrt(aexp); // From our velocities to GADGET sqrt(a) dxdt in km/s
+    gw.write_gadget_single("test.0", part.data(), part.size(), NumPartTotal, NumFiles, aexp, Boxsize, OmegaM, OmegaLambda, h, pos_norm, vel_norm);
 
     //=========================================================
     // The number of dimensions
@@ -85,9 +83,9 @@ int main() {
     const int ndim = 3;
 
     //=========================================================
-    // Set up reader (if posnorm=1.0, ndim=3 then we don't need to provide these numbers)
+    // Set up reader
     //=========================================================
-    GadgetReader g(gadget_pos_norm, ndim);
+    GadgetReader g(ndim);
 
     //=========================================================
     // Container to store it in. Particles will be added to the back of part
@@ -97,8 +95,11 @@ int main() {
     //=========================================================
     // Read a gadget file and fill the data in part
     //=========================================================
-    std::string fileprefix = "test";
-    g.read_gadget(fileprefix, part, true);
+    const std::string fileprefix = "test";
+    const bool only_keep_part_in_domain = true;
+    const bool verbose = true;
+    const double buffer_factor = 1.0;
+    g.read_gadget(fileprefix, part, buffer_factor, only_keep_part_in_domain, verbose);
 
     //=========================================================
     // The positions are in [0,1]
