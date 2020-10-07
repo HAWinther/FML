@@ -45,60 +45,109 @@ namespace FML {
             }
 
           public:
-            // m is the size of your length unit in meters,
-            // s the size of your time unit in seconds, etc.
+            /// Size of your length unit in meters
             double m = 1.0;
+            /// Size of your time unit in seconds
             double s = 1.0;
+            /// Size of your mass unit in kg
             double kg = 1.0;
+            /// Size of your temperature unit in kelvin
             double K = 1.0;
+            /// Size of your charge unit in coloumbs
             double Co = 1.0;
 
             // Physical constants set by the units
+            /// Boltzmanns constant
             double k_b{0.0};
+            /// Coloumbs constant
             double k_e{0.0};
+            /// The gravitational constant
             double G{0.0};
+            /// Reduced Placks constant h/2pi
             double hbar{0.0};
+            /// Speed of light
             double c{0.0};
+            /// Mass of electron
             double m_e{0.0};
+            /// Mass of hydrogen
             double m_H{0.0};
+            /// Thompson cross section
             double sigma_T{0.0};
+            /// Transition rate from 2s to 1s in hydrogen
             double lambda_2s1s{0.0};
+            /// Binding energy of hydrogen
             double epsilon_0{0.0};
+            /// Hubble factor today without the h
             double H0_over_h{0.0};
+            /// Binding energy of helium
             double xhi0{0.0};
+            /// Binding energy of ionized helium
             double xhi1{0.0};
-            double yr{0.0};
-            double Gyr{0.0};
 
             // Derived units
+            /// One year
+            double yr{0.0};
+            /// One gigayear
+            double Gyr{0.0};
+            /// Milimeter
             double mm{0.0};
+            /// Centimeter
             double cm{0.0};
+            /// Kilometer
             double km{0.0};
+            /// Newton
             double N{0.0};
+            /// Joule
             double J{0.0};
+            // Watt
             double W{0.0};
+            // Electronvolt
             double eV{0.0};
+            /// Mega electronvolt
             double MeV{0.0};
+            /// Megaparsec
             double Mpc{0.0};
+            /// Kiloparsec
             double kpc{0.0};
+            /// Gigaparsec
             double Gpc{0.0};
+            /// Solar mass
             double Msun{0.0};
+            /// Velocity m / s
             double velocity{0.0};
+            /// Density kg / m^3
             double density{0.0};
 
+            /// Construct units by type: SI, Planck, ParticlePhysics or Cosmology
             ConstantsAndUnits(std::string type = "SI") { init(type); }
 
-            // User units: specify what lenght, time, mass and charge unit you want
-            ConstantsAndUnits(double L, double T, double M, double C) {
-                m = L;
-                s = T;
-                kg = M;
-                Co = C;
+            //=================================================================================
+            /// User units: specify what length, time, mass, temperature and charge unit you want.
+            /// E.g. if you want km to be your length unit then length = 1/1000
+            /// When all are unity we have SI
+            /// @param[in] L How many length units to make 1 meters
+            /// @param[in] T How many time units to make 1 second
+            /// @param[in] M How many mass units to make 1 kilogram
+            /// @param[in] M How many temperature units to make 1 kelvin
+            /// @param[in] C How many charge units to make 1 coloumb
+            ///
+            //=================================================================================
+            ConstantsAndUnits(double meter_over_lengthunit,
+                              double seconds_over_timeunit,
+                              double kilogram_over_massunit,
+                              double kelvin_over_temperatureunit,
+                              double coloumb_over_chargeunit) {
+                m = meter_over_lengthunit;
+                s = seconds_over_timeunit;
+                kg = kilogram_over_massunit;
+                K = kelvin_over_temperatureunit;
+                Co = coloumb_over_chargeunit;
                 init("User units");
             }
 
             ConstantsAndUnits & operator=(ConstantsAndUnits && other) = default;
 
+            /// Initialize the units and compute all the constants in the desired unit system
             void init(std::string type) {
 
                 if (type == "User units") {
@@ -173,23 +222,40 @@ namespace FML {
                 Gyr = 1e9 * yr;                       // Gigayear
             }
 
+            /// Convert a length in your unit to SI unit
             double length_to_SI(double x) { return x / m; }
+            /// Convert a length in SI to your unit
             double length_to_user_units(double x) { return x * m; }
+            /// Convert a time in your unit to SI unit
             double time_to_SI(double x) { return x / s; }
+            /// Convert a time in SI to your unit
             double time_to_user_units(double x) { return x * s; }
+            /// Convert a mass in your unit to SI unit
             double mass_to_SI(double x) { return x / kg; }
+            /// Convert a mass in SI to your unit
             double mass_to_user_units(double x) { return x * kg; }
+            /// Convert a temperature in your unit to SI unit
             double temperature_to_SI(double x) { return x / K; }
+            /// Convert a temperature in SI to your unit
             double temperature_to_user_units(double x) { return x * K; }
+            /// Convert a charge in your unit to SI unit
             double charge_to_SI(double x) { return x / Co; }
+            /// Convert a charge in SI to your unit
             double charge_to_user_units(double x) { return x * Co; }
+            /// Convert an energy in your unit to SI unit
             double energy_to_SI(double x) { return x / J; }
+            /// Convert an energy in SI to your unit
             double energy_to_user_units(double x) { return x * J; }
+            /// Convert a density in your unit to SI unit
             double density_to_SI(double x) { return x / density; }
+            /// Convert a density in SI to your unit
             double density_to_user_units(double x) { return x * density; }
+            /// Convert a velocity in your unit to SI unit
             double velocity_to_SI(double x) { return x / velocity; }
+            /// Convert a velocity in SI to your unit
             double velocity_to_user_units(double x) { return x * velocity; }
 
+            /// Show info about the given set of units
             void info() {
 #ifdef USE_MPI
                 int ThisTask = 0;
