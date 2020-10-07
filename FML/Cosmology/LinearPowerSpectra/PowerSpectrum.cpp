@@ -1,5 +1,5 @@
 #include "PowerSpectrum.h"
-//#include "FFTLog.h"
+#include <numeric>
 
 namespace FML {
     namespace COSMOLOGY {
@@ -17,7 +17,7 @@ namespace FML {
             // Read parameters
             A_s = p.get<double>("A_s");
             n_s = p.get<double>("n_s");
-            kpivot = p.get<double>("kpivot_mpc") / Constants.Mpc;
+            kpivot = p.get<double>("kpivot");
             ell_max = p.get<int>("ell_max");
             x_cell = std::log(1.0 / (1.0 + p.get<double>("CellOutputRedshift")));
             compute_temperature_cells = p.get<bool>("compute_temperature_cells");
@@ -29,6 +29,7 @@ namespace FML {
             los_integration_loga_nsamples = p.get<int>("los_integration_loga_nsamples");
             los_integration_nsamples_per_osc = p.get<int>("los_integration_nsamples_per_osc");
             cell_nsamples_per_osc = p.get<int>("cell_nsamples_per_osc");
+            kmax = p.get<double>("keta_max") / cosmo->eta_of_x(0.0);
 
             // eta and tau at the output redshift
             // This is today, but in case we want to output how Cell looks like at a different redshift
@@ -37,7 +38,7 @@ namespace FML {
 
             // Set min and max k to compute F_ell's on
             kmin = pert->get_kmin();
-            kmax = pert->get_kmax();
+            kmax = std::min(pert->get_kmax(), kmax);
 
             // Create ell-array to compute Cells on
             bool sample_all_ells = false;
@@ -73,6 +74,8 @@ namespace FML {
         }
 
         void PowerSpectrum::info() const {
+            if (FML::ThisTask > 0)
+                return;
             std::cout << "\n";
             std::cout << "============================================\n";
             std::cout << "Info about PowerSpectrum class:\n";
@@ -86,6 +89,8 @@ namespace FML {
             std::cout << "Nells:       " << ells.size() << "\n";
             std::cout << "============================================\n";
             std::cout << "\n";
+
+            timer.PrintAllTimings();
         }
 
         //=====================================================================
@@ -102,11 +107,14 @@ namespace FML {
             static auto bbks_fit = [](double k) {
                 const double arg = k / keq;
                 return std::log(1.0 + 0.171 * arg) / (0.171 * arg) *
-                       std::pow(1 + 0.284 * arg + std::pow(1.18 * arg, 2) + std::pow(0.399 * arg, 3) + std::pow(0.490 * arg, 4), -0.25);
+                       std::pow(1 + 0.284 * arg + std::pow(1.18 * arg, 2) + std::pow(0.399 * arg, 3) +
+                                    std::pow(0.490 * arg, 4),
+                                -0.25);
             };
 
+            const double kmax_pert = pert->get_kmax();
             const double k_true = k;
-            k = std::max(kmin, std::min(k, kmax));
+            k = std::max(kmin, std::min(k, kmax_pert));
 
             // Different cases: The gauge invariant density perturbation is
             // Delta = delta - 3(1+w)Hv/k given by the transfer functions
@@ -139,15 +147,15 @@ namespace FML {
             }
 
             // Asymptotic behavior
-            if (k_true < kmin or k_true > kmax) {
+            if (k_true < kmin or k_true > kmax_pert) {
                 if (k_true < kmin) {
                     Delta *= (k_true / kmin) * (k_true / kmin);
                 }
-                if (k_true > kmax) {
+                if (k_true > kmax_pert) {
                     // As derived in BBKS 1986
-                    bool radiation = (type == "Nu" || type == "R" || type == "Rtot");
-                    if (!radiation)
-                        Delta *= bbks_fit(k_true) / bbks_fit(kmax);
+                    bool radiation = (type == "Nu" or type == "R" or type == "Rtot");
+                    if (not radiation)
+                        Delta *= bbks_fit(k_true) / bbks_fit(kmax_pert);
                 }
             }
 
@@ -157,7 +165,8 @@ namespace FML {
         // Evaluate P(k) for all k's we integrate perturbations on
         std::pair<DVector, DVector>
         PowerSpectrum::get_power_spectrum_array(double x, int npts, std::string type) const {
-            DVector k_array = FML::MATH::linspace(std::log(kmin), std::log(kmax), npts);
+            const double kmax_pert = pert->get_kmax();
+            DVector k_array = FML::MATH::linspace(std::log(kmin), std::log(kmax_pert), npts);
             for (auto & k : k_array)
                 k = std::exp(k);
             DVector pofk_array;
@@ -181,8 +190,9 @@ namespace FML {
         }
 
         void PowerSpectrum::generate_bessel_function_splines(double xmax, int nsamples_per_osc) {
-            // Utils::StartTiming("POW::making bessel splines");
-            std::cout << "Bessel splines\n";
+            timer.StartTiming("POW::making bessel splines");
+            if (FML::ThisTask == 0)
+                std::cout << "Bessel splines\n";
 
             // The x-array we will compute it over
             const double deltax = 2.0 * M_PI / nsamples_per_osc;
@@ -228,7 +238,7 @@ namespace FML {
             std::iota(index.begin(), index.end(), 0);
             index_of_ells_spline.create(ells, index, "index_of_ell");
 
-            // Utils::EndTiming("POW::making bessel splines");
+            timer.EndTiming("POW::making bessel splines");
         }
 
         DVector2D PowerSpectrum::line_of_sight_integration_single(
@@ -236,7 +246,7 @@ namespace FML {
             DVector & k_array,
             std::function<double(double, double)> & source_function,
             [[maybe_unused]] std::function<double(double, double)> & aux_norm) {
-            // Utils::StartTiming("POW::LOS integration");
+            timer.StartTiming("POW::LOS integration");
 
             const int nells = ells.size();
 
@@ -263,10 +273,27 @@ namespace FML {
             for (size_t ix = 0; ix < x_array.size(); ix++)
                 chi_values[ix] = eta0 - cosmo->eta_of_x(x_array[ix]);
 
+            // The k-values we loop over (doing it like this to ease the
+            // parallelization)
+            std::vector<int> ik_list(k_array.size());
+            std::iota(ik_list.begin(), ik_list.end(), 0);
+#ifdef USE_MPI
+            // Compute what k's to deal with on the local task
+            if (FML::NTasks > 1) {
+                ik_list.clear();
+                for (int i = 0; i < int(k_array.size()); i++) {
+                    if (i % FML::NTasks == FML::ThisTask) {
+                        ik_list.push_back(i);
+                    }
+                }
+            }
+#endif
+
 #ifdef USE_OMP
 #pragma omp parallel for schedule(dynamic, 1)
 #endif
-            for (size_t ik = 0; ik < k_array.size(); ik++) {
+            for (size_t ii = 0; ii < ik_list.size(); ii++) {
+                const int ik = ik_list[ii];
                 const double k = k_array[ik];
 
 #ifdef USE_ODESOLVER_LOS
@@ -278,7 +305,7 @@ namespace FML {
                     for (int i = 0; i < nells; i++) {
                         const Spline & jell_spline = j_ell_splines[i];
                         const auto xrange = jell_spline.get_xrange();
-                        if (arg > xrange.first && arg < xrange.second) {
+                        if (arg > xrange.first and arg < xrange.second) {
                             const double jell = jell_spline(arg);
                             dydx[i] = source * jell * aux_norm(k, ells[i]);
                         } else {
@@ -324,7 +351,14 @@ namespace FML {
                 result[ik] = DVector(data.begin(), data.end());
             }
 
-            // Utils::EndTiming("POW::LOS integration");
+#ifdef USE_MPI
+            // Its not that much data so we simply send all the data from all to all tasks and add up
+            for (size_t ik = 0; ik < result.size(); ik++) {
+                MPI_Allreduce(MPI_IN_PLACE, result[ik].data(), result[ik].size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            }
+#endif
+
+            timer.EndTiming("POW::LOS integration");
             return result;
         }
 
@@ -345,8 +379,9 @@ namespace FML {
             // Solve for Theta_ell(k,x=xcell)
             //============================================================================
             if (compute_temperature_cells) {
-                std::cout << "Temperature ells\n";
-                // Utils::StartTiming("POW::LOS integration thetaT");
+                if (FML::ThisTask == 0)
+                    std::cout << "Temperature ells\n";
+                timer.StartTiming("POW::LOS integration thetaT");
                 std::function<double(double, double)> source_function_T = [&](double x, double k) {
                     return exptau0 * pert->get_Source_T(x, k);
                 };
@@ -357,15 +392,16 @@ namespace FML {
                 DVector2D thetaT_ell_of_k =
                     line_of_sight_integration_single(x_array_photons, k_array, source_function_T, solve_T_norm);
                 thetaT_ell_of_k_spline.create(k_array, ells, thetaT_ell_of_k, "thetaT_ell_of_k_spline");
-                // Utils::EndTiming("POW::LOS integration thetaT");
+                timer.EndTiming("POW::LOS integration thetaT");
             }
 
             //============================================================================
             // Solve for ThetaE_ell(k,x=xcell)
             //============================================================================
             if (compute_polarization_cells) {
-                std::cout << "Polarization ells\n";
-                // Utils::StartTiming("POW::LOS integration thetaE");
+                if (FML::ThisTask == 0)
+                    std::cout << "Polarization ells\n";
+                timer.StartTiming("POW::LOS integration thetaE");
                 std::function<double(double, double)> source_function_E = [&](double x, double k) {
                     return exptau0 * pert->get_Source_E(x, k);
                 };
@@ -378,19 +414,21 @@ namespace FML {
                 // Add in the prefactor Sqrt((l+2)!/(l-2)!) for ThetaE
                 for (int ik = 0; ik < n_k_total; ik++) {
                     for (int i = 0; i < nells; i++) {
-                        thetaE_ell_of_k[ik][i] *= std::sqrt((ells[i] + 2) * (ells[i] + 1) * (ells[i] + 0) * (ells[i] - 1));
+                        thetaE_ell_of_k[ik][i] *=
+                            std::sqrt((ells[i] + 2) * (ells[i] + 1) * (ells[i] + 0) * (ells[i] - 1));
                     }
                 }
                 thetaE_ell_of_k_spline.create(k_array, ells, thetaE_ell_of_k, "thetaE_ell_of_k_spline");
-                // Utils::EndTiming("POW::LOS integration thetaE");
+                timer.EndTiming("POW::LOS integration thetaE");
             }
 
             //============================================================================
             // Solve for CMB lensing potential Psi_ell(k,x=xcell)
             //============================================================================
             if (compute_lensing_cells) {
-                std::cout << "Lensingpotential ells\n";
-                // Utils::StartTiming("POW::LOS integration Phi_lens");
+                if (FML::ThisTask == 0)
+                    std::cout << "Lensingpotential ells\n";
+                timer.StartTiming("POW::LOS integration Phi_lens");
                 std::function<double(double, double)> source_function_L = [&](double x, double k) {
                     return 2.0 * pert->get_Psi(x, k) * lensing_source(x, x_cell);
                 };
@@ -401,15 +439,16 @@ namespace FML {
                 DVector2D lens_ell_of_k =
                     line_of_sight_integration_single(x_array, k_array, source_function_L, solve_lens_norm);
                 lens_ell_of_k_spline.create(k_array, ells, lens_ell_of_k, "lens_ell_of_k_spline");
-                // Utils::EndTiming("POW::LOS integration Phi_lens");
+                timer.EndTiming("POW::LOS integration Phi_lens");
             }
 
             //============================================================================
             // Solve for Nu_ell(k,x=xcell)
             //============================================================================
             if (compute_neutrino_cells) {
-                std::cout << "Neutrino ells\n";
-                // Utils::StartTiming("POW::LOS integration Nu");
+                if (FML::ThisTask == 0)
+                    std::cout << "Neutrino ells\n";
+                timer.StartTiming("POW::LOS integration Nu");
                 std::function<double(double, double)> source_function_N = [&](double x, double k) {
                     return pert->get_Source_N(x, k);
                 };
@@ -420,9 +459,10 @@ namespace FML {
                 DVector2D Nu_ell_of_k =
                     line_of_sight_integration_single(x_array, k_array, source_function_N, solve_nu_norm);
                 Nu_ell_of_k_spline.create(k_array, ells, Nu_ell_of_k, "Nu_ell_of_k_spline");
-                // Utils::EndTiming("POW::LOS integration Nu");
+                timer.EndTiming("POW::LOS integration Nu");
             }
-            std::cout << "Done line of sight integration!\n";
+            if (FML::ThisTask == 0)
+                std::cout << "Done line of sight integration!\n";
         }
 
         DVector PowerSpectrum::solve_for_cell_single(DVector & log_k_array,
@@ -454,14 +494,16 @@ namespace FML {
 
             // Direct summation
             DVector data(ells.size(), 0.0);
-            for (size_t ik = 1; ik < log_k_array.size(); ik++) {
-                const double k = std::exp(log_k_array[ik]);
-                const double dlogk = log_k_array[ik] - log_k_array[ik - 1];
-                for (int i = 0; i < nells; i++) {
+#ifdef USE_OMP
+#pragma omp parallel for schedule(dynamic, 1)
+#endif
+            for (int i = 0; i < nells; i++) {
+                for (size_t ik = 1; ik < log_k_array.size(); ik++) {
+                    const double k = std::exp(log_k_array[ik]);
+                    const double dlogk = log_k_array[ik] - log_k_array[ik - 1];
                     data[i] += integrand(k, ells[i]) * dlogk;
                 }
             }
-
 #endif
 
             return data;
@@ -471,9 +513,9 @@ namespace FML {
                                                               [[maybe_unused]] double xmax,
                                                               [[maybe_unused]] int nx) {
 #ifdef USE_FFTW
-            // Utils::StartTiming("POW::Correlation function wth FFTW");
+            timer.StartTiming("POW::Correlation function wth FFTW");
             const double rmin = 1.0 * Constants.Mpc;
-            const double rmax = 500.0 * Constants.Mpc;
+            const double rmax = 1000.0 * Constants.Mpc;
 
             //==================================================================
             // Computes the correlation function for all x's and r's
@@ -492,6 +534,9 @@ namespace FML {
             // Arrays to store the data in
             std::vector<DVector2D> results(types.size());
             DVector r;
+
+            if (FML::ThisTask == 0)
+                std::cout << "Compute all correlation functions at all times\n";
 
             for (size_t i = 0; i < x_array.size(); i++) {
                 const double x = x_array[i];
@@ -525,12 +570,16 @@ namespace FML {
             xi_Nu_spline.create(x_array, r, results[3], "xi_Nu_spline");
             xi_M_spline.create(x_array, r, results[4], "xi_M_spline");
 
-            // Utils::EndTiming("POW::Correlation function wth FFTW",true);
+            timer.EndTiming("POW::Correlation function wth FFTW");
 #endif
         }
 
         void PowerSpectrum::output_correlation_function(double x, std::string filename) const {
-            if (!compute_corr_function)
+            if (not compute_corr_function)
+                return;
+
+            std::ofstream fp(filename.c_str());
+            if (not fp.is_open())
                 return;
 
             auto yrange = xi_CDM_spline.get_yrange();
@@ -541,7 +590,6 @@ namespace FML {
             for (auto & rr : r)
                 rr = std::exp(rr);
 
-            std::ofstream fp(filename.c_str());
             fp << "# r (Mpc/h)   CDM   Baryon   R    Nu    Matter\n";
             const double norm_r = (cosmo->get_h() / Constants.Mpc);
             for (size_t i = 0; i < r.size(); i++) {
@@ -592,10 +640,10 @@ namespace FML {
             //=========================================================================
             // Integration to get Cell by solving dCell^f/dlogk = Delta(k) * f_ell(k)^2
             //=========================================================================
-            // Utils::StartTiming("POW::integrating Cells");
+            timer.StartTiming("POW::integrating Cells");
 
             if (thetaT_ell_of_k_spline) {
-                // Utils::StartTiming("POW::integrating Cells - TT");
+                timer.StartTiming("POW::integrating Cells - TT");
                 const double units = std::pow(1e6 * cosmo->get_TCMB(x_cell) / Constants.K, 2);
                 std::function<double(double, int)> D_ell_TT_integrand = [&](double k, int ell) {
                     const double normalization = ell * (ell + 1) / (2.0 * M_PI) * units;
@@ -605,11 +653,11 @@ namespace FML {
                 };
                 auto cell_TT = solve_for_cell_single(log_k_array, D_ell_TT_integrand, 1.0);
                 cell_TT_spline.create(ells, cell_TT, "Cell_TT_of_ell");
-                // Utils::EndTiming("POW::integrating Cells - TT");
+                timer.EndTiming("POW::integrating Cells - TT");
             }
 
             if (thetaE_ell_of_k_spline) {
-                // Utils::StartTiming("POW::integrating Cells - EE");
+                timer.StartTiming("POW::integrating Cells - EE");
                 const double units = std::pow(1e6 * cosmo->get_TCMB(x_cell) / Constants.K, 2);
                 std::function<double(double, int)> D_ell_EE_integrand = [&](double k, int ell) {
                     const double normalization = ell * (ell + 1) / (2.0 * M_PI) * units;
@@ -619,11 +667,11 @@ namespace FML {
                 };
                 auto cell_EE = solve_for_cell_single(log_k_array, D_ell_EE_integrand, 1.0);
                 cell_EE_spline.create(ells, cell_EE, "Cell_EE_of_ell");
-                // Utils::EndTiming("POW::integrating Cells - EE");
+                timer.EndTiming("POW::integrating Cells - EE");
             }
 
-            if (thetaT_ell_of_k_spline && thetaE_ell_of_k_spline) {
-                // Utils::StartTiming("POW::integrating Cells - TE");
+            if (thetaT_ell_of_k_spline and thetaE_ell_of_k_spline) {
+                timer.StartTiming("POW::integrating Cells - TE");
                 const double units = std::pow(1e6 * cosmo->get_TCMB(x_cell) / Constants.K, 2);
                 std::function<double(double, int)> D_ell_TE_integrand = [&](double k, int ell) {
                     const double normalization = ell * (ell + 1) / (2.0 * M_PI) * units;
@@ -634,11 +682,11 @@ namespace FML {
                 };
                 auto cell_TE = solve_for_cell_single(log_k_array, D_ell_TE_integrand, 1.0);
                 cell_TE_spline.create(ells, cell_TE, "Cell_TE_of_ell");
-                // Utils::EndTiming("POW::integrating Cells - TE");
+                timer.EndTiming("POW::integrating Cells - TE");
             }
 
             if (Nu_ell_of_k_spline) {
-                // Utils::StartTiming("POW::integrating Cells - NN");
+                timer.StartTiming("POW::integrating Cells - NN");
                 const double xini = -15.0;
                 const double units = std::pow(1e6 * cosmo->get_Tnu(x_cell) / Constants.K, 2);
                 std::function<double(double, int)> D_ell_NN_integrand = [&](double k, int ell) {
@@ -652,11 +700,11 @@ namespace FML {
                 };
                 auto cell_NN = solve_for_cell_single(log_k_array, D_ell_NN_integrand, 1.0);
                 cell_NN_spline.create(ells, cell_NN, "Cell_NN_of_ell");
-                // Utils::EndTiming("POW::integrating Cells - NN");
+                timer.EndTiming("POW::integrating Cells - NN");
             }
 
             if (lens_ell_of_k_spline) {
-                // Utils::StartTiming("POW::integrating Cells - LL");
+                timer.StartTiming("POW::integrating Cells - LL");
                 const double units = 1.0;
                 std::function<double(double, int)> D_ell_LL_integrand = [&](double k, int ell) {
                     const double normalization = units;
@@ -668,11 +716,11 @@ namespace FML {
                 for (size_t i = 0; i < ells.size(); i++)
                     cell_LL[i] *= ells[i] * (ells[i] + 1) * ells[i] * (ells[i] + 1);
                 cell_LL_spline.create(ells, cell_LL, "Cell_LL_of_ell");
-                // Utils::EndTiming("POW::integrating Cells - LL");
+                timer.EndTiming("POW::integrating Cells - LL");
             }
 
             if (lens_ell_of_k_spline and thetaT_ell_of_k_spline) {
-                // Utils::StartTiming("POW::integrating Cells - TL");
+                timer.StartTiming("POW::integrating Cells - TL");
                 const double units = 1.0;
                 std::function<double(double, int)> D_ell_TL_integrand = [&](double k, int ell) {
                     const double normalization = units;
@@ -685,20 +733,23 @@ namespace FML {
                 for (size_t i = 0; i < ells.size(); i++)
                     cell_TL[i] *= 1.0;
                 cell_TL_spline.create(ells, cell_TL, "Cell_TL_of_ell");
-                // Utils::EndTiming("POW::integrating Cells - TL");
+                timer.EndTiming("POW::integrating Cells - TL");
             }
 
-            // Utils::EndTiming("POW::integrating Cells");
+            timer.EndTiming("POW::integrating Cells");
         }
 
         void PowerSpectrum::output_theta_ell(std::string filename) const {
-            const int npts = 1000;
             std::ofstream fp(filename.c_str());
-            auto k_array = FML::MATH::linspace(std::log(pert->get_kmin()), std::log(pert->get_kmax()), npts);
+            if (not fp.is_open())
+                return;
+
+            const int npts = 1000;
+            auto k_array = FML::MATH::linspace(std::log(kmin), std::log(kmax), npts);
             for (auto & k : k_array)
                 k = std::exp(k);
 
-            fp << "# k (1/Mpc)  Theta_ell's\n";
+            fp << "# k (1/Mpc)  Theta_ell_T(l=6,500,1000,1500)   Theta_ell_E(l=...) Theta_ell_lens(l=...) \n";
             auto print_data = [&](const double k) {
                 // 1
                 fp << k * Constants.Mpc << " ";
@@ -738,8 +789,11 @@ namespace FML {
         }
 
         void PowerSpectrum::output_angular_power_spectra(std::string filename) const {
-            // Output in standard units of muK^2
             std::ofstream fp(filename.c_str());
+            if (not fp.is_open())
+                return;
+            
+            // Output in standard units of muK^2
             const int ellmax = int(ells[ells.size() - 1]);
             auto ellvalues = FML::MATH::linspace(2, ellmax, ellmax - 1);
             fp << "# ell  C_ell:  TT  EE  TE  LL  NN  TL\n";
@@ -770,10 +824,13 @@ namespace FML {
         }
 
         void PowerSpectrum::output_matter_power_spectrum(double x, std::string filename) const {
+            std::ofstream fp(filename.c_str());
+            if (not fp.is_open())
+                return;
+            
             const int npts = 100;
 
             // Output in units of k = h/Mpc and P(k) = (Mpc/h)^3
-            std::ofstream fp(filename.c_str());
             auto pofk_M = get_power_spectrum_array(x, npts, "M");
             auto k_M = pofk_M.first;
             auto p_M = pofk_M.second;
@@ -904,7 +961,7 @@ namespace FML {
             }
 
             // FFTLog algorithm
-            auto res = FFTLog::ComputeCorrelationFunction(k_array, Pk_array);
+            auto res = FML::SOLVERS::FFTLog::ComputeCorrelationFunction(k_array, Pk_array);
 
             return res;
         }
@@ -921,7 +978,7 @@ namespace FML {
 
             // Find closest power of two for optimal FFTW
             for (int N = 2;; N *= 2) {
-                if (N >= ngrid || N > 1e9) {
+                if (N >= ngrid or N > 1e9) {
                     ngrid = N;
                     break;
                 }
@@ -931,7 +988,7 @@ namespace FML {
             fftw_complex * source = (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * ngrid);
             for (int i = 0; i < ngrid; i++) {
                 double im = 0.0;
-                if (i == 0 || i == ngrid / 2) {
+                if (i == 0 or i == ngrid / 2) {
                     // Zero mode and largest mode
                     im = 0.0;
                 } else if (i < ngrid / 2) {

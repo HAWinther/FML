@@ -31,6 +31,9 @@ namespace FML {
         //====================================================
 
         void RecombinationHistory::info() const {
+            if (FML::ThisTask > 0)
+                return;
+
             std::cout << "\n";
             std::cout << "============================================\n";
             std::cout << "Info about recombination/reionization history class:\n";
@@ -52,7 +55,8 @@ namespace FML {
                 double tau_reion = reionization ? tau_of_x_spline(std::log(1.0 / (1.0 + z_reion))) : 0.0;
                 double kd_star = kd_of_x_spline(x_star);
                 std::cout << "Recombination (Xe = 0.5)           z       = " << std::exp(-x_recombination) - 1 << "\n";
-                std::cout << "Recombination (Xe = 0.5) with Saha z       = " << std::exp(-x_recombination_saha) - 1 << "\n";
+                std::cout << "Recombination (Xe = 0.5) with Saha z       = " << std::exp(-x_recombination_saha) - 1
+                          << "\n";
                 std::cout << "Last scattering (tau = 1.0) with Saha      = " << std::exp(-x_star_saha) - 1
                           << " Xe: " << Xe_of_x_saha(x_star_saha) << "\n";
                 std::cout << "Last scattering (dgdx = 0.0)       z       = " << std::exp(-x_star2) - 1 << "\n";
@@ -96,7 +100,8 @@ namespace FML {
             const double n_b = (OmegaB * 3.0 * H0 * H0) / (8 * M_PI * G * m_H * a * a * a);
 
             // The rhs of Saha equation
-            const double saha_factor = std::pow(m_e * kT_b / (hbar * hbar * 2.0 * M_PI), 1.5) / n_b * std::exp(-epsilon_0 / kT_b);
+            const double saha_factor =
+                std::pow(m_e * kT_b / (hbar * hbar * 2.0 * M_PI), 1.5) / n_b * std::exp(-epsilon_0 / kT_b);
 
             // The equation reads X_e = saha_fac/2.0 * ( -1 + sqrt(1.0 + 4.0/saha_fac) )
             double f_e = 1.0;
@@ -211,9 +216,11 @@ namespace FML {
             RecfastRec.npts = 50000;
             RecfastRec.zstart = 1e4;
 
-            std::cout << "\n============================================\n";
-            std::cout << "Calling Recfast                               \n";
-            std::cout << "============================================\n\n";
+            if (FML::ThisTask == 0) {
+                std::cout << "\n============================================\n";
+                std::cout << "Calling Recfast                               \n";
+                std::cout << "============================================\n\n";
+            }
             RecfastCosmo.show();
             RecfastRec.show();
 
@@ -437,10 +444,15 @@ namespace FML {
 
         void RecombinationHistory::output(const std::string filename) const {
             std::ofstream fp(filename.c_str());
+            if (not fp.is_open())
+                return;
+
             const int npts = 1000;
             const double x_start = x_start_rec_array;
             const double x_end = x_end_rec_array;
             DVector x_array = FML::MATH::linspace(x_start, x_end, npts);
+
+            fp << "# x = log(a) Recombination Quantities [ Xe   Xe_saha  ne  tau  tau'  tau''  g   g'  g'']\n";
             auto print_data = [&](const double x) {
                 // 1
                 fp << x << " ";
@@ -706,13 +718,15 @@ namespace FML {
         double RecombinationHistory::Xe_of_x_saha_noreion(double x) const { return Xe_of_x_saha_spline(x); }
 
         double RecombinationHistory::ne_of_x(double x) const {
-            static const double factor = 3.0 * std::pow(Constants.H0_over_h, 2) / (8 * M_PI * Constants.G * Constants.m_H);
+            static const double factor =
+                3.0 * std::pow(Constants.H0_over_h, 2) / (8 * M_PI * Constants.G * Constants.m_H);
             double n_b0 = factor * cosmo->get_OmegaB() * std::pow(cosmo->get_h(), 2);
             return Xe_of_x(x) * (1.0 - Yp) * n_b0 * std::exp(-3.0 * x);
         }
 
         double RecombinationHistory::ne_of_x_saha(double x) const {
-            static const double factor = 3.0 * std::pow(Constants.H0_over_h, 2) / (8 * M_PI * Constants.G * Constants.m_H);
+            static const double factor =
+                3.0 * std::pow(Constants.H0_over_h, 2) / (8 * M_PI * Constants.G * Constants.m_H);
             double n_b0 = factor * cosmo->get_OmegaB() * std::pow(cosmo->get_h(), 2);
             return Xe_of_x_saha(x) * (1.0 - Yp) * n_b0 * std::exp(-3.0 * x);
         }
@@ -731,7 +745,7 @@ namespace FML {
 
         // Implemention of reionization on Xe. This is the factor f in Xe = Xe^peebles + f
         double RecombinationHistory::Xe_reionization_factor_of_x(double x) const {
-            if (!reionization) {
+            if (not reionization) {
                 return 0.0;
             }
 

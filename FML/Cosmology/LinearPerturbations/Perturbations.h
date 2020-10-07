@@ -14,6 +14,8 @@
 #include <FML/Math/Math.h>
 #include <FML/ODESolver/ODESolver.h>
 #include <FML/Spline/Spline.h>
+#include <FML/Timing/Timings.h>
+#include <FML/Global/Global.h> // We only need ThisTask
 
 namespace FML {
     namespace COSMOLOGY {
@@ -162,6 +164,9 @@ namespace FML {
             void integrate_perturbations();
             void compute_source_functions();
 
+            // For keeping timings
+            mutable FML::UTILS::Timings timer;
+
           public:
             PerturbationSystemInfo psinfo;
             PerturbationSystemInfo psinfo_tight_coupling;
@@ -176,59 +181,96 @@ namespace FML {
             Perturbations(Perturbations && rhs) = default;
             ~Perturbations() = default;
 
-            // Do all the solving
+            /// Do all the solving
             void solve();
 
+            /// Show some info
             void info() const;
 
-            // Output info to file
+            /// Output perturbation quantities to file
             void output_perturbations(const double k, const std::string filename) const;
+            /// Output transfer functions to file
             void output_transfer(const double x, const std::string filename) const;
 
             // Get the quantities we have integrated
+            /// CDM density contrast in the newtonian gauge of x=log(a) and k
             double get_delta_cdm(const double x, const double k) const;
+            /// Baryon density contrast in the newtonian gauge of x=log(a) and k
             double get_delta_b(const double x, const double k) const;
+            /// CDM velocity in the newtonian gauge of x=log(a) and k
             double get_v_cdm(const double x, const double k) const;
+            /// Baryon velocity in the newtonian gauge of x=log(a) and k
             double get_v_b(const double x, const double k) const;
+            /// Space-space newtonian potential Phi in the newtonian gauge of x=log(a) and k
             double get_Phi(const double x, const double k) const;
+            /// Time-time newtonian potential Psi in the newtonian gauge of x=log(a) and k
             double get_Psi(const double x, const double k) const;
+            /// Photon aniotrop stress Pi in the newtonian gauge of x=log(a) and k
             double get_Pi(const double x, const double k) const;
+            /// Photon perturbation Theta in the newtonian gauge of x=log(a) and k
             double get_Theta(const double x, const double k, const int ell) const;
+            /// Photon polarisation perturbation Theta_p in the newtonian gauge of x=log(a) and k
             double get_Theta_p(const double x, const double k, const int ell) const;
+            /// Neutrino perturbation Nu in the newtonian gauge of x=log(a) and k
             double get_Nu(const double x, const double k, const int ell) const;
 
-            // Gauge invariant matter density
+            /// Gauge invariant matter density constrast
             double get_Delta_M(const double x, const double k) const;
 
             // Source functions
+            /// Source function for LOS integrals for temperature of x=log(a) and k
             double get_Source_T(const double x, const double k) const;
+            /// Source function for LOS integrals for E-mode polarisation of x=log(a) and k
             double get_Source_E(const double x, const double k) const;
+            /// Source function for LOS integrals for CMB lensing of x=log(a) and k
             double get_Source_L(const double x, const double k) const;
+            /// Source function for LOS integrals for massless neutrinos of x=log(a) and k
             double get_Source_N(const double x, const double k) const;
 
             // Individual contributions to temperature source
+            /// Source function for the Sachs-Wolfe effect in the photon LOS integral of x=log(a) and k
             double get_Source_SW_T(const double x, const double k) const;
+            /// Source function for the Integrated Sachs-Wolfe effect in the photon LOS integral of x=log(a) and k
             double get_Source_ISW_T(const double x, const double k) const;
+            /// Source function for the doppler term in the photon LOS integral of x=log(a) and k
             double get_Source_VEL_T(const double x, const double k) const;
+            /// Source function for the polarisation term in the photon LOS integral of x=log(a) and k
             double get_Source_POL_T(const double x, const double k) const;
 
             // Transfer functions
             double get_transfer_zeta(const double x, const double k) const;
+            /// Transfer function for the gamma term needed for including relativistic terms in N-body of x = log(a) and
+            /// k (same as CAMB gives)
             double get_transfer_gammaNbody(const double x, const double k) const;
+            /// Transfer function for the CDM density contrast of x = log(a) and k (same as CAMB gives)
             double get_transfer_Delta_cdm(const double x, const double k) const;
+            /// Transfer function for the baryon density contrast of x = log(a) and k (same as CAMB gives)
             double get_transfer_Delta_b(const double x, const double k) const;
+            /// Transfer function for the baryon+CDM density contrast of x = log(a) and k (same as CAMB gives)
             double get_transfer_Delta_cb(const double x, const double k) const;
+            /// Transfer function for the total matter density contrast of x = log(a) and k (same as CAMB gives)
             double get_transfer_Delta_M(const double x, const double k) const;
+            /// Transfer function for the photon density contrast of x = log(a) and k (same as CAMB gives)
             double get_transfer_Delta_R(const double x, const double k) const;
+            /// Transfer function for the neutrino density contrast of x = log(a) and k (same as CAMB gives)
             double get_transfer_Delta_Nu(const double x, const double k) const;
+            /// Transfer function for the total relativistic density contrast of x = log(a) and k (same as CAMB gives)
             double get_transfer_Delta_Rtot(const double x, const double k) const;
+            /// Transfer function for the CDM velocity of x = log(a) and k (same as CAMB gives)
             double get_transfer_v_cdm(const double x, const double k) const;
+            /// Transfer function for the baryon velocity of x = log(a) and k (same as CAMB gives)
             double get_transfer_v_b(const double x, const double k) const;
+            /// Transfer function for the photon velocity of x = log(a) and k (same as CAMB gives)
             double get_transfer_v_R(const double x, const double k) const;
+            /// Transfer function for the massless neutrino velocity of x = log(a) and k (same as CAMB gives)
             double get_transfer_v_Nu(const double x, const double k) const;
+            /// Transfer function for the baryon-CDM relative velocity of x = log(a) and k (same as CAMB gives)
             double get_transfer_v_b_v_c(const double x, const double k) const;
+            /// Transfer function for the space-space metric potential Psi of x = log(a) and k (same as CAMB gives)
             double get_transfer_Phi(const double x, const double k) const;
+            /// Transfer function for the time-time metric potential Phi of x = log(a) and k (same as CAMB gives)
             double get_transfer_Psi(const double x, const double k) const;
+            /// Transfer function for the Weyl potential of x = log(a) and k (same as CAMB gives)
             double get_transfer_Weyl(const double x, const double k) const;
 
             double get_kmin() const;

@@ -3,7 +3,7 @@
 namespace FML {
     namespace COSMOLOGY {
 
-        FML::UTILS::ConstantsAndUnits Constants;
+        FML::UTILS::ConstantsAndUnits Constants("SI");
 
         //====================================================
         // Constructors
@@ -76,9 +76,10 @@ namespace FML {
         //====================================================
 
         void BackgroundCosmology::info() const {
+            if (FML::ThisTask > 0)
+                return;
             double aeq = OmegaRtot / OmegaM;
             double K = -OmegaK * H0 * H0;
-
             std::cout << "\n";
             std::cout << "============================================\n";
             std::cout << "Info about cosmology class [" << name << "]:\n";
@@ -134,12 +135,14 @@ namespace FML {
 
             // Define the Hubble functions we are to spline
             auto H_function = [&](double x) {
-                return H0 * std::sqrt(OmegaLambda + OmegaK * std::exp(-2 * x) + OmegaM * std::exp(-3 * x) + OmegaRtot * std::exp(-4 * x));
+                return H0 * std::sqrt(OmegaLambda + OmegaK * std::exp(-2 * x) + OmegaM * std::exp(-3 * x) +
+                                      OmegaRtot * std::exp(-4 * x));
             };
             auto Hp_function = [&](double x) { return std::exp(x) * H_function(x); };
             auto dHdx_function = [&](double x) {
                 return 1.0 / (2.0 * H_function(x)) * H0 * H0 *
-                       (-2 * OmegaK * std::exp(-2 * x) - 3 * OmegaM * std::exp(-3 * x) - 4 * OmegaRtot * std::exp(-4 * x));
+                       (-2 * OmegaK * std::exp(-2 * x) - 3 * OmegaM * std::exp(-3 * x) -
+                        4 * OmegaRtot * std::exp(-4 * x));
             };
             auto dHpdx_function = [&](double x) {
                 return 1.0 / (2.0 * Hp_function(x)) * H0 * H0 *
@@ -204,7 +207,8 @@ namespace FML {
             // The initial conditions
             DVector eta_initial{0.0, 0.0};
             if (OmegaRtot > 0.0)
-                eta_initial = {std::exp(x_array[0]) / std::sqrt(OmegaRtot), std::exp(2.0 * x_array[0]) / 2.0 / std::sqrt(OmegaRtot)};
+                eta_initial = {std::exp(x_array[0]) / std::sqrt(OmegaRtot),
+                               std::exp(2.0 * x_array[0]) / 2.0 / std::sqrt(OmegaRtot)};
 
             // Solve the ODE
             ODESolver eta_ode(
@@ -309,11 +313,13 @@ namespace FML {
 
         void BackgroundCosmology::output(const std::string filename) const {
             std::ofstream fp(filename.c_str());
+            if (not fp.is_open())
+                return;
 
             const int npts = 100;
             DVector x_array = FML::MATH::linspace(x_min_background, x_max_background, npts);
 
-            fp << "# x = log(a) Cosmology Quantities [ aH  (aH)'  (aH)'' eta/Mpc  Omegai's  LPT growthfactors ]\n";
+            fp << "# x = log(a) Cosmology Quantities [ aH  (aH)'  (aH)'' eta/Mpc  Omega(B,CDM,Lambda,R,Nu,Rtot,K)  LPT growthfactors+derivs ]\n";
             auto print_data = [&](const double x) {
                 // 1
                 fp << x << " ";

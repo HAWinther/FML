@@ -19,6 +19,11 @@
 #include <FML/Math/Math.h>
 #include <FML/ODESolver/ODESolver.h>
 #include <FML/Spline/Spline.h>
+#include <FML/Timing/Timings.h>
+#include <FML/Global/Global.h> // We only need ThisTask
+#ifdef USE_FFTW
+#include <FML/FFTLog/FFTLog.h>
+#endif
 
 namespace FML {
     namespace COSMOLOGY {
@@ -114,6 +119,9 @@ namespace FML {
             Spline2D xi_R_spline{"xi_R_spline"};
             Spline2D xi_Nu_spline{"xi_Nu_spline"};
             Spline2D xi_M_spline{"xi_M_spline"};
+            
+            // For keeping timings
+            mutable FML::UTILS::Timings timer;
 
           public:
             PowerSpectrum() = delete;
@@ -127,76 +135,91 @@ namespace FML {
             PowerSpectrum(PowerSpectrum && rhs) = default;
             ~PowerSpectrum() = default;
 
-            // Do LOS integration and compute Cells
+            /// Do all the solving
             void solve();
+            /// Show some info
             void info() const;
 
-            // Make bessel-function splines that we need
+            /// Make bessel-function splines that we need
             void generate_bessel_function_splines(double xmax, int nsamples_per_osc);
 
-            // Do all the LOS integrals we need
+            /// Do all the LOS integrals we need
             void line_of_sight_integration(DVector & k_array);
 
-            // Compute LOS integral to get F_ell for any given source function
+            /// Compute LOS integral to get F_ell for any given source function
             DVector2D line_of_sight_integration_single(DVector & x_array,
                                                        DVector & k_array,
                                                        std::function<double(double, double)> & source_function,
                                                        std::function<double(double, double)> & aux_norm);
 
-            // Compute Cell for any given quantity
+            /// Compute Cell for any given quantity
             DVector solve_for_cell_single(DVector & log_k_array,
                                           std::function<double(double, int)> & integrand,
                                           double accuracy_limit);
 
-            // Compute and spline all xi(r,x) - the fourier transforms of the power-spectra
+            /// Compute and spline all xi(r,x) - the fourier transforms of the power-spectra
             void compute_all_correlation_functions(double xmin = -8.0, double xmax = 0.0, int nx = 50);
 
-            // The primordial power-spectrum P(k)
+            /// The primordial power-spectrum P(k)
             double primordial_power_spectrum(double k) const;
 
-            // The dimensionless primordial power-spectrum Delta = 2pi^2/k^3 P(k)
+            /// The dimensionless primordial power-spectrum Delta = 2pi^2/k^3 P(k)
             double primordial_power_spectrum_dimless(double k) const;
 
             // Get the various power spectra: standard format l(l+1)/2pi Cell in muK^2 for photons
+            /// l(l+1)/2pi Cell in muK^2 for photon temperature
             double get_cell_TT(double ell) const;
+            /// l(l+1)/2pi Cell in muK^2 for photon temperature cross E-mode
             double get_cell_TE(double ell) const;
+            /// l(l+1)/2pi Cell in muK^2 for photon E-mode
             double get_cell_EE(double ell) const;
+            /// l(l+1)/2pi Cell in muK^2 for lensing potential
             double get_cell_LL(double ell) const;
+            /// l(l+1)/2pi Cell in muK^2 for neutrinos
             double get_cell_NN(double ell) const;
 
             // Get the various correlation functions
             double get_corr_func(double x, double r, std::string type) const;
+            /// Total matter correlation function of x = log(a) and r
             double get_corr_func_M(double x, double r) const;
+            /// CDM correlation function of x = log(a) and r
             double get_corr_func_CDM(double x, double r) const;
+            /// Baryon correlation function of x = log(a) and r
             double get_corr_func_B(double x, double r) const;
+            /// Baryon+CDM correlation function of x = log(a) and r
             double get_corr_func_CB(double x, double r) const;
+            /// Photon correlation function of x = log(a) and r
             double get_corr_func_R(double x, double r) const;
+            /// Masseless neutrino correlation function of x = log(a) and r
             double get_corr_func_Nu(double x, double r) const;
+            /// Total relativistic correlation function of x = log(a) and r
             double get_corr_func_Rtot(double x, double r) const;
 
-            // Get P(k,x) for a given x. The type is:
-            // B (baryons), CDM, CB (CDM+baryons), R (photons), Nu (neutrionos), Rtot (total radiation)
-            // or M (total matter). The latter is the same as get_matter_power_spectrum
+            /// Get P(k,x) for a given x = log(a) and k. The type is:
+            /// B (baryons), CDM, CB (CDM+baryons), R (photons), Nu (neutrionos), Rtot (total radiation)
+            /// or M (total matter). The latter is the same as get_matter_power_spectrum
             double get_power_spectrum(double x, double k, std::string type) const;
+            
+            /// Get total matter power-spectrum of x = log(a) and k
             double get_matter_power_spectrum(double x, double k) const;
             std::pair<DVector, DVector> get_power_spectrum_array(double x, int npts, std::string type) const;
 
-            // Get spherical bessel-function from the splines we made
+            /// Get spherical bessel-function from the splines we made
             double get_j_ell(int ell, double x) { return j_ell_splines[int(index_of_ells_spline(ell))](x); }
 
-            // Lesning potential source function
+            /// Lensing potential source function
             double lensing_source(double x, double x_observer = 0.0) const;
 
-            // Outputs (k, P(k)) in units of h/Mpc and (Mpc/h)^3
+            /// Outputs (k, P(k)) in units of h/Mpc and (Mpc/h)^3
             void output_matter_power_spectrum(double x, std::string filename) const;
 
-            // Outputs (r, xi(r)) in units of Mpc/h and 1
+            /// Outputs (r, xi(r)) in units of Mpc/h and 1
             void output_correlation_function(double x, std::string filename) const;
 
-            // Output Cl (TT,EE,TE) in units of l(l+1)/2pi (muK)^2
+            /// Output Cl (TT,EE,TE) in units of l(l+1)/2pi (muK)^2
             void output_angular_power_spectra(std::string filename) const;
 
-            // Output the LOS integral quantities we have computed
+            /// Output the LOS integral quantities we have computed
             void output_theta_ell(std::string filename) const;
 
             double los_photons(int i, double k, std::function<double(double, double)> & source_function);

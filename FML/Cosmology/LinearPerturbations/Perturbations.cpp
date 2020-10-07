@@ -1,4 +1,5 @@
 #include "Perturbations.h"
+#include <numeric>
 
 namespace FML {
     namespace COSMOLOGY {
@@ -17,6 +18,7 @@ namespace FML {
             int n_ell_nu = p.get<int>("n_ell_nu");
             double keta_min = p.get<double>("keta_min");
             double keta_max = p.get<double>("keta_max");
+            double k_max_pert = p.get<double>("k_max_pert", 0.0);
             int n_per_logint = p.get<int>("pert_integration_nk_per_logint");
             double deltax = p.get<double>("pert_delta_x");
 
@@ -30,7 +32,7 @@ namespace FML {
             // Set up k-range and sample frequency
             const double delta_log_k = std::log(10.0) / n_per_logint;
             k_min = keta_min / cosmo->eta_of_x(0.0);
-            k_max = keta_max / cosmo->eta_of_x(0.0);
+            k_max = std::max(keta_max / cosmo->eta_of_x(0.0), k_max_pert);
 
             // Check that k_min is not too small when we have curvature
             double OmegaK = cosmo->get_OmegaK();
@@ -39,8 +41,9 @@ namespace FML {
                 double k_min_curvature = sqrt(-K);
                 if (k_min < k_min_curvature) {
                     k_min = 1.01 * k_min_curvature;
-                    std::cout << "Open Universe: Adjusting kmin to " << k_min * Constants.Mpc
-                              << " (1/Mpc) keta = " << k_min * cosmo->eta_of_x(0.0) << "\n";
+                    if (FML::ThisTask == 0)
+                        std::cout << "Open Universe: Adjusting kmin to " << k_min * Constants.Mpc
+                                  << " (1/Mpc) keta = " << k_min * cosmo->eta_of_x(0.0) << "\n";
                 }
             }
             n_k_total = int(std::log(k_max / k_min) / delta_log_k);
@@ -75,6 +78,8 @@ namespace FML {
         //====================================================
 
         void Perturbations::info() const {
+            if (FML::ThisTask > 0)
+                return;
             std::cout << "\n";
             std::cout << "============================================\n";
             std::cout << "Info about perturbations class:\n";
@@ -104,6 +109,8 @@ namespace FML {
             std::cout << "n_ell_nu:      " << psinfo.n_ell_nu << "\n";
             std::cout << "start_nu:      " << psinfo.index_nu_start << "\n";
             std::cout << "============================================\n\n";
+
+            timer.PrintAllTimings();
         }
 
         DVector Perturbations::set_ic_after_tight_coupling(const DVector & y_tight_coupling,
@@ -352,7 +359,7 @@ namespace FML {
                 x += (x_end - x_start_search) / double(n);
                 const double ckoverHp = Constants.c * k / cosmo->Hp_of_x(x);
                 const double dtaudx = std::fabs(rec->dtaudx_of_x(x));
-                if (dtaudx < dtaudx_factor || dtaudx < dtaudx_factor * ckoverHp) {
+                if (dtaudx < dtaudx_factor or dtaudx < dtaudx_factor * ckoverHp) {
                     if (verbose)
                         std::cout << "k: " << k * Constants.Mpc << " z: " << std::exp(-x) - 1 << "\n";
                     return x;
@@ -483,6 +490,7 @@ namespace FML {
 
             //================================================================
             // Set up k-array
+            // XXX This can be improved with larger spacing for large k
             //================================================================
             auto k_array = FML::MATH::linspace(std::log(k_min), std::log(k_max), n_k_total);
             for (auto & k : k_array)
@@ -502,24 +510,45 @@ namespace FML {
             auto x_array = x_array_integration;
 
             // Make storage for all the (x,k,y_i) data (this can require O(Mb) storage)
-            DVector2D results = DVector2D(psinfo.n_tot, DVector(n_k_total * n_x_total));
+            DVector2D results = DVector2D(psinfo.n_tot, DVector(n_k_total * n_x_total, 0.0));
 
-            std::cout << "Integrate " << n_k_total << " wavenumbers in the range [" << k_min * Constants.Mpc << " , "
-                      << k_max * Constants.Mpc << "]\n";
+            if (FML::ThisTask == 0)
+                std::cout << "Integrate " << n_k_total << " wavenumbers in the range [" << k_min * Constants.Mpc
+                          << " , " << k_max * Constants.Mpc << "]\n";
 
             // Loop over all wavenumbers
-            // Utils::StartTiming("PERT::integrating perturbations");
+            timer.StartTiming("PERT::integrating perturbations");
+
+            // The k-values we loop over (doing it like this to ease the
+            // parallelization)
+            std::vector<int> ik_list(n_k_total);
+            std::iota(ik_list.begin(), ik_list.end(), 0);
+#ifdef USE_MPI
+            // Compute what k's to deal with on the local task
+            if (FML::NTasks > 1) {
+                ik_list.clear();
+                for (int i = 0; i < n_k_total; i++) {
+                    if (i % FML::NTasks == FML::ThisTask) {
+                        ik_list.push_back(i);
+                    }
+                }
+            }
+#endif
+
 #ifdef USE_OMP
 #pragma omp parallel for schedule(dynamic, 1)
 #endif
-            for (int ik = 0; ik < n_k_total; ik++) {
+            for (size_t ii = 0; ii < ik_list.size(); ii++) {
+                const int ik = ik_list[ii];
+
                 // Progress bar (each thread has unique value of ik so no race)
-                if ((10 * ik) / n_k_total != (10 * ik + 10) / n_k_total) {
-                    std::cout << (100 * ik + 100) / n_k_total << "% " << std::flush;
-                    if (ik == n_k_total - 1) {
-                        std::cout << std::endl;
+                if (FML::ThisTask == 0)
+                    if ((10 * ii) / ik_list.size() != (10 * ii + 10) / ik_list.size()) {
+                        std::cout << (100 * ii + 100) / ik_list.size() << "% " << std::flush;
+                        if (ii == ik_list.size() - 1) {
+                            std::cout << std::endl;
+                        }
                     }
-                }
 
                 // Current value of k
                 const double k = k_array[ik];
@@ -556,9 +585,9 @@ namespace FML {
                 ODESolver tight_coupling_ode(
                     FIDUCIAL_HSTART_ODE_TIGHT, FIDUCIAL_ABSERR_ODE_TIGHT, FIDUCIAL_RELERR_ODE_TIGHT);
 
-                // Utils::StartTiming("PERT::integrate_tight (all threads)");
+                timer.StartTiming("PERT::integrate_tight (all threads)");
                 tight_coupling_ode.solve(deriv_tight_coupling, x_array_tight, y_pert_tight_coupling);
-                // Utils::EndTiming("PERT::integrate_tight (all threads)");
+                timer.EndTiming("PERT::integrate_tight (all threads)");
 
                 //===================================================================
                 // Full equation integration
@@ -577,7 +606,7 @@ namespace FML {
 
                 // Integrate till the present time. If a Jacobian is availiable use that for
                 // the largest k-modes as this is much faster
-                // Utils::StartTiming("PERT::integrate_full (all threads)");
+                timer.StartTiming("PERT::integrate_full (all threads)");
 #define USE_JACOBIAN
 #ifndef USE_JACOBIAN
                 full_ode.solve(deriv_full, x_array_full, y_pert_full);
@@ -592,13 +621,13 @@ namespace FML {
                     full_ode.solve(deriv_full, x_array_full, y_pert_full);
                 }
 #endif
-                // Utils::EndTiming("PERT::integrate_full (all threads)");
+                timer.EndTiming("PERT::integrate_full (all threads)");
 
                 //===================================================================
                 // Store the data
                 //===================================================================
 
-                // Utils::StartTiming("PERT::store data");
+                timer.StartTiming("PERT::store data");
 
                 auto data_tight = tight_coupling_ode.get_data();
                 auto data_full = full_ode.get_data();
@@ -626,14 +655,29 @@ namespace FML {
                     }
                 }
 
-                // Utils::EndTiming("PERT::store data");
+                timer.EndTiming("PERT::store data");
             }
-            // Utils::EndTiming("PERT::integrating perturbations");
-            std::cout << "Done! Making splines and source functions\n\n";
+            timer.EndTiming("PERT::integrating perturbations");
+            if (FML::ThisTask == 0)
+                std::cout << (FML::NTasks == 1 ? "Done!\n\n" : "Waiting for other tasks to finish... ");
+
+#ifdef USE_MPI
+            MPI_Barrier(MPI_COMM_WORLD);
+            if (FML::ThisTask == 0 and FML::NTasks > 1)
+                std::cout << "All tasks done!\n";
+            // Its not that much data so we simply send all the data from all to  all tasks and add up
+            for (size_t iq = 0; iq < results.size(); iq++) {
+                MPI_Allreduce(
+                    MPI_IN_PLACE, results[iq].data(), results[iq].size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            }
+#endif
+
+            if (FML::ThisTask == 0)
+                std::cout << "Making splines and source functions\n";
 
             //=============================================================================
 
-            // Utils::StartTiming("PERT::making splines");
+            timer.StartTiming("PERT::making splines");
 
             //=============================================================================
             // Splines of scalar quantities
@@ -759,11 +803,11 @@ namespace FML {
             dzetadx_spline.create (x_array, k_array, dzetadx_array,  "dzetaCurvPertdx_x_k");
              */
 
-            // Utils::EndTiming("PERT::making splines");
+            timer.EndTiming("PERT::making splines");
         }
 
         void Perturbations::compute_source_functions() {
-            // Utils::StartTiming("PERT::making source");
+            timer.StartTiming("PERT::making source");
 
             // The x and k arrays to use to make the spline
             // For simplicity we jusy use the same array as used when integrating the perturbations
@@ -842,7 +886,8 @@ namespace FML {
                     POL_array[index] = polarization_term;
 
                     // Polarization source
-                    SE_array[index] = x > -0.001 ? 0.0 : 3.0 * g * Pi / 4.0 / std::pow(ckoverHp * Hp * chi / Constants.c, 2);
+                    SE_array[index] =
+                        x > -0.001 ? 0.0 : 3.0 * g * Pi / 4.0 / std::pow(ckoverHp * Hp * chi / Constants.c, 2);
 
                     // Neutrino source
                     SN_array[index] = (dPsidx - dPhidx);
@@ -860,15 +905,18 @@ namespace FML {
             VEL_spline.create(x_array, k_array, VEL_array, "Source_VEL_x_k");
             POL_spline.create(x_array, k_array, POL_array, "Source_POL_x_k");
 
-            // Utils::EndTiming("PERT::making source");
+            timer.EndTiming("PERT::making source");
         }
 
         void Perturbations::output_perturbations(const double k, const std::string filename) const {
 
             std::ofstream fp(filename.c_str());
+            if (not fp.is_open())
+                return;
+
             const int npts = 2000;
             auto x_array = FML::MATH::linspace(x_start, 0.0, npts);
-            fp << "# x = log(a)    Perturbation quantities\n";
+            fp << "# x = log(a)    Perturbation quantities [Theta+Psi, Theta0,1,2, ThetaP0,1,2  Nu0,1,2  ... (see file) ...]\n";
             auto print_data = [&](const double x) {
                 double arg = k * cosmo->chi_of_x(x);
 
@@ -947,6 +995,9 @@ namespace FML {
 
         void Perturbations::output_transfer(const double x, const std::string filename) const {
             std::ofstream fp(filename.c_str());
+            if (not fp.is_open())
+                return;
+
             const int npts = 1000;
             auto k_array = FML::MATH::linspace(std::log(k_min), std::log(k_max), npts);
             for (auto & k : k_array)
@@ -954,11 +1005,9 @@ namespace FML {
 
             const double norm_k = Constants.Mpc / cosmo->get_h();
             const double norm = std::pow(cosmo->get_h() / Constants.Mpc, 2);
-            fp << "# k (h/Mpc)   Matter   Baryon   CDM  CB  R  Nu   Rtot    (Units: (Mpc/h)^2)\n";
+            fp << "# k (h/Mpc)   Matter   Baryon   CDM  CB  R  Nu   Rtot  gamma  Phi  (Units: (Mpc/h)^2)\n";
             auto print_data = [&](const double k) {
                 fp << k * norm_k << " ";
-                fp << get_transfer_gammaNbody(x, k) * norm << " ";
-                fp << get_transfer_Phi(x, k) * norm << " ";
                 fp << get_transfer_Delta_M(x, k) * norm << " ";
                 fp << get_transfer_Delta_b(x, k) * norm << " ";
                 fp << get_transfer_Delta_cdm(x, k) * norm << " ";
@@ -966,6 +1015,8 @@ namespace FML {
                 fp << get_transfer_Delta_R(x, k) * norm << " ";
                 fp << get_transfer_Delta_Nu(x, k) * norm << " ";
                 fp << get_transfer_Delta_Rtot(x, k) * norm << " ";
+                fp << get_transfer_gammaNbody(x, k) * norm << " ";
+                fp << get_transfer_Phi(x, k) * norm << " ";
                 fp << "\n";
             };
             std::for_each(k_array.begin(), k_array.end(), print_data);
@@ -1113,7 +1164,7 @@ namespace FML {
         }
 
         int Perturbations::rhs_jacobian_full(double x, double k, const double * y, double * dfdy, double * dfdt) {
-            // Utils::StartTiming("PERT::jacobian");
+            timer.StartTiming("PERT::jacobian");
 
             // This computes dfdt - explicit x-derivative of the rhs of the ODE system
             // and dfdy the Jacobian matrix of the system
@@ -1383,7 +1434,7 @@ namespace FML {
                 }
             }
 
-            // Utils::EndTiming("PERT::jacobian");
+            timer.EndTiming("PERT::jacobian");
 
             return GSL_SUCCESS;
         }

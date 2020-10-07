@@ -64,8 +64,8 @@ all: $(TARGETS)
 # Object files to be compiled
 #===================================================
 
-VPATH := $(FML_INCLUDE)/FML/Cosmology/RecombinationHistory/:$(FML_INCLUDE)/FML/Spline/:$(FML_INCLUDE)/FML/ODESolver/:$(FML_INCLUDE)/FML/ParameterMap/:$(FML_INCLUDE)/FML/Cosmology/BackgroundCosmology/:$(FML_INCLUDE)/FML/Math/
-OBJS = Main.o BackgroundCosmology.o Spline.o ODESolver.o ParameterMap.o RecombinationHistory.o Math.o
+VPATH := $(FML_INCLUDE)/FML/Cosmology/RecombinationHistory/:$(FML_INCLUDE)/FML/Spline/:$(FML_INCLUDE)/FML/ODESolver/:$(FML_INCLUDE)/FML/ParameterMap/:$(FML_INCLUDE)/FML/Cosmology/BackgroundCosmology/:$(FML_INCLUDE)/FML/Math/:$(FML_INCLUDE)/FML/Global/
+OBJS = Main.o BackgroundCosmology.o Spline.o ODESolver.o ParameterMap.o RecombinationHistory.o Math.o Global.o
 
 clean:
 	rm -rf $(TARGETS) *.o

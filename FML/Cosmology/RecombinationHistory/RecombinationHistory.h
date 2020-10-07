@@ -16,6 +16,7 @@
 #include <FML/Math/Math.h>
 #include <FML/ODESolver/ODESolver.h>
 #include <FML/Spline/Spline.h>
+#include <FML/Global/Global.h> // Just for ThisTask
 #ifdef USE_RECFAST
 #include "Recfast++.h"
 #endif
@@ -137,33 +138,59 @@ namespace FML {
             RecombinationHistory(RecombinationHistory && rhs) = default;
             ~RecombinationHistory() = default;
 
+            /// Do all the recombination solving
             void solve();
+            /// Show some info
             void info() const;
+            /// Output selected recombination quantities
             void output(const std::string filename) const;
 
+            /// Optical depth of x = log(a)
             double tau_of_x(double x) const;
+            /// Optical depth using the Saha approximation of x = log(a)
             double tau_of_x_saha(double x) const;
+            /// Optical depth using the Saha approximation ignoring reionization of x = log(a)
             double tau_of_x_saha_noreion(double x) const;
+            /// Derivative of optical depth of x = log(a)
             double dtaudx_of_x(double x) const;
+            /// Second derivative of optical depth of x = log(a)
             double ddtauddx_of_x(double x) const;
+            /// Visibility function \f$ g = -\tau'e^{-\tau} \f$ of x = log(a)
             double g_tilde_of_x(double x) const;
+            /// Derivative of visibility function of x = log(a)
             double dgdx_tilde_of_x(double x) const;
+            /// Second derivative of visibility function of x = log(a)
             double ddgddx_tilde_of_x(double x) const;
+            /// Free electron fraction of x = log(a)
             double Xe_of_x(double x) const;
+            /// Free electron fraction using the Saha approximatin of x = log(a)
             double Xe_of_x_saha(double x) const;
+            /// Number density of electrons of x = log(a)
             double ne_of_x(double x) const;
+            /// Number density of electrons using the Saha approximation of x = log(a)
             double ne_of_x_saha(double x) const;
+            /// Free electron fraction ignoring reionization of x = log(a)
             double Xe_of_x_noreion(double x) const;
+            /// Free electron fraction using the Saha approximation ignoring reionization of x = log(a)
             double Xe_of_x_saha_noreion(double x) const;
+            /// Number density of electrons ignoring reionization of x = log(a)
             double ne_of_x_noreion(double x) const;
+            /// Number density of electrons using the Saha approximation ignoring reionization of x = log(a)
             double ne_of_x_saha_noreion(double x) const;
 
+            /// The temperature of baryons of x = log(a)
             double get_Tbaryon(double x) const;
+            /// The sound speed squared of baryons of x = log(a)
             double get_baryon_sound_speed_squared(double x) const;
+            /// The sound speed squared of the primordial plasma of x = log(a)
             double get_sound_speed_squared(double x) const;
+            /// The sound horizon of x = log(a)
             double get_sound_horizon(double x) const;
+            /// x = log(a) for when the optical depth is unity
             double get_xstar() const;
+            /// x = log(a) for when the baryon optical depth is unity (drag epoch)
             double get_xdrag() const;
+            /// Primordial helium abundance
             double get_Yp() const;
             double get_x_start_rec_array() const;
 
