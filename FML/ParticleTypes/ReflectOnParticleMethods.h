@@ -33,6 +33,12 @@
 //    std::cout << std::boolalpha << FML::PARTICLE::has_get_pos<Particle>()  << " get_pos\n";  // true
 //    std::cout << std::boolalpha << FML::PARTICLE::has_get_vel<Particle>()  << " get_vel\n";  // false
 //    std::cout << std::boolalpha << FML::PARTICLE::has_get_mass<Particle>() << " get_mass\n"; // false
+//    
+// TODO: change the methods below and use static_assert so that it gives a compile error
+// instead of a runtime error if trying to use a method that do not exist, e.g. we can add on
+// the template name and use something silly like (false directly will not work as we need something 
+// that only gets evaluated if instansiated and not when parsing the code):
+// static_assert(sizeof...(Args) < 0, "Trying to set Redshift from a particle that has no set_z method");
 //
 //=======================================================================
 
@@ -120,6 +126,7 @@ namespace FML {
         //=====================================================================
         SFINAE_TEST_GET(GetID, get_id)
         SFINAE_TEST_GET(SetID, set_id)
+        template <class T>
         constexpr int GetID(...) {
             assert_mpi(false, "Trying to get id from a particle that has no get_id method");
             return -1;
@@ -131,8 +138,10 @@ namespace FML {
         //=====================================================================
         SFINAE_TEST_GET(GetMass, get_mass)
         SFINAE_TEST_SET(SetMass, set_mass)
-        constexpr double GetMass(...) {
+        template <class... Args>
+        constexpr double GetMass([[maybe_unused]] Args &... args) {
             // Optional to have this. All particles having equal mass is the fiducial case
+            // NB: not using ... to avoid copies of particle being made when this is called
             return 1.0;
         };
         constexpr void SetMass(...) {
@@ -144,8 +153,10 @@ namespace FML {
         //=====================================================================
         SFINAE_TEST_GET(GetVolume, get_volume)
         SFINAE_TEST_SET(SetVolume, set_volume)
-        constexpr double GetVolume(...) {
+        template <class... Args>
+        constexpr double GetVolume([[maybe_unused]] Args &... args) {
             // Optional to have this. All particles having equal volume is the fiducial case
+            // NB: not using ... to avoid copies of particle being made when this is called
             return 1.0;
         };
         constexpr void SetVolume(...) {
@@ -169,19 +180,29 @@ namespace FML {
         SFINAE_TEST_GET(GetSize, get_particle_byte_size)
         SFINAE_TEST_GET(AppendToBuffer, append_to_buffer)
         SFINAE_TEST_GET(AssignFromBuffer, assign_from_buffer)
-        template <class T>
-        constexpr int GetSize([[maybe_unused]] T & t){
-          // How many bytes the particles takes up
-          return sizeof(T);
-        }
-        template <class T>
-        void AppendToBuffer(T & t, char *buffer) {
-            std::memcpy(buffer, &t, GetSize(t));
-        }
-        template <class T>
-        void AssignFromBuffer(T & t, char *buffer) {
-            std::memcpy(&t, buffer, GetSize(t));
-        }
+        template <class... Args>
+        constexpr int GetSize([[maybe_unused]] Args &... args) {
+            // Fiducial method. Assumes no dynamic allocated memory in class
+            static_assert(sizeof...(args) == 1);
+            using ParticleType = NthTypeOf<0, Args...>;
+            return sizeof(ParticleType);
+        };
+        template <class T, class... Args>
+        void AppendToBuffer(T & t, Args... args) {
+            // Fiducial method for communication. Assumes no dynamic allocated memory in class
+            static_assert(sizeof...(args) == 1);
+            using BufferType = NthTypeOf<0, Args...>;
+            static_assert(std::is_same<char *, BufferType>::value);
+            std::memcpy(get_NthArgOf<0>(args...), &t, GetSize(t));
+        };
+        template <class T, class... Args>
+        void AssignFromBuffer(T & t, Args... args) {
+            // Fiducial method for communication. Assumes no dynamic allocated memory in class
+            static_assert(sizeof...(args) == 1);
+            using BufferType = NthTypeOf<0, Args...>;
+            static_assert(std::is_same<char *, BufferType>::value);
+            std::memcpy(&t, get_NthArgOf<0>(args...), GetSize(t));
+        };
 
         //=====================================================================
         // Lagrangian perturbation theory (Displacement fields and Lagrangian coord)
@@ -212,6 +233,19 @@ namespace FML {
             assert_mpi(false, "Trying to get the Lagrangian coordinate q from a particle that has no get_q method");
             return nullptr;
         };
+
+        //=====================================================================
+        // Halo finding
+        //=====================================================================
+        SFINAE_TEST_GET(GetFoFID, get_fofid)
+        SFINAE_TEST_SET(SetFoFID, set_fofid)
+        constexpr size_t GetFoFID(...) {
+            assert_mpi(false, "Trying to get FoFID for particle that has no get_fofid method");
+            return 0;
+        }
+        constexpr void SetFoFID(...) {
+            assert_mpi(false, "Trying to set FoFID for particle that has no set_fofid method");
+        }
 
         //=====================================================================
         // Ramses related methods
@@ -277,8 +311,10 @@ namespace FML {
             assert_mpi(false, "Trying to set Redshift from a particle that has no set_z method");
             return 0.0;
         }
-        constexpr double GetWeight(...) {
-            // Optional to have this. All particles having the same weight is the fiducial caser
+        template <class... Args>
+        constexpr double GetWeight([[maybe_unused]] Args &... args) {
+            // Optional to have this. All particles having the same weight is the fiducial case
+            // NB: not using ... to avoid copies of particle being made when this is called
             return 1.0;
         }
         constexpr void SetWeight(...) {
@@ -303,19 +339,19 @@ namespace FML {
                 std::cout << "# Information about (an empty) particle of the given type:\n";
                 std::cout << "# Below we only show info about methods we have implemented support for\n";
 
-                if (FML::PARTICLE::has_append_to_buffer<T>())
+                if constexpr(FML::PARTICLE::has_append_to_buffer<T>())
                     std::cout << "# Particle has custom communication append_to_buffer method\n";
                 else
                     std::cout << "# Particle uses fiducial communication append_to_buffer method (assumes no dynamic "
                                  "alloc inside class)\n";
 
-                if (FML::PARTICLE::has_assign_from_buffer<T>())
+                if constexpr(FML::PARTICLE::has_assign_from_buffer<T>())
                     std::cout << "# Particle has custom communication assign_from_buffer method\n";
                 else
                     std::cout << "# Particle uses fiducial communication assign_from_buffer method (assumes no dynamic "
                                  "alloc inside class)\n";
 
-                if (FML::PARTICLE::has_get_particle_byte_size<T>())
+                if constexpr(FML::PARTICLE::has_get_particle_byte_size<T>())
                     std::cout << "# Particle has custom size method. Size of an empty particle is "
                               << FML::PARTICLE::GetSize(tmp) << " bytes\n";
                 else
@@ -323,56 +359,56 @@ namespace FML {
                               << FML::PARTICLE::GetSize(tmp) << " bytes\n";
                 std::cout << "# Dimension is " << N << "\n";
 
-                if (FML::PARTICLE::has_get_pos<T>())
+                if constexpr(FML::PARTICLE::has_get_pos<T>())
                     std::cout << "# Particle has [Position] (" << sizeof(FML::PARTICLE::GetVel(tmp)[0]) * N
                               << " bytes)\n";
 
-                if (FML::PARTICLE::has_get_vel<T>())
+                if constexpr(FML::PARTICLE::has_get_vel<T>())
                     std::cout << "# Particle has [Velocity] (" << sizeof(FML::PARTICLE::GetPos(tmp)[0]) * N
                               << " bytes)\n";
 
-                if (FML::PARTICLE::has_set_mass<T>())
+                if constexpr(FML::PARTICLE::has_set_mass<T>())
                     std::cout << "# Particle has [Mass] (" << sizeof(FML::PARTICLE::GetMass(tmp)) << " bytes)\n";
 
-                if (FML::PARTICLE::has_set_id<T>())
+                if constexpr(FML::PARTICLE::has_set_id<T>())
                     std::cout << "# Particle has [ID] (" << sizeof(FML::PARTICLE::GetID(tmp)) << " bytes)\n";
 
-                if (FML::PARTICLE::has_set_volume<T>())
+                if constexpr(FML::PARTICLE::has_set_volume<T>())
                     std::cout << "# Particle has [Volume] (" << sizeof(FML::PARTICLE::GetVolume(tmp)) << " bytes)\n";
 
                 // Ramses specific things
-                if (FML::PARTICLE::has_set_tag<T>())
+                if constexpr(FML::PARTICLE::has_set_tag<T>())
                     std::cout << "# Particle has [Tag] (" << sizeof(FML::PARTICLE::GetTag(tmp)) << " bytes)\n";
-                if (FML::PARTICLE::has_set_family<T>())
+                if constexpr(FML::PARTICLE::has_set_family<T>())
                     std::cout << "# Particle has [Family] (" << sizeof(FML::PARTICLE::GetFamily(tmp)) << " bytes)\n";
-                if (FML::PARTICLE::has_set_level<T>())
+                if constexpr(FML::PARTICLE::has_set_level<T>())
                     std::cout << "# Particle has [Level] (" << sizeof(FML::PARTICLE::GetLevel(tmp)) << " bytes)\n";
 
                 // Galaxy and paircount specific things
-                if (FML::PARTICLE::has_set_RA<T>())
+                if constexpr(FML::PARTICLE::has_set_RA<T>())
                     std::cout << "# Particle has [RA] (" << sizeof(FML::PARTICLE::GetRA(tmp)) << " bytes)\n";
-                if (FML::PARTICLE::has_set_DEC<T>())
+                if constexpr(FML::PARTICLE::has_set_DEC<T>())
                     std::cout << "# Particle has [DEC] (" << sizeof(FML::PARTICLE::GetDEC(tmp)) << " bytes)\n";
-                if (FML::PARTICLE::has_set_z<T>())
+                if constexpr(FML::PARTICLE::has_set_z<T>())
                     std::cout << "# Particle has [Redshift] (" << sizeof(FML::PARTICLE::GetRedshift(tmp))
                               << " bytes)\n";
-                if (FML::PARTICLE::has_set_weight<T>())
+                if constexpr(FML::PARTICLE::has_set_weight<T>())
                     std::cout << "# Particle has [Weight] (" << sizeof(FML::PARTICLE::GetWeight(tmp)) << " bytes)\n";
 
                 // LPT specific things
-                if (FML::PARTICLE::has_get_D_1LPT<T>())
+                if constexpr(FML::PARTICLE::has_get_D_1LPT<T>())
                     std::cout << "# Particle has [1LPT Displacement field] ("
                               << sizeof(FML::PARTICLE::GetD_1LPT(tmp)[0]) * N << " bytes)\n";
-                if (FML::PARTICLE::has_get_D_2LPT<T>())
+                if constexpr(FML::PARTICLE::has_get_D_2LPT<T>())
                     std::cout << "# Particle has [2LPT Displacement field] ("
                               << sizeof(FML::PARTICLE::GetD_1LPT(tmp)[0]) * N << " bytes)\n";
-                if (FML::PARTICLE::has_get_D_3LPTa<T>())
+                if constexpr(FML::PARTICLE::has_get_D_3LPTa<T>())
                     std::cout << "# Particle has [3LPTa Displacement field] ("
                               << sizeof(FML::PARTICLE::GetD_3LPTa(tmp)[0]) * N << " bytes)\n";
-                if (FML::PARTICLE::has_get_D_3LPTb<T>())
+                if constexpr(FML::PARTICLE::has_get_D_3LPTb<T>())
                     std::cout << "# Particle has [3LPTb Displacement field] ("
                               << sizeof(FML::PARTICLE::GetD_3LPTb(tmp)[0]) * N << " bytes)\n";
-                if (FML::PARTICLE::has_get_q<T>())
+                if constexpr(FML::PARTICLE::has_get_q<T>())
                     std::cout << "# Particle has [Lagrangian position] ("
                               << sizeof(FML::PARTICLE::GetLagrangianPos(tmp)[0]) * N << " bytes)\n";
 
