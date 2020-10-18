@@ -1,9 +1,10 @@
 #include <chrono>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <fstream>
 #include <random>
 #include <stdarg.h>
+#include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
 
@@ -194,6 +195,22 @@ namespace FML {
             std::fflush(stdout);
             va_end(argp);
         }
+    }
+
+    //============================================
+    // Create a folder (only task 0 is allowed to
+    // do this)
+    //============================================
+    bool create_folder(std::string foldername) {
+        bool ok = true;
+        if (FML::ThisTask == 0) {
+            int status = mkdir(foldername.c_str(), 0777);
+            ok = not((status < 0) && (errno != EEXIST));
+            if (not ok) {
+                throw std::runtime_error("Failed to create snapshot folder [" + foldername + "]");
+            }
+        }
+        return ok;
     }
 
     //============================================

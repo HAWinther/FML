@@ -182,6 +182,12 @@ namespace FML {
                         power(base, exponent / 2) * power(base, exponent / 2) :
                         (long long int)(base)*power(base, (exponent - 1) / 2) * power(base, (exponent - 1) / 2));
     }
+    
+    //============================================
+    // Create a folder (only Task 0 is allowed 
+    // to do this)
+    //============================================
+    bool create_folder(std::string foldername);
 
     //============================================
     // Overloads of arithmetic operations for the
