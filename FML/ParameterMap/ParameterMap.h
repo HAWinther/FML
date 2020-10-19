@@ -2,17 +2,18 @@
 #define PARAMETERMAP_HEADER
 
 #include <cmath>
-#include <vector>
 #include <iomanip>
 #include <iostream>
 #include <map>
 #include <variant>
+#include <vector>
 
 namespace FML {
     namespace UTILS {
-        
+
         std::ostream & operator<<(std::ostream & s, std::vector<double> const & v);
         std::ostream & operator<<(std::ostream & s, std::vector<int> const & v);
+        std::ostream & operator<<(std::ostream & s, std::vector<std::string> const & v);
 
         /// cout for a variant
         template <typename T0, typename... Ts>
@@ -22,26 +23,32 @@ namespace FML {
         }
 
         /// All the types we can have in the parameter file: string, int, boolean, double and vectors of double and ints
-        /// Can be extended if needed. Only thing that is required is that the type you add have a cout-overload for 
+        /// Can be extended if needed. Only thing that is required is that the type you add have a cout-overload for
         /// printing the value
-        using ParameterTypes = std::variant<std::string, int, bool, double, std::vector<double>, std::vector<int>>;
+        using ParameterTypes = std::variant<bool,
+                                            int,
+                                            double,
+                                            std::string,
+                                            std::vector<int>,
+                                            std::vector<double>,
+                                            std::vector<std::string>>;
 
-        //============================================================================
-        ///
-        /// For holding a map of parameters of different types with easy set and get's
-        /// allowing for fiducial values if the parameter is not in the map
-        ///
-        /// Uses std::variant which requires a C++17 compatible compiler.
-        ///
-        /// Errors handled via the throw_error function.
-        ///
-        /// Compile time defines:
-        ///
-        /// USE_MPI : Use MPI (only difference is in how errors are handled)
-        ///
-        //============================================================================
+            //============================================================================
+            ///
+            /// For holding a map of parameters of different types with easy set and get's
+            /// allowing for fiducial values if the parameter is not in the map
+            ///
+            /// Uses std::variant which requires a C++17 compatible compiler.
+            ///
+            /// Errors handled via the throw_error function.
+            ///
+            /// Compile time defines:
+            ///
+            /// USE_MPI : Use MPI (only difference is in how errors are handled)
+            ///
+            //============================================================================
 
-        class ParameterMap {
+            class ParameterMap {
           private:
             std::map<std::string, ParameterTypes> parameters{};
 

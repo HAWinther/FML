@@ -18,21 +18,32 @@ namespace FML {
             s << "]";
             return s;
         }
-
+        
+        std::ostream & operator<<(std::ostream & s, std::vector<std::string> const & v) {
+            s << "[";
+            for (auto & e : v)
+                s << e << " ";
+            s << "]";
+            return s;
+        }
+        
         void ParameterMap::throw_error(std::string errormessage) const { throw std::runtime_error(errormessage); }
 
         // Print a parameter map
         void ParameterMap::info() const {
             std::cout << std::boolalpha;
-            std::cout << "\n============================================\n";
-            std::cout << "Parameter map contains " << parameters.size() << " elements:\n";
-            std::cout << "============================================\n";
+            std::cout << "\n#=====================================================\n";
+            std::cout << "# Parameter map contains " << parameters.size() << " elements:\n";
+            std::cout << "#=====================================================\n";
             for (auto && param : parameters) {
                 std::string name = param.first;
                 ParameterTypes value = param.second;
-                std::cout << "  " << std::setw(30) << std::left << name << " : " << std::setw(15) << value << "\n";
+                std::cout << "  " << std::setw(30) << std::left << name << " : ";
+                if(value.index() != 0)
+                  std::cout << std::setw(15);
+                std::cout << value << "\n";
             }
-            std::cout << "============================================\n\n";
+            std::cout << "#=====================================================\n\n";
         }
 
         std::map<std::string, ParameterTypes> & ParameterMap::get_map() { return parameters; }
