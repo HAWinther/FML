@@ -4,6 +4,10 @@ namespace FML {
     namespace INTERPOLATION {
         namespace SPLINE {
 
+#ifdef USE_OMP
+            const int nmax_threads = omp_get_max_threads();
+#endif
+
             // How to handle an error
             void GSLSpline::throw_error(std::string errormessage) const {
 #ifdef USE_MPI
@@ -75,7 +79,7 @@ namespace FML {
             }
 
             GSLSpline::operator bool() const { return (spline != nullptr); }
-
+            
             //====================================================
             // Create a GSL spline
             //====================================================
@@ -127,6 +131,9 @@ namespace FML {
                 gsl_spline_init(spline, x, y, nx);
 
                 // Make accelerators (one per thread if OpenMP)
+                // If nthreads = 1 we are likely trying to create a spline 
+                // inside a OMP region. In that case allocate as many as we have
+                // threads availiable on the system
 #ifdef USE_OMP
                 int nthreads = 1;
 #pragma omp parallel
@@ -135,6 +142,9 @@ namespace FML {
                     if (id == 0)
                         nthreads = omp_get_num_threads();
                 }
+                if(nthreads == 1)
+                  nthreads = nmax_threads;
+
                 // If we make a spline inside a nested openmp then
                 // the stuff above does not work
                 // nthreads = std::max(16, nthreads);
@@ -379,7 +389,10 @@ namespace FML {
                 spline = gsl_spline2d_alloc(interpoltype, nx, ny);
                 gsl_spline2d_init(spline, x, y, z, nx, ny);
 
-                // Create accelerators (one per thread if OpenMP)
+                // Make accelerators (one per thread if OpenMP)
+                // If nthreads = 1 we are likely trying to create a spline 
+                // inside a OMP region. In that case allocate as many as we have
+                // threads availiable on the system
 #ifdef USE_OMP
                 int nthreads = 1;
 #pragma omp parallel
@@ -388,9 +401,9 @@ namespace FML {
                     if (id == 0)
                         nthreads = omp_get_num_threads();
                 }
-                // If we make a spline inside a nested openmp then
-                // the stuff above does not work
-                // nthreads = std::max(16, nthreads);
+                if(nthreads == 1)
+                  nthreads = nmax_threads;
+
                 xaccs = std::vector<gsl_interp_accel *>(nthreads);
                 yaccs = std::vector<gsl_interp_accel *>(nthreads);
                 for (auto & xa : xaccs) {
