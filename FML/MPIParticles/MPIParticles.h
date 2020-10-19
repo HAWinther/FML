@@ -157,6 +157,9 @@ namespace FML {
 
             MPIParticles() = default;
 
+            // Has the mpiparticles been created?
+            explicit operator bool() const;
+
             /// Get reference to particle vector. NB: due to we allow a buffer the size of the vector returned is
             /// not equal to the number of active particles!
             Vector<T> & get_particles();
@@ -202,6 +205,11 @@ namespace FML {
         };
 
         template <class T>
+        MPIParticles<T>::operator bool() const {
+            return p.size() > 0;
+        }
+
+        template <class T>
         void MPIParticles<T>::info() {
             T tmp{};
             auto NDIM = FML::PARTICLE::GetNDIM(tmp);
@@ -235,13 +243,14 @@ namespace FML {
                 std::cout << "#                     \\/                \n";
                 std::cout << "#\n";
                 std::cout << "# Info about MPIParticles. Dimension of particles is " << NDIM << "\n";
-                std::cout << "# We have allocated " << mean_memory_in_mb << " MB (mean), " << min_memory_in_mb
-                          << " MB (min), " << max_memory_in_mb << " MB (max)\n";
+                std::cout << "# We have allocated " << mean_memory_in_mb << " MB (mean)\n";
+                std::cout << "#                   " << min_memory_in_mb << " MB (min)\n";
+                std::cout << "#                   " << max_memory_in_mb << " MB (max)\n";
                 std::cout << "# Total particles across all tasks is " << NpartTotal << "\n";
-                std::cout << "# Task 0 has " << NpartLocal_in_use << " particles in use. Capacity is " << p.size()
-                          << "\n";
-                std::cout << "# The buffer is " << mean_fraction_filled << "%% (mean), " << min_fraction_filled
-                          << " %% (min), " << max_fraction_filled << " %% (max) filled across tasks\n";
+                std::cout << "# Task 0 has " << NpartLocal_in_use << " parts. Capacity: " << p.size() << "\n";
+                std::cout << "# The buffer is " << mean_fraction_filled << " %% (mean)\n";
+                std::cout << "#               " << min_fraction_filled << " %% (min)\n";
+                std::cout << "#               " << max_fraction_filled << " %% (max) filled across tasks\n";
                 std::cout << "#\n";
                 std::cout << "#=====================================================\n";
                 std::cout << "\n";
@@ -612,6 +621,9 @@ namespace FML {
                           << std::flush;
             }
 #endif
+                
+            T tmp{};
+            using PosType = std::remove_reference_t<decltype(tmp.get_pos()[0])>;
 
             // Count how many particles to send to each task
             // and move the particles to be send to the back of the array
@@ -624,7 +636,12 @@ namespace FML {
             std::vector<int> nbytes_to_recv(NTasks, 0);
             size_t i = 0;
             while (i < NpartLocal_in_use) {
-                auto x = FML::PARTICLE::GetPos(p[i])[0];
+                auto & x = FML::PARTICLE::GetPos(p[i])[0];
+
+                // To fix issues appearing when we are exactly on the boundary
+                if(x == 1.0) x = std::nextafter(x, PosType(0.0));
+                if(x == 0.0) x = std::nextafter(x, PosType(1.0));
+
                 if (x >= x_max_per_task[ThisTask]) {
                     int taskid = ThisTask;
                     while (1) {
@@ -637,7 +654,7 @@ namespace FML {
                     nbytes_to_send[taskid] += FML::PARTICLE::GetSize(p[i]);
                     swap_particles(p[i], p[--NpartLocal_in_use]);
 
-                } else if (x < x_min_per_task[ThisTask]) {
+                } else if (x < x_min_per_task[ThisTask] or x == 0.0) {
                     int taskid = ThisTask;
                     while (1) {
                         --taskid;
@@ -715,7 +732,7 @@ namespace FML {
 
             // Sanity check
             assert_mpi(NpartLocal_in_use_pre_comm == NpartLocal_in_use + ntot_to_send,
-                       "[MPIParticles::communicate_particles] Number to particles to communicate does not match\n");
+                      "[MPIParticles::communicate_particles] Number to particles to communicate does not match\n");
 
             // Allocate send buffer
             std::vector<char> send_buffer(ntot_bytes_to_send);
@@ -737,6 +754,7 @@ namespace FML {
             for (size_t i = 0; i < ntot_to_send; i++) {
                 size_t index = NpartLocal_in_use + i;
                 auto x = FML::PARTICLE::GetPos(p[index])[0];
+
                 if (x >= x_max_per_task[ThisTask]) {
                     int taskid = ThisTask;
                     while (1) {
