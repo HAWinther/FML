@@ -33,10 +33,10 @@
 //    std::cout << std::boolalpha << FML::PARTICLE::has_get_pos<Particle>()  << " get_pos\n";  // true
 //    std::cout << std::boolalpha << FML::PARTICLE::has_get_vel<Particle>()  << " get_vel\n";  // false
 //    std::cout << std::boolalpha << FML::PARTICLE::has_get_mass<Particle>() << " get_mass\n"; // false
-//    
+//
 // TODO: change the methods below and use static_assert so that it gives a compile error
 // instead of a runtime error if trying to use a method that do not exist, e.g. we can add on
-// the template name and use something silly like (false directly will not work as we need something 
+// the template name and use something silly like (false directly will not work as we need something
 // that only gets evaluated if instansiated and not when parsing the code):
 // static_assert(sizeof...(Args) < 0, "Trying to set Redshift from a particle that has no set_z method");
 //
@@ -126,7 +126,6 @@ namespace FML {
         //=====================================================================
         SFINAE_TEST_GET(GetID, get_id)
         SFINAE_TEST_GET(SetID, set_id)
-        template <class T>
         constexpr int GetID(...) {
             assert_mpi(false, "Trying to get id from a particle that has no get_id method");
             return -1;
@@ -212,13 +211,23 @@ namespace FML {
         SFINAE_TEST_GET(GetD_2LPT, get_D_2LPT)
         SFINAE_TEST_GET(GetD_3LPTa, get_D_3LPTa)
         SFINAE_TEST_GET(GetD_3LPTb, get_D_3LPTb)
+        SFINAE_TEST_GET(GetdDdloga_1LPT, get_dDdloga_1LPT)
+        SFINAE_TEST_GET(GetdDdloga_2LPT, get_dDdloga_2LPT)
         SFINAE_TEST_GET(GetLagrangianPos, get_q)
         constexpr double * GetD_1LPT(...) {
             assert_mpi(false, "Trying to get D_1LPT from a particle that has no get_D_1LPT method");
             return nullptr;
         };
+        constexpr double * GetdDdloga_1LPT(...) {
+            assert_mpi(false, "Trying to get dDdloga_1LPT from a particle that has no get_dDdloga_1LPT method");
+            return nullptr;
+        };
         constexpr double * GetD_2LPT(...) {
             assert_mpi(false, "Trying to get D_2LPT from a particle that has no get_D_2LPT method");
+            return nullptr;
+        };
+        constexpr double * GetdDdloga_2LPT(...) {
+            assert_mpi(false, "Trying to get dDdloga_2LPT from a particle that has no get_dDdloga_2LPT method");
             return nullptr;
         };
         constexpr double * GetD_3LPTa(...) {
@@ -339,19 +348,19 @@ namespace FML {
                 std::cout << "# Information about (an empty) particle of the given type:\n";
                 std::cout << "# Below we only show info about methods we have implemented support for\n";
 
-                if constexpr(FML::PARTICLE::has_append_to_buffer<T>())
+                if constexpr (FML::PARTICLE::has_append_to_buffer<T>())
                     std::cout << "# Particle has custom communication append_to_buffer method\n";
                 else
                     std::cout << "# Particle uses fiducial communication append_to_buffer method (assumes no dynamic "
                                  "alloc inside class)\n";
 
-                if constexpr(FML::PARTICLE::has_assign_from_buffer<T>())
+                if constexpr (FML::PARTICLE::has_assign_from_buffer<T>())
                     std::cout << "# Particle has custom communication assign_from_buffer method\n";
                 else
                     std::cout << "# Particle uses fiducial communication assign_from_buffer method (assumes no dynamic "
                                  "alloc inside class)\n";
 
-                if constexpr(FML::PARTICLE::has_get_particle_byte_size<T>())
+                if constexpr (FML::PARTICLE::has_get_particle_byte_size<T>())
                     std::cout << "# Particle has custom size method. Size of an empty particle is "
                               << FML::PARTICLE::GetSize(tmp) << " bytes\n";
                 else
@@ -359,62 +368,109 @@ namespace FML {
                               << FML::PARTICLE::GetSize(tmp) << " bytes\n";
                 std::cout << "# Dimension is " << N << "\n";
 
-                if constexpr(FML::PARTICLE::has_get_pos<T>())
+                if constexpr (FML::PARTICLE::has_get_pos<T>())
                     std::cout << "# Particle has [Position] (" << sizeof(FML::PARTICLE::GetVel(tmp)[0]) * N
                               << " bytes)\n";
 
-                if constexpr(FML::PARTICLE::has_get_vel<T>())
+                if constexpr (FML::PARTICLE::has_get_vel<T>())
                     std::cout << "# Particle has [Velocity] (" << sizeof(FML::PARTICLE::GetPos(tmp)[0]) * N
                               << " bytes)\n";
 
-                if constexpr(FML::PARTICLE::has_set_mass<T>())
+                if constexpr (FML::PARTICLE::has_set_mass<T>())
                     std::cout << "# Particle has [Mass] (" << sizeof(FML::PARTICLE::GetMass(tmp)) << " bytes)\n";
 
-                if constexpr(FML::PARTICLE::has_set_id<T>())
+                if constexpr (FML::PARTICLE::has_set_id<T>())
                     std::cout << "# Particle has [ID] (" << sizeof(FML::PARTICLE::GetID(tmp)) << " bytes)\n";
 
-                if constexpr(FML::PARTICLE::has_set_volume<T>())
+                if constexpr (FML::PARTICLE::has_set_volume<T>())
                     std::cout << "# Particle has [Volume] (" << sizeof(FML::PARTICLE::GetVolume(tmp)) << " bytes)\n";
 
                 // Ramses specific things
-                if constexpr(FML::PARTICLE::has_set_tag<T>())
+                if constexpr (FML::PARTICLE::has_set_tag<T>())
                     std::cout << "# Particle has [Tag] (" << sizeof(FML::PARTICLE::GetTag(tmp)) << " bytes)\n";
-                if constexpr(FML::PARTICLE::has_set_family<T>())
+                if constexpr (FML::PARTICLE::has_set_family<T>())
                     std::cout << "# Particle has [Family] (" << sizeof(FML::PARTICLE::GetFamily(tmp)) << " bytes)\n";
-                if constexpr(FML::PARTICLE::has_set_level<T>())
+                if constexpr (FML::PARTICLE::has_set_level<T>())
                     std::cout << "# Particle has [Level] (" << sizeof(FML::PARTICLE::GetLevel(tmp)) << " bytes)\n";
 
                 // Galaxy and paircount specific things
-                if constexpr(FML::PARTICLE::has_set_RA<T>())
+                if constexpr (FML::PARTICLE::has_set_RA<T>())
                     std::cout << "# Particle has [RA] (" << sizeof(FML::PARTICLE::GetRA(tmp)) << " bytes)\n";
-                if constexpr(FML::PARTICLE::has_set_DEC<T>())
+                if constexpr (FML::PARTICLE::has_set_DEC<T>())
                     std::cout << "# Particle has [DEC] (" << sizeof(FML::PARTICLE::GetDEC(tmp)) << " bytes)\n";
-                if constexpr(FML::PARTICLE::has_set_z<T>())
+                if constexpr (FML::PARTICLE::has_set_z<T>())
                     std::cout << "# Particle has [Redshift] (" << sizeof(FML::PARTICLE::GetRedshift(tmp))
                               << " bytes)\n";
-                if constexpr(FML::PARTICLE::has_set_weight<T>())
+                if constexpr (FML::PARTICLE::has_set_weight<T>())
                     std::cout << "# Particle has [Weight] (" << sizeof(FML::PARTICLE::GetWeight(tmp)) << " bytes)\n";
 
                 // LPT specific things
-                if constexpr(FML::PARTICLE::has_get_D_1LPT<T>())
+                if constexpr (FML::PARTICLE::has_get_D_1LPT<T>())
                     std::cout << "# Particle has [1LPT Displacement field] ("
                               << sizeof(FML::PARTICLE::GetD_1LPT(tmp)[0]) * N << " bytes)\n";
-                if constexpr(FML::PARTICLE::has_get_D_2LPT<T>())
+                if constexpr (FML::PARTICLE::has_get_dDdloga_1LPT<T>())
+                    std::cout << "# Particle has [1LPT Displacement field derivative] ("
+                              << sizeof(FML::PARTICLE::GetdDdloga_1LPT(tmp)[0]) * N << " bytes)\n";
+                if constexpr (FML::PARTICLE::has_get_D_2LPT<T>())
                     std::cout << "# Particle has [2LPT Displacement field] ("
                               << sizeof(FML::PARTICLE::GetD_1LPT(tmp)[0]) * N << " bytes)\n";
-                if constexpr(FML::PARTICLE::has_get_D_3LPTa<T>())
+                if constexpr (FML::PARTICLE::has_get_dDdloga_2LPT<T>())
+                    std::cout << "# Particle has [2LPT Displacement field derivative] ("
+                              << sizeof(FML::PARTICLE::GetdDdloga_2LPT(tmp)[0]) * N << " bytes)\n";
+                if constexpr (FML::PARTICLE::has_get_D_3LPTa<T>())
                     std::cout << "# Particle has [3LPTa Displacement field] ("
                               << sizeof(FML::PARTICLE::GetD_3LPTa(tmp)[0]) * N << " bytes)\n";
-                if constexpr(FML::PARTICLE::has_get_D_3LPTb<T>())
+                if constexpr (FML::PARTICLE::has_get_D_3LPTb<T>())
                     std::cout << "# Particle has [3LPTb Displacement field] ("
                               << sizeof(FML::PARTICLE::GetD_3LPTb(tmp)[0]) * N << " bytes)\n";
-                if constexpr(FML::PARTICLE::has_get_q<T>())
+                if constexpr (FML::PARTICLE::has_get_q<T>())
                     std::cout << "# Particle has [Lagrangian position] ("
                               << sizeof(FML::PARTICLE::GetLagrangianPos(tmp)[0]) * N << " bytes)\n";
+                if constexpr (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() and
+                              FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>()) {
+                    std::cout << "# Particle compatible with 3LPT COLA\n";
+
+                } else if (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>()) {
+                    std::cout << "# Particle compatible with 2LPT COLA\n";
+                } else if (FML::PARTICLE::has_get_D_1LPT<T>()) {
+                    std::cout << "# Particle compatible with 1LPT COLA\n";
+                } else {
+                    std::cout << "# Particle is not compatible with COLA\n";
+                }
+                if constexpr (FML::PARTICLE::has_get_q<T>() and FML::PARTICLE::has_get_D_1LPT<T>() and
+                              FML::PARTICLE::has_get_dDdloga_1LPT<T>()) {
+                    std::cout << "# Particle compatible with 1LPT scaledependent COLA\n";
+                } else if constexpr (FML::PARTICLE::has_get_q<T>() and FML::PARTICLE::has_get_D_1LPT<T>() and
+                              FML::PARTICLE::has_get_D_2LPT<T>()) {
+                    std::cout << "# Particle compatible with 2+ LPT scaledependent COLA\n";
+                } else {
+                    std::cout << "# Particle is not compatible with scaledependent COLA\n";
+                }
 
                 std::cout << "#\n";
                 std::cout << "#=====================================================\n";
                 std::cout << "\n";
+            }
+        }
+
+        // Swap positions with Lagrangian position (if that exists)
+        template <class T>
+        void swap_eulerian_and_lagrangian_positions(T * part, size_t NumPart) {
+            if constexpr (not FML::PARTICLE::has_get_q<T>())
+                return;
+            constexpr T p{};
+            constexpr int N = p.get_ndim();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (size_t ind = 0; ind < NumPart; ind++) {
+                auto pos_eulerian = FML::PARTICLE::GetPos(part[ind]);
+                auto pos_lagrangian = FML::PARTICLE::GetLagrangianPos(part[ind]);
+                for (int idim = 0; idim < N; idim++) {
+                    auto tmp = pos_eulerian[idim];
+                    pos_eulerian[idim] = pos_lagrangian[idim];
+                    pos_lagrangian[idim] = tmp;
+                }
             }
         }
 
