@@ -126,6 +126,9 @@ namespace FML {
           public:
             FFTWGrid() = default;
 
+            /// Has the grid been allocated
+            explicit operator bool() const;
+
             /// Constructor
             /// @param[in] Nmesh Total number of grid-cells per dimension
             /// @param[in] n_extra_x_slices_left Number of extra x-slices to the left of the grid (for keeping boundary
@@ -286,6 +289,11 @@ namespace FML {
 
             void reallocate(int Nmesh, int nleft, int nright) { FFTWGrid(Nmesh, nleft, nright); }
         };
+
+        template <int N>
+        FFTWGrid<N>::operator bool() const {
+            return fourier_grid_raw.size() > 0;
+        }
 
         template <int N>
         void FFTWGrid<N>::add_memory_label([[maybe_unused]] std::string label) {
