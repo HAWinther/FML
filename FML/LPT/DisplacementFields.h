@@ -10,6 +10,7 @@
 
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
+#include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Smoothing/SmoothingFourier.h>
 
@@ -132,6 +133,21 @@ namespace FML {
                     }
                 }
 
+#ifdef USE_GSL
+                // Using std::function is slow so make a faster spline
+                const int npts = 4 * Nmesh;
+                const double kmin = M_PI;
+                const double kmax = 2.0 * M_PI * Nmesh / 2.0 * std::sqrt(double(N));
+                std::vector<double> k_vec(npts);
+                std::vector<double> D_vec(npts);
+                for (int i = 0; i < npts; i++) {
+                    k_vec[i] = kmin + (kmax - kmin) * i / double(npts - 1);
+                    D_vec[i] = DoverDini_of_k(k_vec[i]);
+                }
+                FML::INTERPOLATION::SPLINE::Spline DoverDini_of_k_spline;
+                DoverDini_of_k_spline.create(k_vec, D_vec);
+#endif
+
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -147,7 +163,11 @@ namespace FML {
                         phi.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
                         // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi]
+#ifdef USE_GSL
+                        auto value = phi.get_fourier_from_index(fourier_index) * I * DoverDini_of_k_spline(kmag);
+#else
                         auto value = phi.get_fourier_from_index(fourier_index) * I * DoverDini_of_k(kmag);
+#endif
 
                         for (int idim = 0; idim < N; idim++) {
                             psi[idim].set_fourier_from_index(fourier_index, value * kvec[idim]);
@@ -1176,6 +1196,7 @@ namespace FML {
             /// Compute 1,2,3LPT growth-factors in simple modified gravity models that have a GeffG(a) and spline them
             /// The growth factors are normalized such that D1LPT = 1 at zini
             /// We assume initial conditions as in EdS: D1LPT=1, D2LPT = -3/7, D3LPTa = -1/3 and D3LPTb = 5/21
+            /// NB: There should be a modified 2LPT+ kernel factor in general which we don't include here (model dependent)
             ///
             /// @param[in] OmegaM Matter density parameter at z=0
             /// @param[in] zini The redshift we want D1LPT = 1
@@ -1317,17 +1338,17 @@ namespace FML {
             }
 
 #endif
-            
+
             //===================================================================================
             /// This method assigns the displacement fields to particles for the case where we have scaledependent
-            /// growth This is involved: we take phi_iLPT(zini,k) and use growth factors to go to phi_iLPT(z,k) and FFT
+            /// growth. This is involved: we take phi_iLPT(zini,k) and use growth factors to go to phi_iLPT(z,k) and FFT
             /// to get phi_iLPT(z,q). Then we transport the particles back to their original CPU given by the particles
             /// Lagrangian position q and assign the displacement field before we move them back to their eulerian
             /// positions. This can be done more efficiently (we don't need to do this much communiation) but this will
-            /// come at the expense of a lot more code so fuck it. The lesson here is: try to stay away from
-            /// scaledependent growth! The main use-case for this is COLA simulations and for many cases using the large
-            /// scale limit for the growth-factors (D(k~0,z)) is often good enough and will allow us to use
-            /// scale-independent growth factors - but this must be tested on a case by case basis.
+            /// come at the expense of a lot more code so fuck it. 
+            /// In practice to be efficient we should ideally do *all* orders at the same time otherwise we need to
+            /// swap and do communication many times. This is how its done in our COLA code. So this method mainly
+            /// shows how to do it.
             ///
             /// @tparam N The dimension we are working in
             /// @tparam T The particle class. Must have a get_D_* with * being one or more of 1LPT, 2LPT, 3LPTa, 3LPTb
@@ -1377,17 +1398,8 @@ namespace FML {
                 }
 
                 // Swap positions with Lagrangian position
-                for (auto & p : part) {
-                    auto pos_eulerian = FML::PARTICLE::GetPos(p);
-                    auto pos_lagrangian = FML::PARTICLE::GetLagrangianPos(p);
-                    for (int idim = 0; idim < N; idim++) {
-                        auto tmp = pos_eulerian[idim];
-                        pos_eulerian[idim] = pos_lagrangian[idim];
-                        pos_lagrangian[idim] = tmp;
-                    }
-                }
-
                 // Bring particles to the task they started off from
+                FML::PARTICLE::swap_eulerian_and_lagrangian_positions(part.get_particles_ptr(), part.get_npart());
                 part.communicate_particles();
 
                 // Use initial LPT potential + growth factor to compute displacement field at present time
@@ -1409,7 +1421,7 @@ namespace FML {
                 }
 
                 // Assign displacment field to particles
-                const auto np = part.get_npart();
+                np = part.get_npart();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -1434,18 +1446,9 @@ namespace FML {
                 }
 
                 // Swap back positions
-                for (auto & p : part) {
-                    auto pos_eulerian = FML::PARTICLE::GetPos(p);
-                    auto pos_lagrangian = FML::PARTICLE::GetLagrangianPos(p);
-                    for (int idim = 0; idim < N; idim++) {
-                        auto tmp = pos_eulerian[idim];
-                        pos_eulerian[idim] = pos_lagrangian[idim];
-                        pos_lagrangian[idim] = tmp;
-                    }
-                }
-
                 // Bring particles back to the task the eulerian position belongs to
                 // The particles are now as they were just with the displacement field assigned
+                FML::PARTICLE::swap_eulerian_and_lagrangian_positions(part.get_particles_ptr(), part.get_npart());
                 part.communicate_particles();
             }
 
