@@ -127,9 +127,13 @@ namespace FML {
                 /// If _buffer_factor > 1 then we will allocate correspondingly more storage in for particles when we
                 /// later read This constructor only reads the info file and gets ready to read. You have to call
                 /// read_ramses to do the actual reading
+                ///
                 /// @param[in] _filepath Path to the folder holding the RAMSES output_0000X folder
                 /// @param[in] _outputnr The X in the RAMSES output_0000X folder
-                /// @param[in] _keep_only_particles_in_domain Only store particles that fall into the local domain (for MPI use)
+                /// @param[in] _buffer_factor If > 1.0 allocate space for this many more particles when reading in the
+                /// container we use to store particles in
+                /// @param[in] _keep_only_particles_in_domain Only store particles that fall into the local domain (for
+                /// MPI use)
                 /// @param[in] _verbose Optional: show info while reading
                 ///
                 RamsesReader(std::string _filepath,
@@ -144,6 +148,7 @@ namespace FML {
                 }
 
                 /// If we have non-standard (or older) file formats set it here
+                ///
                 /// @param[in] what_is_in_file List of what the file contains in order, e.g. (POS, VEL, MASS, ID, LEVEL,
                 /// FAMILY)
                 ///
@@ -159,10 +164,12 @@ namespace FML {
                 }
 
                 /// Read a single ramses file and store the data in p
+                ///
+                /// @param[out] ifile The number of the file to read (the i in part_0000X.out0000i)
                 /// @param[out] p Container for storing the particles we read
                 ///
-                template <class T>
-                void read_ramses_single(int ifile, std::vector<T> & p) {
+                template <class T, class Alloc = std::allocator<T>>
+                void read_ramses_single(int ifile, std::vector<T, Alloc> & p) {
                     if (not infofileread)
                         read_info();
 
@@ -197,8 +204,8 @@ namespace FML {
                 /// Read all ramses files and store the data in p
                 /// @param[out] p Container for storing the particles we read
                 ///
-                template <class T>
-                void read_ramses(std::vector<T> & p) {
+                template <class T, class Alloc = std::allocator<T>>
+                void read_ramses(std::vector<T, Alloc> & p) {
                     if (not infofileread)
                         read_info();
 
@@ -732,7 +739,7 @@ namespace FML {
             // Write a ramses ic_deltab file for a given cosmology
             // and levelmin
             //====================================================
-                
+
             void write_icdeltab(const std::string filename,
                                 const float _astart,
                                 const float _omega_m,

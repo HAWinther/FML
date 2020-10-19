@@ -114,18 +114,18 @@ namespace FML {
 
                 /// Read a single gadget file and store the data in part. If only_keep_part_in_domain then
                 /// we only keep the partiles that fall within the local domain 
-                template <class T>
+                template <class T, class Alloc = std::allocator<T>>
                 void read_gadget_single(std::string filename,
-                                        std::vector<T> & part,
+                                        std::vector<T, Alloc> & part,
                                         bool only_keep_part_in_domain,
                                         bool verbose);
                 
                 /// Read all gadget files and store the data in part. If only_keep_part_in_domain then
                 /// we only keep the partiles that fall within the local domain. If buffer_factor is > 1
                 /// then we allocate corresponding extra storage in part
-                template <class T>
+                template <class T, class Alloc = std::allocator<T>>
                 void read_gadget(std::string filename,
-                                 std::vector<T> & part,
+                                 std::vector<T, Alloc> & part,
                                  double buffer_factor,
                                  bool only_keep_part_in_domain,
                                  bool verbose);
@@ -213,9 +213,9 @@ namespace FML {
                 }
             }
 
-            template <class T>
+            template <class T, class Alloc>
             void GadgetReader::read_gadget(std::string fileprefix,
-                                           std::vector<T> & part,
+                                           std::vector<T, Alloc> & part,
                                            double buffer_factor,
                                            bool only_keep_part_in_domain,
                                            bool verbose) {
@@ -254,9 +254,9 @@ namespace FML {
                 }
             }
 
-            template <class T>
+            template <class T, class Alloc>
             void GadgetReader::read_gadget_single(std::string filename,
-                                                  std::vector<T> & part,
+                                                  std::vector<T, Alloc> & part,
                                                   bool only_keep_part_in_domain,
                                                   bool verbose) {
 
