@@ -1421,7 +1421,7 @@ namespace FML {
                 }
 
                 // Assign displacment field to particles
-                np = part.get_npart();
+                auto np = part.get_npart();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif

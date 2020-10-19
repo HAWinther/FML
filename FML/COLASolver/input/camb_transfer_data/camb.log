@@ -1,0 +1,125 @@
+Reion redshift       =  11.089
+Om_b h^2             =  0.022062
+Om_c h^2             =  0.118729
+Om_nu h^2            =  0.002161
+Om_Lambda            =  0.682500
+Om_K                 =  0.000000
+Om_m (1-Om_K-Om_L)   =  0.317500
+100 theta (CosmoMC)  =  1.043339
+N_eff (total)        =  3.046000
+ 1 nu, g= 1.0153 m_nu*c^2/k_B/T_nu0=   1194.42 (m_nu=  0.201 eV)
+Reion opt depth      =  0.0900
+Age of universe/GYr  =  13.822
+zstar                =  1090.03
+r_s(zstar)/Mpc       =  144.95
+100*theta            =  1.043751
+DA(zstar)/Gpc        =  13.88747
+zdrag                =  1058.98
+r_s(zdrag)/Mpc       =  147.72
+k_D(zstar) Mpc       =  0.1402
+100*theta_D          =  0.161334
+z_EQ (if v_nu=1)     =  3364.45
+k_EQ Mpc (if v_nu=1) =  0.010271
+100*theta_EQ         =  0.821480
+100*theta_rs_EQ      =  0.453955
+tau_recomb/Mpc       =  281.21  tau_now/Mpc =  14168.6
+at z = 50.000 sigma8 (all matter) =  0.0209
+at z = 46.068 sigma8 (all matter) =  0.0226
+at z = 42.438 sigma8 (all matter) =  0.0244
+at z = 39.089 sigma8 (all matter) =  0.0264
+at z = 35.998 sigma8 (all matter) =  0.0286
+at z = 33.145 sigma8 (all matter) =  0.0310
+at z = 30.512 sigma8 (all matter) =  0.0335
+at z = 28.082 sigma8 (all matter) =  0.0363
+at z = 25.840 sigma8 (all matter) =  0.0393
+at z = 23.771 sigma8 (all matter) =  0.0425
+at z = 21.861 sigma8 (all matter) =  0.0460
+at z = 20.098 sigma8 (all matter) =  0.0498
+at z = 18.471 sigma8 (all matter) =  0.0539
+at z = 16.970 sigma8 (all matter) =  0.0583
+at z = 15.584 sigma8 (all matter) =  0.0632
+at z = 14.305 sigma8 (all matter) =  0.0684
+at z = 13.125 sigma8 (all matter) =  0.0740
+at z = 12.036 sigma8 (all matter) =  0.0801
+at z = 11.031 sigma8 (all matter) =  0.0867
+at z = 10.103 sigma8 (all matter) =  0.0939
+at z =  9.247 sigma8 (all matter) =  0.1017
+at z =  8.457 sigma8 (all matter) =  0.1100
+at z =  7.728 sigma8 (all matter) =  0.1191
+at z =  7.055 sigma8 (all matter) =  0.1290
+at z =  6.434 sigma8 (all matter) =  0.1396
+at z =  5.861 sigma8 (all matter) =  0.1511
+at z =  5.332 sigma8 (all matter) =  0.1635
+at z =  4.843 sigma8 (all matter) =  0.1770
+at z =  4.393 sigma8 (all matter) =  0.1915
+at z =  3.977 sigma8 (all matter) =  0.2073
+at z =  3.593 sigma8 (all matter) =  0.2242
+at z =  3.239 sigma8 (all matter) =  0.2425
+at z =  2.912 sigma8 (all matter) =  0.2623
+at z =  2.611 sigma8 (all matter) =  0.2834
+at z =  2.332 sigma8 (all matter) =  0.3063
+at z =  2.075 sigma8 (all matter) =  0.3308
+at z =  1.838 sigma8 (all matter) =  0.3569
+at z =  1.619 sigma8 (all matter) =  0.3849
+at z =  1.417 sigma8 (all matter) =  0.4145
+at z =  1.231 sigma8 (all matter) =  0.4459
+at z =  1.059 sigma8 (all matter) =  0.4789
+at z =  0.900 sigma8 (all matter) =  0.5134
+at z =  0.754 sigma8 (all matter) =  0.5491
+at z =  0.618 sigma8 (all matter) =  0.5862
+at z =  0.494 sigma8 (all matter) =  0.6235
+at z =  0.378 sigma8 (all matter) =  0.6616
+at z =  0.272 sigma8 (all matter) =  0.6993
+at z =  0.174 sigma8 (all matter) =  0.7365
+at z =  0.084 sigma8 (all matter) =  0.7725
+at z =  0.000 sigma8 (all matter) =  0.8075
+at z = 50.000 sigma8^2_vd/sigma8  =  0.0205
+at z = 46.068 sigma8^2_vd/sigma8  =  0.0222
+at z = 42.438 sigma8^2_vd/sigma8  =  0.0241
+at z = 39.089 sigma8^2_vd/sigma8  =  0.0261
+at z = 35.998 sigma8^2_vd/sigma8  =  0.0282
+at z = 33.145 sigma8^2_vd/sigma8  =  0.0306
+at z = 30.512 sigma8^2_vd/sigma8  =  0.0331
+at z = 28.082 sigma8^2_vd/sigma8  =  0.0358
+at z = 25.840 sigma8^2_vd/sigma8  =  0.0388
+at z = 23.771 sigma8^2_vd/sigma8  =  0.0420
+at z = 21.861 sigma8^2_vd/sigma8  =  0.0454
+at z = 20.098 sigma8^2_vd/sigma8  =  0.0492
+at z = 18.471 sigma8^2_vd/sigma8  =  0.0533
+at z = 16.970 sigma8^2_vd/sigma8  =  0.0577
+at z = 15.584 sigma8^2_vd/sigma8  =  0.0624
+at z = 14.305 sigma8^2_vd/sigma8  =  0.0676
+at z = 13.125 sigma8^2_vd/sigma8  =  0.0732
+at z = 12.036 sigma8^2_vd/sigma8  =  0.0792
+at z = 11.031 sigma8^2_vd/sigma8  =  0.0858
+at z = 10.103 sigma8^2_vd/sigma8  =  0.0929
+at z =  9.247 sigma8^2_vd/sigma8  =  0.1005
+at z =  8.457 sigma8^2_vd/sigma8  =  0.1088
+at z =  7.728 sigma8^2_vd/sigma8  =  0.1178
+at z =  7.055 sigma8^2_vd/sigma8  =  0.1274
+at z =  6.434 sigma8^2_vd/sigma8  =  0.1379
+at z =  5.861 sigma8^2_vd/sigma8  =  0.1491
+at z =  5.332 sigma8^2_vd/sigma8  =  0.1613
+at z =  4.843 sigma8^2_vd/sigma8  =  0.1744
+at z =  4.393 sigma8^2_vd/sigma8  =  0.1884
+at z =  3.977 sigma8^2_vd/sigma8  =  0.2035
+at z =  3.593 sigma8^2_vd/sigma8  =  0.2196
+at z =  3.239 sigma8^2_vd/sigma8  =  0.2368
+at z =  2.912 sigma8^2_vd/sigma8  =  0.2550
+at z =  2.611 sigma8^2_vd/sigma8  =  0.2742
+at z =  2.332 sigma8^2_vd/sigma8  =  0.2945
+at z =  2.075 sigma8^2_vd/sigma8  =  0.3155
+at z =  1.838 sigma8^2_vd/sigma8  =  0.3370
+at z =  1.619 sigma8^2_vd/sigma8  =  0.3588
+at z =  1.417 sigma8^2_vd/sigma8  =  0.3805
+at z =  1.231 sigma8^2_vd/sigma8  =  0.4015
+at z =  1.059 sigma8^2_vd/sigma8  =  0.4211
+at z =  0.900 sigma8^2_vd/sigma8  =  0.4387
+at z =  0.754 sigma8^2_vd/sigma8  =  0.4534
+at z =  0.618 sigma8^2_vd/sigma8  =  0.4644
+at z =  0.494 sigma8^2_vd/sigma8  =  0.4708
+at z =  0.378 sigma8^2_vd/sigma8  =  0.4721
+at z =  0.272 sigma8^2_vd/sigma8  =  0.4680
+at z =  0.174 sigma8^2_vd/sigma8  =  0.4584
+at z =  0.084 sigma8^2_vd/sigma8  =  0.4438
+at z =  0.000 sigma8^2_vd/sigma8  =  0.4243
