@@ -21,7 +21,7 @@ class BackgroundCosmologyLCDM final : public BackgroundCosmology {
     double dlogHdloga_of_a(double a) const override {
         double E = HoverH0_of_a(a);
         return 1.0 / (2.0 * E * E) *
-               (-2.0 * OmegaM / (a * a) - 3.0 * OmegaM / (a * a * a) - 4.0 * OmegaRtot / (a * a * a * a));
+               (-2.0 * OmegaK / (a * a) - 3.0 * OmegaM / (a * a * a) - 4.0 * OmegaRtot / (a * a * a * a));
     }
 
     void info() const override {

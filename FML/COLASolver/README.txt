@@ -12,3 +12,5 @@ Gaussian or non-gaussian (local, equilateral, orthogonal) initial density field 
 Different time-stepping options, kernels for PM force, arbitrary density assigments methods (NGP, CIC, TSC, PCS, PQS, ...)
 
 External libraries: FFTW3, GSL, LUA (only for reading the parameterfile).
+
+Not properly tested.
