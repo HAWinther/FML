@@ -12,21 +12,22 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
+#include <FML/ODESolver/ODESolver.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/RandomFields/GaussianRandomField.h>
 #include <FML/RandomFields/NonLocalGaussianRandomField.h>
 
 namespace FML {
 
-    //===================================================================================
     /// This namespace deals with N-body simulations. Computing forces, moving particles
     /// and generating initial conditions.
-    //===================================================================================
     namespace NBODY {
 
         // Type alias
         template <int N>
         using FFTWGrid = FML::GRID::FFTWGrid<N>;
+        template <class T>
+        using MPIParticles = FML::PARTICLE::MPIParticles<T>;
 
         template <int N, class T>
         void DriftParticles(FML::PARTICLE::MPIParticles<T> & part, double delta_time, bool periodic_box = true);
@@ -36,7 +37,7 @@ namespace FML {
 
         template <int N, class T>
         void KickParticles(std::array<FFTWGrid<N>, N> & force_grid,
-                           FML::PARTICLE::MPIParticles<T> & part,
+                           MPIParticles<T> & part,
                            double delta_time,
                            std::string interpolation_method);
 
@@ -50,12 +51,14 @@ namespace FML {
         template <int N>
         void compute_force_from_density_real(const FFTWGrid<N> & density_grid_real,
                                              std::array<FFTWGrid<N>, N> & force_real,
-                                             double norm_poisson_equation = 1.0);
+                                             std::string density_assignment_method_used,
+                                             double norm_poisson_equation);
 
         template <int N>
         void compute_force_from_density_fourier(const FFTWGrid<N> & density_grid_fourier,
                                                 std::array<FFTWGrid<N>, N> & force_real,
-                                                double norm_poisson_equation = 1.0);
+                                                std::string density_assignment_method_used,
+                                                double norm_poisson_equation);
 
         //===================================================================================
         /// @brief Take a N-body step with a simple Kick-Drift-Kick method (this
@@ -82,7 +85,7 @@ namespace FML {
         //===================================================================================
         template <int N, class T>
         void KickDriftKickNBodyStep(int Nmesh,
-                                    FML::PARTICLE::MPIParticles<T> & part,
+                                    MPIParticles<T> & part,
                                     double delta_time,
                                     std::string density_assignment_method,
                                     double norm_poisson_equation) {
@@ -103,7 +106,8 @@ namespace FML {
 
             // Density field -> force
             std::array<FFTWGrid<N>, N> force_real;
-            compute_force_from_density_real(density_grid_real, force_real, norm_poisson_equation);
+            compute_force_from_density_real(
+                density_grid_real, force_real, density_assignment_method, norm_poisson_equation);
 
             // Update velocity of particles
             KickParticles(force_real, part, delta_time * 0.5, density_assignment_method);
@@ -119,7 +123,8 @@ namespace FML {
                                                         density_assignment_method);
 
             // Density field -> force
-            compute_force_from_density_real(density_grid_real, force_real, norm_poisson_equation);
+            compute_force_from_density_real(
+                density_grid_real, force_real, density_assignment_method, norm_poisson_equation);
 
             // Update velocity of particles
             KickParticles(force_real, part, delta_time * 0.5, density_assignment_method);
@@ -141,7 +146,7 @@ namespace FML {
         //===================================================================================
         template <int N, class T>
         void YoshidaNBodyStep(int Nmesh,
-                              FML::PARTICLE::MPIParticles<T> & part,
+                              MPIParticles<T> & part,
                               double delta_time,
                               std::string density_assignment_method,
                               double norm_poisson_equation) {
@@ -180,7 +185,7 @@ namespace FML {
                                                             density_assignment_method);
                 // Density field -> force
                 std::array<FFTWGrid<N>, N> force_real;
-                compute_force_from_density_real(density_grid_real, force_real, norm_poisson);
+                compute_force_from_density_real(density_grid_real, force_real, density_assignment_method, norm_poisson);
 
                 // Update velocity of particles
                 KickParticles(force_real, part, delta_time_vel, density_assignment_method);
@@ -198,52 +203,103 @@ namespace FML {
         //===================================================================================
         /// Take a density grid in real space and returns the force \f$ \nabla \phi \f$  where
         /// \f$ \nabla^2 \phi = {\rm norm} \cdot \delta \f$
+        /// Different choices for what kernel to use for \f$ \nabla / \nabla^2\f$ are availiable, see the function body
+        /// (is set too be a compile time option). Fiducial choice is the continuous greens function \f$ 1/k^2\f$, but
+        /// we can also choose to also devonvolve the window and discrete kernels (Hamming 1989; same as used in GADGET)
+        /// and Hockney & Eastwood 1988. See e.g. 1603.00476 for a list.
         ///
         /// @tparam N The dimension of the grid
         ///
         /// @param[in] density_grid_real The density contrast in real space.
         /// @param[out] force_real The force in real space.
+        /// @param[in] density_assignment_method_used The density assignement we used to compute the density field.
+        /// Needed only in case kernel_choice (defined in the body of this function) is not CONTINUOUS_GREENS_FUNCTION.
         /// @param[in] norm_poisson_equation The prefactor (norm) to the Poisson equation.
         ///
         //===================================================================================
         template <int N>
         void compute_force_from_density_real(const FFTWGrid<N> & density_grid_real,
                                              std::array<FFTWGrid<N>, N> & force_real,
+                                             std::string density_assignment_method_used,
                                              double norm_poisson_equation) {
 
             FFTWGrid<N> density_grid_fourier = density_grid_real;
             density_grid_fourier.add_memory_label("FFTWGrid::compute_force_from_density_real::density_grid_fourier");
             density_grid_fourier.set_grid_status_real(true);
             density_grid_fourier.fftw_r2c();
-            compute_force_from_density_fourier(density_grid_fourier, force_real, norm_poisson_equation);
+            compute_force_from_density_fourier(
+                density_grid_fourier, force_real, density_assignment_method_used, norm_poisson_equation);
         }
 
         //===================================================================================
         /// Take a density grid in fourier space and returns the force \f$ \nabla \phi \f$  where
         /// \f$ \nabla^2 \phi = {\rm norm} \cdot \delta \f$
+        /// Different choices for what kernel to use for \f$ \nabla / \nabla^2\f$ are availiable, see the function body
+        /// (is set too be a compile time option). Fiducial choice is the continuous greens function \f$ 1/k^2\f$, but
+        /// we can also choose to also devonvolve the window and discrete kernels (Hamming 1989; same as used in GADGET)
+        /// and Hockney & Eastwood 1988. See e.g. 1603.00476 for a list and references.
         ///
         /// @tparam N The dimension of the grid
         ///
         /// @param[in] density_grid_fourier The density contrast in fourier space.
         /// @param[out] force_real The force in real space.
+        /// @param[in] density_assignment_method_used The density assignement we used to compute the density field.
+        /// Needed only in case kernel_choice (defined in the body of this function) is not CONTINUOUS_GREENS_FUNCTION.
         /// @param[in] norm_poisson_equation The prefactor (norm) to the Poisson equation.
         ///
         //===================================================================================
         template <int N>
         void compute_force_from_density_fourier(const FFTWGrid<N> & density_grid_fourier,
                                                 std::array<FFTWGrid<N>, N> & force_real,
+                                                std::string density_assignment_method_used,
                                                 double norm_poisson_equation) {
+
+            // What fourier space kernel to use for D/D^2
+            enum KernelChoices {
+                // 1/k^2
+                CONTINUOUS_GREENS_FUNCTION,
+                // Divide by square of density assignment window function 1/k^2W^2
+                CONTINUOUS_GREENS_FUNCTION_DECONVOLVE,
+                // Hockney & Eastwood 1988: 1 / [ 4/dx^2 * Sum sin(ki * dx / 2)^2 ] with dx = 1/Ngrid
+                DISCRETE_GREENS_FUNCTION_HOCKNEYEASTWOOD,
+                // Hockney & Eastwood 1988: 1 / [ 4/dx^2 * Sum sin(ki * dx / 2)^2 ] / W^2 with dx = 1/Ngrid
+                DISCRETE_GREENS_FUNCTION_HOCKNEYEASTWOOD_DECONVOLVE,
+                // Hamming: D = D/k^2 where D = (8 sin(k) - sin(2k))/6
+                DISCRETE_GREENS_FUNCTION_HAMMING,
+                // Hamming: D/k^2W^2 where D = (8 sin(k) - sin(2k))/6 (GADGET2 kernel)
+                DISCRETE_GREENS_FUNCTION_HAMMING_DECONVOLVE
+            };
+            constexpr int kernel_choice = CONTINUOUS_GREENS_FUNCTION;
+
+            auto Nmesh = density_grid_fourier.get_nmesh();
+            auto Local_nx = density_grid_fourier.get_local_nx();
+            auto Local_x_start = density_grid_fourier.get_local_x_start();
+
+            // This is needed in case kernel_choice != CONTINUOUS_GREENS_FUNCTION
+            // The order of the density assignment method
+            const int order = FML::INTERPOLATION::interpolation_order_from_name(density_assignment_method_used);
+            // Window function for density assignment
+            const double knyquist = M_PI * Nmesh;
+            [[maybe_unused]] auto window_function = [&](std::array<double, N> & kvec) -> double {
+                double w = 1.0;
+                for (int idim = 0; idim < N; idim++) {
+                    const double koverkny = M_PI / 2. * (kvec[idim] / knyquist);
+                    w *= koverkny == 0.0 ? 1.0 : std::sin(koverkny) / (koverkny);
+                }
+                // res = pow(w,p);
+                double res = 1;
+                for (int i = 0; i < order; i++)
+                    res *= w;
+                return res;
+            };
 
             // Copy over
             for (int idim = 0; idim < N; idim++) {
                 force_real[idim] = density_grid_fourier;
-                force_real[idim].add_memory_label("FFTWGrid::compute_force_from_density::force_real_" +
+                force_real[idim].add_memory_label("FFTWGrid::compute_force_from_density_fourier::force_real_" +
                                                   std::to_string(idim));
                 force_real[idim].set_grid_status_real(idim == 0);
             }
-
-            auto Local_nx = density_grid_fourier.get_local_nx();
-            auto Local_x_start = density_grid_fourier.get_local_x_start();
 
             // Loop over all local fourier grid cells
 #ifdef USE_OMP
@@ -260,12 +316,55 @@ namespace FML {
                     force_real[0].get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
                     auto value = force_real[0].get_fourier_from_index(fourier_index);
 
-                    // Multiply by -i/k^2
-                    value *= -norm_poisson_equation * I / kmag2;
+                    // Divide by k^2 (different kernel choices here, fiducial is just 1/k^2)
+                    if constexpr (kernel_choice == CONTINUOUS_GREENS_FUNCTION) {
+                        value /= kmag2;
+                    } else if constexpr (kernel_choice == CONTINUOUS_GREENS_FUNCTION_DECONVOLVE) {
+                        double W = window_function(kvec);
+                        value /= (kmag2 * W * W);
+                    } else if constexpr (kernel_choice == DISCRETE_GREENS_FUNCTION_HOCKNEYEASTWOOD) {
+                        double sum = 0.0;
+                        for (int idim = 0; idim < N; idim++) {
+                            double s = std::sin(kvec[idim] / (2.0 * double(Nmesh)));
+                            sum += s * s;
+                        }
+                        sum *= 4.0 * double(Nmesh * Nmesh);
+                        value /= sum;
+                    } else if constexpr (kernel_choice == DISCRETE_GREENS_FUNCTION_HOCKNEYEASTWOOD_DECONVOLVE) {
+                        double W = window_function(kvec);
+                        double sum = 0.0;
+                        for (int idim = 0; idim < N; idim++) {
+                            double s = std::sin(kvec[idim] / (2.0 * double(Nmesh)));
+                            sum += s * s;
+                        }
+                        sum *= 4.0 * double(Nmesh * Nmesh) * W * W;
+                        value /= sum;
+                    } else if constexpr (kernel_choice == DISCRETE_GREENS_FUNCTION_HAMMING) {
+                        value *= 1.0 / kmag2;
+                    } else if constexpr (kernel_choice == DISCRETE_GREENS_FUNCTION_HAMMING_DECONVOLVE) {
+                        double W = window_function(kvec);
+                        value *= 1.0 / (kmag2 * W * W);
+                    } else {
+                        FML::assert_mpi(
+                            false,
+                            "Unknown kernel_choice in compute_force_from_density_fourier. Method set at the "
+                            "head of this function");
+                    }
+
+                    // Modify F[D] = kvec -> (8*sin(ki dx) - sin(2 ki dx))/6dx
+                    if constexpr (kernel_choice == DISCRETE_GREENS_FUNCTION_HAMMING or
+                                  kernel_choice == DISCRETE_GREENS_FUNCTION_HAMMING_DECONVOLVE) {
+                        for (int idim = 0; idim < N; idim++) {
+                            kvec[idim] = (8.0 * std::sin(kvec[idim] / double(Nmesh)) - std::sin(2 * double(Nmesh))) /
+                                         6.0 * double(Nmesh);
+                        }
+                    }
 
                     // Compute force -ik/k^2 delta(k)
-                    for (int idim = 0; idim < N; idim++)
-                        force_real[idim].set_fourier_from_index(fourier_index, value * kvec[idim]);
+                    for (int idim = 0; idim < N; idim++) {
+                        force_real[idim].set_fourier_from_index(fourier_index,
+                                                                -I * kvec[idim] * value * norm_poisson_equation);
+                    }
                 }
             }
 
@@ -292,8 +391,10 @@ namespace FML {
         ///
         //===================================================================================
         template <int N, class T>
-        void DriftParticles(FML::PARTICLE::MPIParticles<T> & part, double delta_time, bool periodic_box) {
+        void DriftParticles(MPIParticles<T> & part, double delta_time, bool periodic_box) {
             if (part.get_npart() == 0)
+                return;
+            if (delta_time == 0.0)
                 return;
 
             // Sanity check on particle
@@ -326,9 +427,11 @@ namespace FML {
         void DriftParticles(T * p, size_t NumPart, double delta_time, bool periodic_box) {
             if (NumPart == 0)
                 return;
+            if (delta_time == 0.0)
+                return;
 
             // Sanity check on particle
-            T tmp;
+            T tmp{};
             assert_mpi(FML::PARTICLE::GetNDIM(tmp) == N,
                        "[DriftParticles] NDIM of particles and of grid does not match");
             static_assert(FML::PARTICLE::has_get_pos<T>(),
@@ -365,8 +468,9 @@ namespace FML {
 
         //===================================================================================
         /// This moves the particle velocities according to \f$ v_{\rm new} = v + F \Delta t \f$. This method
-        /// assumes the force is normalized such that \f$ F \Delta t \f$ has the same units as your v. This method
-        /// frees up memory in the force grids after we have used them. Can be changed with a flag in the source.
+        /// assumes the force is normalized such that \f$ F \Delta t \f$ has the same units as your v.
+        /// If the flag free_force_grids is set in the source then we free up memory of the force grids after we have
+        /// used them. The defalt is false.
         ///
         /// @tparam N The dimension of the grid
         /// @tparam T The particle class
@@ -380,24 +484,25 @@ namespace FML {
         //===================================================================================
         template <int N, class T>
         void KickParticles(std::array<FFTWGrid<N>, N> & force_grid,
-                           FML::PARTICLE::MPIParticles<T> & part,
+                           MPIParticles<T> & part,
                            double delta_time,
                            std::string interpolation_method) {
-
+            if (delta_time == 0.0)
+                return;
             KickParticles<N, T>(
                 force_grid, part.get_particles_ptr(), part.get_npart(), delta_time, interpolation_method);
         }
 
         //===================================================================================
         /// This moves the particle velocities according to \f$ v_{\rm new} = v + F \Delta t \f$. This method
-        /// assumes the force is normalized such that \f$ F \Delta t \f$ has the same units as your v. This method
-        /// frees up memory in the force grids after we have used them. Can be changed with a flag in the source.
+        /// assumes the force is normalized such that \f$ F \Delta t \f$ has the same units as your v.
+        /// If the flag free_force_grids is set in the source then we free up memory of the force grids after we have
+        /// used them. The defalt is false.
         ///
         /// @tparam N The dimension of the grid
         /// @tparam T The particle class
         ///
-        /// @param[in] force_grid The force \f$ \nabla \Phi \f$. This grid is deallocated after use. Set
-        /// free_force_grids = false in the source to chansource to change this.
+        /// @param[in] force_grid The force \f$ \nabla \Phi \f$.
         /// @param[out] p Pointer to the first particle.
         /// @param[in] NumPart The number of local particles.
         /// @param[in] delta_time The size of the timestep.
@@ -412,15 +517,19 @@ namespace FML {
                            double delta_time,
                            std::string interpolation_method) {
 
+            // Nothing to do if delta_time = 0.0
+            if (delta_time == 0.0)
+                return;
+
             // Sanity check on particle
-            T tmp;
+            T tmp{};
             assert_mpi(FML::PARTICLE::GetNDIM(tmp) == N, "[KickParticles] Dimension of particle and grid do not match");
             static_assert(FML::PARTICLE::has_get_vel<T>(),
                           "[KickParticles] Particle must have velocity to use this method");
 
             // Deallocate the force grids (after interpolating to the particles we don't need it here and probably
             // not elsewhere so lets save some memory)
-            const bool free_force_grids = true;
+            constexpr bool free_force_grids = false;
 
             // Interpolate force to particle positions
             std::array<std::vector<double>, N> force;
@@ -452,47 +561,51 @@ namespace FML {
         }
 
         template <int N, class T>
-        void NBodyInitialConditions(FML::PARTICLE::MPIParticles<T> & part,
+        void NBodyInitialConditions(MPIParticles<T> & part,
                                     int Npart_1D,
                                     double buffer_factor,
 
-                                    FFTWGrid<N> & delta_fourier,
+                                    const FFTWGrid<N> & delta_fourier,
+                                    std::vector<FFTWGrid<N>> & phi_nLPT_potentials,
                                     int LPT_order,
 
                                     double box,
                                     double zini,
-                                    std::function<double(double)> H_over_H0_of_loga,
-                                    std::vector<std::function<double(double)>> & growth_rate_f_of_loga);
+                                    std::vector<double> velocity_norms);
 
         //=====================================================================
         /// Generate particles from a given power-spectrum using Lagrangian perturbation theory.
-        /// We generate particles in [0,1) and velocities are given by v_code = a^2 dxdt / (H0 Box)
+        /// We generate particles in [0,1) and velocities are given by \f$ v_{\rm code} = \frac{a^2 \frac{dx}{dt}}{H_0
+        /// B} \f$
         ///
         /// @tparam N The dimension we are working in.
         /// @tparam T The particle class. Must have methods get_pos, get_vel, get_D_1LPT and get_D_2LPT. But only
         /// get_pos data is required to exist. Return a nullptr if the data does not exist in the particle.
         ///
         /// @param[out] part Particle container for particles we are to create.
-        /// @param[in] Npart_1D Number of particles per dimension (i.e. total is Npart_1D^N)
+        /// @param[in] Npart_1D Number of particles per dimension (i.e. total is \f$ {\rm Npart}_{\rm 1D}^N \f$)
         /// @param[in] buffer_factor How many more particles to allocate?
         /// @param[in] Nmesh The grid to generate the IC on
         /// @param[in] fix_amplitude Amplitude fixed? Only random phases if true.
         /// @param[in] rng Random number generator
         /// @param[in] Pofk_of_kBox_over_Pofk_primordal The ratio of the power-spectrum (for delta) at the time you
         /// want the density field to be created at to the primordial one (the function above).
-        /// @param[in] Pofk_of_kBox_over_volume_primordial The dimensionless function P(k)/VolumeOfBox as function of
-        /// the dimensionless wavenumber k*Box where P(k) is the primordial power-spectrum for Phi.
+        /// @param[in] Pofk_of_kBox_over_volume_primordial The dimensionless function \f$ P/V\f$ where \f$ V = B^N\f$
+        /// is the box volume as function of the dimensionless wavenumber \f$ kB \f$ where \f$ B \f$ is the boxsize and
+        /// \f$ P(k) \f$ is the primordial power-spectrum for \f$\Phi\f$.
         /// @param[in] LPT_order The LPT order (1 or 2)
         /// @param[in] type_of_random_field What random field: gaussian, local, equilateral, orthogonal
         /// @param[in] fNL If non-gaussianity the value of fNL
         /// @param[in] box The boxsize (only for prining maximum displacement)
         /// @param[in] zini The initial redshift
-        /// @param[in] H_over_H0_of_loga The function H/H0 as function of x = log(a)
-        /// @param[in] growth_rate_f_of_loga The growth-rate f_1LPT, f_2LPT, ... as function of x = log(a)
+        /// @param[in] velocity_norms A vector of the factors we need to multiply the nLPT displacement fields by to get
+        /// velocities. E.g. $100 {\rm Box_in_Mpch} f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini}$ to get
+        /// peculiar velocities in km/s and $f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini}^2$ to get the
+        /// velocities we use as the fiducial choice in N-body. The order is: 1LPT, 2LPT, 3LPTa, 3LPTb
         ///
         //=====================================================================
         template <int N, class T>
-        void NBodyInitialConditions(FML::PARTICLE::MPIParticles<T> & part,
+        void NBodyInitialConditions(MPIParticles<T> & part,
                                     int Npart_1D,
                                     double buffer_factor,
 
@@ -507,8 +620,7 @@ namespace FML {
 
                                     double box,
                                     double zini,
-                                    std::function<double(double)> H_over_H0_of_loga,
-                                    std::vector<std::function<double(double)>> & growth_rate_f_of_loga) {
+                                    std::vector<double> velocity_norms) {
 
             // Some sanity checks
             assert_mpi(Npart_1D > 0 and Nmesh > 0 and zini >= 0.0 and rng != nullptr and box > 0.0,
@@ -539,29 +651,54 @@ namespace FML {
             }
 
             // Generate IC from a given fourier grid
+            std::vector<FFTWGrid<N>> phi_nLPT_potentials;
             NBodyInitialConditions<N, T>(part,
                                          Npart_1D,
                                          buffer_factor,
                                          delta_fourier,
+                                         phi_nLPT_potentials,
                                          LPT_order,
                                          box,
                                          zini,
-                                         H_over_H0_of_loga,
-                                         growth_rate_f_of_loga);
+                                         velocity_norms);
         }
 
+        //=====================================================================
+        /// Generate particles from a given initial density field using Lagrangian perturbation theory.
+        /// We generate particles in [0,1) and velocities are given by \f$ v_{\rm code} = \frac{a^2 \frac{dx}{dt}}{H_0
+        /// B} \f$
+        ///
+        /// @tparam N The dimension we are working in.
+        /// @tparam T The particle class. Must have methods get_pos, get_vel, get_D_1LPT and get_D_2LPT. But only
+        /// get_pos data is required to exist. Return a nullptr if the data does not exist in the particle.
+        ///
+        /// @param[out] part Particle container for particles we are to create.
+        /// @param[in] Npart_1D Number of particles per dimension (i.e. total is \f$ {\rm Npart}_{\rm 1D}^N \f$)
+        /// @param[in] buffer_factor How many more particles to allocate?
+        /// @param[in] delta_fourier The initial density field \f$ \delta(k,z_{\rm ini})\f$ in fourier space
+        /// @param[in] phi_nLPT_potentials Return the LPT potentials: 2LPT, 3LPTa, 3LPTb, ... If the vector has zero
+        /// size then nothing will be returned.
+        /// @param[in] LPT_order The LPT order (1 or 2)
+        /// @param[in] box The boxsize (only for prining maximum displacement)
+        /// @param[in] zini The initial redshift
+        /// @param[in] velocity_norms A vector of the factors we need to multiply the nLPT displacement fields by to get
+        /// velocities. E.g. $100 {\rm Box_in_Mpch} f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini}$ to get
+        /// peculiar velocities in km/s and $f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini}^2$ to get the
+        /// velocities we use as the fiducial choice in N-body.
+        ///
+        //=====================================================================
         template <int N, class T>
-        void NBodyInitialConditions(FML::PARTICLE::MPIParticles<T> & part,
+        void NBodyInitialConditions(MPIParticles<T> & part,
                                     int Npart_1D,
                                     double buffer_factor,
 
-                                    FFTWGrid<N> & delta_fourier,
+                                    const FFTWGrid<N> & delta_fourier,
+                                    std::vector<FFTWGrid<N>> & phi_nLPT_potentials,
                                     int LPT_order,
 
                                     double box,
                                     double zini,
-                                    std::function<double(double)> H_over_H0_of_loga,
-                                    std::vector<std::function<double(double)>> & growth_rate_f_of_loga) {
+                                    std::vector<double> velocity_norms) {
 
             T tmp{};
             if (FML::ThisTask == 0) {
@@ -622,6 +759,13 @@ namespace FML {
             assert_mpi(LPT_order == 1 or LPT_order == 2 or LPT_order == 3,
                        "[NBodyInitialConditions] Only 1LPT, 2LPT and 3LPT implemented so valid choices here are "
                        "LPT_order = 1, 2 or 3");
+            const std::string interpolation_method = "CIC"; // We use n-linear interpolation below
+            const auto nextra_cic =
+                FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(interpolation_method);
+            assert_mpi(delta_fourier.get_n_extra_slices_left() >= nextra_cic.first and
+                           delta_fourier.get_n_extra_slices_right() >= nextra_cic.second,
+                       "[NBodyInitialConditions] We use CIC interpolation in this routine so the grid needs to have "
+                       "atleast one extra slice on the right");
 
             // Sanity check on particle
             assert_mpi(FML::PARTICLE::GetNDIM(tmp) == N,
@@ -631,7 +775,6 @@ namespace FML {
 
             // The scalefactor and log(a) at the initial time
             const double aini = 1.0 / (1.0 + zini);
-            const double xini = std::log(aini);
 
             FFTWGrid<N> phi_1LPT;
             FFTWGrid<N> phi_2LPT;
@@ -659,9 +802,6 @@ namespace FML {
                                                                     ignore_3LPT_curl_term);
             }
 
-            // Free memory no longer needed
-            delta_fourier.free();
-
             //================================================================
             // Function to compute the displacement from a LPT potential
             // Frees the memory of phi_nLPT after its used
@@ -680,7 +820,7 @@ namespace FML {
                                                                                part.get_particles_ptr(),
                                                                                part.get_npart(),
                                                                                displacements_nLPT[idim],
-                                                                               "CIC");
+                                                                               interpolation_method);
                     Psi_nLPT_vector[idim].free();
                 }
             };
@@ -797,6 +937,7 @@ namespace FML {
 
             // Create particles
             part.create_particle_grid(Npart_1D, buffer_factor, FML::xmin_domain, FML::xmax_domain);
+            part.info();
 
             // Set unique IDs if we have that availiable in the particles
             if constexpr (FML::PARTICLE::has_set_id<T>()) {
@@ -845,53 +986,54 @@ namespace FML {
             std::vector<std::vector<FML::GRID::FloatType>> displacements_2LPT(N);
             if (LPT_order >= 2) {
                 const int nLPT = 2;
+                // Store potential if asked for
+                if (phi_nLPT_potentials.size() > 0)
+                    phi_nLPT_potentials[0] = phi_2LPT;
                 comp_displacement(nLPT, phi_2LPT, displacements_2LPT);
             }
 
             std::vector<std::vector<FML::GRID::FloatType>> displacements_3LPTa(N);
             if (LPT_order >= 3) {
                 const int nLPT = 3;
+                // Store potential if asked for
+                if (phi_nLPT_potentials.size() > 1)
+                    phi_nLPT_potentials[1] = phi_3LPTa;
                 comp_displacement(nLPT, phi_3LPTa, displacements_3LPTa);
             }
 
             std::vector<std::vector<FML::GRID::FloatType>> displacements_3LPTb(N);
             if (LPT_order >= 3) {
                 const int nLPT = 3;
+                // Store potential if asked for
+                if (phi_nLPT_potentials.size() > 2)
+                    phi_nLPT_potentials[2] = phi_3LPTb;
                 comp_displacement(nLPT, phi_3LPTb, displacements_3LPTb);
             }
 
             if (LPT_order >= 1) {
                 const int nLPT = 1;
-                const double growth_rate1 = growth_rate_f_of_loga[0](xini);
-                const double vfac_1LPT = std::exp(2 * xini) * H_over_H0_of_loga(xini) * growth_rate1;
-                add_displacement(nLPT, 0, displacements_1LPT, vfac_1LPT);
+                add_displacement(nLPT, 0, displacements_1LPT, velocity_norms[0]);
                 displacements_1LPT.clear();
                 displacements_1LPT.shrink_to_fit();
             }
 
             if (LPT_order >= 2) {
                 const int nLPT = 2;
-                const double growth_rate2 = growth_rate_f_of_loga[1](xini);
-                const double vfac_2LPT = std::exp(2 * xini) * H_over_H0_of_loga(xini) * growth_rate2;
-                add_displacement(nLPT, 0, displacements_2LPT, vfac_2LPT);
+                add_displacement(nLPT, 0, displacements_2LPT, velocity_norms[1]);
                 displacements_2LPT.clear();
                 displacements_2LPT.shrink_to_fit();
             }
 
             if (LPT_order >= 3) {
                 const int nLPT = 3;
-                const double growth_rate3a = growth_rate_f_of_loga[2](xini);
-                const double vfac_3LPTa = std::exp(2 * xini) * H_over_H0_of_loga(xini) * growth_rate3a;
-                add_displacement(nLPT, 'a', displacements_3LPTa, vfac_3LPTa);
+                add_displacement(nLPT, 'a', displacements_3LPTa, velocity_norms[2]);
                 displacements_3LPTa.clear();
                 displacements_3LPTa.shrink_to_fit();
             }
 
             if (LPT_order >= 3) {
                 const int nLPT = 3;
-                const double growth_rate3b = growth_rate_f_of_loga[3](xini);
-                const double vfac_3LPTb = std::exp(2 * xini) * H_over_H0_of_loga(xini) * growth_rate3b;
-                add_displacement(nLPT, 'b', displacements_3LPTb, vfac_3LPTb);
+                add_displacement(nLPT, 'b', displacements_3LPTb, velocity_norms[3]);
                 displacements_3LPTb.clear();
                 displacements_3LPTb.shrink_to_fit();
             }
@@ -901,24 +1043,40 @@ namespace FML {
         }
 
         //===================================================================================
-        /// This method computes the fifth-force potential for modified gravity models using the linear
-        /// approximation This computes \f$ \delta_{\rm MG}(k) \f$ where the total force in fourier space is \f$ F(k)
-        /// \propto \frac{\vec{k}}{k^2}[\delta(k) + \delta_{\rm MG}(k)] \f$ by solving \f$ \nabla^2 \phi = m^2 \phi +
-        /// F^{-1}[g(k) \delta(k)] \f$ where \f$ \delta_{\rm MG}(k) = -k^2\phi(k)\f$. For example in $f(R)$ gravity we
-        /// have \f$ g(k) = \frac{1}{3}\frac{k^2}{k^2 + m^2}\f$ and in DGP we have \f$ g(k) = \frac{1}{3\beta} \f$
-        /// (independent of scale).
+        /// @brief This method computes the fifth-force potential for modified gravity models using the linear
+        /// approximation This computes \f$ \delta_{\rm MG}(k) \f$ where the total force in fourier space is
+        /// \f$ F(k) \propto \frac{\vec{k}}{k^2}[\delta(k) + \delta_{\rm MG}(k)] \f$ by solving
+        /// \f$ \nabla^2 \phi = m^2 \phi + F^{-1}[g(k) \delta(k)] \f$ where \f$ \delta_{\rm MG}(k) = -k^2\phi(k) \f$.
+        /// For example in \f$ f(R) \f$ gravity we have \f$ g(k) = \frac{1}{3}\frac{k^2}{k^2 + m^2}\f$ and in DGP
+        /// we have \f$ g(k) = \frac{1}{3\beta} \f$ (independent of scale).
         ///
         /// @tparam N The dimension we work in.
         ///
         /// @param[in] density_fourier The density contrast in fourier space.
         /// @param[out] density_mg_fourier The force potential.
-        /// @param[in] coupling_factor_of_kBox The coupling factor \f$g(k)\f$
+        /// @param[in] coupling_factor_of_kBox The coupling factor \f$ g(k) \f$
         ///
         //===================================================================================
         template <int N>
         void compute_delta_fifth_force(const FFTWGrid<N> & density_fourier,
-                              FFTWGrid<N> & density_mg_fourier,
-                              std::function<double(double)> coupling_factor_of_kBox) {
+                                       FFTWGrid<N> & density_mg_fourier,
+                                       std::function<double(double)> coupling_factor_of_kBox) {
+
+#ifdef USE_GSL
+            // Using std::function is slow so make a faster spline
+            const auto Nmesh = density_fourier.get_nmesh();
+            const int npts = 4 * Nmesh;
+            const double kmin = M_PI;
+            const double kmax = 2.0 * M_PI * Nmesh / 2.0 * std::sqrt(double(N));
+            std::vector<double> k_vec(npts);
+            std::vector<double> coupling_vec(npts);
+            for (int i = 0; i < npts; i++) {
+                k_vec[i] = kmin + (kmax - kmin) * i / double(npts - 1);
+                coupling_vec[i] = coupling_factor_of_kBox(k_vec[i]);
+            }
+            FML::INTERPOLATION::SPLINE::Spline coupling_factor_of_kBox_spline;
+            coupling_factor_of_kBox_spline.create(k_vec, coupling_vec);
+#endif
 
             const auto Local_nx = density_fourier.get_local_nx();
             density_mg_fourier = density_fourier;
@@ -929,46 +1087,51 @@ namespace FML {
                 [[maybe_unused]] double kmag;
                 [[maybe_unused]] std::array<double, N> kvec;
                 for (auto && fourier_index : density_mg_fourier.get_fourier_range(islice, islice + 1)) {
-                    auto value = density_mg_fourier.get_fourier_from_index(fourier_index);
-
                     // Get wavevector and magnitude
                     density_mg_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
                     // Compute coupling
+#ifdef USE_GSL
+                    auto coupling = coupling_factor_of_kBox_spline(kmag);
+#else
                     auto coupling = coupling_factor_of_kBox(kmag);
+#endif
 
                     // Multiply by coupling
+                    auto value = density_mg_fourier.get_fourier_from_index(fourier_index);
                     density_mg_fourier.set_fourier_from_index(fourier_index, value * coupling);
                 }
             }
         }
 
         //===================================================================================
-        /// This method computes the fifth-force potential for modified gravity models which has a screening
+        /// @brief This method computes the fifth-force potential for modified gravity models which has a screening
         /// mechanism using the approximate method of Winther & Ferreira 2015. This computes \f$ \delta_{\rm MG}(k) \f$
         /// where the total force in fourier is given by \f$ F(k) \propto \frac{\vec{k}}{k^2}[\delta(k) + \delta_{\rm
         /// MG}(k)] \f$ by solving \f$ \nabla^2 \phi = m^2 \phi + f(\Phi)F^{-1}[g(k) \delta(k)] \f$ where \f$
-        /// \delta_{\rm MG}(k) = -k^2\phi(k)\f$. For example in $f(R)$ gravity we have \f$ g(k) =
-        /// \frac{1}{3}\frac{k^2}{k^2 + m^2}\f$ and the screening function is \f$ f(\Phi) = \min(1,
-        /// \left|\frac{3f_R}{2\Phi}\right|) \f$. If you don't want screening then simpy pass the function \f$ f \equiv
-        /// 1\f$ and the equation reduces to the one in the linear regime
+        /// \delta_{\rm MG}(k) = -k^2\phi(k) \f$ For example in \f$ f(R) \f$ gravity we have \f$ g(k) =
+        /// \frac{1}{3}\frac{k^2}{k^2 + m^2} \f$ and the screening function is \f$ f(\Phi) = \min(1,
+        /// \left|\frac{3f_R}{2\Phi}\right|) \f$ If you don't want screening then simpy pass the function \f$ f \equiv 1
+        /// \f$ and the equation reduces to the one in the linear regime
         ///
         /// @tparam N The dimension we work in.
         ///
         /// @param[in] density_fourier The density contrast in fourier space.
         /// @param[out] density_mg_fourier The force potential.
         /// @param[in] coupling_factor_of_kBox The coupling factor \f$g(k)\f$
-        /// @param[in] screening_factor_of_newtonian_potential The screening factor \f$f(\Phi_N)\f$. Should be in
-        /// \f$[0,1]\f$ and go to 1 for \f$ \Phi_N \to 0 \f$ and 0 for very large \f$ \Phi_N\f$.
-        /// @param[in] poisson_norm The factor \f$ C \f$ in \f$ \nabla^2\Phi = C\delta \f$
+        /// @param[in] screening_factor_of_newtonian_potential The screening factor \f$ f(\Phi_N) \f$ Should be in
+        /// \f$ [0,1] \f$ and go to 1 for \f$ \Phi_N \to 0 \f$ and 0 for very large \f$ \Phi_N \f$
+        /// @param[in] poisson_norm The factor \f$ C \f$ in \f$ \nabla^2\Phi = C\delta \f$ to get the potential in the
+        /// metric (not the code-potential) so \f$ C = \frac{3}{2}\Omega_M a \frac{(H_0B)^2}{a^2} \f$
         ///
         //===================================================================================
         template <int N>
-        void compute_delta_fifth_force_potential_screening(const FFTWGrid<N> & density_fourier,
-                                                  FFTWGrid<N> & density_mg_fourier,
-                                                  std::function<double(double)> coupling_factor_of_kBox,
-                                                  std::function<double(double)> screening_factor_of_newtonian_potential,
-                                                  double poisson_norm) {
+        void compute_delta_fifth_force_potential_screening(
+            const FFTWGrid<N> & density_fourier,
+            FFTWGrid<N> & density_mg_fourier,
+            std::function<double(double)> coupling_factor_of_kBox,
+            std::function<double(double)> screening_factor_of_newtonian_potential,
+            double poisson_norm) {
 
             const auto Local_nx = density_fourier.get_local_nx();
             const auto Local_x_start = density_fourier.get_local_x_start();
@@ -997,8 +1160,12 @@ namespace FML {
             if (Local_x_start == 0)
                 density_mg_fourier.set_fourier_from_index(0, 0.0);
 
-            // Transform to real space: Phi(x)
+            // Take another copy of the density field as we need it in real space
+            auto delta_real = density_fourier;
+
+            // Transform to real space: Phi(x) and delta(x)
             density_mg_fourier.fftw_c2r();
+            delta_real.fftw_c2r();
 
             // Apply screening function
 #ifdef USE_OMP
@@ -1007,13 +1174,13 @@ namespace FML {
             for (int islice = 0; islice < Local_nx; islice++) {
                 for (auto && real_index : density_mg_fourier.get_real_range(islice, islice + 1)) {
                     auto phi_newton = density_mg_fourier.get_real_from_index(real_index);
-                    auto delta = density_fourier.get_real_from_index(real_index);
+                    auto delta = delta_real.get_real_from_index(real_index);
                     auto screening_factor = screening_factor_of_newtonian_potential(phi_newton);
                     density_mg_fourier.set_real_from_index(real_index, delta * screening_factor);
                 }
             }
 
-            // To fourier space: delta(k)
+            // Back to fourier space: delta(k)
             density_mg_fourier.fftw_r2c();
 
             // Apply coupling
@@ -1039,34 +1206,34 @@ namespace FML {
         }
 
         //===================================================================================
-        /// This method computes the fifth-force potential for modified gravity models which has a screening
+        /// @brief This method computes the fifth-force potential for modified gravity models which has a screening
         /// mechanism using the approximate method of Winther & Ferreira 2015. This computes \f$ \delta_{\rm MG}(k) \f$
         /// where the total force in fourier space is \f$ F(k) \propto \frac{\vec{k}}{k^2}[\delta(k) + \delta_{\rm
-        /// MG}(k)] \f$ by solving \f$ \nabla^2 \phi = m^2 \phi + f(\rho)F^{-1}[g(k) \delta(k)]  \f$ where \f$
-        /// \delta_{\rm MG}(k) = -k^2\phi(k)\f$ and \f$\rho \f$ is the density in units of the mean density. For example
-        /// in DGP gravity we have \f$ g(k) = \frac{1}{3\beta}\f$ (independent of scale) and the screening function is
-        /// \f$ f(\rho) = 2\frac{\sqrt{1 + C} - 1}{C}\f$ where \f$ which \f$ C =
-        /// \frac{8\Omega_M(r_cH_0)^2}{9\beta^2}\rho \f$. If you don't want screening then simply pass the function \f$
-        /// f \equiv 1\f$ and the equation reduces to the one in the linear regime.
+        /// MG}(k)] \f$ by solving \f$ \nabla^2 \phi = m^2 \phi + f(\rho)F^{-1}[g(k) \delta(k)] \f$ where \f$
+        /// \delta_{\rm MG}(k) = -k^2\phi(k) \f$ and \f$ \rho \f$ is the density in units of the mean density. For
+        /// example in DGP gravity we have \f$ g(k) = \frac{1}{3\beta} \f$ (independent of scale) and the screening
+        /// function is \f$ f(\rho) = 2\frac{\sqrt{1 + C} - 1}{C} \f$ where \f$ C =
+        /// \frac{8\Omega_M(r_cH_0)^2}{9\beta^2}\rho \f$ If you don't want screening then simply pass the function \f$ f
+        /// \equiv 1 \f$ and the equation reduces to the one in the linear regime.
         ///
         /// @tparam N The dimension we work in.
         ///
         /// @param[in] density_fourier The density contrast in fourier space.
         /// @param[out] density_mg_fourier The force potential.
-        /// @param[in] coupling_factor_of_kBox The coupling factor \f$g(k)\f$
-        /// @param[in] screening_factor_of_density The screening factor \f$f(\rho)\f$. Should be in
-        /// \f$[0,1]\f$ and go to 1 for \f$ \rho \to 0 \f$ and 0 for \f$ \rho \to \infty\f$.
+        /// @param[in] coupling_factor_of_kBox The coupling factor \f$ g(k) \f$
+        /// @param[in] screening_factor_of_density The screening factor \f$ f(\rho) \f$ Should be in \f$ [0,1] \f$ and
+        /// go to 1 for \f$ \rho \to 0 \f$ and to 0 for \f$ \rho \to \infty \f$.
         /// @param[in] smoothing_scale The smoothing radius in units of the boxsize.
         /// @param[in] smoothing_method The k-space smoothing filter (gaussian, tophat, sharpk).
         ///
         //===================================================================================
         template <int N>
         void compute_delta_fifth_force_density_screening(const FFTWGrid<N> & density_fourier,
-                                                FFTWGrid<N> & density_mg_fourier,
-                                                std::function<double(double)> coupling_factor_of_kBox,
-                                                std::function<double(double)> screening_factor_of_density,
-                                                double smoothing_scale,
-                                                std::string smoothing_method) {
+                                                         FFTWGrid<N> & density_mg_fourier,
+                                                         std::function<double(double)> coupling_factor_of_kBox,
+                                                         std::function<double(double)> screening_factor_of_density,
+                                                         double smoothing_scale,
+                                                         std::string smoothing_method) {
 
             const auto Local_nx = density_fourier.get_local_nx();
 
@@ -1074,7 +1241,8 @@ namespace FML {
             density_mg_fourier = density_fourier;
 
             // Smooth density field
-            FML::GRID::smoothing_filter_fourier_space(density_mg_fourier, smoothing_scale, smoothing_method);
+            if (smoothing_scale > 0.0)
+                FML::GRID::smoothing_filter_fourier_space(density_mg_fourier, smoothing_scale, smoothing_method);
 
             // To real space density field
             density_mg_fourier.fftw_c2r();
@@ -1115,6 +1283,51 @@ namespace FML {
                 }
             }
         }
+
+#ifdef USE_GSL
+
+        //===================================================================================
+        /// @brief This computes the standard deviation of linear fluctuations smoothed over a sphere of radius, \f$
+        /// \sigma(R) \f$, by integrating the power-spectrum convolved with a top-hat windowfunction of radius \f$ R
+        /// \f$. We do this by solving \f$ \sigma^2(R) = \int \frac{k^3P(k)}{2\pi^2} |W(kR)|^2 d\log k \f$
+        ///
+        /// @param[in] Pofk_of_kBox_over_volume Dimensionless power-spectrum \f$ P / V \f$ as function of the
+        /// dimensionless scale \f$ kB \f$ where \f$B\f$ is the boxsize and \f$V = B^3\f$ is the box volume.
+        /// @param[in] R_mpch R in units of Mpc/h
+        /// @param[in] boxsize_mpch Boxsize in units of Mpc/h
+        ///
+        //===================================================================================
+        double
+        compute_sigma_of_R(std::function<double(double)> Pofk_of_kBox_over_volume, double R_mpch, double boxsize_mpch) {
+            using ODEFunction = FML::SOLVERS::ODESOLVER::ODEFunction;
+            using DVector = FML::SOLVERS::ODESOLVER::DVector;
+            using ODESolver = FML::SOLVERS::ODESOLVER::ODESolver;
+
+            // We integrate from k = 1e-5 h/Mpc to k = 100 h/Mpc
+            const double kBoxmin = 1e-5 * boxsize_mpch;
+            const double kBoxmax = 1e2 * boxsize_mpch;
+
+            ODEFunction deriv = [&](double logkBox, [[maybe_unused]] const double * sigma2, double * dsigma2dlogk) {
+                const double kBox = std::exp(logkBox);
+                const double dimless_pofk = kBox * kBox * kBox / (2.0 * M_PI * M_PI) * Pofk_of_kBox_over_volume(kBox);
+                const double kR = kBox * R_mpch / boxsize_mpch;
+                const double window = kR > 0.0 ? 3.0 * (std::sin(kR) - kR * std::cos(kR)) / (kR * kR * kR) : 1.0;
+                dsigma2dlogk[0] = dimless_pofk * window * window;
+                return GSL_SUCCESS;
+            };
+
+            // The initial conditions
+            DVector sigmaini{0.0};
+            DVector logkarr{std::log(kBoxmin), std::log(kBoxmax)};
+
+            // Solve the ODE
+            ODESolver ode(1e-3, 1e-10, 1e-10);
+            ode.solve(deriv, logkarr, sigmaini);
+            auto sigma2 = ode.get_final_data_by_component(0);
+
+            return std::sqrt(sigma2);
+        }
+#endif
 
     } // namespace NBODY
 } // namespace FML
