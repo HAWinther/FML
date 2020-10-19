@@ -125,11 +125,11 @@ namespace FML {
             /// User units: specify what length, time, mass, temperature and charge unit you want.
             /// E.g. if you want km to be your length unit then length = 1/1000
             /// When all are unity we have SI
-            /// @param[in] L How many length units to make 1 meters
-            /// @param[in] T How many time units to make 1 second
-            /// @param[in] M How many mass units to make 1 kilogram
-            /// @param[in] M How many temperature units to make 1 kelvin
-            /// @param[in] C How many charge units to make 1 coloumb
+            /// @param[in] meter_over_lengthunit How many length units to make 1 meters
+            /// @param[in] seconds_over_timeunit How many time units to make 1 second
+            /// @param[in] kilogram_over_massunit How many mass units to make 1 kilogram
+            /// @param[in] kelvin_over_temperatureunit How many temperature units to make 1 kelvin
+            /// @param[in] coloumb_over_chargeunit How many charge units to make 1 coloumb
             ///
             //=================================================================================
             ConstantsAndUnits(double meter_over_lengthunit,

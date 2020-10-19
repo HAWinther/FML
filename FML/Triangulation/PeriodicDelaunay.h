@@ -614,7 +614,7 @@ namespace FML {
 
             /// Computes the voronoi volumes for the regular points which we have stored vertex handles for
             ///
-            /// @param[out] List of volumes. The ith entry corresponds to the ith particle used to create the
+            /// @param[out] volumes List of volumes. The ith entry corresponds to the ith particle used to create the
             /// tesselation
             ///
             void VoronoiVolume(std::vector<double> & volumes) {
