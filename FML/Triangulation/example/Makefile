@@ -29,7 +29,7 @@ USE_DEBUG        = false
 #===================================================
 
 # Main library include (path to folder containin FML/)
-FML_INCLUDE    = /Users/hansw/local/FML
+FML_INCLUDE    = $(HOME)/local/FML
 
 # CGAL : only needed if USE_CGAL = true
 CGAL_INCLUDE   = /opt/local/include

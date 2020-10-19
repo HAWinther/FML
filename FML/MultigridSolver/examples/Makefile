@@ -29,7 +29,7 @@ USE_FFTW         = true
 #===================================================
 
 # Main library include (path to folder containin FML/)
-FML_INCLUDE    = /Users/hansw/local/FML
+FML_INCLUDE    = $(HOME)/local/FML
 
 #===================================================
 # Compile up all library defines from options above

@@ -14,7 +14,7 @@ MPICC   = mpicxx -std=c++1z -O3 -Wall -Wextra -march=native
 #===================================================
 
 # Use MPI
-USE_MPI          = false
+USE_MPI          = true
 # Use OpenMP threads
 USE_OMP          = true
 # Use the GSL library (Spline, ODESolver)
@@ -27,7 +27,7 @@ USE_SANITIZER    = false
 #===================================================
 
 # Main library include (path to folder containin FML/)
-FML_INCLUDE    = /Users/hansw/local/FML
+FML_INCLUDE    = $(HOME)/local/FML
 
 # GSL : only needed if USE_GSL = true
 GSL_INCLUDE    = $(HOME)/local/include

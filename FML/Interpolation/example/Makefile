@@ -33,7 +33,7 @@ USE_DEBUG        = false
 #===================================================
 
 # Main library include (path to folder containin FML/)
-FML_INCLUDE    = /Users/hansw/local/FML
+FML_INCLUDE    = $(HOME)/local/FML
 
 # FFTW : only needed if USE_FFTW = true
 FFTW_INCLUDE   = $(HOME)/local/include

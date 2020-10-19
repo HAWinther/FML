@@ -27,7 +27,7 @@ USE_SANITIZER    = false
 #===================================================
 
 # Main library include (path to folder containin FML/)
-FML_INCLUDE    = /Users/hansw/local/FML
+FML_INCLUDE    = $(HOME)/local/FML
 
 # LUA : only needed if USE_LUA = true
 LUA_INCLUDE    = $(HOME)/local/include
