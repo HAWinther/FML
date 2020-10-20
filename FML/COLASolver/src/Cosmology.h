@@ -10,6 +10,8 @@
 #include <FML/Spline/Spline.h>
 #include <FML/Units/Units.h>
 
+#include <memory>
+
 /// Base class for a general cosmology
 class BackgroundCosmology {
   public:
