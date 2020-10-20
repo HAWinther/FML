@@ -70,6 +70,7 @@ namespace FML {
             Spline2D vb_transfer_function_spline;
             Spline2D vbvc_transfer_function_spline;
 
+            double zmax_splines;
             bool transfer_is_read{false};
 
             std::string fileformat{"CAMB"};
@@ -126,6 +127,13 @@ namespace FML {
             double get_total_transfer_function(double k_hmpc, double a) const;
             double get_weyl_transfer_function(double k_hmpc, double a) const;
 
+            // Growth-rates
+            double get_baryon_growth_rate(double k_hmpc, double a) const;
+            double get_cdm_baryon_growth_rate(double k_hmpc, double a) const;
+            double get_cdm_growth_rate(double k_hmpc, double a) const;
+            double get_massive_neutrino_growth_rate(double k_hmpc, double a) const;
+            double get_total_growth_rate(double k_hmpc, double a) const;
+
             // Power-spectrum
             double get_primordial_power_spectrum(double k_hmpc) const;
             double get_cdm_baryon_power_spectrum(double k_hmpc, double a) const;
@@ -149,6 +157,9 @@ namespace FML {
 
             /// Set the fileformat
             void set_fileformat(std::string format);
+        
+            /// Get the range of the splines.
+            double get_zmax_splines() const;
 
             /// Free up all memory
             void free();
@@ -297,6 +308,9 @@ namespace FML {
             return {data[pofk_col_k], data[pofk_col_pofk]};
         }
 
+        /// The largest redshift the splines reach
+        double LinearTransferData::get_zmax_splines() const { return zmax_splines; }
+
         //====================================================================
         /// Read an infofile with the format (folder num_redshift) and then each line contains (transferfile_i
         /// redshift_i) The redshifts have to be ordered from low to high.
@@ -336,6 +350,7 @@ namespace FML {
 
             // Read all files
             DVector redshifts(nredshift);
+            zmax_splines = 0.0;
             for (int i = 0; i < nredshift; i++) {
 
                 // Read filename
@@ -346,6 +361,7 @@ namespace FML {
                 double znow;
                 fp >> znow;
                 redshifts[i] = znow;
+                zmax_splines = std::max(redshifts[i], zmax_splines);
 
                 // Make filename and open file. Assumes all files have the same length
                 std::string fullfilename = filepath + "/" + filename;
@@ -504,6 +520,20 @@ namespace FML {
         }
 
         //====================================================================
+        /// Massive neutrino growth rate
+        /// @param[in] k Fourier wavenumber in h/Mpc
+        /// @param[in] a Scalefactor
+        //====================================================================
+        double LinearTransferData::get_massive_neutrino_growth_rate(double k, double a) const {
+            double z = 1.0 / a - 1.0;
+            double Dnu = mnu_transfer_function_spline(z, std::log(k));
+            if (Dnu == 0.0)
+                return 0.0;
+            double dDnudloga = -mnu_transfer_function_spline.deriv_x(z, std::log(k)) / a;
+            return dDnudloga / Dnu;
+        }
+
+        //====================================================================
         /// CDM transfer function (T = Delta/k^2) in units of Mpc^2
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
@@ -511,6 +541,17 @@ namespace FML {
         double LinearTransferData::get_cdm_transfer_function(double k, double a) const {
             double z = 1.0 / a - 1.0;
             return cdm_transfer_function_spline(z, std::log(k));
+        }
+
+        //====================================================================
+        /// CDM growth rate
+        /// @param[in] k Fourier wavenumber in h/Mpc
+        /// @param[in] a Scalefactor
+        //====================================================================
+        double LinearTransferData::get_cdm_growth_rate(double k, double a) const {
+            double z = 1.0 / a - 1.0;
+            return -cdm_transfer_function_spline.deriv_x(z, std::log(k)) /
+                   cdm_transfer_function_spline(z, std::log(k)) / a;
         }
 
         //====================================================================
@@ -524,6 +565,17 @@ namespace FML {
         }
 
         //====================================================================
+        /// Weighted baryon growth rate
+        /// @param[in] k Fourier wavenumber in h/Mpc
+        /// @param[in] a Scalefactor
+        //====================================================================
+        double LinearTransferData::get_baryon_growth_rate(double k, double a) const {
+            double z = 1.0 / a - 1.0;
+            return -baryon_transfer_function_spline.deriv_x(z, std::log(k)) /
+                   baryon_transfer_function_spline(z, std::log(k)) / a;
+        }
+
+        //====================================================================
         /// Weighted CDM+Baryon transfer function (T = Delta/k^2) in units of Mpc^2
         /// Since baryons are CDM in the simulations this is the one to use
         /// @param[in] k Fourier wavenumber in h/Mpc
@@ -532,6 +584,17 @@ namespace FML {
         double LinearTransferData::get_cdm_baryon_transfer_function(double k, double a) const {
             return (Omegab * get_baryon_transfer_function(k, a) + OmegaCDM * get_cdm_transfer_function(k, a)) /
                    (Omegab + OmegaCDM);
+        }
+
+        //====================================================================
+        /// Weighted CDM+Baryon growth rate
+        /// @param[in] k Fourier wavenumber in h/Mpc
+        /// @param[in] a Scalefactor
+        //====================================================================
+        double LinearTransferData::get_cdm_baryon_growth_rate(double k, double a) const {
+            double deltaB_over_delta_CDM = get_baryon_transfer_function(k, a) / get_cdm_transfer_function(k, a);
+            double fac = Omegab / OmegaCDM * deltaB_over_delta_CDM;
+            return (get_cdm_growth_rate(k, a) + fac * get_baryon_growth_rate(k, a)) / (1.0 + fac);
         }
 
         //====================================================================
@@ -555,9 +618,19 @@ namespace FML {
         }
 
         //====================================================================
-        /// Primordial power-spectrum in units of (Mpc/h)^3
+        /// Total (CDM+b+nu) growth rate
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
+        //====================================================================
+        double LinearTransferData::get_total_growth_rate(double k, double a) const {
+            double z = 1.0 / a - 1.0;
+            return -total_transfer_function_spline.deriv_x(z, std::log(k)) /
+                   total_transfer_function_spline(z, std::log(k)) / a;
+        }
+
+        //====================================================================
+        /// Primordial power-spectrum today in units of (Mpc/h)^3
+        /// @param[in] k Fourier wavenumber in h/Mpc
         //====================================================================
         double LinearTransferData::get_primordial_power_spectrum(double k) const {
             return 2.0 * M_PI * M_PI / (k * k * k) * As * std::pow(k * h / kpivot_mpc, ns - 1.0);
