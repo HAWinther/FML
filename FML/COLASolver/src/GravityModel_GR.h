@@ -59,6 +59,7 @@ class GravityModelGR final : public GravityModel<NDIM> {
         GravityModel<NDIM>::info();
         if (FML::ThisTask == 0) {
             std::cout << "#=====================================================\n";
+            std::cout << "\n";
         }
     }
 };

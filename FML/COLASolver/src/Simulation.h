@@ -50,36 +50,36 @@ class NBodySimulation {
     const double H0_hmpc = 1.0 / 2997.92458;
 
     //=============================================================================
-    // Everything related to the background evolution
+    /// Everything related to the background evolution
     //=============================================================================
     std::shared_ptr<BackgroundCosmology> cosmo;
 
     //=============================================================================
-    // Everything related to gravity: growth factors, computing forces
+    /// Everything related to gravity: growth factors, computing forces
     //=============================================================================
     std::shared_ptr<GravityModel<NDIM>> grav;
 
     //=============================================================================
-    // Everything related to linear perturbations, transfer functions, initial pofk
-    // This is only used if ic_type_of_input == transferinfofile
+    /// Everything related to linear perturbations, transfer functions, initial pofk
+    /// This is only used if ic_type_of_input == transferinfofile
     //=============================================================================
     std::shared_ptr<LinearTransferData> transferdata;
 
     //=============================================================================
-    // A copy of the simulation parameters just to have it. All parameters
-    // *should* be read in from this during read_parameters
+    /// A copy of the simulation parameters just to have it. All parameters
+    /// *should* be read in from this during read_parameters
     //=============================================================================
     std::shared_ptr<ParameterMap> parameters;
 
     //=============================================================================
-    // All the particles
+    /// All the particles
     //=============================================================================
     MPIParticles<T> part;
 
     //=============================================================================
-    // The initial density field delta_cb(zini,k) computed with the same Nmesh
-    // as the forces (used for linear massive neutrinos - not allocated otherwise)
-    // NB: we cannot use phi_1LPT_ini_fourier below as it might have a different gridsize
+    /// The initial density field delta_cb(zini,k) computed with the same Nmesh
+    /// as the forces (used for linear massive neutrinos - not allocated otherwise)
+    /// NB: we cannot use phi_1LPT_ini_fourier below as it might have a different gridsize
     //=============================================================================
     FFTWGrid<NDIM> initial_density_field_fourier;
 
@@ -224,25 +224,25 @@ class NBodySimulation {
     // Compute the delta_t to use for each of the steps
     std::pair<std::vector<double>, std::vector<double>> compute_deltatime_KDK(double amin, double amax, int nsteps);
 
-    // Read in and set parameters we need
+    /// Read in and set parameters we need
     void read_parameters(ParameterMap & param);
 
-    // Initialize simulation. Create initial conditions. Make it ready to run
+    /// Initialize simulation. Create initial conditions. Make it ready to run
     void init();
 
-    // This method reconstructs delta(k,zini) and uses that to make IC from scratch
+    /// This method reconstructs delta(k,zini) and uses that to make IC from scratch
     void reconstruct_ic_from_particles(FFTWGrid<NDIM> & delta_fourier);
 
-    // This method simply read particles and uses them for the simulation
+    /// This method simply read particles and uses them for the simulation
     void read_ic();
 
-    // Run simulation
+    /// Run simulation
     void run();
 
-    // From particles to density field
+    /// From particles to density field
     void compute_density_field_fourier(FFTWGrid<NDIM> & density_grid_fourier, double a);
 
-    // Compute stuff on the fly and output
+    /// Compute stuff on the fly and output
     void analyze_and_output(int ioutput, double redshift);
 
     // Generation of IC

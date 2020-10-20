@@ -38,6 +38,8 @@ class GravityModelFofR final : public GravityModel<NDIM> {
         if (FML::ThisTask == 0) {
             std::cout << "# fofr0    : " << fofr0 << "\n";
             std::cout << "# nfofr    : " << nfofr << "\n";
+            std::cout << "#=====================================================\n";
+            std::cout << "\n";
         }
     }
 
