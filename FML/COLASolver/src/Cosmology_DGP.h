@@ -21,7 +21,9 @@ class BackgroundCosmologyDGP final : public BackgroundCosmology {
         BackgroundCosmology::read_parameters(param);
         OmegaRC = param.get<double>("cosmology_dgp_OmegaRC");
         this->OmegaLambda = 0.0;
-        this->OmegaK = 1.0 - std::pow(std::sqrt(OmegaRC) + std::sqrt(OmegaRC + OmegaM + OmegaRtot),2.0);
+        this->OmegaK = 1.0 - std::pow(std::sqrt(OmegaRC) +
+                                          std::sqrt(OmegaRC + OmegaCDM + Omegab + OmegaR + this->get_rhoNu_exact(1.0)),
+                                      2.0);
     }
 
     //========================================================================
@@ -46,17 +48,19 @@ class BackgroundCosmologyDGP final : public BackgroundCosmology {
     // Hubble function
     //========================================================================
     double HoverH0_of_a(double a) const override {
-        double tmp = std::sqrt(OmegaRC) + std::sqrt(OmegaRC + OmegaM / (a * a * a) + OmegaRtot / (a * a * a * a));
+        double tmp = std::sqrt(OmegaRC) + std::sqrt(OmegaRC + (OmegaCDM + Omegab) / (a * a * a) +
+                                                    OmegaR / (a * a * a * a) + this->get_rhoNu_exact(a));
         return std::sqrt(OmegaK / (a * a) + tmp * tmp);
     }
 
     double dlogHdloga_of_a(double a) const override {
-        double tmp1 = std::sqrt(OmegaRC + OmegaM / (a * a * a) + OmegaRtot / (a * a * a * a));
+        double tmp1 = std::sqrt(OmegaRC + (OmegaCDM + Omegab) / (a * a * a) + OmegaR / (a * a * a * a) +
+                                this->get_rhoNu_exact(a));
         double tmp2 = std::sqrt(OmegaRC) + tmp1;
         double H2 = OmegaK / (a * a) + tmp2 * tmp2;
-        return -OmegaK / (a * a * H2) +
-               tmp2 * 1.0 / (2.0 * tmp1) *
-                   (-3.0 * OmegaM / (a * a * a * H2) - 4.0 * OmegaRtot / (a * a * a * a * H2));
+        return -OmegaK / (a * a * H2) + tmp2 * 1.0 / (2.0 * tmp1) *
+                                            (-3.0 * (OmegaCDM + Omegab) / (a * a * a * H2) -
+                                             4.0 * OmegaR / (a * a * a * a * H2) + this->get_drhoNudloga_exact(a) / H2);
     }
 
   protected:

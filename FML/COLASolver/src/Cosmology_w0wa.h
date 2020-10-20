@@ -45,14 +45,16 @@ class BackgroundCosmologyw0waCDM final : public BackgroundCosmology {
     // Hubble function
     //========================================================================
     double HoverH0_of_a(double a) const override {
-        return std::sqrt(OmegaK / (a * a) + OmegaM / (a * a * a) + OmegaRtot / (a * a * a * a) +
+        return std::sqrt(OmegaK / (a * a) + (OmegaCDM + Omegab) / (a * a * a) + OmegaR / (a * a * a * a) +
+                         this->get_rhoNu_exact(a) +
                          OmegaLambda * std::exp(3.0 * wa * (a - 1) - 3 * (1 + w0 + wa) * std::log(a)));
     }
 
     double dlogHdloga_of_a(double a) const override {
         double E = HoverH0_of_a(a);
         return 1.0 / (2.0 * E * E) *
-               (-2.0 * OmegaK / (a * a) - 3.0 * OmegaM / (a * a * a) - 4.0 * OmegaRtot / (a * a * a * a) +
+               (-2.0 * OmegaK / (a * a) - 3.0 * (OmegaCDM + Omegab) / (a * a * a) - 4.0 * OmegaR / (a * a * a * a) +
+                +this->get_drhoNudloga_exact(a) +
                 OmegaLambda * std::exp(3.0 * wa * (a - 1) - 3 * (1 + w0 + wa) * std::log(a)) *
                     (3.0 * wa * a - 3.0 * (1 + w0 + wa)));
     }

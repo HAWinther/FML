@@ -15,13 +15,15 @@ class BackgroundCosmologyLCDM final : public BackgroundCosmology {
     BackgroundCosmologyLCDM() { name = "LCDM"; }
 
     double HoverH0_of_a(double a) const override {
-        return std::sqrt(OmegaLambda + OmegaK / (a * a) + OmegaM / (a * a * a) + OmegaRtot / (a * a * a * a));
+        return std::sqrt(OmegaLambda + OmegaK / (a * a) + (OmegaCDM + Omegab) / (a * a * a) + OmegaR / (a * a * a * a) +
+                         this->get_rhoNu_exact(a));
     }
 
     double dlogHdloga_of_a(double a) const override {
         double E = HoverH0_of_a(a);
         return 1.0 / (2.0 * E * E) *
-               (-2.0 * OmegaK / (a * a) - 3.0 * OmegaM / (a * a * a) - 4.0 * OmegaRtot / (a * a * a * a));
+               (-2.0 * OmegaK / (a * a) - 3.0 * (OmegaCDM + Omegab) / (a * a * a) - 4.0 * OmegaR / (a * a * a * a) +
+                this->get_drhoNudloga_exact(a));
     }
 
     void info() const override {
