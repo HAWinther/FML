@@ -640,7 +640,7 @@ namespace FML {
 
                 // To fix issues appearing when we are exactly on the boundary
                 if(x == 1.0) x = std::nextafter(x, PosType(0.0));
-                if(x == 0.0) x = std::nextafter(x, PosType(1.0));
+                if(x == 0.0) x = std::numeric_limits<PosType>::min();
 
                 if (x >= x_max_per_task[ThisTask]) {
                     int taskid = ThisTask;
