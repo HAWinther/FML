@@ -16,6 +16,7 @@
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/RandomFields/GaussianRandomField.h>
 #include <FML/RandomFields/NonLocalGaussianRandomField.h>
+#include <FML/Timing/Timings.h>
 
 namespace FML {
 
@@ -532,13 +533,16 @@ namespace FML {
             constexpr bool free_force_grids = false;
 
             // Interpolate force to particle positions
-            std::array<std::vector<double>, N> force;
             for (int idim = 0; idim < N; idim++) {
                 force_grid[idim].communicate_boundaries();
-                FML::INTERPOLATION::interpolate_grid_to_particle_positions<N, T>(
-                    force_grid[idim], p, NumPart, force[idim], interpolation_method);
-                if (free_force_grids)
+            }
+            std::array<std::vector<double>, N> force;
+            FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N, T>(
+                force_grid, p, NumPart, force, interpolation_method);
+            if (free_force_grids) {
+                for (int idim = 0; idim < N; idim++) {
                     force_grid[idim].free();
+                }
             }
 
             double max_dvel = 0.0;
@@ -599,9 +603,9 @@ namespace FML {
         /// @param[in] box The boxsize (only for prining maximum displacement)
         /// @param[in] zini The initial redshift
         /// @param[in] velocity_norms A vector of the factors we need to multiply the nLPT displacement fields by to get
-        /// velocities. E.g. $100 {\rm Box_in_Mpch} f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini}$ to get
-        /// peculiar velocities in km/s and $f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini}^2$ to get the
-        /// velocities we use as the fiducial choice in N-body. The order is: 1LPT, 2LPT, 3LPTa, 3LPTb
+        /// velocities. E.g. \f$ 100 {\rm Box_in_Mpch} f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini} \f$ to
+        /// get peculiar velocities in km/s and \f$ f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini}^2 \f$ to get
+        /// the velocities we use as the fiducial choice in N-body. The order is: 1LPT, 2LPT, 3LPTa, 3LPTb
         ///
         //=====================================================================
         template <int N, class T>
@@ -682,9 +686,9 @@ namespace FML {
         /// @param[in] box The boxsize (only for prining maximum displacement)
         /// @param[in] zini The initial redshift
         /// @param[in] velocity_norms A vector of the factors we need to multiply the nLPT displacement fields by to get
-        /// velocities. E.g. $100 {\rm Box_in_Mpch} f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini}$ to get
-        /// peculiar velocities in km/s and $f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini}^2$ to get the
-        /// velocities we use as the fiducial choice in N-body.
+        /// velocities. E.g. \f$ 100 {\rm Box_in_Mpch} f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini} \f$ to
+        /// get peculiar velocities in km/s and \f$ f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini}^2 \f$ to get
+        /// the velocities we use as the fiducial choice in N-body.
         ///
         //=====================================================================
         template <int N, class T>
@@ -792,14 +796,14 @@ namespace FML {
                 // Generate the 3LPT potentials phi_3LPTa, phi_3LPTb plus 3LPT curl term
                 // We ignore the curl term in this implementation for simplicity
                 const bool ignore_3LPT_curl_term = true;
-                std::vector<FFTWGrid<N>> phi_3LPT_Avec_fourier;
-                FML::COSMOLOGY::LPT::compute_3LPT_potential_fourier(delta_fourier,
-                                                                    phi_1LPT,
-                                                                    phi_2LPT,
-                                                                    phi_3LPTa,
-                                                                    phi_3LPTb,
-                                                                    phi_3LPT_Avec_fourier,
-                                                                    ignore_3LPT_curl_term);
+                std::array<FFTWGrid<N>, N> phi_3LPT_Avec_fourier;
+                FML::COSMOLOGY::LPT::compute_3LPT_potential_fourier<N>(delta_fourier,
+                                                                       phi_1LPT,
+                                                                       phi_2LPT,
+                                                                       phi_3LPTa,
+                                                                       phi_3LPTb,
+                                                                       phi_3LPT_Avec_fourier,
+                                                                       ignore_3LPT_curl_term);
             }
 
             //================================================================
@@ -808,27 +812,27 @@ namespace FML {
             //================================================================
             auto comp_displacement = [&]([[maybe_unused]] int nLPT,
                                          FFTWGrid<N> & phi_nLPT,
-                                         std::vector<std::vector<FML::GRID::FloatType>> & displacements_nLPT) {
+                                         std::array<std::vector<FML::GRID::FloatType>, N> & displacements_nLPT) {
                 // Generate Psi from phi
-                std::vector<FFTWGrid<N>> Psi_nLPT_vector;
-                FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector(phi_nLPT, Psi_nLPT_vector);
+                std::array<FFTWGrid<N>, N> Psi_nLPT_vector;
+                FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector<N>(phi_nLPT, Psi_nLPT_vector);
+                for (int idim = 0; idim < N; idim++) {
+                    Psi_nLPT_vector[idim].communicate_boundaries();
+                }
                 phi_nLPT.free();
 
                 // Interpolate it to particle Lagrangian positions
-                for (int idim = 0; idim < N; idim++) {
-                    FML::INTERPOLATION::interpolate_grid_to_particle_positions(Psi_nLPT_vector[idim],
-                                                                               part.get_particles_ptr(),
-                                                                               part.get_npart(),
-                                                                               displacements_nLPT[idim],
-                                                                               interpolation_method);
-                    Psi_nLPT_vector[idim].free();
-                }
+                FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N, T>(Psi_nLPT_vector,
+                                                                                        part.get_particles_ptr(),
+                                                                                        part.get_npart(),
+                                                                                        displacements_nLPT,
+                                                                                        interpolation_method);
             };
 
             auto add_displacement = [&]([[maybe_unused]] int nLPT,
                                         char type,
-                                        std::vector<std::vector<FML::GRID::FloatType>> & displacements_nLPT,
-                                        double vfac_nLPT) {
+                                        std::array<std::vector<FML::GRID::FloatType>, N> & displacements_nLPT,
+                                        double vfac_nLPT) -> void {
                 // Generate Psi from phi
                 // Add displacement to particle position
                 double max_disp_nLPT = 0.0;
@@ -977,13 +981,13 @@ namespace FML {
 
             // Compute and add displacements
             // NB: we must do this in one go as add_displacement changes the position of the particles
-            std::vector<std::vector<FML::GRID::FloatType>> displacements_1LPT(N);
+            std::array<std::vector<FML::GRID::FloatType>, N> displacements_1LPT;
             if (LPT_order >= 1) {
                 const int nLPT = 1;
                 comp_displacement(nLPT, phi_1LPT, displacements_1LPT);
             }
 
-            std::vector<std::vector<FML::GRID::FloatType>> displacements_2LPT(N);
+            std::array<std::vector<FML::GRID::FloatType>, N> displacements_2LPT;
             if (LPT_order >= 2) {
                 const int nLPT = 2;
                 // Store potential if asked for
@@ -992,7 +996,7 @@ namespace FML {
                 comp_displacement(nLPT, phi_2LPT, displacements_2LPT);
             }
 
-            std::vector<std::vector<FML::GRID::FloatType>> displacements_3LPTa(N);
+            std::array<std::vector<FML::GRID::FloatType>, N> displacements_3LPTa;
             if (LPT_order >= 3) {
                 const int nLPT = 3;
                 // Store potential if asked for
@@ -1001,7 +1005,7 @@ namespace FML {
                 comp_displacement(nLPT, phi_3LPTa, displacements_3LPTa);
             }
 
-            std::vector<std::vector<FML::GRID::FloatType>> displacements_3LPTb(N);
+            std::array<std::vector<FML::GRID::FloatType>, N> displacements_3LPTb;
             if (LPT_order >= 3) {
                 const int nLPT = 3;
                 // Store potential if asked for
@@ -1013,29 +1017,37 @@ namespace FML {
             if (LPT_order >= 1) {
                 const int nLPT = 1;
                 add_displacement(nLPT, 0, displacements_1LPT, velocity_norms[0]);
-                displacements_1LPT.clear();
-                displacements_1LPT.shrink_to_fit();
+                for (auto & d : displacements_1LPT) {
+                    d.clear();
+                    d.shrink_to_fit();
+                }
             }
 
             if (LPT_order >= 2) {
                 const int nLPT = 2;
                 add_displacement(nLPT, 0, displacements_2LPT, velocity_norms[1]);
-                displacements_2LPT.clear();
-                displacements_2LPT.shrink_to_fit();
+                for (auto & d : displacements_2LPT) {
+                    d.clear();
+                    d.shrink_to_fit();
+                }
             }
 
             if (LPT_order >= 3) {
                 const int nLPT = 3;
                 add_displacement(nLPT, 'a', displacements_3LPTa, velocity_norms[2]);
-                displacements_3LPTa.clear();
-                displacements_3LPTa.shrink_to_fit();
+                for (auto & d : displacements_3LPTa) {
+                    d.clear();
+                    d.shrink_to_fit();
+                }
             }
 
             if (LPT_order >= 3) {
                 const int nLPT = 3;
                 add_displacement(nLPT, 'b', displacements_3LPTb, velocity_norms[3]);
-                displacements_3LPTb.clear();
-                displacements_3LPTb.shrink_to_fit();
+                for (auto & d : displacements_3LPTb) {
+                    d.clear();
+                    d.shrink_to_fit();
+                }
             }
 
             // Communicate particles (they might have left the current task)

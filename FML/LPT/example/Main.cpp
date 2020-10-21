@@ -124,12 +124,12 @@ int main() {
     // Generate displacement field Psi = Dphi
     // 3+3 FFTS
     //=====================================================
-    std::vector<FFTWGrid<Ndim>> Psi_1LPT_vector;
-    FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector(phi_1LPT, Psi_1LPT_vector);
+    std::array<FFTWGrid<Ndim>, Ndim> Psi_1LPT_vector;
+    FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector<Ndim>(phi_1LPT, Psi_1LPT_vector);
     phi_1LPT.free();
 
-    std::vector<FFTWGrid<Ndim>> Psi_2LPT_vector;
-    FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector(phi_2LPT, Psi_2LPT_vector);
+    std::array<FFTWGrid<Ndim>, Ndim> Psi_2LPT_vector;
+    FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector<Ndim>(phi_2LPT, Psi_2LPT_vector);
     phi_2LPT.free();
 
     //=====================================================
@@ -147,28 +147,20 @@ int main() {
     // cell is at the particle position and save time though
     // we don't do this here)
     //=====================================================
-    std::vector<std::vector<FML::GRID::FloatType>> displacements_1LPT(Ndim);
-    for (int idim = Ndim - 1; idim >= 0; idim--) {
-        if (FML::ThisTask == 0)
-            std::cout << "Assigning particles for idim = " << idim << "\n";
-        FML::INTERPOLATION::interpolate_grid_to_particle_positions(Psi_1LPT_vector[idim],
-                                                                   part.get_particles_ptr(),
-                                                                   part.get_npart(),
-                                                                   displacements_1LPT[idim],
-                                                                   interpolation_method);
+    std::array<std::vector<FML::GRID::FloatType>, Ndim> displacements_1LPT;
+    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<Ndim, Particle>(
+        Psi_1LPT_vector, part.get_particles_ptr(), part.get_npart(), displacements_1LPT, interpolation_method);
+    for (int idim = 0; idim < Ndim; idim++) {
         Psi_1LPT_vector[idim].free();
     }
 
     //=====================================================
     // Interpolate 2LPT displacement field to particle positions
     //=====================================================
-    std::vector<std::vector<FML::GRID::FloatType>> displacements_2LPT(Ndim);
-    for (int idim = Ndim - 1; idim >= 0; idim--) {
-        FML::INTERPOLATION::interpolate_grid_to_particle_positions(Psi_2LPT_vector[idim],
-                                                                   part.get_particles_ptr(),
-                                                                   part.get_npart(),
-                                                                   displacements_2LPT[idim],
-                                                                   interpolation_method);
+    std::array<std::vector<FML::GRID::FloatType>, Ndim> displacements_2LPT;
+    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<Ndim, Particle>(
+        Psi_2LPT_vector, part.get_particles_ptr(), part.get_npart(), displacements_2LPT, interpolation_method);
+    for (int idim = 0; idim < Ndim; idim++) {
         Psi_2LPT_vector[idim].free();
     }
 

@@ -32,7 +32,7 @@ namespace FML {
 
             template <int N>
             void from_LPT_potential_to_displacement_vector(const FFTWGrid<N> & phi_fourier,
-                                                           std::vector<FFTWGrid<N>> & psi_real,
+                                                           std::array<FFTWGrid<N>, N> & psi_real,
                                                            double DoverDini = 1.0);
 
             template <int N>
@@ -48,7 +48,7 @@ namespace FML {
                                                 FFTWGrid<N> & phi_2LPT_fourier,
                                                 FFTWGrid<N> & phi_3LPT_a_fourier,
                                                 FFTWGrid<N> & phi_3LPT_b_fourier,
-                                                std::vector<FFTWGrid<N>> & phi_3LPT_Avec_fourier,
+                                                std::array<FFTWGrid<N>, N> & phi_3LPT_Avec_fourier,
                                                 bool ignore_curl_term);
 
             // Augmented LPT potential (Kitaura and Hess 2013)
@@ -70,14 +70,14 @@ namespace FML {
             template <int N>
             void from_LPT_potential_to_displacement_vector_scaledependent(
                 const FFTWGrid<N> & phi_fourier,
-                std::vector<FFTWGrid<N>> & psi_real,
+                std::array<FFTWGrid<N>, N> & psi_real,
                 std::function<double(double)> growth_function_ratio);
 
             // Computes it all for 3LPT as we need lower order results and return Psi and dPsidt
             template <int N>
             void compute_3LPT_displacement_field(const FFTWGrid<N> & delta_fourier,
-                                                 std::vector<FFTWGrid<N>> & Psi,
-                                                 std::vector<FFTWGrid<N>> & dPsidt,
+                                                 std::array<FFTWGrid<N>, N> & Psi,
+                                                 std::array<FFTWGrid<N>, N> & dPsidt,
                                                  double dlogDdt,
                                                  bool ignore_curl_term);
 
@@ -102,7 +102,7 @@ namespace FML {
             template <int N>
             void
             from_LPT_potential_to_displacement_vector_scaledependent(const FFTWGrid<N> & phi,
-                                                                     std::vector<FFTWGrid<N>> & psi,
+                                                                     std::array<FFTWGrid<N>, N> & psi,
                                                                      std::function<double(double)> DoverDini_of_k) {
 
                 // We require phi to exist and if psi exists it must have the same size as phi
@@ -122,7 +122,6 @@ namespace FML {
                 auto Local_x_start = phi.get_local_x_start();
 
                 // Create the output grids if they don't exist already
-                psi.resize(N);
                 for (int idim = 0; idim < N; idim++) {
                     if (psi[idim].get_nmesh() == 0) {
                         psi[idim] = FFTWGrid<N>(Nmesh, nleft, nright);
@@ -203,7 +202,7 @@ namespace FML {
             //=================================================================================
             template <int N>
             void from_LPT_potential_to_displacement_vector(const FFTWGrid<N> & phi,
-                                                           std::vector<FFTWGrid<N>> & psi,
+                                                           std::array<FFTWGrid<N>, N> & psi,
                                                            double DoverDini) {
 
                 // We require phi to exist and if psi exists it must have the same size as phi
@@ -222,7 +221,6 @@ namespace FML {
                 auto Local_x_start = phi.get_local_x_start();
 
                 // Create the output grids if they don't exist already
-                psi.resize(N);
                 for (int idim = 0; idim < N; idim++) {
                     if (psi[idim].get_nmesh() == 0) {
                         psi[idim] = FFTWGrid<N>(Nmesh, nleft, nright);
@@ -591,8 +589,8 @@ namespace FML {
             //===========================================================================================
             template <int N>
             void compute_3LPT_displacement_field(const FFTWGrid<N> & delta_fourier,
-                                                 std::vector<FFTWGrid<N>> & Psi,
-                                                 std::vector<FFTWGrid<N>> & dPsidt,
+                                                 std::array<FFTWGrid<N>, N> & Psi,
+                                                 std::array<FFTWGrid<N>, N> & dPsidt,
                                                  double dlogDdt,
                                                  bool ignore_curl_term) {
 
@@ -606,7 +604,7 @@ namespace FML {
                 auto Local_nx = delta_fourier.get_local_nx();
                 auto Local_x_start = delta_fourier.get_local_x_start();
 
-                std::vector<FFTWGrid<N>> phi_3LPT_Avec_fourier;
+                std::array<FFTWGrid<N>, N> phi_3LPT_Avec_fourier;
                 FFTWGrid<N> phi_1LPT_fourier;
                 FFTWGrid<N> phi_2LPT_fourier;
                 FFTWGrid<N> phi_3LPT_a_fourier;
@@ -761,7 +759,7 @@ namespace FML {
                                                 FFTWGrid<N> & phi_2LPT_fourier,
                                                 FFTWGrid<N> & phi_3LPT_a_fourier,
                                                 FFTWGrid<N> & phi_3LPT_b_fourier,
-                                                std::vector<FFTWGrid<N>> & phi_3LPT_Avec_fourier,
+                                                std::array<FFTWGrid<N>, N> & phi_3LPT_Avec_fourier,
                                                 bool ignore_curl_term) {
 
                 // Only works for N = 2 and N = 3
@@ -911,7 +909,6 @@ namespace FML {
                 phi_3LPT_b_fourier = FFTWGrid<N>(Nmesh, nleft, nright);
                 phi_3LPT_b_fourier.add_memory_label("FFTWGrid::compute_3LPT_potential_fourier::phi_3LPT_b_fourier");
                 // And then finally the A-terms (for N=2 we only have 1 component)
-                phi_3LPT_Avec_fourier = std::vector<FFTWGrid<N>>(N);
                 if (not ignore_curl_term)
                     for (int idim = 0; idim < N; idim++) {
                         phi_3LPT_Avec_fourier[idim] = FFTWGrid<N>(Nmesh, nleft, nright);
@@ -1196,7 +1193,8 @@ namespace FML {
             /// Compute 1,2,3LPT growth-factors in simple modified gravity models that have a GeffG(a) and spline them
             /// The growth factors are normalized such that D1LPT = 1 at zini
             /// We assume initial conditions as in EdS: D1LPT=1, D2LPT = -3/7, D3LPTa = -1/3 and D3LPTb = 5/21
-            /// NB: There should be a modified 2LPT+ kernel factor in general which we don't include here (model dependent)
+            /// NB: There should be a modified 2LPT+ kernel factor in general which we don't include here (model
+            /// dependent)
             ///
             /// @param[in] OmegaM Matter density parameter at z=0
             /// @param[in] zini The redshift we want D1LPT = 1
@@ -1345,7 +1343,7 @@ namespace FML {
             /// to get phi_iLPT(z,q). Then we transport the particles back to their original CPU given by the particles
             /// Lagrangian position q and assign the displacement field before we move them back to their eulerian
             /// positions. This can be done more efficiently (we don't need to do this much communiation) but this will
-            /// come at the expense of a lot more code so fuck it. 
+            /// come at the expense of a lot more code so fuck it.
             /// In practice to be efficient we should ideally do *all* orders at the same time otherwise we need to
             /// swap and do communication many times. This is how its done in our COLA code. So this method mainly
             /// shows how to do it.
@@ -1403,20 +1401,17 @@ namespace FML {
                 part.communicate_particles();
 
                 // Use initial LPT potential + growth factor to compute displacement field at present time
-                std::vector<FFTWGrid<N>> psi_LPT_vector;
+                std::array<FFTWGrid<N>, N> psi_LPT_vector;
                 FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector_scaledependent(
                     LPT_potential_fourier, psi_LPT_vector, DoverDini_of_k);
-
-                // Interpolate to particle positions after which we have Psi(q,t) in displacements
-                std::vector<std::vector<FML::GRID::FloatType>> displacements(N);
                 for (int idim = 0; idim < N; idim++) {
-                    if (FML::ThisTask == 0)
-                        std::cout << "Assigning particles for idim = " << idim << "\n";
-                    FML::INTERPOLATION::interpolate_grid_to_particle_positions(psi_LPT_vector[idim],
-                                                                               part.get_particles_ptr(),
-                                                                               part.get_npart(),
-                                                                               displacements[idim],
-                                                                               interpolation_method);
+                    psi_LPT_vector[idim].communicate_boundaries();
+                }
+                // Interpolate to particle positions after which we have Psi(q,t) in displacements
+                std::array<std::vector<FML::GRID::FloatType>, N> displacements;
+                FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions(
+                    psi_LPT_vector, part.get_particles_ptr(), part.get_npart(), displacements, interpolation_method);
+                for (int idim = 0; idim < N; idim++) {
                     psi_LPT_vector[idim].free();
                 }
 
