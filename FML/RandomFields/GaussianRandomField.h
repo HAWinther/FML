@@ -8,6 +8,10 @@
 #include <numeric>
 #include <vector>
 
+#ifdef USE_GSL
+#include <FML/Spline/Spline.h>
+#endif
+
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/RandomGenerator/RandomGenerator.h>
 
@@ -244,7 +248,7 @@ namespace FML {
                         grid.get_fourier_wavevector_and_norm_by_index(index, kvec, kmag);
 
                         // Assign the field. Note kmag is dimensionless here. Units taken care of in Powerspectrum
-                        double delta_norm = sqrt(norm * Pofk_of_kBox_over_volume(kmag));
+                        double delta_norm = std::sqrt(norm * Pofk_of_kBox_over_volume(kmag));
                         std::complex<double> delta = delta_norm * std::exp(std::complex<double>(0, 1) * phase);
                         std::complex<double> delta_conj = std::conj(delta);
 
