@@ -26,20 +26,25 @@ Most of the library is in forms of header files that you just need to include in
  - USE\_LUA : If you have the LUA library. You will have to provide the include and lib paths in the Makefile.
  - USE\_PYTHON : If you have Python with Matplotlib installed. You will have to provide the include and lib paths in the Makefile.
 
-In addition to these we have some other options that can be useful:
-
- - USE\_SANITIZER : Compile with -fsanitize=address to check for bad memory accesses. Useful for debugging.
- - USE\_DEBUG : Do some extra asserts, print some more info from the algorithms while running.
- - USE\_MEMORYLOG : Log allocations over a certain size (see the MemoryLog header). Useful to map out the memory footprint of the code. Currently only a few classes implement this.
-
 Some define statements that can be added to change how the code works:
 
  - SINGLE\_PRECISION\_FFTW : Use float instead of double for FFTWGrid and FFTs in general. FFTW needs to be compiled with float support to use this.
  - LONG\_DOUBLE\_PRECISION\_FFTW : Use long double instead of double for FFTWGrid and FFTs in general. FFTW needs to be compiled with long double support to use this.
  - NO\_AUTO\_FML\_SETUP : FML is automatically initialized and finalized in the code. This includes taking care of MPI and FFTW initialization. If you don't want this add this define. NB: if you use this you should know how FFTW should be initialized with MPI and/or threads to avoid issues. You will then also *need* to call FML::init\_fml() after initializing MPI and FFTW to ensure that the few global variables we use are set.
+ - USE\_MEMORYLOG : Log allocations over a certain size (see the MemoryLog header). Useful to map out the memory footprint of the code. Currently only a few classes implement this.
 
+In addition to these we have some Makefile options that can be useful:
+
+ - USE\_SANITIZER : Compile with -fsanitize=address to check for bad memory accesses. Useful for debugging.
 You will also have to provide the include path to the folder containing FML and in VPATH provide the path to the cpp files that needs to be compiled with the code.
+ - USE\_DEBUG : Do some extra asserts, print some more info from the algorithms while running.
 
 # Examples
 
 Almost every folders within FML contains examples, e.g. [FFTWGrid/example](https://github.com/HAWinther/FML/tree/master/FML/FFTWGrid/example) ; [MultigridSolver/examples](https://github.com/HAWinther/FML/tree/master/FML/MultigridSolver/examples) ; [MPIParticles/example](https://github.com/HAWinther/FML/tree/master/FML/MPIParticles/example) etc., for examples on how to use the different methods and classes. 
+
+# Known issues
+
+On some of the Intel compilers there is an issue with std::variant (which is used in ParameterMap.cpp). If compilation of this fails with the error (internal error: assertion failed: node\_has\_side\_effects: bad node kind) then one option is simply to comment out the body of info() in ParameterMap.cpp. This means you won't get to print the containts of the map, but everything else works well. Intel also does alot of agressive optimizations by default so using the compiler flag -fp-model=precise is reccomended as the code is mainly tested using clang and gcc.
+
+
