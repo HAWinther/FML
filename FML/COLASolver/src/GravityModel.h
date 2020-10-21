@@ -15,8 +15,8 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <vector>
 #include <memory>
+#include <vector>
 
 using LinearTransferData = FML::FILEUTILS::LinearTransferData;
 
@@ -53,7 +53,7 @@ class GravityModel {
     // Ranges for splines of growth-factors
     const int npts_loga = 200;
     double alow = 1.0 / 500.0;
-    const double ahigh = 1.0;
+    const double ahigh = 2.0;
     const int npts_logk = 100;
     const double koverH0low = 1e-4 / H0_hmpc;
     const double koverH0high = 10.0 / H0_hmpc;
@@ -153,7 +153,7 @@ class GravityModel {
               "D3b(a,k)  (source terms)  (Output for k = "
            << k << " h/Mpc)\n";
         for (int i = 0; i < npts_loga; i++) {
-            double loga = std::log(alow) + std::log(ahigh / alow) * i / double(npts_loga);
+            double loga = std::log(alow) + std::log(ahigh / alow) * i / double(npts_loga-1);
             double a = std::exp(loga);
             fp << std::setw(15) << a << "  ";
             fp << std::setw(15) << GeffOverG(a, koverH0) << " ";
@@ -285,7 +285,8 @@ class GravityModel {
                 throw std::runtime_error(
                     "Transferdata provided are only up to z = " + std::to_string(zstart) +
                     ", but we want to start simulation at z = " + std::to_string(1.0 / aini - 1.0) +
-                    " Provide the required data, put OmegaMNu = 0.0 or set it so that we don't use scaledependent growth!");
+                    " Provide the required data, put OmegaMNu = 0.0 or set it so that we don't use scaledependent "
+                    "growth!");
                 aini = astart;
             }
         }
@@ -701,24 +702,22 @@ class GravityModel {
         // positions and returns this vector for all particles
         //======================================================================================
         auto generate_displacements = [&](const FFTWGrid<NDIM> & grid_fourier,
-                                          std::vector<std::vector<FML::GRID::FloatType>> & result,
+                                          std::array<std::vector<FML::GRID::FloatType>, NDIM> & result,
                                           std::function<double(double)> func) {
             timer.StartTiming("LPT potential -> Psi (FFTs)");
-            std::vector<FFTWGrid<NDIM>> grid_vector_real;
-            FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector_scaledependent(
+            std::array<FFTWGrid<NDIM>, NDIM> grid_vector_real;
+            FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector_scaledependent<NDIM>(
                 grid_fourier, grid_vector_real, func);
+            for (int idim = 0; idim < NDIM; idim++) {
+                grid_vector_real[idim].communicate_boundaries();
+            }
             timer.EndTiming("LPT potential -> Psi (FFTs)");
 
             // Compute at particle positions (this would be faster if we could do direct assignment
             // which we can by using Lagrangian position (we know how this is generated...))
             timer.StartTiming("Interpolation");
-            for (int idim = 0; idim < NDIM; idim++) {
-                FML::INTERPOLATION::interpolate_grid_to_particle_positions(grid_vector_real[idim],
-                                                                           part.get_particles_ptr(),
-                                                                           part.get_npart(),
-                                                                           result[idim],
-                                                                           interpolation_method);
-            }
+            FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM,T>(
+                grid_vector_real, part.get_particles_ptr(), part.get_npart(), result, interpolation_method);
             timer.EndTiming("Interpolation");
         };
 
@@ -726,7 +725,7 @@ class GravityModel {
         auto function_vel_1LPT = [&](double kBox) {
             double koverH0 = kBox / H0Box;
             double logkoverH0 = std::log(koverH0);
-            double factor = -1.5 * OmegaM * aold * GeffOverG(a, koverH0) * delta_time_kick;
+            double factor = -1.5 * OmegaM * aold * GeffOverG(aold, koverH0) * delta_time_kick;
             return factor * source_factor_1LPT(aold, koverH0) * D_1LPT_of_logkoverH0_loga(logkoverH0, logaold) /
                    D_1LPT_of_logkoverH0_loga(logkoverH0, logaini);
         };
@@ -743,7 +742,7 @@ class GravityModel {
         [[maybe_unused]] auto function_vel_2LPT = [&](double kBox) {
             double koverH0 = kBox / H0Box;
             double logkoverH0 = std::log(koverH0);
-            double factor = -1.5 * OmegaM * aold * GeffOverG(a, koverH0) * delta_time_kick;
+            double factor = -1.5 * OmegaM * aold * GeffOverG(aold, koverH0) * delta_time_kick;
             double D_1LPT = D_1LPT_of_logkoverH0_loga(logkoverH0, logaold);
             double D_2LPT = D_2LPT_of_logkoverH0_loga(logkoverH0, logaold);
             double D_2LPT_ini = D_2LPT_of_logkoverH0_loga(logkoverH0, logaini);
@@ -762,7 +761,7 @@ class GravityModel {
         [[maybe_unused]] auto function_vel_3LPTa = [&](double kBox) {
             double koverH0 = kBox / H0Box;
             double logkoverH0 = std::log(koverH0);
-            double factor = -1.5 * OmegaM * aold * GeffOverG(a, koverH0) * delta_time_kick;
+            double factor = -1.5 * OmegaM * aold * GeffOverG(aold, koverH0) * delta_time_kick;
             double D_1LPT = D_1LPT_of_logkoverH0_loga(logkoverH0, logaold);
             double D_3LPTa = D_3LPTa_of_logkoverH0_loga(logkoverH0, logaold);
             double D_3LPTa_ini = D_3LPTa_of_logkoverH0_loga(logkoverH0, logaini);
@@ -772,7 +771,7 @@ class GravityModel {
         [[maybe_unused]] auto function_vel_3LPTb = [&](double kBox) {
             double koverH0 = kBox / H0Box;
             double logkoverH0 = std::log(koverH0);
-            double factor = -1.5 * OmegaM * aold * GeffOverG(a, koverH0) * delta_time_kick;
+            double factor = -1.5 * OmegaM * aold * GeffOverG(aold, koverH0) * delta_time_kick;
             double D_1LPT = D_1LPT_of_logkoverH0_loga(logkoverH0, logaold);
             double D_2LPT = D_2LPT_of_logkoverH0_loga(logkoverH0, logaold);
             double D_3LPTb = D_3LPTb_of_logkoverH0_loga(logkoverH0, logaold);
@@ -883,7 +882,7 @@ class GravityModel {
             }
         }
 
-        std::vector<std::vector<FML::GRID::FloatType>> displacements(NDIM);
+        std::array<std::vector<FML::GRID::FloatType>, NDIM> displacements;
         auto multiply_by_one = []([[maybe_unused]] double kBox) { return 1.0; };
         generate_displacements(temp_grid, displacements, multiply_by_one);
 
@@ -1049,20 +1048,16 @@ class GravityModel {
         // particle positions and returns this vector for all particles
         //======================================================================================
         auto generate_displacements = [&](const FFTWGrid<NDIM> & grid_fourier,
-                                          std::vector<std::vector<FML::GRID::FloatType>> & result,
+                                          std::array<std::vector<FML::GRID::FloatType>, NDIM> & result,
                                           std::function<double(double)> func) {
-            std::vector<FFTWGrid<NDIM>> grid_vector_real;
-            FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector_scaledependent(
+            std::array<FFTWGrid<NDIM>, NDIM> grid_vector_real;
+            FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector_scaledependent<NDIM>(
                 grid_fourier, grid_vector_real, func);
-
-            // Compute at particle positions
             for (int idim = 0; idim < NDIM; idim++) {
-                FML::INTERPOLATION::interpolate_grid_to_particle_positions(grid_vector_real[idim],
-                                                                           part.get_particles_ptr(),
-                                                                           part.get_npart(),
-                                                                           result[idim],
-                                                                           interpolation_method);
+                grid_vector_real[idim].communicate_boundaries();
             }
+            FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM,T>(
+                grid_vector_real, part.get_particles_ptr(), part.get_npart(), result, interpolation_method);
         };
 
         auto function_vel_1LPT = [&](double kBox) {
@@ -1159,7 +1154,7 @@ class GravityModel {
             }
         }
 
-        std::vector<std::vector<FML::GRID::FloatType>> displacements(NDIM);
+        std::array<std::vector<FML::GRID::FloatType>, NDIM> displacements;
         auto multiply_by_one = []([[maybe_unused]] double kBox) { return 1.0; };
         generate_displacements(temp_grid, displacements, multiply_by_one);
 

@@ -15,12 +15,16 @@ class GravityModelFofR final : public GravityModel<NDIM> {
   protected:
     double fofr0{0.0};
     double nfofr{1.0};
+
     bool use_screening_method{true};
+    bool screening_enforce_largescale_linear{false};
+    double screening_linear_scale_hmpc{0.0};
 
   public:
     template <int N>
     using FFTWGrid = FML::GRID::FFTWGrid<N>;
     using ParameterMap = FML::UTILS::ParameterMap;
+    using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
     GravityModelFofR() : GravityModel<NDIM>("f(R)") {}
     GravityModelFofR(std::shared_ptr<BackgroundCosmology> cosmo)
@@ -38,6 +42,8 @@ class GravityModelFofR final : public GravityModel<NDIM> {
         if (FML::ThisTask == 0) {
             std::cout << "# fofr0    : " << fofr0 << "\n";
             std::cout << "# nfofr    : " << nfofr << "\n";
+            std::cout << "# Enforce correct linear evolution : " << screening_enforce_largescale_linear << "\n";
+            std::cout << "# Scale for which we enforce this  : " << screening_linear_scale_hmpc << " h/Mpc\n";
             std::cout << "#=====================================================\n";
             std::cout << "\n";
         }
@@ -103,6 +109,50 @@ class GravityModelFofR final : public GravityModel<NDIM> {
                                                                       screening_function_fofr,
                                                                       norm_poisson_equation * std::pow(H0Box / a, 2));
 
+            // Ensure that the large scales are behaving correctly
+            // We set delta_fifth_force => A * (1-f) + B * f
+            // i.e. we use the linear prediction on large sales and the
+            // screened prediction on small scales
+            if (screening_enforce_largescale_linear and screening_linear_scale_hmpc > 0.0) {
+
+                if (FML::ThisTask == 0) {
+                    std::cout << "Combining screened solution with linear solution\n";
+                    std::cout << "We use linear solution for k < " << screening_linear_scale_hmpc << " h/Mpc\n";
+                }
+
+                // Make a spline of the low-pass filter we use
+                const int npts = 1000;
+                const double kBoxmin = M_PI;
+                const double kBoxmax = M_PI * std::sqrt(NDIM) * density_fourier.get_nmesh();
+                const double kcutBox = screening_linear_scale_hmpc / this->H0_hmpc * H0Box;
+                std::vector<double> kBox(npts);
+                std::vector<double> f(npts);
+                for (int i = 0; i < npts; i++) {
+                    kBox[i] = kBoxmin + (kBoxmax - kBoxmin) * i / double(npts - 1);
+                    f[i] = std::exp(-0.5 * kBox[i] * kBox[i] / (kcutBox * kcutBox));
+                }
+                Spline f_spline(kBox, f, "Low-pass filter");
+
+                // Combine the screened and the linear solution together
+                auto Local_nx = density_fourier.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] std::array<double, NDIM> kvec;
+                    double kmag;
+                    for (auto && fourier_index : density_fourier.get_fourier_range(islice, islice + 1)) {
+                        density_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                        auto delta = density_fourier.get_fourier_from_index(fourier_index);
+                        auto delta_fifth_force = density_fifth_force.get_fourier_from_index(fourier_index);
+                        auto delta_fifth_force_linear = delta * (GeffOverG(a, kmag / H0Box) - 1.0);
+                        auto filter = f_spline(kmag);
+                        auto value = delta_fifth_force_linear * filter + delta_fifth_force * (1.0 - filter);
+                        density_fifth_force.set_fourier_from_index(fourier_index, value);
+                    }
+                }
+            }
+
         } else {
 
             // No screening - linear evolution
@@ -137,6 +187,8 @@ class GravityModelFofR final : public GravityModel<NDIM> {
         use_screening_method = param.get<bool>("gravity_model_screening");
         fofr0 = param.get<double>("gravity_model_fofr_fofr0");
         nfofr = param.get<double>("gravity_model_fofr_nfofr");
+        screening_enforce_largescale_linear = param.get<bool>("gravity_model_screening_enforce_largescale_linear");
+        screening_linear_scale_hmpc = param.get<double>("gravity_model_screening_linear_scale_hmpc");
         this->scaledependent_growth = true;
     }
 };

@@ -51,7 +51,7 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
         param["cosmology_w0"] = lfp.read_double("cosmology_w0", -1.0, REQUIRED);
         param["cosmology_wa"] = lfp.read_double("cosmology_wa", 0.0, REQUIRED);
     }
-    
+
     //=============================================================
     // DGP self-accelerating model
     //=============================================================
@@ -73,6 +73,10 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
             param["gravity_model_screening"] = lfp.read_bool("gravity_model_screening", true, OPTIONAL);
             param["gravity_model_fofr_fofr0"] = lfp.read_double("gravity_model_fofr_fofr0", 1e-5, REQUIRED);
             param["gravity_model_fofr_nfofr"] = lfp.read_double("gravity_model_fofr_nfofr", 1.0, OPTIONAL);
+            param["gravity_model_screening_enforce_largescale_linear"] =
+                lfp.read_bool("gravity_model_screening_enforce_largescale_linear", false, OPTIONAL);
+            param["gravity_model_screening_linear_scale_hmpc"] =
+                lfp.read_double("gravity_model_screening_linear_scale_hmpc", 0.05, OPTIONAL);
         }
 
         //=============================================================
@@ -85,6 +89,10 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
                 lfp.read_string("gravity_model_dgp_smoothing_filter", "tophat", OPTIONAL);
             param["gravity_model_dgp_smoothing_scale_over_boxsize"] =
                 lfp.read_double("gravity_model_dgp_smoothing_scale_over_boxsize", 1.0, OPTIONAL);
+            param["gravity_model_screening_enforce_largescale_linear"] =
+                lfp.read_bool("gravity_model_screening_enforce_largescale_linear", false, OPTIONAL);
+            param["gravity_model_screening_linear_scale_hmpc"] =
+                lfp.read_double("gravity_model_screening_linear_scale_hmpc", 0.05, OPTIONAL);
         }
     }
 

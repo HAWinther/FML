@@ -42,7 +42,7 @@ cosmology_Omegab = 0.049
 -- Massive neutrino density
 cosmology_OmegaMNu = 0.0048
 -- Dark energy density (a CC)
-cosmology_OmegaLambda = 0.682
+cosmology_OmegaLambda = 0.682407079
 -- Effective number of relativistic species
 cosmology_Neffective = 3.046
 -- Temperature of CMB today
@@ -80,6 +80,12 @@ if gravity_model == "f(R)" then
   gravity_model_fofr_nfofr = 1.0
   -- Approximate screening model (otherwise linear)
   gravity_model_screening = true
+  -- Combine screeneed solution with linear solution to enforce correct
+  -- linear evolution on large scales
+  gravity_model_screening_enforce_largescale_linear = true
+  -- The fourier scale for which we use the linear solution for k < k*
+  -- and the screened solution for k > k*
+  gravity_model_screening_linear_scale_hmpc = 0.1
 end
 
 -- DGP model (pick LCDM as the cosmology to get the normal branch)
@@ -93,15 +99,21 @@ if gravity_model == "DGP" then
   gravity_model_dgp_smoothing_filter = "tophat"
   -- For screening approx: smoothing scale R/boxsize
   gravity_model_dgp_smoothing_scale_over_boxsize = 0.0
+  -- Combine screeneed solution with linear solution to enforce correct
+  -- linear evolution on large scales
+  gravity_model_screening_enforce_largescale_linear = true
+  -- The fourier scale for which we use the linear solution for k < k*
+  -- and the screened solution for k > k*
+  gravity_model_screening_linear_scale_hmpc = 0.1
 end
 
 ------------------------------------------------------------
 -- Particles
 ------------------------------------------------------------
 -- Number of CDM+b particles per dimension
-particle_Npart_1D = 128
+particle_Npart_1D = 256
 -- Factor of how many more particles to allocate space
-particle_allocation_factor = 1.5
+particle_allocation_factor = 1.25
 
 ------------------------------------------------------------
 -- Output
@@ -120,7 +132,7 @@ output_folder = "output"
 ------------------------------------------------------------
 -- Number of steps between the outputs (in output_redshifts). 
 -- If only one number in the list then its the total number of steps 
-timestep_nsteps = {10}
+timestep_nsteps = {20}
 -- The time-stepping method: Quinn, Tassev
 timestep_method = "Quinn"
 -- For Tassev: the nLPT parameter
@@ -150,7 +162,7 @@ ic_random_field_type = "gaussian"
 -- The grid-size used to generate the IC
 ic_nmesh = particle_Npart_1D
 -- For MG: input LCDM P(k) and use GR to scale back and ensure same IC as for LCDM
-ic_use_gravity_model_GR = false
+ic_use_gravity_model_GR = true
 -- The LPT order to use for the IC
 ic_LPT_order = 2
 -- The type of input: 
@@ -168,7 +180,7 @@ ic_input_redshift = 0.0
 ic_initial_redshift = 20.0
 -- Normalize wrt sigma8? Otherwise use normalization in input + As etc.
 -- If ic_use_gravity_model_GR then this is the sigma8 value is a corresponding GR universe!
-ic_sigma8_normalization = true
+ic_sigma8_normalization = false
 -- Redshift of sigma8 value to normalize wrt
 ic_sigma8_redshift = 0.0
 -- The sigma8 value to normalize wrt

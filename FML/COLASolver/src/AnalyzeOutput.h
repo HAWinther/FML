@@ -217,7 +217,8 @@ void compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double re
         std::string filename = snapshot_folder + "/pofk_multipole_z" + redshiftstring + ".txt";
         std::ofstream fp(filename.c_str());
         if (not fp.is_open()) {
-            std::cout << "Warning: Cannot write power-spectrum multipoles to file, failed to open [" << filename << "]\n";
+            std::cout << "Warning: Cannot write power-spectrum multipoles to file, failed to open [" << filename
+                      << "]\n";
         } else {
             fp << "#  k  (h/Mpc)          P0(k)  (Mpc/h)^3          P2(k)  (Mpc/h)^3       P4(k)  (Mpc/h)^3   ...   "
                   "P0_kaiser    P2_kaiser    P4_kaiser\n";
@@ -303,19 +304,10 @@ void compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std
     // Compute linear predictions
     //=============================================================
     auto pofk_cb = [&](double k) {
-        if (sim.transferdata and false)
-            return sim.transferdata->get_cdm_baryon_power_spectrum(k, 1.0 / (1.0 + redshift));
-        else {
-            double pofk_ini = sim.power_initial_spline(k);
-            double D = sim.grav->get_D_1LPT(1.0 / (1.0 + redshift), k * 2997.93);
-            double Dini = sim.grav->get_D_1LPT(1.0 / (1.0 + sim.ic_initial_redshift), k * 2997.93);
-            return pofk_ini * std::pow(D / Dini, 2);
-        }
-    };
-    [[maybe_unused]] auto pofk_tot = [&](double k) {
-        if (sim.transferdata)
-            return sim.transferdata->get_total_power_spectrum(k, 1.0 / (1.0 + redshift));
-        return 0.0;
+        double pofk_ini = sim.power_initial_spline(k);
+        double D = sim.grav->get_D_1LPT(1.0 / (1.0 + redshift), k * 2997.93);
+        double Dini = sim.grav->get_D_1LPT(1.0 / (1.0 + sim.ic_initial_redshift), k * 2997.93);
+        return pofk_ini * std::pow(D / Dini, 2);
     };
     auto kvals = pofk_cb_binning.kbin;
     auto pofk_cb_linear = kvals;
@@ -419,18 +411,18 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
             nofM[i] /= std::pow(simulation_boxsize, NDIM);
             dnofM[i] /= std::pow(simulation_boxsize, NDIM) * dlogM;
         }
-   
+
         std::string filename = snapshot_folder + "/massfunc_z" + redshiftstring + ".txt";
         std::ofstream fp(filename.c_str());
         if (not fp.is_open()) {
             std::cout << "Warning: Cannot write massfunction to file, failed to open [" << filename << "]\n";
         } else {
             fp << "#  M (Msun/h)         n(M) (h/Mpc)^3         dndlogM(M) (h/Mpc)^3\n";
-            for(int i = 0; i < nbins; i++){
-              fp << std::setw(15) << std::exp(logM[i]) << " ";
-              fp << std::setw(15) << nofM[i] << " ";
-              fp << std::setw(15) << dnofM[i] << " ";
-              fp << "\n";
+            for (int i = 0; i < nbins; i++) {
+                fp << std::setw(15) << std::exp(logM[i]) << " ";
+                fp << std::setw(15) << nofM[i] << " ";
+                fp << std::setw(15) << dnofM[i] << " ";
+                fp << "\n";
             }
         }
     }
@@ -457,8 +449,9 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
             }
         }
     } else {
-        FML::assert_mpi(FoFGroups.size() == 0,
-                        "Something is strange: the FoF algorithm should return all halos to task 0, something changed?");
+        FML::assert_mpi(
+            FoFGroups.size() == 0,
+            "Something is strange: the FoF algorithm should return all halos to task 0, something changed?");
     }
 }
 

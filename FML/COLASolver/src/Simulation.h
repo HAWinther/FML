@@ -1533,7 +1533,7 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
     // Write gadget files
     //=============================================================
     if (output_particles and output_fileformat == "GADGET") {
-        timer.StartTiming("Output particle");
+        timer.StartTiming("Output particles");
         output_gadget(*this, redshift, snapshot_folder);
         timer.EndTiming("Output particles");
     }
