@@ -24,14 +24,14 @@ namespace FML {
     // The standard size is 0
     // Set a limit to how many items we can have in the log
     // at the same time to avoid it taking up too much memory
-    // If this limit is reached then we clear the memory
-    // and stop logging any more
+    // If this limit is reached then we clear the memory associated
+    // with the logger and stop logging any more allocations
     //=======================================================
 #ifndef MIN_BYTES_TO_LOG
 #define MIN_BYTES_TO_LOG 0
 #endif
 #ifndef MAX_ALLOCATIONS_IN_MEMORY
-#define MAX_ALLOCATIONS_IN_MEMORY 1000000
+#define MAX_ALLOCATIONS_IN_MEMORY 100000
 #endif
 
     class MemoryLog;
@@ -182,25 +182,25 @@ namespace FML {
             double mean_sys_rssmemory = sysmem.second;
 
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, &min_sys_vmemory, 1,    MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &max_sys_vmemory, 1,    MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &mean_sys_vmemory, 1,   MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &min_sys_rssmemory, 1,  MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &max_sys_rssmemory, 1,  MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &min_sys_vmemory, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &max_sys_vmemory, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &mean_sys_vmemory, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &min_sys_rssmemory, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &max_sys_rssmemory, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
             MPI_Allreduce(MPI_IN_PLACE, &mean_sys_rssmemory, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 #endif
             mean_sys_vmemory /= NTasks;
             mean_sys_rssmemory /= NTasks;
             if (ThisTask == 0) {
                 std::cout << "\n#=====================================================\n";
-                std::cout << "                   MemoryLogging\n";
+                std::cout << "#                   MemoryLogging\n";
                 std::cout << "#=====================================================\n\n";
-                std::cout << "Info fetched from /proc/self/stat (linux only):\n";
-                std::cout << "[Virtual memory]:\n";
+                std::cout << "Info about resident set size:\n";
+                std::cout << "[Current resident set size]:\n";
                 std::cout << "Min over tasks:  " << std::setw(15) << min_sys_vmemory / 1.0e6 << " MB\n";
                 std::cout << "Mean over tasks: " << std::setw(15) << mean_sys_vmemory / 1.0e6 << " MB\n";
                 std::cout << "Max over tasks:  " << std::setw(15) << max_sys_vmemory / 1.0e6 << " MB\n";
-                std::cout << "[Resident set size]:\n";
+                std::cout << "[Peak resident set size]:\n";
                 std::cout << "Min over tasks:  " << std::setw(15) << min_sys_rssmemory / 1.0e6 << " MB\n";
                 std::cout << "Mean over tasks: " << std::setw(15) << mean_sys_rssmemory / 1.0e6 << " MB\n";
                 std::cout << "Max over tasks:  " << std::setw(15) << max_sys_rssmemory / 1.0e6 << " MB\n";
@@ -229,7 +229,8 @@ namespace FML {
                 std::cout << "Mean over tasks:          " << std::setw(15) << double(mean_memory) / 1.0e6 << " MB\n";
                 std::cout << "Max over tasks:           " << std::setw(15) << double(max_memory) / 1.0e6 << " MB\n";
                 std::cout << "\n";
-                std::cout << "Peak memory use (Task 0): " << std::setw(15) << double(peak_memory_use) / 1.0e6 << " MB\n";
+                std::cout << "Peak memory use (Task 0): " << std::setw(15) << double(peak_memory_use) / 1.0e6
+                          << " MB\n";
                 std::cout << "Max over tasks:           " << std::setw(15) << double(peak_memory) / 1.0e6 << " MB\n";
                 std::cout << "\n";
             }
@@ -305,7 +306,7 @@ namespace FML {
 
     template <typename T, typename U>
     inline bool operator!=(const LogAllocator<T> & a, const LogAllocator<U> & b) {
-        return not (a == b);
+        return not(a == b);
     }
 } // namespace FML
 
