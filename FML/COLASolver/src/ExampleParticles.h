@@ -35,6 +35,7 @@ class FiducialParticle {
   private:
     double pos[NDIM];
     double vel[NDIM];
+    double q[NDIM];
     double Psi_1LPT[NDIM];
     double Psi_2LPT[NDIM];
     long long int id;
@@ -43,6 +44,7 @@ class FiducialParticle {
     double * get_pos() { return pos; }
     double * get_vel() { return vel; }
     constexpr int get_ndim() const { return NDIM; }
+    double * get_q() { return q; }
     double * get_D_1LPT() { return Psi_1LPT; }
     double * get_D_2LPT() { return Psi_2LPT; }
     long long int get_id() const { return id; }
@@ -57,6 +59,7 @@ class FiducialParticleLowMemory {
   private:
     float pos[NDIM];
     float vel[NDIM];
+    float q[NDIM];
     float Psi_1LPT[NDIM];
     float Psi_2LPT[NDIM];
     long long int id;
@@ -65,6 +68,7 @@ class FiducialParticleLowMemory {
     float * get_pos() { return pos; }
     float * get_vel() { return vel; }
     constexpr int get_ndim() const { return NDIM; }
+    float * get_q() { return q; }
     float * get_D_1LPT() { return Psi_1LPT; }
     float * get_D_2LPT() { return Psi_2LPT; }
     long long int get_id() const { return id; }
