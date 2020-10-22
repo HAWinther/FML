@@ -1341,6 +1341,9 @@ void NBodySimulation<NDIM, T>::run() {
 
                 // Show info about particles
                 part.info();
+
+                // Show info about system memory use
+                FML::print_system_memory_use();
             }
 
         //=============================================================
