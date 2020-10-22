@@ -27,7 +27,7 @@ class GravityModelFofR final : public GravityModel<NDIM> {
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
     GravityModelFofR() : GravityModel<NDIM>("f(R)") {}
-    GravityModelFofR(std::shared_ptr<BackgroundCosmology> cosmo)
+    GravityModelFofR(std::shared_ptr<Cosmology> cosmo)
         : GravityModel<NDIM>(cosmo, "f(R)")
 
     {

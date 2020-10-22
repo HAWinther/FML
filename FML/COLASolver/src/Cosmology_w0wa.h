@@ -10,15 +10,15 @@
 
 #include "Cosmology.h"
 
-class BackgroundCosmologyw0waCDM final : public BackgroundCosmology {
+class Cosmologyw0waCDM final : public Cosmology {
   public:
-    BackgroundCosmologyw0waCDM() { name = "w0waCDM"; }
+    Cosmologyw0waCDM() { name = "w0waCDM"; }
 
     //========================================================================
     // Read the parameters we need
     //========================================================================
     void read_parameters(ParameterMap & param) override {
-        BackgroundCosmology::read_parameters(param);
+        Cosmology::read_parameters(param);
         w0 = param.get<double>("cosmology_w0");
         wa = param.get<double>("cosmology_wa");
     }
@@ -26,13 +26,13 @@ class BackgroundCosmologyw0waCDM final : public BackgroundCosmology {
     //========================================================================
     // Initialize the cosmology
     //========================================================================
-    void init() override { BackgroundCosmology::init(); }
+    void init() override { Cosmology::init(); }
 
     //========================================================================
     // Print some info
     //========================================================================
     void info() const override {
-        BackgroundCosmology::info();
+        Cosmology::info();
         if (FML::ThisTask == 0) {
             std::cout << "# w0          : " << w0 << "\n";
             std::cout << "# wa          : " << wa << "\n";

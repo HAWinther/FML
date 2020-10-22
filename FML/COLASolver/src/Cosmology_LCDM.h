@@ -10,9 +10,9 @@
 
 #include "Cosmology.h"
 
-class BackgroundCosmologyLCDM final : public BackgroundCosmology {
+class CosmologyLCDM final : public Cosmology {
   public:
-    BackgroundCosmologyLCDM() { name = "LCDM"; }
+    CosmologyLCDM() { name = "LCDM"; }
 
     double HoverH0_of_a(double a) const override {
         return std::sqrt(OmegaLambda + OmegaK / (a * a) + (OmegaCDM + Omegab) / (a * a * a) + OmegaR / (a * a * a * a) +
@@ -27,7 +27,7 @@ class BackgroundCosmologyLCDM final : public BackgroundCosmology {
     }
 
     void info() const override {
-        BackgroundCosmology::info();
+        Cosmology::info();
         if (FML::ThisTask == 0) {
             std::cout << "#=====================================================\n";
             std::cout << "\n";

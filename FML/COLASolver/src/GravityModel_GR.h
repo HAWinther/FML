@@ -19,7 +19,7 @@ class GravityModelGR final : public GravityModel<NDIM> {
     using ParameterMap = FML::UTILS::ParameterMap;
 
     GravityModelGR() : GravityModel<NDIM>("GR") {}
-    GravityModelGR(std::shared_ptr<BackgroundCosmology> cosmo) : GravityModel<NDIM>(cosmo, "GR") {}
+    GravityModelGR(std::shared_ptr<Cosmology> cosmo) : GravityModel<NDIM>(cosmo, "GR") {}
 
     //========================================================================
     // Compute the force DPhi from the density field delta in fourier space
@@ -47,9 +47,7 @@ class GravityModelGR final : public GravityModel<NDIM> {
     //========================================================================
     void read_parameters(ParameterMap & param) override {
         GravityModel<NDIM>::read_parameters(param);
-        this->scaledependent_growth = false;
-        if(this->cosmo->get_OmegaMNu() > 0.0)
-          this->scaledependent_growth = true;
+        this->scaledependent_growth = this->cosmo->get_OmegaMNu() > 0.0;
     }
     
     //========================================================================

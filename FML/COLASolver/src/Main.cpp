@@ -58,8 +58,8 @@ class Particle {
 
     // Derivative of 1LPT displacement field Psi 
     // This is only needed if you want only 1LPT COLA with scaledependent growth
-    float dPsidloga_1LPT[NDIM];
-    float * get_dDdloga_1LPT() { return dPsidloga_1LPT; }
+    // float dPsidloga_1LPT[NDIM];
+    // float * get_dDdloga_1LPT() { return dPsidloga_1LPT; }
     
     // ... other things like ID, mass, etc. can be added
 };
@@ -88,13 +88,13 @@ int main(int argc, char ** argv) {
     // Choose the cosmology
     //=============================================================
     auto cosmology_model = param.get<std::string>("cosmology_model");
-    std::shared_ptr<BackgroundCosmology> cosmo;
+    std::shared_ptr<Cosmology> cosmo;
     if (cosmology_model == "LCDM")
-        cosmo = std::make_shared<BackgroundCosmologyLCDM>();
+        cosmo = std::make_shared<CosmologyLCDM>();
     else if (cosmology_model == "w0waCDM")
-        cosmo = std::make_shared<BackgroundCosmologyw0waCDM>();
+        cosmo = std::make_shared<Cosmologyw0waCDM>();
     else if (cosmology_model == "DGP")
-        cosmo = std::make_shared<BackgroundCosmologyDGP>();
+        cosmo = std::make_shared<CosmologyDGP>();
     else
         throw std::runtime_error("Unknown cosmology [" + cosmology_model + "]");
     cosmo->read_parameters(param);

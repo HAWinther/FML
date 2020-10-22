@@ -13,7 +13,7 @@
 #include <memory>
 
 /// Base class for a general cosmology
-class BackgroundCosmology {
+class Cosmology {
   public:
     using ParameterMap = FML::UTILS::ParameterMap;
     using ODESolver = FML::SOLVERS::ODESOLVER::ODESolver;
@@ -24,7 +24,7 @@ class BackgroundCosmology {
     //========================================================================
     // Constructors
     //========================================================================
-    BackgroundCosmology() = default;
+    Cosmology() = default;
 
     //========================================================================
     // Print some info.
@@ -34,7 +34,7 @@ class BackgroundCosmology {
         if (FML::ThisTask == 0) {
             std::cout << "\n";
             std::cout << "#=====================================================\n";
-            std::cout << "# BackgroundCosmology [" << name << "]\n";
+            std::cout << "# Cosmology [" << name << "]\n";
             std::cout << "# Omegab      : " << Omegab << "\n";
             std::cout << "# OmegaM      : " << OmegaM << "\n";
             std::cout << "# OmegaMNu    : " << OmegaMNu << "\n";
@@ -127,8 +127,9 @@ class BackgroundCosmology {
     // Sound speed over c in non-relativitic limit (1408.2995). Truncating at the free radiation sounds speed if
     // evaluated for very larger redshifts
     double get_neutrino_sound_speed_cs_over_c(double a) const {
-        return std::min(2.680 * get_neutrino_temperature_eV(a) / Mnu_eV, 1.0 / std::sqrt(3.0));
+        return std::min(nu_sound_speed_factor * get_neutrino_temperature_eV(a) / Mnu_eV, 1.0 / std::sqrt(3.0));
     }
+
     // Free streaming scale for the neutrinos (1408.2995)
     double get_neutrino_free_streaming_scale_hmpc(double a) const {
         return std::sqrt(1.5 * OmegaM / a) / get_neutrino_sound_speed_cs_over_c(a) * H0_hmpc;
@@ -269,7 +270,7 @@ class BackgroundCosmology {
     std::string get_name() { return name; }
 
     void set_As(double _As) { As = _As; }
-    void set_ns(double _ns) { As = _ns; }
+    void set_ns(double _ns) { ns = _ns; }
     void set_kpivot_mpc(double _kpivot_mpc) { kpivot_mpc = _kpivot_mpc; }
 
   protected:
@@ -298,6 +299,7 @@ class BackgroundCosmology {
     const double twoeta3{3.0 / 2.0 * std::riemann_zeta(3.0)};
     const double sixeta4{7.0 / 120.0 * M_PI * M_PI * M_PI * M_PI};
     const double sixzeta4{6.0 * std::riemann_zeta(4.0)};
+    const double nu_sound_speed_factor{std::sqrt(25.0 * std::riemann_zeta(5.0) / std::riemann_zeta(3.0) / 3.0)};
     Spline neutrino_boltzmann_integral_spline;
     Constants units;
 

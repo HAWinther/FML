@@ -10,32 +10,31 @@
 
 #include "Cosmology.h"
 
-class BackgroundCosmologyDGP final : public BackgroundCosmology {
+class CosmologyDGP final : public Cosmology {
   public:
-    BackgroundCosmologyDGP() { name = "DGP"; }
+    CosmologyDGP() { name = "DGP"; }
 
     //========================================================================
     // Read the parameters we need
     //========================================================================
     void read_parameters(ParameterMap & param) override {
-        BackgroundCosmology::read_parameters(param);
+        Cosmology::read_parameters(param);
         OmegaRC = param.get<double>("cosmology_dgp_OmegaRC");
         this->OmegaLambda = 0.0;
-        this->OmegaK = 1.0 - std::pow(std::sqrt(OmegaRC) +
-                                          std::sqrt(OmegaRC + OmegaCDM + Omegab + OmegaR + this->get_rhoNu_exact(1.0)),
-                                      2.0);
+        double tmp = std::sqrt(OmegaRC) + std::sqrt(OmegaRC + OmegaCDM + Omegab + OmegaR + this->get_rhoNu_exact(1.0));
+        this->OmegaK = 1.0 - tmp * tmp;
     }
 
     //========================================================================
     // Initialize the cosmology
     //========================================================================
-    void init() override { BackgroundCosmology::init(); }
+    void init() override { Cosmology::init(); }
 
     //========================================================================
     // Print some info
     //========================================================================
     void info() const override {
-        BackgroundCosmology::info();
+        Cosmology::info();
         if (FML::ThisTask == 0) {
             std::cout << "# OmegaRC     : " << OmegaRC << "\n";
             std::cout << "# rcH0        : " << std::sqrt(0.25 / OmegaRC) << "\n";

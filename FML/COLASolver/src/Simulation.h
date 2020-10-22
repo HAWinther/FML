@@ -5,7 +5,6 @@
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/FileUtils/FileUtils.h>
-#include <FML/FriendsOfFriends/FoF.h>
 #include <FML/GadgetUtils/GadgetUtils.h>
 #include <FML/Global/Global.h>
 #include <FML/LPT/DisplacementFields.h>
@@ -19,10 +18,17 @@
 #include <FML/Timing/Timings.h>
 
 #include "AnalyzeOutput.h"
+#include "COLA.h"
 #include "Cosmology.h"
 #include "GravityModel.h"
 
+#include <array>
 #include <cmath>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <utility>
 #include <vector>
 
 //=============================================================================
@@ -47,12 +53,10 @@ using PowerSpectrumBinning = FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<N>;
 template <int NDIM, class T>
 class NBodySimulation {
   protected:
-    const double H0_hmpc = 1.0 / 2997.92458;
-
     //=============================================================================
     /// Everything related to the background evolution
     //=============================================================================
-    std::shared_ptr<BackgroundCosmology> cosmo;
+    std::shared_ptr<Cosmology> cosmo;
 
     //=============================================================================
     /// Everything related to gravity: growth factors, computing forces
@@ -91,6 +95,7 @@ class NBodySimulation {
     FFTWGrid<NDIM> phi_3LPTa_ini_fourier;
     FFTWGrid<NDIM> phi_3LPTb_ini_fourier;
 
+    // Do timings of the code
     FML::UTILS::Timings timer;
 
     // Splines used to generate the IC
@@ -200,7 +205,8 @@ class NBodySimulation {
     // in the class in case one wants to process it later
     //=============================================================================
     // A list of (z, P(k)) for the particles at every step (naive binning - not using the same pofk_* setting!)
-    std::vector<std::pair<double, PowerSpectrumBinning<NDIM>>> pofk_every_step;
+    std::vector<std::pair<double, PowerSpectrumBinning<NDIM>>> pofk_cb_every_step;
+    std::vector<std::pair<double, PowerSpectrumBinning<NDIM>>> pofk_total_every_step;
     // A list of (z, P(k)) for the particles that we compute if pofk = true
     std::vector<std::pair<double, PowerSpectrumBinning<NDIM>>> pofk_every_output;
     // A list of (z, P_ell(k)) for the particles that we compute every output if pofk_multipoles = true
@@ -208,11 +214,11 @@ class NBodySimulation {
 
   public:
     NBodySimulation() = default;
-    NBodySimulation(std::shared_ptr<BackgroundCosmology> cosmo, std::shared_ptr<GravityModel<NDIM>> grav)
+    NBodySimulation(std::shared_ptr<Cosmology> cosmo, std::shared_ptr<GravityModel<NDIM>> grav)
         : cosmo(cosmo), grav(grav) {}
 
     // Move in particles from an external source
-    NBodySimulation(std::shared_ptr<BackgroundCosmology> cosmo,
+    NBodySimulation(std::shared_ptr<Cosmology> cosmo,
                     std::shared_ptr<GravityModel<NDIM>> grav,
                     MPIParticles<T> && _part)
         : NBodySimulation(cosmo, grav) {
@@ -245,7 +251,7 @@ class NBodySimulation {
     /// Compute stuff on the fly and output
     void analyze_and_output(int ioutput, double redshift);
 
-    // Generation of IC
+    // Generation of IC (to be separated out in own file)
     template <int _NDIM, class _T>
     friend void generate_initial_conditions(NBodySimulation<_NDIM, _T> & sim);
 
@@ -261,6 +267,8 @@ class NBodySimulation {
     friend void compute_bispectrum(NBodySimulation<_NDIM, _T> & sim, double redshift, std::string snapshot_folder);
     template <int _NDIM, class _T>
     friend void output_gadget(NBodySimulation<_NDIM, _T> & sim, double redshift, std::string snapshot_folder);
+    template <int _NDIM, class _T>
+    friend void output_fml(NBodySimulation<_NDIM, _T> & sim, double redshift, std::string snapshot_folder);
 
     // Free all memory
     void free();
@@ -313,6 +321,7 @@ auto NBodySimulation<NDIM, T>::compute_deltatime_KDK(double amin, double amax, i
     //=====================================================
     auto compute_drift_timestep_tassev = [&](double alow, double ahigh) {
         const double amid = (ahigh + alow) / 2.;
+        // XXX For comparing to LPICOLA one needs amid = alow in the first step
 
         ODEFunction deriv = [&](double a, [[maybe_unused]] const double * t, double * dtda) {
             dtda[0] = 1.0 / (a * a * a * cosmo->HoverH0_of_a(a));
@@ -748,8 +757,8 @@ void NBodySimulation<NDIM, T>::init() {
             karr[i] = pofkdata[i][0];
             double k_hmpc = karr[i];
             double k_mpc = karr[i] * cosmo->get_h();
-            double DinioverDinput =
-                grav_ic->get_D_1LPT(aini, k_hmpc / H0_hmpc) / grav_ic->get_D_1LPT(ainput, k_hmpc / H0_hmpc);
+            double DinioverDinput = grav_ic->get_D_1LPT(aini, k_hmpc / grav_ic->H0_hmpc) /
+                                    grav_ic->get_D_1LPT(ainput, k_hmpc / grav_ic->H0_hmpc);
             power_primordial[i] = cosmo->get_primordial_pofk(k_hmpc);
             power[i] = DinioverDinput * DinioverDinput * pofkdata[i][1];
             transfer[i] = std::sqrt(power[i] / power_primordial[i]) / (k_mpc * k_mpc);
@@ -796,8 +805,8 @@ void NBodySimulation<NDIM, T>::init() {
             karr[i] = tofkdata[i][0];
             double k_hmpc = karr[i];
             double k_mpc = karr[i] * cosmo->get_h();
-            double DinioverDinput =
-                grav_ic->get_D_1LPT(aini, k_hmpc / H0_hmpc) / grav_ic->get_D_1LPT(ainput, k_hmpc / H0_hmpc);
+            double DinioverDinput = grav_ic->get_D_1LPT(aini, k_hmpc / grav_ic->H0_hmpc) /
+                                    grav_ic->get_D_1LPT(ainput, k_hmpc / grav_ic->H0_hmpc);
             power_primordial[i] = cosmo->get_primordial_pofk(k_hmpc);
             transfer[i] = DinioverDinput * tofkdata[i][1];
             power[i] = power_primordial[i] * std::pow(transfer[i] * k_mpc * k_mpc, 2);
@@ -856,8 +865,8 @@ void NBodySimulation<NDIM, T>::init() {
             karr[i] = k_hmpc;
             transfer[i] = transferdata->get_cdm_baryon_transfer_function(karr[i], ainput);
             power[i] = transferdata->get_cdm_baryon_power_spectrum(karr[i], ainput);
-            double DinioverDinput =
-                grav_ic->get_D_1LPT(aini, k_hmpc / H0_hmpc) / grav_ic->get_D_1LPT(ainput, k_hmpc / H0_hmpc);
+            double DinioverDinput = grav_ic->get_D_1LPT(aini, k_hmpc / grav_ic->H0_hmpc) /
+                                    grav_ic->get_D_1LPT(ainput, k_hmpc / grav_ic->H0_hmpc);
             power_primordial[i] = cosmo->get_primordial_pofk(k_hmpc);
             transfer[i] *= DinioverDinput;
             power[i] *= DinioverDinput * DinioverDinput;
@@ -886,14 +895,17 @@ void NBodySimulation<NDIM, T>::init() {
 
     // Make some functions we need below to compute sigma(R,z)
     auto pofk_today_over_volume = [&](double kBox) {
-        double D_today = grav_ic->get_D_1LPT(1.0, kBox / simulation_boxsize / H0_hmpc);
-        double D_initial = grav_ic->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), kBox / simulation_boxsize / H0_hmpc);
+        double D_today = grav_ic->get_D_1LPT(1.0, kBox / simulation_boxsize / grav_ic->H0_hmpc);
+        double D_initial =
+            grav_ic->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), kBox / simulation_boxsize / grav_ic->H0_hmpc);
         return std::pow(D_today / D_initial, 2) * power_initial_spline(kBox / simulation_boxsize) /
                std::pow(simulation_boxsize, NDIM);
     };
     auto pofk_atnormtime_over_volume = [&](double kBox) {
-        double D_normtime = grav_ic->get_D_1LPT(1.0 / (1.0 + ic_sigma8_redshift), kBox / simulation_boxsize / H0_hmpc);
-        double D_initial = grav_ic->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), kBox / simulation_boxsize / H0_hmpc);
+        double D_normtime =
+            grav_ic->get_D_1LPT(1.0 / (1.0 + ic_sigma8_redshift), kBox / simulation_boxsize / grav_ic->H0_hmpc);
+        double D_initial =
+            grav_ic->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), kBox / simulation_boxsize / grav_ic->H0_hmpc);
         return std::pow(D_normtime / D_initial, 2) * power_initial_spline(kBox / simulation_boxsize) /
                std::pow(simulation_boxsize, NDIM);
     };
@@ -998,8 +1010,7 @@ void NBodySimulation<NDIM, T>::init() {
     if (ic_random_field_type == "gaussian") {
 
         auto Pofk_of_kBox_over_volume = [&](double kBox) {
-            return power_initial_spline(kBox / simulation_boxsize) /
-                   std::pow(simulation_boxsize, NDIM);
+            return power_initial_spline(kBox / simulation_boxsize) / std::pow(simulation_boxsize, NDIM);
         };
         FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier<NDIM>(
             delta_ini_fourier, rng.get(), Pofk_of_kBox_over_volume, ic_fix_amplitude);
@@ -1009,17 +1020,16 @@ void NBodySimulation<NDIM, T>::init() {
         // The power-spectrum of the Bardeen potential (-Phi) at the given redshift
         const double afnl = 1.0 / (1.0 + ic_fnl_redshift);
         const double aini = 1.0 / (1.0 + ic_initial_redshift);
-        const double H0Box = simulation_boxsize * H0_hmpc;
+        const double H0Box = simulation_boxsize * grav_ic->H0_hmpc;
         const double factor = 1.5 * cosmo->get_OmegaM() / afnl;
         auto Pofk_of_kBox_over_volume_primordial = [&](double kBox) {
-            return power_primordial_spline(kBox / simulation_boxsize) /
-                   std::pow(simulation_boxsize, NDIM) * factor * std::pow(grav_ic->get_D_1LPT(afnl, kBox / H0Box) /
-                   grav_ic->get_D_1LPT(aini, kBox / H0Box), 2);
+            return power_primordial_spline(kBox / simulation_boxsize) / std::pow(simulation_boxsize, NDIM) * factor *
+                   std::pow(grav_ic->get_D_1LPT(afnl, kBox / H0Box) / grav_ic->get_D_1LPT(aini, kBox / H0Box), 2);
         };
         // The product of this and the function above is the initial power-spectrum for delta
         auto Pofk_of_kBox_over_Pofk_primordal = [&](double kBox) {
-            return power_initial_spline(kBox / simulation_boxsize) /
-                   std::pow(simulation_boxsize, NDIM) / Pofk_of_kBox_over_volume_primordial(kBox);
+            return power_initial_spline(kBox / simulation_boxsize) / std::pow(simulation_boxsize, NDIM) /
+                   Pofk_of_kBox_over_volume_primordial(kBox);
         };
         FML::RANDOM::NONGAUSSIAN::generate_nonlocal_gaussian_random_field_fourier_cosmology(
             delta_ini_fourier,
@@ -1280,7 +1290,7 @@ void NBodySimulation<NDIM, T>::run() {
                 if (delta_time_kick != 0.0) {
                     timer.StartTiming("ComputeForce");
                     grav->compute_force(apos,
-                                        H0_hmpc * simulation_boxsize,
+                                        grav->H0_hmpc * simulation_boxsize,
                                         density_grid_fourier,
                                         force_density_assignment_method,
                                         force_real);
@@ -1301,19 +1311,20 @@ void NBodySimulation<NDIM, T>::run() {
                     // unless simulation_use_scaledependent_cola is set to false
                     const double aini = 1.0 / (1.0 + ic_initial_redshift);
                     if (simulation_use_scaledependent_cola and grav->scaledependent_growth) {
-                        grav->cola_kick_drift_scaledependent(part,
-                                                             phi_1LPT_ini_fourier,
-                                                             phi_2LPT_ini_fourier,
-                                                             phi_3LPTa_ini_fourier,
-                                                             phi_3LPTb_ini_fourier,
-                                                             simulation_boxsize * H0_hmpc,
-                                                             aini,
-                                                             apos,
-                                                             apos_new,
-                                                             delta_time_kick,
-                                                             delta_time_drift);
+                        cola_kick_drift_scaledependent<NDIM, T>(part,
+                                                                grav,
+                                                                phi_1LPT_ini_fourier,
+                                                                phi_2LPT_ini_fourier,
+                                                                phi_3LPTa_ini_fourier,
+                                                                phi_3LPTb_ini_fourier,
+                                                                grav->H0_hmpc * simulation_boxsize,
+                                                                aini,
+                                                                apos,
+                                                                apos_new,
+                                                                delta_time_kick,
+                                                                delta_time_drift);
                     } else {
-                        grav->cola_kick_drift(part, aini, apos, apos_new, delta_time_kick, delta_time_drift);
+                        cola_kick_drift<NDIM, T>(part, grav, aini, apos, apos_new, delta_time_kick, delta_time_drift);
                     }
                     timer.EndTiming("COLA");
                 }
@@ -1376,12 +1387,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
     PowerSpectrumBinning<NDIM> pofk_particles(density_grid_fourier.get_nmesh() / 2);
     FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(density_grid_fourier, pofk_particles);
     pofk_particles.scale(simulation_boxsize);
-    pofk_every_step.push_back({redshift, pofk_particles});
-
-    //=============================================================
-    // NB: if we have massive neutrinos and force_linear_massive_neutrinos = false
-    // then the massive neutrinos are treated as CDM+nu!
-    //=============================================================
+    pofk_cb_every_step.push_back({redshift, pofk_particles});
 
     //=============================================================
     // Add on contribution from massive neutrinos, radiation etc.
@@ -1434,8 +1440,10 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
     //=============================================================
     // Bin up total power-spectrum (its basically free)
     //=============================================================
-    // PowerSpectrumBinning<NDIM> pofk_all(density_grid_fourier.get_nmesh() / 2);
-    // FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(density_grid_fourier, pofk_all);
+    PowerSpectrumBinning<NDIM> pofk_total(density_grid_fourier.get_nmesh() / 2);
+    FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(density_grid_fourier, pofk_total);
+    pofk_total.scale(simulation_boxsize);
+    pofk_total_every_step.push_back({redshift, pofk_total});
 }
 
 template <int NDIM, class T>
@@ -1468,17 +1476,18 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
         const double aini = 1.0 / (1.0 + ic_initial_redshift);
         const double a = 1.0 / (1.0 + redshift);
         if (simulation_use_scaledependent_cola and grav->scaledependent_growth) {
-            grav->cola_add_on_LPT_velocity_scaledependent(part,
-                                                          phi_1LPT_ini_fourier,
-                                                          phi_2LPT_ini_fourier,
-                                                          phi_3LPTa_ini_fourier,
-                                                          phi_3LPTb_ini_fourier,
-                                                          simulation_boxsize * H0_hmpc,
-                                                          aini,
-                                                          a,
-                                                          addsubtract_sign);
+            cola_add_on_LPT_velocity_scaledependent<NDIM, T>(part,
+                                                             grav,
+                                                             phi_1LPT_ini_fourier,
+                                                             phi_2LPT_ini_fourier,
+                                                             phi_3LPTa_ini_fourier,
+                                                             phi_3LPTb_ini_fourier,
+                                                             grav->H0_hmpc * simulation_boxsize,
+                                                             aini,
+                                                             a,
+                                                             addsubtract_sign);
         } else {
-            grav->cola_add_on_LPT_velocity(part, aini, a, addsubtract_sign);
+            cola_add_on_LPT_velocity<NDIM, T>(part, grav, aini, a, addsubtract_sign);
         }
     };
 
@@ -1532,9 +1541,13 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
     //=============================================================
     // Write gadget files
     //=============================================================
-    if (output_particles and output_fileformat == "GADGET") {
+    if (output_particles) {
         timer.StartTiming("Output particles");
-        output_gadget(*this, redshift, snapshot_folder);
+        if (output_fileformat == "GADGET")
+            output_gadget(*this, redshift, snapshot_folder);
+        if (output_fileformat == "FML") {
+            output_fml(*this, redshift, snapshot_folder);
+        }
         timer.EndTiming("Output particles");
     }
 

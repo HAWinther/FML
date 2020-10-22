@@ -28,7 +28,7 @@ class GravityModelDGP final : public GravityModel<NDIM> {
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
     GravityModelDGP() : GravityModel<NDIM>("DGP") {}
-    GravityModelDGP(std::shared_ptr<BackgroundCosmology> cosmo) : GravityModel<NDIM>(cosmo, "DGP") {}
+    GravityModelDGP(std::shared_ptr<Cosmology> cosmo) : GravityModel<NDIM>(cosmo, "DGP") {}
 
     //========================================================================
     // Print some info

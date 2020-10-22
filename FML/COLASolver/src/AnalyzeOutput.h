@@ -21,6 +21,19 @@ template <int NDIM, class T>
 class NBodySimulation;
 
 template <int NDIM, class T>
+void output_fml(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
+    
+    std::stringstream stream;
+    stream << std::fixed << std::setprecision(3) << redshift;
+    std::string redshiftstring = stream.str();
+    
+    // Output particles in internal format
+    std::string fileprefix = snapshot_folder + "/" + "fml_z" + redshiftstring;
+    auto & part = sim.part;
+    part.dump_to_file(fileprefix);
+}
+
+template <int NDIM, class T>
 void output_gadget(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
 
     std::stringstream stream;
@@ -163,6 +176,7 @@ void compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double re
     const bool pofk_multipole_subtract_shotnoise = sim.pofk_multipole_subtract_shotnoise;
     const int pofk_multipole_ellmax = sim.pofk_multipole_ellmax;
     auto & part = sim.part;
+    auto & grav = sim.grav;
     auto & cosmo = sim.cosmo;
 
     const double a = 1.0 / (1.0 + redshift);
@@ -200,8 +214,8 @@ void compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double re
             return sim.transferdata->get_cdm_baryon_power_spectrum(k, 1.0 / (1.0 + redshift));
         else {
             double pofk_ini = sim.power_initial_spline(k);
-            double D = sim.grav->get_D_1LPT(1.0 / (1.0 + redshift), k * 2997.93);
-            double Dini = sim.grav->get_D_1LPT(1.0 / (1.0 + sim.ic_initial_redshift), k * 2997.93);
+            double D = grav->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
+            double Dini = grav->get_D_1LPT(1.0 / (1.0 + sim.ic_initial_redshift), k / grav->H0_hmpc);
             return pofk_ini * std::pow(D / Dini, 2);
         }
     };
@@ -224,7 +238,7 @@ void compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double re
                   "P0_kaiser    P2_kaiser    P4_kaiser\n";
             for (int i = 0; i < Pells[0].n; i++) {
                 const double k = Pells[0].kbin[i];
-                const double f = sim.grav->get_f_1LPT(1.0 / (1.0 + redshift), k * 2997.93);
+                const double f = grav->get_f_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
                 fp << std::setw(15) << k << " ";
                 for (size_t ell = 0; ell < Pells.size(); ell += 2)
                     fp << std::setw(15) << Pells[ell].pofk[i] << " ";
@@ -258,6 +272,7 @@ void compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std
     const bool pofk_interlacing = sim.pofk_interlacing;
     const bool pofk_subtract_shotnoise = sim.pofk_subtract_shotnoise;
     auto & part = sim.part;
+    auto & grav = sim.grav;
 
     if (FML::ThisTask == 0) {
         std::cout << "\n";
@@ -305,8 +320,8 @@ void compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std
     //=============================================================
     auto pofk_cb = [&](double k) {
         double pofk_ini = sim.power_initial_spline(k);
-        double D = sim.grav->get_D_1LPT(1.0 / (1.0 + redshift), k * 2997.93);
-        double Dini = sim.grav->get_D_1LPT(1.0 / (1.0 + sim.ic_initial_redshift), k * 2997.93);
+        double D = grav->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
+        double Dini = grav->get_D_1LPT(1.0 / (1.0 + sim.ic_initial_redshift), k / grav->H0_hmpc);
         return pofk_ini * std::pow(D / Dini, 2);
     };
     auto kvals = pofk_cb_binning.kbin;
@@ -348,7 +363,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     //=============================================================
     // Fetch parameters
     //=============================================================
-    const double H0_hmpc = sim.H0_hmpc;
+    const double H0_hmpc = sim.grav->H0_hmpc;
     const double simulation_boxsize = sim.simulation_boxsize;
     const double fof_linking_length = sim.fof_linking_length;
     const int fof_nmin_per_halo = sim.fof_nmin_per_halo;
