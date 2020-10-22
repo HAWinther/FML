@@ -269,6 +269,8 @@ class NBodySimulation {
     friend void output_gadget(NBodySimulation<_NDIM, _T> & sim, double redshift, std::string snapshot_folder);
     template <int _NDIM, class _T>
     friend void output_fml(NBodySimulation<_NDIM, _T> & sim, double redshift, std::string snapshot_folder);
+    template <int _NDIM, class _T>
+    friend void output_pofk_for_every_step(NBodySimulation<_NDIM, _T> & sim);
 
     // Free all memory
     void free();
@@ -302,6 +304,7 @@ auto NBodySimulation<NDIM, T>::compute_deltatime_KDK(double amin, double amax, i
     //=====================================================
     auto compute_kick_timestep_quinn = [&](double alow, double ahigh) {
         const double amid = (ahigh + alow) / 2.;
+        // XXX For comparing to LPICOLA one needs amid = alow in the first step
 
         ODEFunction deriv = [&](double a, [[maybe_unused]] const double * t, double * dtda) {
             dtda[0] = 1.0 / (a * a * a * cosmo->HoverH0_of_a(a)) * poisson_factor(a) / poisson_factor(amid);
@@ -1435,15 +1438,15 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
                 density_grid_fourier.set_fourier_from_index(fourier_index, deltaM);
             }
         }
-    }
 
-    //=============================================================
-    // Bin up total power-spectrum (its basically free)
-    //=============================================================
-    PowerSpectrumBinning<NDIM> pofk_total(density_grid_fourier.get_nmesh() / 2);
-    FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(density_grid_fourier, pofk_total);
-    pofk_total.scale(simulation_boxsize);
-    pofk_total_every_step.push_back({redshift, pofk_total});
+        //=============================================================
+        // Bin up total power-spectrum (its basically free)
+        //=============================================================
+        PowerSpectrumBinning<NDIM> pofk_total(density_grid_fourier.get_nmesh() / 2);
+        FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(density_grid_fourier, pofk_total);
+        pofk_total.scale(simulation_boxsize);
+        pofk_total_every_step.push_back({redshift, pofk_total});
+    }
 }
 
 template <int NDIM, class T>
@@ -1503,6 +1506,14 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
     }
 
     //=============================================================
+    // Every step we (might) have computed Pcb(k) and possibly Ptotal(k)
+    // and stored this. Output these to file
+    //=============================================================
+    if (pofk_cb_every_step.size() > 0 or pofk_total_every_step.size() > 0) {
+        output_pofk_for_every_step(*this);
+    }
+
+    //=============================================================
     // Power-spectrum
     //=============================================================
     if (pofk) {
@@ -1539,7 +1550,7 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
     }
 
     //=============================================================
-    // Write gadget files
+    // Write particles to file
     //=============================================================
     if (output_particles) {
         timer.StartTiming("Output particles");

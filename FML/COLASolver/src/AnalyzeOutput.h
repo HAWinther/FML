@@ -21,12 +21,83 @@ template <int NDIM, class T>
 class NBodySimulation;
 
 template <int NDIM, class T>
-void output_fml(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
+void output_pofk_for_every_step(NBodySimulation<NDIM, T> & sim) {
     
+    //=============================================================
+    // Fetch parameters
+    //=============================================================
+    const auto output_folder = sim.output_folder;
+    const auto simulation_name = sim.simulation_name;
+    const auto ic_initial_redshift = sim.ic_initial_redshift;
+    const auto & pofk_cb_every_step = sim.pofk_cb_every_step;
+    const auto & pofk_total_every_step = sim.pofk_total_every_step;
+    const auto & grav = sim.grav;
+    const auto & transferdata = sim.transferdata;
+    const auto & power_initial_spline = sim.power_initial_spline;
+
+    //=============================================================
+    // Output all CMB+baryon Pofk
+    //=============================================================
+    for (auto & p : pofk_cb_every_step) {
+        auto redshift = p.first;
+        auto binning = p.second;
+        auto pofk_cb = [&](double k) {
+            double pofk_ini = power_initial_spline(k);
+            double D = grav->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
+            double Dini = grav->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
+            return pofk_ini * std::pow(D / Dini, 2);
+        };
+    
+        std::stringstream stream;
+        stream << std::fixed << std::setprecision(3) << redshift;
+        std::string redshiftstring = stream.str();
+        std::string filename = output_folder;
+        filename = filename + (filename == "" ? "" : "/") +  "pofk_" + simulation_name + "_cb_z" + redshiftstring + ".txt";
+        
+        std::ofstream fp(filename.c_str());
+        fp << "# k  (h/Mpc)    Pcb(k)  (Mpc/h)^3    Pcb_linear(k)  (Mpc/h)^3\n";
+        for (int i = 0; i < binning.n; i++) {
+            fp << std::setw(15) << binning.kbin[i] << " ";
+            fp << std::setw(15) << binning.pofk[i] << " ";
+            fp << std::setw(15) << pofk_cb(binning.kbin[i]) << " ";
+            fp << "\n";
+        }
+    }
+    
+    //=============================================================
+    // Output all total Pofk
+    //=============================================================
+    for (auto & p : pofk_total_every_step) {
+        auto redshift = p.first;
+        auto binning = p.second;
+        auto pofk_total = [&](double k) {
+            return transferdata->get_total_power_spectrum(k, 1.0 / (1.0 + redshift));
+        };
+    
+        std::stringstream stream;
+        stream << std::fixed << std::setprecision(3) << redshift;
+        std::string redshiftstring = stream.str();
+        std::string filename = output_folder;
+        filename = filename + (filename == "" ? "" : "/") +  "pofk_" + simulation_name + "_total_z" + redshiftstring + ".txt";
+        
+        std::ofstream fp(filename.c_str());
+        fp << "# k  (h/Mpc)    P(k)  (Mpc/h)^3    P_linear(k)  (Mpc/h)^3\n";
+        for (int i = 0; i < binning.n; i++) {
+            fp << std::setw(15) << binning.kbin[i] << " ";
+            fp << std::setw(15) << binning.pofk[i] << " ";
+            fp << std::setw(15) << pofk_total(binning.kbin[i]) << " ";
+            fp << "\n";
+        }
+    }
+}
+
+template <int NDIM, class T>
+void output_fml(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
+
     std::stringstream stream;
     stream << std::fixed << std::setprecision(3) << redshift;
     std::string redshiftstring = stream.str();
-    
+
     // Output particles in internal format
     std::string fileprefix = snapshot_folder + "/" + "fml_z" + redshiftstring;
     auto & part = sim.part;
@@ -43,8 +114,8 @@ void output_gadget(NBodySimulation<NDIM, T> & sim, double redshift, std::string 
     //=============================================================
     // Fetch parameters
     //=============================================================
-    auto simulation_boxsize = sim.simulation_boxsize;
-    auto & cosmo = sim.cosmo;
+    const auto simulation_boxsize = sim.simulation_boxsize;
+    const auto & cosmo = sim.cosmo;
     auto & part = sim.part;
 
     const double scale_factor = 1.0 / (1.0 + redshift);
@@ -175,9 +246,9 @@ void compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double re
     const bool pofk_multipole_interlacing = sim.pofk_multipole_interlacing;
     const bool pofk_multipole_subtract_shotnoise = sim.pofk_multipole_subtract_shotnoise;
     const int pofk_multipole_ellmax = sim.pofk_multipole_ellmax;
+    const auto & grav = sim.grav;
+    const auto & cosmo = sim.cosmo;
     auto & part = sim.part;
-    auto & grav = sim.grav;
-    auto & cosmo = sim.cosmo;
 
     const double a = 1.0 / (1.0 + redshift);
     const double velocity_to_displacement = 1.0 / (a * a * cosmo->HoverH0_of_a(a));
@@ -272,7 +343,7 @@ void compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std
     const bool pofk_interlacing = sim.pofk_interlacing;
     const bool pofk_subtract_shotnoise = sim.pofk_subtract_shotnoise;
     auto & part = sim.part;
-    auto & grav = sim.grav;
+    const auto & grav = sim.grav;
 
     if (FML::ThisTask == 0) {
         std::cout << "\n";
@@ -368,7 +439,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     const double fof_linking_length = sim.fof_linking_length;
     const int fof_nmin_per_halo = sim.fof_nmin_per_halo;
     const int fof_nmesh_max = sim.fof_nmesh_max;
-    auto cosmo = sim.cosmo;
+    const auto & cosmo = sim.cosmo;
     auto & part = sim.part;
 
     //=============================================================
