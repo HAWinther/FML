@@ -1,0 +1,3 @@
+Simulations of f(R) and LCDM. f(R) is set to use the same IC as LCDM (ic_use_gravity_model_GR=true).
+We use scale-independent COLA for f(R) (simulation_use_scaledependent_cola=false) even though it has scaledependent growth (on small scales so its not super important).
+For the f(R) fifth-force we use an approximate screening model and enforce correct linear evolution on the largest scales.

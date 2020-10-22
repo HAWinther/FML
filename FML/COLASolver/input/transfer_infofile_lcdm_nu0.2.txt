@@ -1,4 +1,4 @@
-/Users/hansw/local/FML/FML/COLASolver/input/camb_transfer_data 50
+/Users/hansw/local/FML/FML/COLASolver/input/camb_data_lcdm_nu0.2 50
 lcdm_nu0.2_transfer_z0.000.dat  0.000
 lcdm_nu0.2_transfer_z0.084.dat  0.084
 lcdm_nu0.2_transfer_z0.174.dat  0.174

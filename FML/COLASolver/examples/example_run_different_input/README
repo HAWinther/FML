@@ -1,0 +1,5 @@
+Example of starting the simulation with different input:
+1) CDM+baryon Power-spectrum P(k,z=0)
+2) CDM+baryon Transfer funcion T(k,z=0)
+3) Transferinfo file (which reads a bunch of T(k,z) files and makes splines - required for doing massive neutrinos)
+All of these should give the same result in this case.

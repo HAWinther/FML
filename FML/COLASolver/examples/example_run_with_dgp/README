@@ -1,0 +1,2 @@
+Simulations of DGP and LCDM. DGP is set to use the same IC as LCDM (ic_use_gravity_model_GR=true).
+For the DGP fifth-force we use an approximate screening model and enforce correct linear evolution on the largest scales.
