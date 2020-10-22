@@ -269,6 +269,7 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                     double delta_time_kick,
                                     [[maybe_unused]] double delta_time_drift) {
 
+    constexpr bool print_timings = false;  
     FML::UTILS::Timings timer;
     timer.StartTiming("Scaledependent COLA");
 
@@ -593,7 +594,7 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
     }
 
     timer.EndTiming("Scaledependent COLA");
-    if (FML::ThisTask == 0)
+    if (FML::ThisTask == 0 and print_timings)
         timer.PrintAllTimings();
 }
 
