@@ -111,7 +111,7 @@ end
 -- Particles
 ------------------------------------------------------------
 -- Number of CDM+b particles per dimension
-particle_Npart_1D = 256
+particle_Npart_1D = 128
 -- Factor of how many more particles to allocate space
 particle_allocation_factor = 1.25
 
@@ -132,7 +132,7 @@ output_folder = "output"
 ------------------------------------------------------------
 -- Number of steps between the outputs (in output_redshifts). 
 -- If only one number in the list then its the total number of steps 
-timestep_nsteps = {20}
+timestep_nsteps = {10}
 -- The time-stepping method: Quinn, Tassev
 timestep_method = "Quinn"
 -- For Tassev: the nLPT parameter
@@ -172,7 +172,7 @@ ic_LPT_order = 2
 -- reconstruct_from_particles (see below)
 -- read_particles   (if not COLA read GADGET file and use that for sim) 
 ic_type_of_input = "transferinfofile"
--- Path to the input
+-- Path to the input (NB: for using the example files update the path at the top of the file below)
 ic_input_filename = "input/transfer_infofile_lcdm_nu0.2.txt"
 -- The redshift of the P(k), T(k) we give as input
 ic_input_redshift = 0.0
