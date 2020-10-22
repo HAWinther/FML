@@ -33,7 +33,7 @@ simulation_use_scaledependent_cola = true
 ------------------------------------------------------------
 -- Choose the cosmology 
 ------------------------------------------------------------
--- Cosmology: LCDM, w0waCDM, DGP, ... add your own ...
+-- Cosmology: LCDM, w0waCDM, DGP, JBD, ... add your own ...
 cosmology_model = "LCDM"
 --- CDM density
 cosmology_OmegaCDM = 0.2637
@@ -55,6 +55,7 @@ cosmology_As = 2.215e-9
 cosmology_ns = 0.966
 -- Pivot scale in 1/Mpc
 cosmology_kpivot_mpc = 0.05
+
 -- The w0wa parametrization
 if cosmology_model == "w0waCDM" then 
   cosmology_w0 = -1.0
@@ -66,10 +67,24 @@ if cosmology_model == "DGP" then
   cosmology_dgp_OmegaRC = 0.11642
 end
 
+-- Jordan-Brans-Dicke
+if cosmology_model == "JBD" then 
+  -- The JBD parameter
+  cosmology_JBD_wBD = 1000.0 
+  -- The IC is set as to produce G_N / phi(a=1) = GeffG_today
+  cosmology_JBD_GeffG_today = 1.0
+  -- We require physical parameters. h is a derived quantity
+  cosmology_JBD_Omegabh2 = 0.025
+  cosmology_JBD_OmegaMNuh2 = 0.0
+  cosmology_JBD_OmegaCDMh2 = 0.12
+  cosmology_JBD_OmegaLambdah2 = 0.3
+  cosmology_JBD_OmegaKh2 = 0.0
+end
+
 ------------------------------------------------------------
 -- Choose the gravity model
 ------------------------------------------------------------
--- Gravity model: GR, DGP, f(R), ... add your own ...
+-- Gravity model: GR, DGP, f(R), JBD, ... add your own ...
 gravity_model = "GR"
 
 -- Hu-Sawicky f(R) model

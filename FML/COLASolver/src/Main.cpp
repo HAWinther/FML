@@ -14,6 +14,7 @@
 #include "Cosmology_DGP.h"
 #include "Cosmology_LCDM.h"
 #include "Cosmology_w0wa.h"
+#include "Cosmology_JBD.h"
 
 //=============================================================
 // The availiable gravity models
@@ -22,6 +23,7 @@
 #include "GravityModel_DGP.h"
 #include "GravityModel_GR.h"
 #include "GravityModel_fofr.h"
+#include "GravityModel_JBD.h"
 
 #include "Simulation.h"
 
@@ -125,6 +127,8 @@ int main(int argc, char ** argv) {
         cosmo = std::make_shared<Cosmologyw0waCDM>();
     else if (cosmology_model == "DGP")
         cosmo = std::make_shared<CosmologyDGP>();
+    else if (cosmology_model == "JBD")
+        cosmo = std::make_shared<CosmologyJBD>();
     else
         throw std::runtime_error("Unknown cosmology [" + cosmology_model + "]");
     cosmo->read_parameters(param);
@@ -142,6 +146,8 @@ int main(int argc, char ** argv) {
         grav = std::make_shared<GravityModelFofR<NDIM>>(cosmo);
     else if (gravity_model == "DGP")
         grav = std::make_shared<GravityModelDGP<NDIM>>(cosmo);
+    else if (gravity_model == "JBD")
+        grav = std::make_shared<GravityModelJBD<NDIM>>(cosmo);
     else
         throw std::runtime_error("Unknown gravitymodel [" + gravity_model + "]");
     grav->read_parameters(param);

@@ -20,6 +20,7 @@ class Cosmology {
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
     using Spline2D = FML::INTERPOLATION::SPLINE::Spline2D;
     using Constants = FML::UTILS::ConstantsAndUnits;
+    using DVector = FML::INTERPOLATION::SPLINE::DVector;
 
     //========================================================================
     // Constructors
@@ -156,20 +157,20 @@ class Cosmology {
         Neff = param.get<double>("cosmology_Neffective");
         TCMB_kelvin = param.get<double>("cosmology_TCMB_kelvin");
 
-        // Number of neutrinos
-        N_nu = 3;
-
         // Neutrino to photon temperature today
         Tnu_kelvin = TCMB_kelvin * std::pow(Neff / 3.0, 0.25) * std::pow(4.0 / 11.0, 1.0 / 3.0);
 
         // Compute photon density parameter
-        const double rho_critical_today = 3.0 * u.H0_over_h * h * u.H0_over_h * h / (8.0 * M_PI * u.G);
-        const double g_photon = 2;
-        OmegaR = g_photon * sixzeta4 / (2.0 * M_PI * M_PI) * std::pow(u.k_b * TCMB_kelvin * u.K / u.hbar, 4) * u.hbar /
-                 std::pow(u.c, 5) / rho_critical_today;
+        const double N_photon = 2;
+        const double rho_critical_today_over_h2 = 3.0 * u.H0_over_h * u.H0_over_h / (8.0 * M_PI * u.G);
+        const double OmegaRh2 = N_photon * sixzeta4 / (2.0 * M_PI * M_PI) *
+                                std::pow(u.k_b * TCMB_kelvin * u.K / u.hbar, 4) * u.hbar / std::pow(u.c, 5) /
+                                rho_critical_today_over_h2;
+        OmegaR = OmegaRh2 / (h * h);
 
         // Neutrino density parameter
-        OmegaNu = (7.0 / 8.0) * N_nu * std::pow(Tnu_kelvin / TCMB_kelvin, 4) * OmegaR;
+        const double OmegaNuh2 = (7.0 / 8.0) * N_nu * std::pow(Tnu_kelvin / TCMB_kelvin, 4) * OmegaRh2;
+        OmegaNu = OmegaNuh2 / (h * h);
 
         // Set the sum of the masses of the neutrinos
         Mnu_eV = (OmegaMNu / OmegaNu) / twoeta3 * sixeta4 * N_nu * ((Tnu_kelvin * u.K * u.k_b / u.eV));
@@ -292,7 +293,7 @@ class Cosmology {
     double TCMB_kelvin; // Temperature of the CMB today in Kelvin
     double Tnu_kelvin;  // Temperature of the neutrinos today in Kelvin. Derived from Neff and TCMB
     double Mnu_eV;      // Sum of the neutrino masses in eV. Derived from OmegaMNu and h
-    double N_nu;        // Number of neutrinos (3)
+    const double N_nu{3}; // Number of neutrinos (3)
     std::string name;
 
     // For neutrinos in the background

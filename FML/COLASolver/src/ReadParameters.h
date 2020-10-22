@@ -43,6 +43,19 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
     param["cosmology_Neffective"] = lfp.read_double("cosmology_Neffective", 3.046, REQUIRED);
     param["cosmology_TCMB_kelvin"] = lfp.read_double("cosmology_TCMB_kelvin", 2.7255, REQUIRED);
     param["cosmology_h"] = lfp.read_double("cosmology_h", 0.0, REQUIRED);
+    
+    //=============================================================
+    // Jordan-Brans-Dicke model
+    //=============================================================
+    if (param.get<std::string>("cosmology_model") == "JBD") {
+        param["cosmology_JBD_wBD"] = lfp.read_double("cosmology_JBD_wBD", 10000.0, REQUIRED);
+        param["cosmology_JBD_OmegaLambdah2"] = lfp.read_double("cosmology_JBD_OmegaLambdah2", 0.0, REQUIRED);
+        param["cosmology_JBD_OmegaCDMh2"] = lfp.read_double("cosmology_JBD_OmegaCDMh2", 0.0, REQUIRED);
+        param["cosmology_JBD_OmegaKh2"] = lfp.read_double("cosmology_JBD_OmegaKh2", 0.0, REQUIRED);
+        param["cosmology_JBD_OmegaMNuh2"] = lfp.read_double("cosmology_JBD_OmegaMNuh2", 0.0, REQUIRED);
+        param["cosmology_JBD_Omegabh2"] = lfp.read_double("cosmology_JBD_Omegabh2", 0.0, REQUIRED);
+        param["cosmology_JBD_GeffG_today"] = lfp.read_double("cosmology_JBD_GeffG_today", 1.0, OPTIONAL);
+    }
 
     //=============================================================
     // w0-wa Dark energy model
