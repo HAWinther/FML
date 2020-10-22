@@ -195,7 +195,7 @@ class GravityModel {
         if (FML::ThisTask == 0) {
             std::cout << "\n";
             std::cout << "#=====================================================\n";
-            std::cout << "# GravityModel [" << name << "] Cosmology: [" << this->cosmo->get_name() << "]\n";
+            std::cout << "# GravityModel is [" << name << "] and has the cosmology: [" << this->cosmo->get_name() << "]\n";
             std::cout << "# Growth factors unity at zini = " << 1.0 / aini - 1.0 << "\n";
             std::cout << "# Starting integrating growth factors from z = " << 1.0 / alow - 1.0 << "\n";
             std::cout << "# scaledependent_growth : " << scaledependent_growth << "\n";
