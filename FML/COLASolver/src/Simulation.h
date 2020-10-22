@@ -1111,6 +1111,7 @@ void NBodySimulation<NDIM, T>::init() {
             if (FML::PARTICLE::has_get_D_1LPT<T>()) {
                 // Store phi_1LPT (D^2 phi_1LPT = -delta)
                 phi_1LPT_ini_fourier = delta_ini_fourier;
+                phi_1LPT_ini_fourier.add_memory_label("phi_1LPT(k,zini)");
                 auto Local_x_start = phi_1LPT_ini_fourier.get_local_x_start();
                 auto Local_nx = phi_1LPT_ini_fourier.get_local_nx();
 #ifdef USE_OMP
@@ -1135,12 +1136,15 @@ void NBodySimulation<NDIM, T>::init() {
                 if (FML::ThisTask == 0)
                     std::cout << "Storing initial 2LPT potential \n";
                 phi_2LPT_ini_fourier = phi_nLPT_potentials[0];
+                phi_2LPT_ini_fourier.add_memory_label("phi_2LPT(k,zini)");
             }
             if (FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>()) {
                 if (FML::ThisTask == 0)
                     std::cout << "Storing initial 3LPT potentials \n";
                 phi_3LPTa_ini_fourier = phi_nLPT_potentials[1];
                 phi_3LPTb_ini_fourier = phi_nLPT_potentials[2];
+                phi_3LPTa_ini_fourier.add_memory_label("phi_3LPTa(k,zini)");
+                phi_3LPTb_ini_fourier.add_memory_label("phi_3LPTb(k,zini)");
             }
         }
 
@@ -1405,6 +1409,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         // First step we store the initial  density field
         if (not initial_density_field_fourier) {
             initial_density_field_fourier = density_grid_fourier;
+            initial_density_field_fourier.add_memory_label("density(k,zini)");
             FML::assert_mpi(std::fabs(redshift - ic_initial_redshift) < 1e-3, "This should not happen");
         }
 
