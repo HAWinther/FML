@@ -122,7 +122,7 @@ particle_allocation_factor = 1.25
 output_redshifts = {0.0}
 -- Output particles?
 output_particles = true
--- Fileformat: GADGET
+-- Fileformat: GADGET, FML
 output_fileformat = "GADGET"
 -- Output folder
 output_folder = "output"
@@ -173,7 +173,7 @@ ic_LPT_order = 2
 -- read_particles   (if not COLA read GADGET file and use that for sim) 
 ic_type_of_input = "transferinfofile"
 -- Path to the input
-ic_input_filename = "input/transfer_infofile.txt"
+ic_input_filename = "input/transfer_infofile_lcdm_nu0.2.txt"
 -- The redshift of the P(k), T(k) we give as input
 ic_input_redshift = 0.0
 -- The initial redshift of the simulation
