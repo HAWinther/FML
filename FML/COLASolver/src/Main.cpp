@@ -1,6 +1,9 @@
 
 //=============================================================
 // How to process the parameters from the input file
+// Gravity model parameters are read by the GravityModel,
+// cosmology parameters are read by the Cosmology model
+// and the rest are read by the Simulation
 //=============================================================
 #include "ReadParameters.h"
 
@@ -8,8 +11,8 @@
 // The availiable cosmologies
 //=============================================================
 #include "Cosmology.h"
-#include "Cosmology_LCDM.h"
 #include "Cosmology_DGP.h"
+#include "Cosmology_LCDM.h"
 #include "Cosmology_w0wa.h"
 
 //=============================================================
@@ -28,40 +31,67 @@
 using ParameterMap = FML::UTILS::ParameterMap;
 
 //=============================================================
-// Design the particle you want to use here. Free choice of types
+// Design the particle you want to use here. Free choice of
+// types so if you for example want to save memory you can change to floats
+// or comment out fields if you, say, don't want scaledependent COLA
+//
+// See src/ExampleParticles.h for more examples
+// See FML/ParticleTypes/ReflectOnParticleMethods.h for standard methods
 //=============================================================
+
 constexpr int NDIM = 3;
+
 class Particle {
   public:
-
+    //=============================================================
     // Things that any particle must have
+    //=============================================================
     double pos[NDIM];
     double * get_pos() { return pos; }
     double vel[NDIM];
     double * get_vel() { return vel; }
     constexpr int get_ndim() const { return NDIM; }
-   
-    // --- Optional things ---
 
-    // 1LPT displacement field Psi (needed for 1LPT COLA)
-    float Psi_1LPT[NDIM];
-    float * get_D_1LPT() { return Psi_1LPT; }
-    
-    // 2LPT displacement field Psi (needed for 2LPT COLA)
-    float Psi_2LPT[NDIM];
-    float * get_D_2LPT() { return Psi_2LPT; }
+    //=============================================================
+    // Optional things below:
+    //=============================================================
 
-    // Lagrangian position
-    // Needed for COLA with scaledependent growth
+    //=============================================================
+    // Add ID to particles (ok to skip this, but if so this will not be
+    // present in GADGET output files)
+    //=============================================================
+    long long int id;
+    long long int get_id() const { return id; }
+    void set_id(long long int _id) { id = _id; }
+
+    //=============================================================
+    // Initial Lagrangian position
+    // Only needed for COLA with scaledependent growth
+    // NB: should ideally have same type as [pos] to avoid truncating the
+    // precision of pos (these are temporarily swapped by some algorithms)
+    //=============================================================
     double q[NDIM];
     double * get_q() { return q; }
 
-    // Derivative of 1LPT displacement field Psi 
-    // This is only needed if you want only 1LPT COLA with scaledependent growth
-    // float dPsidloga_1LPT[NDIM];
-    // float * get_dDdloga_1LPT() { return dPsidloga_1LPT; }
-    
-    // ... other things like ID, mass, etc. can be added
+    //=============================================================
+    // 1LPT displacement field Psi (needed if you want >= 1LPT COLA)
+    //=============================================================
+    float Psi_1LPT[NDIM];
+    float * get_D_1LPT() { return Psi_1LPT; }
+
+    //=============================================================
+    // 2LPT displacement field Psi (needed for >= 2LPT COLA)
+    //=============================================================
+    float Psi_2LPT[NDIM];
+    float * get_D_2LPT() { return Psi_2LPT; }
+
+    //=============================================================
+    // 3LPT displacement field Psi (needed for >= 3LPT COLA)
+    //=============================================================
+    // float Psi_3LPTa[NDIM];
+    // float Psi_3LPTb[NDIM];
+    // float * get_D_3LPTa() { return Psi_3LPTa; }
+    // float * get_D_3LPTb() { return Psi_3LPTb; }
 };
 
 int main(int argc, char ** argv) {
