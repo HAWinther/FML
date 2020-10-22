@@ -36,6 +36,8 @@
 #include <FML/MemoryLogging/MemoryLogging.h>
 #endif
 
+#include <FML/Timing/Timings.h>
+
 namespace FML {
 
     // MPI and OpenMP information
@@ -53,6 +55,9 @@ namespace FML {
     extern double xmin_domain;
     /// The local extent of the domain (global domain goes from 0 to 1)
     extern double xmax_domain;
+
+    // Global timer
+    extern FML::UTILS::Timings global_timer;
 
     auto uniform_random() -> double;
 
@@ -93,7 +98,11 @@ namespace FML {
     //================================================
     void init_fml();
 
+    // Get the current and peak value of the resident set size (in bytes)
     std::pair<double, double> get_system_memory_use();
+    // Print the min/max of the current and peak value of the resident set size 
+    // over tasks
+    void print_system_memory_use(); 
 
     /// Gather a single value from all tasks. Value from task ThisTask is stored in values[ThisTask]
     template <class T>
