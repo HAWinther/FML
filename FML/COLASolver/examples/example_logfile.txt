@@ -1,0 +1,1282 @@
+
+#=====================================================
+#           ________________  .____         
+#           \_   _____/     \ |    |      
+#            |    __)/  \ /  \|    |      
+#            |     \/    Y    \    |___   
+#            \___  /\____|__  /_______ \ 
+#                \/         \/        \/ 
+#
+# Initializing FML, MPI and FFTW
+# MPI is enabled. Running with 4 MPI tasks
+# OpenMP is enabled. Main task has 12 threads availiable
+# MPI + Threads is working
+# FFTW is enabled. Thread support is enabled
+#
+# List of tasks:
+# Task    0 [eduroam-193-157-192-100.wlan.uio.no]
+#     x-domain [       0 ,     0.25)
+# Task    1 [eduroam-193-157-192-100.wlan.uio.no]
+#     x-domain [    0.25 ,      0.5)
+# Task    2 [eduroam-193-157-192-100.wlan.uio.no]
+#     x-domain [     0.5 ,     0.75)
+# Task    3 [eduroam-193-157-192-100.wlan.uio.no]
+#     x-domain [    0.75 ,        1)
+#
+#=====================================================
+
+
+#=====================================================
+#
+#            .___        _____          
+#            |   | _____/ ____\____     
+#            |   |/    \   __\/  _ \    
+#            |   |   |  \  | (  <_> )   
+#            |___|___|  /__|  \____/    
+#                     \/                
+#
+# Information about (an empty) particle of the given type:
+# Below we only show info about methods we have implemented support for
+# Particle uses fiducial communication append_to_buffer method (assumes no dynamic alloc inside class)
+# Particle uses fiducial communication assign_from_buffer method (assumes no dynamic alloc inside class)
+# Particle uses fiducial size method. Size of particle is 104 bytes
+# Dimension is 3
+# Particle has [Position] (24 bytes)
+# Particle has [Velocity] (24 bytes)
+# Particle has [ID] (8 bytes)
+# Particle has [1LPT Displacement field] (12 bytes)
+# Particle has [2LPT Displacement field] (12 bytes)
+# Particle has [Lagrangian position] (24 bytes)
+# Particle compatible with 2LPT COLA
+# Particle compatible with 2+ LPT scaledependent COLA
+#
+#=====================================================
+
+
+#=====================================================
+# Parameter map contains 55 elements:
+#=====================================================
+  all_parameters_must_be_in_file : true
+  bispectrum                     : false
+  cosmology_As                   : 2.215e-09      
+  cosmology_Neffective           : 3.046          
+  cosmology_OmegaCDM             : 0.2637         
+  cosmology_OmegaLambda          : 0.682407       
+  cosmology_OmegaMNu             : 0.0048         
+  cosmology_Omegab               : 0.049          
+  cosmology_TCMB_kelvin          : 2.7255         
+  cosmology_h                    : 0.671          
+  cosmology_kpivot_mpc           : 0.05           
+  cosmology_model                : LCDM           
+  cosmology_ns                   : 0.966          
+  fof                            : false
+  force_density_assignment_method : CIC            
+  force_kernel                   : continuous_greens_function
+  force_linear_massive_neutrinos : true
+  force_nmesh                    : 128            
+  gravity_model                  : GR             
+  ic_LPT_order                   : 2              
+  ic_fix_amplitude               : true
+  ic_initial_redshift            : 20             
+  ic_input_filename              : input/transfer_infofile_lcdm_nu0.2.txt
+  ic_input_redshift              : 0              
+  ic_nmesh                       : 128            
+  ic_random_field_type           : gaussian       
+  ic_random_generator            : GSL            
+  ic_random_seed                 : 1234           
+  ic_reverse_phases              : false
+  ic_sigma8                      : 0.83           
+  ic_sigma8_normalization        : false
+  ic_sigma8_redshift             : 0              
+  ic_type_of_input               : transferinfofile
+  ic_use_gravity_model_GR        : true
+  output_fileformat              : GADGET         
+  output_folder                  : output         
+  output_particles               : true
+  output_redshifts               : [              0 ]
+  particle_Npart_1D              : 128            
+  particle_allocation_factor     : 1.25           
+  pofk                           : true
+  pofk_density_assignment_method : PCS            
+  pofk_interlacing               : true
+  pofk_multipole                 : false
+  pofk_nmesh                     : 128            
+  pofk_subtract_shotnoise        : false
+  simulation_boxsize             : 1000           
+  simulation_name                : TestSim        
+  simulation_use_cola            : true
+  simulation_use_scaledependent_cola : true
+  timestep_algorithm             : KDK            
+  timestep_cola_nLPT             : -2.5           
+  timestep_method                : Quinn          
+  timestep_nsteps                : [              10 ]
+  timestep_scalefactor_spacing   : linear         
+#=====================================================
+
+
+#=====================================================
+# Cosmology [LCDM]
+# Omegab      : 0.049
+# OmegaM      : 0.3175
+# OmegaMNu    : 0.0048
+# OmegaCDM    : 0.2637
+# OmegaLambda : 0.682407
+# OmegaR      : 5.49255e-05
+# OmegaNu     : 3.79958e-05
+# OmegaRtot   : 9.29213e-05
+# OmegaK      : 0
+# h           : 0.671
+# N_nu        : 3
+# Neff        : 3.046
+# Mnu         : 0.200981 eV
+# TCMB        : 2.7255 K
+# Tnu         : 1.95278 K
+# As          : 2.215e-09
+# ns          : 0.966
+# kpivot      : 0.05 1/Mpc
+#=====================================================
+
+
+
+#=====================================================
+# GravityModel is [GR] and has the cosmology: [LCDM]
+# Growth factors unity at zini = 20
+# Starting integrating growth factors from z = 50
+# scaledependent_growth : true
+#=====================================================
+
+
+#=====================================================
+# NBodySimulation::read_parameters
+#=====================================================
+
+simulation_name                          : TestSim
+simulation_boxsize                       : 1000
+simulation_use_cola                      : true
+simulation_use_scaledependent_cola       : true
+force_nmesh                              : 128
+force_kernel                             : continuous_greens_function
+force_density_assignment_method          : CIC
+force_linear_massive_neutrinos           : true
+ic_type_of_input                         : transferinfofile
+ic_input_filename                        : input/transfer_infofile_lcdm_nu0.2.txt
+ic_random_field_type                     : gaussian
+ic_input_redshift                        : 0
+ic_nmesh                                 : 128
+ic_random_seed                           : 1234
+ic_random_generator                      : GSL
+ic_LPT_order                             : 2
+ic_fix_amplitude                         : true
+ic_reverse_phases                        : false
+ic_type_of_input                         : transferinfofile
+particle_Npart_1D                        : 128
+particle_allocation_factor               : 1.25
+timestep_nsteps                          : 10 
+timestep_method                          : Quinn
+timestep_algorithm                       : KDK
+timestep_scalefactor_spacing             : linear
+pofk                                     : true
+pofk_nmesh                               : 128
+pofk_interlacing                         : true
+pofk_subtract_shotnoise                  : false
+pofk_density_assignment_method           : PCS
+output_particles                         : true
+output_redshifts                         : 0 , 
+output_fileformat                        : GADGET
+output_folder                            : output
+
+#=====================================================
+# Create initial conditions
+#=====================================================
+
+
+#=====================================================
+# Testing splines: 
+#=====================================================
+k =  0.01: P(k,zini) = 83.6702 (Mpc/h)^3
+k =  0.10: P(k,zini) = 20.6095 (Mpc/h)^3
+k =  1.00: P(k,zini) = 0.25479 (Mpc/h)^3
+k = 10.00: P(k,zini) = 0.000840555 (Mpc/h)^3
+
+#=====================================================
+# Sigma(R = 8 Mpc/h, z = 0.0 ) : 0.807747       
+#=====================================================
+
+#=====================================================
+#
+#                .___  _________   
+#                |   | \_   ___ \  
+#                |   | /    \  \/  
+#                |   | \     \____ 
+#                |___|  \______  / 
+#                              \/  
+#
+# Generating initial conditions for N-body
+# Order in LPT = 2
+# The boxsize is 1000 comoving Mpc/h
+# The initial redshift zini = 20
+# Particle has [Position] x_code = x / Box (24 bytes)
+# Particle has [Velocity] v_code = a^2 dxdt / (H0 Box) (24 bytes)
+# Particle has [ID] (8 bytes)
+# Particle has [1LPT Displacement field] (12 bytes)
+# Particle has [2LPT Displacement field] (12 bytes)
+# Particle has [Lagrangian position] (24 bytes)
+# Total size of particle is 104 bytes
+# We will make 128^3 particles
+# Plus a buffer with room for 25%% more particles
+# We will allocate ~68.1574 MB per task for the particles
+#
+#=====================================================
+
+
+#=====================================================
+#
+#            .___        _____          
+#            |   | _____/ ____\____     
+#            |   |/    \   __\/  _ \    
+#            |   |   |  \  | (  <_> )   
+#            |___|___|  /__|  \____/    
+#                     \/                
+#
+# Info about MPIParticles. Dimension of particles is 3
+# We have allocated 68.1574 MB (mean)
+#                   68.1574 MB (min)
+#                   68.1574 MB (max)
+# Total particles across all tasks is 2097152
+# Task 0 has 524288 parts. Capacity: 655360
+# The buffer is 80 %% (mean)
+#               80 %% (min)
+#               80 %% (max) filled across tasks
+#
+#=====================================================
+
+Storing unique ID in particle
+Storing Lagrangian position q in particle
+Adding 1LPT position to particle
+Adding 1LPT velocity to particle
+Storing 1LPT displacment field in particle
+Maximum 1LPT displacements: 1.84048 Mpc/h
+Maximum 1LPT velocity: 478.885 km/s peculiar
+Adding 2LPT position to particle
+Adding 2LPT velocity to particle
+Storing 2LPT displacment field in particle
+Maximum 2LPT displacements: 0.0286752 Mpc/h
+Maximum 2LPT velocity: 14.9306 km/s peculiar
+Storing initial 2LPT potential 
+
+#=====================================================
+# The time-steps and outputs we plan to take
+#=====================================================
+
+Next output z = 0 nsteps: 10
+Step: 0    / 10  
+Positions  from z = 20              -> 6              
+Velocities from z = 20              -> 9.5            
+Step: 1    / 10  
+Positions  from z = 6               -> 3.2            
+Velocities from z = 9.5             -> 4.25           
+Step: 2    / 10  
+Positions  from z = 3.2             -> 2              
+Velocities from z = 4.25            -> 2.5            
+Step: 3    / 10  
+Positions  from z = 2               -> 1.33333        
+Velocities from z = 2.5             -> 1.625          
+Step: 4    / 10  
+Positions  from z = 1.33333         -> 0.909091       
+Velocities from z = 1.625           -> 1.1            
+Step: 5    / 10  
+Positions  from z = 0.909091        -> 0.615385       
+Velocities from z = 1.1             -> 0.75           
+Step: 6    / 10  
+Positions  from z = 0.615385        -> 0.4            
+Velocities from z = 0.75            -> 0.5            
+Step: 7    / 10  
+Positions  from z = 0.4             -> 0.235294       
+Velocities from z = 0.5             -> 0.3125         
+Step: 8    / 10  
+Positions  from z = 0.235294        -> 0.105263       
+Velocities from z = 0.3125          -> 0.166667       
+Step: 9    / 10  
+Positions  from z = 0.105263        -> 0              
+Velocities from z = 0.166667        -> 0.05           
+Step: 10   / 10  
+Positions  from z = 0               -> 0              
+Velocities from z = 0.05            -> 0              
+
+
+#=====================================================
+# Starting main time-stepping loop
+#=====================================================
+
+
+Taking substep: 0 / 10 Total steps taken: 0
+Positions from  z = 20              -> 6              
+Velocities from z = 20              -> 9.5            
+deltatime_pos = 6.86079         deltatime_vel = 4.48368        
+Adding particles (baryons+CDM) to the densityfield
+Adding linear massive neutrinos to the densityfield
+[Kick] Max delta_vel * delta_time : 0.000726015
+[Kick] + [Drift] Scaledependent COLA 2LPT
+[Drift] Max displacement: 0.000370642
+
+#=====================================================
+#
+#            .___        _____          
+#            |   | _____/ ____\____     
+#            |   |/    \   __\/  _ \    
+#            |   |   |  \  | (  <_> )   
+#            |___|___|  /__|  \____/    
+#                     \/                
+#
+# Info about MPIParticles. Dimension of particles is 3
+# We have allocated 68.1574 MB (mean)
+#                   68.1574 MB (min)
+#                   68.1574 MB (max)
+# Total particles across all tasks is 2097152
+# Task 0 has 523505 parts. Capacity: 655360
+# The buffer is 80 %% (mean)
+#               79.5229 %% (min)
+#               80.3403 %% (max) filled across tasks
+#
+#=====================================================
+
+#=====================================================
+# System memory use (resident set size): 
+# Current RSS: 166.531         MB (min over tasks)
+# Current RSS: 179.2           MB (max over tasks)
+# Peak RSS:    166.879         MB (min over tasks)
+# Peak RSS:    179.687         MB (max over tasks)
+#=====================================================
+
+Taking substep: 1 / 10 Total steps taken: 1
+Positions from  z = 6               -> 3.2            
+Velocities from z = 9.5             -> 4.25           
+deltatime_pos = 2.1007          deltatime_vel = 3.16354        
+Adding particles (baryons+CDM) to the densityfield
+Adding linear massive neutrinos to the densityfield
+[Kick] Max delta_vel * delta_time : 0.0033098
+[Kick] + [Drift] Scaledependent COLA 2LPT
+[Drift] Max displacement: 0.00097715
+
+#=====================================================
+#
+#            .___        _____          
+#            |   | _____/ ____\____     
+#            |   |/    \   __\/  _ \    
+#            |   |   |  \  | (  <_> )   
+#            |___|___|  /__|  \____/    
+#                     \/                
+#
+# Info about MPIParticles. Dimension of particles is 3
+# We have allocated 68.1574 MB (mean)
+#                   68.1574 MB (min)
+#                   68.1574 MB (max)
+# Total particles across all tasks is 2097152
+# Task 0 has 523522 parts. Capacity: 655360
+# The buffer is 80 %% (mean)
+#               79.507 %% (min)
+#               80.3476 %% (max) filled across tasks
+#
+#=====================================================
+
+#=====================================================
+# System memory use (resident set size): 
+# Current RSS: 166.588         MB (min over tasks)
+# Current RSS: 170.533         MB (max over tasks)
+# Peak RSS:    167.092         MB (min over tasks)
+# Peak RSS:    179.687         MB (max over tasks)
+#=====================================================
+
+Taking substep: 2 / 10 Total steps taken: 2
+Positions from  z = 3.2             -> 2              
+Velocities from z = 4.25            -> 2.5            
+deltatime_pos = 1.09927         deltatime_vel = 1.4406         
+Adding particles (baryons+CDM) to the densityfield
+Adding linear massive neutrinos to the densityfield
+[Kick] Max delta_vel * delta_time : 0.00196746
+[Kick] + [Drift] Scaledependent COLA 2LPT
+[Drift] Max displacement: 0.00122242
+
+#=====================================================
+#
+#            .___        _____          
+#            |   | _____/ ____\____     
+#            |   |/    \   __\/  _ \    
+#            |   |   |  \  | (  <_> )   
+#            |___|___|  /__|  \____/    
+#                     \/                
+#
+# Info about MPIParticles. Dimension of particles is 3
+# We have allocated 68.1574 MB (mean)
+#                   68.1574 MB (min)
+#                   68.1574 MB (max)
+# Total particles across all tasks is 2097152
+# Task 0 has 523492 parts. Capacity: 655360
+# The buffer is 80 %% (mean)
+#               79.502 %% (min)
+#               80.3539 %% (max) filled across tasks
+#
+#=====================================================
+
+#=====================================================
+# System memory use (resident set size): 
+# Current RSS: 166.216         MB (min over tasks)
+# Current RSS: 170.557         MB (max over tasks)
+# Peak RSS:    167.092         MB (min over tasks)
+# Peak RSS:    179.687         MB (max over tasks)
+#=====================================================
+
+Taking substep: 3 / 10 Total steps taken: 3
+Positions from  z = 2               -> 1.33333        
+Velocities from z = 2.5             -> 1.625          
+deltatime_pos = 0.686595        deltatime_vel = 0.847013       
+Adding particles (baryons+CDM) to the densityfield
+Adding linear massive neutrinos to the densityfield
+[Kick] Max delta_vel * delta_time : 0.00124172
+[Kick] + [Drift] Scaledependent COLA 2LPT
+[Drift] Max displacement: 0.00142081
+
+#=====================================================
+#
+#            .___        _____          
+#            |   | _____/ ____\____     
+#            |   |/    \   __\/  _ \    
+#            |   |   |  \  | (  <_> )   
+#            |___|___|  /__|  \____/    
+#                     \/                
+#
+# Info about MPIParticles. Dimension of particles is 3
+# We have allocated 68.1574 MB (mean)
+#                   68.1574 MB (min)
+#                   68.1574 MB (max)
+# Total particles across all tasks is 2097152
+# Task 0 has 523464 parts. Capacity: 655360
+# The buffer is 80 %% (mean)
+#               79.4769 %% (min)
+#               80.3801 %% (max) filled across tasks
+#
+#=====================================================
+
+#=====================================================
+# System memory use (resident set size): 
+# Current RSS: 166.281         MB (min over tasks)
+# Current RSS: 170.562         MB (max over tasks)
+# Peak RSS:    167.092         MB (min over tasks)
+# Peak RSS:    179.687         MB (max over tasks)
+#=====================================================
+
+Taking substep: 4 / 10 Total steps taken: 4
+Positions from  z = 1.33333         -> 0.909091       
+Velocities from z = 1.625           -> 1.1            
+deltatime_pos = 0.466646        deltatime_vel = 0.557817       
+Adding particles (baryons+CDM) to the densityfield
+Adding linear massive neutrinos to the densityfield
+[Kick] Max delta_vel * delta_time : 0.000957635
+[Kick] + [Drift] Scaledependent COLA 2LPT
+[Drift] Max displacement: 0.00163618
+
+#=====================================================
+#
+#            .___        _____          
+#            |   | _____/ ____\____     
+#            |   |/    \   __\/  _ \    
+#            |   |   |  \  | (  <_> )   
+#            |___|___|  /__|  \____/    
+#                     \/                
+#
+# Info about MPIParticles. Dimension of particles is 3
+# We have allocated 68.1574 MB (mean)
+#                   68.1574 MB (min)
+#                   68.1574 MB (max)
+# Total particles across all tasks is 2097152
+# Task 0 has 523347 parts. Capacity: 655360
+# The buffer is 80 %% (mean)
+#               79.4417 %% (min)
+#               80.4317 %% (max) filled across tasks
+#
+#=====================================================
+
+#=====================================================
+# System memory use (resident set size): 
+# Current RSS: 166.695         MB (min over tasks)
+# Current RSS: 171.667         MB (max over tasks)
+# Peak RSS:    167.277         MB (min over tasks)
+# Peak RSS:    179.687         MB (max over tasks)
+#=====================================================
+
+Taking substep: 5 / 10 Total steps taken: 5
+Positions from  z = 0.909091        -> 0.615385       
+Velocities from z = 1.1             -> 0.75           
+deltatime_pos = 0.332359        deltatime_vel = 0.390061       
+Adding particles (baryons+CDM) to the densityfield
+Adding linear massive neutrinos to the densityfield
+[Kick] Max delta_vel * delta_time : 0.000741942
+[Kick] + [Drift] Scaledependent COLA 2LPT
+[Drift] Max displacement: 0.00176338
+
+#=====================================================
+#
+#            .___        _____          
+#            |   | _____/ ____\____     
+#            |   |/    \   __\/  _ \    
+#            |   |   |  \  | (  <_> )   
+#            |___|___|  /__|  \____/    
+#                     \/                
+#
+# Info about MPIParticles. Dimension of particles is 3
+# We have allocated 68.1574 MB (mean)
+#                   68.1574 MB (min)
+#                   68.1574 MB (max)
+# Total particles across all tasks is 2097152
+# Task 0 has 523207 parts. Capacity: 655360
+# The buffer is 80 %% (mean)
+#               79.3901 %% (min)
+#               80.5009 %% (max) filled across tasks
+#
+#=====================================================
+
+#=====================================================
+# System memory use (resident set size): 
+# Current RSS: 166.773         MB (min over tasks)
+# Current RSS: 168.673         MB (max over tasks)
+# Peak RSS:    167.277         MB (min over tasks)
+# Peak RSS:    179.687         MB (max over tasks)
+#=====================================================
+
+Taking substep: 6 / 10 Total steps taken: 6
+Positions from  z = 0.615385        -> 0.4            
+Velocities from z = 0.75            -> 0.5            
+deltatime_pos = 0.243791        deltatime_vel = 0.282667       
+Adding particles (baryons+CDM) to the densityfield
+Adding linear massive neutrinos to the densityfield
+[Kick] Max delta_vel * delta_time : 0.000648153
+[Kick] + [Drift] Scaledependent COLA 2LPT
+[Drift] Max displacement: 0.00178388
+
+#=====================================================
+#
+#            .___        _____          
+#            |   | _____/ ____\____     
+#            |   |/    \   __\/  _ \    
+#            |   |   |  \  | (  <_> )   
+#            |___|___|  /__|  \____/    
+#                     \/                
+#
+# Info about MPIParticles. Dimension of particles is 3
+# We have allocated 68.1574 MB (mean)
+#                   68.1574 MB (min)
+#                   68.1574 MB (max)
+# Total particles across all tasks is 2097152
+# Task 0 has 523130 parts. Capacity: 655360
+# The buffer is 80 %% (mean)
+#               79.3323 %% (min)
+#               80.5722 %% (max) filled across tasks
+#
+#=====================================================
+
+#=====================================================
+# System memory use (resident set size): 
+# Current RSS: 166.904         MB (min over tasks)
+# Current RSS: 168.776         MB (max over tasks)
+# Peak RSS:    167.526         MB (min over tasks)
+# Peak RSS:    179.687         MB (max over tasks)
+#=====================================================
+
+Taking substep: 7 / 10 Total steps taken: 7
+Positions from  z = 0.4             -> 0.235294       
+Velocities from z = 0.5             -> 0.3125         
+deltatime_pos = 0.182683        deltatime_vel = 0.209865       
+Adding particles (baryons+CDM) to the densityfield
+Adding linear massive neutrinos to the densityfield
+[Kick] Max delta_vel * delta_time : 0.000499204
+[Kick] + [Drift] Scaledependent COLA 2LPT
+[Drift] Max displacement: 0.00172212
+
+#=====================================================
+#
+#            .___        _____          
+#            |   | _____/ ____\____     
+#            |   |/    \   __\/  _ \    
+#            |   |   |  \  | (  <_> )   
+#            |___|___|  /__|  \____/    
+#                     \/                
+#
+# Info about MPIParticles. Dimension of particles is 3
+# We have allocated 68.1574 MB (mean)
+#                   68.1574 MB (min)
+#                   68.1574 MB (max)
+# Total particles across all tasks is 2097152
+# Task 0 has 523050 parts. Capacity: 655360
+# The buffer is 80 %% (mean)
+#               79.2805 %% (min)
+#               80.6273 %% (max) filled across tasks
+#
+#=====================================================
+
+#=====================================================
+# System memory use (resident set size): 
+# Current RSS: 168.018         MB (min over tasks)
+# Current RSS: 168.94          MB (max over tasks)
+# Peak RSS:    168.018         MB (min over tasks)
+# Peak RSS:    179.687         MB (max over tasks)
+#=====================================================
+
+Taking substep: 8 / 10 Total steps taken: 8
+Positions from  z = 0.235294        -> 0.105263       
+Velocities from z = 0.3125          -> 0.166667       
+deltatime_pos = 0.13932         deltatime_vel = 0.158785       
+Adding particles (baryons+CDM) to the densityfield
+Adding linear massive neutrinos to the densityfield
+[Kick] Max delta_vel * delta_time : 0.000368883
+[Kick] + [Drift] Scaledependent COLA 2LPT
+[Drift] Max displacement: 0.00160082
+
+#=====================================================
+#
+#            .___        _____          
+#            |   | _____/ ____\____     
+#            |   |/    \   __\/  _ \    
+#            |   |   |  \  | (  <_> )   
+#            |___|___|  /__|  \____/    
+#                     \/                
+#
+# Info about MPIParticles. Dimension of particles is 3
+# We have allocated 68.1574 MB (mean)
+#                   68.1574 MB (min)
+#                   68.1574 MB (max)
+# Total particles across all tasks is 2097152
+# Task 0 has 523037 parts. Capacity: 655360
+# The buffer is 80 %% (mean)
+#               79.2274 %% (min)
+#               80.6718 %% (max) filled across tasks
+#
+#=====================================================
+
+#=====================================================
+# System memory use (resident set size): 
+# Current RSS: 168.202         MB (min over tasks)
+# Current RSS: 169.378         MB (max over tasks)
+# Peak RSS:    168.202         MB (min over tasks)
+# Peak RSS:    179.687         MB (max over tasks)
+#=====================================================
+
+Taking substep: 9 / 10 Total steps taken: 9
+Positions from  z = 0.105263        -> 0              
+Velocities from z = 0.166667        -> 0.05           
+deltatime_pos = 0.107932        deltatime_vel = 0.122121       
+Adding particles (baryons+CDM) to the densityfield
+Adding linear massive neutrinos to the densityfield
+[Kick] Max delta_vel * delta_time : 0.000306911
+[Kick] + [Drift] Scaledependent COLA 2LPT
+[Drift] Max displacement: 0.00144917
+
+#=====================================================
+#
+#            .___        _____          
+#            |   | _____/ ____\____     
+#            |   |/    \   __\/  _ \    
+#            |   |   |  \  | (  <_> )   
+#            |___|___|  /__|  \____/    
+#                     \/                
+#
+# Info about MPIParticles. Dimension of particles is 3
+# We have allocated 68.1574 MB (mean)
+#                   68.1574 MB (min)
+#                   68.1574 MB (max)
+# Total particles across all tasks is 2097152
+# Task 0 has 523029 parts. Capacity: 655360
+# The buffer is 80 %% (mean)
+#               79.1779 %% (min)
+#               80.7103 %% (max) filled across tasks
+#
+#=====================================================
+
+#=====================================================
+# System memory use (resident set size): 
+# Current RSS: 168.231         MB (min over tasks)
+# Current RSS: 169.566         MB (max over tasks)
+# Peak RSS:    168.366         MB (min over tasks)
+# Peak RSS:    179.687         MB (max over tasks)
+#=====================================================
+
+Taking substep: 10 / 10 Total steps taken: 10
+Positions from  z = 0               -> 0              
+Velocities from z = 0.05            -> 0              
+deltatime_pos = 0               deltatime_vel = 0.0506051      
+Adding particles (baryons+CDM) to the densityfield
+Adding linear massive neutrinos to the densityfield
+[Kick] Max delta_vel * delta_time : 6.33135e-05
+[Kick] + [Drift] Scaledependent COLA 2LPT
+
+#=====================================================
+#
+#            .___        _____          
+#            |   | _____/ ____\____     
+#            |   |/    \   __\/  _ \    
+#            |   |   |  \  | (  <_> )   
+#            |___|___|  /__|  \____/    
+#                     \/                
+#
+# Info about MPIParticles. Dimension of particles is 3
+# We have allocated 68.1574 MB (mean)
+#                   68.1574 MB (min)
+#                   68.1574 MB (max)
+# Total particles across all tasks is 2097152
+# Task 0 has 523029 parts. Capacity: 655360
+# The buffer is 80 %% (mean)
+#               79.1779 %% (min)
+#               80.7103 %% (max) filled across tasks
+#
+#=====================================================
+
+#=====================================================
+# System memory use (resident set size): 
+# Current RSS: 168.485         MB (min over tasks)
+# Current RSS: 169.722         MB (max over tasks)
+# Peak RSS:    168.976         MB (min over tasks)
+# Peak RSS:    179.687         MB (max over tasks)
+#=====================================================
+
+#=====================================================
+# Analyze and output
+#=====================================================
+Doing output 0 at redshift z = 0
+Snapshot will be stored in folder output/snapshot_TestSim_z0.000
+Adding on the LPT velocity to particles (COLA 2LPT scaledependent)
+
+#=====================================================
+# Computing power-spectrum of particles
+# pofk_nmesh                     : 128
+# pofk_density_assignment_method : PCS
+# pofk_interlacing               : true
+# pofk_subtract_shotnoise        : false
+#=====================================================
+
+#=====================================================
+# Output in gadget format
+# fileprefix  : output/snapshot_TestSim_z0.000/gadget_z0.000
+#=====================================================
+Adding on the LPT velocity to particles (COLA 2LPT scaledependent)
+
+============================================
+All the recorded timings for task 0:
+============================================
+Total elapsed time for [COLA                               ]: 3.79812    sec
+Total elapsed time for [COLA output                        ]: 0.430829   sec
+Total elapsed time for [ComputeDensityField                ]: 1.3135     sec
+Total elapsed time for [ComputeForce                       ]: 0.679387   sec
+Total elapsed time for [Drift                              ]: 0.202598   sec
+Total elapsed time for [InitialConditions                  ]: 0.508817   sec
+Total elapsed time for [InitialDensityField                ]: 0.137317   sec
+Total elapsed time for [Kick                               ]: 0.491788   sec
+Total elapsed time for [Output particles                   ]: 0.053033   sec
+Total elapsed time for [Power-spectrum                     ]: 0.562032   sec
+============================================
+
+
+#=====================================================
+#                   MemoryLogging
+#=====================================================
+
+Info about resident set size:
+[Current resident set size]:
+Min over tasks:  166.756         MB
+Mean over tasks: 168.511         MB
+Max over tasks:  170.582         MB
+[Peak resident set size]:
+Min over tasks:  173.597         MB
+Mean over tasks: 177.533         MB
+Max over tasks:  179.687         MB
+
+For info below we are only tracking allocation of standard
+container (Vector) and only allocations larger than 0 bytes
+
+Memory in use (Task 0):   81.3363         MB
+Min over tasks:           81.3363         MB
+Mean over tasks:          81.3363         MB
+Max over tasks:           81.3363         MB
+
+Peak memory use (Task 0): 120.873         MB
+Max over tasks:           120.873         MB
+
+
+We have the following things allocated on task 0: 
+Address: 0x108010000 Size: 4.39296 (MB) Label: density(k,zini)
+Address: 0x10918f000 Size: 4.39296 (MB) Label: phi_1LPT(k,zini)
+Address: 0x109ba7000 Size: 4.39296 (MB) Label: phi_2LPT(k,zini)
+Address: 0x109fd8000 Size: 68.1574 (MB) Label: MPIPartices::create_particle_grid
+
+Total memory as function of time:
+ Time (sec): 0             Memory: 0             (MB)
+ Time (sec): 4e-06         Memory: 4.39296       (MB)
+ Time (sec): 0.139186      Memory: 8.78592       (MB)
+ Time (sec): 0.140823      Memory: 13.1789       (MB)
+ Time (sec): 0.142891      Memory: 8.78592       (MB)
+ Time (sec): 0.144465      Memory: 13.1789       (MB)
+ Time (sec): 0.145884      Memory: 17.5718       (MB)
+ Time (sec): 0.149012      Memory: 13.1789       (MB)
+ Time (sec): 0.149052      Memory: 17.5718       (MB)
+ Time (sec): 0.150294      Memory: 21.9648       (MB)
+ Time (sec): 0.152789      Memory: 17.5718       (MB)
+ Time (sec): 0.152803      Memory: 21.9648       (MB)
+ Time (sec): 0.154461      Memory: 26.3578       (MB)
+ Time (sec): 0.156977      Memory: 21.9648       (MB)
+ Time (sec): 0.215849      Memory: 26.3578       (MB)
+ Time (sec): 0.217908      Memory: 30.7507       (MB)
+ Time (sec): 0.220598      Memory: 26.3578       (MB)
+ Time (sec): 0.223904      Memory: 21.9648       (MB)
+ Time (sec): 0.22391       Memory: 17.5718       (MB)
+ Time (sec): 0.223913      Memory: 13.1789       (MB)
+ Time (sec): 0.224374      Memory: 17.5718       (MB)
+ Time (sec): 0.226291      Memory: 21.9648       (MB)
+ Time (sec): 0.228166      Memory: 17.5718       (MB)
+ Time (sec): 0.228191      Memory: 21.9648       (MB)
+ Time (sec): 0.229998      Memory: 26.3578       (MB)
+ Time (sec): 0.231894      Memory: 21.9648       (MB)
+ Time (sec): 0.231916      Memory: 26.3578       (MB)
+ Time (sec): 0.233447      Memory: 30.7507       (MB)
+ Time (sec): 0.235343      Memory: 26.3578       (MB)
+ Time (sec): 0.297248      Memory: 21.9648       (MB)
+ Time (sec): 0.297255      Memory: 17.5718       (MB)
+ Time (sec): 0.297258      Memory: 13.1789       (MB)
+ Time (sec): 0.321476      Memory: 81.3363       (MB)
+ Time (sec): 0.395454      Memory: 85.7293       (MB)
+ Time (sec): 0.39782       Memory: 90.1222       (MB)
+ Time (sec): 0.399721      Memory: 85.7293       (MB)
+ Time (sec): 0.399755      Memory: 90.1222       (MB)
+ Time (sec): 0.40169       Memory: 94.5152       (MB)
+ Time (sec): 0.403569      Memory: 90.1222       (MB)
+ Time (sec): 0.403589      Memory: 94.5152       (MB)
+ Time (sec): 0.40534       Memory: 98.9082       (MB)
+ Time (sec): 0.407104      Memory: 94.5152       (MB)
+ Time (sec): 0.466533      Memory: 90.1222       (MB)
+ Time (sec): 0.493821      Memory: 85.7293       (MB)
+ Time (sec): 0.493829      Memory: 81.3363       (MB)
+ Time (sec): 0.493833      Memory: 76.9434       (MB)
+ Time (sec): 0.493836      Memory: 81.3363       (MB)
+ Time (sec): 0.49554       Memory: 85.7293       (MB)
+ Time (sec): 0.497298      Memory: 90.1222       (MB)
+ Time (sec): 0.499116      Memory: 85.7293       (MB)
+ Time (sec): 0.499134      Memory: 90.1222       (MB)
+ Time (sec): 0.500468      Memory: 94.5152       (MB)
+ Time (sec): 0.503791      Memory: 90.1222       (MB)
+ Time (sec): 0.503809      Memory: 94.5152       (MB)
+ Time (sec): 0.504969      Memory: 98.9082       (MB)
+ Time (sec): 0.507505      Memory: 94.5152       (MB)
+ Time (sec): 0.562381      Memory: 90.1222       (MB)
+ Time (sec): 0.587709      Memory: 85.7293       (MB)
+ Time (sec): 0.587716      Memory: 81.3363       (MB)
+ Time (sec): 0.587719      Memory: 76.9434       (MB)
+ Time (sec): 0.637486      Memory: 81.3363       (MB)
+ Time (sec): 0.643364      Memory: 85.7293       (MB)
+ Time (sec): 0.647947      Memory: 81.3363       (MB)
+ Time (sec): 0.659516      Memory: 76.9434       (MB)
+ Time (sec): 0.670372      Memory: 81.3363       (MB)
+ Time (sec): 0.728708      Memory: 85.7293       (MB)
+ Time (sec): 0.793778      Memory: 90.1222       (MB)
+ Time (sec): 0.795844      Memory: 94.5152       (MB)
+ Time (sec): 0.797843      Memory: 98.9082       (MB)
+ Time (sec): 0.93531       Memory: 103.301       (MB)
+ Time (sec): 0.96171       Memory: 107.694       (MB)
+ Time (sec): 0.964708      Memory: 112.087       (MB)
+ Time (sec): 0.967432      Memory: 107.694       (MB)
+ Time (sec): 0.967807      Memory: 112.087       (MB)
+ Time (sec): 0.969267      Memory: 116.48        (MB)
+ Time (sec): 0.97205       Memory: 112.087       (MB)
+ Time (sec): 0.972423      Memory: 116.48        (MB)
+ Time (sec): 0.975284      Memory: 120.873       (MB)
+ Time (sec): 0.979821      Memory: 116.48        (MB)
+ Time (sec): 1.05196       Memory: 112.087       (MB)
+ Time (sec): 1.05227       Memory: 107.694       (MB)
+ Time (sec): 1.05263       Memory: 103.301       (MB)
+ Time (sec): 1.07632       Memory: 107.694       (MB)
+ Time (sec): 1.0781        Memory: 112.087       (MB)
+ Time (sec): 1.07892       Memory: 107.694       (MB)
+ Time (sec): 1.07926       Memory: 112.087       (MB)
+ Time (sec): 1.0801        Memory: 116.48        (MB)
+ Time (sec): 1.0809        Memory: 112.087       (MB)
+ Time (sec): 1.08122       Memory: 116.48        (MB)
+ Time (sec): 1.08211       Memory: 120.873       (MB)
+ Time (sec): 1.08466       Memory: 116.48        (MB)
+ Time (sec): 1.17873       Memory: 112.087       (MB)
+ Time (sec): 1.17913       Memory: 107.694       (MB)
+ Time (sec): 1.1794        Memory: 103.301       (MB)
+ Time (sec): 1.18275       Memory: 98.9082       (MB)
+ Time (sec): 1.26669       Memory: 94.5152       (MB)
+ Time (sec): 1.26709       Memory: 90.1222       (MB)
+ Time (sec): 1.26745       Memory: 85.7293       (MB)
+ Time (sec): 1.26872       Memory: 81.3363       (MB)
+ Time (sec): 1.26917       Memory: 85.7293       (MB)
+ Time (sec): 1.39094       Memory: 90.1222       (MB)
+ Time (sec): 1.39286       Memory: 94.5152       (MB)
+ Time (sec): 1.39475       Memory: 98.9082       (MB)
+ Time (sec): 1.52822       Memory: 103.301       (MB)
+ Time (sec): 1.55511       Memory: 107.694       (MB)
+ Time (sec): 1.55679       Memory: 112.087       (MB)
+ Time (sec): 1.55843       Memory: 107.694       (MB)
+ Time (sec): 1.55876       Memory: 112.087       (MB)
+ Time (sec): 1.56029       Memory: 116.48        (MB)
+ Time (sec): 1.56584       Memory: 112.087       (MB)
+ Time (sec): 1.56612       Memory: 116.48        (MB)
+ Time (sec): 1.56709       Memory: 120.873       (MB)
+ Time (sec): 1.56782       Memory: 116.48        (MB)
+ Time (sec): 1.64887       Memory: 112.087       (MB)
+ Time (sec): 1.64891       Memory: 107.694       (MB)
+ Time (sec): 1.64891       Memory: 103.301       (MB)
+ Time (sec): 1.67535       Memory: 107.694       (MB)
+ Time (sec): 1.68038       Memory: 112.087       (MB)
+ Time (sec): 1.68198       Memory: 107.694       (MB)
+ Time (sec): 1.682         Memory: 112.087       (MB)
+ Time (sec): 1.683         Memory: 116.48        (MB)
+ Time (sec): 1.68389       Memory: 112.087       (MB)
+ Time (sec): 1.6839        Memory: 116.48        (MB)
+ Time (sec): 1.68464       Memory: 120.873       (MB)
+ Time (sec): 1.68541       Memory: 116.48        (MB)
+ Time (sec): 1.76983       Memory: 112.087       (MB)
+ Time (sec): 1.76984       Memory: 107.694       (MB)
+ Time (sec): 1.77012       Memory: 103.301       (MB)
+ Time (sec): 1.77038       Memory: 98.9082       (MB)
+ Time (sec): 1.85692       Memory: 94.5152       (MB)
+ Time (sec): 1.85722       Memory: 90.1222       (MB)
+ Time (sec): 1.8575        Memory: 85.7293       (MB)
+ Time (sec): 1.85777       Memory: 81.3363       (MB)
+ Time (sec): 1.85823       Memory: 85.7293       (MB)
+ Time (sec): 1.97792       Memory: 90.1222       (MB)
+ Time (sec): 1.97984       Memory: 94.5152       (MB)
+ Time (sec): 1.98194       Memory: 98.9082       (MB)
+ Time (sec): 2.11398       Memory: 103.301       (MB)
+ Time (sec): 2.13766       Memory: 107.694       (MB)
+ Time (sec): 2.13994       Memory: 112.087       (MB)
+ Time (sec): 2.14201       Memory: 107.694       (MB)
+ Time (sec): 2.14244       Memory: 112.087       (MB)
+ Time (sec): 2.1445        Memory: 116.48        (MB)
+ Time (sec): 2.14701       Memory: 112.087       (MB)
+ Time (sec): 2.14751       Memory: 116.48        (MB)
+ Time (sec): 2.15125       Memory: 120.873       (MB)
+ Time (sec): 2.15202       Memory: 116.48        (MB)
+ Time (sec): 2.23556       Memory: 112.087       (MB)
+ Time (sec): 2.23557       Memory: 107.694       (MB)
+ Time (sec): 2.23558       Memory: 103.301       (MB)
+ Time (sec): 2.25362       Memory: 107.694       (MB)
+ Time (sec): 2.25464       Memory: 112.087       (MB)
+ Time (sec): 2.25947       Memory: 107.694       (MB)
+ Time (sec): 2.25949       Memory: 112.087       (MB)
+ Time (sec): 2.26044       Memory: 116.48        (MB)
+ Time (sec): 2.26126       Memory: 112.087       (MB)
+ Time (sec): 2.26127       Memory: 116.48        (MB)
+ Time (sec): 2.26179       Memory: 120.873       (MB)
+ Time (sec): 2.26267       Memory: 116.48        (MB)
+ Time (sec): 2.35837       Memory: 112.087       (MB)
+ Time (sec): 2.35838       Memory: 107.694       (MB)
+ Time (sec): 2.35838       Memory: 103.301       (MB)
+ Time (sec): 2.35865       Memory: 98.9082       (MB)
+ Time (sec): 2.44355       Memory: 94.5152       (MB)
+ Time (sec): 2.44382       Memory: 90.1222       (MB)
+ Time (sec): 2.44409       Memory: 85.7293       (MB)
+ Time (sec): 2.44436       Memory: 81.3363       (MB)
+ Time (sec): 2.44466       Memory: 85.7293       (MB)
+ Time (sec): 2.56533       Memory: 90.1222       (MB)
+ Time (sec): 2.56727       Memory: 94.5152       (MB)
+ Time (sec): 2.56923       Memory: 98.9082       (MB)
+ Time (sec): 2.70624       Memory: 103.301       (MB)
+ Time (sec): 2.72966       Memory: 107.694       (MB)
+ Time (sec): 2.7319        Memory: 112.087       (MB)
+ Time (sec): 2.73398       Memory: 107.694       (MB)
+ Time (sec): 2.73439       Memory: 112.087       (MB)
+ Time (sec): 2.73666       Memory: 116.48        (MB)
+ Time (sec): 2.73831       Memory: 112.087       (MB)
+ Time (sec): 2.73833       Memory: 116.48        (MB)
+ Time (sec): 2.73927       Memory: 120.873       (MB)
+ Time (sec): 2.74035       Memory: 116.48        (MB)
+ Time (sec): 2.82696       Memory: 112.087       (MB)
+ Time (sec): 2.82697       Memory: 107.694       (MB)
+ Time (sec): 2.82697       Memory: 103.301       (MB)
+ Time (sec): 2.85995       Memory: 107.694       (MB)
+ Time (sec): 2.8611        Memory: 112.087       (MB)
+ Time (sec): 2.86199       Memory: 107.694       (MB)
+ Time (sec): 2.86201       Memory: 112.087       (MB)
+ Time (sec): 2.8626        Memory: 116.48        (MB)
+ Time (sec): 2.86333       Memory: 112.087       (MB)
+ Time (sec): 2.86335       Memory: 116.48        (MB)
+ Time (sec): 2.86385       Memory: 120.873       (MB)
+ Time (sec): 2.86484       Memory: 116.48        (MB)
+ Time (sec): 2.95418       Memory: 112.087       (MB)
+ Time (sec): 2.95422       Memory: 107.694       (MB)
+ Time (sec): 2.95423       Memory: 103.301       (MB)
+ Time (sec): 2.95546       Memory: 98.9082       (MB)
+ Time (sec): 3.03306       Memory: 94.5152       (MB)
+ Time (sec): 3.03334       Memory: 90.1222       (MB)
+ Time (sec): 3.03361       Memory: 85.7293       (MB)
+ Time (sec): 3.03389       Memory: 81.3363       (MB)
+ Time (sec): 3.03421       Memory: 85.7293       (MB)
+ Time (sec): 3.16309       Memory: 90.1222       (MB)
+ Time (sec): 3.16491       Memory: 94.5152       (MB)
+ Time (sec): 3.16696       Memory: 98.9082       (MB)
+ Time (sec): 3.29962       Memory: 103.301       (MB)
+ Time (sec): 3.32066       Memory: 107.694       (MB)
+ Time (sec): 3.32201       Memory: 112.087       (MB)
+ Time (sec): 3.32408       Memory: 107.694       (MB)
+ Time (sec): 3.32452       Memory: 112.087       (MB)
+ Time (sec): 3.32625       Memory: 116.48        (MB)
+ Time (sec): 3.32808       Memory: 112.087       (MB)
+ Time (sec): 3.3281        Memory: 116.48        (MB)
+ Time (sec): 3.32953       Memory: 120.873       (MB)
+ Time (sec): 3.33135       Memory: 116.48        (MB)
+ Time (sec): 3.42185       Memory: 112.087       (MB)
+ Time (sec): 3.42186       Memory: 107.694       (MB)
+ Time (sec): 3.42186       Memory: 103.301       (MB)
+ Time (sec): 3.45068       Memory: 107.694       (MB)
+ Time (sec): 3.45198       Memory: 112.087       (MB)
+ Time (sec): 3.45288       Memory: 107.694       (MB)
+ Time (sec): 3.4529        Memory: 112.087       (MB)
+ Time (sec): 3.45383       Memory: 116.48        (MB)
+ Time (sec): 3.45523       Memory: 112.087       (MB)
+ Time (sec): 3.45525       Memory: 116.48        (MB)
+ Time (sec): 3.45653       Memory: 120.873       (MB)
+ Time (sec): 3.45812       Memory: 116.48        (MB)
+ Time (sec): 3.54398       Memory: 112.087       (MB)
+ Time (sec): 3.54399       Memory: 107.694       (MB)
+ Time (sec): 3.54399       Memory: 103.301       (MB)
+ Time (sec): 3.54424       Memory: 98.9082       (MB)
+ Time (sec): 3.62969       Memory: 94.5152       (MB)
+ Time (sec): 3.63          Memory: 90.1222       (MB)
+ Time (sec): 3.63031       Memory: 85.7293       (MB)
+ Time (sec): 3.63063       Memory: 81.3363       (MB)
+ Time (sec): 3.63134       Memory: 85.7293       (MB)
+ Time (sec): 3.75104       Memory: 90.1222       (MB)
+ Time (sec): 3.75286       Memory: 94.5152       (MB)
+ Time (sec): 3.75473       Memory: 98.9082       (MB)
+ Time (sec): 3.888         Memory: 103.301       (MB)
+ Time (sec): 3.91112       Memory: 107.694       (MB)
+ Time (sec): 3.91345       Memory: 112.087       (MB)
+ Time (sec): 3.91558       Memory: 107.694       (MB)
+ Time (sec): 3.91604       Memory: 112.087       (MB)
+ Time (sec): 3.9182        Memory: 116.48        (MB)
+ Time (sec): 3.92021       Memory: 112.087       (MB)
+ Time (sec): 3.92023       Memory: 116.48        (MB)
+ Time (sec): 3.92146       Memory: 120.873       (MB)
+ Time (sec): 3.92221       Memory: 116.48        (MB)
+ Time (sec): 4.00957       Memory: 112.087       (MB)
+ Time (sec): 4.00958       Memory: 107.694       (MB)
+ Time (sec): 4.00958       Memory: 103.301       (MB)
+ Time (sec): 4.03265       Memory: 107.694       (MB)
+ Time (sec): 4.03362       Memory: 112.087       (MB)
+ Time (sec): 4.03418       Memory: 107.694       (MB)
+ Time (sec): 4.0357        Memory: 112.087       (MB)
+ Time (sec): 4.03619       Memory: 116.48        (MB)
+ Time (sec): 4.03674       Memory: 112.087       (MB)
+ Time (sec): 4.03676       Memory: 116.48        (MB)
+ Time (sec): 4.03716       Memory: 120.873       (MB)
+ Time (sec): 4.03789       Memory: 116.48        (MB)
+ Time (sec): 4.12792       Memory: 112.087       (MB)
+ Time (sec): 4.12792       Memory: 107.694       (MB)
+ Time (sec): 4.12793       Memory: 103.301       (MB)
+ Time (sec): 4.12886       Memory: 98.9082       (MB)
+ Time (sec): 4.21417       Memory: 94.5152       (MB)
+ Time (sec): 4.21446       Memory: 90.1222       (MB)
+ Time (sec): 4.21473       Memory: 85.7293       (MB)
+ Time (sec): 4.21506       Memory: 81.3363       (MB)
+ Time (sec): 4.21535       Memory: 85.7293       (MB)
+ Time (sec): 4.33403       Memory: 90.1222       (MB)
+ Time (sec): 4.33591       Memory: 94.5152       (MB)
+ Time (sec): 4.3378        Memory: 98.9082       (MB)
+ Time (sec): 4.47078       Memory: 103.301       (MB)
+ Time (sec): 4.49426       Memory: 107.694       (MB)
+ Time (sec): 4.49639       Memory: 112.087       (MB)
+ Time (sec): 4.49859       Memory: 107.694       (MB)
+ Time (sec): 4.49904       Memory: 112.087       (MB)
+ Time (sec): 4.5012        Memory: 116.48        (MB)
+ Time (sec): 4.50298       Memory: 112.087       (MB)
+ Time (sec): 4.50299       Memory: 116.48        (MB)
+ Time (sec): 4.50376       Memory: 120.873       (MB)
+ Time (sec): 4.5049        Memory: 116.48        (MB)
+ Time (sec): 4.59162       Memory: 112.087       (MB)
+ Time (sec): 4.59163       Memory: 107.694       (MB)
+ Time (sec): 4.59163       Memory: 103.301       (MB)
+ Time (sec): 4.61961       Memory: 107.694       (MB)
+ Time (sec): 4.62055       Memory: 112.087       (MB)
+ Time (sec): 4.62122       Memory: 107.694       (MB)
+ Time (sec): 4.62124       Memory: 112.087       (MB)
+ Time (sec): 4.62172       Memory: 116.48        (MB)
+ Time (sec): 4.6223        Memory: 112.087       (MB)
+ Time (sec): 4.62231       Memory: 116.48        (MB)
+ Time (sec): 4.62272       Memory: 120.873       (MB)
+ Time (sec): 4.62332       Memory: 116.48        (MB)
+ Time (sec): 4.71529       Memory: 112.087       (MB)
+ Time (sec): 4.7153        Memory: 107.694       (MB)
+ Time (sec): 4.7153        Memory: 103.301       (MB)
+ Time (sec): 4.71953       Memory: 98.9082       (MB)
+ Time (sec): 4.79799       Memory: 94.5152       (MB)
+ Time (sec): 4.79827       Memory: 90.1222       (MB)
+ Time (sec): 4.79861       Memory: 85.7293       (MB)
+ Time (sec): 4.79889       Memory: 81.3363       (MB)
+ Time (sec): 4.79951       Memory: 85.7293       (MB)
+ Time (sec): 4.92068       Memory: 90.1222       (MB)
+ Time (sec): 4.92251       Memory: 94.5152       (MB)
+ Time (sec): 4.92434       Memory: 98.9082       (MB)
+ Time (sec): 5.07203       Memory: 103.301       (MB)
+ Time (sec): 5.08728       Memory: 107.694       (MB)
+ Time (sec): 5.08872       Memory: 112.087       (MB)
+ Time (sec): 5.08995       Memory: 107.694       (MB)
+ Time (sec): 5.08998       Memory: 112.087       (MB)
+ Time (sec): 5.09069       Memory: 116.48        (MB)
+ Time (sec): 5.09163       Memory: 112.087       (MB)
+ Time (sec): 5.09165       Memory: 116.48        (MB)
+ Time (sec): 5.09229       Memory: 120.873       (MB)
+ Time (sec): 5.09398       Memory: 116.48        (MB)
+ Time (sec): 5.18765       Memory: 112.087       (MB)
+ Time (sec): 5.18767       Memory: 107.694       (MB)
+ Time (sec): 5.18768       Memory: 103.301       (MB)
+ Time (sec): 5.19991       Memory: 107.694       (MB)
+ Time (sec): 5.20161       Memory: 112.087       (MB)
+ Time (sec): 5.20404       Memory: 107.694       (MB)
+ Time (sec): 5.20407       Memory: 112.087       (MB)
+ Time (sec): 5.20571       Memory: 116.48        (MB)
+ Time (sec): 5.20712       Memory: 112.087       (MB)
+ Time (sec): 5.20714       Memory: 116.48        (MB)
+ Time (sec): 5.20823       Memory: 120.873       (MB)
+ Time (sec): 5.22632       Memory: 116.48        (MB)
+ Time (sec): 5.30886       Memory: 112.087       (MB)
+ Time (sec): 5.30887       Memory: 107.694       (MB)
+ Time (sec): 5.30887       Memory: 103.301       (MB)
+ Time (sec): 5.31422       Memory: 98.9082       (MB)
+ Time (sec): 5.39863       Memory: 94.5152       (MB)
+ Time (sec): 5.3989        Memory: 90.1222       (MB)
+ Time (sec): 5.39924       Memory: 85.7293       (MB)
+ Time (sec): 5.39954       Memory: 81.3363       (MB)
+ Time (sec): 5.40011       Memory: 85.7293       (MB)
+ Time (sec): 5.52191       Memory: 90.1222       (MB)
+ Time (sec): 5.52384       Memory: 94.5152       (MB)
+ Time (sec): 5.52569       Memory: 98.9082       (MB)
+ Time (sec): 5.66172       Memory: 103.301       (MB)
+ Time (sec): 5.68247       Memory: 107.694       (MB)
+ Time (sec): 5.68442       Memory: 112.087       (MB)
+ Time (sec): 5.68666       Memory: 107.694       (MB)
+ Time (sec): 5.68668       Memory: 112.087       (MB)
+ Time (sec): 5.68823       Memory: 116.48        (MB)
+ Time (sec): 5.69008       Memory: 112.087       (MB)
+ Time (sec): 5.6901        Memory: 116.48        (MB)
+ Time (sec): 5.69163       Memory: 120.873       (MB)
+ Time (sec): 5.69439       Memory: 116.48        (MB)
+ Time (sec): 5.78498       Memory: 112.087       (MB)
+ Time (sec): 5.78502       Memory: 107.694       (MB)
+ Time (sec): 5.78503       Memory: 103.301       (MB)
+ Time (sec): 5.80874       Memory: 107.694       (MB)
+ Time (sec): 5.8099        Memory: 112.087       (MB)
+ Time (sec): 5.81092       Memory: 107.694       (MB)
+ Time (sec): 5.81094       Memory: 112.087       (MB)
+ Time (sec): 5.81243       Memory: 116.48        (MB)
+ Time (sec): 5.81357       Memory: 112.087       (MB)
+ Time (sec): 5.81359       Memory: 116.48        (MB)
+ Time (sec): 5.81418       Memory: 120.873       (MB)
+ Time (sec): 5.81719       Memory: 116.48        (MB)
+ Time (sec): 5.90841       Memory: 112.087       (MB)
+ Time (sec): 5.90844       Memory: 107.694       (MB)
+ Time (sec): 5.90845       Memory: 103.301       (MB)
+ Time (sec): 5.90925       Memory: 98.9082       (MB)
+ Time (sec): 5.98748       Memory: 94.5152       (MB)
+ Time (sec): 5.98785       Memory: 90.1222       (MB)
+ Time (sec): 5.9882        Memory: 85.7293       (MB)
+ Time (sec): 5.9885        Memory: 81.3363       (MB)
+ Time (sec): 5.98911       Memory: 85.7293       (MB)
+ Time (sec): 6.10844       Memory: 90.1222       (MB)
+ Time (sec): 6.11024       Memory: 94.5152       (MB)
+ Time (sec): 6.11226       Memory: 98.9082       (MB)
+ Time (sec): 6.24768       Memory: 103.301       (MB)
+ Time (sec): 6.26893       Memory: 107.694       (MB)
+ Time (sec): 6.27037       Memory: 112.087       (MB)
+ Time (sec): 6.27244       Memory: 107.694       (MB)
+ Time (sec): 6.27247       Memory: 112.087       (MB)
+ Time (sec): 6.27365       Memory: 116.48        (MB)
+ Time (sec): 6.27564       Memory: 112.087       (MB)
+ Time (sec): 6.27566       Memory: 116.48        (MB)
+ Time (sec): 6.27708       Memory: 120.873       (MB)
+ Time (sec): 6.2793        Memory: 116.48        (MB)
+ Time (sec): 6.37224       Memory: 112.087       (MB)
+ Time (sec): 6.37227       Memory: 107.694       (MB)
+ Time (sec): 6.37228       Memory: 103.301       (MB)
+ Time (sec): 6.40042       Memory: 107.694       (MB)
+ Time (sec): 6.40238       Memory: 112.087       (MB)
+ Time (sec): 6.4041        Memory: 107.694       (MB)
+ Time (sec): 6.40413       Memory: 112.087       (MB)
+ Time (sec): 6.40578       Memory: 116.48        (MB)
+ Time (sec): 6.40746       Memory: 112.087       (MB)
+ Time (sec): 6.40748       Memory: 116.48        (MB)
+ Time (sec): 6.40882       Memory: 120.873       (MB)
+ Time (sec): 6.41148       Memory: 116.48        (MB)
+ Time (sec): 6.50288       Memory: 112.087       (MB)
+ Time (sec): 6.50292       Memory: 107.694       (MB)
+ Time (sec): 6.50293       Memory: 103.301       (MB)
+ Time (sec): 6.50398       Memory: 98.9082       (MB)
+ Time (sec): 6.6037        Memory: 94.5152       (MB)
+ Time (sec): 6.60398       Memory: 90.1222       (MB)
+ Time (sec): 6.60426       Memory: 85.7293       (MB)
+ Time (sec): 6.60478       Memory: 81.3363       (MB)
+ Time (sec): 6.60487       Memory: 85.7293       (MB)
+ Time (sec): 6.72909       Memory: 90.1222       (MB)
+ Time (sec): 6.73095       Memory: 94.5152       (MB)
+ Time (sec): 6.73288       Memory: 98.9082       (MB)
+ Time (sec): 6.86887       Memory: 103.301       (MB)
+ Time (sec): 6.89052       Memory: 107.694       (MB)
+ Time (sec): 6.89278       Memory: 112.087       (MB)
+ Time (sec): 6.89503       Memory: 107.694       (MB)
+ Time (sec): 6.89505       Memory: 112.087       (MB)
+ Time (sec): 6.8966        Memory: 116.48        (MB)
+ Time (sec): 6.8984        Memory: 112.087       (MB)
+ Time (sec): 6.89842       Memory: 116.48        (MB)
+ Time (sec): 6.90014       Memory: 120.873       (MB)
+ Time (sec): 6.90238       Memory: 116.48        (MB)
+ Time (sec): 7.01008       Memory: 112.087       (MB)
+ Time (sec): 7.01011       Memory: 107.694       (MB)
+ Time (sec): 7.01011       Memory: 103.301       (MB)
+ Time (sec): 7.03564       Memory: 107.694       (MB)
+ Time (sec): 7.03735       Memory: 112.087       (MB)
+ Time (sec): 7.03933       Memory: 107.694       (MB)
+ Time (sec): 7.03935       Memory: 112.087       (MB)
+ Time (sec): 7.04124       Memory: 116.48        (MB)
+ Time (sec): 7.0429        Memory: 112.087       (MB)
+ Time (sec): 7.04292       Memory: 116.48        (MB)
+ Time (sec): 7.04449       Memory: 120.873       (MB)
+ Time (sec): 7.0519        Memory: 116.48        (MB)
+ Time (sec): 7.14255       Memory: 112.087       (MB)
+ Time (sec): 7.14256       Memory: 107.694       (MB)
+ Time (sec): 7.14256       Memory: 103.301       (MB)
+ Time (sec): 7.14286       Memory: 98.9082       (MB)
+ Time (sec): 7.20956       Memory: 94.5152       (MB)
+ Time (sec): 7.20984       Memory: 90.1222       (MB)
+ Time (sec): 7.21024       Memory: 85.7293       (MB)
+ Time (sec): 7.21053       Memory: 81.3363       (MB)
+ Time (sec): 7.24129       Memory: 85.7293       (MB)
+ Time (sec): 7.26462       Memory: 90.1222       (MB)
+ Time (sec): 7.26657       Memory: 94.5152       (MB)
+ Time (sec): 7.26827       Memory: 90.1222       (MB)
+ Time (sec): 7.26866       Memory: 94.5152       (MB)
+ Time (sec): 7.27052       Memory: 98.9082       (MB)
+ Time (sec): 7.272         Memory: 94.5152       (MB)
+ Time (sec): 7.27235       Memory: 98.9082       (MB)
+ Time (sec): 7.27349       Memory: 103.301       (MB)
+ Time (sec): 7.27492       Memory: 98.9082       (MB)
+ Time (sec): 7.35728       Memory: 94.5152       (MB)
+ Time (sec): 7.35763       Memory: 90.1222       (MB)
+ Time (sec): 7.35797       Memory: 85.7293       (MB)
+ Time (sec): 7.41912       Memory: 81.3363       (MB)
+ Time (sec): 7.43014       Memory: 86.1286       (MB)
+ Time (sec): 7.67085       Memory: 90.921        (MB)
+ Time (sec): 7.96617       Memory: 86.1286       (MB)
+ Time (sec): 7.99088       Memory: 81.3363       (MB)
+ Time (sec): 8.08079       Memory: 85.7293       (MB)
+ Time (sec): 8.09901       Memory: 90.1222       (MB)
+ Time (sec): 8.10093       Memory: 94.5152       (MB)
+ Time (sec): 8.10264       Memory: 90.1222       (MB)
+ Time (sec): 8.10267       Memory: 94.5152       (MB)
+ Time (sec): 8.10371       Memory: 98.9082       (MB)
+ Time (sec): 8.10581       Memory: 94.5152       (MB)
+ Time (sec): 8.10583       Memory: 98.9082       (MB)
+ Time (sec): 8.10707       Memory: 103.301       (MB)
+ Time (sec): 8.10879       Memory: 98.9082       (MB)
+ Time (sec): 8.21142       Memory: 94.5152       (MB)
+ Time (sec): 8.21143       Memory: 90.1222       (MB)
+ Time (sec): 8.21143       Memory: 85.7293       (MB)
+ Time (sec): 8.27893       Memory: 81.3363       (MB)
+
+#=====================================================
