@@ -10,7 +10,7 @@ namespace FML {
             s << "]";
             return s;
         }
-        
+
         std::ostream & operator<<(std::ostream & s, std::vector<int> const & v) {
             s << "[";
             for (auto & e : v)
@@ -18,7 +18,7 @@ namespace FML {
             s << "]";
             return s;
         }
-        
+
         std::ostream & operator<<(std::ostream & s, std::vector<std::string> const & v) {
             s << "[";
             for (auto & e : v)
@@ -26,7 +26,7 @@ namespace FML {
             s << "]";
             return s;
         }
-        
+
         void ParameterMap::throw_error(std::string errormessage) const { throw std::runtime_error(errormessage); }
 
         // Print a parameter map
@@ -35,6 +35,16 @@ namespace FML {
             std::cout << "\n#=====================================================\n";
             std::cout << "# Parameter map contains " << parameters.size() << " elements:\n";
             std::cout << "#=====================================================\n";
+#if (defined(__INTEL_COMPILER) && __INTEL_COMPILER + __INTEL_COMPILER_UPDATE < 1904)
+            std::cout << "Showing values is currently disabled for Intel compilers < 19.0.4.243 as old versions have a "
+                         "compiler bug with std::variant\n";
+            std::cout << "You can try commening this test out in FML/ParameterMap/ParameterMap.cpp"
+                      << " if you want to try to use it, but it will likely fail!\n";
+            for (auto && param : parameters) {
+                std::string name = param.first;
+                std::cout << "  " << std::setw(30) << std::left << name << " : (showing value disabled)\n";
+            }
+#else
             for (auto && param : parameters) {
                 std::string name = param.first;
                 ParameterTypes value = param.second;
@@ -43,6 +53,7 @@ namespace FML {
                   std::cout << std::setw(15);
                 std::cout << value << "\n";
             }
+#endif
             std::cout << "#=====================================================\n\n";
         }
 

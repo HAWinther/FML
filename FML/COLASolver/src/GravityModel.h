@@ -463,5 +463,7 @@ class GravityModel {
             Dmnu_1LPT_of_logkoverH0_loga.create(logkoverH0_arr, loga_arr, D1mnu, "D1mnuLPT(log(k/H0),log(a))");
         }
     }
+
+    virtual ~GravityModel() = default;
 };
 #endif

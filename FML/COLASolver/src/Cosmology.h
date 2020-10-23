@@ -10,7 +10,19 @@
 #include <FML/Spline/Spline.h>
 #include <FML/Units/Units.h>
 
+#include <cmath>
 #include <memory>
+
+#ifndef __clang__
+const double riemann_zeta3 = std::riemann_zeta(3.0);
+const double riemann_zeta4 = std::riemann_zeta(4.0);
+const double riemann_zeta5 = std::riemann_zeta(5.0);
+#else
+// clang does not have riemann_zeta so hardcode it
+const double riemann_zeta3 = 1.20205690315959;
+const double riemann_zeta4 = 1.08232323371113;
+const double riemann_zeta5 = 1.03692775514336;
+#endif
 
 /// Base class for a general cosmology
 class Cosmology {
@@ -274,33 +286,35 @@ class Cosmology {
     void set_ns(double _ns) { ns = _ns; }
     void set_kpivot_mpc(double _kpivot_mpc) { kpivot_mpc = _kpivot_mpc; }
 
+    virtual ~Cosmology() = default;
+
   protected:
     //========================================================================
     // Parameters all models have (Baryons, CDM, neutrinos, Cosmological constant)
     //========================================================================
     const double H0_hmpc = 1.0 / 2997.92458;
-    double h;           // Hubble parameter (little h)
-    double OmegaMNu;    // Massive neutrinos (in the matter era)
-    double Omegab;      // Baryons
-    double OmegaM;      // Total matter (in the matter era)
-    double OmegaCDM;    // Cold dark matter
-    double OmegaLambda; // Dark energy
-    double OmegaR;      // Photons
-    double OmegaNu;     // Neutrinos (density set by Neff)
-    double OmegaRtot;   // Total relativistic (in the radiation era)
-    double OmegaK;      // Curvature. Derived from Sum Omega == 1
-    double Neff;        // Effecive number of non-photon relativistic species (3.046)
-    double TCMB_kelvin; // Temperature of the CMB today in Kelvin
-    double Tnu_kelvin;  // Temperature of the neutrinos today in Kelvin. Derived from Neff and TCMB
-    double Mnu_eV;      // Sum of the neutrino masses in eV. Derived from OmegaMNu and h
+    double h;             // Hubble parameter (little h)
+    double OmegaMNu;      // Massive neutrinos (in the matter era)
+    double Omegab;        // Baryons
+    double OmegaM;        // Total matter (in the matter era)
+    double OmegaCDM;      // Cold dark matter
+    double OmegaLambda;   // Dark energy
+    double OmegaR;        // Photons
+    double OmegaNu;       // Neutrinos (density set by Neff)
+    double OmegaRtot;     // Total relativistic (in the radiation era)
+    double OmegaK;        // Curvature. Derived from Sum Omega == 1
+    double Neff;          // Effecive number of non-photon relativistic species (3.046)
+    double TCMB_kelvin;   // Temperature of the CMB today in Kelvin
+    double Tnu_kelvin;    // Temperature of the neutrinos today in Kelvin. Derived from Neff and TCMB
+    double Mnu_eV;        // Sum of the neutrino masses in eV. Derived from OmegaMNu and h
     const double N_nu{3}; // Number of neutrinos (3)
     std::string name;
 
-    // For neutrinos in the background
-    const double twoeta3{3.0 / 2.0 * std::riemann_zeta(3.0)};
+    // For neutrinos in the background 
+    const double twoeta3{3.0 / 2.0 * riemann_zeta3};
     const double sixeta4{7.0 / 120.0 * M_PI * M_PI * M_PI * M_PI};
-    const double sixzeta4{6.0 * std::riemann_zeta(4.0)};
-    const double nu_sound_speed_factor{std::sqrt(25.0 * std::riemann_zeta(5.0) / std::riemann_zeta(3.0) / 3.0)};
+    const double sixzeta4{6.0 * riemann_zeta4};
+    const double nu_sound_speed_factor{std::sqrt(25.0 * riemann_zeta5 / riemann_zeta3 / 3.0)};
     Spline neutrino_boltzmann_integral_spline;
     Constants units;
 
