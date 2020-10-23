@@ -153,6 +153,16 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
                 param["gravity_model_screening_linear_scale_hmpc"] =
                     lfp.read_double("gravity_model_screening_linear_scale_hmpc", 0.05, OPTIONAL);
             }
+            
+            // Solving the exact equation
+            param["gravity_model_dgp_exact_solution"] =
+                lfp.read_bool("gravity_model_dgp_exact_solution", false, OPTIONAL);
+            if (param.get<bool>("gravity_model_dgp_exact_solution")) {
+                param["multigrid_nsweeps"] = lfp.read_int("multigrid_nsweeps", 10, OPTIONAL);
+                param["multigrid_nsweeps_first_step"] = lfp.read_int("multigrid_nsweeps_first_step", 20, OPTIONAL);
+                param["multigrid_solver_residual_convergence"] =
+                    lfp.read_double("multigrid_solver_residual_convergence", 1e-6, OPTIONAL);
+            }
         }
     }
 

@@ -93,6 +93,11 @@ end
 if gravity_model == "DGP" then 
   -- The cross-over scale rc*H0/c
   gravity_model_dgp_rcH0overc = 1.0
+  -- Solve exact DGP equation using the multigridsolver (slow and mainly for testing)
+  -- This option takes precedent over the approximate screening model below if both are set
+  -- NB: this is not always easy to get to work, its a tricky equation, and might saturate at
+  -- a given residual level (and then you will have to reduce the epsilon and deem that to be converged)
+  gravity_model_dgp_exact_solution = true
   -- Approximate screening model (otherwise linear)
   gravity_model_screening = true
   -- For screening approx: smoothing filter for density (tophat, gaussian, sharpk)
@@ -104,7 +109,15 @@ if gravity_model == "DGP" then
   gravity_model_screening_enforce_largescale_linear = true
   -- The fourier scale for which we use the linear solution for k < k*
   -- and the screened solution for k > k*
-  gravity_model_screening_linear_scale_hmpc = 0.05
+  gravity_model_screening_linear_scale_hmpc = 0.1
+  
+  -- Options for the multigrid solver in case we solve exact equation:
+  multigrid_solver_residual_convergence = 1e-3
+  -- How many Newton-Gauss-Seidel sweeps to do every level
+  multigrid_nsweeps = 5
+  -- In some cases the multigrid solver fails if we are not close to the
+  -- solution before starting multigrid. Increase this if so
+  multigrid_nsweeps_first_step = 5
 end
 
 ------------------------------------------------------------

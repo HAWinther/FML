@@ -1,5 +1,5 @@
-#ifndef GRAVITYMODEL_FOFR_HEADER
-#define GRAVITYMODEL_FOFR_HEADER
+#ifndef GRAVITYMODEL_SYMMETRON_HEADER
+#define GRAVITYMODEL_SYMMETRON_HEADER
 
 #include "GravityModel.h"
 #include <FML/FFTWGrid/FFTWGrid.h>
@@ -9,14 +9,15 @@
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
 
-#include <FML/MultigridSolver/FofrSolver.h>
+#include <FML/MultigridSolver/SymmetronSolver.h>
 
-/// f(R) model
+/// Symmetron model
 template <int NDIM>
-class GravityModelFofR final : public GravityModel<NDIM> {
+class GravityModelSymmetron final : public GravityModel<NDIM> {
   protected:
-    double fofr0{0.0};
-    double nfofr{1.0};
+    double assb{0.5};
+    double beta{1.0};
+    double L_mpch{1.0};
 
     // For using the screening approximation
     bool use_screening_method{true};
@@ -35,12 +36,12 @@ class GravityModelFofR final : public GravityModel<NDIM> {
     using ParameterMap = FML::UTILS::ParameterMap;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
-    GravityModelFofR() : GravityModel<NDIM>("f(R)") {}
-    GravityModelFofR(std::shared_ptr<Cosmology> cosmo)
-        : GravityModel<NDIM>(cosmo, "f(R)")
+    GravityModelSymmetron() : GravityModel<NDIM>("Symmetron") {}
+    GravityModelSymmetron(std::shared_ptr<Cosmology> cosmo)
+        : GravityModel<NDIM>(cosmo, "Symmetron")
 
     {
-        assert(this->get_name() == "f(R)");
+        assert(this->get_name() == "Symmetron");
     }
 
     //========================================================================
@@ -49,8 +50,9 @@ class GravityModelFofR final : public GravityModel<NDIM> {
     void info() const override {
         GravityModel<NDIM>::info();
         if (FML::ThisTask == 0) {
-            std::cout << "# fofr0            : " << fofr0 << "\n";
-            std::cout << "# nfofr            : " << nfofr << "\n";
+            std::cout << "# assb             : " << assb << "\n";
+            std::cout << "# beta             : " << beta << "\n";
+            std::cout << "# L_mpch           : " << L_mpch << "\n";
             std::cout << "# Screening method : " << use_screening_method << "\n";
             if (use_screening_method) {
                 std::cout << "# Enforce correct linear evolution : " << screening_enforce_largescale_linear << "\n";
@@ -61,17 +63,18 @@ class GravityModelFofR final : public GravityModel<NDIM> {
         }
     }
 
+    // This is phi/phi0
+    double phi_background(double a) const {
+        return a < assb ? 0.0 : std::sqrt(1.0 - (assb * assb * assb) / (a * a * a));
+    }
+
     //========================================================================
     // Internal method: m^2(a) / H0^2
     //========================================================================
     double mass_over_H0_squared(double a) const {
-        double OmegaM = this->cosmo->get_OmegaM();
-        double OmegaLambda = 1.0 - OmegaM;
-        double a3 = a * a * a;
-        double fac = OmegaM / a3 + 4.0 * OmegaLambda;
-        double fac0 = OmegaM + 4.0 * OmegaLambda;
-        double mass2 = fac * std::pow(fac / fac0, nfofr + 1.0) / ((nfofr + 1.0) * fofr0);
-        return mass2;
+        double mu2H02 = 1.0 / (2.0 * this->H0_hmpc * this->H0_hmpc * L_mpch * L_mpch);
+        double rhorhossb = (assb * assb * assb) / (a * a * a);
+        return a < assb ? mu2H02 * (rhorhossb - 1.0) : 2.0 * mu2H02 * (1.0 - rhorhossb);
     }
 
     //========================================================================
@@ -80,7 +83,8 @@ class GravityModelFofR final : public GravityModel<NDIM> {
     double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0.0) const override {
         double mass2a2 = a * a * mass_over_H0_squared(a);
         double koverH02 = koverH0 * koverH0;
-        return 1.0 + (1.0 / 3.0) * koverH02 / (koverH02 + mass2a2);
+        double phi = phi_background(a);
+        return 1.0 + 2.0 * beta * beta * phi * phi * koverH02 / (koverH02 + mass2a2);
     }
 
     //========================================================================
@@ -102,62 +106,63 @@ class GravityModelFofR final : public GravityModel<NDIM> {
 
         if (solve_exact_equation) {
 
-            // Solve the exactl f(R) equation using the multigridsolver (this is slow)
-            // Intenden mainly to be used for testing things so not super optimized
-            FFTWGrid<NDIM> density_real = density_fourier;
-            // Get back the real-space density field
-            density_real.fftw_c2r();
-            // Set up the solver, set the settings, and solve the solution
-            const bool verbose = true;
-            FofrSolverCosmology<NDIM, double> mgsolver(this->cosmo->get_OmegaM(), nfofr, fofr0, H0Box, verbose);
-            mgsolver.set_ngs_steps(multigrid_nsweeps, multigrid_nsweeps, multigrid_nsweeps_first_step);
-            mgsolver.set_epsilon(multigrid_solver_residual_convergence);
-            mgsolver.solve(a, density_real, density_fifth_force);
-            // It returns it in real-space so go back to fourier space
-            density_fifth_force.fftw_r2c();
+              // Solve the exact symmetron equation using the multigridsolver (this is slow)
+              // Intended mainly to be used for testing things so not super optimized
+              FFTWGrid<NDIM> density_real = density_fourier;
+              
+              // Get back the real-space density field
+              density_real.fftw_c2r();
+              
+              // Set up the solver, set the settings, and solve the solution
+              const bool verbose = true;
+              SymmetronSolverCosmology<NDIM, double> mgsolver(this->cosmo->get_OmegaM(), assb, beta, L_mpch, H0Box, verbose);
+              mgsolver.set_ngs_steps(multigrid_nsweeps, multigrid_nsweeps, multigrid_nsweeps_first_step);
+              mgsolver.set_epsilon(multigrid_solver_residual_convergence);
+              mgsolver.solve(a, density_real, density_fifth_force);
+              
+              // It returns it in real-space so go back to fourier space
+              density_fifth_force.fftw_r2c();
 
-            // Multiply by -k^2 / (1.5 OmegaM a) to go from potential a^2f_R/(2 H0Box^2) to "force density"
-            // (defined such that the total force is 1.5 OmegaM a * D( 1/D^2 delta_FF + 1/D^2 delta) )
-            const auto Local_nx = density_fifth_force.get_local_nx();
-            const auto Local_x_start = density_fifth_force.get_local_x_start();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-            for (int islice = 0; islice < Local_nx; islice++) {
-                [[maybe_unused]] std::array<double, NDIM> kvec;
-                double kmag2;
-                for (auto && fourier_index : density_fifth_force.get_fourier_range(islice, islice + 1)) {
-                    if (Local_x_start == 0 and fourier_index == 0)
-                        continue; // DC mode (k=0)
-                    density_fifth_force.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
-                    auto value = density_fifth_force.get_fourier_from_index(fourier_index);
-                    value *= -kmag2 / norm_poisson_equation;
-                    density_fifth_force.set_fourier_from_index(fourier_index, value);
-                }
-            }
-            // DC mode
-            if (Local_x_start == 0)
-                density_fifth_force.set_fourier_from_index(0, 0.0);
+              // Multiply by -k^2 / (1.5 OmegaM a) to go from potential Cphi^2 to "force density"
+              // (defined such that the total force is 1.5 OmegaM a * D( 1/D^2 delta_FF + 1/D^2 delta) )
+              const auto Local_nx = density_fifth_force.get_local_nx();
+              const auto Local_x_start = density_fifth_force.get_local_x_start();
+  #ifdef USE_OMP
+  #pragma omp parallel for
+  #endif
+              for (int islice = 0; islice < Local_nx; islice++) {
+                  [[maybe_unused]] std::array<double, NDIM> kvec;
+                  double kmag2;
+                  for (auto && fourier_index : density_fifth_force.get_fourier_range(islice, islice + 1)) {
+                      if (Local_x_start == 0 and fourier_index == 0)
+                          continue; // DC mode (k=0)
+                      density_fifth_force.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                      auto value = density_fifth_force.get_fourier_from_index(fourier_index);
+                      value *= -kmag2 / norm_poisson_equation;
+                      density_fifth_force.set_fourier_from_index(fourier_index, value);
+                  }
+              }
+              // DC mode
+              if (Local_x_start == 0)
+                  density_fifth_force.set_fourier_from_index(0, 0.0);
 
         } else if (use_screening_method) {
 
             // Approximate screening method
             const double OmegaM = this->cosmo->get_OmegaM();
-            auto screening_function_fofr = [=](double PhiNewton) {
-                double PhiCrit =
-                    1.5 * fofr0 *
-                    std::pow((OmegaM + 4.0 * (1.0 - OmegaM)) / (1.0 / (a * a * a) * OmegaM + 4.0 * (1.0 - OmegaM)),
-                             nfofr + 1.0);
+            const double PhiCrit = a < assb ? 0.0 : 3.0 * OmegaM * (this->H0_hmpc * L_mpch) * (this->H0_hmpc * L_mpch) /
+                                   (assb * assb * assb);
+            auto screening_function_symmetron = [=](double PhiNewton) {
                 double screenfac = std::abs(PhiCrit / PhiNewton);
                 return screenfac > 1.0 ? 1.0 : screenfac;
             };
 
             if (FML::ThisTask == 0)
-                std::cout << "Adding fifth-force f(R) (screening)\n";
+                std::cout << "Adding fifth-force symmetron (screening)\n";
             FML::NBODY::compute_delta_fifth_force_potential_screening(density_fourier,
                                                                       density_fifth_force,
                                                                       coupling,
-                                                                      screening_function_fofr,
+                                                                      screening_function_symmetron,
                                                                       norm_poisson_equation * std::pow(H0Box / a, 2));
 
             // Ensure that the large scales are behaving correctly
@@ -208,7 +213,7 @@ class GravityModelFofR final : public GravityModel<NDIM> {
 
             // No screening - linear evolution
             if (FML::ThisTask == 0)
-                std::cout << "Adding fifth-force f(R) (linear)\n";
+                std::cout << "Adding fifth-force symmetron (linear)\n";
             FML::NBODY::compute_delta_fifth_force<NDIM>(density_fourier, density_fifth_force, coupling);
         }
 
@@ -235,14 +240,15 @@ class GravityModelFofR final : public GravityModel<NDIM> {
     //========================================================================
     void read_parameters(ParameterMap & param) override {
         GravityModel<NDIM>::read_parameters(param);
-        fofr0 = param.get<double>("gravity_model_fofr_fofr0");
-        nfofr = param.get<double>("gravity_model_fofr_nfofr");
+        assb = param.get<double>("gravity_model_symmetron_assb");
+        beta = param.get<double>("gravity_model_symmetron_beta");
+        L_mpch = param.get<double>("gravity_model_symmetron_L_mpch");
         use_screening_method = param.get<bool>("gravity_model_screening");
         if (use_screening_method) {
             screening_enforce_largescale_linear = param.get<bool>("gravity_model_screening_enforce_largescale_linear");
             screening_linear_scale_hmpc = param.get<double>("gravity_model_screening_linear_scale_hmpc");
         }
-        solve_exact_equation = param.get<bool>("gravity_model_fofr_exact_solution");
+        solve_exact_equation = param.get<bool>("gravity_model_symmetron_exact_solution");
         if (solve_exact_equation) {
             multigrid_nsweeps_first_step = param.get<int>("multigrid_nsweeps_first_step");
             multigrid_nsweeps = param.get<int>("multigrid_nsweeps");
