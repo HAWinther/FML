@@ -43,7 +43,7 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
     param["cosmology_Neffective"] = lfp.read_double("cosmology_Neffective", 3.046, REQUIRED);
     param["cosmology_TCMB_kelvin"] = lfp.read_double("cosmology_TCMB_kelvin", 2.7255, REQUIRED);
     param["cosmology_h"] = lfp.read_double("cosmology_h", 0.0, REQUIRED);
-    
+
     //=============================================================
     // Jordan-Brans-Dicke model
     //=============================================================
@@ -83,29 +83,47 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
         // f(R) model
         //=============================================================
         if (param.get<std::string>("gravity_model") == "f(R)") {
-            param["gravity_model_screening"] = lfp.read_bool("gravity_model_screening", true, OPTIONAL);
             param["gravity_model_fofr_fofr0"] = lfp.read_double("gravity_model_fofr_fofr0", 1e-5, REQUIRED);
             param["gravity_model_fofr_nfofr"] = lfp.read_double("gravity_model_fofr_nfofr", 1.0, OPTIONAL);
-            param["gravity_model_screening_enforce_largescale_linear"] =
-                lfp.read_bool("gravity_model_screening_enforce_largescale_linear", false, OPTIONAL);
-            param["gravity_model_screening_linear_scale_hmpc"] =
-                lfp.read_double("gravity_model_screening_linear_scale_hmpc", 0.05, OPTIONAL);
+
+            // Screening approximation
+            param["gravity_model_screening"] = lfp.read_bool("gravity_model_screening", true, OPTIONAL);
+            if (param.get<bool>("gravity_model_screening")) {
+                param["gravity_model_screening_enforce_largescale_linear"] =
+                    lfp.read_bool("gravity_model_screening_enforce_largescale_linear", false, OPTIONAL);
+                param["gravity_model_screening_linear_scale_hmpc"] =
+                    lfp.read_double("gravity_model_screening_linear_scale_hmpc", 0.05, OPTIONAL);
+            }
+
+            // Solving the exact equation
+            param["gravity_model_fofr_exact_solution"] =
+                lfp.read_bool("gravity_model_fofr_exact_solution", false, OPTIONAL);
+            if (param.get<bool>("gravity_model_fofr_exact_solution")) {
+                param["multigrid_nsweeps"] = lfp.read_int("multigrid_nsweeps", 10, OPTIONAL);
+                param["multigrid_nsweeps_first_step"] = lfp.read_int("multigrid_nsweeps_first_step", 20, OPTIONAL);
+                param["multigrid_solver_residual_convergence"] =
+                    lfp.read_double("multigrid_solver_residual_convergence", 1e-6, OPTIONAL);
+            }
         }
 
         //=============================================================
         // DGP model
         //=============================================================
         if (param.get<std::string>("gravity_model") == "DGP") {
-            param["gravity_model_screening"] = lfp.read_bool("gravity_model_screening", true, OPTIONAL);
             param["gravity_model_dgp_rcH0overc"] = lfp.read_double("gravity_model_dgp_rcH0overc", 1.0, REQUIRED);
-            param["gravity_model_dgp_smoothing_filter"] =
-                lfp.read_string("gravity_model_dgp_smoothing_filter", "tophat", OPTIONAL);
-            param["gravity_model_dgp_smoothing_scale_over_boxsize"] =
-                lfp.read_double("gravity_model_dgp_smoothing_scale_over_boxsize", 1.0, OPTIONAL);
-            param["gravity_model_screening_enforce_largescale_linear"] =
-                lfp.read_bool("gravity_model_screening_enforce_largescale_linear", false, OPTIONAL);
-            param["gravity_model_screening_linear_scale_hmpc"] =
-                lfp.read_double("gravity_model_screening_linear_scale_hmpc", 0.05, OPTIONAL);
+
+            // Screening approximation
+            param["gravity_model_screening"] = lfp.read_bool("gravity_model_screening", true, OPTIONAL);
+            if (param.get<bool>("gravity_model_screening")) {
+                param["gravity_model_dgp_smoothing_filter"] =
+                    lfp.read_string("gravity_model_dgp_smoothing_filter", "tophat", OPTIONAL);
+                param["gravity_model_dgp_smoothing_scale_over_boxsize"] =
+                    lfp.read_double("gravity_model_dgp_smoothing_scale_over_boxsize", 1.0, OPTIONAL);
+                param["gravity_model_screening_enforce_largescale_linear"] =
+                    lfp.read_bool("gravity_model_screening_enforce_largescale_linear", false, OPTIONAL);
+                param["gravity_model_screening_linear_scale_hmpc"] =
+                    lfp.read_double("gravity_model_screening_linear_scale_hmpc", 0.05, OPTIONAL);
+            }
         }
     }
 

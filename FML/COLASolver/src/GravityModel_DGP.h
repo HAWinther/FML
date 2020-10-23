@@ -36,9 +36,12 @@ class GravityModelDGP final : public GravityModel<NDIM> {
     void info() const override {
         GravityModel<NDIM>::info();
         if (FML::ThisTask == 0) {
-            std::cout << "# rcH0    : " << rcH0_DGP << "\n";
-            std::cout << "# Enforce correct linear evolution : " << screening_enforce_largescale_linear << "\n";
-            std::cout << "# Scale for which we enforce this  : " << screening_linear_scale_hmpc << " h/Mpc\n";
+            std::cout << "# rcH0             : " << rcH0_DGP << "\n";
+            std::cout << "# Screening method : " << use_screening_method << "\n";
+            if (use_screening_method) {
+                std::cout << "# Enforce correct linear evolution : " << screening_enforce_largescale_linear << "\n";
+                std::cout << "# Scale for which we enforce this  : " << screening_linear_scale_hmpc << " h/Mpc\n";
+            }
             std::cout << "#=====================================================\n";
             std::cout << "\n";
         }
@@ -178,12 +181,14 @@ class GravityModelDGP final : public GravityModel<NDIM> {
     //========================================================================
     void read_parameters(ParameterMap & param) override {
         GravityModel<NDIM>::read_parameters(param);
-        use_screening_method = param.get<bool>("gravity_model_screening");
         rcH0_DGP = param.get<double>("gravity_model_dgp_rcH0overc");
-        smoothing_scale_over_boxsize = param.get<double>("gravity_model_dgp_smoothing_scale_over_boxsize");
-        smoothing_filter = param.get<std::string>("gravity_model_dgp_smoothing_filter");
-        screening_enforce_largescale_linear = param.get<bool>("gravity_model_screening_enforce_largescale_linear");
-        screening_linear_scale_hmpc = param.get<double>("gravity_model_screening_linear_scale_hmpc");
+        use_screening_method = param.get<bool>("gravity_model_screening");
+        if (use_screening_method) {
+            smoothing_scale_over_boxsize = param.get<double>("gravity_model_dgp_smoothing_scale_over_boxsize");
+            smoothing_filter = param.get<std::string>("gravity_model_dgp_smoothing_filter");
+            screening_enforce_largescale_linear = param.get<bool>("gravity_model_screening_enforce_largescale_linear");
+            screening_linear_scale_hmpc = param.get<double>("gravity_model_screening_linear_scale_hmpc");
+        }
         this->scaledependent_growth = this->cosmo->get_OmegaMNu() > 0.0;
     }
 };

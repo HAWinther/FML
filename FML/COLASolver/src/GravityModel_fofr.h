@@ -9,6 +9,8 @@
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
 
+#include <FML/MultigridSolver/FofrSolver.h>
+
 /// f(R) model
 template <int NDIM>
 class GravityModelFofR final : public GravityModel<NDIM> {
@@ -16,9 +18,16 @@ class GravityModelFofR final : public GravityModel<NDIM> {
     double fofr0{0.0};
     double nfofr{1.0};
 
+    // For using the screening approximation
     bool use_screening_method{true};
     bool screening_enforce_largescale_linear{false};
     double screening_linear_scale_hmpc{0.0};
+
+    // For solving the exact equation
+    bool solve_exact_equation;
+    int multigrid_nsweeps_first_step;
+    int multigrid_nsweeps;
+    double multigrid_solver_residual_convergence;
 
   public:
     template <int N>
@@ -40,10 +49,13 @@ class GravityModelFofR final : public GravityModel<NDIM> {
     void info() const override {
         GravityModel<NDIM>::info();
         if (FML::ThisTask == 0) {
-            std::cout << "# fofr0    : " << fofr0 << "\n";
-            std::cout << "# nfofr    : " << nfofr << "\n";
-            std::cout << "# Enforce correct linear evolution : " << screening_enforce_largescale_linear << "\n";
-            std::cout << "# Scale for which we enforce this  : " << screening_linear_scale_hmpc << " h/Mpc\n";
+            std::cout << "# fofr0            : " << fofr0 << "\n";
+            std::cout << "# nfofr            : " << nfofr << "\n";
+            std::cout << "# Screening method : " << use_screening_method << "\n";
+            if (use_screening_method) {
+                std::cout << "# Enforce correct linear evolution : " << screening_enforce_largescale_linear << "\n";
+                std::cout << "# Scale for which we enforce this  : " << screening_linear_scale_hmpc << " h/Mpc\n";
+            }
             std::cout << "#=====================================================\n";
             std::cout << "\n";
         }
@@ -88,7 +100,46 @@ class GravityModelFofR final : public GravityModel<NDIM> {
         auto coupling = [&](double kBox) { return GeffOverG(a, kBox / H0Box) - 1.0; };
         FFTWGrid<NDIM> density_fifth_force;
 
-        if (use_screening_method) {
+        if (solve_exact_equation) {
+
+            // Solve the exactl f(R) equation using the multigridsolver (this is slow)
+            // Intenden mainly to be used for testing things so not super optimized
+            FFTWGrid<NDIM> density_real = density_fourier;
+            // Get back the real-space density field
+            density_real.fftw_c2r();
+            // Set up the solver, set the settings, and solve the solution
+            const bool verbose = true;
+            FofrSolverCosmology<NDIM, double> mgsolver(this->cosmo->get_OmegaM(), nfofr, fofr0, H0Box, verbose);
+            mgsolver.set_ngs_steps(multigrid_nsweeps, multigrid_nsweeps, multigrid_nsweeps_first_step);
+            mgsolver.set_epsilon(multigrid_solver_residual_convergence);
+            mgsolver.solve(a, density_real, density_fifth_force);
+            // It returns it in real-space so go back to fourier space
+            density_fifth_force.fftw_r2c();
+
+            // Multiply by -k^2 / (1.5 OmegaM a) to go from potential a^2f_R/(2 H0Box^2) to "force density"
+            // (defined such that the total force is 1.5 OmegaM a * D( 1/D^2 delta_FF + 1/D^2 delta) )
+            const auto Local_nx = density_fifth_force.get_local_nx();
+            const auto Local_x_start = density_fifth_force.get_local_x_start();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                [[maybe_unused]] std::array<double, NDIM> kvec;
+                double kmag2;
+                for (auto && fourier_index : density_fifth_force.get_fourier_range(islice, islice + 1)) {
+                    if (Local_x_start == 0 and fourier_index == 0)
+                        continue; // DC mode (k=0)
+                    density_fifth_force.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                    auto value = density_fifth_force.get_fourier_from_index(fourier_index);
+                    value *= -kmag2 / norm_poisson_equation;
+                    density_fifth_force.set_fourier_from_index(fourier_index, value);
+                }
+            }
+            // DC mode
+            if (Local_x_start == 0)
+                density_fifth_force.set_fourier_from_index(0, 0.0);
+
+        } else if (use_screening_method) {
 
             // Approximate screening method
             const double OmegaM = this->cosmo->get_OmegaM();
@@ -184,11 +235,19 @@ class GravityModelFofR final : public GravityModel<NDIM> {
     //========================================================================
     void read_parameters(ParameterMap & param) override {
         GravityModel<NDIM>::read_parameters(param);
-        use_screening_method = param.get<bool>("gravity_model_screening");
         fofr0 = param.get<double>("gravity_model_fofr_fofr0");
         nfofr = param.get<double>("gravity_model_fofr_nfofr");
-        screening_enforce_largescale_linear = param.get<bool>("gravity_model_screening_enforce_largescale_linear");
-        screening_linear_scale_hmpc = param.get<double>("gravity_model_screening_linear_scale_hmpc");
+        use_screening_method = param.get<bool>("gravity_model_screening");
+        if (use_screening_method) {
+            screening_enforce_largescale_linear = param.get<bool>("gravity_model_screening_enforce_largescale_linear");
+            screening_linear_scale_hmpc = param.get<double>("gravity_model_screening_linear_scale_hmpc");
+        }
+        solve_exact_equation = param.get<bool>("gravity_model_fofr_exact_solution");
+        if (solve_exact_equation) {
+            multigrid_nsweeps_first_step = param.get<int>("multigrid_nsweeps_first_step");
+            multigrid_nsweeps = param.get<int>("multigrid_nsweeps");
+            multigrid_solver_residual_convergence = param.get<double>("multigrid_solver_residual_convergence");
+        }
         this->scaledependent_growth = true;
     }
 };

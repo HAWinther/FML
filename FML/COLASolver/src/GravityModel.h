@@ -193,7 +193,6 @@ class GravityModel {
     //========================================================================
     virtual void info() const {
         if (FML::ThisTask == 0) {
-            std::cout << "\n";
             std::cout << "#=====================================================\n";
             std::cout << "# GravityModel is [" << name << "] and has the cosmology: [" << this->cosmo->get_name() << "]\n";
             std::cout << "# Growth factors unity at zini = " << 1.0 / aini - 1.0 << "\n";
@@ -212,7 +211,8 @@ class GravityModel {
                                                             cosmo->get_As(),
                                                             cosmo->get_ns(),
                                                             cosmo->get_h());
-        transferdata->read_transfer(transferinfofilename);
+        const bool verbose = false; // For testing
+        transferdata->read_transfer(transferinfofilename, verbose);
     }
     std::shared_ptr<LinearTransferData> get_transferdata() { return transferdata; }
     void set_transferdata(std::shared_ptr<LinearTransferData> _transferdata) { transferdata = _transferdata; }

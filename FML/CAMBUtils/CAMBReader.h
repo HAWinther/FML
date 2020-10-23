@@ -70,7 +70,10 @@ namespace FML {
             Spline2D vb_transfer_function_spline;
             Spline2D vbvc_transfer_function_spline;
 
-            double zmax_splines;
+            double zmin_splines{};
+            double zmax_splines{};
+            double kmin_hmpc_splines{};
+            double kmax_hmpc_splines{};
             bool transfer_is_read{false};
 
             std::string fileformat{"CAMB"};
@@ -159,7 +162,10 @@ namespace FML {
             void set_fileformat(std::string format);
         
             /// Get the range of the splines.
+            double get_zmin_splines() const;
             double get_zmax_splines() const;
+            double get_kmin_hmpc_splines() const;
+            double get_kmax_hmpc_splines() const;
 
             /// Free up all memory
             void free();
@@ -308,8 +314,14 @@ namespace FML {
             return {data[pofk_col_k], data[pofk_col_pofk]};
         }
 
+        /// The smallest redshift the splines reach
+        double LinearTransferData::get_zmin_splines() const { return zmin_splines; }
         /// The largest redshift the splines reach
         double LinearTransferData::get_zmax_splines() const { return zmax_splines; }
+        /// The smallest scale the splines reach
+        double LinearTransferData::get_kmin_hmpc_splines() const { return kmin_hmpc_splines; }
+        /// The largest redshift the splines reach
+        double LinearTransferData::get_kmax_hmpc_splines() const { return kmax_hmpc_splines; }
 
         //====================================================================
         /// Read an infofile with the format (folder num_redshift) and then each line contains (transferfile_i
@@ -318,7 +330,7 @@ namespace FML {
         //====================================================================
         void LinearTransferData::read_transfer(std::string infofile, bool verbose) {
 
-            DVector logk;
+            DVector k;
             DVector2D transfer_function_cdm;
             DVector2D transfer_function_baryon;
             DVector2D transfer_function_photon;
@@ -361,6 +373,7 @@ namespace FML {
                 double znow;
                 fp >> znow;
                 redshifts[i] = znow;
+                zmin_splines = std::max(redshifts[i], zmin_splines);
                 zmax_splines = std::max(redshifts[i], zmax_splines);
 
                 // Make filename and open file. Assumes all files have the same length
@@ -369,10 +382,12 @@ namespace FML {
                 // Read the transfer data
                 auto data = read_transfer_single(fullfilename);
 
-                // Fetch the data we want
-                auto logk_tmp = data[transfer_col_k];
+                // Fetch the data we want 
+                auto k_tmp = data[transfer_col_k];
                 if (i == 0) {
-                    logk = logk_tmp;
+                    k = k_tmp;
+                    kmin_hmpc_splines = *std::min_element(k_tmp.begin(), k_tmp.end());
+                    kmax_hmpc_splines = *std::max_element(k_tmp.begin(), k_tmp.end());
                 }
 
                 if (transfer_col_cdm >= 0)
@@ -400,14 +415,14 @@ namespace FML {
                 if (transfer_col_vbvc >= 0)
                     transfer_function_vbvc.push_back(data[transfer_col_vbvc]);
 
-                if (logk.size() != logk_tmp.size())
+                if (k.size() != k_tmp.size())
                     throw std::runtime_error(
                         "Error in read_transfer: the number of k-values in the files are different");
 
                 // Check that k-array is the same in all files as this is assumed when splining below
                 if (i > 0) {
-                    for (size_t j = 0; j < logk.size(); j++) {
-                        double err = std::fabs(logk_tmp[j] - logk[j]);
+                    for (size_t j = 0; j < k.size(); j++) {
+                        double err = std::fabs(k_tmp[j] - k[j]);
                         if (err > 1e-3)
                             throw std::runtime_error("Error in read_transfer: the k-array differs in the different "
                                                      "files. Not built-in support for this");
@@ -416,7 +431,7 @@ namespace FML {
 
                 if (FML::ThisTask == 0 and verbose) {
                     std::cout << "Filename: [" << fullfilename << "]\n";
-                    std::cout << "z = [" << std::setw(10) << znow << "] | We have [" << std::setw(6) << logk.size()
+                    std::cout << "z = [" << std::setw(10) << znow << "] | We have [" << std::setw(6) << k.size()
                               << "] k-points\n";
                 }
             }
@@ -424,6 +439,7 @@ namespace FML {
                 std::cout << "\n";
 
             // Change to log
+            auto logk = k;
             for (auto & k : logk)
                 k = std::log(k);
 

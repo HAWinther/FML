@@ -215,7 +215,9 @@ class NBodySimulation {
   public:
     NBodySimulation() = default;
     NBodySimulation(std::shared_ptr<Cosmology> cosmo, std::shared_ptr<GravityModel<NDIM>> grav)
-        : cosmo(cosmo), grav(grav) {}
+        : cosmo(cosmo), grav(grav) {
+          timer.StartTiming("The whole simulation");
+        }
 
     // Move in particles from an external source
     NBodySimulation(std::shared_ptr<Cosmology> cosmo,
@@ -854,9 +856,9 @@ void NBodySimulation<NDIM, T>::init() {
         // Create the arrays. For consistency we generate them at ic_input_redshift
         // and use growth-factors to the initial time (this way we can pick backscaling or not
         // by selecting ic_input_redshift)
-        const int nk = 500;
-        const double kmin = 1e-5;
-        const double kmax = 100.0;
+        const int nk = 1000;
+        const double kmin = transferdata->get_kmin_hmpc_splines();
+        const double kmax = transferdata->get_kmax_hmpc_splines();
         const double ainput = 1.0 / (1.0 + ic_input_redshift);
         const double aini = 1.0 / (1.0 + ic_initial_redshift);
         karr.resize(nk);
@@ -1170,6 +1172,7 @@ void NBodySimulation<NDIM, T>::init() {
 
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::run() {
+    timer.StartTiming("Timestepping");
 
     // Number of extra slices we need for density assignement
     const auto nleftright =
@@ -1355,10 +1358,12 @@ void NBodySimulation<NDIM, T>::run() {
         //=============================================================
         analyze_and_output(ioutput, output_redshifts[ioutput]);
     }
+    timer.EndTiming("Timestepping");
 
     //=============================================================
     // Print all timings
     //=============================================================
+    timer.EndTiming("The whole simulation");
     if (FML::ThisTask == 0) {
         timer.PrintAllTimings();
     }

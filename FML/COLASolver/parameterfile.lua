@@ -93,6 +93,9 @@ if gravity_model == "f(R)" then
   gravity_model_fofr_fofr0 = 1e-5
   -- The index n
   gravity_model_fofr_nfofr = 1.0
+  -- Solve exact f(R) equation using the multigridsolver (slow and mainly for testing)
+  -- This option takes precedent over the approximate screening model below if both are set
+  gravity_model_fofr_exact_solution = false
   -- Approximate screening model (otherwise linear)
   gravity_model_screening = true
   -- Combine screeneed solution with linear solution to enforce correct
@@ -101,6 +104,14 @@ if gravity_model == "f(R)" then
   -- The fourier scale for which we use the linear solution for k < k*
   -- and the screened solution for k > k*
   gravity_model_screening_linear_scale_hmpc = 0.1
+
+  -- Options for the multigrid solver in case we solve exact equation:
+  multigrid_solver_residual_convergence = 1e-7
+  -- How many Newton-Gauss-Seidel sweeps to do every level
+  multigrid_nsweeps = 5
+  -- In some cases the multigrid solver fails if we are not close to the
+  -- solution before starting multigrid. Increase this if so
+  multigrid_nsweeps_first_step = 5
 end
 
 -- DGP model (pick LCDM as the cosmology to get the normal branch)
