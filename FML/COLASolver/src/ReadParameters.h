@@ -107,6 +107,35 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
         }
 
         //=============================================================
+        // Symmetron model
+        //=============================================================
+
+        if (param.get<std::string>("gravity_model") == "Symmetron") {
+            param["gravity_model_symmetron_assb"] = lfp.read_double("gravity_model_symmetron_assb", 0.5, OPTIONAL);
+            param["gravity_model_symmetron_beta"] = lfp.read_double("gravity_model_symmetron_beta", 1.0, OPTIONAL);
+            param["gravity_model_symmetron_L_mpch"] = lfp.read_double("gravity_model_symmetron_L_mpch", 1.0, OPTIONAL);
+            
+            // Screening approximation
+            param["gravity_model_screening"] = lfp.read_bool("gravity_model_screening", true, OPTIONAL);
+            if (param.get<bool>("gravity_model_screening")) {
+                param["gravity_model_screening_enforce_largescale_linear"] =
+                    lfp.read_bool("gravity_model_screening_enforce_largescale_linear", false, OPTIONAL);
+                param["gravity_model_screening_linear_scale_hmpc"] =
+                    lfp.read_double("gravity_model_screening_linear_scale_hmpc", 0.05, OPTIONAL);
+            }
+
+            // Solving the exact equation
+            param["gravity_model_symmetron_exact_solution"] =
+                lfp.read_bool("gravity_model_symmetron_exact_solution", false, OPTIONAL);
+            if (param.get<bool>("gravity_model_symmetron_exact_solution")) {
+                param["multigrid_nsweeps"] = lfp.read_int("multigrid_nsweeps", 10, OPTIONAL);
+                param["multigrid_nsweeps_first_step"] = lfp.read_int("multigrid_nsweeps_first_step", 20, OPTIONAL);
+                param["multigrid_solver_residual_convergence"] =
+                    lfp.read_double("multigrid_solver_residual_convergence", 1e-6, OPTIONAL);
+            }
+        }
+
+        //=============================================================
         // DGP model
         //=============================================================
         if (param.get<std::string>("gravity_model") == "DGP") {

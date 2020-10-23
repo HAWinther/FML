@@ -84,7 +84,7 @@ end
 ------------------------------------------------------------
 -- Choose the gravity model
 ------------------------------------------------------------
--- Gravity model: GR, DGP, f(R), JBD, ... add your own ...
+-- Gravity model: GR, DGP, f(R), JBD, symmetron, ... add your own ...
 gravity_model = "GR"
 
 -- Hu-Sawicky f(R) model
@@ -101,6 +101,35 @@ if gravity_model == "f(R)" then
   -- Combine screeneed solution with linear solution to enforce correct
   -- linear evolution on large scales
   gravity_model_screening_enforce_largescale_linear = true
+  -- The fourier scale for which we use the linear solution for k < k*
+  -- and the screened solution for k > k*
+  gravity_model_screening_linear_scale_hmpc = 0.1
+
+  -- Options for the multigrid solver in case we solve exact equation:
+  multigrid_solver_residual_convergence = 1e-7
+  -- How many Newton-Gauss-Seidel sweeps to do every level
+  multigrid_nsweeps = 5
+  -- In some cases the multigrid solver fails if we are not close to the
+  -- solution before starting multigrid. Increase this if so
+  multigrid_nsweeps_first_step = 5
+end
+
+-- Symmetron model
+if gravity_model == "Symmetron" then 
+  -- Symmetry breaking scalefactor (no fifth-force for a < assb)
+  gravity_model_symmetron_assb = 0.333
+  -- Coupling strength relative to gravity
+  gravity_model_symmetron_beta = 1.0
+  -- Range of force in background today
+  gravity_model_symmetron_L_mpch = 1.0
+  -- Solve exact symmetron equation using the multigridsolver (slow and mainly for testing)
+  -- This option takes precedent over the approximate screening model below if both are set
+  gravity_model_symmetron_exact_solution = false
+  -- Approximate screening model (otherwise linear)
+  gravity_model_screening = false
+  -- Combine screeneed solution with linear solution to enforce correct
+  -- linear evolution on large scales
+  gravity_model_screening_enforce_largescale_linear = false
   -- The fourier scale for which we use the linear solution for k < k*
   -- and the screened solution for k > k*
   gravity_model_screening_linear_scale_hmpc = 0.1
