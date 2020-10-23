@@ -84,7 +84,7 @@ end
 ------------------------------------------------------------
 -- Choose the gravity model
 ------------------------------------------------------------
--- Gravity model: GR, DGP, f(R), JBD, symmetron, ... add your own ...
+-- Gravity model: GR, DGP, f(R), JBD, Symmetron, ... add your own ...
 gravity_model = "GR"
 
 -- Hu-Sawicky f(R) model
@@ -152,7 +152,7 @@ if gravity_model == "DGP" then
   -- This option takes precedent over the approximate screening model below if both are set
   -- NB: this is not always easy to get to work, its a tricky equation, and might saturate at
   -- a given residual level (and then you will have to reduce the epsilon and deem that to be converged)
-  gravity_model_dgp_exact_solution = true
+  gravity_model_dgp_exact_solution = false
   -- Approximate screening model (otherwise linear)
   gravity_model_screening = true
   -- For screening approx: smoothing filter for density (tophat, gaussian, sharpk)
