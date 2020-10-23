@@ -1,14 +1,14 @@
-This is a simple Particle-Mesh (PM) N-body code for a wide range of model that is fast and very flexible. Every time-consuming operation is parallelized over MPI and OpenMP. It uses a slab-based parallelization so its not good for high resolution simulations, but perfect for fast approximate (COLA) simulations.
+This is a simple Particle-Mesh (PM) N-body code for a wide range of model that is fast and very flexible. For models with complex dynamics (screened models) we provide several options from doing it exactly, to approximate but fast to just simulating linear theory equations. Every time-consuming operation is parallelized over MPI and OpenMP. It uses a slab-based parallelization so its not good for high resolution simulations, but perfect for fast approximate (COLA) simulations.
 
 # Models
 
-The two main concepts in the code is that of a Cosmology and a GravityModel. The former contains all of the background evolution quantities (Hubble function etc.) and the latter everything related to growth of perturbations: LPT growth factors and how to compute forces from the density field. The reason these things are seperate is that it makes it possible to combine different thing which keeping the rest fixed. Adding a new model is as simple as making a new class that inherits from the base class Cosmology or GravityModel and implement the relevant functions.
+The two main concepts in the code is that of a Cosmology and a GravityModel. The former contains all of the background evolution quantities (Hubble function etc.) and the latter everything related to growth of perturbations: LPT growth factors and how to compute forces from the density field. The reason these things are seperate is that it makes it possible to combine different thing while keeping the rest fixed. Adding a new model is as simple as making a new class that inherits from the base class Cosmology or GravityModel and implement the relevant functions.
 
 The models that are currently implemented are
 
 ## Cosmology Models
 
-* Base class (Cosmology.cpp) : Contains the stuff all cosmologies have - CDM, baryons, photons, neutrinos, a cosmological constan. The neutrinos are treated exactly in the background.
+* The Cosmology base class contains the stuff all cosmologies have - CDM, baryons, photons, neutrinos, a cosmological constan. The neutrinos are treated exactly in the background.
 
 * LCDM : Good old LCDM.
 
@@ -20,17 +20,21 @@ The models that are currently implemented are
 
 ## Gravity Models
 
-* f(R) : The fidcuial toy-model for modified graity; the Hu-Sawicky f(R) model. Two free parameters: n (power in f(R) function) and fR0 which determined the range of the fifth-force the extra scalar degree of freedom propagates. When fR0 goes to 0 we recover GR.
+* The GravityModel base class contains an implementation of a fairly general set of LPT growth equation up to 3LPT (that works with most of the common modified gravity models for example and easy to add in parametrizations of this). All that models need to provide are the free functions appearing in this like the effective newtons constant etc. If you want a model that does not fit into this pattern then you can override this fiducial method and run your own solver.
+
+* GR : Does what GR does in simulations; take the density field and computes the forces by solving the Poisson equation. All other methods must also remember to add the usual Newtonian force (just a 10 line routine to copy over).
+
+* f(R) : The fiducial toy-model for modified graity; the Hu-Sawicky f(R) model. Two free parameters: n (power in f(R) function) and fR0 which determined the range of the fifth-force the extra scalar degree of freedom propagates. When fR0 goes to 0 we recover GR.
 
 * DGP : The DGP model (a cubic galileon). Combined with a LCDM cosmology we get the normal branch and with a DGP cosmology we get the original DGP model. This is the fiducial toy-model for modifications of gravity with a Vainstein screening mechnism.
 
 * JBD : Jordan-Brans-Dicke model. The gravity model corresponding to the cosmology with the same name (and currently requires this cosmology to work).
 
-* Symmetron : The symmetron model. A f(R)-like modified gravity model.
+* Symmetron : The symmetron model. A f(R)-like modified gravity model - just to have a bit of variety.
 
-## Forces
+# Forces
 
-The code used PM forces. Particles are binned to a grid (free choice of density assignment method: NGP, CIC, TSC, PCS, PQS, ...) and used fourier transforms to get the forces. The choice of kernel for this is also a free choice (the fiducial option is the "poor-mans Poisson solver" using the continuous Greens function). 
+The code computes PM forces. Particles are binned to a grid (free choice of grid size and density assignment method: NGP, CIC, TSC, PCS, PQS, ...) and used fourier transforms to get the forces. The choice of kernel for this is also a free choice (the fiducial option is the "poor-mans Poisson solver" using the continuous Greens function, but other kernels like the ones in Hamming et al., Hockney & Eastwood and GADGET are also included). 
 
 For the modified gravity models that has non-trivial non-linear evolution (a screening mechanism) we offer four ways of including this:
 
@@ -52,7 +56,7 @@ If your particle has dynamically allocated memory then you must implement a func
 
 # COLA
 
-The code has full support for COLA up to 3LPT. The way it does this is that it stored the initial displacement fields in the particles when creating the IC. However it also supports COLA with scaledependent growth if you want to use that (its slower, but as long as the PM grid one uses for forces is larger than the number of particles - as we typically want it to be - this extra cost is not that bad). If the growth-factors is scaledependent (like with massive neutrinos or modified gravity) then the code will automatically detect this and use the scaledependent version unless you set a flag in the parameterfile. The LPT order we use for COLA is determined by what your particle contains: if it contains storage for only 1LPT then we will only use 1LPT and so on.
+The code has full support for COLA up to 3LPT, and can be turned off or on. The way it does this is that it stored the initial displacement fields in the particles when creating the IC. However it also supports COLA with scaledependent growth if you want to use that (its slower, but as long as the PM grid one uses for forces is larger than the number of particles - as we typically want it to be - this extra cost is not that bad). If the growth-factors are scaledependent (like with massive neutrinos or modified gravity) then the code will automatically detect this and use the scaledependent version unless you set a flag in the parameterfile. The LPT order we use for COLA is determined by what your particle contains: if it contains storage for only 1LPT then we will only use 1LPT and so on.
 
 # Initial conditions
 
