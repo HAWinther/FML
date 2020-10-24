@@ -80,7 +80,7 @@ class SymmetronSolverCosmology {
         if (FML::ThisTask == 0 and verbose) {
             std::cout << "\n";
             std::cout << "#=====================================================\n";
-            std::cout << "# Running multigridsolver for f(R)\n";
+            std::cout << "# Running multigridsolver for symmetron\n";
             std::cout << "# Nmesh       : " << Nmesh << "\n";
             std::cout << "# a           : " << a << "\n";
             std::cout << "# OmegaM      : " << OmegaM << "\n";
@@ -186,10 +186,10 @@ class SymmetronSolverCosmology {
         auto sol = g.get_grid(0);
         ConvertToFFTWGrid(sol, fifth_force_potential_real);
 
+        // Convert to fifth-force potential
         const double forcenorm =
             3.0 * OmegaM * a * a * beta * beta * (H0L / H0Box) * (H0L / H0Box) / (assb * assb * assb);
 
-        // Convert to fifth-force potential a^2 f_R / (2 (H0Box)^2)
         double fmin = std::numeric_limits<double>::max();
         double fmax = -std::numeric_limits<double>::max();
         double fmean = 0.0;
@@ -199,12 +199,13 @@ class SymmetronSolverCosmology {
         for (int islice = 0; islice < Local_nx; islice++) {
             for (auto && real_index : fifth_force_potential_real.get_real_range(islice, islice + 1)) {
                 auto value = fifth_force_potential_real.get_real_from_index(real_index);
-                value *= forcenorm;
-                fifth_force_potential_real.set_real_from_index(real_index, value);
 
                 fmean += value;
                 fmax = std::max(fmax, value);
                 fmin = std::min(fmin, value);
+                
+                value = value * value * forcenorm;
+                fifth_force_potential_real.set_real_from_index(real_index, value);
             }
         }
         FML::SumOverTasks(&fmean);
