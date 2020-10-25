@@ -149,8 +149,8 @@ class GravityModelDGP final : public GravityModel<NDIM> {
             // Approximate screening method
             const double OmegaM = this->cosmo->get_OmegaM();
             auto screening_function_dgp = [=](double density_contrast) {
-                double fac = 8.0 * OmegaM * std::pow(rcH0_DGP * (GeffOverG(a) - 1.0), 2) * density_contrast;
-                return fac < 1e-10 ? 0.0 : 2.0 * (std::sqrt(1.0 + fac) - 1) / fac;
+                double fac = 8.0 * OmegaM * std::pow(rcH0_DGP * (GeffOverG(a) - 1.0), 2) * (density_contrast);
+                return fac < 1e-5 ? 1.0 : 2.0 * (std::sqrt(1.0 + fac) - 1) / fac;
             };
 
             FML::NBODY::compute_delta_fifth_force_density_screening(density_fourier,
