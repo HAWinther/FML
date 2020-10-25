@@ -380,6 +380,40 @@ namespace FML {
         template <int N>
         void add_contribution_from_extra_slices(FFTWGrid<N> & density);
 
+        /// @brief This returns the a function giving the window function for a given density assignement method as
+        /// function of the wave-vector in dimensionless units.
+        /// @tparam N The dimension of the grid
+        /// @param[in] density_assignment_method The density assignment method (NGP, CIC, ...) we used when making the
+        /// density contrast.
+        /// @param[in] Ngrid The grid size (used to set the nyquist frequency)
+        ///
+        template <int N>
+        std::function<double(std::array<double, N> &)> get_window_function(std::string density_assignment_method,
+                                                                           int Ngrid) {
+
+            assert_mpi(Ngrid > 0, "[get_window_function_fourier] Ngrid must be positive\n");
+
+            // The order of the method
+            const int p = interpolation_order_from_name(density_assignment_method);
+
+            // Just sinc to the power = order to the method
+            const double knyquist = M_PI * Ngrid;
+            std::function<double(std::array<double, N> &)> window_function = [=](std::array<double, N> & kvec) {
+                double w = 1.0;
+                for (int idim = 0; idim < N; idim++) {
+                    const double koverkny = M_PI / 2. * (kvec[idim] / knyquist);
+                    w *= koverkny == 0.0 ? 1.0 : std::sin(koverkny) / (koverkny);
+                }
+                // res = pow(w,p);
+                double res = 1;
+                for (int i = 0; i < p; i++)
+                    res *= w;
+                return res;
+            };
+
+            return window_function;
+        }
+
         /// @brief Deconvolves the density assignement kernel in Fourier space. We divide the fourier grid by the
         /// FFT of the density assignment kernels \f$ FFT[ H*H*H*...*H ] = FT[H]^p\f$.
         /// @tparam N The dimension of the grid

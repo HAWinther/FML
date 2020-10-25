@@ -510,6 +510,70 @@ namespace FML {
             }
         }
 
+        //==========================================================================================
+        /// @brief Compute the power-spectrum of a fourier grid. The result has no scales. Get
+        /// scales by calling pofk.scale(boxsize) which does \f$ k \to k/B \f$ and
+        /// \f$ P(k) \to B^N P(k) \f$ where \f$ B\f$ is the boxsize once spectrum has been computed. The method assumes
+        /// the two grids are fourier transforms of real grids (i.e. \f$ f(-k) = f^*(k) \f$).
+        /// This method divides the power-spectrum by the square of the window function for every mode we bin up.
+        ///
+        /// @tparam N Dimension of the grid
+        ///
+        /// @param[in] fourier_grid Grid in fourier space
+        /// @param[out] pofk Binned power-spectrum
+        /// @param[in] density_assignment_method The density assignment method we use to create the grid
+        ///
+        //==========================================================================================
+        template <int N>
+        void bin_up_deconvolved_power_spectrum(const FFTWGrid<N> & fourier_grid,
+                                               PowerSpectrumBinning<N> & pofk,
+                                               std::string density_assignment_method) {
+
+            assert_mpi(fourier_grid.get_nmesh() > 0, "[bin_up_power_spectrum] grid must have Nmesh > 0\n");
+            assert_mpi(pofk.n > 0 && pofk.kmax > pofk.kmin && pofk.kmin >= 0.0,
+                       "[bin_up_power_spectrum] Binning has inconsistent parameters\n");
+
+            const auto Nmesh = fourier_grid.get_nmesh();
+            const auto Local_nx = fourier_grid.get_local_nx();
+            const auto Local_x_start = fourier_grid.get_local_x_start();
+            const auto window_function = FML::INTERPOLATION::get_window_function<N>(density_assignment_method, Nmesh);
+
+            // Initialize binning just in case
+            pofk.reset();
+
+            // Bin up P(k)
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                [[maybe_unused]] double kmag;
+                [[maybe_unused]] std::array<double, N> kvec;
+                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                    if (Local_x_start == 0 and fourier_index == 0)
+                        continue; // DC mode( k=0)
+
+                    // Special treatment of k = 0 plane (Safer way: fetch coord)
+                    // auto coord = fourier_grid.get_fourier_coord_from_index(fourier_index);
+                    // int last_coord = coord[N-1];
+                    auto last_coord = fourier_index % (Nmesh / 2 + 1);
+                    double weight = last_coord > 0 && last_coord < Nmesh / 2 ? 2.0 : 1.0;
+
+                    fourier_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+
+                    auto delta = fourier_grid.get_fourier_from_index(fourier_index);
+                    auto delta_norm = std::norm(delta);
+                    auto window = window_function(kvec);
+                    delta_norm /= (window * window);
+
+                    // Add norm to bin
+                    pofk.add_to_bin(kmag, delta_norm, weight);
+                }
+            }
+
+            // Normalize to get P(k) (this communicates over tasks)
+            pofk.normalize();
+        }
+
         // Bin up the power-spectrum of a given fourier grid
         template <int N>
         void bin_up_power_spectrum(const FFTWGrid<N> & fourier_grid, PowerSpectrumBinning<N> & pofk) {
