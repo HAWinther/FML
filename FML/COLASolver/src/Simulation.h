@@ -216,8 +216,8 @@ class NBodySimulation {
     NBodySimulation() = default;
     NBodySimulation(std::shared_ptr<Cosmology> cosmo, std::shared_ptr<GravityModel<NDIM>> grav)
         : cosmo(cosmo), grav(grav) {
-          timer.StartTiming("The whole simulation");
-        }
+        timer.StartTiming("The whole simulation");
+    }
 
     // Move in particles from an external source
     NBodySimulation(std::shared_ptr<Cosmology> cosmo,
@@ -293,20 +293,29 @@ auto NBodySimulation<NDIM, T>::compute_deltatime_KDK(double amin, double amax, i
     //=====================================================
     // Timestep for a kick-step: Tassev et al.
     //=====================================================
-    auto compute_kick_timestep_tassev = [&](double alow, double ahigh) {
-        const double amid = (ahigh + alow) / 2.;
-        const double da = amid *
-                          (std::pow(ahigh / amid, timestep_cola_nLPT) - std::pow(alow / amid, timestep_cola_nLPT)) /
-                          timestep_cola_nLPT;
+    auto compute_kick_timestep_tassev = [&](double alow, double ahigh, int istep, int nsteps) {
+        double amid = (ahigh + alow) / 2.;
+
+        if (istep == 0)
+            amid = alow;
+        else if (istep == nsteps)
+            amid = ahigh;
+
+        const double da = (std::pow(ahigh, timestep_cola_nLPT) - std::pow(alow, timestep_cola_nLPT)) /
+                          (timestep_cola_nLPT * std::pow(amid, timestep_cola_nLPT - 1.0));
         return da / (amid * amid * amid * cosmo->HoverH0_of_a(amid));
     };
 
     //=====================================================
     // Timestep for a kick-step: Quinn et al.
     //=====================================================
-    auto compute_kick_timestep_quinn = [&](double alow, double ahigh) {
-        const double amid = (ahigh + alow) / 2.;
-        // XXX For comparing to LPICOLA one needs amid = alow in the first step
+    auto compute_kick_timestep_quinn = [&](double alow, double ahigh, int istep, int nsteps) {
+        double amid = (ahigh + alow) / 2.;
+
+        if (istep == 0)
+            amid = alow;
+        else if (istep == nsteps)
+            amid = ahigh;
 
         ODEFunction deriv = [&](double a, [[maybe_unused]] const double * t, double * dtda) {
             dtda[0] = 1.0 / (a * a * a * cosmo->HoverH0_of_a(a)) * poisson_factor(a) / poisson_factor(amid);
@@ -324,58 +333,59 @@ auto NBodySimulation<NDIM, T>::compute_deltatime_KDK(double amin, double amax, i
     //=====================================================
     // Timestep for a drift-step: Tassev et al.
     //=====================================================
-    auto compute_drift_timestep_tassev = [&](double alow, double ahigh) {
-        const double amid = (ahigh + alow) / 2.;
-        // XXX For comparing to LPICOLA one needs amid = alow in the first step
+    auto compute_drift_timestep_tassev =
+        [&](double alow, double ahigh, [[maybe_unused]] int istep, [[maybe_unused]] int nsteps) {
+            double amid = (ahigh + alow) / 2.;
 
-        ODEFunction deriv = [&](double a, [[maybe_unused]] const double * t, double * dtda) {
-            dtda[0] = 1.0 / (a * a * a * cosmo->HoverH0_of_a(a));
-            dtda[0] *= std::pow(a / amid, timestep_cola_nLPT);
-            return GSL_SUCCESS;
+            ODEFunction deriv = [&](double a, [[maybe_unused]] const double * t, double * dtda) {
+                dtda[0] = 1.0 / (a * a * a * cosmo->HoverH0_of_a(a));
+                dtda[0] *= std::pow(a / amid, timestep_cola_nLPT);
+                return GSL_SUCCESS;
+            };
+
+            // Solve the integral
+            DVector tini{0.0};
+            DVector avec{alow, ahigh};
+            ODESolver ode;
+            ode.solve(deriv, avec, tini);
+            return ode.get_final_data()[0];
         };
-
-        // Solve the integral
-        DVector tini{0.0};
-        DVector avec{alow, ahigh};
-        ODESolver ode;
-        ode.solve(deriv, avec, tini);
-        return ode.get_final_data()[0];
-    };
 
     //=====================================================
     // Timestep for a drift-step: Quinn et al.
     //=====================================================
-    auto compute_drift_timestep_quinn = [&](double alow, double ahigh) {
-        ODEFunction deriv = [&](double a, [[maybe_unused]] const double * t, double * dtda) {
-            dtda[0] = 1.0 / (a * a * a * cosmo->HoverH0_of_a(a));
-            return GSL_SUCCESS;
-        };
+    auto compute_drift_timestep_quinn =
+        [&](double alow, double ahigh, [[maybe_unused]] int istep, [[maybe_unused]] int nsteps) {
+            ODEFunction deriv = [&](double a, [[maybe_unused]] const double * t, double * dtda) {
+                dtda[0] = 1.0 / (a * a * a * cosmo->HoverH0_of_a(a));
+                return GSL_SUCCESS;
+            };
 
-        // Solve the integral
-        DVector tini{0.0};
-        DVector avec{alow, ahigh};
-        ODESolver ode;
-        ode.solve(deriv, avec, tini);
-        return ode.get_final_data()[0];
-    };
+            // Solve the integral
+            DVector tini{0.0};
+            DVector avec{alow, ahigh};
+            ODESolver ode;
+            ode.solve(deriv, avec, tini);
+            return ode.get_final_data()[0];
+        };
 
     //=====================================================
     // Select the method to use
     //=====================================================
-    auto compute_drift_timestep = [&](double alow, double ahigh) {
+    auto compute_drift_timestep = [&](double alow, double ahigh, int istep, int nsteps) {
         if (timestep_method == "Quinn") {
-            return compute_drift_timestep_quinn(alow, ahigh);
+            return compute_drift_timestep_quinn(alow, ahigh, istep, nsteps);
         } else if (timestep_method == "Tassev") {
-            return compute_drift_timestep_tassev(alow, ahigh);
+            return compute_drift_timestep_tassev(alow, ahigh, istep, nsteps);
         } else {
             throw std::runtime_error("Unknown timestep_method [" + timestep_method + "]");
         }
     };
-    auto compute_kick_timestep = [&](double alow, double ahigh) {
+    auto compute_kick_timestep = [&](double alow, double ahigh, int istep, int nsteps) {
         if (timestep_method == "Quinn") {
-            return compute_kick_timestep_quinn(alow, ahigh);
+            return compute_kick_timestep_quinn(alow, ahigh, istep, nsteps);
         } else if (timestep_method == "Tassev") {
-            return compute_kick_timestep_tassev(alow, ahigh);
+            return compute_kick_timestep_tassev(alow, ahigh, istep, nsteps);
         } else {
             throw std::runtime_error("Unknown timestep_method [" + timestep_method + "]");
         }
@@ -412,8 +422,8 @@ auto NBodySimulation<NDIM, T>::compute_deltatime_KDK(double amin, double amax, i
         double apos_new = (i == nsteps) ? amax : scale_factor_of_step(i + 1.0);
         double avel_old = (i == 0) ? amin : scale_factor_of_step(i - 0.5);
         double avel_new = (i == 0) ? scale_factor_of_step(0.5) : (i == nsteps ? amax : scale_factor_of_step(i + 0.5));
-        delta_time_drift.push_back(compute_drift_timestep(apos_old, apos_new));
-        delta_time_kick.push_back(compute_kick_timestep(avel_old, avel_new));
+        delta_time_drift.push_back(compute_drift_timestep(apos_old, apos_new, i, nsteps));
+        delta_time_kick.push_back(compute_kick_timestep(avel_old, avel_new, i, nsteps));
         pos_timestep.push_back(apos_new);
         vel_timestep.push_back(avel_old);
     }
@@ -1024,12 +1034,12 @@ void NBodySimulation<NDIM, T>::init() {
 
         // The power-spectrum of the Bardeen potential (-Phi) at the given redshift
         const double afnl = 1.0 / (1.0 + ic_fnl_redshift);
-        const double aini = 1.0 / (1.0 + ic_initial_redshift);
         const double H0Box = simulation_boxsize * grav_ic->H0_hmpc;
         const double factor = 1.5 * cosmo->get_OmegaM() / afnl;
         auto Pofk_of_kBox_over_volume_primordial = [&](double kBox) {
-            return power_primordial_spline(kBox / simulation_boxsize) / std::pow(simulation_boxsize, NDIM) * factor *
-                   std::pow(grav_ic->get_D_1LPT(afnl, kBox / H0Box) / grav_ic->get_D_1LPT(aini, kBox / H0Box), 2);
+            return power_primordial_spline(kBox / simulation_boxsize) / std::pow(simulation_boxsize, NDIM) *
+                   std::pow(factor * grav_ic->get_D_1LPT(afnl, kBox / H0Box) / grav_ic->get_D_1LPT(1.0, kBox / H0Box),
+                            2);
         };
         // The product of this and the function above is the initial power-spectrum for delta
         auto Pofk_of_kBox_over_Pofk_primordal = [&](double kBox) {
@@ -1400,7 +1410,9 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
     //=============================================================
     const double redshift = 1.0 / a - 1.0;
     PowerSpectrumBinning<NDIM> pofk_particles(density_grid_fourier.get_nmesh() / 2);
-    FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(density_grid_fourier, pofk_particles);
+    pofk_particles.subtract_shotnoise = false;
+    FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(
+        density_grid_fourier, pofk_particles, force_density_assignment_method);
     pofk_particles.scale(simulation_boxsize);
     pofk_cb_every_step.push_back({redshift, pofk_particles});
 
@@ -1454,9 +1466,17 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
 
         //=============================================================
         // Bin up total power-spectrum (its basically free)
+        // NB: the density field is here the sum of W*deltaCB + deltaNu
+        // so the last part is going to be added up as deltaNu/W^2 so
+        // its not fully correct for large k, but this is not a high
+        // quality P(k) anyway... should improve this at some point
+        // One way is to bin up <(W*deltaCB)^2>, <deltaNu^2> and the cross
+        // <(W*deltaCB) deltaNu> and deconvolve them seperately
         //=============================================================
         PowerSpectrumBinning<NDIM> pofk_total(density_grid_fourier.get_nmesh() / 2);
-        FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(density_grid_fourier, pofk_total);
+        pofk_total.subtract_shotnoise = false;
+        FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(
+            density_grid_fourier, pofk_total, force_density_assignment_method);
         pofk_total.scale(simulation_boxsize);
         pofk_total_every_step.push_back({redshift, pofk_total});
     }
