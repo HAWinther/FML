@@ -213,10 +213,11 @@ namespace FML {
 
                         // Gaussian random number
                         double phase = rng->generate_uniform() * 2 * M_PI;
-                        double norm = rng->generate_uniform();
-                        norm = norm > 0.0 ? -std::log(norm) : 1.0;
-                        if (fix_amplitude)
-                            norm = 1.0;
+                        double norm = 1.0;
+                        if (not fix_amplitude) {
+                            norm = rng->generate_uniform();
+                            norm = norm > 0.0 ? -std::log(norm) : 1.0;
+                        }
 
                         // Skip modes that are zero or otherwise fixed by symmetry
                         // 1) When all coord are 0 (the DC mode)
@@ -362,10 +363,11 @@ namespace FML {
 
                                 // Gaussian random number
                                 double phase = rng->generate_uniform() * 2 * M_PI;
-                                double norm = rng->generate_uniform();
-                                norm = norm > 0.0 ? -std::log(norm) : 1.0;
-                                if (fix_amplitude)
-                                    norm = 1.0;
+                                double norm = 1.0;
+                                if (not fix_amplitude) {
+                                    norm = rng->generate_uniform();
+                                    norm = norm > 0.0 ? -std::log(norm) : 1.0;
+                                }
 
                                 // Skip modes that are zero or otherwise fixed by symmetry
                                 if (i == Nmesh / 2 or j == Nmesh / 2 or k == Nmesh / 2)
