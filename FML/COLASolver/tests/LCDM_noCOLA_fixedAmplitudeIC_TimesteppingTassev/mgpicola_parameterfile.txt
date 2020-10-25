@@ -1,0 +1,87 @@
+% ============================== %
+% This is the run parameters file % 
+% =============================== %
+
+% =============================== %
+% Power-spectrum calculation
+% =============================== %
+pofk_compute_every_step   1           % Turn on this option [1], off [0]
+pofk_compute_rsd_pofk     2           % Every step 1, every time we output 2, off 0
+pofk_nbins                128          % Number of bins. Use 0 to get [Nmesh]
+pofk_bintype              0           % Linear bins [0] or logarithm spacing [1]
+pofk_subtract_shotnoise   0           % Subtract shotnoise contribution = 1/Npart^3
+pofk_kmin                 0.0       % kmin in h/Mpc ( should be >= 2pi/Box). Use 0.0 to use k_fundamental
+pofk_kmax                 0.0         % kmax in h/Mpc ( should be <= 2pi/Box * Nmesh). Use 0.0 to use k_Nyquist
+
+% =============================== %
+% Modified gravity parameters
+% =============================== %
+modified_gravity_active  0              % f(R) simulation [1] or  LCDM [0]
+rcH0_DGP                 1.2            % The cross-over scale
+Rsmooth                  1.0            % Smoothing radius
+include_screening        0              % Include screening [1] or not [0]
+use_lcdm_growth_factors  1              % Use growth-factors computed in LCDM
+input_pofk_is_for_lcdm   1              % If the input P(k) is for LCDM we get the correct MG P(k) by *= (D/DLCDM)^2
+input_sigma8_is_for_lcdm 0              % If Sigma8 provided below is for LCDM then we rescale P(k)
+inverted_initial_condition        0     % If 1 then delta(k) -> -delta(k) in IC
+amplitude_fixed_initial_condition 1     % If 1 then enforce amplitude |delta(k)|^2 == P(k) in IC
+
+% ==================
+% Simulation outputs
+% ==================
+OutputDir                   output                         % Directory for output (must exist)
+FileBase                    lcdm                           % Base-filename of output files (appropriate additions are appended on at runtime) 
+OutputRedshiftFile          files/output_redshifts.dat     % The file containing the redshifts that we want snapshots for
+NumFilesWrittenInParallel   1                              % Limits the number of files that are written in parallel when outputting
+
+% =========================
+% Simulation Specifications
+% =========================
+UseCOLA          0           % Whether or not to use the COLA method (1 = true, 0 = false).
+Buffer           1.5         % The amount of extra memory to reserve for particles moving between tasks during runtime.
+Nmesh            128          % This is the size of the FFT grid used to compute the displacement field and gravitational forces.
+Nsample          128          % This sets the total number of particles in the simulation, such that Ntot = Nsample^3.
+Box              500.0       % The Periodic box size of simulation.
+Init_Redshift    20.0        % The redshift to begin timestepping from (redshift = 9 works well for COLA)
+Seed             5001        % Seed for IC-generator
+SphereMode       0           % If "1" only modes with |k| < k_Nyquist are used to generate initial conditions (i.e. a sphere in k-space), 
+                             % otherwise modes with |k_x|,|k_y|,|k_z| < k_Nyquist are used (i.e. a cube in k-space).
+
+WhichSpectrum    1           % "0" - Use transfer function, not power spectrum
+		                         % "1" - Use a tabulated power spectrum in the file 'FileWithInputSpectrum'
+                             % otherwise, Eisenstein and Hu (1998) parametrization is used
+                             % Non-Gaussian case requires "0" and that we use the transfer function
+
+WhichTransfer    0           % "0" - Use power spectrum, not transfer function
+                             % "1" - Use a tabulated transfer function in the file 'FileWithInputTransfer' 
+                             % otherwise, Eisenstein and Hu (1998) parameterization used 
+                             % For Non-Gaussian models this is required (rather than the power spectrum) 
+
+FileWithInputSpectrum  files/input_power_spectrum.dat      % filename of tabulated input spectrum (if used)
+                                                           % expecting k Pk 
+
+FileWithInputTransfer  files/input_transfer_function.dat   % filename of tabulated transfer function (if used)
+                                                           % expecting k and T (unnormalized)
+
+% =======================
+% Cosmological Parameters
+% =======================
+Omega            0.3       % Total matter density (CDM + Baryons at z=0).
+OmegaBaryon      0.05       % Baryon density (at z=0).
+HubbleParam      0.7        % Hubble parameter, 'little h' (may be used for power spectrum parameterization).
+Sigma8           0.8         % Power spectrum normalization (power spectrum may already be normalized correctly).
+PrimordialIndex  0.96       % Used to tilt the power spectrum for non-tabulated power spectra (if != 1.0 and nongaussian, generic flag required)
+
+% =======================                                                                                             
+% Units
+% =======================                                                                                             
+UnitLength_in_cm                3.085678e24       % defines length unit of output (in cm/h) 
+UnitMass_in_g                   1.989e43          % defines mass unit of output (in g/cm)
+UnitVelocity_in_cm_per_s        1e5               % defines velocity unit of output (in cm/sec)
+InputSpectrum_UnitLength_in_cm  3.085678e24       % defines length unit of tabulated input spectrum in cm/h. 
+                                                  % Note: This can be chosen different from UnitLength_in_cm
+
+% =============================================================== %
+% Additional parameters are needed if we want non-gaussianity
+% or lightcone sims. See original PICOLA for this
+% =============================================================== %
