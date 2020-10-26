@@ -210,7 +210,7 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
     param["ic_sigma8"] = lfp.read_double("ic_sigma8", 0.8, OPTIONAL);
     param["ic_use_gravity_model_GR"] = lfp.read_bool("ic_use_gravity_model_GR", false, OPTIONAL);
 
-    if (param.get<std::string>("ic_random_field_type") != "gaussian") {
+    if (param.get<std::string>("ic_random_field_type") == "nongaussian") {
         //=============================================================
         // Non-gaussianity
         //=============================================================
@@ -232,6 +232,10 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
         param["ic_reconstruct_dimless_smoothing_scale"] =
             lfp.read_double("ic_reconstruct_dimless_smoothing_scale", 0.0, OPTIONAL);
         param["ic_reconstruct_interlacing"] = lfp.read_bool("ic_reconstruct_interlacing", false, OPTIONAL);
+    }
+    
+    if (param.get<std::string>("ic_random_field_type") == "read_particles") {
+        param["ic_reconstruct_gadgetfilepath"] = lfp.read_string("ic_reconstruct_gadgetfilepath", "", REQUIRED);
     }
 
     //=============================================================

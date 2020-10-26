@@ -537,6 +537,9 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
         ic_reconstruct_dimless_smoothing_scale = param.get<double>("ic_reconstruct_dimless_smoothing_scale");
         ic_reconstruct_interlacing = param.get<bool>("ic_reconstruct_interlacing");
     }
+    if (ic_random_field_type == "read_particles") {
+        ic_reconstruct_gadgetfilepath = param.get<std::string>("ic_reconstruct_gadgetfilepath");
+    }
 
     if (FML::ThisTask == 0) {
         std::cout << "ic_type_of_input                         : " << ic_type_of_input << "\n";
@@ -1085,7 +1088,7 @@ void NBodySimulation<NDIM, T>::init() {
     if (ic_random_field_type == "read_particles") {
         FML::assert_mpi(simulation_use_cola == false,
                         "Cannot do a cola simulation without displacementfields. Use reconstruct_from_particles "
-                        "instead of read_particles");
+                        "instead of read_particles or put simulation_use_cola = false");
         read_ic();
     } else {
 
@@ -1466,7 +1469,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
 
         //=============================================================
         // Bin up total power-spectrum (its basically free)
-        // NB: the density field is here the sum of W*deltaCB + deltaNu
+        // XXX: the density field is here the sum of W*deltaCB + deltaNu
         // so the last part is going to be added up as deltaNu/W^2 so
         // its not fully correct for large k, but this is not a high
         // quality P(k) anyway... should improve this at some point
@@ -1662,6 +1665,10 @@ void NBodySimulation<NDIM, T>::reconstruct_ic_from_particles(FFTWGrid<NDIM> & de
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::read_ic() {
 
+    if (FML::ThisTask == 0) {
+        std::cout << "Reading initial conditions from GADGET files [" + ic_reconstruct_gadgetfilepath + "]\n";
+    }
+
     // Read in gadget files (all tasks reads the same files)
     // Using FML::Vector in case we have memory logging on to allow us to
     // move the data into mpiparticles
@@ -1673,7 +1680,14 @@ void NBodySimulation<NDIM, T>::read_ic() {
     g.read_gadget(fileprefix, externalpart, particle_allocation_factor, only_keep_part_in_domain, verbose);
 
     auto header = g.get_header();
+    FML::FILEUTILS::GADGET::print_header_info(header);
+
     const double scale_factor = header.time;
+
+    // Check that the redshift in the file matched the initial redshift
+    FML::assert_mpi(
+        std::fabs(scale_factor - 1.0 / (1.0 + ic_initial_redshift)) < 1e-3,
+        "[read_ic] The redshift in the gadgetfile we read does not match the initial redshift of the simulation");
 
     // Velocities we get from the gadget reader is peculiar km/s
     // so scale to code units
