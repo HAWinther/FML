@@ -146,7 +146,7 @@ class NBodySimulation {
     double ic_sigma8_redshift;    // The redshift of which to normalize
     double ic_sigma8;             // The value of sigma8 at this redshift we want
 
-    // Initial conditions: Read IC from file and reconstruct the phases
+    // Initial conditions: Read IC from file and reconstruct the LPT fields if COLA
     std::string ic_reconstruct_gadgetfilepath;     // /path/to/gadget
     std::string ic_reconstruct_assigment_method;   // Density assignment method (NGP, CIC, ...)
     std::string ic_reconstruct_smoothing_filter;   // Smoothing filter (tophat, sharpk, gaussian)
@@ -237,9 +237,6 @@ class NBodySimulation {
 
     /// Initialize simulation. Create initial conditions. Make it ready to run
     void init();
-
-    /// This method reconstructs delta(k,zini) and uses that to make IC from scratch
-    void reconstruct_ic_from_particles(FFTWGrid<NDIM> & delta_fourier);
 
     /// This method simply read particles and uses them for the simulation
     void read_ic();
@@ -530,15 +527,12 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
         ic_sigma8_redshift = param.get<double>("ic_sigma8_redshift");
         ic_sigma8 = param.get<double>("ic_sigma8");
     }
-    if (ic_random_field_type == "reconstruct_from_particles") {
+    if (ic_random_field_type == "read_particles") {
         ic_reconstruct_gadgetfilepath = param.get<std::string>("ic_reconstruct_gadgetfilepath");
         ic_reconstruct_assigment_method = param.get<std::string>("ic_reconstruct_assigment_method");
         ic_reconstruct_smoothing_filter = param.get<std::string>("ic_reconstruct_smoothing_filter");
         ic_reconstruct_dimless_smoothing_scale = param.get<double>("ic_reconstruct_dimless_smoothing_scale");
         ic_reconstruct_interlacing = param.get<bool>("ic_reconstruct_interlacing");
-    }
-    if (ic_random_field_type == "read_particles") {
-        ic_reconstruct_gadgetfilepath = param.get<std::string>("ic_reconstruct_gadgetfilepath");
     }
 
     if (FML::ThisTask == 0) {
@@ -560,7 +554,7 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
             std::cout << "ic_sigma8                                : " << ic_sigma8 << "\n";
             std::cout << "ic_sigma8_redshift                       : " << ic_sigma8_redshift << "\n";
         }
-        if (ic_random_field_type == "reconstruct_from_particles") {
+        if (ic_random_field_type == "read_particles") {
             std::cout << "ic_reconstruct_gadgetfilepath            : " << ic_reconstruct_gadgetfilepath << "\n";
             std::cout << "ic_reconstruct_assigment_method          : " << ic_reconstruct_assigment_method << "\n";
             std::cout << "ic_reconstruct_smoothing_filter          : " << ic_reconstruct_smoothing_filter << "\n";
@@ -1058,13 +1052,8 @@ void NBodySimulation<NDIM, T>::init() {
             ic_fnl,
             ic_fnl_type);
 
-    } else if (ic_random_field_type == "reconstruct_from_particles") {
-
-        // Reconstruct the initial densityfield and use that to make IC from scratch (useful for testing)
-        reconstruct_ic_from_particles(delta_ini_fourier);
-
     } else if (ic_random_field_type == "read_particles") {
-        // Do nothing, we do this below
+        // Do nothing, we read in particles below this below
     } else {
         throw std::runtime_error("Unknown ic_random_field_type [" + ic_random_field_type + "]");
     }
@@ -1086,9 +1075,6 @@ void NBodySimulation<NDIM, T>::init() {
 
     // If we simply read IC from file (useful for testing)
     if (ic_random_field_type == "read_particles") {
-        FML::assert_mpi(simulation_use_cola == false,
-                        "Cannot do a cola simulation without displacementfields. Use reconstruct_from_particles "
-                        "instead of read_particles or put simulation_use_cola = false");
         read_ic();
     } else {
 
@@ -1619,54 +1605,13 @@ void NBodySimulation<NDIM, T>::free() {
 }
 
 template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::reconstruct_ic_from_particles(FFTWGrid<NDIM> & delta_fourier) {
-    // This assumes the IC was generated with 1LPT, though the error is small if it was 2LPT
-    // And its too much of a hazzle to do it properly (not trivial)
-
-    // Read in gadget files (all tasks reads the same files)
-    GadgetReader g;
-    std::vector<T> externalpart;
-    const std::string fileprefix = ic_reconstruct_gadgetfilepath;
-    const bool only_keep_part_in_domain = true;
-    const double buffer_factor = 1.0;
-    const bool verbose = false;
-    g.read_gadget(fileprefix, externalpart, buffer_factor, only_keep_part_in_domain, verbose);
-
-    size_t NumPart = externalpart.size();
-    size_t NumPartTotal = NumPart;
-    FML::SumOverTasks(&NumPartTotal);
-
-    // Reallocate if we need more extra slices
-    const auto nleftright =
-        FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(ic_reconstruct_assigment_method);
-    auto Nmesh = delta_fourier.get_nmesh();
-    if (delta_fourier.get_n_extra_slices_left() < nleftright.first or
-        delta_fourier.get_n_extra_slices_right() < nleftright.second)
-        delta_fourier = FFTWGrid<NDIM>(Nmesh, nleftright.first, nleftright.second);
-
-    // Assign particles to grid
-    FML::INTERPOLATION::particles_to_fourier_grid(externalpart.data(),
-                                                  NumPart,
-                                                  NumPartTotal,
-                                                  delta_fourier,
-                                                  ic_reconstruct_assigment_method,
-                                                  ic_reconstruct_interlacing);
-
-    // Deconvolve window function
-    FML::INTERPOLATION::deconvolve_window_function_fourier<NDIM>(delta_fourier, ic_reconstruct_assigment_method);
-
-    // Smoothing (should just use a sharpk filter to set modes beyond Nmesh used to generate the IC to zero)
-    // If we use a larger grid then the highest frequency modes, beyond knyuist of the grid used to
-    // generate the IC, will just be noise and will lead to problems so these modes needs to be killed
-    FML::GRID::smoothing_filter_fourier_space(
-        delta_fourier, ic_reconstruct_dimless_smoothing_scale, ic_reconstruct_smoothing_filter);
-}
-
-template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::read_ic() {
 
     if (FML::ThisTask == 0) {
-        std::cout << "Reading initial conditions from GADGET files [" + ic_reconstruct_gadgetfilepath + "]\n";
+        std::cout << "\n";
+        std::cout << "#=====================================================\n";
+        std::cout << "# Reading initial conditions from GADGET files [" + ic_reconstruct_gadgetfilepath + "]\n";
+        std::cout << "#=====================================================\n";
     }
 
     // Read in gadget files (all tasks reads the same files)
@@ -1685,9 +1630,9 @@ void NBodySimulation<NDIM, T>::read_ic() {
     const double scale_factor = header.time;
 
     // Check that the redshift in the file matched the initial redshift
-    FML::assert_mpi(
-        std::fabs(scale_factor - 1.0 / (1.0 + ic_initial_redshift)) < 1e-3,
-        "[read_ic] The redshift in the gadgetfile we read does not match the initial redshift of the simulation");
+    FML::assert_mpi(std::fabs(scale_factor - 1.0 / (1.0 + ic_initial_redshift)) < 1e-3,
+                    "[read_ic] The redshift in the gadgetfile we read does not match the initial redshift of "
+                    "the simulation");
 
     // Velocities we get from the gadget reader is peculiar km/s
     // so scale to code units
@@ -1703,6 +1648,116 @@ void NBodySimulation<NDIM, T>::read_ic() {
 
     // Move them into MPIParticles
     part.move_from(std::move(externalpart));
+
+    // Assign particles to grid
+    const auto nleftright =
+        FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(ic_reconstruct_assigment_method);
+    FFTWGrid<NDIM> delta_fourier(ic_nmesh, nleftright.first, nleftright.second);
+    FML::INTERPOLATION::particles_to_fourier_grid(part.get_particles_ptr(),
+                                                  part.get_npart(),
+                                                  part.get_npart_total(),
+                                                  delta_fourier,
+                                                  ic_reconstruct_assigment_method,
+                                                  ic_reconstruct_interlacing);
+
+    // Deconvolve window function
+    FML::INTERPOLATION::deconvolve_window_function_fourier<NDIM>(delta_fourier, ic_reconstruct_assigment_method);
+
+    // Smoothing (should just use a sharpk filter to set modes beyond Nmesh used to generate the IC to zero)
+    // If we use a larger grid then the highest frequency modes, beyond knyuist of the grid used to
+    // generate the IC, will just be noise and will lead to problems so these modes needs to be killed
+    FML::GRID::smoothing_filter_fourier_space(
+        delta_fourier, ic_reconstruct_dimless_smoothing_scale, ic_reconstruct_smoothing_filter);
+
+    // In case of COLA we need to assign displacement fields to particles
+    if (simulation_use_cola) {
+
+        // Has only implemented this for 1LPT and 2LPT
+        FML::assert_mpi(FML::PARTICLE::has_get_D_3LPTa<T>() == false and FML::PARTICLE::has_get_D_3LPTb<T>() == false,
+                        "3LPT not implemented for read_ic");
+
+        // Doing 1LPT displacementfields
+        // For scaledependent we also set the Lagrangian position
+        if constexpr (FML::PARTICLE::has_get_D_1LPT<T>()) {
+
+            if (FML::ThisTask == 0) {
+                std::cout << "Reconstructing 1LPT potential...\n";
+            }
+
+            FFTWGrid<NDIM> temp;
+            FFTWGrid<NDIM> & phi_1LPT_fourier = simulation_use_scaledependent_cola ? phi_1LPT_ini_fourier : temp;
+
+            FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier(delta_fourier, phi_1LPT_fourier);
+
+            // For scaleindependent we need to store the Psi's in the particles so compute that
+            std::array<FFTWGrid<NDIM>, NDIM> psi_1LPT_vector;
+            FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector<NDIM>(phi_1LPT_fourier, psi_1LPT_vector);
+            for (int idim = 0; idim < NDIM; idim++) {
+                psi_1LPT_vector[idim].communicate_boundaries();
+            }
+            std::array<std::vector<FML::GRID::FloatType>, NDIM> displacements;
+            FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, T>(
+                psi_1LPT_vector, part.get_particles_ptr(), part.get_npart(), displacements, "CIC");
+
+            // Assign displacement field to particles
+            auto * part_ptr = part.get_particles_ptr();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (size_t ind = 0; ind < part.get_npart(); ind++) {
+                auto * pos = FML::PARTICLE::GetPos(part_ptr[ind]);
+                auto * D = FML::PARTICLE::GetD_1LPT(part_ptr[ind]);
+                for (int idim = 0; idim < NDIM; idim++) {
+                    D[idim] = displacements[idim][ind];
+                }
+
+                // Set (approximate) Lagrangian position
+                if constexpr (FML::PARTICLE::has_get_q<T>()) {
+                    auto * q = FML::PARTICLE::GetLagrangianPos(part_ptr[ind]);
+                    for (int idim = 0; idim < NDIM; idim++) {
+                        q[idim] = pos[idim] - D[idim];
+                    }
+                }
+            }
+        }
+
+        // Doing 2LPT displacementfields
+        if constexpr (FML::PARTICLE::has_get_D_2LPT<T>()) {
+
+            if (FML::ThisTask == 0) {
+                std::cout << "Reconstructing 2LPT potential...\n";
+            }
+
+            FFTWGrid<NDIM> temp;
+            FFTWGrid<NDIM> & phi_2LPT_fourier = simulation_use_scaledependent_cola ? phi_2LPT_ini_fourier : temp;
+
+            FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_fourier, phi_2LPT_fourier);
+
+            // For scaleindependent we need to store the Psi's in the particles
+            if (not simulation_use_scaledependent_cola) {
+                std::array<FFTWGrid<NDIM>, NDIM> psi_2LPT_vector;
+                FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector<NDIM>(phi_2LPT_fourier, psi_2LPT_vector);
+                for (int idim = 0; idim < NDIM; idim++) {
+                    psi_2LPT_vector[idim].communicate_boundaries();
+                }
+                std::array<std::vector<FML::GRID::FloatType>, NDIM> displacements;
+                FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, T>(
+                    psi_2LPT_vector, part.get_particles_ptr(), part.get_npart(), displacements, "CIC");
+
+                // Assign displacement field to particles
+                auto * part_ptr = part.get_particles_ptr();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (size_t ind = 0; ind < part.get_npart(); ind++) {
+                    auto * D = FML::PARTICLE::GetD_2LPT(part_ptr[ind]);
+                    for (int idim = 0; idim < NDIM; idim++) {
+                        D[idim] = displacements[idim][ind];
+                    }
+                }
+            }
+        }
+    }
 }
 
 #endif

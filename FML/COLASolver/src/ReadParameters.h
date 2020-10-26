@@ -219,11 +219,9 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
         param["ic_fnl_redshift"] = lfp.read_double("ic_fnl_redshift", 0.0, REQUIRED);
     }
 
-    if (param.get<std::string>("ic_random_field_type") == "reconstruct_from_particles") {
+    if (param.get<std::string>("ic_random_field_type") == "read_particles") {
         //=============================================================
-        // Reconstruct initial density field from particles and use
-        // this to generate the IC (useful for COLA where we need
-        // the displacement fields)
+        // Read particles from file and if COLA reconstruct LPT
         //=============================================================
         param["ic_reconstruct_gadgetfilepath"] = lfp.read_string("ic_reconstruct_gadgetfilepath", "", REQUIRED);
         param["ic_reconstruct_assigment_method"] = lfp.read_string("ic_reconstruct_assigment_method", "CIC", OPTIONAL);
@@ -232,10 +230,6 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
         param["ic_reconstruct_dimless_smoothing_scale"] =
             lfp.read_double("ic_reconstruct_dimless_smoothing_scale", 0.0, OPTIONAL);
         param["ic_reconstruct_interlacing"] = lfp.read_bool("ic_reconstruct_interlacing", false, OPTIONAL);
-    }
-    
-    if (param.get<std::string>("ic_random_field_type") == "read_particles") {
-        param["ic_reconstruct_gadgetfilepath"] = lfp.read_string("ic_reconstruct_gadgetfilepath", "", REQUIRED);
     }
 
     //=============================================================

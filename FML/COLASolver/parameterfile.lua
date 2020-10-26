@@ -158,7 +158,7 @@ if gravity_model == "DGP" then
   -- For screening approx: smoothing filter for density (tophat, gaussian, sharpk)
   gravity_model_dgp_smoothing_filter = "tophat"
   -- For screening approx: smoothing scale R/boxsize
-  gravity_model_dgp_smoothing_scale_over_boxsize = 0.0
+  gravity_model_dgp_smoothing_scale_over_boxsize = 0.0 / simulation_boxsize
   -- Combine screeneed solution with linear solution to enforce correct
   -- linear evolution on large scales
   gravity_model_screening_enforce_largescale_linear = true
@@ -237,8 +237,7 @@ ic_LPT_order = 2
 -- powerspectrum    (file with [k (h/Mph) , P(k) (Mpc/h)^3)])
 -- transferfunction (file with [k (h/Mph) , T(k)  Mpc^2)]
 -- transferinfofile (file containing paths to a bunch of T(k,z) files from CAMB)
--- reconstruct_from_particles (see below)
--- read_particles   (if not COLA read GADGET file and use that for sim) 
+-- read_particles   (read GADGET file and use that for sim - reconstruct LPT fields if COLA) 
 ic_type_of_input = "transferinfofile"
 -- Path to the input (NB: for using the example files update the path at the top of the file below)
 ic_input_filename = "input/transfer_infofile_lcdm_nu0.2.txt"
@@ -263,25 +262,21 @@ if ic_random_field_type == "nongaussian" then
   ic_fnl_redshift = ic_initial_redshift
 end
 
--- For reconstructing the initial density field from particles
--- (needed for COLA when we don't just need the positions, but also displacement fields)
-if ic_random_field_type == "reconstruct_from_particles" then
-  -- Path to gadget files
-  ic_reconstruct_gadgetfilepath = "output/gadget"
-  -- Density assignment method: NGP (not a good idea), CIC, TSC, PCS, PQS
-  ic_reconstruct_assigment_method = "CIC"
-  -- Smoothing filter: tophat, gaussian, sharpk
-  ic_reconstruct_smoothing_filter = "sharpk"
-  -- Smoothing scale R/box (for killing off modes not in the IC if we have a bigger grid)
-  ic_reconstruct_dimless_smoothing_scale = 1.0 / (128 * math.pi)
-  -- Want interlaced grids? Probably not
-  ic_reconstruct_interlacing = false
-end
-
--- For reading IC from an external file (for usual N-body)
+-- For reading IC from an external file
+-- If COLA then we reconstruct the LPT fields 
 if ic_random_field_type == "read_particles" then
   -- Path to GADGET files
-  ic_reconstruct_gadgetfilepath = "path/gadget"
+  ic_reconstruct_gadgetfilepath = "output/snapshot_TestSim_z20.000/gadget_z20.000"
+  -- COLA settings to (naively) reconstruct the LPT fields:
+  -- Density assignment method: NGP, CIC, TSC, PCS, PQS
+  -- We use ic_nmesh to set the grid to compute the density field on
+  -- NB: this should be equal to the nmesh used to generate the IC (i.e. NpartTot^1/3)
+  ic_reconstruct_assigment_method = "CIC"
+  ic_reconstruct_interlacing = false
+  -- Smoothing filter to remove small-scale modes (only relevant if for
+  -- some reason you want ic_nmesh to be larger than the grid it was created on)
+  ic_reconstruct_smoothing_filter = "sharpk"
+  ic_reconstruct_dimless_smoothing_scale = 0.0 /(2.0 * math.pi * 128 / 2)
 end
 
 ------------------------------------------------------------
