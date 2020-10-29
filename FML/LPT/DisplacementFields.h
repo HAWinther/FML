@@ -132,21 +132,9 @@ namespace FML {
                     }
                 }
 
-#ifdef USE_GSL
-                // Using std::function is slow so make a faster spline
-                const int npts = 4 * Nmesh;
-                const double kmin = M_PI;
-                const double kmax = 2.0 * M_PI * Nmesh / 2.0 * std::sqrt(double(N));
-                std::vector<double> k_vec(npts);
-                std::vector<double> D_vec(npts);
-                for (int i = 0; i < npts; i++) {
-                    k_vec[i] = kmin + (kmax - kmin) * i / double(npts - 1);
-                    D_vec[i] = DoverDini_of_k(k_vec[i]);
-                }
-                FML::INTERPOLATION::SPLINE::Spline DoverDini_of_k_spline;
-                DoverDini_of_k_spline.create(k_vec, D_vec);
-#endif
-
+                // Make a spline of the function (faster) if we have GSL otherwise this is
+                // just a copy of the function itself
+                auto DoverDini_of_k_spline = phi.make_fourier_spline(DoverDini_of_k, "D(k)/Dini(k)");
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -162,11 +150,7 @@ namespace FML {
                         phi.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
                         // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi]
-#ifdef USE_GSL
                         auto value = phi.get_fourier_from_index(fourier_index) * I * DoverDini_of_k_spline(kmag);
-#else
-                        auto value = phi.get_fourier_from_index(fourier_index) * I * DoverDini_of_k(kmag);
-#endif
 
                         for (int idim = 0; idim < N; idim++) {
                             psi[idim].set_fourier_from_index(fourier_index, value * kvec[idim]);
@@ -414,7 +398,7 @@ namespace FML {
 
                 // Crete output grid
                 phi_2LPT = FFTWGrid<N>(Nmesh, nleft, nright);
-                phi_2LPT.add_memory_label("FFTWGrid::compute_2LPT_potential_fourier::phi_2LPT");
+                phi_2LPT.add_memory_label("FFTWGrid::compute_2LPT_potential_fourier::phi_2LPT_fourier");
                 phi_2LPT.set_grid_status_real(true);
 
                 // Copy over source

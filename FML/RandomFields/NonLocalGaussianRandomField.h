@@ -188,6 +188,10 @@ namespace FML {
                     return;
                 }
 
+                // If we use GSL make a spline (std::function can be slow) otherwise this is just a copy
+                // of the function itself
+                auto Pofk_of_kBox_over_volume_spline = phi_fourier.make_fourier_spline(Pofk_of_kBox_over_volume, "P(k)/V");
+
                 // Compute the kernel terms
                 FFTWGrid<N> phi_m13(Nmesh);
                 FFTWGrid<N> phi_m23(Nmesh);
@@ -204,7 +208,7 @@ namespace FML {
                     for (auto && fourier_index : phi_fourier.get_fourier_range(islice, islice + 1)) {
                         phi_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
-                        double pofk_m13 = std::pow(Pofk_of_kBox_over_volume(kmag), -1.0 / 3.0);
+                        double pofk_m13 = std::pow(Pofk_of_kBox_over_volume_spline(kmag), -1.0 / 3.0);
                         double pofk_m23 = pofk_m13 * pofk_m13;
                         double pofk_m33 = pofk_m23 * pofk_m13; // XXX Not needed when u=0
 
@@ -275,7 +279,7 @@ namespace FML {
                     for (auto && fourier_index : source.get_fourier_range(islice, islice + 1)) {
                         source.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
-                        double pofk_p13 = std::pow(Pofk_of_kBox_over_volume(kmag), 1.0 / 3.0);
+                        double pofk_p13 = std::pow(Pofk_of_kBox_over_volume_spline(kmag), 1.0 / 3.0);
                         double pofk_p23 = pofk_p13 * pofk_p13;
                         double pofk_p33 = pofk_p23 * pofk_p13;
 

@@ -345,6 +345,10 @@ namespace FML {
 #ifdef USE_MPI
                 MPI_Allreduce(MPI_IN_PLACE, seedtable.data(), Nmesh * Nmesh, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD);
 #endif
+                
+                // If we use GSL make a spline (std::function can be slow) otherwise this is just a copy
+                // of the function itself
+                auto Pofk_of_kBox_over_volume_spline = grid.make_fourier_spline(Pofk_of_kBox_over_volume, "P(k)/V");
 
                 // Generate gaussian random field in k-space
                 std::array<double, 3> kvec;
@@ -388,7 +392,7 @@ namespace FML {
 
                                 // Assign the field. Note kmag is dimensionless here. Units taken care of in
                                 // Powerspectrum
-                                double delta_norm = sqrt(norm * Pofk_of_kBox_over_volume(kmag));
+                                double delta_norm = std::sqrt(norm * Pofk_of_kBox_over_volume_spline(kmag));
 
                                 std::complex<double> delta = delta_norm * std::exp(std::complex<double>(0, 1) * phase);
                                 std::complex<double> delta_conj = std::conj(delta);

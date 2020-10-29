@@ -603,8 +603,8 @@ namespace FML {
         /// @param[in] box The boxsize (only for prining maximum displacement)
         /// @param[in] zini The initial redshift
         /// @param[in] velocity_norms A vector of the factors we need to multiply the nLPT displacement fields by to get
-        /// velocities. E.g. \f$ 100 {\rm Box_in_Mpch} f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini} \f$ to
-        /// get peculiar velocities in km/s and \f$ f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini}^2 \f$ to get
+        /// velocities. E.g. \f$ 100 {\rm Box_in_Mpch} f_i(z_{\rm ini}) H(z_{\rm ini})/H_0 \cdot a_{\rm ini} \f$ to
+        /// get peculiar velocities in km/s and \f$ f_i(z_{\rm ini}) H(z_{\rm ini})/H_0 \cdot a_{\rm ini}^2 \f$ to get
         /// the velocities we use as the fiducial choice in N-body. The order is: 1LPT, 2LPT, 3LPTa, 3LPTb
         ///
         //=====================================================================
@@ -686,8 +686,8 @@ namespace FML {
         /// @param[in] box The boxsize (only for prining maximum displacement)
         /// @param[in] zini The initial redshift
         /// @param[in] velocity_norms A vector of the factors we need to multiply the nLPT displacement fields by to get
-        /// velocities. E.g. \f$ 100 {\rm Box_in_Mpch} f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini} \f$ to
-        /// get peculiar velocities in km/s and \f$ f_i(z_{{\rm ini}) H(z_{{\rm ini})/H_0 \cdot a_{\rm ini}^2 \f$ to get
+        /// velocities. E.g. \f$ 100 {\rm Box_in_Mpch} f_i(z_{\rm ini}) H(z_{\rm ini})/H_0 \cdot a_{\rm ini} \f$ to
+        /// get peculiar velocities in km/s and \f$ f_i(z_{\rm ini}) H(z_{\rm ini})/H_0 \cdot a_{\rm ini}^2 \f$ to get
         /// the velocities we use as the fiducial choice in N-body.
         ///
         //=====================================================================
@@ -1074,22 +1074,7 @@ namespace FML {
                                        FFTWGrid<N> & density_mg_fourier,
                                        std::function<double(double)> coupling_factor_of_kBox) {
 
-#ifdef USE_GSL
-            // Using std::function is slow so make a faster spline
-            const auto Nmesh = density_fourier.get_nmesh();
-            const int npts = 4 * Nmesh;
-            const double kmin = M_PI;
-            const double kmax = 2.0 * M_PI * Nmesh / 2.0 * std::sqrt(double(N));
-            std::vector<double> k_vec(npts);
-            std::vector<double> coupling_vec(npts);
-            for (int i = 0; i < npts; i++) {
-                k_vec[i] = kmin + (kmax - kmin) * i / double(npts - 1);
-                coupling_vec[i] = coupling_factor_of_kBox(k_vec[i]);
-            }
-            FML::INTERPOLATION::SPLINE::Spline coupling_factor_of_kBox_spline;
-            coupling_factor_of_kBox_spline.create(k_vec, coupling_vec);
-#endif
-
+            auto coupling_factor_of_kBox_spline = density_fourier.make_fourier_spline(coupling_factor_of_kBox, "MG coupling(k)");
             const auto Local_nx = density_fourier.get_local_nx();
             density_mg_fourier = density_fourier;
 #ifdef USE_OMP
@@ -1103,11 +1088,7 @@ namespace FML {
                     density_mg_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
                     // Compute coupling
-#ifdef USE_GSL
                     auto coupling = coupling_factor_of_kBox_spline(kmag);
-#else
-                    auto coupling = coupling_factor_of_kBox(kmag);
-#endif
 
                     // Multiply by coupling
                     auto value = density_mg_fourier.get_fourier_from_index(fourier_index);
