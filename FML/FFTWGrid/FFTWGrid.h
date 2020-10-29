@@ -17,6 +17,9 @@
 #include <fftw3-mpi.h>
 #endif
 #endif
+#ifdef USE_GSL
+#include <FML/Spline/Spline.h>
+#endif
 
 #include <FML/Global/Global.h>
 
@@ -172,9 +175,9 @@ namespace FML {
             void fill_fourier_grid(std::function<ComplexType(std::array<double, N> &)> & func);
 
             /// Get the (local) cell coordinates from a local index
-            std::array<int, N> get_coord_from_index(const IndexIntType index_real);
+            std::array<int, N> get_coord_from_index(const IndexIntType index_real) const;
             /// Get the (local) cell coordinates from a local index
-            std::array<int, N> get_fourier_coord_from_index(const IndexIntType index_fourier);
+            std::array<int, N> get_fourier_coord_from_index(const IndexIntType index_fourier) const;
 
             /// From integer (local) coordinate of a cell in Local_nx x [0,Nmesh)^(Ndim-1) to (local) index in allocated
             /// grid
@@ -288,6 +291,22 @@ namespace FML {
             void load_from_file(std::string fileprefix);
 
             void reallocate(int Nmesh, int nleft, int nright) { FFTWGrid(Nmesh, nleft, nright); }
+
+#ifdef USE_GSL
+            // For making a spline that we can later use to evaluate a function of the magnitude of the fourier vector
+            // in each cell
+            FML::INTERPOLATION::SPLINE::Spline make_fourier_spline(std::function<double(double)> function_of_kBox,
+                                                                   std::string label,
+                                                                   int sampling_factor = 4) const;
+#else
+            // If we don't have GSL we simply return the function. This way we can use the same method in both cases
+            // without having a lot of ifdefs
+            std::function<double(double)> make_fourier_spline(std::function<double(double)> function_of_kBox,
+                                                              [[maybe_unused]] std::string label,
+                                                              [[maybe_unused]] int sampling_factor = 4) const {
+                return function_of_kBox;
+            }
+#endif
         };
 
         template <int N>
@@ -778,7 +797,7 @@ namespace FML {
         }
 
         template <int N>
-        std::array<int, N> FFTWGrid<N>::get_coord_from_index(const IndexIntType index_real) {
+        std::array<int, N> FFTWGrid<N>::get_coord_from_index(const IndexIntType index_real) const {
 #ifdef BOUNDSCHECK_FFTWGRID
             assert_mpi(index_real >= -NmeshTotRealSlice * n_extra_x_slices_left and
                            index_real < NmeshTotRealSlice * (Local_nx + n_extra_x_slices_right),
@@ -868,8 +887,8 @@ namespace FML {
             }
             if (not grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
-                    std::cout
-                        << "Warning: [FFTWGrid::fftw_r2c] Transforming grid whose status is already [Fourierspace]\n";
+                    std::cout << "Warning: [FFTWGrid::fftw_r2c] Transforming grid whose status is already "
+                                 "[Fourierspace]\n";
             }
 #endif
 
@@ -1089,7 +1108,7 @@ namespace FML {
         }
 
         template <int N>
-        std::array<int, N> FFTWGrid<N>::get_fourier_coord_from_index(const IndexIntType index) {
+        std::array<int, N> FFTWGrid<N>::get_fourier_coord_from_index(const IndexIntType index) const {
             const int nover2plus1 = Nmesh / 2 + 1;
             std::array<int, N> coord;
             coord[N - 1] = index % nover2plus1;
@@ -1334,6 +1353,40 @@ namespace FML {
             myfile.close();
         }
 
+#ifdef USE_GSL
+        /// std::function can be slow so for looping through a fourier grid and evaluating a function f(k)
+        /// in every cell its faster to make a spline and use this instead. This method makes such a spline.
+        /// @param[in] function_of_kBox The function f(kBox)
+        /// @param[in] label The label given to the spline. Useful for giving error messages if the spline ever
+        /// throw errors
+        /// @param[in] sampling_factor How many points per integer wavenumber should we sample the function at when
+        /// making the spline?
+        template <int N>
+        FML::INTERPOLATION::SPLINE::Spline
+        FFTWGrid<N>::make_fourier_spline(std::function<double(double)> function_of_kBox,
+                                         std::string label,
+                                         int sampling_factor) const {
+
+            FML::assert_mpi(Nmesh > 0, "FFTWGrid::make_fourier_spline Grid is not allocated");
+
+            sampling_factor = std::max(sampling_factor, 1);
+            const int npts = Nmesh * sampling_factor + 1;
+            const double kmin = 0.0;
+            const double kmax = 2.0 * M_PI * Nmesh / 2.0 * std::sqrt(double(N));
+            std::vector<double> k_vec(npts);
+            std::vector<double> func_vec(npts);
+            for (int i = 0; i < npts; i++) {
+                k_vec[i] = kmin + (kmax - kmin) * i / double(npts - 1);
+                func_vec[i] = function_of_kBox(k_vec[i]);
+                if (func_vec[i] != func_vec[i] or std::isinf(func_vec[i])) {
+                    throw std::runtime_error("FFTWGrid::make_fourier_spline The function we asked to make a spline "
+                                             "of evaluated to NaN or Inf at kBox = " +
+                                             std::to_string(k_vec[i]));
+                }
+            }
+            return FML::INTERPOLATION::SPLINE::Spline(k_vec, func_vec, label);
+        }
+#endif
     } // namespace GRID
 } // namespace FML
 #endif
