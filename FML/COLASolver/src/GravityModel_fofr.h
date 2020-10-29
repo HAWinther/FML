@@ -196,9 +196,9 @@ class GravityModelFofR final : public GravityModel<NDIM> {
                         density_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
                         auto delta = density_fourier.get_fourier_from_index(fourier_index);
                         auto delta_fifth_force = density_fifth_force.get_fourier_from_index(fourier_index);
-                        auto delta_fifth_force_linear = delta * (GeffOverG(a, kmag / H0Box) - 1.0);
-                        auto filter = f_spline(kmag);
-                        auto value = delta_fifth_force_linear * filter + delta_fifth_force * (1.0 - filter);
+                        auto delta_fifth_force_linear = delta * FML::GRID::FloatType(GeffOverG(a, kmag / H0Box) - 1.0);
+                        FML::GRID::FloatType filter = f_spline(kmag);
+                        auto value = delta_fifth_force_linear * filter + delta_fifth_force * FML::GRID::FloatType(1.0 - filter);
                         density_fifth_force.set_fourier_from_index(fourier_index, value);
                     }
                 }

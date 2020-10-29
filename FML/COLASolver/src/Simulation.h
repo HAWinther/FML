@@ -1068,7 +1068,7 @@ void NBodySimulation<NDIM, T>::init() {
         for (int islice = 0; islice < Local_nx; islice++) {
             for (auto && fourier_index : delta_ini_fourier.get_fourier_range(islice, islice + 1)) {
                 delta_ini_fourier.set_fourier_from_index(
-                    fourier_index, -1.0 * delta_ini_fourier.get_fourier_from_index(fourier_index));
+                    fourier_index, FML::GRID::FloatType(-1.0) * delta_ini_fourier.get_fourier_from_index(fourier_index));
             }
         }
     }
@@ -1125,7 +1125,7 @@ void NBodySimulation<NDIM, T>::init() {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode k = 0
                         phi_1LPT_ini_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
-                        auto value = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index) / kmag2;
+                        auto value = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
                         phi_1LPT_ini_fourier.set_fourier_from_index(fourier_index, value);
                     }
                 }
@@ -1448,7 +1448,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
                 density_grid_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
                 auto delta_ini = initial_density_field_fourier.get_fourier_from_index(fourier_index);
                 auto deltaCB = density_grid_fourier.get_fourier_from_index(fourier_index);
-                auto deltaM = deltaCB * (1.0 - fMNu) + delta_ini * norm(kmag) * fMNu;
+                auto deltaM = deltaCB * FML::GRID::FloatType(1.0 - fMNu) + delta_ini * FML::GRID::FloatType(norm(kmag) * fMNu);
                 density_grid_fourier.set_fourier_from_index(fourier_index, deltaM);
             }
         }

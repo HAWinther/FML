@@ -470,16 +470,16 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
         for (auto && fourier_index : temp_grid.get_fourier_range(islice, islice + 1)) {
             temp_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
             auto delta_ini = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index);
-            auto value = delta_ini * function_pos_1LPT_spline(kmag);
+            auto value = delta_ini * FML::GRID::FloatType(function_pos_1LPT_spline(kmag));
             if constexpr (LPT_order >= 2) {
                 auto phi_2LPT = phi_2LPT_ini_fourier.get_fourier_from_index(fourier_index);
-                value += phi_2LPT * function_pos_2LPT_spline(kmag);
+                value += phi_2LPT * FML::GRID::FloatType(function_pos_2LPT_spline(kmag));
             }
             if constexpr (LPT_order >= 3) {
                 auto phi_3LPTa = phi_3LPTa_ini_fourier.get_fourier_from_index(fourier_index);
                 auto phi_3LPTb = phi_3LPTb_ini_fourier.get_fourier_from_index(fourier_index);
-                value += phi_3LPTa * function_pos_3LPTa_spline(kmag);
-                value += phi_3LPTb * function_pos_3LPTb_spline(kmag);
+                value += phi_3LPTa * FML::GRID::FloatType(function_pos_3LPTa_spline(kmag));
+                value += phi_3LPTb * FML::GRID::FloatType(function_pos_3LPTb_spline(kmag));
             }
             temp_grid.set_fourier_from_index(fourier_index, value);
         }
@@ -509,16 +509,16 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
         for (auto && fourier_index : temp_grid.get_fourier_range(islice, islice + 1)) {
             temp_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
             auto delta_ini = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index);
-            auto value = delta_ini * function_vel_1LPT_spline(kmag);
+            auto value = delta_ini * FML::GRID::FloatType(function_vel_1LPT_spline(kmag));
             if constexpr (LPT_order >= 2) {
                 auto phi_2LPT = phi_2LPT_ini_fourier.get_fourier_from_index(fourier_index);
-                value += phi_2LPT * function_vel_2LPT_spline(kmag);
+                value += phi_2LPT * FML::GRID::FloatType(function_vel_2LPT_spline(kmag));
             }
             if constexpr (LPT_order >= 3) {
                 auto phi_3LPTa = phi_3LPTa_ini_fourier.get_fourier_from_index(fourier_index);
                 auto phi_3LPTb = phi_3LPTb_ini_fourier.get_fourier_from_index(fourier_index);
-                value += phi_3LPTa * function_vel_3LPTa_spline(kmag);
-                value += phi_3LPTb * function_vel_3LPTb_spline(kmag);
+                value += phi_3LPTa * FML::GRID::FloatType(function_vel_3LPTa_spline(kmag));
+                value += phi_3LPTb * FML::GRID::FloatType(function_vel_3LPTb_spline(kmag));
             }
             temp_grid.set_fourier_from_index(fourier_index, value);
         }
@@ -736,16 +736,16 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
         for (auto && fourier_index : temp_grid.get_fourier_range(islice, islice + 1)) {
             temp_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
             auto phi_1LPT = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index);
-            auto value = phi_1LPT * function_vel_1LPT_spline(kmag);
+            auto value = phi_1LPT * FML::GRID::FloatType(function_vel_1LPT_spline(kmag));
             if constexpr (LPT_order >= 2) {
                 auto phi_2LPT = phi_2LPT_ini_fourier.get_fourier_from_index(fourier_index);
-                value += phi_2LPT * function_vel_2LPT_spline(kmag);
+                value += phi_2LPT * FML::GRID::FloatType(function_vel_2LPT_spline(kmag));
             }
             if constexpr (LPT_order >= 3) {
                 auto phi_3LPTa = phi_3LPTa_ini_fourier.get_fourier_from_index(fourier_index);
                 auto phi_3LPTb = phi_3LPTb_ini_fourier.get_fourier_from_index(fourier_index);
-                value += phi_3LPTa * function_vel_3LPTa_spline(kmag);
-                value += phi_3LPTb * function_vel_3LPTb_spline(kmag);
+                value += phi_3LPTa * FML::GRID::FloatType(function_vel_3LPTa_spline(kmag));
+                value += phi_3LPTb * FML::GRID::FloatType(function_vel_3LPTb_spline(kmag));
             }
             temp_grid.set_fourier_from_index(fourier_index, value);
         }
