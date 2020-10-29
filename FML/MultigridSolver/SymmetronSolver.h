@@ -39,11 +39,11 @@ class SymmetronSolverCosmology {
     /// Matter density parameter today
     double OmegaM{0.3};
     /// The symmetry breaking scalefactor
-    double assb{1e-6};
+    double assb{0.5};
     /// The coupling strength
     double beta{1.0};
     /// The range today in Mpc/h
-    double L_mpch{1e-6};
+    double L_mpch{1.0};
     /// The dimensionless number H0 * Box / c
     double H0Box{};
 
@@ -119,7 +119,7 @@ class SymmetronSolverCosmology {
         const double H0L = L_mpch / 2997.92458;
         const double norm = 0.5 * a * a * (H0Box * H0Box) / (H0L * H0L);
         const double fac = (assb * assb * assb) / (a * a * a);
-
+            
         // The background value of the field we solve for
         const double f0 = get_phi_background(a);
 
@@ -190,9 +190,9 @@ class SymmetronSolverCosmology {
         const double forcenorm =
             3.0 * OmegaM * a * a * beta * beta * (H0L / H0Box) * (H0L / H0Box) / (assb * assb * assb);
 
-        double fmin = std::numeric_limits<double>::max();
-        double fmax = -std::numeric_limits<double>::max();
-        double fmean = 0.0;
+        FML::GRID::FloatType fmin = std::numeric_limits<FML::GRID::FloatType>::max();
+        FML::GRID::FloatType fmax = -std::numeric_limits<FML::GRID::FloatType>::max();
+        FML::GRID::FloatType fmean = 0.0;
 #ifdef USE_OMP
 #pragma omp parallel for reduction(max : fmax) reduction(min : fmin) reduction(+ : fmean)
 #endif
@@ -213,9 +213,9 @@ class SymmetronSolverCosmology {
 
         if (FML::ThisTask == 0 and verbose) {
             std::cout << "#=====================================================\n";
-            std::cout << "# The minimum value of phi/phi0 : " << fmin / forcenorm << "\n";
-            std::cout << "# The mean value of phi/phi0: " << fmean / forcenorm << "\n";
-            std::cout << "# The maximum value phi/phi0: " << fmax / forcenorm << "\n";
+            std::cout << "# The minimum value of phi/phi0 : " << fmin << "\n";
+            std::cout << "# The mean value of phi/phi0: " << fmean << "\n";
+            std::cout << "# The maximum value phi/phi0: " << fmax << "\n";
             std::cout << "# Background field value phi(a) : " << f0 << "\n";
             std::cout << "#=====================================================\n";
             std::cout << "\n";

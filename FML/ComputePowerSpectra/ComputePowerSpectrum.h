@@ -135,6 +135,26 @@ namespace FML {
         void bin_up_power_spectrum(const FFTWGrid<N> & fourier_grid, PowerSpectrumBinning<N> & pofk);
 
         //==========================================================================================
+        /// @brief Compute the power-spectrum of a fourier grid. The result has no scales. Get
+        /// scales by calling pofk.scale(boxsize) which does \f$ k \to k/B \f$ and
+        /// \f$ P(k) \to B^N P(k) \f$ where \f$ B\f$ is the boxsize once spectrum has been computed. The method assumes
+        /// the two grids are fourier transforms of real grids (i.e. \f$ f(-k) = f^*(k) \f$).
+        /// This method divides the power-spectrum by the square of the window function corresponding to the density
+        /// assignement method for every mode we bin up.
+        ///
+        /// @tparam N Dimension of the grid
+        ///
+        /// @param[in] fourier_grid Grid in fourier space
+        /// @param[out] pofk Binned power-spectrum
+        /// @param[in] density_assignment_method The density assignment method we use to create the grid
+        ///
+        //==========================================================================================
+        template <int N>
+        void bin_up_deconvolved_power_spectrum(const FFTWGrid<N> & fourier_grid,
+                                               PowerSpectrumBinning<N> & pofk,
+                                               std::string density_assignment_method);
+
+        //==========================================================================================
         /// @brief Compute the cross power-spectrum of two fourier grids. The result has no scales. Get
         /// scales by calling pofk.scale(boxsize) which does k\f$ k \to k/B \f$ and
         /// \f$ P(k) \to B^N P(k) \f$ where \f$ B\f$ is the boxsize once spectrum has been computed. The method assumes
@@ -510,28 +530,14 @@ namespace FML {
             }
         }
 
-        //==========================================================================================
-        /// @brief Compute the power-spectrum of a fourier grid. The result has no scales. Get
-        /// scales by calling pofk.scale(boxsize) which does \f$ k \to k/B \f$ and
-        /// \f$ P(k) \to B^N P(k) \f$ where \f$ B\f$ is the boxsize once spectrum has been computed. The method assumes
-        /// the two grids are fourier transforms of real grids (i.e. \f$ f(-k) = f^*(k) \f$).
-        /// This method divides the power-spectrum by the square of the window function for every mode we bin up.
-        ///
-        /// @tparam N Dimension of the grid
-        ///
-        /// @param[in] fourier_grid Grid in fourier space
-        /// @param[out] pofk Binned power-spectrum
-        /// @param[in] density_assignment_method The density assignment method we use to create the grid
-        ///
-        //==========================================================================================
         template <int N>
         void bin_up_deconvolved_power_spectrum(const FFTWGrid<N> & fourier_grid,
                                                PowerSpectrumBinning<N> & pofk,
                                                std::string density_assignment_method) {
 
-            assert_mpi(fourier_grid.get_nmesh() > 0, "[bin_up_power_spectrum] grid must have Nmesh > 0\n");
+            assert_mpi(fourier_grid.get_nmesh() > 0, "[bin_up_deconvolved_power_spectrum] grid must have Nmesh > 0\n");
             assert_mpi(pofk.n > 0 && pofk.kmax > pofk.kmin && pofk.kmin >= 0.0,
-                       "[bin_up_power_spectrum] Binning has inconsistent parameters\n");
+                       "[bin_up_deconvolved_power_spectrum] Binning has inconsistent parameters\n");
 
             const auto Nmesh = fourier_grid.get_nmesh();
             const auto Local_nx = fourier_grid.get_local_nx();
@@ -721,8 +727,8 @@ namespace FML {
                 std::cout << "[direct_summation_power_spectrum] Warning: this method assumes all tasks have the same "
                              "particles\n";
 
-            const std::complex<double> I(0, 1);
-            const double norm = 1.0 / double(NumPart);
+            const std::complex<FML::GRID::FloatType> I(0, 1);
+            const FML::GRID::FloatType norm = 1.0 / FML::GRID::FloatType(NumPart);
 
             FFTWGrid<N> density_k(Ngrid, 1, 1);
             density_k.add_memory_label("FFTWGrid::compute_power_spectrum_direct_summation::density_k");
@@ -730,14 +736,14 @@ namespace FML {
 
             for (auto && fourier_index : density_k.get_fourier_range()) {
                 auto kvec = density_k.get_fourier_wavevector_from_index(fourier_index);
-                double real = 0.0;
-                double imag = 0.0;
+                FML::GRID::FloatType real = 0.0;
+                FML::GRID::FloatType imag = 0.0;
 #ifdef USE_OMP
 #pragma omp parallel for reduction(+ : real, imag)
 #endif
                 for (size_t i = 0; i < NumPart; i++) {
                     auto * x = FML::PARTICLE::GetPos(part[i]);
-                    double kx = 0.0;
+                    FML::GRID::FloatType kx = 0.0;
                     for (int idim = 0; idim < N; idim++) {
                         kx += kvec[idim] * x[idim];
                     }
@@ -746,7 +752,7 @@ namespace FML {
                     imag += val.imag();
                 }
 
-                std::complex<double> sum = {real, imag};
+                std::complex<FML::GRID::FloatType> sum = {real, imag};
                 if (ThisTask == 0 and fourier_index == 0)
                     sum -= 1.0;
                 density_k.set_fourier_from_index(fourier_index, sum * norm);

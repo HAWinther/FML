@@ -92,7 +92,7 @@ void ExamplesInterpolation() {
     //=======================================================
     // Interpolate to the particle positions
     //=======================================================
-    std::vector<double> interpolated_values;
+    std::vector<FML::GRID::FloatType> interpolated_values;
     FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, Particle>(
         grid, part.get_particles_ptr(), part.get_npart(), interpolated_values, interpolation_method);
 

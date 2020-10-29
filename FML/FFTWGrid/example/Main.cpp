@@ -117,7 +117,7 @@ int main() {
 
         // Divide by -k^2 and set value
         if (knorm2 > 0.0) {
-            grid.set_fourier_from_index(index, -value / knorm2);
+            grid.set_fourier_from_index(index, -value / FML::GRID::FloatType(knorm2));
         } else {
             grid.set_fourier_from_index(index, 0.0);
         }

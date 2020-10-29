@@ -32,7 +32,7 @@ class DGPSolverCosmology {
     int ngs_fine{10};
     int ngs_coarse{10};
     int ngs_first{40};
-    
+
     int maxsteps{1000};
 
     /// Convergence criterion: residual < epsilon
@@ -68,12 +68,11 @@ class DGPSolverCosmology {
     void set_epsilon(double _epsilon) { epsilon = _epsilon; }
 
     /// Set maximum number of steps to take (in case residual saturates)
-    void set_maxsteps(int _maxsteps){ maxsteps = _maxsteps; }
+    void set_maxsteps(int _maxsteps) { maxsteps = _maxsteps; }
 
     /// Do the solving and return the fifth-force potential.
     /// We solve for f where a phi / phi0 f_R / (2 (H0Box)^2) = e^f and return e^f
     void solve(double a, FFTWGrid<NDIM> & overdensity_real, FFTWGrid<NDIM> & fifth_force_potential_real) {
-        static_assert(NDIM == 3, "DGPSolver not implemented for anything other than NDIM = 3");
 
         Nmesh = overdensity_real.get_nmesh();
         auto Local_nx = overdensity_real.get_local_nx();
@@ -146,7 +145,7 @@ class DGPSolverCosmology {
         MultiGridFunction<NDIM, double> Equation =
             [&](MultiGridSolver<NDIM, SolverType> * sol, int level, IndexInt index) {
                 const auto h = sol->get_Gridspacing(level);
-                
+
                 //======================================================================
                 // Set the (over) density field from formula
                 //======================================================================
@@ -161,34 +160,39 @@ class DGPSolverCosmology {
                 //======================================================================
                 // Second derivatives (as written this only works for NDIM=3)
                 //======================================================================
-                double phi_xy = (sol->get_Field(level, cube_index_list[13 + 3 + 1]) +
-                                 sol->get_Field(level, cube_index_list[13 - 3 - 1]) -
-                                 sol->get_Field(level, cube_index_list[13 + 3 - 1]) -
-                                 sol->get_Field(level, cube_index_list[13 - 3 + 1])) *
+                const int MID = FML::power(3, NDIM) / 2;
+                const int NDIM2 = NDIM * NDIM;
+                
+                double phi_xy = (sol->get_Field(level, cube_index_list[MID + NDIM + 1]) +
+                                 sol->get_Field(level, cube_index_list[MID - NDIM - 1]) -
+                                 sol->get_Field(level, cube_index_list[MID + NDIM - 1]) -
+                                 sol->get_Field(level, cube_index_list[MID - NDIM + 1])) *
                                 0.25 / (h * h);
 
-                double phi_yz = (sol->get_Field(level, cube_index_list[13 + 9 + 3]) +
-                                 sol->get_Field(level, cube_index_list[13 - 9 - 3]) -
-                                 sol->get_Field(level, cube_index_list[13 + 9 - 3]) -
-                                 sol->get_Field(level, cube_index_list[13 - 9 + 3])) *
-                                0.25 / (h * h);
+                double phi_yz = 0.0, phi_zx = 0.0, phi_zz = 0.0;
+                if constexpr (NDIM == 3) {
+                    phi_yz = (sol->get_Field(level, cube_index_list[MID + NDIM2 + NDIM]) +
+                              sol->get_Field(level, cube_index_list[MID - NDIM2 - NDIM]) -
+                              sol->get_Field(level, cube_index_list[MID + NDIM2 - NDIM]) -
+                              sol->get_Field(level, cube_index_list[MID - NDIM2 + NDIM])) *
+                             0.25 / (h * h);
 
-                double phi_zx = (sol->get_Field(level, cube_index_list[13 + 9 + 1]) +
-                                 sol->get_Field(level, cube_index_list[13 - 9 - 1]) -
-                                 sol->get_Field(level, cube_index_list[13 + 9 - 1]) -
-                                 sol->get_Field(level, cube_index_list[13 - 9 + 1])) *
-                                0.25 / (h * h);
+                    phi_zx = (sol->get_Field(level, cube_index_list[MID + NDIM2 + 1]) +
+                              sol->get_Field(level, cube_index_list[MID - NDIM2 - 1]) -
+                              sol->get_Field(level, cube_index_list[MID + NDIM2 - 1]) -
+                              sol->get_Field(level, cube_index_list[MID - NDIM2 + 1])) *
+                             0.25 / (h * h);
+                    phi_zz = (sol->get_Field(level, cube_index_list[MID + NDIM2]) +
+                              sol->get_Field(level, cube_index_list[MID - NDIM2]) - 2 * phi) /
+                             (h * h);
+                }
 
-                double phi_xx = (sol->get_Field(level, cube_index_list[13 + 1]) +
-                                 sol->get_Field(level, cube_index_list[13 - 1]) - 2 * phi) /
+                double phi_xx = (sol->get_Field(level, cube_index_list[MID + 1]) +
+                                 sol->get_Field(level, cube_index_list[MID - 1]) - 2 * phi) /
                                 (h * h);
 
-                double phi_yy = (sol->get_Field(level, cube_index_list[13 + 3]) +
-                                 sol->get_Field(level, cube_index_list[13 - 3]) - 2 * phi) /
-                                (h * h);
-
-                double phi_zz = (sol->get_Field(level, cube_index_list[13 + 9]) +
-                                 sol->get_Field(level, cube_index_list[13 - 9]) - 2 * phi) /
+                double phi_yy = (sol->get_Field(level, cube_index_list[MID + NDIM]) +
+                                 sol->get_Field(level, cube_index_list[MID - NDIM]) - 2 * phi) /
                                 (h * h);
 
                 //======================================================================
@@ -224,9 +228,9 @@ class DGPSolverCosmology {
         // Convert to fifth-force potential
         const double forcenorm = 0.5;
 
-        double fmin = std::numeric_limits<double>::max();
-        double fmax = -std::numeric_limits<double>::max();
-        double fmean = 0.0;
+        FML::GRID::FloatType fmin = std::numeric_limits<FML::GRID::FloatType>::max();
+        FML::GRID::FloatType fmax = -std::numeric_limits<FML::GRID::FloatType>::max();
+        FML::GRID::FloatType fmean = 0.0;
 #ifdef USE_OMP
 #pragma omp parallel for reduction(max : fmax) reduction(min : fmin) reduction(+ : fmean)
 #endif

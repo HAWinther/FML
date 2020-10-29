@@ -141,7 +141,7 @@ namespace FML {
                 for (int islice = 0; islice < Local_nx; islice++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    std::complex<double> I(0, 1);
+                    std::complex<FML::GRID::FloatType> I(0, 1);
                     for (auto && fourier_index : phi.get_fourier_range(islice, islice + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
@@ -150,10 +150,10 @@ namespace FML {
                         phi.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
                         // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi]
-                        auto value = phi.get_fourier_from_index(fourier_index) * I * DoverDini_of_k_spline(kmag);
+                        auto value = phi.get_fourier_from_index(fourier_index) * I * FML::GRID::FloatType(DoverDini_of_k_spline(kmag));
 
                         for (int idim = 0; idim < N; idim++) {
-                            psi[idim].set_fourier_from_index(fourier_index, value * kvec[idim]);
+                            psi[idim].set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(kvec[idim]));
                         }
                     }
                 }
@@ -220,7 +220,7 @@ namespace FML {
                 for (int islice = 0; islice < Local_nx; islice++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    std::complex<double> I(0, 1);
+                    std::complex<FML::GRID::FloatType> I(0, 1);
                     for (auto && fourier_index : psi[0].get_fourier_range(islice, islice + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
@@ -229,9 +229,9 @@ namespace FML {
                         phi.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
                         // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi]
-                        auto value = phi.get_fourier_from_index(fourier_index) * DoverDini;
+                        auto value = phi.get_fourier_from_index(fourier_index) * FML::GRID::FloatType(DoverDini);
                         for (int idim = 0; idim < N; idim++) {
-                            psi[idim].set_fourier_from_index(fourier_index, I * value * kvec[idim]);
+                            psi[idim].set_fourier_from_index(fourier_index, I * value * FML::GRID::FloatType(kvec[idim]));
                         }
                     }
                 }
@@ -303,7 +303,7 @@ namespace FML {
                         phi_1LPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
                         // D^2 Phi_1LPT = -delta => F[Phi_1LPT] = F[delta] / k^2
-                        auto value = delta_fourier.get_fourier_from_index(fourier_index) / kmag2;
+                        auto value = delta_fourier.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
                         phi_1LPT_fourier.set_fourier_from_index(fourier_index, value);
                     }
                 }
@@ -373,10 +373,10 @@ namespace FML {
                         delta.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
                         // D^2Phi = -delta => F[DiDj Phi] = F[delta] kikj/k^2
-                        auto value = delta.get_fourier_from_index(fourier_index) / kmag2;
+                        auto value = delta.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
 
                         for (int idim = 0; idim < N; idim++) {
-                            phi_1LPT_ii[idim].set_fourier_from_index(fourier_index, value * kvec[idim] * kvec[idim]);
+                            phi_1LPT_ii[idim].set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(kvec[idim] * kvec[idim]));
                         }
                     }
                 }
@@ -457,13 +457,13 @@ namespace FML {
                         // Get wavevector and magnitude
                         delta.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
-                        auto value = delta.get_fourier_from_index(fourier_index) / kmag2;
+                        auto value = delta.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
 
                         int pair = 0;
                         for (int idim1 = 0; idim1 < N; idim1++) {
                             for (int idim2 = idim1 + 1; idim2 < N; idim2++) {
                                 phi_1LPT_ij[pair++].set_fourier_from_index(fourier_index,
-                                                                           kvec[idim1] * kvec[idim2] * value);
+                                                                           FML::GRID::FloatType(kvec[idim1] * kvec[idim2]) * value);
                             }
                         }
                     }
@@ -754,11 +754,11 @@ namespace FML {
                            "[compute_3LPT_displacement_field] delta grid has to be already allocated!");
 
                 // Factor to scale displacement potentials such that Psi = Dphi_1LPT + Dphi_2LPT + ... + D x Avec_3LPT
-                constexpr double prefactor_1LPT = -1.0;
-                constexpr double prefactor_2LPT = -3.0 / 7.0;
-                constexpr double prefactor_3LPT_a = 1.0 / 3.0;
-                constexpr double prefactor_3LPT_b = -10.0 / 21.0;
-                constexpr double prefactor_3LPT_Avec = 1.0 / 7.0;
+                constexpr FML::GRID::FloatType prefactor_1LPT = -1.0;
+                constexpr FML::GRID::FloatType prefactor_2LPT = -3.0 / 7.0;
+                constexpr FML::GRID::FloatType prefactor_3LPT_a = 1.0 / 3.0;
+                constexpr FML::GRID::FloatType prefactor_3LPT_b = -10.0 / 21.0;
+                constexpr FML::GRID::FloatType prefactor_3LPT_Avec = 1.0 / 7.0;
 
                 auto nleft = delta_fourier.get_n_extra_slices_left();
                 auto nright = delta_fourier.get_n_extra_slices_right();
@@ -795,13 +795,13 @@ namespace FML {
                         phi_1LPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
                         // phi_1LPT_fourier is delta so transform to LPT potential D^2 phi_1LPT = -delta
-                        auto value = -phi_1LPT_fourier.get_fourier_from_index(fourier_index) / kmag2;
+                        auto value = -phi_1LPT_fourier.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
 
                         int pair = 0;
                         for (int idim1 = 0; idim1 < N; idim1++) {
                             for (int idim2 = idim1; idim2 < N; idim2++) {
                                 phi_1LPT_ij[pair++].set_fourier_from_index(fourier_index,
-                                                                           -kvec[idim1] * kvec[idim2] * value);
+                                                                           -value * FML::GRID::FloatType(kvec[idim1] * kvec[idim2]));
                             }
                         }
                     }
@@ -869,13 +869,13 @@ namespace FML {
 
                         // Get wavevector and magnitude
                         phi_2LPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
-                        auto value = -phi_2LPT_fourier.get_fourier_from_index(fourier_index) / kmag2;
+                        auto value = -phi_2LPT_fourier.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
 
                         int pair = 0;
                         for (int idim1 = 0; idim1 < N; idim1++) {
                             for (int idim2 = idim1; idim2 < N; idim2++) {
                                 phi_2LPT_ij[pair++].set_fourier_from_index(fourier_index,
-                                                                           -kvec[idim1] * kvec[idim2] * value);
+                                                                           -value * FML::GRID::FloatType(kvec[idim1] * kvec[idim2]));
                             }
                         }
                     }
@@ -1004,7 +1004,7 @@ namespace FML {
 
                         // Get wavevector and magnitude
                         phi_1LPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
-                        const double fac = -1.0 / kmag2;
+                        const FML::GRID::FloatType fac = -1.0 / kmag2;
 
                         // Fetch and rescale
                         auto value_1LPT = phi_1LPT_fourier.get_fourier_from_index(fourier_index);

@@ -1264,8 +1264,8 @@ namespace FML {
             // Assumed: index_list is the same as produced by get_neighbor_gridindex
             template <int NDIM, class T>
             inline std::array<T, NDIM>
-            MultiGridSolver<NDIM, T>::get_derivGradient(int level,
-                                                        const std::array<IndexInt, 2 * NDIM + 1> & index_list) {
+            MultiGridSolver<NDIM, T>::get_derivGradient([[maybe_unused]] int level,
+                                                        [[maybe_unused]] const std::array<IndexInt, 2 * NDIM + 1> & index_list) {
                 std::array<T, NDIM> res;
                 res.fill(0.0);
                 return res;

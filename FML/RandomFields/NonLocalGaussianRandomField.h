@@ -170,7 +170,8 @@ namespace FML {
                     for (auto && real_index : source.get_real_range(islice, islice + 1)) {
                         auto phi2 = source.get_real_from_index(real_index);
                         auto phi = phi_real.get_real_from_index(real_index);
-                        auto value = (phi - phi_mean) + kernel_values[0] * (phi2 - phi_squared_mean);
+                        auto value =
+                            (phi - phi_mean) + FML::GRID::FloatType(kernel_values[0]) * (phi2 - phi_squared_mean);
                         source.set_real_from_index(real_index, value);
                     }
                 }
@@ -190,7 +191,8 @@ namespace FML {
 
                 // If we use GSL make a spline (std::function can be slow) otherwise this is just a copy
                 // of the function itself
-                auto Pofk_of_kBox_over_volume_spline = phi_fourier.make_fourier_spline(Pofk_of_kBox_over_volume, "P(k)/V");
+                auto Pofk_of_kBox_over_volume_spline =
+                    phi_fourier.make_fourier_spline(Pofk_of_kBox_over_volume, "P(k)/V");
 
                 // Compute the kernel terms
                 FFTWGrid<N> phi_m13(Nmesh);
@@ -208,9 +210,9 @@ namespace FML {
                     for (auto && fourier_index : phi_fourier.get_fourier_range(islice, islice + 1)) {
                         phi_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
-                        double pofk_m13 = std::pow(Pofk_of_kBox_over_volume_spline(kmag), -1.0 / 3.0);
-                        double pofk_m23 = pofk_m13 * pofk_m13;
-                        double pofk_m33 = pofk_m23 * pofk_m13; // XXX Not needed when u=0
+                        FML::GRID::FloatType pofk_m13 = std::pow(Pofk_of_kBox_over_volume_spline(kmag), -1.0 / 3.0);
+                        FML::GRID::FloatType pofk_m23 = pofk_m13 * pofk_m13;
+                        FML::GRID::FloatType pofk_m33 = pofk_m23 * pofk_m13; // XXX Not needed when u=0
 
                         auto phi = phi_fourier.get_fourier_from_index(fourier_index);
                         auto value1 = phi * pofk_m13;
@@ -279,16 +281,18 @@ namespace FML {
                     for (auto && fourier_index : source.get_fourier_range(islice, islice + 1)) {
                         source.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
-                        double pofk_p13 = std::pow(Pofk_of_kBox_over_volume_spline(kmag), 1.0 / 3.0);
-                        double pofk_p23 = pofk_p13 * pofk_p13;
-                        double pofk_p33 = pofk_p23 * pofk_p13;
+                        FML::GRID::FloatType pofk_p13 = std::pow(Pofk_of_kBox_over_volume_spline(kmag), 1.0 / 3.0);
+                        FML::GRID::FloatType pofk_p23 = pofk_p13 * pofk_p13;
+                        FML::GRID::FloatType pofk_p33 = pofk_p23 * pofk_p13;
 
                         auto term1 = temp1.get_fourier_from_index(fourier_index) * pofk_p13;
                         auto term2 = temp2.get_fourier_from_index(fourier_index) * pofk_p23;
                         auto term3 = temp3.get_fourier_from_index(fourier_index) * pofk_p33; // XXX Not needed when u=0
 
                         auto s = source.get_fourier_from_index(fourier_index);
-                        s += kernel_values[1] * term1 + kernel_values[2] * term2 + kernel_values[3] * term3;
+                        s += term1 * FML::GRID::FloatType(kernel_values[1]) +
+                             term2 * FML::GRID::FloatType(kernel_values[2]) +
+                             term3 * FML::GRID::FloatType(kernel_values[3]);
                         source.set_fourier_from_index(fourier_index, s);
                     }
                 }
@@ -395,7 +399,8 @@ namespace FML {
                         phi_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
                         auto rescaling_factor = std::sqrt(Pofk_of_kBox_over_Pofk_primordal(kmag));
                         auto value = phi_fourier.get_fourier_from_index(fourier_index);
-                        phi_fourier.set_fourier_from_index(fourier_index, value * rescaling_factor);
+                        phi_fourier.set_fourier_from_index(fourier_index,
+                                                           value * FML::GRID::FloatType(rescaling_factor));
                     }
                 }
 

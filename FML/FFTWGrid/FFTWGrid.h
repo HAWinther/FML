@@ -918,7 +918,7 @@ namespace FML {
             grid_is_in_real_space = false;
 
             // Normalize
-            const double norm = 1.0 / std::pow(double(Nmesh), N);
+            const FML::GRID::FloatType norm = 1.0 / std::pow(double(Nmesh), N);
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif

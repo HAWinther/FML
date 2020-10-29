@@ -195,9 +195,9 @@ class FofrSolverCosmology {
         ConvertToFFTWGrid(sol, fifth_force_potential_real);
 
         // Convert to fifth-force potential a^2 f_R / (2 (H0Box)^2)
-        double fmin = std::numeric_limits<double>::max();
-        double fmax = -std::numeric_limits<double>::max();
-        double fmean = 0.0;
+        FML::GRID::FloatType fmin = std::numeric_limits<FML::GRID::FloatType>::max();
+        FML::GRID::FloatType fmax = -std::numeric_limits<FML::GRID::FloatType>::max();
+        FML::GRID::FloatType fmean = 0.0;
 #ifdef USE_OMP
 #pragma omp parallel for reduction(max : fmax) reduction(min : fmin) reduction(+ : fmean)
 #endif

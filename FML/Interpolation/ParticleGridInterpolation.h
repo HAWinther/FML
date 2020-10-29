@@ -453,9 +453,9 @@ namespace FML {
             for (int islice = 0; islice < Local_nx; islice++) {
                 for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
                     auto kvec = fourier_grid.get_fourier_wavevector_from_index(fourier_index);
-                    double w = window_function(kvec);
+                    auto w = window_function(kvec);
                     auto value = fourier_grid.get_fourier_from_index(fourier_index);
-                    fourier_grid.set_fourier_from_index(fourier_index, value / w);
+                    fourier_grid.set_fourier_from_index(fourier_index, value / FML::GRID::FloatType(w));
                 }
             }
         }
@@ -1156,16 +1156,16 @@ namespace FML {
 #pragma omp parallel for
 #endif
             for (int islice = 0; islice < Local_nx; islice++) {
-                const std::complex<double> I(0, 1);
+                const std::complex<FML::GRID::FloatType> I(0, 1);
                 for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
                     auto kvec = density_grid_fourier.get_fourier_wavevector_from_index(fourier_index);
                     auto ksum = kvec[0];
                     for (int idim = 1; idim < N; idim++)
                         ksum += kvec[idim];
-                    auto norm = std::exp(I * ksum * shift);
+                    auto norm = std::exp(I * FML::GRID::FloatType(ksum * shift));
                     auto grid1 = density_grid_fourier.get_fourier_from_index(fourier_index);
                     auto grid2 = density_grid_fourier2.get_fourier_from_index(fourier_index);
-                    density_grid_fourier.set_fourier_from_index(fourier_index, (grid1 + norm * grid2) / 2.0);
+                    density_grid_fourier.set_fourier_from_index(fourier_index, (grid1 + norm * grid2) / FML::GRID::FloatType(2.0));
                 }
             }
         }

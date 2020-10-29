@@ -309,7 +309,7 @@ namespace FML {
             for (int islice = 0; islice < Local_nx; islice++) {
                 [[maybe_unused]] double kmag2;
                 [[maybe_unused]] std::array<double, N> kvec;
-                std::complex<double> I(0, 1);
+                std::complex<FML::GRID::FloatType> I(0, 1);
                 for (auto && fourier_index : force_real[0].get_fourier_range(islice, islice + 1)) {
                     if (Local_x_start == 0 and fourier_index == 0)
                         continue; // DC mode (k=0)
@@ -364,7 +364,7 @@ namespace FML {
                     // Compute force -ik/k^2 delta(k)
                     for (int idim = 0; idim < N; idim++) {
                         force_real[idim].set_fourier_from_index(fourier_index,
-                                                                -I * kvec[idim] * value * norm_poisson_equation);
+                                                                -I * value * FML::GRID::FloatType(kvec[idim] * norm_poisson_equation));
                     }
                 }
             }
@@ -536,7 +536,7 @@ namespace FML {
             for (int idim = 0; idim < N; idim++) {
                 force_grid[idim].communicate_boundaries();
             }
-            std::array<std::vector<double>, N> force;
+            std::array<std::vector<FML::GRID::FloatType>, N> force;
             FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N, T>(
                 force_grid, p, NumPart, force, interpolation_method);
             if (free_force_grids) {
@@ -1092,7 +1092,7 @@ namespace FML {
 
                     // Multiply by coupling
                     auto value = density_mg_fourier.get_fourier_from_index(fourier_index);
-                    density_mg_fourier.set_fourier_from_index(fourier_index, value * coupling);
+                    density_mg_fourier.set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(coupling));
                 }
             }
         }
@@ -1193,7 +1193,7 @@ namespace FML {
                     auto coupling = coupling_factor_of_kBox(kmag);
 
                     // Multiply by coupling
-                    density_mg_fourier.set_fourier_from_index(fourier_index, value * coupling);
+                    density_mg_fourier.set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(coupling));
                 }
             }
         }
@@ -1272,7 +1272,7 @@ namespace FML {
                     auto coupling = coupling_factor_of_kBox(kmag);
 
                     // Multiply by coupling
-                    density_mg_fourier.set_fourier_from_index(fourier_index, value * coupling);
+                    density_mg_fourier.set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(coupling));
                 }
             }
         }
