@@ -170,10 +170,10 @@ namespace FML {
                     Co = sqrt(k_e_SI * kg * (m * m * m) / (s * s));
                 } else if (type == "ParticlePhysics") {
                     description = "Particle Physics Units (c=hbar=kb=1) with eV = 1";
-                    m = eV_SI / hbar_SI / c_SI;
-                    s = c_SI * m;
-                    kg = 1.0 / hbar_SI * s / (m * m);
-                    K = k_b_SI * G_SI * (m * m * m) / (s * s) * (m * m) / (s * s);
+                    kg = (c_SI * c_SI) / eV_SI;
+                    s = (c_SI * c_SI) / (kg * hbar_SI);
+                    m = s / c_SI;
+                    K = k_b_SI / (s * s) * m * m * kg;
                     Co = 1.0;
                 } else if (type == "Cosmology") {
                     description = "Cosmo Units (Mpc, Hubble time, Solar-masses, Kelvin)";
