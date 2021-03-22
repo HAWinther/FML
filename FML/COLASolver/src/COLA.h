@@ -90,25 +90,25 @@ void cola_add_on_LPT_velocity(FML::PARTICLE::MPIParticles<T> & part,
     // 1LPT
     const double D1 = grav->get_D_1LPT(a);
     const double D1ini = grav->get_D_1LPT(aini);
-    const double f1 = grav->get_f_1LPT(a) / D1;
+    const double f1 = grav->get_f_1LPT(a);
     const double vfac_1LPT = sign * D1 / D1ini * f1 * a * a * cosmo->HoverH0_of_a(a);
 
     // 2LPT
     [[maybe_unused]] const double D2 = grav->get_D_2LPT(a);
     [[maybe_unused]] const double D2ini = grav->get_D_2LPT(aini);
-    [[maybe_unused]] const double f2 = grav->get_f_2LPT(a) / D2;
+    [[maybe_unused]] const double f2 = grav->get_f_2LPT(a);
     [[maybe_unused]] const double vfac_2LPT = sign * D2 / D2ini * f2 * a * a * cosmo->HoverH0_of_a(a);
 
     // 3LPTa
     [[maybe_unused]] const double D3a = grav->get_D_3LPTa(a);
     [[maybe_unused]] const double D3aini = grav->get_D_3LPTa(aini);
-    [[maybe_unused]] const double f3a = grav->get_f_3LPTa(a) / D3a;
+    [[maybe_unused]] const double f3a = grav->get_f_3LPTa(a);
     [[maybe_unused]] const double vfac_3LPTa = sign * D3a / D3aini * f3a * a * a * cosmo->HoverH0_of_a(a);
 
     // 3LPTb
     [[maybe_unused]] const double D3b = grav->get_D_3LPTb(a);
     [[maybe_unused]] const double D3bini = grav->get_D_3LPTb(aini);
-    [[maybe_unused]] const double f3b = grav->get_f_3LPTb(a) / D3b;
+    [[maybe_unused]] const double f3b = grav->get_f_3LPTb(a);
     [[maybe_unused]] const double vfac_3LPTb = sign * D3b / D3bini * f3b * a * a * cosmo->HoverH0_of_a(a);
 
 #ifdef USE_OMP
