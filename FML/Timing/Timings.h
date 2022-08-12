@@ -38,7 +38,7 @@ namespace FML {
             Timings() = default;
 
             /// Output all the recorded timings
-            void PrintAllTimings() {
+            void PrintAllTimings() const {
 #ifdef USE_MPI
                 int ThisTask = 0;
                 MPI_Comm_rank(MPI_COMM_WORLD, &ThisTask);
