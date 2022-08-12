@@ -56,7 +56,7 @@ void output_pofk_for_every_step(NBodySimulation<NDIM, T> & sim) {
             filename + (filename == "" ? "" : "/") + "pofk_" + simulation_name + "_cb_z" + redshiftstring + ".txt";
 
         std::ofstream fp(filename.c_str());
-        fp << "# k  (h/Mpc)    Pcb(k)  (Mpc/h)^3    Pcb_linear(k)  (Mpc/h)^3\n";
+        fp << "# k  (h/Mpc)    Pcb(k)  (Mpc/h)^3    Pcb_linear(k) (Mpc/h)^3   ShotnoiseSubtracted = " << std::boolalpha << sim.pofk_subtract_shotnoise << "\n";
         for (int i = 0; i < binning.n; i++) {
             fp << std::setw(15) << binning.kbin[i] << " ";
             fp << std::setw(15) << binning.pofk[i] << " ";
@@ -85,7 +85,7 @@ void output_pofk_for_every_step(NBodySimulation<NDIM, T> & sim) {
             filename + (filename == "" ? "" : "/") + "pofk_" + simulation_name + "_total_z" + redshiftstring + ".txt";
 
         std::ofstream fp(filename.c_str());
-        fp << "# k  (h/Mpc)    P(k)  (Mpc/h)^3    P_linear(k)  (Mpc/h)^3\n";
+        fp << "# k  (h/Mpc)    P(k)  (Mpc/h)^3    P_linear(k)  (Mpc/h)^3  ShotnoiseSubtracted = " << std::boolalpha << sim.pofk_subtract_shotnoise << "\n";
         for (int i = 0; i < binning.n; i++) {
             fp << std::setw(15) << binning.kbin[i] << " ";
             fp << std::setw(15) << binning.pofk[i] << " ";
@@ -313,7 +313,7 @@ void compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double re
                       << "]\n";
         } else {
             fp << "#  k  (h/Mpc)          P0(k)  (Mpc/h)^3          P2(k)  (Mpc/h)^3       P4(k)  (Mpc/h)^3   ...   "
-                  "P0_kaiser    P2_kaiser    P4_kaiser\n";
+                  "P0_kaiser    P2_kaiser    P4_kaiser  ShotnoiseSubtracted = " << std::boolalpha << sim.pofk_multipole_subtract_shotnoise << "\n";
             for (int i = 0; i < Pells[0].n; i++) {
                 const double k = Pells[0].kbin[i];
                 const double f = grav->get_f_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
