@@ -252,20 +252,18 @@ namespace FML {
         const int npts_z = 100;
         const auto xcollapse_array = FML::MATH::linspace(std::log(1.0/(1.0+zini)),std::log(1.0/(1.0+zend)),npts_z);
 
-        DVector deltac_array;
-        DVector DeltaVir_array;
-        DVector xta_array;
-        DVector xvir_array;
-        DVector xnl_array;
-        DVector delta_ini_array;
-        deltac_array.reserve(xcollapse_array.size());
-        DeltaVir_array.reserve(xcollapse_array.size());
-        xta_array.reserve(xcollapse_array.size());
-        xvir_array.reserve(xcollapse_array.size());
-        xnl_array.reserve(xcollapse_array.size());
-        delta_ini_array.reserve(xcollapse_array.size());
+        DVector deltac_array(xcollapse_array.size());
+        DVector DeltaVir_array(xcollapse_array.size());
+        DVector xta_array(xcollapse_array.size());
+        DVector xvir_array(xcollapse_array.size());
+        DVector xnl_array(xcollapse_array.size());
+        DVector delta_ini_array(xcollapse_array.size());
 
-        for(const auto xcollapse : xcollapse_array){
+#ifdef USE_OMP
+#pragma omp parallel for schedule(dynamic,1)
+#endif
+        for(size_t i = 0; i < xcollapse_array.size(); i++){
+          auto xcollapse = xcollapse_array[i];
 
           // Generate solution
           Spline delta_spline;
@@ -301,17 +299,16 @@ namespace FML {
             std::cout << "#=====================================================\n";
           }
 
-          xta_array.push_back(xta);
-          xvir_array.push_back(xvir);
-          xnl_array.push_back(xnl);
-          deltac_array.push_back(deltac);
-          DeltaVir_array.push_back(DeltaVir);
-          delta_ini_array.push_back(delta_ini);
+          xta_array[i] = xta;
+          xnl_array[i] = xnl;
+          xvir_array[i] = xvir;
+          deltac_array[i] = deltac;
+          DeltaVir_array[i] = DeltaVir;
+          delta_ini_array[i] = delta_ini;
 
           // In this case the problem is not well posed so return nan
           if(model.muofx(xcollapse) <= 0.0){
-            std::cout << "Negative mu. Now well posed\n";
-            exit(1);
+            throw std::runtime_error("Spherical collapse. Negative Geff/G encountere. Problem not well posed!");
           }
         }
         xta_of_x_spline = Spline(xcollapse_array, xta_array, "loga_turnaround(loga_collapse)");
