@@ -39,7 +39,7 @@ class GravityModelJBD : public GravityModel<NDIM> {
 
         // Computes gravitational force
         const double norm_poisson_equation = 1.5 * this->cosmo->get_OmegaM() * a * GeffOverG(a);
-        FML::NBODY::compute_force_from_density_fourier<NDIM(
+        FML::NBODY::compute_force_from_density_fourier<NDIM>(
             density_fourier, force_real, density_assignment_method_used, norm_poisson_equation);
     }
 
