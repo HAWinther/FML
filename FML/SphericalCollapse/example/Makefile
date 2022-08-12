@@ -27,8 +27,7 @@ USE_SANITIZER    = false
 #===================================================
 
 # Main library include (path to folder containin FML/)
-#FML_INCLUDE    = $(HOME)/local/FML
-FML_INCLUDE    = $(HOME)/local/UpdatingFML/FML/
+FML_INCLUDE    = $(HOME)/local/FML
 
 # GSL : only needed if USE_GSL = true
 GSL_INCLUDE    = $(HOME)/local/include
