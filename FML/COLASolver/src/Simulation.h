@@ -1156,16 +1156,7 @@ void NBodySimulation<NDIM, T>::init() {
     // In the COLA frame v=0 so reset velocities
     //============================================================
     if (simulation_use_cola) {
-        auto np = part.get_npart();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-        for (size_t i = 0; i < np; i++) {
-            auto * vel = FML::PARTICLE::GetVel(part[i]);
-            for (int idim = 0; idim < NDIM; idim++) {
-                vel[idim] = 0.0;
-            }
-        }
+      cola_initialize_velocities<NDIM, T>(part);
     }
 }
 
@@ -1396,10 +1387,11 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
 
     //=============================================================
     // Bin up power-spectrum (its basically free as we have the density field)
+    // NB: Subtracting shot-noise if the parameter is set
     //=============================================================
     const double redshift = 1.0 / a - 1.0;
     PowerSpectrumBinning<NDIM> pofk_particles(density_grid_fourier.get_nmesh() / 2);
-    pofk_particles.subtract_shotnoise = false;
+    pofk_particles.subtract_shotnoise = pofk_subtract_shotnoise;
     FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(
         density_grid_fourier, pofk_particles, force_density_assignment_method);
     pofk_particles.scale(simulation_boxsize);
@@ -1463,7 +1455,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         // <(W*deltaCB) deltaNu> and deconvolve them seperately
         //=============================================================
         PowerSpectrumBinning<NDIM> pofk_total(density_grid_fourier.get_nmesh() / 2);
-        pofk_total.subtract_shotnoise = false;
+        pofk_total.subtract_shotnoise = pofk_subtract_shotnoise;
         FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(
             density_grid_fourier, pofk_total, force_density_assignment_method);
         pofk_total.scale(simulation_boxsize);
