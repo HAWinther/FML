@@ -19,6 +19,10 @@
 #include <FML/Spline/Spline.h>
 #endif
 
+#if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || (__cplusplus >= 201703L))
+#include <optional>
+#endif
+
 namespace FML {
    
     //===================================================================================
