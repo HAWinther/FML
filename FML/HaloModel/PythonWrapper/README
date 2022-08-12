@@ -1,0 +1,5 @@
+A wrapper around the halomodel which allows you to run it from python
+The file containing the C++ functions exposed to pythons are in Wrapper.cpp
+The interface for SWIG is in InterfaceFile.i
+Use of the resulting python library is in HaloModelWrapper.py (wraps is into a class)
+Example on using it is in example.py
