@@ -24,6 +24,7 @@
 #include "GravityModel_GR.h"
 #include "GravityModel_fofr.h"
 #include "GravityModel_JBD.h"
+#include "GravityModel_Geff.h"
 #include "GravityModel_symmetron.h"
 
 #include "Simulation.h"
@@ -151,6 +152,8 @@ int main(int argc, char ** argv) {
         grav = std::make_shared<GravityModelJBD<NDIM>>(cosmo);
     else if (gravity_model == "Symmetron")
         grav = std::make_shared<GravityModelSymmetron<NDIM>>(cosmo);
+    else if (gravity_model == "Geff")
+        grav = std::make_shared<GravityModelGeff<NDIM>>(cosmo);
     else
         throw std::runtime_error("Unknown gravitymodel [" + gravity_model + "]");
     grav->read_parameters(param);

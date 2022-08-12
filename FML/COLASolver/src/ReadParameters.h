@@ -78,6 +78,13 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
     param["gravity_model"] = lfp.read_string("gravity_model", "GR", OPTIONAL);
 
     if (param.get<std::string>("gravity_model") != "GR") {
+        
+        //=============================================================
+        // Geff/G(a) model
+        //=============================================================
+        if (param.get<std::string>("gravity_model") == "Geff") {
+            param["gravity_model_geff_geffofa_filename"] = lfp.read_string("gravity_model_geff_geffofa_filename", "", REQUIRED);
+        }
 
         //=============================================================
         // f(R) model
