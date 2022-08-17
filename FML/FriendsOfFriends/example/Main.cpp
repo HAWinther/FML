@@ -80,32 +80,55 @@ int main() {
     //==================================================================
     // Do Friend of Friend finding
     //==================================================================
-    const double linking_length = 0.3;
-    const double fof_distance = linking_length / std::pow(p.get_npart_total(), 1.0 / NDIM);
+    const double linking_length = 0.30;
     const int n_min_FoF_group = 20;
     const bool periodic_box = true;
-
-    std::vector<FoFHalo> FoFGroups;
+    const double Buffersize_over_Boxsize = 3.0/box;
+    const int Ngrid_max = 512;
+    std::vector<FoFHalo> LocalFoFGroups;
     FML::FOF::FriendsOfFriends<Particle<NDIM>, NDIM>(
-        p.get_particles_ptr(), p.get_npart(), fof_distance, n_min_FoF_group, periodic_box, FoFGroups);
+        p.get_particles_ptr(), 
+        p.get_npart(), 
+        linking_length, 
+        n_min_FoF_group, 
+        periodic_box, 
+        Buffersize_over_Boxsize,
+        LocalFoFGroups, 
+        Ngrid_max);
+
+    // Mass of particle
+    const double NumPartDMtot = 256*256*256;
+    const double OmegaM = 0.3;
+    const double MplMpl_over_H0Msunh = 2.49264e21;
+    const double HubbleLengthInMpch = 2997.92458;
+    double massofparticle = 3.0 * OmegaM * MplMpl_over_H0Msunh * std::pow(box / HubbleLengthInMpch, 3) /
+      double(NumPartDMtot);
 
     //==================================================================
     // Output (as currently written task 0 has all the halos at this point)
     // (We don't read velocities to these will just be 0)
     //==================================================================
-    if (FML::ThisTask == 0) {
-        std::ofstream fp("fof.txt");
-        std::sort(FoFGroups.begin(), FoFGroups.end(), [&](const FoFHalo & a, const FoFHalo & b) {
-            return a.pos[0] > b.pos[0];
-        });
-        for (auto & g : FoFGroups) {
-            if (g.np > 0) {
-                fp << g.np << " ";
-                for (int idim = 0; idim < NDIM; idim++)
-                    fp << g.pos[idim] * box << " ";
-                fp << "\n";
-            }
+    // Append to the same file task-by-task
+    for(int i = 0; i < FML::NTasks; i++){
+      if(i == FML::ThisTask){
+        std::ofstream fp("fof.txt", (i == 0 ? std::ios_base::out : std::ios_base::app));
+        for(auto & h : LocalFoFGroups){
+          fp << std::setw(15) << h.id     << " ";
+          fp << std::setw(15) << h.np     << " ";
+          fp << std::setw(15) << h.np*massofparticle << " ";
+          fp << std::setw(15) << h.pos[0]*box << " ";
+          fp << std::setw(15) << h.pos[1]*box << " ";
+          fp << std::setw(15) << h.pos[2]*box << " ";
+          fp << std::setw(15) << h.vel[0] << " ";
+          fp << std::setw(15) << h.vel[1] << " ";
+          fp << std::setw(15) << h.vel[2] << " ";
+          fp << std::setw(15) << h.vel_rms[0] << " ";
+          fp << std::setw(15) << h.vel_rms[1] << " ";
+          fp << std::setw(15) << h.vel_rms[2] << " ";
+          fp << "\n";
         }
-        std::cout << FoFGroups.size() << "\n";
+        fp.close();
+      }
+      MPI_Barrier(MPI_COMM_WORLD);  
     }
 }
