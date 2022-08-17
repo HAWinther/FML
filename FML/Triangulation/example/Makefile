@@ -34,7 +34,11 @@ FML_INCLUDE    = $(HOME)/local/FML
 # CGAL : only needed if USE_CGAL = true
 CGAL_INCLUDE   = /opt/local/include
 CGAL_LIB       = /opt/local/lib
-CGAL_LINK      = -lCGAL -lgmp -lm 
+CGAL_LINK      =  -lgmp -lm 
+
+# For older version of CGAL when it was a shared library
+# instead of just headerfiles
+#CGAL_LINK      = -lCGAL -lgmp -lm 
 
 #===================================================
 # Compile up all library defines from options above

@@ -21,6 +21,7 @@ int main() {
     // Read particles from file
     //=======================================================================================
     FML::PARTICLE::MPIParticles<Particle> part;
+    
     std::ifstream fp("../../../TestData/particles_B1024.txt");
     if (!fp)
         exit(1);
@@ -63,6 +64,7 @@ int main() {
 
     // Output the resulting (what is here basically a zobov void) catalogue
     if (FML::ThisTask == 0) {
+        std::ofstream fp("groups.txt");
         for (size_t i = 0; i < watershed_groups.size(); i++) {
             double mean_density = double(ntot);
             double mass = watershed_groups[i].mass;
@@ -73,12 +75,18 @@ int main() {
             double delta_avg = density_avg / mean_density - 1.0;
             double delta_min = density_min / mean_density - 1.0;
             double radius = std::pow(3.0 * volume / (4.0 * M_PI), 0.33333) * boxsize;
-            std::cout << i << " " << boxsize * watershed_groups[i].pos_barycenter[0] << " "
-                      << boxsize * watershed_groups[i].pos_barycenter[1] << " "
-                      << boxsize * watershed_groups[i].pos_barycenter[2] << " "
-                      << boxsize * watershed_groups[i].pos_min[0] << " " << boxsize * watershed_groups[i].pos_min[1]
-                      << " " << boxsize * watershed_groups[i].pos_min[2] << " " << volume << " " << radius << " "
-                      << delta_avg << " " << delta_min << " " << watershed_groups[i].ningroup << "\n";
+            fp << std::setw(6)  << i << " ";
+            fp << std::setw(10) << boxsize * watershed_groups[i].pos_barycenter[0] << " ";
+            fp << std::setw(10) << boxsize * watershed_groups[i].pos_barycenter[1] << " ";
+            fp << std::setw(10) << boxsize * watershed_groups[i].pos_barycenter[2] << " ";
+            fp << std::setw(10) << boxsize * watershed_groups[i].pos_min[0] << " ";
+            fp << std::setw(10) << boxsize * watershed_groups[i].pos_min[1] << " ";
+            fp << std::setw(10) << boxsize * watershed_groups[i].pos_min[2] << " ";
+            fp << std::setw(15) << volume << " ";
+            fp << std::setw(10) << radius << " ";
+            fp << std::setw(15) << delta_avg << " ";
+            fp << std::setw(15) << delta_min << " ";
+            fp << std::setw(10) << watershed_groups[i].ningroup << "\n";
         }
     }
 
