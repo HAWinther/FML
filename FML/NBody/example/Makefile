@@ -6,8 +6,8 @@ SHELL := /bin/bash
 # Set c++11 compliant compiler. If USE_MPI we use MPICC 
 #===================================================
 
-CC      = g++-mp-7 -std=c++1z -O3 -Wall -Wextra -march=native
-MPICC   = mpicxx-openmpi-gcc7 -std=c++1z -O3 -Wall -Wextra -march=native
+CC      = g++ -std=c++1z -O3 -Wall -Wextra -march=native
+MPICC   = mpicxx -std=c++1z -O3 -Wall -Wextra -march=native
 
 #===================================================
 # Options
@@ -35,7 +35,7 @@ USE_GSL          = true
 #===================================================
 
 # Main library include (path to folder containin FML/)
-FML_INCLUDE    = /Users/hansw/local/FML
+FML_INCLUDE    = /Users/hansw/local/FML/
 
 # FFTW : only needed if USE_FFTW = true
 FFTW_INCLUDE   = $(HOME)/local/include

@@ -16,7 +16,7 @@ SWIGWRAPPERO  = InterfaceFile_wrap.o
 # Set c++11 compliant compiler. If USE_MPI we use MPICC 
 #===================================================
 
-CC      = g++-mp-7 -std=c++1z -Wall 
+CC      = g++ -std=c++1z -Wall 
 
 #===================================================
 # Options
@@ -33,10 +33,10 @@ USE_PYTHON       = true
 FML_INCLUDE    = /Users/hansw/local/FML
 
 # Python and numpy includes
-PYTHON_INCLUDE = /anaconda2/include/python2.7 
-PYTHON_LIB     = /anaconda2/lib
-NUMPY_INCLUDE  = /anaconda2/lib/python2.7/site-packages/numpy/core/include
-PYTHON_LINK    = -lpython2.7 -ldl -framework CoreFoundation
+PYTHON_INCLUDE = /opt/local/Library/Frameworks/Python.framework/Versions/3.8/include/python3.8/
+PYTHON_LIB     = /opt/local/Library/Frameworks/Python.framework/Versions/3.8/lib/
+NUMPY_INCLUDE  = /opt/local/Library/Frameworks/Python.framework/Versions/3.8/lib/python3.8/site-packages/numpy/core/include
+PYTHON_LINK    = -lpython3.8 -ldl -framework CoreFoundation
 
 # For Python 3
 #PYTHON_INCLUDE = /astro/local/anaconda3/include/python3.6m
