@@ -32,7 +32,7 @@ int main() {
     // Call matplotlib
     plt::xlim(0.0, 1.0);
     plt::plot(x_array, y_array);
-    plt::title("y = 2 + sin(2 pi x)");
+    plt::title("$y = 2 + \\sin(2 \\pi x)$");
 
     // Save plot to file
     plt::save(filename);

@@ -32,8 +32,9 @@ USE_SANITIZER    = false
 FML_INCLUDE    = $(HOME)/local/FML
 
 # Python : only needed if USE_PYTHON = true
-PYTHON_INCLUDE = /anaconda2/include/python2.7 
-NUMPY_INCLUDE  = /anaconda2/lib/python2.7/site-packages/numpy/core/include
+PYTHON_INCLUDE = /opt/local/Library/Frameworks/Python.framework/Versions/2.7/include/python2.7/
+PYTHON_LIB     = /opt/local/Library/Frameworks/Python.framework/Versions/2.7/lib/
+NUMPY_INCLUDE  = /opt/local/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/site-packages/numpy/core/include
 PYTHON_LINK    = -lpython2.7 -ldl -framework CoreFoundation
 
 #===================================================
@@ -63,7 +64,7 @@ ifeq ($(USE_PYTHON),true)
 OPTIONS += -DWITHOUT_NUMPY
 INC  += -I$(PYTHON_INCLUDE)
 INC  += -I$(NUMPY_INCLUDE)
-LINK += $(PYTHON_LINK)
+LINK += -L$(PYTHON_LIB) $(PYTHON_LINK)
 endif
 
 #===================================================

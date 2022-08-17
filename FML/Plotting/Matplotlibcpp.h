@@ -8,6 +8,7 @@
 //====================================================================
 //
 // Make plots with matplotlib from within C++
+// Works with Python2.7
 //
 // Slightly modified from the library at: https://github.com/lava/matplotlib-cpp
 // Licence: https://github.com/lava/matplotlib-cpp/blob/master/LICENSE
