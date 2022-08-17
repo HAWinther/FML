@@ -84,8 +84,14 @@ end
 ------------------------------------------------------------
 -- Choose the gravity model
 ------------------------------------------------------------
--- Gravity model: GR, DGP, f(R), JBD, Symmetron, ... add your own ...
+-- Gravity model: GR, DGP, f(R), JBD, Symmetron, Geff, ... add your own ...
 gravity_model = "GR"
+
+-- General Geff/G(a) models (mu-parametrization)
+if gravity_model == "Geff" then 
+  -- File with the format [a, Geff/G(a)]
+  gravity_model_geff_geffofa_filename = "GeffoverG_of_a.txt"
+end
 
 -- Hu-Sawicky f(R) model
 if gravity_model == "f(R)" then 
@@ -301,14 +307,16 @@ force_linear_massive_neutrinos = true
 -- Halofinding
 ------------------------------------------------------------
 -- Do halofinding every output?
-fof = false
+fof = true
 -- Minimum number of particles per halo
 fof_nmin_per_halo = 20
--- The fof distance (rmin / boxsize) used when linking
-fof_linking_length = 0.2 / particle_Npart_1D
+-- The linking length (distance in units of mean particle separation)
+fof_linking_length = 0.2
 -- Limit the maximum grid to use to bin particles to
 -- to speed up the fof linking. 0 means we let the code choose this
 fof_nmesh_max = 0
+-- The size of the buffer region larger than largest halo, 2-3Mpc/h should be fine)
+fof_buffer_length_mpch = 3.0
 
 ------------------------------------------------------------
 -- Power-spectrum evaluation

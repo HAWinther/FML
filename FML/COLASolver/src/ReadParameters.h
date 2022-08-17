@@ -263,6 +263,7 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
         param["fof_nmin_per_halo"] = lfp.read_int("fof_nmin_per_halo", 20, OPTIONAL);
         param["fof_linking_length"] = lfp.read_double("fof_linking_length", 0.2, OPTIONAL);
         param["fof_nmesh_max"] = lfp.read_int("fof_nmesh_max", 0, OPTIONAL);
+        param["fof_buffer_length_mpch"] = lfp.read_double("fof_buffer_length_mpch", 3.0, OPTIONAL);
     }
 
     //=============================================================

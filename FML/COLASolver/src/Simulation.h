@@ -166,10 +166,11 @@ class NBodySimulation {
     double timestep_spacing_power;            // For timestep_scalefactor_spacing = powerlaw
 
     // FoF halofinding
-    bool fof;                  // Locate halos when we output
-    int fof_nmin_per_halo;     // Minimum particles per halo
-    int fof_nmesh_max;         // For speeding it up: the maximum gridsize to bin particle to
-    double fof_linking_length; // The linking length in units of the boxsize (i.e. ~0.2 / Npart_1D for bFoF = 0.2)
+    bool fof;                      // Locate halos when we output
+    int fof_nmin_per_halo;         // Minimum particles per halo
+    int fof_nmesh_max;             // For speeding it up: the maximum gridsize to bin particle to
+    double fof_linking_length;     // The linking length in units of the mean partice separation (i.e. ~0.2)
+    double fof_buffer_length_mpch; // The buffer region (from nbor tasks) we use in the FoF finding
 
     // Power-spectrum
     bool pofk;                                  // Compute power-spectrum when we output
@@ -606,12 +607,14 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
         fof_nmin_per_halo = param.get<int>("fof_nmin_per_halo");
         fof_linking_length = param.get<double>("fof_linking_length");
         fof_nmesh_max = param.get<int>("fof_nmesh_max");
+        fof_buffer_length_mpch = param.get<double>("fof_buffer_length_mpch");
 
         if (FML::ThisTask == 0) {
             std::cout << "fof                                      : " << fof << "\n";
             std::cout << "fof_nmin_per_halo                        : " << fof_nmin_per_halo << "\n";
             std::cout << "fof_linking_length                       : " << fof_linking_length << "\n";
             std::cout << "fof_nmesh_max                            : " << fof_nmesh_max << "\n";
+            std::cout << "fof_buffer_length_mpch                   : " << fof_buffer_length_mpch << "\n";
         }
     }
 
@@ -719,8 +722,8 @@ void NBodySimulation<NDIM, T>::init() {
         grav->output(gravprefix + "_k0.001.txt", 1e-3 / grav->H0_hmpc);
         grav->output(gravprefix + "_k0.01.txt", 1e-2 / grav->H0_hmpc);
         grav->output(gravprefix + "_k0.1.txt", 1e-1 / grav->H0_hmpc);
-        grav->output(gravprefix + "_k1.0.txt", 1.0 / grav->H0_hmpc);
-        grav->output(gravprefix + "_k10.0.txt", 1e1 / grav->H0_hmpc);
+        grav->output(gravprefix + "_k1.0.txt", 1e+0 / grav->H0_hmpc);
+        grav->output(gravprefix + "_k10.0.txt", 1e+1 / grav->H0_hmpc);
     }
 
     //=============================================================
@@ -1067,8 +1070,9 @@ void NBodySimulation<NDIM, T>::init() {
 #endif
         for (int islice = 0; islice < Local_nx; islice++) {
             for (auto && fourier_index : delta_ini_fourier.get_fourier_range(islice, islice + 1)) {
-                delta_ini_fourier.set_fourier_from_index(
-                    fourier_index, FML::GRID::FloatType(-1.0) * delta_ini_fourier.get_fourier_from_index(fourier_index));
+                delta_ini_fourier.set_fourier_from_index(fourier_index,
+                                                         FML::GRID::FloatType(-1.0) *
+                                                             delta_ini_fourier.get_fourier_from_index(fourier_index));
             }
         }
     }
@@ -1125,7 +1129,8 @@ void NBodySimulation<NDIM, T>::init() {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode k = 0
                         phi_1LPT_ini_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
-                        auto value = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
+                        auto value =
+                            phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
                         phi_1LPT_ini_fourier.set_fourier_from_index(fourier_index, value);
                     }
                 }
@@ -1156,7 +1161,7 @@ void NBodySimulation<NDIM, T>::init() {
     // In the COLA frame v=0 so reset velocities
     //============================================================
     if (simulation_use_cola) {
-      cola_initialize_velocities<NDIM, T>(part);
+        cola_initialize_velocities<NDIM, T>(part);
     }
 }
 
@@ -1440,7 +1445,8 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
                 density_grid_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
                 auto delta_ini = initial_density_field_fourier.get_fourier_from_index(fourier_index);
                 auto deltaCB = density_grid_fourier.get_fourier_from_index(fourier_index);
-                auto deltaM = deltaCB * FML::GRID::FloatType(1.0 - fMNu) + delta_ini * FML::GRID::FloatType(norm(kmag) * fMNu);
+                auto deltaM =
+                    deltaCB * FML::GRID::FloatType(1.0 - fMNu) + delta_ini * FML::GRID::FloatType(norm(kmag) * fMNu);
                 density_grid_fourier.set_fourier_from_index(fourier_index, deltaM);
             }
         }

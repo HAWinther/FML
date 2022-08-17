@@ -28,6 +28,20 @@ using Spline = FML::INTERPOLATION::SPLINE::Spline;
 //========================================================================
 
 template <int NDIM, class T>
+void cola_initialize_velocities(FML::PARTICLE::MPIParticles<T> & part) {
+    auto np = part.get_npart();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+    for (size_t i = 0; i < np; i++) {
+        auto * vel = FML::PARTICLE::GetVel(part[i]);
+        for (int idim = 0; idim < NDIM; idim++) {
+            vel[idim] = 0.0;
+        }
+    }
+}
+    
+template <int NDIM, class T>
 void cola_add_on_LPT_velocity(FML::PARTICLE::MPIParticles<T> & part,
                               std::shared_ptr<GravityModel<NDIM>> & grav,
                               double aini,
@@ -269,7 +283,7 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                     double delta_time_kick,
                                     [[maybe_unused]] double delta_time_drift) {
 
-    constexpr bool print_timings = false;  
+    constexpr bool print_timings = false;
     FML::UTILS::Timings timer;
     timer.StartTiming("Scaledependent COLA");
 

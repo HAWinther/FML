@@ -309,8 +309,8 @@ force_linear_massive_neutrinos = true
 fof = false
 -- Minimum number of particles per halo
 fof_nmin_per_halo = 20
--- The fof distance (rmin / boxsize) used when linking
-fof_linking_length = 0.2 / particle_Npart_1D
+-- The linking length (distance in units of mean particle separation)
+fof_linking_length = 0.2
 -- Limit the maximum grid to use to bin particles to
 -- to speed up the fof linking. 0 means we let the code choose this
 fof_nmesh_max = 0

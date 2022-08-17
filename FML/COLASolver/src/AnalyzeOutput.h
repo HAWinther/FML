@@ -453,6 +453,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     const double fof_linking_length = sim.fof_linking_length;
     const int fof_nmin_per_halo = sim.fof_nmin_per_halo;
     const int fof_nmesh_max = sim.fof_nmesh_max;
+    const double fof_buffer_length_mpch = sim.fof_buffer_length_mpch;
     const auto & cosmo = sim.cosmo;
     auto & part = sim.part;
 
@@ -460,7 +461,6 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     // Halo finding
     //=============================================================
     using FoFHalo = FML::FOF::FoFHalo<T, NDIM>;
-    const bool merging_in_parallel = simulation_boxsize / FML::NTasks > 3.0;
     const bool periodic_box = true;
     std::vector<FoFHalo> FoFGroups;
     FML::FOF::FriendsOfFriends<T, NDIM>(part.get_particles_ptr(),
@@ -468,11 +468,11 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
                                         fof_linking_length,
                                         fof_nmin_per_halo,
                                         periodic_box,
+                                        fof_buffer_length_mpch / simulation_boxsize,
                                         FoFGroups,
-                                        fof_nmesh_max,
-                                        merging_in_parallel);
+                                        fof_nmesh_max);
 
-    // To physical units
+    // Convert to physical units
     // Code masses are in units of the mean mass -> Msun/h
     const double MplMpl_over_H0Msunh = 2.49264e21;
     const double mass_norm = 3.0 * cosmo->get_OmegaM() * MplMpl_over_H0Msunh *
@@ -486,6 +486,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         for (int idim = 0; idim < NDIM; idim++) {
             g.pos[idim] *= pos_norm;
             g.vel[idim] *= vel_norm;
+            g.vel_rms[idim] *= vel_norm;
         }
     }
 
@@ -527,31 +528,43 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         }
     }
 
-    // Output to file (all halos are at task 0 by default)
-    if (FML::ThisTask == 0) {
-        std::cout << "Found " << FoFGroups.size() << " halos\n";
+    // Output to file
+    for(int i = 0; i < FML::NTasks; i++){
+      if(i == FML::ThisTask){
+        std::cout << "Found " << FoFGroups.size() << " halos on task " << FML::ThisTask << "\n";
         std::string filename = snapshot_folder + "/halos_z" + redshiftstring + ".txt";
-        std::ofstream fp(filename.c_str());
+        std::ofstream fp(filename.c_str(), (i == 0 ? std::ios_base::out : std::ios_base::app));
         if (not fp.is_open()) {
-            std::cout << "Warning: Cannot write halos to file, failed to open [" << filename << "]\n";
+          std::cout << "Warning: Cannot write halos to file, failed to open [" << filename << "]\n";
+          break;
         } else {
-            fp << "#  npart    mass    pos[] (Mpc/h)   vel[] (peculiar km/s)\n";
-            for (auto & g : FoFGroups) {
-                if (g.np > 0) {
-                    fp << std::setw(5) << g.np << " ";
-                    fp << std::setw(15) << g.mass << " ";
-                    for (int idim = 0; idim < NDIM; idim++)
-                        fp << std::setw(15) << g.pos[idim] << " ";
-                    for (int idim = 0; idim < NDIM; idim++)
-                        fp << std::setw(15) << g.vel[idim] << " ";
-                    fp << "\n";
-                }
+          if(i == 0){
+            fp << "#            np     ";
+            fp << "mass (Msun/h)       ";
+            fp << "pos[] (Mpc/h)                                   ";
+            fp << "vel[] (peculiar km/s)                           ";
+            fp << "vel_rms[]  (peculiar km/s)                      ";
+            fp << "\n";
+          }
+          for (auto & g : FoFGroups) {
+            if (g.np > 0) {
+              fp << std::setw(15) << g.np << " ";
+              fp << std::setw(15) << g.mass << " ";
+              for (int idim = 0; idim < NDIM; idim++)
+                fp << std::setw(15) << g.pos[idim] << " ";
+              for (int idim = 0; idim < NDIM; idim++)
+                fp << std::setw(15) << g.vel[idim] << " ";
+              for (int idim = 0; idim < NDIM; idim++)
+                fp << std::setw(15) << g.vel_rms[idim] << " ";
+              fp << "\n";
             }
+          }
         }
-    } else {
-        FML::assert_mpi(
-            FoFGroups.size() == 0,
-            "Something is strange: the FoF algorithm should return all halos to task 0, something changed?");
+        fp.close();
+      }
+#ifdef USE_MPI
+      MPI_Barrier(MPI_COMM_WORLD);
+#endif
     }
 }
 
