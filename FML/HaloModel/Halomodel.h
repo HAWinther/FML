@@ -48,15 +48,16 @@ namespace FML {
       WindowFunction get_tophat_window_fourier();
 
       //===========================================================
-      // Class for computing the standard halomodel predictions
-      // for P(k) plus n(M) or just doing spherical collapse. 
-      // Contains (some of) the HMCode modifications except the fits
-      // in form of free parameters (but fiducial values = original halomodel).
-      // The mass-consentration relation, PDF and bias and halo density profile 
-      // can easily be modified if wanted.
-      //
-      // The cosmology/gravity model is specified through the spherical-collapse model
-      // This currently only handles scale-independent growth
+      /// @brief Class for computing the standard halomodel predictions
+      /// for \f$P(k,z)\f$ plus \f$n(M,z)\f$ or just doing spherical collapse. 
+      /// Contains the HMCode modifications so one can run both the standard halomodel
+      /// and HMCode by setting a flag. 
+      /// The mass-consentration relation, PDF and bias and halo density profile 
+      /// can easily be modified if wanted by providing a lambda functions defining these
+      /// functions..
+      ///
+      /// The cosmology/gravity model is specified through the spherical-collapse model. 
+      /// This currently only handles scale-independent growth.
       //===========================================================
       class HaloModel {
         public:
