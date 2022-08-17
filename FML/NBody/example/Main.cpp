@@ -46,29 +46,34 @@ const std::string type_of_random_field = "gaussian"; // Type of random field: ga
 const double fNL = 100.0;                            // If non-local non-gaussianity the value of fNL
 const unsigned int random_seed = 1234;               // A random seed
 const int Nmesh = 256;                               // Grid-size for binning particles to a grid and computing forces
-const int Nmesh_IC = 256;                            // Grid-size for making the IC
+const int Nmesh_IC = 128;                            // Grid-size for making the IC
 const int Npart_1D = 128;                            // Number of particles per dimension
 const double buffer_factor = 1.5;                    // Extra allocation factor for particles
 const bool COLA = true;                              // Use the COLA method. We use the LPT order we are able to
-const int LPT_order_IC = 3;                          // The LPT order to use when making the IC
+const int LPT_order_IC = 3;                          // The LPT order to use when making the ICi
+                                                     //
 const int n_min_FoF_group = 20;                      // Minimum number of particles per halo
-const double fof_distance = 0.2 / double(Npart_1D);  // Halo linking length
-const int nbin_bispectrum = 16;                      // Number of bins for computing the bispectrum
-const double apofk = 1.0;                            // Redshift for which P(k) is at
-const std::string filename = "pofk.txt";             // File with k (h/Mpc), P(k)  (Mpc/h)^3
-const std::string interpolation_method = "CIC";      // The grid-assignment method
-const double OmegaM = 1.0;                           // The matter density parameter at z = 0
-const double h = 0.7;                                // Hubble parameter h = H0/(100km/s/Mpc) at z = 0
-const double A_s = 2e-9;                             // Primordial amplitude
-const double n_s = 0.96;                             // Primordial spectral index
-const double kpivot = 0.05 / h;                      // Pivot scale in h/Mpc
+const int Ngrid_max_FoF = 256; // Maximum gridsize for speeding up FoF linking (bigger better, but more memory)
+const double FoFBoundarySizeMpch =
+    3.0; // Size of boundary we communicate to do FoF linking (should be bigger than largest halo expected)
+const double linking_length = 0.2;              // Halo linking length
+                                                //
+const int nbin_bispectrum = 16;                 // Number of bins for computing the bispectrum
+const double apofk = 1.0;                       // Redshift for which P(k) is at
+const std::string filename = "pofk.txt";        // File with k (h/Mpc), P(k)  (Mpc/h)^3
+const std::string interpolation_method = "CIC"; // The grid-assignment method
+const double OmegaM = 1.0;                      // The matter density parameter at z = 0
+const double h = 0.7;                           // Hubble parameter h = H0/(100km/s/Mpc) at z = 0
+const double A_s = 2e-9;                        // Primordial amplitude
+const double n_s = 0.96;                        // Primordial spectral index
+const double kpivot = 0.05 / h;                 // Pivot scale in h/Mpc
 
 FML::INTERPOLATION::SPLINE::Spline D_1LPT_of_loga;
 FML::INTERPOLATION::SPLINE::Spline D_2LPT_of_loga;
 FML::INTERPOLATION::SPLINE::Spline D_3LPTa_of_loga;
 FML::INTERPOLATION::SPLINE::Spline D_3LPTb_of_loga;
 
-auto HoverH0 = [&](double a) { return std::sqrt(OmegaM / (a * a * a) + 1.0 - OmegaM); };
+double HoverH0(double a) { return std::sqrt(OmegaM / (a * a * a) + 1.0 - OmegaM); };
 
 // Type aliases for easier use below
 template <int N>
@@ -175,6 +180,13 @@ int main() {
     //============================================================
     // Generate initial conditions
     //============================================================
+
+    std::vector<double> velocity_norms(4);
+    for (int i = 0; i < 4; i++) {
+        velocity_norms[i] =
+            100.0 * box * H_over_H0_of_loga(std::log(aini)) * aini * growth_rate_f_of_loga[i](std::log(aini));
+    }
+
     FML::PARTICLE::MPIParticles<Particle> part;
     FML::NBODY::NBodyInitialConditions<NDIM, Particle>(part,
                                                        Npart_1D,
@@ -189,15 +201,14 @@ int main() {
                                                        fNL,
                                                        box,
                                                        zini,
-                                                       H_over_H0_of_loga,
-                                                       growth_rate_f_of_loga);
+                                                       velocity_norms);
 
     //============================================================
     // In the COLA frame v=0 so reset velocities
     //============================================================
     if (COLA) {
         // Loop over all active particles
-        for (auto & p : part){
+        for (auto & p : part) {
             auto * vel = FML::PARTICLE::GetVel(p);
             for (int idim = 0; idim < NDIM; idim++) {
                 vel[idim] = 0.0;
@@ -275,7 +286,8 @@ int main() {
 
         // Density field -> force
         std::array<FFTWGrid<NDIM>, NDIM> force_real;
-        FML::NBODY::compute_force_from_density_fourier<NDIM>(density_grid_fourier, force_real, norm_poisson_equation);
+        FML::NBODY::compute_force_from_density_fourier<NDIM>(
+            density_grid_fourier, force_real, interpolation_method, norm_poisson_equation);
 
         // Update velocity of particles (frees force)
         FML::NBODY::KickParticles<NDIM>(force_real, part, delta_time_vel, interpolation_method);
@@ -309,7 +321,7 @@ int main() {
                 -norm_poisson_equation * (D3bold + D1old * D1old * D1old - D1old * D2old) / D3bini * delta_time_vel;
 
             // Loop over all active particles
-            for (auto & p : part){
+            for (auto & p : part) {
                 auto * pos = FML::PARTICLE::GetPos(p);
                 auto * vel = FML::PARTICLE::GetVel(p);
 
@@ -528,27 +540,33 @@ int main() {
 
     part.communicate_particles();
     std::vector<FoFHalo> FoFGroups;
-    // Halos not larger then 3 Mpc/h so if local domain is larger then we can do faster merge
-    FML::FOF::merging_in_parallel_default = box / FML::NTasks > 3.0;
-    FML::FOF::FriendsOfFriends<Particle, NDIM>(
-        part.get_particles_ptr(), part.get_npart(), fof_distance, n_min_FoF_group, true, FoFGroups);
+    double bufferlength = FoFBoundarySizeMpch / box;
+    FML::FOF::FriendsOfFriends<Particle, NDIM>(part.get_particles_ptr(),
+                                               part.get_npart(),
+                                               linking_length,
+                                               n_min_FoF_group,
+                                               true,
+                                               bufferlength,
+                                               FoFGroups,
+                                               Ngrid_max_FoF);
 
-    // Sort by position
-    std::sort(FoFGroups.begin(), FoFGroups.end(), [](const FoFHalo & a, const FoFHalo & b) -> bool {
-        return a.pos[0] > b.pos[0];
-    });
-
-    if (FML::ThisTask == 0) {
-        std::cout << "\n# Found " << FoFGroups.size() << " halos\n";
-        std::ofstream fp("halo_out.txt");
-        for (auto & g : FoFGroups) {
-            if (g.np > 0) {
-                fp << g.np << " ";
-                for (int idim = 0; idim < NDIM; idim++)
-                    fp << g.pos[idim] * box << " ";
-                fp << "\n";
+    // Output halos task by task
+    for (int i = 0; i < FML::NTasks; i++) {
+        if (i == FML::ThisTask) {
+            std::cout << "\n# Found " << FoFGroups.size() << " halos on task " << FML::ThisTask << "\n";
+            std::ofstream fp("halo_out.txt");
+            for (auto & g : FoFGroups) {
+                if (g.np > 0) {
+                    fp << g.np << " ";
+                    for (int idim = 0; idim < NDIM; idim++)
+                        fp << g.pos[idim] * box << " ";
+                    fp << "\n";
+                }
             }
         }
+#ifdef USE_MPI
+        MPI_Barrier(MPI_COMM_WORLD);
+#endif
     }
 
 #ifdef MEMORY_LOGGING

@@ -363,8 +363,8 @@ namespace FML {
 
                     // Compute force -ik/k^2 delta(k)
                     for (int idim = 0; idim < N; idim++) {
-                        force_real[idim].set_fourier_from_index(fourier_index,
-                                                                -I * value * FML::GRID::FloatType(kvec[idim] * norm_poisson_equation));
+                        force_real[idim].set_fourier_from_index(
+                            fourier_index, -I * value * FML::GRID::FloatType(kvec[idim] * norm_poisson_equation));
                     }
                 }
             }
@@ -639,6 +639,8 @@ namespace FML {
             // Make a gaussian or non-local non-gaussian random field in fourier space
             if (type_of_random_field == "gaussian") {
                 auto Pofk_of_kBox_over_volume = [&](double kBox) {
+                    if (kBox == 0.0)
+                        return 0.0;
                     return Pofk_of_kBox_over_Pofk_primordal(kBox) * Pofk_of_kBox_over_volume_primordial(kBox);
                 };
                 FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier(
@@ -1074,7 +1076,8 @@ namespace FML {
                                        FFTWGrid<N> & density_mg_fourier,
                                        std::function<double(double)> coupling_factor_of_kBox) {
 
-            auto coupling_factor_of_kBox_spline = density_fourier.make_fourier_spline(coupling_factor_of_kBox, "MG coupling(k)");
+            auto coupling_factor_of_kBox_spline =
+                density_fourier.make_fourier_spline(coupling_factor_of_kBox, "MG coupling(k)");
             const auto Local_nx = density_fourier.get_local_nx();
             density_mg_fourier = density_fourier;
 #ifdef USE_OMP
