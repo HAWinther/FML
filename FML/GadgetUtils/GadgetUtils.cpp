@@ -32,16 +32,22 @@ namespace FML {
             void print_header_info(GadgetHeader & header) {
                 std::cout << "\n";
                 std::cout << "GadgetHeader:\n";
-                std::cout << "aexp        " << header.time << "\n";
-                std::cout << "Redshift    " << header.redshift << "\n";
-                std::cout << "Boxsize     " << header.BoxSize << "\n";
-                std::cout << "Omega0      " << header.Omega0 << "\n";
-                std::cout << "OmegaLambda " << header.OmegaLambda << "\n";
-                std::cout << "HubbleParam " << header.HubbleParam << "\n";
-                std::cout << "numFiles    " << header.num_files << "\n";
-                std::cout << "npart       " << header.npart[1] << "\n";
-                std::cout << "npartTotal  " << (size_t(header.npartTotalHighWord[1]) << 32) + header.npartTotal[1]
-                          << "\n";
+                std::cout << "aexp          " << header.time << "\n";
+                std::cout << "Redshift      " << header.redshift << "\n";
+                std::cout << "Boxsize       " << header.BoxSize << " Mpc/h\n";
+                std::cout << "Omega0        " << header.Omega0 << "\n";
+                std::cout << "OmegaLambda   " << header.OmegaLambda << "\n";
+                std::cout << "HubbleParam   " << header.HubbleParam << "\n";
+                std::cout << "numFiles      " << header.num_files << "\n";
+                for(int i = 0; i < 6; i++){
+                  std::cout << "npart[" << i << "]      " << header.npart[i] << "\n";
+                }
+                for(int i = 0; i < 6; i++){
+                  std::cout << "mass[" << i << "]       " << header.mass[i] << "\n";
+                }
+                for(int i = 0; i < 6; i++){
+                  std::cout << "npartTotal[" << i << "] " << (size_t(header.npartTotalHighWord[i]) << 32) + header.npartTotal[i] << "\n";
+                }
                 std::cout << "\n";
             }
 
@@ -148,6 +154,7 @@ namespace FML {
                 fp.write((char *)&bytes, sizeof(bytes));
             }
 
+            // Simple thing only for dark matter particles
             void GadgetWriter::write_header(std::ofstream & fp,
                                             unsigned int NumPart,
                                             size_t NumPartTot,
@@ -174,6 +181,50 @@ namespace FML {
                 header.npartTotalHighWord[1] = (unsigned int)(NumPartTot >> 32);
                 header.mass[1] = 3.0 * OmegaM * MplMpl_over_H0Msunh * std::pow(Boxsize / HubbleLengthInMpch, 3) /
                                  double(NumPartTot) / 1e10;
+                header.time = aexp;
+                header.redshift = 1.0 / aexp - 1.0;
+                header.flag_sfr = 0;
+                header.flag_feedback = 0;
+                header.flag_cooling = 0;
+                header.flag_stellarage = 0;
+                header.flag_metals = 0;
+                header.flag_stellarage = 0;
+                header.flag_metals = 0;
+                header.flag_entropy_instead_u = 0;
+                header.num_files = NumberOfFilesToWrite;
+                header.BoxSize = Boxsize;
+                header.Omega0 = OmegaM;
+                header.OmegaLambda = OmegaLambda;
+                header.HubbleParam = HubbleParam;
+
+                int bytes = sizeof(header);
+                fp.write((char *)&bytes, sizeof(bytes));
+                fp.write((char *)&header, bytes);
+                fp.write((char *)&bytes, sizeof(bytes));
+            }
+            
+            void GadgetWriter::write_header_general(std::ofstream & fp,
+                                            std::vector<size_t> npart_family,
+                                            std::vector<size_t> npart_family_tot,
+                                            std::vector<double> mass_in_1e10_msunh,
+                                            int NumberOfFilesToWrite,
+                                            double aexp,
+                                            double Boxsize,
+                                            double OmegaM,
+                                            double OmegaLambda,
+                                            double HubbleParam) {
+                if (not fp.is_open()) {
+                    std::string errormessage = "[GadgetWriter::write_header] File is not open\n";
+                    throw_error(errormessage);
+                }
+
+                // Mass in 10^10 Msun/h. Assumptions: Boxsize in Mpc/h
+                for (int i = 0; i < 6; i++) {
+                    header.npart[i] = npart_family[i];
+                    header.npartTotal[i] = (unsigned int) npart_family_tot[i];
+                    header.npartTotalHighWord[i] = (unsigned int)(npart_family_tot[i] >> 32);
+                    header.mass[i] = mass_in_1e10_msunh[i];
+                }
                 header.time = aexp;
                 header.redshift = 1.0 / aexp - 1.0;
                 header.flag_sfr = 0;
