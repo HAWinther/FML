@@ -9,8 +9,8 @@ struct Particle {
     double Pos[NDIM];
     double volume{0.0};
     Particle() = default;
-    int get_ndim() { return NDIM; }
-    double get_volume() { return volume; }
+    constexpr int get_ndim() const { return NDIM; }
+    double get_volume() const { return volume; }
     void set_volume(double _volume) { volume = _volume; }
     double * get_pos() { return Pos; }
 };
