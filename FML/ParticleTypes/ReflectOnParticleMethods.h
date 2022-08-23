@@ -85,6 +85,14 @@ decltype(auto) get_NthArgOf(Ts &&... ts) {
         return p.getmethod(args...);                                                                                   \
     }
 
+#define SFINAE_CONSTEXPR_GET(name, getmethod)                                                                          \
+    template <typename T,                                                                                              \
+              typename B = typename std::enable_if<Has##name<T>::value, decltype(&T::getmethod)>::type,                \
+              class... Args>                                                                                           \
+    constexpr auto name(const T & p, Args... args) {                                                                   \
+        return p.getmethod(args...);                                                                                   \
+    }
+
 #define SFINAE_SET(name, setmethod)                                                                                    \
     template <typename T,                                                                                              \
               typename B = typename std::enable_if<Has##name<T>::value, decltype(&T::setmethod)>::type,                \
@@ -97,6 +105,11 @@ decltype(auto) get_NthArgOf(Ts &&... ts) {
     SFINAE_STRUCT(name, getmethod)                                                                                     \
     SFINAE_HAS(name, getmethod)                                                                                        \
     SFINAE_GET(name, getmethod)
+
+#define SFINAE_CONSTEXPR_TEST_GET(name, getmethod)                                                                     \
+    SFINAE_STRUCT(name, getmethod)                                                                                     \
+    SFINAE_HAS(name, getmethod)                                                                                        \
+    SFINAE_CONSTEXPR_GET(name, getmethod)
 
 #define SFINAE_TEST_SET(name, setmethod)                                                                               \
     SFINAE_STRUCT(name, setmethod)                                                                                     \
@@ -164,8 +177,9 @@ namespace FML {
 
         //=====================================================================
         // Dimension we are working in
+        // This should be constexpr to allow for compiletime evaluation of it
         //=====================================================================
-        SFINAE_TEST_GET(GetNDIM, get_ndim)
+        SFINAE_CONSTEXPR_TEST_GET(GetNDIM, get_ndim)
         constexpr int GetNDIM(...) {
             assert_mpi(false, "Particle must have a get_ndim method to signal the dimension");
             return 3;
@@ -334,7 +348,7 @@ namespace FML {
         void info() {
             if (FML::ThisTask == 0) {
                 T tmp{};
-                int N = FML::PARTICLE::GetNDIM(tmp);
+                constexpr int N = FML::PARTICLE::GetNDIM(tmp);
                 std::cout << "\n";
                 std::cout << "#=====================================================\n";
                 std::cout << "#\n";

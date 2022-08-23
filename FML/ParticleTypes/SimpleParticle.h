@@ -14,7 +14,7 @@ struct SimpleParticle {
     double Vel[NDIM];
 
     /// Get the dimension of the position
-    int get_ndim() { return NDIM; }
+    constexpr int get_ndim() const { return NDIM; }
     /// Get a pointer to the position of the particle
     double * get_pos() { return Pos; }
     /// Get a pointer to the velocity of the particle
@@ -46,11 +46,11 @@ struct COLAParticle {
     long long int id;
 
     /// Get the ID of the particle
-    long long int get_id() { return id; }
+    long long int get_id() const { return id; }
     /// Set the ID of the particle
     void set_id(long long int _id) { id = _id; }
     /// Get the dimension of the position
-    constexpr int get_ndim() { return NDIM; }
+    constexpr int get_ndim() const { return NDIM; }
     /// Get a pointer to the position of the particle
     double * get_pos() { return Pos; }
     /// Get a pointer to the velocity of the particle

@@ -12,10 +12,10 @@ class TestParticle {
 
   public:
     
-    constexpr int get_ndim() { return NDIM; }
+    constexpr int get_ndim() const { return NDIM; }
     double * get_pos() { return pos; }
     double * get_vel() { return vel; }
-    size_t get_id() { return id; }
+    size_t get_id() const { return id; }
     void set_id(size_t _id) { id = _id; }
 
     // If the mass is not set here then the fiducial value 1 is used by algorithms
