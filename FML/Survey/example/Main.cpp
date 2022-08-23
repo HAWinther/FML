@@ -20,7 +20,7 @@ struct Galaxy {
 struct Particle {
     double Pos[3];
     double * get_pos() { return Pos; }
-    int get_ndim() { return 3; }
+    constexpr int get_ndim() const { return 3; }
 };
 
 using namespace FML;
@@ -51,6 +51,7 @@ int main() {
     const bool shiftPositions = true;
     const bool scalePositions = true;
     const bool verbose = true;
+    std::vector<double> observer_position;
 
     // Convert galaxies to cartesian coordinates
     std::vector<Particle> particles;
@@ -60,6 +61,7 @@ int main() {
                                                  particles,
                                                  hubble_over_c_of_z,
                                                  boxsize,
+                                                 observer_position,
                                                  shiftPositions,
                                                  scalePositions,
                                                  verbose);

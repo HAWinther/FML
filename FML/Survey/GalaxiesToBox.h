@@ -129,8 +129,7 @@ namespace FML {
             FML::INTERPOLATION::SPLINE::Spline r_of_z_spline(z_arr, r_arr, "r_of_z_spline");
 
             // Fetch ndim from particles and check that we have the right dimensions
-            U utemp;
-            assert_mpi(FML::PARTICLE::GetNDIM(utemp) == 3,
+            assert_mpi(FML::PARTICLE::GetNDIM(U()) == 3,
                        "[EquitorialToCartesianCoordinates] Particles must have ndim = 3");
 
             // Make particles and convert to cartesian coordinates
@@ -153,9 +152,9 @@ namespace FML {
                 const double redshift = FML::PARTICLE::GetRedshift(galaxies_ra_dec_z[i]);
                 const double r = r_of_z_spline(redshift);
 
-                const double cosTheta = std::cos((90.0 - RA) * degrees_to_radial);
-                const double sinTheta = std::sqrt(1.0 - cosTheta * cosTheta);
-                const double phi = DEC * degrees_to_radial;
+                const double cosTheta = std::cos((90.0 - DEC) * degrees_to_radial);
+                const double sinTheta = std::sin((90.0 - DEC) * degrees_to_radial);
+                const double phi = RA * degrees_to_radial;
 
                 const double x = r * sinTheta * std::cos(phi);
                 const double y = r * sinTheta * std::sin(phi);
@@ -205,17 +204,19 @@ namespace FML {
                            std::vector<U> & particles_xyz,
                            std::function<double(double)> & hubble_over_c_of_z,
                            double & boxsize,
+                           std::vector<double> & observer_position,
                            bool shiftPositions,
                            bool scalePositions,
                            bool verbose) {
+
+            observer_position = {0.,0.,0.};
 
             // If we are to scale the positions then they must be shifted so they lie in [0,1)
             if (scalePositions)
                 assert(shiftPositions);
 
             // Fetch ndim from particles and check that we have the right dimensions
-            U utemp;
-            assert_mpi(FML::PARTICLE::GetNDIM(utemp) == 3,
+            assert_mpi(FML::PARTICLE::GetNDIM(U()) == 3,
                        "[GalaxiesToBox] Particles must have ndim = 3                ");
 
 #ifdef USE_MPI
@@ -248,6 +249,7 @@ namespace FML {
             boxsize = (1. + 1e-10) * std::max(std::max(max_x, max_y), max_z);
 
             if (verbose) {
+                std::cout << "Minimum Pos: " << min_x << " " << min_y << " " << min_z << "\n";
                 std::cout << "Maximum Pos: " << max_x << " " << max_y << " " << max_z << "\n";
                 std::cout << "Boxsize: " << boxsize << "\n";
             }
@@ -263,12 +265,18 @@ namespace FML {
                     Pos[0] -= min_x;
                     Pos[1] -= min_y;
                     Pos[2] -= min_z;
+                    observer_position[0] -= min_x;
+                    observer_position[1] -= min_y;
+                    observer_position[2] -= min_z;
                 }
 
                 if (scalePositions) {
                     Pos[0] /= boxsize;
                     Pos[1] /= boxsize;
                     Pos[2] /= boxsize;
+                    observer_position[0] /= boxsize;
+                    observer_position[1] /= boxsize;
+                    observer_position[2] /= boxsize;
                 }
             }
         }
@@ -293,6 +301,8 @@ namespace FML {
         /// @param[out] boxsize The boxsize we need to place the galaxies and randoms in a cubic box.
         /// @param[in] shiftPositions Shift the positions such that all are >=0
         /// @param[in] scalePositions Scale positions so that all are in [0,1). This requires also shifting positions.
+        /// @param[out] observer_position If we don't shift the positions the observer is at (0,0,0). Otherwise we return
+        /// the position of the observer after shifting the box.
         /// @param[in] verbose Print info while doing this.
         ///
         //==============================================================================
@@ -307,16 +317,18 @@ namespace FML {
                                   double & boxsize,
                                   bool shiftPositions,
                                   bool scalePositions,
+                                  std::vector<double> & observer_position,
                                   bool verbose) {
 
             verbose = verbose and FML::ThisTask == 0;
-
             double boxsize1, boxsize2;
 
             GalaxiesToBox(
-                galaxies_ra_dec_z, ngalaxies, galaxies_xyz, hubble_over_c_of_z, boxsize1, false, false, verbose);
-
-            GalaxiesToBox(randoms_ra_dec_z, nrandoms, randoms_xyz, hubble_over_c_of_z, boxsize2, false, false, verbose);
+                galaxies_ra_dec_z, ngalaxies, galaxies_xyz, hubble_over_c_of_z, boxsize1, observer_position, false, false, verbose);
+            GalaxiesToBox(randoms_ra_dec_z, nrandoms, randoms_xyz, hubble_over_c_of_z, boxsize2, observer_position, false, false, verbose);
+            
+            // Set observer position to be at origin
+            observer_position = std::vector<double>(3,0.0);
 
             double max_x = -1e100, max_y = -1e100, max_z = -1e100;
             double min_x = +1e100, min_y = +1e100, min_z = +1e100;
@@ -350,7 +362,7 @@ namespace FML {
             max_z -= min_z;
 
             // The boxsize we use is the maximum of the two
-            boxsize = 1.1 * std::max(std::max(max_x, max_y), max_z);
+            boxsize = 1.05 * std::max(std::max(max_x, max_y), max_z);
 
             if (shiftPositions) {
                 for (auto & p : galaxies_xyz) {
@@ -365,6 +377,9 @@ namespace FML {
                     Pos[1] += min_y;
                     Pos[2] += min_z;
                 }
+                observer_position[0] += min_x;
+                observer_position[1] += min_y;
+                observer_position[2] += min_z;
             }
 
             if (scalePositions) {
@@ -380,10 +395,14 @@ namespace FML {
                     Pos[1] /= boxsize;
                     Pos[2] /= boxsize;
                 }
+                observer_position[0] /= boxsize;
+                observer_position[1] /= boxsize;
+                observer_position[2] /= boxsize;
             }
 
             if (verbose) {
                 std::cout << "Boxsize for boxing galaxies and randoms: " << boxsize << "\n";
+                std::cout << "Observer at ( " << observer_position[0] << " , " << observer_position[1] << " , " << observer_position[2] << ") in code units\n";
             }
         }
     } // namespace SURVEY
