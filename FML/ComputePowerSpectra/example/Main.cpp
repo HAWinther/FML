@@ -25,7 +25,7 @@ struct Particle {
         std::memcpy(x, _x, NDIM * sizeof(double));
         std::memcpy(v, _v, NDIM * sizeof(double));
     }
-    constexpr int get_ndim() { return NDIM; }
+    constexpr int get_ndim() const { return NDIM; }
     double * get_pos() { return x; }
     double * get_vel() { return v; }
 };
