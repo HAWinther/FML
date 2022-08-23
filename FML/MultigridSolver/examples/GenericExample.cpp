@@ -29,6 +29,7 @@ struct MyType {
         }                                                                                                              \
         return *this;                                                                                                  \
     }
+    MyType& operator=(MyType const&) = default;
     OPS(*=);
     OPS(/=);
     OPS(+=);
