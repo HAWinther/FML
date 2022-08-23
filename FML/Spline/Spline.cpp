@@ -48,6 +48,9 @@ namespace FML {
                                  const DVector & y,
                                  std::string splinename,
                                  const gsl_interp_type * interpoltype) {
+                // Check that dimensions match
+                if(x.size() != y.size())
+                  throw std::runtime_error("GSLSpline::create The input vectors x, y don't have incompatible lengths!");
                 create(x, y, splinename, interpoltype);
             }
 
@@ -309,6 +312,12 @@ namespace FML {
                                      const DVector2D & z,
                                      std::string splinename,
                                      const gsl_interp2d_type * interpoltype) {
+              
+                // Check that dimensions match
+                bool ok = (x.size() == z.size());
+                ok = ok and (z.size() > 0 ? z[0].size() == y.size() : true);
+                if(not ok)
+                  throw std::runtime_error("GSLSpline2D::create The input vectors x, y, z don't have incompatible lengths!");
                 create(x, y, z, splinename, interpoltype);
             }
 
