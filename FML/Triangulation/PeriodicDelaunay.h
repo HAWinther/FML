@@ -520,8 +520,8 @@ namespace FML {
                 if (buffer_fraction >= 1.0) {
                     buffer_fraction = 1.0 - 1e-10;
                 }
-                T tmp{};
-                assert(tmp.get_ndim() == CGAL_NDIM);
+
+                assert_mpi(FML::PARTICLE::GetNDIM(T()) == CGAL_NDIM, "Dimensions do not match");
 
                 if (FML::ThisTask == 0) {
                     std::cout << "\n";

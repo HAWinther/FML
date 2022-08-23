@@ -16,7 +16,7 @@ struct Particle {
     double x[NDIM];
     Particle() = default;
     Particle(double * _x) { std::memcpy(x, _x, NDIM * sizeof(double)); }
-    int get_ndim() { return NDIM; }
+    constexpr int get_ndim() const { return NDIM; }
     double * get_pos() { return x; }
 
     // If you want the algorithm to store the FoFID in the particle add these methods

@@ -211,8 +211,7 @@ namespace FML {
 
         template <class T>
         void MPIParticles<T>::info() {
-            T tmp{};
-            auto NDIM = FML::PARTICLE::GetNDIM(tmp);
+            auto NDIM = FML::PARTICLE::GetNDIM(T());
             double memory_in_mb = 0;
             for (auto & part : p)
                 memory_in_mb += FML::PARTICLE::GetSize(part);
@@ -531,8 +530,7 @@ namespace FML {
 #endif
 
             // Total number of particles
-            T tmp{};
-            int ndim = FML::PARTICLE::GetNDIM(tmp);
+            constexpr int ndim = FML::PARTICLE::GetNDIM(T());
             NpartTotal = FML::power(Npart_1D, ndim);
             NpartLocal_in_use = Local_Npart_1D * FML::power(Npart_1D, ndim - 1);
 
@@ -833,8 +831,7 @@ namespace FML {
                 return;
             }
 
-            T tmp;
-            int ndim = FML::PARTICLE::GetNDIM(tmp);
+            int ndim = FML::PARTICLE::GetNDIM(T());
 
             // Compute total bytes to write
             size_t total_bytes_to_write = 0;
@@ -901,8 +898,7 @@ namespace FML {
                 assert_mpi(false, error.c_str());
             }
 
-            T tmp;
-            int ndim_expected = FML::PARTICLE::GetNDIM(tmp);
+            int ndim_expected = FML::PARTICLE::GetNDIM(T());
             int ndim;
 
             // Read header data

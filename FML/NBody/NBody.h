@@ -399,8 +399,7 @@ namespace FML {
                 return;
 
             // Sanity check on particle
-            T tmp{};
-            assert_mpi(FML::PARTICLE::GetNDIM(tmp) == N,
+            assert_mpi(FML::PARTICLE::GetNDIM(T()) == N,
                        "[DriftParticles] NDIM of particles and of grid does not match");
 
             DriftParticles<N, T>(part.get_particles_ptr(), part.get_npart(), delta_time, periodic_box);
@@ -432,8 +431,7 @@ namespace FML {
                 return;
 
             // Sanity check on particle
-            T tmp{};
-            assert_mpi(FML::PARTICLE::GetNDIM(tmp) == N,
+            assert_mpi(FML::PARTICLE::GetNDIM(T()) == N,
                        "[DriftParticles] NDIM of particles and of grid does not match");
             static_assert(FML::PARTICLE::has_get_pos<T>(),
                           "[DriftParticles] Particle class must have a get_pos method to use this method");
@@ -523,8 +521,7 @@ namespace FML {
                 return;
 
             // Sanity check on particle
-            T tmp{};
-            assert_mpi(FML::PARTICLE::GetNDIM(tmp) == N, "[KickParticles] Dimension of particle and grid do not match");
+            assert_mpi(FML::PARTICLE::GetNDIM(T()) == N, "[KickParticles] Dimension of particle and grid do not match");
             static_assert(FML::PARTICLE::has_get_vel<T>(),
                           "[KickParticles] Particle must have velocity to use this method");
 
@@ -774,7 +771,7 @@ namespace FML {
                        "atleast one extra slice on the right");
 
             // Sanity check on particle
-            assert_mpi(FML::PARTICLE::GetNDIM(tmp) == N,
+            assert_mpi(FML::PARTICLE::GetNDIM(T()) == N,
                        "[NBodyInitialConditions] NDIM of particles and of grid does not match");
             assert_mpi(FML::PARTICLE::has_get_pos<T>(),
                        "[NBodyInitialConditions] Particle class must have a get_pos method");

@@ -32,7 +32,7 @@ namespace FML {
             void allocate(int n);
 
             // Add a particle to its corresponding cell in the grid
-            void add(T & p);
+            void add(const T & p);
 
             // Free up memory
             void clear();
@@ -61,7 +61,6 @@ namespace FML {
           private:
             std::vector<Cell<T>> cells{};
             int Ngrid{0};
-            int Ndim{0};
             size_t Npart{0};
 
           public:
@@ -74,8 +73,8 @@ namespace FML {
             void info() const;
 
             // Create the grid
-            void create(std::vector<T> & particles, int ngrid);
-            void create(T * particles, size_t nparticles, int ngrid);
+            void create(const std::vector<T> & particles, int ngrid);
+            void create(const T * particles, size_t nparticles, int ngrid);
 
             // Free up the memory
             void clear();
@@ -117,7 +116,7 @@ namespace FML {
         }
 
         template <class T>
-        void Cell<T>::add(T & p) {
+        void Cell<T>::add(const T & p) {
             ps.push_back(p);
         }
 
@@ -158,19 +157,25 @@ namespace FML {
             double fraction_empty = nempty / double(ntot);
             
             if (FML::ThisTask == 0) {
-                std::cout << "ParticlesInBoxes Ngrid:     " << Ngrid << " Ndim: " << Ndim << "\n";
-                std::cout << "Total elements in grid: " << ntot << "\n";
-                std::cout << "Empty cells:            " << nempty << " = " << int(fraction_empty * 100) << "%\n";
+                constexpr int Ndim = FML::PARTICLE::GetNDIM(T());
+                std::cout << "\n#=====================================================\n";
+                std::cout << "# ParticlesInBoxes Info \n";
+                std::cout << "#=====================================================\n";
+                std::cout << "# Ndim:                    " << Ndim << "\n";
+                std::cout << "# Ngrid:                   " << Ngrid << "\n";
+                std::cout << "# Total particles in grid: " << ntot << "\n";
+                std::cout << "# Empty cells:             " << nempty << " ( " << fraction_empty * 100.0 << "% )\n";
+                std::cout << "#=====================================================\n";
             }
         }
 
         template <class T>
-        void ParticlesInBoxes<T>::create(std::vector<T> & particles, int ngrid) {
+        void ParticlesInBoxes<T>::create(const std::vector<T> & particles, int ngrid) {
             create(particles.data(), particles.size(), ngrid);
         }
 
         template <class T>
-        void ParticlesInBoxes<T>::create(T * particles, size_t nparticles, int ngrid) {
+        void ParticlesInBoxes<T>::create(const T * particles, size_t nparticles, int ngrid) {
             if (nparticles == 0)
                 return;
 
@@ -178,8 +183,8 @@ namespace FML {
                        "[ParticlesInBoxes] Particle class must have positions via a get_pos method");
 
             // Set class data
+            constexpr int Ndim = FML::PARTICLE::GetNDIM(T());
             Ngrid = ngrid;
-            Ndim = particles[0].get_ndim();
             Npart = nparticles;
 
             // Allocate cells
@@ -192,7 +197,7 @@ namespace FML {
 
             // Count number of particles in each cell
             for (size_t i = 0; i < nparticles; i++) {
-                auto * Pos = FML::PARTICLE::GetPos(particles[i]);
+                const auto * Pos = FML::PARTICLE::GetPos(const_cast<T&>(particles[i]));
 
                 // Index of cell particle belong to
                 size_t index = 0;
@@ -215,7 +220,8 @@ namespace FML {
 
             // Add particles to cell
             for (size_t i = 0; i < nparticles; i++) {
-                auto * Pos = FML::PARTICLE::GetPos(particles[i]);
+                const auto * Pos = FML::PARTICLE::GetPos(const_cast<T&>(particles[i]));
+                //const auto * Pos = FML::PARTICLE::GetPos(particles[i]);
 
                 // Index of cell particle belong to
                 size_t index = 0;

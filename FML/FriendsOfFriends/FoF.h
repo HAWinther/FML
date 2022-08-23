@@ -199,7 +199,7 @@ namespace FML {
             const bool debug = false;
 
             // Some basic checks
-            assert_mpi(part[0].get_ndim() == NDIM,
+            assert_mpi(FML::PARTICLE::GetNDIM(T()) == NDIM,
                        "FriendsOfFriends::The dimensions of particle and method do not match!\n");
 
             // Compute fof search distance

@@ -7,7 +7,7 @@
 const int NDIM = 2;
 struct Particle {
     double Pos[NDIM];
-    int get_ndim() { return NDIM; }
+    constexpr int get_ndim() const { return NDIM; }
     double * get_pos() { return Pos; }
 };
 

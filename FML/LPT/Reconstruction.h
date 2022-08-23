@@ -246,8 +246,7 @@ namespace FML {
                                         double velocity_to_displacement) {
 
             // Fetch how many dimensjons we are working in
-            T tmp;
-            const int N = FML::PARTICLE::GetNDIM(tmp);
+            const int N = FML::PARTICLE::GetNDIM(T());
 
             // Check that velocities really exists (i.e. get_vel is not just set to return a nullptr)
             static_assert(FML::PARTICLE::has_get_pos<T>(),
