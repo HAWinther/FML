@@ -542,5 +542,18 @@ namespace FML {
         }
 #endif
 
+        // Legendre polynomials. Computes P0(mu), P1(mu), ..., Pellmax(mu)
+        std::vector<double> legendre_ell_of_mu_vector(double mu, int ell_max) {
+            std::vector<double> P_ell_array(ell_max + 1);
+            if (ell_max >= 0)
+                P_ell_array[0] = 1.0;
+            if (ell_max >= 1)
+                P_ell_array[1] = mu;
+            for (int ell = 2; ell <= ell_max; ell++)
+                P_ell_array[ell] =
+                    ((2 * ell - 1.) * mu * P_ell_array[ell - 1] - (ell - 1.) * P_ell_array[ell - 2]) / ell;
+            return P_ell_array;
+        }
+
     } // namespace MATH
 } // namespace FML

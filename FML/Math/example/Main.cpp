@@ -26,6 +26,15 @@ int main() {
     int ell = 0;
     double x = 1.0;
     std::cout << "Sph.Bessel " << FML::MATH::j_ell(ell, x) << " = " << sin(x) / x << "\n";
+    
+    //==============================================
+    // Legendre polyomials
+    //==============================================
+    double mu = 1./3.;
+    auto Pell = FML::MATH::legendre_ell_of_mu_vector(mu, 2);
+    std::cout << "Legendre P0(" << mu << ") = " << Pell[0] << " = "<< 1.0 << " )\n";
+    std::cout << "Legendre P1(" << mu << ") = " << Pell[1] << " = " << mu << " )\n";
+    std::cout << "Legendre P2(" << mu << ") = " << Pell[2] << " = " << (3*mu*mu-1)/2. << " )\n";
 
     //==============================================
     // Airy function

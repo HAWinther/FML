@@ -24,7 +24,7 @@
 #endif
 
 namespace FML {
-   
+
     //===================================================================================
     /// This namespace deals with special math functions and general math algorithms
     /// needed in the library
@@ -70,6 +70,10 @@ namespace FML {
 
         /// Spherical bessel function \f$ j_\ell(x) \f$ from CXX or GSL with fix for very small or large arguments.
         double j_ell(const int ell, const double arg);
+
+        /// Legendre polynomials. Computes an array with \f$ P_0(\mu), P_1(\mu), ..., P_{ellmax}(\mu) \f$
+        /// using a recursion relation
+        std::vector<double> legendre_ell_of_mu_vector(double mu, int ell_max);
 
 #ifdef USE_GSL
         /// Airy function \f$ {\rm Ai}(x) \f$ (requires GSL). Found by solving and splining \f$ y'' - xy = 0 \f$.
