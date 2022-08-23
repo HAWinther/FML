@@ -25,7 +25,7 @@ namespace FML {
     namespace CORRELATIONFUNCTIONS {
 
         //===========================================================================
-        /// 
+        ///
         /// This namespace deals with paircounting and contains
         /// general auto and cross paircount methods in 1D, 2D or 3D for simulation boxes and survey data
         /// (with randoms). Implemented radial and angular (r,mu). For the latter one can specify the
@@ -113,41 +113,52 @@ namespace FML {
                 // and https://arxiv.org/pdf/astro-ph/9912088.pdf for a comparison
                 if (estimator == "LZ") {
                     // Landy & Szalay 1993
-                    if(R1R2 == 0.0) return 0.0;
+                    if (R1R2 == 0.0)
+                        return 0.0;
                     return (D1D2 + R1R2 - (D1R2 + R1D2)) / R1R2;
                 } else if (estimator == "HAM") {
                     // Hamilton 1993
-                    if(D1R2 == 0.0 or R1D2 == 0.0) return 0.0;
+                    if (D1R2 == 0.0 or R1D2 == 0.0)
+                        return 0.0;
                     return D1D2 * R1R2 / (D1R2 * R1D2) - 1.0;
                 } else if (estimator == "HAM_no_R1") {
-                    if(D1R2 == 0.0) return 0.0;
+                    if (D1R2 == 0.0)
+                        return 0.0;
                     return D1D2 * R1R2 / (D1R2 * D1R2) - 1.0;
                 } else if (estimator == "HAM_no_R2") {
-                    if(R1D2 == 0.0) return 0.0;
+                    if (R1D2 == 0.0)
+                        return 0.0;
                     return D1D2 * R1R2 / (R1D2 * R1D2) - 1.0;
                 } else if (estimator == "HEW") {
                     // Hewett 1982
-                    if(R1R2 == 0.0) return 0.0;
+                    if (R1R2 == 0.0)
+                        return 0.0;
                     return (D1D2 - 0.5 * (D1R2 + R1D2)) / R1R2;
                 } else if (estimator == "HEW_no_R1") {
-                    if(R1R2 == 0.0) return 0.0;
+                    if (R1R2 == 0.0)
+                        return 0.0;
                     return (D1D2 - D1R2) / R1R2;
                 } else if (estimator == "HEW_no_R2") {
-                    if(R1R2 == 0.0) return 0.0;
+                    if (R1R2 == 0.0)
+                        return 0.0;
                     return (D1D2 - R1D2) / R1R2;
                 } else if (estimator == "DP") {
                     // Davis & Peebles 1983
-                    if(D1R2 + R1D2 == 0.0) return 0.0;
+                    if (D1R2 + R1D2 == 0.0)
+                        return 0.0;
                     return D1D2 / (0.5 * (D1R2 + R1D2)) - 1.0;
                 } else if (estimator == "DP_no_R2") {
-                    if(R1D2 == 0.0) return 0.0;
+                    if (R1D2 == 0.0)
+                        return 0.0;
                     return D1D2 / R1D2 - 1.0;
                 } else if (estimator == "DP_no_R1") {
-                    if(D1R2 == 0.0) return 0.0;
+                    if (D1R2 == 0.0)
+                        return 0.0;
                     return D1D2 / D1R2 - 1.0;
                 } else if (estimator == "PH") {
                     // Peebles & Hauser 1974
-                    if(R1R2 == 0.0) return 0.0;
+                    if (R1R2 == 0.0)
+                        return 0.0;
                     return D1D2 / R1R2 - 1.0;
                 } else {
                     throw std::runtime_error(
@@ -510,14 +521,15 @@ namespace FML {
                         if (verbose) {
                             // Progress bar
                             int ntot = num_max / mpi_size;
-                            if(ntot > 0){
-                              if ((10 * num_processed) / ntot != (10 * num_processed + 10) / ntot or num_processed == 0) {
-                                std::cout << (100 * num_processed + 100) / ntot << "% " << std::flush;
-                                if (num_processed == ntot - 1) {
-                                  std::cout << "\nFinished on first task, waiting for the rest to finish\n"
-                                    << std::endl;
+                            if (ntot > 0) {
+                                if ((10 * num_processed) / ntot != (10 * num_processed + 10) / ntot or
+                                    num_processed == 0) {
+                                    std::cout << (100 * num_processed + 100) / ntot << "% " << std::flush;
+                                    if (num_processed == ntot - 1) {
+                                        std::cout << "\nFinished on first task, waiting for the rest to finish\n"
+                                                  << std::endl;
+                                    }
                                 }
-                              }
                             }
                         }
                         num_processed++;
@@ -745,10 +757,10 @@ namespace FML {
                 if constexpr (FML::PARTICLE::has_get_weight<T1>()) {
                     sum1_weights = 0.0;
                     sum1_weights_squared = 0.0;
-                    for (size_t i = 0; i < npart1; i++){
+                    for (size_t i = 0; i < npart1; i++) {
                         double w = FML::PARTICLE::GetWeight(part1[i]);
                         sum1_weights += w;
-                        sum1_weights_squared += w*w;
+                        sum1_weights_squared += w * w;
                     }
                 }
 
@@ -783,7 +795,7 @@ namespace FML {
                         grid1, grid1, binning_function, not cross_pair_counting, rmax, periodic_box, verbose);
                     numpairs = (sum1_weights * sum1_weights - sum1_weights_squared) / 2.0;
                 }
-                
+
                 // Sum up over threads
                 DVector count(nbinstotal, 0.0);
                 for (int j = 0; j < nbinstotal; j++)
@@ -1231,43 +1243,45 @@ namespace FML {
             /// Compute multipoles xi_ell(r) from a spline xi(mu,r)
             /// xiell(r) = (2ell+1) Int Pell(mu)xi(r,mu)dmu / Int dmu
             void FromAngularCorrelationToMultipoles(const DVector & r_array,
-                const Spline2D & xi_mu_r_spline,
-                std::vector<DVector> & multipoles,
-                double mumin = -1.0,
-                double mumax = 1.0){
+                                                    const Spline2D & xi_mu_r_spline,
+                                                    std::vector<DVector> & multipoles,
+                                                    double mumin = -1.0,
+                                                    double mumax = 1.0) {
 
-              // Integration range and number of points
-              // We compute (2ell+1) Int Pell(mu) xi(r,mu) dmu / Int dmu 
-              const int nint = 1000;
+                // Integration range and number of points
+                // We compute (2ell+1) Int Pell(mu) xi(r,mu) dmu / Int dmu
+                const int nint = 1000;
 
-              // Legendre polynomials
-              auto P_ell_of_mu = [](double mu, int ell_max) -> DVector {
-                DVector P_ell_array(ell_max);
-                if(ell_max >= 0)
-                  P_ell_array[0] = 1.0;
-                if(ell_max >= 1)
-                  P_ell_array[1] = mu;
-                for(int ell = 2; ell < ell_max; ell++)
-                  P_ell_array[ell] = ((2*ell-1.) * mu * P_ell_array[ell-1] - (ell-1.)*P_ell_array[ell-2])/ell;
-                return P_ell_array;
-              };
+                // Legendre polynomials
+                auto P_ell_of_mu = [](double mu, int ell_max) -> DVector {
+                    DVector P_ell_array(ell_max);
+                    if (ell_max >= 0)
+                        P_ell_array[0] = 1.0;
+                    if (ell_max >= 1)
+                        P_ell_array[1] = mu;
+                    for (int ell = 2; ell < ell_max; ell++)
+                        P_ell_array[ell] =
+                            ((2 * ell - 1.) * mu * P_ell_array[ell - 1] - (ell - 1.) * P_ell_array[ell - 2]) / ell;
+                    return P_ell_array;
+                };
 
-              // Initialize results
-              multipoles = DVector2D(multipoles.size(), DVector(r_array.size(), 0.0));
+                // Initialize results
+                multipoles = DVector2D(multipoles.size(), DVector(r_array.size(), 0.0));
 
-              // Integrate up using the trapezoidal rule
-              const double dmu = (mumax - mumin) / nint;
-              for (size_t ir = 0; ir < r_array.size(); ir++) {
-                const double r = r_array[ir];
-                for (int i = 0; i < nint; i++) {
-                  const double mu = mumin + (i + 0.5) * dmu;
-                  const double xirmu = xi_mu_r_spline(mu, r);
-                  const auto P_ell_of_mu_array = P_ell_of_mu(mu, multipoles.size());
-                  for(size_t ell = 0; ell < multipoles.size(); ell++){
-                    multipoles[ell][ir] += (2 * ell + 1) * dmu / (mumax-mumin) * xirmu * P_ell_of_mu_array[ell];
-                  }
+                // Integrate up using the trapezoidal rule
+                const double dmu = (mumax - mumin) / nint;
+                for (size_t ir = 0; ir < r_array.size(); ir++) {
+                    const double r = r_array[ir];
+                    for (int i = 0; i < nint; i++) {
+                        const double mu = mumin + (i + 0.5) * dmu;
+                        const double xirmu = xi_mu_r_spline(mu, r);
+                        const auto P_ell_of_mu_array = P_ell_of_mu(mu, multipoles.size());
+                        for (size_t ell = 0; ell < multipoles.size(); ell++) {
+                            multipoles[ell][ir] +=
+                                (2 * ell + 1) * dmu / (mumax - mumin) * xirmu * P_ell_of_mu_array[ell];
+                        }
+                    }
                 }
-              }
             }
 
         } // namespace PAIRCOUNTS
