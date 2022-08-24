@@ -1,5 +1,7 @@
 # FML
 
+24/08/22: I removed all the TestData from the repository history as it was so large. Will add this back in a submodel soon.
+
 For documentation and more info about the library see the [website](https://fml.wintherscoming.no/). See also the [Doxygen documentation](https://fml.wintherscoming.no/doxygen/).
 
 # About
