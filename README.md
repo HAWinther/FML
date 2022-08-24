@@ -1,8 +1,11 @@
 # FML
 
-24/08/22: I removed all the TestData from the repository history as it was so large. Will add this back in a submodel soon.
-
 For documentation and more info about the library see the [website](https://fml.wintherscoming.no/). See also the [Doxygen documentation](https://fml.wintherscoming.no/doxygen/).
+
+If you want the test-data (~50MB) that is needed for some the example uses of the library then clone the repository using --recursive
+```
+git clone --recursive https://github.com/HAWinther/FML/
+```
 
 # About
 A C++ library for working with particles and grids and solving PDEs in parallel with up to thousands of tasks. The library uses MPI, OpenMP (or both) for the parallelization, though everything also works without a MPI compiler. We take care of most of the communication between tasks under the cover so the user don't have to deal too much with that. It is made mainly for analyzing the large scale structure of the Universe, but it is written in general so it can be useful outside of cosmology. It is not meant to be a replacement for common cosmology codes that does similar things (like initial condition generation, simple N-body simuations, halo and void finders, reconstruction etc.) although these things are very easy to do with the library. The goal of the library is rather provide users with the basic tools needed to working in parallel so that one don't have to start by making the tools before doing the science. The philosophy of the library is to implement general algorithms without making (too many) assumptions about how they are to be used and let the user take all these decitions thus making it easier to do new things without having to modify the whole code. The classes we provide are therefore templated on dimension (well knowing that nobody is going to use it for anything else than N=2 or N=3) and the types and the algorithms are templated on classes that determine how to process and compile up the data it computes. To be able to do Fourier transforms we settle for a simple slab-based domain decomposition for the parallelization. The library contains algorithms for assigning particles to grids, linking particles together in groups, general watershed, tesselations, fourier transforms, computing correlation function a general multigrid solver and many more things. We also provide wrappers of methods in libraries like GSL, CGAL and LUA to more easily being able to perform various tasks.
