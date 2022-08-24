@@ -47,7 +47,7 @@ int main() {
     // to allocate compared to the average among tasks
     // NB: if we go over we will reallocate automatically!
     //=========================================================
-    const std::string fileprefix = "../../../TestData/gadget";
+    const std::string fileprefix = "../../../TestData/ExampleGadgetSnapshot/gadget";
     const bool only_keep_part_in_domain = true;
     const double buffer_factor = 1.0;
     const bool verbose = false;
@@ -58,6 +58,11 @@ int main() {
     auto header = g.get_header();
     size_t NumPartTotal = part.size();
     FML::SumOverTasks(&NumPartTotal);
+   
+    //=========================================================
+    // Print header
+    //=========================================================
+    FML::FILEUTILS::GADGET::print_header_info(header);
 
     //=========================================================
     // The positions are in [0,1]

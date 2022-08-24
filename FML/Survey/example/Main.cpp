@@ -27,18 +27,20 @@ using namespace FML;
 
 int main() {
 
-    // Read ascii file with [RA, DEC, z, w]
-    const std::string filename = "../../../TestData/Randoms.txt";
-    const int ncols = 3;
-    const int nskip_header = 0;
-    const std::vector<int> cols_to_keep{0, 1, 2};
-    auto data = FML::FILEUTILS::read_regular_ascii(filename, ncols, cols_to_keep, nskip_header, 3412304);
+    // Read ascii file with [DEC, RA, z, w]
+    const std::string filename = "../../../TestData/ExampleSurveyData/Randoms_DEC_RA_z.txt";
 
     // Make galaxies
     std::vector<Galaxy> galaxies;
-    for (auto & c : data) {
-        Galaxy g(c[0], c[1], c[2], 1.0);
-        galaxies.push_back(g);
+    auto data = FML::FILEUTILS::loadtxt(filename);
+    for (auto & row : data) {
+      Galaxy g;
+      g.DEC = row[0];
+      g.RA = row[1];
+      g.z = row[2];
+      if(row.size() > 3)
+        g.weight = row[3];
+      galaxies.push_back(g);
     }
     std::cout << "Read: " << galaxies.size() << " galaxies\n";
 

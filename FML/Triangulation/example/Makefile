@@ -78,8 +78,8 @@ endif
 # Object files to be compiled
 #===================================================
 
-VPATH := $(FML_INCLUDE)/FML/Global/
-OBJS = Main.o Global.o
+VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/FileUtils/
+OBJS = Main.o Global.o FileUtils.o
 
 TARGETS := voronoi
 all: $(TARGETS)

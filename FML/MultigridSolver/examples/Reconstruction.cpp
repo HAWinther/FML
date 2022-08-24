@@ -50,12 +50,9 @@ void ReconSolver() {
     // Read ascii file that has the format [x,y,z] and fetch the position
     // (This file has positions in real-space so no recon is needed, but fuck it its just to test it)
     //=================================================================================
-    const std::string filename = "../../../TestData/galaxies_redshiftspace_z0.42.txt"; // Filename of particles
-    const double box = 1024.0;                    // The boxsize of the simulation data
-    const int ncols = 3;                          // Number of columns in file
-    const int nskip_header = 0;                   // Number of header lines to skip
-    const std::vector<int> cols_to_keep{0, 1, 2}; // The columns we want to store
-    auto data = FML::FILEUTILS::read_regular_ascii(filename, ncols, cols_to_keep, nskip_header);
+    const std::string filename = "../../../TestData/galaxies_redshiftspace.txt";
+    const double box = 1024.0; 
+    auto data = FML::FILEUTILS::loadtxt(filename);
 
     //======================================================================
     // Recon option

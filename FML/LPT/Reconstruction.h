@@ -130,7 +130,7 @@ namespace FML {
 
                     // The 1LPT displacement field
                     std::array<FFTWGrid<N>, N> Psi;
-                    from_LPT_potential_to_displacement_vector(phi_1LPT, Psi);
+                    from_LPT_potential_to_displacement_vector<N>(phi_1LPT, Psi);
                     for (int idim = 0; idim < N; idim++) {
                         Psi[idim].communicate_boundaries();
                     }
@@ -140,7 +140,7 @@ namespace FML {
 
                     // Interpolate Psi to particle positions
                     std::array<std::vector<FloatType>, N> Psi_particle_positions;
-                    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions(
+                    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N,T>(
                         Psi, part.get_particles_ptr(), part.get_npart(), Psi_particle_positions, interpolation_method);
                     for (int idim = 0; idim < N; idim++) {
                         Psi[idim].free();

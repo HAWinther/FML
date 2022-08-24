@@ -54,7 +54,7 @@ int main() {
     // so after we are done the particles are distributed among tasks
     // buffer_factor (1.0): If keep_only_particles_in_domain then we allocate this number times the 
     // particles we need (only needed if we want extra capacity in the vector we store the particles in)
-    std::string outfolder = "../../../TestData/";
+    std::string outfolder = "../../../TestData/ExampleRamsesSnapshot/";
     const int output_number = 8;
     const bool keep_only_particles_in_domain = true;
     const double buffer_factor = 1.0;

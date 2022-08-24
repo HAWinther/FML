@@ -16,7 +16,7 @@ MPICC   = mpicxx -std=c++1z -O3 -Wall -Wextra -march=native
 # Use MPI
 USE_MPI          = false
 # Use OpenMP threads
-USE_OMP          = false
+USE_OMP          = true
 # Use the GSL library (Spline, ODESolver)
 USE_GSL          = true
 # Log allocations in the library
@@ -74,8 +74,8 @@ endif
 # Object files to be compiled
 #===================================================
 
-VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/Spline/:$(FML_INCLUDE)/FML/ODESolver/
-OBJS = Main.o Spline.o ODESolver.o Global.o
+VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/Spline/:$(FML_INCLUDE)/FML/ODESolver/:$(FML_INCLUDE)/FML/FileUtils/
+OBJS = Main.o Spline.o ODESolver.o Global.o FileUtils.o
 
 TARGETS := paircount
 all: $(TARGETS)

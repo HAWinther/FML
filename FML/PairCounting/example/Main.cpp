@@ -1,6 +1,7 @@
 #include <FML/PairCounting/PairCount.h>
 #include <FML/Spline/Spline.h>
 #include <FML/Survey/GalaxiesToBox.h>
+#include <FML/FileUtils/FileUtils.h>
 #include <fstream>
 
 using DVector = FML::INTERPOLATION::SPLINE::DVector;
@@ -40,23 +41,15 @@ void ExampleRadialCorrelationFunctionSurvey() {
   //===============================================
   // Helper to read file with [DEC, RA, z, (w) ]
   //===============================================
-  auto readData = [](std::string filename, std::vector<Galaxy> & galaxies, bool with_weigths = false) {
-    std::ifstream fp(filename.c_str());
-    while (1) {
-      double RA, DEC, z, w = 1.0;
-      fp >> DEC;
-      if (fp.eof())
-        break;
-      fp >> RA;
-      fp >> z;
-      if(with_weigths)
-        fp >> w;
-
+  auto readData = [](std::string filename, std::vector<Galaxy> & galaxies) {
+    auto data = FML::FILEUTILS::loadtxt(filename);
+    for(auto & row : data){
       Galaxy g;
-      g.RA = RA;
-      g.DEC = DEC;
-      g.z = z;
-      g.weight = w;
+      g.DEC = row[0];
+      g.RA = row[1];
+      g.z = row[2];
+      if(row.size() > 3)
+        g.weight = row[3];
       galaxies.push_back(g);
     }
   };
@@ -64,14 +57,14 @@ void ExampleRadialCorrelationFunctionSurvey() {
   //===============================================
   // Read galaxies. File have [DEC, RA, z]
   //===============================================
-  std::string filename_galaxies = "../../../TestData/Galaxies.txt";
+  std::string filename_galaxies = "../../../TestData/ExampleSurveyData/Galaxies_DEC_RA_z.txt";
   std::vector<Galaxy> galaxies;
   readData(filename_galaxies, galaxies);
 
   //===============================================
   // Read randoms. File have [DEC, RA, z]
   //===============================================
-  std::string filename_randoms = "../../../TestData/Randoms.txt";
+  std::string filename_randoms = "../../../TestData/ExampleSurveyData/Randoms_DEC_RA_z.txt";
   std::vector<Galaxy> randoms;
   readData(filename_randoms, randoms);
 
@@ -311,29 +304,21 @@ void ExampleCorrelationFunctionMultipoles() {
   // Helper for reading files [x,y,z]
   //===============================================
   auto read = [](std::string filename, std::vector<Particle> & part, double box) {
-    std::ifstream fp(filename);
-    while (1) {
+    auto data = FML::FILEUTILS::loadtxt(filename);
+    for(auto & row : data){
       Particle p;
-      auto Pos = p.get_pos();
-      fp >> Pos[0];
-      if (fp.eof())
-        break;
-      fp >> Pos[1];
-      fp >> Pos[2];
-      Pos[0] /= box;
-      Pos[1] /= box;
-      Pos[2] /= box;
-
+      p.Pos[0] = row[0] / box;
+      p.Pos[1] = row[1] / box;
+      p.Pos[2] = row[2] / box;
       part.push_back(p);
     }
   };
 
-
   //===============================================
   // Catalogues
   //===============================================
-  std::string filename_galaxies = "galaxies_redshiftspace.txt";
-  std::string filename_voids = "voids_realspace.txt";
+  std::string filename_galaxies = "../../../TestData/galaxies_redshiftspace.txt";
+  std::string filename_voids = "../../../TestData/voids_realspace.txt";
   const double box = 1000.0;
   const bool periodic = true;
   const bool verbose = true;

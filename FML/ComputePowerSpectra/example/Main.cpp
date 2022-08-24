@@ -38,7 +38,7 @@ void ExamplesPower() {
     const bool TEST_MULTIPOLES = true;
     const bool TEST_MULTIPOLES_GRID = true;
 
-    const int Nmesh = 32;
+    const int Nmesh = 64;
     const int ell_max = 4;
     const std::string density_assignment_method = "CIC";
     const double box = 1024.0;
@@ -51,11 +51,8 @@ void ExamplesPower() {
 
     // Read ascii file with [x,y,z]
     const std::string filename = "../../../TestData/particles_B1024.txt";
-    const int ncols = 3;
-    const std::vector<int> cols_to_keep{0, 1, 2};
-    const int nskip_header = 0;
-    auto data = FML::FILEUTILS::read_regular_ascii(filename, ncols, cols_to_keep, nskip_header);
-    
+    auto data = FML::FILEUTILS::loadtxt(filename);
+
     // Create particles and scale to [0,1)
     std::vector<Particle> part;
     for (auto & pos : data) {
@@ -63,26 +60,6 @@ void ExamplesPower() {
             x /= box;
         part.push_back(Particle(pos.data()));
     }
-
-    /*
-    // Read file with [x,y,z,vx,vy,vz] 
-    const std::string filename = "../../../TestData/galaxies_realspace_z0.42.txt";
-    const int ncols = 6;
-    const std::vector<int> cols_to_keep{0, 1, 2, 3, 4, 5};
-    const int nskip_header = 0;
-    auto data = FML::FILEUTILS::read_regular_ascii(filename, ncols, cols_to_keep, nskip_header);
-
-    // Create particles and scale to [0,1)
-    std::vector<Particle> part;
-    for (auto & line : data) {
-        double x[3], v[3];
-        for (int i = 0; i < 3; i++) {
-            x[i] = line[i] / box;
-            v[i] = line[3 + i];
-        }
-        part.push_back(Particle(x, v));
-    }
-    */
 
     // Create MPI particles by letting each task keep only the particles that falls in its domain
     FML::PARTICLE::MPIParticles<Particle> p;
@@ -114,7 +91,9 @@ void ExamplesPower() {
         pofk.scale(box);
         if (FML::ThisTask == 0) {
             for (int i = 0; i < pofk.n; i++) {
-                std::cout << pofk.k[i] << " " << pofk.pofk[i] << "\n";
+                std::cout << std::setw(15) << pofk.k[i] << " ";
+                std::cout << std::setw(15) << pofk.pofk[i] << " ";
+                std::cout << "\n";
             }
             std::cout << "\n";
         }
@@ -139,7 +118,9 @@ void ExamplesPower() {
         pofk.scale(box);
         if (FML::ThisTask == 0) {
             for (int i = 0; i < pofk.n; i++) {
-                std::cout << pofk.k[i] << " " << pofk.pofk[i] << "\n";
+                std::cout << std::setw(15) << pofk.k[i] << " ";
+                std::cout << std::setw(15) << pofk.pofk[i] << " ";
+                std::cout << "\n";
             }
             std::cout << "\n";
         }
@@ -162,7 +143,9 @@ void ExamplesPower() {
         pofk.scale(box);
         if (FML::ThisTask == 0) {
             for (int i = 0; i < pofk.n; i++) {
-                std::cout << pofk.k[i] << " " << pofk.pofk[i] << "\n";
+                std::cout << std::setw(15) << pofk.k[i] << " ";
+                std::cout << std::setw(15) << pofk.pofk[i] << " ";
+                std::cout << "\n";
             }
         }
     }
@@ -196,9 +179,9 @@ void ExamplesPower() {
         // Output
         if (FML::ThisTask == 0) {
             for (int i = 0; i < Pells[0].n; i++) {
-                std::cout << Pells[0].k[i] << " ";
+                std::cout << std::setw(15) << Pells[0].k[i] << " ";
                 for (size_t ell = 0; ell < Pells.size(); ell++) {
-                    std::cout << Pells[ell].pofk[i] << " ";
+                    std::cout << std::setw(15) << Pells[ell].pofk[i] << " ";
                 }
                 std::cout << "\n";
             }
@@ -251,9 +234,9 @@ void ExamplesPower() {
         // Output
         if (FML::ThisTask == 0) {
             for (int i = 0; i < Pell[0].n; i++) {
-                std::cout << Pell[0].k[i] << " ";
+                std::cout << std::setw(15) << Pell[0].k[i] << " ";
                 for (size_t ell = 0; ell < Pell.size(); ell++) {
-                    std::cout << Pell[ell].pofk[i] << " ";
+                    std::cout << std::setw(15) << Pell[ell].pofk[i] << " ";
                 }
                 std::cout << "\n";
             }

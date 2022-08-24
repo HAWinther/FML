@@ -26,17 +26,14 @@ void ReadParticlesFromFile(FML::PARTICLE::MPIParticles<Particle> & part) {
     // Read ascii file with [x,y,z]
     const double box = 1024.0;
     const std::string filename = "../../../TestData/particles_B1024.txt";
-    const int ncols = 3;
-    const int nskip_header = 0;
-    const std::vector<int> cols_to_keep{0, 1, 2};
-    auto data = FML::FILEUTILS::read_regular_ascii(filename, ncols, cols_to_keep, nskip_header);
+    auto data = FML::FILEUTILS::loadtxt(filename);
 
     // Create particles and scale to [0,1)
     std::vector<Particle> p;
-    for (auto & pos : data) {
-        for (auto & x : pos)
+    for (auto & row : data) {
+        for (auto & x : row)
             x /= box;
-        p.push_back(Particle(pos.data()));
+        p.push_back(Particle(row.data()));
     }
 
     // Create MPI particles by letting each task keep only the particles that falls in its domain
@@ -74,6 +71,7 @@ int main() {
 
     // Output the points in the grid on task 0 where all eigenvalues are positive
     if (FML::ThisTask == 0) {
+        std::cout << "#              x               y              z               eig1             eig2              eig3\n";
         for (auto real_index : eigenvalues[0].get_real_range()) {
             bool all_positive = true;
             double e[NDIM];
@@ -86,9 +84,9 @@ int main() {
                 auto coord = eigenvalues[0].get_coord_from_index(real_index);
                 auto pos = eigenvalues[0].get_real_position(coord);
                 for (int idim = 0; idim < NDIM; idim++)
-                    std::cout << pos[idim] << " ";
+                    std::cout << std::setw(15) << pos[idim] << " ";
                 for (int idim = 0; idim < NDIM; idim++) {
-                    std::cout << e[idim] << " ";
+                    std::cout << std::setw(15) << e[idim] << " ";
                 }
                 std::cout << "\n";
             }
