@@ -15,10 +15,13 @@
 #include <mpi.h>
 #endif
 
+#ifdef USE_GSL
+#include <FML/Spline/Spline.h>
+#endif
+
 #include <FML/Global/Global.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/ParticlesInBoxes/ParticlesInBoxes.h>
-#include <FML/Spline/Spline.h>
 
 namespace FML {
 
@@ -69,8 +72,10 @@ namespace FML {
             using DVector = std::vector<double>;
             using DVector2D = std::vector<DVector>;
             using DVector3D = std::vector<DVector2D>;
+#ifdef USE_GSL
             using Spline2D = FML::INTERPOLATION::SPLINE::Spline2D;
             using Spline = FML::INTERPOLATION::SPLINE::Spline;
+#endif
 
             // For fiducial parameters
             DVector3D empty_3D_array{};
@@ -1240,6 +1245,7 @@ namespace FML {
                 }
             }
 
+#ifdef USE_GSL
             /// Compute multipoles xi_ell(r) from a spline xi(mu,r)
             /// xiell(r) = (2ell+1) Int Pell(mu)xi(r,mu)dmu / Int dmu
             void FromAngularCorrelationToMultipoles(const DVector & r_array,
@@ -1283,6 +1289,7 @@ namespace FML {
                     }
                 }
             }
+#endif
 
         } // namespace PAIRCOUNTS
     }     // namespace CORRELATIONFUNCTIONS
