@@ -93,18 +93,21 @@ endif
 # Object files to be compiled
 #===================================================
 
-VPATH := $(FML_INCLUDE)/FML/Global/
-OBJS = Main.o Global.o 
+VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/FileUtils/
 
-TARGETS := kdtree
+TARGETS := kdtree test
 all: $(TARGETS)
 .PHONY: all clean
 
 clean:
 	rm -rf $(TARGETS) *.o
 
-kdtree: $(OBJS)
+test: Test.o Global.o
 	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+
+kdtree: Main.o Global.o FileUtils.o
+	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+
 
 %.o: %.cpp 
 	${CC} -c -o $@ $< $(OPTIONS) $(INC) 
