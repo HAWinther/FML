@@ -40,6 +40,9 @@ namespace FML {
 
         /// Python linspace. Generate a lineary spaced array
         DVector linspace(double xmin, double xmax, int num);
+        
+        /// Python logspace. Generate a log spaced array
+        DVector logspace(double xmin, double xmax, int num, double base = 10.0);
 
 #if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || (__cplusplus >= 201703L))
         /// Find roots \f$ f(x) = 0 \f$ using Newtons method. Requires C++17

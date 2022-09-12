@@ -276,6 +276,16 @@ namespace FML {
             res[num - 1] = xmax;
             return res;
         }
+        
+        // Log spaced array ala Python Numpy logspace
+        DVector logspace(double xmin, double xmax, int num, double base) {
+            if(base <= 0.0) throw std::runtime_error("logspace::Cannot have base <= 0.0\n");
+            DVector res = linspace(xmin, xmax, num);
+            for (int i = 0; i < num; i++) {
+                res[i] = std::pow(base, res[i]);
+            }
+            return res;
+        }
 
 #ifdef USE_GSL
         // Airy function implemented as a singleton
@@ -510,8 +520,8 @@ namespace FML {
             const double alpha = nu / sqrtellellp1, a2 = alpha * alpha;
             const double w = alpha * chi * sincKchi, w2 = w * w;
             const double sign = w < 1.0 ? 1.0 : -1.0;
-            double S;
             const double sqrtw2m1 = std::sqrt(sign * (1 - w2));
+            double S{};
             if (sign < 0.0) {
                 if (K == 0.0) {
                     S = (std::atan(1.0 / sqrtw2m1) + sqrtw2m1 - M_PI / 2.);
