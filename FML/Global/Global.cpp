@@ -213,6 +213,9 @@ namespace FML {
                 throw std::runtime_error("Failed to create snapshot folder [" + foldername + "]");
             }
         }
+#ifdef USE_MPI
+        MPI_Barrier(MPI_COMM_WORLD);
+#endif
         return ok;
     }
 
