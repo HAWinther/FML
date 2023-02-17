@@ -1785,7 +1785,7 @@ void NBodySimulation<NDIM, T>::read_ic() {
             }
             std::array<std::vector<FML::GRID::FloatType>, NDIM> displacements;
             FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, T>(
-                psi_1LPT_vector, part.get_particles_ptr(), part.get_npart(), displacements, "CIC");
+                psi_1LPT_vector, part.get_particles_ptr(), part.get_npart(), displacements, ic_reconstruct_assigment_method);
 
             // Assign displacement field to particles
             auto * part_ptr = part.get_particles_ptr();
@@ -1804,6 +1804,8 @@ void NBodySimulation<NDIM, T>::read_ic() {
                     auto * q = FML::PARTICLE::GetLagrangianPos(part_ptr[ind]);
                     for (int idim = 0; idim < NDIM; idim++) {
                         q[idim] = pos[idim] - D[idim];
+                        if(q[idim] <  0.0) q[idim] += 1.0;
+                        if(q[idim] >= 1.0) q[idim] -= 1.0;
                     }
                 }
             }
@@ -1829,8 +1831,9 @@ void NBodySimulation<NDIM, T>::read_ic() {
                     psi_2LPT_vector[idim].communicate_boundaries();
                 }
                 std::array<std::vector<FML::GRID::FloatType>, NDIM> displacements;
+                // We should interpolate it to particle Lagrangian positions, but we interpolate to particles Eulerian position
                 FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, T>(
-                    psi_2LPT_vector, part.get_particles_ptr(), part.get_npart(), displacements, "CIC");
+                    psi_2LPT_vector, part.get_particles_ptr(), part.get_npart(), displacements, ic_reconstruct_assigment_method);
 
                 // Assign displacement field to particles
                 auto * part_ptr = part.get_particles_ptr();
@@ -1841,6 +1844,16 @@ void NBodySimulation<NDIM, T>::read_ic() {
                     auto * D = FML::PARTICLE::GetD_2LPT(part_ptr[ind]);
                     for (int idim = 0; idim < NDIM; idim++) {
                         D[idim] = displacements[idim][ind];
+                    }
+
+                    // Set (approximate) Lagrangian position
+                    if constexpr (FML::PARTICLE::has_get_q<T>()) {
+                        auto * q = FML::PARTICLE::GetLagrangianPos(part_ptr[ind]);
+                        for (int idim = 0; idim < NDIM; idim++) {
+                            q[idim] -= displacements[idim][ind];
+                            if(q[idim] < 0.0) q[idim] += 1.0;
+                            if(q[idim] >= 1.0) q[idim] -= 1.0;
+                        }
                     }
                 }
             }

@@ -278,12 +278,12 @@ if ic_random_field_type == "read_particles" or ic_random_field_type == "read_pha
   -- Density assignment method: NGP, CIC, TSC, PCS, PQS
   -- We use ic_nmesh to set the grid to compute the density field on
   -- NB: this should be equal to the nmesh used to generate the IC (i.e. NpartTot^1/3)
-  ic_reconstruct_assigment_method = "CIC"
-  ic_reconstruct_interlacing = false
+  ic_reconstruct_assigment_method = "PCS"
+  ic_reconstruct_interlacing = true
   -- Smoothing filter to remove small-scale modes (only relevant if for
   -- some reason you want ic_nmesh to be larger than the grid it was created on)
   ic_reconstruct_smoothing_filter = "sharpk"
-  ic_reconstruct_dimless_smoothing_scale = 0.0 /(2.0 * math.pi * 128 / 2)
+  ic_reconstruct_dimless_smoothing_scale = 1.0 /(2.0 * math.pi * ic_nmesh / 2)
 end
 
 ------------------------------------------------------------
