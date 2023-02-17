@@ -231,7 +231,9 @@ ic_random_generator = "GSL"
 ic_fix_amplitude = true
 -- Mirror the phases (for amplitude-fixed simulations)
 ic_reverse_phases = false
--- Type of IC: gaussian, nongaussian, reconstruct_from_particles, read_from_file
+-- Type of IC: gaussian, nongaussian, read_particles, read_phases
+-- read_particles   (read GADGET file and use that for sim - reconstruct LPT fields if COLA) 
+-- read_phases      (read GADGET file and use that to set the phases for the sim)
 ic_random_field_type = "gaussian"
 -- The grid-size used to generate the IC
 ic_nmesh = particle_Npart_1D
@@ -243,7 +245,6 @@ ic_LPT_order = 2
 -- powerspectrum    (file with [k (h/Mph) , P(k) (Mpc/h)^3)])
 -- transferfunction (file with [k (h/Mph) , T(k)  Mpc^2)]
 -- transferinfofile (file containing paths to a bunch of T(k,z) files from CAMB)
--- read_particles   (read GADGET file and use that for sim - reconstruct LPT fields if COLA) 
 ic_type_of_input = "transferinfofile"
 -- Path to the input (NB: for using the example files update the path at the top of the file below)
 ic_input_filename = "input/transfer_infofile_lcdm_nu0.2.txt"
@@ -270,7 +271,7 @@ end
 
 -- For reading IC from an external file
 -- If COLA then we reconstruct the LPT fields 
-if ic_random_field_type == "read_particles" then
+if ic_random_field_type == "read_particles" or ic_random_field_type == "read_phases" then
   -- Path to GADGET files
   ic_reconstruct_gadgetfilepath = "output/snapshot_TestSim_z20.000/gadget_z20.000"
   -- COLA settings to (naively) reconstruct the LPT fields:

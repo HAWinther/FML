@@ -226,7 +226,7 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
         param["ic_fnl_redshift"] = lfp.read_double("ic_fnl_redshift", 0.0, REQUIRED);
     }
 
-    if (param.get<std::string>("ic_random_field_type") == "read_particles") {
+    if (param.get<std::string>("ic_random_field_type") == "read_particles" or param.get<std::string>("ic_random_field_type") == "read_phases") {
         //=============================================================
         // Read particles from file and if COLA reconstruct LPT
         //=============================================================
