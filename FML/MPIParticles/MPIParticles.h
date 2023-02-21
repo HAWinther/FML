@@ -729,8 +729,10 @@ namespace FML {
             }
 
             // Sanity check
-            assert_mpi(NpartLocal_in_use_pre_comm == NpartLocal_in_use + ntot_to_send,
-                      "[MPIParticles::communicate_particles] Number to particles to communicate does not match\n");
+            std::string error = "[MPIParticles::communicate_particles] Number to particles to communicate does not match\n" 
+                      + std::to_string(NpartLocal_in_use_pre_comm) + " vs " + std::to_string(NpartLocal_in_use + ntot_to_send) + "\n";
+            error += "Possible cause is particles not being wrapped inside [0,1) or not communicated after they have moved across boundaries!\n";
+            assert_mpi(NpartLocal_in_use_pre_comm == NpartLocal_in_use + ntot_to_send, error.c_str());
 
             // Allocate send buffer
             std::vector<char> send_buffer(ntot_bytes_to_send);
