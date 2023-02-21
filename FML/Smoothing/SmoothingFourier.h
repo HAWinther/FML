@@ -40,6 +40,26 @@ namespace FML {
                 }
             }
         }
+        
+        template <int N>
+        void custom_smoothing_filter_fourier_space(FFTWGrid<N> & fourier_grid,
+                                                   std::function<double(double)> & custom_filter_of_kBox_squared){
+            // Do the smoothing
+            auto Local_nx = fourier_grid.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                [[maybe_unused]] double kmag2;
+                [[maybe_unused]] std::array<double, N> kvec;
+                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                    fourier_grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                    auto value = fourier_grid.get_fourier_from_index(fourier_index);
+                    value *= custom_filter_of_kBox_squared(kmag2);
+                    fourier_grid.set_fourier_from_index(fourier_index, value);
+                }
+            }
+        }
 
         //===================================================================================
         /// Low-pass filters (tophat, gaussian, sharpk)
