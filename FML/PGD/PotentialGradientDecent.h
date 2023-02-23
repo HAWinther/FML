@@ -13,10 +13,16 @@
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Smoothing/SmoothingFourier.h>
+#include <FML/LPT/DisplacementFields.h>
 #include <FML/NBody/NBody.h>
 
 namespace FML {
   namespace PGD {
+
+    template <int N>
+    using FFTWGrid = FML::GRID::FFTWGrid<N>;
+    template <class T1>
+    using MPIParticles = FML::PARTICLE::MPIParticles<T1>;
 
     //=================================================================================
     /// Applies the potential gradient decent method (1804.00671) to a set of particles
