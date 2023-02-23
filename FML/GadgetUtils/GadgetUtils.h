@@ -97,7 +97,7 @@ namespace FML {
             } GadgetHeader;
             static_assert(sizeof(GadgetHeader) == 256);
 
-            void print_header_info(GadgetHeader & header);
+            void print_header_info(const GadgetHeader & header);
 
             /// Class for reading Gadget files. Checks and corrects for different endian-ness.
             class GadgetReader {

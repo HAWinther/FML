@@ -29,7 +29,7 @@ namespace FML {
 #endif
             }
 
-            void print_header_info(GadgetHeader & header) {
+            void print_header_info(const GadgetHeader & header) {
                 std::cout << "\n";
                 std::cout << "GadgetHeader:\n";
                 std::cout << "aexp          " << header.time << "\n";
