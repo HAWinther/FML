@@ -32,8 +32,10 @@ void output_pofk_for_every_step(NBodySimulation<NDIM, T> & sim) {
     const auto & pofk_cb_every_step = sim.pofk_cb_every_step;
     const auto & pofk_total_every_step = sim.pofk_total_every_step;
     const auto & grav = sim.grav;
+    const auto & grav_ic = sim.grav_ic;
     const auto & transferdata = sim.transferdata;
     const auto & power_initial_spline = sim.power_initial_spline;
+    const auto & ic_use_gravity_model_GR = sim.ic_use_gravity_model_GR;
 
     //=============================================================
     // Output all CMB+baryon Pofk
@@ -72,8 +74,19 @@ void output_pofk_for_every_step(NBodySimulation<NDIM, T> & sim) {
         auto redshift = p.first;
         auto binning = p.second;
         auto pofk_total = [&](double k) {
+            double fac = 1.0;  
+            // If ic_use_gravity_model_GR then transferdata is that of GR so
+            // we need to rescale it with growthfactors
+            if(ic_use_gravity_model_GR){ 
+              double D = grav->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
+              double Dini = grav->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
+              double D_GR = grav_ic->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
+              double Dini_GR = grav_ic->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
+              fac = std::pow((D/Dini) / (D_GR/Dini_GR), 2);
+            }
             if (transferdata)
-                return transferdata->get_total_power_spectrum(k, 1.0 / (1.0 + redshift));
+                return fac * transferdata->get_total_power_spectrum(k, 1.0 / (1.0 + redshift));
+            // If we don't have transfer data we don't have this info so just output 0.0
             return 0.0;
         };
 

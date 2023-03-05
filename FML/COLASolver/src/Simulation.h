@@ -62,6 +62,7 @@ class NBodySimulation {
     /// Everything related to gravity: growth factors, computing forces
     //=============================================================================
     std::shared_ptr<GravityModel<NDIM>> grav;
+    std::shared_ptr<GravityModel<NDIM>> grav_ic;
 
     //=============================================================================
     /// Everything related to linear perturbations, transfer functions, initial pofk
@@ -741,7 +742,6 @@ void NBodySimulation<NDIM, T>::init() {
 
     // If we have a MG model and want exactly the same IC as for LCDM
     // we can supply LCDM P(k) and use the GR growth factors to scale it back
-    std::shared_ptr<GravityModel<NDIM>> grav_ic;
     if (ic_use_gravity_model_GR) {
         grav_ic = std::make_shared<GravityModelGR<NDIM>>(cosmo);
         grav_ic->read_parameters(*parameters);
