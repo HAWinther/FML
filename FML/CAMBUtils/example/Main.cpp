@@ -6,6 +6,7 @@ int main() {
    
     double Omegab = 0.049;
     double OmegaCDM = 0.2637;
+    double OmegaMNu = 0.0;
     double kpivot = 0.05;
     double As = 2.215e-9;
     double ns = 0.966;
@@ -13,7 +14,7 @@ int main() {
 
     // Read all the CAMB transfer function data and spline the functions T_i(k,a) and P_i(k,a)
     std::string infofile = "transfer_infofile.txt";
-    FML::FILEUTILS::LinearTransferData camb(Omegab, OmegaCDM, kpivot, As, ns, h);
+    FML::FILEUTILS::LinearTransferData camb(Omegab, OmegaCDM, OmegaMNu, kpivot, As, ns, h);
     camb.read_transfer(infofile);
 
     // If we only have a single power-spectrum file: read it and spline it

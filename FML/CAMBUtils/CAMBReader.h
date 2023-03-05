@@ -51,6 +51,7 @@ namespace FML {
           private:
             double Omegab{};
             double OmegaCDM{};
+            double OmegaMNu{};
             double kpivot_mpc{};
             double As{};
             double ns{};
@@ -103,8 +104,8 @@ namespace FML {
             int pofk_col_pofk = -1;      // col number of P(k)
 
             LinearTransferData() : fileformat("CAMB") { set_fileformat(fileformat); };
-            LinearTransferData(double Omegab, double OmegaCDM, double kpivot_mpc, double As, double ns, double h)
-                : Omegab(Omegab), OmegaCDM(OmegaCDM), kpivot_mpc(kpivot_mpc), As(As), ns(ns), h(h), fileformat("CAMB") {
+            LinearTransferData(double Omegab, double OmegaCDM, double OmegaMNu, double kpivot_mpc, double As, double ns, double h)
+                : Omegab(Omegab), OmegaCDM(OmegaCDM), OmegaMNu(OmegaMNu), kpivot_mpc(kpivot_mpc), As(As), ns(ns), h(h), fileformat("CAMB") {
                 set_fileformat(fileformat);
             }
 
@@ -154,6 +155,7 @@ namespace FML {
             double get_kpivot_mpc() { return kpivot_mpc; }
             double get_Omegab() { return Omegab; }
             double get_OmegaCDM() { return OmegaCDM; }
+            double get_OmegaMNu() { return OmegaMNu; }
 
             /// Output some sample data
             void output(std::string filename, double a) const;
@@ -619,8 +621,14 @@ namespace FML {
         /// @param[in] a Scalefactor
         //====================================================================
         double LinearTransferData::get_total_transfer_function(double k, double a) const {
-            double z = 1.0 / a - 1.0;
-            return total_transfer_function_spline(z, std::log(k));
+            /// Alternative way (which atleast works for CAMB)  
+            //double z = 1.0 / a - 1.0;
+            //return total_transfer_function_spline(z, std::log(k));
+            return (
+                  Omegab * get_baryon_transfer_function(k, a) 
+                + OmegaCDM * get_cdm_transfer_function(k, a) 
+                + OmegaMNu * get_massive_neutrino_transfer_function(k, a)) /
+                   (Omegab + OmegaCDM + OmegaMNu);
         }
 
         //====================================================================

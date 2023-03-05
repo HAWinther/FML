@@ -853,6 +853,7 @@ void NBodySimulation<NDIM, T>::init() {
         if (not transferdata) {
             transferdata = std::make_shared<LinearTransferData>(cosmo->get_Omegab(),
                                                                 cosmo->get_OmegaCDM(),
+                                                                cosmo->get_OmegaMNu(),
                                                                 cosmo->get_kpivot_mpc(),
                                                                 cosmo->get_As(),
                                                                 cosmo->get_ns(),
