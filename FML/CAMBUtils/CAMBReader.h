@@ -15,34 +15,86 @@ namespace FML {
         using DVector2D = FML::INTERPOLATION::SPLINE::DVector2D;
         using Spline2D = FML::INTERPOLATION::SPLINE::Spline2D;
 
-        /// The format of a CAMB transfer function file
-        struct FileFormatTransferCAMB {
-            // 0: k/h   1: CDM      2: baryon   3: photon  4: nu     5: mass_nu  6: total
-            // 7: no_nu 8: total_de 9: Weyl    10: v_CDM  11: v_b   12: v_b-v_c
-            const int n_transfer_header_lines = 1; // Number of header lines
-            const int ncol_transfer_file = 13;     // Columns in file
-            const int transfer_col_k = 0;          // col number of k
-            const int transfer_col_cdm = 1;        // col number of T_CDM
-            const int transfer_col_baryon = 2;     // col number of T_b
-            const int transfer_col_photon = 3;     // col number of T_photon
-            const int transfer_col_nu = 4;         // col number of T_nu
-            const int transfer_col_mnu = 5;        // col number of T_massive_nu
-            const int transfer_col_total = 6;      // col number of T_total
-            const int transfer_col_nonu = 7;       // col number of T_nonu
-            const int transfer_col_totde = 8;      // col number of T_total_de
-            const int transfer_col_weyl = 9;       // col number of T_weyl
-            const int transfer_col_vcdm = 10;      // col number of T_vcdm
-            const int transfer_col_vb = 11;        // col number of T_vb
-            const int transfer_col_vbvc = 12;      // col number of T_vb - T_vc
+        /// Defines the generic fileformat for transferfiles
+        struct FileFormatTransfer {
+            int n_transfer_header_lines = -1; // Number of header lines
+            int ncol_transfer_file = -1;      // Columns in file
+            int transfer_col_k = -1;          // col number of k
+            int transfer_col_cdm = -1;        // col number of T_CDM
+            int transfer_col_baryon = -1;     // col number of T_b
+            int transfer_col_photon = -1;     // col number of T_photon
+            int transfer_col_nu = -1;         // col number of T_nu
+            int transfer_col_mnu = -1;        // col number of T_massive_nu
+            int transfer_col_total = -1;      // col number of T_total
+            int transfer_col_nonu = -1;       // col number of T_nonu
+            int transfer_col_totde = -1;      // col number of T_total_de
+            int transfer_col_weyl = -1;       // col number of T_weyl
+            int transfer_col_vcdm = -1;       // col number of T_vcdm
+            int transfer_col_vb = -1;         // col number of T_vb
+            int transfer_col_vbvc = -1;       // col number of T_vb - T_vc
         };
 
-        /// The format of a CAMB P(k) file
-        struct FileFormatPowerCAMB {
+        /// Defines the generic fileformat for pofkfiles
+        struct FileFormatPower {
             // 0: k/h   1: P(k)
-            const int n_pofk_header_lines = 1; // Number of header lines
-            const int ncol_pofk_file = 2;      // Columns in file
-            const int pofk_col_k = 0;          // col number of k
-            const int pofk_col_pofk = 1;       // col number of P(k)
+            int n_pofk_header_lines = 1; // Number of header lines
+            int ncol_pofk_file = 2;      // Columns in file
+            int pofk_col_k = 0;          // col number of k
+            int pofk_col_pofk = 1;       // col number of P(k)
+        };
+       
+        /// The format of transferfiles from CAMB
+        FileFormatTransfer camb_transfer_format{
+            .n_transfer_header_lines = 1,
+            .ncol_transfer_file = 13,
+            .transfer_col_k = 0,
+            .transfer_col_cdm = 1,
+            .transfer_col_baryon = 2,
+            .transfer_col_photon = 3,
+            .transfer_col_nu = 4,
+            .transfer_col_mnu = 5,
+            .transfer_col_total = 6,
+            .transfer_col_nonu = 7,
+            .transfer_col_totde = 8,
+            .transfer_col_weyl = 9,
+            .transfer_col_vcdm = 10,
+            .transfer_col_vb = 11,
+            .transfer_col_vbvc = 12
+        };
+
+        /// The format of pofkfiles from CAMB
+        FileFormatPower camb_power_format{
+            .n_pofk_header_lines = 1,
+            .ncol_pofk_file = 2,
+            .pofk_col_k = 0,
+            .pofk_col_pofk = 1
+        };
+        
+        /// The format of transferfiles from CLASS (NB: assumes CLASS run with format=camb)
+        FileFormatTransfer class_transfer_format{
+            .n_transfer_header_lines = 8,
+            .ncol_transfer_file = 7,
+            .transfer_col_k = 0,
+            .transfer_col_cdm = 1,
+            .transfer_col_baryon = 2,
+            .transfer_col_photon = 3,
+            .transfer_col_nu = 4,
+            .transfer_col_mnu = 5,
+            .transfer_col_total = 6,
+            .transfer_col_nonu = -1,
+            .transfer_col_totde = -1,
+            .transfer_col_weyl = -1,
+            .transfer_col_vcdm = -1,
+            .transfer_col_vb = -1,
+            .transfer_col_vbvc = -1
+        };
+
+        /// The format of pofkfiles from CLASS (NB: assumes CLASS run with format=camb)
+        FileFormatPower class_power_format{
+            .n_pofk_header_lines = 4,
+            .ncol_pofk_file = 2,
+            .pofk_col_k = 0,
+            .pofk_col_pofk = 1
         };
 
         /// This class reads transfer/power-spectrum data from the output of a Einstein-Boltzmann solver.
@@ -104,8 +156,9 @@ namespace FML {
             int pofk_col_pofk = -1;      // col number of P(k)
 
             LinearTransferData() : fileformat("CAMB") { set_fileformat(fileformat); };
-            LinearTransferData(double Omegab, double OmegaCDM, double OmegaMNu, double kpivot_mpc, double As, double ns, double h)
-                : Omegab(Omegab), OmegaCDM(OmegaCDM), OmegaMNu(OmegaMNu), kpivot_mpc(kpivot_mpc), As(As), ns(ns), h(h), fileformat("CAMB") {
+            LinearTransferData(std::string fileformat) : fileformat(fileformat) { set_fileformat(fileformat); };
+            LinearTransferData(double Omegab, double OmegaCDM, double OmegaMNu, double kpivot_mpc, double As, double ns, double h, std::string fileformat = "CAMB")
+                : Omegab(Omegab), OmegaCDM(OmegaCDM), OmegaMNu(OmegaMNu), kpivot_mpc(kpivot_mpc), As(As), ns(ns), h(h), fileformat(fileformat) {
                 set_fileformat(fileformat);
             }
 
@@ -178,32 +231,41 @@ namespace FML {
         //====================================================================
         void LinearTransferData::set_fileformat(std::string format) {
             fileformat = format;
+            
+            struct FileFormatTransfer tmp;
+            struct FileFormatPower tmp1;
             if (fileformat == "CAMB") {
-                FileFormatTransferCAMB tmp;
-                n_transfer_header_lines = tmp.n_transfer_header_lines;
-                ncol_transfer_file = tmp.ncol_transfer_file;
-                transfer_col_k = tmp.transfer_col_k;
-                transfer_col_cdm = tmp.transfer_col_cdm;
-                transfer_col_baryon = tmp.transfer_col_baryon;
-                transfer_col_photon = tmp.transfer_col_photon;
-                transfer_col_nu = tmp.transfer_col_nu;
-                transfer_col_mnu = tmp.transfer_col_mnu;
-                transfer_col_total = tmp.transfer_col_total;
-                transfer_col_nonu = tmp.transfer_col_nonu;
-                transfer_col_totde = tmp.transfer_col_totde;
-                transfer_col_weyl = tmp.transfer_col_weyl;
-                transfer_col_vcdm = tmp.transfer_col_vcdm;
-                transfer_col_vb = tmp.transfer_col_vb;
-                transfer_col_vbvc = tmp.transfer_col_vbvc;
-
-                FileFormatPowerCAMB tmp1;
-                n_pofk_header_lines = tmp1.n_pofk_header_lines;
-                ncol_pofk_file = tmp1.ncol_pofk_file;
-                pofk_col_k = tmp1.pofk_col_k;
-                pofk_col_pofk = tmp1.pofk_col_pofk;
+              tmp = camb_transfer_format;
+              tmp1 = camb_power_format;
+            } else if (fileformat == "CLASS") {
+              tmp = class_transfer_format;
+              tmp1 = class_power_format;
             } else {
-                throw std::runtime_error("Fileformat [" + fileformat + "] is unknown");
+                throw std::runtime_error("Fileformat [" + fileformat + "] is unknown. Only CAMB and CLASS implemented.\n");
             }
+
+            // Set transfer format
+            n_transfer_header_lines = tmp.n_transfer_header_lines;
+            ncol_transfer_file = tmp.ncol_transfer_file;
+            transfer_col_k = tmp.transfer_col_k;
+            transfer_col_cdm = tmp.transfer_col_cdm;
+            transfer_col_baryon = tmp.transfer_col_baryon;
+            transfer_col_photon = tmp.transfer_col_photon;
+            transfer_col_nu = tmp.transfer_col_nu;
+            transfer_col_mnu = tmp.transfer_col_mnu;
+            transfer_col_total = tmp.transfer_col_total;
+            transfer_col_nonu = tmp.transfer_col_nonu;
+            transfer_col_totde = tmp.transfer_col_totde;
+            transfer_col_weyl = tmp.transfer_col_weyl;
+            transfer_col_vcdm = tmp.transfer_col_vcdm;
+            transfer_col_vb = tmp.transfer_col_vb;
+            transfer_col_vbvc = tmp.transfer_col_vbvc;
+
+            // Set power format
+            n_pofk_header_lines = tmp1.n_pofk_header_lines;
+            ncol_pofk_file = tmp1.ncol_pofk_file;
+            pofk_col_k = tmp1.pofk_col_k;
+            pofk_col_pofk = tmp1.pofk_col_pofk;
         }
 
         //====================================================================
