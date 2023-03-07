@@ -246,6 +246,7 @@ ic_LPT_order = 2
 -- transferfunction (file with [k (h/Mph) , T(k)  Mpc^2)]
 -- transferinfofile (file containing paths to a bunch of T(k,z) files from CAMB)
 ic_type_of_input = "transferinfofile"
+ic_type_of_input_fileformat = "CAMB" -- CAMB, CLASS (run with format=camb), AXIONCAMB. Easy to add more in CAMBReader.h
 -- Path to the input (NB: for using the example files update the path at the top of the file below)
 ic_input_filename = "input/transfer_infofile_lcdm_nu0.2.txt"
 -- The redshift of the P(k), T(k) we give as input

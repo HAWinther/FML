@@ -206,6 +206,7 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
     param["ic_random_generator"] = lfp.read_string("ic_random_generator", "MT19937", OPTIONAL);
     param["ic_nmesh"] = lfp.read_int("ic_nmesh", 0, REQUIRED);
     param["ic_type_of_input"] = lfp.read_string("ic_type_of_input", "powerspectrum", REQUIRED);
+    param["ic_type_of_input_fileformat"] = lfp.read_string("ic_type_of_input_fileformat", "CAMB", OPTIONAL);
     param["ic_input_filename"] = lfp.read_string("ic_input_filename", "", REQUIRED);
     param["ic_input_redshift"] = lfp.read_double("ic_input_redshift", 0.0, REQUIRED);
     param["ic_fix_amplitude"] = lfp.read_bool("ic_fix_amplitude", true, OPTIONAL);

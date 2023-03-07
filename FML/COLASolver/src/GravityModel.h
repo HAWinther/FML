@@ -204,14 +204,15 @@ class GravityModel {
     //========================================================================
     // Read the transferinfo data from file
     //========================================================================
-    void init_transferdata(std::string transferinfofilename) {
+    void init_transferdata(std::string transferinfofilename, std::string fileformat = "CAMB") {
         transferdata = std::make_shared<LinearTransferData>(cosmo->get_Omegab(),
                                                             cosmo->get_OmegaCDM(),
                                                             cosmo->get_OmegaMNu(),
                                                             cosmo->get_kpivot_mpc(),
                                                             cosmo->get_As(),
                                                             cosmo->get_ns(),
-                                                            cosmo->get_h());
+                                                            cosmo->get_h(),
+                                                            fileformat);
         const bool verbose = false; // For testing
         transferdata->read_transfer(transferinfofilename, verbose);
     }
@@ -225,7 +226,7 @@ class GravityModel {
     virtual void read_parameters(ParameterMap & param) {
         aini = 1.0 / (1.0 + param.get<double>("ic_initial_redshift"));
         if (param.get<std::string>("ic_type_of_input") == "transferinfofile") {
-            init_transferdata(param.get<std::string>("ic_input_filename"));
+            init_transferdata(param.get<std::string>("ic_input_filename"), param.get<std::string>("ic_type_of_input_fileformat", "CAMB"));
         }
         this->scaledependent_growth = this->cosmo->get_OmegaMNu() > 0.0;
     }

@@ -61,6 +61,25 @@ namespace FML {
             .transfer_col_vb = 11,
             .transfer_col_vbvc = 12
         };
+        
+        /// The format of transferfiles from CAMB
+        FileFormatTransfer axioncamb_transfer_format{
+            .n_transfer_header_lines = 1,
+            .ncol_transfer_file = 9,
+            .transfer_col_k = 0,
+            .transfer_col_cdm = 1,
+            .transfer_col_baryon = 2,
+            .transfer_col_photon = 3,
+            .transfer_col_nu = 4,
+            .transfer_col_mnu = 5,
+            .transfer_col_total = 6,
+            .transfer_col_nonu = 7,
+            .transfer_col_totde = 8,
+            .transfer_col_weyl = -1,
+            .transfer_col_vcdm = -1,
+            .transfer_col_vb = -1,
+            .transfer_col_vbvc = -1
+        };
 
         /// The format of pofkfiles from CAMB
         FileFormatPower camb_power_format{
@@ -237,11 +256,14 @@ namespace FML {
             if (fileformat == "CAMB") {
               tmp = camb_transfer_format;
               tmp1 = camb_power_format;
+            } else if (fileformat == "AXIONCAMB") {
+              tmp = axioncamb_transfer_format;
+              tmp1 = camb_power_format;
             } else if (fileformat == "CLASS") {
               tmp = class_transfer_format;
               tmp1 = class_power_format;
             } else {
-                throw std::runtime_error("Fileformat [" + fileformat + "] is unknown. Only CAMB and CLASS implemented.\n");
+                throw std::runtime_error("Fileformat [" + fileformat + "] is unknown. Only CAMB, AXIONCAMB and CLASS implemented. Easy to fix (look at the top of CAMBReader.h and add your format there + in set_fileformat)\n");
             }
 
             // Set transfer format

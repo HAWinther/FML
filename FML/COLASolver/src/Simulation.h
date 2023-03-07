@@ -129,6 +129,7 @@ class NBodySimulation {
 
     // Initial conditions: input file (power-spectrum / transfer functions)
     std::string ic_type_of_input;  // Type of input (powerspectrum, transferfuntion, transferinfofile)
+    std::string ic_type_of_input_fileformat; // Format, CAMB, CLASS (with format=camb), ..., for transfer files 
     std::string ic_input_filename; // The filename
     double ic_input_redshift;      // The redshift of P(k,z) / T(k,z) that we read in
     bool ic_use_gravity_model_GR;  // Input power-spectrum is for LCDM so if MG use LCDM to set the IC
@@ -509,6 +510,7 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
 
     // Initial conditions
     ic_type_of_input = param.get<std::string>("ic_type_of_input");
+    ic_type_of_input_fileformat = param.get<std::string>("ic_type_of_input_fileformat", "CAMB");
     ic_input_filename = param.get<std::string>("ic_input_filename");
     ic_random_field_type = param.get<std::string>("ic_random_field_type");
     ic_input_redshift = param.get<double>("ic_input_redshift");
@@ -540,6 +542,7 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
 
     if (FML::ThisTask == 0) {
         std::cout << "ic_type_of_input                         : " << ic_type_of_input << "\n";
+        std::cout << "ic_type_of_input_fileformat              : " << ic_type_of_input_fileformat << "\n";
         std::cout << "ic_input_filename                        : " << ic_input_filename << "\n";
         std::cout << "ic_random_field_type                     : " << ic_random_field_type << "\n";
         std::cout << "ic_input_redshift                        : " << ic_input_redshift << "\n";
@@ -857,7 +860,8 @@ void NBodySimulation<NDIM, T>::init() {
                                                                 cosmo->get_kpivot_mpc(),
                                                                 cosmo->get_As(),
                                                                 cosmo->get_ns(),
-                                                                cosmo->get_h());
+                                                                cosmo->get_h(),
+                                                                ic_type_of_input_fileformat);
             transferdata->read_transfer(ic_input_filename);
 
             // Make sure the gravity model also gets a pointer to this
