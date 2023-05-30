@@ -24,6 +24,7 @@ class GravityModelDGP final : public GravityModel<NDIM> {
     double smoothing_scale_over_boxsize{0.0};
     bool screening_enforce_largescale_linear{false};
     double screening_linear_scale_hmpc{0.0};
+    double screening_efficiency{1.0};
     
     // For solving the exact equation
     bool solve_exact_equation{false};
@@ -51,6 +52,7 @@ class GravityModelDGP final : public GravityModel<NDIM> {
             if (use_screening_method) {
                 std::cout << "# Enforce correct linear evolution : " << screening_enforce_largescale_linear << "\n";
                 std::cout << "# Scale for which we enforce this  : " << screening_linear_scale_hmpc << " h/Mpc\n";
+                std::cout << "# Screening efficiency             : " << screening_efficiency << "\n";
             }
             std::cout << "#=====================================================\n";
             std::cout << "\n";
@@ -150,6 +152,7 @@ class GravityModelDGP final : public GravityModel<NDIM> {
             const double OmegaM = this->cosmo->get_OmegaM();
             auto screening_function_dgp = [=](double density_contrast) {
                 double fac = 8.0 * OmegaM * std::pow(rcH0_DGP * (GeffOverG(a) - 1.0), 2) * (density_contrast);
+                fac *= screening_efficiency;
                 return fac < 1e-5 ? 1.0 : 2.0 * (std::sqrt(1.0 + fac) - 1) / fac;
             };
 
@@ -240,6 +243,7 @@ class GravityModelDGP final : public GravityModel<NDIM> {
             smoothing_filter = param.get<std::string>("gravity_model_dgp_smoothing_filter");
             screening_enforce_largescale_linear = param.get<bool>("gravity_model_screening_enforce_largescale_linear");
             screening_linear_scale_hmpc = param.get<double>("gravity_model_screening_linear_scale_hmpc");
+            screening_efficiency = param.get<double>("gravity_model_screening_efficiency", 1.0);
         }
         solve_exact_equation = param.get<bool>("gravity_model_dgp_exact_solution");
         if (solve_exact_equation) {
