@@ -93,6 +93,28 @@ if gravity_model == "Geff" then
   gravity_model_geff_geffofa_filename = "GeffoverG_of_a.txt"
 end
 
+-- (m(a),beta(a)) models
+if gravity_model == "mbeta" then 
+  
+  -- The parameters defining m(a) and beta(a)
+  -- In this example implementation we have beta(a) = beta0 a^n, m(a) = m0*H0*a^m
+  -- where (beta0, n, m0, m) are the parameters
+  gravity_model_mbeta_params = {0.5, 0.0, 1e3, -2.0}
+
+  -- Approximate screening model (otherwise linear)
+  gravity_model_screening = true
+  -- Screening efficiency (1.0 is standard)
+  -- This can be used to increase or decrease the amount of screening if using gravity_model_screening
+  gravity_model_screening_efficiency = 1.0
+  -- Combine screeneed solution with linear solution to enforce correct
+  -- linear evolution on large scales
+  gravity_model_screening_enforce_largescale_linear = true
+  -- The fourier scale for which we use the linear solution for k < k*
+  -- and the screened solution for k > k*
+  gravity_model_screening_linear_scale_hmpc = 0.1
+
+end
+
 -- Hu-Sawicky f(R) model
 if gravity_model == "f(R)" then 
   -- f_R0 value
@@ -104,6 +126,9 @@ if gravity_model == "f(R)" then
   gravity_model_fofr_exact_solution = false
   -- Approximate screening model (otherwise linear)
   gravity_model_screening = true
+  -- Screening efficiency (1.0 is standard)
+  -- This can be used to increase or decrease the amount of screening if using gravity_model_screening
+  gravity_model_screening_efficiency = 1.0
   -- Combine screeneed solution with linear solution to enforce correct
   -- linear evolution on large scales
   gravity_model_screening_enforce_largescale_linear = true
@@ -133,6 +158,9 @@ if gravity_model == "Symmetron" then
   gravity_model_symmetron_exact_solution = false
   -- Approximate screening model (otherwise linear)
   gravity_model_screening = false
+  -- Screening efficiency (1.0 is standard)
+  -- This can be used to increase or decrease the amount of screening if using gravity_model_screening
+  gravity_model_screening_efficiency = 1.0
   -- Combine screeneed solution with linear solution to enforce correct
   -- linear evolution on large scales
   gravity_model_screening_enforce_largescale_linear = false
