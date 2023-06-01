@@ -55,7 +55,7 @@ namespace FML {
         /// calculation. The default FoF_Ngrid_max is set in the header. Larger value means more memory needed.
         ///
         //========================================================================================
-        template <class T, int NDIM, class FoFHaloClass = FoFHalo<T, NDIM>>
+        template <class T, int NDIM, class FoFHaloClass>
         void FriendsOfFriends(T * part,
                               size_t NumPart,
                               double linking_length,
@@ -153,8 +153,8 @@ namespace FML {
 
             // Allocate cells
             int np_max = 0;
-            size_t np_total = 0;
-            size_t np_boundary_total = 0;
+            [[maybe_unused]] size_t np_total = 0;
+            [[maybe_unused]] size_t np_boundary_total = 0;
             for (auto & cell : PartCells) {
                 cell.ParticleIndexBoundary = ptr;
                 ptr += cell.np_boundary;
@@ -196,7 +196,7 @@ namespace FML {
             LocalFoFGroups.clear();
             if (NumPart == 0)
                 return;
-            const bool debug = false;
+            [[maybe_unused]] const bool debug = false;
 
             // Some basic checks
             assert_mpi(FML::PARTICLE::GetNDIM(T()) == NDIM,
