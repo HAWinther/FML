@@ -71,7 +71,7 @@ namespace FML {
 
             /// The GADGET header format
             // Do not change the order of the fields below as this is read as one piece of memory from file
-            typedef struct {
+            typedef struct GadgetHeader {
                 // npart[1] gives the number of DM particles in the file, other particle types are ignored
                 unsigned int npart[6]{0, 0, 0, 0, 0, 0};
                 double mass[6]{0., 0., 0., 0., 0., 0.}; // mass[1] gives the particle mass
