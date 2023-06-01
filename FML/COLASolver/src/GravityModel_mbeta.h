@@ -23,7 +23,7 @@ class GravityModelmbeta : public GravityModel<NDIM> {
     double screening_efficiency{1.0};
 
     // Spline for phi(a)/Mpl needed for screening method
-    Spline phi_over_Mpl_of_a_spline;
+    FML::INTERPOLATION::SPLINE::Spline phi_over_Mpl_of_a_spline;
 
   public:
     template <int N>
