@@ -503,29 +503,37 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         }
     }
 
-    // Compute mass-function and output it
-    if (FML::ThisTask == 0) {
-        const int nbins = 30;
-        const double massmin = 1e10;
-        const double massmax = 1e16;
-        std::vector<double> dnofM(nbins), nofM(nbins), logM(nbins);
-        const double dlogM = std::log(massmax / massmin) / double(nbins);
-        for (auto & g : FoFGroups) {
-            int index = int(std::log(g.mass / massmin) / dlogM);
-            if (index >= 0 and index < nbins) {
-                dnofM[index] += 1.0;
-            }
+    // Compute mass-function
+    const int nbins = 30;
+    const double massmin = 1e10;
+    const double massmax = 1e16;
+    std::vector<double> dnofM(nbins,0.0), nofM(nbins,0.0), logM(nbins,0.0);
+    const double dlogM = std::log(massmax / massmin) / double(nbins);
+    for (auto & g : FoFGroups) {
+        int index = int(std::log(g.mass / massmin) / dlogM);
+        if (index >= 0 and index < nbins) {
+            dnofM[index] += 1.0;
         }
-        nofM[nbins - 1] = dnofM[nbins - 1];
-        for (int i = nbins - 2; i >= 0; i--) {
-            nofM[i] = nofM[i + 1] + dnofM[i];
-        }
-        for (int i = 0; i < nbins; i++) {
-            logM[i] = std::log(massmin) + dlogM * (i + 0.5);
-            nofM[i] /= std::pow(simulation_boxsize, NDIM);
-            dnofM[i] /= std::pow(simulation_boxsize, NDIM) * dlogM;
-        }
+    }
+    
+    // Sum over tasks
+    FML::SumArrayOverTasks(dnofM.data(), nbins);
 
+    // Integrate up to get n(M)
+    nofM[nbins - 1] = dnofM[nbins - 1];
+    for (int i = nbins - 2; i >= 0; i--) {
+        nofM[i] = nofM[i + 1] + dnofM[i];
+    }
+
+    // Normalize
+    for (int i = 0; i < nbins; i++) {
+        logM[i] = std::log(massmin) + dlogM * (i + 0.5);
+        nofM[i] /= std::pow(simulation_boxsize, NDIM);
+        dnofM[i] /= std::pow(simulation_boxsize, NDIM) * dlogM;
+    }
+
+    // Output mass-function
+    if (FML::ThisTask == 0) {
         std::string filename = snapshot_folder + "/massfunc_z" + redshiftstring + ".txt";
         std::ofstream fp(filename.c_str());
         if (not fp.is_open()) {

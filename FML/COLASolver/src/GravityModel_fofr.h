@@ -22,6 +22,7 @@ class GravityModelFofR final : public GravityModel<NDIM> {
     bool use_screening_method{true};
     bool screening_enforce_largescale_linear{false};
     double screening_linear_scale_hmpc{0.0};
+    double screening_efficiency{1.0};
 
     // For solving the exact equation
     bool solve_exact_equation{false};
@@ -55,6 +56,7 @@ class GravityModelFofR final : public GravityModel<NDIM> {
             if (use_screening_method) {
                 std::cout << "# Enforce correct linear evolution : " << screening_enforce_largescale_linear << "\n";
                 std::cout << "# Scale for which we enforce this  : " << screening_linear_scale_hmpc << " h/Mpc\n";
+                std::cout << "# Screening efficiency             : " << screening_efficiency << "\n";
             }
             std::cout << "#=====================================================\n";
             std::cout << "\n";
@@ -140,15 +142,15 @@ class GravityModelFofR final : public GravityModel<NDIM> {
                 density_fifth_force.set_fourier_from_index(0, 0.0);
 
         } else if (use_screening_method) {
+               
+            // Critial treshold for screening in Hu-Sawicky (basically 3/2 f_R(a))
+            const double OmegaM = this->cosmo->get_OmegaM();
+            double PhiCrit = 1.5 * fofr0 *
+              std::pow((OmegaM + 4.0 * (1.0 - OmegaM)) / (1.0 / (a * a * a) * OmegaM + 4.0 * (1.0 - OmegaM)), nfofr + 1.0);
 
             // Approximate screening method
-            const double OmegaM = this->cosmo->get_OmegaM();
             auto screening_function_fofr = [=](double PhiNewton) {
-                double PhiCrit =
-                    1.5 * fofr0 *
-                    std::pow((OmegaM + 4.0 * (1.0 - OmegaM)) / (1.0 / (a * a * a) * OmegaM + 4.0 * (1.0 - OmegaM)),
-                             nfofr + 1.0);
-                double screenfac = std::abs(PhiCrit / PhiNewton);
+                double screenfac = std::abs(PhiCrit / PhiNewton) * screening_efficiency;
                 return screenfac > 1.0 ? 1.0 : screenfac;
             };
 
@@ -241,6 +243,7 @@ class GravityModelFofR final : public GravityModel<NDIM> {
         if (use_screening_method) {
             screening_enforce_largescale_linear = param.get<bool>("gravity_model_screening_enforce_largescale_linear");
             screening_linear_scale_hmpc = param.get<double>("gravity_model_screening_linear_scale_hmpc");
+            screening_efficiency = param.get<double>("gravity_model_screening_efficiency", 1.0);
         }
         solve_exact_equation = param.get<bool>("gravity_model_fofr_exact_solution");
         if (solve_exact_equation) {

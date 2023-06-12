@@ -569,7 +569,7 @@ namespace FML {
                 }
 
                 // Loop over all nbor cells
-                double sumweights = 0.0;
+                [[maybe_unused]] double sumweights = 0.0;
                 for (int i = 0; i < widthtondim; i++) {
                     double w = 1.0;
                     std::array<int, N> icoord;
@@ -711,7 +711,7 @@ namespace FML {
                 // Interpolation
                 std::array<double, N> value;
                 value.fill(0.0);
-                double sumweight = 0;
+                [[maybe_unused]] double sumweight = 0;
                 for (int i = 0; i < widthtondim; i++) {
                     double w = 1.0;
                     for (int idim = 0, n = 1; idim < N; idim++, n *= ORDER) {
@@ -857,7 +857,7 @@ namespace FML {
 
                 // Interpolation
                 FloatType value = 0;
-                double sumweight = 0;
+                [[maybe_unused]] double sumweight = 0;
                 for (int i = 0; i < widthtondim; i++) {
                     double w = 1.0;
                     std::array<int, N> icoord;

@@ -1,36 +1,29 @@
-#ifndef GRAVITYMODEL_DGP_HEADER
-#define GRAVITYMODEL_DGP_HEADER
+#ifndef GRAVITYMODEL_MBETA_HEADER
+#define GRAVITYMODEL_MBETA_HEADER
 
 #include "GravityModel.h"
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/LPT/DisplacementFields.h>
-#include <FML/NBody/NBody.h>
 #include <FML/ODESolver/ODESolver.h>
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
 
-#include <FML/MultigridSolver/DGPSolver.h>
-
-/// DGP model
+/// (m(a),beta(a)) model
 template <int NDIM>
-class GravityModelDGP final : public GravityModel<NDIM> {
-  protected:
-    double rcH0_DGP;
-    
-    // For screening method
+class GravityModelmbeta : public GravityModel<NDIM> {
+  
+  // Take in parameters used to define m(a), beta(a)
+  std::vector<double> mbeta_params;
+
+    // For using the screening approximation
     bool use_screening_method{true};
-    std::string smoothing_filter{"tophat"};
-    double smoothing_scale_over_boxsize{0.0};
     bool screening_enforce_largescale_linear{false};
     double screening_linear_scale_hmpc{0.0};
     double screening_efficiency{1.0};
-    
-    // For solving the exact equation
-    bool solve_exact_equation{false};
-    int multigrid_nsweeps_first_step{10};
-    int multigrid_nsweeps{10};
-    double multigrid_solver_residual_convergence{1e-7};
+
+    // Spline for phi(a)/Mpl needed for screening method
+    FML::INTERPOLATION::SPLINE::Spline phi_over_Mpl_of_a_spline;
 
   public:
     template <int N>
@@ -38,8 +31,13 @@ class GravityModelDGP final : public GravityModel<NDIM> {
     using ParameterMap = FML::UTILS::ParameterMap;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
-    GravityModelDGP() : GravityModel<NDIM>("DGP") {}
-    GravityModelDGP(std::shared_ptr<Cosmology> cosmo) : GravityModel<NDIM>(cosmo, "DGP") {}
+    GravityModelmbeta() : GravityModel<NDIM>("mbeta") {}
+    GravityModelmbeta(std::shared_ptr<Cosmology> cosmo)
+        : GravityModel<NDIM>(cosmo, "mbeta")
+
+    {
+        assert(this->get_name() == "mbeta");
+    }
 
     //========================================================================
     // Print some info
@@ -47,7 +45,8 @@ class GravityModelDGP final : public GravityModel<NDIM> {
     void info() const override {
         GravityModel<NDIM>::info();
         if (FML::ThisTask == 0) {
-            std::cout << "# rcH0             : " << rcH0_DGP << "\n";
+            for(size_t i = 0; i < mbeta_params.size(); i++)
+              std::cout << "# Params[" << i << "]        : " << mbeta_params[i] << "\n";
             std::cout << "# Screening method : " << use_screening_method << "\n";
             if (use_screening_method) {
                 std::cout << "# Enforce correct linear evolution : " << screening_enforce_largescale_linear << "\n";
@@ -60,38 +59,47 @@ class GravityModelDGP final : public GravityModel<NDIM> {
     }
 
     //========================================================================
-    // Internal method: the beta function
+    // Internal method: m(a)/H0 and beta(a) and phi(a)/Mpl
     //========================================================================
-    double get_beta_dgp(double a) const {
-        double E = this->cosmo->HoverH0_of_a(a);
-        double dlogHdloga = this->cosmo->dlogHdloga_of_a(a);
-        return 1.0 + 2.0 * rcH0_DGP * E * (1.0 + dlogHdloga / 3.0);
+    double phi_over_mpl_of_a(double a) const {
+        return phi_over_Mpl_of_a_spline(a);
+    }
+    double m_over_H0_of_a(double a) const {
+        return mbeta_params[2] * std::pow(a, mbeta_params[3]); 
+    
+        // For example f(R) would be like this: 
+        // ...with mbeta_params[0] = 1.0/sqrt(6.0), mbeta_params[1] = 0 and mbeta_params[2] = fofr0
+        //double OmegaM = this->cosmo->get_OmegaM();
+        //double OmegaLambda = 1.0 - OmegaM;
+        //double a3 = a * a * a;
+        //double fac = OmegaM / a3 + 4.0 * OmegaLambda;
+        //double fac0 = OmegaM + 4.0 * OmegaLambda;
+        //double mass2 = fac * std::pow(fac / fac0, 2.0) / (2.0 * mbeta_params[2]);
+        //return std::sqrt(mass2);
+    }
+    double beta_of_a(double a) const {
+        return mbeta_params[0] * std::pow(a, mbeta_params[1]); 
+    }
+    double mass_over_H0_squared(double a) const {
+        double moverH0 = m_over_H0_of_a(a);  
+        return moverH0 * moverH0;
     }
 
     //========================================================================
     // Effective newtonian constant
     //========================================================================
     double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0.0) const override {
-        return 1.0 + 1.0 / (3.0 * get_beta_dgp(a));
-    }
-
-    //========================================================================
-    // For the LPT equations there is a modified >= 2LPT factor
-    //========================================================================
-    double source_factor_2LPT(double a, [[maybe_unused]] double koverH0 = 0.0) const override {
-        double betadgp = get_beta_dgp(a);
-        // The base-class contains how to deal with massive neutrinos so we multiply this in
-        // to avoid having to also implement it here
-        return GravityModel<NDIM>::source_factor_2LPT(a, koverH0) *
-               (1.0 - (2.0 * rcH0_DGP * rcH0_DGP * this->cosmo->get_OmegaM()) /
-                          (9.0 * a * a * a * (betadgp * betadgp * betadgp) * (1 + 1.0 / (3.0 * betadgp))));
+        double mass2a2  = a * a * mass_over_H0_squared(a);
+        double koverH02 = koverH0 * koverH0;
+        double beta     = beta_of_a(a);
+        return 1.0 + 2.0 * beta * beta * koverH02 / (koverH02 + mass2a2);
     }
 
     //========================================================================
     // Compute the force DPhi from the density field delta in fourier space
-    // We compute this from D^2 Phi_GR = norm_poisson_equation * delta (GR)
-    // and D^2 phi_DGP = C delta where Phi = Phi_GR + phi_DGP
-    // With screening we compute C as a function of delta
+    // We compute this from D^2 Phi_GR = norm_poisson_equation * delta
+    // and D^2 phi + m^2 phi = C delta where Phi = Phi_GR + phi
+    // With screening C is a function of the newtonian potential
     //========================================================================
     void compute_force(double a,
                        double H0Box,
@@ -101,67 +109,27 @@ class GravityModelDGP final : public GravityModel<NDIM> {
 
         // Compute fifth-force
         const double norm_poisson_equation = 1.5 * this->cosmo->get_OmegaM() * a;
-        auto coupling = [&]([[maybe_unused]] double kBox) { return GeffOverG(a, kBox / H0Box) - 1.0; };
+        auto coupling = [&](double kBox) { return GeffOverG(a, kBox / H0Box) - 1.0; };
         FFTWGrid<NDIM> density_fifth_force;
 
-       if (solve_exact_equation) {
+        if (use_screening_method) {
 
-              // Solve the exact symmetron equation using the multigridsolver (this is slow)
-              // Intended mainly to be used for testing things so not super optimized
-              FFTWGrid<NDIM> density_real = density_fourier;
-              
-              // Get back the real-space density field
-              density_real.fftw_c2r();
-              
-              // Set up the solver, set the settings, and solve the solution
-              const bool verbose = true;
-              DGPSolverCosmology<NDIM, double> mgsolver(this->cosmo->get_OmegaM(), rcH0_DGP, get_beta_dgp(a), H0Box, verbose);
-              mgsolver.set_ngs_steps(multigrid_nsweeps, multigrid_nsweeps, multigrid_nsweeps_first_step);
-              mgsolver.set_epsilon(multigrid_solver_residual_convergence);
-              mgsolver.solve(a, density_real, density_fifth_force);
-
-              // It returns it in real-space so go back to fourier space
-              density_fifth_force.fftw_r2c();
-
-              // Multiply by -k^2 / (1.5 OmegaM a) to go from potential Cphi^2 to "force density"
-              // (defined such that the total force is 1.5 OmegaM a * D( 1/D^2 delta_FF + 1/D^2 delta) )
-              const auto Local_nx = density_fifth_force.get_local_nx();
-              const auto Local_x_start = density_fifth_force.get_local_x_start();
-  #ifdef USE_OMP
-  #pragma omp parallel for
-  #endif
-              for (int islice = 0; islice < Local_nx; islice++) {
-                  [[maybe_unused]] std::array<double, NDIM> kvec;
-                  double kmag2;
-                  for (auto && fourier_index : density_fifth_force.get_fourier_range(islice, islice + 1)) {
-                      if (Local_x_start == 0 and fourier_index == 0)
-                          continue; // DC mode (k=0)
-                      density_fifth_force.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
-                      auto value = density_fifth_force.get_fourier_from_index(fourier_index);
-                      value *= -kmag2 / norm_poisson_equation;
-                      density_fifth_force.set_fourier_from_index(fourier_index, value);
-                  }
-              }
-              // DC mode
-              if (Local_x_start == 0)
-                  density_fifth_force.set_fourier_from_index(0, 0.0);
-
-        } else if (use_screening_method) {
+            // PhiCrit is phi(a) / (Mpl * 2 * beta) and screening-factor is PhiCrit/Phi_N
+            double PhiCrit = phi_over_Mpl_of_a_spline(a) / (2.0 * beta_of_a(a));
 
             // Approximate screening method
-            const double OmegaM = this->cosmo->get_OmegaM();
-            auto screening_function_dgp = [=](double density_contrast) {
-                double fac = 8.0 * OmegaM * std::pow(rcH0_DGP * (GeffOverG(a) - 1.0), 2) * (density_contrast);
-                fac *= screening_efficiency;
-                return fac < 1e-5 ? 1.0 : 2.0 * (std::sqrt(1.0 + fac) - 1) / fac;
+            auto screening_function = [=](double PhiNewton) {
+                double screenfac = std::abs(PhiCrit / PhiNewton) * screening_efficiency;
+                return screenfac > 1.0 ? 1.0 : screenfac;
             };
 
-            FML::NBODY::compute_delta_fifth_force_density_screening(density_fourier,
-                                                                    density_fifth_force,
-                                                                    coupling,
-                                                                    screening_function_dgp,
-                                                                    smoothing_scale_over_boxsize,
-                                                                    smoothing_filter);
+            if (FML::ThisTask == 0)
+                std::cout << "Adding fifth-force for (m(a),beta(a)) model (screening)\n";
+            FML::NBODY::compute_delta_fifth_force_potential_screening(density_fourier,
+                                                                      density_fifth_force,
+                                                                      coupling,
+                                                                      screening_function,
+                                                                      norm_poisson_equation * std::pow(H0Box / a, 2));
 
             // Ensure that the large scales are behaving correctly
             // We set delta_fifth_force => A * (1-f) + B * f
@@ -209,7 +177,9 @@ class GravityModelDGP final : public GravityModel<NDIM> {
 
         } else {
 
-            // No screening - linear equation
+            // No screening - linear evolution
+            if (FML::ThisTask == 0)
+                std::cout << "Adding fifth-force (m(a),beta(a)) models (linear)\n";
             FML::NBODY::compute_delta_fifth_force<NDIM>(density_fourier, density_fifth_force, coupling);
         }
 
@@ -230,28 +200,51 @@ class GravityModelDGP final : public GravityModel<NDIM> {
         FML::NBODY::compute_force_from_density_fourier<NDIM>(
             density_fifth_force, force_real, density_assignment_method_used, norm_poisson_equation);
     }
+    
+    virtual void init() override { 
+      // Here we need to compute and spline phi(a)/Mpl needed for the screening method
+      
+      // Integrand for computing the phi_over_Mpl_of_a_spline = 9 * OmegaM0 * Int_0^a beta(a) / [a^3(m/H0)^2] dloga
+      double OmegaM0 = this->cosmo->get_OmegaM();
+      auto integrand = [=](double a){
+        return 9.0 * OmegaM0 * beta_of_a(a) / (a*a*a * mass_over_H0_squared(a));
+      };
+
+      // Make an a-array, evaluate integral over it and make the spline
+      // This part needs to be tested (how best to evaluate this integral). Might want to do compute logphi maybe? ...
+      const double amin = 0.001;
+      const double amax = 1.0;
+      const int npts    = 10000;
+      std::vector<double> a_array(npts, amin), loga_array(npts, std::log(amin)), phi_array(npts, 0.0);
+      for(size_t i = 1; i < npts; i++){
+        loga_array[i] = std::log(amin) + std::log(amax/amin) * i / double(npts-1);
+        a_array[i]    = std::exp(loga_array[i]);
+        phi_array[i]  = phi_array[i-1] + integrand(a_array[i]) * (loga_array[i] - loga_array[i-1]);
+      }
+      phi_over_Mpl_of_a_spline = Spline(a_array, phi_array, "phi(a)/Mpl spline for m(a),beta(a) models");
+
+      // If we use the power-law model beta(a) = beta0 * a^n and m(a) = m0 * H0 * a^m
+      // then we should ensure that n-4-2m > -1 for the integral to not have an uncurable divergence at a=0
+      FML::assert_mpi(mbeta_params[1] - 4.0 - 2.0 * mbeta_params[3] > -1.0, 
+          "Error in m(a) = m0H0a^m beta(a) = beta0 a^n models: n-4-2m <= -1.0 => phi(a) integral diverges");
+
+      // Important: call base-call initializer in the end
+      GravityModel<NDIM>::init();
+    }
 
     //========================================================================
     // Read the parameters we need
     //========================================================================
     void read_parameters(ParameterMap & param) override {
         GravityModel<NDIM>::read_parameters(param);
-        rcH0_DGP = param.get<double>("gravity_model_dgp_rcH0overc");
+        mbeta_params = param.get<std::vector<double>>("gravity_model_mbeta_params");
         use_screening_method = param.get<bool>("gravity_model_screening");
         if (use_screening_method) {
-            smoothing_scale_over_boxsize = param.get<double>("gravity_model_dgp_smoothing_scale_over_boxsize");
-            smoothing_filter = param.get<std::string>("gravity_model_dgp_smoothing_filter");
             screening_enforce_largescale_linear = param.get<bool>("gravity_model_screening_enforce_largescale_linear");
             screening_linear_scale_hmpc = param.get<double>("gravity_model_screening_linear_scale_hmpc");
             screening_efficiency = param.get<double>("gravity_model_screening_efficiency", 1.0);
         }
-        solve_exact_equation = param.get<bool>("gravity_model_dgp_exact_solution");
-        if (solve_exact_equation) {
-            multigrid_nsweeps_first_step = param.get<int>("multigrid_nsweeps_first_step");
-            multigrid_nsweeps = param.get<int>("multigrid_nsweeps");
-            multigrid_solver_residual_convergence = param.get<double>("multigrid_solver_residual_convergence");
-        }
-        this->scaledependent_growth = this->cosmo->get_OmegaMNu() > 0.0;
+        this->scaledependent_growth = true;
     }
 };
 

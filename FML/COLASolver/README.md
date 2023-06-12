@@ -119,3 +119,11 @@ We require FFTW3, GSL and LUA. LUA is only for reading the parameterfiles.
 # Caveats
 
 Everything in this code is not properly tested so use it with care and make sure you test it. The code itself should be correct - well tested - but all the different models and options makes it likely some mistake is still there. There are also some things not implemented that in principle should be there like all the higher order LPT functions for models beyond LCDM (which should have very small effects though so its not a huge deal).
+
+# Contributors
+
+Many people have helped improve the code, here is a list of a few:
+
+* Bartolomeo Fiorini
+
+* Guilherme Brando

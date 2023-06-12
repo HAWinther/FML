@@ -65,7 +65,7 @@ class GravityModelGeff : public GravityModel<NDIM> {
         this->scaledependent_growth = this->cosmo->get_OmegaMNu() > 0.0;
     }
     
-    virtual void init() {
+    virtual void init() override {
       // Read file with [a,Geff/G(a)] and spline it
       std::ifstream fp(geffofa_filename.c_str());
       FML::assert_mpi(fp.good(), "GeffG file count not be opened\n");

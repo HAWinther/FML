@@ -85,6 +85,24 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
         if (param.get<std::string>("gravity_model") == "Geff") {
             param["gravity_model_geff_geffofa_filename"] = lfp.read_string("gravity_model_geff_geffofa_filename", "", REQUIRED);
         }
+        
+        //=============================================================
+        // (m(a),beta(a)) model
+        //=============================================================
+        if (param.get<std::string>("gravity_model") == "mbeta") {
+            param["gravity_model_mbeta_params"] = lfp.read_number_array<double>("gravity_model_mbeta_params", {}, REQUIRED);
+
+            // Screening approximation
+            param["gravity_model_screening"] = lfp.read_bool("gravity_model_screening", true, OPTIONAL);
+            if (param.get<bool>("gravity_model_screening")) {
+                param["gravity_model_screening_enforce_largescale_linear"] =
+                    lfp.read_bool("gravity_model_screening_enforce_largescale_linear", false, OPTIONAL);
+                param["gravity_model_screening_linear_scale_hmpc"] =
+                    lfp.read_double("gravity_model_screening_linear_scale_hmpc", 0.05, OPTIONAL);
+                param["gravity_model_screening_efficiency"] =
+                    lfp.read_double("gravity_model_screening_efficiency", 1.0, OPTIONAL);
+            }
+        }
 
         //=============================================================
         // f(R) model
@@ -100,6 +118,8 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
                     lfp.read_bool("gravity_model_screening_enforce_largescale_linear", false, OPTIONAL);
                 param["gravity_model_screening_linear_scale_hmpc"] =
                     lfp.read_double("gravity_model_screening_linear_scale_hmpc", 0.05, OPTIONAL);
+                param["gravity_model_screening_efficiency"] =
+                    lfp.read_double("gravity_model_screening_efficiency", 1.0, OPTIONAL);
             }
 
             // Solving the exact equation

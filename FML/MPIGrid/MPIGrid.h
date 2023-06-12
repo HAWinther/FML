@@ -556,7 +556,7 @@ namespace FML {
         }
 
         template <int NDIM, class T>
-        void MPIGrid<NDIM, T>::send_slice_right(int ix, std::vector<T> & recv_slice) {
+        void MPIGrid<NDIM, T>::send_slice_right([[maybe_unused]] int ix, [[maybe_unused]] std::vector<T> & recv_slice) {
             if (FML::NTasks == 1)
                 return;
 
@@ -587,7 +587,7 @@ namespace FML {
         }
 
         template <int NDIM, class T>
-        void MPIGrid<NDIM, T>::send_slice_left(int ix, std::vector<T> & recv_slice) {
+        void MPIGrid<NDIM, T>::send_slice_left([[maybe_unused]] int ix, [[maybe_unused]] std::vector<T> & recv_slice) {
             if (FML::NTasks == 1)
                 return;
 
