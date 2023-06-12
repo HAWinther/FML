@@ -34,7 +34,7 @@ class CosmologyJBD final : public Cosmology {
         // Neutrino density parameter
         OmegaNuh2 = OmegaNu * h * h;
         // Convert computed neutrino mass to the value we want
-        Mnu_eV = Mnu_eV * (OmegaNu / OmegaMNu) * (OmegaMNuh2 / OmegaNuh2);
+        Mnu_eV = Mnu_eV == 0.0 ? 0.0 : Mnu_eV * (OmegaNu / OmegaMNu) * (OmegaMNuh2 / OmegaNuh2); // avoid NaN without massive neutrinos
     }
 
     //========================================================================
