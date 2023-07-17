@@ -49,11 +49,6 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
     //=============================================================
     if (param.get<std::string>("cosmology_model") == "JBD") {
         param["cosmology_JBD_wBD"] = lfp.read_double("cosmology_JBD_wBD", 10000.0, REQUIRED);
-        param["cosmology_JBD_OmegaLambdah2"] = lfp.read_double("cosmology_JBD_OmegaLambdah2", 0.0, REQUIRED);
-        param["cosmology_JBD_OmegaCDMh2"] = lfp.read_double("cosmology_JBD_OmegaCDMh2", 0.0, REQUIRED);
-        param["cosmology_JBD_OmegaKh2"] = lfp.read_double("cosmology_JBD_OmegaKh2", 0.0, REQUIRED);
-        param["cosmology_JBD_OmegaMNuh2"] = lfp.read_double("cosmology_JBD_OmegaMNuh2", 0.0, REQUIRED);
-        param["cosmology_JBD_Omegabh2"] = lfp.read_double("cosmology_JBD_Omegabh2", 0.0, REQUIRED);
         param["cosmology_JBD_GeffG_today"] = lfp.read_double("cosmology_JBD_GeffG_today", 1.0, OPTIONAL);
     }
 

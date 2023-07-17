@@ -19,20 +19,18 @@ class CosmologyJBD final : public Cosmology {
     //========================================================================
     void read_parameters(ParameterMap & param) override {
         Cosmology::read_parameters(param);
-        Omegabh2 = param.get<double>("cosmology_JBD_Omegabh2");
-        OmegaMNuh2 = param.get<double>("cosmology_JBD_OmegaMNuh2");
-        OmegaKh2 = param.get<double>("cosmology_JBD_OmegaKh2");
-        OmegaCDMh2 = param.get<double>("cosmology_JBD_OmegaCDMh2");
-        OmegaLambdah2 = param.get<double>("cosmology_JBD_OmegaLambdah2");
         wBD = param.get<double>("cosmology_JBD_wBD");
         GeffG_today = param.get<double>("cosmology_JBD_GeffG_today");
 
-        // We have computed OmegaR/Nu in the base class so convert to physical parameters
-        // (and it does not matter what value of h we used for these as long as we use the same here)
-        // Compute photon density parameter
+        // Convert to physical density parameters
+        Omegabh2 = Omegab * h * h;
+        OmegaMNuh2 = OmegaMNu * h * h;
+        OmegaKh2 = OmegaK * h * h;
+        OmegaCDMh2 = OmegaCDM * h * h;
+        OmegaLambdah2 = OmegaLambda * h * h;
         OmegaRh2 = OmegaR * h * h;
-        // Neutrino density parameter
         OmegaNuh2 = OmegaNu * h * h;
+
         // Convert computed neutrino mass to the value we want
         Mnu_eV = Mnu_eV == 0.0 ? 0.0 : Mnu_eV * (OmegaNu / OmegaMNu) * (OmegaMNuh2 / OmegaNuh2); // avoid NaN without massive neutrinos
     }
