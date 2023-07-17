@@ -24,9 +24,64 @@ class CosmologyJBD final : public Cosmology {
     }
 
     //========================================================================
-    // Initialize the cosmology
+    // Initialize the cosmology (b-searching/shooting phi_ini and OmegaLambda)
     //========================================================================
     void init() override {
+        // The value we shoot for
+        const double desired_phi_today_over_phi0 = 1.0 / GeffG_today;
+
+        // Find the correct initial condition
+        const double epsilon{1e-8};
+        double philow = 0.0;
+        double phihigh = desired_phi_today_over_phi0;
+        double logphi_ini{};
+        int istep = 0;
+        while (istep < 1000) {
+            ++istep;
+
+            // Current value for phi
+            const double phinow = (philow + phihigh) / 2.0;
+            logphi_ini = std::log(phinow);
+
+            // Solve cosmology for current (phi_ini, OmegaLambda)
+            init(logphi_ini, OmegaLambda);
+
+            // Check for convergence
+            double logphi_today = logphi_of_loga_spline(0.0);
+            const double phi_today_over_phi0 = std::exp(logphi_today);
+            if (std::fabs(phi_today_over_phi0 / desired_phi_today_over_phi0 - 1.0) < epsilon) { // TODO: check E0 = 1 here, too (instead of down below)
+                break;
+            }
+
+            // Bisection step
+            if (phi_today_over_phi0 < desired_phi_today_over_phi0) {
+                philow = phinow;
+            } else {
+                phihigh = phinow;
+            }
+
+            // Refine guess for OmegaLambda, assuming closure condidtion (E0 = 1) converges to a good value
+            double dlogphi_dloga = logphi_of_loga_spline.deriv_x(0.0);
+            double OmegaPhi = -dlogphi_dloga + wBD/6 * dlogphi_dloga * dlogphi_dloga;
+            OmegaLambda = 1.0 - OmegaM - OmegaRtot - OmegaK - OmegaPhi;
+        }
+
+        if (istep < 1000 && FML::ThisTask == 0) {
+            std::cout << "JBD::init Convergence of solution found after " << istep << " iterations:\n";
+            std::cout << "          Found phi_ini = " << std::exp(logphi_ini) << "\n";
+            std::cout << "          Found OmegaLambda = " << OmegaLambda << "\n";
+            std::cout << "          Testing spline H(a=1)/H0 = " << HoverH0_of_a(1.0) << "\n";
+            FML::assert_mpi(std::fabs(HoverH0_of_a(1.0) - 1.0) < 1e-5,
+                            "JBD H(a=1)/H0 is not unity. Something went wrong");
+        } else {
+            throw std::runtime_error("JBD::init Failed to converge");
+        }
+    };
+
+    //========================================================================
+    // Initialize the cosmology (for particular phi_ini and OmegaLambda)
+    //========================================================================
+    void init(double logphi_ini, double OmegaLambda) {
         Cosmology::init();
 
         // Start deep in the radiation era
@@ -78,50 +133,6 @@ class CosmologyJBD final : public Cosmology {
             ode.solve(deriv, loga_arr, ini);
             return ode.get_data_by_component(0);
         };
-
-        auto find_correct_IC_using_bisection = [&](double _desired_phi_today_over_phi0) {
-            // Find the correct initial condition
-            const double epsilon{1e-8};
-            double philow = 0.0;
-            double phihigh = _desired_phi_today_over_phi0;
-            double _logphi_ini{};
-            int istep = 0;
-            while (istep < 1000) {
-                ++istep;
-
-                // Current value for phi
-                const double phinow = (philow + phihigh) / 2.0;
-                _logphi_ini = std::log(phinow);
-
-                // Solve ODE
-                const auto logphi_arr = solve_ode(_logphi_ini, 0.0);
-                const double logphi_today = logphi_arr[npts_loga - 1];
-                FML::assert_mpi(std::fabs(loga_arr[npts_loga - 1] - 0.0) < 1e-5,
-                                "We assume below that the element loga_arr[npts_loga-1] is 0.0... its not!");
-
-                // Check for convergence
-                const double phi_today_over_phi0 = std::exp(logphi_today);
-                if (std::fabs(phi_today_over_phi0 / _desired_phi_today_over_phi0 - 1.0) < epsilon) {
-                    std::cout << "JBD::init Convergence of solution found after " << istep << " iterations\n";
-                    return _logphi_ini;
-                }
-
-                // Bisection step
-                if (phi_today_over_phi0 < _desired_phi_today_over_phi0) {
-                    philow = phinow;
-                } else {
-                    phihigh = phinow;
-                }
-            }
-            throw std::runtime_error("JBD::init Failed to converge");
-            return _logphi_ini;
-        };
-
-        // The value we shoot for
-        const double desired_phi_today_over_phi0 = 1.0 / GeffG_today;
-
-        // Find the initial value that gives this value today
-        const double logphi_ini = find_correct_IC_using_bisection(desired_phi_today_over_phi0);
 
         // Solve the ODE for this initial value and make splines
         auto logphi_arr = solve_ode(logphi_ini, 0.0);
