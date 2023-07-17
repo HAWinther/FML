@@ -39,7 +39,7 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
     param["cosmology_Omegab"] = lfp.read_double("cosmology_Omegab", 0.0, REQUIRED);
     param["cosmology_OmegaMNu"] = lfp.read_double("cosmology_OmegaMNu", 0.0, OPTIONAL);
     param["cosmology_OmegaCDM"] = lfp.read_double("cosmology_OmegaCDM", 0.0, REQUIRED);
-    param["cosmology_OmegaLambda"] = lfp.read_double("cosmology_OmegaLambda", 0.0, REQUIRED);
+    param["cosmology_OmegaK"] = lfp.read_double("cosmology_OmegaK", 0.0, REQUIRED);
     param["cosmology_Neffective"] = lfp.read_double("cosmology_Neffective", 3.046, REQUIRED);
     param["cosmology_TCMB_kelvin"] = lfp.read_double("cosmology_TCMB_kelvin", 2.7255, REQUIRED);
     param["cosmology_h"] = lfp.read_double("cosmology_h", 0.0, REQUIRED);

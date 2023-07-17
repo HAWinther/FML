@@ -160,7 +160,7 @@ class Cosmology {
         OmegaMNu = param.get<double>("cosmology_OmegaMNu");
         Omegab = param.get<double>("cosmology_Omegab");
         OmegaCDM = param.get<double>("cosmology_OmegaCDM");
-        OmegaLambda = param.get<double>("cosmology_OmegaLambda");
+        OmegaK = param.get<double>("cosmology_OmegaK");
         OmegaM = Omegab + OmegaCDM + OmegaMNu;
         h = param.get<double>("cosmology_h");
         As = param.get<double>("cosmology_As");
@@ -191,15 +191,11 @@ class Cosmology {
         // Total radiation density (in the early Universe)
         OmegaRtot = OmegaR + OmegaNu;
 
-        // Curvature is whats left. Just set it to 0 if its super small
-        OmegaK = 1.0 - OmegaM - OmegaRtot - OmegaLambda;
-        if (std::fabs(OmegaK) < 1e-5) {
-            OmegaLambda -= OmegaK;
-            OmegaK = 0.0;
-        }
+        // Cosmological constant is whats left
+        OmegaLambda = 1.0 - OmegaM - OmegaRtot - OmegaK;
 
         // Well to be super precise its really (to avoid overcounting the neutrinos today which are matter):
-        // OmegaK = 1.0 - (OmegaLambda + OmegaR + OmegaCDM + Omegab + OmegaNu * F(y_today)/F(0));
+        // OmegaLambda = 1.0 - (OmegaK + OmegaR + OmegaCDM + Omegab + OmegaNu * F(y_today)/F(0));
     }
 
     //========================================================================
