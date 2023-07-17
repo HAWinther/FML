@@ -41,9 +41,9 @@ class CosmologyJBD final : public Cosmology {
             OmegaLambda = 1.0 - OmegaM - OmegaRtot - OmegaK - OmegaPhi; // equivalent to E0 == 1
 
             // Solve cosmology for current (phi_ini, OmegaLambda) and record phi and its derivative today
-            init(logphi_ini, OmegaLambda);
-            double phi_today = std::exp(logphi_of_loga_spline(0.0)); // TODO: use get_phi
-            double dlogphi_dloga_today = logphi_of_loga_spline.deriv_x(0.0); // TODO: create and use get_phi_derivative or something
+            init_current();
+            double phi_today = phi_of_a(1.0);
+            double dlogphi_dloga_today = dlogphi_dloga_of_a(1.0);
             OmegaPhi = -dlogphi_dloga_today + wBD/6 * dlogphi_dloga_today * dlogphi_dloga_today; // defined so sum_i Omega_i == 1
 
             // Check for convergence (phi_today == phi_today_target and E0 == 1) TODO: generalize to G/G != 1
@@ -145,13 +145,12 @@ class CosmologyJBD final : public Cosmology {
     }
 
     //========================================================================
-    // Hubble function
+    // Spline evaluation wrappers (for Hubble function and scalar field)
     //========================================================================
     double HoverH0_of_a(double a) const override { return std::exp(logE_of_loga_spline(std::log(a))); }
     double dlogHdloga_of_a(double a) const override { return logE_of_loga_spline.deriv_x(std::log(a)); }
-
-    // The JBD scalar normalized such that 1/phi_today = GeffG_today
-    double get_phi(double a) { return std::exp(logphi_of_loga_spline(std::log(a))); }
+    double phi_of_a(double a) { return std::exp(logphi_of_loga_spline(std::log(a))); } // normalized to 1/phi_today = GeffG_today
+    double dlogphi_dloga_of_a(double a) { return logphi_of_loga_spline.deriv_x(std::log(a)); }
 
   protected:
     //========================================================================

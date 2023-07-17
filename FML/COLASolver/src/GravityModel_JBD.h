@@ -49,7 +49,7 @@ class GravityModelJBD : public GravityModel<NDIM> {
     //========================================================================
     double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0) const override { 
       CosmologyJBD * jbd = dynamic_cast<CosmologyJBD *>(this->cosmo.get());
-      return 1.0 / jbd->get_phi(a); 
+      return 1.0 / jbd->phi_of_a(a);
     }
 
     //========================================================================
