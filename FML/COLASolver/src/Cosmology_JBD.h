@@ -21,18 +21,6 @@ class CosmologyJBD final : public Cosmology {
         Cosmology::read_parameters(param);
         wBD = param.get<double>("cosmology_JBD_wBD");
         GeffG_today = param.get<double>("cosmology_JBD_GeffG_today");
-
-        // Convert to physical density parameters
-        Omegabh2 = Omegab * h * h;
-        OmegaMNuh2 = OmegaMNu * h * h;
-        OmegaKh2 = OmegaK * h * h;
-        OmegaCDMh2 = OmegaCDM * h * h;
-        OmegaLambdah2 = OmegaLambda * h * h;
-        OmegaRh2 = OmegaR * h * h;
-        OmegaNuh2 = OmegaNu * h * h;
-
-        // Convert computed neutrino mass to the value we want
-        Mnu_eV = Mnu_eV == 0.0 ? 0.0 : Mnu_eV * (OmegaNu / OmegaMNu) * (OmegaMNuh2 / OmegaNuh2); // avoid NaN without massive neutrinos
     }
 
     //========================================================================
@@ -53,22 +41,22 @@ class CosmologyJBD final : public Cosmology {
                 break;
         }
 
-        // H as function of loga, y = logphi and z = H a^3 e^y dy/dx. phi is here phi/phi0
-        auto JBD_HubbleFunction_of_z = [&](double loga, double logphi, double z) {
+        // E=H/H0 as function of loga, y = logphi and z = E a^3 e^y dy/dx. phi is here phi/phi0
+        auto JBD_E_of_z = [&](double loga, double logphi, double z) {
             const double a = std::exp(loga);
             return std::sqrt(exp(-logphi) *
-                                 (OmegaKh2 / (a * a) + OmegaRh2 / (a * a * a * a) + this->get_rhoNu_exact(a) * h * h +
-                                  (Omegabh2 + OmegaCDMh2) / (a * a * a) + OmegaLambdah2) +
+                                 (OmegaK / (a * a) + OmegaR / (a * a * a * a) + this->get_rhoNu_exact(a) + // TODO: phi * Omegak
+                                  (Omegab + OmegaCDM) / (a * a * a) + OmegaLambda) + // TODO: OmegaM?
                              z * z / 12.0 * (2.0 * wBD + 3.0) * exp(-2 * logphi - 6 * loga)) -
                    z / 2.0 * exp(-logphi - 3 * loga);
         };
 
         // H as function of loga, logphi and dlogphidloga. phi is here phi/phi0
-        auto JBD_HubbleFunction_of_dy = [&](double loga, double logphi, double dlogphidloga) {
+        auto JBD_E_of_dy = [&](double loga, double logphi, double dlogphidloga) {
             const double a = std::exp(loga);
             return std::sqrt(std::exp(-logphi) *
-                             (OmegaRh2 / (a * a * a * a) + this->get_rhoNu_exact(a) * h * h +
-                              (Omegabh2 + OmegaCDMh2) / (a * a * a) + OmegaLambdah2) /
+                             (OmegaR / (a * a * a * a) + this->get_rhoNu_exact(a) + // TODO: phi * Omegak
+                              (Omegab + OmegaCDM) / (a * a * a) + OmegaLambda) / // TODO: OmegaM?
                              (1.0 + dlogphidloga - wBD / 6 * dlogphidloga * dlogphidloga));
         };
 
@@ -77,14 +65,14 @@ class CosmologyJBD final : public Cosmology {
             // The neutrino treatment here is not 100%, but good enough
             // Should correct this at some point though
             FML::SOLVERS::ODESOLVER::ODEFunction deriv = [&](double loga, const double * y, double * dydx) {
-                double H = JBD_HubbleFunction_of_z(loga, y[0], y[1]);
-                dydx[0] = y[1] * std::exp(-y[0] - 3 * loga) / H;
-                dydx[1] = 3.0 * std::exp(3.0 * loga) / (2 * wBD + 3) / H *
-                          ((Omegabh2 + OmegaCDMh2 + OmegaMNu) * std::exp(-3 * loga) + 4.0 * OmegaLambdah2);
+                double E = JBD_E_of_z(loga, y[0], y[1]);
+                dydx[0] = y[1] * std::exp(-y[0] - 3 * loga) / E;
+                dydx[1] = 3.0 * std::exp(3.0 * loga) / (2 * wBD + 3) / E *
+                          ((Omegab + OmegaCDM + OmegaMNu) * std::exp(-3 * loga) + 4.0 * OmegaLambda); // TODO: OmegaM?
                 return GSL_SUCCESS;
             };
             FML::SOLVERS::ODESOLVER::ODESolver ode;
-            const double z_ini = JBD_HubbleFunction_of_dy(loga_ini, _logphi_ini, _dlogphidloga_ini) *
+            const double z_ini = JBD_E_of_dy(loga_ini, _logphi_ini, _dlogphidloga_ini) *
                                  std::exp(3.0 * loga_ini + _logphi_ini) * _dlogphidloga_ini;
             DVector ini{_logphi_ini, z_ini};
             ode.solve(deriv, loga_arr, ini);
@@ -137,41 +125,15 @@ class CosmologyJBD final : public Cosmology {
 
         // Solve the ODE for this initial value and make splines
         auto logphi_arr = solve_ode(logphi_ini, 0.0);
-        auto logh_of_loga_arr = loga_arr;
         logphi_of_loga_spline.create(loga_arr, logphi_arr, "JBD logphi(loga)");
-        for (auto & loga : logh_of_loga_arr) {
-            loga = std::log(
-                JBD_HubbleFunction_of_dy(loga, logphi_of_loga_spline(loga), logphi_of_loga_spline.deriv_x(loga)));
+
+        auto logE_of_loga_arr = loga_arr; // copy to create vector of same size (preserving loga)
+        for (auto & logE : logE_of_loga_arr) {
+            double loga = logE; // because we copied the vector above
+            logE = std::log(
+                JBD_E_of_dy(loga, logphi_of_loga_spline(loga), logphi_of_loga_spline.deriv_x(loga)));
         }
-        loghubble_of_loga_spline.create(loga_arr, logh_of_loga_arr, "JBD logH(loga)");
-
-        // Compute the value of 'h'
-        h = std::exp(loghubble_of_loga_spline(0.0));
-
-        // Make sure the spline has H(0) == 1
-        for (auto & logH : logh_of_loga_arr) {
-            logH -= std::log(h);
-        }
-        loghubble_of_loga_spline.create(loga_arr, logh_of_loga_arr, "JBD logH(loga)");
-
-        // Set cosmological parameters
-        OmegaR = OmegaRh2 / (h * h);
-        OmegaNu = OmegaNuh2 / (h * h);
-        OmegaK = OmegaKh2 / (h * h);
-        OmegaMNu = OmegaMNuh2 / (h * h);
-        OmegaCDM = OmegaCDMh2 / (h * h);
-        Omegab = Omegabh2 / (h * h);
-        OmegaLambda = OmegaLambda / (h * h);
-        OmegaRtot = OmegaR + OmegaNu;
-        OmegaM = Omegab + OmegaCDM + OmegaMNu;
-
-        if (FML::ThisTask == 0) {
-            std::cout << "JBD::init Found phi_ini = " << std::exp(logphi_ini) << "\n";
-            std::cout << "          We have h = " << h << "\n";
-            std::cout << "          Testing spline H(a=1)/H0 = " << HoverH0_of_a(1.0) << "\n";
-            FML::assert_mpi(std::fabs(HoverH0_of_a(1.0) - 1.0) < 1e-5,
-                            "JBD H(a=1)/H0 is not unity. Something went wrong");
-        }
+        logE_of_loga_spline.create(loga_arr, logE_of_loga_arr, "JBD logE(loga)");
     }
 
     //========================================================================
@@ -181,11 +143,6 @@ class CosmologyJBD final : public Cosmology {
         Cosmology::info();
         if (FML::ThisTask == 0) {
             std::cout << "# wBD           : " << wBD << "\n";
-            std::cout << "# Omegabh2      : " << Omegabh2 << "\n";
-            std::cout << "# OmegaCDMh2    : " << OmegaCDMh2 << "\n";
-            std::cout << "# OmegaMNuh2    : " << OmegaMNuh2 << "\n";
-            std::cout << "# OmegaKh2      : " << OmegaKh2 << "\n";
-            std::cout << "# OmegaLambdah2 : " << OmegaLambdah2 << "\n";
             std::cout << "# GeffG_today   : " << GeffG_today << "\n";
             std::cout << "#=====================================================\n";
             std::cout << "\n";
@@ -195,8 +152,8 @@ class CosmologyJBD final : public Cosmology {
     //========================================================================
     // Hubble function
     //========================================================================
-    double HoverH0_of_a(double a) const override { return std::exp(loghubble_of_loga_spline(std::log(a))); }
-    double dlogHdloga_of_a(double a) const override { return loghubble_of_loga_spline.deriv_x(std::log(a)); }
+    double HoverH0_of_a(double a) const override { return std::exp(logE_of_loga_spline(std::log(a))); }
+    double dlogHdloga_of_a(double a) const override { return logE_of_loga_spline.deriv_x(std::log(a)); }
 
     // The JBD scalar normalized such that 1/phi_today = GeffG_today
     double get_phi(double a) { return std::exp(logphi_of_loga_spline(std::log(a))); }
@@ -209,21 +166,9 @@ class CosmologyJBD final : public Cosmology {
     double GeffG_today;
 
     //========================================================================
-    // We don't know 'h' a priori so we must take in physical parameters
-    // and derive the usual parameters
+    // Splines for the Hubble function (E = H/H0) and JBD scalar field phi
     //========================================================================
-    double OmegaRh2;
-    double OmegaNuh2;
-    double Omegabh2;
-    double OmegaMNuh2;
-    double OmegaCDMh2;
-    double OmegaKh2;
-    double OmegaLambdah2;
-
-    //========================================================================
-    // Splines for the hubble function and for the JBD scalar phi
-    //========================================================================
-    Spline loghubble_of_loga_spline;
+    Spline logE_of_loga_spline;
     Spline logphi_of_loga_spline;
 
     // For the solving and splines of phi
