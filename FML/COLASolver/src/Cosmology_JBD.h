@@ -32,17 +32,21 @@ class CosmologyJBD final : public Cosmology {
         double phi_today_target = 1.0 / GeffG_today; // TODO: w-factors
         double phi_ini_lo = 0.0;
         double phi_ini_hi = phi_today_target;
+        double OmegaPhi = 0.0; // bootstrap the first guess for OmegaLambda in the loop
 
         for (int iter = 0; iter < 1000; iter++) {
-            // Refine guess for phi_ini from bisection limits
+            // Refine guesses for phi_ini (from bisection limits) and OmegaLambda (from closure condition E0 == 1)
             double phi_ini = (phi_ini_lo + phi_ini_hi) / 2.0;
             double logphi_ini = std::log(phi_ini);
+            OmegaLambda = 1.0 - OmegaM - OmegaRtot - OmegaK - OmegaPhi; // equivalent to E0 == 1
 
-            // Solve cosmology for current (phi_ini, OmegaLambda)
+            // Solve cosmology for current (phi_ini, OmegaLambda) and record phi and its derivative today
             init(logphi_ini, OmegaLambda);
+            double phi_today = std::exp(logphi_of_loga_spline(0.0)); // TODO: use get_phi
+            double dlogphi_dloga_today = logphi_of_loga_spline.deriv_x(0.0); // TODO: create and use get_phi_derivative or something
+            OmegaPhi = -dlogphi_dloga_today + wBD/6 * dlogphi_dloga_today * dlogphi_dloga_today; // defined so sum_i Omega_i == 1
 
             // Check for convergence (phi_today == phi_today_target and E0 == 1) TODO: generalize to G/G != 1
-            double phi_today = std::exp(logphi_of_loga_spline(0.0));
             bool converged_phi_today = std::fabs(phi_today / phi_today_target - 1.0) < 1e-8;
             bool converged_E_today   = std::fabs(HoverH0_of_a(1.0)            - 1.0) < 1e-8;
             if (converged_phi_today && converged_E_today) {
@@ -58,11 +62,6 @@ class CosmologyJBD final : public Cosmology {
             } else {
                 phi_ini_hi = phi_ini; //  overhit, so decrease next guess
             }
-
-            // Refine guess for OmegaLambda from closure condidtion (E0 == 1)
-            double dlogphi_dloga_today = logphi_of_loga_spline.deriv_x(0.0);
-            double OmegaPhi = -dlogphi_dloga_today + wBD/6 * dlogphi_dloga_today * dlogphi_dloga_today; // defined so sum_i Omega_i == 1
-            OmegaLambda = 1.0 - OmegaM - OmegaRtot - OmegaK - OmegaPhi; // equivalent to E0 == 1
         }
 
         throw std::runtime_error("JBD::init Failed to converge");
