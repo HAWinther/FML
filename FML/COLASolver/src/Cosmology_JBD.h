@@ -24,78 +24,64 @@ class CosmologyJBD final : public Cosmology {
     }
 
     //========================================================================
-    // Initialize the cosmology (b-searching/shooting phi_ini and OmegaLambda)
+    // Initialize cosmology (bisect/shoot for phi_ini and OmegaLambda)
     //========================================================================
     void init() override {
-        // The value we shoot for
-        const double desired_phi_today_over_phi0 = 1.0 / GeffG_today;
+        // Bisect and shoot for correct (phi_ini, OmegaLambda)
+        // that gives desired Geff/G today and satisfies closure condition (E0 = 1)
+        double phi_today_target = 1.0 / GeffG_today; // TODO: w-factors
+        double phi_ini_lo = 0.0;
+        double phi_ini_hi = phi_today_target;
 
-        // Find the correct initial condition
-        const double epsilon{1e-8};
-        double philow = 0.0;
-        double phihigh = desired_phi_today_over_phi0;
-        double logphi_ini{};
-        int istep = 0;
-        while (istep < 1000) {
-            ++istep;
-
-            // Current value for phi
-            const double phinow = (philow + phihigh) / 2.0;
-            logphi_ini = std::log(phinow);
+        for (int iter = 0; iter < 1000; iter++) {
+            // Refine guess for phi_ini from bisection limits
+            double phi_ini = (phi_ini_lo + phi_ini_hi) / 2.0;
+            double logphi_ini = std::log(phi_ini);
 
             // Solve cosmology for current (phi_ini, OmegaLambda)
             init(logphi_ini, OmegaLambda);
 
-            // Check for convergence
-            double logphi_today = logphi_of_loga_spline(0.0);
-            const double phi_today_over_phi0 = std::exp(logphi_today);
-            bool converged_phi0 = std::fabs(phi_today_over_phi0 / desired_phi_today_over_phi0 - 1.0) < epsilon;
-            bool converged_E0   = std::fabs(HoverH0_of_a(1.0)                                 - 1.0) < epsilon;
-            if (converged_phi0 && converged_E0) {
-                break;
+            // Check for convergence (phi_today == phi_today_target and E0 == 1) TODO: generalize to G/G != 1
+            double phi_today = std::exp(logphi_of_loga_spline(0.0));
+            bool converged_phi_today = std::fabs(phi_today / phi_today_target - 1.0) < 1e-8;
+            bool converged_E_today   = std::fabs(HoverH0_of_a(1.0)            - 1.0) < 1e-8;
+            if (converged_phi_today && converged_E_today) {
+                std::cout << "JBD::init Convergence of solution found after " << iter << " iterations:\n";
+                std::cout << "          Found phi_ini = " << std::exp(logphi_ini) << "\n";
+                std::cout << "          Found OmegaLambda = " << OmegaLambda << "\n";
+                return; // the cosmology is now initialized and ready-to-use
             }
 
             // Bisection step
-            if (phi_today_over_phi0 < desired_phi_today_over_phi0) {
-                philow = phinow;
+            if (phi_today < phi_today_target) {
+                phi_ini_lo = phi_ini; // underhit, so increase next guess
             } else {
-                phihigh = phinow;
+                phi_ini_hi = phi_ini; //  overhit, so decrease next guess
             }
 
-            // Refine guess for OmegaLambda, assuming closure condidtion (E0 = 1) converges to a good value
-            double dlogphi_dloga = logphi_of_loga_spline.deriv_x(0.0);
-            double OmegaPhi = -dlogphi_dloga + wBD/6 * dlogphi_dloga * dlogphi_dloga;
-            OmegaLambda = 1.0 - OmegaM - OmegaRtot - OmegaK - OmegaPhi;
+            // Refine guess for OmegaLambda from closure condidtion (E0 == 1)
+            double dlogphi_dloga_today = logphi_of_loga_spline.deriv_x(0.0);
+            double OmegaPhi = -dlogphi_dloga_today + wBD/6 * dlogphi_dloga_today * dlogphi_dloga_today; // defined so sum_i Omega_i == 1
+            OmegaLambda = 1.0 - OmegaM - OmegaRtot - OmegaK - OmegaPhi; // equivalent to E0 == 1
         }
 
-        if (istep < 1000 && FML::ThisTask == 0) {
-            std::cout << "JBD::init Convergence of solution found after " << istep << " iterations:\n";
-            std::cout << "          Found phi_ini = " << std::exp(logphi_ini) << "\n";
-            std::cout << "          Found OmegaLambda = " << OmegaLambda << "\n";
-        } else {
-            throw std::runtime_error("JBD::init Failed to converge");
-        }
+        throw std::runtime_error("JBD::init Failed to converge");
     };
 
     //========================================================================
-    // Initialize the cosmology (for particular phi_ini and OmegaLambda)
+    // Initialize cosmology (with particular phi_ini and OmegaLambda)
     //========================================================================
     void init(double logphi_ini, double OmegaLambda) {
         Cosmology::init();
 
-        // Start deep in the radiation era
-        // Set up array such thay a=1.0 is at i = npts_loga-1
-        const double loga_ini = std::log(alow);
-        const double loga_end = std::log(ahigh);
-        const double dloga = (std::log(1.0) - loga_ini) / double(npts_loga - 1);
-        DVector loga_arr;
-        for (int i = 0;; i++) {
-            loga_arr.push_back(loga_ini + i * dloga);
-            if (loga_arr.back() > loga_end)
-                break;
+        // Linearly spaced scale factor logarithms to integrate over
+        const double dloga = (loga_max - loga_min) / double(nloga - 1);
+        DVector loga_arr(nloga);
+        for (int i = 0; i < nloga; i++) {
+            loga_arr[i] = loga_min + i * dloga;
         }
 
-        // E=H/H0 as function of loga, y = logphi and z = E a^3 e^y dy/dx. phi is here phi/phi0
+        // E = H/H0 as function of loga, y = logphi and z = E a^3 e^y dy/dx. phi is here phi/phi0
         auto JBD_E_of_z = [&](double loga, double logphi, double z) {
             const double a = std::exp(loga);
             return std::sqrt(exp(-logphi) *
@@ -126,6 +112,7 @@ class CosmologyJBD final : public Cosmology {
                 return GSL_SUCCESS;
             };
             FML::SOLVERS::ODESOLVER::ODESolver ode;
+            const double loga_ini = loga_min;
             const double z_ini = JBD_E_of_dy(loga_ini, _logphi_ini, _dlogphidloga_ini) *
                                  std::exp(3.0 * loga_ini + _logphi_ini) * _dlogphidloga_ini;
             DVector ini{_logphi_ini, z_ini};
@@ -133,15 +120,14 @@ class CosmologyJBD final : public Cosmology {
             return ode.get_data_by_component(0);
         };
 
-        // Solve the ODE for this initial value and make splines
+        // Solve the ODE for this initial value and spline logphi(loga) and logE(loga)
         auto logphi_arr = solve_ode(logphi_ini, 0.0);
         logphi_of_loga_spline.create(loga_arr, logphi_arr, "JBD logphi(loga)");
 
         auto logE_of_loga_arr = loga_arr; // copy to create vector of same size (preserving loga)
         for (auto & logE : logE_of_loga_arr) {
             double loga = logE; // because we copied the vector above
-            logE = std::log(
-                JBD_E_of_dy(loga, logphi_of_loga_spline(loga), logphi_of_loga_spline.deriv_x(loga)));
+            logE = std::log(JBD_E_of_dy(loga, logphi_of_loga_spline(loga), logphi_of_loga_spline.deriv_x(loga)));
         }
         logE_of_loga_spline.create(loga_arr, logE_of_loga_arr, "JBD logE(loga)");
     }
@@ -181,11 +167,10 @@ class CosmologyJBD final : public Cosmology {
     Spline logE_of_loga_spline;
     Spline logphi_of_loga_spline;
 
-    // For the solving and splines of phi
-    // We integrate from deep inside the radiation era
-    const int npts_loga = 500;
-    const double alow = 1e-6;
-    const double ahigh = 2.0;
+    // Scale factor logarithm range to integrate/spline over
+    const double loga_min = -10.0; // from deep in radiation era (when phi is close to constant)
+    const double loga_max = 0.0;   // till today
+    const int nloga = 1000;
 };
 #endif
 
