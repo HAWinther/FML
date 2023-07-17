@@ -49,7 +49,9 @@ class CosmologyJBD final : public Cosmology {
             // Check for convergence
             double logphi_today = logphi_of_loga_spline(0.0);
             const double phi_today_over_phi0 = std::exp(logphi_today);
-            if (std::fabs(phi_today_over_phi0 / desired_phi_today_over_phi0 - 1.0) < epsilon) { // TODO: check E0 = 1 here, too (instead of down below)
+            bool converged_phi0 = std::fabs(phi_today_over_phi0 / desired_phi_today_over_phi0 - 1.0) < epsilon;
+            bool converged_E0   = std::fabs(HoverH0_of_a(1.0)                                 - 1.0) < epsilon;
+            if (converged_phi0 && converged_E0) {
                 break;
             }
 
@@ -70,9 +72,6 @@ class CosmologyJBD final : public Cosmology {
             std::cout << "JBD::init Convergence of solution found after " << istep << " iterations:\n";
             std::cout << "          Found phi_ini = " << std::exp(logphi_ini) << "\n";
             std::cout << "          Found OmegaLambda = " << OmegaLambda << "\n";
-            std::cout << "          Testing spline H(a=1)/H0 = " << HoverH0_of_a(1.0) << "\n";
-            FML::assert_mpi(std::fabs(HoverH0_of_a(1.0) - 1.0) < 1e-5,
-                            "JBD H(a=1)/H0 is not unity. Something went wrong");
         } else {
             throw std::runtime_error("JBD::init Failed to converge");
         }
