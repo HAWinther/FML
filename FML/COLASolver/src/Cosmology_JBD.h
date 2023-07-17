@@ -36,8 +36,7 @@ class CosmologyJBD final : public Cosmology {
 
         for (int iter = 0; iter < 1000; iter++) {
             // Refine guesses for phi_ini (from bisection limits) and OmegaLambda (from closure condition E0 == 1)
-            double phi_ini = (phi_ini_lo + phi_ini_hi) / 2.0;
-            double logphi_ini = std::log(phi_ini);
+            phi_ini = (phi_ini_lo + phi_ini_hi) / 2.0;
             OmegaLambda = 1.0 - OmegaM - OmegaRtot - OmegaK - OmegaPhi; // equivalent to E0 == 1
 
             // Solve cosmology for current (phi_ini, OmegaLambda) and record phi and its derivative today
@@ -50,10 +49,8 @@ class CosmologyJBD final : public Cosmology {
             bool converged_phi_today = std::fabs(phi_today / phi_today_target - 1.0) < 1e-8;
             bool converged_E_today   = std::fabs(HoverH0_of_a(1.0)            - 1.0) < 1e-8;
             if (converged_phi_today && converged_E_today) {
-                std::cout << "JBD::init Convergence of solution found after " << iter << " iterations:\n";
-                std::cout << "          Found phi_ini = " << std::exp(logphi_ini) << "\n";
-                std::cout << "          Found OmegaLambda = " << OmegaLambda << "\n";
-                return; // the cosmology is now initialized and ready-to-use
+                std::cout << "JBD::init Search for phi_ini and OmegaLambda converged in " << iter << " iterations:\n";
+                return; // hit, so stop; the cosmology is initialized and ready-to-use
             }
 
             // Bisection step
@@ -64,13 +61,13 @@ class CosmologyJBD final : public Cosmology {
             }
         }
 
-        throw std::runtime_error("JBD::init Failed to converge");
+        throw std::runtime_error("JBD::init Search for phi_ini and OmegaLambda did not converge");
     };
 
     //========================================================================
-    // Initialize cosmology (with particular phi_ini and OmegaLambda)
+    // Initialize cosmology (with current values of phi_ini and OmegaLambda)
     //========================================================================
-    void init(double logphi_ini, double OmegaLambda) {
+    void init_current() {
         Cosmology::init();
 
         // Linearly spaced scale factor logarithms to integrate over
@@ -120,7 +117,7 @@ class CosmologyJBD final : public Cosmology {
         };
 
         // Solve the ODE for this initial value and spline logphi(loga) and logE(loga)
-        auto logphi_arr = solve_ode(logphi_ini, 0.0);
+        auto logphi_arr = solve_ode(std::log(phi_ini), 0.0);
         logphi_of_loga_spline.create(loga_arr, logphi_arr, "JBD logphi(loga)");
 
         auto logE_of_loga_arr = loga_arr; // copy to create vector of same size (preserving loga)
@@ -139,6 +136,7 @@ class CosmologyJBD final : public Cosmology {
         if (FML::ThisTask == 0) {
             std::cout << "# wBD           : " << wBD << "\n";
             std::cout << "# GeffG_today   : " << GeffG_today << "\n";
+            std::cout << "# phi_ini       : " << phi_ini << "\n";
             std::cout << "#=====================================================\n";
             std::cout << "\n";
         }
@@ -156,8 +154,9 @@ class CosmologyJBD final : public Cosmology {
     //========================================================================
     // Parameters specific to the JBD model
     //========================================================================
-    double wBD;
-    double GeffG_today;
+    double wBD; // independent
+    double GeffG_today; // independent
+    double phi_ini; // dependent on GeffG_today
 
     //========================================================================
     // Splines for the Hubble function (E = H/H0) and JBD scalar field phi
