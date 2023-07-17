@@ -34,31 +34,38 @@ class CosmologyJBD final : public Cosmology {
         double phi_ini_hi = phi_today_target;
         double OmegaPhi = 0.0; // bootstrap the first guess for OmegaLambda in the loop
 
-        for (int iter = 0; iter < 1000; iter++) {
+        std::cout << "JBD::init Searching for phi_ini and OmegaLambda that gives "
+                  << "phi_today = " << phi_today_target << " and "
+                  << "E_today = (H/H0)_today = 1.0:" << "\n";
+
+        for (int iter = 1; iter < 100; iter++) {
             // Refine guesses for phi_ini (from bisection limits) and OmegaLambda (from closure condition E0 == 1)
             phi_ini = (phi_ini_lo + phi_ini_hi) / 2.0;
             OmegaLambda = 1.0 - OmegaM - OmegaRtot - OmegaK - OmegaPhi; // equivalent to E0 == 1
 
             // Solve cosmology for current (phi_ini, OmegaLambda) and record phi and its derivative today
             init_current();
-            double phi_today = phi_of_a(1.0);
-            double dlogphi_dloga_today = dlogphi_dloga_of_a(1.0);
-            OmegaPhi = -dlogphi_dloga_today + wBD/6 * dlogphi_dloga_today * dlogphi_dloga_today; // defined so sum_i Omega_i == 1
+
+            std::cout << "#" << std::setiosflags(std::ios::right) << std::setw(2) << iter << std::setiosflags(std::ios::left) << ": "
+                      << std::fixed << std::setprecision(8) // 8 decimals in all following numbers
+                      << "phi_ini = " << std::setw(10) << phi_ini << ", OmegaLambda = " << std::setw(10) << OmegaLambda << " gives "
+                      << "phi_today = " << std::setw(10) << phi_of_a(1.0) << ", E_today = " << std::setw(10) << HoverH0_of_a(1.0) << "\n";
 
             // Check for convergence (phi_today == phi_today_target and E0 == 1) TODO: generalize to G/G != 1
-            bool converged_phi_today = std::fabs(phi_today / phi_today_target - 1.0) < 1e-8;
-            bool converged_E_today   = std::fabs(HoverH0_of_a(1.0)            - 1.0) < 1e-8;
+            bool converged_phi_today = std::fabs(phi_of_a(1.0) / phi_today_target - 1.0) < 1e-8;
+            bool converged_E_today   = std::fabs(HoverH0_of_a(1.0)                - 1.0) < 1e-8;
             if (converged_phi_today && converged_E_today) {
-                std::cout << "JBD::init Search for phi_ini and OmegaLambda converged in " << iter << " iterations:\n";
+                std::cout << "JBD::init Search for phi_ini and OmegaLambda converged in " << iter << " iterations\n";
                 return; // hit, so stop; the cosmology is initialized and ready-to-use
             }
 
-            // Bisection step
-            if (phi_today < phi_today_target) {
+            // Improve next guesses for phi_ini and OmegaLambda
+            if (phi_of_a(1.0) < phi_today_target) {
                 phi_ini_lo = phi_ini; // underhit, so increase next guess
             } else {
                 phi_ini_hi = phi_ini; //  overhit, so decrease next guess
             }
+            OmegaPhi = -dlogphi_dloga_of_a(1.0) + wBD/6 * dlogphi_dloga_of_a(1.0) * dlogphi_dloga_of_a(1.0); // defined from E0 == 1, so sum_i Omega_i == 1
         }
 
         throw std::runtime_error("JBD::init Search for phi_ini and OmegaLambda did not converge");
