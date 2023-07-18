@@ -25,19 +25,23 @@ class CosmologyJBD final : public Cosmology {
     }
 
     //========================================================================
-    // Initialize cosmology (bisect/shoot for phi_ini and OmegaLambda)
+    // Initialize cosmology by bisecting/shooting for phi_ini and OmegaLambda
+    // that gives desired Geff/G today and satisfies closure condition E0 == 1
     //========================================================================
     void init() override {
-        // Bisect and shoot for correct (phi_ini, OmegaLambda)
-        // that gives desired Geff/G today and satisfies closure condition (E0 = 1)
         double phi_today_target = (4+2*wBD) / (3+2*wBD) / GeffG_today; // arXiv:2010.15278 equation (17)
         double phi_ini_lo = 0.0;
         double phi_ini_hi = phi_today_target;
-        OmegaLambda = 0.0; // initial arbitrary guess for OmegaLambda (stupidly chosen to emphasize it is a *guess*)
+        OmegaLambda = 0.0; // initial arbitrary guess for OmegaLambda (stupidly chosen to emphasize it is a *guess*; smarter guesses gives <1 fewer iterations)
 
-        std::cout << "JBD: Finding phi_ini = ??????????, OmegaLambda = ????? that gives "
-                  << "phi_today = " << std::fixed << std::setprecision(8) << phi_today_target << ", "
-                  << "E_today = " << 1.0 << ":\n";
+        if (FML::ThisTask == 0) {
+            std::cout << "JBD::init Guessing   phi_ini = ??????????, OmegaLambda = ????? that gives "
+                      << "phi_today = " << std::fixed << std::setprecision(8) << phi_today_target << ", "
+                      << "E_today = " << 1.0 << ":\n";
+        }
+
+        // Here          (and     in hiclass): input h and Omegas except OmegaL, enforce E0 == 1, and output OmegaL
+        // Alternatively (and not in hiclass): input all Omegas but not h,       relax   E0 == 1, and output h
 
         for (int iter = 1; iter < 100; iter++) {
             phi_ini = (phi_ini_lo + phi_ini_hi) / 2.0; // try new phi_ini between bisection limits
@@ -46,16 +50,20 @@ class CosmologyJBD final : public Cosmology {
             init_current();
             double phi_today = phi_of_a(1.0);
 
-            std::cout << "Attempt #" << std::setiosflags(std::ios::right) << std::setw(2) << iter << std::setiosflags(std::ios::left) << ": "
-                      << std::fixed << std::setprecision(8) // 8 decimals in all following numbers
-                      << "phi_ini = " << phi_ini << ", OmegaLambda = " << OmegaLambda << " gives "
-                      << "phi_today = " << phi_today << ", E_today = " << HoverH0_of_a(1.0) << "\n";
+            if (FML::ThisTask == 0) {
+                std::cout << "JBD::init Guess #" << std::setiosflags(std::ios::right) << std::setw(2) << iter << std::setiosflags(std::ios::left) << ": "
+                          << std::fixed << std::setprecision(8) // 8 decimals in all following numbers
+                          << "phi_ini = " << phi_ini << ", OmegaLambda = " << OmegaLambda << " gives "
+                          << "phi_today = " << phi_today << ", E_today = " << HoverH0_of_a(1.0) << "\n";
+            }
 
             // Check for convergence (phi_today == phi_today_target and E0 == 1)
-            bool converged_phi_today = std::fabs(phi_today / phi_today_target - 1.0) < 1e-8;
-            bool converged_E_today   = std::fabs(HoverH0_of_a(1.0) / 1.0      - 1.0) < 1e-8;
+            bool converged_phi_today = std::fabs(phi_today - phi_today_target) < 1e-9; // require 8=9-1 correct decimals
+            bool converged_E_today   = std::fabs(HoverH0_of_a(1.0) - 1.0)      < 1e-9; // require 8=9-1 correct decimals
             if (converged_phi_today && converged_E_today) {
-                std::cout << "JBD::init Search for phi_ini and OmegaLambda converged in " << iter << " iterations\n";
+                if (FML::ThisTask == 0) {
+                    std::cout << "JBD::init Guessing converged in " << iter << " iterations\n";
+                }
                 return; // hit, so stop; the cosmology is now initialized and ready-to-use
             }
 
@@ -70,10 +78,10 @@ class CosmologyJBD final : public Cosmology {
             // equivalent to phi == OmegaR + Omegab + OmegaCDM + OmegaNu + phi*(OmegaK + OmegaPhi) today (and OmegaPhi is defined below)
             // (reduces to familiar 1 == sum(Omega_i) only in the specific case with phi == 1 today!)
             double OmegaPhi = -dlogphi_dloga_of_a(1.0) + wBD/6 * dlogphi_dloga_of_a(1.0) * dlogphi_dloga_of_a(1.0);
-            OmegaLambda = phi_today - OmegaR - this->get_rhoNu_exact(1.0) - Omegab - OmegaCDM - phi_today*(OmegaK + OmegaPhi); // equivalent to E0 == 1 // TODO: correct/improve neutrino treatment?
+            OmegaLambda = phi_today - OmegaR - this->get_rhoNu_exact(1.0) - Omegab - OmegaCDM - phi_today*(OmegaK + OmegaPhi); // equivalent to E0 == 1 // TODO: Hans says neutrino treatment should be corrected/improved at some point
         }
 
-        throw std::runtime_error("JBD::init Search for phi_ini and OmegaLambda did not converge");
+        throw std::runtime_error("JBD::init Guessing did not converge");
     };
 
     //========================================================================
@@ -86,7 +94,7 @@ class CosmologyJBD final : public Cosmology {
         auto E2_frac_top = [&](double loga, double logphi) {
             double a = std::exp(loga);
             double phi = std::exp(logphi);
-            return OmegaR / (a*a*a*a) + this->get_rhoNu_exact(a) + (Omegab+OmegaCDM) / (a*a*a) + phi * OmegaK / (a*a) + OmegaLambda; // TODO: correct/improve neutrino treatment?
+            return OmegaR / (a*a*a*a) + this->get_rhoNu_exact(a) + (Omegab+OmegaCDM) / (a*a*a) + phi * OmegaK / (a*a) + OmegaLambda; // TODO: Hans says neutrino treatment should be corrected/improved at some point
         };
         auto E2_frac_bot = [&](double logphi, double dlogphi_dloga) {
             double phi = std::exp(logphi);
@@ -96,7 +104,7 @@ class CosmologyJBD final : public Cosmology {
             return std::sqrt(E2_frac_top(loga, logphi) / E2_frac_bot(logphi, dlogphi_dloga));
         };
 
-        // ODE system for scalar field phi (here "phi" means phi/phi0 TODO: does it, really?):
+        // ODE system for scalar field phi (here "phi" means phi/phi0 TODO: verify!):
         // y0' = d(logphi)                  / dloga
         // y1' = d(a^3*E*phi*dlogphi/dloga) / dloga = 3/(3+2*wBD) * (OmegaM + 4*OmegaLambda*a^3) / E
         FML::SOLVERS::ODESOLVER::ODEFunction deriv = [&](double loga, const double * y, double * dy_dloga) {
@@ -119,23 +127,23 @@ class CosmologyJBD final : public Cosmology {
             return GSL_SUCCESS;
         };
 
-        // Integrate scalar field phi
+        // Integrate scalar field phi, assuming dlogphi_dloga == 0 at early times in radiation era
+        // (i.e. neglecting the unphysical diverging mode in the approximate analytical solution phi = A + B/a)
         FML::SOLVERS::ODESOLVER::ODESolver ode;
         DVector loga_arr = FML::MATH::linspace(loga_min, loga_max, nloga); // scale factor logarithms to integrate over
-        DVector yini{std::log(phi_ini), 0.0}; // assume dlogphi_dloga = 0 at early times // TODO: explain why
-        ode.solve(deriv, loga_arr, yini);
-        auto logphi_arr = ode.get_data_by_component(0);
+        DVector y_ini{std::log(phi_ini), dlogphi_dloga_ini}; // assume dlogphi_dloga == 0
+        ode.solve(deriv, loga_arr, y_ini);
+        DVector logphi_arr = ode.get_data_by_component(0);
 
         // Spline logphi(loga)
         logphi_of_loga_spline.create(loga_arr, logphi_arr, "JBD logphi(loga)");
 
         // Spline logE(loga)
-        auto logE_of_loga_arr = loga_arr; // copy to create vector of same size (preserving loga)
-        for (auto & logE : logE_of_loga_arr) {
-            double loga = logE; // because we copied the vector above
-            logE = std::log(E_func(loga, logphi_of_loga_spline(loga), logphi_of_loga_spline.deriv_x(loga)));
+        DVector logE_arr(nloga);
+        for (int i = 0; i < nloga; i++) {
+            logE_arr[i] = std::log(E_func(loga_arr[i], logphi_of_loga_spline(loga_arr[i]), logphi_of_loga_spline.deriv_x(loga_arr[i])));
         }
-        logE_of_loga_spline.create(loga_arr, logE_of_loga_arr, "JBD logE(loga)");
+        logE_of_loga_spline.create(loga_arr, logE_arr, "JBD logE(loga)");
     }
 
     //========================================================================
@@ -144,9 +152,10 @@ class CosmologyJBD final : public Cosmology {
     void info() const override {
         Cosmology::info();
         if (FML::ThisTask == 0) {
-            std::cout << "# wBD           : " << wBD << "\n";
-            std::cout << "# GeffG_today   : " << GeffG_today << "\n";
-            std::cout << "# phi_ini       : " << phi_ini << "\n";
+            std::cout << "# wBD               : " << wBD << "\n";
+            std::cout << "# GeffG_today       : " << GeffG_today << "\n";
+            std::cout << "# phi_ini           : " << phi_ini << "\n";
+            std::cout << "# dlogphi_dloga_ini : " << dlogphi_dloga_ini << "\n";
             std::cout << "#=====================================================\n";
             std::cout << "\n";
         }
@@ -167,6 +176,7 @@ class CosmologyJBD final : public Cosmology {
     double wBD; // independent
     double GeffG_today; // independent
     double phi_ini; // dependent on GeffG_today
+    double dlogphi_dloga_ini = 0.0;
 
     //========================================================================
     // Splines for the Hubble function (E = H/H0) and JBD scalar field phi

@@ -48,24 +48,24 @@ class Cosmology {
             std::cout << "\n";
             std::cout << "#=====================================================\n";
             std::cout << "# Cosmology [" << name << "]\n";
-            std::cout << "# Omegab      : " << Omegab << "\n";
-            std::cout << "# OmegaM      : " << OmegaM << "\n";
-            std::cout << "# OmegaMNu    : " << OmegaMNu << "\n";
-            std::cout << "# OmegaCDM    : " << OmegaCDM << "\n";
-            std::cout << "# OmegaLambda : " << OmegaLambda << "\n";
-            std::cout << "# OmegaR      : " << OmegaR << "\n";
-            std::cout << "# OmegaNu     : " << OmegaNu << "\n";
-            std::cout << "# OmegaRtot   : " << OmegaRtot << "\n";
-            std::cout << "# OmegaK      : " << OmegaK << "\n";
-            std::cout << "# h           : " << h << "\n";
-            std::cout << "# N_nu        : " << N_nu << "\n";
-            std::cout << "# Neff        : " << Neff << "\n";
-            std::cout << "# Mnu         : " << Mnu_eV << " eV\n";
-            std::cout << "# TCMB        : " << TCMB_kelvin << " K\n";
-            std::cout << "# Tnu         : " << Tnu_kelvin << " K\n";
-            std::cout << "# As          : " << As << "\n";
-            std::cout << "# ns          : " << ns << "\n";
-            std::cout << "# kpivot      : " << kpivot_mpc << " 1/Mpc\n";
+            std::cout << "# Omegab            : " << Omegab << "\n";
+            std::cout << "# OmegaM            : " << OmegaM << "\n";
+            std::cout << "# OmegaMNu          : " << OmegaMNu << "\n";
+            std::cout << "# OmegaCDM          : " << OmegaCDM << "\n";
+            std::cout << "# OmegaLambda       : " << OmegaLambda << "\n";
+            std::cout << "# OmegaR            : " << OmegaR << "\n";
+            std::cout << "# OmegaNu           : " << OmegaNu << "\n";
+            std::cout << "# OmegaRtot         : " << OmegaRtot << "\n";
+            std::cout << "# OmegaK            : " << OmegaK << "\n";
+            std::cout << "# h                 : " << h << "\n";
+            std::cout << "# N_nu              : " << N_nu << "\n";
+            std::cout << "# Neff              : " << Neff << "\n";
+            std::cout << "# Mnu               : " << Mnu_eV << " eV\n";
+            std::cout << "# TCMB              : " << TCMB_kelvin << " K\n";
+            std::cout << "# Tnu               : " << Tnu_kelvin << " K\n";
+            std::cout << "# As                : " << As << "\n";
+            std::cout << "# ns                : " << ns << "\n";
+            std::cout << "# kpivot            : " << kpivot_mpc << " 1/Mpc\n";
         }
     }
 
