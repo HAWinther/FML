@@ -30,7 +30,7 @@ class CosmologyJBD final : public Cosmology {
     void init() override {
         // Bisect and shoot for correct (phi_ini, OmegaLambda)
         // that gives desired Geff/G today and satisfies closure condition (E0 = 1)
-        double phi_today_target = 1.0 / GeffG_today; // TODO: w-factors
+        double phi_today_target = (4+2*wBD) / (3+2*wBD) / GeffG_today; // arXiv:2010.15278 equation (17)
         double phi_ini_lo = 0.0;
         double phi_ini_hi = phi_today_target;
         OmegaLambda = 1.0 - OmegaR - Omegab - OmegaCDM - OmegaK; // initial guess for OmegaLambda (neglecting neutrinos and scalar field)
@@ -65,7 +65,7 @@ class CosmologyJBD final : public Cosmology {
                 phi_ini_hi = phi_ini; //  overhit, so decrease next guess
             }
             double OmegaPhi = -dlogphi_dloga_of_a(1.0) + wBD/6 * dlogphi_dloga_of_a(1.0) * dlogphi_dloga_of_a(1.0); // defined from E0 == 1, so sum_i Omega_i == 1
-            OmegaLambda = 1.0 - OmegaR - this->get_rhoNu_exact(1.0) - Omegab - OmegaCDM - OmegaK - OmegaPhi; // equivalent to E0 == 1 // TODO: correct/improve neutrino treatment?
+            OmegaLambda = 1.0 - OmegaR - this->get_rhoNu_exact(1.0) - Omegab - OmegaCDM - OmegaK - OmegaPhi; // equivalent to E0 == 1 // TODO: generalize to G/G != 1 // TODO: correct/improve neutrino treatment?
         }
 
         throw std::runtime_error("JBD::init Search for phi_ini and OmegaLambda did not converge");
@@ -152,7 +152,7 @@ class CosmologyJBD final : public Cosmology {
     //========================================================================
     double HoverH0_of_a(double a) const override { return std::exp(logE_of_loga_spline(std::log(a))); }
     double dlogHdloga_of_a(double a) const override { return logE_of_loga_spline.deriv_x(std::log(a)); }
-    double phi_of_a(double a) { return std::exp(logphi_of_loga_spline(std::log(a))); } // normalized to 1/phi_today = GeffG_today
+    double phi_of_a(double a) { return std::exp(logphi_of_loga_spline(std::log(a))); } // normalized to 1 / phi_today = (4+2*wBD) / (3+2*wBD) / GeffG_today
     double dlogphi_dloga_of_a(double a) { return logphi_of_loga_spline.deriv_x(std::log(a)); }
 
   protected:
