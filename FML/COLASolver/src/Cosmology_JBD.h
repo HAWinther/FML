@@ -33,39 +33,44 @@ class CosmologyJBD final : public Cosmology {
         double phi_today_target = (4+2*wBD) / (3+2*wBD) / GeffG_today; // arXiv:2010.15278 equation (17)
         double phi_ini_lo = 0.0;
         double phi_ini_hi = phi_today_target;
-        OmegaLambda = 1.0 - OmegaR - Omegab - OmegaCDM - OmegaK; // initial guess for OmegaLambda (neglecting neutrinos and scalar field)
+        OmegaLambda = 0.0; // initial arbitrary guess for OmegaLambda (stupidly chosen to emphasize it is a *guess*)
 
-        std::cout << "JBD::init Searching for phi_ini and OmegaLambda that gives "
-                  << "phi_today = " << phi_today_target << " and "
-                  << "E_today = (H/H0)_today = 1.0:" << "\n";
+        std::cout << "JBD: Finding phi_ini = ??????????, OmegaLambda = ????? that gives "
+                  << "phi_today = " << std::fixed << std::setprecision(8) << phi_today_target << ", "
+                  << "E_today = " << 1.0 << ":\n";
 
         for (int iter = 1; iter < 100; iter++) {
             phi_ini = (phi_ini_lo + phi_ini_hi) / 2.0; // try new phi_ini between bisection limits
 
-            // Solve cosmology for current (phi_ini, OmegaLambda) and record phi and its derivative today
+            // Solve cosmology for current (phi_ini, OmegaLambda)
             init_current();
+            double phi_today = phi_of_a(1.0);
 
-            std::cout << "#" << std::setiosflags(std::ios::right) << std::setw(2) << iter << std::setiosflags(std::ios::left) << ": "
+            std::cout << "Attempt #" << std::setiosflags(std::ios::right) << std::setw(2) << iter << std::setiosflags(std::ios::left) << ": "
                       << std::fixed << std::setprecision(8) // 8 decimals in all following numbers
-                      << "phi_ini = " << std::setw(10) << phi_ini << ", OmegaLambda = " << std::setw(10) << OmegaLambda << " gives "
-                      << "phi_today = " << std::setw(10) << phi_of_a(1.0) << ", E_today = " << std::setw(10) << HoverH0_of_a(1.0) << "\n";
+                      << "phi_ini = " << phi_ini << ", OmegaLambda = " << OmegaLambda << " gives "
+                      << "phi_today = " << phi_today << ", E_today = " << HoverH0_of_a(1.0) << "\n";
 
-            // Check for convergence (phi_today == phi_today_target and E0 == 1) TODO: generalize to G/G != 1
-            bool converged_phi_today = std::fabs(phi_of_a(1.0) / phi_today_target - 1.0) < 1e-8;
-            bool converged_E_today   = std::fabs(HoverH0_of_a(1.0)                - 1.0) < 1e-8;
+            // Check for convergence (phi_today == phi_today_target and E0 == 1)
+            bool converged_phi_today = std::fabs(phi_today / phi_today_target - 1.0) < 1e-8;
+            bool converged_E_today   = std::fabs(HoverH0_of_a(1.0) / 1.0      - 1.0) < 1e-8;
             if (converged_phi_today && converged_E_today) {
                 std::cout << "JBD::init Search for phi_ini and OmegaLambda converged in " << iter << " iterations\n";
-                return; // hit, so stop; the cosmology is initialized and ready-to-use
+                return; // hit, so stop; the cosmology is now initialized and ready-to-use
             }
 
-            // Refine guesses for phi_ini (from bisection limits) and OmegaLambda (from closure condition E0 == 1)
-            if (phi_of_a(1.0) < phi_today_target) {
+            // Refine guess for phi_ini from bisection limits
+            if (phi_today < phi_today_target) {
                 phi_ini_lo = phi_ini; // underhit, so increase next guess
             } else {
                 phi_ini_hi = phi_ini; //  overhit, so decrease next guess
             }
-            double OmegaPhi = -dlogphi_dloga_of_a(1.0) + wBD/6 * dlogphi_dloga_of_a(1.0) * dlogphi_dloga_of_a(1.0); // defined from E0 == 1, so sum_i Omega_i == 1
-            OmegaLambda = 1.0 - OmegaR - this->get_rhoNu_exact(1.0) - Omegab - OmegaCDM - OmegaK - OmegaPhi; // equivalent to E0 == 1 // TODO: generalize to G/G != 1 // TODO: correct/improve neutrino treatment?
+
+            // Refine guess for OmegaLambda from closure condition E0 == 1,
+            // equivalent to phi == OmegaR + Omegab + OmegaCDM + OmegaNu + phi*(OmegaK + OmegaPhi) today (and OmegaPhi is defined below)
+            // (reduces to familiar 1 == sum(Omega_i) only in the specific case with phi == 1 today!)
+            double OmegaPhi = -dlogphi_dloga_of_a(1.0) + wBD/6 * dlogphi_dloga_of_a(1.0) * dlogphi_dloga_of_a(1.0);
+            OmegaLambda = phi_today - OmegaR - this->get_rhoNu_exact(1.0) - Omegab - OmegaCDM - phi_today*(OmegaK + OmegaPhi); // equivalent to E0 == 1 // TODO: correct/improve neutrino treatment?
         }
 
         throw std::runtime_error("JBD::init Search for phi_ini and OmegaLambda did not converge");
