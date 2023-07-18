@@ -7,6 +7,7 @@
 #include <FML/ODESolver/ODESolver.h>
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
+#include <FML/Math/Math.h>
 
 #include "Cosmology.h"
 
@@ -76,13 +77,6 @@ class CosmologyJBD final : public Cosmology {
     void init_current() {
         Cosmology::init();
 
-        // Linearly spaced scale factor logarithms to integrate over // TODO: linspace?
-        const double dloga = (loga_max - loga_min) / double(nloga - 1);
-        DVector loga_arr(nloga);
-        for (int i = 0; i < nloga; i++) {
-            loga_arr[i] = loga_min + i * dloga;
-        }
-
         // Convenience functions for calculating E = sqrt(E2_frac_top / E2_frac_bot)
         auto E2_frac_top = [&](double loga, double logphi) {
             double a = std::exp(loga);
@@ -122,6 +116,7 @@ class CosmologyJBD final : public Cosmology {
 
         // Integrate scalar field phi
         FML::SOLVERS::ODESOLVER::ODESolver ode;
+        DVector loga_arr = FML::MATH::linspace(loga_min, loga_max, nloga); // scale factor logarithms to integrate over
         DVector yini{std::log(phi_ini), 0.0}; // assume dlogphi_dloga = 0 at early times // TODO: explain why
         ode.solve(deriv, loga_arr, yini);
         auto logphi_arr = ode.get_data_by_component(0);
