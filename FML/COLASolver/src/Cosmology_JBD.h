@@ -13,7 +13,7 @@
 
 class CosmologyJBD final : public Cosmology {
   public:
-    CosmologyJBD() { name = "JBD"; }
+    CosmologyJBD() : Cosmology(1e-10, 1e0, 1000) { name = "JBD"; }
 
     //========================================================================
     // Read the parameters we need
@@ -130,7 +130,7 @@ class CosmologyJBD final : public Cosmology {
         // Integrate scalar field phi, assuming dlogphi_dloga == 0 at early times in radiation era
         // (i.e. neglecting the unphysical diverging mode in the approximate analytical solution phi = A + B/a)
         FML::SOLVERS::ODESOLVER::ODESolver ode;
-        DVector loga_arr = FML::MATH::linspace(loga_min, loga_max, nloga); // scale factor logarithms to integrate over
+        DVector loga_arr = FML::MATH::linspace(std::log(alow), std::log(ahigh), npts_loga); // scale factor logarithms to integrate over
         DVector y_ini{std::log(phi_ini), dlogphi_dloga_ini}; // assume dlogphi_dloga == 0
         ode.solve(deriv, loga_arr, y_ini);
         DVector logphi_arr = ode.get_data_by_component(0);
@@ -139,8 +139,8 @@ class CosmologyJBD final : public Cosmology {
         logphi_of_loga_spline.create(loga_arr, logphi_arr, "JBD logphi(loga)");
 
         // Spline logE(loga)
-        DVector logE_arr(nloga);
-        for (int i = 0; i < nloga; i++) {
+        DVector logE_arr(npts_loga);
+        for (int i = 0; i < npts_loga; i++) {
             logE_arr[i] = std::log(E_func(loga_arr[i], logphi_of_loga_spline(loga_arr[i]), logphi_of_loga_spline.deriv_x(loga_arr[i])));
         }
         logE_of_loga_spline.create(loga_arr, logE_arr, "JBD logE(loga)");
@@ -191,10 +191,5 @@ class CosmologyJBD final : public Cosmology {
     //========================================================================
     Spline logE_of_loga_spline;
     Spline logphi_of_loga_spline;
-
-    // Scale factor logarithm range to integrate/spline over
-    const double loga_min = -10.0; // from deep in radiation era (when phi is close to constant)
-    const double loga_max = 0.0;   // till today
-    const int nloga = 1000;
 };
 #endif

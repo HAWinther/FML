@@ -38,6 +38,7 @@ class Cosmology {
     // Constructors
     //========================================================================
     Cosmology() = default;
+    Cosmology(double alow, double ahigh, int npts_loga) : alow{alow}, ahigh{ahigh}, npts_loga{npts_loga} {};
 
     //========================================================================
     // Print some info.
@@ -353,10 +354,11 @@ class Cosmology {
 
     //========================================================================
     // Ranges for splines of growth-factors
+    // Override by constructing e.g. Cosmology(1e-10, 1e0, 1000)
     //========================================================================
+    const double alow = 1e-3;
+    const double ahigh = 1e2;
     const int npts_loga = 200;
-    const double alow = 1.0 / 1000.0;
-    const double ahigh = 100.0;
 };
 
 #endif
