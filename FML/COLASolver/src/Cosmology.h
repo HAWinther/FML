@@ -294,7 +294,7 @@ class Cosmology {
 
         output_header(fp); fp << '\n';
         for (int i = 0; i < npts_loga; i++) {
-            double loga = std::log(alow) + std::log(ahigh / alow) * i / double(npts_loga);
+            double loga = std::log(alow) + std::log(ahigh / alow) * i / double(npts_loga - 1);
             double a = std::exp(loga);
             output_row(fp, a); fp << '\n';
         }
