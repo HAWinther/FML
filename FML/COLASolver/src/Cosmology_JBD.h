@@ -161,13 +161,24 @@ class CosmologyJBD final : public Cosmology {
         }
     }
 
+    void output_header(std::ofstream & fp) const override {
+        Cosmology::output_header(fp);
+        fp << " phi dlogphi_dloga";
+    }
+
+    void output_row(std::ofstream & fp, double a) const override {
+        Cosmology::output_row(fp, a);
+        fp << std::setw(15) << phi_of_a(a) << " ";
+        fp << std::setw(15) << dlogphi_dloga_of_a(a) << " ";
+    }
+
     //========================================================================
     // Spline evaluation wrappers (for Hubble function and scalar field)
     //========================================================================
     double HoverH0_of_a(double a) const override { return std::exp(logE_of_loga_spline(std::log(a))); }
     double dlogHdloga_of_a(double a) const override { return logE_of_loga_spline.deriv_x(std::log(a)); }
-    double phi_of_a(double a) { return std::exp(logphi_of_loga_spline(std::log(a))); } // normalized to 1 / phi_today = (4+2*wBD) / (3+2*wBD) / GeffG_today
-    double dlogphi_dloga_of_a(double a) { return logphi_of_loga_spline.deriv_x(std::log(a)); }
+    double phi_of_a(double a) const { return std::exp(logphi_of_loga_spline(std::log(a))); } // normalized to 1 / phi_today = (4+2*wBD) / (3+2*wBD) / GeffG_today
+    double dlogphi_dloga_of_a(double a) const { return logphi_of_loga_spline.deriv_x(std::log(a)); }
 
   protected:
     //========================================================================

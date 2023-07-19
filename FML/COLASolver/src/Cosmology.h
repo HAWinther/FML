@@ -249,23 +249,40 @@ class Cosmology {
     //========================================================================
     // Output the stuff we compute
     //========================================================================
-    virtual void output(std::string filename) const {
+
+    // Output a header row of various quantities at scale factor a
+    // without ending the line, so children can override this to output more quantities on the same row
+    virtual void output_header(std::ofstream & fp) const {
+        fp << "#   a     H/H0    dlogHdloga     OmegaM     OmegaRtot    OmegaLambda";
+    }
+
+    // Output a row of various quantities at scale factor a
+    // without ending the line, so children can override this to output more quantities on the same row
+    virtual void output_row(std::ofstream & fp, double a) const {
+        fp << std::setw(15) << a << "  ";
+        fp << std::setw(15) << HoverH0_of_a(a) << " ";
+        fp << std::setw(15) << dlogHdloga_of_a(a) << " ";
+        fp << std::setw(15) << get_OmegaM(a) << " ";
+        fp << std::setw(15) << get_OmegaR(a) << " ";
+        fp << std::setw(15) << get_OmegaNu(a) << " ";
+        fp << std::setw(15) << get_OmegaMNu(a) << " ";
+        fp << std::setw(15) << get_OmegaNu_exact(a) << " ";
+        fp << std::setw(15) << get_OmegaLambda(a) << " ";
+    }
+
+    // Master outputter that simply calls output_header() and output_row() in a loop
+    // Children should override output_header() and output_row() instead of this
+    void output(std::string filename) const {
         std::ofstream fp(filename.c_str());
         if (not fp.is_open())
             return;
-        fp << "#   a     H/H0    dlogHdloga     OmegaM     OmegaRtot    OmegaLambda\n";
+
+        output_header(fp);
+        fp << "\n";
         for (int i = 0; i < npts_loga; i++) {
             double loga = std::log(alow) + std::log(ahigh / alow) * i / double(npts_loga);
             double a = std::exp(loga);
-            fp << std::setw(15) << a << "  ";
-            fp << std::setw(15) << HoverH0_of_a(a) << " ";
-            fp << std::setw(15) << dlogHdloga_of_a(a) << " ";
-            fp << std::setw(15) << get_OmegaM(a) << " ";
-            fp << std::setw(15) << get_OmegaR(a) << " ";
-            fp << std::setw(15) << get_OmegaNu(a) << " ";
-            fp << std::setw(15) << get_OmegaMNu(a) << " ";
-            fp << std::setw(15) << get_OmegaNu_exact(a) << " ";
-            fp << std::setw(15) << get_OmegaLambda(a) << " ";
+            output_row(fp, a);
             fp << "\n";
         }
     }
