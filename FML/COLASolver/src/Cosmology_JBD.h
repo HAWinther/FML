@@ -147,8 +147,14 @@ class CosmologyJBD final : public Cosmology {
     }
 
     //========================================================================
-    // Print some info
+    // Spline evaluation wrappers (for Hubble function and scalar field)
     //========================================================================
+    double HoverH0_of_a(double a) const override { return std::exp(logE_of_loga_spline(std::log(a))); }
+    double dlogHdloga_of_a(double a) const override { return logE_of_loga_spline.deriv_x(std::log(a)); }
+    double phi_of_a(double a) const { return std::exp(logphi_of_loga_spline(std::log(a))); } // normalized to 1 / phi_today = (4+2*wBD) / (3+2*wBD) / GeffG_today
+    double dlogphi_dloga_of_a(double a) const { return logphi_of_loga_spline.deriv_x(std::log(a)); }
+
+    // Override and extend parent info and output functions with additional parameters and scalar field
     void info() const override {
         Cosmology::info();
         if (FML::ThisTask == 0) {
@@ -160,26 +166,16 @@ class CosmologyJBD final : public Cosmology {
             std::cout << "\n";
         }
     }
-
     void output_header(std::ofstream & fp) const override {
         Cosmology::output_header(fp);
-        output_element(fp, "phi");
-        output_element(fp, "dlogphi/dloga");
+        fp << ' '; output_element(fp, "phi");
+        fp << ' '; output_element(fp, "dlogphi/dloga");
     }
-
     void output_row(std::ofstream & fp, double a) const override {
         Cosmology::output_row(fp, a);
-        output_element(fp, phi_of_a(a));
-        output_element(fp, dlogphi_dloga_of_a(a));
+        fp << ' '; output_element(fp, phi_of_a(a));
+        fp << ' '; output_element(fp, dlogphi_dloga_of_a(a));
     }
-
-    //========================================================================
-    // Spline evaluation wrappers (for Hubble function and scalar field)
-    //========================================================================
-    double HoverH0_of_a(double a) const override { return std::exp(logE_of_loga_spline(std::log(a))); }
-    double dlogHdloga_of_a(double a) const override { return logE_of_loga_spline.deriv_x(std::log(a)); }
-    double phi_of_a(double a) const { return std::exp(logphi_of_loga_spline(std::log(a))); } // normalized to 1 / phi_today = (4+2*wBD) / (3+2*wBD) / GeffG_today
-    double dlogphi_dloga_of_a(double a) const { return logphi_of_loga_spline.deriv_x(std::log(a)); }
 
   protected:
     //========================================================================

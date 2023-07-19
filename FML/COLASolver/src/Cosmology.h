@@ -250,56 +250,53 @@ class Cosmology {
     // Output the stuff we compute
     //========================================================================
 
-    // Output an element (e.g. string/double) in a header/row with a desired width
-    template <typename T>
-    void output_element(std::ofstream & fp, const T & element, int width = 15) const {
-        fp << std::setw(width) << element << " ";
+    // Output an element (e.g. string/double) in a header/row with a desired alignment width
+    template <typename T> void output_element(std::ofstream & fp, const T & element, int width = 15) const {
+        fp << std::setw(width) << element;
     }
 
-    // Output a header row of various quantities at scale factor a
-    // without ending the line, so children can override this to output more quantities on the same row
+    // Output a header row of various quantities
+    // Children should override and extend this to output additional quantities
     virtual void output_header(std::ofstream & fp) const {
-        fp << "# ";
-        output_element(fp, "a");
-        output_element(fp, "H/H0");
-        output_element(fp, "dlogH/dloga");
-        output_element(fp, "OmegaM");
-        output_element(fp, "OmegaR");
-        output_element(fp, "OmegaNu");
-        output_element(fp, "OmegaMNu");
-        output_element(fp, "OmegaNu_exact");
-        output_element(fp, "OmegaLambda");
+        fp << '#'; output_element(fp, "a"); // TODO: would be nice to syntax: fp << '#' << output_element("a") << ...
+        fp << ' '; output_element(fp, "H/H0");
+        fp << ' '; output_element(fp, "dlogH/dloga");
+        fp << ' '; output_element(fp, "OmegaM");
+        fp << ' '; output_element(fp, "OmegaR");
+        fp << ' '; output_element(fp, "OmegaNu");
+        fp << ' '; output_element(fp, "OmegaMNu");
+        fp << ' '; output_element(fp, "OmegaNu_exact");
+        fp << ' '; output_element(fp, "OmegaLambda");
+        // end line in output() instead, so additional quantities printed by children come on the same row
     }
 
     // Output a row of various quantities at scale factor a
-    // without ending the line, so children can override this to output more quantities on the same row
+    // Children should override and extend this to output additional quantities
     virtual void output_row(std::ofstream & fp, double a) const {
-        fp << "  "; // compensate for "# " in header
-        output_element(fp, a);
-        output_element(fp, HoverH0_of_a(a));
-        output_element(fp, dlogHdloga_of_a(a));
-        output_element(fp, get_OmegaM(a));
-        output_element(fp, get_OmegaR(a));
-        output_element(fp, get_OmegaNu(a));
-        output_element(fp, get_OmegaMNu(a));
-        output_element(fp, get_OmegaNu_exact(a));
-        output_element(fp, get_OmegaLambda(a));
+        fp << ' '; output_element(fp, a); // first ' ' compensates for '#' in header
+        fp << ' '; output_element(fp, HoverH0_of_a(a));
+        fp << ' '; output_element(fp, dlogHdloga_of_a(a));
+        fp << ' '; output_element(fp, get_OmegaM(a));
+        fp << ' '; output_element(fp, get_OmegaR(a));
+        fp << ' '; output_element(fp, get_OmegaNu(a));
+        fp << ' '; output_element(fp, get_OmegaMNu(a));
+        fp << ' '; output_element(fp, get_OmegaNu_exact(a));
+        fp << ' '; output_element(fp, get_OmegaLambda(a));
+        // end line in output() instead, so additional quantities printed by children come on the same row
     }
 
-    // Master outputter that simply calls output_header() and output_row() in a loop
+    // Master outputter that simply calls its slaves output_header() and output_row()
     // Children should override output_header() and output_row() instead of this
     void output(std::string filename) const {
         std::ofstream fp(filename.c_str());
         if (not fp.is_open())
             return;
 
-        output_header(fp);
-        fp << "\n";
+        output_header(fp); fp << '\n';
         for (int i = 0; i < npts_loga; i++) {
             double loga = std::log(alow) + std::log(ahigh / alow) * i / double(npts_loga);
             double a = std::exp(loga);
-            output_row(fp, a);
-            fp << "\n";
+            output_row(fp, a); fp << '\n';
         }
     }
 
