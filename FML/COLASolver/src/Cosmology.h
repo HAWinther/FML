@@ -250,24 +250,40 @@ class Cosmology {
     // Output the stuff we compute
     //========================================================================
 
+    // Output an element (e.g. string/double) in a header/row with a desired width
+    template <typename T>
+    void output_element(std::ofstream & fp, const T & element, int width = 15) const {
+        fp << std::setw(width) << element << " ";
+    }
+
     // Output a header row of various quantities at scale factor a
     // without ending the line, so children can override this to output more quantities on the same row
     virtual void output_header(std::ofstream & fp) const {
-        fp << "#   a     H/H0    dlogHdloga     OmegaM     OmegaRtot    OmegaLambda";
+        fp << "# ";
+        output_element(fp, "a");
+        output_element(fp, "H/H0");
+        output_element(fp, "dlogH/dloga");
+        output_element(fp, "OmegaM");
+        output_element(fp, "OmegaR");
+        output_element(fp, "OmegaNu");
+        output_element(fp, "OmegaMNu");
+        output_element(fp, "OmegaNu_exact");
+        output_element(fp, "OmegaLambda");
     }
 
     // Output a row of various quantities at scale factor a
     // without ending the line, so children can override this to output more quantities on the same row
     virtual void output_row(std::ofstream & fp, double a) const {
-        fp << std::setw(15) << a << "  ";
-        fp << std::setw(15) << HoverH0_of_a(a) << " ";
-        fp << std::setw(15) << dlogHdloga_of_a(a) << " ";
-        fp << std::setw(15) << get_OmegaM(a) << " ";
-        fp << std::setw(15) << get_OmegaR(a) << " ";
-        fp << std::setw(15) << get_OmegaNu(a) << " ";
-        fp << std::setw(15) << get_OmegaMNu(a) << " ";
-        fp << std::setw(15) << get_OmegaNu_exact(a) << " ";
-        fp << std::setw(15) << get_OmegaLambda(a) << " ";
+        fp << "  "; // compensate for "# " in header
+        output_element(fp, a);
+        output_element(fp, HoverH0_of_a(a));
+        output_element(fp, dlogHdloga_of_a(a));
+        output_element(fp, get_OmegaM(a));
+        output_element(fp, get_OmegaR(a));
+        output_element(fp, get_OmegaNu(a));
+        output_element(fp, get_OmegaMNu(a));
+        output_element(fp, get_OmegaNu_exact(a));
+        output_element(fp, get_OmegaLambda(a));
     }
 
     // Master outputter that simply calls output_header() and output_row() in a loop

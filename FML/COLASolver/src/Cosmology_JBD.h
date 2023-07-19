@@ -163,13 +163,14 @@ class CosmologyJBD final : public Cosmology {
 
     void output_header(std::ofstream & fp) const override {
         Cosmology::output_header(fp);
-        fp << " phi dlogphi_dloga";
+        output_element(fp, "phi");
+        output_element(fp, "dlogphi/dloga");
     }
 
     void output_row(std::ofstream & fp, double a) const override {
         Cosmology::output_row(fp, a);
-        fp << std::setw(15) << phi_of_a(a) << " ";
-        fp << std::setw(15) << dlogphi_dloga_of_a(a) << " ";
+        output_element(fp, phi_of_a(a));
+        output_element(fp, dlogphi_dloga_of_a(a));
     }
 
     //========================================================================
