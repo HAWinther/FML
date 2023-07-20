@@ -73,12 +73,6 @@ if cosmology_model == "JBD" then
   cosmology_JBD_wBD = 1000.0 
   -- The IC is set as to produce G_N / phi(a=1) = GeffG_today
   cosmology_JBD_GeffG_today = 1.0
-  -- We require physical parameters. h is a derived quantity
-  cosmology_JBD_Omegabh2 = 0.025
-  cosmology_JBD_OmegaMNuh2 = 0.0
-  cosmology_JBD_OmegaCDMh2 = 0.12
-  cosmology_JBD_OmegaLambdah2 = 0.3
-  cosmology_JBD_OmegaKh2 = 0.0
 end
 
 ------------------------------------------------------------
