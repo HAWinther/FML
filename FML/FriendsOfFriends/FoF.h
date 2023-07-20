@@ -183,7 +183,7 @@ namespace FML {
             }
         }
 
-        template <class T, int NDIM, class FoFHaloClass>
+        template <class T, int NDIM, class FoFHaloClass = FoFHalo<T, NDIM>>
         void FriendsOfFriends(T * part,
                               size_t NumPart,
                               double linking_length,
