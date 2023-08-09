@@ -36,8 +36,8 @@ class CosmologyDGP final : public Cosmology {
     void info() const override {
         Cosmology::info();
         if (FML::ThisTask == 0) {
-            std::cout << "# OmegaRC     : " << OmegaRC << "\n";
-            std::cout << "# rcH0        : " << std::sqrt(0.25 / OmegaRC) << "\n";
+            std::cout << "# OmegaRC                 : " << OmegaRC << "\n";
+            std::cout << "# rcH0                    : " << std::sqrt(0.25 / OmegaRC) << "\n";
             std::cout << "#=====================================================\n";
             std::cout << "\n";
         }

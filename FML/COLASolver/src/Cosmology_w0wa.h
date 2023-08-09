@@ -34,8 +34,9 @@ class Cosmologyw0waCDM final : public Cosmology {
     void info() const override {
         Cosmology::info();
         if (FML::ThisTask == 0) {
-            std::cout << "# w0          : " << w0 << "\n";
-            std::cout << "# wa          : " << wa << "\n";
+            std::cout << "# Omegab                  : " << Omegab << "\n";
+            std::cout << "# w0                      : " << w0 << "\n";
+            std::cout << "# wa                      : " << wa << "\n";
             std::cout << "#=====================================================\n";
             std::cout << "\n";
         }
@@ -60,6 +61,7 @@ class Cosmologyw0waCDM final : public Cosmology {
     }
 
     double get_OmegaLambda(double a = 1.0) const override {
+        if(a == 1.0) return OmegaLambda;
         double E = HoverH0_of_a(a);
         return OmegaLambda * std::exp(3.0 * wa * (a - 1) - 3 * (1 + w0 + wa) * std::log(a)) / (E * E);
     }
