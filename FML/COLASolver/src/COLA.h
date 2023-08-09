@@ -99,7 +99,7 @@ void cola_add_on_LPT_velocity(FML::PARTICLE::MPIParticles<T> & part,
         std::cout << "Adding on the LPT velocity to particles (COLA)\n";
     }
 
-    auto cosmo = grav->cosmo;
+    auto cosmo = grav->get_cosmo();
 
     // 1LPT
     const double D1 = grav->get_D_1LPT(a);
@@ -186,7 +186,7 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
         std::cout << "[Kick] + [Drift] COLA " << LPT_order << "LPT\n";
     }
 
-    auto cosmo = grav->cosmo;
+    auto cosmo = grav->get_cosmo();
     const double norm_poisson = 1.5 * cosmo->get_OmegaM() * aold * grav->GeffOverG(aold);
 
     const double D1 = grav->get_D_1LPT(a);
@@ -314,7 +314,7 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                         "Error in cola_kick_drift_scaledependent. Initial 2LPT potential is not allocated\n");
     }
 
-    auto cosmo = grav->cosmo;
+    auto cosmo = grav->get_cosmo();
     const double OmegaM = cosmo->get_OmegaM();
     const std::string interpolation_method = "CIC";
 
@@ -650,7 +650,7 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
                         "and get_D_2LPT methods\n");
     }
 
-    auto cosmo = grav->cosmo;
+    auto cosmo = grav->get_cosmo();
     const double vfactor = sign * a * a * cosmo->HoverH0_of_a(a);
     const std::string interpolation_method = "CIC";
 

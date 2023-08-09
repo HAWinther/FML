@@ -1362,7 +1362,7 @@ void NBodySimulation<NDIM, T>::run() {
                     // If the growth factors are scaledependent then we use the scaledependent version
                     // unless simulation_use_scaledependent_cola is set to false
                     const double aini = 1.0 / (1.0 + ic_initial_redshift);
-                    if (simulation_use_scaledependent_cola and grav->scaledependent_growth) {
+                    if (simulation_use_scaledependent_cola and grav->is_growth_scaledependent()) {
                         cola_kick_drift_scaledependent<NDIM, T>(part,
                                                                 grav,
                                                                 phi_1LPT_ini_fourier,
@@ -1454,7 +1454,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
     // We need to have transfer functions for what follows and for that we
     // check [transferdata] which is created if "transferinfofile" is used
     //=============================================================
-    if (force_linear_massive_neutrinos and cosmo->get_OmegaMNu() > 0.0 and transferdata) {
+    if (force_linear_massive_neutrinos and cosmo->get_fMNu() > 0.0 and transferdata) {
 
         // First step we store the initial  density field
         if (not initial_density_field_fourier) {
@@ -1477,9 +1477,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         };
 
         // We compute the total matter density-field deltaM = (OmegaCB deltaCB + OmegaMNu deltaMNu)/OmegaM
-        const double OmegaM = cosmo->get_OmegaM();
-        const double OmegaMNu = cosmo->get_OmegaMNu();
-        const double fMNu = OmegaMNu / OmegaM;
+        const double fMNu = cosmo->get_fMNu();
 
         auto Local_nx = initial_density_field_fourier.get_local_nx();
 #ifdef USE_OMP
@@ -1545,7 +1543,7 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
     auto add_on_LPT_velocity = [&](double addsubtract_sign) {
         const double aini = 1.0 / (1.0 + ic_initial_redshift);
         const double a = 1.0 / (1.0 + redshift);
-        if (simulation_use_scaledependent_cola and grav->scaledependent_growth) {
+        if (simulation_use_scaledependent_cola and grav->is_growth_scaledependent()) {
             cola_add_on_LPT_velocity_scaledependent<NDIM, T>(part,
                                                              grav,
                                                              phi_1LPT_ini_fourier,
