@@ -44,12 +44,15 @@ class GravityModelJBD : public GravityModel<NDIM> {
     }
 
     //========================================================================
-    // In JBD GeffOverG = 1/phi. The value at 1/phi(a=1) is the parameter
-    // cosmology_JBD_GeffG_today
+    // In JBD Geff = G/phi(a) where the parameter GeffG_today = phi_*/phi(0) is a free
+    // parameter that sets the strength of gravity today (we need GeffG_today = 1 to have
+    // the correct Newtonian limit)
     //========================================================================
     double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0) const override { 
       CosmologyJBD * jbd = dynamic_cast<CosmologyJBD *>(this->cosmo.get());
-      return 1.0 / jbd->get_phi(a); 
+      double phi_star = jbd->get_phi_star();
+      double G_over_Gdensityparams = jbd->get_G_over_Gdensityparams();
+      return G_over_Gdensityparams * phi_star / jbd->phi_of_a(a);
     }
 
     //========================================================================
