@@ -41,8 +41,8 @@ cosmology_OmegaCDM = 0.2637
 cosmology_Omegab = 0.049
 -- Massive neutrino density
 cosmology_OmegaMNu = 0.0048
--- Dark energy density (a CC)
-cosmology_OmegaLambda = 0.682407079
+-- Curvature parameter (-k/H0^2)
+cosmology_OmegaK = 0.0
 -- Effective number of relativistic species
 cosmology_Neffective = 3.046
 -- Temperature of CMB today
@@ -67,18 +67,25 @@ if cosmology_model == "DGP" then
   cosmology_dgp_OmegaRC = 0.11642
 end
 
--- Jordan-Brans-Dicke
+-- Jordan-Brans-Dicke. Connection to the hi-class implementation:
+-- If hi-class is run with M_pl_today_smg = ... and normalize_G_NR = no then we should use:
+-- cosmology_JBD_wBD = 100.0
+-- cosmology_JBD_GeffG_today = (4+2*cosmology_JBD_wBD)/(3+2*cosmology_JBD_wBD) / M_pl_today_smg
+-- cosmology_JBD_density_parameter_definition = "hi-class"
+-- If we run hi-class with normalize_G_NR = yes then we need
+-- cosmology_JBD_wBD = 100.0
+-- cosmology_JBD_GeffG_today = 1.0
+-- cosmology_JBD_density_parameter_definition = "hi-class"
 if cosmology_model == "JBD" then 
-  -- The JBD parameter
-  cosmology_JBD_wBD = 1000.0 
-  -- The IC is set as to produce G_N / phi(a=1) = GeffG_today
+  -- The JBD parameter (wBD -> infty gives us GR)
+  cosmology_JBD_wBD = 100.0 
+  -- The value of G today ("should" by unity). We have G_N = G / phi_* where phi_* = (4+2w)/(3+2w).
+  -- G_today = G/phi(a=1) so GeffG_today = phi_*/phi(a=1) so if GeffG_today != 1.0
+  -- we effectively have a different Newtons constant
   cosmology_JBD_GeffG_today = 1.0
-  -- We require physical parameters. h is a derived quantity
-  cosmology_JBD_Omegabh2 = 0.025
-  cosmology_JBD_OmegaMNuh2 = 0.0
-  cosmology_JBD_OmegaCDMh2 = 0.12
-  cosmology_JBD_OmegaLambdah2 = 0.3
-  cosmology_JBD_OmegaKh2 = 0.0
+  -- Density parameter definition Omega = 8pi G_* rho / 3H0^2
+  -- Different choices for G_* (Gbare, Gnewton, Gtoday, hi-class)
+  cosmology_JBD_density_parameter_definition = "hi-class"
 end
 
 ------------------------------------------------------------
@@ -266,7 +273,8 @@ ic_random_field_type = "gaussian"
 -- The grid-size used to generate the IC
 ic_nmesh = particle_Npart_1D
 -- For MG: input LCDM P(k) and use GR to scale back and ensure same IC as for LCDM
-ic_use_gravity_model_GR = true
+-- ONLY use this if you don't have the P(k) for the MG model or if you want to consider PMG/PLCDM run with same IC at high z
+ic_use_gravity_model_GR = false
 -- The LPT order to use for the IC
 ic_LPT_order = 2
 -- The type of input: 
@@ -274,7 +282,7 @@ ic_LPT_order = 2
 -- transferfunction (file with [k (h/Mph) , T(k)  Mpc^2)]
 -- transferinfofile (file containing paths to a bunch of T(k,z) files from CAMB)
 ic_type_of_input = "transferinfofile"
-ic_type_of_input_fileformat = "CAMB" -- CAMB, CLASS (run with format=camb), AXIONCAMB. Easy to add more in CAMBReader.h
+ic_type_of_input_fileformat = "CAMB" -- Format for transferinfofile: CAMB, CLASS (run this with format=camb), AXIONCAMB. Easy to add more in CAMBReader.h
 -- Path to the input (NB: for using the example files update the path at the top of the file below)
 ic_input_filename = "input/transfer_infofile_lcdm_nu0.2.txt"
 -- The redshift of the P(k), T(k) we give as input
