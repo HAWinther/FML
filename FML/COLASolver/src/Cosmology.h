@@ -99,7 +99,7 @@ class Cosmology {
             FML::SOLVERS::ODESOLVER::ODEFunction deriv =
                 [&](double x, [[maybe_unused]] const double * y, double * dydx) {
                     dydx[0] = x * x * std::sqrt(x * x + val * val) / (1.0 + std::exp(x)); // Energy density
-                    dydx[0] = (x == 0.0) ? 0.0 :  x * x * (x * x / std::sqrt(x * x + val * val) / 3.0) / (1.0 + std::exp(x)); // Pressure
+                    dydx[1] = (x == 0.0 and val == 0.0) ? 0.0 :  x * x * (x * x / std::sqrt(x * x + val * val) / 3.0) / (1.0 + std::exp(x)); // Pressure
                     return GSL_SUCCESS;
                 };
             FML::SOLVERS::ODESOLVER::ODESolver ode;
