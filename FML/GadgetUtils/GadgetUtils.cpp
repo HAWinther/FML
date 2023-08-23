@@ -65,10 +65,12 @@ namespace FML {
                     std::string errormessage = "[GadgetReader::read_section] File is not open\n";
                     throw_error(errormessage);
                 }
+
                 int bytes_start, bytes_end;
                 fp.read((char *)&bytes_start, sizeof(bytes_start));
                 if (endian_swap)
                     bytes_start = swap_endian(bytes_start);
+                
                 if (buffer.size() > 0) {
                     if (buffer.size() < size_t(bytes_start)) {
                         std::string errormessage = "[GadgetReader::read_section] Buffersize is too small\n";
@@ -77,10 +79,15 @@ namespace FML {
                 } else {
                     buffer = std::vector<char>(bytes_start);
                 }
+                
+                // NB: we do not swap endian-ness here, the caller will have to do that
+                // depending on what type of data we are reading
                 fp.read(buffer.data(), bytes_start);
+
                 fp.read((char *)&bytes_end, sizeof(bytes_end));
                 if (endian_swap)
                     bytes_end = swap_endian(bytes_end);
+                
                 if (bytes_start != bytes_end) {
                     std::string errormessage = "[GadgetReader::read_section] Error in file BytesStart != ByteEnd!\n";
                     throw_error(errormessage);
@@ -92,26 +99,33 @@ namespace FML {
                     std::string errormessage = "[GadgetReader::read_header] File is not open\n";
                     throw_error(errormessage);
                 }
+
                 int bytes_start, bytes_end;
                 fp.read((char *)&bytes_start, sizeof(bytes_start));
+                if(bytes_start != sizeof(header)) {
+                    // Ok lets try to swap endian and see if that works better
+                    endian_swap = true;
+                    bytes_start = swap_endian(bytes_start);
+                    if (bytes_start != sizeof(header)) {
+                        std::string errormessage =
+                            "[GadgetReader::read_header] Error: ByteStart != sizeof(header) even after endian-swap\n";
+                        throw_error(errormessage);
+                    }
+                }
                 fp.read((char *)&header, bytes_start);
                 fp.read((char *)&bytes_end, sizeof(bytes_end));
+                if(endian_swap) 
+                    bytes_end = swap_endian(bytes_end);
+                
                 if (bytes_start != bytes_end) {
-                    std::string errormessage = "[GadgetReader::read_section] Error in file BytesStart != ByteEnd!\n";
+                    std::string errormessage = "[GadgetReader::read_header] Error: we find that BytesStart != ByteEnd!\n";
                     throw_error(errormessage);
                 }
 
                 // Check if endian of file needs to be changed
                 // Swap endian of header and set flag so that we
                 // swap the endian of the other fields also
-                if (bytes_start != sizeof(header)) {
-                    bytes_start = swap_endian(bytes_start);
-                    bytes_end = swap_endian(bytes_end);
-                    if (bytes_start != sizeof(header)) {
-                        std::string errormessage =
-                            "[GadgetReader::read_section] Error in file. ByteStart != sizeof(header)\n";
-                        throw_error(errormessage);
-                    }
+                if (endian_swap) {
                     swap_endian_vector(header.npart, 6);
                     swap_endian_vector(header.mass, 6);
                     swap_endian_vector(header.npartTotal, 6);
@@ -129,7 +143,6 @@ namespace FML {
                     header.flag_stellarage = swap_endian(header.flag_stellarage);
                     header.flag_metals = swap_endian(header.flag_metals);
                     header.flag_entropy_instead_u = swap_endian(header.flag_entropy_instead_u);
-                    endian_swap = true;
                 }
 
                 header_is_read = true;
@@ -246,8 +259,6 @@ namespace FML {
                 fp.write((char *)&header, bytes);
                 fp.write((char *)&bytes, sizeof(bytes));
             }
-
-            void GadgetReader::set_endian_swap() { endian_swap = true; }
 
             int GadgetReader::get_num_files(std::string filename) {
                 if (not header_is_read) {

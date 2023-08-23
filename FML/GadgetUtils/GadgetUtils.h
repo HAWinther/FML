@@ -114,7 +114,6 @@ namespace FML {
                 std::vector<std::string> fields_in_file = {"POS", "VEL", "ID"};
 
                 void throw_error(std::string errormessage) const;
-                void set_endian_swap();
 
               public:
                 GadgetReader() = default;
@@ -232,8 +231,8 @@ namespace FML {
             }
 
             template <typename T>
-            void swap_endian_vector(T * vec, int n) {
-                for (int i = 0; i < n; i++) {
+            void swap_endian_vector(T * vec, size_t n) {
+                for (size_t i = 0; i < n; i++) {
                     vec[i] = swap_endian(vec[i]);
                 }
             }
@@ -410,6 +409,8 @@ namespace FML {
                                       << " BytesPerParticle: " << sizeof(float) * NDIM << "\n";
                         buffer.resize(bytes);
                         read_section(fp, buffer);
+                        if (endian_swap)
+                          swap_endian_vector((float *) buffer.data(), buffer.size() / sizeof(float));
 
                         size_t index = index_start;
                         for (unsigned int i = 0; i < NumPartFileTot; i++) {
@@ -441,8 +442,6 @@ namespace FML {
                                 auto * pos = FML::PARTICLE::GetPos(part[index++]);
                                 for (int idim = 0; idim < NDIM; idim++) {
                                     pos[idim] = float_buffer[NDIM * i + idim] * pos_norm;
-                                    if (endian_swap)
-                                        pos[idim] = swap_endian(pos[idim]);
                                     if (pos[idim] >= 1.0)
                                         pos[idim] -= 1.0;
                                     if (pos[idim] < 0.0)
@@ -472,6 +471,8 @@ namespace FML {
                                       << " BytesPerParticle: " << sizeof(float) * NDIM << "\n";
                         buffer.resize(bytes);
                         read_section(fp, buffer);
+                        if (endian_swap)
+                          swap_endian_vector((float *) buffer.data(), buffer.size() / sizeof(float));
 
                         // Check if velocities exists in Particle
                         if constexpr (FML::PARTICLE::has_get_vel<T>()) {
@@ -490,8 +491,6 @@ namespace FML {
                                 auto * vel = FML::PARTICLE::GetVel(part[index++]);
                                 for (int idim = 0; idim < NDIM; idim++) {
                                     vel[idim] = float_buffer[NDIM * i + idim] * vel_norm;
-                                    if (endian_swap)
-                                        vel[idim] = swap_endian(vel[idim]);
                                 }
                             }
                         }
@@ -503,6 +502,8 @@ namespace FML {
                                       << " BytesPerParticle: " << sizeof(gadget_particle_id_type) << "\n";
                         buffer.resize(bytes);
                         read_section(fp, buffer);
+                        if (endian_swap)
+                          swap_endian_vector((gadget_particle_id_type *) buffer.data(), buffer.size() / sizeof(gadget_particle_id_type));
 
                         // Check if particle has ID
                         if constexpr (FML::PARTICLE::has_set_id<T>()) {
@@ -518,11 +519,7 @@ namespace FML {
                                 if (i >= header.npart[0] + header.npart[1])
                                     continue;
 #endif
-                                if (endian_swap) {
-                                    FML::PARTICLE::SetID(part[index++], swap_endian(id_buffer[i]));
-                                } else {
-                                    FML::PARTICLE::SetID(part[index++], id_buffer[i]);
-                                }
+                                FML::PARTICLE::SetID(part[index++], id_buffer[i]);
                             }
                         }
                     }
