@@ -218,6 +218,10 @@ class GravityModel {
             init_transferdata(param.get<std::string>("ic_input_filename"), param.get<std::string>("ic_type_of_input_fileformat", "CAMB"));
         }
         this->scaledependent_growth = this->cosmo->get_fMNu() > 0.0;
+    
+        // Experimental option with finite-difference forces (instead of fourier)
+        force_use_finite_difference_force = param.get<bool>("force_use_finite_difference_force", false);
+        force_finite_difference_stencil_order = param.get<int>("force_finite_difference_stencil_order", 4);
     }
 
     //========================================================================
@@ -493,5 +497,9 @@ class GravityModel {
     
     // Does it have scaledependent growth?
     bool scaledependent_growth{false};
+
+    // Experimental option (only for GR so far)
+    bool force_use_finite_difference_force{false};
+    int force_finite_difference_stencil_order{4};
 };
 #endif

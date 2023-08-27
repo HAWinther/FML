@@ -264,6 +264,10 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
     param["force_kernel"] = lfp.read_string("force_kernel", "continuous_greens_function", OPTIONAL);
     param["force_linear_massive_neutrinos"] = lfp.read_bool("force_linear_massive_neutrinos", false, OPTIONAL);
 
+    // Experimental option
+    param["force_use_finite_difference_force"] = lfp.read_bool("force_use_finite_difference_force", false, lfp.optional);
+    param["force_finite_difference_stencil_order"] = lfp.read_int("force_finite_difference_stencil_order", 4, lfp.optional);
+
     //=============================================================
     // Output
     //=============================================================

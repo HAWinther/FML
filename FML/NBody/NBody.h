@@ -61,6 +61,32 @@ namespace FML {
                                                 std::string density_assignment_method_used,
                                                 double norm_poisson_equation);
 
+        /// What fourier space kernel to use for 1/D^2
+        enum GreensFunctionPoissonKernels {
+            // Continuous kernel: -1/k^2
+            CONTINUOUS_GREENS_FUNCTION,
+            // Hockney & Eastwood 1988: -1 / [ 4/dx^2 * Sum sin(ki * dx / 2)^2 ] with dx = 1/Ngrid
+            DISCRETE_GREENS_FUNCTION_HOCKNEYEASTWOOD,
+            // GLAM (-1 / dx^2 Sum 2(1-cos(ki * dx))
+            GLAM_GREENS_FUNCTION
+        };
+
+        /// The Greens function 1/D^2 in fourier space (fiducial -1/k^2)
+        template <int NDIM>
+        double greens_function_poisson_fourier(double kmag2, std::array<double, NDIM> & kvec, int Nmesh, int KERNEL);
+
+        template <int N>
+        void compute_force_from_potential_real(FFTWGrid<N> & potential_real,
+                                               std::array<FFTWGrid<N>, N> & force_grid_real,
+                                               std::string force_interpolation_method,
+                                               int stencil_order);
+
+        template <int N>
+        void compute_potential_real_from_density_fourier(const FFTWGrid<N> & density_grid_fourier,
+                                                         FFTWGrid<N> & potential_real,
+                                                         double norm_poisson_equation,
+                                                         int n_boundary_slices_to_be_allocated);
+
         //===================================================================================
         /// @brief Take a N-body step with a simple Kick-Drift-Kick method (this
         /// method serves mainly as an example for how one can do this).
@@ -1275,6 +1301,218 @@ namespace FML {
                     density_mg_fourier.set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(coupling));
                 }
             }
+        }
+
+        /// Compute the force DPhi from the potential using finite differencing
+        /// The force_interpolation_method is used to set the number of extra slices on the left and right
+        /// stencil_order is 2 for 2-point stencil [phi(i+1) - phi(i-1)] / 2h,
+        /// 4 for 4-point stencil using phi(+/-1), phi(+/-2) and 6 for 6-point stencil
+        template <int N>
+        void compute_force_from_potential_real(FFTWGrid<N> & potential_real,
+                                               std::array<FFTWGrid<N>, N> & force_grid_real,
+                                               std::string force_interpolation_method,
+                                               int stencil_order) {
+
+            const auto Nmesh = potential_real.get_nmesh();
+            const auto Local_nx = potential_real.get_local_nx();
+            const double one_over_h = double(Nmesh);
+
+            // Make sure boundaries are set
+            potential_real.communicate_boundaries();
+
+            // Allocate grid
+            auto nextra =
+                FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(force_interpolation_method);
+            for (int idim = 0; idim < N; idim++)
+                force_grid_real[idim] = FFTWGrid<N>(Nmesh, nextra.first, nextra.second);
+
+            // Adds iplus to idim of (i,j,k,...) and does periodic wrap
+            // Used to compute Phi(i+1,j,k), Phi(i,j,k-2) etc.
+            auto add_to_coord = [=](std::array<int, N> & coord, int idim, int iplus) {
+                coord[idim] += iplus;
+                if (idim == 0) {
+                    if (FML::NTasks == 1 and coord[0] >= Nmesh)
+                        coord[idim] -= Nmesh;
+                    if (FML::NTasks == 1 and coord[0] < 0)
+                        coord[idim] += Nmesh;
+                } else {
+                    if (coord[idim] >= Nmesh)
+                        coord[idim] -= Nmesh;
+                    if (coord[idim] < 0)
+                        coord[idim] += Nmesh;
+                }
+            };
+
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                for (auto && real_index : potential_real.get_real_range(islice, islice + 1)) {
+                    const auto coord = potential_real.get_coord_from_index(real_index);
+
+                    [[maybe_unused]] std::array<FML::GRID::FloatType, N> dPhidx_pm1{};
+                    [[maybe_unused]] std::array<FML::GRID::FloatType, N> dPhidx_pm2{};
+                    [[maybe_unused]] std::array<FML::GRID::FloatType, N> dPhidx_pm3{};
+
+                    // Compute (Phi(i+1) - Phi(i-1))/2
+                    if (stencil_order >= 2) {
+                        for (int idim = 0; idim < N; idim++) {
+
+                            // Add +/- 1 and do periodic wrap
+                            auto coord_plus = coord;
+                            add_to_coord(coord_plus, idim, +1);
+                            auto coord_minus = coord;
+                            add_to_coord(coord_minus, idim, -1);
+
+                            // Fetch values and compute derivative
+                            auto Phi_i_plus_one = potential_real.get_real(coord_plus);
+                            auto Phi_i_minus_one = potential_real.get_real(coord_minus);
+                            dPhidx_pm1[idim] = (Phi_i_plus_one - Phi_i_minus_one) / 2.0;
+                        }
+                    }
+
+                    // Compute (Phi(i+2) - Phi(i-2))/4
+                    if (stencil_order >= 4) {
+                        for (int idim = 0; idim < N; idim++) {
+
+                            // Add +/- 2 and do periodic wrap
+                            auto coord_plus = coord;
+                            add_to_coord(coord_plus, idim, +2);
+                            auto coord_minus = coord;
+                            add_to_coord(coord_minus, idim, -2);
+
+                            // Fetch values and compute derivative
+                            auto Phi_i_plus_two = potential_real.get_real(coord_plus);
+                            auto Phi_i_minus_two = potential_real.get_real(coord_minus);
+                            dPhidx_pm2[idim] = (Phi_i_plus_two - Phi_i_minus_two) / 4.0;
+                        }
+                    }
+
+                    // Compute (Phi(i+3) - Phi(i-3))/26
+                    if (stencil_order >= 6) {
+                        for (int idim = 0; idim < N; idim++) {
+
+                            // Add +/- 3 and do periodic wrap
+                            auto coord_plus = coord;
+                            add_to_coord(coord_plus, idim, +3);
+                            auto coord_minus = coord;
+                            add_to_coord(coord_minus, idim, -3);
+
+                            // Fetch values and compute derivative
+                            auto Phi_i_plus_three = potential_real.get_real(coord_plus);
+                            auto Phi_i_minus_three = potential_real.get_real(coord_minus);
+                            dPhidx_pm3[idim] = (Phi_i_plus_three - Phi_i_minus_three) / 6.0;
+                        }
+                    }
+
+                    // Compute and store the derivative
+                    if (stencil_order == 2) {
+                        for (int idim = 0; idim < N; idim++) {
+                            auto DPhi = dPhidx_pm1[idim] * one_over_h;
+                            force_grid_real[idim].set_real_from_index(real_index, DPhi);
+                        }
+                    } else if (stencil_order == 4) {
+                        for (int idim = 0; idim < N; idim++) {
+                            auto DPhi = (4.0 / 3.0 * dPhidx_pm1[idim] - dPhidx_pm2[idim] / 3.0) * one_over_h;
+                            force_grid_real[idim].set_real_from_index(real_index, DPhi);
+                        }
+                    } else if (stencil_order == 6) {
+                        for (int idim = 0; idim < N; idim++) {
+                            auto DPhi =
+                                (0.1 * dPhidx_pm3[idim] - 0.6 * dPhidx_pm2[idim] + 1.5 * dPhidx_pm1[idim]) * one_over_h;
+                            force_grid_real[idim].set_real_from_index(real_index, DPhi);
+                        }
+                    } else {
+                        throw std::runtime_error("stencil_order != 2,4,6 are not implemented yet");
+                    }
+                }
+            }
+        }
+
+        // This function returns the equivalent of -1/k^2 for different kernels
+        template <int NDIM>
+        double greens_function_poisson_fourier(double kmag2, std::array<double, NDIM> & kvec, int Nmesh, int KERNEL) {
+            switch (KERNEL) {
+                case CONTINUOUS_GREENS_FUNCTION: {
+                    return -1.0 / kmag2;
+                    break;
+                }
+                case DISCRETE_GREENS_FUNCTION_HOCKNEYEASTWOOD: {
+                    double sum = 0.0;
+                    for (int idim = 0; idim < NDIM; idim++) {
+                        double s = std::sin(kvec[idim] / (2.0 * double(Nmesh)));
+                        sum += s * s;
+                    }
+                    sum *= 4.0 * double(Nmesh * Nmesh);
+                    return -1.0 / sum;
+                    break;
+                }
+                case GLAM_GREENS_FUNCTION: {
+                    double sum = 0.0;
+                    for (int idim = 0; idim < NDIM; idim++)
+                        sum += 2.0 * (1.0 - std::cos(kvec[idim] / double(Nmesh)));
+                    sum *= (Nmesh * Nmesh);
+                    if (sum < 1e-3)
+                        return 0.0;
+                    return -1.0 / sum;
+                    break;
+                }
+                default: {
+                    FML::assert_mpi(false,
+                                    "Unknown kernel_choice in compute_force_from_density_fourier. Method set at the "
+                                    "head of this function");
+                    return -1.0 / kmag2;
+                    break;
+                }
+            }
+        }
+
+        /// Compute Phi(x) from the density field in fourier space Phi = F^-1( -1/k^2 * delta * norm)
+        /// n_boundary_slices_to_be_allocated is how many extra boundary slices we allocate, this is
+        /// relevant for when we later want to use the potential to get the force
+        template <int N>
+        void compute_potential_real_from_density_fourier(const FFTWGrid<N> & density_grid_fourier,
+                                                         FFTWGrid<N> & potential_real,
+                                                         double norm_poisson_equation,
+                                                         int n_boundary_slices_to_be_allocated) {
+
+            const int KERNEL = CONTINUOUS_GREENS_FUNCTION;
+            const auto Nmesh = density_grid_fourier.get_nmesh();
+            const auto Local_nx = density_grid_fourier.get_local_nx();
+            const auto Local_x_start = density_grid_fourier.get_local_x_start();
+
+            // Allocate grid with n_boundary_slices_to_be_allocated extra
+            // cells on the left and right
+            potential_real = FFTWGrid<N>(Nmesh, n_boundary_slices_to_be_allocated, n_boundary_slices_to_be_allocated);
+
+            // Loop over all local fourier grid cells
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                double kmag2;
+                std::array<double, N> kvec;
+                std::complex<FML::GRID::FloatType> I(0, 1);
+                for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
+                    if (Local_x_start == 0 and fourier_index == 0) {
+                        potential_real.set_fourier_from_index(0, 0.0);
+                        continue; // DC mode (k=0)
+                    }
+
+                    // Compute potential (-1/k^2) * delta(k) * (3/2 OmegaM a)
+                    density_grid_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                    auto value = density_grid_fourier.get_fourier_from_index(fourier_index);
+                    if (KERNEL == CONTINUOUS_GREENS_FUNCTION) {
+                        value *= -1.0 / kmag2;
+                    } else {
+                        value *= greens_function_poisson_fourier<N>(kmag2, kvec, Nmesh, KERNEL);
+                    }
+                    potential_real.set_fourier_from_index(fourier_index, value * norm_poisson_equation);
+                }
+            }
+
+            // Fourier transform back to real space
+            potential_real.fftw_c2r();
         }
 
 #ifdef USE_GSL
