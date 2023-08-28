@@ -127,3 +127,11 @@ Many people have helped improve the code, here is a list of a few:
 * Bartolomeo Fiorini
 
 * Guilherme Brando
+
+* Kazuya Koyama
+
+* Daniela Saadeh
+
+* Herman Slettmoen
+
+* Renate Mauland-Hus
