@@ -346,7 +346,7 @@ namespace FML {
 
           public:
             LoopIteratorReal(IndexIntType _index, int _Nmesh)
-                : real_index(_index + 2 * (_index / _Nmesh)), index(_index), Nmesh(_Nmesh), odd(_Nmesh % 2) {}
+                : real_index(_index + (_Nmesh % 2 == 1 ? 1 : 2) * (_index / _Nmesh)), index(_index), Nmesh(_Nmesh), odd(_Nmesh % 2) {}
             bool operator!=(LoopIteratorReal const & other) const { return index != other.index; }
             const IndexIntType & operator*() const { return real_index; }
             LoopIteratorReal & operator++() {
