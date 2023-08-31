@@ -382,7 +382,7 @@ namespace FML {
                     if constexpr (kernel_choice == DISCRETE_GREENS_FUNCTION_HAMMING or
                                   kernel_choice == DISCRETE_GREENS_FUNCTION_HAMMING_DECONVOLVE) {
                         for (int idim = 0; idim < N; idim++) {
-                            kvec[idim] = (8.0 * std::sin(kvec[idim] / double(Nmesh)) - std::sin(2 * double(Nmesh))) /
+                            kvec[idim] = (8.0 * std::sin(kvec[idim] / double(Nmesh)) - std::sin(2 * kvec[idim] * double(Nmesh))) /
                                          6.0 * double(Nmesh);
                         }
                     }
