@@ -590,12 +590,20 @@ namespace FML {
                         // Periodic BC for all but x (we have extra slices - XXX should assert that its not too large,
                         // but covered by boundscheck in FFTWGrid if this is turned on)!
                         icoord[0] = ix_nbor[0];
-                        for (int idim = 1; idim < N; idim++) {
+                        for (int idim = istart; idim < N; idim++) {
                             icoord[idim] = ix_nbor[idim];
                             if (icoord[idim] >= Nmesh)
                                 icoord[idim] -= Nmesh;
                             if (icoord[idim] < 0)
                                 icoord[idim] += Nmesh;
+                        }
+
+                        // If only 1 task then we should wrap
+                        if (FML::NTasks == 1) {
+                            if (icoord[0] >= Nmesh)
+                                icoord[0] -= Nmesh;
+                            if (icoord[0] < 0)
+                                icoord[0] += Nmesh;
                         }
                     }
 
@@ -612,7 +620,9 @@ namespace FML {
 #endif
             }
 
-            add_contribution_from_extra_slices<N>(density);
+            // Extra slices only relevant if we have more than 1 task
+            if (FML::NTasks > 1)
+                add_contribution_from_extra_slices<N>(density);
         }
 
         template <int N, int ORDER, class T>
