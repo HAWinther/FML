@@ -590,7 +590,7 @@ namespace FML {
                         // Periodic BC for all but x (we have extra slices - XXX should assert that its not too large,
                         // but covered by boundscheck in FFTWGrid if this is turned on)!
                         icoord[0] = ix_nbor[0];
-                        for (int idim = istart; idim < N; idim++) {
+                        for (int idim = 1; idim < N; idim++) {
                             icoord[idim] = ix_nbor[idim];
                             if (icoord[idim] >= Nmesh)
                                 icoord[idim] -= Nmesh;
