@@ -24,7 +24,7 @@ namespace FML {
     /// and generating initial conditions.
     namespace NBODY {
 
-        // Type alias
+        // Type aliases
         template <int N>
         using FFTWGrid = FML::GRID::FFTWGrid<N>;
         template <class T>
@@ -61,7 +61,7 @@ namespace FML {
                                                 std::string density_assignment_method_used,
                                                 double norm_poisson_equation);
         
-        /// What fourier space kernel to use for 1/D^2
+        /// Enum listing options we have for what fourier space kernel to use for 1/D^2
         enum GreensFunctionLaplaceOperatorKernels {
             // Continuous kernel: -1/k^2 - Poor mans Green's solver
             CONTINUOUS_GREENS_FUNCTION,
@@ -72,9 +72,9 @@ namespace FML {
             DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT,
         };
 
-        /// What kernel to use for D/i
+        /// Enum lising options we have for what kernel to use for the gradient D
         enum GradientKernels {
-            // Continuous kernel D = ik_vec so just k_vec
+            // Continuous kernel D = ik_vec 
             CONTINUOUS_GRADIENT,
             // This kernel corresponds to using the symmetric 2-point formula for D = (phi(i+1)-phi(i-1))
             DISCRETE_TWO_POINT_GRADIENT,
@@ -82,21 +82,18 @@ namespace FML {
             DISCRETE_FOUR_POINT_GRADIENT,
         };
         
-        // The fiducial options for the kernels (and if we should deconvolve the 
-        // density assignment when computing the force ala what Gadget does)
+        /// The choice of the fourier greens-function for D^2 is set by this global and used by methods below.
         int FIDUCIAL_LAPLACE_KERNEL = GreensFunctionLaplaceOperatorKernels::CONTINUOUS_GREENS_FUNCTION;
+        /// The choice of fourier kernel for gradient D is set by this global and used by methods below.
         int FIDUCIAL_GRADIENT_KERNEL = GradientKernels::CONTINUOUS_GRADIENT;
+        /// The choice of deconvolving the density assignement and interpolation when computing the force is set by this global.
         bool FIDUCIAL_DECONVOLVE_FORCE = false;
         
-        /// The kernel for the gradient D (fiducial k_vec)
         double gradient_kernel_fourier(double k_j, int Nmesh, int KERNEL);
-        /// Change fiducial gradient kernel 
         void set_fiducial_gradient_kernel(std::string kernel);
 
-        /// The Greens function 1/D^2 in fourier space (fiducial -1/k^2)
         template <int NDIM>
         double greens_function_laplace_operator_fourier(double kmag2, std::array<double, NDIM> & kvec, int Nmesh, int KERNEL);
-        /// Change fiducial greens function kernel
         void set_fiducial_greens_functions_kernel(std::string kernel);
 
         template <int N>
@@ -252,19 +249,17 @@ namespace FML {
         }
 
         //===================================================================================
-        /// Take a density grid in real space and returns the force \f$ \nabla \phi \f$  where
+        /// @brief Take a density grid in real space and returns the force \f$ \nabla \phi \f$  where
         /// \f$ \nabla^2 \phi = {\rm norm} \cdot \delta \f$
-        /// Different choices for what kernel to use for \f$ \nabla / \nabla^2\f$ are availiable, see the function body
-        /// (is set too be a compile time option). Fiducial choice is the continuous greens function \f$ 1/k^2\f$, but
-        /// we can also choose to also devonvolve the window and discrete kernels (Hamming 1989; same as used in GADGET)
-        /// and Hockney & Eastwood 1988. See e.g. 1603.00476 for a list.
+        /// Different choices for what kernel to use for \f$ \nabla / \nabla^2\f$ are availiable and set by the globals
+        /// FIDUCIAL_LAPLACE_KERNEL and FIDUCIAL_GRADIENT_KERNEL. Fiducial choice is the continuous greens function \f$ D^2 =-k^2\f$, and gradient \f$ D = i\vec{k}\f$.
+        /// We can also choose to deconvole the density assignment and force interpolation (ala Gadget). This is set by the global FIDUCIAL_DECONVOLVE_FORCE.
         ///
         /// @tparam N The dimension of the grid
         ///
         /// @param[in] density_grid_real The density contrast in real space.
         /// @param[out] force_real The force in real space.
         /// @param[in] density_assignment_method_used The density assignement we used to compute the density field.
-        /// Needed only in case kernel_choice (defined in the body of this function) is not CONTINUOUS_GREENS_FUNCTION.
         /// @param[in] norm_poisson_equation The prefactor (norm) to the Poisson equation.
         ///
         //===================================================================================
@@ -283,19 +278,17 @@ namespace FML {
         }
 
         //===================================================================================
-        /// Take a density grid in fourier space and returns the force \f$ \nabla \phi \f$  where
+        /// @brief Take a density grid in fourier space and returns the force \f$ \nabla \phi \f$  where
         /// \f$ \nabla^2 \phi = {\rm norm} \cdot \delta \f$
-        /// Different choices for what kernel to use for \f$ \nabla / \nabla^2\f$ are availiable, see the function body
-        /// (is set too be a compile time option). Fiducial choice is the continuous greens function \f$ 1/k^2\f$, but
-        /// we can also choose to also devonvolve the window and discrete kernels (Hamming 1989; same as used in GADGET)
-        /// and Hockney & Eastwood 1988. See e.g. 1603.00476 for a list and references.
+        /// Different choices for what kernel to use for \f$ \nabla / \nabla^2\f$ are availiable and set by the globals
+        /// FIDUCIAL_LAPLACE_KERNEL and FIDUCIAL_GRADIENT_KERNEL. Fiducial choice is the continuous greens function \f$ D^2 =-k^2\f$, and gradient \f$ D = i\vec{k}\f$.
+        /// We can also choose to deconvole the density assignment and force interpolation (ala Gadget). This is set by the global FIDUCIAL_DECONVOLVE_FORCE.
         ///
         /// @tparam N The dimension of the grid
         ///
         /// @param[in] density_grid_fourier The density contrast in fourier space.
         /// @param[out] force_real The force in real space.
         /// @param[in] density_assignment_method_used The density assignement we used to compute the density field.
-        /// Needed only in case kernel_choice (defined in the body of this function) is not CONTINUOUS_GREENS_FUNCTION.
         /// @param[in] norm_poisson_equation The prefactor (norm) to the Poisson equation.
         ///
         //===================================================================================
@@ -399,7 +392,7 @@ namespace FML {
         }
 
         //===================================================================================
-        /// This moves the particles according to \f$ x_{\rm new} = x + v \Delta t \f$. Note that we assume the
+        /// @brief This moves the particles according to \f$ x_{\rm new} = x + v \Delta t \f$. Note that we assume the
         /// velocities are in such units that \f$ v \Delta t\f$ is a dimensionless shift in [0,1).
         ///
         /// @tparam N The dimension of the grid
@@ -428,7 +421,7 @@ namespace FML {
         }
 
         //===================================================================================
-        /// This moves the particles according to \f$ x_{\rm new} = x + v \Delta t \f$. Note that we assume the
+        /// @brief This moves the particles according to \f$ x_{\rm new} = x + v \Delta t \f$. Note that we assume the
         /// velocities are in such units that \f$ v \Delta t\f$ is a dimensionless shift in [0,1). NB: after this
         /// methods is done the particles might have left the current task and must be communicated (this is done
         /// automatically if you use the MPIParticles version of this method).
@@ -485,7 +478,7 @@ namespace FML {
         }
 
         //===================================================================================
-        /// This moves the particle velocities according to \f$ v_{\rm new} = v + F \Delta t \f$. This method
+        /// @brief This moves the particle velocities according to \f$ v_{\rm new} = v + F \Delta t \f$. This method
         /// assumes the force is normalized such that \f$ F \Delta t \f$ has the same units as your v.
         /// If the flag free_force_grids is set in the source then we free up memory of the force grids after we have
         /// used them. The defalt is false.
@@ -512,7 +505,7 @@ namespace FML {
         }
 
         //===================================================================================
-        /// This moves the particle velocities according to \f$ v_{\rm new} = v + F \Delta t \f$. This method
+        /// @brief This moves the particle velocities according to \f$ v_{\rm new} = v + F \Delta t \f$. This method
         /// assumes the force is normalized such that \f$ F \Delta t \f$ has the same units as your v.
         /// If the flag free_force_grids is set in the source then we free up memory of the force grids after we have
         /// used them. The defalt is false.
@@ -594,7 +587,7 @@ namespace FML {
                                     std::vector<double> velocity_norms);
 
         //=====================================================================
-        /// Generate particles from a given power-spectrum using Lagrangian perturbation theory.
+        /// @brief Generate particles from a given power-spectrum using Lagrangian perturbation theory.
         /// We generate particles in [0,1) and velocities are given by \f$ v_{\rm code} = \frac{a^2 \frac{dx}{dt}}{H_0
         /// B} \f$
         ///
@@ -686,7 +679,7 @@ namespace FML {
         }
 
         //=====================================================================
-        /// Generate particles from a given initial density field using Lagrangian perturbation theory.
+        /// @brief Generate particles from a given initial density field using Lagrangian perturbation theory.
         /// We generate particles in [0,1) and velocities are given by \f$ v_{\rm code} = \frac{a^2 \frac{dx}{dt}}{H_0
         /// B} \f$
         ///
@@ -1295,11 +1288,17 @@ namespace FML {
                 }
             }
         }
-
-        /// Compute the force DPhi from the potential using finite differencing
-        /// The force_interpolation_method is used to set the number of extra slices on the left and right
-        /// stencil_order is 2 for 2-point stencil [phi(i+1) - phi(i-1)] / 2h,
-        /// 4 for 4-point stencil using phi(+/-1), phi(+/-2) and 6 for 6-point stencil
+        
+        //===================================================================================
+        /// @brief Compute the force DPhi from the potential using finite differencing
+        /// 
+        /// @param[in]  potential_real The gravitational potential in real-space
+        /// @param[out] force_grid_real Grids containing the gradient
+        /// @param[in]  force_interpolation_method Used to set the number of extra slices we allocated on the left and right
+        /// @param[in]  stencil_order The order of the (symmetric) stencil. E.g. 2 is for 2-point stencil [phi(i+1) - phi(i-1)] / 2h,
+        ///             4 for 4-point stencil using phi(+/-1), phi(+/-2). We also have 6 implemented.
+        ///
+        //===================================================================================
         template <int N>
         void compute_force_from_potential_real(FFTWGrid<N> & potential_real,
                                                std::array<FFTWGrid<N>, N> & force_grid_real,
@@ -1422,7 +1421,18 @@ namespace FML {
             }
         }
 
-        // This function returns the equivalent of -1/k^2 for different kernels
+        //===================================================================================
+        /// @brief This function returns the equivalent of -1/k^2 for different kernels
+        ///
+        /// @tparam N The dimension of the grid
+        ///
+        /// @param[in] kmag2 The norm of the fourier wavevector 
+        /// @param[in] kvec The fourier wavevector 
+        /// @param[in] Nmesh The grid size
+        /// @param[in] KERNEL The kernel to use for the Greens Function 
+        ///            (see enum GreensFunctionLaplaceOperatorKernels for options)
+        ///
+        //===================================================================================
         template <int NDIM>
         double greens_function_laplace_operator_fourier(double kmag2, std::array<double, NDIM> & kvec, int Nmesh, int KERNEL) {
             const double dx = 1.0 / double(Nmesh);
@@ -1462,6 +1472,13 @@ namespace FML {
             }
         }
         
+        //===================================================================================
+        /// @brief This function sets the fiducal kernel for the greens function.
+        ///
+        /// @param[in] kernel The kernel to use for the Greens Function 
+        ///            (see enum GreensFunctionLaplaceOperatorKernels for options)
+        ///
+        //===================================================================================
         void set_fiducial_greens_functions_kernel(std::string kernel) {
             if (kernel == "" or kernel == "fiducial") {
                 return;
@@ -1476,6 +1493,17 @@ namespace FML {
             }
         }
         
+        //===================================================================================
+        /// @brief This function returns the equivalent of D/i = k_vec for different kernels
+        ///
+        /// @tparam N The dimension of the grid
+        ///
+        /// @param[in] k_j The component of the fourier wavevector
+        /// @param[in] Nmesh The grid size
+        /// @param[in] KERNEL The kernel to use for the gradient
+        ///            (see enum GradientKernels for options)
+        ///
+        //===================================================================================
         double gradient_kernel_fourier(double k_j, int Nmesh, int KERNEL) {
             const double dx = 1.0 / double(Nmesh);
             switch (KERNEL) {
@@ -1500,6 +1528,13 @@ namespace FML {
             }
         }
         
+        //===================================================================================
+        /// @brief This function sets the fiducal kernel for the gradient D/i
+        ///
+        /// @param[in] kernel The kernel to use for the gradient 
+        ///            (see enum GradientKernels for options)
+        ///
+        //===================================================================================
         void set_fiducial_gradient_kernel(std::string kernel) {
             if (kernel == "" or kernel == "fiducial") {
                 return;
@@ -1514,9 +1549,16 @@ namespace FML {
             }
         }
 
-        /// Compute Phi(x) from the density field in fourier space Phi = F^-1( -1/k^2 * delta * norm)
-        /// n_boundary_slices_to_be_allocated is how many extra boundary slices we allocate, this is
-        /// relevant for when we later want to use the potential to get the force
+        //===================================================================================
+        /// @brief Compute Phi(x) from the density field in fourier space Phi = F^-1( 1/D^2 * delta * norm )
+        ///
+        /// @param[in]  density_grid_fourier The density field (already in fourier space)
+        /// @param[out] potential_real The gravitational potential in real-space
+        /// @param[in]  norm_poisson_equation The prefactor to the Poisson equation D^2 Phi = delta * norm
+        /// @param[in]  n_boundary_slices_to_be_allocated For the potential we compute allocate n extra 
+        ///             slices on the left and right (useful if we later want to compute finite difference gradients to get forces)
+        ///
+        //===================================================================================
         template <int N>
         void compute_potential_real_from_density_fourier(const FFTWGrid<N> & density_grid_fourier,
                                                          FFTWGrid<N> & potential_real,
