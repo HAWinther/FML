@@ -17,7 +17,7 @@ all_parameters_must_be_in_file = true
 -- Simulation options
 ------------------------------------------------------------
 -- Label
-simulation_name = "TestSimX"
+simulation_name = "TestSim"
 -- Boxsize of simulation in Mpc/h
 simulation_boxsize = 512.0
 
