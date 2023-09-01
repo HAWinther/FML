@@ -261,7 +261,8 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
     //=============================================================
     param["force_nmesh"] = lfp.read_int("force_nmesh", 0, REQUIRED);
     param["force_density_assignment_method"] = lfp.read_string("force_density_assignment_method", "CIC", OPTIONAL);
-    param["force_kernel"] = lfp.read_string("force_kernel", "continuous_greens_function", OPTIONAL);
+    param["force_greens_function_kernel"] = lfp.read_string("force_greens_function_kernel", "fiducial", OPTIONAL);
+    param["force_gradient_kernel"] = lfp.read_string("force_gradient_kernel", "fiducial", OPTIONAL);
     param["force_linear_massive_neutrinos"] = lfp.read_bool("force_linear_massive_neutrinos", false, OPTIONAL);
 
     // Experimental option

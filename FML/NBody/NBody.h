@@ -60,20 +60,44 @@ namespace FML {
                                                 std::array<FFTWGrid<N>, N> & force_real,
                                                 std::string density_assignment_method_used,
                                                 double norm_poisson_equation);
-
+        
         /// What fourier space kernel to use for 1/D^2
-        enum GreensFunctionPoissonKernels {
-            // Continuous kernel: -1/k^2
+        enum GreensFunctionLaplaceOperatorKernels {
+            // Continuous kernel: -1/k^2 - Poor mans Green's solver
             CONTINUOUS_GREENS_FUNCTION,
-            // Hockney & Eastwood 1988: -1 / [ 4/dx^2 * Sum sin(ki * dx / 2)^2 ] with dx = 1/Ngrid
-            DISCRETE_GREENS_FUNCTION_HOCKNEYEASTWOOD,
-            // GLAM (-1 / dx^2 Sum 2(1-cos(ki * dx))
-            GLAM_GREENS_FUNCTION
+            // This kernel corresponds to using the symmetric 2-point formula for D = (phi(i+1)-phi(i-1)) to get D^2 = [phi(i+1)+phi(i-1)-2phi(i)]/h^2
+            // This is also the one in Hockney & Eastwood 1988 (-1 / [ 4/dx^2 * Sum sin(ki * dx / 2)^2) and the one used by FastPM and GLAM
+            DISCRETE_GREENS_FUNCTION_FROM_TWO_POINT,
+            // This kernel corresponds to using the symmetric 4-point formula for D to get D^2
+            DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT,
         };
+
+        /// What kernel to use for D/i
+        enum GradientKernels {
+            // Continuous kernel D = ik_vec so just k_vec
+            CONTINUOUS_GRADIENT,
+            // This kernel corresponds to using the symmetric 2-point formula for D = (phi(i+1)-phi(i-1))
+            DISCRETE_TWO_POINT_GRADIENT,
+            // This kernel corresponds to using the symmetric 4-point formula for D
+            DISCRETE_FOUR_POINT_GRADIENT,
+        };
+        
+        // The fiducial options for the kernels (and if we should deconvolve the 
+        // density assignment when computing the force ala what Gadget does)
+        int FIDUCIAL_LAPLACE_KERNEL = GreensFunctionLaplaceOperatorKernels::CONTINUOUS_GREENS_FUNCTION;
+        int FIDUCIAL_GRADIENT_KERNEL = GradientKernels::CONTINUOUS_GRADIENT;
+        bool FIDUCIAL_DECONVOLVE_FORCE = false;
+        
+        /// The kernel for the gradient D (fiducial k_vec)
+        double gradient_kernel_fourier(double k_j, int Nmesh, int KERNEL);
+        /// Change fiducial gradient kernel 
+        void set_fiducial_gradient_kernel(std::string kernel);
 
         /// The Greens function 1/D^2 in fourier space (fiducial -1/k^2)
         template <int NDIM>
-        double greens_function_poisson_fourier(double kmag2, std::array<double, NDIM> & kvec, int Nmesh, int KERNEL);
+        double greens_function_laplace_operator_fourier(double kmag2, std::array<double, NDIM> & kvec, int Nmesh, int KERNEL);
+        /// Change fiducial greens function kernel
+        void set_fiducial_greens_functions_kernel(std::string kernel);
 
         template <int N>
         void compute_force_from_potential_real(FFTWGrid<N> & potential_real,
@@ -281,31 +305,18 @@ namespace FML {
                                                 std::string density_assignment_method_used,
                                                 double norm_poisson_equation) {
 
-            // What fourier space kernel to use for D/D^2
-            enum KernelChoices {
-                // 1/k^2
-                CONTINUOUS_GREENS_FUNCTION,
-                // Divide by square of density assignment window function 1/k^2W^2
-                CONTINUOUS_GREENS_FUNCTION_DECONVOLVE,
-                // Hockney & Eastwood 1988: 1 / [ 4/dx^2 * Sum sin(ki * dx / 2)^2 ] with dx = 1/Ngrid
-                DISCRETE_GREENS_FUNCTION_HOCKNEYEASTWOOD,
-                // Hockney & Eastwood 1988: 1 / [ 4/dx^2 * Sum sin(ki * dx / 2)^2 ] / W^2 with dx = 1/Ngrid
-                DISCRETE_GREENS_FUNCTION_HOCKNEYEASTWOOD_DECONVOLVE,
-                // Hamming: D = D/k^2 where D = (8 sin(k) - sin(2k))/6
-                DISCRETE_GREENS_FUNCTION_HAMMING,
-                // Hamming: D/k^2W^2 where D = (8 sin(k) - sin(2k))/6 (GADGET2 kernel)
-                DISCRETE_GREENS_FUNCTION_HAMMING_DECONVOLVE
-            };
-            constexpr int kernel_choice = CONTINUOUS_GREENS_FUNCTION;
+            const int LAPLACE_KERNEL = FIDUCIAL_LAPLACE_KERNEL;
+            const int GRADIENT_KERNEL = FIDUCIAL_GRADIENT_KERNEL;
 
             auto Nmesh = density_grid_fourier.get_nmesh();
             auto Local_nx = density_grid_fourier.get_local_nx();
             auto Local_x_start = density_grid_fourier.get_local_x_start();
 
-            // This is needed in case kernel_choice != CONTINUOUS_GREENS_FUNCTION
-            // The order of the density assignment method
+            // Should we deconvolve the density+force-assignment? 
+            // We set this to false as standard
+            // If we do so we need the window function for the density assignment
+            const bool DECONVOLVE = FIDUCIAL_DECONVOLVE_FORCE;
             const int order = FML::INTERPOLATION::interpolation_order_from_name(density_assignment_method_used);
-            // Window function for density assignment
             const double knyquist = M_PI * Nmesh;
             [[maybe_unused]] auto window_function = [&](std::array<double, N> & kvec) -> double {
                 double w = 1.0;
@@ -320,7 +331,14 @@ namespace FML {
                 return res;
             };
 
-            // Copy over
+            // Make the force-kernel (D/i)_j = k_j for the continuous case)
+            std::vector<double> gradient_kernel(2*(Nmesh/2+1), 0.0);
+            for(int i = -Nmesh/2; i <= Nmesh/2; i++) {
+                double k_j = 2.0 * M_PI * i;
+                gradient_kernel[Nmesh/2 + i] = gradient_kernel_fourier(k_j, Nmesh, GRADIENT_KERNEL);
+            }
+
+            // Allocate grid (just copy it over)
             for (int idim = 0; idim < N; idim++) {
                 force_real[idim] = density_grid_fourier;
                 force_real[idim].add_memory_label("FFTWGrid::compute_force_from_density_fourier::force_real_" +
@@ -333,72 +351,47 @@ namespace FML {
 #pragma omp parallel for
 #endif
             for (int islice = 0; islice < Local_nx; islice++) {
-                [[maybe_unused]] double kmag2;
-                [[maybe_unused]] std::array<double, N> kvec;
+                std::array<double, N> kvec;
                 std::complex<FML::GRID::FloatType> I(0, 1);
                 for (auto && fourier_index : force_real[0].get_fourier_range(islice, islice + 1)) {
-                    if (Local_x_start == 0 and fourier_index == 0)
+                    if (Local_x_start == 0 and fourier_index == 0) {
+                        for (int idim = 0; idim < N; idim++)
+                            force_real[idim].set_fourier_from_index(0, 0.0);
                         continue; // DC mode (k=0)
+                    }
 
-                    force_real[0].get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                    // Fetch value, k_vec_integer, k_vec and |k_vec|
+                    auto k_vec_integer = force_real[0].get_fourier_integer_wavevector_from_index(fourier_index);
+                    double kmag2 = 0.0;
+                    for(int idim = 0; idim < N; idim++) {
+                        kvec[idim] = k_vec_integer[idim] * 2.0 * M_PI;
+                        kmag2 += kvec[idim] * kvec[idim];
+                    }
                     auto value = force_real[0].get_fourier_from_index(fourier_index);
+                
+                    force_real[0].get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
-                    // Divide by k^2 (different kernel choices here, fiducial is just 1/k^2)
-                    if constexpr (kernel_choice == CONTINUOUS_GREENS_FUNCTION) {
-                        value /= kmag2;
-                    } else if constexpr (kernel_choice == CONTINUOUS_GREENS_FUNCTION_DECONVOLVE) {
-                        double W = window_function(kvec);
-                        value /= (kmag2 * W * W);
-                    } else if constexpr (kernel_choice == DISCRETE_GREENS_FUNCTION_HOCKNEYEASTWOOD) {
-                        double sum = 0.0;
-                        for (int idim = 0; idim < N; idim++) {
-                            double s = std::sin(kvec[idim] / (2.0 * double(Nmesh)));
-                            sum += s * s;
-                        }
-                        sum *= 4.0 * double(Nmesh * Nmesh);
-                        value /= sum;
-                    } else if constexpr (kernel_choice == DISCRETE_GREENS_FUNCTION_HOCKNEYEASTWOOD_DECONVOLVE) {
-                        double W = window_function(kvec);
-                        double sum = 0.0;
-                        for (int idim = 0; idim < N; idim++) {
-                            double s = std::sin(kvec[idim] / (2.0 * double(Nmesh)));
-                            sum += s * s;
-                        }
-                        sum *= 4.0 * double(Nmesh * Nmesh) * W * W;
-                        value /= sum;
-                    } else if constexpr (kernel_choice == DISCRETE_GREENS_FUNCTION_HAMMING) {
-                        value *= 1.0 / kmag2;
-                    } else if constexpr (kernel_choice == DISCRETE_GREENS_FUNCTION_HAMMING_DECONVOLVE) {
-                        double W = window_function(kvec);
-                        value *= 1.0 / (kmag2 * W * W);
+                    // Apply kernel 1/D^2
+                    if (LAPLACE_KERNEL == CONTINUOUS_GREENS_FUNCTION){
+                        value *= -1.0 / kmag2;
                     } else {
-                        FML::assert_mpi(
-                            false,
-                            "Unknown kernel_choice in compute_force_from_density_fourier. Method set at the "
-                            "head of this function");
+                        value *= greens_function_laplace_operator_fourier<N>(kmag2, kvec, Nmesh, LAPLACE_KERNEL);
                     }
 
-                    // Modify F[D] = kvec -> (8*sin(ki dx) - sin(2 ki dx))/6dx
-                    if constexpr (kernel_choice == DISCRETE_GREENS_FUNCTION_HAMMING or
-                                  kernel_choice == DISCRETE_GREENS_FUNCTION_HAMMING_DECONVOLVE) {
-                        for (int idim = 0; idim < N; idim++) {
-                            kvec[idim] = (8.0 * std::sin(kvec[idim] / double(Nmesh)) - std::sin(2 * kvec[idim] * double(Nmesh))) /
-                                         6.0 * double(Nmesh);
-                        }
+                    // Deconvolve the density assigment? 
+                    if (DECONVOLVE) {
+                        double W = window_function(kvec);
+                        value /= (W * W);
                     }
 
-                    // Compute force -ik/k^2 delta(k)
+                    // Apply kernel for D to get force so in the end we have
+                    // -ik/k^2 delta(k) for continuous kernels
                     for (int idim = 0; idim < N; idim++) {
                         force_real[idim].set_fourier_from_index(
-                            fourier_index, -I * value * FML::GRID::FloatType(kvec[idim] * norm_poisson_equation));
+                            fourier_index, I * value * FML::GRID::FloatType(gradient_kernel[Nmesh/2 + k_vec_integer[idim]] * norm_poisson_equation));
                     }
                 }
             }
-
-            // Deal with DC mode
-            if (Local_x_start == 0)
-                for (int idim = 0; idim < N; idim++)
-                    force_real[idim].set_fourier_from_index(0, 0.0);
 
             // Fourier transform back to real space
             for (int idim = 0; idim < N; idim++)
@@ -1348,7 +1341,7 @@ namespace FML {
 #endif
             for (int islice = 0; islice < Local_nx; islice++) {
                 for (auto && real_index : potential_real.get_real_range(islice, islice + 1)) {
-                    const auto coord = potential_real.get_coord_from_index(real_index);
+                    const auto coord = potential_real.get_coord_from_index(real_index); // XXX Check this
 
                     [[maybe_unused]] std::array<FML::GRID::FloatType, N> dPhidx_pm1{};
                     [[maybe_unused]] std::array<FML::GRID::FloatType, N> dPhidx_pm2{};
@@ -1431,39 +1424,93 @@ namespace FML {
 
         // This function returns the equivalent of -1/k^2 for different kernels
         template <int NDIM>
-        double greens_function_poisson_fourier(double kmag2, std::array<double, NDIM> & kvec, int Nmesh, int KERNEL) {
+        double greens_function_laplace_operator_fourier(double kmag2, std::array<double, NDIM> & kvec, int Nmesh, int KERNEL) {
+            const double dx = 1.0 / double(Nmesh);
             switch (KERNEL) {
                 case CONTINUOUS_GREENS_FUNCTION: {
                     return -1.0 / kmag2;
                     break;
-                }
-                case DISCRETE_GREENS_FUNCTION_HOCKNEYEASTWOOD: {
-                    double sum = 0.0;
+                  }
+                case DISCRETE_GREENS_FUNCTION_FROM_TWO_POINT: {
+                    double sum1 = 0.0;
                     for (int idim = 0; idim < NDIM; idim++) {
-                        double s = std::sin(kvec[idim] / (2.0 * double(Nmesh)));
-                        sum += s * s;
+                        double _sin_over_two = std::sin(kvec[idim] * dx / 2.0);
+                        sum1 += _sin_over_two * _sin_over_two;
                     }
-                    sum *= 4.0 * double(Nmesh * Nmesh);
-                    return -1.0 / sum;
+                    sum1 *= 4.0 / (dx * dx);
+                    if(sum1 == 0.0) return 0.0;
+                    return -1.0 / sum1;
                     break;
-                }
-                case GLAM_GREENS_FUNCTION: {
-                    double sum = 0.0;
-                    for (int idim = 0; idim < NDIM; idim++)
-                        sum += 2.0 * (1.0 - std::cos(kvec[idim] / double(Nmesh)));
-                    sum *= (Nmesh * Nmesh);
-                    if (sum < 1e-3)
-                        return 0.0;
-                    return -1.0 / sum;
+                  }
+                case DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT: {
+                    double sum2 = 0.0;
+                    for (int idim = 0; idim < NDIM; idim++) {
+                        double _sin = std::sin(kvec[idim] * dx);
+                        double _cos = std::cos(kvec[idim] * dx);
+                        sum2 += _sin*_sin * (9.0 - 8.0 * (_cos - 1.0) + _sin * _sin);
+                    }
+                    sum2 *= 1.0 / (9.0 * dx * dx);
+                    if(sum2 == 0.0) return 0.0;
+                    return -1.0 / sum2;
                     break;
                 }
                 default: {
-                    FML::assert_mpi(false,
-                                    "Unknown kernel_choice in compute_force_from_density_fourier. Method set at the "
-                                    "head of this function");
-                    return -1.0 / kmag2;
+                    FML::assert_mpi(false, "Unknown KERNEL in greens_function_laplace_operator_fourier");
+                    return 0.0;
                     break;
                 }
+            }
+        }
+        
+        void set_fiducial_greens_functions_kernel(std::string kernel) {
+            if (kernel == "" or kernel == "fiducial") {
+                return;
+            } else if(kernel == "continuous") {
+                FIDUCIAL_LAPLACE_KERNEL = CONTINUOUS_GREENS_FUNCTION;
+            } else if(kernel == "discrete_2pt") {
+                FIDUCIAL_LAPLACE_KERNEL = DISCRETE_GREENS_FUNCTION_FROM_TWO_POINT;
+            } else if(kernel == "discrete_4pt") {
+                FIDUCIAL_LAPLACE_KERNEL = DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT;
+            } else {
+                throw std::runtime_error("Error in set_fiducial_greens_functions_kernel. Unknown kernel (continuous, discrete_2pt, discrete_4pt) got" + kernel);
+            }
+        }
+        
+        double gradient_kernel_fourier(double k_j, int Nmesh, int KERNEL) {
+            const double dx = 1.0 / double(Nmesh);
+            switch (KERNEL) {
+                case CONTINUOUS_GRADIENT: {
+                    return k_j;
+                    break;
+                }
+                case DISCRETE_TWO_POINT_GRADIENT: {
+                    return std::sin(k_j * dx) / dx;
+                    break;
+                }
+                case DISCRETE_FOUR_POINT_GRADIENT: 
+                {
+                    return (8.0 * std::sin(k_j * dx) - std::sin(2.0 * k_j * dx)) / (6.0 * dx);
+                    break;
+                }
+                default: {
+                    FML::assert_mpi(false, "Unknown KERNEL in gradient_kernel_fourier");
+                    return 0.0;
+                    break;
+                }
+            }
+        }
+        
+        void set_fiducial_gradient_kernel(std::string kernel) {
+            if (kernel == "" or kernel == "fiducial") {
+                return;
+            } else if(kernel == "continuous") {
+                FIDUCIAL_GRADIENT_KERNEL = CONTINUOUS_GRADIENT;
+            } else if(kernel == "discrete_2pt") {
+                FIDUCIAL_GRADIENT_KERNEL = DISCRETE_TWO_POINT_GRADIENT;
+            } else if(kernel == "discrete_4pt") {
+                FIDUCIAL_GRADIENT_KERNEL = DISCRETE_FOUR_POINT_GRADIENT;
+            } else {
+                throw std::runtime_error("Error in set_fiducial_gradient_kernel. Unknown kernel (continuous, discrete_2pt, discrete_4pt) got" + kernel);
             }
         }
 
@@ -1476,7 +1523,7 @@ namespace FML {
                                                          double norm_poisson_equation,
                                                          int n_boundary_slices_to_be_allocated) {
 
-            const int KERNEL = CONTINUOUS_GREENS_FUNCTION;
+            const int LAPLACE_KERNEL = CONTINUOUS_GREENS_FUNCTION;
             const auto Nmesh = density_grid_fourier.get_nmesh();
             const auto Local_nx = density_grid_fourier.get_local_nx();
             const auto Local_x_start = density_grid_fourier.get_local_x_start();
@@ -1502,10 +1549,10 @@ namespace FML {
                     // Compute potential (-1/k^2) * delta(k) * (3/2 OmegaM a)
                     density_grid_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
                     auto value = density_grid_fourier.get_fourier_from_index(fourier_index);
-                    if (KERNEL == CONTINUOUS_GREENS_FUNCTION) {
+                    if (LAPLACE_KERNEL == CONTINUOUS_GREENS_FUNCTION) {
                         value *= -1.0 / kmag2;
                     } else {
-                        value *= greens_function_poisson_fourier<N>(kmag2, kvec, Nmesh, KERNEL);
+                        value *= greens_function_laplace_operator_fourier<N>(kmag2, kvec, Nmesh, LAPLACE_KERNEL);
                     }
                     potential_real.set_fourier_from_index(fourier_index, value * norm_poisson_equation);
                 }

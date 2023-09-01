@@ -116,7 +116,6 @@ class NBodySimulation {
     // Force and density assignment
     int force_nmesh;                             // The gridsize to bin particles to and compute PM forces
     std::string force_density_assignment_method; // Density assignment (NGP,CIC,TSC,PCS,PQS)
-    std::string force_kernel;                    // The force kernel (see relevant files)
     bool force_linear_massive_neutrinos;         // Include the effects of massive neutrinos using linear theory
 
     // Initial conditions
@@ -498,12 +497,17 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
     // Computing forces
     force_nmesh = param.get<int>("force_nmesh");
     force_density_assignment_method = param.get<std::string>("force_density_assignment_method");
-    force_kernel = param.get<std::string>("force_kernel");
     force_linear_massive_neutrinos = param.get<bool>("force_linear_massive_neutrinos");
+   
+    auto force_greens_function_kernel = param.get<std::string>("force_greens_function_kernel");
+    auto force_gradient_kernel = param.get<std::string>("force_gradient_kernel");
+    FML::NBODY::set_fiducial_greens_functions_kernel(force_greens_function_kernel);
+    FML::NBODY::set_fiducial_gradient_kernel(force_gradient_kernel);
 
     if (FML::ThisTask == 0) {
         std::cout << "force_nmesh                              : " << force_nmesh << "\n";
-        std::cout << "force_kernel                             : " << force_kernel << "\n";
+        std::cout << "force_greens_function_kernel             : " << force_greens_function_kernel << "\n";
+        std::cout << "force_gradient_kernel                    : " << force_gradient_kernel << "\n";
         std::cout << "force_density_assignment_method          : " << force_density_assignment_method << "\n";
         std::cout << "force_linear_massive_neutrinos           : " << force_linear_massive_neutrinos << "\n";
     }
