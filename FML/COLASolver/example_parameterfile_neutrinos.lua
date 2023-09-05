@@ -341,6 +341,12 @@ force_gradient_kernel = "fiducial"
 -- Requires: transferinfofile above (we need all T(k,z))
 force_linear_massive_neutrinos = true
 
+-- Experimental feature:
+-- Use finite difference on the gravitational potential to compute forces
+-- instead of using Fourier transforms. Currently only implemented for GravityModel = GR
+force_use_finite_difference_force = false
+force_finite_difference_stencil_order = 4
+
 ------------------------------------------------------------
 -- On the fly analysis
 ------------------------------------------------------------
