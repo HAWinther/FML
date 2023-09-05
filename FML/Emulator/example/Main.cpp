@@ -11,9 +11,11 @@ using EuclidEmulator2Cosmology = FML::EMULATOR::EUCLIDEMULATOR2::Cosmology;
 
 int main() {
 
-    // The euclidemulator needs the ee2_bindata.dat file, if this is not
-    // in the right folder set the path to it here
-    FML::EMULATOR::EUCLIDEMULATOR2::set_path_to_ee2_data("../EuclidEmulator2.dat");
+    // The euclidemulator needs the EuclidEmulator2.dat file, if this is not
+    // in the right folder set the path to it here. This path is computed automatically
+    // at compiletime so as long as the file is in the same folder as EuclidEmulator2.h 
+    // all should be good
+    // FML::EMULATOR::EUCLIDEMULATOR2::set_path_to_ee2_data("../EuclidEmulator2.dat");
 
     // Set cosmological parameters
     double h = 0.67, OmegaB = 0.05, OmegaM = 0.3, Sum_m_nu = 0.15, n_s = 1.0, w_0 = -1.0, w_a = 0.0, A_s = 2e-9;
