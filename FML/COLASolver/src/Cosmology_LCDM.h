@@ -7,6 +7,7 @@
 #include <FML/ODESolver/ODESolver.h>
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
+#include <FML/Emulator/EuclidEmulator2.h>
 
 #include "Cosmology.h"
 
@@ -32,6 +33,25 @@ class CosmologyLCDM final : public Cosmology {
             std::cout << "#=====================================================\n";
             std::cout << "\n";
         }
+    }
+    
+    //========================================================================
+    // This method returns an estimate for the non-linear Pnl/Plinea
+    // The fiducial option is to use the EuclidEmulator2
+    //========================================================================
+    Spline get_nonlinear_matter_power_spectrum_boost(double redshift) const override {
+        Spline ee2_boost_of_k{"P/Plinear from EuclidEmulator2 uninitialized"};
+        try {
+            FML::EMULATOR::EUCLIDEMULATOR2::Cosmology ee2cosmo(Omegab, OmegaM, Mnu_eV, ns, h, -1.0, 0.0, As);
+            if (ee2cosmo.is_good_to_use()) {
+                FML::EMULATOR::EUCLIDEMULATOR2::EuclidEmulator ee2(ee2cosmo);
+                auto result = ee2.compute_boost(redshift);
+                ee2_boost_of_k = Spline(result.first, result.second, "P/Plinear from EuclidEmulator2");
+            }
+        } catch(...) {
+            ee2_boost_of_k = Spline();
+        }
+        return ee2_boost_of_k;
     }
 
   protected:
