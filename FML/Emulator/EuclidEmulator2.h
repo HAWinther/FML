@@ -56,11 +56,14 @@ namespace FML {
 #ifdef USE_GSL
 
             // We assume the EE2 datafile is in the same folder as this header with a .dat ending instead of .h
-            // If this does not work with your compiler simply comment out these lines and define path_to_ee2_datafile
-            // to be the path you want
+            // If this does not work with your compiler simply define path_to_ee2_datafile below
+#ifdef __FILE__  
             std::string _temp_this_filepath = __FILE__;
             std::string _temp_this_filepath_no_ending = _temp_this_filepath.substr(0, _temp_this_filepath.size()-1);
             std::string path_to_ee2_datafile = _temp_this_filepath_no_ending + "dat";
+#else 
+            std::string path_to_ee2_datafile = "EuclidEmulator2.dat";
+#endif
 
             // Base units
             const double second = 1.0;
