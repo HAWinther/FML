@@ -20,15 +20,19 @@ class CosmologyDGP final : public Cosmology {
     void read_parameters(ParameterMap & param) override {
         Cosmology::read_parameters(param);
         OmegaRC = param.get<double>("cosmology_dgp_OmegaRC");
-        this->OmegaLambda = 0.0;
-        double tmp = std::sqrt(OmegaRC) + std::sqrt(OmegaRC + OmegaCDM + Omegab + OmegaR + this->get_rhoNu_exact(1.0));
-        this->OmegaK = 1.0 - tmp * tmp;
     }
 
     //========================================================================
     // Initialize the cosmology
     //========================================================================
-    void init() override { Cosmology::init(); }
+    void init() override { 
+        Cosmology::init(); 
+
+        // Set OmegaK from closure-condition
+        double tmp = std::sqrt(OmegaRC) + std::sqrt(OmegaRC + OmegaCDM + Omegab + OmegaR + this->get_rhoNu_exact(1.0));
+        this->OmegaK = 1.0 - tmp * tmp;
+        this->OmegaLambda = 0.0;
+    }
 
     //========================================================================
     // Print some info
