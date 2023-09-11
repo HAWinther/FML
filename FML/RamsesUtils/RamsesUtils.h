@@ -327,7 +327,9 @@ namespace FML {
                     fclose(fp);
 
                     // Calculate boxsize in Mpc/h
-                    boxlen_ini = unit_l * h0 / 100.0 / aexp / 3.08567758e24;
+                    // RAMSES uses Mpc/cm = 3.08e24 instead of (the more accurate) 3.08567758e24:
+                    // (https://groups.google.com/g/pynbody-users/c/ZSXesVlgi3o/m/k3VOhs3wDAAJ)
+                    boxlen_ini = unit_l * h0 / 100.0 / aexp / 3.08e24;
 
                     // Read how many particles there is in the files
                     count_particles_in_files();
