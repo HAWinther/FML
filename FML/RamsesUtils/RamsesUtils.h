@@ -97,7 +97,6 @@ namespace FML {
                 double unit_l{0.0};
                 double unit_d{0.0};
                 double unit_t{0.0};
-                double boxlen_ini{0.0};
 
                 // Book-keeping variables
                 bool infofileread{false};
@@ -326,11 +325,6 @@ namespace FML {
                     fscanf(fp, "unit_t      =  %lf\n", &unit_t);
                     fclose(fp);
 
-                    // Calculate boxsize in Mpc/h
-                    // RAMSES uses Mpc/cm = 3.08e24 instead of (the more accurate) 3.08567758e24:
-                    // (https://groups.google.com/g/pynbody-users/c/ZSXesVlgi3o/m/k3VOhs3wDAAJ)
-                    boxlen_ini = unit_l * h0 / 100.0 / aexp / 3.08e24;
-
                     // Read how many particles there is in the files
                     count_particles_in_files();
                     npart = 0;
@@ -349,7 +343,7 @@ namespace FML {
                         std::cout << "=================================="
                                   << "\n";
                         std::cout << "Filename     = " << infofile << "\n";
-                        std::cout << "Box (Mpc/h)  = " << boxlen_ini << "\n";
+                        std::cout << "Box (Mpc/h)  = " << boxlen << "\n";
                         std::cout << "ncpu         = " << ncpu << "\n";
                         std::cout << "npart        = " << npart << "\n";
                         std::cout << "aexp         = " << aexp << "\n";
@@ -437,7 +431,7 @@ namespace FML {
                 void store_velocity(RamsesVelType * vel, char * is_in_domain, T * p, const int dim, const int np) {
                     if constexpr (not FML::PARTICLE::has_get_vel<T>())
                         return;
-                    RamsesVelType velfac = 100.0 * boxlen_ini / aexp;
+                    RamsesVelType velfac = 100.0 * boxlen / aexp;
                     int count = 0;
                     for (int i = 0; i < np; i++) {
                         if (is_in_domain[i] == 1) {
@@ -732,7 +726,7 @@ namespace FML {
                     fclose(fp);
                 }
 
-                double get_boxsize() { return boxlen_ini; }
+                double get_boxsize() { return boxlen; }
                 double get_omega_m() { return omega_m; }
                 double get_omega_l() { return omega_l; }
                 double get_omega_b() { return omega_b; }
@@ -749,7 +743,7 @@ namespace FML {
                                 const float _astart,
                                 const float _omega_m,
                                 const float _omega_l,
-                                const float _boxlen_ini,
+                                const float _boxlen,
                                 const float _h0,
                                 const int _levelmin,
                                 const int NDIM) {
@@ -764,7 +758,7 @@ namespace FML {
                 n1 = n2 = n3 = 1 << _levelmin;
 
                 // dx in Mpc (CHECK THIS)
-                dx = _boxlen_ini / float(n1) * 100.0 / _h0;
+                dx = _boxlen / float(n1) * 100.0 / _h0;
 
                 // Number of floats and ints we write
                 tmp = (5 + NDIM) * sizeof(float) + NDIM * sizeof(int);
