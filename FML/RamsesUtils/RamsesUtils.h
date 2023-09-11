@@ -258,6 +258,16 @@ namespace FML {
                     }
                 }
 
+                double get_boxsize() { return boxlen; }
+                double get_omega_m() { return omega_m; }
+                double get_omega_l() { return omega_l; }
+                double get_omega_b() { return omega_b; }
+                double get_aexp() { return aexp; }
+                double get_h() { return h0/100.; }
+                int get_npart() { return npart; }
+                int get_levelmin() { return levelmin; }
+                int get_levelmax() { return levelmax; }
+
               private:
                 //====================================================
                 // Integer to ramses string
@@ -725,13 +735,6 @@ namespace FML {
                         keep_only_particles_in_domain ? size_t(npart_in_domain_in_file[i]) : size_t(npart_in_file[i]);
                     fclose(fp);
                 }
-
-                double get_boxsize() { return boxlen; }
-                double get_omega_m() { return omega_m; }
-                double get_omega_l() { return omega_l; }
-                double get_omega_b() { return omega_b; }
-                double get_aexp() { return aexp; }
-                double get_h() { return h0/100.; }
             };
 
             //====================================================
