@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <regex>
 #include <sstream>
 #include <stdlib.h>
 #include <vector>
@@ -72,8 +73,8 @@ namespace FML {
                 bool TAG_STORE = false;
 
                 // File description
-                std::string filepath{};
-                int outputnr{0};
+                std::string snapdir{}; // e.g. "output_00123"
+                std::string snapnum;   // e.g. "00123"
 
                 // Total number of particles and particles in local domain
                 size_t npart{0};
@@ -122,28 +123,37 @@ namespace FML {
               public:
                 RamsesReader() = default;
 
-                /// Construct with paths to folder holding output_0000X and the output number.
+                /// Construct with path to directory containing a RAMSES snapshot.
                 /// If _keep_only_particles_in_domain then we will only store particles that fall into the local domain.
                 /// If _buffer_factor > 1 then we will allocate correspondingly more storage in for particles when we
                 /// later read This constructor only reads the info file and gets ready to read. You have to call
                 /// read_ramses to do the actual reading
                 ///
-                /// @param[in] _filepath Path to the folder holding the RAMSES output_0000X folder
-                /// @param[in] _outputnr The X in the RAMSES output_0000X folder
+                /// @param[in] _snapdir RAMSES snapshot directory (e.g. path/to/ramses/output_00001)
                 /// @param[in] _buffer_factor If > 1.0 allocate space for this many more particles when reading in the
                 /// container we use to store particles in
                 /// @param[in] _keep_only_particles_in_domain Only store particles that fall into the local domain (for
                 /// MPI use)
                 /// @param[in] _verbose Optional: show info while reading
                 ///
-                RamsesReader(std::string _filepath,
-                             int _outputnr,
+                RamsesReader(std::string _snapdir,
                              double _buffer_factor,
                              bool _keep_only_particles_in_domain,
                              bool _verbose = false)
-                    : filepath(_filepath), outputnr(_outputnr), buffer_factor(_buffer_factor),
+                    : snapdir(_snapdir), buffer_factor(_buffer_factor),
                       keep_only_particles_in_domain(_keep_only_particles_in_domain),
                       verbose(_verbose and FML::ThisTask == 0) {
+
+                    // ensure snapdir ends with trailing /
+                    if (snapdir.back() != '/') {
+                        snapdir += "/";
+                    }
+
+                    // extract e.g. "00123" from "path/to/snapshot/directory/output_00123/"
+                    std::string output_snapnum = snapdir.substr(snapdir.length()-13, 12); // should be e.g. "output_00123"
+                    assert(std::regex_match(output_snapnum, std::regex("output_[0-9]{5}"))); // verify snapdir ends with e.g. "output_00123/"
+                    snapnum = output_snapnum.substr(output_snapnum.length()-5); // e.g. "00123"
+
                     read_info();
                 }
 
@@ -173,10 +183,8 @@ namespace FML {
                     if (not infofileread)
                         read_info();
 
-                    std::string numberfolder = int_to_ramses_string(outputnr);
                     std::string numberfile = int_to_ramses_string(ifile + 1);
-                    std::string partfile = filepath == "" ? "" : filepath + "/";
-                    partfile = partfile + "output_" + numberfolder + "/part_" + numberfolder + ".out" + numberfile;
+                    std::string partfile = snapdir + "part_" + snapnum + ".out" + numberfile;
                     FILE * fp;
                     if ((fp = fopen(partfile.c_str(), "r")) == nullptr) {
                         throw_error("[RamsesReader::read_ramses_single] Error opening particle file " + partfile);
@@ -232,8 +240,7 @@ namespace FML {
                                   << "\n";
                         std::cout << "=================================="
                                   << "\n";
-                        std::cout << "Folder containing output: " << filepath << "\n";
-                        std::cout << "Outputnumber: " << int_to_ramses_string(outputnr) << "\n";
+                        std::cout << "Snapshot folder: " << snapdir << "\n";
                         std::cout << "Npart total " << npart << " particles\n";
                         if (keep_only_particles_in_domain)
                             for (int i = 0; i < FML::NTasks; i++)
@@ -256,7 +263,6 @@ namespace FML {
                 //====================================================
                 // Integer to ramses string
                 //====================================================
-
                 std::string int_to_ramses_string(int i) {
                     std::stringstream rnum;
                     rnum << std::setfill('0') << std::setw(5) << i;
@@ -291,9 +297,7 @@ namespace FML {
 
                 void read_info() {
                     int ndim_loc;
-                    std::string numbers = int_to_ramses_string(outputnr);
-                    std::string infofile = filepath == "" ? "" : filepath + "/";
-                    infofile = infofile + "output_" + numbers + "/info_" + numbers + ".txt";
+                    std::string infofile = snapdir + "info_" + snapnum + ".txt";
                     FILE * fp;
 
                     // Open file
@@ -363,12 +367,8 @@ namespace FML {
 
                     for (int i = 0; i < ncpu; i++) {
                         FILE * fp;
-                        std::string numberfolder = int_to_ramses_string(outputnr);
                         std::string numberfile = int_to_ramses_string(i + 1);
-                        std::string partfile = "";
-                        if (filepath.compare("") != 0)
-                            partfile = filepath + "/";
-                        partfile = partfile + "output_" + numberfolder + "/part_" + numberfolder + ".out" + numberfile;
+                        std::string partfile = snapdir + "part_" + snapnum + ".out" + numberfile;
 
                         // Open file
                         if ((fp = fopen(partfile.c_str(), "r")) == nullptr) {
@@ -540,12 +540,8 @@ namespace FML {
                 //====================================================
                 template <class T>
                 void read_particle_file(const int i, std::vector<T> & p) {
-                    std::string numberfolder = int_to_ramses_string(outputnr);
                     std::string numberfile = int_to_ramses_string(i + 1);
-                    std::string partfile = "";
-                    if (filepath.compare("") != 0)
-                        partfile = filepath + "/";
-                    partfile = partfile + "output_" + numberfolder + "/part_" + numberfolder + ".out" + numberfile;
+                    std::string partfile = snapdir + "part_" + snapnum + ".out" + numberfile;
                     FILE * fp;
 
                     // Local variables used to read into
