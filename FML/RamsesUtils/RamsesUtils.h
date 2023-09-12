@@ -345,22 +345,21 @@ namespace FML {
                     }
 
                     if (verbose) {
-                        std::cout << "\n";
-                        std::cout << "=================================="
+                        std::cout << "\n"
+                                  << "==================================" << "\n"
+                                  << "Infofile data:                    " << "\n"
+                                  << "==================================" << "\n"
+                                  << "Filename     = " << infofile        << "\n"
+                                  << "Box (Mpc/h)  = " << boxlen          << "\n"
+                                  << "ncpu         = " << ncpu            << "\n"
+                                  << "npart        = " << npart           << "\n"
+                                  << "levelmin     = " << levelmin        << "\n"
+                                  << "levelmax     = " << levelmax        << "\n"
+                                  << "aexp         = " << aexp            << "\n"
+                                  << "H0           = " << h0              << "\n"
+                                  << "omega_m      = " << omega_m         << "\n"
+                                  << "==================================" << "\n"
                                   << "\n";
-                        std::cout << "Infofile data:                    "
-                                  << "\n";
-                        std::cout << "=================================="
-                                  << "\n";
-                        std::cout << "Filename     = " << infofile << "\n";
-                        std::cout << "Box (Mpc/h)  = " << boxlen << "\n";
-                        std::cout << "ncpu         = " << ncpu << "\n";
-                        std::cout << "npart        = " << npart << "\n";
-                        std::cout << "aexp         = " << aexp << "\n";
-                        std::cout << "H0           = " << h0 << "\n";
-                        std::cout << "omega_m      = " << omega_m << "\n";
-                        std::cout << "=================================="
-                                  << "\n\n";
                     }
 
                     infofileread = true;
