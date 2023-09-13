@@ -59,9 +59,9 @@ int main() {
     const bool verbose = true;
     RamsesReader reader(snapdir, buffer_factor, keep_only_particles_in_domain, verbose);
 
-    // The fiducial file format is POS,VEL,MASS,ID,LEVEL,FAMILY,TAG, but
-    // if the format is different one can set it here and we can also set if we want
-    // to store the resulting data or not
+    // The reader tries to automatically detect the particle file format from the header file
+    // The default file format is POS,VEL,MASS,ID,LEVEL,FAMILY,TAG,
+    // If it is not detected, it can be overridden like this:
     std::vector<std::string> fileformat{"POS", "VEL", "MASS", "ID"};
     reader.set_file_format(fileformat);
 

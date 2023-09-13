@@ -386,14 +386,21 @@ namespace FML {
                     fscanf(fp, " Total number of sink particles %*d\n");
                     fscanf(fp, " Particle fields\n"); fgets(fieldcstr, sizeof(fieldcstr), fp);
 
-                    // Detect particle format
+                    // Try to detect particle format
                     std::string fieldstr(fieldcstr);
                     std::vector<std::string> fields;
                     int i1 = 0;
                     int i2 = fieldstr.find(" ");
                     while (i2 != -1) {
                         std::string field_ramses = fieldstr.substr(i1, i2-i1); // i2-i1 is substring *length*
-                        std::string field_fml    = entries_ramses2fml.at(field_ramses); // translate to our naming convention
+                        auto ramses2fml = entries_ramses2fml.find(field_ramses);
+                        if (ramses2fml == entries_ramses2fml.end()) { // not found
+                            if (verbose) {
+                                std::cout << "Failed to detect format from header\n";
+                            }
+                            return;
+                        }
+                        std::string field_fml = ramses2fml->second; // translate to our naming convention
                         fields.push_back(field_fml);
                         i1 = i2 + 1; // skip over ,
                         i2 = fieldstr.find(" ", i1); // find next field after i1
