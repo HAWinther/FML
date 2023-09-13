@@ -110,7 +110,6 @@ namespace FML {
                 double unit_t{0.0};
 
                 // Book-keeping variables
-                bool infofileread{false};
                 size_t npart_read{0};
 
                 double buffer_factor{1.0};
@@ -131,7 +130,7 @@ namespace FML {
                 }
 
               public:
-                RamsesReader() = default;
+                RamsesReader() = delete;
 
                 /// Construct with path to directory containing a RAMSES snapshot.
                 /// If _keep_only_particles_in_domain then we will only store particles that fall into the local domain.
@@ -191,9 +190,6 @@ namespace FML {
                 ///
                 template <class T, class Alloc = std::allocator<T>>
                 void read_ramses_single(int ifile, std::vector<T, Alloc> & p) {
-                    if (not infofileread)
-                        read_info();
-
                     std::string numberfile = int_to_ramses_string(ifile + 1);
                     std::string partfile = snapdir + "part_" + snapnum + ".out" + numberfile;
                     FILE * fp;
@@ -225,9 +221,6 @@ namespace FML {
                 ///
                 template <class T, class Alloc = std::allocator<T>>
                 void read_ramses(std::vector<T, Alloc> & p) {
-                    if (not infofileread)
-                        read_info();
-
                     if (keep_only_particles_in_domain) {
                         size_t nallocate =
                             buffer_factor > 1.0 ? size_t(double(npart_in_domain) * buffer_factor) : npart_in_domain;
@@ -373,8 +366,6 @@ namespace FML {
                                   << "==================================" << "\n"
                                   << "\n";
                     }
-
-                    infofileread = true;
                 }
 
                 //====================================================
