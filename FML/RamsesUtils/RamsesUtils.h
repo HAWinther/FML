@@ -59,7 +59,18 @@ namespace FML {
 
             class RamsesReader {
               private:
-                // What is in the file and if we want to store it or not
+                // Translation of Ramses' to FML's particle field naming convention
+                static const inline std::map<std::string, std::string> entries_ramses2fml = {
+                    {"pos", "POS"},
+                    {"vel", "VEL"},
+                    {"mass", "MASS"},
+                    {"iord", "ID"},
+                    {"level", "LEVEL"},
+                    {"family", "FAMILY"},
+                    {"tag", "TAG"},
+                };
+
+                // What particle fields are in the file, and which of them we want to store
                 std::vector<std::string> entries_in_file{"POS", "VEL", "MASS", "ID", "LEVEL", "FAMILY", "TAG"};
                 std::vector<bool> entries_to_store{true, true, true, true, true, true, true};
 
@@ -154,6 +165,7 @@ namespace FML {
                     snapnum = output_snapnum.substr(output_snapnum.length()-5); // e.g. "00123"
 
                     read_info();
+                    read_header();
                 }
 
                 /// If we have non-standard (or older) file formats set it here
@@ -363,6 +375,47 @@ namespace FML {
                     }
 
                     infofileread = true;
+                }
+
+                //====================================================
+                // Read a ramses header file
+                //====================================================
+
+                void read_header() {
+                    std::string headerfile = snapdir + "header_" + snapnum + ".txt";
+                    FILE *fp = fopen(headerfile.c_str(), "r");
+                    if (fp == nullptr) {
+                        throw_error("[RamsesReader::read_header] Error opening header file " + headerfile);
+                    }
+
+                    char fieldcstr[50]; // big enough to hold "pos vel mass iord level family tag"
+                    fscanf(fp, " Total number of particles %*d\n"); // TODO: use for something?
+                    fscanf(fp, " Total number of dark matter particles %*d\n"); // TODO: use for something?
+                    fscanf(fp, " Total number of star particles %*d\n");
+                    fscanf(fp, " Total number of sink particles %*d\n");
+                    fscanf(fp, " Particle fields\n"); fgets(fieldcstr, sizeof(fieldcstr), fp);
+
+                    // Detect particle format
+                    std::string fieldstr(fieldcstr);
+                    std::vector<std::string> fields;
+                    int i1 = 0;
+                    int i2 = fieldstr.find(" ");
+                    while (i2 != -1) {
+                        std::string field_ramses = fieldstr.substr(i1, i2-i1); // i2-i1 is substring *length*
+                        std::string field_fml    = entries_ramses2fml.at(field_ramses); // translate to our naming convention
+                        fields.push_back(field_fml);
+                        i1 = i2 + 1; // skip over ,
+                        i2 = fieldstr.find(" ", i1); // find next field after i1
+                    } // the loop even handles the last field, because the line has a trailing whitespace!
+                    set_file_format(fields);
+
+                    if (verbose) {
+                        std::cout << "Detected format ";
+                        for (std::string &field : fields) {
+                            std::cout << " " << field;
+                        }
+                        std::cout << " from header\n";
+                    }
                 }
 
                 // Count how many particles are in each file and how many fall into the local domain

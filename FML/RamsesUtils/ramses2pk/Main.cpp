@@ -94,11 +94,11 @@ int main(int argc, char *argv[]) {
 
     // Help stupid users
     if (user_is_stupid) {
-        std::cout << "SYNTAX and (default values):\n"
+        std::cout << "SYNTAX:\n"
                   << "ramses2pk [--help] [--verbose]\n"
-                  << "          [--format=FORMAT]             (POS,VEL,MASS,ID,LEVEL,FAMILY,TAG)\n"
-                  << "          [--density-assignment=METHOD] (PCS)\n"
                   << "          [--subtract-shotnoise]\n"
+                  << "          [--density-assignment=METHOD] (default: PCS)\n"
+                  << "          [--format=FORMAT]             (override detected format, default: POS,VEL,MASS,ID,LEVEL,FAMILY,TAG)\n"
                   << "          path/to/ramses/snapshot/directory/like/output_00123/\n";
     }
 }
