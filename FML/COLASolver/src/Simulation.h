@@ -1363,10 +1363,8 @@ void NBodySimulation<NDIM, T>::run() {
                 // For COLA we can do the kick and drift at the same time
                 if (simulation_use_cola) {
                     timer.StartTiming("COLA");
-                    // If the growth factors are scaledependent then we use the scaledependent version
-                    // unless simulation_use_scaledependent_cola is set to false
                     const double aini = 1.0 / (1.0 + ic_initial_redshift);
-                    if (simulation_use_scaledependent_cola and grav->is_growth_scaledependent()) {
+                    if (simulation_use_scaledependent_cola) {
                         cola_kick_drift_scaledependent<NDIM, T>(part,
                                                                 grav,
                                                                 phi_1LPT_ini_fourier,
@@ -1547,7 +1545,7 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
     auto add_on_LPT_velocity = [&](double addsubtract_sign) {
         const double aini = 1.0 / (1.0 + ic_initial_redshift);
         const double a = 1.0 / (1.0 + redshift);
-        if (simulation_use_scaledependent_cola and grav->is_growth_scaledependent()) {
+        if (simulation_use_scaledependent_cola) {
             cola_add_on_LPT_velocity_scaledependent<NDIM, T>(part,
                                                              grav,
                                                              phi_1LPT_ini_fourier,
