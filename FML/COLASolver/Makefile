@@ -116,7 +116,7 @@ endif
 # Object files to be compiled
 #===================================================
 
-VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/Spline/:$(FML_INCLUDE)/FML/ODESolver/:$(FML_INCLUDE)/FML/GadgetUtils/:$(FML_INCLUDE)/FML/ParameterMap/:$(FML_INCLUDE)/FML/FileUtils/:$(FML_INCLUDE)/FML/Math/:src/
+VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/Spline/:$(FML_INCLUDE)/FML/ODESolver/:$(FML_INCLUDE)/FML/GadgetUtils/:$(FML_INCLUDE)/FML/ParameterMap/:$(FML_INCLUDE)/FML/FileUtils/:src/:$(FML_INCLUDE)/FML/Math/
 OBJS = Main.o Global.o Spline.o ODESolver.o GadgetUtils.o ParameterMap.o FileUtils.o Math.o
 
 TARGETS := nbody

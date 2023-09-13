@@ -1,0 +1,20 @@
+From now on I will add a little log of changes so people can see what has changed without having to look at the commits.
+
+================
+August 9th 2023:
+================
+
+* Main update is the JBD solver (code made by Hermann Slettmoen). This now can use several different density parameter definitons and is compatible with the implementation in hi-class.
+
+* Minor updates to the cosmology class. Added computation of the neutrino pressure (needed for rho-3p terms in some theories like JBD). Added some helper functions (Hermann) for outputting the cosmology. With this its easy to add new columns to the output in child classes (see JBD as an example for how to do this). Extended range for alow/ahigh. 
+
+* The only major change to the code is that I removed OmegaLambda as a free parameter and added OmegaK. It is much more natural to define OmegaK and derive OmegaLambda than the opposite. The main change is that you need to add cosmology_OmegaK to the parameterfile and remove cosmology_OmegaLambda.
+
+* Minor updates to the GravityModel class. Changed to more general output (easier to add more things). Made stuff that should not be public non-public. Changed the alow/ahigh klow/khigh parameters to cover a wider range.
+
+* Files changed:
+  ReadParameters.h (removed the physical parameters for JBD as this is no longer needed)
+  Cosmology.h (switched OmegaLambda for OmegaK as input parameter; improved output methods; adjusted ranges)
+  GravityModel.h (adjusted ranges; improved output methods)
+  COLA.h (cosmetic)
+  Simulation.h (cosmetic)

@@ -19,8 +19,6 @@
 #include <memory>
 #include <vector>
 
-using LinearTransferData = FML::FILEUTILS::LinearTransferData;
-
 /// Base class for gravity models
 template <int NDIM>
 class GravityModel {
@@ -33,46 +31,8 @@ class GravityModel {
     using ParameterMap = FML::UTILS::ParameterMap;
     using DVector = FML::INTERPOLATION::SPLINE::DVector;
     using DVector2D = FML::INTERPOLATION::SPLINE::DVector2D;
-
+    using LinearTransferData = FML::FILEUTILS::LinearTransferData;
     const double H0_hmpc = 1.0 / 2997.92458;
-
-    // The background cosmology
-    std::shared_ptr<Cosmology> cosmo;
-
-    // Does it have scaledependent growth?
-    bool scaledependent_growth{false};
-
-    // For massive neutrinos we need transfer functions
-    std::shared_ptr<LinearTransferData> transferdata;
-
-    // Name of the gravity model
-    std::string name;
-
-    // Scalefactor we normalize D1(aini) = 1 which we take to be the start of the simulation
-    double aini;
-
-    // Ranges for splines of growth-factors
-    const int npts_loga = 200;
-    double alow = 1.0 / 500.0;
-    const double ahigh = 2.0;
-    const int npts_logk = 100;
-    const double koverH0low = 1e-4 / H0_hmpc;
-    const double koverH0high = 10.0 / H0_hmpc;
-
-    // Scaleindependent growth-factors
-    Spline D_1LPT_of_loga{"[D1LPT(log(a)) not yet created]"};
-    Spline D_2LPT_of_loga{"[D2LPT(log(a)) not yet created]"};
-    Spline D_3LPTa_of_loga{"[D3LPTa(log(a)) not yet created]"};
-    Spline D_3LPTb_of_loga{"[D3LPTb(log(a)) not yet created]"};
-
-    // Scaledependent growth factors
-    Spline2D D_1LPT_of_logkoverH0_loga{"[D1LPT(log(k/H0),log(a)) not yet created]"};
-    Spline2D D_2LPT_of_logkoverH0_loga{"[D2LPT(log(k/H0),log(a)) not yet created]"};
-    Spline2D D_3LPTa_of_logkoverH0_loga{"[D3LPTa(log(k/H0),log(a)) not yet created"};
-    Spline2D D_3LPTb_of_logkoverH0_loga{"[D3LPTb(log(k/H0),log(a)) not yet created]"};
-
-    Spline Dmnu_1LPT_of_loga{"[Dmnu1LPT(log(a)) not yet created]"};
-    Spline2D Dmnu_1LPT_of_logkoverH0_loga{"[Dmnu1LPT(log(k/H0),log(a)) not yet created]"};
 
     //========================================================================
     // Constructors
@@ -84,6 +44,8 @@ class GravityModel {
     // Name of the model
     //========================================================================
     std::string get_name() const { return name; }
+
+    std::shared_ptr<Cosmology> get_cosmo() { return cosmo; }
 
     //========================================================================
     // Growth functions
@@ -113,6 +75,11 @@ class GravityModel {
         return not scaledependent_growth ? D_3LPTb_of_loga(std::log(a)) :
                                            D_3LPTb_of_logkoverH0_loga(std::log(koverH0), std::log(a));
     }
+   
+    //========================================================================
+    // Is growth scaledpendent?
+    //========================================================================
+    bool is_growth_scaledependent() const { return scaledependent_growth; }
 
     //========================================================================
     // Growth rates
@@ -141,42 +108,64 @@ class GravityModel {
                                            D_3LPTb_of_logkoverH0_loga.deriv_y(std::log(koverH0), std::log(a)) /
                                                D_3LPTb_of_logkoverH0_loga(std::log(koverH0), std::log(a));
     }
+    
+    // Output an element (e.g. string/double) in a header/row with a desired alignment width
+    template <typename T> void output_element(std::ofstream & fp, const T & element, int width = 15) const {
+        fp << std::setw(width) << element;
+    }
 
     //========================================================================
     // Output the stuff we compute
     //========================================================================
+    virtual void output_header(std::ofstream & fp) {
+        fp << "#"; output_element(fp, "a"); 
+        fp << " "; output_element(fp, "GeffG(a,k)"); 
+        fp << " "; output_element(fp, "D1(a,k)"); 
+        fp << " "; output_element(fp, "D1mnu(a,k)"); 
+        if (transferdata) {
+          fp << " "; output_element(fp, "D1_Tk(a,k)"); 
+          fp << " "; output_element(fp, "D1mnu_Tk(a,k)"); 
+        }
+        fp << " "; output_element(fp, "D2(a,k)"); 
+        fp << " "; output_element(fp, "D3a(a,k)"); 
+        fp << " "; output_element(fp, "D3b(a,k)"); 
+        fp << " "; output_element(fp, "source_1LPT"); 
+        fp << " "; output_element(fp, "source_2LPT"); 
+        fp << " "; output_element(fp, "source_3LPTa"); 
+        fp << " "; output_element(fp, "source_3LPTb"); 
+    }
+    
+    virtual void output_row(std::ofstream & fp, double a, double koverH0) const {
+        fp << " "; output_element(fp, a); 
+        fp << " "; output_element(fp, GeffOverG(a, koverH0)); 
+        fp << " "; output_element(fp, get_D_1LPT(a, koverH0)); 
+        fp << " "; output_element(fp, get_Dmnu_1LPT(a, koverH0)); 
+        if (transferdata) {
+          fp << " "; output_element(fp,  transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, a) /
+                      transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, aini)); 
+          fp << " "; output_element(fp, transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, a) /
+                      transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, aini)); 
+        }
+        fp << " "; output_element(fp, get_D_2LPT(a, koverH0)); 
+        fp << " "; output_element(fp, get_D_3LPTa(a, koverH0)); 
+        fp << " "; output_element(fp, get_D_3LPTb(a, koverH0)); 
+        fp << " "; output_element(fp, source_factor_1LPT(a, koverH0)); 
+        fp << " "; output_element(fp, source_factor_2LPT(a, koverH0)); 
+        fp << " "; output_element(fp, source_factor_3LPTa(a, koverH0)); 
+        fp << " "; output_element(fp, source_factor_3LPTb(a, koverH0)); 
+    }
+
     virtual void output(std::string filename, double koverH0) {
         std::ofstream fp(filename.c_str());
         if (not fp.is_open())
             return;
-        double k = koverH0 * this->H0_hmpc;
-        fp << "#  a  GeffG(a,k)  D1(a,k)  D1mnu(a,k) ( D1_transfer(a,k) D1mnu_transfer(a,k) )  D2(a,k)  D3a(a,k)  "
-              "D3b(a,k)  (source terms)  (Output for k = "
-           << k << " h/Mpc)\n";
+        
+        output_header(fp); 
+        fp << "\n";
         for (int i = 0; i < npts_loga; i++) {
             double loga = std::log(alow) + std::log(ahigh / alow) * i / double(npts_loga - 1);
             double a = std::exp(loga);
-            fp << std::setw(15) << a << "  ";
-            fp << std::setw(15) << GeffOverG(a, koverH0) << " ";
-            fp << std::setw(15) << get_D_1LPT(a, koverH0) << " ";
-            fp << std::setw(15) << get_Dmnu_1LPT(a, koverH0) << " ";
-            if (transferdata) {
-                fp << std::setw(15)
-                   << transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, a) /
-                          transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, aini)
-                   << " ";
-                fp << std::setw(15)
-                   << transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, a) /
-                          transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, aini)
-                   << " ";
-            }
-            fp << std::setw(15) << get_D_2LPT(a, koverH0) << " ";
-            fp << std::setw(15) << get_D_3LPTa(a, koverH0) << " ";
-            fp << std::setw(15) << get_D_3LPTb(a, koverH0) << " ";
-            fp << std::setw(15) << source_factor_1LPT(a, koverH0) << " ";
-            fp << std::setw(15) << source_factor_2LPT(a, koverH0) << " ";
-            fp << std::setw(15) << source_factor_3LPTa(a, koverH0) << " ";
-            fp << std::setw(15) << source_factor_3LPTb(a, koverH0) << " ";
+            output_row(fp, a, koverH0); 
             fp << "\n";
         }
     }
@@ -228,7 +217,11 @@ class GravityModel {
         if (param.get<std::string>("ic_type_of_input") == "transferinfofile") {
             init_transferdata(param.get<std::string>("ic_input_filename"), param.get<std::string>("ic_type_of_input_fileformat", "CAMB"));
         }
-        this->scaledependent_growth = this->cosmo->get_OmegaMNu() > 0.0;
+        this->scaledependent_growth = this->cosmo->get_fMNu() > 0.0;
+    
+        // Experimental option with finite-difference forces (instead of fourier)
+        force_use_finite_difference_force = param.get<bool>("force_use_finite_difference_force", false);
+        force_finite_difference_stencil_order = param.get<int>("force_finite_difference_stencil_order", 4);
     }
 
     //========================================================================
@@ -240,11 +233,9 @@ class GravityModel {
     // Factors in the LPT equations
     virtual double source_factor_1LPT([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
         double factor = 1.0;
-        const double OmegaMNu = this->cosmo->get_OmegaMNu();
-        if (OmegaMNu > 0.0 and koverH0 > 0.0) {
+        const double fnu = this->cosmo->get_fMNu();
+        if (fnu > 0.0 and koverH0 > 0.0) {
             if (transferdata) {
-                const double OmegaM = this->cosmo->get_OmegaM();
-                const double fnu = OmegaMNu / OmegaM;
                 const double T_nu = transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, a);
                 const double T_cb = transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, a);
                 factor = (1.0 - fnu) + fnu * T_nu / T_cb;
@@ -253,13 +244,13 @@ class GravityModel {
         return factor;
     };
     virtual double source_factor_2LPT([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
-        return 1.0 - this->cosmo->get_OmegaMNu() / this->cosmo->get_OmegaM();
+        return 1.0 - this->cosmo->get_fMNu();
     };
     virtual double source_factor_3LPTa([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
-        return 1.0 - this->cosmo->get_OmegaMNu() / this->cosmo->get_OmegaM();
+        return 1.0 - this->cosmo->get_fMNu();
     };
     virtual double source_factor_3LPTb([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
-        return 1.0 - this->cosmo->get_OmegaMNu() / this->cosmo->get_OmegaM();
+        return 1.0 - this->cosmo->get_fMNu();
     };
 
     // This computes the force DPhi from the density field
@@ -278,7 +269,7 @@ class GravityModel {
         // When we have massive neutrinos we use the transferdata when
         // solving the LPT equations so we cannot start earlier than what we
         // have splines for and we cannot do
-        if (scaledependent_growth and cosmo->get_OmegaMNu() > 0.0) {
+        if (scaledependent_growth and cosmo->get_fMNu() > 0.0) {
             const double zstart = transferdata->get_zmax_splines();
             const double astart = 1.0 / (1.0 + zstart);
             if (alow < astart) {
@@ -306,13 +297,12 @@ class GravityModel {
         // We can include solving for the massive neutrinos below
         // However we need the CAMB data to set the IC so its no point
         // but we leave this as an option (basically the equations in 1605.05283)
-        const bool solve_for_neutrinos = transferdata and scaledependent_growth and cosmo->get_OmegaMNu() > 0.0;
+        const bool solve_for_neutrinos = transferdata and scaledependent_growth and cosmo->get_fMNu() > 0.0;
 
         // A quite general set of LPT equations up to 3rd order
         auto solve_growth_equations = [&](double koverH0) -> std::tuple<DVector, DVector, DVector, DVector, DVector> {
             const double OmegaM = cosmo->get_OmegaM();
-            const double OmegaMNu = cosmo->get_OmegaMNu();
-            const double fnu = OmegaMNu / OmegaM;
+            const double fnu = cosmo->get_fMNu();
             FML::SOLVERS::ODESOLVER::ODEFunction deriv = [&](double x, const double * y, double * dydx) {
                 const double a = std::exp(x);
                 const double H = cosmo->HoverH0_of_a(a);
@@ -467,5 +457,49 @@ class GravityModel {
     }
 
     virtual ~GravityModel() = default;
+   
+  protected:
+    
+    // For massive neutrinos we need transfer functions
+    std::shared_ptr<LinearTransferData> transferdata;
+    
+    // The background cosmology
+    std::shared_ptr<Cosmology> cosmo;
+
+    // Name of the gravity model
+    std::string name;
+
+    // Scalefactor we normalize D1(aini) = 1 which we take to be the start of the simulation
+    double aini;
+
+    // Ranges for splines of growth-factors
+    double alow = 1e-4;
+    const double ahigh = 1e1;
+    const int npts_loga = 1000;
+    const double koverH0low = 1e-4 / H0_hmpc;
+    const double koverH0high = 100.0 / H0_hmpc;
+    const int npts_logk = 200;
+
+    // Scaleindependent growth-factors
+    Spline D_1LPT_of_loga{"[D1LPT(log(a)) not yet created]"};
+    Spline D_2LPT_of_loga{"[D2LPT(log(a)) not yet created]"};
+    Spline D_3LPTa_of_loga{"[D3LPTa(log(a)) not yet created]"};
+    Spline D_3LPTb_of_loga{"[D3LPTb(log(a)) not yet created]"};
+
+    // Scaledependent growth factors
+    Spline2D D_1LPT_of_logkoverH0_loga{"[D1LPT(log(k/H0),log(a)) not yet created]"};
+    Spline2D D_2LPT_of_logkoverH0_loga{"[D2LPT(log(k/H0),log(a)) not yet created]"};
+    Spline2D D_3LPTa_of_logkoverH0_loga{"[D3LPTa(log(k/H0),log(a)) not yet created"};
+    Spline2D D_3LPTb_of_logkoverH0_loga{"[D3LPTb(log(k/H0),log(a)) not yet created]"};
+
+    Spline Dmnu_1LPT_of_loga{"[Dmnu1LPT(log(a)) not yet created]"};
+    Spline2D Dmnu_1LPT_of_logkoverH0_loga{"[Dmnu1LPT(log(k/H0),log(a)) not yet created]"};
+    
+    // Does it have scaledependent growth?
+    bool scaledependent_growth{false};
+
+    // Experimental option (only for GR so far)
+    bool force_use_finite_difference_force{false};
+    int force_finite_difference_stencil_order{4};
 };
 #endif

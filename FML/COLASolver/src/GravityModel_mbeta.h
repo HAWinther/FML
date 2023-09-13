@@ -197,8 +197,28 @@ class GravityModelmbeta : public GravityModel<NDIM> {
         }
 
         // Compute total force
-        FML::NBODY::compute_force_from_density_fourier<NDIM>(
-            density_fifth_force, force_real, density_assignment_method_used, norm_poisson_equation);
+        if (this->force_use_finite_difference_force) {
+          // Use a by default a 4 point formula (using phi(i+/-2), phi(i+/-1) to compute DPhi)
+          // This requires 2 boundary cells (stencil_order=2,4,6 implemented so far)
+          const int stencil_order = this->force_finite_difference_stencil_order;
+          const int nboundary_cells = stencil_order/2;
+
+          FFTWGrid<NDIM> potential_real;
+          FML::NBODY::compute_potential_real_from_density_fourier<NDIM>(density_fifth_force,
+              potential_real,
+              norm_poisson_equation,
+              nboundary_cells);
+
+          FML::NBODY::compute_force_from_potential_real<NDIM>(potential_real,
+              force_real,
+              density_assignment_method_used,
+              stencil_order);
+
+        } else {
+          // Computes gravitational force using fourier-methods
+          FML::NBODY::compute_force_from_density_fourier<NDIM>(
+              density_fifth_force, force_real, density_assignment_method_used, norm_poisson_equation);
+        }
     }
     
     virtual void init() override { 

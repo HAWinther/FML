@@ -39,17 +39,41 @@ class GravityModelJBD : public GravityModel<NDIM> {
 
         // Computes gravitational force
         const double norm_poisson_equation = 1.5 * this->cosmo->get_OmegaM() * a * GeffOverG(a);
-        FML::NBODY::compute_force_from_density_fourier<NDIM>(
-            density_fourier, force_real, density_assignment_method_used, norm_poisson_equation);
+        
+        if (this->force_use_finite_difference_force) {
+          // Use a by default a 4 point formula (using phi(i+/-2), phi(i+/-1) to compute DPhi)
+          // This requires 2 boundary cells (stencil_order=2,4,6 implemented so far)
+          const int stencil_order = this->force_finite_difference_stencil_order;
+          const int nboundary_cells = stencil_order/2;
+
+          FFTWGrid<NDIM> potential_real;
+          FML::NBODY::compute_potential_real_from_density_fourier<NDIM>(density_fourier,
+              potential_real,
+              norm_poisson_equation,
+              nboundary_cells);
+
+          FML::NBODY::compute_force_from_potential_real<NDIM>(potential_real,
+              force_real,
+              density_assignment_method_used,
+              stencil_order);
+
+        } else {
+          // Computes gravitational force using fourier-methods
+          FML::NBODY::compute_force_from_density_fourier<NDIM>(
+              density_fourier, force_real, density_assignment_method_used, norm_poisson_equation);
+        }
     }
 
     //========================================================================
-    // In JBD GeffOverG = 1/phi. The value at 1/phi(a=1) is the parameter
-    // cosmology_JBD_GeffG_today
+    // In JBD Geff = G/phi(a) where the parameter GeffG_today = phi_*/phi(0) is a free
+    // parameter that sets the strength of gravity today (we need GeffG_today = 1 to have
+    // the correct Newtonian limit)
     //========================================================================
     double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0) const override { 
       CosmologyJBD * jbd = dynamic_cast<CosmologyJBD *>(this->cosmo.get());
-      return 1.0 / jbd->phi_of_a(a);
+      double phi_star = jbd->get_phi_star();
+      double G_over_Gdensityparams = jbd->get_G_over_Gdensityparams();
+      return G_over_Gdensityparams * phi_star / jbd->phi_of_a(a);
     }
 
     //========================================================================

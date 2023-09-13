@@ -41,8 +41,8 @@ cosmology_OmegaCDM = 0.25
 cosmology_Omegab = 0.05
 -- Massive neutrino density
 cosmology_OmegaMNu = 0.0
--- Dark energy density (a CC)
-cosmology_OmegaLambda = 0.7
+-- Curvature
+cosmology_OmegaK = 0.0
 -- Effective number of relativistic species
 cosmology_Neffective = 3.046
 -- Temperature of CMB today
@@ -240,6 +240,7 @@ ic_LPT_order = 2
 -- reconstruct_from_particles (see below)
 -- read_particles   (if not COLA read GADGET file and use that for sim) 
 ic_type_of_input = "powerspectrum"
+ic_type_of_input_fileformat = "CAMB"
 -- Path to the input (NB: for using the example files update the path at the top of the file below)
 ic_input_filename = "input_power_spectrum.dat"
 -- The redshift of the P(k), T(k) we give as input

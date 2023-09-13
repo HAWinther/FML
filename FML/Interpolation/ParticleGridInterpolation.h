@@ -597,6 +597,14 @@ namespace FML {
                             if (icoord[idim] < 0)
                                 icoord[idim] += Nmesh;
                         }
+
+                        // If only 1 task then we should wrap
+                        if (FML::NTasks == 1) {
+                            if (icoord[0] >= Nmesh)
+                                icoord[0] -= Nmesh;
+                            if (icoord[0] < 0)
+                                icoord[0] += Nmesh;
+                        }
                     }
 
                     // Add particle to grid
@@ -612,7 +620,9 @@ namespace FML {
 #endif
             }
 
-            add_contribution_from_extra_slices<N>(density);
+            // Extra slices only relevant if we have more than 1 task
+            if (FML::NTasks > 1)
+                add_contribution_from_extra_slices<N>(density);
         }
 
         template <int N, int ORDER, class T>

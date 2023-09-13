@@ -50,6 +50,7 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
     if (param.get<std::string>("cosmology_model") == "JBD") {
         param["cosmology_JBD_wBD"] = lfp.read_double("cosmology_JBD_wBD", 10000.0, REQUIRED);
         param["cosmology_JBD_GeffG_today"] = lfp.read_double("cosmology_JBD_GeffG_today", 1.0, OPTIONAL);
+        param["cosmology_JBD_density_parameter_definition"] = lfp.read_string("cosmology_JBD_density_parameter_definition", "hi-class", OPTIONAL);
     }
 
     //=============================================================
@@ -260,8 +261,13 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
     //=============================================================
     param["force_nmesh"] = lfp.read_int("force_nmesh", 0, REQUIRED);
     param["force_density_assignment_method"] = lfp.read_string("force_density_assignment_method", "CIC", OPTIONAL);
-    param["force_kernel"] = lfp.read_string("force_kernel", "continuous_greens_function", OPTIONAL);
+    param["force_greens_function_kernel"] = lfp.read_string("force_greens_function_kernel", "fiducial", OPTIONAL);
+    param["force_gradient_kernel"] = lfp.read_string("force_gradient_kernel", "fiducial", OPTIONAL);
     param["force_linear_massive_neutrinos"] = lfp.read_bool("force_linear_massive_neutrinos", false, OPTIONAL);
+
+    // Experimental option
+    param["force_use_finite_difference_force"] = lfp.read_bool("force_use_finite_difference_force", false, lfp.optional);
+    param["force_finite_difference_stencil_order"] = lfp.read_int("force_finite_difference_stencil_order", 4, lfp.optional);
 
     //=============================================================
     // Output

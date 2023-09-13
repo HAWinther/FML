@@ -116,7 +116,6 @@ class NBodySimulation {
     // Force and density assignment
     int force_nmesh;                             // The gridsize to bin particles to and compute PM forces
     std::string force_density_assignment_method; // Density assignment (NGP,CIC,TSC,PCS,PQS)
-    std::string force_kernel;                    // The force kernel (see relevant files)
     bool force_linear_massive_neutrinos;         // Include the effects of massive neutrinos using linear theory
 
     // Initial conditions
@@ -498,12 +497,17 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
     // Computing forces
     force_nmesh = param.get<int>("force_nmesh");
     force_density_assignment_method = param.get<std::string>("force_density_assignment_method");
-    force_kernel = param.get<std::string>("force_kernel");
     force_linear_massive_neutrinos = param.get<bool>("force_linear_massive_neutrinos");
+   
+    auto force_greens_function_kernel = param.get<std::string>("force_greens_function_kernel");
+    auto force_gradient_kernel = param.get<std::string>("force_gradient_kernel");
+    FML::NBODY::set_fiducial_greens_functions_kernel(force_greens_function_kernel);
+    FML::NBODY::set_fiducial_gradient_kernel(force_gradient_kernel);
 
     if (FML::ThisTask == 0) {
         std::cout << "force_nmesh                              : " << force_nmesh << "\n";
-        std::cout << "force_kernel                             : " << force_kernel << "\n";
+        std::cout << "force_greens_function_kernel             : " << force_greens_function_kernel << "\n";
+        std::cout << "force_gradient_kernel                    : " << force_gradient_kernel << "\n";
         std::cout << "force_density_assignment_method          : " << force_density_assignment_method << "\n";
         std::cout << "force_linear_massive_neutrinos           : " << force_linear_massive_neutrinos << "\n";
     }
@@ -1362,7 +1366,7 @@ void NBodySimulation<NDIM, T>::run() {
                     // If the growth factors are scaledependent then we use the scaledependent version
                     // unless simulation_use_scaledependent_cola is set to false
                     const double aini = 1.0 / (1.0 + ic_initial_redshift);
-                    if (simulation_use_scaledependent_cola and grav->scaledependent_growth) {
+                    if (simulation_use_scaledependent_cola and grav->is_growth_scaledependent()) {
                         cola_kick_drift_scaledependent<NDIM, T>(part,
                                                                 grav,
                                                                 phi_1LPT_ini_fourier,
@@ -1454,7 +1458,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
     // We need to have transfer functions for what follows and for that we
     // check [transferdata] which is created if "transferinfofile" is used
     //=============================================================
-    if (force_linear_massive_neutrinos and cosmo->get_OmegaMNu() > 0.0 and transferdata) {
+    if (force_linear_massive_neutrinos and cosmo->get_fMNu() > 0.0 and transferdata) {
 
         // First step we store the initial  density field
         if (not initial_density_field_fourier) {
@@ -1477,9 +1481,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         };
 
         // We compute the total matter density-field deltaM = (OmegaCB deltaCB + OmegaMNu deltaMNu)/OmegaM
-        const double OmegaM = cosmo->get_OmegaM();
-        const double OmegaMNu = cosmo->get_OmegaMNu();
-        const double fMNu = OmegaMNu / OmegaM;
+        const double fMNu = cosmo->get_fMNu();
 
         auto Local_nx = initial_density_field_fourier.get_local_nx();
 #ifdef USE_OMP
@@ -1545,7 +1547,7 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
     auto add_on_LPT_velocity = [&](double addsubtract_sign) {
         const double aini = 1.0 / (1.0 + ic_initial_redshift);
         const double a = 1.0 / (1.0 + redshift);
-        if (simulation_use_scaledependent_cola and grav->scaledependent_growth) {
+        if (simulation_use_scaledependent_cola and grav->is_growth_scaledependent()) {
             cola_add_on_LPT_velocity_scaledependent<NDIM, T>(part,
                                                              grav,
                                                              phi_1LPT_ini_fourier,
