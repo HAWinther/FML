@@ -18,37 +18,30 @@ class RamsesParticle {
 void compute_power_spectrum(std::string snapdir, std::vector<std::string> format={}, std::string density_assignment="PCS", bool subtract_shotnoise=false, bool verbose=false) {
     const int NDIM = 3;
 
-    // ensure path ends with trailing /
+    // Ensure path ends with trailing /
     if (snapdir.back() != '/') {
         snapdir += "/";
     }
 
-    // Set up Ramses reader
+    // Set up Ramses reader with custom format, if provided
     FML::FILEUTILS::RAMSES::RamsesReader reader(snapdir, 1.0, true, verbose);
-
-    // Set custom format, if provided
     if (not format.empty()) {
         reader.set_file_format(format); // default: POS, VEL, MASS, ID, LEVEL, FAMILY, TAG
     }
 
-    // Read particles
-    std::vector<RamsesParticle<NDIM>> part;
-    reader.read_ramses(part);
+    // Read particles into MPI-able container
+    std::vector<RamsesParticle<NDIM>> parts;
+    reader.read_ramses(parts);
+    FML::PARTICLE::MPIParticles<RamsesParticle<NDIM>> mpiparts;
+    mpiparts.move_from(std::move(parts));
 
-    int Npart = reader.get_npart();
-    int Npart1D = int(round(pow(Npart, 1.0 / NDIM))); // Npart == Npart1D^NDIM
-    assert(int(round(pow(Npart1D, NDIM))) == Npart);
-    int Ncell1D = 1 << reader.get_levelmin(); // == 2^n
-    double Lh = reader.get_boxsize(); // == L / (Mpc/h) == L*h / Mpc
-
-    FML::PARTICLE::MPIParticles<RamsesParticle<NDIM>> parts; // TODO: does not work with mpirun -np 16
-    parts.create(part.data(), Npart, Npart, 0.0, 1.0, false); // TODO: Npart_total? what is x [0.0, 1.0] domain?
+    int Ncell1D = 1 << reader.get_levelmin(); // == 2^n // TODO: what is best to use for AMR sim?
 
     // Compute power spectrum
-    FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> pofk(Ncell1D / 2); // store resulting P(k) // TODO: why divide by 2?
-    pofk.subtract_shotnoise = subtract_shotnoise; // same as in COLA by default // TODO: do this in COLA sims or not? true gives negative P(k)
-    FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM>(Ncell1D, parts.get_particles_ptr(), parts.get_npart(), parts.get_npart_total(), pofk, density_assignment, true);
-    pofk.scale(Lh); // scale to box
+    FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> pofk(Ncell1D / 2);
+    pofk.subtract_shotnoise = subtract_shotnoise;
+    FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM>(Ncell1D, mpiparts.get_particles_ptr(), mpiparts.get_npart(), mpiparts.get_npart_total(), pofk, density_assignment, true);
+    pofk.scale(reader.get_boxsize()); // scale to box
 
     // Output to file
     std::string pkpath = snapdir + "pofk_fml.dat";
@@ -58,7 +51,9 @@ void compute_power_spectrum(std::string snapdir, std::vector<std::string> format
         pkfile << " " << std::setw(15) << pofk.kbin[i] << " " << std::setw(15) << pofk.pofk[i] << "\n";
     }
     pkfile.close();
-    std::cout << "Wrote P(k) to " << pkpath << "\n";
+    if (FML::ThisTask == 0) {
+        std::cout << "Wrote P(k) to " << pkpath << "\n";
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -93,7 +88,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Help stupid users
-    if (user_is_stupid) {
+    if (user_is_stupid and FML::ThisTask == 0) {
         std::cout << "SYNTAX:\n"
                   << "ramses2pk [--help] [--verbose]\n"
                   << "          [--subtract-shotnoise]\n"
