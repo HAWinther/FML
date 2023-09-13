@@ -19,7 +19,7 @@ all_parameters_must_be_in_file = true
 -- Label
 simulation_name = "TestSim"
 -- Boxsize of simulation in Mpc/h
-simulation_boxsize = 1000.0
+simulation_boxsize = 512.0
 
 ------------------------------------------------------------
 -- COLA
@@ -28,7 +28,7 @@ simulation_boxsize = 1000.0
 simulation_use_cola = true
 -- If gravity model has scaledependent growth. If this is false
 -- then we use the k=0 limit of the growth factors when doing COLA
-simulation_use_scaledependent_cola = true
+simulation_use_scaledependent_cola = false
 
 ------------------------------------------------------------
 -- Choose the cosmology 
@@ -36,11 +36,11 @@ simulation_use_scaledependent_cola = true
 -- Cosmology: LCDM, w0waCDM, DGP, JBD, ... add your own ...
 cosmology_model = "LCDM"
 --- CDM density
-cosmology_OmegaCDM = 0.2637
+cosmology_OmegaCDM = 0.2685
 --- Baryon density
 cosmology_Omegab = 0.049
 -- Massive neutrino density
-cosmology_OmegaMNu = 0.0048
+cosmology_OmegaMNu = 0.0
 -- Curvature parameter (-k/H0^2)
 cosmology_OmegaK = 0.0
 -- Effective number of relativistic species
@@ -281,10 +281,10 @@ ic_LPT_order = 2
 -- powerspectrum    (file with [k (h/Mph) , P(k) (Mpc/h)^3)])
 -- transferfunction (file with [k (h/Mph) , T(k)  Mpc^2)]
 -- transferinfofile (file containing paths to a bunch of T(k,z) files from CAMB)
-ic_type_of_input = "transferinfofile"
+ic_type_of_input = "powerspectrum"
 ic_type_of_input_fileformat = "CAMB" -- Format for transferinfofile: CAMB, CLASS (run this with format=camb), AXIONCAMB. Easy to add more in CAMBReader.h
 -- Path to the input (NB: for using the example files update the path at the top of the file below)
-ic_input_filename = "input/transfer_infofile_lcdm_nu0.2.txt"
+ic_input_filename = "input/example_power_spectrum_cb_z0.000.txt"
 -- The redshift of the P(k), T(k) we give as input
 ic_input_redshift = 0.0
 -- The initial redshift of the simulation
@@ -330,12 +330,21 @@ end
 force_nmesh = 128
 -- Density assignment method: NGP, CIC, TSC, PCS, PQS
 force_density_assignment_method = "CIC"
--- The kernel to use when solving the Poisson equation
-force_kernel = "continuous_greens_function"
+-- The kernel to use for D^2 when solving the Poisson equation
+-- Options: (fiducial = continuous, discrete_2pt, discrete_4pt)
+force_greens_function_kernel = "fiducial"
+-- The kernel to use for D when computing forces (with fourier)
+-- Options: (fiducial = continuous, discrete_2pt, discrete_4pt)
+force_gradient_kernel = "fiducial"
 -- Include the effects of massive neutrinos when computing
 -- the density field (density of mnu is the linear prediction)
 -- Requires: transferinfofile above (we need all T(k,z))
 force_linear_massive_neutrinos = true
+
+-- Experimental feature: Use finite difference on the gravitational 
+-- potential to compute forces instead of using Fourier transforms.
+force_use_finite_difference_force = false
+force_finite_difference_stencil_order = 4
 
 ------------------------------------------------------------
 -- On the fly analysis

@@ -23,6 +23,10 @@ class NBodySimulation;
 template <int NDIM, class T>
 void output_pofk_for_every_step(NBodySimulation<NDIM, T> & sim) {
 
+    // Only task 0 outputs
+    if(FML::ThisTask > 0) 
+      return;
+
     //=============================================================
     // Fetch parameters
     //=============================================================
@@ -32,6 +36,7 @@ void output_pofk_for_every_step(NBodySimulation<NDIM, T> & sim) {
     const auto & pofk_cb_every_step = sim.pofk_cb_every_step;
     const auto & pofk_total_every_step = sim.pofk_total_every_step;
     const auto & grav = sim.grav;
+    const auto & cosmo = grav->get_cosmo();
     const auto & grav_ic = sim.grav_ic;
     const auto & transferdata = sim.transferdata;
     const auto & power_initial_spline = sim.power_initial_spline;
@@ -49,20 +54,26 @@ void output_pofk_for_every_step(NBodySimulation<NDIM, T> & sim) {
             double Dini = grav->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
             return pofk_ini * std::pow(D / Dini, 2);
         };
+    
+        // Get non-linear boost (if this is implemented for the model)
+        // Currently we only have EuclidEmulator2 predictions for LCDM and w0waCDM
+        Spline non_linear_boost_of_k = cosmo->get_nonlinear_matter_power_spectrum_boost(redshift);
 
         std::stringstream stream;
         stream << std::fixed << std::setprecision(3) << redshift;
         std::string redshiftstring = stream.str();
         std::string filename = output_folder;
         filename =
-            filename + (filename == "" ? "" : "/") + "pofk_" + simulation_name + "_cb_z" + redshiftstring + ".txt";
+          filename + (filename == "" ? "" : "/") + "pofk_" + simulation_name + "_cb_z" + redshiftstring + ".txt";
 
         std::ofstream fp(filename.c_str());
-        fp << "# k  (h/Mpc)    Pcb(k)  (Mpc/h)^3    Pcb_linear(k) (Mpc/h)^3   ShotnoiseSubtracted = " << std::boolalpha << sim.pofk_subtract_shotnoise << "\n";
+        fp << "# k  (h/Mpc)    Pcb(k)  (Mpc/h)^3    Pcb_linear(k) (Mpc/h)^3    Pcb_NL(k) (Mpc/h)^3   ShotnoiseSubtracted = " << std::boolalpha << sim.pofk_subtract_shotnoise << "\n";
         for (int i = 0; i < binning.n; i++) {
+            double boost = non_linear_boost_of_k ? non_linear_boost_of_k(binning.kbin[i]) : 1.0;
             fp << std::setw(15) << binning.kbin[i] << " ";
             fp << std::setw(15) << binning.pofk[i] << " ";
             fp << std::setw(15) << pofk_cb(binning.kbin[i]) << " ";
+            fp << std::setw(15) << pofk_cb(binning.kbin[i]) * boost << " ";
             fp << "\n";
         }
     }
@@ -96,13 +107,19 @@ void output_pofk_for_every_step(NBodySimulation<NDIM, T> & sim) {
         std::string filename = output_folder;
         filename =
             filename + (filename == "" ? "" : "/") + "pofk_" + simulation_name + "_total_z" + redshiftstring + ".txt";
+        
+        // Get non-linear boost (if this is implemented for the model)
+        // Currently we only have EuclidEmulator2 predictions for LCDM and w0waCDM
+        Spline non_linear_boost_of_k = cosmo->get_nonlinear_matter_power_spectrum_boost(redshift);
 
         std::ofstream fp(filename.c_str());
-        fp << "# k  (h/Mpc)    P(k)  (Mpc/h)^3    P_linear(k)  (Mpc/h)^3  ShotnoiseSubtracted = " << std::boolalpha << sim.pofk_subtract_shotnoise << "\n";
+        fp << "# k  (h/Mpc)    P(k)  (Mpc/h)^3    P_linear(k)  (Mpc/h)^3     P_NL(k)  ShotnoiseSubtracted = " << std::boolalpha << sim.pofk_subtract_shotnoise << "\n";
         for (int i = 0; i < binning.n; i++) {
+            double boost = non_linear_boost_of_k ? non_linear_boost_of_k(binning.kbin[i]) : 1.0;
             fp << std::setw(15) << binning.kbin[i] << " ";
             fp << std::setw(15) << binning.pofk[i] << " ";
             fp << std::setw(15) << pofk_total(binning.kbin[i]) << " ";
+            fp << std::setw(15) << pofk_total(binning.kbin[i]) * boost << " ";
             fp << "\n";
         }
     }
@@ -365,6 +382,7 @@ void compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std
     const auto & transferdata = sim.transferdata;
     const auto & power_initial_spline = sim.power_initial_spline;
     const auto & grav = sim.grav;
+    const auto & cosmo = grav->get_cosmo();
     auto & part = sim.part;
 
     if (FML::ThisTask == 0) {
@@ -428,20 +446,27 @@ void compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std
         v = pofk_cb(v);
     }
     FML::INTERPOLATION::SPLINE::Spline pofk_cb_linear_spline(kvals, pofk_cb_linear, "Pcb(k) linear spline");
-
+        
     // Output to file
     if (FML::ThisTask == 0) {
+    
+        // Get non-linear boost (if this is implemented for the model)
+        // Currently we only have EuclidEmulator2 predictions for LCDM and w0waCDM
+        Spline non_linear_boost_of_k = cosmo->get_nonlinear_matter_power_spectrum_boost(redshift);
+
         std::string filename = snapshot_folder + "/pofk_z" + redshiftstring + ".txt";
         std::ofstream fp(filename.c_str());
         if (not fp.is_open()) {
             std::cout << "Warning: Cannot write power-spectrum to file, failed to open [" << filename << "]\n";
         } else {
-            fp << "#  k  (h/Mpc)          P(k)  (Mpc/h)^3     P_linear(k) (Mpc/h)^3\n";
+            fp << "#  k  (h/Mpc)          P(k)  (Mpc/h)^3     P_linear(k)   P_NL(k) (Mpc/h)^3\n";
             for (int i = 0; i < pofk_cb_binning.n; i++) {
                 const double k = pofk_cb_binning.kbin[i];
+                double boost = non_linear_boost_of_k ? non_linear_boost_of_k(k) : 1.0;
                 fp << std::setw(15) << k << " ";
                 fp << std::setw(15) << pofk_cb_binning.pofk[i] << " ";
                 fp << std::setw(15) << pofk_cb_linear_spline(k) << " ";
+                fp << std::setw(15) << pofk_cb_linear_spline(k) * boost << " ";
                 fp << "\n";
             }
         }

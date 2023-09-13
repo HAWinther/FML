@@ -337,6 +337,15 @@ class Cosmology {
         }
     }
 
+    //========================================================================
+    // This method returns an estimate for the non-linear Pnl/Plinea
+    // The fiducial option is to use the EuclidEmulator2 for LCDM and w0waCDM
+    // Not implemented for other cosmologies
+    //========================================================================
+    virtual Spline get_nonlinear_matter_power_spectrum_boost([[maybe_unused]] double redshift) const {
+        return Spline();
+    }
+
     double get_h() const { return h; }
     double get_As() const { return As; }
     double get_ns() const { return ns; }
