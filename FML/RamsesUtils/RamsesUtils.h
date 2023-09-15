@@ -579,10 +579,10 @@ namespace FML {
                         for (int j = 0; j < header.ndim; j++) {
 
                             int bytes_per_element = read_section(fp, buffer.data(), header.npart);
-                            if (bytes_per_element != sizeof(RamsesVelType))
+                            if (bytes_per_element != sizeof(RamsesPosType))
                                 throw_error("[RamsesReader::read_particle_file] Field POS has size " +
                                             std::to_string(bytes_per_element) + " but size set to " +
-                                            std::to_string(sizeof(RamsesVelType)));
+                                            std::to_string(sizeof(RamsesPosType)));
 
                             // Set the book-keeping array that tells us if a particle is in the domain or not
                             if (j == 0) {
