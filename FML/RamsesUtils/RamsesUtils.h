@@ -343,9 +343,9 @@ namespace FML {
                     // Calculate boxsize in Mpc/h
                     // RAMSES uses Mpc/cm = 3.08e24 instead of (the more accurate) 3.08567758e24:
                     // (see amr/units.f90 and https://groups.google.com/g/pynbody-users/c/ZSXesVlgi3o/m/k3VOhs3wDAAJ)
-                    std::cout << "WARNING: overriding read boxlen = " << boxlen;
+                    if (verbose) std::cout << "WARNING: overriding read boxlen = " << boxlen;
                     boxlen = unit_l * h0 / 100.0 / aexp / 3.08e24;
-                    std::cout << " with boxlen = " << boxlen << " calculated from unit_l = " << unit_l << "\n";
+                    if (verbose) std::cout << " with boxlen = " << boxlen << " calculated from unit_l = " << unit_l << "\n";
 
                     // Read how many particles there is in the files
                     count_particles_in_files();
