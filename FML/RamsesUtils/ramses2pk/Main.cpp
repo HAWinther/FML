@@ -15,7 +15,7 @@ class RamsesParticle {
 };
 
 // snapdir: a ramses snapshot directory path (e.g. path/to/ramses/stuff/output_00001/)
-void compute_power_spectrum(std::string snapdir, std::vector<std::string> format={}, std::string density_assignment="PCS", bool subtract_shotnoise=false, bool verbose=false) {
+void compute_power_spectrum(std::string snapdir, int level=-1, std::vector<std::string> format={}, std::string density_assignment="PCS", bool subtract_shotnoise=false, bool verbose=false) {
     const int NDIM = 3;
 
     // Ensure path ends with trailing /
@@ -35,12 +35,23 @@ void compute_power_spectrum(std::string snapdir, std::vector<std::string> format
     FML::PARTICLE::MPIParticles<RamsesParticle<NDIM>> mpiparts;
     mpiparts.move_from(std::move(parts));
 
-    int Ncell1D = 1 << reader.get_levelmin(); // == 2^n // TODO: what is best to use for AMR sim?
+    if (level == -1) {
+        level = reader.get_levelmin(); // default to minimum level (as in a non-AMR simulation)
+    }
+    int Nmesh = 1 << level; // == 2^levelmin
+    int Nbins = Nmesh / 2;
+
+    if (FML::ThisTask == 0) {
+        std::cout << "Computing P(k) with " << Nbins << " k-bins "
+                  << "on " << Nmesh << "^" << NDIM << " mesh "
+                  << "using " << density_assignment << " density assignment "
+                  << (subtract_shotnoise ? "with" : "without") << " subtracting shot noise\n";
+    }
 
     // Compute power spectrum
-    FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> pofk(Ncell1D / 2);
+    FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> pofk(Nbins);
     pofk.subtract_shotnoise = subtract_shotnoise;
-    FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM>(Ncell1D, mpiparts.get_particles_ptr(), mpiparts.get_npart(), mpiparts.get_npart_total(), pofk, density_assignment, true);
+    FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM>(Nmesh, mpiparts.get_particles_ptr(), mpiparts.get_npart(), mpiparts.get_npart_total(), pofk, density_assignment, true);
     pofk.scale(reader.get_boxsize()); // scale to box
 
     // Output to file
@@ -57,6 +68,7 @@ void compute_power_spectrum(std::string snapdir, std::vector<std::string> format
 }
 
 int main(int argc, char *argv[]) {
+    int level = -1;
     bool subtract_shotnoise = false;
     std::string density_assignment = "PCS";
     std::vector<std::string> format;
@@ -65,7 +77,9 @@ int main(int argc, char *argv[]) {
 
     for (int argi = 1; argi < argc; argi++) {
         std::string arg = argv[argi];
-        if (arg.starts_with("--format=")) { // e.g. --format=POS,VEL,MASS,ID
+        if (arg.starts_with("--level=")) {
+            level = std::stoi(arg.substr(8));
+        } else if (arg.starts_with("--format=")) { // e.g. --format=POS,VEL,MASS,ID
             std::string formatstr = arg.substr(9); // e.g. POS,VEL,MASS,ID
             while (formatstr != "") {
                 int i = formatstr.find(",");
@@ -82,7 +96,7 @@ int main(int argc, char *argv[]) {
             user_is_stupid = true;
             break;
         } else { // argument is a snapshot directory path to process
-            compute_power_spectrum(arg, format, density_assignment, subtract_shotnoise, verbose);
+            compute_power_spectrum(arg, level, format, density_assignment, subtract_shotnoise, verbose);
             user_is_stupid = false; // user figured out how the program works
         }
     }
@@ -90,10 +104,12 @@ int main(int argc, char *argv[]) {
     // Help stupid users
     if (user_is_stupid and FML::ThisTask == 0) {
         std::cout << "SYNTAX:\n"
-                  << "ramses2pk [--help] [--verbose]\n"
-                  << "          [--subtract-shotnoise]\n"
-                  << "          [--density-assignment=METHOD] (default: PCS)\n"
-                  << "          [--format=FORMAT]             (override detected format, default: POS,VEL,MASS,ID,LEVEL,FAMILY,TAG)\n"
-                  << "          path/to/ramses/snapshot/directory/like/output_00123/\n";
+                  << "ramses2pk\n"
+                  << "[--help] [--verbose]\n"
+                  << "[--level=LEVEL]               (default: detected levelmin)\n"
+                  << "[--density-assignment=METHOD] (default: PCS)\n"
+                  << "[--subtract-shotnoise]        (default: off)\n"
+                  << "[--format=FORMAT]             (default: detected or POS,VEL,MASS,ID,LEVEL,FAMILY,TAG)\n"
+                  << "ramses/simulation/snapshot/   (usually .../output_00123/)\n";
     }
 }
