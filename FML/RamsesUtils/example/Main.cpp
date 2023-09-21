@@ -49,21 +49,19 @@ int main() {
     using RamsesReader = FML::FILEUTILS::RAMSES::RamsesReader;
 
     // Set up the Ramses reader
-    // output_number is X in output_0000X
     // keep_only_particles_in_domain means each task only keeps particles in its own domain
     // so after we are done the particles are distributed among tasks
     // buffer_factor (1.0): If keep_only_particles_in_domain then we allocate this number times the 
     // particles we need (only needed if we want extra capacity in the vector we store the particles in)
-    std::string outfolder = "../../../TestData/ExampleRamsesSnapshot/";
-    const int output_number = 8;
+    std::string snapdir = "../../../TestData/ExampleRamsesSnapshot/output_00008";
     const bool keep_only_particles_in_domain = true;
     const double buffer_factor = 1.0;
     const bool verbose = true;
-    RamsesReader reader(outfolder, output_number, buffer_factor, keep_only_particles_in_domain, verbose);
+    RamsesReader reader(snapdir, buffer_factor, keep_only_particles_in_domain, verbose);
 
-    // The fiducial file format is POS,VEL,MASS,ID,LEVEL,FAMILY,TAG, but
-    // if the format is different one can set it here and we can also set if we want
-    // to store the resulting data or not
+    // The reader tries to automatically detect the particle file format from the header file
+    // The default file format is POS,VEL,MASS,ID,LEVEL,FAMILY,TAG,
+    // If it is not detected, it can be overridden like this:
     std::vector<std::string> fileformat{"POS", "VEL", "MASS", "ID"};
     reader.set_file_format(fileformat);
 
