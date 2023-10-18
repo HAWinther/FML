@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <regex>
 #include <sstream>
 #include <stdlib.h>
 #include <vector>
@@ -58,7 +59,18 @@ namespace FML {
 
             class RamsesReader {
               private:
-                // What is in the file and if we want to store it or not
+                // Translation of Ramses' to FML's particle field naming convention
+                static const inline std::map<std::string, std::string> entries_ramses2fml = {
+                    {"pos", "POS"},
+                    {"vel", "VEL"},
+                    {"mass", "MASS"},
+                    {"iord", "ID"},
+                    {"level", "LEVEL"},
+                    {"family", "FAMILY"},
+                    {"tag", "TAG"},
+                };
+
+                // What particle fields are in the file, and which of them we want to store
                 std::vector<std::string> entries_in_file{"POS", "VEL", "MASS", "ID", "LEVEL", "FAMILY", "TAG"};
                 std::vector<bool> entries_to_store{true, true, true, true, true, true, true};
 
@@ -72,8 +84,8 @@ namespace FML {
                 bool TAG_STORE = false;
 
                 // File description
-                std::string filepath{};
-                int outputnr{0};
+                std::string snapdir{}; // e.g. "output_00123"
+                std::string snapnum;   // e.g. "00123"
 
                 // Total number of particles and particles in local domain
                 size_t npart{0};
@@ -96,10 +108,8 @@ namespace FML {
                 double unit_l{0.0};
                 double unit_d{0.0};
                 double unit_t{0.0};
-                double boxlen_ini{0.0};
 
                 // Book-keeping variables
-                bool infofileread{false};
                 size_t npart_read{0};
 
                 double buffer_factor{1.0};
@@ -120,31 +130,41 @@ namespace FML {
                 }
 
               public:
-                RamsesReader() = default;
+                RamsesReader() = delete;
 
-                /// Construct with paths to folder holding output_0000X and the output number.
+                /// Construct with path to directory containing a RAMSES snapshot.
                 /// If _keep_only_particles_in_domain then we will only store particles that fall into the local domain.
                 /// If _buffer_factor > 1 then we will allocate correspondingly more storage in for particles when we
                 /// later read This constructor only reads the info file and gets ready to read. You have to call
                 /// read_ramses to do the actual reading
                 ///
-                /// @param[in] _filepath Path to the folder holding the RAMSES output_0000X folder
-                /// @param[in] _outputnr The X in the RAMSES output_0000X folder
+                /// @param[in] _snapdir RAMSES snapshot directory (e.g. path/to/ramses/output_00001)
                 /// @param[in] _buffer_factor If > 1.0 allocate space for this many more particles when reading in the
                 /// container we use to store particles in
                 /// @param[in] _keep_only_particles_in_domain Only store particles that fall into the local domain (for
                 /// MPI use)
                 /// @param[in] _verbose Optional: show info while reading
                 ///
-                RamsesReader(std::string _filepath,
-                             int _outputnr,
+                RamsesReader(std::string _snapdir,
                              double _buffer_factor,
                              bool _keep_only_particles_in_domain,
                              bool _verbose = false)
-                    : filepath(_filepath), outputnr(_outputnr), buffer_factor(_buffer_factor),
+                    : snapdir(_snapdir), buffer_factor(_buffer_factor),
                       keep_only_particles_in_domain(_keep_only_particles_in_domain),
                       verbose(_verbose and FML::ThisTask == 0) {
+
+                    // ensure snapdir ends with trailing /
+                    if (snapdir.back() != '/') {
+                        snapdir += "/";
+                    }
+
+                    // extract e.g. "00123" from "path/to/snapshot/directory/output_00123/"
+                    std::string output_snapnum = snapdir.substr(snapdir.length()-13, 12); // should be e.g. "output_00123"
+                    assert(std::regex_match(output_snapnum, std::regex("output_[0-9]{5}"))); // verify snapdir ends with e.g. "output_00123/"
+                    snapnum = output_snapnum.substr(output_snapnum.length()-5); // e.g. "00123"
+
                     read_info();
+                    read_header();
                 }
 
                 /// If we have non-standard (or older) file formats set it here
@@ -170,13 +190,8 @@ namespace FML {
                 ///
                 template <class T, class Alloc = std::allocator<T>>
                 void read_ramses_single(int ifile, std::vector<T, Alloc> & p) {
-                    if (not infofileread)
-                        read_info();
-
-                    std::string numberfolder = int_to_ramses_string(outputnr);
                     std::string numberfile = int_to_ramses_string(ifile + 1);
-                    std::string partfile = filepath == "" ? "" : filepath + "/";
-                    partfile = partfile + "output_" + numberfolder + "/part_" + numberfolder + ".out" + numberfile;
+                    std::string partfile = snapdir + "part_" + snapnum + ".out" + numberfile;
                     FILE * fp;
                     if ((fp = fopen(partfile.c_str(), "r")) == nullptr) {
                         throw_error("[RamsesReader::read_ramses_single] Error opening particle file " + partfile);
@@ -206,9 +221,6 @@ namespace FML {
                 ///
                 template <class T, class Alloc = std::allocator<T>>
                 void read_ramses(std::vector<T, Alloc> & p) {
-                    if (not infofileread)
-                        read_info();
-
                     if (keep_only_particles_in_domain) {
                         size_t nallocate =
                             buffer_factor > 1.0 ? size_t(double(npart_in_domain) * buffer_factor) : npart_in_domain;
@@ -232,8 +244,7 @@ namespace FML {
                                   << "\n";
                         std::cout << "=================================="
                                   << "\n";
-                        std::cout << "Folder containing output: " << filepath << "\n";
-                        std::cout << "Outputnumber: " << int_to_ramses_string(outputnr) << "\n";
+                        std::cout << "Snapshot folder: " << snapdir << "\n";
                         std::cout << "Npart total " << npart << " particles\n";
                         if (keep_only_particles_in_domain)
                             for (int i = 0; i < FML::NTasks; i++)
@@ -252,11 +263,20 @@ namespace FML {
                     }
                 }
 
+                double get_boxsize() { return boxlen; }
+                double get_omega_m() { return omega_m; }
+                double get_omega_l() { return omega_l; }
+                double get_omega_b() { return omega_b; }
+                double get_aexp() { return aexp; }
+                double get_h() { return h0/100.; }
+                int get_npart() { return npart; }
+                int get_levelmin() { return levelmin; }
+                int get_levelmax() { return levelmax; }
+
               private:
                 //====================================================
                 // Integer to ramses string
                 //====================================================
-
                 std::string int_to_ramses_string(int i) {
                     std::stringstream rnum;
                     rnum << std::setfill('0') << std::setw(5) << i;
@@ -291,9 +311,7 @@ namespace FML {
 
                 void read_info() {
                     int ndim_loc;
-                    std::string numbers = int_to_ramses_string(outputnr);
-                    std::string infofile = filepath == "" ? "" : filepath + "/";
-                    infofile = infofile + "output_" + numbers + "/info_" + numbers + ".txt";
+                    std::string infofile = snapdir + "info_" + snapnum + ".txt";
                     FILE * fp;
 
                     // Open file
@@ -323,7 +341,11 @@ namespace FML {
                     fclose(fp);
 
                     // Calculate boxsize in Mpc/h
-                    boxlen_ini = unit_l * h0 / 100.0 / aexp / 3.08567758e24;
+                    // RAMSES uses Mpc/cm = 3.08e24 instead of (the more accurate) 3.08567758e24:
+                    // (see amr/units.f90 and https://groups.google.com/g/pynbody-users/c/ZSXesVlgi3o/m/k3VOhs3wDAAJ)
+                    if (verbose) std::cout << "WARNING: overriding read boxlen = " << boxlen;
+                    boxlen = unit_l * h0 / 100.0 / aexp / 3.08e24;
+                    if (verbose) std::cout << " with boxlen = " << boxlen << " calculated from unit_l = " << unit_l << "\n";
 
                     // Read how many particles there is in the files
                     count_particles_in_files();
@@ -335,25 +357,70 @@ namespace FML {
                     }
 
                     if (verbose) {
-                        std::cout << "\n";
-                        std::cout << "=================================="
+                        std::cout << "\n"
+                                  << "==================================" << "\n"
+                                  << "Infofile data:                    " << "\n"
+                                  << "==================================" << "\n"
+                                  << "Filename     = " << infofile        << "\n"
+                                  << "Box (Mpc/h)  = " << boxlen          << "\n"
+                                  << "ncpu         = " << ncpu            << "\n"
+                                  << "npart        = " << npart           << "\n"
+                                  << "levelmin     = " << levelmin        << "\n"
+                                  << "levelmax     = " << levelmax        << "\n"
+                                  << "aexp         = " << aexp            << "\n"
+                                  << "H0           = " << h0              << "\n"
+                                  << "omega_m      = " << omega_m         << "\n"
+                                  << "==================================" << "\n"
                                   << "\n";
-                        std::cout << "Infofile data:                    "
-                                  << "\n";
-                        std::cout << "=================================="
-                                  << "\n";
-                        std::cout << "Filename     = " << infofile << "\n";
-                        std::cout << "Box (Mpc/h)  = " << boxlen_ini << "\n";
-                        std::cout << "ncpu         = " << ncpu << "\n";
-                        std::cout << "npart        = " << npart << "\n";
-                        std::cout << "aexp         = " << aexp << "\n";
-                        std::cout << "H0           = " << h0 << "\n";
-                        std::cout << "omega_m      = " << omega_m << "\n";
-                        std::cout << "=================================="
-                                  << "\n\n";
+                    }
+                }
+
+                //====================================================
+                // Read a ramses header file
+                //====================================================
+
+                void read_header() {
+                    std::string headerfile = snapdir + "header_" + snapnum + ".txt";
+                    FILE *fp = fopen(headerfile.c_str(), "r");
+                    if (fp == nullptr) {
+                        throw_error("[RamsesReader::read_header] Error opening header file " + headerfile);
                     }
 
-                    infofileread = true;
+                    char fieldcstr[50]; // big enough to hold "pos vel mass iord level family tag"
+                    fscanf(fp, " Total number of particles %*d\n"); // TODO: use for something?
+                    fscanf(fp, " Total number of dark matter particles %*d\n"); // TODO: use for something?
+                    fscanf(fp, " Total number of star particles %*d\n");
+                    fscanf(fp, " Total number of sink particles %*d\n");
+                    fscanf(fp, " Particle fields\n"); fgets(fieldcstr, sizeof(fieldcstr), fp);
+
+                    // Try to detect particle format
+                    std::string fieldstr(fieldcstr);
+                    std::vector<std::string> fields;
+                    int i1 = 0;
+                    int i2 = fieldstr.find(" ");
+                    while (i2 != -1) {
+                        std::string field_ramses = fieldstr.substr(i1, i2-i1); // i2-i1 is substring *length*
+                        auto ramses2fml = entries_ramses2fml.find(field_ramses);
+                        if (ramses2fml == entries_ramses2fml.end()) { // not found
+                            if (verbose) {
+                                std::cout << "Failed to detect format from header\n";
+                            }
+                            return;
+                        }
+                        std::string field_fml = ramses2fml->second; // translate to our naming convention
+                        fields.push_back(field_fml);
+                        i1 = i2 + 1; // skip over ,
+                        i2 = fieldstr.find(" ", i1); // find next field after i1
+                    } // the loop even handles the last field, because the line has a trailing whitespace!
+                    set_file_format(fields);
+
+                    if (verbose) {
+                        std::cout << "Detected format ";
+                        for (std::string &field : fields) {
+                            std::cout << " " << field;
+                        }
+                        std::cout << " from header\n";
+                    }
                 }
 
                 // Count how many particles are in each file and how many fall into the local domain
@@ -363,12 +430,8 @@ namespace FML {
 
                     for (int i = 0; i < ncpu; i++) {
                         FILE * fp;
-                        std::string numberfolder = int_to_ramses_string(outputnr);
                         std::string numberfile = int_to_ramses_string(i + 1);
-                        std::string partfile = "";
-                        if (filepath.compare("") != 0)
-                            partfile = filepath + "/";
-                        partfile = partfile + "output_" + numberfolder + "/part_" + numberfolder + ".out" + numberfile;
+                        std::string partfile = snapdir + "part_" + snapnum + ".out" + numberfile;
 
                         // Open file
                         if ((fp = fopen(partfile.c_str(), "r")) == nullptr) {
@@ -435,7 +498,7 @@ namespace FML {
                 void store_velocity(RamsesVelType * vel, char * is_in_domain, T * p, const int dim, const int np) {
                     if constexpr (not FML::PARTICLE::has_get_vel<T>())
                         return;
-                    RamsesVelType velfac = 100.0 * boxlen_ini / aexp;
+                    RamsesVelType velfac = 100.0 * boxlen / aexp;
                     int count = 0;
                     for (int i = 0; i < np; i++) {
                         if (is_in_domain[i] == 1) {
@@ -540,12 +603,8 @@ namespace FML {
                 //====================================================
                 template <class T>
                 void read_particle_file(const int i, std::vector<T> & p) {
-                    std::string numberfolder = int_to_ramses_string(outputnr);
                     std::string numberfile = int_to_ramses_string(i + 1);
-                    std::string partfile = "";
-                    if (filepath.compare("") != 0)
-                        partfile = filepath + "/";
-                    partfile = partfile + "output_" + numberfolder + "/part_" + numberfolder + ".out" + numberfile;
+                    std::string partfile = snapdir + "part_" + snapnum + ".out" + numberfile;
                     FILE * fp;
 
                     // Local variables used to read into
@@ -579,10 +638,10 @@ namespace FML {
                         for (int j = 0; j < header.ndim; j++) {
 
                             int bytes_per_element = read_section(fp, buffer.data(), header.npart);
-                            if (bytes_per_element != sizeof(RamsesVelType))
+                            if (bytes_per_element != sizeof(RamsesPosType))
                                 throw_error("[RamsesReader::read_particle_file] Field POS has size " +
                                             std::to_string(bytes_per_element) + " but size set to " +
-                                            std::to_string(sizeof(RamsesVelType)));
+                                            std::to_string(sizeof(RamsesPosType)));
 
                             // Set the book-keeping array that tells us if a particle is in the domain or not
                             if (j == 0) {
@@ -733,13 +792,6 @@ namespace FML {
                         keep_only_particles_in_domain ? size_t(npart_in_domain_in_file[i]) : size_t(npart_in_file[i]);
                     fclose(fp);
                 }
-
-                double get_boxsize() { return boxlen_ini; }
-                double get_omega_m() { return omega_m; }
-                double get_omega_l() { return omega_l; }
-                double get_omega_b() { return omega_b; }
-                double get_aexp() { return aexp; }
-                double get_h() { return h0/100.; }
             };
 
             //====================================================
@@ -751,7 +803,7 @@ namespace FML {
                                 const float _astart,
                                 const float _omega_m,
                                 const float _omega_l,
-                                const float _boxlen_ini,
+                                const float _boxlen,
                                 const float _h0,
                                 const int _levelmin,
                                 const int NDIM) {
@@ -766,7 +818,7 @@ namespace FML {
                 n1 = n2 = n3 = 1 << _levelmin;
 
                 // dx in Mpc (CHECK THIS)
-                dx = _boxlen_ini / float(n1) * 100.0 / _h0;
+                dx = _boxlen / float(n1) * 100.0 / _h0;
 
                 // Number of floats and ints we write
                 tmp = (5 + NDIM) * sizeof(float) + NDIM * sizeof(int);
