@@ -4,7 +4,6 @@
 #include <FML/Global/Global.h>
 #include <FML/ODESolver/ODESolver.h>
 #include <FML/Spline/Spline.h>
-#include <FML/Units/Units.h>
 #include <FML/GadgetUtils/GadgetUtils.h>
 #include <FML/ParameterMap/ParameterMap.h>
 #include "Lightcone_Healpix.h"
@@ -311,9 +310,9 @@ void Lightcone<NDIM, T, U>::create_lightcone(
     p_bare.assign_from_particle(part[ipart]);
 
     // Measure the position relative to the observer position
-    // and compute the distance the particle moves over a full step
+    // and compute the distance per dimension that the particle moves over a full step
     Point delta_pos;
-    auto * pos_bare = FML::PARTICLE::GetVel(p_bare);
+    auto * pos_bare = FML::PARTICLE::GetPos(p_bare);
     auto * vel_bare = FML::PARTICLE::GetVel(p_bare);
     for(int idim =0; idim<NDIM; idim++) {
       pos_bare[idim] -= pos_observer[idim];
