@@ -11,6 +11,9 @@ template<int NDIM>
 class BoxReplicas {
   private:
     using Point = std::array<double, NDIM>;
+    
+    enum FlagValues { COMPLETELY_OUTSIDE_LC = -1, INTERSECTING_LC = 0, COMPLETELY_INSIDE_LC = 1};
+    
     Point pos_observer;
     int n_rep;
     int ndim_rep;
@@ -78,9 +81,11 @@ class BoxReplicas {
       // Check that (atleast some) of the lightcone is inside the volume we have set
       bool all_outside = true;;
       for(int idim = 0; idim < NDIM; idim++) {
-        if (ceil(fabs((pos_observer[idim] - R_init))) < n_per_dim_left[idim]) 
+        double max_dist_left_from_box_origin = ceil( std::fabs(R_init - pos_observer[idim]) );
+        if (max_dist_left_from_box_origin < n_per_dim_left[idim])
           all_outside = false;
-        if (ceil(R_init + pos_observer[idim])-1 < n_per_dim_right[idim])
+        double max_dist_right_from_box_origin = ceil( std::fabs(R_init + pos_observer[idim]) );
+        if (max_dist_right_from_box_origin - 1 < n_per_dim_right[idim])
           all_outside = false;
       }
       if (all_outside)
@@ -89,10 +94,13 @@ class BoxReplicas {
       // Reduce the number of replications if possible
       n_replicas_total = 1;
       for(int idim = 0; idim < NDIM; idim++) {
-        if (ceil(fabs((pos_observer[idim] - R_init))) < n_per_dim_left[idim]) 
-          n_per_dim_left[idim] = int(ceil(fabs((pos_observer[idim] - R_init))));
-        if (ceil((R_init + pos_observer[idim]))-1 < n_per_dim_right[idim]) 
-          n_per_dim_right[idim] = int(ceil((R_init + pos_observer[idim])))-1;
+        double max_dist_left_from_box_origin = ceil( std::fabs(R_init - pos_observer[idim]) );
+        if (max_dist_left_from_box_origin < n_per_dim_left[idim]) 
+          n_per_dim_left[idim] = int(max_dist_left_from_box_origin);
+        double max_dist_right_from_box_origin = ceil( std::fabs(R_init + pos_observer[idim]) );
+        if (max_dist_right_from_box_origin - 1 < n_per_dim_right[idim])
+          n_per_dim_right[idim] = int(max_dist_right_from_box_origin)-1;
+   
         n_replicas_total *= (n_per_dim_left[idim] + n_per_dim_right[idim] + 1);
       }
       if(FML::ThisTask == 0) {
@@ -108,8 +116,8 @@ class BoxReplicas {
       n_per_dim_right_alloc = n_per_dim_right;
 
       // Create lookuptable
-      // 0 mean in use, 1 means outside for current step and 2 means permanently outside from now on
-      in_use_flag = std::vector<char>(n_replicas_total, 0);
+      // 0 mean in use, 1 means inside for current step and 2 means permanently outside from now on
+      in_use_flag = std::vector<char>(n_replicas_total, INTERSECTING_LC);
       replicas_initialized = true;
     }
 
@@ -138,10 +146,17 @@ class BoxReplicas {
 
       // Update the number of replicas we need to even consider
       for(int idim = 0; idim < NDIM; idim++) {
-        if (int(ceil(fabs((pos_observer[idim] - r_old)))) < n_per_dim_left[idim]) 
-          n_per_dim_left[idim] = int(ceil(fabs((pos_observer[idim] - r_old))));
-        if (int(ceil((r_old + pos_observer[idim])))-1 < n_per_dim_right[idim]) 
-          n_per_dim_right[idim] = int(ceil((r_old + pos_observer[idim])))-1;
+        double max_dist_left_from_box_origin = ceil( std::fabs(r_old - pos_observer[idim]) );
+        if (max_dist_left_from_box_origin < n_per_dim_left[idim]) 
+          n_per_dim_left[idim] = int(max_dist_left_from_box_origin);
+        double max_dist_right_from_box_origin = ceil( std::fabs(r_old + pos_observer[idim]) );
+        if (max_dist_right_from_box_origin - 1 < n_per_dim_right[idim])
+          n_per_dim_right[idim] = int(max_dist_right_from_box_origin) - 1;
+      }
+      if(FML::ThisTask == 0) {
+        for(int idim = 0; idim < NDIM; idim++) {
+          std::cout << "# For idim = " << idim << " we have replicas from -" << n_per_dim_left[idim] << " -> +" << n_per_dim_right[idim] << " boxes\n";
+        }
       }
 
       // Compute the total number of replicas we have
@@ -163,7 +178,7 @@ class BoxReplicas {
         const size_t coord = get_coord_of_replica(index);
 
         // If it has been set to be outside before then do not process it
-        if(in_use_flag[coord] == -1) continue;
+        if(in_use_flag[coord] == COMPLETELY_OUTSIDE_LC) continue;
 
         // Compute minimum and maximum distance from observer to the box
         Point corner_point;
@@ -174,11 +189,11 @@ class BoxReplicas {
 
         // Flag it
         if(r_min_squared - std::pow(boundary_over_boxsize,2) > r_old_squared) {
-          in_use_flag[coord] = -1;
+          in_use_flag[coord] = COMPLETELY_OUTSIDE_LC;
         } else if(r_max_squared < r_new_squared + std::pow(boundary_over_boxsize,2)) {
-          in_use_flag[coord] = 1;
+          in_use_flag[coord] = COMPLETELY_INSIDE_LC;
         } else {
-          in_use_flag[coord] = 0;
+          in_use_flag[coord] = INTERSECTING_LC;
           n_replicas_in_use++;
         }
       }
@@ -186,6 +201,28 @@ class BoxReplicas {
         std::cout << "# Number of replicas flagged as being in use on main task: " << n_replicas_in_use << "\n";
     }
 
+    // Given a box [0,box_x] x [0,box_y] x ... defined by the point X compute the minimum and maximum
+    // distance from an observer to all points in the box.
+    // The point X is the corner with the smallest coordinates (see below).
+    // The boxsize per dimension is given by the array boxsize_per_dim
+    // I.e.
+    //
+    // In 1D x______
+    // Corners: X = x and x+box_x
+    //
+    // In 2D ________
+    //       |      |
+    //       |      |
+    //       X______|
+    // Corners: X = (x,y), (x+box_x,y) (x,y+box_y), (x+box_x,y+box_y)
+    //
+    // In 3D  ________
+    //       /       /|
+    //      /_______/ |
+    //      |       | |
+    //      |       | /
+    //      X_______|/
+    //
     std::pair<double,double> minmax_distance_from_observer_to_box(Point & corner_point, Point & observer){
       constexpr auto twotondim = FML::power(2, NDIM);
 
@@ -234,7 +271,7 @@ class BoxReplicas {
     }
 
     bool is_flagged_in_use(size_t coord) {
-      return in_use_flag[coord] == 0;
+      return in_use_flag[coord] == INTERSECTING_LC;
     }
 
     int get_ndim_rep() { return ndim_rep; }
