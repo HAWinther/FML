@@ -76,7 +76,7 @@ HP_LINK        = -lchealpix -lcfitsio
 INC     = -I$(FML_INCLUDE) 
 LIB     =
 LINK    = 
-OPTIONS = -DNDIM_SPACE=3 
+OPTIONS = -DNDIM_SPACE=$(NDIM_SPACE)
 
 ifeq ($(USE_MPI),true)
 CC       = $(MPICC)
