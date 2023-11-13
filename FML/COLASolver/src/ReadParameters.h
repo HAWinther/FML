@@ -277,9 +277,9 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
        param["plc_pos_observer"] = lfp.read_number_array<double>("plc_pos_observer", {0.0, 0.0, 0.0}, OPTIONAL);
        param["plc_z_init"] = lfp.read_double("plc_z_init", 0.0, OPTIONAL);
        param["plc_z_finish"] = lfp.read_double("plc_z_finish", 0.0, OPTIONAL);
-       param["plc_ndim_rep"] = lfp.read_int("plc_ndim_rep", 0, OPTIONAL);
        param["plc_boundary_mpch"] = lfp.read_double("plc_boundary_mpch", 20.0, OPTIONAL);
-       param["plc_n_rep"] = lfp.read_int("plc_n_rep", 1, OPTIONAL);
+       param["plc_use_replicas"] = lfp.read_bool("plc_use_replicas", 0, OPTIONAL);
+       param["plc_ndim_rep"] = lfp.read_int("plc_ndim_rep", 0, OPTIONAL);
        param["plc_output_gadgetfile"] = lfp.read_bool("plc_output_gadgetfile", false, OPTIONAL);
        param["plc_output_asciifile"] = lfp.read_bool("plc_output_asciifile", false, OPTIONAL);
        param["plc_build_healpix"] = lfp.read_bool("plc_build_healpix", false, OPTIONAL);

@@ -15,7 +15,7 @@ class BoxReplicas {
     enum FlagValues { COMPLETELY_OUTSIDE_LC = -1, INTERSECTING_LC = 0, COMPLETELY_INSIDE_LC = 1};
     
     Point pos_observer;
-    int n_rep;
+    bool use_replicas;
     int ndim_rep;
     double boundary_over_boxsize;
 
@@ -43,56 +43,55 @@ class BoxReplicas {
     size_t get_n_replicas() { return n_replicas_total; }
 
     void read_parameters(ParameterMap & param) {
-      double boxsize = param.get<double>("simulation_boxsize");
-      double boundary_in_mpch = param.get<double>("plc_boundary_mpch");
-      boundary_over_boxsize = boundary_in_mpch / boxsize;
-      auto origin = param.get<std::vector<double>>("plc_pos_observer");
-      FML::assert_mpi(origin.size() >= NDIM, "Position of observer much have NDIM components");
-      for(int idim = 0; idim < NDIM; idim++)
-        pos_observer[idim] = origin[idim];
-      ndim_rep = param.get<int>("plc_ndim_rep");
-      ndim_rep = std::min(ndim_rep, NDIM);
-      n_rep = param.get<int>("plc_n_rep");
+      use_replicas = param.get<bool>("plc_use_replicas");
       if (FML::ThisTask == 0) {
-        std::cout << "plc_pos_observer                         : ";
-        for(auto & p : pos_observer)
-          std::cout << p << " , ";
-        std::cout << "\n";
-        std::cout << "plc_boundary_mpch                        : " << boundary_in_mpch << " Mpc/h\n";
-        std::cout << "plc_ndim_rep                             : " << ndim_rep << "\n";
-        std::cout << "plc_n_rep                                : " << n_rep << "\n";
+        std::cout << "plc_use_replicas                         : " << use_replicas << "\n";
+      }
+      if(use_replicas) {
+        double boxsize = param.get<double>("simulation_boxsize");
+        double boundary_in_mpch = param.get<double>("plc_boundary_mpch");
+        boundary_over_boxsize = boundary_in_mpch / boxsize;
+        auto origin = param.get<std::vector<double>>("plc_pos_observer");
+        FML::assert_mpi(origin.size() >= NDIM, "Position of observer much have NDIM components");
+        for(int idim = 0; idim < NDIM; idim++)
+          pos_observer[idim] = origin[idim];
+
+        ndim_rep = param.get<int>("plc_ndim_rep");
+        ndim_rep = std::min(ndim_rep, NDIM);
+
+        if (FML::ThisTask == 0) {
+          std::cout << "plc_pos_observer                         : ";
+          for(auto & p : pos_observer)
+            std::cout << p << " , ";
+          std::cout << "\n";
+          std::cout << "plc_ndim_rep                             : " << ndim_rep << "\n";
+          std::cout << "plc_boundary_mpch                        : " << boundary_in_mpch << " Mpc/h\n";
+        }
+      } else {
+        ndim_rep = 0;
+        pos_observer = {};
+        boundary_over_boxsize = 0.0;
       }
     }
 
     void init(double a_init, double R_init) {
       if(replicas_initialized) return;
+      
+      // Initialize the number of replicas to cover the whole lightcone
+      // (will be adjusted below)
+      int n_rep = use_replicas ? std::ceil(R_init + 1.0) : 0;
+      if(not use_replicas and R_init > 1.0) {
+        if(FML::ThisTask == 0) {
+          throw std::runtime_error("We do not use replicas, but R_init / boxsize > 1 so lightcone quadrant will not be complete. Reduce z_init, increase boxsize or add using replicas");
+        }
+      }
 
+      // Initialize how many replicas we have along each direction
       for(int idim = 0; idim < NDIM; idim++)
         n_per_dim_right[idim] = n_rep;
       n_per_dim_left = {};
       for(int idim = 0; idim < ndim_rep; idim++)
-         n_per_dim_left[idim] = n_per_dim_right[idim];
-
-      // Calculate the maximum number of replicate boxes we need in all directions. 
-      // This allows us to remove replicates that are unnecessary
-      if (FML::ThisTask == 0) {
-        std::cout << "# Init replicas\n";
-        std::cout << "# a            = " << a_init << "\n";
-        std::cout << "# Rmax/boxsize = " << R_init << "\n";
-      }
-
-      // Check that (atleast some) of the lightcone is inside the volume we have set
-      bool all_outside = true;;
-      for(int idim = 0; idim < NDIM; idim++) {
-        double max_dist_left_from_box_origin = ceil( std::fabs(R_init - pos_observer[idim]) );
-        if (max_dist_left_from_box_origin < n_per_dim_left[idim])
-          all_outside = false;
-        double max_dist_right_from_box_origin = ceil( std::fabs(R_init + pos_observer[idim]) );
-        if (max_dist_right_from_box_origin - 1 < n_per_dim_right[idim])
-          all_outside = false;
-      }
-      if (all_outside)
-        throw std::runtime_error("Initial comoving radius of the lightcone is outside all replicated boxes");
+        n_per_dim_left[idim] = n_per_dim_right[idim];
 
       // Reduce the number of replications if possible
       n_replicas_total = 1;
@@ -107,6 +106,7 @@ class BoxReplicas {
         n_replicas_total *= (n_per_dim_left[idim] + n_per_dim_right[idim] + 1);
       }
       if(FML::ThisTask == 0) {
+        std::cout << "# Init replicas at a = " << a_init << " Rmax/boxsize = " << R_init << "\n";
         for(int idim = 0; idim < NDIM; idim++) {
           std::cout << "# For idim = " << idim << " we have replicas from -" << n_per_dim_left[idim] << " -> +" << n_per_dim_right[idim] << " boxes\n";
           std::cout << "# We have a total of n = " << n_replicas_total << " replicas\n";

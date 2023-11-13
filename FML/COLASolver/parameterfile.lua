@@ -351,7 +351,7 @@ force_finite_difference_stencil_order = 4
 ------------------------------------------------------------
 lightcone = false
 if lightcone then
-  -- The origin of the lightcone in units of the boxsize (e.g. 0.5,0.5,0.5 is the center of the box)
+  -- The origin of the lightcone in units of the boxsize (e.g. 0.5,0.5,0.5 is the center of the box in 3D)
   plc_pos_observer = {0.0, 0.0, 0.0}
   -- The boundary region we use around the shell to ensure we get all particles belonging to the lightcone
   plc_boundary_mpch = 20.0
@@ -359,11 +359,13 @@ if lightcone then
   plc_z_init = 1.0
   -- The redshift when we stop recording the lightcone
   plc_z_finish = 0.0
+  -- Replicate the box to match the sky coverage we want?
+  -- If not then we need to make sure boxsize is big enough to cover the sky at zinit
+  plc_use_replicas = false
   -- Number of dimensions where we do replicas in both + and - direction
   -- The sky fraction is fsky = 1/2^(ndim_rep - NDIM)
+  -- For 3D: if 0 we get an octant and 3 we get the full sky
   plc_ndim_rep = 3
-  -- The number of replicas in positive direction per dimension
-  plc_n_rep = 5
   -- Output gadget
   plc_output_gadgetfile = false
   -- Output ascii
