@@ -584,9 +584,17 @@ void Lightcone<NDIM, T, U>::output_ascii(std::vector<U> & part_lc, double astart
   if(FML::ThisTask == 0)
     std::cout << "# Writing lightcone to ascii file(s): " << filename << "X\n";
   filename += std::to_string(FML::ThisTask);
+  
+  size_t npart = part_lc.size();
+  size_t npart_total = npart;
+  FML::SumOverTasks(&npart_total);
+  
   std::ofstream fp(filename);
-  fp << "# Lightcone particle for a in [" << std::to_string(astart) << " -> " << std::to_string(aend);
-  fp << " corresponding to r in [" << get_distance(aend) * boxsize << " -> " << get_distance(astart) * boxsize << "] Mpc/h\n";
+  fp << "# Lightcone particles from Task " << FML::ThisTask << " / " << FML::NTasks << "\n";
+  fp << "# The lightcone crossing scale-factors for this sample is in [" << std::to_string(astart) << " -> " << std::to_string(aend) << "]\n";
+  fp << "# The corresponding comoving distances is in [" << get_distance(aend) * boxsize << " -> " << get_distance(astart) * boxsize << "] Mpc/h\n";
+  fp << "# This file has " << npart << " / " << npart_total << " particles\n";
+  fp << "# The columns below are [pos_vec] (Mpc/h), [vel_vec] (km/s comoving)\n";
   for(auto & p : part_lc) {
     auto * pos = FML::PARTICLE::GetPos(p);
     auto * vel = FML::PARTICLE::GetVel(p);
