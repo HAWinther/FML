@@ -68,7 +68,10 @@ class BoxReplicas {
       if(replicas_initialized) return;
 
       for(int idim = 0; idim < NDIM; idim++)
-        n_per_dim_left[idim] = n_per_dim_right[idim] = n_rep;
+        n_per_dim_right[idim] = n_rep;
+      n_per_dim_left = {};
+      for(int idim = 0; idim < ndim_rep; idim++)
+         n_per_dim_left[idim] = n_per_dim_right[idim];
 
       // Calculate the maximum number of replicate boxes we need in all directions. 
       // This allows us to remove replicates that are unnecessary
