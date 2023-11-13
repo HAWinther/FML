@@ -347,6 +347,47 @@ force_use_finite_difference_force = false
 force_finite_difference_stencil_order = 4
 
 ------------------------------------------------------------
+-- Lightcone option
+------------------------------------------------------------
+lightcone = false
+if lightcone_on then
+  -- The origin of the lightcone in units of the boxsize (e.g. 0.5,0.5,0.5 is the center of the box)
+  plc_pos_observer = {0.0, 0.0, 0.0}
+  -- The boundary region we use around the shell to ensure we get all particles belonging to the lightcone
+  plc_boundary_mpch = 20.0
+  -- The redshift we turn on the lightcone
+  plc_z_init = 1.0
+  -- The redshift when we stop recording the lightcone
+  plc_z_finish = 0.0
+  -- Number of dimensions where we do replicas in both + and - direction
+  -- The sky fraction is fsky = 1/2^(ndim_rep - NDIM)
+  plc_ndim_rep = 3
+  -- The number of replicas in positive direction per dimension
+  plc_n_rep = 5
+  -- Output gadget
+  plc_output_gadgetfile = false
+  -- Output ascii
+  plc_output_asciifile = true
+  -- Make healpix delta(z, theta) maps?
+  plc_build_healpix = false
+  if plc_build_healpix then
+    -- Roughly the size of the size of the bins you want in a
+    -- The exact value we use will depend on the time-steps
+    -- At minimum we make one map per timestep
+    plc_da_maps   = 0.02
+    -- nested (true) or ring (false) format for healpix
+    plc_is_nested = true
+    -- Number of pixels (npix = 4*nside^2)
+    plc_nside     = 8
+    -- Use chunkpix. Map containing pixels. Only useful for very sparse maps
+    plc_use_chunkpix = false
+    if plc_use_chunkpix then
+      plc_nside_chunks = 8
+    end
+  end
+end
+
+------------------------------------------------------------
 -- On the fly analysis
 ------------------------------------------------------------
 

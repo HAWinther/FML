@@ -21,6 +21,7 @@
 #include "COLA.h"
 #include "Cosmology.h"
 #include "GravityModel.h"
+#include "Lightcone.h"
 
 #include <array>
 #include <cmath>
@@ -95,6 +96,11 @@ class NBodySimulation {
     FFTWGrid<NDIM> phi_2LPT_ini_fourier;
     FFTWGrid<NDIM> phi_3LPTa_ini_fourier;
     FFTWGrid<NDIM> phi_3LPTb_ini_fourier;
+
+    //=============================================================================
+    /// The lightcone construction
+    //=============================================================================
+    std::shared_ptr<Lightcone<NDIM, T>> lightcone;
 
     // Do timings of the code
     FML::UTILS::Timings timer;
@@ -1214,11 +1220,37 @@ void NBodySimulation<NDIM, T>::init() {
     if (simulation_use_cola) {
         cola_initialize_velocities<NDIM, T>(part);
     }
+    
+    //============================================================
+    // Set up the lightcone
+    //============================================================
+    lightcone = std::make_shared<Lightcone<NDIM,T>>(cosmo);
+    lightcone->read_parameters(*parameters);
+    lightcone->init();
 }
 
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::run() {
     timer.StartTiming("Timestepping");
+    
+    // Used for lightcone to add on COLA velocity
+    auto add_on_LPT_velocity = [&](double addsubtract_sign, double a) {
+        const double aini = 1.0 / (1.0 + ic_initial_redshift);
+        if (simulation_use_scaledependent_cola) {
+            cola_add_on_LPT_velocity_scaledependent<NDIM, T>(part,
+                                                             grav,
+                                                             phi_1LPT_ini_fourier,
+                                                             phi_2LPT_ini_fourier,
+                                                             phi_3LPTa_ini_fourier,
+                                                             phi_3LPTb_ini_fourier,
+                                                             grav->H0_hmpc * simulation_boxsize,
+                                                             aini,
+                                                             a,
+                                                             addsubtract_sign);
+        } else {
+            cola_add_on_LPT_velocity<NDIM, T>(part, grav, aini, a, addsubtract_sign);
+        }
+    };
 
     // Number of extra slices we need for density assignement
     const auto nleftright =
@@ -1381,6 +1413,29 @@ void NBodySimulation<NDIM, T>::run() {
                         cola_kick_drift<NDIM, T>(part, grav, aini, apos, apos_new, delta_time_kick, delta_time_drift);
                     }
                     timer.EndTiming("COLA");
+                }
+                
+                // Build the lightcone
+                if (lightcone->lightcone_active() and delta_time_drift != 0.0) {
+                    if (simulation_use_cola) {
+                        timer.StartTiming("COLA output");
+                        add_on_LPT_velocity(+1.0, avel_new);
+                        timer.EndTiming("COLA output");
+                    }
+
+                    timer.StartTiming("Lightcone");
+                    lightcone->create_lightcone(part,
+                                                apos,
+                                                apos_new,
+                                                avel_new,
+                                                delta_time_drift);
+                    timer.EndTiming("Lightcone");
+                    
+                    if (simulation_use_cola) {
+                        timer.StartTiming("COLA output");
+                        add_on_LPT_velocity(-1.0, avel_new);
+                        timer.EndTiming("COLA output");
+                    }
                 }
 
                 // Drift particles (updates positions)

@@ -30,6 +30,10 @@ USE_GSL          = true
 # Use LUA (required to use parameterfile)
 # One can edit ReadParameters.h to do without it
 USE_LUA          = true
+# Use Healpix (required to create weak lensing maps)
+USE_HEALPIX      = false
+# Use chunkpix to store healpix maps
+USE_CHUNKPIX     = false
 
 #===================================================
 # Include and library paths
@@ -54,6 +58,13 @@ GSL_LINK       = -lgsl -lgslcblas
 LUA_INCLUDE    = $(HOME)/local/include
 LUA_LIB        = $(HOME)/local/lib
 LUA_LINK       = -llua -ldl
+
+# HEALPIX
+HP_INCLUDE     = $(HOME)/local/Healpix_3.82/include
+HP_LIB         = $(HOME)/local/Healpix_3.82/lib
+CFITSIO_INCLUDE = $(HOME)/local/include
+CFITSIO_LIB    = $(HOME)/local/lib
+HP_LINK        = -lchealpix -lcfitsio
 
 #===================================================
 # Compile up all library defines from options above
@@ -110,6 +121,16 @@ OPTIONS += -DUSE_LUA
 INC     += -I$(LUA_INCLUDE)
 LIB     += -L$(LUA_LIB)
 LINK    += $(LUA_LINK)
+endif
+
+ifeq ($(USE_HEALPIX),true)
+OPTIONS += -DUSE_HEALPIX
+INC     += -I$(HP_INCLUDE) -I$(CFITSIO_INCLUDE)
+LIB     += -L$(HP_LIB) -L$(CFITSIO_LIB)
+LINK    += $(HP_LINK)
+ifeq ($(USE_CHUNKPIX),true)
+OPTIONS += -DUSE_CHUNKPIX
+endif
 endif
 
 #===================================================
