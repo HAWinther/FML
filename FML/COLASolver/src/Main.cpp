@@ -44,7 +44,7 @@ using ParameterMap = FML::UTILS::ParameterMap;
 // See FML/ParticleTypes/ReflectOnParticleMethods.h for standard methods
 //=============================================================
 
-constexpr int NDIM = 3;
+constexpr int NDIM = NDIM_SPACE;
 
 class Particle {
   public:
