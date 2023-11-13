@@ -13,6 +13,9 @@ MPICC   = mpicxx -std=c++1z -O3 -Wall -Wextra -march=native
 # Options
 #===================================================
 
+# Number of dimensions of space
+NDIM_SPACE = 3
+
 # Use MPI 
 USE_MPI          = true
 # Use OpenMP threads
@@ -73,7 +76,7 @@ HP_LINK        = -lchealpix -lcfitsio
 INC     = -I$(FML_INCLUDE) 
 LIB     =
 LINK    = 
-OPTIONS = 
+OPTIONS = -DNDIM_SPACE=3 
 
 ifeq ($(USE_MPI),true)
 CC       = $(MPICC)
