@@ -350,7 +350,7 @@ force_finite_difference_stencil_order = 4
 -- Lightcone option
 ------------------------------------------------------------
 lightcone = false
-if lightcone_on then
+if lightcone then
   -- The origin of the lightcone in units of the boxsize (e.g. 0.5,0.5,0.5 is the center of the box)
   plc_pos_observer = {0.0, 0.0, 0.0}
   -- The boundary region we use around the shell to ensure we get all particles belonging to the lightcone
