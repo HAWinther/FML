@@ -129,6 +129,9 @@ class Lightcone {
         double delta_time_drift);
 
     bool lightcone_active() { return lightcone_on; } 
+    
+    // To be written...
+    void create_kappa_maps();
 };
 
 // Read all the parameters we need for the lightcone
@@ -617,6 +620,69 @@ double Lightcone<NDIM, T, U>::volume_shell(double rlow, double rhigh) {
     return 2.0 * (rhigh - rlow);
   else
     throw std::runtime_error("Volume-shell only implemented for ndim = 1,2,3");
+}
+
+template <int NDIM, class T, class U>
+void Lightcone<NDIM, T, U>::create_kappa_maps() {
+  // If we have not made healpix maps then exit
+  if(not build_healpix) return;
+  // The maps are only on the main task
+  if(FML::ThisTask != 0) return;
+
+  std::cout << "\n=====================================================\n";
+  std::cout << "# Create kappa-maps. This routine is not written yet...\n";
+  std::cout << "=====================================================\n";
+
+  // Get all the maps (a vector of maps)
+  auto maps = hp_maps.get_maps();
+
+  // Notes:
+  // If you want to create a new raw map then
+  // HealpixMap mymap(nside);
+  // To get the raw data
+  // auto * map_data = mymap.get_map_data();
+  // To write the map
+  // mymap.output(filename);
+  // If you want to get the comoving distance in Mpc/h then you can use
+  // (all distances are in units of the boxsize)
+  // double r = get_distance( a ) * boxsize; 
+
+  // Loop over all the maps
+  for(size_t i = 0; i < maps.size(); i++) {
+    // Fetch the HealpixMap
+    auto & map = maps[i];
+
+    // Extract the raw data (a vector of floats containing the pixels 0,1,...,npix-1)
+    auto * map_data = map.get_map_data();
+  
+    // Extract the number of pixels
+    auto npix = map.get_npix();
+
+    // Extract the range of the current map
+    auto amin = map.get_amin();
+    auto amax = map.get_amax();
+    
+    auto rmin = map.get_rmin();
+    auto rmax = map.get_rmax();
+
+    // Loop over all the pixels and compute min,mean and max
+    float delta_min = std::numeric_limits<float>::max();
+    float delta_max = -std::numeric_limits<float>::max();
+    float delta_mean = 0.0;
+    for(int j = 0; j < npix; j++) {
+      auto value_of_pixel = map_data[j];
+      delta_min = std::min(delta_min, value_of_pixel);
+      delta_max = std::max(delta_max, value_of_pixel);
+      delta_mean += value_of_pixel;
+    }
+    delta_mean /= npix;
+
+    std::cout << "Map i = " << i << " has npix = " << npix << " pixels\n";
+    std::cout << "Range of scalefactor amin = " << amin << " -> amax = " << amax << "\n";
+    std::cout << "The range of the map rmin = " << rmax * boxsize << " Mpc/h -> rmax = " << rmin * boxsize << " Mpc/h\n";
+    std::cout << "The max has delta_min = " << delta_min << " delta_mean = " << delta_mean << " delta_max = " << delta_max << "\n";
+    std::cout << "\n";
+  }
 }
 
 #endif

@@ -36,6 +36,8 @@ class HealpixMap {
     // Radial ranges for the map
     double rmin;
     double rmax;
+    double amin;
+    double amax;
 
     size_t n_added;
     bool is_finalized;
@@ -47,10 +49,15 @@ class HealpixMap {
   public:
 
     HealpixMap() = default;
+    HealpixMap(int _nside, bool _is_nested = true) {
+      init(0.0, 0.0, 0.0, 0.0, _nside, _is_nested, false, 0);
+    }
 
-    void init(double _rmin, double _rmax, int _nside, bool _is_nested, bool _use_chunkpix, int _nside_chunks) {
+    void init(double _rmin, double _rmax, double _amin, double _amax, int _nside, bool _is_nested, bool _use_chunkpix, int _nside_chunks) {
       rmin = _rmin;
       rmax = _rmax;
+      amin = _amin;
+      amax = _amax;
       nside = _nside;
       is_nested = _is_nested;
 #ifdef USE_HEALPIX
@@ -58,11 +65,10 @@ class HealpixMap {
 #else
       throw std::runtime_error("Healpix not installed so cannot use healpix routines");
 #endif
-#ifdef USE_CHUNKPIX
       use_chunkpix = _use_chunkpix;
-#else
-      (void) _use_chunkpix;
-      throw std::runtime_error("Chunkpix not installed so cannot use use_chunkpix = true");
+#ifndef USE_CHUNKPIX
+      if(_use_chunkpix)
+        throw std::runtime_error("Chunkpix not installed so cannot use use_chunkpix = true");
 #endif
       nside_chunks = _nside_chunks;
 
@@ -84,6 +90,7 @@ class HealpixMap {
 
     void free() {
       map = std::vector<float>{};
+      amin = amax = 0.0;
       rmin = rmax = 0.0;
       nside = npix = nside_chunks = n_added = 0;
       is_finalized = false;
@@ -93,7 +100,7 @@ class HealpixMap {
 #endif
     }
 
-    auto *get_map() { return map.data(); }
+    auto *get_map_data() { return map.data(); }
 
     long int get_pixel_index([[maybe_unused]] double *pos) {
       // Find healpix pixel corresponding to the vector pos
@@ -131,11 +138,10 @@ class HealpixMap {
     bool get_is_nested() { return is_nested; }
 
     double get_rmin() { return rmin; }
-
     double get_rmax() { return rmax; }
-
+    double get_amin() { return amin; }
+    double get_amax() { return amax; }
     int get_nside() { return nside; }
-
     int get_npix() { return npix; }
 
     void finalize() {
@@ -299,7 +305,7 @@ class HealpixMaps {
         double rmin = r_of_loga_spline(std::log(aend));
         double rmax = r_of_loga_spline(std::log(astart));
         maps.push_back( HealpixMap() );
-        maps.back().init(rmin, rmax, nside, is_nested, use_chunkpix, nside_chunks);
+        maps.back().init(rmin, rmax, astart, aend, nside, is_nested, use_chunkpix, nside_chunks);
       }
 
       index_healpix_current_step_end = maps.size();

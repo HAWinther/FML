@@ -1458,6 +1458,13 @@ void NBodySimulation<NDIM, T>::run() {
         analyze_and_output(ioutput, output_redshifts[ioutput]);
     }
     timer.EndTiming("Timestepping");
+    
+    //=============================================================
+    // Lightcone create kappa maps
+    //=============================================================
+    if(lightcone->lightcone_active()) {
+      lightcone->create_kappa_maps();
+    }
 
     //=============================================================
     // Print all timings
