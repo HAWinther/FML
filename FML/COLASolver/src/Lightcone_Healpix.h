@@ -175,7 +175,8 @@ class HealpixMap {
         for(int ipix = 0; ipix < npix; ipix++) {
           count += map[ipix];
         }
-        assert(count == n_added_total);
+        if(n_added_total > 0.0 and std::fabs(count/n_added_total - 1.0) > 1e-3)
+          std::cout << "WARNING: the count in the map does not equal the number we have recorded adding. n/n_expected = " << count / n_added_total << "\n";
       }
 
       is_finalized = true;

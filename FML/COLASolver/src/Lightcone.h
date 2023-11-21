@@ -370,8 +370,12 @@ void Lightcone<NDIM, T, U>::create_lightcone(
         // Compute crossing scale-factor
         const double r_old = std::sqrt(r_old_squared);
         const double r_new = std::sqrt(r_new_squared);
-        const double a_L = apos + (apos_new - apos) * (r_lc_old - r_old) / ((r_new - r_old) - (r_lc_new - r_lc_old));
-        const double delta_factor = (a_L - apos) / (apos_new - apos);
+        const double a_cross = apos + (apos_new - apos) * (r_lc_old - r_old) / ((r_new - r_old) - (r_lc_new - r_lc_old));
+        const double delta_factor = (a_cross - apos) / (apos_new - apos);
+      
+        // Check that the crossing time is within the range we ask for
+        // If not the skip it. This can only kick in the first or last time we call the lightcone routines
+        if( a_cross < plc_a_init or a_cross > plc_a_finish ) continue;
 
         // Take a fraction of a step
         double r_crossing = 0.0;
@@ -383,7 +387,7 @@ void Lightcone<NDIM, T, U>::create_lightcone(
         r_crossing = std::sqrt(r_crossing);
 
         // Compute the error we do with the approximation above
-        const double r_crossing_expected = get_distance(a_L);
+        const double r_crossing_expected = get_distance(a_cross);
         const double error = std::abs(r_crossing / r_crossing_expected - 1.0);
         mean_error += error;
         mean_error_count += 1.0;
