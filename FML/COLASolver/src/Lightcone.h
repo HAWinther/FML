@@ -616,7 +616,7 @@ double Lightcone<NDIM, T, U>::volume_shell(double rlow, double rhigh) {
     return 4.0/3.0 * M_PI * (rhigh*rhigh*rhigh - rlow*rlow*rlow);
   else if(NDIM == 2)
     return M_PI * (rhigh*rhigh - rlow*rlow);
-  else if(NDIM == 0)
+  else if(NDIM == 1)
     return 2.0 * (rhigh - rlow);
   else
     throw std::runtime_error("Volume-shell only implemented for ndim = 1,2,3");
