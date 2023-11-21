@@ -118,6 +118,8 @@ class NBodySimulation {
     double simulation_boxsize;               // The boxsize in Mpc/h
     bool simulation_use_cola;                // Use the cola method?
     bool simulation_use_scaledependent_cola; // If cola, use cola with scaledependent growth?
+    bool simulation_enforce_LPT_trajectories; // Do not include the PM force, just let particles follow LPT trajectores
+                                              // This requires COLA to be on, otherwise the particles do not change
 
     // Force and density assignment
     int force_nmesh;                             // The gridsize to bin particles to and compute PM forces
@@ -485,14 +487,18 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
     // General parameters
     simulation_name = param.get<std::string>("simulation_name");
     simulation_boxsize = param.get<double>("simulation_boxsize");
+    
+    // COLA
     simulation_use_cola = param.get<bool>("simulation_use_cola");
     simulation_use_scaledependent_cola = param.get<bool>("simulation_use_scaledependent_cola");
+    simulation_enforce_LPT_trajectories = param.get<bool>("simulation_enforce_LPT_trajectories", false);
 
     if (FML::ThisTask == 0) {
         std::cout << "simulation_name                          : " << simulation_name << "\n";
         std::cout << "simulation_boxsize                       : " << simulation_boxsize << "\n";
         std::cout << "simulation_use_cola                      : " << simulation_use_cola << "\n";
         std::cout << "simulation_use_scaledependent_cola       : " << simulation_use_scaledependent_cola << "\n";
+        std::cout << "simulation_enforce_LPT_trajectories      : " << simulation_enforce_LPT_trajectories << "\n";
 
         // We cannot use COLA if the particle type is not compatible with it
         if (simulation_use_cola and not FML::PARTICLE::has_get_D_1LPT<T>()) {
@@ -1375,7 +1381,7 @@ void NBodySimulation<NDIM, T>::run() {
 
                 // Compute forces
                 std::array<FFTWGrid<NDIM>, NDIM> force_real;
-                if (delta_time_kick != 0.0) {
+                if (delta_time_kick != 0.0 and not simulation_enforce_LPT_trajectories) {
                     timer.StartTiming("ComputeForce");
                     grav->compute_force(apos,
                                         grav->H0_hmpc * simulation_boxsize,
@@ -1385,8 +1391,12 @@ void NBodySimulation<NDIM, T>::run() {
                     timer.EndTiming("ComputeForce");
                 }
 
+                if(simulation_enforce_LPT_trajectories and FML::ThisTask == 0) {
+                  std::cout << "Enforcing LPT trajectories so we do not compute forces and apply KICK/DRIFT operators\n";
+                }
+
                 // Kick particles (updates velocity)
-                if (delta_time_kick != 0.0) {
+                if (delta_time_kick != 0.0 and not simulation_enforce_LPT_trajectories) {
                     timer.StartTiming("Kick");
                     FML::NBODY::KickParticles<NDIM>(force_real, part, delta_time_kick, force_density_assignment_method);
                     timer.EndTiming("Kick");
@@ -1439,7 +1449,7 @@ void NBodySimulation<NDIM, T>::run() {
                 }
 
                 // Drift particles (updates positions)
-                if (delta_time_drift != 0.0) {
+                if (delta_time_drift != 0.0 and not simulation_enforce_LPT_trajectories) {
                     timer.StartTiming("Drift");
                     FML::NBODY::DriftParticles<NDIM, T>(part, delta_time_drift);
                     timer.EndTiming("Drift");

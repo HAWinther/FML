@@ -29,6 +29,10 @@ simulation_use_cola = true
 -- If gravity model has scaledependent growth. If this is false
 -- then we use the k=0 limit of the growth factors when doing COLA
 simulation_use_scaledependent_cola = false
+-- Let the particles follow the LPT trajectories during the simulation
+-- i.e. we do not compute any forces. This requires COLA to work
+-- NB: for normal simulations make sure this should be false
+simulation_enforce_LPT_trajectories = false
 
 ------------------------------------------------------------
 -- Choose the cosmology 
@@ -361,7 +365,7 @@ if lightcone then
   plc_z_finish = 0.0
   -- Replicate the box to match the sky coverage we want?
   -- If not then we need to make sure boxsize is big enough to cover the sky at zinit
-  plc_use_replicas = false
+  plc_use_replicas = true
   -- Number of dimensions where we do replicas in both + and - direction
   -- The sky fraction is fsky = 1/2^(ndim_rep - NDIM)
   -- For 3D: if 0 we get an octant and 3 we get the full sky
@@ -378,7 +382,8 @@ if lightcone then
     -- At minimum we make one map per timestep
     plc_da_maps   = 0.02
     -- nested (true) or ring (false) format for healpix
-    plc_is_nested = true
+    -- Just use false (will remove this option eventually as ring is just better)
+    plc_is_nested = false
     -- Number of pixels (npix = 4*nside^2)
     plc_nside     = 8
     -- Use chunkpix. Map containing pixels. Only useful for very sparse maps

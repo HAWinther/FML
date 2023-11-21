@@ -31,6 +31,7 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
     //=============================================================
     param["simulation_use_cola"] = lfp.read_bool("simulation_use_cola", false, OPTIONAL);
     param["simulation_use_scaledependent_cola"] = lfp.read_bool("simulation_use_scaledependent_cola", true, OPTIONAL);
+    param["simulation_enforce_LPT_trajectories"] = lfp.read_bool("simulation_enforce_LPT_trajectories", false, OPTIONAL);
 
     //=============================================================
     // Cosmology options
