@@ -491,14 +491,15 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
     // COLA
     simulation_use_cola = param.get<bool>("simulation_use_cola");
     simulation_use_scaledependent_cola = param.get<bool>("simulation_use_scaledependent_cola");
-    simulation_enforce_LPT_trajectories = param.get<bool>("simulation_enforce_LPT_trajectories", false);
+    simulation_enforce_LPT_trajectories = simulation_use_cola ? param.get<bool>("simulation_enforce_LPT_trajectories", false) : false;
 
     if (FML::ThisTask == 0) {
         std::cout << "simulation_name                          : " << simulation_name << "\n";
         std::cout << "simulation_boxsize                       : " << simulation_boxsize << "\n";
         std::cout << "simulation_use_cola                      : " << simulation_use_cola << "\n";
         std::cout << "simulation_use_scaledependent_cola       : " << simulation_use_scaledependent_cola << "\n";
-        std::cout << "simulation_enforce_LPT_trajectories      : " << simulation_enforce_LPT_trajectories << "\n";
+        if (simulation_use_cola)
+            std::cout << "simulation_enforce_LPT_trajectories      : " << simulation_enforce_LPT_trajectories << "\n";
 
         // We cannot use COLA if the particle type is not compatible with it
         if (simulation_use_cola and not FML::PARTICLE::has_get_D_1LPT<T>()) {
@@ -1392,7 +1393,7 @@ void NBodySimulation<NDIM, T>::run() {
                 }
 
                 if(simulation_enforce_LPT_trajectories and FML::ThisTask == 0) {
-                  std::cout << "Enforcing LPT trajectories so we do not compute forces and apply KICK/DRIFT operators\n";
+                  std::cout << "Enforcing LPT trajectories so we do not compute forces and apply (non COLA) KICK/DRIFT operators\n";
                 }
 
                 // Kick particles (updates velocity)
