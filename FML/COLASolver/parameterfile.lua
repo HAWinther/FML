@@ -33,7 +33,7 @@ simulation_use_scaledependent_cola = false
 -- i.e. we do not compute any forces
 -- NB: for normal simulations make sure this is set to false
 if simulation_use_cola then
-  simulation_enforce_LPT_trajectories = true
+  simulation_enforce_LPT_trajectories = false
 end
 
 ------------------------------------------------------------

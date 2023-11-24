@@ -29,6 +29,12 @@ simulation_use_cola = true
 -- If gravity model has scaledependent growth. If this is false
 -- then we use the k=0 limit of the growth factors when doing COLA
 simulation_use_scaledependent_cola = true
+-- Let the particles follow the LPT trajectories during the simulation
+-- i.e. we do not compute any forces
+-- NB: for normal simulations make sure this is set to false
+if simulation_use_cola then
+  simulation_enforce_LPT_trajectories = false
+end
 
 ------------------------------------------------------------
 -- Choose the cosmology 
