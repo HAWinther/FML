@@ -1081,7 +1081,7 @@ namespace FML {
                                                                    MPIGrid<NDIM, T> & df) {
                 IndexInt NtotLocal = f.get_NtotLocal();
 
-                int level = 0;
+                [[maybe_unused]] int level = 0;
                 int N = f.get_N();
                 while (N != _N) {
                     N *= 2;

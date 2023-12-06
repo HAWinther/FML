@@ -326,11 +326,9 @@ namespace FML {
                 gsl_interp_accel * logz2pc_acc[15];
                 gsl_spline2d * logklogz2pc_spline[15];
                 double * pc[15];
-                double pc_weights[14];
                 double * pce_coeffs[14];
                 double * pce_multiindex[14];
                 std::array<std::vector<double>, 8> univ_legendre;
-                double * pce_basisfuncs;
                 void read_in_ee2_data_file();
                 void pc_2d_interp();
                 Cosmology csm{};

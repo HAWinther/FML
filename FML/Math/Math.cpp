@@ -67,7 +67,7 @@ namespace FML {
             }
 
             // Do the binary search
-            int count = 0;
+            [[maybe_unused]] int count = 0;
             while (x_high - x_low > delta_x) {
                 double x_mid = (x_high + x_low) / 2.0;
                 double y_mid = function(x_mid) * sign;

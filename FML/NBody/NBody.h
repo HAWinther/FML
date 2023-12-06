@@ -1581,7 +1581,6 @@ namespace FML {
             for (int islice = 0; islice < Local_nx; islice++) {
                 double kmag2;
                 std::array<double, N> kvec;
-                std::complex<FML::GRID::FloatType> I(0, 1);
                 for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
                     if (Local_x_start == 0 and fourier_index == 0) {
                         potential_real.set_fourier_from_index(0, 0.0);
