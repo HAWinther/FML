@@ -366,7 +366,7 @@ if lightcone then
   -- The redshift when we stop recording the lightcone
   plc_z_finish = 0.0
   -- Replicate the box to match the sky coverage we want?
-  -- If not then we need to make sure boxsize is big enough to cover the sky at zinit
+  -- If not then we need to make sure boxsize is big enough to cover the sky at z_init
   plc_use_replicas = true
   -- Number of dimensions where we do replicas in both + and - direction
   -- The sky fraction is fsky = 1/2^(ndim_rep - NDIM)
@@ -375,26 +375,29 @@ if lightcone then
   -- Output gadget
   plc_output_gadgetfile = false
   -- Output ascii
-  plc_output_asciifile = true
-  -- Make healpix delta(z, theta) maps?
-  plc_build_healpix = false
-  if plc_build_healpix then
+  plc_output_asciifile = false
+  -- To save memory output in batches (we only alloc as many particles as we already have to reduce memory consumption)
+  plc_output_in_batches = true
+
+  -- Make delta(z, theta) maps? This is Healpix maps in 3D where we always use the RING scheme for the maps
+  -- For 2D we use output textfiles with the binning
+  plc_make_onion_density_maps = true
+  if plc_make_onion_density_maps then
     -- Roughly the size of the size of the bins you want in a
-    -- The exact value we use will depend on the time-steps
+    -- The exact value we use will depend on the time-steps (but not bigger than 2x this value)
     -- At minimum we make one map per timestep
-    plc_da_maps   = 0.02
-    -- nested (true) or ring (false) format for healpix
-    -- Just use false (will remove this option eventually as ring is just better)
-    plc_is_nested = false
-    -- Number of pixels (npix = 4*nside^2)
-    plc_nside     = 8
-    -- Use chunkpix. Map containing pixels. Only useful for very sparse maps
+    plc_da_maps = 0.025
+    -- Number of pixels (npix = 4*nside^2). The largest lmax we can get from
+    -- the maps is lmax ~ 2nside
+    plc_nside = 512
+    -- Use chunkpix. Only useful for very sparse maps
     plc_use_chunkpix = false
     if plc_use_chunkpix then
-      plc_nside_chunks = 8
+      plc_nside_chunks = 256
     end
   end
 end
+
 
 ------------------------------------------------------------
 -- On the fly analysis

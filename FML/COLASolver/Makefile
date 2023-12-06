@@ -63,11 +63,12 @@ LUA_LIB        = $(HOME)/local/lib
 LUA_LINK       = -llua -ldl
 
 # HEALPIX
-HP_INCLUDE     = $(HOME)/local/Healpix_3.82/include
-HP_LIB         = $(HOME)/local/Healpix_3.82/lib
+HP_INCLUDE     = $(HOME)/local/Healpix_3.82_gcc/include/healpix_cxx/
+HP_LIB         = $(HOME)/local/Healpix_3.82_gcc/lib
 CFITSIO_INCLUDE = $(HOME)/local/include
 CFITSIO_LIB    = $(HOME)/local/lib
-HP_LINK        = -lchealpix -lcfitsio
+HP_LINK_C      = -lchealpix -lcfitsio
+HP_LINK        = -lhealpix_cxx -lsharp -lcfitsio
 
 #===================================================
 # Compile up all library defines from options above

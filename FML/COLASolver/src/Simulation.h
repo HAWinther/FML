@@ -21,7 +21,7 @@
 #include "COLA.h"
 #include "Cosmology.h"
 #include "GravityModel.h"
-#include "Lightcone.h"
+#include "Lightcone/Lightcone.h"
 
 #include <array>
 #include <cmath>
@@ -1231,9 +1231,10 @@ void NBodySimulation<NDIM, T>::init() {
     //============================================================
     // Set up the lightcone
     //============================================================
+    std::vector<std::string> particle_types_lightcone{"cb"};
     lightcone = std::make_shared<Lightcone<NDIM,T>>(cosmo);
     lightcone->read_parameters(*parameters);
-    lightcone->init();
+    lightcone->init(particle_types_lightcone);
 }
 
 template <int NDIM, class T>
@@ -1474,7 +1475,7 @@ void NBodySimulation<NDIM, T>::run() {
     // Lightcone create kappa maps
     //=============================================================
     if(lightcone->lightcone_active()) {
-      lightcone->create_kappa_maps();
+      lightcone->create_weak_lensing_maps();
     }
 
     //=============================================================

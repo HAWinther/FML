@@ -353,6 +353,7 @@ class Cosmology {
     double get_Neff() const { return Neff; }
     double get_kpivot_mpc() const { return kpivot_mpc; }
     std::string get_name() { return name; }
+    double get_H0_hmpc() const { return H0_hmpc; }
 
     void set_As(double _As) { As = _As; }
     void set_ns(double _ns) { ns = _ns; }

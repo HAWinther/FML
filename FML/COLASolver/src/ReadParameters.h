@@ -277,24 +277,24 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
     //=============================================================
     param["lightcone"] = lfp.read_bool("lightcone", false, OPTIONAL);
     if (param.get<bool>("lightcone")) {
-       param["plc_pos_observer"] = lfp.read_number_array<double>("plc_pos_observer", {0.0, 0.0, 0.0}, OPTIONAL);
-       param["plc_z_init"] = lfp.read_double("plc_z_init", 0.0, OPTIONAL);
-       param["plc_z_finish"] = lfp.read_double("plc_z_finish", 0.0, OPTIONAL);
-       param["plc_boundary_mpch"] = lfp.read_double("plc_boundary_mpch", 20.0, OPTIONAL);
-       param["plc_use_replicas"] = lfp.read_bool("plc_use_replicas", 0, OPTIONAL);
-       param["plc_ndim_rep"] = lfp.read_int("plc_ndim_rep", 0, OPTIONAL);
-       param["plc_output_gadgetfile"] = lfp.read_bool("plc_output_gadgetfile", false, OPTIONAL);
-       param["plc_output_asciifile"] = lfp.read_bool("plc_output_asciifile", false, OPTIONAL);
-       param["plc_build_healpix"] = lfp.read_bool("plc_build_healpix", false, OPTIONAL);
-       if(param.get<bool>("plc_build_healpix")) {
-         param["plc_is_nested"] = lfp.read_bool("plc_is_nested", true, OPTIONAL);
-         param["plc_nside"] = lfp.read_int("plc_nside", 256, OPTIONAL);
-         param["plc_da_maps"] = lfp.read_double("plc_da_maps", 0.02, OPTIONAL);
-         param["plc_use_chunkpix"] = lfp.read_bool("plc_use_chunkpix", false, OPTIONAL);
-         if(param.get<bool>("plc_use_chunkpix")) {
-           param["plc_nside_chunks"] = lfp.read_int("plc_nside_chunks", 8, OPTIONAL);
-         }
-       }
+        param["plc_pos_observer"] = lfp.read_number_array<double>("plc_pos_observer", {0.0, 0.0, 0.0}, OPTIONAL);
+        param["plc_z_init"] = lfp.read_double("plc_z_init", 0.0, OPTIONAL);
+        param["plc_z_finish"] = lfp.read_double("plc_z_finish", 0.0, OPTIONAL);
+        param["plc_boundary_mpch"] = lfp.read_double("plc_boundary_mpch", 20.0, OPTIONAL);
+        param["plc_use_replicas"] = lfp.read_bool("plc_use_replicas", 0, OPTIONAL);
+        param["plc_ndim_rep"] = lfp.read_int("plc_ndim_rep", 0, OPTIONAL);
+        param["plc_output_gadgetfile"] = lfp.read_bool("plc_output_gadgetfile", false, OPTIONAL);
+        param["plc_output_asciifile"] = lfp.read_bool("plc_output_asciifile", false, OPTIONAL);
+        param["plc_output_in_batches"] = lfp.read_bool("plc_output_in_batches", false, OPTIONAL);
+        param["plc_make_onion_density_maps"] = lfp.read_bool("plc_make_onion_density_maps", false, OPTIONAL);
+        if (param.get<bool>("plc_make_onion_density_maps")) {
+            param["plc_nside"] = lfp.read_int("plc_nside", 256, OPTIONAL);
+            param["plc_da_maps"] = lfp.read_double("plc_da_maps", 0.02, OPTIONAL);
+            param["plc_use_chunkpix"] = lfp.read_bool("plc_use_chunkpix", false, OPTIONAL);
+            if (param.get<bool>("plc_use_chunkpix")) {
+                param["plc_nside_chunks"] = lfp.read_int("plc_nside_chunks", 8, OPTIONAL);
+            }
+        }
     }
 
     //=============================================================
