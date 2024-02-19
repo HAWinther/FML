@@ -341,6 +341,8 @@ class OnionSlice {
     }
 
     void output(std::string filename) {
+#ifdef USE_HEALPIX
+        // This requires c++ 17 so we only include it if really needed
         if (std::filesystem::remove(filename)) {
             if(FML::ThisTask == 0)
               std::cout << "# Writing map: " << filename << " on task 0. Pre-existing file deleted\n";
@@ -348,6 +350,10 @@ class OnionSlice {
             if(FML::ThisTask == 0)
               std::cout << "# Writing map: " << filename << " on task 0\n";
         }
+#else
+        if(FML::ThisTask == 0)
+          std::cout << "# Writing map: " << filename << " on task 0\n";
+#endif
         if constexpr(NDIM == 1) {
           std::ofstream fp(filename);
           fp << "#  r/box     delta      (amin = " << amin << ", amax = " << amax << ")   (rmin/box = " << rmin << ", rmax/box = " << rmax << ")\n";
