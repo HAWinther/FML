@@ -161,6 +161,7 @@ class NBodySimulation {
     std::string ic_reconstruct_smoothing_filter;   // Smoothing filter (tophat, sharpk, gaussian)
     double ic_reconstruct_dimless_smoothing_scale; // Smoothing scales R/boxsize
     bool ic_reconstruct_interlacing;               // Use interlacing (probably not)?
+    bool ic_reconstruct_exact;
 
     // Particles
     int particle_Npart_1D;             // Number of particles per dimension (total is N^3)
@@ -555,6 +556,7 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
         ic_reconstruct_smoothing_filter = param.get<std::string>("ic_reconstruct_smoothing_filter");
         ic_reconstruct_dimless_smoothing_scale = param.get<double>("ic_reconstruct_dimless_smoothing_scale");
         ic_reconstruct_interlacing = param.get<bool>("ic_reconstruct_interlacing");
+        ic_reconstruct_exact =  param.get<bool>("ic_reconstruct_exact");
     }
 
     if (FML::ThisTask == 0) {
@@ -584,6 +586,7 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
             std::cout << "ic_reconstruct_dimless_smoothing_scale   : " << ic_reconstruct_dimless_smoothing_scale
                       << "\n";
             std::cout << "ic_reconstruct_interlacing               : " << ic_reconstruct_interlacing << "\n";
+            std::cout << "ic_reconstruct_exact                     : " << ic_reconstruct_exact << "\n";
         }
     }
 
@@ -1815,6 +1818,93 @@ void NBodySimulation<NDIM, T>::read_ic() {
 
     // Move them into MPIParticles
     part.move_from(std::move(externalpart));
+    
+    // Only *if* IC is 1LPT
+    // ...or *if* the initial q-distribution is a regular grid (i/N,j/N,k/N)
+    // then we can do it exactly for 2LPT also
+    auto exact_1LPT_reconstruction = [&](bool regular_q_grid_and_2LPT) {
+
+      // v_code = a^2 E f Psi_code
+      double disp_factor = 1.0 / (scale_factor * scale_factor 
+          * cosmo->HoverH0_of_a(scale_factor) * grav_ic->get_f_1LPT(scale_factor));
+      double f2_over_f1 = grav_ic->get_f_2LPT(scale_factor) / grav_ic->get_f_1LPT(scale_factor);
+      double v_factor_2LPT = 1.0 / (1.0 - f2_over_f1);
+      int Npart_1D = std::round(std::pow(part.get_npart_total(), 1.0 / NDIM));
+      auto * part_ptr = part.get_particles_ptr();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+      for (size_t ind = 0; ind < part.get_npart(); ind++) {
+        auto * pos = FML::PARTICLE::GetPos(part_ptr[ind]);
+        auto * v = FML::PARTICLE::GetVel(part_ptr[ind]);
+        std::array<double,NDIM> disp{}, disp2{}, q_vec{};
+        for (int idim = 0; idim < NDIM; idim++) {
+          disp[idim] = v[idim] * disp_factor;
+          q_vec[idim] = pos[idim] - disp[idim];
+          if(q_vec[idim] >= 1.0) q_vec[idim] -= 1.0;
+          if(q_vec[idim] < 0.0) q_vec[idim] += 1.0;
+        }
+
+        // At this point we have:
+        // q_vec == q + Psi2LPT(1 - f2LPT/f1LPT)
+        // disp == Psi1LPT + (f2LPT/f1LPT) * Psi2LPT
+
+        if(regular_q_grid_and_2LPT) {
+          std::array<double, NDIM> q_exact;
+          for (int idim = 0; idim < NDIM; idim++) {
+            // Compute exact q
+            q_exact[idim] = std::round(q_vec[idim] * Npart_1D) / double(Npart_1D);
+            // Compute exact D2
+            disp2[idim] = (q_vec[idim] - q_exact[idim]) * v_factor_2LPT;
+            if(disp2[idim] >= 0.5) disp2[idim] -= 1.0;
+            if(disp2[idim] < -0.5) disp2[idim] += 1.0;
+            // Compute exact D1
+            disp[idim] -= f2_over_f1 * disp2[idim];
+            if(disp[idim] >= 0.5) disp[idim] -= 1.0;
+            if(disp[idim] < -0.5) disp[idim] += 1.0;
+            //...and finally wrap q_exact
+            if(q_exact[idim] >= 1.0) q_exact[idim] -= 1.0;
+            if(q_exact[idim] < 0.0) q_exact[idim] += 1.0;
+          }
+          q_vec = q_exact;
+        }
+
+        if constexpr (FML::PARTICLE::has_get_q<T>()) {
+          auto * q = FML::PARTICLE::GetLagrangianPos(part_ptr[ind]);
+          for (int idim = 0; idim < NDIM; idim++) {
+            q[idim] = q_vec[idim];
+          }
+        }
+        if constexpr (FML::PARTICLE::has_get_D_1LPT<T>()) {
+          auto * D = FML::PARTICLE::GetD_1LPT(part_ptr[ind]);
+          for (int idim = 0; idim < NDIM; idim++) {
+            D[idim] = disp[idim];
+          }
+        }
+        if constexpr (FML::PARTICLE::has_get_D_2LPT<T>()) {
+          auto * D2 = FML::PARTICLE::GetD_2LPT(part_ptr[ind]);
+          for (int idim = 0; idim < NDIM; idim++) {
+            D2[idim] = disp2[idim];
+          }
+        }
+      }
+    };
+
+    // This method does the reconstruction exactly using the data in the gadget-files
+    // For 1LPT IC this always works. For 2LPT IC this assumes the q-grid the IC 
+    // was created on is a regular grid (i.e. does not work for a glass)
+    // When using this with COLA we assume the COLA LPT order is the same as in the IC
+    // If you have 1LPT IC and want 2LPT COLA then the D2LPT fields are put to zero!
+    // Only works with scaleindependent COLA
+    const bool regular_q_grid_and_2LPT = ic_LPT_order > 1;
+    if(ic_reconstruct_exact) {
+      if(FML::ThisTask == 0) 
+        std::cout << "# Doing exact reconstruction\n";
+      FML::assert_mpi(simulation_use_scaledependent_cola == false,
+          "Exact 1LPT reconstruction only implemented for scaleindependent cola");
+      exact_1LPT_reconstruction(regular_q_grid_and_2LPT);
+      return;
+    }
 
     // Assign particles to grid
     const auto nleftright =

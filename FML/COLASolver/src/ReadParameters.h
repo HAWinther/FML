@@ -257,6 +257,7 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
         param["ic_reconstruct_dimless_smoothing_scale"] =
             lfp.read_double("ic_reconstruct_dimless_smoothing_scale", 0.0, OPTIONAL);
         param["ic_reconstruct_interlacing"] = lfp.read_bool("ic_reconstruct_interlacing", false, OPTIONAL);
+        param["ic_reconstruct_exact"] = lfp.read_bool("ic_reconstruct_exact", false, OPTIONAL);
     }
 
     //=============================================================

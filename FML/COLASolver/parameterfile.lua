@@ -327,6 +327,15 @@ if ic_random_field_type == "read_particles" or ic_random_field_type == "read_pha
   -- some reason you want ic_nmesh to be larger than the grid it was created on)
   ic_reconstruct_smoothing_filter = "sharpk"
   ic_reconstruct_dimless_smoothing_scale = 1.0 /(2.0 * math.pi * ic_nmesh / 2)
+
+  -- This method does the reconstruction exactly using the data in the gadget-files
+  -- Overrides the options above
+  -- For 1LPT IC this always works. For 2LPT IC this assumes the q-grid the IC
+  -- was created on is a regular grid (i.e. does not work for a glass)
+  -- When using this with COLA we assume the COLA LPT order is the same as in the IC ( set in ic_LPT_order )
+  -- If you have 1LPT IC and want 2LPT COLA then the D2LPT fields are simply put to zero
+  -- Only works with scaleindependent COLA
+  ic_reconstruct_exact = true
 end
 
 ------------------------------------------------------------
@@ -407,7 +416,7 @@ end
 -- Halofinding
 ------------------------------------------------------------
 -- Do halofinding every output?
-fof = true
+fof = false
 -- Minimum number of particles per halo
 fof_nmin_per_halo = 20
 -- The linking length (distance in units of mean particle separation)
