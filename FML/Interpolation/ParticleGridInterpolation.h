@@ -514,16 +514,19 @@ namespace FML {
                 mean_mass /= double(NumPartTot);
                 norm_fac /= mean_mass;
             }
-            double mass = 1.0;
 
             // Loop over all particles and add them to the grid
-            // OpenMP will not be very good due to critical section needed in add_real
+            auto * density_raw = density.get_real_grid();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
             for (size_t i = 0; i < NumPart; i++) {
 
                 // Particle position
                 const auto * pos = FML::PARTICLE::GetPos(const_cast<T *>(part)[i]);
 
                 // Fetch mass if this is availiable
+                double mass = 1.0;
                 if constexpr (has_mass)
                     mass = FML::PARTICLE::GetMass(part[i]);
 
@@ -608,7 +611,15 @@ namespace FML {
                     }
 
                     // Add particle to grid
-                    density.add_real(icoord, w * norm_fac * mass);
+                    // Old version when we did not use OMP: density.add_real(icoord, w * norm_fac * mass);
+                    auto index = density.get_index_real(icoord);
+                    double mass_to_add = w * norm_fac * mass;
+#ifdef USE_OMP
+#pragma omp atomic
+#endif
+                    density_raw[index] += mass_to_add;
+                   
+                    // Sum up and unsure weights sum to unity
                     sumweights += w;
                 }
 
