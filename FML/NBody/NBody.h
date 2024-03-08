@@ -1595,7 +1595,7 @@ namespace FML {
                     } else {
                         value *= greens_function_laplace_operator_fourier<N>(kmag2, kvec, Nmesh, LAPLACE_KERNEL);
                     }
-                    potential_real.set_fourier_from_index(fourier_index, value * norm_poisson_equation);
+                    potential_real.set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(norm_poisson_equation));
                 }
             }
 
