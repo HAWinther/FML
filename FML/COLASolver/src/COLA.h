@@ -44,6 +44,7 @@ void cola_initialize_velocities(FML::PARTICLE::MPIParticles<T> & part) {
 template <int NDIM, class T>
 void cola_add_on_LPT_velocity(FML::PARTICLE::MPIParticles<T> & part,
                               std::shared_ptr<GravityModel<NDIM>> & grav,
+                              int LPT_order,
                               double aini,
                               double a,
                               double sign = 1.0);
@@ -51,6 +52,7 @@ void cola_add_on_LPT_velocity(FML::PARTICLE::MPIParticles<T> & part,
 template <int NDIM, class T>
 void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                              std::shared_ptr<GravityModel<NDIM>> & grav,
+                                             int LPT_order,
                                              FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
                                              FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
                                              FML::GRID::FFTWGrid<NDIM> & phi_3LPTa_ini_fourier,
@@ -63,6 +65,7 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
 template <int NDIM, class T>
 void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                     std::shared_ptr<GravityModel<NDIM>> & grav,
+                                    int LPT_order,
                                     FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
                                     FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
                                     FML::GRID::FFTWGrid<NDIM> & phi_3LPTa_ini_fourier,
@@ -77,6 +80,7 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
 template <int NDIM, class T>
 void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
                      std::shared_ptr<GravityModel<NDIM>> & grav,
+                     int LPT_order,
                      double aini,
                      double aold,
                      double a,
@@ -91,9 +95,11 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
 template <int NDIM, class T>
 void cola_add_on_LPT_velocity(FML::PARTICLE::MPIParticles<T> & part,
                               std::shared_ptr<GravityModel<NDIM>> & grav,
+                              int LPT_order,
                               double aini,
                               double a,
                               double sign) {
+    if (LPT_order < 1) return;
 
     if (FML::ThisTask == 0) {
         std::cout << "Adding on the LPT velocity to particles (COLA)\n";
@@ -105,25 +111,29 @@ void cola_add_on_LPT_velocity(FML::PARTICLE::MPIParticles<T> & part,
     const double D1 = grav->get_D_1LPT(a);
     const double D1ini = grav->get_D_1LPT(aini);
     const double f1 = grav->get_f_1LPT(a);
-    const double vfac_1LPT = sign * D1 / D1ini * f1 * a * a * cosmo->HoverH0_of_a(a);
+    double vfac_1LPT = sign * D1 / D1ini * f1 * a * a * cosmo->HoverH0_of_a(a);
+    if(LPT_order < 1) vfac_1LPT = 0.0;
 
     // 2LPT
     [[maybe_unused]] const double D2 = grav->get_D_2LPT(a);
     [[maybe_unused]] const double D2ini = grav->get_D_2LPT(aini);
     [[maybe_unused]] const double f2 = grav->get_f_2LPT(a);
-    [[maybe_unused]] const double vfac_2LPT = sign * D2 / D2ini * f2 * a * a * cosmo->HoverH0_of_a(a);
+    [[maybe_unused]] double vfac_2LPT = sign * D2 / D2ini * f2 * a * a * cosmo->HoverH0_of_a(a);
+    if(LPT_order < 2) vfac_2LPT = 0.0;
 
     // 3LPTa
     [[maybe_unused]] const double D3a = grav->get_D_3LPTa(a);
     [[maybe_unused]] const double D3aini = grav->get_D_3LPTa(aini);
     [[maybe_unused]] const double f3a = grav->get_f_3LPTa(a);
-    [[maybe_unused]] const double vfac_3LPTa = sign * D3a / D3aini * f3a * a * a * cosmo->HoverH0_of_a(a);
+    [[maybe_unused]] double vfac_3LPTa = sign * D3a / D3aini * f3a * a * a * cosmo->HoverH0_of_a(a);
+    if(LPT_order < 3) vfac_3LPTa = 0.0;
 
     // 3LPTb
     [[maybe_unused]] const double D3b = grav->get_D_3LPTb(a);
     [[maybe_unused]] const double D3bini = grav->get_D_3LPTb(aini);
     [[maybe_unused]] const double f3b = grav->get_f_3LPTb(a);
-    [[maybe_unused]] const double vfac_3LPTb = sign * D3b / D3bini * f3b * a * a * cosmo->HoverH0_of_a(a);
+    [[maybe_unused]] double vfac_3LPTb = sign * D3b / D3bini * f3b * a * a * cosmo->HoverH0_of_a(a);
+    if(LPT_order < 3) vfac_3LPTb = 0.0;
 
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -169,18 +179,26 @@ void cola_add_on_LPT_velocity(FML::PARTICLE::MPIParticles<T> & part,
 template <int NDIM, class T>
 void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
                      std::shared_ptr<GravityModel<NDIM>> & grav,
+                     int LPT_order,
                      double aini,
                      double aold,
                      double a,
                      double delta_time_kick,
                      [[maybe_unused]] double delta_time_drift) {
+    if (LPT_order < 1) return;
 
-    constexpr int LPT_order = (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() and
+    constexpr int LPT_order_particle = (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() and
                                FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>()) ?
                                   3 :
                                   (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() ?
                                        2 :
                                        (FML::PARTICLE::has_get_D_1LPT<T>() ? 1 : 0));
+    
+    if(LPT_order_particle < LPT_order) {
+      std::string error = "The particle type is compatible with " + std::to_string(LPT_order_particle) +"LPT, ";
+      error += "but we are asked to do " + std::to_string(LPT_order) + "LPT COLA. Lower the order or fix the particle\n";
+      FML::assert_mpi(false, error.c_str());
+    }
 
     if (FML::ThisTask == 0) {
         std::cout << "[Kick] + [Drift] COLA " << LPT_order << "LPT\n";
@@ -192,28 +210,32 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
     const double D1 = grav->get_D_1LPT(a);
     const double D1old = grav->get_D_1LPT(aold);
     const double D1ini = grav->get_D_1LPT(aini);
-    const double fac1_pos = (D1 - D1old) / D1ini;
-    const double fac1_vel = -norm_poisson * D1old / D1ini * delta_time_kick;
+    double fac1_pos = (D1 - D1old) / D1ini;
+    double fac1_vel = -norm_poisson * D1old / D1ini * delta_time_kick;
+    if (LPT_order < 1) fac1_pos = fac1_vel = 0.0;
 
     [[maybe_unused]] const double D2 = grav->get_D_2LPT(a);
     [[maybe_unused]] const double D2old = grav->get_D_2LPT(aold);
     [[maybe_unused]] const double D2ini = grav->get_D_2LPT(aini);
-    [[maybe_unused]] const double fac2_pos = (D2 - D2old) / D2ini;
-    [[maybe_unused]] const double fac2_vel = -norm_poisson * (D2old - D1old * D1old) / D2ini * delta_time_kick;
+    [[maybe_unused]] double fac2_pos = (D2 - D2old) / D2ini;
+    [[maybe_unused]] double fac2_vel = -norm_poisson * (D2old - D1old * D1old) / D2ini * delta_time_kick;
+    if (LPT_order < 2) fac2_pos = fac2_vel = 0.0;
 
     [[maybe_unused]] const double D3a = grav->get_D_3LPTa(a);
     [[maybe_unused]] const double D3aold = grav->get_D_3LPTa(aold);
     [[maybe_unused]] const double D3aini = grav->get_D_3LPTa(aini);
-    [[maybe_unused]] const double fac3a_pos = (D3a - D3aold) / D3aini;
-    [[maybe_unused]] const double fac3a_vel =
+    [[maybe_unused]] double fac3a_pos = (D3a - D3aold) / D3aini;
+    [[maybe_unused]] double fac3a_vel =
         -norm_poisson * (D3aold - 2.0 * D1old * D1old * D1old) / D3aini * delta_time_kick;
+    if (LPT_order < 3) fac3a_pos = fac3a_vel = 0.0;
 
     [[maybe_unused]] const double D3b = grav->get_D_3LPTb(a);
     [[maybe_unused]] const double D3bold = grav->get_D_3LPTb(aold);
     [[maybe_unused]] const double D3bini = grav->get_D_3LPTb(aini);
-    [[maybe_unused]] const double fac3b_pos = (D3b - D3bold) / D3bini;
-    [[maybe_unused]] const double fac3b_vel =
+    [[maybe_unused]] double fac3b_pos = (D3b - D3bold) / D3bini;
+    [[maybe_unused]] double fac3b_vel =
         -norm_poisson * (D3bold + D1old * D1old * D1old - D1old * D2old) / D3bini * delta_time_kick;
+    if (LPT_order < 3) fac3b_pos = fac3b_vel = 0.0;
 
     // Loop over all active particles
     const size_t np = part.get_npart();
@@ -225,7 +247,7 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
         auto * pos = FML::PARTICLE::GetPos(p);
         auto * vel = FML::PARTICLE::GetVel(p);
 
-        if constexpr (LPT_order >= 1) {
+        if (LPT_order >= 1) {
             auto * D1 = FML::PARTICLE::GetD_1LPT(p);
             for (int idim = 0; idim < NDIM; idim++) {
                 pos[idim] += D1[idim] * fac1_pos;
@@ -233,7 +255,7 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
             }
         }
 
-        if constexpr (LPT_order >= 2) {
+        if (LPT_order >= 2) {
             auto * D2 = FML::PARTICLE::GetD_2LPT(p);
             for (int idim = 0; idim < NDIM; idim++) {
                 pos[idim] += D2[idim] * fac2_pos;
@@ -241,7 +263,7 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
             }
         }
 
-        if constexpr (LPT_order >= 3) {
+        if (LPT_order >= 3) {
             auto * D3a = FML::PARTICLE::GetD_3LPTa(p);
             auto * D3b = FML::PARTICLE::GetD_3LPTb(p);
             for (int idim = 0; idim < NDIM; idim++) {
@@ -272,6 +294,7 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
 template <int NDIM, class T>
 void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                     std::shared_ptr<GravityModel<NDIM>> & grav,
+                                    int LPT_order,
                                     FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
                                     FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
                                     FML::GRID::FFTWGrid<NDIM> & phi_3LPTa_ini_fourier,
@@ -282,12 +305,13 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                     double a,
                                     double delta_time_kick,
                                     [[maybe_unused]] double delta_time_drift) {
+    if (LPT_order < 1) return;
 
     constexpr bool print_timings = false;
     FML::UTILS::Timings timer;
     timer.StartTiming("Scaledependent COLA");
 
-    constexpr int LPT_order = (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() and
+    constexpr int LPT_order_particle = (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() and
                                FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>()) ?
                                   3 :
                                   (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() ?
@@ -299,19 +323,25 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
     }
 
     // Check that particles have the methods they need to use this method
-    if constexpr (LPT_order == 1) {
+    if (LPT_order_particle == 1) {
         FML::assert_mpi(FML::PARTICLE::has_get_dDdloga_1LPT<T>(),
                         "Error in cola_kick_drift_scaledependent. Particle do not have a get_dDdloga_1LPT method\n");
         FML::assert_mpi(phi_1LPT_ini_fourier.get_nmesh() > 0,
                         "Error in cola_kick_drift_scaledependent. Initial 1LPT potential is not allocated\n");
     }
-    if constexpr (LPT_order >= 2) {
+    if (LPT_order >= 2) {
         FML::assert_mpi(phi_2LPT_ini_fourier.get_nmesh() > 0,
                         "Error in cola_kick_drift_scaledependent. Initial 2LPT potential is not allocated\n");
     }
-    if constexpr (LPT_order >= 3) {
+    if (LPT_order >= 3) {
         FML::assert_mpi(phi_3LPTa_ini_fourier.get_nmesh() > 0 and phi_3LPTb_ini_fourier.get_nmesh() > 0,
                         "Error in cola_kick_drift_scaledependent. Initial 2LPT potential is not allocated\n");
+    }
+    
+    if(LPT_order_particle < LPT_order) {
+      std::string error = "The particle type is compatible with " + std::to_string(LPT_order_particle) +"LPT, ";
+      error += "but we are asked to do " + std::to_string(LPT_order) + "LPT COLA. Lower the order or fix the particle\n";
+      FML::assert_mpi(false, error.c_str());
     }
 
     auto cosmo = grav->get_cosmo();
@@ -426,15 +456,15 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
 
     for (int i = 0; i < npts; i++) {
         k_vec[i] = kmin + (kmax - kmin) * i / double(npts - 1);
-        if constexpr (LPT_order >= 1) {
+        if (LPT_order >= 1) {
             pos1[i] = function_pos_1LPT(k_vec[i]);
             vel1[i] = function_vel_1LPT(k_vec[i]);
         }
-        if constexpr (LPT_order >= 2) {
+        if (LPT_order >= 2) {
             pos2[i] = function_pos_2LPT(k_vec[i]);
             vel2[i] = function_vel_2LPT(k_vec[i]);
         }
-        if constexpr (LPT_order >= 3) {
+        if (LPT_order >= 3) {
             pos3a[i] = function_pos_3LPTa(k_vec[i]);
             vel3a[i] = function_vel_3LPTa(k_vec[i]);
             pos3b[i] = function_pos_3LPTb(k_vec[i]);
@@ -444,14 +474,14 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
 
     Spline function_pos_1LPT_spline;
     Spline function_vel_1LPT_spline;
-    if constexpr (LPT_order >= 1) {
+    if (LPT_order >= 1) {
         function_pos_1LPT_spline.create(k_vec, pos1);
         function_vel_1LPT_spline.create(k_vec, vel1);
     }
 
     Spline function_pos_2LPT_spline;
     Spline function_vel_2LPT_spline;
-    if constexpr (LPT_order >= 2) {
+    if (LPT_order >= 2) {
         function_pos_2LPT_spline.create(k_vec, pos2);
         function_vel_2LPT_spline.create(k_vec, vel2);
     }
@@ -460,7 +490,7 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
     Spline function_pos_3LPTb_spline;
     Spline function_vel_3LPTa_spline;
     Spline function_vel_3LPTb_spline;
-    if constexpr (LPT_order >= 3) {
+    if (LPT_order >= 3) {
         function_pos_3LPTa_spline.create(k_vec, pos3a);
         function_vel_3LPTa_spline.create(k_vec, vel3a);
         function_pos_3LPTb_spline.create(k_vec, pos3b);
@@ -485,11 +515,11 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
             temp_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
             auto delta_ini = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index);
             auto value = delta_ini * FML::GRID::FloatType(function_pos_1LPT_spline(kmag));
-            if constexpr (LPT_order >= 2) {
+            if (LPT_order >= 2) {
                 auto phi_2LPT = phi_2LPT_ini_fourier.get_fourier_from_index(fourier_index);
                 value += phi_2LPT * FML::GRID::FloatType(function_pos_2LPT_spline(kmag));
             }
-            if constexpr (LPT_order >= 3) {
+            if (LPT_order >= 3) {
                 auto phi_3LPTa = phi_3LPTa_ini_fourier.get_fourier_from_index(fourier_index);
                 auto phi_3LPTb = phi_3LPTb_ini_fourier.get_fourier_from_index(fourier_index);
                 value += phi_3LPTa * FML::GRID::FloatType(function_pos_3LPTa_spline(kmag));
@@ -524,11 +554,11 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
             temp_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
             auto delta_ini = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index);
             auto value = delta_ini * FML::GRID::FloatType(function_vel_1LPT_spline(kmag));
-            if constexpr (LPT_order >= 2) {
+            if (LPT_order >= 2) {
                 auto phi_2LPT = phi_2LPT_ini_fourier.get_fourier_from_index(fourier_index);
                 value += phi_2LPT * FML::GRID::FloatType(function_vel_2LPT_spline(kmag));
             }
-            if constexpr (LPT_order >= 3) {
+            if (LPT_order >= 3) {
                 auto phi_3LPTa = phi_3LPTa_ini_fourier.get_fourier_from_index(fourier_index);
                 auto phi_3LPTb = phi_3LPTb_ini_fourier.get_fourier_from_index(fourier_index);
                 value += phi_3LPTa * FML::GRID::FloatType(function_vel_3LPTa_spline(kmag));
@@ -547,13 +577,11 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
 #pragma omp parallel for
 #endif
     for (size_t ind = 0; ind < np; ind++) {
-        if constexpr (LPT_order == 1) {
+        if (LPT_order_particle == 1) {
             auto * D_vel = FML::PARTICLE::GetdDdloga_1LPT(part[ind]);
             for (int idim = 0; idim < NDIM; idim++)
                 D_vel[idim] = displacements[idim][ind];
-        }
-
-        if constexpr (LPT_order >= 2) {
+        } else {
             auto * D_vel = FML::PARTICLE::GetD_2LPT(part[ind]);
             for (int idim = 0; idim < NDIM; idim++)
                 D_vel[idim] = displacements[idim][ind];
@@ -578,7 +606,7 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
         auto * pos = FML::PARTICLE::GetPos(p);
         auto * vel = FML::PARTICLE::GetVel(p);
 
-        if constexpr (LPT_order == 1) {
+        if (LPT_order_particle == 1) {
             // 1LPT: we are using D1 and dDdloga_1LPT
             auto * D_pos = FML::PARTICLE::GetD_1LPT(p);
             auto * D_vel = FML::PARTICLE::GetdDdloga_1LPT(p);
@@ -586,9 +614,7 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                 pos[idim] += D_pos[idim];
                 vel[idim] += D_vel[idim];
             }
-        }
-
-        if constexpr (LPT_order >= 2) {
+        } else {
             // 1LPT + 2LPT: we are using D1 and D2 as temp storage
             auto * D_pos = FML::PARTICLE::GetD_1LPT(p);
             auto * D_vel = FML::PARTICLE::GetD_2LPT(p);
@@ -615,6 +641,7 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
 template <int NDIM, class T>
 void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                              std::shared_ptr<GravityModel<NDIM>> & grav,
+                                             int LPT_order,
                                              FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
                                              FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
                                              FML::GRID::FFTWGrid<NDIM> & phi_3LPTa_ini_fourier,
@@ -623,8 +650,10 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
                                              double aini,
                                              double a,
                                              double sign) {
+    
+    if (LPT_order < 1) return;
 
-    constexpr int LPT_order = (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() and
+    constexpr int LPT_order_particle = (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() and
                                FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>()) ?
                                   3 :
                                   (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() ?
@@ -638,16 +667,22 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
     if (not phi_1LPT_ini_fourier)
         FML::assert_mpi(false, "phi_1LPT_ini_fourier is not allocated");
 
-    if constexpr (LPT_order == 1) {
+    if (LPT_order_particle == 1) {
         FML::assert_mpi(FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_dDdloga_1LPT<T>(),
                         "Error in cola_add_on_LPT_velocity_scaledependent. Particle do not have both get_D_1LPT "
                         "and get_dDdloga_1LPT methods\n");
     }
 
-    if constexpr (LPT_order >= 2) {
+    if (LPT_order >= 2) {
         FML::assert_mpi(FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>(),
                         "Error in cola_add_on_LPT_velocity_scaledependent. Particle do not have both get_D_1LPT "
                         "and get_D_2LPT methods\n");
+    }
+    
+    if(LPT_order_particle < LPT_order) {
+      std::string error = "The particle type is compatible with " + std::to_string(LPT_order_particle) +"LPT, ";
+      error += "but we are asked to do " + std::to_string(LPT_order) + "LPT COLA. Lower the order or fix the particle\n";
+      FML::assert_mpi(false, error.c_str());
     }
 
     auto cosmo = grav->get_cosmo();
@@ -713,10 +748,10 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
     for (int i = 0; i < npts; i++) {
         k_vec[i] = kmin + (kmax - kmin) * i / double(npts - 1);
         vel1[i] = function_vel_1LPT(k_vec[i]);
-        if constexpr (LPT_order >= 2) {
+        if (LPT_order >= 2) {
             vel2[i] = function_vel_2LPT(k_vec[i]);
         }
-        if constexpr (LPT_order >= 3) {
+        if (LPT_order >= 3) {
             vel3a[i] = function_vel_3LPTa(k_vec[i]);
             vel3b[i] = function_vel_3LPTb(k_vec[i]);
         }
@@ -726,12 +761,12 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
     function_vel_1LPT_spline.create(k_vec, vel1);
 
     Spline function_vel_2LPT_spline;
-    if constexpr (LPT_order >= 2) {
+    if (LPT_order >= 2) {
         function_vel_2LPT_spline.create(k_vec, vel2);
     }
     Spline function_vel_3LPTa_spline;
     Spline function_vel_3LPTb_spline;
-    if constexpr (LPT_order >= 3) {
+    if (LPT_order >= 3) {
         function_vel_3LPTa_spline.create(k_vec, vel3a);
         function_vel_3LPTb_spline.create(k_vec, vel3b);
     }
@@ -751,11 +786,11 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
             temp_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
             auto phi_1LPT = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index);
             auto value = phi_1LPT * FML::GRID::FloatType(function_vel_1LPT_spline(kmag));
-            if constexpr (LPT_order >= 2) {
+            if (LPT_order >= 2) {
                 auto phi_2LPT = phi_2LPT_ini_fourier.get_fourier_from_index(fourier_index);
                 value += phi_2LPT * FML::GRID::FloatType(function_vel_2LPT_spline(kmag));
             }
-            if constexpr (LPT_order >= 3) {
+            if (LPT_order >= 3) {
                 auto phi_3LPTa = phi_3LPTa_ini_fourier.get_fourier_from_index(fourier_index);
                 auto phi_3LPTb = phi_3LPTb_ini_fourier.get_fourier_from_index(fourier_index);
                 value += phi_3LPTa * FML::GRID::FloatType(function_vel_3LPTa_spline(kmag));

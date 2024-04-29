@@ -120,6 +120,7 @@ class NBodySimulation {
     bool simulation_use_scaledependent_cola; // If cola, use cola with scaledependent growth?
     bool simulation_enforce_LPT_trajectories; // Do not include the PM force, just let particles follow LPT trajectores
                                               // This requires COLA to be on, otherwise the particles do not change
+    int simulation_cola_LPT_order;            // The LPT order for COLA
 
     // Force and density assignment
     int force_nmesh;                             // The gridsize to bin particles to and compute PM forces
@@ -493,14 +494,24 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
     simulation_use_cola = param.get<bool>("simulation_use_cola");
     simulation_use_scaledependent_cola = param.get<bool>("simulation_use_scaledependent_cola");
     simulation_enforce_LPT_trajectories = simulation_use_cola ? param.get<bool>("simulation_enforce_LPT_trajectories", false) : false;
-
+    simulation_cola_LPT_order = simulation_use_cola ? param.get<int>("simulation_cola_LPT_order", 2) : 2;
+    if(simulation_use_cola and simulation_cola_LPT_order > param.get<int>("ic_LPT_order")) 
+      FML::assert_mpi(false, "The highest COLA LPT order is ic_LPT_order (i.e. simulation_cola_LPT_order must be <= ic_LPT_order)"); 
+    if(simulation_cola_LPT_order < 1 and simulation_use_cola) {
+      simulation_use_cola = simulation_use_scaledependent_cola = false;
+      if (FML::ThisTask == 0)
+        std::cout << "NB: simulation_cola_LPT_order < 1 so turning off COLA\n";
+    }
+ 
     if (FML::ThisTask == 0) {
         std::cout << "simulation_name                          : " << simulation_name << "\n";
         std::cout << "simulation_boxsize                       : " << simulation_boxsize << "\n";
         std::cout << "simulation_use_cola                      : " << simulation_use_cola << "\n";
         std::cout << "simulation_use_scaledependent_cola       : " << simulation_use_scaledependent_cola << "\n";
-        if (simulation_use_cola)
+        if (simulation_use_cola) {
             std::cout << "simulation_enforce_LPT_trajectories      : " << simulation_enforce_LPT_trajectories << "\n";
+            std::cout << "simulation_cola_LPT_order                : " << simulation_cola_LPT_order << "\n";
+        }
 
         // We cannot use COLA if the particle type is not compatible with it
         if (simulation_use_cola and not FML::PARTICLE::has_get_D_1LPT<T>()) {
@@ -1158,13 +1169,13 @@ void NBodySimulation<NDIM, T>::init() {
                                            fac * grav_ic->get_f_3LPTb(aini)};
         timer.StartTiming("InitialConditions");
 
-        // Store the LPT potentials we need from the IC (max 2LPT)
+        // Store the LPT potentials we need from the IC (max 3LPT)
         // We store 2LPT, 3LPTa, 3LPTb depending on the size of the vector we send in
         std::vector<FFTWGrid<NDIM>> phi_nLPT_potentials;
         if (simulation_use_cola and simulation_use_scaledependent_cola) {
-            if (FML::PARTICLE::has_get_D_2LPT<T>())
+            if (FML::PARTICLE::has_get_D_2LPT<T>() and simulation_cola_LPT_order >= 2)
                 phi_nLPT_potentials.resize(1);
-            if (FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>())
+            if (FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>() and simulation_cola_LPT_order >= 3)
                 phi_nLPT_potentials.resize(3);
         }
 
@@ -1180,7 +1191,7 @@ void NBodySimulation<NDIM, T>::init() {
 
         // Store potential in the class
         if (simulation_use_cola and simulation_use_scaledependent_cola) {
-            if (FML::PARTICLE::has_get_D_1LPT<T>()) {
+            if (FML::PARTICLE::has_get_D_1LPT<T>() and simulation_cola_LPT_order >= 1) {
                 // Store phi_1LPT (D^2 phi_1LPT = -delta)
                 phi_1LPT_ini_fourier = delta_ini_fourier;
                 phi_1LPT_ini_fourier.add_memory_label("phi_1LPT(k,zini)");
@@ -1205,13 +1216,13 @@ void NBodySimulation<NDIM, T>::init() {
                 if (Local_x_start == 0)
                     phi_1LPT_ini_fourier.set_fourier_from_index(0, 0.0);
             }
-            if (FML::PARTICLE::has_get_D_2LPT<T>()) {
+            if (FML::PARTICLE::has_get_D_2LPT<T>() and simulation_cola_LPT_order >= 2) {
                 if (FML::ThisTask == 0)
                     std::cout << "Storing initial 2LPT potential \n";
                 phi_2LPT_ini_fourier = phi_nLPT_potentials[0];
                 phi_2LPT_ini_fourier.add_memory_label("phi_2LPT(k,zini)");
             }
-            if (FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>()) {
+            if (FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>() and simulation_cola_LPT_order >= 3) {
                 if (FML::ThisTask == 0)
                     std::cout << "Storing initial 3LPT potentials \n";
                 phi_3LPTa_ini_fourier = phi_nLPT_potentials[1];
@@ -1250,6 +1261,7 @@ void NBodySimulation<NDIM, T>::run() {
         if (simulation_use_scaledependent_cola) {
             cola_add_on_LPT_velocity_scaledependent<NDIM, T>(part,
                                                              grav,
+                                                             simulation_cola_LPT_order, 
                                                              phi_1LPT_ini_fourier,
                                                              phi_2LPT_ini_fourier,
                                                              phi_3LPTa_ini_fourier,
@@ -1259,7 +1271,7 @@ void NBodySimulation<NDIM, T>::run() {
                                                              a,
                                                              addsubtract_sign);
         } else {
-            cola_add_on_LPT_velocity<NDIM, T>(part, grav, aini, a, addsubtract_sign);
+            cola_add_on_LPT_velocity<NDIM, T>(part, grav, simulation_cola_LPT_order, aini, a, addsubtract_sign);
         }
     };
 
@@ -1414,6 +1426,7 @@ void NBodySimulation<NDIM, T>::run() {
                     if (simulation_use_scaledependent_cola) {
                         cola_kick_drift_scaledependent<NDIM, T>(part,
                                                                 grav,
+                                                                simulation_cola_LPT_order, 
                                                                 phi_1LPT_ini_fourier,
                                                                 phi_2LPT_ini_fourier,
                                                                 phi_3LPTa_ini_fourier,
@@ -1425,7 +1438,7 @@ void NBodySimulation<NDIM, T>::run() {
                                                                 delta_time_kick,
                                                                 delta_time_drift);
                     } else {
-                        cola_kick_drift<NDIM, T>(part, grav, aini, apos, apos_new, delta_time_kick, delta_time_drift);
+                        cola_kick_drift<NDIM, T>(part, grav, simulation_cola_LPT_order, aini, apos, apos_new, delta_time_kick, delta_time_drift);
                     }
                     timer.EndTiming("COLA");
                 }
@@ -1625,6 +1638,7 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
         if (simulation_use_scaledependent_cola) {
             cola_add_on_LPT_velocity_scaledependent<NDIM, T>(part,
                                                              grav,
+                                                             simulation_cola_LPT_order, 
                                                              phi_1LPT_ini_fourier,
                                                              phi_2LPT_ini_fourier,
                                                              phi_3LPTa_ini_fourier,
@@ -1634,7 +1648,7 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
                                                              a,
                                                              addsubtract_sign);
         } else {
-            cola_add_on_LPT_velocity<NDIM, T>(part, grav, aini, a, addsubtract_sign);
+            cola_add_on_LPT_velocity<NDIM, T>(part, grav, simulation_cola_LPT_order, aini, a, addsubtract_sign);
         }
     };
 
@@ -1758,7 +1772,7 @@ void NBodySimulation<NDIM, T>::read_phases(FFTWGrid<NDIM> & delta_fourier) {
     // Move them into MPIParticles
     MPIParticles<T> temppart;
     temppart.move_from(std::move(externalpart));
-
+    
     FML::INTERPOLATION::particles_to_fourier_grid(temppart.get_particles_ptr(),
                                                   temppart.get_npart(),
                                                   temppart.get_npart_total(),
@@ -1935,7 +1949,7 @@ void NBodySimulation<NDIM, T>::read_ic() {
 
         // Doing 1LPT displacementfields
         // For scaledependent we also set the Lagrangian position
-        if constexpr (FML::PARTICLE::has_get_D_1LPT<T>()) {
+        if (FML::PARTICLE::has_get_D_1LPT<T>() and simulation_cola_LPT_order >= 1) {
 
             if (FML::ThisTask == 0) {
                 std::cout << "Reconstructing 1LPT potential...\n";
@@ -1981,7 +1995,7 @@ void NBodySimulation<NDIM, T>::read_ic() {
         }
 
         // Doing 2LPT displacementfields
-        if constexpr (FML::PARTICLE::has_get_D_2LPT<T>()) {
+        if (FML::PARTICLE::has_get_D_2LPT<T>() and simulation_cola_LPT_order >= 2) {
 
             if (FML::ThisTask == 0) {
                 std::cout << "Reconstructing 2LPT potential...\n";

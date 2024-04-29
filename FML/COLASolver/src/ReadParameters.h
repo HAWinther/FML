@@ -33,6 +33,7 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
     param["simulation_use_scaledependent_cola"] = lfp.read_bool("simulation_use_scaledependent_cola", true, OPTIONAL);
     if (param.get<bool>("simulation_use_cola")) {
         param["simulation_enforce_LPT_trajectories"] = lfp.read_bool("simulation_enforce_LPT_trajectories", false, OPTIONAL);
+        param["simulation_cola_LPT_order"] = lfp.read_int("simulation_cola_LPT_order", 2, OPTIONAL);
     }
 
     //=============================================================
