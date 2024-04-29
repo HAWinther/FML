@@ -1889,18 +1889,20 @@ void NBodySimulation<NDIM, T>::read_ic() {
             q[idim] = q_vec[idim];
           }
         }
-        if constexpr (FML::PARTICLE::has_get_D_1LPT<T>()) {
-          auto * D = FML::PARTICLE::GetD_1LPT(part_ptr[ind]);
-          for (int idim = 0; idim < NDIM; idim++) {
-            D[idim] = disp[idim];
-          }
-        }
-        if constexpr (FML::PARTICLE::has_get_D_2LPT<T>()) {
-          auto * D2 = FML::PARTICLE::GetD_2LPT(part_ptr[ind]);
-          for (int idim = 0; idim < NDIM; idim++) {
-            D2[idim] = disp2[idim];
-          }
-        }
+        if(simulation_cola_LPT_order >= 1)
+            if constexpr (FML::PARTICLE::has_get_D_1LPT<T>()) {
+              auto * D = FML::PARTICLE::GetD_1LPT(part_ptr[ind]);
+              for (int idim = 0; idim < NDIM; idim++) {
+                D[idim] = disp[idim];
+              }
+            }
+        if(simulation_cola_LPT_order >= 2)
+            if constexpr (FML::PARTICLE::has_get_D_2LPT<T>()) {
+              auto * D2 = FML::PARTICLE::GetD_2LPT(part_ptr[ind]);
+              for (int idim = 0; idim < NDIM; idim++) {
+                D2[idim] = disp2[idim];
+              }
+            }
       }
     };
 
