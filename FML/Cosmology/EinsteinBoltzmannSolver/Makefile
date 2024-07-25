@@ -14,7 +14,7 @@ MPICC   = mpicxx -O3 -std=c++1z -Wall -Wextra -march=native
 #===================================================
 
 # Use MPI
-USE_MPI          = true
+USE_MPI          = false
 # Use OpenMP threads
 USE_OMP          = true
 # Use the GSL library (Spline, ODESolver) Required here!
@@ -22,7 +22,7 @@ USE_GSL          = true
 # Check for bad memory accesses
 USE_SANITIZER    = false
 # Use the FFTW library
-USE_FFTW         = true
+USE_FFTW         = false
 # Use threads in FFTW
 USE_FFTW_THREADS = false
 
@@ -39,6 +39,7 @@ GSL_LIB        = $(HOME)/local/lib
 GSL_LINK       = -lgsl -lgslcblas
 
 # FFTW : only needed if USE_FFTW = true
+# Only needed for correlation functions in real-space
 FFTW_INCLUDE   = $(HOME)/local/include
 FFTW_LIB       = $(HOME)/local/lib
 FFTW_LINK      = -lfftw3

@@ -577,6 +577,9 @@ namespace FML {
         void PowerSpectrum::output_correlation_function(double x, std::string filename) const {
             if (not compute_corr_function)
                 return;
+#ifndef USE_FFTW
+            return;
+#endif
 
             std::ofstream fp(filename.c_str());
             if (not fp.is_open())
