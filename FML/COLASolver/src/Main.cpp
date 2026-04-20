@@ -70,13 +70,23 @@ class Particle {
     void set_id(long long int _id) { id = _id; }
 
     //=============================================================
-    // Initial Lagrangian position
+    // Mass (for weighting in when interpolating particles to grid)
+    //=============================================================
+    double mass;
+    double get_mass() const { return mass; }
+
+    //=============================================================
+    // Initial Lagrangian position and functions thereof (delta, ...)
     // Only needed for COLA with scaledependent growth
     // NB: should ideally have same type as [pos] to avoid truncating the
     // precision of pos (these are temporarily swapped by some algorithms)
     //=============================================================
-    double q[NDIM];
+    double q[NDIM]; // position
+    double delta_q; // overdensity
+    double delta2_q; // overdensity squared
     double * get_q() { return q; }
+    double get_delta_q() { return delta_q; }
+    double get_delta2_q() { return delta2_q; }
 
     //=============================================================
     // 1LPT displacement field Psi (needed if you want >= 1LPT COLA)

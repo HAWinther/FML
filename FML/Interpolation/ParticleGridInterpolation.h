@@ -512,7 +512,7 @@ namespace FML {
                 }
                 SumOverTasks(&mean_mass);
                 mean_mass /= double(NumPartTot);
-                norm_fac /= mean_mass;
+                //norm_fac /= mean_mass; // normalization in presence of multiple particle species?
             }
 
             // Loop over all particles and add them to the grid

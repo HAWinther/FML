@@ -228,6 +228,8 @@ namespace FML {
         SFINAE_TEST_GET(GetdDdloga_1LPT, get_dDdloga_1LPT)
         SFINAE_TEST_GET(GetdDdloga_2LPT, get_dDdloga_2LPT)
         SFINAE_TEST_GET(GetLagrangianPos, get_q)
+        SFINAE_TEST_GET(GetLagrangianDelta, get_delta_q)
+        SFINAE_TEST_GET(GetLagrangianDelta2, get_delta2_q)
         constexpr double * GetD_1LPT(...) {
             assert_mpi(false, "Trying to get D_1LPT from a particle that has no get_D_1LPT method");
             return nullptr;
@@ -254,6 +256,14 @@ namespace FML {
         };
         constexpr double * GetLagrangianPos(...) {
             assert_mpi(false, "Trying to get the Lagrangian coordinate q from a particle that has no get_q method");
+            return nullptr;
+        };
+        constexpr double * GetLagrangianDelta(...) {
+            assert_mpi(false, "Trying to get the Lagrangian overdensity from a particle that has no get_delta_q method");
+            return nullptr;
+        };
+        constexpr double * GetLagrangianDelta2(...) {
+            assert_mpi(false, "Trying to get the Lagrangian overdensity squared from a particle that has no get_delta2_q method");
             return nullptr;
         };
 
@@ -390,7 +400,7 @@ namespace FML {
                     std::cout << "# Particle has [Velocity] (" << sizeof(FML::PARTICLE::GetPos(tmp)[0]) * N
                               << " bytes)\n";
 
-                if constexpr (FML::PARTICLE::has_set_mass<T>())
+                if constexpr (FML::PARTICLE::has_get_mass<T>())
                     std::cout << "# Particle has [Mass] (" << sizeof(FML::PARTICLE::GetMass(tmp)) << " bytes)\n";
 
                 if constexpr (FML::PARTICLE::has_set_id<T>())
@@ -440,6 +450,12 @@ namespace FML {
                 if constexpr (FML::PARTICLE::has_get_q<T>())
                     std::cout << "# Particle has [Lagrangian position] ("
                               << sizeof(FML::PARTICLE::GetLagrangianPos(tmp)[0]) * N << " bytes)\n";
+                if constexpr (FML::PARTICLE::has_get_delta_q<T>())
+                    std::cout << "# Particle has [Lagrangian overdensity] ("
+                              << sizeof(FML::PARTICLE::GetLagrangianDelta(tmp)) << " bytes)\n";
+                if constexpr (FML::PARTICLE::has_get_delta2_q<T>())
+                    std::cout << "# Particle has [Lagrangian overdensity squared] ("
+                              << sizeof(FML::PARTICLE::GetLagrangianDelta2(tmp)) << " bytes)\n";
                 if constexpr (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() and
                               FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>()) {
                     std::cout << "# Particle compatible with 3LPT COLA\n";
