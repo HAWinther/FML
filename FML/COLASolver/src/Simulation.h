@@ -1439,6 +1439,7 @@ void NBodySimulation<NDIM, T>::run() {
                                                                 delta_time_drift);
                     } else {
                         cola_kick_drift<NDIM, T>(part, grav, simulation_cola_LPT_order, aini, apos, apos_new, delta_time_kick, delta_time_drift);
+                        if (simulation_enforce_LPT_trajectories) part.communicate_particles();
                     }
                     timer.EndTiming("COLA");
                 }
