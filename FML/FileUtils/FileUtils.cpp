@@ -11,6 +11,7 @@ namespace FML {
         // Read a regular ascii files with nskip header lines and containing ncol collums
         // nestimated_lines is the amount we allocate for originally. Reallocated if file is larger
         // Not perfect for realy large files due to all the allocations we have to do
+        // If nskip is negative, header lines starting with # are skipped
         DVector2D read_regular_ascii(std::string filename,
                                      int ncols,
                                      std::vector<int> cols_to_keep,
@@ -18,7 +19,7 @@ namespace FML {
                                      size_t nestimated_lines) {
 
             // Sanity check
-            assert(cols_to_keep.size() > 0 and nskip >= 0 and ncols > 0);
+            assert(cols_to_keep.size() > 0 and ncols > 0);
             for (auto & i : cols_to_keep)
                 assert(i < ncols and i >= 0);
 
@@ -37,8 +38,8 @@ namespace FML {
             DVector newline(ntokeep);
             DVector temp(ncols);
 
-            // Read and skip header lines
-            for (int i = 0; i < nskip; i++) {
+            // Read and skip header lines (fixed number or all lines starting with #)
+            for (int i = 0; i < nskip || (nskip < 0 && fp && fp.peek() == '#'); i++) {
                 std::string line;
                 std::getline(fp, line);
 #ifdef DEBUG_READASCII
