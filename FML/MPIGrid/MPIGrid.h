@@ -99,7 +99,7 @@ namespace FML {
             void set_y(std::array<int, NDIM> & coord, const T & value);
 
             // Assign the whole grid from a function
-            void set_y(std::function<T(std::array<double, NDIM> &)> & func);
+            void set_y(const std::function<T(std::array<double, NDIM> &)> & func);
 
             // Grid-index -> Local coordinate list
             // e.g. index = ix1_local * N^2 + ix2 * N + ix3 -> (ix1_local, ix2, ix3)
@@ -382,7 +382,7 @@ namespace FML {
 
         // Set the whole grid with a function
         template <int NDIM, class T>
-        void MPIGrid<NDIM, T>::set_y(std::function<T(std::array<double, NDIM> &)> & func) {
+        void MPIGrid<NDIM, T>::set_y(const std::function<T(std::array<double, NDIM> &)> & func) {
             T * y = get_y();
             for (IndexInt index = 0; index < _NtotLocal; index++) {
                 auto pos = get_pos(index);
@@ -581,7 +581,7 @@ namespace FML {
                          MPI_CHAR,
                          _LeftTask,
                          0,
-                         MPI_COMM_WORLD,
+                         FML::communicator,
                          &status);
 #endif
         }
@@ -612,7 +612,7 @@ namespace FML {
                          MPI_CHAR,
                          _RightTask,
                          0,
-                         MPI_COMM_WORLD,
+                         FML::communicator,
                          &status);
 #endif
         }

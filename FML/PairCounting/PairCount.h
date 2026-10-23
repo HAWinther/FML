@@ -98,7 +98,7 @@ namespace FML {
             template <class T, class U>
             void GeneralPairCounter(FML::PARTICLE::ParticlesInBoxes<T> & grid,
                                     FML::PARTICLE::ParticlesInBoxes<U> & grid2,
-                                    std::function<void(int, double *, T &, U &)> & binning_function,
+                                    const std::function<void(int, double *, T &, U &)> & binning_function,
                                     bool auto_pair_binning,
                                     double rmax,
                                     bool periodic_box,
@@ -181,7 +181,7 @@ namespace FML {
             template <class T, class U>
             void GeneralPairCounter(FML::PARTICLE::ParticlesInBoxes<T> & grid1,
                                     FML::PARTICLE::ParticlesInBoxes<U> & grid2,
-                                    std::function<void(int, double *, T &, U &)> & binning_function,
+                                    const std::function<void(int, double *, T &, U &)> & binning_function,
                                     bool auto_pair_binning,
                                     double rmax,
                                     bool periodic_box,
@@ -195,8 +195,8 @@ namespace FML {
                 [[maybe_unused]] int mpi_rank = 0;
                 [[maybe_unused]] int mpi_size = 1;
 #if defined(USE_MPI)
-                MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
-                MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
+                MPI_Comm_rank(FML::communicator, &mpi_rank);
+                MPI_Comm_size(FML::communicator, &mpi_size);
                 verbose = verbose and mpi_rank == 0;
 #endif
 

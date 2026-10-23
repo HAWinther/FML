@@ -126,6 +126,7 @@ namespace FML {
                     // Integrate from x -> xnew
                     const int status = gsl_odeiv2_driver_apply(ode_driver, &x, xnew, y.data());
                     if (status != GSL_SUCCESS) {
+                        gsl_odeiv2_driver_free(ode_driver);
                         std::string errormessage =
                             "[ODESolver::solve] GSL gsl_odeiv2_driver_apply returned non-successful\n";
                         throw_error(errormessage);

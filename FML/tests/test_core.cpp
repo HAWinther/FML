@@ -12,6 +12,40 @@
 #include <FML/Spline/Spline.h>
 #endif
 #include <cstdlib>
+#include <random>
+
+// A non-arithmetic type to test the generic (gather based) reductions
+struct Pair {
+    double a{0}, b{0};
+    Pair & operator+=(const Pair & rhs) {
+        a += rhs.a;
+        b += rhs.b;
+        return *this;
+    }
+    bool operator<(const Pair & rhs) const { return a < rhs.a; }
+    bool operator>(const Pair & rhs) const { return a > rhs.a; }
+};
+
+// Fill a grid with random numbers, transform back and forth and return the max error
+template <int N>
+double fft_roundtrip_error(FML::GRID::FFTWGrid<N> & grid, unsigned int seed) {
+    std::mt19937 gen(seed + FML::ThisTask);
+    std::uniform_real_distribution<double> dist(-1.0, 1.0);
+    std::vector<double> orig;
+    for (auto && real_index : grid.get_real_range()) {
+        double v = dist(gen);
+        grid.set_real_from_index(real_index, v);
+        orig.push_back(v);
+    }
+    grid.fftw_r2c();
+    grid.fftw_c2r();
+    double maxerr = 0.0;
+    size_t i = 0;
+    for (auto && real_index : grid.get_real_range())
+        maxerr = std::max(maxerr, std::abs(grid.get_real_from_index(real_index) - orig[i++]));
+    FML::MaxOverTasks(&maxerr);
+    return maxerr;
+}
 
 struct Particle {
     double pos[3];
@@ -84,6 +118,81 @@ int main(int argc, char ** argv) {
                 }
             }
             check(maxerr < 1e-4, "Spline eval with more threads than at creation + nested OMP");
+        }
+#endif
+
+        // 8. Reductions over tasks (MPI_Allreduce for arithmetic types, gather for others)
+        {
+            const int n = FML::NTasks;
+            const int r = FML::ThisTask;
+            bool ok = true;
+            int i_sum = r + 1;
+            FML::SumOverTasks(&i_sum);
+            ok = ok and i_sum == n * (n + 1) / 2;
+            size_t s_sum = size_t(1) << 40;
+            FML::SumOverTasks(&s_sum);
+            ok = ok and s_sum == size_t(n) << 40;
+            long long ll_min = 100 - r;
+            FML::MinOverTasks(&ll_min);
+            ok = ok and ll_min == 100 - (n - 1);
+            float f_max = 0.5f * r;
+            FML::MaxOverTasks(&f_max);
+            ok = ok and f_max == 0.5f * (n - 1);
+            long double ld_sum = 0.25L;
+            FML::SumOverTasks(&ld_sum);
+            ok = ok and ld_sum == 0.25L * n;
+            char c_max = char(r);
+            FML::MaxOverTasks(&c_max);
+            ok = ok and c_max == char(n - 1);
+            double arr[3] = {1.0, double(r), -1.0};
+            FML::SumArrayOverTasks(arr, 3);
+            ok = ok and arr[0] == n and arr[1] == n * (n - 1) / 2.0 and arr[2] == -n;
+            Pair p{double(r), 1.0};
+            FML::SumOverTasks(&p);
+            ok = ok and p.a == n * (n - 1) / 2.0 and p.b == n;
+            Pair q{double(r), 1.0};
+            FML::MaxOverTasks(&q);
+            ok = ok and q.a == n - 1;
+            check(ok, "Sum/Min/Max/SumArray OverTasks (int, size_t, long long, float, long double, char, struct)");
+#ifdef USE_MPI
+            int result;
+            MPI_Comm_compare(FML::communicator, MPI_COMM_WORLD, &result);
+            check(result == MPI_IDENT, "FML::communicator defaults to MPI_COMM_WORLD");
+#endif
+        }
+
+        // 9. FFTs with cached plans: correct on first and repeated use, with different
+        // padding (alignment) and with FFTW_MEASURE planning preserving the data
+#ifdef USE_FFTW
+        {
+            FML::GRID::FFTWGrid<3> a(32, 1, 1), b(32, 2, 3);
+            FML::GRID::FFTWGrid<2> c(64);
+            double err = 0.0;
+            err = std::max(err, fft_roundtrip_error(a, 1));
+            err = std::max(err, fft_roundtrip_error(a, 2)); // reuses the cached plan
+            err = std::max(err, fft_roundtrip_error(b, 3));
+            err = std::max(err, fft_roundtrip_error(c, 4));
+            check(err < 1e-12, "FFT roundtrip with cached plans (different sizes/padding)");
+
+            // Same transform with FFTW_ESTIMATE and FFTW_MEASURE plans must agree
+            FML::GRID::FFTWGrid<3> d(16), e(16);
+            std::mt19937 gen(7 + FML::ThisTask);
+            std::uniform_real_distribution<double> dist(-1.0, 1.0);
+            for (auto && real_index : d.get_real_range()) {
+                double v = dist(gen);
+                d.set_real_from_index(real_index, v);
+                e.set_real_from_index(real_index, v);
+            }
+            d.fftw_r2c();
+            FML::GRID::set_fftw_planner_flag(FFTW_MEASURE);
+            e.fftw_r2c(); // plans with FFTW_MEASURE on e's data, which must be preserved
+            FML::GRID::set_fftw_planner_flag(FFTW_ESTIMATE);
+            double maxdiff = 0.0;
+            for (auto && fourier_index : d.get_fourier_range())
+                maxdiff = std::max(maxdiff,
+                                   std::abs(d.get_fourier_from_index(fourier_index) - e.get_fourier_from_index(fourier_index)));
+            FML::MaxOverTasks(&maxdiff);
+            check(maxdiff < 1e-14, "FFTW_MEASURE planning preserves grid data and agrees with FFTW_ESTIMATE");
         }
 #endif
 

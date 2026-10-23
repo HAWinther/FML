@@ -84,8 +84,8 @@ namespace FML {
 #endif
 
         // General method for evaluating continued fraction
-        std::pair<double, bool> GeneralizedLentzMethod(std::function<double(int)> & a,
-                                                       std::function<double(int)> & b,
+        std::pair<double, bool> GeneralizedLentzMethod(const std::function<double(int)> & a,
+                                                       const std::function<double(int)> & b,
                                                        double epsilon,
                                                        int maxsteps);
 

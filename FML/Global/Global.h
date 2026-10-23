@@ -7,7 +7,8 @@
 // decomposition, type information, macros etc.
 //
 // Compile time defines:
-// USE_MPI               : Use MPI
+// USE_MPI               : Use MPI (all communication goes through FML::communicator,
+//                         fiducial MPI_COMM_WORLD; see below for how to change it)
 // NO_AUTO_FML_SETUP     : Do not initialize FML/MPI/FFTW automatically
 // USE_OMP               : Use OpenMP
 // USE_FFTW              : Use FFTW (here its just for initialization for MPI/threads)
@@ -21,11 +22,21 @@
 #include <cmath>
 #include <complex>
 #include <cstring>
+#include <tuple>
 #include <iostream>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
 #include <vector>
 
 #ifdef USE_MPI
 #include <mpi.h>
+namespace FML {
+    /// The MPI communicator used for all communication in the library (fiducial MPI_COMM_WORLD).
+    /// To run on a sub-communicator: define NO_AUTO_FML_SETUP, call MPI_Init yourself, set
+    /// FML::communicator and then call FML::init_fml() (and FML::GRID::init_fftw if using FFTW)
+    extern MPI_Comm communicator;
+} // namespace FML
 #endif
 
 #ifdef USE_OMP
@@ -37,6 +48,15 @@
 #endif
 
 #include <FML/Timing/Timings.h>
+
+// The FFTW C API must be declared in the global namespace (FFTWGlobal.h is included
+// inside namespace FML::GRID below and would otherwise put it there)
+#ifdef USE_FFTW
+#include <fftw3.h>
+#ifdef USE_MPI
+#include <fftw3-mpi.h>
+#endif
+#endif
 
 namespace FML {
 
@@ -104,12 +124,49 @@ namespace FML {
     // over tasks
     void print_system_memory_use(); 
 
+#ifdef USE_MPI
+    /// Types we can reduce directly with MPI_Allreduce (arithmetic types except bool)
+    template <class T>
+    constexpr bool is_mpi_reducible_v = std::is_arithmetic_v<T> and not std::is_same_v<T, bool>;
+
+    /// The MPI datatype corresponding to an arithmetic type T
+    template <class T>
+    MPI_Datatype get_mpi_type() {
+        static_assert(is_mpi_reducible_v<T>, "get_mpi_type: T must be an arithmetic type");
+        if constexpr (std::is_same_v<T, float>) {
+            return MPI_FLOAT;
+        } else if constexpr (std::is_same_v<T, double>) {
+            return MPI_DOUBLE;
+        } else if constexpr (std::is_same_v<T, long double>) {
+            return MPI_LONG_DOUBLE;
+        } else if constexpr (std::is_signed_v<T>) {
+            if constexpr (sizeof(T) == 1)
+                return MPI_INT8_T;
+            else if constexpr (sizeof(T) == 2)
+                return MPI_INT16_T;
+            else if constexpr (sizeof(T) == 4)
+                return MPI_INT32_T;
+            else
+                return MPI_INT64_T;
+        } else {
+            if constexpr (sizeof(T) == 1)
+                return MPI_UINT8_T;
+            else if constexpr (sizeof(T) == 2)
+                return MPI_UINT16_T;
+            else if constexpr (sizeof(T) == 4)
+                return MPI_UINT32_T;
+            else
+                return MPI_UINT64_T;
+        }
+    }
+#endif
+
     /// Gather a single value from all tasks. Value from task ThisTask is stored in values[ThisTask]
     template <class T>
     std::vector<T> GatherFromTasks(T * value) {
         std::vector<T> values(FML::NTasks);
 #ifdef USE_MPI
-        MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, MPI_COMM_WORLD);
+        MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, FML::communicator);
 #else
         values[0] = *value;
 #endif
@@ -118,9 +175,16 @@ namespace FML {
 
     /// Inplace max over tasks of a single value
     template <class T>
-    void MaxOverTasks([[maybe_unused]] T * value) {
+    void MaxOverTasks(T * value) {
         if (FML::NTasks == 1)
             return;
+#ifdef USE_MPI
+        if constexpr (is_mpi_reducible_v<T>) {
+            MPI_Allreduce(MPI_IN_PLACE, value, 1, get_mpi_type<T>(), MPI_MAX, FML::communicator);
+            return;
+        }
+#endif
+        // Fallback for general types: gather and reduce locally
         std::vector<T> values = GatherFromTasks(value);
         T maxvalue = *value;
         for (auto v : values)
@@ -128,12 +192,19 @@ namespace FML {
                 maxvalue = v;
         *value = maxvalue;
     }
-    
+
     /// Inplace min over tasks of a single value
     template <class T>
-    void MinOverTasks([[maybe_unused]] T * value) {
+    void MinOverTasks(T * value) {
         if (FML::NTasks == 1)
             return;
+#ifdef USE_MPI
+        if constexpr (is_mpi_reducible_v<T>) {
+            MPI_Allreduce(MPI_IN_PLACE, value, 1, get_mpi_type<T>(), MPI_MIN, FML::communicator);
+            return;
+        }
+#endif
+        // Fallback for general types: gather and reduce locally
         std::vector<T> values = GatherFromTasks(value);
         T minvalue = *value;
         for (auto v : values)
@@ -141,37 +212,48 @@ namespace FML {
                 minvalue = v;
         *value = minvalue;
     }
-    
+
     /// Inplace sum over tasks of a single value
     template <class T>
-    void SumOverTasks([[maybe_unused]] T * value) {
+    void SumOverTasks(T * value) {
         if (FML::NTasks == 1)
             return;
-        std::vector<T> values = GatherFromTasks(value);
-        T sum = 0;
-        for (auto v : values) {
-            sum += v;
+#ifdef USE_MPI
+        if constexpr (is_mpi_reducible_v<T>) {
+            MPI_Allreduce(MPI_IN_PLACE, value, 1, get_mpi_type<T>(), MPI_SUM, FML::communicator);
+            return;
         }
+#endif
+        // Fallback for general types: gather and reduce locally
+        std::vector<T> values = GatherFromTasks(value);
+        T sum{};
+        for (auto v : values)
+            sum += v;
         *value = sum;
     }
-    
+
     /// Inplace sum over tasks of a contiguous array of values
     template <class T>
-    void SumArrayOverTasks([[maybe_unused]] T * value, int n) {
+    void SumArrayOverTasks(T * value, int n) {
         if (FML::NTasks == 1)
             return;
-        for(int i = 0; i < n; i++){
-          SumOverTasks(&value[i]);
+#ifdef USE_MPI
+        if constexpr (is_mpi_reducible_v<T>) {
+            MPI_Allreduce(MPI_IN_PLACE, value, n, get_mpi_type<T>(), MPI_SUM, FML::communicator);
+            return;
         }
+#endif
+        for (int i = 0; i < n; i++)
+            SumOverTasks(&value[i]);
     }
-    
+
     //============================================
     /// An assert function that calls MPI_Abort
     /// instead of just abort to avoid deadlock
     //============================================
-    constexpr void __assert_mpi(const char * expr_str, bool expr, const char * file, int line, const char * msg) {
+    constexpr void assert_mpi_impl(const char * expr_str, bool expr, const char * file, int line, const char * msg) {
         if (not expr) {
-            std::cout << "[assert_mpi] Assertion failed: [" << expr_str << "], File: [" << file << "], Line: [" << line
+            std::cerr << "[assert_mpi] Assertion failed: [" << expr_str << "], File: [" << file << "], Line: [" << line
                       << "], Message: [" << msg << "]" << std::endl;
 #ifdef USE_MPI
             MPI_Abort(MPI_COMM_WORLD, 1);
@@ -179,7 +261,7 @@ namespace FML {
             abort();
         }
     }
-#define assert_mpi(Expr, Msg) __assert_mpi(#Expr, Expr, __FILE__, __LINE__, Msg)
+#define assert_mpi(Expr, Msg) assert_mpi_impl(#Expr, Expr, __FILE__, __LINE__, Msg)
 
     //============================================
     /// Simple integer a^b power-function by squaring
@@ -307,6 +389,35 @@ namespace FML {
         void init_fftw(int * argc, char *** argv);
         void finalize_fftw();
         void set_fftw_nthreads(int nthreads);
+        /// The number of threads FFTW currently makes plans with
+        int get_fftw_nthreads();
+
+        //=============================================================
+        // FFTW plans are cached and reused for all grids with the same
+        // dimension, size, alignment, thread count and planner flag.
+        // The planner flag (fiducial FFTW_ESTIMATE) can be set to e.g.
+        // FFTW_MEASURE for faster transforms: the first transform of
+        // each grid size then takes longer (the grid data is preserved)
+        //=============================================================
+        struct FFTWPlanKey {
+            int ndim;
+            int nmesh;
+            int direction; // +1 = r2c, -1 = c2r
+            int nthreads;
+            int alignment;
+            unsigned int flag;
+            bool operator<(const FFTWPlanKey & rhs) const {
+                return std::tie(ndim, nmesh, direction, nthreads, alignment, flag) <
+                       std::tie(rhs.ndim, rhs.nmesh, rhs.direction, rhs.nthreads, rhs.alignment, rhs.flag);
+            }
+        };
+        /// Returns nullptr if no plan is cached for this key
+        my_fftw_plan * find_cached_fftw_plan(const FFTWPlanKey & key);
+        void store_fftw_plan(const FFTWPlanKey & key, my_fftw_plan plan);
+        /// Destroy all cached plans (done automatically when FFTW is finalized)
+        void clear_fftw_plan_cache();
+        void set_fftw_planner_flag(unsigned int flag);
+        unsigned int get_fftw_planner_flag();
     } // namespace GRID
 
     //=============================================================

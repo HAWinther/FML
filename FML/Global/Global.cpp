@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <random>
 #include <stdarg.h>
 #include <sys/stat.h>
@@ -14,7 +15,13 @@
 static std::string processor_name{"NameIsOnlyKnownWithMPI"};
 
 namespace FML {
-    
+
+#ifdef USE_MPI
+    // The communicator used by the library. NB: must be defined before fmlsetup below
+    // as it is used when FML is initialized
+    MPI_Comm communicator = MPI_COMM_WORLD;
+#endif
+
     FML::UTILS::Timings global_timer;
 
     // Initialize FML, set the few globals we have and init MPI
@@ -70,8 +77,8 @@ namespace FML {
     //============================================
     void init_fml() {
 #ifdef USE_MPI
-        MPI_Comm_rank(MPI_COMM_WORLD, &ThisTask);
-        MPI_Comm_size(MPI_COMM_WORLD, &NTasks);
+        MPI_Comm_rank(FML::communicator, &ThisTask);
+        MPI_Comm_size(FML::communicator, &NTasks);
         int plen;
         char pname[MPI_MAX_PROCESSOR_NAME];
         MPI_Get_processor_name(pname, &plen);
@@ -146,7 +153,7 @@ namespace FML {
 #ifdef USE_MPI
             // Sleep to synchronize output to screen (this is not guaranteed to ensure synchronized output, but the only
             // alternative is communication and its not that important)
-            MPI_Barrier(MPI_COMM_WORLD);
+            MPI_Barrier(FML::communicator);
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
 #endif
         }
@@ -159,7 +166,7 @@ namespace FML {
         }
 
 #ifdef USE_MPI
-        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Barrier(FML::communicator);
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 #endif
     }
@@ -214,7 +221,7 @@ namespace FML {
             }
         }
 #ifdef USE_MPI
-        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Barrier(FML::communicator);
 #endif
         return ok;
     }
@@ -279,12 +286,44 @@ namespace FML {
 namespace FML {
     namespace GRID {
 
+        // The number of threads FFTW currently makes plans with
+        static int fftw_nthreads = 1;
+        int get_fftw_nthreads() { return fftw_nthreads; }
+
+#ifdef USE_FFTW
+        //============================================
+        // Cache of FFTW plans. Allocated on the heap and
+        // never deleted as it must outlive the static
+        // FFTWSetup object that cleans up FFTW at exit
+        //============================================
+        static unsigned int fftw_planner_flag = FFTW_ESTIMATE;
+        static std::map<FFTWPlanKey, my_fftw_plan> & get_fftw_plan_cache() {
+            static auto * cache = new std::map<FFTWPlanKey, my_fftw_plan>;
+            return *cache;
+        }
+        my_fftw_plan * find_cached_fftw_plan(const FFTWPlanKey & key) {
+            auto & cache = get_fftw_plan_cache();
+            auto it = cache.find(key);
+            return it == cache.end() ? nullptr : &it->second;
+        }
+        void store_fftw_plan(const FFTWPlanKey & key, my_fftw_plan plan) { get_fftw_plan_cache()[key] = plan; }
+        void clear_fftw_plan_cache() {
+            auto & cache = get_fftw_plan_cache();
+            for (auto & entry : cache)
+                DESTROY_PLAN(entry.second);
+            cache.clear();
+        }
+        void set_fftw_planner_flag(unsigned int flag) { fftw_planner_flag = flag; }
+        unsigned int get_fftw_planner_flag() { return fftw_planner_flag; }
+#endif
+
         void init_fftw([[maybe_unused]] int * argc, [[maybe_unused]] char *** argv) {
 #if defined(USE_FFTW) && defined(USE_FFTW_THREADS)
             if (FML::MPIThreadsOK) {
                 FML::FFTWThreadsOK = INIT_FFTW_THREADS();
                 if (FML::FFTWThreadsOK) {
                     SET_FFTW_NTHREADS(FML::NThreads);
+                    fftw_nthreads = FML::NThreads;
                 }
             }
 #endif
@@ -294,6 +333,9 @@ namespace FML {
         }
 
         void finalize_fftw() {
+#ifdef USE_FFTW
+            clear_fftw_plan_cache();
+#endif
 #if defined(USE_FFTW) && defined(USE_MPI)
             CLEANUP_FFTW_MPI();
             MPI_Finalize();
@@ -302,8 +344,10 @@ namespace FML {
 
         void set_fftw_nthreads([[maybe_unused]] int nthreads) {
 #if defined(USE_FFTW) && defined(USE_FFTW_THREADS)
-            if (FML::FFTWThreadsOK)
+            if (FML::FFTWThreadsOK) {
                 SET_FFTW_NTHREADS(nthreads);
+                fftw_nthreads = nthreads;
+            }
 #endif
         }
     } // namespace GRID

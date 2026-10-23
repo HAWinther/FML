@@ -11,6 +11,10 @@
 
 #ifdef USE_MPI
 #include <mpi.h>
+namespace FML {
+    // The MPI communicator used by the library (defined in Global.cpp)
+    extern MPI_Comm communicator;
+} // namespace FML
 #endif
 
 namespace FML {
@@ -160,7 +164,7 @@ namespace FML {
             // Check if any task has saturated the allocation limit
             char ok = stop_logging ? 0 : 1;
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, &ok, 1, MPI_CHAR, MPI_MIN, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &ok, 1, MPI_CHAR, MPI_MIN, FML::communicator);
 #endif
             if (ok == 0) {
                 clear();
@@ -182,12 +186,12 @@ namespace FML {
             double mean_sys_rssmemory = sysmem.second;
 
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, &min_sys_vmemory, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &max_sys_vmemory, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &mean_sys_vmemory, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &min_sys_rssmemory, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &max_sys_rssmemory, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &mean_sys_rssmemory, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &min_sys_vmemory, 1, MPI_DOUBLE, MPI_MIN, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, &max_sys_vmemory, 1, MPI_DOUBLE, MPI_MAX, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, &mean_sys_vmemory, 1, MPI_DOUBLE, MPI_SUM, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, &min_sys_rssmemory, 1, MPI_DOUBLE, MPI_MIN, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, &max_sys_rssmemory, 1, MPI_DOUBLE, MPI_MAX, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, &mean_sys_rssmemory, 1, MPI_DOUBLE, MPI_SUM, FML::communicator);
 #endif
             mean_sys_vmemory /= NTasks;
             mean_sys_rssmemory /= NTasks;
@@ -217,10 +221,10 @@ namespace FML {
             long long int mean_memory = memory_in_use;
             long long int peak_memory = peak_memory_use;
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, &min_memory, 1, MPI_LONG_LONG, MPI_MIN, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &max_memory, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &mean_memory, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &peak_memory, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &min_memory, 1, MPI_LONG_LONG, MPI_MIN, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, &max_memory, 1, MPI_LONG_LONG, MPI_MAX, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, &mean_memory, 1, MPI_LONG_LONG, MPI_SUM, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, &peak_memory, 1, MPI_LONG_LONG, MPI_MAX, FML::communicator);
 #endif
             mean_memory /= NTasks;
             if (ThisTask == 0) {

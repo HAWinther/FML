@@ -759,7 +759,7 @@ namespace FML {
                               bincount_individual[i].size(),
                               MPI_DOUBLE,
                               MPI_SUM,
-                              MPI_COMM_WORLD);
+                              FML::communicator);
 #endif
 
             // Create density profiles

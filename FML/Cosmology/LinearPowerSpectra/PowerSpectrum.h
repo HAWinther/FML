@@ -149,12 +149,12 @@ namespace FML {
             /// Compute LOS integral to get F_ell for any given source function
             DVector2D line_of_sight_integration_single(DVector & x_array,
                                                        DVector & k_array,
-                                                       std::function<double(double, double)> & source_function,
-                                                       std::function<double(double, double)> & aux_norm);
+                                                       const std::function<double(double, double)> & source_function,
+                                                       const std::function<double(double, double)> & aux_norm);
 
             /// Compute Cell for any given quantity
             DVector solve_for_cell_single(DVector & log_k_array,
-                                          std::function<double(double, int)> & integrand,
+                                          const std::function<double(double, int)> & integrand,
                                           double accuracy_limit);
 
             /// Compute and spline all xi(r,x) - the fourier transforms of the power-spectra
@@ -222,22 +222,22 @@ namespace FML {
             /// Output the LOS integral quantities we have computed
             void output_theta_ell(std::string filename) const;
 
-            double los_photons(int i, double k, std::function<double(double, double)> & source_function);
+            double los_photons(int i, double k, const std::function<double(double, double)> & source_function);
         };
 
         // Methods for computing correlation functions
 #ifdef USE_FFTW
-        std::pair<DVector, DVector> correlation_function_single_fftw(std::function<double(double)> & Delta_P,
+        std::pair<DVector, DVector> correlation_function_single_fftw(const std::function<double(double)> & Delta_P,
                                                                      double rmin = 1.0 * Constants.Mpc,
                                                                      double rmax = 512.0 * Constants.Mpc,
                                                                      int ngrid_min = 8192);
 
-        std::pair<DVector, DVector> correlation_function_single_fftlog(std::function<double(double)> & Delta_P,
+        std::pair<DVector, DVector> correlation_function_single_fftlog(const std::function<double(double)> & Delta_P,
                                                                        double rmin = 1e-3 * Constants.Mpc,
                                                                        double rmax = 1e3 * Constants.Mpc,
                                                                        int ngrid = 8192);
 #endif
-        double correlation_function_single(double r, std::function<double(double)> & Delta_P, double kmin, double kmax);
+        double correlation_function_single(double r, const std::function<double(double)> & Delta_P, double kmin, double kmax);
 
     } // namespace COSMOLOGY
 } // namespace FML

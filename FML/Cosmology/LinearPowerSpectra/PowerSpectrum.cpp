@@ -244,8 +244,8 @@ namespace FML {
         DVector2D PowerSpectrum::line_of_sight_integration_single(
             DVector & x_array,
             DVector & k_array,
-            std::function<double(double, double)> & source_function,
-            [[maybe_unused]] std::function<double(double, double)> & aux_norm) {
+            const std::function<double(double, double)> & source_function,
+            [[maybe_unused]] const std::function<double(double, double)> & aux_norm) {
             timer.StartTiming("POW::LOS integration");
 
             const int nells = ells.size();
@@ -354,7 +354,7 @@ namespace FML {
 #ifdef USE_MPI
             // Its not that much data so we simply send all the data from all to all tasks and add up
             for (size_t ik = 0; ik < result.size(); ik++) {
-                MPI_Allreduce(MPI_IN_PLACE, result[ik].data(), result[ik].size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+                MPI_Allreduce(MPI_IN_PLACE, result[ik].data(), result[ik].size(), MPI_DOUBLE, MPI_SUM, FML::communicator);
             }
 #endif
 
@@ -466,7 +466,7 @@ namespace FML {
         }
 
         DVector PowerSpectrum::solve_for_cell_single(DVector & log_k_array,
-                                                     std::function<double(double, int)> & integrand,
+                                                     const std::function<double(double, int)> & integrand,
                                                      [[maybe_unused]] double accuracy_limit) {
             const int nells = ells.size();
 
@@ -920,7 +920,7 @@ namespace FML {
         // Computes the correlation function from a power-spectrum DeltaP = k^3 P(k)/2pi^2 by integrating
         // over [kmin, kmax]
         double
-        correlation_function_single(double r, std::function<double(double)> & Delta_P, double kmin, double kmax) {
+        correlation_function_single(double r, const std::function<double(double)> & Delta_P, double kmin, double kmax) {
 
             ODEFunction dxidlogk_func = [&](double logkr, [[maybe_unused]] const double * y, double * dxidlogkr) {
                 double kr = std::exp(logkr);
@@ -938,7 +938,7 @@ namespace FML {
 
 #ifdef USE_FFTW
 
-        std::pair<DVector, DVector> correlation_function_single_fftlog(std::function<double(double)> & Delta_P,
+        std::pair<DVector, DVector> correlation_function_single_fftlog(const std::function<double(double)> & Delta_P,
                                                                        double rmin,
                                                                        double rmax,
                                                                        int ngrid) {
@@ -970,7 +970,7 @@ namespace FML {
         }
 
         // Computes the correlation function from a power-spectrum using FFTW
-        std::pair<DVector, DVector> correlation_function_single_fftw(std::function<double(double)> & Delta_P,
+        std::pair<DVector, DVector> correlation_function_single_fftw(const std::function<double(double)> & Delta_P,
                                                                      double rmin,
                                                                      double rmax,
                                                                      int ngrid_min) {

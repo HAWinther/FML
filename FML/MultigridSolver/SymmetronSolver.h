@@ -9,10 +9,6 @@
 #include <iostream>
 #include <limits>
 
-// Type aliases used below
-template <int N>
-using FFTWGrid = FML::GRID::FFTWGrid<N>;
-using namespace FML::SOLVERS::MULTIGRIDSOLVER;
 
 //======================================================================
 /// Solver the symmetron gravity equation in a cosmological setting
@@ -24,6 +20,18 @@ using namespace FML::SOLVERS::MULTIGRIDSOLVER;
 template <int NDIM, typename SolverType = double>
 class SymmetronSolverCosmology {
   private:
+    // Type aliases used below (kept inside the class so they don't leak into user code)
+    template <int N>
+    using FFTWGrid = FML::GRID::FFTWGrid<N>;
+    template <int N, class T>
+    using MPIMultiGrid = FML::SOLVERS::MULTIGRIDSOLVER::MPIMultiGrid<N, T>;
+    template <int N, class T>
+    using MultiGridSolver = FML::SOLVERS::MULTIGRIDSOLVER::MultiGridSolver<N, T>;
+    using MultiGridConvCrit = FML::SOLVERS::MULTIGRIDSOLVER::MultiGridConvCrit;
+    template <int N, class T>
+    using MultiGridFunction = FML::SOLVERS::MULTIGRIDSOLVER::MultiGridFunction<N, T>;
+    using IndexInt = FML::SOLVERS::MULTIGRIDSOLVER::IndexInt;
+
     int Nmesh{};
     int Nlevels{-1};
     int nleft{1};

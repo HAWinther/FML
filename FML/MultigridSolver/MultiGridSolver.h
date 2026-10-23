@@ -169,7 +169,7 @@ namespace FML {
                 // Set the initial guess (uniform or from a grid)
                 void set_initial_guess(const T & guess);
                 void set_initial_guess(const T * guess);
-                void set_initial_guess(std::function<T(std::array<double, NDIM> &)> & func);
+                void set_initial_guess(const std::function<T(std::array<double, NDIM> &)> & func);
                 void set_initial_guess(const MPIGrid<NDIM, T> & guess);
 #ifdef USE_MASK
                 void set_mask(const MPIGrid<NDIM, T> & mask);
@@ -210,11 +210,11 @@ namespace FML {
                 // D[ b(f) Df ]
                 T get_BLaplacian(int level,
                                  const std::array<IndexInt, 2 * NDIM + 1> & nbor_index_list,
-                                 std::function<T(int, IndexInt)> & b);
+                                 const std::function<T(int, IndexInt)> & b);
                 T get_derivBLaplacian(int level,
                                       const std::array<IndexInt, 2 * NDIM + 1> & nbor_index_list,
-                                      std::function<T(int, IndexInt)> & b,
-                                      std::function<T(int, IndexInt)> & db);
+                                      const std::function<T(int, IndexInt)> & b,
+                                      const std::function<T(int, IndexInt)> & db);
                 // Compute df/dx_i and d^2f/dx_i^2 for a given accuracy for a given cell ( O(h^(2order) )
                 // Assumes equal grid-spacing in all directions
                 std::array<T, NDIM> get_Gradient(int level, IndexInt index, int order);
@@ -535,7 +535,7 @@ namespace FML {
             }
 
             template <int NDIM, class T>
-            void MultiGridSolver<NDIM, T>::set_initial_guess(std::function<T(std::array<double, NDIM> &)> & func) {
+            void MultiGridSolver<NDIM, T>::set_initial_guess(const std::function<T(std::array<double, NDIM> &)> & func) {
                 _f.get_grid(0).set_y(func);
             }
 
@@ -1197,7 +1197,7 @@ namespace FML {
             template <int NDIM, class T>
             T MultiGridSolver<NDIM, T>::get_BLaplacian(int level,
                                                        const std::array<IndexInt, 2 * NDIM + 1> & index_list,
-                                                       std::function<T(int, IndexInt)> & b) {
+                                                       const std::function<T(int, IndexInt)> & b) {
 
                 T f = _f[level][index_list[0]];
                 T result{0.0};
@@ -1218,8 +1218,8 @@ namespace FML {
             template <int NDIM, class T>
             T MultiGridSolver<NDIM, T>::get_derivBLaplacian(int level,
                                                             const std::array<IndexInt, 2 * NDIM + 1> & index_list,
-                                                            std::function<T(int, IndexInt)> & b,
-                                                            std::function<T(int, IndexInt)> & db) {
+                                                            const std::function<T(int, IndexInt)> & b,
+                                                            const std::function<T(int, IndexInt)> & db) {
 
                 T f = _f[level][index_list[0]];
                 T result{0.0};

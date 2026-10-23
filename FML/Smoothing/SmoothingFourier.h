@@ -43,7 +43,7 @@ namespace FML {
         
         template <int N>
         void custom_smoothing_filter_fourier_space(FFTWGrid<N> & fourier_grid,
-                                                   std::function<double(double)> & custom_filter_of_kBox_squared){
+                                                   const std::function<double(double)> & custom_filter_of_kBox_squared){
             // Do the smoothing
             auto Local_nx = fourier_grid.get_local_nx();
 #ifdef USE_OMP
@@ -318,7 +318,7 @@ namespace FML {
 
             // Sum over tasks
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, pdf.data(), nbins, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, pdf.data(), nbins, MPI_DOUBLE, MPI_SUM, FML::communicator);
 #endif
 
             // Normalize so that the PDF integrates to unity

@@ -201,9 +201,9 @@ namespace FML {
 #endif
 
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, pofk.data(), n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, count.data(), n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, kbin.data(), n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, pofk.data(), n, MPI_DOUBLE, MPI_SUM, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, count.data(), n, MPI_DOUBLE, MPI_SUM, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, kbin.data(), n, MPI_DOUBLE, MPI_SUM, FML::communicator);
 #endif
 
             for (int i = 0; i < n; i++) {

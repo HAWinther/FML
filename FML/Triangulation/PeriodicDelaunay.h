@@ -229,7 +229,7 @@ namespace FML {
                              MPI_CHAR,
                              RightTask,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
                 MPI_Sendrecv(&count_right,
                              sizeof(count_right),
@@ -241,7 +241,7 @@ namespace FML {
                              MPI_CHAR,
                              LeftTask,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
                 MPI_Sendrecv(&bytes_to_send_left,
                              sizeof(bytes_to_send_left),
@@ -253,7 +253,7 @@ namespace FML {
                              MPI_CHAR,
                              RightTask,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
                 MPI_Sendrecv(&bytes_to_send_right,
                              sizeof(bytes_to_send_right),
@@ -265,7 +265,7 @@ namespace FML {
                              MPI_CHAR,
                              LeftTask,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
 #ifdef DEBUG_TESSELATION
                 std::cout << "Task " << FML::ThisTask << " will receive " << recv_left << " + " << recv_right
@@ -286,7 +286,7 @@ namespace FML {
                              MPI_CHAR,
                              RightTask,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
                 MPI_Sendrecv(p_to_send_right.data(),
                              int(bytes_to_send_right),
@@ -298,7 +298,7 @@ namespace FML {
                              MPI_CHAR,
                              LeftTask,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
 
                 // Free memory
@@ -790,7 +790,7 @@ namespace FML {
                              MPI_CHAR,
                              RightTask,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
                 MPI_Sendrecv(&count_right,
                              sizeof(count_right),
@@ -802,7 +802,7 @@ namespace FML {
                              MPI_CHAR,
                              LeftTask,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
 
                 // Gather quantity
@@ -835,7 +835,7 @@ namespace FML {
                              MPI_CHAR,
                              RightTask,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
                 MPI_Sendrecv(quantity_to_send_right.data(),
                              sizeof(QuantityType) * count_right,
@@ -847,7 +847,7 @@ namespace FML {
                              MPI_CHAR,
                              LeftTask,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
 
                 // Assign quantity to particles
@@ -914,7 +914,7 @@ namespace FML {
             std::vector<int> nminima_per_task(FML::NTasks, 0);
             nminima_per_task[FML::ThisTask] = nminima;
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, nminima_per_task.data(), FML::NTasks, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, nminima_per_task.data(), FML::NTasks, MPI_INT, MPI_SUM, FML::communicator);
 #endif
             int id_start = 0;
             for (int i = 0; i < FML::ThisTask; i++)
@@ -1052,7 +1052,7 @@ namespace FML {
                                  MPI_CHAR,
                                  RightTask,
                                  0,
-                                 MPI_COMM_WORLD,
+                                 FML::communicator,
                                  &status);
                     MPI_Sendrecv(watershed_id_to_send_right.data(),
                                  sizeof(IDType) * count_right,
@@ -1064,7 +1064,7 @@ namespace FML {
                                  MPI_CHAR,
                                  LeftTask,
                                  0,
-                                 MPI_COMM_WORLD,
+                                 FML::communicator,
                                  &status);
 
                     // Update Watershed IDs
@@ -1137,7 +1137,7 @@ namespace FML {
                 }
             }
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, n_per_group.data(), ntotal_minima, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, n_per_group.data(), ntotal_minima, MPI_INT, MPI_SUM, FML::communicator);
 #endif
 
             // Compute the minimum position and make sure all tasks have this
@@ -1163,9 +1163,9 @@ namespace FML {
 #endif
             }
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, x_minima.data(), ntotal_minima, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, y_minima.data(), ntotal_minima, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, z_minima.data(), ntotal_minima, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, x_minima.data(), ntotal_minima, MPI_DOUBLE, MPI_SUM, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, y_minima.data(), ntotal_minima, MPI_DOUBLE, MPI_SUM, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, z_minima.data(), ntotal_minima, MPI_DOUBLE, MPI_SUM, FML::communicator);
 #endif
 
             // Time to compile up the results. Make the result array
@@ -1199,16 +1199,16 @@ namespace FML {
                 if (FML::ThisTask == 0) {
                     std::vector<U> watershed_groups_from_other_task(ntotal_minima);
                     MPI_Status status;
-                    MPI_Recv(watershed_groups_from_other_task.data(), bytes, MPI_BYTE, i, 0, MPI_COMM_WORLD, &status);
+                    MPI_Recv(watershed_groups_from_other_task.data(), bytes, MPI_BYTE, i, 0, FML::communicator, &status);
 
                     // Merge in the groups
                     for (size_t j = 0; j < ntotal_minima; j++) {
                         watershed_groups[j].merge(watershed_groups_from_other_task[j]);
                     }
                 } else if (FML::ThisTask == i) {
-                    MPI_Send(watershed_groups.data(), bytes, MPI_BYTE, 0, 0, MPI_COMM_WORLD);
+                    MPI_Send(watershed_groups.data(), bytes, MPI_BYTE, 0, 0, FML::communicator);
                 }
-                MPI_Barrier(MPI_COMM_WORLD);
+                MPI_Barrier(FML::communicator);
             }
 #endif
 

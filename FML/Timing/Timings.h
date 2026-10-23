@@ -9,6 +9,10 @@
 
 #ifdef USE_MPI
 #include <mpi.h>
+namespace FML {
+    // The MPI communicator used by the library (defined in Global.cpp)
+    extern MPI_Comm communicator;
+} // namespace FML
 #endif
 
 namespace FML {
@@ -41,7 +45,7 @@ namespace FML {
             void PrintAllTimings() const {
 #ifdef USE_MPI
                 int ThisTask = 0;
-                MPI_Comm_rank(MPI_COMM_WORLD, &ThisTask);
+                MPI_Comm_rank(FML::communicator, &ThisTask);
                 if (ThisTask > 0)
                     return;
 #endif

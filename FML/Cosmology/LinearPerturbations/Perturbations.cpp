@@ -662,13 +662,13 @@ namespace FML {
                 std::cout << (FML::NTasks == 1 ? "Done!\n\n" : "Waiting for other tasks to finish... ");
 
 #ifdef USE_MPI
-            MPI_Barrier(MPI_COMM_WORLD);
+            MPI_Barrier(FML::communicator);
             if (FML::ThisTask == 0 and FML::NTasks > 1)
                 std::cout << "All tasks done!\n";
             // Its not that much data so we simply send all the data from all to  all tasks and add up
             for (size_t iq = 0; iq < results.size(); iq++) {
                 MPI_Allreduce(
-                    MPI_IN_PLACE, results[iq].data(), results[iq].size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+                    MPI_IN_PLACE, results[iq].data(), results[iq].size(), MPI_DOUBLE, MPI_SUM, FML::communicator);
             }
 #endif
 

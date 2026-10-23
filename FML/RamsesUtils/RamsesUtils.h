@@ -234,7 +234,7 @@ namespace FML {
                     npart_task[FML::ThisTask] = npart_in_domain;
 #ifdef USE_MPI
                     long long int n = npart_in_domain;
-                    MPI_Allgather(&n, 1, MPI_LONG_LONG, npart_task.data(), 1, MPI_LONG_LONG, MPI_COMM_WORLD);
+                    MPI_Allgather(&n, 1, MPI_LONG_LONG, npart_task.data(), 1, MPI_LONG_LONG, FML::communicator);
 #endif
                     if (verbose) {
                         std::cout << "\n";
@@ -436,7 +436,7 @@ namespace FML {
                         // Open file
                         if ((fp = fopen(partfile.c_str(), "r")) == nullptr) {
                             std::string error = "Error opening particle file " + partfile;
-                            exit(0);
+                            throw_error(error);
                         }
 
                         // Read header
@@ -611,7 +611,7 @@ namespace FML {
                     // Open file
                     if ((fp = fopen(partfile.c_str(), "r")) == nullptr) {
                         std::string error = "Error opening particle file " + partfile;
-                        exit(0);
+                        throw_error(error);
                     }
 
                     // Read header

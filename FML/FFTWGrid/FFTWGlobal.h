@@ -54,6 +54,18 @@ using my_fftw_plan = fftwf_plan;
 #endif
 #define EXECUTE_FFT fftwf_execute
 #define DESTROY_PLAN fftwf_destroy_plan
+#define ALIGNMENT_OF fftwf_alignment_of
+#define IMPORT_WISDOM_FROM_FILENAME fftwf_import_wisdom_from_filename
+#define EXPORT_WISDOM_TO_FILENAME fftwf_export_wisdom_to_filename
+#ifdef USE_MPI
+#define EXECUTE_R2C_NEW_ARRAY fftwf_mpi_execute_dft_r2c
+#define EXECUTE_C2R_NEW_ARRAY fftwf_mpi_execute_dft_c2r
+#define MPI_BROADCAST_WISDOM fftwf_mpi_broadcast_wisdom
+#define MPI_GATHER_WISDOM fftwf_mpi_gather_wisdom
+#else
+#define EXECUTE_R2C_NEW_ARRAY fftwf_execute_dft_r2c
+#define EXECUTE_C2R_NEW_ARRAY fftwf_execute_dft_c2r
+#endif
 #else // Single precision
 #ifdef LONG_DOUBLE_PRECISION_FFTW
 using my_fftw_complex = fftwl_complex;
@@ -72,6 +84,18 @@ using my_fftw_plan = fftwl_plan;
 #endif
 #define EXECUTE_FFT fftwl_execute
 #define DESTROY_PLAN fftwl_destroy_plan
+#define ALIGNMENT_OF fftwl_alignment_of
+#define IMPORT_WISDOM_FROM_FILENAME fftwl_import_wisdom_from_filename
+#define EXPORT_WISDOM_TO_FILENAME fftwl_export_wisdom_to_filename
+#ifdef USE_MPI
+#define EXECUTE_R2C_NEW_ARRAY fftwl_mpi_execute_dft_r2c
+#define EXECUTE_C2R_NEW_ARRAY fftwl_mpi_execute_dft_c2r
+#define MPI_BROADCAST_WISDOM fftwl_mpi_broadcast_wisdom
+#define MPI_GATHER_WISDOM fftwl_mpi_gather_wisdom
+#else
+#define EXECUTE_R2C_NEW_ARRAY fftwl_execute_dft_r2c
+#define EXECUTE_C2R_NEW_ARRAY fftwl_execute_dft_c2r
+#endif
 #else // Long double precision
 using my_fftw_complex = fftw_complex;
 using my_fftw_plan = fftw_plan;
@@ -89,6 +113,18 @@ using my_fftw_plan = fftw_plan;
 #endif
 #define EXECUTE_FFT fftw_execute
 #define DESTROY_PLAN fftw_destroy_plan
+#define ALIGNMENT_OF fftw_alignment_of
+#define IMPORT_WISDOM_FROM_FILENAME fftw_import_wisdom_from_filename
+#define EXPORT_WISDOM_TO_FILENAME fftw_export_wisdom_to_filename
+#ifdef USE_MPI
+#define EXECUTE_R2C_NEW_ARRAY fftw_mpi_execute_dft_r2c
+#define EXECUTE_C2R_NEW_ARRAY fftw_mpi_execute_dft_c2r
+#define MPI_BROADCAST_WISDOM fftw_mpi_broadcast_wisdom
+#define MPI_GATHER_WISDOM fftw_mpi_gather_wisdom
+#else
+#define EXECUTE_R2C_NEW_ARRAY fftw_execute_dft_r2c
+#define EXECUTE_C2R_NEW_ARRAY fftw_execute_dft_c2r
+#endif
 #endif // Double precision
 #endif
 #endif

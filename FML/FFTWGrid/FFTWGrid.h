@@ -126,6 +126,11 @@ namespace FML {
 
             std::string name{""};
 
+#ifdef USE_FFTW
+            // Get a (cached) FFTW plan for transforming this grid. r2c = true for real to complex
+            my_fftw_plan get_fftw_plan(bool r2c);
+#endif
+
           public:
             FFTWGrid() = default;
 
@@ -170,9 +175,9 @@ namespace FML {
             void fill_fourier_grid(const ComplexType val);
 
             /// Fill the main grid from a function specifying the value at a given position
-            void fill_real_grid(std::function<FloatType(std::array<double, N> &)> & func);
+            void fill_real_grid(const std::function<FloatType(std::array<double, N> &)> & func);
             /// Fill the main grid from a function specifying the value at a given fourier wave-vector
-            void fill_fourier_grid(std::function<ComplexType(std::array<double, N> &)> & func);
+            void fill_fourier_grid(const std::function<ComplexType(std::array<double, N> &)> & func);
 
             /// Get the (local) cell coordinates from a local index
             std::array<int, N> get_coord_from_index(const IndexIntType index_real) const;
@@ -537,7 +542,7 @@ namespace FML {
 #ifdef USE_MPI
             std::vector<ptrdiff_t> NmeshPerDim(N, Nmesh);
             my_fftw_plan plan_r2c =
-                MAKE_PLAN_R2C(N, NmeshPerDim.data(), get_real_grid(), get_fftw_grid(), MPI_COMM_WORLD, planner_flag);
+                MAKE_PLAN_R2C(N, NmeshPerDim.data(), get_real_grid(), get_fftw_grid(), FML::communicator, planner_flag);
 #else
             std::vector<int> NmeshPerDim(N, Nmesh);
             my_fftw_plan plan_r2c =
@@ -551,7 +556,7 @@ namespace FML {
         }
 
         template <int N>
-        void FFTWGrid<N>::load_wisdom(std::string filename) const {
+        void FFTWGrid<N>::load_wisdom([[maybe_unused]] std::string filename) const {
 #ifdef USE_FFTW
 #ifdef DEBUG_FFTWGRID
             if (FML::ThisTask == 0) {
@@ -559,19 +564,21 @@ namespace FML {
             }
 #endif
             if (FML::ThisTask == 0)
-                fftw_import_wisdom_from_filename(filename.c_str());
+                IMPORT_WISDOM_FROM_FILENAME(filename.c_str());
 #ifdef USE_MPI
-            fftw_mpi_broadcast_wisdom(MPI_COMM_WORLD);
+            MPI_BROADCAST_WISDOM(FML::communicator);
+#endif
 #endif
         }
 
         template <int N>
-        void FFTWGrid<N>::save_wisdom(std::string filename) const {
+        void FFTWGrid<N>::save_wisdom([[maybe_unused]] std::string filename) const {
+#ifdef USE_FFTW
 #ifdef USE_MPI
-            fftw_mpi_gather_wisdom(MPI_COMM_WORLD);
+            MPI_GATHER_WISDOM(FML::communicator);
 #endif
             if (FML::ThisTask == 0)
-                fftw_export_wisdom_to_filename(filename.c_str());
+                EXPORT_WISDOM_TO_FILENAME(filename.c_str());
 #ifdef DEBUG_FFTWGRID
             if (FML::ThisTask == 0) {
                 std::cout << "[FFTWGrid::save_wisdom] Filename " << filename << ". Label: " + name + "\n";
@@ -579,6 +586,40 @@ namespace FML {
 #endif
 #endif
         }
+
+#ifdef USE_FFTW
+        template <int N>
+        my_fftw_plan FFTWGrid<N>::get_fftw_plan(bool r2c) {
+            const unsigned int flag = FML::GRID::get_fftw_planner_flag();
+            const FML::GRID::FFTWPlanKey key{
+                N, Nmesh, r2c ? 1 : -1, FML::GRID::get_fftw_nthreads(), ALIGNMENT_OF(get_real_grid()), flag};
+            if (auto * plan = FML::GRID::find_cached_fftw_plan(key))
+                return *plan;
+
+            // Planning with anything but FFTW_ESTIMATE overwrites the arrays so keep a copy
+            Vector<ComplexType> backup;
+            if (flag != FFTW_ESTIMATE)
+                backup = fourier_grid_raw;
+
+#ifdef USE_MPI
+            std::vector<ptrdiff_t> NmeshPerDim(N, Nmesh);
+            my_fftw_plan plan =
+                r2c ? MAKE_PLAN_R2C(N, NmeshPerDim.data(), get_real_grid(), get_fftw_grid(), FML::communicator, flag) :
+                      MAKE_PLAN_C2R(N, NmeshPerDim.data(), get_fftw_grid(), get_real_grid(), FML::communicator, flag);
+#else
+            std::vector<int> NmeshPerDim(N, Nmesh);
+            my_fftw_plan plan = r2c ? MAKE_PLAN_R2C(N, NmeshPerDim.data(), get_real_grid(), get_fftw_grid(), flag) :
+                                      MAKE_PLAN_C2R(N, NmeshPerDim.data(), get_fftw_grid(), get_real_grid(), flag);
+#endif
+            assert_mpi(plan != nullptr, "[FFTWGrid::get_fftw_plan] FFTW failed to create a plan\n");
+
+            if (flag != FFTW_ESTIMATE)
+                fourier_grid_raw = std::move(backup);
+
+            FML::GRID::store_fftw_plan(key, plan);
+            return plan;
+        }
+#endif
 
         template <int N>
         ptrdiff_t FFTWGrid<N>::get_ntot_real_slice_alloc() const {
@@ -600,7 +641,7 @@ namespace FML {
         }
 
         template <int N>
-        void FFTWGrid<N>::fill_real_grid(std::function<FloatType(std::array<double, N> &)> & func) {
+        void FFTWGrid<N>::fill_real_grid(const std::function<FloatType(std::array<double, N> &)> & func) {
 #ifdef DEBUG_FFTWGRID
             if (not grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
@@ -637,7 +678,7 @@ namespace FML {
         }
 
         template <int N>
-        void FFTWGrid<N>::fill_fourier_grid(std::function<ComplexType(std::array<double, N> &)> & func) {
+        void FFTWGrid<N>::fill_fourier_grid(const std::function<ComplexType(std::array<double, N> &)> & func) {
 #ifdef DEBUG_FFTWGRID
             if (grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
@@ -698,7 +739,7 @@ namespace FML {
                              MPI_CHAR,
                              rightcpu,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
 #else
                 std::memcpy(recvbuf, sendbuf, bytes_slice);
@@ -724,7 +765,7 @@ namespace FML {
                              MPI_CHAR,
                              leftcpu,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
 #else
                 std::memcpy(recvbuf, sendbuf, bytes_slice);
@@ -751,7 +792,7 @@ namespace FML {
 #ifdef USE_MPI
 #ifdef USE_FFTW
             NmeshTotComplex =
-                MPI_FFTW_LOCAL_SIZE(N, NmeshPerDimFourier.data(), MPI_COMM_WORLD, &Local_nx, &Local_x_start);
+                MPI_FFTW_LOCAL_SIZE(N, NmeshPerDimFourier.data(), FML::communicator, &Local_nx, &Local_x_start);
 #else
             // If we don't have FFTW, but want to use this class
             Local_nx = Nmesh / FML::NTasks;
@@ -905,17 +946,9 @@ namespace FML {
                     right_copy[i] = real_grid_right[i];
             }
 
-#ifdef USE_MPI
-            std::vector<ptrdiff_t> NmeshPerDim(N, Nmesh);
-            my_fftw_plan plan_r2c =
-                MAKE_PLAN_R2C(N, NmeshPerDim.data(), get_real_grid(), get_fftw_grid(), MPI_COMM_WORLD, FFTW_ESTIMATE);
-#else
-            std::vector<int> NmeshPerDim(N, Nmesh);
-            my_fftw_plan plan_r2c =
-                MAKE_PLAN_R2C(N, NmeshPerDim.data(), get_real_grid(), get_fftw_grid(), FFTW_ESTIMATE);
-#endif
-
-            EXECUTE_FFT(plan_r2c);
+            // Plans are cached so this is only expensive the first time
+            my_fftw_plan plan_r2c = get_fftw_plan(true);
+            EXECUTE_R2C_NEW_ARRAY(plan_r2c, get_real_grid(), get_fftw_grid());
             grid_is_in_real_space = false;
 
             // Normalize
@@ -937,7 +970,6 @@ namespace FML {
                     real_grid_right[i] = right_copy[i];
             }
 
-            DESTROY_PLAN(plan_r2c);
 #else
             assert_mpi(false, "[FFTWGrid::fftw_r2c] Compiled without FFTW support so cannot take Fourier transforms\n");
 #endif
@@ -970,17 +1002,9 @@ namespace FML {
                     right_copy[i] = real_grid_right[i];
             }
 
-#ifdef USE_MPI
-            std::vector<ptrdiff_t> NmeshPerDim(N, Nmesh);
-            my_fftw_plan plan_c2r =
-                MAKE_PLAN_C2R(N, NmeshPerDim.data(), get_fftw_grid(), get_real_grid(), MPI_COMM_WORLD, FFTW_ESTIMATE);
-#else
-            std::vector<int> NmeshPerDim(N, Nmesh);
-            my_fftw_plan plan_c2r =
-                MAKE_PLAN_C2R(N, NmeshPerDim.data(), get_fftw_grid(), get_real_grid(), FFTW_ESTIMATE);
-#endif
-
-            EXECUTE_FFT(plan_c2r);
+            // Plans are cached so this is only expensive the first time
+            my_fftw_plan plan_c2r = get_fftw_plan(false);
+            EXECUTE_C2R_NEW_ARRAY(plan_c2r, get_fftw_grid(), get_real_grid());
             grid_is_in_real_space = true;
 
             //=================================================================================
@@ -991,7 +1015,6 @@ namespace FML {
                     real_grid_right[i] = right_copy[i];
             }
 
-            DESTROY_PLAN(plan_c2r);
 #else
             assert_mpi(false, "[FFTWGrid::fftw_c2r] Compiled without FFTW support so cannot take Fourier transforms\n");
 #endif

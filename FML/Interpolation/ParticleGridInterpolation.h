@@ -215,7 +215,7 @@ namespace FML {
         template <int N, int ORDER>
         void convolve_grid_with_kernel(const FFTWGrid<N> & grid_in,
                                        FFTWGrid<N> & grid_out,
-                                       std::function<FloatType(std::array<double, N> &)> & convolution_kernel);
+                                       const std::function<FloatType(std::array<double, N> &)> & convolution_kernel);
 
         //===================================================================================================
         //===================================================================================================
@@ -961,7 +961,7 @@ namespace FML {
                              MPI_CHAR,
                              int(recv_from),
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
 #else
                 temp = extra_slice_right;
@@ -995,7 +995,7 @@ namespace FML {
                              MPI_CHAR,
                              recv_from,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
 #else
                 temp = extra_slice_left;
@@ -1025,7 +1025,7 @@ namespace FML {
         template <int N, int ORDER>
         void convolve_grid_with_kernel(const FFTWGrid<N> & grid_in,
                                        FFTWGrid<N> & grid_out,
-                                       std::function<FloatType(std::array<double, N> &)> & convolution_kernel) {
+                                       const std::function<FloatType(std::array<double, N> &)> & convolution_kernel) {
 
             auto nextra = get_extra_slices_needed_by_order<ORDER>();
             assert_mpi(grid_in.get_n_extra_slices_left() >= nextra.first and

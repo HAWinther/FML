@@ -366,7 +366,7 @@ namespace FML {
 
 #ifdef USE_MPI
             std::cout << std::flush;
-            MPI_Barrier(MPI_COMM_WORLD);
+            MPI_Barrier(FML::communicator);
 #endif
 
             // If only one or more task has particles then read in batches and communicate as we go along
@@ -678,40 +678,10 @@ namespace FML {
                 }
             }
 
-            // Communicate to get how many to receive from each task
-            for (int i = 1; i < NTasks; i++) {
-                int send_request_to = (ThisTask + i) % NTasks;
-                int get_request_from = (ThisTask - i + NTasks) % NTasks;
-
-                // Send to the right, receive from left
-                MPI_Status status;
-                MPI_Sendrecv(&n_to_send[send_request_to],
-                             1,
-                             MPI_INT,
-                             send_request_to,
-                             0,
-                             &n_to_recv[get_request_from],
-                             1,
-                             MPI_INT,
-                             get_request_from,
-                             0,
-                             MPI_COMM_WORLD,
-                             &status);
-
-                // If part can have variable size
-                MPI_Sendrecv(&nbytes_to_send[send_request_to],
-                             1,
-                             MPI_LONG_LONG,
-                             send_request_to,
-                             0,
-                             &nbytes_to_recv[get_request_from],
-                             1,
-                             MPI_LONG_LONG,
-                             get_request_from,
-                             0,
-                             MPI_COMM_WORLD,
-                             &status);
-            }
+            // Communicate to get how many particles and bytes to receive from each task
+            MPI_Alltoall(n_to_send.data(), 1, MPI_INT, n_to_recv.data(), 1, MPI_INT, FML::communicator);
+            MPI_Alltoall(
+                nbytes_to_send.data(), 1, MPI_LONG_LONG, nbytes_to_recv.data(), 1, MPI_LONG_LONG, FML::communicator);
 
 #ifdef DEBUG_MPIPARTICLES
             // Show some info
@@ -836,7 +806,7 @@ namespace FML {
                                  MPI_CHAR,
                                  get_request_from,
                                  0,
-                                 MPI_COMM_WORLD,
+                                 FML::communicator,
                                  &status);
                 }
             }

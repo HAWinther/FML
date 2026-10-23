@@ -259,7 +259,7 @@ namespace FML {
             void info() {
 #ifdef USE_MPI
                 int ThisTask = 0;
-                MPI_Comm_rank(MPI_COMM_WORLD, &ThisTask);
+                MPI_Comm_rank(FML::communicator, &ThisTask);
                 if (ThisTask > 0)
                     return;
 #endif

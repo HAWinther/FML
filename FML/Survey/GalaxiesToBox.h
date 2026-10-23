@@ -83,7 +83,7 @@ namespace FML {
         void EquitorialToCartesianCoordinates(T * galaxies_ra_dec_z,
                                               size_t ngalaxies,
                                               std::vector<U> & particles_xyz,
-                                              std::function<double(double)> & hubble_over_c_of_z,
+                                              const std::function<double(double)> & hubble_over_c_of_z,
                                               std::pair<double, double> & min_max_x,
                                               std::pair<double, double> & min_max_y,
                                               std::pair<double, double> & min_max_z) {
@@ -202,7 +202,7 @@ namespace FML {
         void GalaxiesToBox(const T * galaxies_ra_dec_z,
                            size_t ngalaxies,
                            std::vector<U> & particles_xyz,
-                           std::function<double(double)> & hubble_over_c_of_z,
+                           const std::function<double(double)> & hubble_over_c_of_z,
                            double & boxsize,
                            std::vector<double> & observer_position,
                            bool shiftPositions,
@@ -223,8 +223,8 @@ namespace FML {
             // If we run with MPI only print once
             if (verbose) {
                 int mpi_rank = 0, mpi_size = 1;
-                MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
-                MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
+                MPI_Comm_rank(FML::communicator, &mpi_rank);
+                MPI_Comm_size(FML::communicator, &mpi_size);
                 verbose = (mpi_rank == 0);
             }
 #endif
@@ -313,7 +313,7 @@ namespace FML {
                                   size_t nrandoms,
                                   std::vector<U> & galaxies_xyz,
                                   std::vector<U> & randoms_xyz,
-                                  std::function<double(double)> & hubble_over_c_of_z,
+                                  const std::function<double(double)> & hubble_over_c_of_z,
                                   double & boxsize,
                                   bool shiftPositions,
                                   bool scalePositions,

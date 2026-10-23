@@ -48,7 +48,7 @@ void RunTests() {
     n_per_task[FML::ThisTask] = local_nx;
     n_per_task[FML::NTasks] = local_nx;
 #ifdef USE_MPI
-    MPI_Allreduce(MPI_IN_PLACE, n_per_task.data(), FML::NTasks + 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, n_per_task.data(), FML::NTasks + 1, MPI_INT, MPI_SUM, FML::communicator);
 #endif
     assert(n_per_task[FML::NTasks] == Nmesh);
 

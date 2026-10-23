@@ -565,7 +565,7 @@ int main() {
             }
         }
 #ifdef USE_MPI
-        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Barrier(FML::communicator);
 #endif
     }
 

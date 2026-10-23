@@ -232,9 +232,9 @@ class OnionSlice {
 
         // Reduce map over tasks (different if float or double)
         if constexpr( std::is_same<T, float>::value ) {
-          MPI_Reduce( (FML::ThisTask == task_to_reduce_to ? MPI_IN_PLACE : &map[0]), &map[0], npix, MPI_FLOAT, MPI_SUM, task_to_reduce_to, MPI_COMM_WORLD);
+          MPI_Reduce( (FML::ThisTask == task_to_reduce_to ? MPI_IN_PLACE : &map[0]), &map[0], npix, MPI_FLOAT, MPI_SUM, task_to_reduce_to, FML::communicator);
         } else if( std::is_same<T, double>::value ) {
-          MPI_Reduce( (FML::ThisTask == task_to_reduce_to ? MPI_IN_PLACE : &map[0]), &map[0], npix, MPI_DOUBLE, MPI_SUM, task_to_reduce_to, MPI_COMM_WORLD);
+          MPI_Reduce( (FML::ThisTask == task_to_reduce_to ? MPI_IN_PLACE : &map[0]), &map[0], npix, MPI_DOUBLE, MPI_SUM, task_to_reduce_to, FML::communicator);
         } else {
           throw std::runtime_error("We only support float and double for onion maps");
         }

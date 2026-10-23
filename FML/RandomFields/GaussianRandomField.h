@@ -65,7 +65,7 @@ namespace FML {
                     }
                 }
 #ifdef USE_MPI
-                MPI_Allreduce(MPI_IN_PLACE, seedtable.data(), Nmesh, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD);
+                MPI_Allreduce(MPI_IN_PLACE, seedtable.data(), Nmesh, MPI_UNSIGNED, MPI_SUM, FML::communicator);
 #endif
                 // Make random generators for each slice to ensure we get the same
                 // result no matter how many threads we use
@@ -177,7 +177,7 @@ namespace FML {
                     }
                 }
 #ifdef USE_MPI
-                MPI_Allreduce(MPI_IN_PLACE, seedtable.data(), num_seeds, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD);
+                MPI_Allreduce(MPI_IN_PLACE, seedtable.data(), num_seeds, MPI_UNSIGNED, MPI_SUM, FML::communicator);
 #endif
 
                 // Generate gaussian random field in k-space
@@ -343,7 +343,7 @@ namespace FML {
                     }
 
 #ifdef USE_MPI
-                MPI_Allreduce(MPI_IN_PLACE, seedtable.data(), Nmesh * Nmesh, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD);
+                MPI_Allreduce(MPI_IN_PLACE, seedtable.data(), Nmesh * Nmesh, MPI_UNSIGNED, MPI_SUM, FML::communicator);
 #endif
                 
                 // If we use GSL make a spline (std::function can be slow) otherwise this is just a copy

@@ -303,9 +303,9 @@ int main() {
         delta_mean += delta;
     }
 #ifdef USE_MPI
-    MPI_Allreduce(MPI_IN_PLACE, &delta_min, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
-    MPI_Allreduce(MPI_IN_PLACE, &delta_max, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-    MPI_Allreduce(MPI_IN_PLACE, &delta_mean, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, &delta_min, 1, MPI_DOUBLE, MPI_MIN, FML::communicator);
+    MPI_Allreduce(MPI_IN_PLACE, &delta_max, 1, MPI_DOUBLE, MPI_MAX, FML::communicator);
+    MPI_Allreduce(MPI_IN_PLACE, &delta_mean, 1, MPI_DOUBLE, MPI_SUM, FML::communicator);
 #endif
     delta_mean /= std::pow(grid.get_nmesh(), Ndim);
 
@@ -326,7 +326,7 @@ int main() {
         }
     }
 #ifdef USE_MPI
-    MPI_Allreduce(MPI_IN_PLACE, count.data(), nbins, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, count.data(), nbins, MPI_DOUBLE, MPI_SUM, FML::communicator);
 #endif
 
     //=========================================================================

@@ -609,7 +609,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         fp.close();
       }
 #ifdef USE_MPI
-      MPI_Barrier(MPI_COMM_WORLD);
+      MPI_Barrier(FML::communicator);
 #endif
     }
 }

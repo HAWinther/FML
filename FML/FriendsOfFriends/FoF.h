@@ -291,7 +291,7 @@ namespace FML {
                              MPI_BYTE,
                              RightTask,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
                 // Send right receive from left
                 MPI_Sendrecv(&n_send_right,
@@ -304,7 +304,7 @@ namespace FML {
                              MPI_BYTE,
                              LeftTask,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
 
                 // If not periodic then left boundary on first task and right boundary on last task is not there
@@ -365,7 +365,7 @@ namespace FML {
                              MPI_BYTE,
                              RightTask,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
 
                 // Generate particles
@@ -397,7 +397,7 @@ namespace FML {
                              MPI_BYTE,
                              LeftTask,
                              0,
-                             MPI_COMM_WORLD,
+                             FML::communicator,
                              &status);
 
                 // Generate particles
@@ -723,7 +723,7 @@ namespace FML {
                 }
             }
 #ifdef USE_MPI
-            MPI_Barrier(MPI_COMM_WORLD);
+            MPI_Barrier(FML::communicator);
 #endif
             foftimer.EndTiming("FoFLinking");
 
@@ -749,7 +749,7 @@ namespace FML {
             for (int i = FML::ThisTask + 1; i < FML::NTasks; i++)
                 addfofid[i] = FoFID;
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, addfofid.data(), NTasks, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, addfofid.data(), NTasks, MPI_INT, MPI_SUM, FML::communicator);
 #endif
      
             // Finalize computation of halos

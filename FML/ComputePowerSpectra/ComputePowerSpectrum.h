@@ -487,9 +487,9 @@ namespace FML {
 
 #ifdef USE_MPI
             for (size_t ell = 0; ell < Pell.size(); ell++) {
-                MPI_Allreduce(MPI_IN_PLACE, Pell[ell].pofk.data(), Pell[ell].n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-                MPI_Allreduce(MPI_IN_PLACE, Pell[ell].count.data(), Pell[ell].n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-                MPI_Allreduce(MPI_IN_PLACE, Pell[ell].kbin.data(), Pell[ell].n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+                MPI_Allreduce(MPI_IN_PLACE, Pell[ell].pofk.data(), Pell[ell].n, MPI_DOUBLE, MPI_SUM, FML::communicator);
+                MPI_Allreduce(MPI_IN_PLACE, Pell[ell].count.data(), Pell[ell].n, MPI_DOUBLE, MPI_SUM, FML::communicator);
+                MPI_Allreduce(MPI_IN_PLACE, Pell[ell].kbin.data(), Pell[ell].n, MPI_DOUBLE, MPI_SUM, FML::communicator);
             }
 #endif
 
