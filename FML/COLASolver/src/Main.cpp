@@ -16,6 +16,7 @@
 // Usage:
 //   ./nbody parameterfile.lua    Run a simulation
 //   ./nbody --parameters [file]  Print the reference of all parameters (markdown) [to file]
+//   ./nbody --features           Print the optional features compiled in (hdf5, healpix)
 //
 // The cosmologies and gravity models are listed in Models.h, the parameters in
 // ParameterSchema.h and the particle types in Particles.h
@@ -42,6 +43,20 @@ int main(int argc, char ** argv) {
         if (FML::ThisTask == 0) {
             std::cout << "Missing parameterfile. Run as: ./nbody parameterfile.lua\n";
             std::cout << "To see all the parameters run: ./nbody --parameters\n";
+        }
+        return 0;
+    }
+    if (std::strcmp(argv[1], "--features") == 0) {
+        // The optional features this executable was compiled with (used by the tests)
+        if (FML::ThisTask == 0) {
+            std::cout << "FEATURES:";
+#ifdef USE_HDF5
+            std::cout << " hdf5";
+#endif
+#ifdef USE_HEALPIX
+            std::cout << " healpix";
+#endif
+            std::cout << "\n";
         }
         return 0;
     }

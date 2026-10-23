@@ -32,7 +32,7 @@ namespace COLASOLVER {
     enum class RandomGeneratorType { GSL, MT19937 };
     enum class TimestepMethod { Quinn, Tassev, FastPM, BullFrog };
     enum class ScaleFactorSpacing { Linear, Logarithmic, Powerlaw };
-    enum class ParticleFileFormat { GADGET, FML };
+    enum class ParticleFileFormat { GADGET, HDF5, FML };
 
     //=============================================================================
     /// Reads parameters from a ParameterMap and remembers what was read so that
@@ -376,7 +376,9 @@ namespace COLASOLVER {
             if (output.particles) {
                 r.get_choice("output_fileformat",
                              output.fileformat,
-                             {{"GADGET", ParticleFileFormat::GADGET}, {"FML", ParticleFileFormat::FML}});
+                             {{"GADGET", ParticleFileFormat::GADGET},
+                              {"HDF5", ParticleFileFormat::HDF5},
+                              {"FML", ParticleFileFormat::FML}});
             }
             r.get("output_folder", output.folder);
 
@@ -397,6 +399,10 @@ namespace COLASOLVER {
                 if (FML::ThisTask == 0)
                     std::cout << "NB: simulation_cola_LPT_order < 1 so turning off COLA\n";
             }
+#ifndef USE_HDF5
+            if (output.particles and output.fileformat == ParticleFileFormat::HDF5)
+                fail("output_fileformat = HDF5 needs HDF5: compile with USE_HDF5=true (make USE_HDF5=true)");
+#endif
             if (simulation.use_cola and timestep.method == TimestepMethod::BullFrog)
                 fail("timestep_method = BullFrog already follows 2LPT and cannot be combined with COLA "
                      "(simulation_use_cola = false)");

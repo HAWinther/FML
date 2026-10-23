@@ -13,8 +13,10 @@ here="$(cd "$(dirname "$0")" && pwd)"
 exe="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 outdir="$2"
 shift 2
-cases="${*:-$(python3 "$here/cases.py" --list)}"
 MPIRUN="${MPIRUN-mpirun -np 2}"
+# Cases needing optional features (e.g. hdf5) are only run if the executable has them
+features="$($MPIRUN "$exe" --features 2>/dev/null | grep '^FEATURES:' | cut -d: -f2)"
+cases="${*:-$(python3 "$here/cases.py" --list $features)}"
 export OMP_NUM_THREADS=1
 
 mkdir -p "$outdir"

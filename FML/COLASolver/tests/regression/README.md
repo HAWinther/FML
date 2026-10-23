@@ -16,6 +16,8 @@ all the main code paths of the solver:
 | `read_particles_exact` | Reading particles (from `cola_quinn_all`) with exact LPT reconstruction |
 | `read_particles_grid` | Reading particles with LPT reconstruction from the density field |
 | `read_phases` | Taking the phases of the IC from particles |
+| `hdf5_output` | As `cola_quinn_all` but with GADGET HDF5 output (only run if compiled with `USE_HDF5=true`) |
+| `read_particles_hdf5` | Reading the HDF5 particles from `hdf5_output` (only run if compiled with `USE_HDF5=true`) |
 | `nongaussian` | Non-gaussian (local fNL) IC |
 
 The cases are defined in `cases.py`.

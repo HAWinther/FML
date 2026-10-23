@@ -779,6 +779,8 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
          [&]() {
              if (params.output.fileformat == COLASOLVER::ParticleFileFormat::GADGET)
                  output_gadget(*this, redshift, snapshot_folder);
+             else if (params.output.fileformat == COLASOLVER::ParticleFileFormat::HDF5)
+                 output_gadget_hdf5(*this, redshift, snapshot_folder);
              else
                  output_fml(*this, redshift, snapshot_folder);
          }},

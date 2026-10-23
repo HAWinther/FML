@@ -378,7 +378,10 @@ namespace COLASOLVER {
             b.when(is_one_of("ic_random_field_type", {"read_particles", "read_phases"}),
                    "ic_random_field_type in {read_particles, read_phases}",
                    [&]() {
-                       b.required("ic_reconstruct_gadgetfilepath", "", "Path to the GADGET files");
+                       b.required("ic_reconstruct_gadgetfilepath",
+                                  "",
+                                  "Path to the GADGET files without the file number: binary (path.0, path.1, ...) "
+                                  "or HDF5 (path.hdf5 or path.0.hdf5, ...), detected automatically");
                        b.optional("ic_reconstruct_assigment_method",
                                   "CIC",
                                   "Density assignment method used to reconstruct the density field",
@@ -453,7 +456,11 @@ namespace COLASOLVER {
             b.required("output_folder", "", "Folder to put the output in (\"\" is the current folder)");
             b.required("output_redshifts", std::vector<double>{}, "The output redshifts (decreasing)");
             b.optional("output_particles", true, "Write the particles at the output redshifts");
-            b.optional("output_fileformat", "GADGET", "File format for the particles", {"GADGET", "FML"});
+            b.optional("output_fileformat",
+                       "GADGET",
+                       "File format for the particles. GADGET: binary GADGET files. HDF5: GADGET HDF5 files "
+                       "(compile with USE_HDF5=true). FML: raw dump of the particles (can be read back by FML)",
+                       {"GADGET", "HDF5", "FML"});
 
             b.section("Halo finding");
             b.optional("fof", false, "Locate friends-of-friends halos at every output");

@@ -241,7 +241,7 @@ particle_allocation_factor = 1.25
 output_redshifts = {0.0}
 -- Output particles?
 output_particles = true
--- Fileformat: GADGET, FML
+-- Fileformat: GADGET (binary), HDF5 (GADGET HDF5, compile with USE_HDF5=true), FML
 output_fileformat = "GADGET"
 -- Output folder
 output_folder = "output"
@@ -320,7 +320,7 @@ end
 -- For reading IC from an external file
 -- If COLA then we reconstruct the LPT fields 
 if ic_random_field_type == "read_particles" or ic_random_field_type == "read_phases" then
-  -- Path to GADGET files
+  -- Path to GADGET files (binary: path.0, path.1, ... or HDF5: path.hdf5 or path.0.hdf5, ...)
   ic_reconstruct_gadgetfilepath = "output/snapshot_TestSim_z20.000/gadget_z20.000"
   -- COLA settings to (naively) reconstruct the LPT fields:
   -- Density assignment method: NGP, CIC, TSC, PCS, PQS

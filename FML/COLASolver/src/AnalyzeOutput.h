@@ -6,6 +6,7 @@
 #include <FML/FileUtils/FileUtils.h>
 #include <FML/FriendsOfFriends/FoF.h>
 #include <FML/GadgetUtils/GadgetUtils.h>
+#include <FML/GadgetUtils/GadgetUtilsHDF5.h>
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/NBody/NBody.h>
@@ -175,6 +176,52 @@ void output_gadget(NBodySimulation<NDIM, T> & sim, double redshift, std::string 
                            cosmo->get_h(),
                            pos_norm,
                            vel_norm);
+}
+
+/// Output the particles as GADGET HDF5 files: one file per task, <prefix>.<task>.hdf5
+/// (or <prefix>.hdf5 if we only have one task)
+template <int NDIM, class T>
+void output_gadget_hdf5([[maybe_unused]] NBodySimulation<NDIM, T> & sim,
+                        [[maybe_unused]] double redshift,
+                        [[maybe_unused]] std::string snapshot_folder) {
+#ifdef USE_HDF5
+    const std::string redshiftstring = redshift_to_string(redshift);
+    const auto simulation_boxsize = sim.get_parameters().simulation.boxsize;
+    const auto cosmo = sim.get_cosmology();
+    auto & part = sim.get_particles();
+
+    const double scale_factor = 1.0 / (1.0 + redshift);
+    const int nfiles = FML::NTasks;
+    const double pos_norm = simulation_boxsize;
+    const double vel_norm = 100 * simulation_boxsize / std::pow(scale_factor, 1.5);
+    const std::string fileprefix = snapshot_folder + "/" + "gadget_z" + redshiftstring;
+    const std::string filename =
+        nfiles == 1 ? fileprefix + ".hdf5" : fileprefix + "." + std::to_string(FML::ThisTask) + ".hdf5";
+
+    if (FML::ThisTask == 0) {
+        std::cout << "\n";
+        std::cout << "#=====================================================\n";
+        std::cout << "# Output in gadget HDF5 format\n";
+        std::cout << "# fileprefix  : " << fileprefix << "\n";
+        std::cout << "#=====================================================\n";
+    }
+
+    FML::FILEUTILS::GADGET::GadgetHDF5Writer gw(NDIM);
+    gw.write_gadget_single(filename,
+                           part.get_particles_ptr(),
+                           part.get_npart(),
+                           part.get_npart_total(),
+                           nfiles,
+                           scale_factor,
+                           simulation_boxsize,
+                           cosmo->get_OmegaM(),
+                           cosmo->get_OmegaLambda(),
+                           cosmo->get_h(),
+                           pos_norm,
+                           vel_norm);
+#else
+    throw std::runtime_error("output_gadget_hdf5: compile with USE_HDF5=true to write HDF5 files");
+#endif
 }
 
 template <int NDIM, class T>

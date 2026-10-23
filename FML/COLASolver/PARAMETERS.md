@@ -115,7 +115,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `ic_fnl_type` | string | *required* | ic_random_field_type = nongaussian | Type of non-gaussianity. Options: `local`, `equilateral`, `orthogonal` |
 | `ic_fnl` | double | *required* | ic_random_field_type = nongaussian | The value of fNL |
 | `ic_fnl_redshift` | double | *required* | ic_random_field_type = nongaussian | The redshift at which the non-gaussian potential is applied |
-| `ic_reconstruct_gadgetfilepath` | string | *required* | ic_random_field_type in {read_particles, read_phases} | Path to the GADGET files |
+| `ic_reconstruct_gadgetfilepath` | string | *required* | ic_random_field_type in {read_particles, read_phases} | Path to the GADGET files without the file number: binary (path.0, path.1, ...) or HDF5 (path.hdf5 or path.0.hdf5, ...), detected automatically |
 | `ic_reconstruct_assigment_method` | string | `"CIC"` | ic_random_field_type in {read_particles, read_phases} | Density assignment method used to reconstruct the density field. Options: `NGP`, `CIC`, `TSC`, `PCS`, `PQS` |
 | `ic_reconstruct_smoothing_filter` | string | `"sharpk"` | ic_random_field_type in {read_particles, read_phases} | Filter used to remove small-scale modes from the reconstructed density field. Options: `tophat`, `sharpk`, `gaussian` |
 | `ic_reconstruct_dimless_smoothing_scale` | double | `0` | ic_random_field_type in {read_particles, read_phases} | Smoothing scale R/boxsize of the reconstructed density field |
@@ -161,7 +161,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `output_folder` | string | *required* | always | Folder to put the output in ("" is the current folder) |
 | `output_redshifts` | double list | *required* | always | The output redshifts (decreasing) |
 | `output_particles` | bool | `true` | always | Write the particles at the output redshifts |
-| `output_fileformat` | string | `"GADGET"` | always | File format for the particles. Options: `GADGET`, `FML` |
+| `output_fileformat` | string | `"GADGET"` | always | File format for the particles. GADGET: binary GADGET files. HDF5: GADGET HDF5 files (compile with USE_HDF5=true). FML: raw dump of the particles (can be read back by FML). Options: `GADGET`, `HDF5`, `FML` |
 
 ## Halo finding
 

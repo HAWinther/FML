@@ -3,6 +3,7 @@
 
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/GadgetUtils/GadgetUtils.h>
+#include <FML/GadgetUtils/GadgetUtilsHDF5.h>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/LPT/DisplacementFields.h>
@@ -33,20 +34,35 @@ namespace COLASOLVER {
     using GadgetHeader = FML::FILEUTILS::GADGET::GadgetHeader;
 
     /// Read particles from gadget files (all tasks read the same files and only keep the particles
-    /// in their domain) and check that they are at the expected scale factor.
+    /// in their domain) and check that they are at the expected scale factor. The files can be
+    /// binary (fileprefix.0, fileprefix.1, ...) or HDF5 (fileprefix.hdf5 or fileprefix.0.hdf5, ...)
     /// Returns the particles (as FML::Vector so they can be moved into MPIParticles) and the header
     template <class T>
     std::pair<FML::Vector<T>, GadgetHeader> read_gadget_particles(const std::string & fileprefix,
                                                                   double allocation_factor,
                                                                   double expected_scale_factor,
                                                                   const std::string & caller) {
-        FML::FILEUTILS::GADGET::GadgetReader g;
         FML::Vector<T> particles;
         const bool only_keep_part_in_domain = true;
         const bool verbose = false;
-        g.read_gadget(fileprefix, particles, allocation_factor, only_keep_part_in_domain, verbose);
+        GadgetHeader header;
+        if (FML::FILEUTILS::GADGET::is_hdf5_snapshot(fileprefix)) {
+#ifdef USE_HDF5
+            if (FML::ThisTask == 0)
+                std::cout << "# Reading GADGET HDF5 files\n";
+            FML::FILEUTILS::GADGET::GadgetHDF5Reader g;
+            g.read_gadget(fileprefix, particles, allocation_factor, only_keep_part_in_domain, verbose);
+            header = g.get_header();
+#else
+            throw std::runtime_error("[" + caller + "] " + fileprefix +
+                                     " is a GADGET HDF5 snapshot. Compile with USE_HDF5=true to read it");
+#endif
+        } else {
+            FML::FILEUTILS::GADGET::GadgetReader g;
+            g.read_gadget(fileprefix, particles, allocation_factor, only_keep_part_in_domain, verbose);
+            header = g.get_header();
+        }
 
-        auto header = g.get_header();
         if (FML::ThisTask == 0)
             FML::FILEUTILS::GADGET::print_header_info(header);
 

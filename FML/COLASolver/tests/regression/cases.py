@@ -100,6 +100,8 @@ BASE = dict(
 # Particles written at the initial redshift by the 'cola_quinn_all' case are used
 # as input for the read_particles / read_phases cases
 IC_GADGET = "../cola_quinn_all/output/snapshot_Reg_z20.000/gadget_z20.000"
+# ...and by 'hdf5_output' for 'read_particles_hdf5'
+IC_GADGET_HDF5 = "../hdf5_output/output/snapshot_Reg_z20.000/gadget_z20.000"
 
 CASES = {
     # COLA, Quinn, all analysis on, output also at the initial redshift, sigma8 normalization
@@ -224,6 +226,23 @@ CASES = {
         output_redshifts=[1.0, 0.0],
         timestep_nsteps=[3, 3],
     ),
+    # The same as 'cola_quinn_all' but with GADGET HDF5 output (needs USE_HDF5)
+    "hdf5_output": dict(
+        output_redshifts=[20.0, 1.0, 0.0],
+        timestep_nsteps=[0, 3, 3],
+        ic_sigma8_normalization=True,
+        output_fileformat="HDF5",
+    ),
+    # Read the HDF5 particles written at z=20 by 'hdf5_output' (same as 'read_particles_exact')
+    "read_particles_hdf5": dict(
+        ic_random_field_type="read_particles",
+        ic_reconstruct_gadgetfilepath=IC_GADGET_HDF5,
+        ic_reconstruct_assigment_method="PCS",
+        ic_reconstruct_interlacing=True,
+        ic_reconstruct_smoothing_filter="sharpk",
+        ic_reconstruct_dimless_smoothing_scale=0.01,
+        ic_reconstruct_exact=True,
+    ),
     # Read particles written at z=20 by 'cola_quinn_all' and reconstruct LPT fields exactly
     "read_particles_exact": dict(
         ic_random_field_type="read_particles",
@@ -259,7 +278,14 @@ CASES = {
 # Cases that fail with the current code and are not run by default (run them by name)
 KNOWN_FAILING = []
 
-# The order the cases must run in (the read_* cases need 'cola_quinn_all')
+# Cases that need an optional feature (shown by ./nbody --features). They are only run
+# if the executable has it
+REQUIRES = {
+    "hdf5_output": "hdf5",
+    "read_particles_hdf5": "hdf5",
+}
+
+# The order the cases must run in (the read_* cases need 'cola_quinn_all' / 'hdf5_output')
 ORDER = [c for c in CASES.keys() if c not in KNOWN_FAILING]
 
 
@@ -297,8 +323,10 @@ def write_case(outdir, name):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 2 and sys.argv[1] == "--list":
-        print(" ".join(ORDER))
+    if len(sys.argv) >= 2 and sys.argv[1] == "--list":
+        # --list [feature ...]: the cases that can run with these features
+        features = sys.argv[2:]
+        print(" ".join(c for c in ORDER if REQUIRES.get(c, None) in [None] + features))
         sys.exit(0)
     outdir = sys.argv[1]
     for name in CASES:
