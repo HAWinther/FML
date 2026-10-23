@@ -102,7 +102,7 @@ namespace FML {
             /// Class for reading Gadget files. Checks and corrects for different endian-ness.
             class GadgetReader {
               private:
-                GadgetHeader header;
+                GadgetHeader header{};
 
                 bool endian_swap{false};
                 bool header_is_read{false};
@@ -156,7 +156,7 @@ namespace FML {
             /// Write files in GADGET format
             class GadgetWriter {
               private:
-                GadgetHeader header;
+                GadgetHeader header{};
 
                 int NDIM{3};
 

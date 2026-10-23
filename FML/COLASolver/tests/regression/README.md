@@ -1,0 +1,45 @@
+# Regression tests for the COLASolver
+
+A set of small simulations (32^3 particles, about 30 seconds in total) that together go through
+all the main code paths of the solver:
+
+| Case | What it covers |
+|---|---|
+| `cola_quinn_all` | COLA, Quinn time-stepping, output at the initial redshift, sigma8 normalization, P(k), multipoles, bispectrum, FoF, Gadget output |
+| `nocola_tassev_log` | No COLA, Tassev time-stepping, logarithmic spacing, total number of steps split over outputs, transfer function input, IC from GR growth, fixed amplitude + reversed phases, MT19937, FML output |
+| `scaledep_cola_neutrinos` | Scale-dependent COLA, massive neutrinos, transfer info file input |
+| `fofr_cola1_tsc` | f(R) gravity with screening, 1LPT COLA, TSC assignment |
+| `powerlaw_spacing` | Power-law spacing of the time steps |
+| `lightcone_dgp` | Lightcone (ascii output), DGP gravity |
+| `read_particles_exact` | Reading particles (from `cola_quinn_all`) with exact LPT reconstruction |
+| `read_particles_grid` | Reading particles with LPT reconstruction from the density field |
+| `read_phases` | Taking the phases of the IC from particles |
+| `nongaussian` | Non-gaussian IC. **Currently fails** (NaN in the IC), so it is not run by default |
+
+The cases are defined in `cases.py`.
+
+## Usage
+
+Use these when changing the code: run the cases with the code before and after the change and
+compare the outputs. Results are reproducible (`OMP_NUM_THREADS=1` and a fixed seed), so a pure
+refactoring should give identical outputs.
+
+```bash
+# Reference: build the code before your change
+make && tests/regression/run.sh ./nbody /tmp/reg_ref
+
+# ...make your change, rebuild, and run again
+make && tests/regression/run.sh ./nbody /tmp/reg_new
+
+# Compare (--exact: every number and every binary file must be identical)
+python3 tests/regression/compare.py /tmp/reg_ref /tmp/reg_new --exact
+```
+
+- `run.sh <nbody> <outdir> [case ...]` runs all cases (or the ones named). Set `MPIRUN` to choose
+  how to launch, e.g. `MPIRUN="mpirun -np 4"` or `MPIRUN=""` for a serial build (default `mpirun -np 2`).
+- `compare.py <ref> <new>` compares all output files. Without `--exact` text files are compared
+  with a relative tolerance (`--rtol`, default 1e-6) and binary files are skipped. Use this
+  when comparing across machines or compilers, where results are not bit-identical.
+
+The `read_*` cases use the particles written by `cola_quinn_all`, so run that case first (the default
+order does this).

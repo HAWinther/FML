@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdexcept>
 #include <string>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -442,11 +443,11 @@ namespace FML {
                 double basisfunc;
                 double stp_no[n_redshift];
                 for (int iz = 0; iz < n_redshift; iz++) {
+                    // Outside this range the emulator has no data (stp_no would be left unset and the
+                    // boost would be garbage) so we throw and let the caller decide what to do
                     if (redshift.at(iz) > 10.0 || redshift.at(iz) < 0.0) {
-                        std::cout << "ERROR: EuclidEmulator2 accepts only redshifts in the interval [0.0, 10.0]\n"
-                                  << "The current redshift z = " << redshift.at(iz) << " is therefore ignored."
-                                  << std::endl;
-                        continue;
+                        throw std::runtime_error("EuclidEmulator2 accepts only redshifts in the interval [0.0, 10.0]. "
+                                                 "Got z = " + std::to_string(redshift.at(iz)));
                     }
                     stp_no[iz] = csm.compute_step_number(redshift.at(iz));
                 }

@@ -836,4 +836,115 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
         }
     }
 }
+
+//========================================================================
+/// Everything COLA needs during the simulation: the settings and (for
+/// scale-dependent COLA) the LPT potentials at the initial time. This
+/// selects between the scale-dependent and scale-independent methods
+//========================================================================
+template <int NDIM, class T>
+class ColaState {
+  public:
+    bool enabled{false};        // Use COLA?
+    bool scaledependent{false}; // Use the scale-dependent version?
+    int LPT_order{2};           // The LPT order of COLA
+    double aini{1.0};           // The initial scale factor
+    double H0Box{1.0};          // H0 * boxsize
+    std::shared_ptr<GravityModel<NDIM>> grav;
+
+    // The LPT potentials at the initial time (only allocated for scale-dependent COLA)
+    FML::GRID::FFTWGrid<NDIM> phi_1LPT_ini_fourier;
+    FML::GRID::FFTWGrid<NDIM> phi_2LPT_ini_fourier;
+    FML::GRID::FFTWGrid<NDIM> phi_3LPTa_ini_fourier;
+    FML::GRID::FFTWGrid<NDIM> phi_3LPTb_ini_fourier;
+
+    /// Add (sign = +1) or subtract (sign = -1) the LPT velocity at scale factor a, i.e. go from
+    /// the COLA frame to the standard frame and back
+    void add_on_LPT_velocity(FML::PARTICLE::MPIParticles<T> & part, double a, double sign) {
+        if (scaledependent) {
+            cola_add_on_LPT_velocity_scaledependent<NDIM, T>(part,
+                                                             grav,
+                                                             LPT_order,
+                                                             phi_1LPT_ini_fourier,
+                                                             phi_2LPT_ini_fourier,
+                                                             phi_3LPTa_ini_fourier,
+                                                             phi_3LPTb_ini_fourier,
+                                                             H0Box,
+                                                             aini,
+                                                             a,
+                                                             sign);
+        } else {
+            cola_add_on_LPT_velocity<NDIM, T>(part, grav, LPT_order, aini, a, sign);
+        }
+    }
+
+    /// The COLA kick and drift from aold to a
+    void kick_drift(FML::PARTICLE::MPIParticles<T> & part,
+                    double aold,
+                    double a,
+                    double delta_time_kick,
+                    double delta_time_drift) {
+        if (scaledependent) {
+            cola_kick_drift_scaledependent<NDIM, T>(part,
+                                                    grav,
+                                                    LPT_order,
+                                                    phi_1LPT_ini_fourier,
+                                                    phi_2LPT_ini_fourier,
+                                                    phi_3LPTa_ini_fourier,
+                                                    phi_3LPTb_ini_fourier,
+                                                    H0Box,
+                                                    aini,
+                                                    aold,
+                                                    a,
+                                                    delta_time_kick,
+                                                    delta_time_drift);
+        } else {
+            cola_kick_drift<NDIM, T>(part, grav, LPT_order, aini, aold, a, delta_time_kick, delta_time_drift);
+        }
+    }
+
+    void free() {
+        phi_1LPT_ini_fourier.free();
+        phi_2LPT_ini_fourier.free();
+        phi_3LPTa_ini_fourier.free();
+        phi_3LPTb_ini_fourier.free();
+    }
+};
+
+//========================================================================
+/// While this object exists the particles have their true velocities (the
+/// LPT velocity at scale factor a is added on) instead of the COLA velocities.
+/// Does nothing if COLA is not used
+//========================================================================
+template <int NDIM, class T>
+class ScopedLPTVelocity {
+  public:
+    ScopedLPTVelocity(ColaState<NDIM, T> & cola,
+                      FML::PARTICLE::MPIParticles<T> & part,
+                      double a,
+                      FML::UTILS::Timings * timer = nullptr)
+        : cola(cola), part(part), a(a), timer(timer) {
+        apply(+1.0);
+    }
+    ~ScopedLPTVelocity() { apply(-1.0); }
+    ScopedLPTVelocity(const ScopedLPTVelocity &) = delete;
+    ScopedLPTVelocity & operator=(const ScopedLPTVelocity &) = delete;
+
+  private:
+    ColaState<NDIM, T> & cola;
+    FML::PARTICLE::MPIParticles<T> & part;
+    double a;
+    FML::UTILS::Timings * timer;
+
+    void apply(double sign) {
+        if (not cola.enabled)
+            return;
+        if (timer)
+            timer->StartTiming("COLA output");
+        cola.add_on_LPT_velocity(part, a, sign);
+        if (timer)
+            timer->EndTiming("COLA output");
+    }
+};
+
 #endif

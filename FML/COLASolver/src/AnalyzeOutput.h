@@ -15,13 +15,26 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <string>
 #include <vector>
+
+//=============================================================================
+// On the fly analysis and output of the simulation. These functions only use
+// the public interface of NBodySimulation (get_parameters(), get_particles(), ...)
+//=============================================================================
 
 template <int NDIM, class T>
 class NBodySimulation;
 
+/// The redshift formatted as used in filenames
+inline std::string redshift_to_string(double redshift) {
+    std::stringstream stream;
+    stream << std::fixed << std::setprecision(3) << redshift;
+    return stream.str();
+}
+
 template <int NDIM, class T>
-void output_pofk_for_every_step(NBodySimulation<NDIM, T> & sim) {
+void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
 
     // Only task 0 outputs
     if(FML::ThisTask > 0) 
@@ -30,17 +43,17 @@ void output_pofk_for_every_step(NBodySimulation<NDIM, T> & sim) {
     //=============================================================
     // Fetch parameters
     //=============================================================
-    const auto output_folder = sim.output_folder;
-    const auto simulation_name = sim.simulation_name;
-    const auto ic_initial_redshift = sim.ic_initial_redshift;
-    const auto & pofk_cb_every_step = sim.pofk_cb_every_step;
-    const auto & pofk_total_every_step = sim.pofk_total_every_step;
-    const auto & grav = sim.grav;
+    const auto & params = sim.get_parameters();
+    const auto ic_initial_redshift = params.ic.initial_redshift;
+    const auto & pofk_cb_every_step = sim.get_pofk_cb_every_step();
+    const auto & pofk_total_every_step = sim.get_pofk_total_every_step();
+    const auto grav = sim.get_gravity_model();
     const auto & cosmo = grav->get_cosmo();
-    const auto & grav_ic = sim.grav_ic;
-    const auto & transferdata = sim.transferdata;
-    const auto & power_initial_spline = sim.power_initial_spline;
-    const auto & ic_use_gravity_model_GR = sim.ic_use_gravity_model_GR;
+    const auto grav_ic = sim.get_gravity_model_ic();
+    const auto transferdata = sim.get_transferdata();
+    const auto & power_initial_spline = sim.get_power_initial_spline();
+    const auto ic_use_gravity_model_GR = params.ic.use_gravity_model_GR;
+    const auto pofk_subtract_shotnoise = params.pofk.subtract_shotnoise;
 
     //=============================================================
     // Output all CMB+baryon Pofk
@@ -57,17 +70,14 @@ void output_pofk_for_every_step(NBodySimulation<NDIM, T> & sim) {
     
         // Get non-linear boost (if this is implemented for the model)
         // Currently we only have EuclidEmulator2 predictions for LCDM and w0waCDM
-        Spline non_linear_boost_of_k = cosmo->get_nonlinear_matter_power_spectrum_boost(redshift);
+        FML::INTERPOLATION::SPLINE::Spline non_linear_boost_of_k =
+            cosmo->get_nonlinear_matter_power_spectrum_boost(redshift);
 
-        std::stringstream stream;
-        stream << std::fixed << std::setprecision(3) << redshift;
-        std::string redshiftstring = stream.str();
-        std::string filename = output_folder;
-        filename =
-          filename + (filename == "" ? "" : "/") + "pofk_" + simulation_name + "_cb_z" + redshiftstring + ".txt";
+        std::string filename =
+            params.output.path("pofk_" + params.simulation.name + "_cb_z" + redshift_to_string(redshift) + ".txt");
 
         std::ofstream fp(filename.c_str());
-        fp << "# k  (h/Mpc)    Pcb(k)  (Mpc/h)^3    Pcb_linear(k) (Mpc/h)^3    Pcb_NL(k) (Mpc/h)^3   ShotnoiseSubtracted = " << std::boolalpha << sim.pofk_subtract_shotnoise << "\n";
+        fp << "# k  (h/Mpc)    Pcb(k)  (Mpc/h)^3    Pcb_linear(k) (Mpc/h)^3    Pcb_NL(k) (Mpc/h)^3   ShotnoiseSubtracted = " << std::boolalpha << pofk_subtract_shotnoise << "\n";
         for (int i = 0; i < binning.n; i++) {
             double boost = non_linear_boost_of_k ? non_linear_boost_of_k(binning.kbin[i]) : 1.0;
             fp << std::setw(15) << binning.kbin[i] << " ";
@@ -101,19 +111,16 @@ void output_pofk_for_every_step(NBodySimulation<NDIM, T> & sim) {
             return 0.0;
         };
 
-        std::stringstream stream;
-        stream << std::fixed << std::setprecision(3) << redshift;
-        std::string redshiftstring = stream.str();
-        std::string filename = output_folder;
-        filename =
-            filename + (filename == "" ? "" : "/") + "pofk_" + simulation_name + "_total_z" + redshiftstring + ".txt";
-        
+        std::string filename =
+            params.output.path("pofk_" + params.simulation.name + "_total_z" + redshift_to_string(redshift) + ".txt");
+
         // Get non-linear boost (if this is implemented for the model)
         // Currently we only have EuclidEmulator2 predictions for LCDM and w0waCDM
-        Spline non_linear_boost_of_k = cosmo->get_nonlinear_matter_power_spectrum_boost(redshift);
+        FML::INTERPOLATION::SPLINE::Spline non_linear_boost_of_k =
+            cosmo->get_nonlinear_matter_power_spectrum_boost(redshift);
 
         std::ofstream fp(filename.c_str());
-        fp << "# k  (h/Mpc)    P(k)  (Mpc/h)^3    P_linear(k)  (Mpc/h)^3     P_NL(k)  ShotnoiseSubtracted = " << std::boolalpha << sim.pofk_subtract_shotnoise << "\n";
+        fp << "# k  (h/Mpc)    P(k)  (Mpc/h)^3    P_linear(k)  (Mpc/h)^3     P_NL(k)  ShotnoiseSubtracted = " << std::boolalpha << pofk_subtract_shotnoise << "\n";
         for (int i = 0; i < binning.n; i++) {
             double boost = non_linear_boost_of_k ? non_linear_boost_of_k(binning.kbin[i]) : 1.0;
             fp << std::setw(15) << binning.kbin[i] << " ";
@@ -128,29 +135,18 @@ void output_pofk_for_every_step(NBodySimulation<NDIM, T> & sim) {
 template <int NDIM, class T>
 void output_fml(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
 
-    std::stringstream stream;
-    stream << std::fixed << std::setprecision(3) << redshift;
-    std::string redshiftstring = stream.str();
-
     // Output particles in internal format
-    std::string fileprefix = snapshot_folder + "/" + "fml_z" + redshiftstring;
-    auto & part = sim.part;
-    part.dump_to_file(fileprefix);
+    std::string fileprefix = snapshot_folder + "/" + "fml_z" + redshift_to_string(redshift);
+    sim.get_particles().dump_to_file(fileprefix);
 }
 
 template <int NDIM, class T>
 void output_gadget(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
 
-    std::stringstream stream;
-    stream << std::fixed << std::setprecision(3) << redshift;
-    std::string redshiftstring = stream.str();
-
-    //=============================================================
-    // Fetch parameters
-    //=============================================================
-    const auto simulation_boxsize = sim.simulation_boxsize;
-    const auto & cosmo = sim.cosmo;
-    auto & part = sim.part;
+    const std::string redshiftstring = redshift_to_string(redshift);
+    const auto simulation_boxsize = sim.get_parameters().simulation.boxsize;
+    const auto cosmo = sim.get_cosmology();
+    auto & part = sim.get_particles();
 
     const double scale_factor = 1.0 / (1.0 + redshift);
     const int nfiles = FML::NTasks;
@@ -184,20 +180,15 @@ void output_gadget(NBodySimulation<NDIM, T> & sim, double redshift, std::string 
 template <int NDIM, class T>
 void compute_bispectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
 
-    std::stringstream stream;
-    stream << std::fixed << std::setprecision(3) << redshift;
-    std::string redshiftstring = stream.str();
-
-    //=============================================================
-    // Fetch parameters
-    //=============================================================
-    const double simulation_boxsize = sim.simulation_boxsize;
-    const int bispectrum_nmesh = sim.bispectrum_nmesh;
-    const int bispectrum_nbins = sim.bispectrum_nbins;
-    const std::string bispectrum_density_assignment_method = sim.bispectrum_density_assignment_method;
-    const bool bispectrum_interlacing = sim.bispectrum_interlacing;
-    const bool bispectrum_subtract_shotnoise = sim.bispectrum_subtract_shotnoise;
-    auto & part = sim.part;
+    const std::string redshiftstring = redshift_to_string(redshift);
+    const auto & settings = sim.get_parameters().bispectrum;
+    const double simulation_boxsize = sim.get_parameters().simulation.boxsize;
+    const int bispectrum_nmesh = settings.nmesh;
+    const int bispectrum_nbins = settings.nbins;
+    const std::string bispectrum_density_assignment_method = settings.density_assignment_method;
+    const bool bispectrum_interlacing = settings.interlacing;
+    const bool bispectrum_subtract_shotnoise = settings.subtract_shotnoise;
+    auto & part = sim.get_particles();
 
     const double kmin = 0.0;
     const double kmax = 2.0 * M_PI * bispectrum_nmesh / 2;
@@ -264,27 +255,25 @@ void compute_bispectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::st
     }
 }
 
+/// Returns P_ell(k) for ell = 0,1,...,ellmax (also written to file)
 template <int NDIM, class T>
-void compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
+std::vector<FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM>>
+compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
 
-    std::stringstream stream;
-    stream << std::fixed << std::setprecision(3) << redshift;
-    std::string redshiftstring = stream.str();
-
-    //=============================================================
-    // Fetch parameters
-    //=============================================================
-    const double simulation_boxsize = sim.simulation_boxsize;
-    const int pofk_multipole_nmesh = sim.pofk_multipole_nmesh;
-    const std::string pofk_multipole_density_assignment_method = sim.pofk_multipole_density_assignment_method;
-    const bool pofk_multipole_interlacing = sim.pofk_multipole_interlacing;
-    const bool pofk_multipole_subtract_shotnoise = sim.pofk_multipole_subtract_shotnoise;
-    const int pofk_multipole_ellmax = sim.pofk_multipole_ellmax;
-    const auto & transferdata = sim.transferdata;
-    const auto & power_initial_spline = sim.power_initial_spline;
-    const auto & grav = sim.grav;
-    const auto & cosmo = sim.cosmo;
-    auto & part = sim.part;
+    const std::string redshiftstring = redshift_to_string(redshift);
+    const auto & settings = sim.get_parameters().pofk_multipole;
+    const double simulation_boxsize = sim.get_parameters().simulation.boxsize;
+    const double ic_initial_redshift = sim.get_parameters().ic.initial_redshift;
+    const int pofk_multipole_nmesh = settings.nmesh;
+    const std::string pofk_multipole_density_assignment_method = settings.density_assignment_method;
+    const bool pofk_multipole_interlacing = settings.interlacing;
+    const bool pofk_multipole_subtract_shotnoise = settings.subtract_shotnoise;
+    const int pofk_multipole_ellmax = settings.ellmax;
+    const auto transferdata = sim.get_transferdata();
+    const auto & power_initial_spline = sim.get_power_initial_spline();
+    const auto grav = sim.get_gravity_model();
+    const auto cosmo = sim.get_cosmology();
+    auto & part = sim.get_particles();
 
     const double a = 1.0 / (1.0 + redshift);
     const double velocity_to_displacement = 1.0 / (a * a * cosmo->HoverH0_of_a(a));
@@ -318,9 +307,9 @@ void compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double re
     //=============================================================
     auto pofk_cb = [&](double k) {
         if (power_initial_spline) {
-            double pofk_ini = sim.power_initial_spline(k);
+            double pofk_ini = power_initial_spline(k);
             double D = grav->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
-            double Dini = grav->get_D_1LPT(1.0 / (1.0 + sim.ic_initial_redshift), k / grav->H0_hmpc);
+            double Dini = grav->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
             return pofk_ini * std::pow(D / Dini, 2);
         } else if (transferdata) {
             return transferdata->get_cdm_baryon_power_spectrum(k, 1.0 / (1.0 + redshift));
@@ -343,7 +332,7 @@ void compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double re
                       << "]\n";
         } else {
             fp << "#  k  (h/Mpc)          P0(k)  (Mpc/h)^3          P2(k)  (Mpc/h)^3       P4(k)  (Mpc/h)^3   ...   "
-                  "P0_kaiser    P2_kaiser    P4_kaiser  ShotnoiseSubtracted = " << std::boolalpha << sim.pofk_multipole_subtract_shotnoise << "\n";
+                  "P0_kaiser    P2_kaiser    P4_kaiser  ShotnoiseSubtracted = " << std::boolalpha << pofk_multipole_subtract_shotnoise << "\n";
             for (int i = 0; i < Pells[0].n; i++) {
                 const double k = Pells[0].kbin[i];
                 const double f = grav->get_f_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
@@ -360,30 +349,27 @@ void compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double re
         }
     }
 
-    // Store the data in the class
-    sim.pofk_multipoles_every_output.push_back({redshift, Pells});
+    return Pells;
 }
 
+/// Returns the baryon+CDM P(k) (also written to file)
 template <int NDIM, class T>
-void compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
+FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM>
+compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
 
-    std::stringstream stream;
-    stream << std::fixed << std::setprecision(3) << redshift;
-    std::string redshiftstring = stream.str();
-
-    //=============================================================
-    // Fetch parameters
-    //=============================================================
-    const double simulation_boxsize = sim.simulation_boxsize;
-    const int pofk_nmesh = sim.pofk_nmesh;
-    const std::string pofk_density_assignment_method = sim.pofk_density_assignment_method;
-    const bool pofk_interlacing = sim.pofk_interlacing;
-    const bool pofk_subtract_shotnoise = sim.pofk_subtract_shotnoise;
-    const auto & transferdata = sim.transferdata;
-    const auto & power_initial_spline = sim.power_initial_spline;
-    const auto & grav = sim.grav;
+    const std::string redshiftstring = redshift_to_string(redshift);
+    const auto & settings = sim.get_parameters().pofk;
+    const double simulation_boxsize = sim.get_parameters().simulation.boxsize;
+    const double ic_initial_redshift = sim.get_parameters().ic.initial_redshift;
+    const int pofk_nmesh = settings.nmesh;
+    const std::string pofk_density_assignment_method = settings.density_assignment_method;
+    const bool pofk_interlacing = settings.interlacing;
+    const bool pofk_subtract_shotnoise = settings.subtract_shotnoise;
+    const auto transferdata = sim.get_transferdata();
+    const auto & power_initial_spline = sim.get_power_initial_spline();
+    const auto grav = sim.get_gravity_model();
     const auto & cosmo = grav->get_cosmo();
-    auto & part = sim.part;
+    auto & part = sim.get_particles();
 
     if (FML::ThisTask == 0) {
         std::cout << "\n";
@@ -433,7 +419,7 @@ void compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std
         if (power_initial_spline) {
             double pofk_ini = power_initial_spline(k);
             double D = grav->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
-            double Dini = grav->get_D_1LPT(1.0 / (1.0 + sim.ic_initial_redshift), k / grav->H0_hmpc);
+            double Dini = grav->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
             return pofk_ini * std::pow(D / Dini, 2);
         } else if (transferdata) {
             return transferdata->get_cdm_baryon_power_spectrum(k, 1.0 / (1.0 + redshift));
@@ -452,7 +438,8 @@ void compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std
     
         // Get non-linear boost (if this is implemented for the model)
         // Currently we only have EuclidEmulator2 predictions for LCDM and w0waCDM
-        Spline non_linear_boost_of_k = cosmo->get_nonlinear_matter_power_spectrum_boost(redshift);
+        FML::INTERPOLATION::SPLINE::Spline non_linear_boost_of_k =
+            cosmo->get_nonlinear_matter_power_spectrum_boost(redshift);
 
         std::string filename = snapshot_folder + "/pofk_z" + redshiftstring + ".txt";
         std::ofstream fp(filename.c_str());
@@ -472,28 +459,22 @@ void compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std
         }
     }
 
-    // Store the data in the class
-    sim.pofk_every_output.push_back({redshift, pofk_cb_binning});
+    return pofk_cb_binning;
 }
 
 template <int NDIM, class T>
 void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
 
-    std::stringstream stream;
-    stream << std::fixed << std::setprecision(3) << redshift;
-    std::string redshiftstring = stream.str();
-
-    //=============================================================
-    // Fetch parameters
-    //=============================================================
-    const double H0_hmpc = sim.grav->H0_hmpc;
-    const double simulation_boxsize = sim.simulation_boxsize;
-    const double fof_linking_length = sim.fof_linking_length;
-    const int fof_nmin_per_halo = sim.fof_nmin_per_halo;
-    const int fof_nmesh_max = sim.fof_nmesh_max;
-    const double fof_buffer_length_mpch = sim.fof_buffer_length_mpch;
-    const auto & cosmo = sim.cosmo;
-    auto & part = sim.part;
+    const std::string redshiftstring = redshift_to_string(redshift);
+    const auto & settings = sim.get_parameters().fof;
+    const double H0_hmpc = sim.get_gravity_model()->H0_hmpc;
+    const double simulation_boxsize = sim.get_parameters().simulation.boxsize;
+    const double fof_linking_length = settings.linking_length;
+    const int fof_nmin_per_halo = settings.nmin_per_halo;
+    const int fof_nmesh_max = settings.nmesh_max;
+    const double fof_buffer_length_mpch = settings.buffer_length_mpch;
+    const auto cosmo = sim.get_cosmology();
+    auto & part = sim.get_particles();
 
     //=============================================================
     // Halo finding
