@@ -584,7 +584,8 @@ namespace FML {
 
                                     double box,
                                     double zini,
-                                    std::vector<double> velocity_norms);
+                                    std::vector<double> velocity_norms,
+                                    std::function<double(double)> velocity_norm_1LPT_of_kBox = nullptr);
 
         //=====================================================================
         /// @brief Generate particles from a given power-spectrum using Lagrangian perturbation theory.
@@ -700,6 +701,9 @@ namespace FML {
         /// velocities. E.g. \f$ 100 {\rm Box_in_Mpch} f_i(z_{\rm ini}) H(z_{\rm ini})/H_0 \cdot a_{\rm ini} \f$ to
         /// get peculiar velocities in km/s and \f$ f_i(z_{\rm ini}) H(z_{\rm ini})/H_0 \cdot a_{\rm ini}^2 \f$ to get
         /// the velocities we use as the fiducial choice in N-body.
+        /// @param[in] velocity_norm_1LPT_of_kBox Optional. If set the 1LPT velocity is computed with this
+        /// scale-dependent factor (a function of \f$ kB \f$) instead of velocity_norms[0], i.e.
+        /// \f$ v_{\rm 1LPT}(k) = {\rm norm}(k) \Psi_{\rm 1LPT}(k) \f$ (e.g. for a scale-dependent growth rate)
         ///
         //=====================================================================
         template <int N, class T>
@@ -713,7 +717,8 @@ namespace FML {
 
                                     double box,
                                     double zini,
-                                    std::vector<double> velocity_norms) {
+                                    std::vector<double> velocity_norms,
+                                    std::function<double(double)> velocity_norm_1LPT_of_kBox) {
 
             T tmp{};
             if (FML::ThisTask == 0) {
@@ -843,7 +848,9 @@ namespace FML {
             auto add_displacement = [&]([[maybe_unused]] int nLPT,
                                         char type,
                                         std::array<std::vector<FML::GRID::FloatType>, N> & displacements_nLPT,
-                                        double vfac_nLPT) -> void {
+                                        double vfac_nLPT,
+                                        const std::array<std::vector<FML::GRID::FloatType>, N> * velocities_nLPT =
+                                            nullptr) -> void {
                 // Generate Psi from phi
                 // Add displacement to particle position
                 double max_disp_nLPT = 0.0;
@@ -885,10 +892,12 @@ namespace FML {
                             std::cout << "Adding " << std::to_string(nLPT) << "LPT velocity to particle\n";
                         auto * vel = FML::PARTICLE::GetVel(part_ptr[ind]);
                         for (int idim = 0; idim < N; idim++) {
-                            vel[idim] += vfac_nLPT * disp[idim];
+                            const double dvel =
+                                velocities_nLPT ? double((*velocities_nLPT)[idim][ind]) : vfac_nLPT * disp[idim];
+                            vel[idim] += dvel;
 
-                            if (std::fabs(vfac_nLPT * disp[idim]) > max_vel_nLPT)
-                                max_vel_nLPT = std::fabs(vfac_nLPT * disp[idim]);
+                            if (std::fabs(dvel) > max_vel_nLPT)
+                                max_vel_nLPT = std::fabs(dvel);
                         }
                     }
 
@@ -993,8 +1002,28 @@ namespace FML {
             // Compute and add displacements
             // NB: we must do this in one go as add_displacement changes the position of the particles
             std::array<std::vector<FML::GRID::FloatType>, N> displacements_1LPT;
+            std::array<std::vector<FML::GRID::FloatType>, N> velocities_1LPT;
             if (LPT_order >= 1) {
                 const int nLPT = 1;
+                // Scale-dependent 1LPT velocity: the displacement of phi_1LPT(k) * norm(k)
+                if (velocity_norm_1LPT_of_kBox) {
+                    FFTWGrid<N> phi_vel = phi_1LPT;
+                    auto Local_nx = phi_vel.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                    for (int islice = 0; islice < Local_nx; islice++) {
+                        [[maybe_unused]] double kmag;
+                        [[maybe_unused]] std::array<double, N> kvec;
+                        for (auto && fourier_index : phi_vel.get_fourier_range(islice, islice + 1)) {
+                            phi_vel.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                            const double norm = kmag > 0.0 ? velocity_norm_1LPT_of_kBox(kmag) : 0.0;
+                            phi_vel.set_fourier_from_index(
+                                fourier_index, phi_vel.get_fourier_from_index(fourier_index) * FML::GRID::FloatType(norm));
+                        }
+                    }
+                    comp_displacement(nLPT, phi_vel, velocities_1LPT);
+                }
                 comp_displacement(nLPT, phi_1LPT, displacements_1LPT);
             }
 
@@ -1027,8 +1056,16 @@ namespace FML {
 
             if (LPT_order >= 1) {
                 const int nLPT = 1;
-                add_displacement(nLPT, 0, displacements_1LPT, velocity_norms[0]);
+                add_displacement(nLPT,
+                                 0,
+                                 displacements_1LPT,
+                                 velocity_norms[0],
+                                 velocity_norm_1LPT_of_kBox ? &velocities_1LPT : nullptr);
                 for (auto & d : displacements_1LPT) {
+                    d.clear();
+                    d.shrink_to_fit();
+                }
+                for (auto & d : velocities_1LPT) {
                     d.clear();
                     d.shrink_to_fit();
                 }

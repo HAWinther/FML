@@ -132,6 +132,32 @@ The code currently only does a second order leap-frog, but there are methods imp
 
 Without COLA, FastPM and BullFrog need far fewer steps than Quinn: with 10 steps from z = 19 they get P(k) at z = 0 to about 0.5% for k < 0.1 h/Mpc and 1-2% up to k = 0.5 h/Mpc, while Quinn is off by 7-12% (see `tests/check_timestepping.py`).
 
+## Radiation, neutrinos and GR: the N-body gauge
+
+On very large scales (k < ~0.01 h/Mpc) a Newtonian simulation misses the effect of the radiation
+(photons and massless neutrinos), and of the massive neutrinos, on the growth, and the meaning of the
+particle positions is ambiguous. In the N-body gauge (Fidler et al. 2015, 2016) the particles follow the
+Newtonian equations exactly to linear order in GR if the force is sourced by
+rho_cb (delta_cb + delta_extra), where delta_extra(k,z) is a linear field that contains everything else
+(photons, neutrinos and a metric term). With `force_nbody_gauge = true` we add this source to the density
+field every time we compute the force, and the initial conditions are made from the N-body gauge transfer
+functions (with the scale-dependent growth rate for the velocities).
+
+The input is made with CLASS (`pip install classy`) for the cosmology in the parameterfile:
+
+```bash
+python3 scripts/make_nbody_gauge_transfer.py parameterfile.lua --outdir nbgauge_input
+```
+
+This writes the N-body gauge transfer functions (CAMB format, with a transfer info file) and the table
+T_extra(k,z), checks the gauge transformation against CLASS, shows how big the effect is for your initial
+redshift and prints the lines to put in the parameterfile. Only for LCDM with GR; the code checks that the
+table was made for the same cosmology and that H(z) agrees.
+
+For a start at z = 49 the effect on P(k) at z = 0 is about 2% at k = 1e-3 h/Mpc (radiation, without
+massive neutrinos) and much less than 0.1% for k > 0.01 h/Mpc. `tests/check_nbody_gauge.py` checks that the
+simulation follows the linear N-body gauge evolution from CLASS on the largest scales.
+
 For the time-step spacing there are three options: linear, logarithmic or a powerlaw (free power) spacing in the scalefactor.
 
 # On the fly analysis

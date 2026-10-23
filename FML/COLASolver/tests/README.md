@@ -43,6 +43,18 @@ Runs the same simulation (64^3, z = 19 -> 0) with all the time-stepping methods 
 and prints how far P(k) at z = 0 is from a reference run with 200 steps. Checks that FastPM and BullFrog
 get large scales right with few steps and that all methods converge.
 
+## N-body gauge (`check_nbody_gauge.py`)
+
+```bash
+python3 tests/check_nbody_gauge.py ./nbody /tmp/nbgauge   # about 3 minutes, needs numpy, scipy and classy
+```
+
+Makes the N-body gauge input with CLASS and runs a large box (8000 Mpc/h, 128^3, tiny amplitude so it is
+linear) from z = 49 with the N-body gauge source, with the source set to zero and with the standard setup.
+Checks that the source changes P(k) on the largest scales as linear theory predicts (0.96% at k = 1e-3 h/Mpc,
+reproduced to 0.01%) and that the run then follows the CLASS growth as well as the standard run follows its
+own linear theory (the PM force resolution slows the growth by about 0.5% at this k in both).
+
 ## Regression tests (`regression/`)
 
 Small simulations covering all the main code paths, for checking that a change does not change the

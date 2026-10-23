@@ -131,6 +131,8 @@ Parameters marked *optional* take the default value if they are not in the param
 | `force_greens_function_kernel` | string | `"fiducial"` | always | Kernel for D^2 when solving the Poisson equation (fiducial = continuous). Options: `fiducial`, `continuous`, `discrete_2pt`, `discrete_4pt` |
 | `force_gradient_kernel` | string | `"fiducial"` | always | Kernel for D when computing the forces (fiducial = continuous). Options: `fiducial`, `continuous`, `discrete_2pt`, `discrete_4pt` |
 | `force_linear_massive_neutrinos` | bool | `false` | always | Include massive neutrinos in the density field using linear theory (requires ic_type_of_input = transferinfofile) |
+| `force_nbody_gauge` | bool | `false` | always | Run in the N-body gauge: add the linear source from radiation, neutrinos and GR (made with CLASS by scripts/make_nbody_gauge_transfer.py) to the density field |
+| `force_nbody_gauge_filename` | string | *required* | force_nbody_gauge = true | The table T_extra(k,z) (nbgauge_extra.txt from scripts/make_nbody_gauge_transfer.py) |
 | `force_use_finite_difference_force` | bool | `false` | always | Experimental: compute forces with finite differences of the potential |
 | `force_finite_difference_stencil_order` | int | `4` | always | Experimental: order of the finite difference stencil |
 

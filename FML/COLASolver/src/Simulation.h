@@ -23,6 +23,7 @@
 #include "InitialConditions.h"
 #include "InitialPowerSpectrum.h"
 #include "Lightcone/Lightcone.h"
+#include "NBodyGauge.h"
 #include "SimulationParameters.h"
 #include "TimeStepping.h"
 
@@ -86,8 +87,11 @@ class NBodySimulation {
     MPIParticles part;
 
     /// The initial density field delta_cb(zini,k) computed with the same Nmesh
-    /// as the forces (used for linear massive neutrinos - not allocated otherwise)
+    /// as the forces (used for linear massive neutrinos and the N-body gauge - not allocated otherwise)
     FFTWGrid<NDIM> initial_density_field_fourier;
+
+    /// The linear N-body gauge source (if force_nbody_gauge)
+    std::shared_ptr<COLASOLVER::NBodyGaugeSource> nbody_gauge;
 
     /// COLA settings and the LPT potentials at the initial time
     ColaState<NDIM, T> cola;
@@ -175,6 +179,7 @@ class NBodySimulation {
     void generate_initial_conditions();
     void read_ic();
     void read_phases(FFTWGrid<NDIM> & delta_fourier);
+    void setup_nbody_gauge();
 
     // The parts of run()
     struct StepInfo {
@@ -247,6 +252,10 @@ void NBodySimulation<NDIM, T>::init() {
     setup_initial_power_spectrum();
 
     generate_initial_conditions();
+
+    // The N-body gauge source needs the initial density field of the particles
+    if (params.force.nbody_gauge)
+        setup_nbody_gauge();
 
     // In the COLA frame v=0 so reset velocities
     if (cola.enabled) {
@@ -433,6 +442,31 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
     if (store_3LPT)
         phi_nLPT_potentials.resize(3);
 
+    // In the N-body gauge the growth rate (and so the 1LPT velocity) is scale-dependent on large scales.
+    // We take it from the (N-body gauge) transfer functions
+    std::function<double(double)> velocity_norm_1LPT_of_kBox = nullptr;
+    Spline growth_rate_of_logk{"f_cb(k,zini)"};
+    if (params.force.nbody_gauge) {
+        FML::assert_mpi(transferdata != nullptr, "force_nbody_gauge needs the transfer functions");
+        const double kmin = transferdata->get_kmin_hmpc_splines();
+        const double kmax = transferdata->get_kmax_hmpc_splines();
+        const int nk = 512;
+        DVector logk(nk), f(nk);
+        for (int i = 0; i < nk; i++) {
+            logk[i] = std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1);
+            f[i] = transferdata->get_cdm_baryon_growth_rate(std::exp(logk[i]), aini);
+        }
+        growth_rate_of_logk.create(logk, f, "f_cb(k,zini)");
+        velocity_norm_1LPT_of_kBox = [&, kmin, kmax](double kBox) {
+            const double k = std::min(std::max(kBox / boxsize, kmin), kmax);
+            return fac * growth_rate_of_logk(std::log(k));
+        };
+        if (FML::ThisTask == 0)
+            std::cout << "# N-body gauge: growth rate at zini f(k) = " << growth_rate_of_logk(std::log(kmin)) << " (k = "
+                      << kmin << " h/Mpc), " << growth_rate_of_logk(std::log(0.1)) << " (k = 0.1 h/Mpc). "
+                      << "Scale-independent value " << grav_ic->get_f_1LPT(aini) << "\n";
+    }
+
     FML::NBODY::NBodyInitialConditions<NDIM, T>(part,
                                                 params.particle.Npart_1D,
                                                 params.particle.allocation_factor,
@@ -441,7 +475,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
                                                 ic.LPT_order,
                                                 boxsize,
                                                 ic.initial_redshift,
-                                                velocity_norms);
+                                                velocity_norms,
+                                                velocity_norm_1LPT_of_kBox);
 
     // Store the potentials
     if (store_1LPT) {
@@ -464,6 +499,44 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
     }
 
     timer.EndTiming("InitialConditions");
+}
+
+/// Read the N-body gauge source, check it and store the initial density field of the particles
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::setup_nbody_gauge() {
+    const auto & force = params.force;
+    if (grav->get_name() != "GR" or cosmo->get_name() != "LCDM")
+        throw std::runtime_error("force_nbody_gauge is only implemented for cosmology_model = LCDM and gravity_model "
+                                 "= GR (the source is computed with CLASS)");
+    FML::assert_mpi(transferdata != nullptr, "force_nbody_gauge needs the transfer functions");
+
+    if (FML::ThisTask == 0)
+        std::cout << "# Running in the N-body gauge. Reading the linear source [" << force.nbody_gauge_filename << "]\n";
+    nbody_gauge = std::make_shared<COLASOLVER::NBodyGaugeSource>();
+    nbody_gauge->read(force.nbody_gauge_filename);
+    nbody_gauge->check_cosmology(*cosmo, params.ic.initial_redshift, params.simulation.boxsize, force.nmesh);
+
+    if (FML::ThisTask == 0) {
+        const double aini = params.ic.a_initial();
+        for (double a : {aini, 0.5, 1.0}) {
+            const auto ratio = nbody_gauge->ratio_spline(a, aini, *transferdata);
+            std::cout << "# N-body gauge source: delta_extra(k,z) / delta_cb(k,zini) at z = " << 1.0 / a - 1.0 << ":";
+            for (double k : {1e-3, 1e-2, 1e-1})
+                std::cout << " " << ratio(std::log(k)) << " (k = " << k << ")";
+            std::cout << "\n";
+        }
+    }
+
+    // delta_cb(k,zini) of the particles on the force grid
+    const auto nleftright = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(force.density_assignment_method);
+    initial_density_field_fourier = FFTWGrid<NDIM>(force.nmesh, nleftright.first, nleftright.second);
+    initial_density_field_fourier.add_memory_label("density(k,zini)");
+    FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
+                                          part.get_npart(),
+                                          part.get_npart_total(),
+                                          initial_density_field_fourier,
+                                          force.density_assignment_method);
+    initial_density_field_fourier.fftw_r2c();
 }
 
 /// Compute delta(k) from particles in gadget files (used to take the phases from them)
@@ -663,6 +736,49 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
                                                                  force.density_assignment_method);
     pofk_particles.scale(boxsize);
     pofk_cb_every_step.push_back({redshift, pofk_particles});
+
+    //=============================================================
+    // N-body gauge: add the linear source from radiation, neutrinos and GR
+    // delta_extra(k,a) = delta_cb(k,aini) T_extra(k,a) / T_cb(k,aini)
+    //=============================================================
+    if (nbody_gauge) {
+        if (FML::ThisTask == 0)
+            std::cout << "Adding the N-body gauge linear source (radiation, neutrinos, GR) to the densityfield\n";
+        const double aini = 1.0 / (1.0 + ic_initial_redshift);
+        const Spline ratio = nbody_gauge->ratio_spline(a, aini, *transferdata);
+        const double logkmin = std::log(nbody_gauge->get_kmin_hmpc());
+        const double logkmax = std::log(nbody_gauge->get_kmax_hmpc());
+
+        // The force is normalized to OmegaM = OmegaCB + OmegaMNu so the source is (1-fMNu)(delta_cb + delta_extra)
+        const double fMNu = cosmo->get_fMNu();
+        auto Local_nx = density_grid_fourier.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+        for (int islice = 0; islice < Local_nx; islice++) {
+            [[maybe_unused]] double kmag;
+            [[maybe_unused]] std::array<double, NDIM> kvec;
+            for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
+                density_grid_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                const double logk = std::min(std::max(std::log(kmag / boxsize), logkmin), logkmax);
+                const double r = kmag > 0.0 ? ratio(logk) : 0.0;
+                auto delta_ini = initial_density_field_fourier.get_fourier_from_index(fourier_index);
+                auto deltaCB = density_grid_fourier.get_fourier_from_index(fourier_index);
+                auto delta = (deltaCB + delta_ini * FML::GRID::FloatType(r)) * FML::GRID::FloatType(1.0 - fMNu);
+                density_grid_fourier.set_fourier_from_index(fourier_index, delta);
+            }
+        }
+
+        // P(k) of the total source (the same caveat about deconvolution as for the neutrinos below)
+        PowerSpectrumBinning pofk_total(density_grid_fourier.get_nmesh() / 2);
+        pofk_total.subtract_shotnoise = pofk_subtract_shotnoise;
+        FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(density_grid_fourier,
+                                                                     pofk_total,
+                                                                     force.density_assignment_method);
+        pofk_total.scale(boxsize);
+        pofk_total_every_step.push_back({redshift, pofk_total});
+        return;
+    }
 
     //=============================================================
     // Add on contribution from massive neutrinos.

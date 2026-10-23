@@ -417,6 +417,15 @@ namespace COLASOLVER {
                        false,
                        "Include massive neutrinos in the density field using linear theory (requires "
                        "ic_type_of_input = transferinfofile)");
+            b.always_optional("force_nbody_gauge",
+                              false,
+                              "Run in the N-body gauge: add the linear source from radiation, neutrinos and GR "
+                              "(made with CLASS by scripts/make_nbody_gauge_transfer.py) to the density field");
+            b.when(is_true("force_nbody_gauge"), "force_nbody_gauge = true", [&]() {
+                b.required("force_nbody_gauge_filename",
+                           "",
+                           "The table T_extra(k,z) (nbgauge_extra.txt from scripts/make_nbody_gauge_transfer.py)");
+            });
             b.always_optional("force_use_finite_difference_force",
                               false,
                               "Experimental: compute forces with finite differences of the potential");

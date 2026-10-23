@@ -361,6 +361,17 @@ force_gradient_kernel = "fiducial"
 -- Requires: transferinfofile above (we need all T(k,z))
 force_linear_massive_neutrinos = true
 
+-- Run in the N-body gauge (Fidler et al. 2015, 2016): add the linear source from photons,
+-- massless and massive neutrinos and GR to the density field. This makes the simulation
+-- correct to linear order in GR on all scales (matters for k < ~0.01 h/Mpc).
+-- Make the input with CLASS:  python3 scripts/make_nbody_gauge_transfer.py parameterfile.lua --outdir nbgauge_input
+-- which prints the lines to use (ic_type_of_input = "transferinfofile" with the N-body gauge
+-- transfer functions, ic_input_redshift = ic_initial_redshift). Replaces force_linear_massive_neutrinos
+force_nbody_gauge = false
+if force_nbody_gauge then
+  force_nbody_gauge_filename = "nbgauge_input/nbgauge_extra.txt"
+end
+
 -- Experimental feature: Use finite difference on the gravitational 
 -- potential to compute forces instead of using Fourier transforms.
 force_use_finite_difference_force = false

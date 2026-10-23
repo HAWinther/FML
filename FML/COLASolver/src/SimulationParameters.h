@@ -124,6 +124,8 @@ namespace COLASOLVER {
         int nmesh;                             // The gridsize to bin particles to and compute PM forces
         std::string density_assignment_method; // Density assignment (NGP,CIC,TSC,PCS,PQS)
         bool linear_massive_neutrinos;         // Include the effects of massive neutrinos using linear theory
+        bool nbody_gauge{false};               // Add the linear N-body gauge source (radiation, neutrinos, GR)
+        std::string nbody_gauge_filename;      // The table T_extra(k,z) (from scripts/make_nbody_gauge_transfer.py)
         std::string greens_function_kernel;    // Kernel used for the Greens function of the Poisson equation
         std::string gradient_kernel;           // Kernel used for computing the gradient of the potential
     };
@@ -263,6 +265,9 @@ namespace COLASOLVER {
             r.get("force_nmesh", force.nmesh);
             r.get("force_density_assignment_method", force.density_assignment_method);
             r.get("force_linear_massive_neutrinos", force.linear_massive_neutrinos);
+            r.get("force_nbody_gauge", force.nbody_gauge);
+            if (force.nbody_gauge)
+                r.get("force_nbody_gauge_filename", force.nbody_gauge_filename);
             r.get("force_greens_function_kernel", force.greens_function_kernel);
             r.get("force_gradient_kernel", force.gradient_kernel);
 
@@ -403,6 +408,21 @@ namespace COLASOLVER {
             if (output.particles and output.fileformat == ParticleFileFormat::HDF5)
                 fail("output_fileformat = HDF5 needs HDF5: compile with USE_HDF5=true (make USE_HDF5=true)");
 #endif
+            // N-body gauge: the IC must be the N-body gauge transfer functions at the initial redshift
+            if (force.nbody_gauge) {
+                if (ic.type_of_input != ICInputType::TransferInfoFile)
+                    fail("force_nbody_gauge = true needs ic_type_of_input = transferinfofile (the N-body gauge "
+                         "transfer functions made by scripts/make_nbody_gauge_transfer.py)");
+                if (std::fabs(ic.input_redshift - ic.initial_redshift) > 1e-6)
+                    fail("force_nbody_gauge = true needs ic_input_redshift = ic_initial_redshift (scaling the "
+                         "transfer functions with the growth factor would not be in the N-body gauge)");
+                if (force.linear_massive_neutrinos) {
+                    force.linear_massive_neutrinos = false;
+                    if (FML::ThisTask == 0)
+                        std::cout << "NB: force_linear_massive_neutrinos is ignored with force_nbody_gauge = true "
+                                     "(the N-body gauge source already includes the massive neutrinos)\n";
+                }
+            }
             if (simulation.use_cola and timestep.method == TimestepMethod::BullFrog)
                 fail("timestep_method = BullFrog already follows 2LPT and cannot be combined with COLA "
                      "(simulation_use_cola = false)");

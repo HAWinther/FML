@@ -195,6 +195,15 @@ CASES = {
         output_redshifts=[0.0],
         timestep_nsteps=[6],
     ),
+    # N-body gauge: IC from the N-body gauge transfer functions and the linear source from radiation,
+    # neutrinos and GR (input made with scripts/make_nbody_gauge_transfer.py)
+    "nbody_gauge": dict(
+        ic_type_of_input="transferinfofile",
+        ic_input_filename=INPUT + "/nbody_gauge_lcdm/nbgauge_transferinfo.txt",
+        ic_input_redshift=20.0,
+        force_nbody_gauge=True,
+        force_nbody_gauge_filename=INPUT + "/nbody_gauge_lcdm/nbgauge_extra.txt",
+    ),
     # FastPM time-stepping with COLA, logarithmic spacing, f(R) gravity
     "fastpm_cola_fofr": dict(
         timestep_method="FastPM",

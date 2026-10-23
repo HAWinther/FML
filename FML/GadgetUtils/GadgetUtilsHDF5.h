@@ -164,7 +164,10 @@ namespace FML {
                                           hsize_t ncols) {
                     hsize_t dims[2] = {nrows, ncols};
                     Handle space(H5Screate_simple(ncols == 1 ? 1 : 2, dims, nullptr), H5Sclose, "dataspace for " + name);
-                    Handle dataset(H5Dcreate2(loc, name.c_str(), filetype, space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT),
+                    // No modification times in the file so the same data gives identical files
+                    Handle dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose, "property list for " + name);
+                    H5Pset_obj_track_times(dcpl, false);
+                    Handle dataset(H5Dcreate2(loc, name.c_str(), filetype, space, H5P_DEFAULT, dcpl, H5P_DEFAULT),
                                    H5Dclose,
                                    "dataset " + name);
                     if (nrows > 0 and H5Dwrite(dataset, memtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0)
@@ -455,10 +458,20 @@ namespace FML {
                 GadgetHeader header{};
                 int NDIM{3};
                 bool double_precision{false};
+                HDF5::Handle gcpl;
 
               public:
                 GadgetHDF5Writer() = default;
                 GadgetHDF5Writer(int ndim) : NDIM(ndim) {}
+
+                /// Group creation properties: no modification times (so the same data gives identical files)
+                HDF5::Handle & group_properties() {
+                    if (gcpl < 0) {
+                        gcpl = HDF5::Handle(H5Pcreate(H5P_GROUP_CREATE), H5Pclose, "group properties");
+                        H5Pset_obj_track_times(gcpl, false);
+                    }
+                    return gcpl;
+                }
 
                 /// Write positions and velocities as double instead of float
                 void set_double_precision(bool use_double) { double_precision = use_double; }
@@ -539,7 +552,7 @@ namespace FML {
                         header.OmegaLambda = OmegaLambda;
                         header.HubbleParam = HubbleParam;
 
-                        HDF5::Handle h(H5Gcreate2(file, "Header", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose, "Header");
+                        HDF5::Handle h(H5Gcreate2(file, "Header", H5P_DEFAULT, group_properties(), H5P_DEFAULT), H5Gclose, "Header");
                         const int zero = 0;
                         const int precision = double_precision ? 1 : 0;
                         auto uint6 = [&](const char * name, const std::array<unsigned int, 6> & v) {
@@ -578,7 +591,7 @@ namespace FML {
                         if (n == 0)
                             continue;
                         const std::string group = "PartType" + std::to_string(type);
-                        HDF5::Handle g(H5Gcreate2(file, group.c_str(), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose, group);
+                        HDF5::Handle g(H5Gcreate2(file, group.c_str(), H5P_DEFAULT, group_properties(), H5P_DEFAULT), H5Gclose, group);
 
                         std::vector<double> buffer;
                         auto gather = [&](auto && get, double norm) {

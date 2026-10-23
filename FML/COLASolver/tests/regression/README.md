@@ -11,6 +11,7 @@ all the main code paths of the solver:
 | `fofr_cola1_tsc` | f(R) gravity with screening, 1LPT COLA, TSC assignment |
 | `powerlaw_spacing` | Power-law spacing of the time steps |
 | `lightcone_dgp` | Lightcone (ascii output), DGP gravity |
+| `nbody_gauge` | N-body gauge: IC from N-body gauge transfer functions plus the linear source from radiation, neutrinos and GR |
 | `fastpm_cola_fofr` | FastPM time-stepping with COLA, logarithmic spacing, f(R) gravity |
 | `bullfrog_lightcone` | BullFrog time-stepping (no COLA) with the lightcone |
 | `read_particles_exact` | Reading particles (from `cola_quinn_all`) with exact LPT reconstruction |
