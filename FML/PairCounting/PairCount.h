@@ -39,7 +39,7 @@ namespace FML {
         /// providing a function that does this (e.g. v12 = v1-v2).
         ///
         /// Parallelized with both OpenMP and MPI. For MPI its assumed that all tasks have *all* the particles
-        /// and each task is then reponsible for a certain part of the pairs we want to count.
+        /// and each task is then responsible for a certain part of the pairs we want to count.
         ///
         /// Particles are assumed to reside in [0,1)^n
         /// rmax is the maximum pair separation (in [0,1)) that we are interested in
@@ -53,7 +53,7 @@ namespace FML {
         /// int get_ndim()
         /// double get_weight() (just return 1.0 if no weight)
         ///
-        /// For the availiable estimators for survey correlation functions see the method
+        /// For the available estimators for survey correlation functions see the method
         /// CorrelationFunctionEstimator below (LZ, DP, HAW, HP, PH, ...).
         ///
         //===========================================================================
@@ -414,7 +414,7 @@ namespace FML {
                                 if (ndim == 2)
                                     iz2_left = iz2_right = 0;
 
-                                // Loop over neightbor cells
+                                // Loop over neighbor cells
                                 for (int delta_ix2 = ix2_left; delta_ix2 <= ix2_right; delta_ix2++) {
                                     int ix2 = delta_ix2;
                                     if (periodic_box) {
@@ -931,7 +931,7 @@ namespace FML {
                 DVector observer_position;
                 DVector mu_array;
 
-                // We need one bin convering the entire domain
+                // We need one bin covering the entire domain
                 double mumin = -1.0;
                 double mumax = 1.0;
                 int nmubins = 1;

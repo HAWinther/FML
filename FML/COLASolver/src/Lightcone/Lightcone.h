@@ -722,7 +722,7 @@ void Lightcone<NDIM, T, U>::output_ascii(FML::Vector<U> & part_lc, double astart
     else
       fp.open(filename, std::ios_base::app);
     
-    // What to outout
+    // What to output
     const bool output_mass = false and FML::PARTICLE::has_get_mass<T>();
     const bool output_pos = true;
     const bool output_vel = false;
@@ -815,7 +815,7 @@ void Lightcone<NDIM, T, U>::free() {
 
 template <int NDIM, class T, class U>
 void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) {
-    // This routine currenlty assumes that all maps are reduced and reside on task 0
+    // This routine currently assumes that all maps are reduced and reside on task 0
     if (FML::ThisTask != 0)
         return;
     if (not make_onion_density_maps)

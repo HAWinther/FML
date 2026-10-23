@@ -214,7 +214,7 @@ namespace FML {
             /// Neutrino perturbation Nu in the newtonian gauge of x=log(a) and k
             double get_Nu(const double x, const double k, const int ell) const;
 
-            /// Gauge invariant matter density constrast
+            /// Gauge invariant matter density contrast
             double get_Delta_M(const double x, const double k) const;
 
             // Source functions

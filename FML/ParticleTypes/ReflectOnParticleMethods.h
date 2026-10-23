@@ -15,10 +15,10 @@
 // It's a convoluted (because there is no other good) way of checking if a class
 // has a given method and return that. If it doesn't exist we need to provide a
 // fiducial method for it for the code to compile. In algorithms always test
-// if a method is availiable by calling FML::PARTICLE::has_##method##() and
+// if a method is available by calling FML::PARTICLE::has_##method##() and
 // only if this is true call FML::PARTICLE::Get##method##(p) to fetch the quantity
 //
-// The only methods that are truely needed are [get_pos] and [get_ndim].
+// The only methods that are truly needed are [get_pos] and [get_ndim].
 // We exit with an error if a method that doesn't exist is used
 // The exception so far is [get_mass] and [get_volume]. These return the
 // fiducial value 1.0 (same for all particles)
@@ -37,7 +37,7 @@
 // TODO: change the methods below and use static_assert so that it gives a compile error
 // instead of a runtime error if trying to use a method that do not exist, e.g. we can add on
 // the template name and use something silly like (false directly will not work as we need something
-// that only gets evaluated if instansiated and not when parsing the code):
+// that only gets evaluated if instantiated and not when parsing the code):
 // static_assert(sizeof...(Args) < 0, "Trying to set Redshift from a particle that has no set_z method");
 //
 //=======================================================================

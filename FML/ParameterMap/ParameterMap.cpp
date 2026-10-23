@@ -38,7 +38,7 @@ namespace FML {
 #if (defined(__INTEL_COMPILER) && __INTEL_COMPILER + __INTEL_COMPILER_UPDATE < 1904)
             std::cout << "Showing values is currently disabled for Intel compilers < 19.0.4.243 as old versions have a "
                          "compiler bug with std::variant\n";
-            std::cout << "You can try commening this test out in FML/ParameterMap/ParameterMap.cpp"
+            std::cout << "You can try commenting this test out in FML/ParameterMap/ParameterMap.cpp"
                       << " if you want to try to use it, but it will likely fail!\n";
             for (auto && param : parameters) {
                 std::string name = param.first;

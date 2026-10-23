@@ -139,7 +139,7 @@ namespace FML {
           //===========================================
           /// @brief Do the spherical collapse at a single redshift and get \f$\delta(x)\f$, \f$\delta_{\rm lin}(x)\f$ together
           /// with turnaround time, virialization time, non-linear time, initial overdensity,
-          /// critial overdensity \f$\delta_c\f$ and virial overdensity. The times are \f$x=\log a\f$.
+          /// critical overdensity \f$\delta_c\f$ and virial overdensity. The times are \f$x=\log a\f$.
           //===========================================
           void run_single_redshift(
               double z,

@@ -78,7 +78,7 @@ namespace FML {
                 nequations = int(yinitial.size());
                 num_x_points = int(xarr.size());
                 if (num_x_points < 2) {
-                    std::string errormessage = "[ODESolver::solve] The xarray needs to have atleast size 2\n";
+                    std::string errormessage = "[ODESolver::solve] The xarray needs to have at least size 2\n";
                     throw_error(errormessage);
                 }
                 if (nequations < 1) {

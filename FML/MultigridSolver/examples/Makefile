@@ -1,131 +1,44 @@
-# Hans A. Winther (hans.a.winther@gmail.com)
+#===================================================================
+# FML: MultigridSolver/examples
+#
+# Compiler, library paths and how the options below are used are set
+# in ../../Makefile.config. Override for your machine in Makefile.local
+# there, or on the command line, e.g. make USE_MPI=false USE_DEBUG=true
+#===================================================================
 
-SHELL := /bin/bash
-
-#===================================================
-# Set c++11 compliant compiler. If USE_MPI we use MPICC 
-#===================================================
-
-CC      = g++ -std=c++1z -O3 -Wall -Wextra -march=native
-MPICC   = mpicxx -std=c++1z -O3 -g -Wall -Wextra -march=native
-
-#===================================================
-# Options
-#===================================================
-
-# Use MPI
-USE_MPI          = true
-# Use OpenMP threads
-USE_OMP          = true
-# Log allocations in the library
-USE_MEMORYLOG    = true
-# Check for bad memory accesses
-USE_SANITIZER    = false
-# Use the FFTW library (needed for Reconstruction.cpp)
-USE_FFTW         = true
-
-#===================================================
-# Include and library paths
-#===================================================
-
-# Main library include (path to folder containin FML/)
-FML_INCLUDE    = $(HOME)/local/FML
-
-#===================================================
-# Compile up all library defines from options above
-#===================================================
-
-INC     = -I$(FML_INCLUDE) 
-LIB     = 
-LINK    =
-OPTIONS =
-
-# FFTW : only needed if USE_FFTW = true
-FFTW_INCLUDE   = $(HOME)/local/include
-FFTW_LIB       = $(HOME)/local/lib
-FFTW_LINK      = -lfftw3
-FFTW_MPI_LINK  = -lfftw3_mpi
-FFTW_OMP_LINK  = -lfftw3_threads
-
-ifeq ($(USE_MPI),true)
-CC       = $(MPICC)
-OPTIONS += -DUSE_MPI
-endif
-
-ifeq ($(USE_OMP),true)
-OPTIONS += -DUSE_OMP
-CC      += -fopenmp
-endif
-
-ifeq ($(USE_FFTW),true)
-OPTIONS += -DUSE_FFTW
-INC     += -I$(FFTW_INCLUDE)
-LIB     += -L$(FFTW_LIB)
-ifeq ($(USE_MPI),true)
-LINK    += $(FFTW_MPI_LINK)
-endif
-ifeq ($(USE_OMP),true)
-ifeq ($(USE_FFTW_THREADS),true)
-OPTIONS += -DUSE_FFTW_THREADS
-LINK    += $(FFTW_OMP_LINK)
-endif
-endif
-LINK    += $(FFTW_LINK)
-endif
-
-ifeq ($(USE_SANITIZER),true)
-CC      += -fsanitize=address
-endif
-
-ifeq ($(USE_MEMORYLOG),true)
-OPTIONS += -DMEMORY_LOGGING
-endif
-
-#===================================================
-# Object files to be compiled
-#===================================================
-
-VPATH = $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/MultigridSolver/:$(FML_INCLUDE)/FML/FileUtils/
-OBJS      = GenericExample.o    Global.o
-OBJS_CONT = ContinuityExample.o Global.o
-OBJS_POIS = PoissonExample.o    Global.o
-OBJS_FOFR = FofrExample.o       Global.o
-OBJS_SYM  = SymmetronExample.o  Global.o 
-OBJS_DGP  = dgpExample.o        Global.o
-OBJS_REC  = Reconstruction.o    Global.o FileUtils.o
-OBJS_TEST = Test.o              Global.o FileUtils.o
+USE_MPI             ?= true
+USE_OMP             ?= true
+USE_FFTW            ?= true
+USE_MEMORYLOG       ?= true
 
 TARGETS := mgsolver
-all: $(TARGETS)
-.PHONY: all clean
 
-clean:
-	rm -rf $(TARGETS) *.o
+include ../../Makefile.config
 
-mgsolver: $(OBJS)
-	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+FML_MODULES := Global MultigridSolver FileUtils
+EXTRA_CLEAN := contsolver poissonsolver fofrsolver symm dgp recon test
 
-contsolver: $(OBJS_CONT)
-	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+mgsolver: GenericExample.o Global.o
+	$(LINK_EXE)
 
-poissonsolver: $(OBJS_POIS)
-	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+# Not built by default (make <name>)
+contsolver: ContinuityExample.o Global.o
+	$(LINK_EXE)
 
-fofrsolver: $(OBJS_FOFR)
-	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+poissonsolver: PoissonExample.o Global.o
+	$(LINK_EXE)
 
-recon: $(OBJS_REC)
-	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+fofrsolver: FofrExample.o Global.o
+	$(LINK_EXE)
 
-test: $(OBJS_TEST)
-	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+symm: SymmetronExample.o Global.o
+	$(LINK_EXE)
 
-symm: $(OBJS_SYM)
-	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+dgp: dgpExample.o Global.o
+	$(LINK_EXE)
 
-dgp: $(OBJS_DGP)
-	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+recon: Reconstruction.o Global.o FileUtils.o
+	$(LINK_EXE)
 
-%.o: %.cpp 
-	${CC} -c -o $@ $< $(OPTIONS) $(INC) 
-
+test: Test.o Global.o FileUtils.o
+	$(LINK_EXE)

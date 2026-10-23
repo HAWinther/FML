@@ -48,7 +48,7 @@ namespace FML {
             }
             n_k_total = int(std::log(k_max / k_min) / delta_log_k);
 
-            // Set up bookeeping system for perturbations
+            // Set up bookkeeping system for perturbations
             psinfo = PerturbationSystemInfo(n_ell_theta, n_ell_theta * int(polarization), n_ell_nu * int(neutrinos));
 
             psinfo_tight_coupling = PerturbationSystemInfo(2, 0, n_ell_nu * int(neutrinos));
@@ -179,7 +179,7 @@ namespace FML {
             //=============================================================================
 
             //=============================================================================
-            // SET: Scalar quantities (Gravitational potental, baryons and CDM)
+            // SET: Scalar quantities (Gravitational potential, baryons and CDM)
             //=============================================================================
             Phi = Phi_tc;
             delta_cdm = delta_cdm_tc;
@@ -409,7 +409,7 @@ namespace FML {
 
             //=============================================================================
 
-            // Cosmology and recombination varables
+            // Cosmology and recombination variables
             const double ckoverHp = Constants.c * k / cosmo->Hp_of_x(x);
             const double dtaudx = rec->dtaudx_of_x(x);
             const double ckoverHpdtaudx = ckoverHp / dtaudx;
@@ -604,7 +604,7 @@ namespace FML {
 
                 ODESolver full_ode(FIDUCIAL_HSTART_ODE_FULL, FIDUCIAL_ABSERR_ODE_FULL, FIDUCIAL_RELERR_ODE_FULL);
 
-                // Integrate till the present time. If a Jacobian is availiable use that for
+                // Integrate till the present time. If a Jacobian is available use that for
                 // the largest k-modes as this is much faster
                 timer.StartTiming("PERT::integrate_full (all threads)");
 #define USE_JACOBIAN

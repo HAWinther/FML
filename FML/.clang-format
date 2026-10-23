@@ -1,0 +1,30 @@
+# Formatting style for FML. Run e.g.
+#   clang-format -i FFTWGrid/FFTWGrid.h
+# (most editors pick this file up automatically)
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++17
+IndentWidth: 4
+ColumnLimit: 120
+AccessModifierOffset: -2
+NamespaceIndentation: All
+FixNamespaceComments: true
+PointerAlignment: Middle
+DerivePointerAlignment: false
+AlignAfterOpenBracket: Align
+BinPackArguments: false
+BinPackParameters: false
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakTemplateDeclarations: Yes
+BreakConstructorInitializers: BeforeColon
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+IndentCaseLabels: true
+SortIncludes: Never
+SpaceAfterTemplateKeyword: true
+MaxEmptyLinesToKeep: 2
+BreakBeforeTernaryOperators: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowAllArgumentsOnNextLine: false

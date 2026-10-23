@@ -44,7 +44,7 @@ namespace FML {
         /// @param[in] part Pointer to particles. If the particle has a set_fofid then we will also store the FoFID in
         /// the particles.
         /// @param[in] NumPart Number of local particles
-        /// @param[in] linking_length The distance in units of mean particle seperation (in [0,1)) required to have a
+        /// @param[in] linking_length The distance in units of mean particle separation (in [0,1)) required to have a
         /// link between two particles. Typical value is 0.2.
         /// @param[in] nmin_FoF_group Minimum number of particles in a FoF group to store it. Typical value is 20.
         /// @param[in] periodic Is the box periodic?
@@ -276,11 +276,11 @@ namespace FML {
                 const int RightTask = (FML::ThisTask + 1) % FML::NTasks;
                 const int LeftTask = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
 
-                // Communicate how many to send and get how many to recieve
+                // Communicate how many to send and get how many to receive
                 size_t n_recv_left = 0;
                 size_t n_recv_right = 0;
 
-                // Send left recieve from right
+                // Send left receive from right
                 MPI_Sendrecv(&n_send_left,
                              sizeof(n_send_left),
                              MPI_BYTE,
@@ -293,7 +293,7 @@ namespace FML {
                              0,
                              MPI_COMM_WORLD,
                              &status);
-                // Send right recieve from left
+                // Send right receive from left
                 MPI_Sendrecv(&n_send_right,
                              sizeof(n_send_right),
                              MPI_BYTE,
@@ -354,7 +354,7 @@ namespace FML {
                         }
                     }
 
-                // Send left recieve from right
+                // Send left receive from right
                 MPI_Sendrecv(CommBufferSend.data(),
                              bytes_send_left,
                              MPI_BYTE,
@@ -386,7 +386,7 @@ namespace FML {
                         }
                     }
 
-                // Send right recieve from left
+                // Send right receive from left
                 MPI_Sendrecv(CommBufferSend.data(),
                              bytes_send_right,
                              MPI_BYTE,

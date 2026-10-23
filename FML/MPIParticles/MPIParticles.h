@@ -1,12 +1,15 @@
 #ifndef MPIPARTICLES_HEADER
 #define MPIPARTICLES_HEADER
 
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <fstream>
 #include <functional>
 #include <ios>
 #include <iostream>
+#include <limits>
+#include <string>
 #include <vector>
 
 #ifdef USE_MPI
@@ -46,7 +49,7 @@ namespace FML {
         ///    append_to_buffer(char *)   : append all the particle data to a char array moving buffer forward as we
         ///    read
         ///
-        ///    assign_from_buffer(char *) : assign data to a particle after it has been recieved moving buffer forward
+        ///    assign_from_buffer(char *) : assign data to a particle after it has been received moving buffer forward
         ///    as we do this
         ///
         /// Compile time defines:
@@ -95,7 +98,7 @@ namespace FML {
             size_t get_particle_byte_size(size_t ipart);
 
             // For communication
-            void copy_over_recieved_data(std::vector<char> & recv_buffer, size_t Npart_recieved);
+            void copy_over_received_data(std::vector<char> & recv_buffer, size_t Npart_received);
 
           public:
             /// Iterator for looping through all the active particles i.e. allow for(auto &&p: mpiparticles)
@@ -143,7 +146,7 @@ namespace FML {
             void create(std::vector<T> & part, size_t nallocate, std::function<bool(T &)> selection_function);
 
             /// Moves a vector of particles into internal storage (so no copies are being done).
-            /// The extra storage (if needed) needs to allready be in part!
+            /// The extra storage (if needed) needs to already be in part!
             /// Assumes we have distinct particles on different tasks. This saves having to do allocations
             /// and copies, but its safer and flexible to just use create() so its best to not use this unless
             /// you really need to
@@ -173,7 +176,7 @@ namespace FML {
 
             /// Get the idim component of the position for particle ipart
             auto get_pos(size_t ipart, int idim);
-            /// Get the idim component of the velocity for particle ipart (if its availiable)
+            /// Get the idim component of the velocity for particle ipart (if its available)
             auto get_vel(size_t ipart, int idim);
 
             /// Total number of active particles across all tasks
@@ -338,7 +341,7 @@ namespace FML {
 
             // Allocate memory
             p.resize(nallocate);
-            add_memory_label("MPIPartices::create");
+            add_memory_label("MPIParticles::create");
 
             // If all tasks has the same particles
             // we read all the particles and only keep the particles in range
@@ -347,14 +350,12 @@ namespace FML {
                 for (size_t i = 0; i < NumPartinpart; i++) {
                     auto * pos = FML::PARTICLE::GetPos(part[i]);
                     if (pos[0] >= xmin and pos[0] < xmax) {
+                        // Check that we are not past allocation limit before writing
+                        assert_mpi(count < nallocate,
+                                   "[MPIParticle::create] Reached allocation limit. Increase nallocate\n");
                         p[count] = part[i];
                         count++;
                     }
-                }
-
-                // Check that we are not past allocation limit
-                if (count > nallocate) {
-                    assert_mpi(false, "[MPIParticle::create] Reached allocation limit. Increase nallocate\n");
                 }
 
                 NpartLocal_in_use = count;
@@ -384,12 +385,11 @@ namespace FML {
                         more_to_process_locally = nbatch < NumPartinpart;
 
                         for (size_t i = start; i < nbatch; i++) {
+                            // Check that we are not past allocation limit before writing
+                            assert_mpi(count < nallocate,
+                                       "[MPIParticle::create] Reached allocation limit. Increase nallocate\n");
                             p[count] = part[i];
                             count++;
-                            if (count > nallocate) {
-                                assert_mpi(false,
-                                           "[MPIParticle::create] Reached allocation limit. Increase nallocate\n");
-                            }
                         }
                         start = nbatch;
                     }
@@ -511,7 +511,7 @@ namespace FML {
             x_min_per_task = std::vector<double>(NTasks, 0.0);
             x_max_per_task = std::vector<double>(NTasks, 0.0);
 
-            // If we don't have xmin,xmax availiable
+            // If we don't have xmin,xmax available
             // x_min_per_task[ThisTask] = Local_p_start / double(Npart_1D);
             // x_max_per_task[ThisTask] = (Local_p_start + Local_Npart_1D) / double(Npart_1D);
 
@@ -539,7 +539,7 @@ namespace FML {
                 buffer_factor <= 1.0 ? NpartLocal_in_use : size_t(double(NpartLocal_in_use) * buffer_factor);
             assert(NpartToAllocate >= NpartLocal_in_use);
             p.resize(NpartToAllocate);
-            add_memory_label("MPIPartices::create_particle_grid");
+            add_memory_label("MPIParticles::create_particle_grid");
 
             // Initialize the coordinate to the first cell in the local grid
             std::vector<double> Pos(ndim, 0.0);
@@ -585,9 +585,9 @@ namespace FML {
         }
 
         template <class T>
-        void MPIParticles<T>::copy_over_recieved_data(std::vector<char> & recv_buffer, size_t Npart_recv) {
+        void MPIParticles<T>::copy_over_received_data(std::vector<char> & recv_buffer, size_t Npart_recv) {
             assert_mpi(NpartLocal_in_use + Npart_recv <= p.size(),
-                       "[MPIParticles::copy_over_recieved_data] Too many particles recieved! Increase buffer\n");
+                       "[MPIParticles::copy_over_received_data] Too many particles received! Increase buffer\n");
 
             char * buffer = recv_buffer.data();
             size_t bytes_processed = 0;
@@ -630,8 +630,9 @@ namespace FML {
             // location [NpartLocal_in_use, NpartLocal_in_use_pre_comm)
             std::vector<int> n_to_send(NTasks, 0);
             std::vector<int> n_to_recv(NTasks, 0);
-            std::vector<int> nbytes_to_send(NTasks, 0);
-            std::vector<int> nbytes_to_recv(NTasks, 0);
+            // Byte counts can exceed 2^31 so use long long (MPI calls below are chunked)
+            std::vector<long long> nbytes_to_send(NTasks, 0);
+            std::vector<long long> nbytes_to_recv(NTasks, 0);
             size_t i = 0;
             while (i < NpartLocal_in_use) {
                 auto & x = FML::PARTICLE::GetPos(p[i])[0];
@@ -640,9 +641,17 @@ namespace FML {
                 if(x == 1.0) x = std::nextafter(x, PosType(0.0));
                 if(x == 0.0) x = std::numeric_limits<PosType>::min();
 
+                // Particles must be wrapped inside [0,1) (this also catches NaN)
+                if (not(x >= 0.0 and x < 1.0)) {
+                    std::string errmsg = "[MPIParticles::communicate_particles] Particle with x = " +
+                                         std::to_string(double(x)) +
+                                         " is outside [0,1). Particles must be wrapped (periodic) before communication\n";
+                    assert_mpi(false, errmsg.c_str());
+                }
+
                 if (x >= x_max_per_task[ThisTask]) {
                     int taskid = ThisTask;
-                    while (1) {
+                    while (taskid < NTasks - 1) {
                         ++taskid;
                         if (x < x_max_per_task[taskid])
                             break;
@@ -654,7 +663,7 @@ namespace FML {
 
                 } else if (x < x_min_per_task[ThisTask] or x == 0.0) {
                     int taskid = ThisTask;
-                    while (1) {
+                    while (taskid > 0) {
                         --taskid;
                         if (x >= x_min_per_task[taskid])
                             break;
@@ -669,12 +678,12 @@ namespace FML {
                 }
             }
 
-            // Communicate to get how many to recieve from each task
+            // Communicate to get how many to receive from each task
             for (int i = 1; i < NTasks; i++) {
                 int send_request_to = (ThisTask + i) % NTasks;
                 int get_request_from = (ThisTask - i + NTasks) % NTasks;
 
-                // Send to the right, recieve from left
+                // Send to the right, receive from left
                 MPI_Status status;
                 MPI_Sendrecv(&n_to_send[send_request_to],
                              1,
@@ -692,12 +701,12 @@ namespace FML {
                 // If part can have variable size
                 MPI_Sendrecv(&nbytes_to_send[send_request_to],
                              1,
-                             MPI_INT,
+                             MPI_LONG_LONG,
                              send_request_to,
                              0,
                              &nbytes_to_recv[get_request_from],
                              1,
-                             MPI_INT,
+                             MPI_LONG_LONG,
                              get_request_from,
                              0,
                              MPI_COMM_WORLD,
@@ -757,7 +766,7 @@ namespace FML {
 
                 if (x >= x_max_per_task[ThisTask]) {
                     int taskid = ThisTask;
-                    while (1) {
+                    while (taskid < NTasks - 1) {
                         ++taskid;
                         if (x < x_max_per_task[taskid])
                             break;
@@ -768,7 +777,7 @@ namespace FML {
 
                 } else if (x < x_min_per_task[ThisTask]) {
                     int taskid = ThisTask;
-                    while (1) {
+                    while (taskid > 0) {
                         --taskid;
                         if (x >= x_min_per_task[taskid])
                             break;
@@ -792,29 +801,48 @@ namespace FML {
                 recv_buffer_by_task[i] = &recv_buffer.data()[offset_in_recv_buffer[i]];
             }
 
-            // Communicate the particle data
+            // Communicate the particle data. MPI counts are int so we send in chunks of
+            // at most INT_MAX bytes. All tasks do the same number of chunks so that the
+            // send/recv pairs always match up (most of the time this is just 1 chunk)
+            const long long max_chunk_bytes = std::numeric_limits<int>::max();
+            long long max_bytes = 0;
+            for (int i = 0; i < NTasks; i++)
+                max_bytes = std::max(max_bytes, std::max(nbytes_to_send[i], nbytes_to_recv[i]));
+            FML::MaxOverTasks(&max_bytes);
+            const long long nchunks = (max_bytes + max_chunk_bytes - 1) / max_chunk_bytes;
+
             for (int i = 1; i < NTasks; i++) {
                 int send_request_to = (ThisTask + i) % NTasks;
                 int get_request_from = (ThisTask - i + NTasks) % NTasks;
 
-                // Send to the right, recieve from left
-                MPI_Status status;
-                MPI_Sendrecv(send_buffer_by_task[send_request_to],
-                             nbytes_to_send[send_request_to],
-                             MPI_CHAR,
-                             send_request_to,
-                             0,
-                             recv_buffer_by_task[get_request_from],
-                             nbytes_to_recv[get_request_from],
-                             MPI_CHAR,
-                             get_request_from,
-                             0,
-                             MPI_COMM_WORLD,
-                             &status);
+                for (long long ichunk = 0; ichunk < nchunks; ichunk++) {
+                    const long long offset = ichunk * max_chunk_bytes;
+                    const int nsend =
+                        int(std::clamp(nbytes_to_send[send_request_to] - offset, 0LL, max_chunk_bytes));
+                    const int nrecv =
+                        int(std::clamp(nbytes_to_recv[get_request_from] - offset, 0LL, max_chunk_bytes));
+                    char * send_ptr = send_buffer_by_task[send_request_to] + (nsend > 0 ? offset : 0);
+                    char * recv_ptr = recv_buffer_by_task[get_request_from] + (nrecv > 0 ? offset : 0);
+
+                    // Send to the right, receive from left
+                    MPI_Status status;
+                    MPI_Sendrecv(send_ptr,
+                                 nsend,
+                                 MPI_CHAR,
+                                 send_request_to,
+                                 0,
+                                 recv_ptr,
+                                 nrecv,
+                                 MPI_CHAR,
+                                 get_request_from,
+                                 0,
+                                 MPI_COMM_WORLD,
+                                 &status);
+                }
             }
 
             // Copy over the particle data (this also updates the total number of particles)
-            copy_over_recieved_data(recv_buffer, ntot_to_recv);
+            copy_over_received_data(recv_buffer, ntot_to_recv);
 #endif
         }
 

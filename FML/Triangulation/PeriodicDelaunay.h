@@ -39,7 +39,7 @@
 namespace FML {
 
     //========================================================================================
-    /// This namespace deals with performin triangulations (Delaunay and Voronoi)
+    /// This namespace deals with performing triangulations (Delaunay and Voronoi)
     //========================================================================================
 
     namespace TRIANGULATION {
@@ -91,18 +91,18 @@ namespace FML {
         ///
         /// Create a Periodic Delaunay triangulation with particles spread
         /// across tasks. We communicate a buffer of particles to the left
-        /// and right of the current task and create a periodic tesselation
+        /// and right of the current task and create a periodic tessellation
         /// with the regular particles, the boundary particles and a set of
-        /// random particles (is faster!). In the end we have the tesselation
+        /// random particles (is faster!). In the end we have the tessellation
         /// with a vertex handle to each of the regular particles
         ///
         /// Templated on a vertex class and when creating the user can
         /// supply a function that assigns data to the vertices
         ///
-        /// Only availiable in 2D and 3D. Use define CGAL_NDIM to choose this
+        /// Only available in 2D and 3D. Use define CGAL_NDIM to choose this
         /// at compiletime
         ///
-        /// Probably much faster to do a regular tesselation and deal with the boundaries
+        /// Probably much faster to do a regular tessellation and deal with the boundaries
         /// ourselves, but this is much easier!
         ///
         //====================================================================
@@ -116,16 +116,16 @@ namespace FML {
             using Vertex_handle = typename PeriodicDelaunay::Vertex_handle;
             using Vertex_iterator = typename PeriodicDelaunay::Vertex_iterator;
 
-            // Random shuffle the particles before tesselating (always a good idea)
-            const bool tesselation_random_shuffle{true};
+            // Random shuffle the particles before tessellating (always a good idea)
+            const bool tessellation_random_shuffle{true};
 
-            // The CGAL tesselation structure
+            // The CGAL tessellation structure
             PeriodicDelaunay dt;
 
             // The size of the buffer
             double dx_buffer{0.0};
 
-            // Info about the tesselation
+            // Info about the tessellation
             std::vector<Vertex_handle> vs{};
             std::vector<Vertex_handle> vs_boundary{};
 
@@ -268,7 +268,7 @@ namespace FML {
                              MPI_COMM_WORLD,
                              &status);
 #ifdef DEBUG_TESSELATION
-                std::cout << "Task " << FML::ThisTask << " will recieve " << recv_left << " + " << recv_right
+                std::cout << "Task " << FML::ThisTask << " will receive " << recv_left << " + " << recv_right
                           << " boundary particles\n";
 #endif
 
@@ -324,7 +324,7 @@ namespace FML {
             }
 
             // Generate random (guard) positions outside of local domain plus buffer to help speed up
-            // the tesselation
+            // the tessellation
             void make_random_points_outside_domain(size_t nrandom, std::vector<float> & positions_random) {
                 if (FML::NTasks == 1)
                     return;
@@ -420,7 +420,7 @@ namespace FML {
             // Combines the normal points with the boundary points and the randoms
             // to create a total std::vector<Point> & points and an id
             // and then does a random shuffle of the points to make it more
-            // random (faster to tesselate that!)
+            // random (faster to tessellate that!)
             void create_total_point_set(T * p,
                                         size_t NumPart,
                                         T * pboundary,
@@ -474,8 +474,8 @@ namespace FML {
                 assert(points.size() == npoints);
                 assert(id.size() == npoints);
 
-                // Random shuffle of positions (to speed up tesselation)
-                if (tesselation_random_shuffle) {
+                // Random shuffle of positions (to speed up tessellation)
+                if (tessellation_random_shuffle) {
                     std::random_device rd;
                     unsigned int seed = rd();
 
@@ -491,12 +491,12 @@ namespace FML {
                 }
             }
 
-            /// Create the tesselation and check that it is good
+            /// Create the tessellation and check that it is good
             ///
             /// @param[in] p Pointer to the particles
             /// @param[in] NumPart Number of local particles
             /// @param[in] buffer_fraction Optional: what fraction of the neighboring domain(s) we include when making
-            /// the tesselation.
+            /// the tessellation.
             /// @param[in] random_fraction Optional: what fraction of random particles we use (just to speed up the
             /// calculation)
             /// @param[in] assignment_function Optional: function to tell what data to store at the vertices
@@ -534,7 +534,7 @@ namespace FML {
                     std::cout << "# /_______  /\\___  >____(____  /___|  /\\___  > ____|   \n";
                     std::cout << "#         \\/     \\/          \\/     \\/     \\/\\/    \n";
                     std::cout << "#\n";
-                    std::cout << "# Creating periodic Delaunay tesselation on " << NumPart << " parts\n";
+                    std::cout << "# Creating periodic Delaunay tessellation on " << NumPart << " parts\n";
                     std::cout << "# Buffer fraction: " << buffer_fraction << "\n";
                     std::cout << "# Random fraction: " << random_fraction << "\n";
                     std::cout << "#\n";
@@ -565,15 +565,15 @@ namespace FML {
                 positions_random.shrink_to_fit();
 
 #ifdef DEBUG_TESSELATION
-                std::cout << "Task " << FML::ThisTask << " Tesselation with " << NumPart << " (part) + " << nboundary
+                std::cout << "Task " << FML::ThisTask << " Tessellation with " << NumPart << " (part) + " << nboundary
                           << " (boundary) + " << nrandom << " (random) = " << npoints << " (total)\n";
 #endif
 
-                // Create tesselation and store a vertex handle to all the regular points
+                // Create tessellation and store a vertex handle to all the regular points
                 // and boundary points (but not random points as they are there just to speed up
                 // the calculation)
                 if (FML::ThisTask == 0)
-                    std::cout << "[MPIPeriodicDelaunay::create] Tesselating: 0% " << std::flush;
+                    std::cout << "[MPIPeriodicDelaunay::create] Tessellating: 0% " << std::flush;
                 vs.resize(NumPart);
                 vs_boundary.resize(nboundary);
 
@@ -615,7 +615,7 @@ namespace FML {
             /// Computes the voronoi volumes for the regular points which we have stored vertex handles for
             ///
             /// @param[out] volumes List of volumes. The ith entry corresponds to the ith particle used to create the
-            /// tesselation
+            /// tessellation
             ///
             void VoronoiVolume(std::vector<double> & volumes) {
                 size_t npts = vs.size();
@@ -647,7 +647,7 @@ namespace FML {
                               << (totvol - 1) * 100 << " %\n";
             }
 
-            // Check that the tesselation is OK
+            // Check that the tessellation is OK
             int num_bad_cells() {
                 int nbadcells = 0;
 
@@ -697,7 +697,7 @@ namespace FML {
         const IDType NoWatershedID = std::numeric_limits<IDType>::max();
         const QuantityType Infinity = std::numeric_limits<QuantityType>::infinity();
 
-        /// The vertex base for the CGAL tesselation needed for the Watershed algorithm.
+        /// The vertex base for the CGAL tessellation needed for the Watershed algorithm.
         typedef struct {
             void * part_ptr;
             QuantityType quantity{Infinity};
@@ -707,8 +707,8 @@ namespace FML {
         } VertexDataWatershed;
 
         //===============================================================================
-        /// In this method we perform a tesselation, then we assign [quantity] to vertices
-        /// and walk the tesselation assigning the particles to Watershed basins
+        /// In this method we perform a tessellation, then we assign [quantity] to vertices
+        /// and walk the tessellation assigning the particles to Watershed basins
         /// Quantity is a vector of size NumPart. When quantity is the density or inverse
         /// density of the particle then we get a Void or Cluster finder
         ///
@@ -720,7 +720,7 @@ namespace FML {
         /// @tparam T The particle class
         /// @tparam U The watershed binning class
         ///
-        /// @param[in] D MPIPeriodicDelaunay tesselation (already created).
+        /// @param[in] D MPIPeriodicDelaunay tessellation (already created).
         /// @param[in] p Pointer to the particles.
         /// @param[in] NumPart Number of local particles.
         /// @param[in] quantity Vector with the quantity to watershed on (e.g. the density of the particles).
@@ -739,7 +739,7 @@ namespace FML {
             assert(quantity.size() == NumPart);
             [[maybe_unused]] const double dx_buffer = D.get_dx_buffer();
 
-            // Fetch tesselation
+            // Fetch tessellation
             auto dt = D.get_delaunay_triangulation();
             using Vertex_handle = typename decltype(dt)::Vertex_handle;
 
@@ -751,7 +751,7 @@ namespace FML {
             [[maybe_unused]] size_t nboundary = 0;
 
             // Assign quantity to particles
-            // Here we fetch the vertex handles from the tesselation
+            // Here we fetch the vertex handles from the tessellation
             auto vs = D.get_vertex_handles_regular();
             assert(vs.size() == NumPart);
             for (size_t i = 0; i < NumPart; i++) {
@@ -778,7 +778,7 @@ namespace FML {
                         count_right++;
                 }
 
-                // Comunicate how many to send
+                // Communicate how many to send
                 MPI_Status status;
                 MPI_Sendrecv(&count_left,
                              sizeof(count_left),
@@ -851,7 +851,7 @@ namespace FML {
                              &status);
 
                 // Assign quantity to particles
-                // Here we fetch the vertex handles from the tesselation
+                // Here we fetch the vertex handles from the tessellation
                 auto vs_boundary = D.get_vertex_handles_boundary();
                 nboundary = recv_left + recv_right;
                 assert(vs_boundary.size() == nboundary);
@@ -1280,9 +1280,9 @@ namespace FML {
         }
 
         //==========================================================================================
-        /// In this method we perform a tesselation, compute voronoi volumes and
+        /// In this method we perform a tessellation, compute voronoi volumes and
         /// assign density to each cell mass_of_part/volume and then we locate the density minima (or maxima)
-        /// and walk the tesselation assigning the particles to Watershed basins
+        /// and walk the tessellation assigning the particles to Watershed basins
         /// If density_maximum = true then we assign 1/density to the particles and run the same algorithm so
         /// we locate density peaks instead of density minima. The method sets the volume of each particle and
         /// the particle must have a set_volume method.
@@ -1319,20 +1319,20 @@ namespace FML {
                 std::cout << "[WatershedDensity] Buffer fraction " << buffer_fraction << " of neighbor domains\n";
             }
 
-            // Vertex assignement function
+            // Vertex assignment function
             std::function<void(VertexDataWatershed *, T *)> vertex_assignment_function =
                 [](VertexDataWatershed * v, T * p) { v->part_ptr = p ? (void *)p : nullptr; };
 
-            // Create tesselation
+            // Create tessellation
             if (FML::ThisTask == 0)
-                std::cout << "[WatershedDensity] Computing tesselation\n";
+                std::cout << "[WatershedDensity] Computing tessellation\n";
             MPIPeriodicDelaunay<T, VertexDataWatershed> D;
             D.create(p, NumPart, buffer_fraction, random_fraction, vertex_assignment_function);
             // double dx_buffer = D.get_dx_buffer();
 
             // Compute Voronoi volumes
             if (FML::ThisTask == 0)
-                std::cout << "[WatershedDensity] Computing voronoi volumes from tesselation\n";
+                std::cout << "[WatershedDensity] Computing voronoi volumes from tessellation\n";
             std::vector<double> volumes;
             D.VoronoiVolume(volumes);
 
@@ -1344,7 +1344,7 @@ namespace FML {
             }
 
             // Convert volumes to mass density
-            // If you want to tesselated based on an other property then this is all we
+            // If you want to tessellated based on an other property then this is all we
             // need to change
             std::vector<double> & density = volumes;
             double mass = 1.0;

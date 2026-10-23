@@ -269,11 +269,11 @@ namespace FML {
             void communicate_boundaries();
 
             /// This creates FFTW wisdom (but overwrites the arrays so must be done before setting the arrays)
-            void create_wisdow(int planner_flag, int numthreads = FML::NThreads);
+            void create_wisdom(int planner_flag, int numthreads = FML::NThreads);
             /// Load FFTW wisdom
-            void load_wisdow(std::string filename) const;
+            void load_wisdom(std::string filename) const;
             /// Save FFTW wisdom
-            void save_wisdow(std::string filename) const;
+            void save_wisdom(std::string filename) const;
 
             /// Print some info about the grid
             void info();
@@ -291,7 +291,7 @@ namespace FML {
             /// Load grid from file
             void load_from_file(std::string fileprefix);
 
-            void reallocate(int Nmesh, int nleft, int nright) { FFTWGrid(Nmesh, nleft, nright); }
+            void reallocate(int Nmesh, int nleft, int nright) { *this = FFTWGrid(Nmesh, nleft, nright); }
 
 #ifdef USE_GSL
             // For making a spline that we can later use to evaluate a function of the magnitude of the fourier vector
@@ -521,7 +521,7 @@ namespace FML {
 
         // Make FFTW plans with FFTW_MEASURE, FFTW_PATIENT, FFTW_EXHAUSTIVE
         template <int N>
-        void FFTWGrid<N>::create_wisdow([[maybe_unused]] int planner_flag, [[maybe_unused]] int nthreads) {
+        void FFTWGrid<N>::create_wisdom([[maybe_unused]] int planner_flag, [[maybe_unused]] int nthreads) {
 #ifdef USE_FFTW
             if (planner_flag == FFTW_ESTIMATE)
                 return;
@@ -530,7 +530,7 @@ namespace FML {
 #endif
 #ifdef DEBUG_FFTWGRID
             if (FML::ThisTask == 0) {
-                std::cout << "[FFTWGrid::create_wisdow] Planning flag " << planner_flag << ". Label: " + name + "\n";
+                std::cout << "[FFTWGrid::create_wisdom] Planning flag " << planner_flag << ". Label: " + name + "\n";
             }
 #endif
 
@@ -544,18 +544,18 @@ namespace FML {
                 MAKE_PLAN_R2C(N, NmeshPerDim.data(), get_real_grid(), get_fftw_grid(), planner_flag);
 #endif
             if (FML::ThisTask == 0)
-                std::cout << "[FFTWGrid::create_wisdow] Warning this will clear data in the grid. Label: " + name +
+                std::cout << "[FFTWGrid::create_wisdom] Warning this will clear data in the grid. Label: " + name +
                                  "\n";
             DESTROY_PLAN(plan_r2c);
 #endif
         }
 
         template <int N>
-        void FFTWGrid<N>::load_wisdow(std::string filename) const {
+        void FFTWGrid<N>::load_wisdom(std::string filename) const {
 #ifdef USE_FFTW
 #ifdef DEBUG_FFTWGRID
             if (FML::ThisTask == 0) {
-                std::cout << "[FFTWGrid::load_wisdow] Filename " << filename << ". Label: " + name + "\n";
+                std::cout << "[FFTWGrid::load_wisdom] Filename " << filename << ". Label: " + name + "\n";
             }
 #endif
             if (FML::ThisTask == 0)
@@ -566,7 +566,7 @@ namespace FML {
         }
 
         template <int N>
-        void FFTWGrid<N>::save_wisdow(std::string filename) const {
+        void FFTWGrid<N>::save_wisdom(std::string filename) const {
 #ifdef USE_MPI
             fftw_mpi_gather_wisdom(MPI_COMM_WORLD);
 #endif
@@ -574,7 +574,7 @@ namespace FML {
                 fftw_export_wisdom_to_filename(filename.c_str());
 #ifdef DEBUG_FFTWGRID
             if (FML::ThisTask == 0) {
-                std::cout << "[FFTWGrid::save_wisdow] Filename " << filename << ". Label: " + name + "\n";
+                std::cout << "[FFTWGrid::save_wisdom] Filename " << filename << ". Label: " + name + "\n";
             }
 #endif
 #endif
@@ -670,7 +670,7 @@ namespace FML {
 
 #ifdef DEBUG_FFTWGRID
             if (FML::ThisTask == 0) {
-                std::cout << "[FFTWGrid::communicate_boundaries] Recieving " << n_to_recv_right
+                std::cout << "[FFTWGrid::communicate_boundaries] Receiving " << n_to_recv_right
                           << " from the right and " << n_to_recv_left << " slices from the left. Label: " + name + "\n";
             }
 #endif
@@ -781,7 +781,7 @@ namespace FML {
             std::fill(fourier_grid_raw.begin(), fourier_grid_raw.end(), 0.0);
 
             // Check alignment (relevant for SIMD instructions) since we don't use fftw_malloc
-            // If you have SIMD and the alignment is off then changing to an allignment allocator
+            // If you have SIMD and the alignment is off then changing to an alignment allocator
             // will help speed up the transforms
 #ifdef USE_FFTW
             if (((unsigned long)get_fftw_grid() & (16 - 1))) {
@@ -838,9 +838,9 @@ namespace FML {
 #endif
 
             if constexpr (N == 2) {
-                return coord[0] * (2 * (Nmesh / 2 + 1)) + coord[1];
+                return IndexIntType(coord[0]) * (2 * (Nmesh / 2 + 1)) + coord[1];
             } else if (N == 3) {
-                return (coord[0] * Nmesh + coord[1]) * (2 * (Nmesh / 2 + 1)) + coord[2];
+                return (IndexIntType(coord[0]) * Nmesh + coord[1]) * (2 * (Nmesh / 2 + 1)) + coord[2];
             } else {
 
                 IndexIntType index = coord[0];
@@ -865,9 +865,9 @@ namespace FML {
 #endif
 
             if constexpr (N == 2) {
-                return coord[0] * (Nmesh / 2 + 1) + coord[1];
+                return IndexIntType(coord[0]) * (Nmesh / 2 + 1) + coord[1];
             } else if (N == 3) {
-                return (coord[0] * Nmesh + coord[1]) * (Nmesh / 2 + 1) + coord[2];
+                return (IndexIntType(coord[0]) * Nmesh + coord[1]) * (Nmesh / 2 + 1) + coord[2];
             } else {
                 IndexIntType index = coord[0];
                 for (int idim = 1; idim < N - 1; idim++) {

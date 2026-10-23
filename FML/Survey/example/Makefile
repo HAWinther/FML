@@ -1,91 +1,20 @@
-# Hans A. Winther (hans.a.winther@gmail.com)
+#===================================================================
+# FML: Survey/example
+#
+# Compiler, library paths and how the options below are used are set
+# in ../../Makefile.config. Override for your machine in Makefile.local
+# there, or on the command line, e.g. make USE_MPI=false USE_DEBUG=true
+#===================================================================
 
-SHELL := /bin/bash
-
-#===================================================
-# Set c++11 compliant compiler. If USE_MPI we use MPICC 
-#===================================================
-
-CC      = g++ -std=c++1z -O3 -Wall -Wextra -march=native
-MPICC   = mpicxx -std=c++1z -O3 -Wall -Wextra -march=native
-
-#===================================================
-# Options
-#===================================================
-
-# Use MPI
-USE_MPI          = false
-# Use OpenMP threads
-USE_OMP          = false
-# Use the GSL library (Spline, ODESolver)
-USE_GSL          = true
-# Use LUA (LuaFileParser)
-USE_LUA          = false
-# Check for bad memory accesses
-USE_SANITIZER    = false
-
-#===================================================
-# Include and library paths
-#===================================================
-
-# Main library include (path to folder containin FML/)
-FML_INCLUDE    = $(HOME)/local/FML
-
-# GSL : only needed if USE_GSL = true
-GSL_INCLUDE    = $(HOME)/local/include
-GSL_LIB        = $(HOME)/local/lib
-GSL_LINK       = -lgsl -lgslcblas
-
-#===================================================
-# Compile up all library defines from options above
-#===================================================
-
-INC     = -I$(FML_INCLUDE) 
-LIB     =
-LINK    = 
-OPTIONS = 
-
-ifeq ($(USE_MPI),true)
-CC       = $(MPICC)
-OPTIONS += -DUSE_MPI
-endif
-
-ifeq ($(USE_OMP),true)
-OPTIONS += -DUSE_OMP
-CC      += -fopenmp
-endif
-
-ifeq ($(USE_SANITIZER),true)
-CC      += -fsanitize=address
-endif
-
-ifeq ($(USE_MEMORYLOG),true)
-OPTIONS += -DMEMORY_LOGGING
-endif
-
-ifeq ($(USE_GSL),true)
-OPTIONS += -DUSE_GSL
-INC     += -I$(GSL_INCLUDE)
-LIB     += -L$(GSL_LIB)
-LINK    += $(GSL_LINK)
-endif
-
-#===================================================
-# Object files to be compiled
-#===================================================
-
-VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/Spline/:$(FML_INCLUDE)/FML/ODESolver/:$(FML_INCLUDE)/FML/FileUtils/
-OBJS = Main.o Spline.o ODESolver.o FileUtils.o Global.o
+USE_GSL             ?= true
+USE_MPI             ?= false
+USE_OMP             ?= false
 
 TARGETS := galaxiestobox
-all: $(TARGETS)
-.PHONY: all clean
 
-clean:
-	rm -rf $(TARGETS) *.o
+include ../../Makefile.config
 
-galaxiestobox: $(OBJS)
-	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+FML_MODULES := Global Spline ODESolver FileUtils
 
-%.o: %.cpp 
-	${CC} -c -o $@ $< $(OPTIONS) $(INC) 
+galaxiestobox: Main.o Spline.o ODESolver.o FileUtils.o Global.o
+	$(LINK_EXE)

@@ -156,7 +156,7 @@ void read_parameters(FML::UTILS::ParameterMap & p) {
     pmap["pert_delta_x"] = 0.05;                  // Sampling in x for splines of perturbation
     pmap["bessel_nsamples_per_osc"] = 16;         // Sampling of bessel functions
     pmap["los_integration_nsamples_per_osc"] = 8; // Sampling of line of sight integrals
-    pmap["los_integration_loga_nsamples"] = 300;  // Samping of line of sight integrals
+    pmap["los_integration_loga_nsamples"] = 300;  // Sampling of line of sight integrals
     pmap["cell_nsamples_per_osc"] = 32;           // Sampling of Cell integration
 
     // Show all that we have in the map

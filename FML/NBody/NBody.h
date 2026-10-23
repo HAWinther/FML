@@ -86,7 +86,7 @@ namespace FML {
         int FIDUCIAL_LAPLACE_KERNEL = GreensFunctionLaplaceOperatorKernels::CONTINUOUS_GREENS_FUNCTION;
         /// The choice of fourier kernel for gradient D is set by this global and used by methods below.
         int FIDUCIAL_GRADIENT_KERNEL = GradientKernels::CONTINUOUS_GRADIENT;
-        /// The choice of deconvolving the density assignement and interpolation when computing the force is set by this global.
+        /// The choice of deconvolving the density assignment and interpolation when computing the force is set by this global.
         bool FIDUCIAL_DECONVOLVE_FORCE = false;
         
         double gradient_kernel_fourier(double k_j, int Nmesh, int KERNEL);
@@ -127,7 +127,7 @@ namespace FML {
         /// @param[in] Nmesh The gridsize to use for computing the density and force.
         /// @param[out] part The particles
         /// @param[in] delta_time The time \f$ \Delta t \f$ we move forward.
-        /// @param[in] density_assignment_method The density assignement method (NGP, CIC, TSC, PCS or PQS).
+        /// @param[in] density_assignment_method The density assignment method (NGP, CIC, TSC, PCS or PQS).
         /// @param[in] norm_poisson_equation A possible prefactor to the Poisson equation
         ///
         //===================================================================================
@@ -188,7 +188,7 @@ namespace FML {
         /// @param[in] Nmesh The gridsize to use for computing the density and force.
         /// @param[out] part The particles
         /// @param[in] delta_time The time \f$ \Delta t \f$ we move forward.
-        /// @param[in] density_assignment_method The density assignement method (NGP, CIC, TSC, PCS or PQS).
+        /// @param[in] density_assignment_method The density assignment method (NGP, CIC, TSC, PCS or PQS).
         /// @param[in] norm_poisson_equation A possible prefactor to the Poisson equation
         ///
         //===================================================================================
@@ -251,7 +251,7 @@ namespace FML {
         //===================================================================================
         /// @brief Take a density grid in real space and returns the force \f$ \nabla \phi \f$  where
         /// \f$ \nabla^2 \phi = {\rm norm} \cdot \delta \f$
-        /// Different choices for what kernel to use for \f$ \nabla / \nabla^2\f$ are availiable and set by the globals
+        /// Different choices for what kernel to use for \f$ \nabla / \nabla^2\f$ are available and set by the globals
         /// FIDUCIAL_LAPLACE_KERNEL and FIDUCIAL_GRADIENT_KERNEL. Fiducial choice is the continuous greens function \f$ D^2 =-k^2\f$, and gradient \f$ D = i\vec{k}\f$.
         /// We can also choose to deconvole the density assignment and force interpolation (ala Gadget). This is set by the global FIDUCIAL_DECONVOLVE_FORCE.
         ///
@@ -259,7 +259,7 @@ namespace FML {
         ///
         /// @param[in] density_grid_real The density contrast in real space.
         /// @param[out] force_real The force in real space.
-        /// @param[in] density_assignment_method_used The density assignement we used to compute the density field.
+        /// @param[in] density_assignment_method_used The density assignment we used to compute the density field.
         /// @param[in] norm_poisson_equation The prefactor (norm) to the Poisson equation.
         ///
         //===================================================================================
@@ -280,7 +280,7 @@ namespace FML {
         //===================================================================================
         /// @brief Take a density grid in fourier space and returns the force \f$ \nabla \phi \f$  where
         /// \f$ \nabla^2 \phi = {\rm norm} \cdot \delta \f$
-        /// Different choices for what kernel to use for \f$ \nabla / \nabla^2\f$ are availiable and set by the globals
+        /// Different choices for what kernel to use for \f$ \nabla / \nabla^2\f$ are available and set by the globals
         /// FIDUCIAL_LAPLACE_KERNEL and FIDUCIAL_GRADIENT_KERNEL. Fiducial choice is the continuous greens function \f$ D^2 =-k^2\f$, and gradient \f$ D = i\vec{k}\f$.
         /// We can also choose to deconvole the density assignment and force interpolation (ala Gadget). This is set by the global FIDUCIAL_DECONVOLVE_FORCE.
         ///
@@ -288,7 +288,7 @@ namespace FML {
         ///
         /// @param[in] density_grid_fourier The density contrast in fourier space.
         /// @param[out] force_real The force in real space.
-        /// @param[in] density_assignment_method_used The density assignement we used to compute the density field.
+        /// @param[in] density_assignment_method_used The density assignment we used to compute the density field.
         /// @param[in] norm_poisson_equation The prefactor (norm) to the Poisson equation.
         ///
         //===================================================================================
@@ -371,7 +371,7 @@ namespace FML {
                         value *= greens_function_laplace_operator_fourier<N>(kmag2, kvec, Nmesh, LAPLACE_KERNEL);
                     }
 
-                    // Deconvolve the density assigment? 
+                    // Deconvolve the density assignment? 
                     if (DECONVOLVE) {
                         double W = window_function(kvec);
                         value /= (W * W);
@@ -481,7 +481,7 @@ namespace FML {
         /// @brief This moves the particle velocities according to \f$ v_{\rm new} = v + F \Delta t \f$. This method
         /// assumes the force is normalized such that \f$ F \Delta t \f$ has the same units as your v.
         /// If the flag free_force_grids is set in the source then we free up memory of the force grids after we have
-        /// used them. The defalt is false.
+        /// used them. The default is false.
         ///
         /// @tparam N The dimension of the grid
         /// @tparam T The particle class
@@ -508,7 +508,7 @@ namespace FML {
         /// @brief This moves the particle velocities according to \f$ v_{\rm new} = v + F \Delta t \f$. This method
         /// assumes the force is normalized such that \f$ F \Delta t \f$ has the same units as your v.
         /// If the flag free_force_grids is set in the source then we free up memory of the force grids after we have
-        /// used them. The defalt is false.
+        /// used them. The default is false.
         ///
         /// @tparam N The dimension of the grid
         /// @tparam T The particle class
@@ -609,7 +609,7 @@ namespace FML {
         /// @param[in] LPT_order The LPT order (1 or 2)
         /// @param[in] type_of_random_field What random field: gaussian, local, equilateral, orthogonal
         /// @param[in] fNL If non-gaussianity the value of fNL
-        /// @param[in] box The boxsize (only for prining maximum displacement)
+        /// @param[in] box The boxsize (only for printing maximum displacement)
         /// @param[in] zini The initial redshift
         /// @param[in] velocity_norms A vector of the factors we need to multiply the nLPT displacement fields by to get
         /// velocities. E.g. \f$ 100 {\rm Box_in_Mpch} f_i(z_{\rm ini}) H(z_{\rm ini})/H_0 \cdot a_{\rm ini} \f$ to
@@ -694,7 +694,7 @@ namespace FML {
         /// @param[in] phi_nLPT_potentials Return the LPT potentials: 2LPT, 3LPTa, 3LPTb, ... If the vector has zero
         /// size then nothing will be returned.
         /// @param[in] LPT_order The LPT order (1 or 2)
-        /// @param[in] box The boxsize (only for prining maximum displacement)
+        /// @param[in] box The boxsize (only for printing maximum displacement)
         /// @param[in] zini The initial redshift
         /// @param[in] velocity_norms A vector of the factors we need to multiply the nLPT displacement fields by to get
         /// velocities. E.g. \f$ 100 {\rm Box_in_Mpch} f_i(z_{\rm ini}) H(z_{\rm ini})/H_0 \cdot a_{\rm ini} \f$ to
@@ -780,7 +780,7 @@ namespace FML {
             assert_mpi(delta_fourier.get_n_extra_slices_left() >= nextra_cic.first and
                            delta_fourier.get_n_extra_slices_right() >= nextra_cic.second,
                        "[NBodyInitialConditions] We use CIC interpolation in this routine so the grid needs to have "
-                       "atleast one extra slice on the right");
+                       "at least one extra slice on the right");
 
             // Sanity check on particle
             assert_mpi(FML::PARTICLE::GetNDIM(T()) == N,
@@ -897,7 +897,7 @@ namespace FML {
                     if (nLPT == 1) {
                         if constexpr (FML::PARTICLE::has_get_D_1LPT<T>()) {
                             if (ind == 0 and FML::ThisTask == 0)
-                                std::cout << "Storing 1LPT displacment field in particle\n";
+                                std::cout << "Storing 1LPT displacement field in particle\n";
                             auto * D = FML::PARTICLE::GetD_1LPT(part_ptr[ind]);
                             for (int idim = 0; idim < N; idim++) {
                                 D[idim] = disp[idim];
@@ -908,7 +908,7 @@ namespace FML {
                     if (nLPT == 2) {
                         if constexpr (FML::PARTICLE::has_get_D_2LPT<T>()) {
                             if (ind == 0 and FML::ThisTask == 0)
-                                std::cout << "Storing 2LPT displacment field in particle\n";
+                                std::cout << "Storing 2LPT displacement field in particle\n";
                             auto * D2 = FML::PARTICLE::GetD_2LPT(part_ptr[ind]);
                             for (int idim = 0; idim < N; idim++) {
                                 D2[idim] = disp[idim];
@@ -919,7 +919,7 @@ namespace FML {
                     if (nLPT == 3 and type == 'a') {
                         if constexpr (FML::PARTICLE::has_get_D_3LPTa<T>()) {
                             if (ind == 0 and FML::ThisTask == 0)
-                                std::cout << "Storing 3LPTa displacment field in particle\n";
+                                std::cout << "Storing 3LPTa displacement field in particle\n";
                             auto * D3a = FML::PARTICLE::GetD_3LPTa(part_ptr[ind]);
                             for (int idim = 0; idim < N; idim++) {
                                 D3a[idim] = disp[idim];
@@ -930,7 +930,7 @@ namespace FML {
                     if (nLPT == 3 and type == 'b') {
                         if constexpr (FML::PARTICLE::has_get_D_3LPTb<T>()) {
                             if (ind == 0 and FML::ThisTask == 0)
-                                std::cout << "Storing 3LPTb displacment field in particle\n";
+                                std::cout << "Storing 3LPTb displacement field in particle\n";
                             auto * D3b = FML::PARTICLE::GetD_3LPTb(part_ptr[ind]);
                             for (int idim = 0; idim < N; idim++) {
                                 D3b[idim] = disp[idim];
@@ -939,7 +939,7 @@ namespace FML {
                     }
                 }
 
-                // Output the maximum displacment and velocity
+                // Output the maximum displacement and velocity
                 FML::MaxOverTasks(&max_disp_nLPT);
                 FML::MaxOverTasks(&max_vel_nLPT);
                 if (FML::ThisTask == 0)
@@ -954,7 +954,7 @@ namespace FML {
             part.create_particle_grid(Npart_1D, buffer_factor, FML::xmin_domain, FML::xmax_domain);
             part.info();
 
-            // Set unique IDs if we have that availiable in the particles
+            // Set unique IDs if we have that available in the particles
             if constexpr (FML::PARTICLE::has_set_id<T>()) {
                 if (FML::ThisTask == 0)
                     std::cout << "Storing unique ID in particle\n";
@@ -969,7 +969,7 @@ namespace FML {
                 }
             }
 
-            // Set mass if we have that availiable in the particles
+            // Set mass if we have that available in the particles
             if constexpr (FML::PARTICLE::has_set_mass<T>()) {
                 if (FML::ThisTask == 0)
                     std::cout << "Storing Mass (1.0) in particle\n";
@@ -978,7 +978,7 @@ namespace FML {
                 }
             }
 
-            // Set Lagrangian position of the particle if we have that availiable
+            // Set Lagrangian position of the particle if we have that available
             if constexpr (FML::PARTICLE::has_get_q<T>()) {
                 if (FML::ThisTask == 0)
                     std::cout << "Storing Lagrangian position q in particle\n";
@@ -1116,7 +1116,7 @@ namespace FML {
         /// MG}(k)] \f$ by solving \f$ \nabla^2 \phi = m^2 \phi + f(\Phi)F^{-1}[g(k) \delta(k)] \f$ where \f$
         /// \delta_{\rm MG}(k) = -k^2\phi(k) \f$ For example in \f$ f(R) \f$ gravity we have \f$ g(k) =
         /// \frac{1}{3}\frac{k^2}{k^2 + m^2} \f$ and the screening function is \f$ f(\Phi) = \min(1,
-        /// \left|\frac{3f_R}{2\Phi}\right|) \f$ If you don't want screening then simpy pass the function \f$ f \equiv 1
+        /// \left|\frac{3f_R}{2\Phi}\right|) \f$ If you don't want screening then simply pass the function \f$ f \equiv 1
         /// \f$ and the equation reduces to the one in the linear regime
         ///
         /// @tparam N The dimension we work in.

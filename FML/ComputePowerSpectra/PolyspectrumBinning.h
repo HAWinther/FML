@@ -42,7 +42,7 @@ namespace FML {
             /// kmean is the mean of wavenumbers added to the bin
             std::vector<double> kmean;
 
-            /// If we have precomputed the volume factor (N123) or not and have it availiable for algorithms to use
+            /// If we have precomputed the volume factor (N123) or not and have it available for algorithms to use
             bool bincount_is_set{false};
 
             PolyspectrumBinning() = default;

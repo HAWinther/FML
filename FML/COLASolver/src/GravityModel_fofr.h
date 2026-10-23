@@ -143,7 +143,7 @@ class GravityModelFofR final : public GravityModel<NDIM> {
 
         } else if (use_screening_method) {
                
-            // Critial treshold for screening in Hu-Sawicky (basically 3/2 f_R(a))
+            // Critical threshold for screening in Hu-Sawicky (basically 3/2 f_R(a))
             const double OmegaM = this->cosmo->get_OmegaM();
             double PhiCrit = 1.5 * fofr0 *
               std::pow((OmegaM + 4.0 * (1.0 - OmegaM)) / (1.0 / (a * a * a) * OmegaM + 4.0 * (1.0 - OmegaM)), nfofr + 1.0);

@@ -5,7 +5,7 @@
 // A simple units class
 //================================================
 
-// Constants availiable globally for simplicity
+// Constants available globally for simplicity
 FML::UTILS::ConstantsAndUnits Constants;
 
 void print() {

@@ -79,7 +79,7 @@ namespace FML {
 #else
         ThisTask = 0;
         NTasks = 1;
-        processor_name = "ComputerNameNotAvailiable";
+        processor_name = "ComputerNameNotAvailable";
 #endif
 
         // Initialize OpenMP
@@ -120,7 +120,7 @@ namespace FML {
             std::cout << "# MPI is *not* enabled\n";
 #endif
 #ifdef USE_OMP
-            std::cout << "# OpenMP is enabled. Main task has " << NThreads << " threads availiable\n";
+            std::cout << "# OpenMP is enabled. Main task has " << NThreads << " threads available\n";
 #else
             std::cout << "# OpenMP is *not* enabled\n";
 #endif
@@ -144,8 +144,8 @@ namespace FML {
                           << FML::xmax_domain << ")" << std::endl;
             }
 #ifdef USE_MPI
-            // Sleep to syncronize output to screen (this is not guaranteed to ensure syncronized output, but the only
-            // alternative is communiation and its not that important)
+            // Sleep to synchronize output to screen (this is not guaranteed to ensure synchronized output, but the only
+            // alternative is communication and its not that important)
             MPI_Barrier(MPI_COMM_WORLD);
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
 #endif
@@ -256,7 +256,7 @@ namespace FML {
         }
     }
 
-    // Make sure the most common types we use for comm gets instansiated
+    // Make sure the most common types we use for comm gets instantiated
 #define TYPES(TYPE)                                                                                                    \
     template std::vector<TYPE> GatherFromTasks<TYPE>(TYPE *);                                                          \
     template void MinOverTasks<TYPE>(TYPE *);                                                                          \

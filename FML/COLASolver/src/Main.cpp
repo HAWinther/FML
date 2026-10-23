@@ -8,7 +8,7 @@
 #include "ReadParameters.h"
 
 //=============================================================
-// The availiable cosmologies
+// The available cosmologies
 //=============================================================
 #include "Cosmology.h"
 #include "Cosmology_DGP.h"
@@ -17,7 +17,7 @@
 #include "Cosmology_JBD.h"
 
 //=============================================================
-// The availiable gravity models
+// The available gravity models
 //=============================================================
 #include "GravityModel.h"
 #include "GravityModel_DGP.h"

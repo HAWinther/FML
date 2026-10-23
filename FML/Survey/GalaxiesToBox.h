@@ -55,7 +55,7 @@
 namespace FML {
 
     /// This namespace contains methods for dealing with surveys. So far its not much here just some conversion from
-    /// equitorial to cartesian coordinates.
+    /// equatorial to cartesian coordinates.
     namespace SURVEY {
 
         //==============================================================================
@@ -72,7 +72,7 @@ namespace FML {
         /// @param[in] ngalaxies Number of galaxies
         /// @param[out] particles_xyz Vector with galaxies as particles with cartesian coordinates.
         /// @param[in] hubble_over_c_of_z This is the function \f$ H(z)/c \f$ used to compute the redshift-comobing
-        /// distance relationship. Postions units is the same as those of \f$ c/H(z) \f$ (so e.g. if you want Mpc/h then
+        /// distance relationship. Positions units is the same as those of \f$ c/H(z) \f$ (so e.g. if you want Mpc/h then
         /// we need H0 = 100, if you want kpc/s then use H0 = 10^5 and so on.
         /// @param[out] min_max_x The min/max values of x-postions
         /// @param[out] min_max_y The min/max values of x-postions
@@ -190,7 +190,7 @@ namespace FML {
         /// @param[in] ngalaxies Number of galaxies
         /// @param[out] particles_xyz Vector with galaxies as particles with cartesian coordinates.
         /// @param[in] hubble_over_c_of_z This is the function \f$ H(z)/c \f$ used to compute the redshift-comobing
-        /// distance relationship. Postions units is the same as those of \f$ c/H(z) \f$ (so e.g. if you want Mpc/h then
+        /// distance relationship. Positions units is the same as those of \f$ c/H(z) \f$ (so e.g. if you want Mpc/h then
         /// we need H0 = 100, if you want kpc/s then use H0 = 10^5 and so on.
         /// @param[out] boxsize The boxsize we need to place the particles in a cubic box.
         /// @param[in] shiftPositions Shift the positions such that all are >=0
@@ -254,7 +254,7 @@ namespace FML {
                 std::cout << "Boxsize: " << boxsize << "\n";
             }
 
-            // Shift positions and possily scale them so they are in [0,1)
+            // Shift positions and possibly scale them so they are in [0,1)
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -296,7 +296,7 @@ namespace FML {
         /// @param[out] galaxies_xyz Vector with galaxies as particles with cartesian coordinates.
         /// @param[out] randoms_xyz Vector with random galaxies as particles with cartesian coordinates.
         /// @param[in] hubble_over_c_of_z This is the function \f$ H(z)/c \f$ used to compute the redshift-comobing
-        /// distance relationship. Postions units is the same as those of \f$ c/H(z) \f$ (so e.g. if you want Mpc/h then
+        /// distance relationship. Positions units is the same as those of \f$ c/H(z) \f$ (so e.g. if you want Mpc/h then
         /// we need H0 = 100, if you want kpc/s then use H0 = 10^5 and so on.
         /// @param[out] boxsize The boxsize we need to place the galaxies and randoms in a cubic box.
         /// @param[in] shiftPositions Shift the positions such that all are >=0

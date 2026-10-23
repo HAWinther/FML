@@ -8,6 +8,7 @@
 #include <FML/Timing/Timings.h>
 #include <FML/SphericalCollapse/SphericalCollapse.h>
 #include <cmath>
+#include <memory>
 #include <tuple>
 #include <iostream>
 #include <fstream>
@@ -103,7 +104,7 @@ namespace FML {
           //=====================================================
           // The density profile of halos
           // The fiducial option is NFW 
-          // with the possibillity of using the HMCode modifications
+          // with the possibility of using the HMCode modifications
           // Halo concentration. The fiducial option is Bullock 2001
           //=====================================================
           std::string halo_profile = "NFW";

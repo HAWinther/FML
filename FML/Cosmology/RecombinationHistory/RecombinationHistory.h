@@ -163,7 +163,7 @@ namespace FML {
             double ddgddx_tilde_of_x(double x) const;
             /// Free electron fraction of x = log(a)
             double Xe_of_x(double x) const;
-            /// Free electron fraction using the Saha approximatin of x = log(a)
+            /// Free electron fraction using the Saha approximation of x = log(a)
             double Xe_of_x_saha(double x) const;
             /// Number density of electrons of x = log(a)
             double ne_of_x(double x) const;

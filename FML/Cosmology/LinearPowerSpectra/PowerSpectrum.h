@@ -89,7 +89,7 @@ namespace FML {
             int ell_max{2000};
             DVector ells{};
 
-            // What Cells to compute (if data is availiable)
+            // What Cells to compute (if data is available)
             bool compute_temperature_cells{true};
             bool compute_polarization_cells{false};
             bool compute_neutrino_cells{false};

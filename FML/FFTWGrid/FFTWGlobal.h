@@ -19,7 +19,7 @@
 #endif
 
 //==========================================================================
-// This file contains type definition and macros for avoiding alot of
+// This file contains type definition and macros for avoiding a lot of
 // ifdefs wrt float/double/long double FFTW transfors
 // It also contains a singleton for automatically initializing FFTW
 // with MPI and threads

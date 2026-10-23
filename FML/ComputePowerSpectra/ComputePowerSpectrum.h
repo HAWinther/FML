@@ -65,7 +65,7 @@ namespace FML {
 
         //================================================================================
         /// @brief Assign particles to grid using density_assignment_method = NGP,CIC,TSC,PCS,...
-        /// Fourier transform, decolvolve the window function for the assignement above.
+        /// Fourier transform, decolvolve the window function for the assignment above.
         /// With interlacing bin to a grid and an interlaced grid (displaced by dx/2 in all directions)
         /// Fourier transform both and add the together to cancel the leading aliasing contributions
         /// bin up power-spectrum and subtract shot-noise 1/NumPartTotal. Note that with interlacing we change the
@@ -97,7 +97,7 @@ namespace FML {
         //================================================================================
         /// @brief Brute force (but aliasing free) computation of the power spectrum.
         /// Loop over all grid-cells and all particles and add up contribution and subtracts shot-noise term.
-        /// Since we need to combine all particles with all cells this is not easiy parallelizable with MPI
+        /// Since we need to combine all particles with all cells this is not easily parallelizable with MPI
         /// so we assume all CPUs have exactly the same particles when this is run on more than 1 MPI tasks (so best run
         /// just using OpenMP).
         /// This method scales as \f$ \mathcal{O}({\rm Npart}\cdot {\rm Nmesh}^N) \f$ so will be slow!
@@ -140,7 +140,7 @@ namespace FML {
         /// \f$ P(k) \to B^N P(k) \f$ where \f$ B\f$ is the boxsize once spectrum has been computed. The method assumes
         /// the two grids are fourier transforms of real grids (i.e. \f$ f(-k) = f^*(k) \f$).
         /// This method divides the power-spectrum by the square of the window function corresponding to the density
-        /// assignement method for every mode we bin up.
+        /// assignment method for every mode we bin up.
         ///
         /// @tparam N Dimension of the grid
         ///
@@ -1290,7 +1290,7 @@ namespace FML {
                        "[compute_polyspectrum] Binning is not good\n");
             static_assert(ORDER > 1);
 
-            // Get where to store the resuts in
+            // Get where to store the results in
             // We don't add to thes below so we don't need to clear the arrays
             std::vector<double> & P123 = polyofk.P123;
             std::vector<double> & N123 = polyofk.N123;

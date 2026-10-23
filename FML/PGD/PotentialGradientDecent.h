@@ -37,7 +37,7 @@ namespace FML {
     /// @param[in] displacement_factor The strength of the displacement (alpha in the linked paper)
     /// @param[in] norm_poisson_equation The prefactor to the Poisson equation (1.5*OmegaM0*a for cosmological sims)
     /// @param[in] Ngrid Size of the grid we do the calculations on
-    /// @param[in] density_assignment_method The density assignement method we use for assigning particles to grid
+    /// @param[in] density_assignment_method The density assignment method we use for assigning particles to grid
     //             and doing interpolation when computing things.
     ///
     //=================================================================================
@@ -133,7 +133,7 @@ namespace FML {
             << max_disp << " = " << max_disp * Ngrid << " grid-cells\n";
       }
 
-    /// Fitting formula for the displacment factor needed in the PGD method
+    /// Fitting formula for the displacement factor needed in the PGD method
     /// Delta is the mean particle separation
     double pgd_fitting_formula_alpha(double Delta, double scale_factor){
       const double alpha0 = 0.0061*std::pow(Delta,25) + 0.0051*std::pow(Delta,3) + 0.00314;

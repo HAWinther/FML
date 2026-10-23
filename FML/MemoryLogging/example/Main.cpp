@@ -13,7 +13,7 @@ int main() {
     // Example of memory logging
     //================================================
 
-    // Allocte some memory
+    // Allocate some memory
     MyVector a(100000);
     MyVector b(1000000);
     MyVector c;

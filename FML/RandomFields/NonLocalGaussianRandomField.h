@@ -21,7 +21,7 @@ namespace FML {
         /// power-spectrum and a source of random numbers. Templated on dimension.
         ///
         /// The type of fNL is local, orthogonal, equilateral and generic (supply kernel values
-        /// youself. See 1108.5512 for more info)
+        /// yourself. See 1108.5512 for more info)
         ///
         /// fix_amplitude means we fix the amplitude of the modes in the gaussian random field
         /// we generate to start with
@@ -43,7 +43,7 @@ namespace FML {
             /// and up to 8 fourier transforms
             ///
             /// NB: for generating IC for cosmological simulations see the related method
-            /// and see 1108.5512 for more info about the algorithmm.
+            /// and see 1108.5512 for more info about the algorithm.
             ///
             /// @tparam N The dimension of the grid
             ///
@@ -70,7 +70,7 @@ namespace FML {
 
                 // Ensure that <phi> = 0 in the end (this costs 2 extra FT)
                 // This is not really needed as all terms apart from phi^2 mean to zero
-                // and we take care of phi^2 seperately. Also it is not observable anyway
+                // and we take care of phi^2 separately. Also it is not observable anyway
                 const double subtract_mean = false;
 
                 // Set up the kernel values:
@@ -96,7 +96,7 @@ namespace FML {
                 } else {
                     std::string error = "[generate_nonlocal_gaussian_random_field_fourier] Unknown fNL type " +
                                         type_of_fnl +
-                                        ". Availiable options are: local, equilateral, orthogonal and generic";
+                                        ". Available options are: local, equilateral, orthogonal and generic";
                     assert_mpi(false, error.c_str());
                 }
 

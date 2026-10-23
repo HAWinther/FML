@@ -158,9 +158,9 @@ namespace FML {
             /// Massive neutrino density parameter of x = log(a)
             double get_OmegaMnu(double x = 0.0) const;
             
-            /// Effective equatin of state of x = log(a)
+            /// Effective equation of state of x = log(a)
             double get_weff(double x) const;
-            /// Derivative of effective equatin of state of x = log(a)
+            /// Derivative of effective equation of state of x = log(a)
             double get_dweffdx(double x) const;
 
             // LPT growth-factors normalized to unity today

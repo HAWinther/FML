@@ -95,7 +95,7 @@ namespace FML {
             const double TCMB_of_x = cosmo->get_TCMB(x);
             const double H0 = h * H0_over_h;
 
-            // Baryon temperatur and number density
+            // Baryon temperature and number density
             const double kT_b = k_b * TCMB_of_x;
             const double n_b = (OmegaB * 3.0 * H0 * H0) / (8 * M_PI * G * m_H * a * a * a);
 
@@ -149,7 +149,7 @@ namespace FML {
                 return std::pair<double, double>(1.0, 1e-100);
             }
 
-            // Baryon temperatur and number density
+            // Baryon temperature and number density
             const double kT_b = k_b * TCMB_of_x;
             const double n_b = (OmegaB * 3.0 * H0 * H0) / (8 * M_PI * G * m_H * a * a * a);
 
@@ -743,7 +743,7 @@ namespace FML {
             return Xe_of_x_saha_noreion(x) * (1.0 - Yp) * n_b0 * std::exp(-3.0 * x);
         }
 
-        // Implemention of reionization on Xe. This is the factor f in Xe = Xe^peebles + f
+        // Implementation of reionization on Xe. This is the factor f in Xe = Xe^peebles + f
         double RecombinationHistory::Xe_reionization_factor_of_x(double x) const {
             if (not reionization) {
                 return 0.0;

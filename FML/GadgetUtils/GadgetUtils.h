@@ -149,7 +149,7 @@ namespace FML {
                 /// Get the number of gadget files
                 int get_num_files(std::string filename = "");
 
-                /// If non-standard file, set the fields that are in the file (only POS,VEL,ID implmented)
+                /// If non-standard file, set the fields that are in the file (only POS,VEL,ID implemented)
                 void set_fields_in_file(std::vector<std::string> fields);
             };
 
@@ -261,7 +261,7 @@ namespace FML {
 
                 // Allocate memory for particle vector and reset it
                 // If we only keep in domain we reserve for buffer_factor more particles
-                // (but will resize if that is too litte)
+                // (but will resize if that is too little)
 #ifdef GADGET_ONLY_DM
                 size_t npartTotal = (size_t(header.npartTotalHighWord[1]) << 32) + size_t(header.npartTotal[1]);
 #else

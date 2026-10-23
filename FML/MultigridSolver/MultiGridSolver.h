@@ -41,7 +41,7 @@ namespace FML {
             /// with periodic or Dirichlet boundary
             /// conditions.
             ///
-            /// The main implemention is for periodic
+            /// The main implementation is for periodic
             /// boundary conditions. However the user has
             /// an option of providing a mask-field
             /// which specifies the boundary and the
@@ -53,7 +53,7 @@ namespace FML {
             /// value is that provided in the initial
             /// guess.
             /// Currently this is a quite simplistic
-            /// implemention so on a general domain
+            /// implementation so on a general domain
             /// make sure you use a big enough mask so
             /// that the lowest level is masked out.
             /// To try this compile with USE_MASK
@@ -124,7 +124,7 @@ namespace FML {
                 double _rms_res_old; // The residual at the old step
 
                 // Book-keeping variables
-                int _istep_vcycle = 0; // The number of V-cycles we are currenlty at
+                int _istep_vcycle = 0; // The number of V-cycles we are currently at
 
                 // Internal methods implementing the multigrid algorithm
                 double calculate_residual(int level, MPIGrid<NDIM, T> & res);
@@ -255,7 +255,7 @@ namespace FML {
                             source += (-4.0 * M_PI * M_PI) * std::sin(2.0 * M_PI * coordinate[idim]);
                         // The full equation L(f) = 0
                         auto l = laplacian - source;
-                        // The derivtive dL/df
+                        // The derivative dL/df
                         auto dl = derivlaplacian;
                         return std::pair<T, T>{l, dl};
                     };
@@ -1070,7 +1070,7 @@ namespace FML {
 
             //================================================
             // Make the array we are going to prolonge up
-            // Assumes [Rf] contains the restiction of f
+            // Assumes [Rf] contains the restriction of f
             // from the upper level and returns [df]
             // containing df = f - R[f]
             //================================================

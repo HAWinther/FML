@@ -376,7 +376,7 @@ class Cosmology {
     double OmegaNu;       // Neutrinos (density set by Neff)
     double OmegaRtot;     // Total relativistic (in the radiation era)
     double OmegaK;        // Curvature. Derived from Sum Omega == 1
-    double Neff;          // Effecive number of non-photon relativistic species (3.046)
+    double Neff;          // Effective number of non-photon relativistic species (3.046)
     double TCMB_kelvin;   // Temperature of the CMB today in Kelvin
     double Tnu_kelvin;    // Temperature of the neutrinos today in Kelvin. Derived from Neff and TCMB
     double Mnu_eV;        // Sum of the neutrino masses in eV. Derived from OmegaMNu and h

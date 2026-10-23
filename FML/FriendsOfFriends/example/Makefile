@@ -1,84 +1,23 @@
-# Hans A. Winther (hans.a.winther@gmail.com)
+#===================================================================
+# FML: FriendsOfFriends/example
+#
+# Compiler, library paths and how the options below are used are set
+# in ../../Makefile.config. Override for your machine in Makefile.local
+# there, or on the command line, e.g. make USE_MPI=false USE_DEBUG=true
+#===================================================================
 
-SHELL := /bin/bash
+USE_MPI             ?= true
+USE_DEBUG           ?= true
+USE_OMP             ?= false
 
-#===================================================
-# Set c++11 compliant compiler. If USE_MPI we use MPICC 
-#===================================================
-
-CC      = g++ -std=c++1z -O3 -Wall -Wextra -march=native
-MPICC   = mpicxx -std=c++1z -O3 -Wall -Wextra -march=native
-
-#===================================================
-# Options
-#===================================================
-
-# Use MPI
-USE_MPI          = true
-# Use OpenMP threads
-USE_OMP          = false
-# Log allocations in the library
-USE_MEMORYLOG    = false
-# Check for bad memory accesses
-USE_SANITIZER    = false
-# Print more info as the code runs and do some more checks
-USE_DEBUG        = true
-
-#===================================================
-# Include and library paths
-#===================================================
-
-# Main library include (path to folder containin FML/)
-FML_INCLUDE    = $(HOME)/local/FML
-
-#===================================================
-# Compile up all library defines from options above
-#===================================================
-
-INC     = -I$(FML_INCLUDE) 
-LIB     =
-LINK    = 
-OPTIONS = 
-
-ifeq ($(USE_DEBUG),true)
-OPTIONS += -DDEBUG_FOF
-endif
-
-ifeq ($(USE_MPI),true)
-CC       = $(MPICC)
-OPTIONS += -DUSE_MPI
-endif
-
-ifeq ($(USE_OMP),true)
-OPTIONS += -DUSE_OMP
-CC      += -fopenmp
-endif
-
-ifeq ($(USE_SANITIZER),true)
-CC      += -fsanitize=address
-endif
-
-ifeq ($(USE_MEMORYLOG),true)
-OPTIONS += -DMEMORY_LOGGING
-endif
-
-#===================================================
-# Object files to be compiled
-#===================================================
-
-VPATH := $(FML_INCLUDE)/FML/Global/:$(FML_INCLUDE)/FML/FileUtils/
-OBJS = Main.o Global.o FileUtils.o
+# Extra defines added when USE_DEBUG = true
+DEBUG_OPTIONS     = -DDEBUG_FOF
 
 TARGETS := fof
-all: $(TARGETS)
-.PHONY: all clean
 
-clean:
-	rm -rf $(TARGETS) *.o
+include ../../Makefile.config
 
-fof: $(OBJS)
-	${CC} -o $@ $^ $(OPTIONS) $(LIB) $(LINK)
+FML_MODULES := Global FileUtils
 
-%.o: %.cpp 
-	${CC} -c -o $@ $< $(OPTIONS) $(INC) 
-
+fof: Main.o Global.o FileUtils.o
+	$(LINK_EXE)

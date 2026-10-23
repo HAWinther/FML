@@ -3,9 +3,9 @@
 
 //======================================================================
 // Some examples of particles you can use depending on what you want to do.
-// The LPT order we use for COLA is determined from what is availiable in the particles
+// The LPT order we use for COLA is determined from what is available in the particles
 // and some algorithms can do more things (or even require) if certain fields are
-// availiable. E.g. watershed require get/set_volume and FoF halo finder will
+// available. E.g. watershed require get/set_volume and FoF halo finder will
 // store fofid in the particle if present. Particles->Grid checks for get_mass
 // and will use the mass, otherwise assumes all masses are the same. GADGET
 // writer checks for get_id and will only output IDs in the files if this is present.
@@ -18,7 +18,7 @@
 //
 // If you need dynamically allocated memory inside the class then that is no
 // problem, but you will have to implement three functions that appends the data
-// to a communiation buffer, assigns the data from a communication buffer and a
+// to a communication buffer, assigns the data from a communication buffer and a
 // method that gives the byte-size of the particle. Otherwise communication of 
 // the particles across tasks will not work.
 //======================================================================

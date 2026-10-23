@@ -189,7 +189,7 @@ namespace FML {
         /// @param[in] NumPart How many particles/positions we have that we want to interpolate the grid to.
         /// @param[in] NumPartTot How many particles/positions we have in total over all tasks.
         /// @param[out] density_grid_fourier The output density grid in fourier space (must be initialized)
-        /// @param[in] density_assignment_method The density assignement method (NGP, CIC, TSC, PCS or PQS).
+        /// @param[in] density_assignment_method The density assignment method (NGP, CIC, TSC, PCS or PQS).
         /// @param[in] interlacing If true use interlacing to reduce aliasing
         ///
         template <int N, class T>
@@ -273,9 +273,9 @@ namespace FML {
             return 0;
         }
 
-        /// @brief Compute how many extra slices we need in the FFTWGrid for a given density assignement / interpolation
+        /// @brief Compute how many extra slices we need in the FFTWGrid for a given density assignment / interpolation
         /// method.
-        /// @param[in] density_assignment_method The density assignement method (NGP, CIC, TSC, PCS or PQS).
+        /// @param[in] density_assignment_method The density assignment method (NGP, CIC, TSC, PCS or PQS).
         /// @return The number of left and right slices.
         /// @details
         /// Example usage:
@@ -380,7 +380,7 @@ namespace FML {
         template <int N>
         void add_contribution_from_extra_slices(FFTWGrid<N> & density);
 
-        /// @brief This returns the a function giving the window function for a given density assignement method as
+        /// @brief This returns the a function giving the window function for a given density assignment method as
         /// function of the wave-vector in dimensionless units.
         /// @tparam N The dimension of the grid
         /// @param[in] density_assignment_method The density assignment method (NGP, CIC, ...) we used when making the
@@ -414,7 +414,7 @@ namespace FML {
             return window_function;
         }
 
-        /// @brief Deconvolves the density assignement kernel in Fourier space. We divide the fourier grid by the
+        /// @brief Deconvolves the density assignment kernel in Fourier space. We divide the fourier grid by the
         /// FFT of the density assignment kernels \f$ FFT[ H*H*H*...*H ] = FT[H]^p\f$.
         /// @tparam N The dimension of the grid
         /// @param[out] fourier_grid The Fourier grid of the density contrast that we will deconvolve.
@@ -484,7 +484,7 @@ namespace FML {
             //==========================================================
             // This is a generic method. You have to specify the kernel
             // and the corresponding width = the number of cells
-            // the point gets distrubuted to in each dimension which
+            // the point gets distributed to in each dimension which
             // also corresponds to the order
             //==========================================================
 
@@ -525,7 +525,7 @@ namespace FML {
                 // Particle position
                 const auto * pos = FML::PARTICLE::GetPos(const_cast<T *>(part)[i]);
 
-                // Fetch mass if this is availiable
+                // Fetch mass if this is available
                 double mass = 1.0;
                 if constexpr (has_mass)
                     mass = FML::PARTICLE::GetMass(part[i]);
@@ -684,7 +684,7 @@ namespace FML {
                     x[idim] = pos[idim] * Nmesh;
 
                 // Nearest grid-node in grid
-                // Also do some santity checks. Probably better to throw here if these tests kick in
+                // Also do some sanity checks. Probably better to throw here if these tests kick in
                 std::array<int, N> ix, ix_nbor;
                 for (int idim = 0; idim < N; idim++) {
                     ix[idim] = int(x[idim]);
@@ -830,7 +830,7 @@ namespace FML {
                     x[idim] = pos[idim] * Nmesh;
 
                 // Nearest grid-node in grid
-                // Also do some santity checks. Probably better to throw here if these tests kick in
+                // Also do some sanity checks. Probably better to throw here if these tests kick in
                 std::array<int, N> ix;
                 [[maybe_unused]] std::array<int, N> ix_nbor;
                 for (int idim = 0; idim < N; idim++) {
@@ -939,7 +939,7 @@ namespace FML {
 
             std::vector<FloatType> buffer(num_cells_slice);
 
-            // [1] Send to the right, recieve from left
+            // [1] Send to the right, receive from left
             for (int i = 0; i < n_extra_right; i++) {
                 FloatType * extra_slice_right = density.get_real_grid_right() + num_cells_slice * i;
                 FloatType * slice_left = density.get_real_grid() + num_cells_slice * i;
@@ -973,7 +973,7 @@ namespace FML {
                 }
             }
 
-            // [2] Send to the left, recieve from right
+            // [2] Send to the left, receive from right
             for (int i = 1; i <= n_extra_left; i++) {
                 FloatType * extra_slice_left = density.get_real_grid() - i * num_cells_slice;
                 FloatType * slice_right = density.get_real_grid() + num_cells_slice * (Local_nx - i);

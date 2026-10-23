@@ -168,7 +168,7 @@ void TestMultiGridSolver() {
             const auto l = laplacian - source;
 
             //======================================================================
-            // The derivtive dL/df
+            // The derivative dL/df
             //======================================================================
             const auto dl = SolverType(-2.0 * Ndim / (h * h));
 

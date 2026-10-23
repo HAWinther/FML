@@ -43,14 +43,14 @@ int main() {
     part.create(partvec.data(), partvec.size(), partvec.size(), FML::xmin_domain, FML::xmax_domain, true);
 
     //=======================================================================================
-    // Do a Delaunay tesselation, compute voronoi volumes, locate density minima (or maximima, see h-file)
+    // Do a Delaunay tessellation, compute voronoi volumes, locate density minima (or maximima, see h-file)
     // Assign particles to the local density minima using the Delaunay links and bin up data
     // according to what is defined in the class WatershedBasins. In the end all the info about the groups are on task 0
     // This only works in 3D currently, the missing piece is to compute voronoi volumes (i.e. area)
-    // from the tesselation in 2D
+    // from the tessellation in 2D
     //
     // This is basically the ZOBOV void finder without the additional watershed merging of zones
-    // (and we use the Delaunay tesselation instead of the Voronoi tesselation to propagate
+    // (and we use the Delaunay tessellation instead of the Voronoi tessellation to propagate
     // the particles to their density minima)
     //=======================================================================================
 
@@ -92,7 +92,7 @@ int main() {
     // Other examples:
 
     //=======================================================================================
-    // Compute tesselation from MPIParticles and get volume of the particles
+    // Compute tessellation from MPIParticles and get volume of the particles
     // FML::TRIANGULATION::MPIPeriodicDelaunay<Particle> d;
     // const double random_fraction = 0.5;
     // const double buffer_fraction = 1.0;
@@ -105,7 +105,7 @@ int main() {
     //=======================================================================================
 
     //=======================================================================================
-    // More general: assign data to the vertices when doing the tesselation.
+    // More general: assign data to the vertices when doing the tessellation.
     // Define a vertex data struct and give the function the assigns the data.
     // Note that p might be null for which we have a boundary/random particle. Example:
     // struct VertexData{ double mass; };
@@ -115,6 +115,6 @@ int main() {
     // };
     // d.create(part.get_particles_ptr(), part.get_npart(), buffer_fraction, random_fraction,
     // vertex_assignment_function);
-    // // We now have the mass assigned to the vertices of the tesselation and can do stuff with it
+    // // We now have the mass assigned to the vertices of the tessellation and can do stuff with it
     //=======================================================================================
 }

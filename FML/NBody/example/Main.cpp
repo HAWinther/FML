@@ -16,7 +16,7 @@
 // Initial conditions (1LPT, 2LPT or 3LPT) from a given P(k) to get either a gaussian or a non-local non-gaussian
 // initial density field (with or without the amplitude fixing trick) Computing forces (using any grid-assignment order
 // you want) and using this to do time-stepping. This is done with a second order leapfrog (though 4th order is also
-// availiable)
+// available)
 //
 // We also implement the COLA method on top of this with a choice of what LPT order (1, 2 or 3) you want to use.
 //

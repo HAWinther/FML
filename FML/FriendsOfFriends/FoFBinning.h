@@ -92,7 +92,7 @@ namespace FML {
 
                 // Update center of mass
                 std::array<double, NDIM> dx;
-                double weigth = _mass / (mass + _mass);
+                double weight = _mass / (mass + _mass);
                 for (int idim = 0; idim < NDIM; idim++) {
                     dx[idim] = _pos[idim] - pos[idim];
                     if (periodic) {
@@ -101,7 +101,7 @@ namespace FML {
                         if (dx[idim] >= 0.5)
                             dx[idim] -= 1;
                     }
-                    pos[idim] += dx[idim] * weigth;
+                    pos[idim] += dx[idim] * weight;
                     if (periodic) {
                         if (pos[idim] < 0.0)
                             pos[idim] += 1;
@@ -114,8 +114,8 @@ namespace FML {
                 if constexpr (FML::PARTICLE::has_get_vel<T>()) {
                     auto _vel = FML::PARTICLE::GetVel(particle);
                     for (int idim = 0; idim < NDIM; idim++) {
-                        vel[idim] = vel[idim] * (1 - weigth) + _vel[idim] * weigth;
-                        vel_rms[idim] = vel_rms[idim] * (1 - weigth) + _vel[idim] * _vel[idim] * weigth;
+                        vel[idim] = vel[idim] * (1 - weight) + _vel[idim] * weight;
+                        vel_rms[idim] = vel_rms[idim] * (1 - weight) + _vel[idim] * _vel[idim] * weight;
                     }
                 }
 

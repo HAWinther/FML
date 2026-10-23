@@ -6,6 +6,17 @@ namespace FML {
 
 #ifdef USE_OMP
             const int nmax_threads = omp_get_max_threads();
+
+            // Get the accelerator for the current thread. The accelerators are only a
+            // lookup cache so if we cannot safely get a unique one (more threads than
+            // when the spline was created, or nested parallel regions where thread ids
+            // are not unique) we return nullptr which GSL handles with a binary search
+            static inline gsl_interp_accel * get_thread_accel(const std::vector<gsl_interp_accel *> & accs) {
+                if (omp_get_active_level() > 1)
+                    return nullptr;
+                const int id = omp_get_thread_num();
+                return id < int(accs.size()) ? accs[id] : nullptr;
+            }
 #endif
 
             // How to handle an error
@@ -136,7 +147,7 @@ namespace FML {
                 // Make accelerators (one per thread if OpenMP)
                 // If nthreads = 1 we are likely trying to create a spline 
                 // inside a OMP region. In that case allocate as many as we have
-                // threads availiable on the system
+                // threads available on the system
 #ifdef USE_OMP
                 int nthreads = 1;
 #pragma omp parallel
@@ -193,7 +204,7 @@ namespace FML {
 
                 // Return f, f' or f'' depending on value of deriv
 #ifdef USE_OMP
-                gsl_interp_accel * xacc_thread = xaccs[omp_get_thread_num()];
+                gsl_interp_accel * xacc_thread = get_thread_accel(xaccs);
 #else
                 gsl_interp_accel * xacc_thread = xacc;
 #endif
@@ -218,7 +229,7 @@ namespace FML {
 
                 // Return f, f' or f'' depending on value of deriv
 #ifdef USE_OMP
-                gsl_interp_accel * xacc_thread = xaccs[omp_get_thread_num()];
+                gsl_interp_accel * xacc_thread = get_thread_accel(xaccs);
 #else
                 gsl_interp_accel * xacc_thread = xacc;
 #endif
@@ -401,7 +412,7 @@ namespace FML {
                 // Make accelerators (one per thread if OpenMP)
                 // If nthreads = 1 we are likely trying to create a spline 
                 // inside a OMP region. In that case allocate as many as we have
-                // threads availiable on the system
+                // threads available on the system
 #ifdef USE_OMP
                 int nthreads = 1;
 #pragma omp parallel
@@ -487,8 +498,8 @@ namespace FML {
                 y = std::min(ymax, y);
 
 #ifdef USE_OMP
-                gsl_interp_accel * xacc_thread = xaccs[omp_get_thread_num()];
-                gsl_interp_accel * yacc_thread = yaccs[omp_get_thread_num()];
+                gsl_interp_accel * xacc_thread = get_thread_accel(xaccs);
+                gsl_interp_accel * yacc_thread = get_thread_accel(yaccs);
 #else
                 gsl_interp_accel * xacc_thread = xacc;
                 gsl_interp_accel * yacc_thread = yacc;
@@ -521,8 +532,8 @@ namespace FML {
                 y = std::min(ymax, y);
 
 #ifdef USE_OMP
-                gsl_interp_accel * xacc_thread = xaccs[omp_get_thread_num()];
-                gsl_interp_accel * yacc_thread = yaccs[omp_get_thread_num()];
+                gsl_interp_accel * xacc_thread = get_thread_accel(xaccs);
+                gsl_interp_accel * yacc_thread = get_thread_accel(yaccs);
 #else
                 gsl_interp_accel * xacc_thread = xacc;
                 gsl_interp_accel * yacc_thread = yacc;

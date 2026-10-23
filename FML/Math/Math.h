@@ -38,7 +38,7 @@ namespace FML {
 #endif
         using DVector = std::vector<double>;
 
-        /// Python linspace. Generate a lineary spaced array
+        /// Python linspace. Generate a linearly spaced array
         DVector linspace(double xmin, double xmax, int num);
         
         /// Python logspace. Generate a log spaced array

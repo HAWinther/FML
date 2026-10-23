@@ -273,7 +273,7 @@ namespace FML {
                 /// Get the value of the spline (if out of bounds we use the closest value)
                 double eval(double x, double y) const;
                 /// General method to fetch derivatives. derivx is the number of x-derivatives and derivy is the number
-                /// of y-derivatives (how many are availiable depends on the spline method).
+                /// of y-derivatives (how many are available depends on the spline method).
                 double eval_deriv(double x, double y, int derivx, int derivy) const;
                 /// Get the value of the x-derivative of the spline
                 double deriv_x(double x, double y) const;

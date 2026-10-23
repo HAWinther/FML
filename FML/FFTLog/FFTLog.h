@@ -15,7 +15,7 @@ namespace FML {
         ///
         /// This namespace deals with performing Hankel transforms. We can
         /// for example use this to convert between a power-spectrum and the
-        /// correlation function. NB: this is only imlemented in 3D. Its not hard to
+        /// correlation function. NB: this is only implemented in 3D. Its not hard to
         /// generalize, but not done as I can't see any use for it.
         ///
         /// This version is adapted from https://github.com/slosar/FFTLog

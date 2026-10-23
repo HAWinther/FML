@@ -45,7 +45,7 @@ namespace FML {
     extern int ThisTask;
     /// Total number of MPI tasks
     extern int NTasks;
-    /// Total number of threads availiable
+    /// Total number of threads available
     extern int NThreads;
     /// If MPI and threads can work together with FFTW
     extern bool MPIThreadsOK;  // Set by init_mpi
@@ -155,7 +155,7 @@ namespace FML {
         *value = sum;
     }
     
-    /// Inplace sum over tasks of a contigious array of values
+    /// Inplace sum over tasks of a contiguous array of values
     template <class T>
     void SumArrayOverTasks([[maybe_unused]] T * value, int n) {
         if (FML::NTasks == 1)
@@ -268,7 +268,7 @@ namespace FML {
 #define FUNS(FUN)                                                                                                      \
     template <class T>                                                                                                 \
     auto FUN(const Vector<T> & x)->Vector<T> {                                                                         \
-        auto op_##FUN = [](double x) -> Vector<T> { return std::FUN(x); };                                             \
+        auto op_##FUN = [](T x) -> T { return std::FUN(x); };                                             \
         Vector<T> y(x.size());                                                                                         \
         std::transform(x.begin(), x.end(), y.begin(), op_##FUN);                                                       \
         return y;                                                                                                      \

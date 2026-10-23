@@ -140,8 +140,8 @@ namespace FML {
 
         //===================================================================================
         /// @brief From two fourier grids, f and g, compute the convolution
-        /// \f$ f(k) * g(k) = \int d^{\rm N}q f(q) g(k-q) \f$ This is done via multuplication in reals-space. We
-        /// allocate one temporary grid and perform 3 fourier tranforms.
+        /// \f$ f(k) * g(k) = \int d^{\rm N}q f(q) g(k-q) \f$ This is done via multiplication in reals-space. We
+        /// allocate one temporary grid and perform 3 fourier transforms.
         ///
         /// @tparam N dimension of the grid
         ///
@@ -194,9 +194,9 @@ namespace FML {
         //===================================================================================
         /// @brief From two real grids, f and g, compute the convolution
         /// \f$ f(x) * g(x) = \int d^{\rm N}y f(y) g(x-y) \f$ This is done via multiplication in fourier-space.
-        /// We allocate one temporary grid and perform 3 fourier tranforms. We can merge this with
+        /// We allocate one temporary grid and perform 3 fourier transforms. We can merge this with
         /// convolution_fourier_space and just have one method and get do the real or fourier space convolution
-        /// depening on the status of the grids, but its easy to forget to set the status so we have two methods
+        /// depending on the status of the grids, but its easy to forget to set the status so we have two methods
         /// for this.
         ///
         /// @tparam N dimension of the grid
@@ -250,7 +250,7 @@ namespace FML {
         //===================================================================================
         /// This computes the PDF of whatever quantity is in the grid (e.g. the density if its a density grid)
         /// The binning is set to be linear. The range is set by the values we find in the grid
-        /// This realy belongs in the namespace CORRELATIONFUNCTIONS so should move it there
+        /// This really belongs in the namespace CORRELATIONFUNCTIONS so should move it there
         ///
         /// @tparam N The dimension of the grid
         ///

@@ -2,7 +2,7 @@
 %{
   #define SWIG_FILE_WITH_INIT
 
-  // The functions and data structures you want availiable in Python
+  // The functions and data structures you want available in Python
   struct Data {
     int n;
     double *x;
@@ -24,7 +24,7 @@ import_array();
 %apply (int DIM1, double* IN_ARRAY1) {(int nx, double *x), (int ny, double *y)};
 
   
-// The functions and data structures you want availiable in Python (have to be repeated here)
+// The functions and data structures you want available in Python (have to be repeated here)
 struct Data {
   int n;
   double *x;

@@ -105,7 +105,7 @@ namespace FML {
             // e.g. index = ix1_local * N^2 + ix2 * N + ix3 -> (ix1_local, ix2, ix3)
             std::array<int, NDIM> coord_from_index(IndexInt index) const;
 
-            // Local coordiates -> Grid-index
+            // Local coordinates -> Grid-index
             // e.g. index = ix1_local * N^2 + ix2 * N + ix3
             IndexInt index_from_coord(const std::array<int, NDIM> & coord) const;
 
@@ -272,7 +272,7 @@ namespace FML {
             return res;
         }
 
-        // Constructor with intial value
+        // Constructor with initial value
         template <int NDIM, class T>
         MPIGrid<NDIM, T>::MPIGrid(int N, bool periodic, int n_extra_slices_left, int n_extra_slices_right) {
             assert_mpi(N > 0, "[MPIGrid] We need Ngrid > 0\n");
@@ -622,7 +622,7 @@ namespace FML {
             const int nsend_to_left = _n_extra_slices_right;
             const int nsend_to_right = _n_extra_slices_left;
 
-            // Buffer to recive data in
+            // Buffer to receive data in
             std::vector<T> recv_array(_NperSlice);
 
             // Send rightmost slices right and store in extra left slices

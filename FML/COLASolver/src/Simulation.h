@@ -33,7 +33,7 @@
 #include <vector>
 
 //=============================================================================
-// Type alises we use below
+// Type aliases we use below
 //=============================================================================
 using RandomGenerator = FML::RANDOM::RandomGenerator;
 using GSLRandomGenerator = FML::RANDOM::GSLRandomGenerator;
@@ -1275,7 +1275,7 @@ void NBodySimulation<NDIM, T>::run() {
         }
     };
 
-    // Number of extra slices we need for density assignement
+    // Number of extra slices we need for density assignment
     const auto nleftright =
         FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(force_density_assignment_method);
 
@@ -1596,7 +1596,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         // its not fully correct for large k, but this is not a high
         // quality P(k) anyway... should improve this at some point
         // One way is to bin up <(W*deltaCB)^2>, <deltaNu^2> and the cross
-        // <(W*deltaCB) deltaNu> and deconvolve them seperately
+        // <(W*deltaCB) deltaNu> and deconvolve them separately
         //=============================================================
         PowerSpectrumBinning<NDIM> pofk_total(density_grid_fourier.get_nmesh() / 2);
         pofk_total.subtract_shotnoise = pofk_subtract_shotnoise;

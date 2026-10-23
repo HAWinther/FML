@@ -187,7 +187,7 @@ namespace FML {
             /// Read the infofile, read transferfiles listed in that and make splines of T(k,z)
             void read_transfer(std::string infofilename, bool verbose = false);
 
-            /// Read a single tranfer function
+            /// Read a single transfer function
             DVector2D read_transfer_single(std::string filename) const;
 
             /// Read a single power-spectrum file
@@ -705,7 +705,7 @@ namespace FML {
         /// @param[in] a Scalefactor
         //====================================================================
         double LinearTransferData::get_total_transfer_function(double k, double a) const {
-            /// Alternative way (which atleast works for CAMB)  
+            /// Alternative way (which at least works for CAMB)  
             //double z = 1.0 / a - 1.0;
             //return total_transfer_function_spline(z, std::log(k));
             return (

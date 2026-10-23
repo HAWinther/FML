@@ -15,9 +15,9 @@ namespace FML {
         using DVector = std::vector<double>;
         using DVector2D = std::vector<DVector>;
 
-        /// Read a regular ascii files with nskip header lines and containing ncol collums
+        /// Read a regular ascii files with nskip header lines and containing ncol columns
         /// nestimated_lines is the amount we allocate for originally. Reallocated if file is larger
-        /// Not perfect for realy large files due to all the allocations we have to do
+        /// Not perfect for really large files due to all the allocations we have to do
         DVector2D read_regular_ascii(std::string filename,
                                      int ncols,
                                      std::vector<int> cols_to_keep,

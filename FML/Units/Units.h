@@ -89,7 +89,7 @@ namespace FML {
             double yr{0.0};
             /// One gigayear
             double Gyr{0.0};
-            /// Milimeter
+            /// Millimeter
             double mm{0.0};
             /// Centimeter
             double cm{0.0};

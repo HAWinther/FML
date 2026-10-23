@@ -100,7 +100,7 @@ void ReconSolver() {
     //=================================================================================
     // Particles to grid
     //=================================================================================
-    // The density assignement method (Cloud in Cell)
+    // The density assignment method (Cloud in Cell)
     const std::string density_assignment_method = "CIC";
     // Set up density grid
     FML::GRID::FFTWGrid<NDIM> density(N, 0, 1);

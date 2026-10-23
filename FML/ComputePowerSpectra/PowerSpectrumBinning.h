@@ -36,7 +36,7 @@ namespace FML {
             std::vector<double> pofk;
 
 #ifdef USE_OMP
-            // Temporary storage for OpenMP parallization
+            // Temporary storage for OpenMP parallelization
             std::vector<std::vector<double>> count_thread;
             std::vector<std::vector<double>> pofk_thread;
             std::vector<std::vector<double>> kbin_thread;

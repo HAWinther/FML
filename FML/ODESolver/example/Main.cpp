@@ -32,7 +32,7 @@ int main() {
     // The initial conditions
     DVector y_initial{1.0, 0.0};
 
-    // The anaytical solution
+    // The analytical solution
     auto function = [](double x) -> double { return std::cos(x); };
 
     // Solve the ODE from xmin = x[0] till xmax = x[npts-1] and store the

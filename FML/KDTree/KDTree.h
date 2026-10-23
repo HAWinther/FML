@@ -52,7 +52,7 @@ namespace FML {
                                BinningFunction<T, U> & binning_function);
 
         //============================================================================
-        // This method computes the individual (lineary spaced bins)
+        // This method computes the individual (linearly spaced bins)
         // density profile of tracer2 around tracer1.
         // The density profile is normalized in terms of the mean density
         // of tracer2. This is an example of using the generic profile binner.

@@ -601,7 +601,7 @@ namespace FML {
                                                phi_3LPT_Avec_fourier,
                                                ignore_curl_term);
 
-                // Make the displacment field
+                // Make the displacement field
                 for (int idim = 0; idim < N; idim++) {
                     Psi[idim] = FFTWGrid<N>(Nmesh, nleft, nright);
                     Psi[idim].add_memory_label("FFTWGrid::compute_1LPT_2LPT_3LPT_displacement_field::Psi" +
@@ -1326,7 +1326,7 @@ namespace FML {
             /// growth. This is involved: we take phi_iLPT(zini,k) and use growth factors to go to phi_iLPT(z,k) and FFT
             /// to get phi_iLPT(z,q). Then we transport the particles back to their original CPU given by the particles
             /// Lagrangian position q and assign the displacement field before we move them back to their eulerian
-            /// positions. This can be done more efficiently (we don't need to do this much communiation) but this will
+            /// positions. This can be done more efficiently (we don't need to do this much communication) but this will
             /// come at the expense of a lot more code so fuck it.
             /// In practice to be efficient we should ideally do *all* orders at the same time otherwise we need to
             /// swap and do communication many times. This is how its done in our COLA code. So this method mainly
@@ -1399,7 +1399,7 @@ namespace FML {
                     psi_LPT_vector[idim].free();
                 }
 
-                // Assign displacment field to particles
+                // Assign displacement field to particles
                 auto np = part.get_npart();
 #ifdef USE_OMP
 #pragma omp parallel for

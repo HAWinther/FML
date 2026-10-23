@@ -257,7 +257,7 @@ namespace FML {
 #ifdef USE_GSL
             return j_ell_gsl(ell, arg);
 #endif
-            throw std::runtime_error("No j_ell implementation availiable");
+            throw std::runtime_error("No j_ell implementation available");
 #endif
         }
 
@@ -265,7 +265,7 @@ namespace FML {
         // Useful methods
         //=======================================================================
 
-        // Lineary spaced array ala Python Numpy linspace
+        // Linearly spaced array ala Python Numpy linspace
         DVector linspace(double xmin, double xmax, int num) {
             DVector res(num);
             double delta_x = (xmax - xmin) / double(num - 1);

@@ -254,7 +254,7 @@ namespace FML {
 
         template <int NDIM, class T>
         void MPIMultiGrid<NDIM, T>::restrict_down(int from_level, MPIGrid<NDIM, T> & to_grid) {
-            // Cannot restict down if we are at the bottom
+            // Cannot restrict down if we are at the bottom
             if (from_level + 1 >= _Nlevel)
                 return;
 

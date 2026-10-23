@@ -226,7 +226,7 @@ int main() {
     }
 
     //=====================================================
-    // Output the maximum displacment and velocity
+    // Output the maximum displacement and velocity
     //=====================================================
     FML::MaxOverTasks(&max_disp_1LPT);
     FML::MaxOverTasks(&max_disp_2LPT);

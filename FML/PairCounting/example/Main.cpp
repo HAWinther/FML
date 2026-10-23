@@ -83,7 +83,7 @@ void ExampleRadialCorrelationFunctionSurvey() {
   // Shift and scale so particles are inside [0,1)^3
   // Observer position (0,0,0) gets shifted/scales
   // appropriately
-  // Boxsize in physical coordiates is returned
+  // Boxsize in physical coordinates is returned
   //===============================================
   const bool shiftPositions = true;
   const bool scalePositions = true;
@@ -235,7 +235,7 @@ void ExampleRadialCorrelationFunctionSurvey() {
 }
 
 //===============================================
-// Compute the radial correlation fuction in a
+// Compute the radial correlation function in a
 // periodic box
 //===============================================
 void ExamplePeriodicBox() {

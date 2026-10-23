@@ -513,7 +513,7 @@ namespace FML {
                                                               [[maybe_unused]] double xmax,
                                                               [[maybe_unused]] int nx) {
 #ifdef USE_FFTW
-            timer.StartTiming("POW::Correlation function wth FFTW");
+            timer.StartTiming("POW::Correlation function with FFTW");
             const double rmin = 1.0 * Constants.Mpc;
             const double rmax = 1000.0 * Constants.Mpc;
 
@@ -570,7 +570,7 @@ namespace FML {
             xi_Nu_spline.create(x_array, r, results[3], "xi_Nu_spline");
             xi_M_spline.create(x_array, r, results[4], "xi_M_spline");
 
-            timer.EndTiming("POW::Correlation function wth FFTW");
+            timer.EndTiming("POW::Correlation function with FFTW");
 #endif
         }
 

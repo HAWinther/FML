@@ -21,7 +21,7 @@ int main() {
     auto AnInt = p.get<int>("AnInt");
     auto Array = p.get<std::vector<double>>("Array");
 
-    // If not found use a defalt value
+    // If not found use a default value
     auto NonExistentInt = p.get<int>("NonExistentInt", 999);
 
     // Output

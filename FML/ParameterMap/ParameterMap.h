@@ -35,7 +35,7 @@ namespace FML {
 
             //============================================================================
             ///
-            /// For holding a map of parameters of different types with easy set and get's
+            /// For holding a map of parameters of different types with easy set and gets
             /// allowing for fiducial values if the parameter is not in the map
             ///
             /// Uses std::variant which requires a C++17 compatible compiler.
