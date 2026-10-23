@@ -132,6 +132,25 @@ The code currently only does a second order leap-frog, but there are methods imp
 
 Without COLA, FastPM and BullFrog need far fewer steps than Quinn: with 10 steps from z = 19 they get P(k) at z = 0 to about 0.5% for k < 0.1 h/Mpc and 1-2% up to k = 0.5 h/Mpc, while Quinn is off by 7-12% (see `tests/check_timestepping.py`).
 
+## The force grid and the gradient kernel
+
+A force grid finer than the particle grid (force_nmesh = 2-4 x particle_Npart_1D) is the usual choice for
+COLA. Then the regular particle lattice of the initial conditions puts power just below the Nyquist frequency of
+the force grid. With the continuous gradient kernel (D = ik), which is large there, this gives spurious forces:
+the growth of individual large-scale modes is off by tens of percent and there is too much small-scale power
+(+10% at k = 0.2 h/Mpc for 64^3 particles in 256 Mpc/h with a 128^3 grid). The two-point finite difference
+kernel sin(k dx)/dx removes this, so the fiducial gradient kernel is discrete_2pt when force_nmesh >
+particle_Npart_1D and continuous otherwise (where it is the more accurate one). With this P(k) converges
+smoothly with the grid size (-1.9%, +0.5%, +0.2% at k = 0.2 h/Mpc for 2, 3, 4 x the particle grid), and few-step
+time-stepping is much more accurate on a finer grid. See `tests/check_force_grid.py`.
+
+For a force grid 3 x (or more) the particle grid the lattice also shows up below the Nyquist frequency, where
+the gradient kernel does not suppress it. With CIC assignment a linear test (64^3 particles, 1000 Mpc/h, 192^3 grid)
+then has +2% too much growth and 7% scatter between modes at k = 0.05 h/Mpc (30% scatter with the continuous
+kernel); TSC assignment (force_density_assignment_method = "TSC") removes this (-0.1%, 1.9%). The nonlinear P(k)
+is fine with both (within 0.5% of a 4x grid up to k = 0.2 h/Mpc), so TSC is recommended for 3x grids if the
+largest scales matter.
+
 ## Radiation, neutrinos and GR: the N-body gauge
 
 On very large scales (k < ~0.01 h/Mpc) a Newtonian simulation misses the effect of the radiation

@@ -12,6 +12,7 @@ all the main code paths of the solver:
 | `powerlaw_spacing` | Power-law spacing of the time steps |
 | `lightcone_dgp` | Lightcone (ascii output), DGP gravity |
 | `nbody_gauge` | N-body gauge: IC from N-body gauge transfer functions plus the linear source from radiation, neutrinos and GR |
+| `fine_force_grid` | Force grid twice the particle grid (fiducial gradient kernel becomes discrete_2pt), PCS assignment |
 | `fastpm_cola_fofr` | FastPM time-stepping with COLA, logarithmic spacing, f(R) gravity |
 | `bullfrog_lightcone` | BullFrog time-stepping (no COLA) with the lightcone |
 | `read_particles_exact` | Reading particles (from `cola_quinn_all`) with exact LPT reconstruction |

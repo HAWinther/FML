@@ -55,6 +55,17 @@ Checks that the source changes P(k) on the largest scales as linear theory predi
 reproduced to 0.01%) and that the run then follows the CLASS growth as well as the standard run follows its
 own linear theory (the PM force resolution slows the growth by about 0.5% at this k in both).
 
+## Force grid finer than the particle grid (`check_force_grid.py`)
+
+```bash
+python3 tests/check_force_grid.py ./nbody /tmp/forcegrid   # about 20 s, needs numpy
+```
+
+A linear (tiny amplitude) run with a force grid twice the particle grid. With the continuous gradient
+kernel the regular particle lattice of the initial conditions gives spurious forces and the growth of the
+individual large-scale modes scatters by 40-70%; with the fiducial kernel (discrete_2pt when the force grid
+is finer than the particle grid) the growth is right to < 1% with < 2% scatter.
+
 ## Regression tests (`regression/`)
 
 Small simulations covering all the main code paths, for checking that a change does not change the

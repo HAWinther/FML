@@ -13,10 +13,8 @@
 #    k < 0.1 h/Mpc right to < 1% with 10 steps
 #  - All methods converge to the reference: < 1.5% for k < 0.5 h/Mpc with 40 steps
 #
-# The force grid is the same as the particle grid (64^3). With a finer force grid
-# the regular particle lattice of the IC gives spurious forces (aliasing of the
-# lattice) that the large-step methods are more sensitive to (set FORCE_NMESH=128
-# to see this)
+# The force grid is the same as the particle grid (64^3) by default. With FORCE_NMESH=128
+# the errors are smaller still (e.g. BullFrog with 5 steps: 0.08% for k < 0.1 h/Mpc)
 #
 # Usage: python3 check_timestepping.py <path/to/nbody> <outdir> [--nref 200]
 #   MPIRUN      : how to launch (default "mpirun -np 2"; MPIRUN="" for a serial build)
