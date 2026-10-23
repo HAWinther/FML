@@ -29,6 +29,10 @@ simulation_use_cola = false
 -- If gravity model has scaledependent growth. If this is false
 -- then we use the k=0 limit of the growth factors when doing COLA
 simulation_use_scaledependent_cola = false
+-- Do not include the PM force, just let particles follow LPT trajectories
+simulation_enforce_LPT_trajectories = false
+-- The LPT order used for COLA
+simulation_cola_LPT_order = 2
 
 ------------------------------------------------------------
 -- Choose the cosmology 
@@ -277,6 +281,7 @@ if ic_random_field_type == "reconstruct_from_particles" then
   ic_reconstruct_dimless_smoothing_scale = 1.0 / (128 * math.pi)
   -- Want interlaced grids? Probably not
   ic_reconstruct_interlacing = false
+  ic_reconstruct_exact = false
 end
 
 -- For reading IC from an external file (for usual N-body)
@@ -290,10 +295,18 @@ end
 ------------------------------------------------------------
 -- Grid to use for computing PM forces
 force_nmesh = 128
+-- Make a lightcone?
+lightcone = false
 -- Density assignment method: NGP, CIC, TSC, PCS, PQS
 force_density_assignment_method = "CIC"
 -- The kernel to use when solving the Poisson equation
-force_kernel = "continuous_greens_function"
+-- The kernels for D^2 (Poisson equation) and D (forces). These tests used the
+-- continuous Greens function (the fiducial choice)
+force_greens_function_kernel = "continuous"
+force_gradient_kernel = "continuous"
+-- Compute forces with finite differences instead of in Fourier space
+force_use_finite_difference_force = false
+force_finite_difference_stencil_order = 4
 -- Include the effects of massive neutrinos when computing
 -- the density field (density of mnu is the linear prediction)
 -- Requires: transferinfofile above (we need all T(k,z))
@@ -308,6 +321,8 @@ force_linear_massive_neutrinos = true
 ------------------------------------------------------------
 -- Do halofinding every output?
 fof = false
+-- The buffer region (from neighbor tasks) used in the FoF finding
+fof_buffer_length_mpch = 3.0
 -- Minimum number of particles per halo
 fof_nmin_per_halo = 20
 -- The linking length (distance in units of mean particle separation)
@@ -326,7 +341,8 @@ pofk_nmesh = 128
 -- Use interlaced grids for alias reduction?
 pofk_interlacing = false
 -- Subtract shotnoise?
-pofk_subtract_shotnoise = true
+-- NB: false so we can compare to the MG-PICOLA reference, which does not subtract shotnoise
+pofk_subtract_shotnoise = false
 -- Density assignment method: NGP, CIC, TSC, PCS, PQS, ...
 pofk_density_assignment_method = "PCS"
 

@@ -580,7 +580,7 @@ class OnionSlices {
       astart = aend = 0.0;
     }
 
-    void read_parameters(ParameterMap & param) {
+    void read_parameters(FML::UTILS::ParameterMap & param) {
       use_chunkpix = param.get<bool>("plc_use_chunkpix");
       if (use_chunkpix)
         nside_chunks = param.get<int>("plc_nside_chunks");

@@ -55,6 +55,7 @@ class LightConeParticle {
 template <int NDIM, class T, class U = LightConeParticle<float, NDIM>>
 class Lightcone {
   protected:
+    using ParameterMap = FML::UTILS::ParameterMap;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
     using DVector = FML::INTERPOLATION::SPLINE::DVector;
     using Point = std::array<double, NDIM>;

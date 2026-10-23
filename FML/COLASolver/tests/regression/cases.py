@@ -155,7 +155,6 @@ CASES = {
         force_density_assignment_method="TSC",
     ),
     # Non-gaussian (local fNL) initial conditions
-    # NB: currently fails (NaN in the IC), see KNOWN_FAILING below
     "nongaussian": dict(
         ic_random_field_type="nongaussian",
         ic_fnl_type="local",
@@ -226,10 +225,8 @@ CASES = {
     ),
 }
 
-# Cases that fail with the current code and are not run by default (run them by name).
-# nongaussian: the steep primordial power spectrum is splined by FFTWGrid::make_fourier_spline
-# and the cubic spline goes negative at low k, giving sqrt(<0) = NaN in the random field
-KNOWN_FAILING = ["nongaussian"]
+# Cases that fail with the current code and are not run by default (run them by name)
+KNOWN_FAILING = []
 
 # The order the cases must run in (the read_* cases need 'cola_quinn_all')
 ORDER = [c for c in CASES.keys() if c not in KNOWN_FAILING]

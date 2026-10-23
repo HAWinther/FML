@@ -4,9 +4,42 @@ This is a simple Particle-Mesh (PM) N-body code for a wide range of model that i
 
 You can find some documentation [on this page](https://fml.wintherscoming.no/nbodycode.php) or look at the source files.
 
+# Running the code
+
+```bash
+make                                   # settings in ../Makefile.config (or ../Makefile.local)
+mpirun -np 4 ./nbody parameterfile.lua
+./nbody --parameters PARAMETERS.md     # write the reference of all parameters
+```
+
+All the parameters, with their type, default value, when they are used and the allowed values, are listed in
+[PARAMETERS.md](PARAMETERS.md) (generated from `src/ParameterSchema.h`). `parameterfile.lua` is a commented
+example. String parameters are checked against the allowed values, and names in the parameterfile that are not
+parameters (e.g. misspelled ones) give a warning with a suggestion for what was meant.
+
+The particle type is chosen automatically to use as little memory as possible: 56 bytes per particle without COLA,
+80 bytes with scale-independent COLA and 104 bytes with scale-dependent COLA (in 3D, see `src/Particles.h`).
+
+How the code is organised:
+
+| File | Contents |
+|---|---|
+| `src/Main.cpp` | Reads the parameterfile, creates the models and runs the simulation |
+| `src/ParameterSchema.h` | All the parameters (read, checked and documented from one table) |
+| `src/Models.h` | The list of cosmologies and gravity models that can be selected |
+| `src/Particles.h` | The particle types |
+| `src/Simulation.h` | The simulation: initial conditions, time-stepping loop and output |
+| `src/SimulationParameters.h` | The parameters of the simulation itself, grouped and validated |
+| `src/TimeStepping.h` | Where the steps are and the size of the kick/drift steps |
+| `src/InitialPowerSpectrum.h`, `src/InitialConditions.h`, `src/ExternalIC.h` | Making the initial conditions |
+| `src/COLA.h` | The COLA method |
+| `src/AnalyzeOutput.h` | On the fly analysis (P(k), multipoles, bispectrum, halos) and output |
+| `src/Cosmology*.h`, `src/GravityModel*.h` | The models |
+| `tests/` | Accuracy tests (comparison to MG-PICOLA), checks and regression tests (see `tests/README.md`) |
+
 # Models
 
-The two main concepts in the code is that of a Cosmology and a GravityModel. The former contains all of the background evolution quantities (Hubble function etc.) and the latter everything related to growth of perturbations: LPT growth factors and how to compute forces from the density field. The reason these things are separate is that it makes it possible to combine different thing while keeping the rest fixed. Adding a new model is as simple as making a new class that inherits from the base class Cosmology or GravityModel and implement the relevant functions.
+The two main concepts in the code is that of a Cosmology and a GravityModel. The former contains all of the background evolution quantities (Hubble function etc.) and the latter everything related to growth of perturbations: LPT growth factors and how to compute forces from the density field. The reason these things are separate is that it makes it possible to combine different thing while keeping the rest fixed. Adding a new model is as simple as making a new class that inherits from the base class Cosmology or GravityModel and implement the relevant functions, adding it to the list in `src/Models.h` and adding the parameters it reads to `src/ParameterSchema.h`.
 
 The models that are currently implemented are
 

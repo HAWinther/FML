@@ -14,7 +14,7 @@ all the main code paths of the solver:
 | `read_particles_exact` | Reading particles (from `cola_quinn_all`) with exact LPT reconstruction |
 | `read_particles_grid` | Reading particles with LPT reconstruction from the density field |
 | `read_phases` | Taking the phases of the IC from particles |
-| `nongaussian` | Non-gaussian IC. **Currently fails** (NaN in the IC), so it is not run by default |
+| `nongaussian` | Non-gaussian (local fNL) IC |
 
 The cases are defined in `cases.py`.
 

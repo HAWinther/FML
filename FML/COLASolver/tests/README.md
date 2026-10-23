@@ -1,9 +1,39 @@
 # Tests
 
-This folder contains some tests. This is mainly comparing to L-PICOLA / MG-PICOLA.
-We have the option of using the same random number generator and the same time-stepping.
-When these things are the same we should get *very* close results (and we do do, the agreement is < 0.1%).
-For these tests I also modified the power-spectrum evaluation to do exactly the same in the two codes.
-Will add more tests later.
+All the scripts take the `nbody` executable and a folder to put the outputs in. They use
+`mpirun -np 2` by default; set `MPIRUN` to change this (e.g. `MPIRUN=""` for a serial build).
 
-NB: the k we output is slightly different (we output the mean of the k-modes in each bin, while the picola results are the raw k-bins thus only the P(k) rows will agree)
+## Accuracy: comparison to MG-PICOLA (`LCDM_*`)
+
+The `LCDM_*` folders compare to L-PICOLA / MG-PICOLA run with the same random number generator and
+the same time-stepping. When these things are the same we should get *very* close results. For these
+tests MG-PICOLA was also modified to evaluate the power-spectrum exactly as we do it for the P(k) we
+compute every step (CIC on the force grid, window deconvolved, no shot-noise subtraction).
+
+```bash
+tests/run_accuracy_tests.sh ./nbody /tmp/accuracy      # about 15 s per test
+```
+
+Each test is a 128^3 simulation and passes if P(k) at z = 0 agrees with MG-PICOLA to 0.2% for all
+k up to the Nyquist frequency (0.8 h/Mpc). Currently the agreement is better than 0.08%. Use
+`compare_pofk.py <reference> <pofk-file> --verbose` to see the comparison bin by bin.
+
+NB: the k we output is slightly different (we output the mean of the k-modes in each bin, while the
+picola results are the raw k-bins) so the rows are matched by index.
+
+The `pofk_TestSim_cb_z0.000.txt` files are the results from the time the tests were made.
+
+## Non-gaussian initial conditions (`check_nongaussian.py`)
+
+```bash
+python3 tests/check_nongaussian.py ./nbody /tmp/nongaussian   # about 15 s, needs numpy
+```
+
+Runs gaussian IC and local fNL = 0, +300, -300 with the same seed and checks that fNL = 0 gives the
+same P(k) as the gaussian IC, that the bispectrum responds linearly to fNL and that the large-scale
+reduced bispectrum increases with fNL.
+
+## Regression tests (`regression/`)
+
+Small simulations covering all the main code paths, for checking that a change does not change the
+results (or only changes what it should). See `regression/README.md`.

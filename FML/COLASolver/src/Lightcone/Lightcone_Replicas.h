@@ -41,7 +41,7 @@ class BoxReplicas {
   public:
     size_t get_n_replicas() { return n_replicas_total; }
 
-    void read_parameters(ParameterMap & param) {
+    void read_parameters(FML::UTILS::ParameterMap & param) {
         use_replicas = param.get<bool>("plc_use_replicas");
         if (FML::ThisTask == 0) {
             std::cout << "# Read in Lightcone_Replicas.h:\n";

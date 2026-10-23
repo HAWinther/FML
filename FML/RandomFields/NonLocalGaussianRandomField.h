@@ -1,7 +1,9 @@
 #ifndef NONLOCALGAUSSIANRANDOMFIELD_HEADER
 #define NONLOCALGAUSSIANRANDOMFIELD_HEADER
+#include <array>
 #include <cassert>
 #include <climits>
+#include <cmath>
 #include <complex>
 #include <cstdio>
 #include <functional>
@@ -111,9 +113,29 @@ namespace FML {
                 assert_mpi(Nmesh > 0,
                            "[generate_nonlocal_gaussian_random_field_fourier] Grid must already be allocated");
 
-                // Generate a gaussian random field in fourier space
+                // Generate a gaussian random field in fourier space. We generate white noise (P = 1) and
+                // multiply by sqrt(P(k)) evaluated exactly in every cell: the gaussian generator works with a
+                // cubic spline of P(k), and for the steep primordial power-spectrum (~k^-3, with a
+                // constant value at k = 0) this spline is inaccurate at low k and can even go negative
+                // (giving NaN). The random numbers are the same so this is the same field as before
+                auto white_noise = []([[maybe_unused]] double kBox) { return 1.0; };
                 FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier(
-                    phi_fourier, rng, Pofk_of_kBox_over_volume, fix_amplitude);
+                    phi_fourier, rng, white_noise, fix_amplitude);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    for (auto && fourier_index : phi_fourier.get_fourier_range(islice, islice + 1)) {
+                        phi_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                        if (kmag == 0.0)
+                            continue;
+                        auto value = phi_fourier.get_fourier_from_index(fourier_index);
+                        value *= FML::GRID::FloatType(std::sqrt(Pofk_of_kBox_over_volume(kmag)));
+                        phi_fourier.set_fourier_from_index(fourier_index, value);
+                    }
+                }
 
                 // Set DC mode to zero (this should be the case, but just to be sure)
                 if (FML::ThisTask == 0)
@@ -189,10 +211,9 @@ namespace FML {
                     return;
                 }
 
-                // If we use GSL make a spline (std::function can be slow) otherwise this is just a copy
-                // of the function itself
-                auto Pofk_of_kBox_over_volume_spline =
-                    phi_fourier.make_fourier_spline(Pofk_of_kBox_over_volume, "P(k)/V");
+                // NB: we evaluate P(k) exactly and not with a spline (FFTWGrid::make_fourier_spline) as
+                // such a spline of the steep primordial power-spectrum is inaccurate (see above)
+                const auto & Pofk_of_kBox_over_volume_spline = Pofk_of_kBox_over_volume;
 
                 // Compute the kernel terms
                 FFTWGrid<N> phi_m13(Nmesh);

@@ -1,9 +1,11 @@
 #ifndef LUAFILEPARSER_HEADER
 #define LUAFILEPARSER_HEADER
 
+#include <algorithm>
 #include <cstring>
 #include <ios>
 #include <iostream>
+#include <string>
 #include <vector>
 
 #ifdef USE_MPI
@@ -99,6 +101,34 @@ namespace FML {
             /// Read arrays of strings. If it does not exist use the default_value unless required for which we throw and error
             std::vector<std::string>
             read_string_array(std::string name, std::vector<std::string> default_value, bool required = true);
+
+            /// The names of all the global variables set in the file (not counting the ones defined by Lua itself).
+            /// Useful for checking for misspelled parameter names
+            std::vector<std::string> get_global_variable_names() const {
+                auto globals = [](lua_State * state) {
+                    std::vector<std::string> names;
+                    lua_pushglobaltable(state);
+                    lua_pushnil(state);
+                    while (lua_next(state, -2) != 0) {
+                        if (lua_type(state, -2) == LUA_TSTRING)
+                            names.push_back(lua_tostring(state, -2));
+                        lua_pop(state, 1);
+                    }
+                    lua_pop(state, 1);
+                    return names;
+                };
+                lua_State * fresh = luaL_newstate();
+                luaL_openlibs(fresh);
+                auto builtin = globals(fresh);
+                lua_close(fresh);
+
+                std::vector<std::string> names;
+                for (auto & name : globals(L))
+                    if (std::find(builtin.begin(), builtin.end(), name) == builtin.end())
+                        names.push_back(name);
+                std::sort(names.begin(), names.end());
+                return names;
+            }
         };
 
         /// How to handle errors

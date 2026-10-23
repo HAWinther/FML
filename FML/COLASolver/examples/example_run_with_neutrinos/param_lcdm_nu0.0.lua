@@ -42,7 +42,8 @@ cosmology_Omegab = 0.049
 -- Massive neutrino density
 cosmology_OmegaMNu = 0.0
 -- Dark energy density (a CC)
-cosmology_OmegaLambda = 0.682407079
+-- (OmegaLambda is now derived from the other density parameters; this example is flat)
+cosmology_OmegaK = 0.0
 -- Effective number of relativistic species
 cosmology_Neffective = 3.046
 -- Temperature of CMB today
@@ -226,7 +227,8 @@ force_nmesh = 128
 -- Density assignment method: NGP, CIC, TSC, PCS, PQS
 force_density_assignment_method = "CIC"
 -- The kernel to use when solving the Poisson equation
-force_kernel = "continuous_greens_function"
+force_greens_function_kernel = "continuous"
+force_gradient_kernel = "continuous"
 -- Include the effects of massive neutrinos when computing
 -- the density field (density of mnu is the linear prediction)
 -- Requires: transferinfofile above (we need all T(k,z))
@@ -296,3 +298,13 @@ bispectrum_subtract_shotnoise = false
 -- Density assignment method: NGP, CIC, TSC, PCS, PQS
 bispectrum_density_assignment_method = "PCS"
 
+
+------------------------------------------------------------
+-- Parameters added in newer versions of the code (default values)
+------------------------------------------------------------
+simulation_enforce_LPT_trajectories = false
+simulation_cola_LPT_order = 2
+ic_type_of_input_fileformat = "CAMB"
+force_use_finite_difference_force = false
+force_finite_difference_stencil_order = 4
+lightcone = false

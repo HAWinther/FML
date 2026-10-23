@@ -461,3 +461,8 @@ bispectrum_subtract_shotnoise = false
 -- Density assignment method: NGP, CIC, TSC, PCS, PQS
 bispectrum_density_assignment_method = "PCS"
 
+
+------------------------------------------------------------
+-- Parameters added in newer versions of the code (default values)
+------------------------------------------------------------
+simulation_cola_LPT_order = 2

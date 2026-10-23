@@ -1,0 +1,206 @@
+# COLASolver parameters
+
+Generated with `./nbody --parameters PARAMETERS.md` from `src/ParameterSchema.h`.
+
+Parameters marked *optional* take the default value if they are not in the parameterfile, unless `all_parameters_must_be_in_file = true`. A parameter is only used if the condition in the *Used when* column holds.
+
+## General
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `all_parameters_must_be_in_file` | bool | `false` | always | If true every parameter that is used must be in the parameterfile (no default values are used) |
+
+## Simulation
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `simulation_boxsize` | double | *required* | always | Boxsize of the simulation (Mpc/h) |
+| `simulation_name` | string | *required* | always | Label used in the output filenames |
+| `simulation_use_cola` | bool | `false` | always | Use the COLA method |
+| `simulation_use_scaledependent_cola` | bool | `true` | always | If the gravity model has scale-dependent growth: use scale-dependent COLA. If false we use the k = 0 limit of the growth factors when doing COLA |
+| `simulation_enforce_LPT_trajectories` | bool | `false` | simulation_use_cola = true | Do not compute the PM force, just let particles follow the LPT trajectories |
+| `simulation_cola_LPT_order` | int | `2` | simulation_use_cola = true | The LPT order of COLA (1, 2 or 3). Has to be <= ic_LPT_order. If < 1 COLA is turned off |
+
+## Cosmology
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `cosmology_model` | string | `"LCDM"` | always | The cosmology (background evolution). Options: `LCDM`, `w0waCDM`, `DGP`, `JBD` |
+| `cosmology_Omegab` | double | *required* | always | Baryon density parameter |
+| `cosmology_OmegaMNu` | double | `0` | always | Massive neutrino density parameter |
+| `cosmology_OmegaCDM` | double | *required* | always | CDM density parameter |
+| `cosmology_OmegaK` | double | *required* | always | Curvature density parameter (-k/H0^2) |
+| `cosmology_Neffective` | double | *required* | always | Effective number of relativistic species |
+| `cosmology_TCMB_kelvin` | double | *required* | always | Temperature of the CMB today (Kelvin) |
+| `cosmology_h` | double | *required* | always | Hubble parameter H0 = 100h km/s/Mpc |
+| `cosmology_JBD_wBD` | double | *required* | cosmology_model = JBD | The JBD parameter (wBD -> infinity gives GR) |
+| `cosmology_JBD_GeffG_today` | double | `1` | cosmology_model = JBD | The value of G today relative to Newtons constant (GeffG_today != 1 effectively gives a different Newtons constant) |
+| `cosmology_JBD_density_parameter_definition` | string | `"hi-class"` | cosmology_model = JBD | Definition of the density parameters Omega = 8pi G_* rho / 3H0^2 (which G_* to use). Options: `Gbare`, `Gnewton`, `Gtoday`, `hi-class` |
+| `cosmology_w0` | double | *required* | cosmology_model = w0waCDM | Dark energy equation of state w(a) = w0 + wa(1-a): w0 |
+| `cosmology_wa` | double | *required* | cosmology_model = w0waCDM | Dark energy equation of state w(a) = w0 + wa(1-a): wa |
+| `cosmology_dgp_OmegaRC` | double | *required* | cosmology_model = DGP | The cross-over scale of the self-accelerating DGP model (Omega_rc = 1/(4 rc^2 H0^2)) |
+
+## Gravity model
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `gravity_model` | string | `"GR"` | always | The gravity model (growth of perturbations and forces). Options: `GR`, `f(R)`, `DGP`, `JBD`, `Symmetron`, `Geff`, `mbeta` |
+| `gravity_model_geff_geffofa_filename` | string | *required* | gravity_model = Geff | File with the format [a, Geff/G(a)] |
+| `gravity_model_mbeta_params` | double list | *required* | gravity_model = mbeta | The parameters (beta0, n, m0, m) of beta(a) = beta0 a^n and m(a) = m0 H0 a^m |
+| `gravity_model_fofr_fofr0` | double | *required* | gravity_model = f(R) | The value of f_R today |
+| `gravity_model_fofr_nfofr` | double | `1` | gravity_model = f(R) | The index n of the Hu-Sawicky model |
+| `gravity_model_symmetron_assb` | double | `0.5` | gravity_model = Symmetron | Symmetry breaking scale factor (no fifth-force for a < assb) |
+| `gravity_model_symmetron_beta` | double | `1` | gravity_model = Symmetron | Coupling strength relative to gravity |
+| `gravity_model_symmetron_L_mpch` | double | `1` | gravity_model = Symmetron | Range of the fifth force in the background today (Mpc/h) |
+| `gravity_model_dgp_rcH0overc` | double | *required* | gravity_model = DGP | The cross-over scale rc H0 / c |
+| `gravity_model_screening` | bool | `true` | gravity_model in {mbeta, f(R), Symmetron, DGP} | Use the approximate screening model (otherwise linear) |
+| `gravity_model_dgp_smoothing_filter` | string | `"tophat"` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the filter used to smooth the density field. Options: `tophat`, `sharpk`, `gaussian` |
+| `gravity_model_dgp_smoothing_scale_over_boxsize` | double | `1` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the smoothing scale R/boxsize |
+| `gravity_model_screening_enforce_largescale_linear` | bool | `false` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true | Combine the screened solution with the linear solution to get the correct linear evolution on large scales |
+| `gravity_model_screening_linear_scale_hmpc` | double | `0.05` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true | Use the linear solution for k < k* and the screened solution for k > k* (h/Mpc) |
+| `gravity_model_screening_efficiency` | double | `1` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true and gravity_model in {mbeta, f(R)} | Screening efficiency (1 is standard). Increases or decreases the amount of screening |
+| `gravity_model_fofr_exact_solution` | bool | `false` | gravity_model = f(R) | Solve the exact f(R) equation with the multigrid solver (slow, mainly for testing) |
+| `gravity_model_symmetron_exact_solution` | bool | `false` | gravity_model = Symmetron | Solve the exact symmetron equation with the multigrid solver (slow, mainly for testing) |
+| `gravity_model_dgp_exact_solution` | bool | `false` | gravity_model = DGP | Solve the exact DGP equation with the multigrid solver (slow, mainly for testing; can be hard to get to converge) |
+| `multigrid_nsweeps` | int | `10` | solving the exact equation of the gravity model | Multigrid solver: Newton-Gauss-Seidel sweeps on every level |
+| `multigrid_nsweeps_first_step` | int | `20` | solving the exact equation of the gravity model | Multigrid solver: sweeps on the first step (increase if the solver fails to converge) |
+| `multigrid_solver_residual_convergence` | double | `1e-06` | solving the exact equation of the gravity model | Multigrid solver: converged when the residual is below this |
+
+## Primordial power-spectrum
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `cosmology_As` | double | `2e-09` | always | Primordial amplitude |
+| `cosmology_ns` | double | `1` | always | Spectral index |
+| `cosmology_kpivot_mpc` | double | `0.05` | always | Pivot scale (1/Mpc) |
+
+## Particles
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `particle_Npart_1D` | int | *required* | always | Number of CDM+baryon particles per dimension |
+| `particle_allocation_factor` | double | `1.5` | always | Allocate this factor more particles than the average per task (particles move between tasks) |
+
+## Time-stepping
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `timestep_nsteps` | int list | *required* | always | Number of steps between the outputs (one per output redshift). If only one number it is the total number of steps |
+| `timestep_algorithm` | string | `"KDK"` | always | The time-stepping algorithm |
+| `timestep_method` | string | `"Quinn"` | always | The time-stepping method. Options: `Quinn`, `Tassev` |
+| `timestep_cola_nLPT` | double | `-2.5` | always | The nLPT parameter of the Tassev time-stepping |
+| `timestep_scalefactor_spacing` | string | `"linear"` | always | Spacing of the steps in the scale factor (powerlaw: uniform in a^timestep_spacing_power). Options: `linear`, `logarithmic`, `powerlaw` |
+| `timestep_spacing_power` | double | `1` | timestep_scalefactor_spacing = powerlaw | The steps are uniform in a^power |
+
+## Initial conditions
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `ic_initial_redshift` | double | *required* | always | The initial redshift of the simulation |
+| `ic_random_seed` | int | *required* | always | The random seed |
+| `ic_random_generator` | string | `"MT19937"` | always | The random number generator (GSL is gsl_rng_ranlxd1 as used in 2LPTic, for comparisons). Options: `GSL`, `MT19937` |
+| `ic_nmesh` | int | *required* | always | The grid size used to generate the IC |
+| `ic_type_of_input` | string | *required* | always | The input: powerspectrum (file with [k (h/Mpc), P(k) (Mpc/h)^3]), transferfunction (file with [k (h/Mpc), T(k) Mpc^2]) or transferinfofile (file listing T(k,z) files from CAMB/CLASS). Options: `powerspectrum`, `transferfunction`, `transferinfofile` |
+| `ic_type_of_input_fileformat` | string | `"CAMB"` | always | Format of the transfer function files (CLASS run with format=camb). Options: `CAMB`, `CLASS`, `AXIONCAMB` |
+| `ic_input_filename` | string | *required* | always | The input file |
+| `ic_input_redshift` | double | *required* | always | The redshift of the input P(k) / T(k) |
+| `ic_fix_amplitude` | bool | `true` | always | Fix the amplitude of the modes when generating the random field |
+| `ic_reverse_phases` | bool | `false` | always | Reverse the phases (for paired simulations) |
+| `ic_random_field_type` | string | `"gaussian"` | always | Type of IC: gaussian, nongaussian, read_particles (read a GADGET file and use that, reconstructing the LPT fields if COLA) or read_phases (take the phases from a GADGET file). Options: `gaussian`, `nongaussian`, `read_particles`, `read_phases` |
+| `ic_LPT_order` | int | `2` | always | The LPT order used to make the IC |
+| `ic_sigma8_normalization` | bool | `false` | always | Normalize P(k) to a given sigma8 (otherwise use the input) |
+| `ic_sigma8_redshift` | double | `0` | always | The redshift of the sigma8 value |
+| `ic_sigma8` | double | `0.8` | always | The sigma8 value to normalize to |
+| `ic_use_gravity_model_GR` | bool | `false` | always | For modified gravity: the input P(k) is for LCDM, use GR growth factors to scale it to the initial redshift (same IC as the LCDM simulation) |
+| `ic_fnl_type` | string | *required* | ic_random_field_type = nongaussian | Type of non-gaussianity. Options: `local`, `equilateral`, `orthogonal` |
+| `ic_fnl` | double | *required* | ic_random_field_type = nongaussian | The value of fNL |
+| `ic_fnl_redshift` | double | *required* | ic_random_field_type = nongaussian | The redshift at which the non-gaussian potential is applied |
+| `ic_reconstruct_gadgetfilepath` | string | *required* | ic_random_field_type in {read_particles, read_phases} | Path to the GADGET files |
+| `ic_reconstruct_assigment_method` | string | `"CIC"` | ic_random_field_type in {read_particles, read_phases} | Density assignment method used to reconstruct the density field. Options: `NGP`, `CIC`, `TSC`, `PCS`, `PQS` |
+| `ic_reconstruct_smoothing_filter` | string | `"sharpk"` | ic_random_field_type in {read_particles, read_phases} | Filter used to remove small-scale modes from the reconstructed density field. Options: `tophat`, `sharpk`, `gaussian` |
+| `ic_reconstruct_dimless_smoothing_scale` | double | `0` | ic_random_field_type in {read_particles, read_phases} | Smoothing scale R/boxsize of the reconstructed density field |
+| `ic_reconstruct_interlacing` | bool | `false` | ic_random_field_type in {read_particles, read_phases} | Use interlacing when reconstructing the density field |
+| `ic_reconstruct_exact` | bool | `false` | ic_random_field_type in {read_particles, read_phases} | Reconstruct the LPT fields exactly from the positions and velocities (always works for 1LPT IC; for 2LPT IC the particles must come from a regular grid) |
+
+## Forces
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `force_nmesh` | int | *required* | always | Grid size used to compute the PM forces |
+| `force_density_assignment_method` | string | `"CIC"` | always | Density assignment method. Options: `NGP`, `CIC`, `TSC`, `PCS`, `PQS` |
+| `force_greens_function_kernel` | string | `"fiducial"` | always | Kernel for D^2 when solving the Poisson equation (fiducial = continuous). Options: `fiducial`, `continuous`, `discrete_2pt`, `discrete_4pt` |
+| `force_gradient_kernel` | string | `"fiducial"` | always | Kernel for D when computing the forces (fiducial = continuous). Options: `fiducial`, `continuous`, `discrete_2pt`, `discrete_4pt` |
+| `force_linear_massive_neutrinos` | bool | `false` | always | Include massive neutrinos in the density field using linear theory (requires ic_type_of_input = transferinfofile) |
+| `force_use_finite_difference_force` | bool | `false` | always | Experimental: compute forces with finite differences of the potential |
+| `force_finite_difference_stencil_order` | int | `4` | always | Experimental: order of the finite difference stencil |
+
+## Lightcone
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `lightcone` | bool | `false` | always | Make a lightcone |
+| `plc_pos_observer` | double list | `{0, 0, 0}` | lightcone = true | Position of the observer in units of the boxsize |
+| `plc_z_init` | double | `0` | lightcone = true | The redshift we start recording the lightcone |
+| `plc_z_finish` | double | `0` | lightcone = true | The redshift we stop recording the lightcone |
+| `plc_boundary_mpch` | double | `20` | lightcone = true | Boundary region around the shell to make sure we get all particles (Mpc/h) |
+| `plc_use_replicas` | bool | `false` | lightcone = true | Replicate the box to get the sky coverage we want |
+| `plc_ndim_rep` | int | `0` | lightcone = true | Number of dimensions with replicas in both directions (3D: 0 = octant, 3 = full sky) |
+| `plc_output_gadgetfile` | bool | `false` | lightcone = true | Output the lightcone particles in GADGET format |
+| `plc_output_asciifile` | bool | `false` | lightcone = true | Output the lightcone particles in ascii |
+| `plc_output_in_batches` | bool | `false` | lightcone = true | Output in batches to save memory |
+| `plc_make_onion_density_maps` | bool | `false` | lightcone = true | Make (Healpix) density maps delta(z, theta) |
+| `plc_nside` | int | `256` | lightcone = true and plc_make_onion_density_maps = true | Healpix nside of the maps (npix = 12 nside^2) |
+| `plc_da_maps` | double | `0.02` | lightcone = true and plc_make_onion_density_maps = true | Roughly the size of the bins in a for the maps |
+| `plc_use_chunkpix` | bool | `false` | lightcone = true and plc_make_onion_density_maps = true | Store the maps with chunkpix (useful for sparse maps) |
+| `plc_nside_chunks` | int | `8` | lightcone = true and plc_make_onion_density_maps = true and plc_use_chunkpix = true | Healpix nside of the chunks |
+
+## Output
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `output_folder` | string | *required* | always | Folder to put the output in ("" is the current folder) |
+| `output_redshifts` | double list | *required* | always | The output redshifts (decreasing) |
+| `output_particles` | bool | `true` | always | Write the particles at the output redshifts |
+| `output_fileformat` | string | `"GADGET"` | always | File format for the particles. Options: `GADGET`, `FML` |
+
+## Halo finding
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `fof` | bool | `false` | always | Locate friends-of-friends halos at every output |
+| `fof_nmin_per_halo` | int | `20` | fof = true | Minimum number of particles per halo |
+| `fof_linking_length` | double | `0.2` | fof = true | The linking length in units of the mean particle separation |
+| `fof_nmesh_max` | int | `0` | fof = true | Maximum grid size used to bin particles to speed up the linking (0: the code chooses) |
+| `fof_buffer_length_mpch` | double | `3` | fof = true | Buffer region (larger than the largest halo) from neighbor tasks (Mpc/h) |
+
+## Power-spectrum
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `pofk` | bool | `false` | always | Compute the power-spectrum at every output |
+| `pofk_nmesh` | int | `0` | pofk = true | Grid size |
+| `pofk_interlacing` | bool | `false` | pofk = true | Use interlaced grids to reduce aliasing |
+| `pofk_subtract_shotnoise` | bool | `false` | pofk = true | Subtract shot-noise |
+| `pofk_density_assignment_method` | string | `"CIC"` | pofk = true | Density assignment method. Options: `NGP`, `CIC`, `TSC`, `PCS`, `PQS` |
+
+## Power-spectrum multipoles
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `pofk_multipole` | bool | `false` | always | Compute the redshift space multipoles P_ell(k) at every output |
+| `pofk_multipole_nmesh` | int | *required* | pofk_multipole = true | Grid size |
+| `pofk_multipole_interlacing` | bool | `false` | pofk_multipole = true | Use interlaced grids to reduce aliasing |
+| `pofk_multipole_subtract_shotnoise` | bool | `false` | pofk_multipole = true | Subtract shot-noise from P0 |
+| `pofk_multipole_ellmax` | int | `4` | pofk_multipole = true | Compute P_ell for ell = 0, 2, ..., ellmax |
+| `pofk_multipole_density_assignment_method` | string | `"CIC"` | pofk_multipole = true | Density assignment method. Options: `NGP`, `CIC`, `TSC`, `PCS`, `PQS` |
+
+## Bispectrum
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `bispectrum` | bool | `false` | always | Compute the bispectrum at every output |
+| `bispectrum_nmesh` | int | *required* | bispectrum = true | Grid size |
+| `bispectrum_nbins` | int | *required* | bispectrum = true | Number of k-bins (memory and time scale as nbins grids and nbins^3 integrals) |
+| `bispectrum_density_assignment_method` | string | `"CIC"` | bispectrum = true | Density assignment method. Options: `NGP`, `CIC`, `TSC`, `PCS`, `PQS` |
+| `bispectrum_interlacing` | bool | `true` | bispectrum = true | Use interlaced grids to reduce aliasing |
+| `bispectrum_subtract_shotnoise` | bool | `false` | bispectrum = true | Subtract shot-noise |

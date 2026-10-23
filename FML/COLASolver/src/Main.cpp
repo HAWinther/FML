@@ -1,174 +1,96 @@
-
-//=============================================================
-// How to process the parameters from the input file
-// Gravity model parameters are read by the GravityModel,
-// cosmology parameters are read by the Cosmology model
-// and the rest are read by the Simulation
-//=============================================================
-#include "ReadParameters.h"
-
-//=============================================================
-// The available cosmologies
-//=============================================================
-#include "Cosmology.h"
-#include "Cosmology_DGP.h"
-#include "Cosmology_LCDM.h"
-#include "Cosmology_w0wa.h"
-#include "Cosmology_JBD.h"
-
-//=============================================================
-// The available gravity models
-//=============================================================
-#include "GravityModel.h"
-#include "GravityModel_DGP.h"
-#include "GravityModel_GR.h"
-#include "GravityModel_fofr.h"
-#include "GravityModel_JBD.h"
-#include "GravityModel_Geff.h"
-#include "GravityModel_mbeta.h"
-#include "GravityModel_symmetron.h"
-
+#include "Models.h"
+#include "ParameterSchema.h"
+#include "Particles.h"
 #include "Simulation.h"
 
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 
-using ParameterMap = FML::UTILS::ParameterMap;
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <string>
 
-//=============================================================
-// Design the particle you want to use here. Free choice of
-// types so if you for example want to save memory you can change to floats
-// or comment out fields if you, say, don't want scaledependent COLA
+//=============================================================================
+// Usage:
+//   ./nbody parameterfile.lua    Run a simulation
+//   ./nbody --parameters [file]  Print the reference of all parameters (markdown) [to file]
 //
-// See src/ExampleParticles.h for more examples
-// See FML/ParticleTypes/ReflectOnParticleMethods.h for standard methods
-//=============================================================
+// The cosmologies and gravity models are listed in Models.h, the parameters in
+// ParameterSchema.h and the particle types in Particles.h
+//=============================================================================
 
+using ParameterMap = FML::UTILS::ParameterMap;
 constexpr int NDIM = NDIM_SPACE;
 
-class Particle {
-  public:
-    //=============================================================
-    // Things that any particle must have
-    //=============================================================
-    double pos[NDIM];
-    double * get_pos() { return pos; }
-    double vel[NDIM];
-    double * get_vel() { return vel; }
-    constexpr int get_ndim() const { return NDIM; }
-
-    //=============================================================
-    // Optional things below:
-    //=============================================================
-
-    //=============================================================
-    // Add ID to particles (ok to skip this, but if so this will not be
-    // present in GADGET output files)
-    //=============================================================
-    long long int id;
-    long long int get_id() const { return id; }
-    void set_id(long long int _id) { id = _id; }
-
-    //=============================================================
-    // Initial Lagrangian position
-    // Only needed for COLA with scaledependent growth
-    // NB: should ideally have same type as [pos] to avoid truncating the
-    // precision of pos (these are temporarily swapped by some algorithms)
-    //=============================================================
-    double q[NDIM];
-    double * get_q() { return q; }
-
-    //=============================================================
-    // 1LPT displacement field Psi (needed if you want >= 1LPT COLA)
-    //=============================================================
-    float Psi_1LPT[NDIM];
-    float * get_D_1LPT() { return Psi_1LPT; }
-
-    //=============================================================
-    // 2LPT displacement field Psi (needed for >= 2LPT COLA)
-    //=============================================================
-    float Psi_2LPT[NDIM];
-    float * get_D_2LPT() { return Psi_2LPT; }
-
-    //=============================================================
-    // 3LPT displacement field Psi (needed for >= 3LPT COLA)
-    //=============================================================
-    // float Psi_3LPTa[NDIM];
-    // float Psi_3LPTb[NDIM];
-    // float * get_D_3LPTa() { return Psi_3LPTa; }
-    // float * get_D_3LPTb() { return Psi_3LPTb; }
-};
+/// Run the simulation with the particle type T
+template <class T>
+void run_simulation(const ParameterMap & param,
+                    std::shared_ptr<Cosmology> cosmo,
+                    std::shared_ptr<GravityModel<NDIM>> grav) {
+    FML::PARTICLE::info<T>();
+    NBodySimulation<NDIM, T> sim(cosmo, grav);
+    ParameterMap p = param;
+    sim.read_parameters(p);
+    sim.init();
+    sim.run();
+}
 
 int main(int argc, char ** argv) {
     if (argc == 1) {
-        std::cout << "Missing parameterfile. Run as: ./code input.lua\n";
+        if (FML::ThisTask == 0) {
+            std::cout << "Missing parameterfile. Run as: ./nbody parameterfile.lua\n";
+            std::cout << "To see all the parameters run: ./nbody --parameters\n";
+        }
         return 0;
     }
-
-    //=============================================================
-    // Show info about the particle we are using
-    //=============================================================
-    FML::PARTICLE::info<Particle>();
+    if (std::strcmp(argv[1], "--parameters") == 0) {
+        if (FML::ThisTask == 0) {
+            if (argc > 2) {
+                std::ofstream file(argv[2]);
+                COLASOLVER::print_parameter_reference<NDIM>(file);
+                std::cout << "Wrote the parameter reference to " << argv[2] << "\n";
+            } else {
+                COLASOLVER::print_parameter_reference<NDIM>(std::cout);
+            }
+        }
+        return 0;
+    }
 
     //=============================================================
     // Parse the parameterfile
     //=============================================================
     ParameterMap param;
-    std::string filename = std::string(argv[1]);
-    read_parameterfile(param, filename);
+    COLASOLVER::read_parameterfile<NDIM>(param, argv[1]);
     if (FML::ThisTask == 0)
         param.info();
 
     //=============================================================
-    // Choose the cosmology
+    // The cosmology (background) and the gravity model (growth and forces)
     //=============================================================
-    auto cosmology_model = param.get<std::string>("cosmology_model");
-    std::shared_ptr<Cosmology> cosmo;
-    if (cosmology_model == "LCDM")
-        cosmo = std::make_shared<CosmologyLCDM>();
-    else if (cosmology_model == "w0waCDM")
-        cosmo = std::make_shared<Cosmologyw0waCDM>();
-    else if (cosmology_model == "DGP")
-        cosmo = std::make_shared<CosmologyDGP>();
-    else if (cosmology_model == "JBD")
-        cosmo = std::make_shared<CosmologyJBD>();
-    else
-        throw std::runtime_error("Unknown cosmology [" + cosmology_model + "]");
+    auto cosmo = COLASOLVER::make_cosmology(param.get<std::string>("cosmology_model"));
     cosmo->read_parameters(param);
     cosmo->init();
     cosmo->info();
 
-    //=============================================================
-    // Choose the gravity model
-    //=============================================================
-    auto gravity_model = param.get<std::string>("gravity_model");
-    std::shared_ptr<GravityModel<NDIM>> grav;
-    if (gravity_model == "GR")
-        grav = std::make_shared<GravityModelGR<NDIM>>(cosmo);
-    else if (gravity_model == "f(R)")
-        grav = std::make_shared<GravityModelFofR<NDIM>>(cosmo);
-    else if (gravity_model == "DGP")
-        grav = std::make_shared<GravityModelDGP<NDIM>>(cosmo);
-    else if (gravity_model == "JBD")
-        grav = std::make_shared<GravityModelJBD<NDIM>>(cosmo);
-    else if (gravity_model == "Symmetron")
-        grav = std::make_shared<GravityModelSymmetron<NDIM>>(cosmo);
-    else if (gravity_model == "Geff")
-        grav = std::make_shared<GravityModelGeff<NDIM>>(cosmo);
-    else if (gravity_model == "mbeta")
-        grav = std::make_shared<GravityModelmbeta<NDIM>>(cosmo);
-    else
-        throw std::runtime_error("Unknown gravitymodel [" + gravity_model + "]");
+    auto grav = COLASOLVER::make_gravity_model<NDIM>(param.get<std::string>("gravity_model"), cosmo);
     grav->read_parameters(param);
     grav->init();
     grav->info();
 
     //=============================================================
-    // Run the simulation
+    // Run the simulation with the smallest particle type that has
+    // what we need (see Particles.h). COLA with LPT order < 1 is
+    // turned off (see SimulationParameters.h)
     //=============================================================
-    NBodySimulation<NDIM, Particle> sim(cosmo, grav);
-    sim.read_parameters(param);
-    sim.init();
-    sim.run();
+    const bool use_cola =
+        param.get<bool>("simulation_use_cola") and param.get<int>("simulation_cola_LPT_order", 2) >= 1;
+    const bool scaledependent_cola = use_cola and param.get<bool>("simulation_use_scaledependent_cola");
+    if (scaledependent_cola)
+        run_simulation<ParticleCOLAScaleDep<NDIM>>(param, cosmo, grav);
+    else if (use_cola)
+        run_simulation<ParticleCOLA<NDIM>>(param, cosmo, grav);
+    else
+        run_simulation<ParticleBasic<NDIM>>(param, cosmo, grav);
 }
-
