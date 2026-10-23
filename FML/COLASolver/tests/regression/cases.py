@@ -193,6 +193,37 @@ CASES = {
         output_redshifts=[0.0],
         timestep_nsteps=[6],
     ),
+    # FastPM time-stepping with COLA, logarithmic spacing, f(R) gravity
+    "fastpm_cola_fofr": dict(
+        timestep_method="FastPM",
+        timestep_scalefactor_spacing="logarithmic",
+        gravity_model="f(R)",
+        gravity_model_fofr_fofr0=1e-5,
+        gravity_model_fofr_nfofr=1.0,
+        gravity_model_fofr_exact_solution=False,
+        gravity_model_screening=True,
+        gravity_model_screening_efficiency=1.0,
+        gravity_model_screening_enforce_largescale_linear=True,
+        gravity_model_screening_linear_scale_hmpc=0.1,
+    ),
+    # BullFrog time-stepping (no COLA) with the lightcone
+    "bullfrog_lightcone": dict(
+        simulation_use_cola=False,
+        timestep_method="BullFrog",
+        lightcone=True,
+        plc_pos_observer=[0.0, 0.0, 0.0],
+        plc_boundary_mpch=20.0,
+        plc_z_init=0.05,
+        plc_z_finish=0.0,
+        plc_use_replicas=False,
+        plc_ndim_rep=3,
+        plc_output_gadgetfile=False,
+        plc_output_asciifile=True,
+        plc_output_in_batches=True,
+        plc_make_onion_density_maps=False,
+        output_redshifts=[1.0, 0.0],
+        timestep_nsteps=[3, 3],
+    ),
     # Read particles written at z=20 by 'cola_quinn_all' and reconstruct LPT fields exactly
     "read_particles_exact": dict(
         ic_random_field_type="read_particles",

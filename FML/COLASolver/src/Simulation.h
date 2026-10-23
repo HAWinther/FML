@@ -183,6 +183,7 @@ class NBodySimulation {
         double avel_new;         // Scale factor of the velocities at the end of the step
         double delta_time_drift; // The size of the drift step
         double delta_time_kick;  // The size of the kick step
+        double velocity_scale;   // Multiply the velocities by this before the kick
     };
     void step(const StepInfo & s);
     void compute_density_field_fourier(FFTWGrid<NDIM> & density_grid_fourier, double a);
@@ -513,8 +514,7 @@ void NBodySimulation<NDIM, T>::run() {
         // The steps to take till the next output
         const double amin = (ioutput == 0) ? 1.0 / (1.0 + zini) : 1.0 / (1.0 + output_redshifts[ioutput - 1]);
         const double amax = 1.0 / (1.0 + output_redshifts[ioutput]);
-        const auto asteps = stepper.scalefactors_KDK(amin, amax, nsteps[ioutput]);
-        const auto delta_time = stepper.deltatime_KDK(amin, amax, nsteps[ioutput]);
+        const auto steps = stepper.steps(amin, amax, nsteps[ioutput]);
 
         if (nsteps[ioutput] > 0) {
             for (int istep = 0; istep <= nsteps[ioutput]; istep++) {
@@ -527,16 +527,13 @@ void NBodySimulation<NDIM, T>::run() {
                     std::cout << "#=====================================================\n";
                     std::cout << "# Step " << istep_total << " (" << istep << " / " << nsteps[ioutput]
                               << " till output " << ioutput << ")\n";
-                    std::cout << "# Pos: " << asteps.first[istep] << " -> " << asteps.first[istep + 1]
-                              << "  Vel: " << asteps.second[istep] << " -> " << asteps.second[istep + 1] << "\n";
+                    std::cout << "# Pos: " << steps[istep].apos << " -> " << steps[istep].apos_new
+                              << "  Vel: " << steps[istep].avel << " -> " << steps[istep].avel_new << "\n";
                     std::cout << "#=====================================================\n";
                 }
 
-                step({asteps.first[istep],
-                      asteps.first[istep + 1],
-                      asteps.second[istep + 1],
-                      delta_time.first[istep],
-                      delta_time.second[istep]});
+                const auto & s = steps[istep];
+                step({s.apos, s.apos_new, s.avel_new, s.delta_time_drift, s.delta_time_kick, s.velocity_scale});
             }
         }
 
@@ -588,6 +585,17 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
         timer.EndTiming("ComputeForce");
 
         timer.StartTiming("Kick");
+        if (s.velocity_scale != 1.0) {
+            auto * p = part.get_particles_ptr();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (size_t i = 0; i < part.get_npart(); i++) {
+                auto * vel = FML::PARTICLE::GetVel(p[i]);
+                for (int idim = 0; idim < NDIM; idim++)
+                    vel[idim] *= s.velocity_scale;
+            }
+        }
         FML::NBODY::KickParticles<NDIM>(force_real, part, s.delta_time_kick, force.density_assignment_method);
         timer.EndTiming("Kick");
     }

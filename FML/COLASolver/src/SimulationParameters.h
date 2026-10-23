@@ -30,7 +30,7 @@ namespace COLASOLVER {
     enum class ICRandomFieldType { Gaussian, NonGaussian, ReadParticles, ReadPhases };
     enum class ICInputType { PowerSpectrum, TransferFunction, TransferInfoFile };
     enum class RandomGeneratorType { GSL, MT19937 };
-    enum class TimestepMethod { Quinn, Tassev };
+    enum class TimestepMethod { Quinn, Tassev, FastPM, BullFrog };
     enum class ScaleFactorSpacing { Linear, Logarithmic, Powerlaw };
     enum class ParticleFileFormat { GADGET, FML };
 
@@ -179,7 +179,7 @@ namespace COLASOLVER {
 
     struct TimestepSettings {
         std::vector<int> nsteps;    // Steps between the outputs (if just 1 number the total amount of steps)
-        TimestepMethod method;      // The method of Quinn or the method of Tassev (for COLA mainly)
+        TimestepMethod method;      // Quinn, Tassev (for COLA mainly), FastPM or BullFrog (see TimeStepping.h)
         std::string algorithm;      // KDK - Kick-Drift-Kick is the main method we use
         double cola_nLPT;           // nLPT. For method = Tassev
         ScaleFactorSpacing spacing; // linear, logarithmic, powerlaw
@@ -318,7 +318,10 @@ namespace COLASOLVER {
             r.get("timestep_nsteps", timestep.nsteps);
             r.get_choice("timestep_method",
                          timestep.method,
-                         {{"Quinn", TimestepMethod::Quinn}, {"Tassev", TimestepMethod::Tassev}});
+                         {{"Quinn", TimestepMethod::Quinn},
+                          {"Tassev", TimestepMethod::Tassev},
+                          {"FastPM", TimestepMethod::FastPM},
+                          {"BullFrog", TimestepMethod::BullFrog}});
             r.get("timestep_algorithm", timestep.algorithm);
             r.get("timestep_cola_nLPT", timestep.cola_nLPT);
             r.get_choice("timestep_scalefactor_spacing",
@@ -394,6 +397,9 @@ namespace COLASOLVER {
                 if (FML::ThisTask == 0)
                     std::cout << "NB: simulation_cola_LPT_order < 1 so turning off COLA\n";
             }
+            if (simulation.use_cola and timestep.method == TimestepMethod::BullFrog)
+                fail("timestep_method = BullFrog already follows 2LPT and cannot be combined with COLA "
+                     "(simulation_use_cola = false)");
 
             // Output redshifts: decreasing and not before the start of the simulation
             // (a first output within 1e-3 of the initial redshift is taken to be at the initial redshift)

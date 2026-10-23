@@ -123,7 +123,16 @@ The code can also read IC from file (GADGET format) and if you want to do a run 
 
 # Time-stepping
 
-The code currently only does a second order leap-frog, but there are methods implemented for a 4th order Yoshida integrator if you want to test that. We work with a fixed set of steps determined ahead of time and you can freely choose how many steps in total or how many steps between output redshifts. There are two main time-stepping options: we can either use Quinn et al. or we can use the method of Tassev et al. (mainly useful for COLA). For the time-step spacing there are three options: linear, logarithmic or a powerlaw (free power) spacing in the scalefactor.
+The code currently only does a second order leap-frog, but there are methods implemented for a 4th order Yoshida integrator if you want to test that. We work with a fixed set of steps determined ahead of time and you can freely choose how many steps in total or how many steps between output redshifts. The time-stepping options (`timestep_method`) are:
+
+- `Quinn`: standard leapfrog (Quinn et al. 1997).
+- `Tassev`: modified leapfrog for COLA (Tassev et al. 2013).
+- `FastPM`: leapfrog where the kick and drift factors come from the linear growth factor, so the linear growing mode is followed exactly whatever the step size (Feng et al. 2016, [arXiv:1603.00476](https://arxiv.org/abs/1603.00476)).
+- `BullFrog`: drift-kick-drift in growth-factor time with the kick chosen so that 2LPT is followed after every step (Rampf, List & Hahn 2024, [arXiv:2409.19049](https://arxiv.org/abs/2409.19049)). It already does what COLA does, so it cannot be combined with COLA.
+
+Without COLA, FastPM and BullFrog need far fewer steps than Quinn: with 10 steps from z = 19 they get P(k) at z = 0 to about 0.5% for k < 0.1 h/Mpc and 1-2% up to k = 0.5 h/Mpc, while Quinn is off by 7-12% (see `tests/check_timestepping.py`).
+
+For the time-step spacing there are three options: linear, logarithmic or a powerlaw (free power) spacing in the scalefactor.
 
 # On the fly analysis
 

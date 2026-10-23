@@ -87,7 +87,7 @@ Parameters marked *optional* take the default value if they are not in the param
 |---|---|---|---|---|
 | `timestep_nsteps` | int list | *required* | always | Number of steps between the outputs (one per output redshift). If only one number it is the total number of steps |
 | `timestep_algorithm` | string | `"KDK"` | always | The time-stepping algorithm |
-| `timestep_method` | string | `"Quinn"` | always | The time-stepping method. Options: `Quinn`, `Tassev` |
+| `timestep_method` | string | `"Quinn"` | always | The time-stepping method. Quinn: standard leapfrog. Tassev: modified leapfrog for COLA. FastPM: leapfrog that follows linear growth exactly (Feng et al. 2016). BullFrog: follows 2LPT growth after every step (Rampf, List & Hahn 2024), not for COLA. Options: `Quinn`, `Tassev`, `FastPM`, `BullFrog` |
 | `timestep_cola_nLPT` | double | `-2.5` | always | The nLPT parameter of the Tassev time-stepping |
 | `timestep_scalefactor_spacing` | string | `"linear"` | always | Spacing of the steps in the scale factor (powerlaw: uniform in a^timestep_spacing_power). Options: `linear`, `logarithmic`, `powerlaw` |
 | `timestep_spacing_power` | double | `1` | timestep_scalefactor_spacing = powerlaw | The steps are uniform in a^power |

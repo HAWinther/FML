@@ -321,7 +321,12 @@ namespace COLASOLVER {
                        "Number of steps between the outputs (one per output redshift). If only one number it is the "
                        "total number of steps");
             b.optional("timestep_algorithm", "KDK", "The time-stepping algorithm");
-            b.optional("timestep_method", "Quinn", "The time-stepping method", {"Quinn", "Tassev"});
+            b.optional("timestep_method",
+                       "Quinn",
+                       "The time-stepping method. Quinn: standard leapfrog. Tassev: modified leapfrog for COLA. "
+                       "FastPM: leapfrog that follows linear growth exactly (Feng et al. 2016). BullFrog: follows "
+                       "2LPT growth after every step (Rampf, List & Hahn 2024), not for COLA",
+                       {"Quinn", "Tassev", "FastPM", "BullFrog"});
             b.optional("timestep_cola_nLPT", -2.5, "The nLPT parameter of the Tassev time-stepping");
             b.optional("timestep_scalefactor_spacing",
                        "linear",

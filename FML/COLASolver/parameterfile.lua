@@ -252,7 +252,8 @@ output_folder = "output"
 -- Number of steps between the outputs (in output_redshifts). 
 -- If only one number in the list then its the total number of steps 
 timestep_nsteps = {10}
--- The time-stepping method: Quinn, Tassev
+-- The time-stepping method: Quinn, Tassev (for COLA), FastPM or BullFrog (not with COLA)
+-- FastPM and BullFrog need far fewer steps than Quinn when not using COLA
 timestep_method = "Quinn"
 -- For Tassev: the nLPT parameter
 timestep_cola_nLPT = -2.5
