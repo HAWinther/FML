@@ -26,15 +26,19 @@
 #include "InitialPowerSpectrum.h"
 #include "Lightcone/Lightcone.h"
 #include "NBodyGauge.h"
-#include "Neutrinos.h"
+#include "KickDrift.h"
+#include "NeutrinoParticles.h"
 #include "Particles.h"
 #include "SimulationParameters.h"
+#include "Species.h"
 #include "TimeStepping.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <string>
 #include <utility>
@@ -50,9 +54,13 @@
 ///   SimulationParameters.h : all the parameters (read, printed and validated)
 ///   TimeStepping.h         : where the steps are and the size of the kick/drift steps
 ///   InitialPowerSpectrum.h : P(k,zini) / T(k,zini) the initial conditions are made from
-///   InitialConditions.h    : the initial density field
+///   InitialConditions.h    : the initial density field and making the particles of a species from it
 ///   ExternalIC.h           : starting from particles read from file
 ///   COLA.h                 : the COLA method (ColaState)
+///   Species.h              : the particle species (CDM+baryons, or CDM and baryons, and neutrinos)
+///   NeutrinoParticles.h    : massive neutrinos as particles (delta-f method)
+///   KickDrift.h            : the kick and drift of a species (non-relativistic or relativistic)
+///   SimulationDensity.h    : the density field the force is computed from (part of this class)
 ///   AnalyzeOutput.h        : on the fly analysis and output
 //=============================================================================
 template <int NDIM, class T>
@@ -87,22 +95,20 @@ class NBodySimulation {
     /// The parameters of the simulation
     Parameters params;
 
+    /// The particle species (see Species.h): "cb", or "cdm" and "baryon", and "nu"
+    std::vector<COLASOLVER::SpeciesInfo> species;
     /// All the particles (CDM+baryons as one species "cb", or the CDM particles if particle_baryons)
     MPIParticles part;
     /// The baryon particles (only if particle_baryons)
     MPIParticles part_baryon;
-    /// The weights of the species in the CDM+baryon density: OmegaCDM / OmegaCB and Omegab / OmegaCB
-    double weight_cdm{1.0};
-    double weight_baryon{0.0};
     /// The massive neutrino particles (only if particle_neutrinos; delta-f method)
-    FML::PARTICLE::MPIParticles<ParticleNeutrino<NDIM>> part_nu;
-    /// Neutrino mass (one species, eV) and temperature today (eV)
-    double mnu_eV{0.0};
-    double Tnu0_eV{0.0};
+    COLASOLVER::NeutrinoParticles<NDIM> neutrinos;
 
     /// The initial density field delta_cb(zini,k) computed with the same Nmesh
     /// as the forces (used for linear massive neutrinos and the N-body gauge - not allocated otherwise)
     FFTWGrid<NDIM> initial_density_field_fourier;
+    // ...and in the frame of the particles when they are shifted (only during compute_density_field_fourier)
+    FFTWGrid<NDIM> initial_density_field_shifted;
     // Shift of the particles relative to the grid when computing the density (force interlacing)
     std::array<double, NDIM> density_shift{};
     // The force settings used in the current step (params.force or the early-time settings)
@@ -133,11 +139,8 @@ class NBodySimulation {
     // A list of (z, P(k)) for the particles at every step (naive binning - not using the same pofk_* setting!)
     std::vector<std::pair<double, PowerSpectrumBinning>> pofk_cb_every_step;
     std::vector<std::pair<double, PowerSpectrumBinning>> pofk_total_every_step;
-    // ...and of the CDM and baryon particles separately (if particle_baryons)
-    std::vector<std::pair<double, PowerSpectrumBinning>> pofk_cdm_every_step;
-    std::vector<std::pair<double, PowerSpectrumBinning>> pofk_baryon_every_step;
-    // ...and of the neutrino particles (if particle_neutrinos)
-    std::vector<std::pair<double, PowerSpectrumBinning>> pofk_nu_every_step;
+    // ...and of the species separately when there are several (cdm, baryon, nu)
+    std::map<std::string, std::vector<std::pair<double, PowerSpectrumBinning>>> pofk_species_every_step;
     // A list of (z, P(k)) for the particles that we compute if pofk = true
     std::vector<std::pair<double, PowerSpectrumBinning>> pofk_every_output;
     // A list of (z, P_ell(k)) for the particles that we compute every output if pofk_multipoles = true
@@ -176,19 +179,50 @@ class NBodySimulation {
     /// Separate CDM and baryon particles? Then get_particles() are the CDM particles
     bool has_baryons() const { return params.particle.baryons; }
     MPIParticles & get_baryon_particles() { return part_baryon; }
-    double get_weight_cdm() const { return weight_cdm; }
-    double get_weight_baryon() const { return weight_baryon; }
     /// Massive neutrinos as particles (delta-f method)?
     bool has_neutrino_particles() const { return params.particle.neutrinos; }
-    FML::PARTICLE::MPIParticles<ParticleNeutrino<NDIM>> & get_neutrino_particles() { return part_nu; }
-    /// The shot noise of the (weighted) neutrino density field: sum w^2 / N^2 (1/N without the weights)
-    double neutrino_shotnoise() const;
-    /// Call f(particles) for all the species
+    COLASOLVER::NeutrinoParticles<NDIM> & get_neutrinos() { return neutrinos; }
+    typename COLASOLVER::NeutrinoParticles<NDIM>::Container & get_neutrino_particles() { return neutrinos.particles(); }
+
+    /// The particle species (in the order of the IDs)
+    const std::vector<COLASOLVER::SpeciesInfo> & get_species() const { return species; }
+    /// Call f(particles, info) for the CDM+baryon species ("cb", or "cdm" and "baryon"; all of type T)
+    template <class F>
+    void for_each_cb_species(F && f) {
+        for (auto & info : species) {
+            if (info.name == "cb" or info.name == "cdm")
+                f(part, info);
+            else if (info.name == "baryon")
+                f(part_baryon, info);
+        }
+    }
+    /// Call f(particles, info) for all the species (the particle types differ, so use a generic lambda)
     template <class F>
     void for_each_species(F && f) {
-        f(part);
-        if (has_baryons())
-            f(part_baryon);
+        for_each_cb_species(f);
+        for (auto & info : species)
+            if (info.name == "nu")
+                f(neutrinos.particles(), info);
+    }
+    /// The shot noise of the density field of a species (in units of the box volume): 1/N (sum w^2 / N^2 for the
+    /// delta-f neutrinos). Collective
+    double species_shotnoise(const COLASOLVER::SpeciesInfo & info) {
+        if (info.name == "nu")
+            return neutrinos.shotnoise();
+        return 1.0 / double((info.name == "baryon" ? part_baryon : part).get_npart_total());
+    }
+    /// The shot noise of delta_cb = sum_i w_i delta_i: sum_i w_i^2 / N_i
+    double cb_shotnoise() {
+        double shotnoise = 0.0;
+        for_each_cb_species([&](MPIParticles & particles, const COLASOLVER::SpeciesInfo & info) {
+            shotnoise += info.weight_cb * info.weight_cb / double(particles.get_npart_total());
+        });
+        return shotnoise;
+    }
+    /// The shot noise of the total delta_m = (1 - f_nu) delta_cb + f_nu delta_nu with neutrino particles. Collective
+    double total_shotnoise() {
+        const double fnu = cosmo->get_fMNu();
+        return (1.0 - fnu) * (1.0 - fnu) * cb_shotnoise() + fnu * fnu * neutrinos.shotnoise();
     }
     std::shared_ptr<Cosmology> get_cosmology() const { return cosmo; }
     std::shared_ptr<GravityModel<NDIM>> get_gravity_model() const { return grav; }
@@ -197,9 +231,7 @@ class NBodySimulation {
     const Spline & get_power_initial_spline() const { return power_initial_spline; }
     const auto & get_pofk_cb_every_step() const { return pofk_cb_every_step; }
     const auto & get_pofk_total_every_step() const { return pofk_total_every_step; }
-    const auto & get_pofk_cdm_every_step() const { return pofk_cdm_every_step; }
-    const auto & get_pofk_baryon_every_step() const { return pofk_baryon_every_step; }
-    const auto & get_pofk_nu_every_step() const { return pofk_nu_every_step; }
+    const auto & get_pofk_species_every_step() const { return pofk_species_every_step; }
     const auto & get_pofk_every_output() const { return pofk_every_output; }
     const auto & get_pofk_multipoles_every_output() const { return pofk_multipoles_every_output; }
 
@@ -223,7 +255,6 @@ class NBodySimulation {
     void generate_initial_conditions();
     void generate_initial_conditions_two_species(const FFTWGrid<NDIM> & delta_cb_fourier);
     void apply_lattice_offset();
-    void generate_neutrino_particles(const FFTWGrid<NDIM> & delta_cb_fourier);
     void read_ic();
     void read_phases(FFTWGrid<NDIM> & delta_fourier);
     void setup_nbody_gauge();
@@ -240,11 +271,21 @@ class NBodySimulation {
     void step(const StepInfo & s);
     void drift_and_lightcone(const StepInfo & s);
     void kick_with_interlaced_force(const StepInfo & s);
-    void kick_neutrinos(std::array<FFTWGrid<NDIM>, NDIM> & force_real, const StepInfo & s);
-    void drift_neutrinos(const StepInfo & s);
-    void update_neutrino_weights();
-    void add_neutrino_particles_to_density(FFTWGrid<NDIM> & density_grid_fourier, double a);
+    // The density field (SimulationDensity.h)
     void compute_density_field_fourier(FFTWGrid<NDIM> & density_grid_fourier, double a);
+    void assign_cb_particles_to_grid(FFTWGrid<NDIM> & density_grid_fourier, double a);
+    void add_nbody_gauge_source(FFTWGrid<NDIM> & density_grid_fourier, double a);
+    void add_neutrino_particles(FFTWGrid<NDIM> & density_grid_fourier, double a);
+    void add_linear_neutrinos(FFTWGrid<NDIM> & density_grid_fourier, double a);
+    const FFTWGrid<NDIM> & initial_density_in_particle_frame();
+    bool particles_shifted() const {
+        return std::any_of(density_shift.begin(), density_shift.end(), [](double x) { return x != 0.0; });
+    }
+    void bin_up_power_spectrum_every_step(const FFTWGrid<NDIM> & grid,
+                                          bool deconvolve,
+                                          double shotnoise,
+                                          double a,
+                                          std::vector<std::pair<double, PowerSpectrumBinning>> & list);
     void analyze_and_output(int ioutput, double redshift);
 };
 
@@ -290,12 +331,6 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
                      "force_nmesh = particle_Npart_1D. With a finer force grid they amplify the discreteness of the "
                      "particles (see README)\n";
 
-    if (params.particle.neutrinos and param.get<bool>("lightcone", false))
-        throw std::runtime_error("Invalid parameters: particle_neutrinos = true: needs lightcone = false (not "
-                                 "implemented for neutrino particles yet)");
-    if (params.particle.baryons and param.get<bool>("lightcone", false))
-        throw std::runtime_error("Invalid parameters: particle_baryons = true: needs lightcone = false (not "
-                                 "implemented for two species yet)");
 
     cola.enabled = params.simulation.use_cola;
     cola.scaledependent = params.simulation.use_scaledependent_cola;
@@ -328,27 +363,24 @@ void NBodySimulation<NDIM, T>::init() {
 
     output_background_and_growth_functions();
 
-    // The weights of CDM and baryons in the CDM+baryon density (when they are separate particles)
-    if (has_baryons()) {
-        const double OmegaCB = cosmo->get_OmegaCDM() + cosmo->get_Omegab();
-        weight_cdm = cosmo->get_OmegaCDM() / OmegaCB;
-        weight_baryon = cosmo->get_Omegab() / OmegaCB;
-        if (FML::ThisTask == 0)
-            std::cout << "# CDM and baryons as separate particles. Weights in the CDM+baryon density: CDM "
-                      << weight_cdm << " baryons " << weight_baryon << "\n";
+    // The particle species (CDM+baryons as one, or CDM and baryons, and massive neutrinos)
+    if (has_neutrino_particles() and not(cosmo->get_OmegaMNu() > 0.0 and cosmo->get_Mnu_eV() > 0.0))
+        throw std::runtime_error("particle_neutrinos = true needs massive neutrinos (cosmology_OmegaMNu > 0)");
+    species = COLASOLVER::make_species_list(params.particle, *cosmo, NDIM);
+    if (FML::ThisTask == 0 and species.size() > 1) {
+        std::cout << "# Particle species (name, Npart_1D, GADGET type, Omega_i / OmegaM, weight in delta_cb):\n";
+        for (auto & info : species)
+            std::cout << "#   " << info.name << " " << info.Npart_1D << " " << info.gadget_type << " "
+                      << info.mass_fraction << " " << info.weight_cb << "\n";
     }
-
-    // Massive neutrinos as particles
     if (has_neutrino_particles()) {
-        if (not(cosmo->get_OmegaMNu() > 0.0 and cosmo->get_Mnu_eV() > 0.0))
-            throw std::runtime_error("particle_neutrinos = true needs massive neutrinos (cosmology_OmegaMNu > 0)");
-        mnu_eV = cosmo->get_Mnu_eV() / cosmo->get_N_nu();
-        Tnu0_eV = cosmo->get_neutrino_temperature_eV(1.0);
+        const double mnu_eV = cosmo->get_Mnu_eV() / cosmo->get_N_nu();
+        const double Tnu0_eV = cosmo->get_neutrino_temperature_eV(1.0);
+        neutrinos.init(mnu_eV, Tnu0_eV, params.simulation.boxsize, params.particle.neutrino_deltaf);
         if (FML::ThisTask == 0)
-            std::cout << "# Massive neutrinos as particles (" << params.particle.neutrino_Npart_1D << "^" << NDIM
-                      << ", delta-f weights: " << std::boolalpha << params.particle.neutrino_deltaf
-                      << "). m_nu = " << mnu_eV << " eV (x" << cosmo->get_N_nu() << "), T_nu0 = " << Tnu0_eV
-                      << " eV, f_nu = " << cosmo->get_fMNu() << "\n";
+            std::cout << "# Massive neutrinos as particles (delta-f weights: " << std::boolalpha
+                      << params.particle.neutrino_deltaf << "). m_nu = " << mnu_eV << " eV (x" << cosmo->get_N_nu()
+                      << "), T_nu0 = " << Tnu0_eV << " eV, f_nu = " << cosmo->get_fMNu() << "\n";
     }
 
     // If we have a MG model and want exactly the same IC as for LCDM
@@ -531,7 +563,16 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
     // Massive neutrino particles (made from the same random field)
     if (has_neutrino_particles()) {
         timer.StartTiming("InitialConditionsNeutrinos");
-        generate_neutrino_particles(delta_ini_fourier);
+        FML::assert_mpi(transferdata != nullptr, "particle_neutrinos needs the transfer functions (transferinfofile)");
+        const auto & nu = species.back();
+        neutrinos.generate(delta_ini_fourier,
+                           *transferdata,
+                           ic.initial_redshift,
+                           cosmo->HoverH0_of_a(ic.a_initial()),
+                           nu.Npart_1D,
+                           params.particle.allocation_factor,
+                           ic.random_seed,
+                           nu.id_offset);
         timer.EndTiming("InitialConditionsNeutrinos");
     }
 
@@ -647,7 +688,8 @@ void NBodySimulation<NDIM, T>::apply_lattice_offset() {
     if (FML::ThisTask == 0)
         std::cout << "Offsetting the particle lattice by half a force grid cell (" << shift * params.simulation.boxsize
                   << " Mpc/h) in each direction\n";
-    for_each_species([&](MPIParticles & particles) {
+    for_each_species([&](auto & particles, const COLASOLVER::SpeciesInfo &) {
+        using P = std::remove_reference_t<decltype(*particles.get_particles_ptr())>;
         for (auto & p : particles) {
             auto * pos = FML::PARTICLE::GetPos(p);
             for (int idim = 0; idim < NDIM; idim++) {
@@ -655,7 +697,7 @@ void NBodySimulation<NDIM, T>::apply_lattice_offset() {
                 if (pos[idim] >= 1.0)
                     pos[idim] -= 1.0;
             }
-            if constexpr (FML::PARTICLE::has_get_q<T>()) {
+            if constexpr (FML::PARTICLE::has_get_q<P>()) {
                 auto * q = FML::PARTICLE::GetLagrangianPos(p);
                 for (int idim = 0; idim < NDIM; idim++) {
                     q[idim] += shift;
@@ -666,28 +708,13 @@ void NBodySimulation<NDIM, T>::apply_lattice_offset() {
         }
         particles.communicate_particles();
     });
-    if (has_neutrino_particles()) {
-        for (auto & p : part_nu) {
-            auto * pos = FML::PARTICLE::GetPos(p);
-            for (int idim = 0; idim < NDIM; idim++) {
-                pos[idim] += shift;
-                if (pos[idim] >= 1.0)
-                    pos[idim] -= 1.0;
-            }
-        }
-        part_nu.communicate_particles();
-    }
 }
 
-/// The initial conditions with separate CDM and baryon particles. Both are made from the same random field
-/// delta_cb(k,zini): delta_i(k) = delta_cb(k) R_i(k,zini) with R_i = T_i / T_cb from the transfer functions
-/// (w_c R_c + w_b R_b = 1). The 1LPT velocity uses f_i = f_cb + dlog(R_i)/dlna where f_cb is the growth rate of
-/// the gravity model (so the total CDM+baryon velocity is exactly the growing mode, as for one species, and the
-/// relative velocity comes from the transfer functions; the growth rates computed directly from the transfer
-/// functions are inaccurate near the ends of the redshift range of the table). The 2LPT displacement is that of
-/// the total (CDM+baryon) field for both. By default (particle_baryon_lattice = same) the baryons start from the same
-/// lattice as the CDM. With "offset" their lattice is offset by half a particle spacing in each direction (their
-/// displacement field is then evaluated at the offset positions). Their IDs follow those of the CDM.
+/// The initial conditions with separate CDM and baryon particles (see two_species_ic_splines and
+/// generate_species_from_delta_cb in InitialConditions.h). The 2LPT displacement is that of the total (CDM+baryon)
+/// field for both. By default (particle_baryon_lattice = same) the baryons start from the same lattice as the CDM.
+/// With "offset" their lattice is offset by half a particle spacing in each direction. Their IDs follow those of the
+/// CDM.
 /// NB: interleaved (offset) lattices give a large spurious growth of the baryon-CDM difference on scales k > k_Ny/8
 /// of the particles (and a few % too little CDM+baryon power at k ~ k_Ny/2) in this PM code; with the same lattice the
 /// difference follows linear theory on all scales and the CDM+baryon P(k) is that of one species (see the README)
@@ -695,420 +722,48 @@ template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFTWGrid<NDIM> & delta_cb_fourier) {
     const auto & ic = params.ic;
     const double boxsize = params.simulation.boxsize;
-    const int Npart_1D = params.particle.Npart_1D;
     const double aini = ic.a_initial();
     FML::assert_mpi(transferdata != nullptr, "particle_baryons needs the transfer functions (transferinfofile)");
-    if (aini < 1.0 / (1.0 + transferdata->get_zmax_splines()) * (1.0 - 1e-10))
-        throw std::runtime_error("particle_baryons: the transfer functions only go up to z = " +
-                                 std::to_string(transferdata->get_zmax_splines()) + " (need zini)");
-
-    // T_i / T_cb and f_i at zini
-    const double kmin = transferdata->get_kmin_hmpc_splines();
-    const double kmax = transferdata->get_kmax_hmpc_splines();
-    const int nk = 512;
-    DVector logk(nk), ratio_cdm(nk), ratio_baryon(nk), f_cdm(nk), f_baryon(nk);
-    double max_err = 0.0;
-    // dlog(R_i)/dlna by finite differences over +-dx in log(a) (one-sided at the end of the table)
-    const double dx = 0.05;
-    const double xini = std::log(aini);
-    const double xmin_table = std::log(1.0 / (1.0 + transferdata->get_zmax_splines()));
-    const double xlo = std::max(xini - dx, xmin_table), xhi = xini + dx;
-    auto ratios = [&](double k, double a) {
-        const double Tcb = transferdata->get_cdm_baryon_transfer_function(k, a);
-        return std::pair<double, double>(transferdata->get_cdm_transfer_function(k, a) / Tcb,
-                                         transferdata->get_baryon_transfer_function(k, a) / Tcb);
-    };
-    for (int i = 0; i < nk; i++) {
-        logk[i] = std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1);
-        const double k = std::exp(logk[i]);
-        const auto r = ratios(k, aini), rlo = ratios(k, std::exp(xlo)), rhi = ratios(k, std::exp(xhi));
-        ratio_cdm[i] = r.first;
-        ratio_baryon[i] = r.second;
-        const double fcb = grav_ic->get_f_1LPT(aini, k / grav_ic->H0_hmpc);
-        f_cdm[i] = fcb + std::log(rhi.first / rlo.first) / (xhi - xlo);
-        f_baryon[i] = fcb + std::log(rhi.second / rlo.second) / (xhi - xlo);
-        max_err = std::max(max_err, std::fabs(weight_cdm * ratio_cdm[i] + weight_baryon * ratio_baryon[i] - 1.0));
-    }
-    Spline ratio_cdm_spline(logk, ratio_cdm, "T_cdm/T_cb(k,zini)");
-    Spline ratio_baryon_spline(logk, ratio_baryon, "T_b/T_cb(k,zini)");
-    Spline f_cdm_spline(logk, f_cdm, "f_cdm(k,zini)");
-    Spline f_baryon_spline(logk, f_baryon, "f_b(k,zini)");
-    if (FML::ThisTask == 0) {
-        std::cout << "# Two species IC at z = " << ic.initial_redshift << ": T_b/T_c = ";
-        for (double k : {0.01, 0.1, 1.0})
-            std::cout << ratio_baryon_spline(std::log(k)) / ratio_cdm_spline(std::log(k)) << " (k = " << k << ") ";
-        std::cout << "\n# f_cdm, f_b at k = 0.1: " << f_cdm_spline(std::log(0.1)) << " " << f_baryon_spline(std::log(0.1))
-                  << ". Max |w_c T_c/T_cb + w_b T_b/T_cb - 1| = " << max_err << "\n";
-    }
-    if (max_err > 1e-2)
-        throw std::runtime_error("particle_baryons: OmegaCDM and Omegab do not match the transfer functions "
-                                 "(w_c T_c + w_b T_b != T_cb)");
+    const auto & cdm = species[0];
+    const auto & baryon = species[1];
+    const auto splines = COLASOLVER::two_species_ic_splines<NDIM>(
+        *transferdata, *grav_ic, ic.initial_redshift, cdm.weight_cb, baryon.weight_cb);
 
     const double fac = aini * aini * cosmo->HoverH0_of_a(aini);
     const std::vector<double> velocity_norms{fac * grav_ic->get_f_1LPT(aini),
                                              fac * grav_ic->get_f_2LPT(aini),
                                              fac * grav_ic->get_f_3LPTa(aini),
                                              fac * grav_ic->get_f_3LPTb(aini)};
-    auto clamp_logk = [&](double kBox) { return std::log(std::min(std::max(kBox / boxsize, kmin), kmax)); };
-
-    auto make_species = [&](MPIParticles & particles,
-                            const Spline & ratio,
-                            const Spline & growth_rate,
-                            double shift,
-                            long long int id_offset,
-                            const std::string & label) {
-        if (FML::ThisTask == 0)
-            std::cout << "# Making the " << label << " particles\n";
-        const std::array<double, NDIM> shift_vec = [&] {
-            std::array<double, NDIM> v;
-            v.fill(shift);
-            return v;
-        }();
-        // delta_i(k) on the (offset) lattice: f(q) -> f(q + shift) so that the particle created at q gets the
-        // displacement at q + shift (and is then moved there)
-        FFTWGrid<NDIM> delta = delta_cb_fourier;
-        FFTWGrid<NDIM> delta_total = delta_cb_fourier;
-        const auto Local_nx = delta.get_local_nx();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-        for (int islice = 0; islice < Local_nx; islice++) {
-            [[maybe_unused]] double kmag;
-            [[maybe_unused]] std::array<double, NDIM> kvec;
-            for (auto && fourier_index : delta.get_fourier_range(islice, islice + 1)) {
-                delta.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
-                const auto value = delta.get_fourier_from_index(fourier_index);
-                delta.set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(ratio(clamp_logk(kmag))));
-            }
-        }
-        if (shift != 0.0) {
-            FML::GRID::shift_grid_fourier<NDIM>(delta, shift_vec, +1.0);
-            FML::GRID::shift_grid_fourier<NDIM>(delta_total, shift_vec, +1.0);
-        }
-        std::function<double(double)> velocity_norm_1LPT = [&](double kBox) {
-            return fac * growth_rate(clamp_logk(kBox));
-        };
-        std::vector<FFTWGrid<NDIM>> no_potentials;
-        FML::NBODY::NBodyInitialConditions<NDIM, T>(particles,
-                                                    Npart_1D,
-                                                    params.particle.allocation_factor,
-                                                    delta,
-                                                    no_potentials,
-                                                    ic.LPT_order,
-                                                    boxsize,
-                                                    ic.initial_redshift,
-                                                    velocity_norms,
-                                                    velocity_norm_1LPT,
-                                                    ic.LPT_order >= 2 ? &delta_total : nullptr);
-        for (auto & p : particles) {
-            auto * pos = FML::PARTICLE::GetPos(p);
-            for (int idim = 0; idim < NDIM; idim++) {
-                pos[idim] += shift;
-                if (pos[idim] >= 1.0)
-                    pos[idim] -= 1.0;
-            }
-            if constexpr (FML::PARTICLE::has_get_q<T>()) {
-                auto * q = FML::PARTICLE::GetLagrangianPos(p);
-                for (int idim = 0; idim < NDIM; idim++) {
-                    q[idim] += shift;
-                    if (q[idim] >= 1.0)
-                        q[idim] -= 1.0;
-                }
-            }
-            if constexpr (FML::PARTICLE::has_set_id<T>())
-                FML::PARTICLE::SetID(p, FML::PARTICLE::GetID(p) + id_offset);
-        }
-        particles.communicate_particles();
-    };
-    make_species(part, ratio_cdm_spline, f_cdm_spline, 0.0, 0, "CDM");
-    make_species(part_baryon,
-                 ratio_baryon_spline,
-                 f_baryon_spline,
-                 params.particle.baryon_lattice == "offset" ? 0.5 / double(Npart_1D) : 0.0,
-                 (long long int)FML::power(size_t(Npart_1D), NDIM),
-                 "baryon");
-}
-
-//=============================================================================
-// Massive neutrino particles (delta-f method, Elbers et al. 2021)
-//=============================================================================
-
-/// The neutrino particles. The bulk part is made like the CDM: delta_nu(k) = delta_cb(k) T_nu(k,zini) / T_cb(k,zini)
-/// from the same random field, 1LPT displacements and velocities v = a^2 H f_nu(k) Psi with f_nu from the transfer
-/// functions. On top of this each particle gets a thermal momentum q = y k_B T_nu0 / c in a random direction, with y
-/// drawn from the Fermi-Dirac distribution (the random numbers depend only on the seed and the particle ID).
-/// We store y and the linear delta_nu at the particle (needed for the delta-f weights)
-template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::generate_neutrino_particles(const FFTWGrid<NDIM> & delta_cb_fourier) {
-    namespace NU = COLASOLVER::NEUTRINOS;
-    const auto & ic = params.ic;
-    const double boxsize = params.simulation.boxsize;
-    const int Npart_1D = params.particle.neutrino_Npart_1D;
-    const double aini = ic.a_initial();
-    FML::assert_mpi(transferdata != nullptr, "particle_neutrinos needs the transfer functions (transferinfofile)");
-    if (aini < 1.0 / (1.0 + transferdata->get_zmax_splines()) * (1.0 - 1e-10))
-        throw std::runtime_error("particle_neutrinos: the transfer functions only go up to z = " +
-                                 std::to_string(transferdata->get_zmax_splines()) + " (need zini)");
-
-    // T_nu / T_cb and f_nu at zini
     const double kmin = transferdata->get_kmin_hmpc_splines();
     const double kmax = transferdata->get_kmax_hmpc_splines();
-    const int nk = 512;
-    DVector logk(nk), ratio(nk), f_nu(nk);
-    for (int i = 0; i < nk; i++) {
-        logk[i] = std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1);
-        const double k = std::exp(logk[i]);
-        ratio[i] = transferdata->get_massive_neutrino_transfer_function(k, aini) /
-                   transferdata->get_cdm_baryon_transfer_function(k, aini);
-        f_nu[i] = transferdata->get_massive_neutrino_growth_rate(k, aini);
-    }
-    Spline ratio_spline(logk, ratio, "T_nu/T_cb(k,zini)");
-    Spline f_nu_spline(logk, f_nu, "f_nu(k,zini)");
-    if (FML::ThisTask == 0) {
-        std::cout << "# Neutrino particles at z = " << ic.initial_redshift << ": T_nu/T_cb, f_nu =";
-        for (double k : {0.01, 0.1, 1.0})
-            std::cout << " " << ratio_spline(std::log(k)) << ", " << f_nu_spline(std::log(k)) << " (k = " << k << ")";
-        std::cout << "\n";
-    }
     auto clamp_logk = [&](double kBox) { return std::log(std::min(std::max(kBox / boxsize, kmin), kmax)); };
-
-    // delta_nu(k, zini)
-    FFTWGrid<NDIM> delta_nu = delta_cb_fourier;
-    delta_nu.add_memory_label("delta_nu(k,zini)");
-    const auto Local_nx = delta_nu.get_local_nx();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-    for (int islice = 0; islice < Local_nx; islice++) {
-        [[maybe_unused]] double kmag;
-        [[maybe_unused]] std::array<double, NDIM> kvec;
-        for (auto && fourier_index : delta_nu.get_fourier_range(islice, islice + 1)) {
-            delta_nu.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
-            const auto value = delta_nu.get_fourier_from_index(fourier_index);
-            delta_nu.set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(ratio_spline(clamp_logk(kmag))));
-        }
-    }
-
-    // The bulk motion (1LPT)
-    const double fac = aini * aini * cosmo->HoverH0_of_a(aini);
-    const std::vector<double> velocity_norms{fac * f_nu_spline(std::log(0.1)), 0.0, 0.0, 0.0};
-    std::function<double(double)> velocity_norm_1LPT = [&](double kBox) {
-        return fac * f_nu_spline(clamp_logk(kBox));
+    auto make_species = [&](MPIParticles & particles,
+                            const COLASOLVER::SpeciesInfo & info,
+                            const Spline & ratio,
+                            const Spline & growth_rate,
+                            double shift) {
+        if (FML::ThisTask == 0)
+            std::cout << "# Making the " << info.name << " particles\n";
+        COLASOLVER::generate_species_from_delta_cb<NDIM, T>(
+            particles,
+            delta_cb_fourier,
+            [&](double kBox) { return ratio(clamp_logk(kBox)); },
+            [&](double kBox) { return fac * growth_rate(clamp_logk(kBox)); },
+            velocity_norms,
+            ic.LPT_order,
+            info.Npart_1D,
+            params.particle.allocation_factor,
+            boxsize,
+            ic.initial_redshift,
+            shift,
+            info.id_offset);
     };
-    std::vector<FFTWGrid<NDIM>> no_potentials;
-    FML::NBODY::NBodyInitialConditions<NDIM, ParticleNeutrino<NDIM>>(part_nu,
-                                                                     Npart_1D,
-                                                                     params.particle.allocation_factor,
-                                                                     delta_nu,
-                                                                     no_potentials,
-                                                                     1,
-                                                                     boxsize,
-                                                                     ic.initial_redshift,
-                                                                     velocity_norms,
-                                                                     velocity_norm_1LPT);
-
-    // The linear delta_nu at the particles
-    delta_nu.fftw_c2r();
-    delta_nu.communicate_boundaries();
-    std::vector<FML::GRID::FloatType> delta_at_particles;
-    FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, ParticleNeutrino<NDIM>>(
-        delta_nu, part_nu.get_particles_ptr(), part_nu.get_npart(), delta_at_particles, "CIC");
-    delta_nu.free();
-
-    // The IDs follow those of the CDM (and baryons) and the thermal momenta
-    const long long int id_offset =
-        (long long int)FML::power(size_t(params.particle.Npart_1D), NDIM) * (has_baryons() ? 2 : 1);
-    const double vth_norm = Tnu0_eV / mnu_eV * NU::c_code(boxsize);
-    const NU::FermiDiracSampler sampler;
-    auto * p = part_nu.get_particles_ptr();
-    double min_delta = 1e100;
-#ifdef USE_OMP
-#pragma omp parallel for reduction(min : min_delta)
-#endif
-    for (size_t i = 0; i < part_nu.get_npart(); i++) {
-        p[i].id += id_offset;
-        p[i].delta_ini = float(delta_at_particles[i]);
-        min_delta = std::min(min_delta, double(delta_at_particles[i]));
-        NU::ParticleRNG rng(uint64_t(ic.random_seed), uint64_t(p[i].id));
-        const double y = sampler(rng.uniform());
-        p[i].y_ini = float(y);
-        const double cos_theta = 2.0 * rng.uniform() - 1.0;
-        const double phi = 2.0 * M_PI * rng.uniform();
-        const double sin_theta = std::sqrt(std::max(0.0, 1.0 - cos_theta * cos_theta));
-        const double dir[3] = {sin_theta * std::cos(phi), sin_theta * std::sin(phi), cos_theta};
-        for (int idim = 0; idim < NDIM; idim++)
-            p[i].vel[idim] += y * vth_norm * (NDIM == 3 ? dir[idim] : (idim == 0 ? 1.0 : 0.0));
-    }
-    FML::MinOverTasks(&min_delta);
-    if (min_delta <= -1.0)
-        throw std::runtime_error("particle_neutrinos: delta_nu <= -1 in the initial conditions (start earlier)");
-    update_neutrino_weights();
-    if (FML::ThisTask == 0)
-        std::cout << "# Neutrino thermal velocity scale (T_nu0 / m_nu) c = " << vth_norm << " (code units), "
-                  << vth_norm * 100.0 * boxsize << " km/s today. Min delta_nu(zini) at the particles = " << min_delta
-                  << "\n";
-}
-
-/// The delta-f weights w = 1 - f0(y) / f_i where f_i = f0(y_ini) (1 + delta_ini) is the (conserved) phase-space
-/// density of the particle and y the current momentum in units of k_B T_nu0 / c. The weighted density
-/// (N_grid^3 / N_nu) sum w_i W(x - x_i) is then delta_nu (not 1 + delta_nu). Without delta-f all weights are 1
-template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::update_neutrino_weights() {
-    namespace NU = COLASOLVER::NEUTRINOS;
-    auto * p = part_nu.get_particles_ptr();
-    const size_t npart = part_nu.get_npart();
-    if (not params.particle.neutrino_deltaf) {
-        for (size_t i = 0; i < npart; i++)
-            p[i].weight = 1.0f;
-        return;
-    }
-    const double inv_c = 1.0 / NU::c_code(params.simulation.boxsize);
-    const double y_over_v = inv_c * mnu_eV / Tnu0_eV;
-    double sum_w = 0.0, sum_w2 = 0.0;
-#ifdef USE_OMP
-#pragma omp parallel for reduction(+ : sum_w, sum_w2)
-#endif
-    for (size_t i = 0; i < npart; i++) {
-        double v2 = 0.0;
-        for (int idim = 0; idim < NDIM; idim++)
-            v2 += p[i].vel[idim] * p[i].vel[idim];
-        const double y = std::sqrt(v2) * y_over_v;
-        const double fi = NU::fermi_dirac(p[i].y_ini) * (1.0 + p[i].delta_ini);
-        const double w = 1.0 - NU::fermi_dirac(y) / fi;
-        p[i].weight = float(w);
-        sum_w += w;
-        sum_w2 += w * w;
-    }
-    FML::SumOverTasks(&sum_w);
-    FML::SumOverTasks(&sum_w2);
-    const double N = double(part_nu.get_npart_total());
-    if (FML::ThisTask == 0)
-        std::cout << "[Neutrinos] delta-f weights: mean " << sum_w / N << " rms " << std::sqrt(sum_w2 / N) << "\n";
-}
-
-template <int NDIM, class T>
-double NBodySimulation<NDIM, T>::neutrino_shotnoise() const {
-    const double N = double(part_nu.get_npart_total());
-    if (not params.particle.neutrino_deltaf)
-        return 1.0 / N;
-    double sum_w2 = 0.0;
-    for (auto & p : const_cast<FML::PARTICLE::MPIParticles<ParticleNeutrino<NDIM>> &>(part_nu))
-        sum_w2 += double(p.weight) * double(p.weight);
-    FML::SumOverTasks(&sum_w2);
-    return sum_w2 / (N * N);
-}
-
-/// Kick the neutrinos with the relativistic factor (1 + 2u^2) / sqrt(1 + u^2) at the time of the force
-template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::kick_neutrinos(std::array<FFTWGrid<NDIM>, NDIM> & force_real, const StepInfo & s) {
-    namespace NU = COLASOLVER::NEUTRINOS;
-    for (int idim = 0; idim < NDIM; idim++)
-        force_real[idim].communicate_boundaries();
-    auto * p = part_nu.get_particles_ptr();
-    const size_t npart = part_nu.get_npart();
-    std::array<std::vector<FML::GRID::FloatType>, NDIM> force;
-    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, ParticleNeutrino<NDIM>>(
-        force_real, p, npart, force, current_force.density_assignment_method);
-    const double inv_ac = 1.0 / (s.apos * NU::c_code(params.simulation.boxsize));
-    double max_u = 0.0;
-#ifdef USE_OMP
-#pragma omp parallel for reduction(max : max_u)
-#endif
-    for (size_t i = 0; i < npart; i++) {
-        double v2 = 0.0;
-        for (int idim = 0; idim < NDIM; idim++) {
-            p[i].vel[idim] *= s.velocity_scale;
-            v2 += p[i].vel[idim] * p[i].vel[idim];
-        }
-        const double u2 = v2 * inv_ac * inv_ac;
-        max_u = std::max(max_u, u2);
-        const double R = NU::kick_factor(u2);
-        for (int idim = 0; idim < NDIM; idim++)
-            p[i].vel[idim] -= force[idim][i] * s.delta_time_kick * R;
-    }
-    FML::MaxOverTasks(&max_u);
-    if (FML::ThisTask == 0)
-        std::cout << "[Kick neutrinos] max u = q/(amc) = " << std::sqrt(max_u) << "\n";
-    update_neutrino_weights();
-}
-
-/// Drift the neutrinos: dx = v dt_drift / sqrt(1 + u^2) with u evaluated at the middle of the drift
-template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::drift_neutrinos(const StepInfo & s) {
-    namespace NU = COLASOLVER::NEUTRINOS;
-    auto * p = part_nu.get_particles_ptr();
-    const size_t npart = part_nu.get_npart();
-    const double amid = 0.5 * (s.apos + s.apos_new);
-    const double inv_ac = 1.0 / (amid * NU::c_code(params.simulation.boxsize));
-    double max_disp = 0.0;
-#ifdef USE_OMP
-#pragma omp parallel for reduction(max : max_disp)
-#endif
-    for (size_t i = 0; i < npart; i++) {
-        double v2 = 0.0;
-        for (int idim = 0; idim < NDIM; idim++)
-            v2 += p[i].vel[idim] * p[i].vel[idim];
-        const double fac = s.delta_time_drift * NU::drift_factor(v2 * inv_ac * inv_ac);
-        for (int idim = 0; idim < NDIM; idim++) {
-            const double disp = p[i].vel[idim] * fac;
-            max_disp = std::max(max_disp, std::fabs(disp));
-            double x = p[i].pos[idim] + disp;
-            x -= std::floor(x);
-            if (x >= 1.0)
-                x = 0.0;
-            p[i].pos[idim] = x;
-        }
-    }
-    FML::MaxOverTasks(&max_disp);
-    if (FML::ThisTask == 0)
-        std::cout << "[Drift neutrinos] Max displacement: " << max_disp << "\n";
-    part_nu.communicate_particles();
-}
-
-/// Assign the (weighted) neutrino particles to a grid and add them to the density field: on input the CDM+baryon
-/// density delta_cb(k), on output delta_m = (1 - f_nu) delta_cb + f_nu delta_nu. Also bins up P_nu(k)
-template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::add_neutrino_particles_to_density(FFTWGrid<NDIM> & density_grid_fourier, double a) {
-    const auto & force = current_force;
-    if (FML::ThisTask == 0)
-        std::cout << "Adding the neutrino particles to the densityfield\n";
-    FFTWGrid<NDIM> density_nu(density_grid_fourier.get_nmesh(),
-                              density_grid_fourier.get_n_extra_slices_left(),
-                              density_grid_fourier.get_n_extra_slices_right());
-    FML::INTERPOLATION::particles_to_grid(part_nu.get_particles_ptr(),
-                                          part_nu.get_npart(),
-                                          part_nu.get_npart_total(),
-                                          density_nu,
-                                          force.density_assignment_method);
-    density_nu.fftw_r2c();
-    // Without the delta-f weights the density is 1 + delta
-    if (FML::ThisTask == 0)
-        density_nu.set_fourier_from_index(0, 0.0);
-
-    if (params.pofk.every_step) {
-        PowerSpectrumBinning pofk(density_nu.get_nmesh() / 2);
-        FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(density_nu, pofk, force.density_assignment_method);
-        if (params.pofk.subtract_shotnoise) {
-            const double shotnoise = neutrino_shotnoise();
-            for (int i = 0; i < pofk.n; i++)
-                pofk.pofk[i] -= shotnoise;
-        }
-        pofk.scale(params.simulation.boxsize);
-        pofk_nu_every_step.push_back({1.0 / a - 1.0, pofk});
-    }
-
-    const auto fnu = FML::GRID::FloatType(cosmo->get_fMNu());
-    const auto Local_nx = density_grid_fourier.get_local_nx();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-    for (int islice = 0; islice < Local_nx; islice++) {
-        for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
-            const auto dcb = density_grid_fourier.get_fourier_from_index(fourier_index);
-            const auto dnu = density_nu.get_fourier_from_index(fourier_index);
-            density_grid_fourier.set_fourier_from_index(fourier_index, dcb * (FML::GRID::FloatType(1.0) - fnu) + dnu * fnu);
-        }
-    }
+    make_species(part, cdm, splines.ratio_cdm, splines.f_cdm, 0.0);
+    make_species(part_baryon,
+                 baryon,
+                 splines.ratio_baryon,
+                 splines.f_baryon,
+                 params.particle.baryon_lattice == "offset" ? 0.5 / double(baryon.Npart_1D) : 0.0);
 }
 
 /// Read the N-body gauge source, check it and store the initial density field of the particles
@@ -1300,24 +955,21 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
         timer.EndTiming("ComputeForce");
 
         timer.StartTiming("Kick");
-        if (s.velocity_scale != 1.0) {
-            for_each_species([&](MPIParticles & particles) {
-                auto * p = particles.get_particles_ptr();
+        if (force.interpolation_method == "nufft") {
+            // Exact evaluation of the Fourier series of the force at the particle positions (one species)
+            auto * p = part.get_particles_ptr();
+            if (s.velocity_scale != 1.0) {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (size_t i = 0; i < particles.get_npart(); i++) {
+                for (size_t i = 0; i < part.get_npart(); i++) {
                     auto * vel = FML::PARTICLE::GetVel(p[i]);
                     for (int idim = 0; idim < NDIM; idim++)
                         vel[idim] *= s.velocity_scale;
                 }
-            });
-        }
-        if (force.interpolation_method == "nufft") {
-            // Exact evaluation of the Fourier series of the force at the particle positions
+            }
             FML::NUFFT::ESKernel kernel(force.nufft_epsilon);
             std::vector<FML::GRID::FloatType> force_particle;
-            auto * p = part.get_particles_ptr();
             for (int idim = 0; idim < NDIM; idim++) {
                 force_real[idim].fftw_r2c();
                 FML::NUFFT::nufft_type2<NDIM>(force_real[idim], p, part.get_npart(), force_particle, kernel);
@@ -1328,13 +980,20 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
                     FML::PARTICLE::GetVel(p[i])[idim] -= force_particle[i] * s.delta_time_kick;
             }
         } else {
-            for_each_species([&](MPIParticles & particles) {
-                FML::NBODY::KickParticles<NDIM>(
-                    force_real, particles, s.delta_time_kick, force.density_assignment_method);
+            for_each_species([&](auto & particles, const COLASOLVER::SpeciesInfo & info) {
+                COLASOLVER::kick_particles<NDIM>(particles,
+                                                 info,
+                                                 force_real,
+                                                 s.apos,
+                                                 s.delta_time_kick,
+                                                 s.velocity_scale,
+                                                 force.density_assignment_method,
+                                                 sim.boxsize);
             });
         }
+        // The delta-f weights depend on the momenta
         if (has_neutrino_particles())
-            kick_neutrinos(force_real, s);
+            neutrinos.update_weights();
         timer.EndTiming("Kick");
     }
     drift_and_lightcone(s);
@@ -1369,17 +1028,15 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
     // Drift particles (updates positions)
     if (s.delta_time_drift != 0.0 and not sim.enforce_LPT_trajectories) {
         timer.StartTiming("Drift");
-        for_each_species(
-            [&](MPIParticles & particles) { FML::NBODY::DriftParticles<NDIM, T>(particles, s.delta_time_drift); });
-        if (has_neutrino_particles())
-            drift_neutrinos(s);
+        for_each_species([&](auto & particles, const COLASOLVER::SpeciesInfo & info) {
+            COLASOLVER::drift_particles<NDIM>(
+                particles, info, s.apos, s.apos_new, s.delta_time_drift, sim.boxsize);
+        });
         timer.EndTiming("Drift");
     }
 
     // Show info about particles and memory use
-    for_each_species([&](MPIParticles & particles) { particles.info(); });
-    if (has_neutrino_particles())
-        part_nu.info();
+    for_each_species([&](auto & particles, const COLASOLVER::SpeciesInfo &) { particles.info(); });
     FML::print_system_memory_use();
 }
 
@@ -1449,274 +1106,6 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const StepInfo & s) {
     }
 }
 
-/// Assign the particles to a grid, Fourier transform it and add on the contribution from
-/// massive neutrinos (if any). Also bins up P(k) of the particles (and the total P(k))
-template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & density_grid_fourier, double a) {
-    const auto & force = current_force;
-    const double boxsize = params.simulation.boxsize;
-    const double ic_initial_redshift = params.ic.initial_redshift;
-    const bool pofk_subtract_shotnoise = params.pofk.subtract_shotnoise;
-
-    if (FML::ThisTask == 0) {
-        std::cout << (has_baryons() ? "Adding the CDM and baryon particles to the densityfield\n" :
-                                      "Adding particles (baryons+CDM) to the densityfield\n");
-    }
-
-    // Particles to grid and Fourier transform (or NUFFT / sheet interpolation)
-    if (force.density_method == "nufft") {
-        // The exact Fourier modes (no window function, no aliasing) for |m_i| < Nmesh/2
-        FML::NUFFT::particles_to_fourier_grid_nufft<NDIM>(part.get_particles_ptr(),
-                                                          part.get_npart(),
-                                                          part.get_npart_total(),
-                                                          density_grid_fourier,
-                                                          force.nufft_epsilon);
-    } else if (force.density_method == "sheet" or force.density_method == "sheet_nufft") {
-        if constexpr (FML::PARTICLE::has_get_q<T>()) {
-            FML::INTERPOLATION::particles_to_fourier_grid_sheet<NDIM>(
-                part.get_particles_ptr(),
-                part.get_npart(),
-                params.particle.Npart_1D,
-                force.sheet_refinement,
-                density_grid_fourier,
-                force.density_method == "sheet" ? force.density_assignment_method : std::string("NUFFT"),
-                force.nufft_epsilon);
-        } else {
-            FML::assert_mpi(false, "force_density_method = sheet needs particles with a Lagrangian position q");
-        }
-    } else if (not has_baryons()) {
-        FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
-                                              part.get_npart(),
-                                              part.get_npart_total(),
-                                              density_grid_fourier,
-                                              force.density_assignment_method);
-        density_grid_fourier.fftw_r2c();
-    } else {
-        // CDM and baryons: delta_cb = w_c delta_c + w_b delta_b (and P(k) of each species)
-        FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
-                                              part.get_npart(),
-                                              part.get_npart_total(),
-                                              density_grid_fourier,
-                                              force.density_assignment_method);
-        density_grid_fourier.fftw_r2c();
-        FFTWGrid<NDIM> density_baryon(density_grid_fourier.get_nmesh(),
-                                      density_grid_fourier.get_n_extra_slices_left(),
-                                      density_grid_fourier.get_n_extra_slices_right());
-        FML::INTERPOLATION::particles_to_grid(part_baryon.get_particles_ptr(),
-                                              part_baryon.get_npart(),
-                                              part_baryon.get_npart_total(),
-                                              density_baryon,
-                                              force.density_assignment_method);
-        density_baryon.fftw_r2c();
-        if (params.pofk.every_step) {
-            auto bin_species = [&](const FFTWGrid<NDIM> & grid, size_t npart_total, auto & list) {
-                PowerSpectrumBinning pofk(grid.get_nmesh() / 2);
-                FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(grid, pofk, force.density_assignment_method);
-                if (params.pofk.subtract_shotnoise)
-                    for (int i = 0; i < pofk.n; i++)
-                        pofk.pofk[i] -= 1.0 / double(npart_total);
-                pofk.scale(boxsize);
-                list.push_back({1.0 / a - 1.0, pofk});
-            };
-            bin_species(density_grid_fourier, part.get_npart_total(), pofk_cdm_every_step);
-            bin_species(density_baryon, part_baryon.get_npart_total(), pofk_baryon_every_step);
-        }
-        const auto wc = FML::GRID::FloatType(weight_cdm);
-        const auto wb = FML::GRID::FloatType(weight_baryon);
-        const auto Local_nx = density_grid_fourier.get_local_nx();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-        for (int islice = 0; islice < Local_nx; islice++) {
-            for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
-                const auto dc = density_grid_fourier.get_fourier_from_index(fourier_index);
-                const auto db = density_baryon.get_fourier_from_index(fourier_index);
-                density_grid_fourier.set_fourier_from_index(fourier_index, dc * wc + db * wb);
-            }
-        }
-    }
-
-    // P(k) from the density field: deconvolve the assignment window (not needed for the NUFFT). The shot noise
-    // (if subtracted) is 1/N for one species and w_c^2/N_c + w_b^2/N_b for CDM + baryons
-    auto bin_up_pofk = [&](PowerSpectrumBinning & pofk) {
-        if (force.density_method == "nufft" or force.density_method == "sheet_nufft")
-            FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(density_grid_fourier, pofk);
-        else
-            FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(
-                density_grid_fourier, pofk, force.density_assignment_method);
-    };
-    auto subtract_cb_shotnoise = [&](PowerSpectrumBinning & pofk) {
-        if (params.pofk.subtract_shotnoise) {
-            double shotnoise = 1.0 / double(part.get_npart_total());
-            if (has_baryons())
-                shotnoise = weight_cdm * weight_cdm / double(part.get_npart_total()) +
-                            weight_baryon * weight_baryon / double(part_baryon.get_npart_total());
-            for (int i = 0; i < pofk.n; i++)
-                pofk.pofk[i] -= shotnoise;
-        }
-    };
-
-    // Bin up power-spectrum (its basically free as we have the density field)
-    const double redshift = 1.0 / a - 1.0;
-    PowerSpectrumBinning pofk_particles(density_grid_fourier.get_nmesh() / 2);
-    pofk_particles.subtract_shotnoise = pofk_subtract_shotnoise;
-    // With force interlacing the particles might be shifted relative to the grid: then we have the linear
-    // fields below in the shifted frame and do not bin up P(k) again
-    const bool shifted = std::any_of(density_shift.begin(), density_shift.end(), [](double x) { return x != 0.0; });
-    FFTWGrid<NDIM> initial_density_field_shifted;
-    auto initial_density = [&]() -> const FFTWGrid<NDIM> & {
-        if (not shifted)
-            return initial_density_field_fourier;
-        if (not initial_density_field_shifted) {
-            // The particles were moved by +s so delta_s(k) = exp(-ik.s) delta(k)
-            initial_density_field_shifted = initial_density_field_fourier;
-            FML::GRID::shift_grid_fourier<NDIM>(initial_density_field_shifted, density_shift, -1.0);
-        }
-        return initial_density_field_shifted;
-    };
-    const bool pofk_every_step = params.pofk.every_step;
-    if (not shifted and pofk_every_step) {
-        bin_up_pofk(pofk_particles);
-        subtract_cb_shotnoise(pofk_particles);
-        pofk_particles.scale(boxsize);
-        pofk_cb_every_step.push_back({redshift, pofk_particles});
-    }
-
-    //=============================================================
-    // N-body gauge: add the linear source from radiation, neutrinos and GR
-    // delta_extra(k,a) = delta_cb(k,aini) T_extra(k,a) / T_cb(k,aini)
-    //=============================================================
-    if (nbody_gauge) {
-        if (FML::ThisTask == 0)
-            std::cout << "Adding the N-body gauge linear source (radiation, neutrinos, GR) to the densityfield\n";
-        const double aini = 1.0 / (1.0 + ic_initial_redshift);
-        const Spline ratio = nbody_gauge->ratio_spline(a, aini, *transferdata);
-        const double logkmin = std::log(nbody_gauge->get_kmin_hmpc());
-        const double logkmax = std::log(nbody_gauge->get_kmax_hmpc());
-
-        // The force is normalized to OmegaM = OmegaCB + OmegaMNu so the source is (1-fMNu)(delta_cb + delta_extra)
-        const double fMNu = cosmo->get_fMNu();
-        const auto & delta_ini_grid = initial_density();
-        auto Local_nx = density_grid_fourier.get_local_nx();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-        for (int islice = 0; islice < Local_nx; islice++) {
-            [[maybe_unused]] double kmag;
-            [[maybe_unused]] std::array<double, NDIM> kvec;
-            for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
-                density_grid_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
-                const double logk = std::min(std::max(std::log(kmag / boxsize), logkmin), logkmax);
-                const double r = kmag > 0.0 ? ratio(logk) : 0.0;
-                auto delta_ini = delta_ini_grid.get_fourier_from_index(fourier_index);
-                auto deltaCB = density_grid_fourier.get_fourier_from_index(fourier_index);
-                auto delta = (deltaCB + delta_ini * FML::GRID::FloatType(r)) * FML::GRID::FloatType(1.0 - fMNu);
-                density_grid_fourier.set_fourier_from_index(fourier_index, delta);
-            }
-        }
-
-        // P(k) of the total source (the same caveat about deconvolution as for the neutrinos below)
-        if (not shifted and pofk_every_step) {
-            PowerSpectrumBinning pofk_total(density_grid_fourier.get_nmesh() / 2);
-            pofk_total.subtract_shotnoise = pofk_subtract_shotnoise;
-            bin_up_pofk(pofk_total);
-            pofk_total.scale(boxsize);
-            pofk_total_every_step.push_back({redshift, pofk_total});
-        }
-        return;
-    }
-
-    //=============================================================
-    // Massive neutrino particles: delta_m = (1 - f_nu) delta_cb + f_nu delta_nu
-    //=============================================================
-    if (has_neutrino_particles()) {
-        add_neutrino_particles_to_density(density_grid_fourier, a);
-        if (shifted or not pofk_every_step)
-            return;
-        PowerSpectrumBinning pofk_total(density_grid_fourier.get_nmesh() / 2);
-        pofk_total.subtract_shotnoise = pofk_subtract_shotnoise;
-        bin_up_pofk(pofk_total);
-        if (pofk_subtract_shotnoise) {
-            const double fnu = cosmo->get_fMNu();
-            double shotnoise_cb = 1.0 / double(part.get_npart_total());
-            if (has_baryons())
-                shotnoise_cb = weight_cdm * weight_cdm / double(part.get_npart_total()) +
-                               weight_baryon * weight_baryon / double(part_baryon.get_npart_total());
-            const double shotnoise = (1.0 - fnu) * (1.0 - fnu) * shotnoise_cb + fnu * fnu * neutrino_shotnoise();
-            for (int i = 0; i < pofk_total.n; i++)
-                pofk_total.pofk[i] -= shotnoise;
-        }
-        pofk_total.scale(boxsize);
-        pofk_total_every_step.push_back({redshift, pofk_total});
-        return;
-    }
-
-    //=============================================================
-    // Add on contribution from massive neutrinos.
-    // We need to have transfer functions for this and for that we
-    // check [transferdata] which is created if "transferinfofile" is used
-    //=============================================================
-    if (not(force.linear_massive_neutrinos and cosmo->get_fMNu() > 0.0 and transferdata))
-        return;
-
-    // First step we store the initial density field
-    if (not initial_density_field_fourier) {
-        initial_density_field_fourier = density_grid_fourier;
-        initial_density_field_fourier.add_memory_label("density(k,zini)");
-        FML::assert_mpi(std::fabs(redshift - ic_initial_redshift) < 1e-3, "This should not happen");
-    }
-
-    if (FML::ThisTask == 0) {
-        std::cout << "Adding on the massive neutrinos to the densityfield using linear theory\n";
-    }
-
-    // Function to translate delta_cb(zini,k) -> delta_nu(z,k) using transfer functions
-    const double aini = 1.0 / (1.0 + ic_initial_redshift);
-    const double koverkBox = 1.0 / boxsize;
-    auto norm = [&](double kBox) {
-        double T_mnu = transferdata->get_massive_neutrino_transfer_function(kBox * koverkBox, a);
-        double T_cb_ini = transferdata->get_cdm_baryon_transfer_function(kBox * koverkBox, aini);
-        return (T_mnu / T_cb_ini);
-    };
-
-    // We compute the total matter density-field deltaM = (OmegaCB deltaCB + OmegaMNu deltaMNu)/OmegaM
-    const double fMNu = cosmo->get_fMNu();
-    const auto & delta_ini_grid = initial_density();
-    auto Local_nx = initial_density_field_fourier.get_local_nx();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-    for (int islice = 0; islice < Local_nx; islice++) {
-        [[maybe_unused]] double kmag;
-        [[maybe_unused]] std::array<double, NDIM> kvec;
-        for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
-            density_grid_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
-            auto delta_ini = delta_ini_grid.get_fourier_from_index(fourier_index);
-            auto deltaCB = density_grid_fourier.get_fourier_from_index(fourier_index);
-            auto deltaM =
-                deltaCB * FML::GRID::FloatType(1.0 - fMNu) + delta_ini * FML::GRID::FloatType(norm(kmag) * fMNu);
-            density_grid_fourier.set_fourier_from_index(fourier_index, deltaM);
-        }
-    }
-
-    //=============================================================
-    // Bin up total power-spectrum (its basically free)
-    // XXX: the density field is here the sum of W*deltaCB + deltaNu
-    // so the last part is going to be added up as deltaNu/W^2 so
-    // its not fully correct for large k, but this is not a high
-    // quality P(k) anyway... should improve this at some point
-    // One way is to bin up <(W*deltaCB)^2>, <deltaNu^2> and the cross
-    // <(W*deltaCB) deltaNu> and deconvolve them separately
-    //=============================================================
-    if (shifted or not pofk_every_step)
-        return;
-    PowerSpectrumBinning pofk_total(density_grid_fourier.get_nmesh() / 2);
-    pofk_total.subtract_shotnoise = pofk_subtract_shotnoise;
-    bin_up_pofk(pofk_total);
-    pofk_total.scale(boxsize);
-    pofk_total_every_step.push_back({redshift, pofk_total});
-}
-
 /// Do all the on the fly analysis that is turned on and write the output
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) {
@@ -1746,9 +1135,7 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
         output_pofk_for_every_step(*this);
         pofk_cb_every_step.clear();
         pofk_total_every_step.clear();
-        pofk_cdm_every_step.clear();
-        pofk_baryon_every_step.clear();
-        pofk_nu_every_step.clear();
+        pofk_species_every_step.clear();
     }
 
     struct Analysis {
@@ -1790,9 +1177,12 @@ template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::free() {
     part.free();
     part_baryon.free();
-    part_nu.free();
+    neutrinos.free();
     initial_density_field_fourier.free();
     cola.free();
 }
+
+// The density field the force is computed from (member functions of NBodySimulation)
+#include "SimulationDensity.h"
 
 #endif

@@ -122,7 +122,7 @@ With the same lattice the CDM+baryon P(k) is the same as that of one species, an
 
 Output: P(k) of CDM (`pofk_cdm_zX.txt`), baryons (`pofk_baryon_zX.txt`) and CDM+baryons (`pofk_zX.txt`, as before) with linear theory P_cb (T_i/T_cb)^2. The same files are written for every step. GADGET (binary and HDF5) files have the CDM as type 1 and the baryons as type 2 (a collisionless type: type 0 is SPH gas in GADGET, which many readers expect to have gas fields). Baryon IDs follow the CDM IDs.
 
-Not implemented for two species yet (the code stops with a message): COLA, reading the IC from file, NUFFT / sheet densities, force interlacing and the early-time force, the N-body gauge, the lightcone, FoF, multipoles and the bispectrum. Use `ic_input_redshift = ic_initial_redshift` (the two species are made from the transfer functions at zini).
+Not implemented for two species yet (the code stops with a message): COLA, reading the IC from file, NUFFT / sheet densities, force interlacing and the early-time force, the N-body gauge, the lightcone, FoF, multipoles and the bispectrum (the full list is the table at the end of [PARAMETERS.md](PARAMETERS.md)). Use `ic_input_redshift = ic_initial_redshift` (the two species are made from the transfer functions at zini).
 
 ## Massive neutrinos as particles (delta-f method)
 
@@ -150,7 +150,7 @@ Tests: 1024 Mpc/h, 128^3 CDM+baryon and 128^3 neutrino particles, 256^3 force gr
 
 Output: P(k) of the neutrinos (`pofk_nu_zX.txt`, with the shot noise in the header) and of the total matter (`pofk_total_zX.txt`) at the outputs and every step. GADGET (binary and HDF5) files have the neutrinos as type 3 (HDF5: with their weights in `PartType3/Weights`; the particle mass is that of a plain particle, the effective mass is mass * weight). Their velocities are q / (a m), which differs from the peculiar velocity by the factor sqrt(1 + u^2). Neutrino IDs follow the CDM (and baryon) IDs.
 
-Not implemented for neutrino particles yet (the code stops with a message): time stepping other than Quinn, COLA, reading the IC from file, NUFFT / sheet densities, force interlacing and the early-time force, the N-body gauge, the lightcone, FoF, multipoles and the bispectrum. The initial conditions use the same density perturbation for all momenta (Elbers et al. use momentum-dependent initial conditions from integrating linear geodesics, which is more accurate for light neutrinos at high redshift).
+Not implemented for neutrino particles yet (the code stops with a message): time stepping other than Quinn, COLA, reading the IC from file, NUFFT / sheet densities, force interlacing and the early-time force, the N-body gauge, the lightcone, FoF, multipoles and the bispectrum (see the table at the end of [PARAMETERS.md](PARAMETERS.md)). The initial conditions use the same density perturbation for all momenta (Elbers et al. use momentum-dependent initial conditions from integrating linear geodesics, which is more accurate for light neutrinos at high redshift).
 
 # COLA
 

@@ -6,6 +6,7 @@
 #include <FML/ParameterMap/ParameterMap.h>
 
 #include "Models.h"
+#include "SimulationParameters.h"
 
 #include <algorithm>
 #include <functional>
@@ -821,6 +822,11 @@ namespace COLASOLVER {
             os << "| `" << spec.name << "` | " << type_name(spec.default_value) << " | " << default_text << " | "
                << (spec.when_text.empty() ? "always" : spec.when_text) << " | " << description << " |\n";
         }
+        os << "\n## Options with separate particle species\n\n";
+        os << "Not everything is implemented yet for CDM and baryons as separate particles (`particle_baryons`) and "
+              "for neutrino particles (`particle_neutrinos`). The code stops with a message if one of these is not "
+              "satisfied (generated from `species_requirements()` in `src/SimulationParameters.h`):\n\n";
+        print_species_requirements(os);
     }
 
 } // namespace COLASOLVER

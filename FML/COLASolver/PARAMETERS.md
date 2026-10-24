@@ -238,3 +238,26 @@ Parameters marked *optional* take the default value if they are not in the param
 | `bispectrum_density_assignment_method` | string | `"CIC"` | bispectrum = true | Density assignment method. Options: `NGP`, `CIC`, `TSC`, `PCS`, `PQS` |
 | `bispectrum_interlacing` | bool | `true` | bispectrum = true | Use interlaced grids to reduce aliasing |
 | `bispectrum_subtract_shotnoise` | bool | `false` | bispectrum = true | Subtract shot-noise |
+
+## Options with separate particle species
+
+Not everything is implemented yet for CDM and baryons as separate particles (`particle_baryons`) and for neutrino particles (`particle_neutrinos`). The code stops with a message if one of these is not satisfied (generated from `species_requirements()` in `src/SimulationParameters.h`):
+
+| Needs | `particle_baryons` | `particle_neutrinos` |
+|---|---|---|
+| `timestep_method = Quinn` |  | yes |
+| `simulation_use_cola = false` | yes | yes |
+| `simulation_enforce_LPT_trajectories = false` | yes | yes |
+| `ic_type_of_input = transferinfofile` (the transfer functions of the species at zini) | yes | yes |
+| `ic_random_field_type = gaussian` or `nongaussian` | yes | yes |
+| `ic_LPT_order = 1` or `2` | yes |  |
+| `force_linear_massive_neutrinos = false` (the particles replace the linear neutrinos) |  | yes |
+| `force_density_method = assignment` | yes | yes |
+| `force_interpolation_method` other than `nufft` | yes | yes |
+| `force_interlacing_order = 1` | yes | yes |
+| `force_early_method = none` | yes | yes |
+| `force_nbody_gauge = false` | yes | yes |
+| `lightcone = false` | yes | yes |
+| `fof = false` | yes | yes |
+| `pofk_multipole = false` | yes | yes |
+| `bispectrum = false` | yes | yes |

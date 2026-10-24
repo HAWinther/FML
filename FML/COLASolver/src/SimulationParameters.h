@@ -6,6 +6,7 @@
 #include <FML/ParameterMap/ParameterMap.h>
 
 #include <cmath>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -246,10 +247,26 @@ namespace COLASOLVER {
         bool particles;                // Output particles?
         ParticleFileFormat fileformat; // Fileformat for particles
         std::string folder;            // Folder to store output ("" is the current folder)
+        bool lightcone{false};         // Make a lightcone (the settings are read by the Lightcone class)
 
         /// Path for a file in the output folder
         std::string path(const std::string & filename) const { return folder + (folder == "" ? "" : "/") + filename; }
     };
+
+    struct SimulationParameters;
+
+    //=============================================================================
+    /// What the separate particle species need (particle_baryons, particle_neutrinos): one row per requirement,
+    /// whether it applies to the baryon and to the neutrino particles and a test of a set of parameters. Used to
+    /// validate the parameters and for the table in PARAMETERS.md
+    //=============================================================================
+    struct SpeciesRequirement {
+        std::string requirement;
+        bool baryons;
+        bool neutrinos;
+        std::function<bool(const SimulationParameters &)> satisfied;
+    };
+    inline std::vector<SpeciesRequirement> species_requirements();
 
     //=============================================================================
     /// All the parameters of the simulation
@@ -439,6 +456,7 @@ namespace COLASOLVER {
                               {"HDF5", ParticleFileFormat::HDF5}});
             }
             r.get("output_folder", output.folder);
+            r.get("lightcone", output.lightcone, false);
 
             validate();
             r.print("NBodySimulation::read_parameters");
@@ -528,54 +546,68 @@ namespace COLASOLVER {
             if (timestep.spacing == ScaleFactorSpacing::Powerlaw and timestep.spacing_power == 0.0)
                 fail("timestep_spacing_power cannot be 0 (use logarithmic spacing)");
 
-            // Neutrino particles: what is implemented so far
-            if (particle.neutrinos) {
-                auto need = [&](bool ok, const std::string & what) {
-                    if (not ok)
-                        fail("particle_neutrinos = true: " + what + " (not implemented for neutrino particles yet)");
-                };
-                need(timestep.method == TimestepMethod::Quinn, "needs timestep_method = Quinn");
-                need(not simulation.use_cola and not simulation.enforce_LPT_trajectories, "needs simulation_use_cola = false");
-                need(ic.type_of_input == ICInputType::TransferInfoFile,
-                     "needs ic_type_of_input = transferinfofile (the neutrino transfer function at zini)");
-                need(ic.random_field_type == ICRandomFieldType::Gaussian or
-                         ic.random_field_type == ICRandomFieldType::NonGaussian,
-                     "needs ic_random_field_type = gaussian or nongaussian");
-                need(not force.linear_massive_neutrinos,
-                     "needs force_linear_massive_neutrinos = false (the particles replace the linear neutrinos)");
-                need(force.density_method == "assignment" and force.interpolation_method != "nufft",
-                     "needs force_density_method = assignment and force_interpolation_method != nufft");
-                need(force.interlacing_order <= 1 and force.early_method == "none",
-                     "needs force_interlacing_order = 1 and force_early_method = none");
-                need(not force.nbody_gauge, "needs force_nbody_gauge = false");
-                need(not fof.enabled and not pofk_multipole.enabled and not bispectrum.enabled,
-                     "needs fof, pofk_multipole and bispectrum = false");
-            }
-
-            // Separate CDM and baryon particles: what is implemented so far
-            if (particle.baryons) {
-                auto need = [&](bool ok, const std::string & what) {
-                    if (not ok)
-                        fail("particle_baryons = true: " + what + " (not implemented for two species yet)");
-                };
-                need(not simulation.use_cola, "needs simulation_use_cola = false");
-                need(not simulation.enforce_LPT_trajectories, "needs simulation_enforce_LPT_trajectories = false");
-                need(ic.type_of_input == ICInputType::TransferInfoFile,
-                     "needs ic_type_of_input = transferinfofile (the CDM and baryon transfer functions at zini)");
-                need(ic.random_field_type == ICRandomFieldType::Gaussian or
-                         ic.random_field_type == ICRandomFieldType::NonGaussian,
-                     "needs ic_random_field_type = gaussian or nongaussian");
-                need(ic.LPT_order <= 2, "needs ic_LPT_order = 1 or 2");
-                need(force.density_method == "assignment" and force.interpolation_method != "nufft",
-                     "needs force_density_method = assignment and force_interpolation_method != nufft");
-                need(force.interlacing_order <= 1 and force.early_method == "none",
-                     "needs force_interlacing_order = 1 and force_early_method = none");
-                need(not force.nbody_gauge, "needs force_nbody_gauge = false");
-                need(not fof.enabled and not pofk_multipole.enabled and not bispectrum.enabled,
-                     "needs fof, pofk_multipole and bispectrum = false");
+            // What is implemented for the particle species beyond one set of CDM+baryon particles
+            for (auto & req : species_requirements()) {
+                if (req.satisfied(*this))
+                    continue;
+                if (particle.baryons and req.baryons)
+                    fail("particle_baryons = true needs " + req.requirement + " (not implemented for two species yet)");
+                if (particle.neutrinos and req.neutrinos)
+                    fail("particle_neutrinos = true needs " + req.requirement +
+                         " (not implemented for neutrino particles yet)");
             }
         }
     };
+
+
+    inline std::vector<SpeciesRequirement> species_requirements() {
+        using P = const SimulationParameters &;
+        return {
+            {"`timestep_method = Quinn`", false, true, [](P p) { return p.timestep.method == TimestepMethod::Quinn; }},
+            {"`simulation_use_cola = false`", true, true, [](P p) { return not p.simulation.use_cola; }},
+            {"`simulation_enforce_LPT_trajectories = false`",
+             true,
+             true,
+             [](P p) { return not p.simulation.enforce_LPT_trajectories; }},
+            {"`ic_type_of_input = transferinfofile` (the transfer functions of the species at zini)",
+             true,
+             true,
+             [](P p) { return p.ic.type_of_input == ICInputType::TransferInfoFile; }},
+            {"`ic_random_field_type = gaussian` or `nongaussian`",
+             true,
+             true,
+             [](P p) {
+                 return p.ic.random_field_type == ICRandomFieldType::Gaussian or
+                        p.ic.random_field_type == ICRandomFieldType::NonGaussian;
+             }},
+            {"`ic_LPT_order = 1` or `2`", true, false, [](P p) { return p.ic.LPT_order <= 2; }},
+            {"`force_linear_massive_neutrinos = false` (the particles replace the linear neutrinos)",
+             false,
+             true,
+             [](P p) { return not p.force.linear_massive_neutrinos; }},
+            {"`force_density_method = assignment`", true, true, [](P p) { return p.force.density_method == "assignment"; }},
+            {"`force_interpolation_method` other than `nufft`",
+             true,
+             true,
+             [](P p) { return p.force.interpolation_method != "nufft"; }},
+            {"`force_interlacing_order = 1`", true, true, [](P p) { return p.force.interlacing_order <= 1; }},
+            {"`force_early_method = none`", true, true, [](P p) { return p.force.early_method == "none"; }},
+            {"`force_nbody_gauge = false`", true, true, [](P p) { return not p.force.nbody_gauge; }},
+            {"`lightcone = false`", true, true, [](P p) { return not p.output.lightcone; }},
+            {"`fof = false`", true, true, [](P p) { return not p.fof.enabled; }},
+            {"`pofk_multipole = false`", true, true, [](P p) { return not p.pofk_multipole.enabled; }},
+            {"`bispectrum = false`", true, true, [](P p) { return not p.bispectrum.enabled; }},
+        };
+    }
+
+    /// The table of what the particle species need (markdown, for PARAMETERS.md)
+    inline void print_species_requirements(std::ostream & os) {
+        os << "| Needs | `particle_baryons` | `particle_neutrinos` |\n";
+        os << "|---|---|---|\n";
+        for (auto & req : species_requirements())
+            os << "| " << req.requirement << " | " << (req.baryons ? "yes" : "") << " | " << (req.neutrinos ? "yes" : "")
+               << " |\n";
+    }
 
 } // namespace COLASOLVER
 

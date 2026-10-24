@@ -5,6 +5,24 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLASolver: refactoring of the particle species (no change in results)
+- `src/Species.h`: one `SpeciesInfo` per particle container (name, GADGET type, mass fraction, weight in delta_cb,
+  ID offset, dynamics) and `species_transfer_function`. The every-step and output P(k), linear theory, shot noise
+  and GADGET output loop over the species (`NBodySimulation::for_each_species` / `for_each_cb_species`, generic
+  lambdas over the different particle types).
+- `src/KickDrift.h`: one kick and one drift for all species, chosen by the species dynamics (relativistic for the
+  neutrinos); the place to add species-dependent dynamics.
+- `src/NeutrinoParticles.h`: class owning the neutrino particles (initial conditions, delta-f weights, density).
+  `src/SimulationDensity.h`: the density field as a sum of contributions (CDM+baryon particles, then the N-body
+  gauge source, the neutrino particles or linear neutrinos). `InitialConditions.h`: `generate_species_from_delta_cb`
+  (shared by baryons and neutrinos) and `two_species_ic_splines`. `Simulation.h` 1800 -> 1190 lines.
+- One table of what the species need (`species_requirements()` in `SimulationParameters.h`) used for the validation
+  and printed at the end of PARAMETERS.md.
+- Library: `FML::GRID::for_each_fourier_mode`, `transform_fourier_modes`, `multiply_fourier_by_function_of_k`,
+  `linear_combination_fourier` (Smoothing/SmoothingFourier.h); used in COLASolver (incl. the scale-dependent COLA
+  kernels).
+- All regression results unchanged bit for bit.
+
 ### COLASolver: massive neutrinos as particles (delta-f method, optional)
 - `particle_neutrinos = true`: neutrino particles (`particle_neutrino_Npart_1D`, default `particle_Npart_1D`) with the
   delta-f method of Elbers et al. 2021: Fermi-Dirac thermal momenta (reproducible per particle ID), relativistic

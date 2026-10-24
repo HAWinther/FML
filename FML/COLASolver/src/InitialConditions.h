@@ -2,10 +2,14 @@
 #define INITIALCONDITIONS_HEADER
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/CAMBUtils/CAMBReader.h>
 #include <FML/Global/Global.h>
+#include <FML/MPIParticles/MPIParticles.h>
+#include <FML/NBody/NBody.h>
 #include <FML/RandomFields/GaussianRandomField.h>
 #include <FML/RandomFields/NonLocalGaussianRandomField.h>
 #include <FML/RandomGenerator/RandomGenerator.h>
+#include <FML/Smoothing/SmoothingFourier.h>
 #include <FML/Spline/Spline.h>
 
 #include "Cosmology.h"
@@ -16,7 +20,12 @@
 #include <cmath>
 #include <complex>
 #include <functional>
+#include <iostream>
+#include <stdexcept>
+#include <utility>
 #include <memory>
+#include <string>
+#include <vector>
 
 //=============================================================================
 // Generating the initial density field delta(k,zini) that the particles are
@@ -41,24 +50,8 @@ namespace COLASOLVER {
         return rng;
     }
 
-    /// Apply func(kmag, value) -> new value to every mode of a grid in fourier space
-    template <int NDIM>
-    void transform_fourier_modes(
-        FFTWGrid<NDIM> & grid,
-        const std::function<std::complex<FML::GRID::FloatType>(double, std::complex<FML::GRID::FloatType>)> & func) {
-        const auto Local_nx = grid.get_local_nx();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-        for (int islice = 0; islice < Local_nx; islice++) {
-            [[maybe_unused]] double kmag;
-            [[maybe_unused]] std::array<double, NDIM> kvec;
-            for (auto && fourier_index : grid.get_fourier_range(islice, islice + 1)) {
-                grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
-                grid.set_fourier_from_index(fourier_index, func(kmag, grid.get_fourier_from_index(fourier_index)));
-            }
-        }
-    }
+    // The library helpers for loops over the fourier modes
+    using FML::GRID::transform_fourier_modes;
 
     //=============================================================================
     /// Generate a gaussian or non-gaussian (non-local fNL) random field delta(k,zini)
@@ -162,6 +155,146 @@ namespace COLASOLVER {
         if (Local_x_start == 0)
             phi_1LPT_fourier.set_fourier_from_index(0, 0.0);
         return phi_1LPT_fourier;
+    }
+
+
+    //=============================================================================
+    /// Make the particles of a species i from the CDM+baryon density field delta_cb(k,zini): delta_i(k) =
+    /// delta_cb(k) ratio(kB) with ratio = T_i / T_cb, LPT displacements and velocities (1LPT velocity
+    /// velocity_norm_1LPT(kB) Psi, the rest from velocity_norms; see FML::NBODY::NBodyInitialConditions). With
+    /// LPT_order >= 2 the 2LPT term is that of the total field delta_cb. The particles start from the lattice
+    /// offset by lattice_shift (in units of the box) in each direction: the fields are evaluated at the offset
+    /// positions and the particles moved there. id_offset is added to the IDs. Returns delta_i(k) (shifted).
+    //=============================================================================
+    template <int NDIM, class P>
+    FFTWGrid<NDIM> generate_species_from_delta_cb(FML::PARTICLE::MPIParticles<P> & particles,
+                                                  const FFTWGrid<NDIM> & delta_cb_fourier,
+                                                  const std::function<double(double)> & ratio_of_kBox,
+                                                  std::function<double(double)> velocity_norm_1LPT_of_kBox,
+                                                  const std::vector<double> & velocity_norms,
+                                                  int LPT_order,
+                                                  int Npart_1D,
+                                                  double allocation_factor,
+                                                  double boxsize,
+                                                  double zini,
+                                                  double lattice_shift,
+                                                  long long int id_offset) {
+        std::array<double, NDIM> shift_vec;
+        shift_vec.fill(lattice_shift);
+
+        // delta_i(k) on the (offset) lattice: f(q) -> f(q + shift) so that the particle created at q gets the
+        // displacement at q + shift (and is then moved there)
+        FFTWGrid<NDIM> delta = delta_cb_fourier;
+        FFTWGrid<NDIM> delta_total;
+        if (LPT_order >= 2)
+            delta_total = delta_cb_fourier;
+        FML::GRID::multiply_fourier_by_function_of_k<NDIM>(delta, ratio_of_kBox);
+        if (lattice_shift != 0.0) {
+            FML::GRID::shift_grid_fourier<NDIM>(delta, shift_vec, +1.0);
+            if (LPT_order >= 2)
+                FML::GRID::shift_grid_fourier<NDIM>(delta_total, shift_vec, +1.0);
+        }
+
+        std::vector<FFTWGrid<NDIM>> no_potentials;
+        FML::NBODY::NBodyInitialConditions<NDIM, P>(particles,
+                                                    Npart_1D,
+                                                    allocation_factor,
+                                                    delta,
+                                                    no_potentials,
+                                                    LPT_order,
+                                                    boxsize,
+                                                    zini,
+                                                    velocity_norms,
+                                                    velocity_norm_1LPT_of_kBox,
+                                                    LPT_order >= 2 ? &delta_total : nullptr);
+
+        for (auto & p : particles) {
+            auto * pos = FML::PARTICLE::GetPos(p);
+            for (int idim = 0; idim < NDIM; idim++) {
+                pos[idim] += lattice_shift;
+                if (pos[idim] >= 1.0)
+                    pos[idim] -= 1.0;
+            }
+            if constexpr (FML::PARTICLE::has_get_q<P>()) {
+                auto * q = FML::PARTICLE::GetLagrangianPos(p);
+                for (int idim = 0; idim < NDIM; idim++) {
+                    q[idim] += lattice_shift;
+                    if (q[idim] >= 1.0)
+                        q[idim] -= 1.0;
+                }
+            }
+            if constexpr (FML::PARTICLE::has_set_id<P>())
+                FML::PARTICLE::SetID(p, FML::PARTICLE::GetID(p) + id_offset);
+        }
+        particles.communicate_particles();
+        return delta;
+    }
+
+
+    //=============================================================================
+    /// The ratios T_i / T_cb and the growth rates f_i of CDM and baryons at zini for the initial conditions with
+    /// separate CDM and baryon particles: delta_i(k) = delta_cb(k) R_i(k,zini) with R_i = T_i / T_cb from the
+    /// transfer functions (w_c R_c + w_b R_b = 1). The 1LPT velocity uses f_i = f_cb + dlog(R_i)/dlna where f_cb is
+    /// the growth rate of the gravity model (so the total CDM+baryon velocity is exactly the growing mode, as for one
+    /// species, and the relative velocity comes from the transfer functions). Splines of log(k) (k in h/Mpc).
+    //=============================================================================
+    struct TwoSpeciesICSplines {
+        FML::INTERPOLATION::SPLINE::Spline ratio_cdm, ratio_baryon, f_cdm, f_baryon;
+    };
+    template <int NDIM>
+    TwoSpeciesICSplines two_species_ic_splines(const FML::FILEUTILS::LinearTransferData & transferdata,
+                                               const GravityModel<NDIM> & grav_ic,
+                                               double zini,
+                                               double weight_cdm,
+                                               double weight_baryon) {
+        using DVector = FML::INTERPOLATION::SPLINE::DVector;
+        const double aini = 1.0 / (1.0 + zini);
+        if (aini < 1.0 / (1.0 + transferdata.get_zmax_splines()) * (1.0 - 1e-10))
+            throw std::runtime_error("particle_baryons: the transfer functions only go up to z = " +
+                                     std::to_string(transferdata.get_zmax_splines()) + " (need zini)");
+
+        const double kmin = transferdata.get_kmin_hmpc_splines();
+        const double kmax = transferdata.get_kmax_hmpc_splines();
+        const int nk = 512;
+        DVector logk(nk), ratio_cdm(nk), ratio_baryon(nk), f_cdm(nk), f_baryon(nk);
+        double max_err = 0.0;
+        // dlog(R_i)/dlna by finite differences over +-dx in log(a) (one-sided at the end of the table)
+        const double dx = 0.05;
+        const double xini = std::log(aini);
+        const double xmin_table = std::log(1.0 / (1.0 + transferdata.get_zmax_splines()));
+        const double xlo = std::max(xini - dx, xmin_table), xhi = xini + dx;
+        auto ratios = [&](double k, double a) {
+            const double Tcb = transferdata.get_cdm_baryon_transfer_function(k, a);
+            return std::pair<double, double>(transferdata.get_cdm_transfer_function(k, a) / Tcb,
+                                             transferdata.get_baryon_transfer_function(k, a) / Tcb);
+        };
+        for (int i = 0; i < nk; i++) {
+            logk[i] = std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1);
+            const double k = std::exp(logk[i]);
+            const auto r = ratios(k, aini), rlo = ratios(k, std::exp(xlo)), rhi = ratios(k, std::exp(xhi));
+            ratio_cdm[i] = r.first;
+            ratio_baryon[i] = r.second;
+            const double fcb = grav_ic.get_f_1LPT(aini, k / grav_ic.H0_hmpc);
+            f_cdm[i] = fcb + std::log(rhi.first / rlo.first) / (xhi - xlo);
+            f_baryon[i] = fcb + std::log(rhi.second / rlo.second) / (xhi - xlo);
+            max_err = std::max(max_err, std::fabs(weight_cdm * ratio_cdm[i] + weight_baryon * ratio_baryon[i] - 1.0));
+        }
+        TwoSpeciesICSplines s;
+        s.ratio_cdm.create(logk, ratio_cdm, "T_cdm/T_cb(k,zini)");
+        s.ratio_baryon.create(logk, ratio_baryon, "T_b/T_cb(k,zini)");
+        s.f_cdm.create(logk, f_cdm, "f_cdm(k,zini)");
+        s.f_baryon.create(logk, f_baryon, "f_b(k,zini)");
+        if (FML::ThisTask == 0) {
+            std::cout << "# Two species IC at z = " << zini << ": T_b/T_c = ";
+            for (double k : {0.01, 0.1, 1.0})
+                std::cout << s.ratio_baryon(std::log(k)) / s.ratio_cdm(std::log(k)) << " (k = " << k << ") ";
+            std::cout << "\n# f_cdm, f_b at k = 0.1: " << s.f_cdm(std::log(0.1)) << " " << s.f_baryon(std::log(0.1))
+                      << ". Max |w_c T_c/T_cb + w_b T_b/T_cb - 1| = " << max_err << "\n";
+        }
+        if (max_err > 1e-2)
+            throw std::runtime_error("particle_baryons: OmegaCDM and Omegab do not match the transfer functions "
+                                     "(w_c T_c + w_b T_b != T_cb)");
+        return s;
     }
 
 } // namespace COLASOLVER

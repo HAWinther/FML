@@ -7,6 +7,7 @@
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/ODESolver/ODESolver.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
+#include <FML/Smoothing/SmoothingFourier.h>
 #include <FML/Spline/Spline.h>
 #include <FML/Timing/Timings.h>
 
@@ -288,6 +289,36 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
 // Scaledependent methods
 //====================================================================================
 
+/// grid(k) = phi_1LPT(k) f_1(k) + phi_2LPT(k) f_2(k) + phi_3LPTa(k) f_3a(k) + phi_3LPTb(k) f_3b(k) up to LPT_order
+/// (the grid must have the same layout as the potentials; k in units of 1/boxsize)
+template <int NDIM>
+void sum_of_LPT_potentials(FML::GRID::FFTWGrid<NDIM> & grid,
+                           int LPT_order,
+                           const FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
+                           const FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
+                           const FML::GRID::FFTWGrid<NDIM> & phi_3LPTa_ini_fourier,
+                           const FML::GRID::FFTWGrid<NDIM> & phi_3LPTb_ini_fourier,
+                           const Spline & f_1LPT,
+                           const Spline & f_2LPT,
+                           const Spline & f_3LPTa,
+                           const Spline & f_3LPTb) {
+    FML::GRID::for_each_fourier_mode<NDIM>(grid, [&](size_t fourier_index, double kmag) {
+        auto phi_1LPT = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index);
+        auto value = phi_1LPT * FML::GRID::FloatType(f_1LPT(kmag));
+        if (LPT_order >= 2) {
+            auto phi_2LPT = phi_2LPT_ini_fourier.get_fourier_from_index(fourier_index);
+            value += phi_2LPT * FML::GRID::FloatType(f_2LPT(kmag));
+        }
+        if (LPT_order >= 3) {
+            auto phi_3LPTa = phi_3LPTa_ini_fourier.get_fourier_from_index(fourier_index);
+            auto phi_3LPTb = phi_3LPTb_ini_fourier.get_fourier_from_index(fourier_index);
+            value += phi_3LPTa * FML::GRID::FloatType(f_3LPTa(kmag));
+            value += phi_3LPTb * FML::GRID::FloatType(f_3LPTb(kmag));
+        }
+        grid.set_fourier_from_index(fourier_index, value);
+    });
+}
+
 // This method kick's and drift's the particles one time-step
 // Only 1LPT, though not hard to extend
 // This method can be speed up a lot
@@ -504,30 +535,16 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
     //======================================================================================
 
     auto temp_grid = phi_1LPT_ini_fourier;
-    auto Local_nx = temp_grid.get_local_nx();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-    for (int islice = 0; islice < Local_nx; islice++) {
-        double kmag;
-        std::array<double, NDIM> kvec;
-        for (auto && fourier_index : temp_grid.get_fourier_range(islice, islice + 1)) {
-            temp_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
-            auto delta_ini = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index);
-            auto value = delta_ini * FML::GRID::FloatType(function_pos_1LPT_spline(kmag));
-            if (LPT_order >= 2) {
-                auto phi_2LPT = phi_2LPT_ini_fourier.get_fourier_from_index(fourier_index);
-                value += phi_2LPT * FML::GRID::FloatType(function_pos_2LPT_spline(kmag));
-            }
-            if (LPT_order >= 3) {
-                auto phi_3LPTa = phi_3LPTa_ini_fourier.get_fourier_from_index(fourier_index);
-                auto phi_3LPTb = phi_3LPTb_ini_fourier.get_fourier_from_index(fourier_index);
-                value += phi_3LPTa * FML::GRID::FloatType(function_pos_3LPTa_spline(kmag));
-                value += phi_3LPTb * FML::GRID::FloatType(function_pos_3LPTb_spline(kmag));
-            }
-            temp_grid.set_fourier_from_index(fourier_index, value);
-        }
-    }
+    sum_of_LPT_potentials<NDIM>(temp_grid,
+                                LPT_order,
+                                phi_1LPT_ini_fourier,
+                                phi_2LPT_ini_fourier,
+                                phi_3LPTa_ini_fourier,
+                                phi_3LPTb_ini_fourier,
+                                function_pos_1LPT_spline,
+                                function_pos_2LPT_spline,
+                                function_pos_3LPTa_spline,
+                                function_pos_3LPTb_spline);
 
     std::array<std::vector<FML::GRID::FloatType>, NDIM> displacements;
     auto multiply_by_one = []([[maybe_unused]] double kBox) { return 1.0; };
@@ -544,29 +561,16 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
             D_pos[idim] = displacements[idim][ind];
     }
 
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-    for (int islice = 0; islice < Local_nx; islice++) {
-        double kmag;
-        std::array<double, NDIM> kvec;
-        for (auto && fourier_index : temp_grid.get_fourier_range(islice, islice + 1)) {
-            temp_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
-            auto delta_ini = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index);
-            auto value = delta_ini * FML::GRID::FloatType(function_vel_1LPT_spline(kmag));
-            if (LPT_order >= 2) {
-                auto phi_2LPT = phi_2LPT_ini_fourier.get_fourier_from_index(fourier_index);
-                value += phi_2LPT * FML::GRID::FloatType(function_vel_2LPT_spline(kmag));
-            }
-            if (LPT_order >= 3) {
-                auto phi_3LPTa = phi_3LPTa_ini_fourier.get_fourier_from_index(fourier_index);
-                auto phi_3LPTb = phi_3LPTb_ini_fourier.get_fourier_from_index(fourier_index);
-                value += phi_3LPTa * FML::GRID::FloatType(function_vel_3LPTa_spline(kmag));
-                value += phi_3LPTb * FML::GRID::FloatType(function_vel_3LPTb_spline(kmag));
-            }
-            temp_grid.set_fourier_from_index(fourier_index, value);
-        }
-    }
+    sum_of_LPT_potentials<NDIM>(temp_grid,
+                                LPT_order,
+                                phi_1LPT_ini_fourier,
+                                phi_2LPT_ini_fourier,
+                                phi_3LPTa_ini_fourier,
+                                phi_3LPTb_ini_fourier,
+                                function_vel_1LPT_spline,
+                                function_vel_2LPT_spline,
+                                function_vel_3LPTa_spline,
+                                function_vel_3LPTb_spline);
     generate_displacements(temp_grid, displacements, multiply_by_one);
     temp_grid.free();
 
@@ -775,30 +779,16 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
     // Compute the total LPT potential
     //======================================================================================
     auto temp_grid = phi_1LPT_ini_fourier;
-    auto Local_nx = temp_grid.get_local_nx();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-    for (int islice = 0; islice < Local_nx; islice++) {
-        double kmag;
-        std::array<double, NDIM> kvec;
-        for (auto && fourier_index : temp_grid.get_fourier_range(islice, islice + 1)) {
-            temp_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
-            auto phi_1LPT = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index);
-            auto value = phi_1LPT * FML::GRID::FloatType(function_vel_1LPT_spline(kmag));
-            if (LPT_order >= 2) {
-                auto phi_2LPT = phi_2LPT_ini_fourier.get_fourier_from_index(fourier_index);
-                value += phi_2LPT * FML::GRID::FloatType(function_vel_2LPT_spline(kmag));
-            }
-            if (LPT_order >= 3) {
-                auto phi_3LPTa = phi_3LPTa_ini_fourier.get_fourier_from_index(fourier_index);
-                auto phi_3LPTb = phi_3LPTb_ini_fourier.get_fourier_from_index(fourier_index);
-                value += phi_3LPTa * FML::GRID::FloatType(function_vel_3LPTa_spline(kmag));
-                value += phi_3LPTb * FML::GRID::FloatType(function_vel_3LPTb_spline(kmag));
-            }
-            temp_grid.set_fourier_from_index(fourier_index, value);
-        }
-    }
+    sum_of_LPT_potentials<NDIM>(temp_grid,
+                                LPT_order,
+                                phi_1LPT_ini_fourier,
+                                phi_2LPT_ini_fourier,
+                                phi_3LPTa_ini_fourier,
+                                phi_3LPTb_ini_fourier,
+                                function_vel_1LPT_spline,
+                                function_vel_2LPT_spline,
+                                function_vel_3LPTa_spline,
+                                function_vel_3LPTb_spline);
 
     std::array<std::vector<FML::GRID::FloatType>, NDIM> displacements;
     auto multiply_by_one = []([[maybe_unused]] double kBox) { return 1.0; };

@@ -65,6 +65,65 @@ namespace FML {
             }
         }
 
+        //===================================================================================
+        /// @brief Call f(fourier_index, kmag) for every local mode of a grid in fourier space (OpenMP over the
+        /// slices; kmag is the norm of the wavevector in units of 1/boxsize). The function can read and set the
+        /// modes of this and of other grids with the same layout.
+        ///
+        /// @tparam N The dimension of the grid
+        ///
+        //===================================================================================
+        template <int N, class F>
+        void for_each_fourier_mode(const FFTWGrid<N> & fourier_grid, F && f) {
+            const auto Local_nx = fourier_grid.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                double kmag;
+                std::array<double, N> kvec;
+                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                    fourier_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                    f(fourier_index, kmag);
+                }
+            }
+        }
+
+        /// @brief Replace every mode by func(kmag, value) (kmag in units of 1/boxsize)
+        template <int N, class F>
+        void transform_fourier_modes(FFTWGrid<N> & fourier_grid, F && func) {
+            for_each_fourier_mode<N>(fourier_grid, [&](size_t fourier_index, double kmag) {
+                fourier_grid.set_fourier_from_index(fourier_index,
+                                                    func(kmag, fourier_grid.get_fourier_from_index(fourier_index)));
+            });
+        }
+
+        /// @brief Multiply every mode by g(kmag) (kmag in units of 1/boxsize)
+        template <int N, class F>
+        void multiply_fourier_by_function_of_k(FFTWGrid<N> & fourier_grid, F && g) {
+            transform_fourier_modes<N>(fourier_grid,
+                                       [&](double kmag, ComplexType value) { return value * FloatType(g(kmag)); });
+        }
+
+        /// @brief The linear combination a -> wa a + wb b of two grids in fourier space (same layout)
+        template <int N>
+        void linear_combination_fourier(FFTWGrid<N> & a, const FFTWGrid<N> & b, double wa, double wb) {
+            assert_mpi(a.get_nmesh() == b.get_nmesh(), "[linear_combination_fourier] The grids have different sizes\n");
+            const auto fa = FloatType(wa);
+            const auto fb = FloatType(wb);
+            const auto Local_nx = a.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                for (auto && fourier_index : a.get_fourier_range(islice, islice + 1)) {
+                    a.set_fourier_from_index(fourier_index,
+                                             a.get_fourier_from_index(fourier_index) * fa +
+                                                 b.get_fourier_from_index(fourier_index) * fb);
+                }
+            }
+        }
+
         /// @brief Translate a real grid: \f$ f(x) \to f(x + {\rm sign}\cdot s) \f$ using Fourier interpolation (an
         /// r2c, a phase factor and a c2r). See shift_grid_fourier.
         template <int N>
