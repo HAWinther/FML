@@ -1,6 +1,7 @@
 #ifndef PARTICLEGRIDINTERPOLATION_HEADER
 #define PARTICLEGRIDINTERPOLATION_HEADER
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <stdexcept>
@@ -669,6 +670,7 @@ namespace FML {
             const auto Local_nx = grid_vec[0].get_local_nx();
             const auto Local_x_start = grid_vec[0].get_local_x_start();
             const int Nmesh = grid_vec[0].get_nmesh();
+            const int spare_right = std::max(0, grid_vec[0].get_n_extra_slices_right() - nextra.second);
 
             // Allocate memory needed
             for (auto & i : interpolated_values_vec) {
@@ -693,8 +695,10 @@ namespace FML {
                 for (int idim = 0; idim < N; idim++) {
                     ix[idim] = int(x[idim]);
                     if (idim == 0) {
-                        if (ix[0] == (Local_x_start + Local_nx))
-                            ix[0] = int(Local_x_start + Local_nx) - 1;
+                        // Particles may be up to spare_right cells outside the local domain if the grid has
+                        // more extra slices than the kernel needs (e.g. when the particles have been shifted)
+                        if (ix[0] >= (Local_x_start + Local_nx + spare_right))
+                            ix[0] = int(Local_x_start + Local_nx + spare_right) - 1;
                         if (ix[0] < Local_x_start)
                             ix[0] = int(Local_x_start);
                     } else {
@@ -818,6 +822,7 @@ namespace FML {
             const auto Local_nx = grid.get_local_nx();
             const auto Local_x_start = grid.get_local_x_start();
             const int Nmesh = grid.get_nmesh();
+            const int spare_right = std::max(0, grid.get_n_extra_slices_right() - nextra.second);
 
             // Allocate memory needed
             interpolated_values.resize(NumPart);
@@ -840,8 +845,10 @@ namespace FML {
                 for (int idim = 0; idim < N; idim++) {
                     ix[idim] = int(x[idim]);
                     if (idim == 0) {
-                        if (ix[0] == (Local_x_start + Local_nx))
-                            ix[0] = int(Local_x_start + Local_nx) - 1;
+                        // Particles may be up to spare_right cells outside the local domain if the grid has
+                        // more extra slices than the kernel needs (e.g. when the particles have been shifted)
+                        if (ix[0] >= (Local_x_start + Local_nx + spare_right))
+                            ix[0] = int(Local_x_start + Local_nx + spare_right) - 1;
                         if (ix[0] < Local_x_start)
                             ix[0] = int(Local_x_start);
                     } else {

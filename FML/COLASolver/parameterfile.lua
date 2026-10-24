@@ -364,6 +364,10 @@ force_gradient_kernel = "fiducial"
 -- modes, no window/aliasing; then the force is also evaluated exactly at the particles), sheet or
 -- sheet_nufft (spectral sheet interpolation with force_sheet_refinement^3 tracers per particle). See README
 force_density_method = "assignment"
+-- Experimental: force interlacing (average the force over this many shifted grids; 1 = off) and deconvolution
+-- of the assignment window W(k)^2 (only stable with interlacing). See README
+force_interlacing_order = 1
+force_deconvolve_window = false
 -- Include the effects of massive neutrinos when computing
 -- the density field (density of mnu is the linear prediction)
 -- Requires: transferinfofile above (we need all T(k,z))

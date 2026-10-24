@@ -219,6 +219,20 @@ CASES = {
         force_sheet_refinement=2,
         force_interpolation_method="nufft",
     ),
+    # Force interlacing (2 shifted grids) with PCS and deconvolution of the window function
+    "interlaced_force": dict(
+        force_interlacing_order=2,
+        force_density_assignment_method="PCS",
+        force_deconvolve_window=True,
+    ),
+    # BullFrog from (almost) the Big Bang: Zel'dovich initial conditions at z = 1e7
+    "bullfrog_bigbang": dict(
+        simulation_use_cola=False,
+        timestep_method="BullFrog",
+        ic_initial_redshift=1e7,
+        ic_LPT_order=1,
+        force_density_method="nufft",
+    ),
     # FastPM time-stepping with COLA, logarithmic spacing, f(R) gravity
     "fastpm_cola_fofr": dict(
         timestep_method="FastPM",

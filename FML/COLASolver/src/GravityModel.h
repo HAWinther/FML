@@ -214,6 +214,8 @@ class GravityModel {
     //========================================================================
     virtual void read_parameters(ParameterMap & param) {
         aini = 1.0 / (1.0 + param.get<double>("ic_initial_redshift"));
+        // The growth factor splines must start before the simulation (e.g. when starting at very high redshift)
+        alow = std::min(alow, aini / 10.0);
         if (param.get<std::string>("ic_type_of_input") == "transferinfofile") {
             init_transferdata(param.get<std::string>("ic_input_filename"), param.get<std::string>("ic_type_of_input_fileformat", "CAMB"));
         }

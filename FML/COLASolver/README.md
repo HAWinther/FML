@@ -209,6 +209,56 @@ about 3.5x the cost of CIC. Smaller force_nufft_epsilon is more accurate but slo
 so the default is 1e-5. Sheet interpolation does not help much on a 1x grid. NUFFT and sheet_nufft need FFTs on a grid 2x finer than
 force_nmesh.
 
+## Force interlacing and window deconvolution (experimental)
+
+With `force_interlacing_order` = M > 1 the force is computed for M copies of the particles shifted by a fraction of a
+force-grid cell (M = 2: (1/2,1/2,1/2); 4: the half-cell face diagonals; 8: all half-cell corners; 64: quarter
+cells), interpolated to the shifted particles and averaged. This cancels the leading aliasing of both the density
+assignment and the force interpolation, at the cost of M force calculations. On its own it only removes the
+scatter (the smoothing by the assignment window remains). With the aliasing gone the window can be deconvolved
+(`force_deconvolve_window = true`, dividing the force by W(k)^2), which without interlacing is unstable (it amplifies
+the aliased power). Interlacing with M = 2 and TSC or PCS plus deconvolution is almost as accurate as the NUFFT at a
+fraction of the cost (List, Hahn & Rampf 2024 use the same combination). Same tests as above (1x grid):
+
+| Settings                              | P(k), k = 0.1 / 0.2 / 0.4 h/Mpc | Linear growth, k = 0.028 / 0.053 | Time  |
+|---------------------------------------|---------------------------------|----------------------------------|-------|
+| CIC (default)                         | -4.3% / -12.8% / -26.7%         | -3.2/4.4%, -8.4/11.6%            | 29 s  |
+| CIC, interlacing 2                    | -3.8% / -12.6% / -29.5%         | -3.3/2.2%, -9.7/6.3%             |       |
+| CIC, deconvolved (no interlacing)     |                                 | -39/66%, +32/166%                |       |
+| CIC, interlacing 8, deconvolved       |                                 | -0.2/2.1%, +0.3/5.8%             |       |
+| TSC, interlacing 2, deconvolved       | -0.5% / -0.2% / -0.3%           | +0.25/0.11%, +0.8/0.4%           | ~50 s |
+| PCS, interlacing 2, deconvolved       | -0.4% / -0.2% / -0.2%           | -0.00/0.03%, +0.00/0.07%         |       |
+| NUFFT (both ways)                     | -0.2% / +0.3% / +0.5%           | +0.07/0.05%, +0.07/0.08%         | 103 s |
+
+Orders 4 and 8 give the same as 2 for TSC/PCS (the remaining aliases come from the even images, which only
+quarter-cell shifts cancel). These are tests on a grid equal to the particle grid; finer grids are not tested yet.
+
+## Starting from the Big Bang with BullFrog
+
+A BullFrog step is exact for the second order (2LPT) growing mode, so the simulation can start at (almost) a = 0 with
+the particles on the lattice and the Zel'dovich velocity: set `timestep_method = "BullFrog"`,
+`ic_LPT_order = 1` and a very high `ic_initial_redshift` (e.g. 1e7). The first step then produces the 2LPT
+displacement itself (List, Hahn & Rampf 2024). This needs an accurate force at early times, when the particles are
+still close to the lattice: with CIC on a 1x grid the force is ~5% too weak there and a one-step start from z = 1e7
+to z = 19 misses the linear displacement by 5%, while with the NUFFT (`force_density_method = "nufft"`) the linear
+displacement is right to 0.01% and the 2LPT displacement is reproduced on large scales (to ~10% of the 2LPT
+correction at k < k_Ny/4, more at higher k where the particles' discreteness matters). P(k, z = 0) with N BullFrog
+steps relative to 2LPT at z = 19 + 100 FastPM steps with the same force (64^3 particles, 256 Mpc/h, 1x grid):
+
+| Start                         | N = 5, k = 0.1 / 0.2 / 0.4 | N = 10                  | N = 20                  |
+|-------------------------------|----------------------------|-------------------------|-------------------------|
+| 2LPT at z = 19, CIC           | +0.7% / +1.8% / +1.8%      | +0.4% / +0.9% / +1.0%   | +0.1% / +0.3% / +0.5%   |
+| z = 1e7, Zel'dovich, CIC      | -1.6% / -4.1% / -6.4%      | -3.1% / -6.6% / -6.9%   | -4.8% / -9.2% / -8.7%   |
+| 2LPT at z = 19, NUFFT         | -0.2% / -0.5% / -0.8%      | -0.1% / -0.1% / -0.2%   | -0.0% / -0.0% / -0.0%   |
+| z = 1e7, Zel'dovich, NUFFT    | -0.3% / -0.7% / -1.1%      | -0.1% / -0.2% / -0.1%   | -0.0% / +0.0% / +0.2%   |
+
+So with an accurate early-time force the start from the Big Bang converges to the same answer as 2LPT initial
+conditions (with CIC it gets worse with more steps as more of them are taken while the force is inaccurate). The
+growth factor tables now start before the initial redshift when it is above z = 1e4 (with radiation in the
+background the growth equations are started with the matter-dominated growing mode, which is only approximate
+deep in the radiation era; switching radiation off changes the positions after the one step by 0.35% of the
+displacement).
+
 ## Radiation, neutrinos and GR: the N-body gauge
 
 On very large scales (k < ~0.01 h/Mpc) a Newtonian simulation misses the effect of the radiation

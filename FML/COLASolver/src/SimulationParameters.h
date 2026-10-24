@@ -2,6 +2,7 @@
 #define SIMULATIONPARAMETERS_HEADER
 
 #include <FML/Global/Global.h>
+#include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/ParameterMap/ParameterMap.h>
 
 #include <cmath>
@@ -132,6 +133,8 @@ namespace COLASOLVER {
         double nufft_epsilon{1e-5};            // Accuracy of the NUFFT (density_method = nufft)
         int sheet_refinement{2};               // R: R^NDIM tracers per particle (density_method = sheet)
         std::string interpolation_method{"assignment"}; // Force to particles: assignment (kernel) or nufft
+        int interlacing_order{1};              // Average the force over this many shifted copies of the particles
+        bool deconvolve_window{false};         // Divide the force by W(k)^2 of the assignment kernel
     };
 
     struct ICSettings {
@@ -280,6 +283,8 @@ namespace COLASOLVER {
                 r.get("force_nufft_epsilon", force.nufft_epsilon, 1e-5);
             if (force.density_method == "sheet" or force.density_method == "sheet_nufft")
                 r.get("force_sheet_refinement", force.sheet_refinement, 2);
+            r.get("force_interlacing_order", force.interlacing_order, 1);
+            r.get("force_deconvolve_window", force.deconvolve_window, false);
             r.get("force_interpolation_method", force.interpolation_method, std::string("fiducial"));
             if (force.interpolation_method == "fiducial")
                 force.interpolation_method = force.density_method == "nufft" ? "nufft" : "assignment";
@@ -431,6 +436,17 @@ namespace COLASOLVER {
                          "ic_random_field_type = read_particles)");
                 if (force.sheet_refinement < 1)
                     fail("force_sheet_refinement must be >= 1");
+            }
+            if (force.interlacing_order > 1) {
+                if (force.density_method != "assignment" or force.interpolation_method != "assignment")
+                    fail("force_interlacing_order > 1 needs force_density_method = assignment and "
+                         "force_interpolation_method = assignment (the NUFFT has no aliasing to remove)");
+                try {
+                    FML::INTERPOLATION::generate_interlacing_shifts<3>(force.interlacing_order, 1.0);
+                } catch (std::exception & e) {
+                    fail("force_interlacing_order = " + std::to_string(force.interlacing_order) +
+                         " is not supported (use 1, 2, 4, 8, 16, 27, 32, 64, ...)");
+                }
             }
             if (not(force.nufft_epsilon > 0.0 and force.nufft_epsilon < 0.1))
                 fail("force_nufft_epsilon must be in (0, 0.1)");

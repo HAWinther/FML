@@ -436,6 +436,19 @@ namespace COLASOLVER {
                               "sheet interpolation with the exact Fourier modes of the tracers (NUFFT). The force is "
                               "always interpolated back to the particles with force_density_assignment_method",
                               {"assignment", "nufft", "sheet", "sheet_nufft"});
+            b.always_optional("force_interlacing_order",
+                              1,
+                              "Force interlacing: compute the force for this many copies of the particles shifted "
+                              "by a fraction of a cell relative to the grid and average (at the particles). 1: off, "
+                              "2: shift (1/2,1/2,1/2), 4: the half-cell face diagonals, 8: all half-cell corners, "
+                              "64: quarter cells. Cancels the leading aliasing of the density assignment and the force "
+                              "interpolation at the cost of this many force calculations");
+            b.always_optional("force_deconvolve_window",
+                              false,
+                              "Divide the force by W(k)^2 where W is the window function of "
+                              "force_density_assignment_method (corrects for the smoothing of the assignment and the "
+                              "interpolation). Unstable unless the aliasing is suppressed (force_interlacing_order "
+                              "> 1, see README)");
             b.always_optional("force_interpolation_method",
                               "fiducial",
                               "How the force is interpolated to the particles. assignment: with the "

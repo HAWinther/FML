@@ -91,6 +91,8 @@ class NBodySimulation {
     /// The initial density field delta_cb(zini,k) computed with the same Nmesh
     /// as the forces (used for linear massive neutrinos and the N-body gauge - not allocated otherwise)
     FFTWGrid<NDIM> initial_density_field_fourier;
+    // Shift of the particles relative to the grid when computing the density (force interlacing)
+    std::array<double, NDIM> density_shift{};
 
     /// The linear N-body gauge source (if force_nbody_gauge)
     std::shared_ptr<COLASOLVER::NBodyGaugeSource> nbody_gauge;
@@ -193,6 +195,8 @@ class NBodySimulation {
         double velocity_scale;   // Multiply the velocities by this before the kick
     };
     void step(const StepInfo & s);
+    void drift_and_lightcone(const StepInfo & s);
+    void kick_with_interlaced_force(const StepInfo & s);
     void compute_density_field_fourier(FFTWGrid<NDIM> & density_grid_fourier, double a);
     void analyze_and_output(int ioutput, double redshift);
 };
@@ -225,6 +229,7 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
                       << " (set force_gradient_kernel to continuous, discrete_2pt or discrete_4pt to change this)\n";
     }
     FML::NBODY::set_fiducial_gradient_kernel(gradient_kernel);
+    FML::NBODY::FIDUCIAL_DECONVOLVE_FORCE = params.force.deconvolve_window;
 
     cola.enabled = params.simulation.use_cola;
     cola.scaledependent = params.simulation.use_scaledependent_cola;
@@ -685,9 +690,15 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
     const auto & sim = params.simulation;
     const auto & force = params.force;
 
-    // Compute total density field
+    // Force interlacing: average the force over copies of the particles shifted relative to the grid
     const auto nleftright =
         FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(force.density_assignment_method);
+    if (force.interlacing_order > 1 and s.delta_time_kick != 0.0 and not sim.enforce_LPT_trajectories) {
+        kick_with_interlaced_force(s);
+        return drift_and_lightcone(s);
+    }
+
+    // Compute total density field
     FFTWGrid<NDIM> density_grid_fourier(force.nmesh, nleftright.first, nleftright.second);
     if (s.delta_time_kick != 0.0) {
         timer.StartTiming("ComputeDensityField");
@@ -737,6 +748,13 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
         }
         timer.EndTiming("Kick");
     }
+    drift_and_lightcone(s);
+}
+
+/// The rest of a step after the (PM) kick: COLA kick-drift, lightcone and drift
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
+    const auto & sim = params.simulation;
     if (sim.enforce_LPT_trajectories and FML::ThisTask == 0) {
         std::cout << "Enforcing LPT trajectories so we do not compute forces and apply (non COLA) KICK/DRIFT "
                      "operators\n";
@@ -769,6 +787,72 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
     // Show info about particles and memory use
     part.info();
     FML::print_system_memory_use();
+}
+
+/// The kick with force interlacing: the force is computed for force_interlacing_order copies of the particles
+/// shifted by a fraction of a cell relative to the grid (see FML::INTERPOLATION::generate_interlacing_shifts),
+/// interpolated to the shifted particles and averaged. This cancels the leading aliasing terms of both the
+/// density assignment and the force interpolation
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const StepInfo & s) {
+    const auto & sim = params.simulation;
+    const auto & force = params.force;
+    const auto nleftright =
+        FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(force.density_assignment_method);
+    const auto shifts =
+        FML::INTERPOLATION::generate_interlacing_shifts<NDIM>(force.interlacing_order, 1.0 / double(force.nmesh));
+    // With one task the shifted particles can be wrapped in all directions. Otherwise not in x (they stay on
+    // their task and the grid has one extra slice on the right for the ones that end up outside the domain)
+    const int wrap_type = FML::NTasks == 1 ? 1 : 2;
+
+    auto * p = part.get_particles_ptr();
+    const size_t npart = part.get_npart();
+    std::array<std::vector<FML::GRID::FloatType>, NDIM> force_sum;
+    for (auto & f : force_sum)
+        f.assign(npart, 0.0);
+    for (auto & shift : shifts) {
+        FML::PARTICLE::shift_particles<T, NDIM>(p, npart, shift, +1.0, wrap_type);
+        density_shift = shift;
+
+        FFTWGrid<NDIM> density_grid_fourier(force.nmesh, nleftright.first, nleftright.second + 1);
+        timer.StartTiming("ComputeDensityField");
+        compute_density_field_fourier(density_grid_fourier, s.apos);
+        timer.EndTiming("ComputeDensityField");
+
+        timer.StartTiming("ComputeForce");
+        std::array<FFTWGrid<NDIM>, NDIM> force_real;
+        grav->compute_force(s.apos,
+                            grav->H0_hmpc * sim.boxsize,
+                            density_grid_fourier,
+                            force.density_assignment_method,
+                            force_real);
+        timer.EndTiming("ComputeForce");
+
+        timer.StartTiming("Kick");
+        for (int idim = 0; idim < NDIM; idim++)
+            force_real[idim].communicate_boundaries();
+        std::array<std::vector<FML::GRID::FloatType>, NDIM> force_particle;
+        FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, T>(
+            force_real, p, npart, force_particle, force.density_assignment_method);
+        const double norm = 1.0 / double(shifts.size());
+        for (int idim = 0; idim < NDIM; idim++)
+            for (size_t i = 0; i < npart; i++)
+                force_sum[idim][i] += force_particle[idim][i] * norm;
+        timer.EndTiming("Kick");
+
+        FML::PARTICLE::shift_particles<T, NDIM>(p, npart, shift, -1.0, wrap_type);
+    }
+    density_shift = {};
+
+    // Kick: v -> velocity_scale * v - F dt
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+    for (size_t i = 0; i < npart; i++) {
+        auto * vel = FML::PARTICLE::GetVel(p[i]);
+        for (int idim = 0; idim < NDIM; idim++)
+            vel[idim] = vel[idim] * s.velocity_scale - force_sum[idim][i] * s.delta_time_kick;
+    }
 }
 
 /// Assign the particles to a grid, Fourier transform it and add on the contribution from
@@ -827,9 +911,25 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
     const double redshift = 1.0 / a - 1.0;
     PowerSpectrumBinning pofk_particles(density_grid_fourier.get_nmesh() / 2);
     pofk_particles.subtract_shotnoise = pofk_subtract_shotnoise;
-    bin_up_pofk(pofk_particles);
-    pofk_particles.scale(boxsize);
-    pofk_cb_every_step.push_back({redshift, pofk_particles});
+    // With force interlacing the particles might be shifted relative to the grid: then we have the linear
+    // fields below in the shifted frame and do not bin up P(k) again
+    const bool shifted = std::any_of(density_shift.begin(), density_shift.end(), [](double x) { return x != 0.0; });
+    FFTWGrid<NDIM> initial_density_field_shifted;
+    auto initial_density = [&]() -> const FFTWGrid<NDIM> & {
+        if (not shifted)
+            return initial_density_field_fourier;
+        if (not initial_density_field_shifted) {
+            // The particles were moved by +s so delta_s(k) = exp(-ik.s) delta(k)
+            initial_density_field_shifted = initial_density_field_fourier;
+            FML::GRID::shift_grid_fourier<NDIM>(initial_density_field_shifted, density_shift, -1.0);
+        }
+        return initial_density_field_shifted;
+    };
+    if (not shifted) {
+        bin_up_pofk(pofk_particles);
+        pofk_particles.scale(boxsize);
+        pofk_cb_every_step.push_back({redshift, pofk_particles});
+    }
 
     //=============================================================
     // N-body gauge: add the linear source from radiation, neutrinos and GR
@@ -845,6 +945,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
 
         // The force is normalized to OmegaM = OmegaCB + OmegaMNu so the source is (1-fMNu)(delta_cb + delta_extra)
         const double fMNu = cosmo->get_fMNu();
+        const auto & delta_ini_grid = initial_density();
         auto Local_nx = density_grid_fourier.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -856,7 +957,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
                 density_grid_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
                 const double logk = std::min(std::max(std::log(kmag / boxsize), logkmin), logkmax);
                 const double r = kmag > 0.0 ? ratio(logk) : 0.0;
-                auto delta_ini = initial_density_field_fourier.get_fourier_from_index(fourier_index);
+                auto delta_ini = delta_ini_grid.get_fourier_from_index(fourier_index);
                 auto deltaCB = density_grid_fourier.get_fourier_from_index(fourier_index);
                 auto delta = (deltaCB + delta_ini * FML::GRID::FloatType(r)) * FML::GRID::FloatType(1.0 - fMNu);
                 density_grid_fourier.set_fourier_from_index(fourier_index, delta);
@@ -864,11 +965,13 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         }
 
         // P(k) of the total source (the same caveat about deconvolution as for the neutrinos below)
-        PowerSpectrumBinning pofk_total(density_grid_fourier.get_nmesh() / 2);
-        pofk_total.subtract_shotnoise = pofk_subtract_shotnoise;
-        bin_up_pofk(pofk_total);
-        pofk_total.scale(boxsize);
-        pofk_total_every_step.push_back({redshift, pofk_total});
+        if (not shifted) {
+            PowerSpectrumBinning pofk_total(density_grid_fourier.get_nmesh() / 2);
+            pofk_total.subtract_shotnoise = pofk_subtract_shotnoise;
+            bin_up_pofk(pofk_total);
+            pofk_total.scale(boxsize);
+            pofk_total_every_step.push_back({redshift, pofk_total});
+        }
         return;
     }
 
@@ -902,6 +1005,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
 
     // We compute the total matter density-field deltaM = (OmegaCB deltaCB + OmegaMNu deltaMNu)/OmegaM
     const double fMNu = cosmo->get_fMNu();
+    const auto & delta_ini_grid = initial_density();
     auto Local_nx = initial_density_field_fourier.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -911,7 +1015,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         [[maybe_unused]] std::array<double, NDIM> kvec;
         for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
             density_grid_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
-            auto delta_ini = initial_density_field_fourier.get_fourier_from_index(fourier_index);
+            auto delta_ini = delta_ini_grid.get_fourier_from_index(fourier_index);
             auto deltaCB = density_grid_fourier.get_fourier_from_index(fourier_index);
             auto deltaM =
                 deltaCB * FML::GRID::FloatType(1.0 - fMNu) + delta_ini * FML::GRID::FloatType(norm(kmag) * fMNu);
@@ -928,6 +1032,8 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
     // One way is to bin up <(W*deltaCB)^2>, <deltaNu^2> and the cross
     // <(W*deltaCB) deltaNu> and deconvolve them separately
     //=============================================================
+    if (shifted)
+        return;
     PowerSpectrumBinning pofk_total(density_grid_fourier.get_nmesh() / 2);
     pofk_total.subtract_shotnoise = pofk_subtract_shotnoise;
     bin_up_pofk(pofk_total);
