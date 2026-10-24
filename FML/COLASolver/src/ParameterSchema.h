@@ -211,6 +211,46 @@ namespace COLASOLVER {
                 b.required("cosmology_w0", -1.0, "Dark energy equation of state w(a) = w0 + wa(1-a): w0");
                 b.required("cosmology_wa", 0.0, "Dark energy equation of state w(a) = w0 + wa(1-a): wa");
             });
+            b.when(is_one_of("cosmology_model", {"Quintessence"}), "cosmology_model = Quintessence", [&]() {
+                b.required("cosmology_quintessence_potential",
+                           "exponential",
+                           "The potential V = V0 u(phi), phi in units of Mpl: exponential u = exp(-lambda phi), "
+                           "inverse_power_law u = phi^-alpha, pngb u = 1 + cos(phi/f), hilltop u = (1 - (phi/mu)^p)^2. "
+                           "V0 is found so that OmegaDE today = 1 - OmegaM - OmegaR - OmegaK",
+                           {"exponential", "inverse_power_law", "pngb", "hilltop"});
+                b.optional("cosmology_quintessence_phi_ini",
+                           0.0,
+                           "The initial value of the field (units of Mpl; deep in the radiation era)");
+                b.optional("cosmology_quintessence_dphidlna_ini", 0.0, "The initial dphi/dlna (0: frozen)");
+                b.when(is_one_of("cosmology_quintessence_potential", {"exponential"}),
+                       "cosmology_quintessence_potential = exponential",
+                       [&]() { b.required("cosmology_quintessence_lambda", 1.0, "The slope lambda"); });
+                b.when(is_one_of("cosmology_quintessence_potential", {"inverse_power_law"}),
+                       "cosmology_quintessence_potential = inverse_power_law",
+                       [&]() { b.required("cosmology_quintessence_alpha", 1.0, "The power alpha"); });
+                b.when(is_one_of("cosmology_quintessence_potential", {"pngb"}),
+                       "cosmology_quintessence_potential = pngb",
+                       [&]() { b.required("cosmology_quintessence_f", 1.0, "The scale f (units of Mpl)"); });
+                b.when(is_one_of("cosmology_quintessence_potential", {"hilltop"}),
+                       "cosmology_quintessence_potential = hilltop",
+                       [&]() {
+                           b.required("cosmology_quintessence_mu", 1.0, "The position of the minimum mu (units of Mpl)");
+                           b.required("cosmology_quintessence_p", 2.0, "The power p");
+                       });
+            });
+            b.when(is_one_of("cosmology_model", {"EDE"}), "cosmology_model = EDE", [&]() {
+                b.required("cosmology_ede_fEDE", 0.1, "Early dark energy: the maximum of rho_EDE / rho_total");
+                b.required("cosmology_ede_zc", 3500.0, "Early dark energy: the redshift of the maximum");
+                b.optional("cosmology_ede_theta_ini", 2.8, "Early dark energy: the initial angle phi_ini / f");
+                b.optional("cosmology_ede_n", 3.0, "Early dark energy: V = m^2 f^2 (1 - cos(phi/f))^n");
+            });
+            b.when(is_one_of("cosmology_model", {"Tabulated"}), "cosmology_model = Tabulated", [&]() {
+                b.required("cosmology_tabulated_filename", std::string(""), "The file with the background");
+                b.required("cosmology_tabulated_format",
+                           "H",
+                           "H: columns z, H/H0. CLASS: a CLASS background file. w: columns a, w(a) of the dark energy",
+                           {"H", "CLASS", "w"});
+            });
             b.when(is_one_of("cosmology_model", {"DGP"}), "cosmology_model = DGP", [&]() {
                 b.required("cosmology_dgp_OmegaRC",
                            0.0,

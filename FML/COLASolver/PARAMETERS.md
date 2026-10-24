@@ -25,7 +25,7 @@ Parameters marked *optional* take the default value if they are not in the param
 
 | Parameter | Type | Default | Used when | Description |
 |---|---|---|---|---|
-| `cosmology_model` | string | `"LCDM"` | always | The cosmology (background evolution). Options: `LCDM`, `w0waCDM`, `DGP`, `JBD` |
+| `cosmology_model` | string | `"LCDM"` | always | The cosmology (background evolution). Options: `LCDM`, `w0waCDM`, `DGP`, `JBD`, `Quintessence`, `EDE`, `Tabulated` |
 | `cosmology_Omegab` | double | *required* | always | Baryon density parameter |
 | `cosmology_OmegaMNu` | double | `0` | always | Massive neutrino density parameter |
 | `cosmology_OmegaCDM` | double | *required* | always | CDM density parameter |
@@ -38,6 +38,20 @@ Parameters marked *optional* take the default value if they are not in the param
 | `cosmology_JBD_density_parameter_definition` | string | `"hi-class"` | cosmology_model = JBD | Definition of the density parameters Omega = 8pi G_* rho / 3H0^2 (which G_* to use). Options: `Gbare`, `Gnewton`, `Gtoday`, `hi-class` |
 | `cosmology_w0` | double | *required* | cosmology_model = w0waCDM | Dark energy equation of state w(a) = w0 + wa(1-a): w0 |
 | `cosmology_wa` | double | *required* | cosmology_model = w0waCDM | Dark energy equation of state w(a) = w0 + wa(1-a): wa |
+| `cosmology_quintessence_potential` | string | *required* | cosmology_model = Quintessence | The potential V = V0 u(phi), phi in units of Mpl: exponential u = exp(-lambda phi), inverse_power_law u = phi^-alpha, pngb u = 1 + cos(phi/f), hilltop u = (1 - (phi/mu)^p)^2. V0 is found so that OmegaDE today = 1 - OmegaM - OmegaR - OmegaK. Options: `exponential`, `inverse_power_law`, `pngb`, `hilltop` |
+| `cosmology_quintessence_phi_ini` | double | `0` | cosmology_model = Quintessence | The initial value of the field (units of Mpl; deep in the radiation era) |
+| `cosmology_quintessence_dphidlna_ini` | double | `0` | cosmology_model = Quintessence | The initial dphi/dlna (0: frozen) |
+| `cosmology_quintessence_lambda` | double | *required* | cosmology_model = Quintessence and cosmology_quintessence_potential = exponential | The slope lambda |
+| `cosmology_quintessence_alpha` | double | *required* | cosmology_model = Quintessence and cosmology_quintessence_potential = inverse_power_law | The power alpha |
+| `cosmology_quintessence_f` | double | *required* | cosmology_model = Quintessence and cosmology_quintessence_potential = pngb | The scale f (units of Mpl) |
+| `cosmology_quintessence_mu` | double | *required* | cosmology_model = Quintessence and cosmology_quintessence_potential = hilltop | The position of the minimum mu (units of Mpl) |
+| `cosmology_quintessence_p` | double | *required* | cosmology_model = Quintessence and cosmology_quintessence_potential = hilltop | The power p |
+| `cosmology_ede_fEDE` | double | *required* | cosmology_model = EDE | Early dark energy: the maximum of rho_EDE / rho_total |
+| `cosmology_ede_zc` | double | *required* | cosmology_model = EDE | Early dark energy: the redshift of the maximum |
+| `cosmology_ede_theta_ini` | double | `2.8` | cosmology_model = EDE | Early dark energy: the initial angle phi_ini / f |
+| `cosmology_ede_n` | double | `3` | cosmology_model = EDE | Early dark energy: V = m^2 f^2 (1 - cos(phi/f))^n |
+| `cosmology_tabulated_filename` | string | *required* | cosmology_model = Tabulated | The file with the background |
+| `cosmology_tabulated_format` | string | *required* | cosmology_model = Tabulated | H: columns z, H/H0. CLASS: a CLASS background file. w: columns a, w(a) of the dark energy. Options: `H`, `CLASS`, `w` |
 | `cosmology_dgp_OmegaRC` | double | *required* | cosmology_model = DGP | The cross-over scale of the self-accelerating DGP model (Omega_rc = 1/(4 rc^2 H0^2)) |
 
 ## Gravity model

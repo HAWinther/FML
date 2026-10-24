@@ -5,6 +5,18 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLASolver: new cosmologies (dark energy backgrounds)
+- `cosmology_model = "Quintessence"`: scalar-field dark energy with exponential, inverse power law
+  (Ratra-Peebles), PNGB and hilltop potentials; V0 found by shooting for the dark energy density today
+  (`src/Cosmology_ScalarField.h`, `src/Cosmology_Quintessence.h`).
+- `cosmology_model = "EDE"`: axion-like early dark energy parametrized by fEDE, zc, theta_ini and n (m and f by
+  shooting) plus a cosmological constant (`src/Cosmology_EDE.h`).
+- `cosmology_model = "Tabulated"`: the background from a file, as H(z)/H0, a CLASS background file or w(a)
+  (`src/Cosmology_Tabulated.h`, example `input/class_background_w0wa.dat`).
+- Checked against an independent solution (H to < 1e-4, w to < 1e-5 for a < 1); a CLASS table of w0waCDM gives
+  the same simulation as `w0waCDM` (P(k) to 3e-6). Regression cases `quintessence_exponential`,
+  `quintessence_pngb`, `early_dark_energy`, `tabulated_class`.
+
 ### COLASolver: growth factors in the radiation era, time steps uniform in D, outputs
 - The growth equations start from the growing mode of a matter + radiation universe (D1 = 1 + 3a/(2a_eq) and the
   matching 2LPT/3LPT modes), at a < a_eq/10, instead of the Einstein-de Sitter values. Before, the tables

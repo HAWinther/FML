@@ -268,6 +268,38 @@ CASES = {
         output_redshifts=[1.0, 0.0],
         timestep_nsteps=[3, 3],
     ),
+    # Quintessence (exponential potential) with BullFrog
+    "quintessence_exponential": dict(
+        cosmology_model="Quintessence",
+        cosmology_quintessence_potential="exponential",
+        cosmology_quintessence_lambda=1.0,
+        cosmology_quintessence_phi_ini=0.0,
+        cosmology_quintessence_dphidlna_ini=0.0,
+        simulation_use_cola=False,
+        timestep_method="BullFrog",
+    ),
+    # Thawing PNGB quintessence with COLA
+    "quintessence_pngb": dict(
+        cosmology_model="Quintessence",
+        cosmology_quintessence_potential="pngb",
+        cosmology_quintessence_f=1.0,
+        cosmology_quintessence_phi_ini=1.5,
+        cosmology_quintessence_dphidlna_ini=0.0,
+    ),
+    # Early dark energy
+    "early_dark_energy": dict(
+        cosmology_model="EDE",
+        cosmology_ede_fEDE=0.1,
+        cosmology_ede_zc=3500.0,
+        cosmology_ede_theta_ini=2.8,
+        cosmology_ede_n=3.0,
+    ),
+    # Background from a CLASS file (w0 = -0.9, wa = 0.1)
+    "tabulated_class": dict(
+        cosmology_model="Tabulated",
+        cosmology_tabulated_filename=INPUT + "/class_background_w0wa.dat",
+        cosmology_tabulated_format="CLASS",
+    ),
     # The same as 'bullfrog_lightcone' with the lightcone particles in HDF5 (needs USE_HDF5)
     "hdf5_lightcone": dict(
         simulation_use_cola=False,

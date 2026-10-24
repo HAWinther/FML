@@ -6,6 +6,9 @@
 #include "Cosmology_JBD.h"
 #include "Cosmology_LCDM.h"
 #include "Cosmology_w0wa.h"
+#include "Cosmology_Quintessence.h"
+#include "Cosmology_EDE.h"
+#include "Cosmology_Tabulated.h"
 
 #include "GravityModel.h"
 #include "GravityModel_DGP.h"
@@ -43,6 +46,9 @@ namespace COLASOLVER {
             {"w0waCDM", []() { return std::make_shared<Cosmologyw0waCDM>(); }},
             {"DGP", []() { return std::make_shared<CosmologyDGP>(); }},
             {"JBD", []() { return std::make_shared<CosmologyJBD>(); }},
+            {"Quintessence", []() { return std::make_shared<CosmologyQuintessence>(); }},
+            {"EDE", []() { return std::make_shared<CosmologyEDE>(); }},
+            {"Tabulated", []() { return std::make_shared<CosmologyTabulated>(); }},
         };
         return models;
     }

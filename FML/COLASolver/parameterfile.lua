@@ -43,7 +43,7 @@ end
 ------------------------------------------------------------
 -- Choose the cosmology 
 ------------------------------------------------------------
--- Cosmology: LCDM, w0waCDM, DGP, JBD, ... add your own ...
+-- Cosmology: LCDM, w0waCDM, DGP, JBD, Quintessence, EDE, Tabulated ... add your own ...
 cosmology_model = "LCDM"
 --- CDM density
 cosmology_OmegaCDM = 0.2685
@@ -73,6 +73,37 @@ if cosmology_model == "w0waCDM" then
 end
 
 -- DGP self-accelerating model
+if cosmology_model == "Quintessence" then
+  -- V = V0 u(phi) with phi in units of Mpl: exponential, inverse_power_law, pngb, hilltop
+  -- (V0 is found so that we get the dark energy density today)
+  cosmology_quintessence_potential = "exponential"
+  -- Initial field value and dphi/dlna (deep in the radiation era)
+  cosmology_quintessence_phi_ini = 0.0
+  cosmology_quintessence_dphidlna_ini = 0.0
+  -- exponential: u = exp(-lambda phi)
+  cosmology_quintessence_lambda = 1.0
+  -- inverse_power_law: u = phi^-alpha (needs phi_ini > 0)
+  cosmology_quintessence_alpha = 1.0
+  -- pngb: u = 1 + cos(phi/f)
+  cosmology_quintessence_f = 1.0
+  -- hilltop: u = (1 - (phi/mu)^p)^2
+  cosmology_quintessence_mu = 1.0
+  cosmology_quintessence_p = 2.0
+end
+if cosmology_model == "EDE" then
+  -- Axion-like early dark energy V = m^2 f^2 (1 - cos(phi/f))^n (+ a cosmological constant)
+  -- The maximum of rho_EDE/rho_total and the redshift where it happens
+  cosmology_ede_fEDE = 0.1
+  cosmology_ede_zc = 3500.0
+  -- The initial angle phi_ini/f and the power n
+  cosmology_ede_theta_ini = 2.8
+  cosmology_ede_n = 3.0
+end
+if cosmology_model == "Tabulated" then
+  -- The background from a file: H (columns z, H/H0), CLASS (a CLASS background file) or w (columns a, w(a))
+  cosmology_tabulated_filename = "input/class_background_w0wa.dat"
+  cosmology_tabulated_format = "CLASS"
+end
 if cosmology_model == "DGP" then 
   cosmology_dgp_OmegaRC = 0.11642
 end
