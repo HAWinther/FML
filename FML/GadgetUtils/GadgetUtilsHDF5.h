@@ -5,6 +5,7 @@
 #include <FML/Global/Global.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <fstream>
@@ -636,6 +637,128 @@ namespace FML {
                             for (size_t i = 0; i < NumPart; i++)
                                 if (family_of(i) == type)
                                     ids.push_back((unsigned long long)FML::PARTICLE::GetID(part[i]));
+                            HDF5::write_dataset(g, "ParticleIDs", H5T_STD_U64LE, H5T_NATIVE_ULLONG, ids.data(), n, 1);
+                        }
+                    }
+                }
+
+                /// Write a single file with several sets of particles (e.g. CDM and baryons kept in separate
+                /// containers), each its own particle type (see GadgetWriter::write_gadget_species). No MPI calls
+                template <class T>
+                void write_gadget_species(std::string filename,
+                                          std::vector<GadgetSpecies<T>> species,
+                                          int NumberOfFilesToWrite,
+                                          double aexp,
+                                          double Boxsize,
+                                          double OmegaM,
+                                          double OmegaLambda,
+                                          double HubbleParam,
+                                          double pos_norm,
+                                          double vel_norm) {
+                    std::sort(species.begin(), species.end(), [](auto & a, auto & b) { return a.type < b.type; });
+                    std::array<unsigned int, 6> npart{}, npart_total{}, highword{};
+                    std::vector<double> mass(6, 0.0);
+                    for (size_t i = 0; i < species.size(); i++) {
+                        auto & sp = species[i];
+                        if (sp.type < 0 or sp.type > 5 or (i > 0 and species[i - 1].type == sp.type))
+                            throw std::runtime_error("[GadgetHDF5Writer::write_gadget_species] The particle types must "
+                                                     "be different and in 0-5");
+                        npart[sp.type] = (unsigned int)sp.npart;
+                        npart_total[sp.type] = (unsigned int)(sp.npart_total & 0xffffffffULL);
+                        highword[sp.type] = (unsigned int)(sp.npart_total >> 32);
+                        mass[sp.type] = sp.npart_total == 0 ?
+                                            0.0 :
+                                            3.0 * OmegaM * sp.mass_fraction * MplMpl_over_H0Msunh *
+                                                std::pow(Boxsize / HubbleLengthInMpch, 3) / double(sp.npart_total) / 1e10;
+                    }
+
+                    HDF5::Handle file(H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT), H5Fclose, filename);
+                    {
+                        header = GadgetHeader{};
+                        for (int i = 0; i < 6; i++) {
+                            header.npart[i] = npart[i];
+                            header.npartTotal[i] = npart_total[i];
+                            header.npartTotalHighWord[i] = highword[i];
+                            header.mass[i] = mass[i];
+                        }
+                        header.time = aexp;
+                        header.redshift = 1.0 / aexp - 1.0;
+                        header.num_files = NumberOfFilesToWrite;
+                        header.BoxSize = Boxsize;
+                        header.Omega0 = OmegaM;
+                        header.OmegaLambda = OmegaLambda;
+                        header.HubbleParam = HubbleParam;
+
+                        HDF5::Handle h(H5Gcreate2(file, "Header", H5P_DEFAULT, group_properties(), H5P_DEFAULT), H5Gclose, "Header");
+                        const int zero = 0;
+                        const int precision = double_precision ? 1 : 0;
+                        auto uint6 = [&](const char * name, const std::array<unsigned int, 6> & v) {
+                            HDF5::write_attribute(h, name, H5T_STD_U32LE, H5T_NATIVE_UINT, v.data(), 6);
+                        };
+                        auto dbl = [&](const char * name, double v) {
+                            HDF5::write_attribute(h, name, H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, &v, 1);
+                        };
+                        auto integer = [&](const char * name, int v) {
+                            HDF5::write_attribute(h, name, H5T_STD_I32LE, H5T_NATIVE_INT, &v, 1);
+                        };
+                        uint6("NumPart_ThisFile", npart);
+                        uint6("NumPart_Total", npart_total);
+                        uint6("NumPart_Total_HighWord", highword);
+                        HDF5::write_attribute(h, "MassTable", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, mass.data(), 6);
+                        dbl("Time", header.time);
+                        dbl("Redshift", header.redshift);
+                        dbl("BoxSize", Boxsize);
+                        integer("NumFilesPerSnapshot", NumberOfFilesToWrite);
+                        dbl("Omega0", OmegaM);
+                        dbl("OmegaLambda", OmegaLambda);
+                        dbl("HubbleParam", HubbleParam);
+                        integer("Flag_Sfr", zero);
+                        integer("Flag_Cooling", zero);
+                        integer("Flag_StellarAge", zero);
+                        integer("Flag_Metals", zero);
+                        integer("Flag_Feedback", zero);
+                        integer("Flag_Entropy_ICs", zero);
+                        integer("Flag_DoublePrecision", precision);
+                    }
+
+                    const hid_t filetype = double_precision ? H5T_IEEE_F64LE : H5T_IEEE_F32LE;
+                    for (auto & sp : species) {
+                        const size_t n = sp.npart;
+                        if (n == 0)
+                            continue;
+                        const std::string group = "PartType" + std::to_string(sp.type);
+                        HDF5::Handle g(H5Gcreate2(file, group.c_str(), H5P_DEFAULT, group_properties(), H5P_DEFAULT), H5Gclose, group);
+                        std::vector<double> buffer;
+                        auto gather = [&](auto && get, double norm) {
+                            buffer.assign(n * NDIM, 0.0);
+                            for (size_t i = 0; i < n; i++) {
+                                const auto * x = get(sp.part[i]);
+                                for (int idim = 0; idim < NDIM; idim++)
+                                    buffer[NDIM * i + idim] = double(x[idim]) * norm;
+                            }
+                        };
+                        if constexpr (FML::PARTICLE::has_get_pos<T>()) {
+                            gather([](auto & p) { return FML::PARTICLE::GetPos(p); }, pos_norm);
+                            for (auto & x : buffer) {
+                                if (not periodic_wrap)
+                                    break;
+                                if (x >= Boxsize)
+                                    x -= Boxsize;
+                                if (x < 0.0)
+                                    x += Boxsize;
+                                if (not double_precision and float(x) >= float(Boxsize))
+                                    x = 0.0;
+                            }
+                            HDF5::write_dataset(g, "Coordinates", filetype, H5T_NATIVE_DOUBLE, buffer.data(), n, NDIM);
+                        }
+                        if constexpr (FML::PARTICLE::has_get_vel<T>()) {
+                            gather([](auto & p) { return FML::PARTICLE::GetVel(p); }, vel_norm);
+                            HDF5::write_dataset(g, "Velocities", filetype, H5T_NATIVE_DOUBLE, buffer.data(), n, NDIM);
+                        }
+                        if constexpr (FML::PARTICLE::has_get_id<T>()) {
+                            std::vector<unsigned long long> ids(n);
+                            for (size_t i = 0; i < n; i++)
+                                ids[i] = (unsigned long long)FML::PARTICLE::GetID(sp.part[i]);
                             HDF5::write_dataset(g, "ParticleIDs", H5T_STD_U64LE, H5T_NATIVE_ULLONG, ids.data(), n, 1);
                         }
                     }

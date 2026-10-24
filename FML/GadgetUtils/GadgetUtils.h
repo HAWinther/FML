@@ -1,6 +1,7 @@
 #ifndef GADGETUTILS_HEADER
 #define GADGETUTILS_HEADER
 
+#include <algorithm>
 #include <cassert>
 #include <climits>
 #include <cmath>
@@ -153,6 +154,16 @@ namespace FML {
                 void set_fields_in_file(std::vector<std::string> fields);
             };
 
+            /// One set of particles (one GADGET particle type) for GadgetWriter::write_gadget_species
+            template <class T>
+            struct GadgetSpecies {
+                int type{1};            // GADGET particle type (0-5)
+                T * part{nullptr};      // the particles on this task
+                size_t npart{0};        // number of particles on this task
+                size_t npart_total{0};  // total number of particles (over all tasks)
+                double mass_fraction{1.0}; // Omega of this species / OmegaM (sets the particle mass)
+            };
+
             /// Write files in GADGET format
             class GadgetWriter {
               private:
@@ -186,6 +197,22 @@ namespace FML {
                                          double pos_norm,
                                          double vel_norm,
                                          std::vector<double> OmegaFamilyOverOmegaM = {0., 1., 0., 0., 0., 0.});
+
+                /// Write a single gadget file with several sets of particles (e.g. CDM and baryons kept in separate
+                /// containers), each its own particle type (types must differ). The mass of a particle of a species
+                /// is mass_fraction * OmegaM * rho_crit * Box^3 / npart_total. IDs are written as they are (make them
+                /// unique). No MPI communication (the totals are given)
+                template <class T>
+                void write_gadget_species(std::string filename,
+                                          std::vector<GadgetSpecies<T>> species,
+                                          int NumberOfFilesToWrite,
+                                          double aexp,
+                                          double Boxsize,
+                                          double OmegaM,
+                                          double OmegaLambda,
+                                          double HubbleParam,
+                                          double pos_norm,
+                                          double vel_norm);
 
                 /// Write a gadget section
                 void write_section(std::ofstream & fp, std::vector<char> & buffer, int bytes);
@@ -694,6 +721,81 @@ namespace FML {
                     }
                     assert(count == ntowrite);
                     write_section(fp, buffer, bytes);
+                }
+            }
+
+            template <class T>
+            void GadgetWriter::write_gadget_species(std::string filename,
+                                                    std::vector<GadgetSpecies<T>> species,
+                                                    int NumberOfFilesToWrite,
+                                                    double aexp,
+                                                    double Boxsize,
+                                                    double OmegaM,
+                                                    double OmegaLambda,
+                                                    double HubbleParam,
+                                                    double pos_norm,
+                                                    double vel_norm) {
+                std::sort(species.begin(), species.end(), [](auto & a, auto & b) { return a.type < b.type; });
+                std::vector<size_t> npart_type(6, 0), npart_type_tot(6, 0);
+                std::vector<double> mass_in_1e10_msunh(6, 0.0);
+                for (size_t i = 0; i < species.size(); i++) {
+                    auto & sp = species[i];
+                    if (sp.type < 0 or sp.type > 5 or (i > 0 and species[i - 1].type == sp.type))
+                        throw_error("[GadgetWriter::write_gadget_species] The particle types must be different and in 0-5");
+                    npart_type[sp.type] = sp.npart;
+                    npart_type_tot[sp.type] = sp.npart_total;
+                    mass_in_1e10_msunh[sp.type] =
+                        sp.npart_total == 0 ? 0.0 :
+                                              3.0 * OmegaM * sp.mass_fraction * MplMpl_over_H0Msunh *
+                                                  std::pow(Boxsize / HubbleLengthInMpch, 3) / double(sp.npart_total) / 1e10;
+                }
+
+                std::ofstream fp(filename.c_str(), std::ios::binary | std::ios::out);
+                if (not fp.is_open())
+                    throw_error("[GadgetWriter::write_gadget_species] File " + filename + " is not open\n");
+                write_header_general(fp,
+                                     npart_type,
+                                     npart_type_tot,
+                                     mass_in_1e10_msunh,
+                                     NumberOfFilesToWrite,
+                                     aexp,
+                                     Boxsize,
+                                     OmegaM,
+                                     OmegaLambda,
+                                     HubbleParam);
+
+                size_t ntowrite = 0;
+                for (auto & sp : species)
+                    ntowrite += sp.npart;
+                std::vector<char> buffer;
+
+                auto write_vector_block = [&](auto && get, double norm) {
+                    const size_t bytes = ntowrite * NDIM * sizeof(float);
+                    buffer.resize(bytes);
+                    float * float_buffer = reinterpret_cast<float *>(buffer.data());
+                    size_t count = 0;
+                    for (auto & sp : species)
+                        for (size_t j = 0; j < sp.npart; j++) {
+                            const auto * x = get(sp.part[j]);
+                            for (int idim = 0; idim < NDIM; idim++)
+                                float_buffer[NDIM * count + idim] = float(x[idim] * norm);
+                            count++;
+                        }
+                    write_section(fp, buffer, int(bytes));
+                };
+                if constexpr (FML::PARTICLE::has_get_pos<T>())
+                    write_vector_block([](auto & p) { return FML::PARTICLE::GetPos(p); }, pos_norm);
+                if constexpr (FML::PARTICLE::has_get_vel<T>())
+                    write_vector_block([](auto & p) { return FML::PARTICLE::GetVel(p); }, vel_norm);
+                if constexpr (FML::PARTICLE::has_get_id<T>()) {
+                    const size_t bytes = sizeof(gadget_particle_id_type) * ntowrite;
+                    buffer.resize(bytes);
+                    auto * id_buffer = reinterpret_cast<gadget_particle_id_type *>(buffer.data());
+                    size_t count = 0;
+                    for (auto & sp : species)
+                        for (size_t j = 0; j < sp.npart; j++)
+                            id_buffer[count++] = gadget_particle_id_type(FML::PARTICLE::GetID(sp.part[j]));
+                    write_section(fp, buffer, int(bytes));
                 }
             }
 

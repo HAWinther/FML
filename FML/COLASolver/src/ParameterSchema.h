@@ -353,6 +353,17 @@ namespace COLASOLVER {
 
             b.section("Particles");
             b.required("particle_Npart_1D", 0, "Number of CDM+baryon particles per dimension");
+            b.always_optional("particle_baryons",
+                              false,
+                              "Evolve CDM and baryons as two sets of particles (particle_Npart_1D^3 of each, IC from "
+                              "the CDM and baryon transfer functions at zini). false: one set of CDM+baryon particles");
+            b.always_optional("particle_baryon_lattice",
+                              "same",
+                              "particle_baryons: start the baryons from the same lattice as the CDM (same, recommended: "
+                              "the baryon-CDM difference then follows linear theory on all scales) or from a lattice "
+                              "offset by half a particle spacing (offset: gives a spurious baryon-CDM difference on "
+                              "small scales)",
+                              {"same", "offset"});
             b.optional("particle_allocation_factor",
                        1.5,
                        "Allocate this factor more particles than the average per task (particles move between "

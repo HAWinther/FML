@@ -190,6 +190,8 @@ namespace COLASOLVER {
     struct ParticleSettings {
         int Npart_1D;             // Number of particles per dimension (total is N^NDIM)
         double allocation_factor; // Allocate this many more particles
+        bool baryons{false};      // CDM and baryons as two sets of particles (otherwise one set "cb")
+        std::string baryon_lattice{"same"}; // same: the baryons start from the CDM lattice, offset: half a spacing
     };
 
     struct TimestepSettings {
@@ -355,6 +357,9 @@ namespace COLASOLVER {
             // Particles
             r.get("particle_Npart_1D", particle.Npart_1D);
             r.get("particle_allocation_factor", particle.allocation_factor);
+            r.get("particle_baryons", particle.baryons);
+            if (particle.baryons)
+                r.get("particle_baryon_lattice", particle.baryon_lattice);
 
             // Time-stepping
             r.get("timestep_nsteps", timestep.nsteps);
@@ -512,6 +517,29 @@ namespace COLASOLVER {
                     fail("timestep_nsteps cannot be negative");
             if (timestep.spacing == ScaleFactorSpacing::Powerlaw and timestep.spacing_power == 0.0)
                 fail("timestep_spacing_power cannot be 0 (use logarithmic spacing)");
+
+            // Separate CDM and baryon particles: what is implemented so far
+            if (particle.baryons) {
+                auto need = [&](bool ok, const std::string & what) {
+                    if (not ok)
+                        fail("particle_baryons = true: " + what + " (not implemented for two species yet)");
+                };
+                need(not simulation.use_cola, "needs simulation_use_cola = false");
+                need(not simulation.enforce_LPT_trajectories, "needs simulation_enforce_LPT_trajectories = false");
+                need(ic.type_of_input == ICInputType::TransferInfoFile,
+                     "needs ic_type_of_input = transferinfofile (the CDM and baryon transfer functions at zini)");
+                need(ic.random_field_type == ICRandomFieldType::Gaussian or
+                         ic.random_field_type == ICRandomFieldType::NonGaussian,
+                     "needs ic_random_field_type = gaussian or nongaussian");
+                need(ic.LPT_order <= 2, "needs ic_LPT_order = 1 or 2");
+                need(force.density_method == "assignment" and force.interpolation_method != "nufft",
+                     "needs force_density_method = assignment and force_interpolation_method != nufft");
+                need(force.interlacing_order <= 1 and force.early_method == "none",
+                     "needs force_interlacing_order = 1 and force_early_method = none");
+                need(not force.nbody_gauge, "needs force_nbody_gauge = false");
+                need(not fof.enabled and not pofk_multipole.enabled and not bispectrum.enabled,
+                     "needs fof, pofk_multipole and bispectrum = false");
+            }
         }
     };
 

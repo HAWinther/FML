@@ -5,6 +5,19 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLASolver: CDM and baryons as separate particles (optional)
+- `particle_baryons = true`: CDM and baryons in two particle containers (gravity only), IC from the CDM and baryon
+  transfer functions at zini (total velocity = growing mode, relative velocity from d log(T_i/T_cb)/dlna), the
+  density for the force is (OmegaCDM delta_cdm + Omegab delta_b)/OmegaCB. Default off: one species as before
+  (all regression results unchanged bit for bit).
+- `particle_baryon_lattice` (`same`, default, or `offset`): with the same lattice the baryon-CDM difference follows
+  linear theory on all scales; offset lattices give a spurious difference for k > k_Ny/8 (README).
+- P(k) of CDM, baryons and CDM+baryons at outputs and every step; GADGET binary/HDF5 output with CDM as type 1
+  and baryons as type 2 (`GadgetWriter::write_gadget_species`, `GadgetHDF5Writer::write_gadget_species`).
+- `NBodyInitialConditions` can take a separate 2LPT source field.
+- `pofk_subtract_shotnoise` now also applies to the every-step P(k) (it had no effect there).
+- Regression cases `two_species_bullfrog`, `two_species_neutrinos_hdf5`.
+
 ### COLASolver: new cosmologies (dark energy backgrounds)
 - `cosmology_model = "Quintessence"`: scalar-field dark energy with exponential, inverse power law
   (Ratra-Peebles), PNGB and hilltop potentials; V0 found by shooting for the dark energy density today

@@ -300,6 +300,29 @@ CASES = {
         cosmology_tabulated_filename=INPUT + "/class_background_w0wa.dat",
         cosmology_tabulated_format="CLASS",
     ),
+    # CDM and baryons as separate particles (same lattice), BullFrog, IC from the transfer functions at zini
+    "two_species_bullfrog": dict(
+        particle_baryons=True,
+        particle_baryon_lattice="same",
+        simulation_use_cola=False,
+        timestep_method="BullFrog",
+        ic_type_of_input="transferinfofile",
+        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
+        ic_input_redshift=20.0,
+        pofk_subtract_shotnoise=True,
+    ),
+    # CDM and baryons (offset lattices) with linear massive neutrinos and HDF5 output (needs USE_HDF5)
+    "two_species_neutrinos_hdf5": dict(
+        particle_baryons=True,
+        particle_baryon_lattice="offset",
+        simulation_use_cola=False,
+        cosmology_OmegaMNu=0.0048,
+        cosmology_OmegaCDM=0.2637,
+        ic_type_of_input="transferinfofile",
+        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.2.txt",
+        ic_input_redshift=20.0,
+        output_fileformat="HDF5",
+    ),
     # The same as 'bullfrog_lightcone' with the lightcone particles in HDF5 (needs USE_HDF5)
     "hdf5_lightcone": dict(
         simulation_use_cola=False,
@@ -387,6 +410,7 @@ KNOWN_FAILING = []
 REQUIRES = {
     "hdf5_output": "hdf5",
     "hdf5_lightcone": "hdf5",
+    "two_species_neutrinos_hdf5": "hdf5",
     "read_particles_hdf5": "hdf5",
 }
 

@@ -99,6 +99,31 @@ The particle container we use, MPIParticles, can hold any particle as long as it
 
 If your particle has dynamically allocated memory then you must implement a function that appends to (and one that assigns from) a communication buffer and a method that returns the byte-size of the particle.
 
+## CDM and baryons as separate particles
+
+By default CDM and baryons are one set of particles ("cb"). With `particle_baryons = true` they are two sets (one MPIParticles container each, `particle_Npart_1D^3` of each) with masses in the ratio Omegab / OmegaCDM. Both feel the gravity of the total CDM+baryon density delta_cb = (OmegaCDM delta_cdm + Omegab delta_b) / OmegaCB (plus linear massive neutrinos), so the baryons are collisionless (no hydrodynamics). What this gets right is the difference between baryons and CDM left over from before decoupling (the baryons lag behind the CDM and catch up). The initial conditions are made from the CDM and baryon transfer functions at zini (`ic_type_of_input = transferinfofile`):
+
+- delta_i(k) = delta_cb(k) T_i(k,zini) / T_cb(k,zini) from the same random field;
+- 1LPT velocities with f_i = f_cb + dlog(T_i/T_cb)/dlna, where f_cb is the growth rate of the gravity model. The total CDM+baryon velocity is then exactly the growing mode, and the relative velocity comes from the transfer functions. (The growth rates computed directly from the CAMB transfer functions are inaccurate near the ends of the redshift range of the table: from z = 49 they gave 0.8% too much CDM+baryon power.)
+- the 2LPT displacement of the total field for both species.
+
+By default both species start from the same particle lattice (`particle_baryon_lattice = "same"`). Interleaved lattices offset by half a particle spacing (`"offset"`, the usual choice in tree codes) give a large spurious baryon-CDM difference on small scales in this PM code. Tests: 64^3 particles of each species in 256 Mpc/h, z_ini = 49, 2x force grid, P(k) at z = 0. The relative difference is 1 - sqrt(P_b/P_cdm), compared with CAMB 1 - T_b/T_cdm:
+
+| k (h/Mpc)                                    | 0.025 | 0.05  | 0.1   | 0.2   | 0.3   | 0.4    |
+|----------------------------------------------|-------|-------|-------|-------|-------|--------|
+| CAMB 1 - T_b/T_cdm (%)                       | 0.54  | 0.55  | 0.64  | 0.44  | 0.52  | 0.49   |
+| linear amplitude, same lattice (%)           | 0.51  | 0.53  | 0.60  | 0.45  | 0.55  | 0.55   |
+| linear amplitude, offset lattices (%)        | 0.54  | 0.62  | 0.96  | 2.06  | 4.40  | 8.06   |
+| P_cb (two species) / P_cb (one species) - 1, same lattice (%) | 0.00 | 0.00 | -0.01 | 0.00 | 0.00 | 0.00 |
+| ... offset lattices, linear amplitude (%)    | -0.06 | -0.14 | -0.55 | -2.4  | -5.6  | -10.5  |
+| ... offset lattices, normal amplitude, 1x grid, 20 BullFrog steps (%) | 0.08 | 0.13 | 0.21 | -0.31 | -2.0 | -2.8 |
+
+With the same lattice the CDM+baryon P(k) is the same as that of one species, and the baryon-CDM difference follows linear theory on all scales. With 20 BullFrog steps and a 1x force grid at normal amplitude it is 0.51 / 0.54 / 0.60 / 0.58 / 0.64 / 0.69 % (the nonlinear evolution changes it a little on small scales). With offset lattices the difference grows spuriously for k > k_Ny/8 (worse with a 1x force grid). Time stepping: BullFrog with 20 steps gets the CDM+baryon P(k) at z = 0 to 0.04% for k < 0.1 h/Mpc (relative to 300 logarithmic Quinn steps), and FastPM with 20 steps to 0.3%.
+
+Output: P(k) of CDM (`pofk_cdm_zX.txt`), baryons (`pofk_baryon_zX.txt`) and CDM+baryons (`pofk_zX.txt`, as before) with linear theory P_cb (T_i/T_cb)^2. The same files are written for every step. GADGET (binary and HDF5) files have the CDM as type 1 and the baryons as type 2 (a collisionless type: type 0 is SPH gas in GADGET, which many readers expect to have gas fields). Baryon IDs follow the CDM IDs.
+
+Not implemented for two species yet (the code stops with a message): COLA, reading the IC from file, NUFFT / sheet densities, force interlacing and the early-time force, the N-body gauge, the lightcone, FoF, multipoles and the bispectrum. Use `ic_input_redshift = ic_initial_redshift` (the two species are made from the transfer functions at zini).
+
 # COLA
 
 The code has full support for COLA up to 3LPT, and can be turned off or on. The way it does this is that it stored the initial displacement fields in the particles when creating the IC. However it also supports COLA with scaledependent growth if you want to use that (its slower, but as long as the PM grid one uses for forces is larger than the number of particles - as we typically want it to be - this extra cost is not that bad). If the growth-factors are scaledependent (like with massive neutrinos or modified gravity) then the code will automatically detect this and use the scaledependent version unless you set a flag in the parameterfile. The LPT order we use for COLA is determined by what your particle contains: if it contains storage for only 1LPT then we will only use 1LPT and so on.

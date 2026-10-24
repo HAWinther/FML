@@ -264,6 +264,10 @@ end
 particle_Npart_1D = 128
 -- Factor of how many more particles to allocate space
 particle_allocation_factor = 1.25
+-- CDM and baryons as two sets of particles (particle_Npart_1D^3 of each)? Needs ic_type_of_input = transferinfofile
+particle_baryons = false
+-- Start the baryons from the same lattice as the CDM (same, recommended) or offset by half a particle spacing (offset)
+particle_baryon_lattice = "same"
 
 ------------------------------------------------------------
 -- Output

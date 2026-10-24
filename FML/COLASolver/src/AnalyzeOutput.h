@@ -90,6 +90,39 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
     }
 
     //=============================================================
+    // Separate CDM and baryon particles: P(k) of each species, with linear theory from the transfer functions
+    // P_i(k,z) = P_cb(k,z) (T_i(k,z) / T_cb(k,z))^2
+    //=============================================================
+    auto output_species = [&](const auto & list, const std::string & label, bool cdm) {
+        for (auto & p : list) {
+            const double redshift = p.first;
+            const auto & binning = p.second;
+            const double a = 1.0 / (1.0 + redshift);
+            std::string filename =
+                params.output.path("pofk_" + params.simulation.name + "_" + label + "_z" + redshift_to_string(redshift) + ".txt");
+            std::ofstream fp(filename.c_str());
+            fp << "# k  (h/Mpc)    P_" << label << "(k)  (Mpc/h)^3    P_" << label
+               << "_linear(k) (Mpc/h)^3   ShotnoiseSubtracted = " << std::boolalpha << pofk_subtract_shotnoise << "\n";
+            for (int i = 0; i < binning.n; i++) {
+                const double k = binning.kbin[i];
+                double plin = 0.0;
+                if (transferdata) {
+                    const double Ti = cdm ? transferdata->get_cdm_transfer_function(k, a) :
+                                            transferdata->get_baryon_transfer_function(k, a);
+                    const double D = grav->get_D_1LPT(a, k / grav->H0_hmpc);
+                    const double Dini = grav->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
+                    plin = power_initial_spline(k) * std::pow(D / Dini, 2) *
+                           std::pow(Ti / transferdata->get_cdm_baryon_transfer_function(k, a), 2);
+                }
+                fp << std::setw(15) << k << " " << std::setw(15) << binning.pofk[i] << " " << std::setw(15) << plin
+                   << "\n";
+            }
+        }
+    };
+    output_species(sim.get_pofk_cdm_every_step(), "cdm", true);
+    output_species(sim.get_pofk_baryon_every_step(), "baryon", false);
+
+    //=============================================================
     // Output all total Pofk
     //=============================================================
     for (auto & p : pofk_total_every_step) {
@@ -156,6 +189,26 @@ void output_gadget(NBodySimulation<NDIM, T> & sim, double redshift, std::string 
     }
 
     FML::FILEUTILS::GADGET::GadgetWriter gw;
+    if (sim.has_baryons()) {
+        // CDM as type 1 and the baryons as type 2 (a collisionless type: type 0 is SPH gas in GADGET)
+        auto & part_b = sim.get_baryon_particles();
+        const double OmegaM = cosmo->get_OmegaM();
+        gw.write_gadget_species(fileprefix + "." + std::to_string(FML::ThisTask),
+                                std::vector<FML::FILEUTILS::GADGET::GadgetSpecies<T>>{
+                                    {1, part.get_particles_ptr(), part.get_npart(), part.get_npart_total(),
+                                     cosmo->get_OmegaCDM() / OmegaM},
+                                    {2, part_b.get_particles_ptr(), part_b.get_npart(), part_b.get_npart_total(),
+                                     cosmo->get_Omegab() / OmegaM}},
+                                nfiles,
+                                scale_factor,
+                                simulation_boxsize,
+                                OmegaM,
+                                cosmo->get_OmegaLambda(),
+                                cosmo->get_h(),
+                                pos_norm,
+                                vel_norm);
+        return;
+    }
     gw.write_gadget_single(fileprefix + "." + std::to_string(FML::ThisTask),
                            part.get_particles_ptr(),
                            part.get_npart(),
@@ -199,6 +252,26 @@ void output_gadget_hdf5([[maybe_unused]] NBodySimulation<NDIM, T> & sim,
     }
 
     FML::FILEUTILS::GADGET::GadgetHDF5Writer gw(NDIM);
+    if (sim.has_baryons()) {
+        // CDM as PartType1 and the baryons as PartType2 (a collisionless type: PartType0 is SPH gas)
+        auto & part_b = sim.get_baryon_particles();
+        const double OmegaM = cosmo->get_OmegaM();
+        gw.write_gadget_species(filename,
+                                std::vector<FML::FILEUTILS::GADGET::GadgetSpecies<T>>{
+                                    {1, part.get_particles_ptr(), part.get_npart(), part.get_npart_total(),
+                                     cosmo->get_OmegaCDM() / OmegaM},
+                                    {2, part_b.get_particles_ptr(), part_b.get_npart(), part_b.get_npart_total(),
+                                     cosmo->get_Omegab() / OmegaM}},
+                                nfiles,
+                                scale_factor,
+                                simulation_boxsize,
+                                OmegaM,
+                                cosmo->get_OmegaLambda(),
+                                cosmo->get_h(),
+                                pos_norm,
+                                vel_norm);
+        return;
+    }
     gw.write_gadget_single(filename,
                            part.get_particles_ptr(),
                            part.get_npart(),
@@ -426,14 +499,63 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     //=============================================================
     FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> pofk_cb_binning(pofk_nmesh / 2);
     pofk_cb_binning.subtract_shotnoise = pofk_subtract_shotnoise;
-    FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM, T>(pofk_nmesh,
-                                                               part.get_particles_ptr(),
-                                                               part.get_npart(),
-                                                               part.get_npart_total(),
-                                                               pofk_cb_binning,
-                                                               pofk_density_assignment_method,
-                                                               pofk_interlacing);
-    pofk_cb_binning.scale(simulation_boxsize);
+    // Separate CDM and baryon particles: P(k) of each and of delta_cb = w_c delta_c + w_b delta_b
+    std::vector<std::pair<std::string, FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM>>> pofk_species;
+    if (not sim.has_baryons()) {
+        FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM, T>(pofk_nmesh,
+                                                                   part.get_particles_ptr(),
+                                                                   part.get_npart(),
+                                                                   part.get_npart_total(),
+                                                                   pofk_cb_binning,
+                                                                   pofk_density_assignment_method,
+                                                                   pofk_interlacing);
+        pofk_cb_binning.scale(simulation_boxsize);
+    } else {
+        const auto nleftright =
+            FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(pofk_density_assignment_method);
+        auto delta_of = [&](auto & particles) {
+            FML::GRID::FFTWGrid<NDIM> grid(pofk_nmesh, nleftright.first, nleftright.second + (pofk_interlacing ? 1 : 0));
+            if (pofk_interlacing) {
+                FML::INTERPOLATION::particles_to_fourier_grid_interlacing(particles.get_particles_ptr(),
+                                                                          particles.get_npart(),
+                                                                          particles.get_npart_total(),
+                                                                          grid,
+                                                                          pofk_density_assignment_method);
+            } else {
+                FML::INTERPOLATION::particles_to_grid(particles.get_particles_ptr(),
+                                                      particles.get_npart(),
+                                                      particles.get_npart_total(),
+                                                      grid,
+                                                      pofk_density_assignment_method);
+                grid.fftw_r2c();
+            }
+            FML::INTERPOLATION::deconvolve_window_function_fourier<NDIM>(grid, pofk_density_assignment_method);
+            return grid;
+        };
+        auto & part_b = sim.get_baryon_particles();
+        auto delta_c = delta_of(part);
+        auto delta_b = delta_of(part_b);
+        auto bin = [&](const FML::GRID::FFTWGrid<NDIM> & grid, double shotnoise) {
+            FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> binning(pofk_nmesh / 2);
+            FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum<NDIM>(grid, binning);
+            if (pofk_subtract_shotnoise)
+                for (int i = 0; i < binning.n; i++)
+                    binning.pofk[i] -= shotnoise;
+            binning.scale(simulation_boxsize);
+            return binning;
+        };
+        const double wc = sim.get_weight_cdm(), wb = sim.get_weight_baryon();
+        const double Nc = double(part.get_npart_total()), Nb = double(part_b.get_npart_total());
+        pofk_species.push_back({"cdm", bin(delta_c, 1.0 / Nc)});
+        pofk_species.push_back({"baryon", bin(delta_b, 1.0 / Nb)});
+        const auto Local_nx = delta_c.get_local_nx();
+        for (int islice = 0; islice < Local_nx; islice++)
+            for (auto && fourier_index : delta_c.get_fourier_range(islice, islice + 1))
+                delta_c.set_fourier_from_index(fourier_index,
+                                               delta_c.get_fourier_from_index(fourier_index) * FML::GRID::FloatType(wc) +
+                                                   delta_b.get_fourier_from_index(fourier_index) * FML::GRID::FloatType(wb));
+        pofk_cb_binning = bin(delta_c, wc * wc / Nc + wb * wb / Nb);
+    }
 
     /* ...or do it this way for which we can compute the total power-spectrum by adding on the neutrinos
     const auto nleftright =
@@ -494,6 +616,25 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
                 fp << std::setw(15) << pofk_cb_linear_spline(k) << " ";
                 fp << std::setw(15) << pofk_cb_linear_spline(k) * boost << " ";
                 fp << "\n";
+            }
+        }
+
+        // The species (linear theory: P_cb (T_i / T_cb)^2 from the transfer functions)
+        const double a = 1.0 / (1.0 + redshift);
+        for (auto & sp : pofk_species) {
+            std::string fname = snapshot_folder + "/pofk_" + sp.first + "_z" + redshiftstring + ".txt";
+            std::ofstream fps(fname.c_str());
+            fps << "#  k  (h/Mpc)          P_" << sp.first << "(k)  (Mpc/h)^3     P_" << sp.first << "_linear(k)\n";
+            for (int i = 0; i < sp.second.n; i++) {
+                const double k = sp.second.kbin[i];
+                double ratio = 1.0;
+                if (transferdata) {
+                    const double Ti = sp.first == "cdm" ? transferdata->get_cdm_transfer_function(k, a) :
+                                                          transferdata->get_baryon_transfer_function(k, a);
+                    ratio = std::pow(Ti / transferdata->get_cdm_baryon_transfer_function(k, a), 2);
+                }
+                fps << std::setw(15) << k << " " << std::setw(15) << sp.second.pofk[i] << " " << std::setw(15)
+                    << pofk_cb_linear_spline(k) * ratio << "\n";
             }
         }
     }

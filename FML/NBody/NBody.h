@@ -585,7 +585,8 @@ namespace FML {
                                     double box,
                                     double zini,
                                     std::vector<double> velocity_norms,
-                                    std::function<double(double)> velocity_norm_1LPT_of_kBox = nullptr);
+                                    std::function<double(double)> velocity_norm_1LPT_of_kBox = nullptr,
+                                    const FFTWGrid<N> * delta_fourier_2LPT_source = nullptr);
 
         //=====================================================================
         /// @brief Generate particles from a given power-spectrum using Lagrangian perturbation theory.
@@ -704,6 +705,9 @@ namespace FML {
         /// @param[in] velocity_norm_1LPT_of_kBox Optional. If set the 1LPT velocity is computed with this
         /// scale-dependent factor (a function of \f$ kB \f$) instead of velocity_norms[0], i.e.
         /// \f$ v_{\rm 1LPT}(k) = {\rm norm}(k) \Psi_{\rm 1LPT}(k) \f$ (e.g. for a scale-dependent growth rate)
+        /// @param[in] delta_fourier_2LPT_source Optional. If set the 2LPT potential is computed from this density
+        /// field instead of delta_fourier (e.g. the total matter density when making the IC for one of several
+        /// species). Only for LPT_order <= 2
         ///
         //=====================================================================
         template <int N, class T>
@@ -718,7 +722,8 @@ namespace FML {
                                     double box,
                                     double zini,
                                     std::vector<double> velocity_norms,
-                                    std::function<double(double)> velocity_norm_1LPT_of_kBox) {
+                                    std::function<double(double)> velocity_norm_1LPT_of_kBox,
+                                    const FFTWGrid<N> * delta_fourier_2LPT_source) {
 
             T tmp{};
             if (FML::ThisTask == 0) {
@@ -776,6 +781,8 @@ namespace FML {
             // Sanity checks
             const auto Nmesh = delta_fourier.get_nmesh();
             assert_mpi(Nmesh > 0, "[NBodyInitialConditions] delta_fourier has to be already allocated");
+            assert_mpi(delta_fourier_2LPT_source == nullptr or LPT_order <= 2,
+                       "[NBodyInitialConditions] A separate 2LPT source is only implemented for LPT_order <= 2");
             assert_mpi(LPT_order == 1 or LPT_order == 2 or LPT_order == 3,
                        "[NBodyInitialConditions] Only 1LPT, 2LPT and 3LPT implemented so valid choices here are "
                        "LPT_order = 1, 2 or 3");
@@ -807,7 +814,8 @@ namespace FML {
                 // Generate the 1LPT potential phi_1LPT = delta(k)/k^2
                 FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier(delta_fourier, phi_1LPT);
                 // Generate the 2LPT potential phi_2LPT = -1/2k^2 F[phi_ii phi_jj - phi_ij^2]
-                FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_fourier, phi_2LPT);
+                FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(
+                    delta_fourier_2LPT_source ? *delta_fourier_2LPT_source : delta_fourier, phi_2LPT);
             } else if (LPT_order == 3) {
                 // Generate the 3LPT potentials phi_3LPTa, phi_3LPTb plus 3LPT curl term
                 // We ignore the curl term in this implementation for simplicity

@@ -85,8 +85,13 @@ class NBodySimulation {
     /// The parameters of the simulation
     Parameters params;
 
-    /// All the particles
+    /// All the particles (CDM+baryons as one species "cb", or the CDM particles if particle_baryons)
     MPIParticles part;
+    /// The baryon particles (only if particle_baryons)
+    MPIParticles part_baryon;
+    /// The weights of the species in the CDM+baryon density: OmegaCDM / OmegaCB and Omegab / OmegaCB
+    double weight_cdm{1.0};
+    double weight_baryon{0.0};
 
     /// The initial density field delta_cb(zini,k) computed with the same Nmesh
     /// as the forces (used for linear massive neutrinos and the N-body gauge - not allocated otherwise)
@@ -121,6 +126,9 @@ class NBodySimulation {
     // A list of (z, P(k)) for the particles at every step (naive binning - not using the same pofk_* setting!)
     std::vector<std::pair<double, PowerSpectrumBinning>> pofk_cb_every_step;
     std::vector<std::pair<double, PowerSpectrumBinning>> pofk_total_every_step;
+    // ...and of the CDM and baryon particles separately (if particle_baryons)
+    std::vector<std::pair<double, PowerSpectrumBinning>> pofk_cdm_every_step;
+    std::vector<std::pair<double, PowerSpectrumBinning>> pofk_baryon_every_step;
     // A list of (z, P(k)) for the particles that we compute if pofk = true
     std::vector<std::pair<double, PowerSpectrumBinning>> pofk_every_output;
     // A list of (z, P_ell(k)) for the particles that we compute every output if pofk_multipoles = true
@@ -156,6 +164,18 @@ class NBodySimulation {
     //=============================================================================
     const Parameters & get_parameters() const { return params; }
     MPIParticles & get_particles() { return part; }
+    /// Separate CDM and baryon particles? Then get_particles() are the CDM particles
+    bool has_baryons() const { return params.particle.baryons; }
+    MPIParticles & get_baryon_particles() { return part_baryon; }
+    double get_weight_cdm() const { return weight_cdm; }
+    double get_weight_baryon() const { return weight_baryon; }
+    /// Call f(particles) for all the species
+    template <class F>
+    void for_each_species(F && f) {
+        f(part);
+        if (has_baryons())
+            f(part_baryon);
+    }
     std::shared_ptr<Cosmology> get_cosmology() const { return cosmo; }
     std::shared_ptr<GravityModel<NDIM>> get_gravity_model() const { return grav; }
     std::shared_ptr<GravityModel<NDIM>> get_gravity_model_ic() const { return grav_ic; }
@@ -163,6 +183,8 @@ class NBodySimulation {
     const Spline & get_power_initial_spline() const { return power_initial_spline; }
     const auto & get_pofk_cb_every_step() const { return pofk_cb_every_step; }
     const auto & get_pofk_total_every_step() const { return pofk_total_every_step; }
+    const auto & get_pofk_cdm_every_step() const { return pofk_cdm_every_step; }
+    const auto & get_pofk_baryon_every_step() const { return pofk_baryon_every_step; }
     const auto & get_pofk_every_output() const { return pofk_every_output; }
     const auto & get_pofk_multipoles_every_output() const { return pofk_multipoles_every_output; }
 
@@ -184,6 +206,8 @@ class NBodySimulation {
     void output_background_and_growth_functions();
     void setup_initial_power_spectrum();
     void generate_initial_conditions();
+    void generate_initial_conditions_two_species(const FFTWGrid<NDIM> & delta_cb_fourier);
+    void apply_lattice_offset();
     void read_ic();
     void read_phases(FFTWGrid<NDIM> & delta_fourier);
     void setup_nbody_gauge();
@@ -246,6 +270,10 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
                      "force_nmesh = particle_Npart_1D. With a finer force grid they amplify the discreteness of the "
                      "particles (see README)\n";
 
+    if (params.particle.baryons and param.get<bool>("lightcone", false))
+        throw std::runtime_error("Invalid parameters: particle_baryons = true: needs lightcone = false (not "
+                                 "implemented for two species yet)");
+
     cola.enabled = params.simulation.use_cola;
     cola.scaledependent = params.simulation.use_scaledependent_cola;
     cola.LPT_order = params.simulation.cola_LPT_order;
@@ -276,6 +304,16 @@ void NBodySimulation<NDIM, T>::init() {
     }
 
     output_background_and_growth_functions();
+
+    // The weights of CDM and baryons in the CDM+baryon density (when they are separate particles)
+    if (has_baryons()) {
+        const double OmegaCB = cosmo->get_OmegaCDM() + cosmo->get_Omegab();
+        weight_cdm = cosmo->get_OmegaCDM() / OmegaCB;
+        weight_baryon = cosmo->get_Omegab() / OmegaCB;
+        if (FML::ThisTask == 0)
+            std::cout << "# CDM and baryons as separate particles. Weights in the CDM+baryon density: CDM "
+                      << weight_cdm << " baryons " << weight_baryon << "\n";
+    }
 
     // If we have a MG model and want exactly the same IC as for LCDM
     // we can supply LCDM P(k) and use the GR growth factors to scale it back
@@ -454,6 +492,15 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
         COLASOLVER::reverse_phases<NDIM>(delta_ini_fourier);
     }
 
+    // Separate CDM and baryon particles
+    if (has_baryons()) {
+        timer.StartTiming("InitialConditions");
+        generate_initial_conditions_two_species(delta_ini_fourier);
+        apply_lattice_offset();
+        timer.EndTiming("InitialConditions");
+        return;
+    }
+
     //=============================================================
     // Displace particles from a regular grid using LPT
     // The growth rate is used to generate the velocities
@@ -516,36 +563,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
                                                 velocity_norms,
                                                 velocity_norm_1LPT_of_kBox);
 
-    // Offset the particle lattice from the nodes of the force grid. With a force grid finer than the particle
-    // grid the particles would otherwise start exactly on grid nodes where CIC responds to |displacement|
-    // (a rectified response) and this gives large spurious forces (see notes/force_grid_and_lattice.md).
-    // This is a uniform translation of all the particles so it does not change the physics
-    const bool offset_lattice =
-        ic.lattice_offset == "half_force_cell" or
-        (ic.lattice_offset == "fiducial" and params.force.nmesh > params.particle.Npart_1D);
-    if (offset_lattice) {
-        const double shift = 0.5 / double(params.force.nmesh);
-        if (FML::ThisTask == 0)
-            std::cout << "Offsetting the particle lattice by half a force grid cell (" << shift * boxsize
-                      << " Mpc/h) in each direction\n";
-        for (auto & p : part) {
-            auto * pos = FML::PARTICLE::GetPos(p);
-            for (int idim = 0; idim < NDIM; idim++) {
-                pos[idim] += shift;
-                if (pos[idim] >= 1.0)
-                    pos[idim] -= 1.0;
-            }
-            if constexpr (FML::PARTICLE::has_get_q<T>()) {
-                auto * q = FML::PARTICLE::GetLagrangianPos(p);
-                for (int idim = 0; idim < NDIM; idim++) {
-                    q[idim] += shift;
-                    if (q[idim] >= 1.0)
-                        q[idim] -= 1.0;
-                }
-            }
-        }
-        part.communicate_particles();
-    }
+    apply_lattice_offset();
 
     // Store the potentials
     if (store_1LPT) {
@@ -568,6 +586,193 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
     }
 
     timer.EndTiming("InitialConditions");
+}
+
+/// Offset the particle lattice from the nodes of the force grid. With a force grid finer than the particle
+/// grid the particles would otherwise start exactly on grid nodes where CIC responds to |displacement|
+/// (a rectified response) and this gives large spurious forces (see notes/force_grid_and_lattice.md).
+/// This is a uniform translation of all the particles (all species) so it does not change the physics
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::apply_lattice_offset() {
+    const auto & ic = params.ic;
+    const bool offset_lattice =
+        ic.lattice_offset == "half_force_cell" or
+        (ic.lattice_offset == "fiducial" and params.force.nmesh > params.particle.Npart_1D);
+    if (not offset_lattice)
+        return;
+    const double shift = 0.5 / double(params.force.nmesh);
+    if (FML::ThisTask == 0)
+        std::cout << "Offsetting the particle lattice by half a force grid cell (" << shift * params.simulation.boxsize
+                  << " Mpc/h) in each direction\n";
+    for_each_species([&](MPIParticles & particles) {
+        for (auto & p : particles) {
+            auto * pos = FML::PARTICLE::GetPos(p);
+            for (int idim = 0; idim < NDIM; idim++) {
+                pos[idim] += shift;
+                if (pos[idim] >= 1.0)
+                    pos[idim] -= 1.0;
+            }
+            if constexpr (FML::PARTICLE::has_get_q<T>()) {
+                auto * q = FML::PARTICLE::GetLagrangianPos(p);
+                for (int idim = 0; idim < NDIM; idim++) {
+                    q[idim] += shift;
+                    if (q[idim] >= 1.0)
+                        q[idim] -= 1.0;
+                }
+            }
+        }
+        particles.communicate_particles();
+    });
+}
+
+/// The initial conditions with separate CDM and baryon particles. Both are made from the same random field
+/// delta_cb(k,zini): delta_i(k) = delta_cb(k) R_i(k,zini) with R_i = T_i / T_cb from the transfer functions
+/// (w_c R_c + w_b R_b = 1). The 1LPT velocity uses f_i = f_cb + dlog(R_i)/dlna where f_cb is the growth rate of
+/// the gravity model (so the total CDM+baryon velocity is exactly the growing mode, as for one species, and the
+/// relative velocity comes from the transfer functions; the growth rates computed directly from the transfer
+/// functions are inaccurate near the ends of the redshift range of the table). The 2LPT displacement is that of
+/// the total (CDM+baryon) field for both. By default (particle_baryon_lattice = same) the baryons start from the same
+/// lattice as the CDM. With "offset" their lattice is offset by half a particle spacing in each direction (their
+/// displacement field is then evaluated at the offset positions). Their IDs follow those of the CDM.
+/// NB: interleaved (offset) lattices give a large spurious growth of the baryon-CDM difference on scales k > k_Ny/8
+/// of the particles (and a few % too little CDM+baryon power at k ~ k_Ny/2) in this PM code; with the same lattice the
+/// difference follows linear theory on all scales and the CDM+baryon P(k) is that of one species (see the README)
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFTWGrid<NDIM> & delta_cb_fourier) {
+    const auto & ic = params.ic;
+    const double boxsize = params.simulation.boxsize;
+    const int Npart_1D = params.particle.Npart_1D;
+    const double aini = ic.a_initial();
+    FML::assert_mpi(transferdata != nullptr, "particle_baryons needs the transfer functions (transferinfofile)");
+    if (aini < 1.0 / (1.0 + transferdata->get_zmax_splines()) * (1.0 - 1e-10))
+        throw std::runtime_error("particle_baryons: the transfer functions only go up to z = " +
+                                 std::to_string(transferdata->get_zmax_splines()) + " (need zini)");
+
+    // T_i / T_cb and f_i at zini
+    const double kmin = transferdata->get_kmin_hmpc_splines();
+    const double kmax = transferdata->get_kmax_hmpc_splines();
+    const int nk = 512;
+    DVector logk(nk), ratio_cdm(nk), ratio_baryon(nk), f_cdm(nk), f_baryon(nk);
+    double max_err = 0.0;
+    // dlog(R_i)/dlna by finite differences over +-dx in log(a) (one-sided at the end of the table)
+    const double dx = 0.05;
+    const double xini = std::log(aini);
+    const double xmin_table = std::log(1.0 / (1.0 + transferdata->get_zmax_splines()));
+    const double xlo = std::max(xini - dx, xmin_table), xhi = xini + dx;
+    auto ratios = [&](double k, double a) {
+        const double Tcb = transferdata->get_cdm_baryon_transfer_function(k, a);
+        return std::pair<double, double>(transferdata->get_cdm_transfer_function(k, a) / Tcb,
+                                         transferdata->get_baryon_transfer_function(k, a) / Tcb);
+    };
+    for (int i = 0; i < nk; i++) {
+        logk[i] = std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1);
+        const double k = std::exp(logk[i]);
+        const auto r = ratios(k, aini), rlo = ratios(k, std::exp(xlo)), rhi = ratios(k, std::exp(xhi));
+        ratio_cdm[i] = r.first;
+        ratio_baryon[i] = r.second;
+        const double fcb = grav_ic->get_f_1LPT(aini, k / grav_ic->H0_hmpc);
+        f_cdm[i] = fcb + std::log(rhi.first / rlo.first) / (xhi - xlo);
+        f_baryon[i] = fcb + std::log(rhi.second / rlo.second) / (xhi - xlo);
+        max_err = std::max(max_err, std::fabs(weight_cdm * ratio_cdm[i] + weight_baryon * ratio_baryon[i] - 1.0));
+    }
+    Spline ratio_cdm_spline(logk, ratio_cdm, "T_cdm/T_cb(k,zini)");
+    Spline ratio_baryon_spline(logk, ratio_baryon, "T_b/T_cb(k,zini)");
+    Spline f_cdm_spline(logk, f_cdm, "f_cdm(k,zini)");
+    Spline f_baryon_spline(logk, f_baryon, "f_b(k,zini)");
+    if (FML::ThisTask == 0) {
+        std::cout << "# Two species IC at z = " << ic.initial_redshift << ": T_b/T_c = ";
+        for (double k : {0.01, 0.1, 1.0})
+            std::cout << ratio_baryon_spline(std::log(k)) / ratio_cdm_spline(std::log(k)) << " (k = " << k << ") ";
+        std::cout << "\n# f_cdm, f_b at k = 0.1: " << f_cdm_spline(std::log(0.1)) << " " << f_baryon_spline(std::log(0.1))
+                  << ". Max |w_c T_c/T_cb + w_b T_b/T_cb - 1| = " << max_err << "\n";
+    }
+    if (max_err > 1e-2)
+        throw std::runtime_error("particle_baryons: OmegaCDM and Omegab do not match the transfer functions "
+                                 "(w_c T_c + w_b T_b != T_cb)");
+
+    const double fac = aini * aini * cosmo->HoverH0_of_a(aini);
+    const std::vector<double> velocity_norms{fac * grav_ic->get_f_1LPT(aini),
+                                             fac * grav_ic->get_f_2LPT(aini),
+                                             fac * grav_ic->get_f_3LPTa(aini),
+                                             fac * grav_ic->get_f_3LPTb(aini)};
+    auto clamp_logk = [&](double kBox) { return std::log(std::min(std::max(kBox / boxsize, kmin), kmax)); };
+
+    auto make_species = [&](MPIParticles & particles,
+                            const Spline & ratio,
+                            const Spline & growth_rate,
+                            double shift,
+                            long long int id_offset,
+                            const std::string & label) {
+        if (FML::ThisTask == 0)
+            std::cout << "# Making the " << label << " particles\n";
+        const std::array<double, NDIM> shift_vec = [&] {
+            std::array<double, NDIM> v;
+            v.fill(shift);
+            return v;
+        }();
+        // delta_i(k) on the (offset) lattice: f(q) -> f(q + shift) so that the particle created at q gets the
+        // displacement at q + shift (and is then moved there)
+        FFTWGrid<NDIM> delta = delta_cb_fourier;
+        FFTWGrid<NDIM> delta_total = delta_cb_fourier;
+        const auto Local_nx = delta.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+        for (int islice = 0; islice < Local_nx; islice++) {
+            [[maybe_unused]] double kmag;
+            [[maybe_unused]] std::array<double, NDIM> kvec;
+            for (auto && fourier_index : delta.get_fourier_range(islice, islice + 1)) {
+                delta.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                const auto value = delta.get_fourier_from_index(fourier_index);
+                delta.set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(ratio(clamp_logk(kmag))));
+            }
+        }
+        if (shift != 0.0) {
+            FML::GRID::shift_grid_fourier<NDIM>(delta, shift_vec, +1.0);
+            FML::GRID::shift_grid_fourier<NDIM>(delta_total, shift_vec, +1.0);
+        }
+        std::function<double(double)> velocity_norm_1LPT = [&](double kBox) {
+            return fac * growth_rate(clamp_logk(kBox));
+        };
+        std::vector<FFTWGrid<NDIM>> no_potentials;
+        FML::NBODY::NBodyInitialConditions<NDIM, T>(particles,
+                                                    Npart_1D,
+                                                    params.particle.allocation_factor,
+                                                    delta,
+                                                    no_potentials,
+                                                    ic.LPT_order,
+                                                    boxsize,
+                                                    ic.initial_redshift,
+                                                    velocity_norms,
+                                                    velocity_norm_1LPT,
+                                                    ic.LPT_order >= 2 ? &delta_total : nullptr);
+        for (auto & p : particles) {
+            auto * pos = FML::PARTICLE::GetPos(p);
+            for (int idim = 0; idim < NDIM; idim++) {
+                pos[idim] += shift;
+                if (pos[idim] >= 1.0)
+                    pos[idim] -= 1.0;
+            }
+            if constexpr (FML::PARTICLE::has_get_q<T>()) {
+                auto * q = FML::PARTICLE::GetLagrangianPos(p);
+                for (int idim = 0; idim < NDIM; idim++) {
+                    q[idim] += shift;
+                    if (q[idim] >= 1.0)
+                        q[idim] -= 1.0;
+                }
+            }
+            if constexpr (FML::PARTICLE::has_set_id<T>())
+                FML::PARTICLE::SetID(p, FML::PARTICLE::GetID(p) + id_offset);
+        }
+        particles.communicate_particles();
+    };
+    make_species(part, ratio_cdm_spline, f_cdm_spline, 0.0, 0, "CDM");
+    make_species(part_baryon,
+                 ratio_baryon_spline,
+                 f_baryon_spline,
+                 params.particle.baryon_lattice == "offset" ? 0.5 / double(Npart_1D) : 0.0,
+                 (long long int)FML::power(size_t(Npart_1D), NDIM),
+                 "baryon");
 }
 
 /// Read the N-body gauge source, check it and store the initial density field of the particles
@@ -760,15 +965,17 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
 
         timer.StartTiming("Kick");
         if (s.velocity_scale != 1.0) {
-            auto * p = part.get_particles_ptr();
+            for_each_species([&](MPIParticles & particles) {
+                auto * p = particles.get_particles_ptr();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (size_t i = 0; i < part.get_npart(); i++) {
-                auto * vel = FML::PARTICLE::GetVel(p[i]);
-                for (int idim = 0; idim < NDIM; idim++)
-                    vel[idim] *= s.velocity_scale;
-            }
+                for (size_t i = 0; i < particles.get_npart(); i++) {
+                    auto * vel = FML::PARTICLE::GetVel(p[i]);
+                    for (int idim = 0; idim < NDIM; idim++)
+                        vel[idim] *= s.velocity_scale;
+                }
+            });
         }
         if (force.interpolation_method == "nufft") {
             // Exact evaluation of the Fourier series of the force at the particle positions
@@ -785,7 +992,10 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
                     FML::PARTICLE::GetVel(p[i])[idim] -= force_particle[i] * s.delta_time_kick;
             }
         } else {
-            FML::NBODY::KickParticles<NDIM>(force_real, part, s.delta_time_kick, force.density_assignment_method);
+            for_each_species([&](MPIParticles & particles) {
+                FML::NBODY::KickParticles<NDIM>(
+                    force_real, particles, s.delta_time_kick, force.density_assignment_method);
+            });
         }
         timer.EndTiming("Kick");
     }
@@ -821,12 +1031,13 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
     // Drift particles (updates positions)
     if (s.delta_time_drift != 0.0 and not sim.enforce_LPT_trajectories) {
         timer.StartTiming("Drift");
-        FML::NBODY::DriftParticles<NDIM, T>(part, s.delta_time_drift);
+        for_each_species(
+            [&](MPIParticles & particles) { FML::NBODY::DriftParticles<NDIM, T>(particles, s.delta_time_drift); });
         timer.EndTiming("Drift");
     }
 
     // Show info about particles and memory use
-    part.info();
+    for_each_species([&](MPIParticles & particles) { particles.info(); });
     FML::print_system_memory_use();
 }
 
@@ -906,7 +1117,8 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
     const bool pofk_subtract_shotnoise = params.pofk.subtract_shotnoise;
 
     if (FML::ThisTask == 0) {
-        std::cout << "Adding particles (baryons+CDM) to the densityfield\n";
+        std::cout << (has_baryons() ? "Adding the CDM and baryon particles to the densityfield\n" :
+                                      "Adding particles (baryons+CDM) to the densityfield\n");
     }
 
     // Particles to grid and Fourier transform (or NUFFT / sheet interpolation)
@@ -930,22 +1142,76 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         } else {
             FML::assert_mpi(false, "force_density_method = sheet needs particles with a Lagrangian position q");
         }
-    } else {
+    } else if (not has_baryons()) {
         FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
                                               part.get_npart(),
                                               part.get_npart_total(),
                                               density_grid_fourier,
                                               force.density_assignment_method);
         density_grid_fourier.fftw_r2c();
+    } else {
+        // CDM and baryons: delta_cb = w_c delta_c + w_b delta_b (and P(k) of each species)
+        FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
+                                              part.get_npart(),
+                                              part.get_npart_total(),
+                                              density_grid_fourier,
+                                              force.density_assignment_method);
+        density_grid_fourier.fftw_r2c();
+        FFTWGrid<NDIM> density_baryon(density_grid_fourier.get_nmesh(),
+                                      density_grid_fourier.get_n_extra_slices_left(),
+                                      density_grid_fourier.get_n_extra_slices_right());
+        FML::INTERPOLATION::particles_to_grid(part_baryon.get_particles_ptr(),
+                                              part_baryon.get_npart(),
+                                              part_baryon.get_npart_total(),
+                                              density_baryon,
+                                              force.density_assignment_method);
+        density_baryon.fftw_r2c();
+        if (params.pofk.every_step) {
+            auto bin_species = [&](const FFTWGrid<NDIM> & grid, size_t npart_total, auto & list) {
+                PowerSpectrumBinning pofk(grid.get_nmesh() / 2);
+                FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(grid, pofk, force.density_assignment_method);
+                if (params.pofk.subtract_shotnoise)
+                    for (int i = 0; i < pofk.n; i++)
+                        pofk.pofk[i] -= 1.0 / double(npart_total);
+                pofk.scale(boxsize);
+                list.push_back({1.0 / a - 1.0, pofk});
+            };
+            bin_species(density_grid_fourier, part.get_npart_total(), pofk_cdm_every_step);
+            bin_species(density_baryon, part_baryon.get_npart_total(), pofk_baryon_every_step);
+        }
+        const auto wc = FML::GRID::FloatType(weight_cdm);
+        const auto wb = FML::GRID::FloatType(weight_baryon);
+        const auto Local_nx = density_grid_fourier.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+        for (int islice = 0; islice < Local_nx; islice++) {
+            for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
+                const auto dc = density_grid_fourier.get_fourier_from_index(fourier_index);
+                const auto db = density_baryon.get_fourier_from_index(fourier_index);
+                density_grid_fourier.set_fourier_from_index(fourier_index, dc * wc + db * wb);
+            }
+        }
     }
 
-    // P(k) from the density field: deconvolve the assignment window (not needed for the NUFFT)
+    // P(k) from the density field: deconvolve the assignment window (not needed for the NUFFT). The shot noise
+    // (if subtracted) is 1/N for one species and w_c^2/N_c + w_b^2/N_b for CDM + baryons
     auto bin_up_pofk = [&](PowerSpectrumBinning & pofk) {
         if (force.density_method == "nufft" or force.density_method == "sheet_nufft")
             FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(density_grid_fourier, pofk);
         else
             FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(
                 density_grid_fourier, pofk, force.density_assignment_method);
+    };
+    auto subtract_cb_shotnoise = [&](PowerSpectrumBinning & pofk) {
+        if (params.pofk.subtract_shotnoise) {
+            double shotnoise = 1.0 / double(part.get_npart_total());
+            if (has_baryons())
+                shotnoise = weight_cdm * weight_cdm / double(part.get_npart_total()) +
+                            weight_baryon * weight_baryon / double(part_baryon.get_npart_total());
+            for (int i = 0; i < pofk.n; i++)
+                pofk.pofk[i] -= shotnoise;
+        }
     };
 
     // Bin up power-spectrum (its basically free as we have the density field)
@@ -969,6 +1235,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
     const bool pofk_every_step = params.pofk.every_step;
     if (not shifted and pofk_every_step) {
         bin_up_pofk(pofk_particles);
+        subtract_cb_shotnoise(pofk_particles);
         pofk_particles.scale(boxsize);
         pofk_cb_every_step.push_back({redshift, pofk_particles});
     }
@@ -1112,6 +1379,8 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
         output_pofk_for_every_step(*this);
         pofk_cb_every_step.clear();
         pofk_total_every_step.clear();
+        pofk_cdm_every_step.clear();
+        pofk_baryon_every_step.clear();
     }
 
     struct Analysis {
