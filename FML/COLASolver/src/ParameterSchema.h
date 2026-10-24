@@ -84,8 +84,11 @@ namespace COLASOLVER {
             add(name, to_value(default_value), Need::Optional, description, choices);
         }
         template <class V>
-        void always_optional(const std::string & name, V default_value, const std::string & description) {
-            add(name, to_value(default_value), Need::AlwaysOptional, description, {});
+        void always_optional(const std::string & name,
+                             V default_value,
+                             const std::string & description,
+                             std::vector<std::string> choices = {}) {
+            add(name, to_value(default_value), Need::AlwaysOptional, description, choices);
         }
 
         std::vector<ParameterSpec> specs;
@@ -344,6 +347,13 @@ namespace COLASOLVER {
                        "The random number generator (GSL is gsl_rng_ranlxd1 as used in 2LPTic, for comparisons)",
                        {"GSL", "MT19937"});
             b.required("ic_nmesh", 0, "The grid size used to generate the IC");
+            b.always_optional("ic_lattice_offset",
+                              "fiducial",
+                              "Offset of the initial particle lattice from the nodes of the force grid. fiducial: half a "
+                              "force grid cell if force_nmesh > particle_Npart_1D, otherwise none. With particles "
+                              "exactly on the nodes of a finer grid, CIC responds to the size of the displacement and gives large "
+                              "spurious forces (see the force grid section of README.md)",
+                              {"fiducial", "none", "half_force_cell"});
             b.required("ic_type_of_input",
                        "powerspectrum",
                        "The input: powerspectrum (file with [k (h/Mpc), P(k) (Mpc/h)^3]), transferfunction (file "

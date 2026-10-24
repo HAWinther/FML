@@ -151,6 +151,15 @@ kernel); TSC assignment (force_density_assignment_method = "TSC") removes this (
 is fine with both (within 0.5% of a 4x grid up to k = 0.2 h/Mpc), so TSC is recommended for 3x grids if the
 largest scales matter.
 
+The reason is that with an integer ratio m = force_nmesh / particle_Npart_1D the particles start exactly on the
+nodes of the force grid, where the CIC kernel has a kink. The assigned density then responds to the *size* of
+the displacement (a rectified signal at the lattice frequency, which is the grid Nyquist frequency for m = 2 and
+lies below it for m >= 3). TSC and PCS are smooth at the nodes and do not have this problem. With
+ic_lattice_offset = "fiducial" (the default) the particle lattice is therefore moved by half a force-grid cell
+when force_nmesh > particle_Npart_1D, which removes the rectified term for any assignment method; in the linear
+test above the scatter between modes drops to the 0.1-2% level. Use ic_lattice_offset = "none" for the old
+behaviour. This option is new and its effect on the nonlinear P(k) is still being benchmarked.
+
 ## Radiation, neutrinos and GR: the N-body gauge
 
 On very large scales (k < ~0.01 h/Mpc) a Newtonian simulation misses the effect of the radiation

@@ -100,6 +100,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `ic_random_seed` | int | *required* | always | The random seed |
 | `ic_random_generator` | string | `"MT19937"` | always | The random number generator (GSL is gsl_rng_ranlxd1 as used in 2LPTic, for comparisons). Options: `GSL`, `MT19937` |
 | `ic_nmesh` | int | *required* | always | The grid size used to generate the IC |
+| `ic_lattice_offset` | string | `"fiducial"` | always | Offset of the initial particle lattice from the nodes of the force grid. fiducial: half a force grid cell if force_nmesh > particle_Npart_1D, otherwise none. With particles exactly on the nodes of a finer grid, CIC responds to the size of the displacement and gives large spurious forces (see the force grid section of README.md). Options: `fiducial`, `none`, `half_force_cell` |
 | `ic_type_of_input` | string | *required* | always | The input: powerspectrum (file with [k (h/Mpc), P(k) (Mpc/h)^3]), transferfunction (file with [k (h/Mpc), T(k) Mpc^2]) or transferinfofile (file listing T(k,z) files from CAMB/CLASS). Options: `powerspectrum`, `transferfunction`, `transferinfofile` |
 | `ic_type_of_input_fileformat` | string | `"CAMB"` | always | Format of the transfer function files (CLASS run with format=camb). Options: `CAMB`, `CLASS`, `AXIONCAMB` |
 | `ic_input_filename` | string | *required* | always | The input file |

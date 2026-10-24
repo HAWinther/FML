@@ -491,6 +491,37 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
                                                 velocity_norms,
                                                 velocity_norm_1LPT_of_kBox);
 
+    // Offset the particle lattice from the nodes of the force grid. With a force grid finer than the particle
+    // grid the particles would otherwise start exactly on grid nodes where CIC responds to |displacement|
+    // (a rectified response) and this gives large spurious forces (see notes/force_grid_and_lattice.md).
+    // This is a uniform translation of all the particles so it does not change the physics
+    const bool offset_lattice =
+        ic.lattice_offset == "half_force_cell" or
+        (ic.lattice_offset == "fiducial" and params.force.nmesh > params.particle.Npart_1D);
+    if (offset_lattice) {
+        const double shift = 0.5 / double(params.force.nmesh);
+        if (FML::ThisTask == 0)
+            std::cout << "Offsetting the particle lattice by half a force grid cell (" << shift * boxsize
+                      << " Mpc/h) in each direction\n";
+        for (auto & p : part) {
+            auto * pos = FML::PARTICLE::GetPos(p);
+            for (int idim = 0; idim < NDIM; idim++) {
+                pos[idim] += shift;
+                if (pos[idim] >= 1.0)
+                    pos[idim] -= 1.0;
+            }
+            if constexpr (FML::PARTICLE::has_get_q<T>()) {
+                auto * q = FML::PARTICLE::GetLagrangianPos(p);
+                for (int idim = 0; idim < NDIM; idim++) {
+                    q[idim] += shift;
+                    if (q[idim] >= 1.0)
+                        q[idim] -= 1.0;
+                }
+            }
+        }
+        part.communicate_particles();
+    }
+
     // Store the potentials
     if (store_1LPT) {
         cola.phi_1LPT_ini_fourier = COLASOLVER::compute_phi_1LPT_from_delta<NDIM>(delta_ini_fourier);

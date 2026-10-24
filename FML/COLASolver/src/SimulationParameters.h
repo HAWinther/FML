@@ -134,6 +134,7 @@ namespace COLASOLVER {
         ICRandomFieldType random_field_type;  // gaussian, nongaussian, read_particles, read_phases
         double initial_redshift;              // The initial redshift of the sim
         int nmesh;                            // The Nmesh used to generate the IC (use particle_Npart_1D)
+        std::string lattice_offset{"fiducial"}; // Offset of the particle lattice from the force grid nodes
         int random_seed;                      // The random seed
         RandomGeneratorType random_generator; // The generator: GSL or MT19937
         int LPT_order;                        // The LPT order to use to make IC (1,2,3)
@@ -289,6 +290,7 @@ namespace COLASOLVER {
             r.get("ic_use_gravity_model_GR", ic.use_gravity_model_GR);
             r.get("ic_initial_redshift", ic.initial_redshift);
             r.get("ic_nmesh", ic.nmesh);
+            r.get("ic_lattice_offset", ic.lattice_offset);
             r.get("ic_random_seed", ic.random_seed);
             r.get_choice("ic_random_generator",
                          ic.random_generator,
