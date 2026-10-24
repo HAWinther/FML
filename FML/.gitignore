@@ -59,6 +59,7 @@ Timing/example/timing
 Triangulation/example/voronoi
 Units/example/units
 tests/test_core
+tests/test_grid_tools
 */example/test
 */examples/test
 

@@ -16,6 +16,65 @@ namespace FML {
     namespace GRID {
 
         //===================================================================================
+        /// @brief Translate a field given in Fourier space: \f$ f(x) \to f(x + {\rm sign}\cdot s) \f$, i.e. multiply
+        /// each mode by \f$ e^{i\,{\rm sign}\, k\cdot s} \f$. This is exact (spectral) interpolation of the
+        /// band-limited field to a shifted set of points: after a c2r the value in cell \f$ i \f$ is
+        /// \f$ f(x_i + s) \f$.
+        ///
+        /// For even Nmesh the Nyquist components are their own mirror images and the band-limited real field there
+        /// is \f$ \propto \cos(k_{\rm Ny} x) \f$. Shifting it gives a factor \f$ \cos(k_{\rm Ny} s) \f$ (not
+        /// \f$ e^{i k_{\rm Ny} s} \f$) so that the result stays a real field. This means a shift by \f$ s \f$ followed
+        /// by \f$ -s \f$ is not the identity for the Nyquist modes unless \f$ s \f$ is a multiple of the cell size.
+        ///
+        /// @tparam N The dimension of the grid
+        /// @param[out] fourier_grid The Fourier grid we shift (in place)
+        /// @param[in] shift The shift vector (in units of the boxsize)
+        /// @param[in] sign +1: f(x) -> f(x+s), -1: f(x) -> f(x-s)
+        ///
+        //===================================================================================
+        template <int N>
+        void shift_grid_fourier(FFTWGrid<N> & fourier_grid, const std::array<double, N> & shift, double sign = +1.0) {
+            const int Nmesh = fourier_grid.get_nmesh();
+            const auto Local_nx = fourier_grid.get_local_nx();
+            assert_mpi(Nmesh > 0, "[shift_grid_fourier] Grid is not allocated\n");
+
+            // The 1D phase factors for integer wavenumbers m = -Nmesh/2, ..., Nmesh/2
+            std::array<std::vector<std::complex<double>>, N> factor;
+            for (int idim = 0; idim < N; idim++) {
+                factor[idim].resize(Nmesh + 1);
+                for (int m = -Nmesh / 2; m <= Nmesh / 2; m++) {
+                    const double phase = sign * 2.0 * M_PI * m * shift[idim];
+                    const bool nyquist = (Nmesh % 2 == 0) and (std::abs(m) == Nmesh / 2);
+                    factor[idim][m + Nmesh / 2] =
+                        nyquist ? std::complex<double>(std::cos(phase), 0.0) : std::polar(1.0, phase);
+                }
+            }
+
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                    auto kint = fourier_grid.get_fourier_integer_wavevector_from_index(fourier_index);
+                    std::complex<double> f = factor[0][kint[0] + Nmesh / 2];
+                    for (int idim = 1; idim < N; idim++)
+                        f *= factor[idim][kint[idim] + Nmesh / 2];
+                    auto value = fourier_grid.get_fourier_from_index(fourier_index);
+                    fourier_grid.set_fourier_from_index(fourier_index, value * ComplexType(f));
+                }
+            }
+        }
+
+        /// @brief Translate a real grid: \f$ f(x) \to f(x + {\rm sign}\cdot s) \f$ using Fourier interpolation (an
+        /// r2c, a phase factor and a c2r). See shift_grid_fourier.
+        template <int N>
+        void shift_grid_real(FFTWGrid<N> & real_grid, const std::array<double, N> & shift, double sign = +1.0) {
+            real_grid.fftw_r2c();
+            shift_grid_fourier<N>(real_grid, shift, sign);
+            real_grid.fftw_c2r();
+        }
+
+        //===================================================================================
         /// Take a fourier grid and divide each mode by its norm: \f$ f(k) \to f(k) / |f(k)| \f$
         ///
         /// @tparam N The dimension of the grid

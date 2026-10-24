@@ -1,6 +1,7 @@
 #ifndef PARTICLEREFLECTION_HEADER
 #define PARTICLEREFLECTION_HEADER
 
+#include <array>
 #include <cassert>
 #include <cstring>
 #include <iostream>
@@ -464,6 +465,35 @@ namespace FML {
                 std::cout << "#\n";
                 std::cout << "#=====================================================\n";
                 std::cout << "\n";
+            }
+        }
+
+        /// @brief Shift the positions of a set of particles: \f$ x \to x + {\rm sign}\cdot s \f$.
+        /// @param[in] part Pointer to the first particle
+        /// @param[in] NumPart Number of particles
+        /// @param[in] shift The shift (in units of the boxsize)
+        /// @param[in] sign +1 or -1 (to undo a shift)
+        /// @param[in] wrap_type 0: no periodic wrapping, 1: wrap all coordinates into [0,1), 2: wrap all but the
+        /// x-coordinate (so particles stay on the task they belong to; with MPI the grid then needs one extra
+        /// slice on the right if the shift is less than a cell)
+        template <class T, int NDIM>
+        void shift_particles(T * part, size_t NumPart, const std::array<double, NDIM> & shift, double sign = 1.0,
+                             int wrap_type = 1) {
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (size_t i = 0; i < NumPart; i++) {
+                auto * pos = FML::PARTICLE::GetPos(part[i]);
+                for (int idim = 0; idim < NDIM; idim++) {
+                    pos[idim] += sign * shift[idim];
+                    const bool wrap = (wrap_type == 1) or (wrap_type == 2 and idim > 0);
+                    if (wrap) {
+                        if (pos[idim] >= 1.0)
+                            pos[idim] -= 1.0;
+                        if (pos[idim] < 0.0)
+                            pos[idim] += 1.0;
+                    }
+                }
             }
         }
 

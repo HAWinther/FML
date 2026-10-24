@@ -2,6 +2,9 @@
 #define PARTICLEGRIDINTERPOLATION_HEADER
 
 #include <array>
+#include <cmath>
+#include <stdexcept>
+#include <string>
 #include <functional>
 #include <vector>
 
@@ -9,6 +12,7 @@
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
+#include <FML/Smoothing/SmoothingFourier.h>
 
 namespace FML {
 
@@ -1205,6 +1209,190 @@ namespace FML {
             } else {
                 particles_to_grid<N, T>(part, NumPart, NumPartTot, density_grid_fourier, density_assignment_method);
                 density_grid_fourier.fftw_r2c();
+            }
+        }
+
+        //===================================================================================
+        /// @brief Generate the set of shifts used for interlacing (alias reduction by averaging the density field
+        /// computed from several copies of the particle distribution shifted by a fraction of a cell).
+        ///
+        /// The order is the number of grids (including the unshifted one). Supported orders:
+        ///  - 1: no interlacing (only the zero shift)
+        ///  - any order in 1D: shifts i/order * dx
+        ///  - 2 in any dimension: 0 and (1/2,...,1/2) dx. Cancels the aliases (images at k + 2 k_Ny n) with odd
+        ///    sum(n)
+        ///  - 2^(NDIM-1) for NDIM >= 3 (e.g. 4 in 3D): all corners of the half-cell cube with an even number of
+        ///    1/2's: 0, (1/2,1/2,0), (1/2,0,1/2), (0,1/2,1/2). Cancels all aliases except those with all n_i odd
+        ///    (the (1,1,1) family which has the smallest amplitude)
+        ///  - n^NDIM: a regular sub-lattice with n points per dimension (e.g. 8 = 2^3 in 3D cancels all aliases with
+        ///    some odd n_i)
+        ///  - 2^m >= 2^NDIM: the 2^NDIM corners of the half-cell cube, recursively refined along the diagonal
+        /// The shifts are in [0, dx) in each coordinate.
+        ///
+        /// @tparam NDIM The dimension
+        /// @param[in] interlacing_order The number of grids
+        /// @param[in] dx The cell size
+        //===================================================================================
+        template <int NDIM>
+        std::vector<std::array<double, NDIM>> generate_interlacing_shifts(int interlacing_order, double dx) {
+            std::vector<std::array<double, NDIM>> shifts;
+
+            // No interlacing: just the zero shift
+            if (interlacing_order <= 1) {
+                shifts.push_back(std::array<double, NDIM>{});
+                return shifts;
+            }
+
+            // Any order in 1D
+            if constexpr (NDIM == 1) {
+                for (int i = 0; i < interlacing_order; i++)
+                    shifts.push_back({i / double(interlacing_order) * dx});
+                return shifts;
+            }
+
+            // Order 2 in any dimension: the body diagonal
+            if (interlacing_order == 2) {
+                std::array<double, NDIM> shift{};
+                shifts.push_back(shift);
+                shift.fill(0.5 * dx);
+                shifts.push_back(shift);
+                return shifts;
+            }
+
+            // Order 2^(NDIM-1) for NDIM >= 3: corners of the half-cell cube with an even number of 1/2's
+            if (NDIM >= 3 and interlacing_order == FML::power(2, NDIM - 1)) {
+                for (int i = 0; i < FML::power(2, NDIM); i++) {
+                    std::array<double, NDIM> shift{};
+                    int nhalf = 0;
+                    for (int idim = 0; idim < NDIM; idim++) {
+                        int bit = (i >> idim) & 1;
+                        nhalf += bit;
+                        shift[idim] = 0.5 * dx * bit;
+                    }
+                    if (nhalf % 2 == 0)
+                        shifts.push_back(shift);
+                }
+                return shifts;
+            }
+
+            // Order n^NDIM: a regular sub-lattice
+            const int n1d = int(std::round(std::pow(double(interlacing_order), 1.0 / NDIM)));
+            if (FML::power(n1d, NDIM) == interlacing_order) {
+                for (int i = 0; i < interlacing_order; i++) {
+                    std::array<double, NDIM> shift{};
+                    for (int idim = 0, n = 1; idim < NDIM; idim++, n *= n1d)
+                        shift[idim] = ((i / n) % n1d) / double(n1d) * dx;
+                    shifts.push_back(shift);
+                }
+                return shifts;
+            }
+
+            // Order 2^m with m >= NDIM: the 2^NDIM corners of the half-cell cube, then recursively add copies
+            // shifted by dx/4, dx/8, ... along the diagonal
+            int log2order = 0;
+            while ((1 << (log2order + 1)) <= interlacing_order)
+                log2order++;
+            if ((1 << log2order) == interlacing_order and log2order >= NDIM) {
+                for (int i = 0; i < FML::power(2, NDIM); i++) {
+                    std::array<double, NDIM> shift{};
+                    for (int idim = 0; idim < NDIM; idim++)
+                        shift[idim] = 0.5 * dx * ((i >> idim) & 1);
+                    shifts.push_back(shift);
+                }
+                for (int level = 1; level <= log2order - NDIM; level++) {
+                    const double extra = dx / std::pow(2.0, level + 1);
+                    const size_t nold = shifts.size();
+                    for (size_t j = 0; j < nold; j++) {
+                        auto shift = shifts[j];
+                        for (int idim = 0; idim < NDIM; idim++)
+                            shift[idim] += extra;
+                        shifts.push_back(shift);
+                    }
+                }
+                return shifts;
+            }
+
+            throw std::runtime_error("[generate_interlacing_shifts] Interlacing order " +
+                                     std::to_string(interlacing_order) + " is not supported in " +
+                                     std::to_string(NDIM) + "D");
+        }
+
+        //===================================================================================
+        /// @brief Assign particles to a grid with interlacing of any (supported) order and return the density
+        /// contrast in Fourier space: \f$ \delta(k) = \frac{1}{M}\sum_j e^{i k\cdot s_j} \delta_{s_j}(k) \f$ where
+        /// \f$ \delta_{s}\f$ is the density of the particles shifted by \f$ s \f$. The window function is not
+        /// deconvolved. Order 1 is the standard assignment, order 2 is the usual interlacing. See
+        /// generate_interlacing_shifts for the orders available. The particles are shifted and shifted back (so
+        /// their positions might change in the last digit).
+        ///
+        /// @tparam N The dimension of the grid
+        /// @tparam T The particle class
+        /// @param[in] part Pointer to the first particle
+        /// @param[in] NumPart Number of local particles
+        /// @param[in] NumPartTot Total number of particles over all tasks
+        /// @param[out] density_grid_fourier The density contrast in Fourier space (must have Nmesh set; it is
+        /// reallocated if it has too few extra slices)
+        /// @param[in] density_assignment_method NGP, CIC, TSC, PCS or PQS
+        /// @param[in] interlacing_order The number of shifted grids
+        //===================================================================================
+        template <int N, class T>
+        void particles_to_fourier_grid_interlaced(T * part,
+                                                  size_t NumPart,
+                                                  size_t NumPartTot,
+                                                  FFTWGrid<N> & density_grid_fourier,
+                                                  std::string density_assignment_method,
+                                                  int interlacing_order) {
+
+            const int Ngrid = density_grid_fourier.get_nmesh();
+            assert_mpi(Ngrid > 0, "[particles_to_fourier_grid_interlaced] Grid must be allocated\n");
+
+            // One extra slice on the right as the particles are shifted by less than a cell without wrapping in x
+            auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
+            const int nleft = nleftright.first;
+            const int nright = nleftright.second + (interlacing_order > 1 ? 1 : 0);
+            if (density_grid_fourier.get_n_extra_slices_left() < nleft or
+                density_grid_fourier.get_n_extra_slices_right() < nright) {
+                density_grid_fourier = FFTWGrid<N>(Ngrid, nleft, nright);
+                density_grid_fourier.add_memory_label(
+                    "FFTWGrid::particles_to_fourier_grid_interlaced::density_grid_fourier (reallocated)");
+            }
+
+            if (interlacing_order <= 1) {
+                particles_to_grid<N, T>(part, NumPart, NumPartTot, density_grid_fourier, density_assignment_method);
+                density_grid_fourier.fftw_r2c();
+                return;
+            }
+
+            const auto shifts = generate_interlacing_shifts<N>(interlacing_order, 1.0 / double(Ngrid));
+            const FloatType norm = FloatType(1.0 / double(shifts.size()));
+
+            // With one task the particles can be wrapped in all directions, otherwise not in x
+            const int wrap_type = FML::NTasks == 1 ? 1 : 2;
+
+            FFTWGrid<N> grid_shifted(Ngrid, nleft, nright);
+            grid_shifted.add_memory_label("FFTWGrid::particles_to_fourier_grid_interlaced::grid_shifted");
+            density_grid_fourier.fill_fourier_grid(0.0);
+            density_grid_fourier.set_grid_status_real(false);
+            for (auto & shift : shifts) {
+                FML::PARTICLE::shift_particles<T, N>(part, NumPart, shift, +1.0, wrap_type);
+                particles_to_grid<N, T>(part, NumPart, NumPartTot, grid_shifted, density_assignment_method);
+                FML::PARTICLE::shift_particles<T, N>(part, NumPart, shift, -1.0, wrap_type);
+                grid_shifted.fftw_r2c();
+
+                // The particles were moved by +s so the field is delta(x - s): shift it back
+                FML::GRID::shift_grid_fourier<N>(grid_shifted, shift, +1.0);
+
+                const auto Local_nx = density_grid_fourier.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
+                        auto value = density_grid_fourier.get_fourier_from_index(fourier_index);
+                        value += grid_shifted.get_fourier_from_index(fourier_index) * norm;
+                        density_grid_fourier.set_fourier_from_index(fourier_index, value);
+                    }
+                }
             }
         }
 
