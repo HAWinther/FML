@@ -93,6 +93,9 @@ class NBodySimulation {
     FFTWGrid<NDIM> initial_density_field_fourier;
     // Shift of the particles relative to the grid when computing the density (force interlacing)
     std::array<double, NDIM> density_shift{};
+    // The force settings used in the current step (params.force or the early-time settings)
+    COLASOLVER::ForceSettings current_force;
+    void set_force_settings_for_step(double a);
 
     /// The linear N-body gauge source (if force_nbody_gauge)
     std::shared_ptr<COLASOLVER::NBodyGaugeSource> nbody_gauge;
@@ -230,6 +233,18 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
     }
     FML::NBODY::set_fiducial_gradient_kernel(gradient_kernel);
     FML::NBODY::FIDUCIAL_DECONVOLVE_FORCE = params.force.deconvolve_window;
+    current_force = params.force;
+
+    // The accurate force options (NUFFT, deconvolution, early-time force) remove the smoothing of the force
+    // near the grid Nyquist frequency. With a grid finer than the particle grid the modes between the particle
+    // and the grid Nyquist frequency are dominated by the discreteness of the particles and these options then
+    // give far too much small-scale power (+15-60% at k = 0.2 h/Mpc in tests with a 2x grid)
+    const bool exact_force = params.force.density_method != "assignment" or params.force.deconvolve_window or
+                             params.force.interpolation_method == "nufft" or params.force.early_method != "none";
+    if (exact_force and params.force.nmesh > params.particle.Npart_1D and FML::ThisTask == 0)
+        std::cout << "WARNING: force_density_method / force_deconvolve_window / force_early_method are meant for "
+                     "force_nmesh = particle_Npart_1D. With a finer force grid they amplify the discreteness of the "
+                     "particles (see README)\n";
 
     cola.enabled = params.simulation.use_cola;
     cola.scaledependent = params.simulation.use_scaledependent_cola;
@@ -684,11 +699,37 @@ void NBodySimulation<NDIM, T>::run() {
 #endif
 }
 
+/// Choose the force settings for a step where the force is evaluated at scale factor a: the early-time
+/// settings (force_early_method) for z > force_early_until_redshift, otherwise the normal ones
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::set_force_settings_for_step(double a) {
+    const auto & f = params.force;
+    current_force = f;
+    const bool early = f.early_method != "none" and 1.0 / a - 1.0 > f.early_until_redshift;
+    if (early and f.early_method == "nufft") {
+        current_force.density_method = "nufft";
+        current_force.interpolation_method = "nufft";
+        current_force.interlacing_order = 1;
+        current_force.deconvolve_window = false;
+    }
+    if (early and f.early_method == "interlaced") {
+        current_force.density_method = "assignment";
+        current_force.interpolation_method = "assignment";
+        current_force.interlacing_order = f.early_interlacing_order;
+        current_force.density_assignment_method = f.early_density_assignment_method;
+        current_force.deconvolve_window = true;
+    }
+    FML::NBODY::FIDUCIAL_DECONVOLVE_FORCE = current_force.deconvolve_window;
+    if (early and FML::ThisTask == 0)
+        std::cout << "Using the early-time force (" << f.early_method << ") at z = " << 1.0 / a - 1.0 << "\n";
+}
+
 /// One kick-drift step: density -> force -> kick -> (COLA kick-drift) -> lightcone -> drift
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
     const auto & sim = params.simulation;
-    const auto & force = params.force;
+    set_force_settings_for_step(s.apos);
+    const auto & force = current_force;
 
     // Force interlacing: average the force over copies of the particles shifted relative to the grid
     const auto nleftright =
@@ -796,7 +837,7 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const StepInfo & s) {
     const auto & sim = params.simulation;
-    const auto & force = params.force;
+    const auto & force = current_force;
     const auto nleftright =
         FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(force.density_assignment_method);
     const auto shifts =
@@ -859,7 +900,7 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const StepInfo & s) {
 /// massive neutrinos (if any). Also bins up P(k) of the particles (and the total P(k))
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & density_grid_fourier, double a) {
-    const auto & force = params.force;
+    const auto & force = current_force;
     const double boxsize = params.simulation.boxsize;
     const double ic_initial_redshift = params.ic.initial_redshift;
     const bool pofk_subtract_shotnoise = params.pofk.subtract_shotnoise;

@@ -135,6 +135,11 @@ namespace COLASOLVER {
         std::string interpolation_method{"assignment"}; // Force to particles: assignment (kernel) or nufft
         int interlacing_order{1};              // Average the force over this many shifted copies of the particles
         bool deconvolve_window{false};         // Divide the force by W(k)^2 of the assignment kernel
+        // Early-time force: a more accurate (and expensive) force before force_early_until_redshift
+        std::string early_method{"none"};      // none, nufft or interlaced
+        double early_until_redshift{10.0};     // Use the early force for steps with z > this
+        int early_interlacing_order{2};        // early_method = interlaced: number of shifted grids
+        std::string early_density_assignment_method{"TSC"}; // early_method = interlaced: assignment kernel
     };
 
     struct ICSettings {
@@ -285,6 +290,16 @@ namespace COLASOLVER {
                 r.get("force_sheet_refinement", force.sheet_refinement, 2);
             r.get("force_interlacing_order", force.interlacing_order, 1);
             r.get("force_deconvolve_window", force.deconvolve_window, false);
+            r.get("force_early_method", force.early_method, std::string("none"));
+            if (force.early_method != "none") {
+                r.get("force_early_until_redshift", force.early_until_redshift, 10.0);
+                if (force.early_method == "interlaced") {
+                    r.get("force_early_interlacing_order", force.early_interlacing_order, 2);
+                    r.get("force_early_density_assignment_method",
+                          force.early_density_assignment_method,
+                          std::string("TSC"));
+                }
+            }
             r.get("force_interpolation_method", force.interpolation_method, std::string("fiducial"));
             if (force.interpolation_method == "fiducial")
                 force.interpolation_method = force.density_method == "nufft" ? "nufft" : "assignment";
@@ -437,6 +452,8 @@ namespace COLASOLVER {
                 if (force.sheet_refinement < 1)
                     fail("force_sheet_refinement must be >= 1");
             }
+            if (force.early_method == "interlaced" and force.early_interlacing_order < 2)
+                fail("force_early_interlacing_order must be >= 2");
             if (force.interlacing_order > 1) {
                 if (force.density_method != "assignment" or force.interpolation_method != "assignment")
                     fail("force_interlacing_order > 1 needs force_density_method = assignment and "

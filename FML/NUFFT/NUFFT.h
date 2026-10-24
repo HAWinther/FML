@@ -12,6 +12,9 @@
 #ifdef USE_MPI
 #include <mpi.h>
 #endif
+#ifdef USE_OMP
+#include <omp.h>
+#endif
 
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
@@ -76,6 +79,7 @@ namespace FML {
                 width = std::max(2, std::min(16, width));
                 beta = std::fabs(sigma - 2.0) < 1e-12 ? 2.30 * width : 0.97 * M_PI * (1.0 - 0.5 / sigma) * width;
                 setup_quadrature();
+                setup_polynomials();
             }
 
             /// The kernel as function of the distance x in fine-grid cells
@@ -106,8 +110,97 @@ namespace FML {
             /// so that particles slightly outside the domain are fine)
             int extra_slices() const { return (width + 1) / 2 + 1; }
 
+            /// The w kernel weights phi(delta + j - w/2), j = 0,...,w-1, for delta in [0,1] (the distance from the
+            /// particle to the first grid node it touches is w/2 - delta). Evaluated with Chebyshev polynomials
+            /// (much faster than exp and sqrt), or exactly if the fit is not accurate enough
+            void weights(double delta, double * out) const {
+                if (cheb_degree < 0) {
+                    for (int j = 0; j < width; j++)
+                        out[j] = (*this)(delta + j - 0.5 * width);
+                    return;
+                }
+                switch (width) {
+                    case 2: return weights_impl<2>(delta, out);
+                    case 3: return weights_impl<3>(delta, out);
+                    case 4: return weights_impl<4>(delta, out);
+                    case 5: return weights_impl<5>(delta, out);
+                    case 6: return weights_impl<6>(delta, out);
+                    case 7: return weights_impl<7>(delta, out);
+                    case 8: return weights_impl<8>(delta, out);
+                    case 9: return weights_impl<9>(delta, out);
+                    case 10: return weights_impl<10>(delta, out);
+                    case 11: return weights_impl<11>(delta, out);
+                    case 12: return weights_impl<12>(delta, out);
+                    case 13: return weights_impl<13>(delta, out);
+                    case 14: return weights_impl<14>(delta, out);
+                    case 15: return weights_impl<15>(delta, out);
+                    default: return weights_impl<16>(delta, out);
+                }
+            }
+
+            /// The degree of the Chebyshev expansion of the weights (-1: exact evaluation)
+            int polynomial_degree() const { return cheb_degree; }
+
+          private:
+            // Clenshaw recursion for all W polynomials at once (W known at compile time so it vectorizes)
+            template <int W>
+            void weights_impl(double delta, double * out) const {
+                const double u = 2.0 * delta - 1.0, u2 = 2.0 * u;
+                double b1[W], b2[W];
+                for (int j = 0; j < W; j++)
+                    b1[j] = b2[j] = 0.0;
+                for (int k = cheb_degree; k >= 1; k--) {
+                    const double * c = &cheb_coeffs[k * width];
+                    for (int j = 0; j < W; j++) {
+                        const double b0 = u2 * b1[j] - b2[j] + c[j];
+                        b2[j] = b1[j];
+                        b1[j] = b0;
+                    }
+                }
+                for (int j = 0; j < W; j++)
+                    out[j] = u * b1[j] - b2[j] + 0.5 * cheb_coeffs[j];
+            }
+
           private:
             std::vector<double> quad_x, quad_w, quad_phi;
+            int cheb_degree{-1};
+            std::vector<double> cheb_coeffs; // [k * width + j]
+
+            // Chebyshev expansions of the weights as function of delta. We increase the degree until the
+            // maximum error (checked on a fine set of points) is below epsilon / 100 (or 2 exp(-beta))
+            void setup_polynomials() {
+                for (int degree = width + 2; degree <= 30; degree += 2) {
+                    const int n = degree + 1;
+                    std::vector<double> coeffs(n * width, 0.0);
+                    for (int j = 0; j < width; j++) {
+                        std::vector<double> f(n);
+                        for (int i = 0; i < n; i++) {
+                            const double u = std::cos(M_PI * (i + 0.5) / n);
+                            f[i] = (*this)(0.5 * (u + 1.0) + j - 0.5 * width);
+                        }
+                        for (int k = 0; k < n; k++) {
+                            double sum = 0.0;
+                            for (int i = 0; i < n; i++)
+                                sum += f[i] * std::cos(M_PI * k * (i + 0.5) / n);
+                            coeffs[k * width + j] = 2.0 * sum / n;
+                        }
+                    }
+                    cheb_degree = degree;
+                    cheb_coeffs = coeffs;
+                    double maxerr = 0.0;
+                    double out[16];
+                    for (int i = 0; i <= 1000; i++) {
+                        const double delta = i / 1000.0;
+                        weights(delta, out);
+                        for (int j = 0; j < width; j++)
+                            maxerr = std::max(maxerr, std::fabs(out[j] - (*this)(delta + j - 0.5 * width)));
+                    }
+                    // (the kernel jumps from exp(-beta) to 0 at the edge so we cannot do better than that)
+                    if (maxerr < std::max(0.01 * epsilon, 2.0 * std::exp(-beta)))
+                        return;
+                }
+                cheb_degree = -1; // Use the exact kernel
+            }
 
             // Gauss-Legendre quadrature on [0, width/2] for the Fourier transform of the kernel
             void setup_quadrature() {
@@ -209,8 +302,8 @@ namespace FML {
                 const double x = pos[idim] * nfine;
                 const int j0 = int(std::ceil(x - 0.5 * w));
                 istart[idim] = j0 - (idim == 0 ? int(local_x_start) : 0);
-                for (int j = 0; j < w; j++)
-                    weights[idim * w + j] = kernel(double(j0 + j) - x);
+                // Node j0 + j is at distance (j0 - x + w/2) + j - w/2 = delta + j - w/2 with delta in [0,1)
+                kernel.weights(double(j0) - x + 0.5 * w, &weights[idim * w]);
             }
         }
 
@@ -231,19 +324,14 @@ namespace FML {
             FloatType * grid = fine.get_real_grid();
             fine.fill_real_grid(0.0);
 
-            int out_of_bounds = 0;
-#ifdef USE_OMP
-#pragma omp parallel for reduction(max : out_of_bounds)
-#endif
-            for (size_t ip = 0; ip < NumPart; ip++) {
+            // Spread one particle (no atomics: see the scheduling below)
+            auto spread_one = [&](size_t ip) -> int {
                 const double * pos = FML::PARTICLE::GetPos(const_cast<T *>(part)[ip]);
                 std::array<int, N> istart;
                 std::array<double, N * 16> weights;
                 kernel_weights<N>(kernel, pos, nf, Local_x_start, istart, weights);
-                if (istart[0] < -nleft or istart[0] + w > Local_nx + nright) {
-                    out_of_bounds = 1;
-                    continue;
-                }
+                if (istart[0] < -nleft or istart[0] + w > Local_nx + nright)
+                    return 1;
                 if constexpr (N == 3) {
                     // Fast path: precompute the (wrapped) cell indices along each direction
                     std::array<int, 16> c0, c1, c2;
@@ -259,15 +347,11 @@ namespace FML {
                         for (int b = 0; b < w; b++) {
                             const double wab = wa * weights[w + b];
                             const auto base = fine.get_index_real({c0[a], c1[b], 0});
-                            for (int c = 0; c < w; c++) {
-#ifdef USE_OMP
-#pragma omp atomic
-#endif
+                            for (int c = 0; c < w; c++)
                                 grid[base + c2[c]] += FloatType(wab * weights[2 * w + c]);
-                            }
                         }
                     }
-                    continue;
+                    return 0;
                 }
                 for (int i = 0; i < wtondim; i++) {
                     std::array<int, N> coord;
@@ -282,12 +366,43 @@ namespace FML {
                         }
                         coord[idim] = c;
                     }
-                    const auto index = fine.get_index_real(coord);
-#ifdef USE_OMP
-#pragma omp atomic
-#endif
-                    grid[index] += FloatType(weight);
+                    grid[fine.get_index_real(coord)] += FloatType(weight);
                 }
+                return 0;
+            };
+
+            int out_of_bounds = 0;
+#ifdef USE_OMP
+            const int nthreads = omp_get_max_threads();
+#else
+            const int nthreads = 1;
+#endif
+            if (nthreads == 1) {
+                for (size_t ip = 0; ip < NumPart; ip++)
+                    out_of_bounds = std::max(out_of_bounds, spread_one(ip));
+            } else {
+                // Without atomics: bin the particles in x-slabs of width w (the kernel width) by the first cell
+                // they touch. A particle in slab s only touches slabs s and s+1, so all even slabs can be done
+                // in parallel and then all odd ones. Particles that wrap around the box (one task) are done last
+                const int nslabs = int((Local_nx + nleft + nright) / w) + 1;
+                std::vector<std::vector<size_t>> slabs(nslabs + 1);
+                for (size_t ip = 0; ip < NumPart; ip++) {
+                    const double x = FML::PARTICLE::GetPos(const_cast<T *>(part)[ip])[0] * nf;
+                    const int i0 = int(std::ceil(x - 0.5 * w)) - int(Local_x_start);
+                    const bool wraps = FML::NTasks == 1 and (i0 < 0 or i0 + w > Local_nx);
+                    const int slab = std::min(std::max((i0 + nleft) / w, 0), nslabs - 1);
+                    slabs[wraps ? nslabs : slab].push_back(ip);
+                }
+                for (int color = 0; color < 2; color++) {
+#ifdef USE_OMP
+#pragma omp parallel for schedule(dynamic) reduction(max : out_of_bounds)
+#endif
+                    for (int islab = color; islab < nslabs; islab += 2)
+                        for (auto ip : slabs[islab])
+                            out_of_bounds = std::max(out_of_bounds, spread_one(ip));
+                }
+                for (auto ip : slabs[nslabs])
+                    out_of_bounds = std::max(out_of_bounds, spread_one(ip));
             }
             FML::MaxOverTasks(&out_of_bounds);
             assert_mpi(out_of_bounds == 0,

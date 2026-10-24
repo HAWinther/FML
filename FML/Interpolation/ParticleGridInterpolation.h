@@ -9,6 +9,9 @@
 #include <functional>
 #include <vector>
 
+#ifdef USE_OMP
+#include <omp.h>
+#endif
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
@@ -522,6 +525,12 @@ namespace FML {
 
             // Loop over all particles and add them to the grid
             auto * density_raw = density.get_real_grid();
+            // Atomic adds (a slow compare-and-swap loop for doubles) are only needed with more than one thread
+#ifdef USE_OMP
+            const bool use_atomic = omp_get_max_threads() > 1;
+#else
+            const bool use_atomic = false;
+#endif
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -619,10 +628,14 @@ namespace FML {
                     // Old version when we did not use OMP: density.add_real(icoord, w * norm_fac * mass);
                     auto index = density.get_index_real(icoord);
                     double mass_to_add = w * norm_fac * mass;
+                    if (use_atomic) {
 #ifdef USE_OMP
 #pragma omp atomic
 #endif
-                    density_raw[index] += mass_to_add;
+                        density_raw[index] += mass_to_add;
+                    } else {
+                        density_raw[index] += mass_to_add;
+                    }
                    
                     // Sum up and unsure weights sum to unity
                     sumweights += w;

@@ -368,6 +368,9 @@ force_density_method = "assignment"
 -- of the assignment window W(k)^2 (only stable with interlacing). See README
 force_interlacing_order = 1
 force_deconvolve_window = false
+-- Experimental: a more accurate force at early times (nufft or interlaced) for z > force_early_until_redshift
+-- (only for force_nmesh = particle_Npart_1D). See README
+force_early_method = "none"
 -- Include the effects of massive neutrinos when computing
 -- the density field (density of mnu is the linear prediction)
 -- Requires: transferinfofile above (we need all T(k,z))

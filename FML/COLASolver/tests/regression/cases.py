@@ -233,6 +233,11 @@ CASES = {
         ic_LPT_order=1,
         force_density_method="nufft",
     ),
+    # Early-time force switch: NUFFT for z > 5, then the normal CIC force
+    "early_force_switch": dict(
+        force_early_method="nufft",
+        force_early_until_redshift=5.0,
+    ),
     # FastPM time-stepping with COLA, logarithmic spacing, f(R) gravity
     "fastpm_cola_fofr": dict(
         timestep_method="FastPM",

@@ -449,6 +449,25 @@ namespace COLASOLVER {
                               "force_density_assignment_method (corrects for the smoothing of the assignment and the "
                               "interpolation). Unstable unless the aliasing is suppressed (force_interlacing_order "
                               "> 1, see README)");
+            b.always_optional("force_early_method",
+                              "none",
+                              "A more accurate force at early times (when the particles are still close to the "
+                              "lattice and CIC is inaccurate): nufft (NUFFT density and interpolation) or interlaced "
+                              "(force_early_interlacing_order shifted grids with force_early_density_assignment_method "
+                              "and window deconvolution) for steps at z > force_early_until_redshift, then the "
+                              "normal force settings. none: off",
+                              {"none", "nufft", "interlaced"});
+            b.when(is_one_of("force_early_method", {"nufft", "interlaced"}),
+                   one_of_text("force_early_method", {"nufft", "interlaced"}), [&]() {
+                       b.always_optional("force_early_until_redshift", 10.0, "Use the early force for z > this");
+                   });
+            b.when(is_one_of("force_early_method", {"interlaced"}), "force_early_method = interlaced", [&]() {
+                b.always_optional("force_early_interlacing_order", 2, "Number of shifted grids at early times");
+                b.always_optional("force_early_density_assignment_method",
+                                  "TSC",
+                                  "Assignment kernel at early times",
+                                  assignment_methods);
+            });
             b.always_optional("force_interpolation_method",
                               "fiducial",
                               "How the force is interpolated to the particles. assignment: with the "
