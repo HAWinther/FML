@@ -128,6 +128,10 @@ namespace COLASOLVER {
         std::string nbody_gauge_filename;      // The table T_extra(k,z) (from scripts/make_nbody_gauge_transfer.py)
         std::string greens_function_kernel;    // Kernel used for the Greens function of the Poisson equation
         std::string gradient_kernel;           // Kernel used for computing the gradient of the potential
+        std::string density_method{"assignment"}; // assignment, nufft, sheet or sheet_nufft
+        double nufft_epsilon{1e-5};            // Accuracy of the NUFFT (density_method = nufft)
+        int sheet_refinement{2};               // R: R^NDIM tracers per particle (density_method = sheet)
+        std::string interpolation_method{"assignment"}; // Force to particles: assignment (kernel) or nufft
     };
 
     struct ICSettings {
@@ -271,6 +275,16 @@ namespace COLASOLVER {
                 r.get("force_nbody_gauge_filename", force.nbody_gauge_filename);
             r.get("force_greens_function_kernel", force.greens_function_kernel);
             r.get("force_gradient_kernel", force.gradient_kernel);
+            r.get("force_density_method", force.density_method, std::string("assignment"));
+            if (force.density_method == "nufft" or force.density_method == "sheet_nufft")
+                r.get("force_nufft_epsilon", force.nufft_epsilon, 1e-5);
+            if (force.density_method == "sheet" or force.density_method == "sheet_nufft")
+                r.get("force_sheet_refinement", force.sheet_refinement, 2);
+            r.get("force_interpolation_method", force.interpolation_method, std::string("fiducial"));
+            if (force.interpolation_method == "fiducial")
+                force.interpolation_method = force.density_method == "nufft" ? "nufft" : "assignment";
+            if (force.interpolation_method == "nufft")
+                r.get("force_nufft_epsilon", force.nufft_epsilon, 1e-5);
 
             // Initial conditions
             r.get_choice("ic_type_of_input",
@@ -411,6 +425,15 @@ namespace COLASOLVER {
                 fail("output_fileformat = HDF5 needs HDF5: compile with USE_HDF5=true (make USE_HDF5=true)");
 #endif
             // N-body gauge: the IC must be the N-body gauge transfer functions at the initial redshift
+            if (force.density_method == "sheet" or force.density_method == "sheet_nufft") {
+                if (ic.random_field_type == ICRandomFieldType::ReadParticles)
+                    fail("force_density_method = sheet needs particles that start on a regular lattice (not "
+                         "ic_random_field_type = read_particles)");
+                if (force.sheet_refinement < 1)
+                    fail("force_sheet_refinement must be >= 1");
+            }
+            if (not(force.nufft_epsilon > 0.0 and force.nufft_epsilon < 0.1))
+                fail("force_nufft_epsilon must be in (0, 0.1)");
             if (force.nbody_gauge) {
                 if (ic.type_of_input != ICInputType::TransferInfoFile)
                     fail("force_nbody_gauge = true needs ic_type_of_input = transferinfofile (the N-body gauge "

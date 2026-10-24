@@ -6,9 +6,11 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
+#include <FML/Interpolation/SheetInterpolation.h>
 #include <FML/LPT/DisplacementFields.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/NBody/NBody.h>
+#include <FML/NUFFT/NUFFT.h>
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Smoothing/SmoothingFourier.h>
 #include <FML/Spline/Spline.h>
@@ -716,7 +718,23 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
                     vel[idim] *= s.velocity_scale;
             }
         }
-        FML::NBODY::KickParticles<NDIM>(force_real, part, s.delta_time_kick, force.density_assignment_method);
+        if (force.interpolation_method == "nufft") {
+            // Exact evaluation of the Fourier series of the force at the particle positions
+            FML::NUFFT::ESKernel kernel(force.nufft_epsilon);
+            std::vector<FML::GRID::FloatType> force_particle;
+            auto * p = part.get_particles_ptr();
+            for (int idim = 0; idim < NDIM; idim++) {
+                force_real[idim].fftw_r2c();
+                FML::NUFFT::nufft_type2<NDIM>(force_real[idim], p, part.get_npart(), force_particle, kernel);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (size_t i = 0; i < part.get_npart(); i++)
+                    FML::PARTICLE::GetVel(p[i])[idim] -= force_particle[i] * s.delta_time_kick;
+            }
+        } else {
+            FML::NBODY::KickParticles<NDIM>(force_real, part, s.delta_time_kick, force.density_assignment_method);
+        }
         timer.EndTiming("Kick");
     }
     if (sim.enforce_LPT_trajectories and FML::ThisTask == 0) {
@@ -766,21 +784,50 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         std::cout << "Adding particles (baryons+CDM) to the densityfield\n";
     }
 
-    // Particles to grid and Fourier transform
-    FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
-                                          part.get_npart(),
-                                          part.get_npart_total(),
-                                          density_grid_fourier,
-                                          force.density_assignment_method);
-    density_grid_fourier.fftw_r2c();
+    // Particles to grid and Fourier transform (or NUFFT / sheet interpolation)
+    if (force.density_method == "nufft") {
+        // The exact Fourier modes (no window function, no aliasing) for |m_i| < Nmesh/2
+        FML::NUFFT::particles_to_fourier_grid_nufft<NDIM>(part.get_particles_ptr(),
+                                                          part.get_npart(),
+                                                          part.get_npart_total(),
+                                                          density_grid_fourier,
+                                                          force.nufft_epsilon);
+    } else if (force.density_method == "sheet" or force.density_method == "sheet_nufft") {
+        if constexpr (FML::PARTICLE::has_get_q<T>()) {
+            FML::INTERPOLATION::particles_to_fourier_grid_sheet<NDIM>(
+                part.get_particles_ptr(),
+                part.get_npart(),
+                params.particle.Npart_1D,
+                force.sheet_refinement,
+                density_grid_fourier,
+                force.density_method == "sheet" ? force.density_assignment_method : std::string("NUFFT"),
+                force.nufft_epsilon);
+        } else {
+            FML::assert_mpi(false, "force_density_method = sheet needs particles with a Lagrangian position q");
+        }
+    } else {
+        FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
+                                              part.get_npart(),
+                                              part.get_npart_total(),
+                                              density_grid_fourier,
+                                              force.density_assignment_method);
+        density_grid_fourier.fftw_r2c();
+    }
+
+    // P(k) from the density field: deconvolve the assignment window (not needed for the NUFFT)
+    auto bin_up_pofk = [&](PowerSpectrumBinning & pofk) {
+        if (force.density_method == "nufft" or force.density_method == "sheet_nufft")
+            FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(density_grid_fourier, pofk);
+        else
+            FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(
+                density_grid_fourier, pofk, force.density_assignment_method);
+    };
 
     // Bin up power-spectrum (its basically free as we have the density field)
     const double redshift = 1.0 / a - 1.0;
     PowerSpectrumBinning pofk_particles(density_grid_fourier.get_nmesh() / 2);
     pofk_particles.subtract_shotnoise = pofk_subtract_shotnoise;
-    FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(density_grid_fourier,
-                                                                 pofk_particles,
-                                                                 force.density_assignment_method);
+    bin_up_pofk(pofk_particles);
     pofk_particles.scale(boxsize);
     pofk_cb_every_step.push_back({redshift, pofk_particles});
 
@@ -819,9 +866,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         // P(k) of the total source (the same caveat about deconvolution as for the neutrinos below)
         PowerSpectrumBinning pofk_total(density_grid_fourier.get_nmesh() / 2);
         pofk_total.subtract_shotnoise = pofk_subtract_shotnoise;
-        FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(density_grid_fourier,
-                                                                     pofk_total,
-                                                                     force.density_assignment_method);
+        bin_up_pofk(pofk_total);
         pofk_total.scale(boxsize);
         pofk_total_every_step.push_back({redshift, pofk_total});
         return;
@@ -885,9 +930,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
     //=============================================================
     PowerSpectrumBinning pofk_total(density_grid_fourier.get_nmesh() / 2);
     pofk_total.subtract_shotnoise = pofk_subtract_shotnoise;
-    FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(density_grid_fourier,
-                                                                 pofk_total,
-                                                                 force.density_assignment_method);
+    bin_up_pofk(pofk_total);
     pofk_total.scale(boxsize);
     pofk_total_every_step.push_back({redshift, pofk_total});
 }

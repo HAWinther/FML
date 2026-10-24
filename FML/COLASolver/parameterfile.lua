@@ -360,6 +360,10 @@ force_greens_function_kernel = "fiducial"
 -- Options: fiducial (= continuous; discrete_4pt if particle_Npart_1D < force_nmesh <= 3 particle_Npart_1D;
 --          discrete_2pt for finer grids), continuous, discrete_2pt, discrete_4pt
 force_gradient_kernel = "fiducial"
+-- Experimental: how the density for the force is computed: assignment (default), nufft (exact Fourier
+-- modes, no window/aliasing; then the force is also evaluated exactly at the particles), sheet or
+-- sheet_nufft (spectral sheet interpolation with force_sheet_refinement^3 tracers per particle). See README
+force_density_method = "assignment"
 -- Include the effects of massive neutrinos when computing
 -- the density field (density of mnu is the linear prediction)
 -- Requires: transferinfofile above (we need all T(k,z))

@@ -10,6 +10,8 @@
 //   ParticleBasic         (pos, vel, id)               no COLA
 //   ParticleCOLA          (+ 1LPT and 2LPT Psi)        scale-independent COLA
 //   ParticleCOLAScaleDep  (+ Lagrangian position q)    scale-dependent COLA
+//   ParticleBasicQ        (pos, vel, id, q)            no COLA, but q is needed
+//                                                      (force_density_method = sheet)
 //
 // Free choice of types, so you can for example change to floats to save memory
 // or add fields you want to carry along. See ExampleParticles.h for more examples
@@ -30,6 +32,14 @@ class ParticleBasic {
     long long int id;
     long long int get_id() const { return id; }
     void set_id(long long int _id) { id = _id; }
+};
+
+/// A standard PM particle that also stores its Lagrangian position q (for sheet interpolation)
+template <int NDIM>
+class ParticleBasicQ : public ParticleBasic<NDIM> {
+  public:
+    double q[NDIM];
+    double * get_q() { return q; }
 };
 
 /// For scale-independent COLA we also need the LPT displacement fields

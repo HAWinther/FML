@@ -102,10 +102,15 @@ int main(int argc, char ** argv) {
     const bool use_cola =
         param.get<bool>("simulation_use_cola") and param.get<int>("simulation_cola_LPT_order", 2) >= 1;
     const bool scaledependent_cola = use_cola and param.get<bool>("simulation_use_scaledependent_cola");
-    if (scaledependent_cola)
+    // Sheet interpolation needs the Lagrangian position q
+    const std::string density_method = param.get<std::string>("force_density_method", "assignment");
+    const bool need_q = density_method == "sheet" or density_method == "sheet_nufft";
+    if (scaledependent_cola or (use_cola and need_q))
         run_simulation<ParticleCOLAScaleDep<NDIM>>(param, cosmo, grav);
     else if (use_cola)
         run_simulation<ParticleCOLA<NDIM>>(param, cosmo, grav);
+    else if (need_q)
+        run_simulation<ParticleBasicQ<NDIM>>(param, cosmo, grav);
     else
         run_simulation<ParticleBasic<NDIM>>(param, cosmo, grav);
 }

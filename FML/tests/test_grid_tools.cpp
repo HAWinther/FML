@@ -442,6 +442,24 @@ int main() {
         FML::MaxOverTasks(&maxdiff);
         FML::MaxOverTasks(&maxref);
         check(maxdiff < 1e-8 * maxref, "particles_to_fourier_grid_sheet (R = 2) equals the analytic sheet density");
+
+        // The same with the exact Fourier modes of the tracers (NUFFT)
+        FFTWGrid<3> density_nufft(nmesh);
+        FML::INTERPOLATION::particles_to_fourier_grid_sheet<3>(part.data(), part.size(), Np, R, density_nufft, "NUFFT",
+                                                               1e-8);
+        FFTWGrid<3> density_nufft_ref(nmesh);
+        FML::NUFFT::particles_to_fourier_grid_nufft<3>(analytic.data(), analytic.size(), FML::power(R * Np, 3),
+                                                       density_nufft_ref, 1e-8);
+        maxdiff = maxref = 0.0;
+        for (auto && fourier_index : density_nufft.get_fourier_range()) {
+            maxdiff = std::max(maxdiff, std::abs(density_nufft.get_fourier_from_index(fourier_index) -
+                                                 density_nufft_ref.get_fourier_from_index(fourier_index)));
+            maxref = std::max(maxref, std::abs(density_nufft_ref.get_fourier_from_index(fourier_index)));
+        }
+        FML::MaxOverTasks(&maxdiff);
+        FML::MaxOverTasks(&maxref);
+        check(maxdiff < 1e-6 * maxref, "particles_to_fourier_grid_sheet with NUFFT equals the NUFFT of the analytic "
+                                       "sheet tracers (rel err " + sci(maxdiff / maxref) + ")");
     }
 
     if (FML::ThisTask == 0)

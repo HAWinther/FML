@@ -15,6 +15,7 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
+#include <FML/NUFFT/NUFFT.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/Smoothing/SmoothingFourier.h>
 
@@ -271,14 +272,17 @@ namespace FML {
         /// @param[in] lattice_offset The lattice offset in units of the lattice spacing
         /// @param[in] refinement R (1 means just the particles)
         /// @param[out] density_fourier The output (Nmesh must be set)
-        /// @param[in] density_assignment_method NGP, CIC, TSC, PCS or PQS
+        /// @param[in] density_assignment_method NGP, CIC, TSC, PCS or PQS, or NUFFT for the exact Fourier modes of
+        /// the tracers (no window function or aliasing; modes |m_i| < Nmesh/2, see FML::NUFFT)
+        /// @param[in] nufft_epsilon The accuracy of the NUFFT (if used)
         //================================================================================
         template <int N>
         void sheet_density_fourier(const std::array<FFTWGrid<N>, N> & Psi_fourier,
                                    const std::array<double, N> & lattice_offset,
                                    int refinement,
                                    FFTWGrid<N> & density_fourier,
-                                   std::string density_assignment_method) {
+                                   std::string density_assignment_method,
+                                   double nufft_epsilon = 1e-6) {
             const int nmesh = density_fourier.get_nmesh();
             const int Np = Psi_fourier[0].get_nmesh();
             assert_mpi(nmesh > 0, "[sheet_density_fourier] Output grid must be allocated\n");
@@ -287,10 +291,48 @@ namespace FML {
             const int nshifts = FML::power(R, N);
             const size_t NumTracersTot = FML::power(size_t(Np), N);
 
+            // Exact Fourier modes of the tracers with a NUFFT (accumulated in Fourier space)
+            if (density_assignment_method == "NUFFT") {
+                FML::NUFFT::ESKernel kernel(nufft_epsilon);
+                FFTWGrid<N> density_shift(nmesh);
+                density_shift.add_memory_label("FFTWGrid::sheet_density_fourier::density_shift");
+                FFTWGrid<N> sum(nmesh, density_fourier.get_n_extra_slices_left(), density_fourier.get_n_extra_slices_right());
+                sum.add_memory_label("FFTWGrid::sheet_density_fourier::sum");
+                sum.fill_fourier_grid(0.0);
+                sum.set_grid_status_real(false);
+                std::vector<SheetTracer<N>> tracers;
+                std::vector<double> ones;
+                for (int ishift = 0; ishift < nshifts; ishift++) {
+                    std::array<double, N> shift;
+                    for (int idim = 0, n = 1; idim < N; idim++, n *= R)
+                        shift[idim] = ((ishift / n) % R) / double(R * Np);
+                    sheet_tracers<N>(Psi_fourier, lattice_offset, shift, tracers);
+                    ones.assign(tracers.size(), 1.0);
+                    FML::NUFFT::nufft_type1<N, SheetTracer<N>>(
+                        tracers.data(), tracers.size(), ones, 1.0 / double(NumTracersTot * nshifts), density_shift, kernel);
+                    const auto Local_nx = sum.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                    for (int islice = 0; islice < Local_nx; islice++) {
+                        for (auto && fourier_index : sum.get_fourier_range(islice, islice + 1)) {
+                            sum.set_fourier_from_index(fourier_index,
+                                                       sum.get_fourier_from_index(fourier_index) +
+                                                           density_shift.get_fourier_from_index(fourier_index));
+                        }
+                    }
+                }
+                if (sum.get_local_x_start() == 0)
+                    sum.set_fourier_from_index(0, 0.0);
+                density_fourier = sum;
+                return;
+            }
+
             auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
             FFTWGrid<N> density_shift(nmesh, nleftright.first, nleftright.second);
             density_shift.add_memory_label("FFTWGrid::sheet_density_fourier::density_shift");
-            FFTWGrid<N> sum(nmesh);
+            // Keep the extra slices of the output grid (they are needed if it is used for interpolation later)
+            FFTWGrid<N> sum(nmesh, density_fourier.get_n_extra_slices_left(), density_fourier.get_n_extra_slices_right());
             sum.add_memory_label("FFTWGrid::sheet_density_fourier::sum");
 
             std::vector<SheetTracer<N>> tracers;
@@ -330,13 +372,15 @@ namespace FML {
                                              int Npart_1D,
                                              int refinement,
                                              FFTWGrid<N> & density_fourier,
-                                             std::string density_assignment_method) {
+                                             std::string density_assignment_method,
+                                             double nufft_epsilon = 1e-6) {
             std::array<FFTWGrid<N>, N> Psi;
             std::array<double, N> lattice_offset;
             displacement_field_from_particles<N, T>(part, NumPart, Npart_1D, Psi, lattice_offset);
             for (int idim = 0; idim < N; idim++)
                 Psi[idim].fftw_r2c();
-            sheet_density_fourier<N>(Psi, lattice_offset, refinement, density_fourier, density_assignment_method);
+            sheet_density_fourier<N>(
+                Psi, lattice_offset, refinement, density_fourier, density_assignment_method, nufft_epsilon);
         }
 
     } // namespace INTERPOLATION

@@ -171,6 +171,44 @@ ic_lattice_offset = "none" and force_gradient_kernel = "discrete_2pt" for the pr
 continuous kernel a 2x grid is wrong (+10% at k = 0.2 h/Mpc) even with the offset. Deconvolving the
 assignment window in the force amplifies the lattice noise and does not help.
 
+## Exact forces with NUFFTs and sheet interpolation (experimental)
+
+`force_density_method` sets how the density field for the force is computed and `force_interpolation_method`
+how the force is brought back to the particles:
+
+- `assignment` (default): particles to grid with force_density_assignment_method (CIC, TSC, ...), and the same
+  kernel for the interpolation.
+- `nufft`: the exact Fourier modes of the particle distribution, computed with a non-uniform FFT
+  (FML/NUFFT/NUFFT.h, accuracy force_nufft_epsilon), for all modes |k_i| < k_Nyquist of the force grid: no window
+  function and no aliasing. The force is then also evaluated exactly at the particles with a NUFFT
+  (force_interpolation_method = fiducial = nufft). It is important to use the NUFFT both ways: with the exact density
+  and CIC interpolation a particle feels a force from itself that pulls it towards the nearest grid node, which slows
+  down the growth of all modes (by ~1% in P(k) on the largest scales in the test below).
+- `sheet` / `sheet_nufft`: spectral sheet interpolation (FML/Interpolation/SheetInterpolation.h). The displacement
+  field x - q of the particles is Fourier interpolated to force_sheet_refinement^3 points per particle and these
+  tracers are assigned to the grid with the assignment kernel (`sheet`) or with a NUFFT (`sheet_nufft`). This
+  removes the discreteness of the particles but rings after shell crossing.
+
+Tests with a force grid equal to the particle grid (64^3 particles; P(k) at z = 0 in 256 Mpc/h relative to a 6x grid
+run, linear growth of the modes at k = 0.028 / 0.053 h/Mpc in 1000 Mpc/h; run time with 2 MPI tasks):
+
+| Density / interpolation       | P(k), k = 0.1 / 0.2 / 0.4 h/Mpc | Linear growth (mean / scatter)  | Time  |
+|-------------------------------|---------------------------------|---------------------------------|-------|
+| CIC / CIC (default)           | -4.3% / -12.8% / -26.7%         | -3.2/4.4%, -8.4/11.6%           | 29 s  |
+| TSC / TSC                     | -6.5% / -21% / -46%             | -5.2/1.3%, -16/4.3%             | 55 s  |
+| sheet R = 2, CIC / CIC        | -4.3% / -12.0% / -28.3%         | -2.1/2.2%, -6.1/5.9%            | 126 s |
+| NUFFT / CIC                   | -2.6% / -4.6% / -11.6%          | -0.1/0.04%, -0.2/0.08%          |  –    |
+| NUFFT / NUFFT, eps = 1e-5     | -0.2% / +0.3% / +0.5%           | +0.07/0.05%, +0.07/0.08%        | 103 s |
+| sheet R = 2 NUFFT / NUFFT, eps = 1e-3 | -0.1% / +0.6% / +1.3%   |                                 | > 2x NUFFT |
+
+With NUFFTs both ways a 1x grid gives the P(k) of a 6x grid to < 1% up to half the particle Nyquist frequency
+(the largest scales are -0.1%, compared to -0.6% for CIC and -1.8% for NUFFT density with CIC interpolation), for
+about 3.5x the cost of CIC. Smaller force_nufft_epsilon is more accurate but slower (the kernel covers
+(log10(1/eps)+1)^3 cells): the nonlinear P(k) is the same to 0.1% for eps = 1e-3 to 1e-6 (56 s, 65 s, 103 s,
+102 s), but in a linear test with a tiny amplitude (sigma8 = 0.02) eps = 1e-3 gives a +5% error and 1e-4 -0.2%,
+so the default is 1e-5. Sheet interpolation does not help much on a 1x grid. NUFFT and sheet_nufft need FFTs on a grid 2x finer than
+force_nmesh.
+
 ## Radiation, neutrinos and GR: the N-body gauge
 
 On very large scales (k < ~0.01 h/Mpc) a Newtonian simulation misses the effect of the radiation

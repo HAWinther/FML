@@ -209,6 +209,16 @@ CASES = {
         force_nmesh=64,
         force_density_assignment_method="PCS",
     ),
+    # Force with NUFFTs (exact density and force interpolation, no window functions)
+    "nufft_force": dict(
+        force_density_method="nufft",
+    ),
+    # Density from spectral sheet interpolation (R = 2) with the exact Fourier modes of the tracers
+    "sheet_nufft_force": dict(
+        force_density_method="sheet_nufft",
+        force_sheet_refinement=2,
+        force_interpolation_method="nufft",
+    ),
     # FastPM time-stepping with COLA, logarithmic spacing, f(R) gravity
     "fastpm_cola_fofr": dict(
         timestep_method="FastPM",

@@ -244,6 +244,31 @@ namespace FML {
                     out_of_bounds = 1;
                     continue;
                 }
+                if constexpr (N == 3) {
+                    // Fast path: precompute the (wrapped) cell indices along each direction
+                    std::array<int, 16> c0, c1, c2;
+                    for (int j = 0; j < w; j++) {
+                        c0[j] = istart[0] + j;
+                        if (FML::NTasks == 1)
+                            c0[j] = (c0[j] % int(Local_nx) + int(Local_nx)) % int(Local_nx);
+                        c1[j] = ((istart[1] + j) % nf + nf) % nf;
+                        c2[j] = ((istart[2] + j) % nf + nf) % nf;
+                    }
+                    for (int a = 0; a < w; a++) {
+                        const double wa = values[ip] * weights[a];
+                        for (int b = 0; b < w; b++) {
+                            const double wab = wa * weights[w + b];
+                            const auto base = fine.get_index_real({c0[a], c1[b], 0});
+                            for (int c = 0; c < w; c++) {
+#ifdef USE_OMP
+#pragma omp atomic
+#endif
+                                grid[base + c2[c]] += FloatType(wab * weights[2 * w + c]);
+                            }
+                        }
+                    }
+                    continue;
+                }
                 for (int i = 0; i < wtondim; i++) {
                     std::array<int, N> coord;
                     double weight = values[ip];
@@ -303,6 +328,28 @@ namespace FML {
                     continue;
                 }
                 double sum = 0.0;
+                if constexpr (N == 3) {
+                    // Fast path: precompute the (wrapped) cell indices along each direction
+                    const FloatType * grid = const_cast<FFTWGrid<N> &>(fine).get_real_grid();
+                    std::array<int, 16> c1, c2;
+                    for (int j = 0; j < w; j++) {
+                        c1[j] = ((istart[1] + j) % nf + nf) % nf;
+                        c2[j] = ((istart[2] + j) % nf + nf) % nf;
+                    }
+                    for (int a = 0; a < w; a++) {
+                        const double wa = weights[a];
+                        for (int b = 0; b < w; b++) {
+                            const double wab = wa * weights[w + b];
+                            const auto base = fine.get_index_real({istart[0] + a, c1[b], 0});
+                            double row = 0.0;
+                            for (int c = 0; c < w; c++)
+                                row += weights[2 * w + c] * grid[base + c2[c]];
+                            sum += wab * row;
+                        }
+                    }
+                    result[ip] = FloatType(sum);
+                    continue;
+                }
                 for (int i = 0; i < wtondim; i++) {
                     std::array<int, N> coord;
                     double weight = 1.0;

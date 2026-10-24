@@ -426,6 +426,34 @@ namespace COLASOLVER {
                        "larger (the continuous kernel gives "
                        "spurious forces from the particle lattice when the force grid is finer than it)",
                        kernels);
+            b.always_optional("force_density_method",
+                              "assignment",
+                              "How the density field for the force is computed. assignment: particles to grid with "
+                              "force_density_assignment_method. nufft: the exact Fourier modes of the particle "
+                              "distribution (non-uniform FFT; no window function or aliasing). sheet: spectral sheet "
+                              "interpolation, R^NDIM tracers per particle placed by Fourier interpolating the "
+                              "displacement field x - q, assigned with force_density_assignment_method. sheet_nufft: "
+                              "sheet interpolation with the exact Fourier modes of the tracers (NUFFT). The force is "
+                              "always interpolated back to the particles with force_density_assignment_method",
+                              {"assignment", "nufft", "sheet", "sheet_nufft"});
+            b.always_optional("force_interpolation_method",
+                              "fiducial",
+                              "How the force is interpolated to the particles. assignment: with the "
+                              "force_density_assignment_method kernel. nufft: exact evaluation of the Fourier series "
+                              "of the force at the particles (non-uniform FFT). fiducial: nufft if "
+                              "force_density_method = nufft (then assignment and interpolation are both exact, so "
+                              "there is no self-force), otherwise assignment",
+                              {"fiducial", "assignment", "nufft"});
+            b.always_optional("force_nufft_epsilon",
+                              1e-5,
+                              "Relative accuracy of the NUFFT (force_density_method = nufft or sheet_nufft, or "
+                              "force_interpolation_method = nufft)");
+            b.when(is_one_of("force_density_method", {"sheet", "sheet_nufft"}),
+                   one_of_text("force_density_method", {"sheet", "sheet_nufft"}), [&]() {
+                b.always_optional("force_sheet_refinement",
+                                  2,
+                                  "R: the number of tracers per particle per dimension for sheet interpolation");
+            });
             b.optional("force_linear_massive_neutrinos",
                        false,
                        "Include massive neutrinos in the density field using linear theory (requires "
