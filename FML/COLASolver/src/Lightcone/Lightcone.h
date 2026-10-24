@@ -4,6 +4,7 @@
 #include "Lightcone_Healpix.h"
 #include "Lightcone_Replicas.h"
 #include <FML/GadgetUtils/GadgetUtils.h>
+#include <FML/GadgetUtils/GadgetUtilsHDF5.h>
 #include <FML/Global/Global.h>
 #include <FML/ODESolver/ODESolver.h>
 #include <FML/ParameterMap/ParameterMap.h>
@@ -86,6 +87,7 @@ class Lightcone {
     std::string plc_folder;
     bool output_gadgetfile{false};
     bool output_asciifile{false};
+    bool output_hdf5file{false};
     bool output_in_batches{false};
     bool store_particles{false};
 
@@ -124,6 +126,7 @@ class Lightcone {
     void output_particles(FML::Vector<U> & part_lc, double astart, double aend, std::string label, int ibatch = 0);
     void output_ascii(FML::Vector<U> & part_lc, double astart, double aend, std::string label, int ibatch = 0);
     void output_gadget(FML::Vector<U> & part_lc, double astart, double aend, std::string label, int ibatch = 0);
+    void output_hdf5(FML::Vector<U> & part_lc, double astart, double aend, std::string label, int ibatch = 0);
 
     // Useful function - volume of a shell (in any dim)
     double volume_shell(double rlow, double rhigh);
@@ -171,6 +174,11 @@ void Lightcone<NDIM, T, U>::read_parameters(ParameterMap & param) {
         plc_a_finish = 1.0 / (1.0 + plc_z_finish);
         output_gadgetfile = param.get<bool>("plc_output_gadgetfile");
         output_asciifile = param.get<bool>("plc_output_asciifile");
+        output_hdf5file = param.get<bool>("plc_output_hdf5file", false);
+#ifndef USE_HDF5
+        if (output_hdf5file)
+            throw std::runtime_error("Invalid parameters: plc_output_hdf5file = true needs HDF5: compile with USE_HDF5=true (make USE_HDF5=true)");
+#endif
         make_onion_density_maps = param.get<bool>("plc_make_onion_density_maps");
         if (FML::ThisTask == 0) {
             std::cout << "\n# Read in Lightcone.h:\n";
@@ -183,6 +191,7 @@ void Lightcone<NDIM, T, U>::read_parameters(ParameterMap & param) {
             std::cout << "# plc_z_finish                             : " << plc_z_finish << "\n";
             std::cout << "# plc_output_gadgetfile                    : " << output_gadgetfile << "\n";
             std::cout << "# plc_output_asciifile                     : " << output_asciifile << "\n";
+            std::cout << "# plc_output_hdf5file                      : " << output_hdf5file << "\n";
             std::cout << "# output_in_batches                        : " << output_in_batches << "\n";
             std::cout << "# plc_make_onion_density_maps                        : " << make_onion_density_maps << "\n";
         }
@@ -318,7 +327,7 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
 
     // Estimate how many particles we should reserve based on the volume and the average number density
     // If no output method is picked then we don't save anything
-    store_particles = output_asciifile or output_gadgetfile;
+    store_particles = output_asciifile or output_gadgetfile or output_hdf5file;
     size_t num_particles_to_allocate =
         ceil(mean_density[particle_type] * fsky * volume_shell(r_lc_new, r_lc_old) * particle_allocation_factor);
     if(store_particles and output_in_batches) {
@@ -696,12 +705,57 @@ void Lightcone<NDIM, T, U>::output_gadget(FML::Vector<U> & part_lc, double astar
                            vel_norm);
 }
 
+// Output the lightcone-particles as GADGET HDF5 files (one file per task, and per batch with output in batches).
+// Positions are comoving in Mpc/h (not wrapped into the box: with replicas they extend beyond it; the observer
+// is at plc_pos_observer * boxsize) and
+// velocities are peculiar velocities in km/s (not the GADGET convention v/sqrt(a)), as for the GADGET lightcone.
+// The header time is the mean of the crossing scale factors [astart, aend] of the step.
+// With output in batches NumPartTotal is just NumPart (we cannot get the total on the fly)
+template <int NDIM, class T, class U>
+void Lightcone<NDIM, T, U>::output_hdf5([[maybe_unused]] FML::Vector<U> & part_lc,
+                                        [[maybe_unused]] double astart,
+                                        [[maybe_unused]] double aend,
+                                        [[maybe_unused]] std::string label,
+                                        [[maybe_unused]] int ibatch) {
+#ifdef USE_HDF5
+    std::string fileprefix = plc_folder + "/" + "lightcone_" + label + "_hdf5_step" + std::to_string(plc_step);
+    if (output_in_batches)
+        fileprefix += "_batch" + std::to_string(ibatch);
+    if (FML::ThisTask == 0)
+        std::cout << "# Writing lightcone to HDF5 file(s): " << fileprefix << ".X.hdf5\n";
+
+    size_t npart_lc = part_lc.size();
+    size_t npart_lc_global = npart_lc;
+    if (not output_in_batches)
+        FML::SumOverTasks(&npart_lc_global);
+
+    FML::FILEUTILS::GADGET::GadgetHDF5Writer gw(NDIM);
+    gw.set_periodic_wrap(false);
+    gw.write_gadget_single(fileprefix + "." + std::to_string(FML::ThisTask) + ".hdf5",
+                           part_lc.data(),
+                           npart_lc,
+                           npart_lc_global,
+                           FML::NTasks,
+                           (astart + aend) / 2.0,
+                           boxsize,
+                           cosmo->get_OmegaM(),
+                           cosmo->get_OmegaLambda(),
+                           cosmo->get_h(),
+                           1.0,
+                           1.0);
+#else
+    throw std::runtime_error("plc_output_hdf5file needs HDF5: compile with USE_HDF5=true");
+#endif
+}
+
 template <int NDIM, class T, class U>
 void Lightcone<NDIM, T, U>::output_particles(FML::Vector<U> & part_lc, double astart, double aend, std::string label, int ibatch) {
   if (output_gadgetfile)
     output_gadget(part_lc, astart, aend, label, ibatch);
   if (output_asciifile)
     output_ascii(part_lc, astart, aend, label, ibatch);
+  if (output_hdf5file)
+    output_hdf5(part_lc, astart, aend, label, ibatch);
 }
 
 // Output the lightcone-particles as an ascii file

@@ -76,6 +76,25 @@ namespace COLASOLVER {
                     const double n = settings.spacing_power;
                     return amin * std::pow(1.0 + (std::pow(amax / amin, n) - 1.0) * i / double(nsteps), 1.0 / n);
                 }
+                case ScaleFactorSpacing::GrowthFactor: {
+                    // Steps uniformly spaced in the linear growth factor D(a) (scale-independent part)
+                    if (i <= 0.0)
+                        return amin;
+                    if (i >= nsteps)
+                        return amax;
+                    const double Dmin = D(amin), Dmax = D(amax);
+                    const double Dtarget = Dmin + (Dmax - Dmin) * i / double(nsteps);
+                    // D is monotonic in a: bisection in log(a)
+                    double lo = std::log(amin), hi = std::log(amax);
+                    for (int it = 0; it < 100 and hi - lo > 1e-14; it++) {
+                        const double mid = 0.5 * (lo + hi);
+                        if (D(std::exp(mid)) < Dtarget)
+                            lo = mid;
+                        else
+                            hi = mid;
+                    }
+                    return std::exp(0.5 * (lo + hi));
+                }
             }
             throw std::runtime_error("TimeStepping: unknown scale factor spacing");
         }

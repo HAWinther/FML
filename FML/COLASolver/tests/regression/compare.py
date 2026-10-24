@@ -4,7 +4,7 @@
 #
 # Usage: python3 compare.py <reference_dir> <new_dir> [--rtol 1e-6] [--atol 1e-12] [--exact]
 #   Text files are compared number by number with the given tolerances
-#   (--exact: they must be identical). Binary files (Gadget/FML particles)
+#   (--exact: they must be identical). Binary files (GADGET/HDF5 particles)
 #   must be byte identical with --exact, otherwise they are skipped.
 #   Log files and the parameter files are not compared.
 #==========================================================================

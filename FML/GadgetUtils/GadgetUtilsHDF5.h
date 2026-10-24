@@ -458,6 +458,7 @@ namespace FML {
                 GadgetHeader header{};
                 int NDIM{3};
                 bool double_precision{false};
+                bool periodic_wrap{true};
                 HDF5::Handle gcpl;
 
               public:
@@ -475,6 +476,10 @@ namespace FML {
 
                 /// Write positions and velocities as double instead of float
                 void set_double_precision(bool use_double) { double_precision = use_double; }
+
+                /// Wrap the positions into [0, BoxSize) (the default, as GADGET expects). Turn off for data that is
+                /// not a periodic box, e.g. a lightcone where the positions are relative to an observer
+                void set_periodic_wrap(bool wrap) { periodic_wrap = wrap; }
 
                 GadgetHeader get_header() const { return header; }
 
@@ -610,6 +615,8 @@ namespace FML {
                             gather([](auto & p) { return FML::PARTICLE::GetPos(p); }, pos_norm);
                             // Positions must be in [0, Boxsize) also after rounding to float
                             for (auto & x : buffer) {
+                                if (not periodic_wrap)
+                                    break;
                                 if (x >= Boxsize)
                                     x -= Boxsize;
                                 if (x < 0.0)

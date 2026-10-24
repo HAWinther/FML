@@ -241,7 +241,7 @@ particle_allocation_factor = 1.25
 output_redshifts = {0.0}
 -- Output particles?
 output_particles = true
--- Fileformat: GADGET (binary), HDF5 (GADGET HDF5, compile with USE_HDF5=true), FML
+-- Fileformat: GADGET (binary), HDF5 (GADGET HDF5, compile with USE_HDF5=true)
 output_fileformat = "GADGET"
 -- Output folder
 output_folder = "output"
@@ -260,7 +260,8 @@ timestep_cola_nLPT = -2.5
 -- The time-stepping algorithm: KDK
 timestep_algorithm = "KDK"
 
--- Spacing of the time-steps in 'a' is: linear, logarithmic, powerlaw
+-- Spacing of the time-steps in 'a' is: linear, logarithmic, powerlaw or growthfactor (uniform in D(a),
+-- recommended for BullFrog)
 timestep_scalefactor_spacing = "linear"
 if timestep_scalefactor_spacing == "powerlaw" then
   timestep_spacing_power = 1.0
@@ -417,6 +418,8 @@ if lightcone then
   plc_output_gadgetfile = false
   -- Output ascii
   plc_output_asciifile = false
+  -- Output GADGET HDF5 (needs USE_HDF5)
+  plc_output_hdf5file = false
   -- To save memory output in batches (we only alloc as many particles as we already have to reduce memory consumption)
   plc_output_in_batches = true
 
@@ -462,6 +465,8 @@ fof_buffer_length_mpch = 3.0
 ------------------------------------------------------------
 -- Power-spectrum evaluation
 ------------------------------------------------------------
+-- Write P(k) of the force density field at every step (cheap, accurate only on large scales)
+pofk_every_step = true
 -- Compute power-spectrum when we output
 pofk = true
 -- Gridsize to use for this

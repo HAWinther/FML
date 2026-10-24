@@ -291,9 +291,10 @@ namespace FML {
             /// For memory logging: add a label to the grid
             void add_memory_label(std::string label);
 
-            /// Save to file (adds .X to fileprefix where X is ThisTask)
+            /// Save to file (adds .X to fileprefix where X is ThisTask). A raw copy of the grid meant for
+            /// checkpointing: read it back with load_from_file with the same number of tasks
             void dump_to_file(std::string fileprefix);
-            /// Load grid from file
+            /// Load a grid written by dump_to_file (same number of tasks)
             void load_from_file(std::string fileprefix);
 
             void reallocate(int Nmesh, int nleft, int nright) { *this = FFTWGrid(Nmesh, nleft, nright); }

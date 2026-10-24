@@ -129,7 +129,6 @@ CASES = {
         ic_input_filename=INPUT + "/example_transfer_function_cb_z0.000.txt",
         ic_use_gravity_model_GR=True,
         ic_random_generator="MT19937",
-        output_fileformat="FML",
     ),
     # Scale-dependent COLA with massive neutrinos from transfer info file
     "scaledep_cola_neutrinos": dict(
@@ -269,6 +268,36 @@ CASES = {
         output_redshifts=[1.0, 0.0],
         timestep_nsteps=[3, 3],
     ),
+    # The same as 'bullfrog_lightcone' with the lightcone particles in HDF5 (needs USE_HDF5)
+    "hdf5_lightcone": dict(
+        simulation_use_cola=False,
+        timestep_method="BullFrog",
+        lightcone=True,
+        plc_pos_observer=[0.0, 0.0, 0.0],
+        plc_boundary_mpch=20.0,
+        plc_z_init=0.05,
+        plc_z_finish=0.0,
+        plc_use_replicas=False,
+        plc_ndim_rep=3,
+        plc_output_gadgetfile=False,
+        plc_output_asciifile=True,
+        plc_output_hdf5file=True,
+        plc_output_in_batches=True,
+        plc_make_onion_density_maps=False,
+        output_redshifts=[1.0, 0.0],
+        timestep_nsteps=[3, 3],
+    ),
+    # BullFrog from the Big Bang with the steps uniform in the growth factor
+    "bullfrog_growthfactor_spacing": dict(
+        simulation_use_cola=False,
+        timestep_method="BullFrog",
+        timestep_scalefactor_spacing="growthfactor",
+        ic_initial_redshift=1e7,
+        ic_LPT_order=1,
+        force_interlacing_order=2,
+        force_density_assignment_method="TSC",
+        force_deconvolve_window=True,
+    ),
     # The same as 'cola_quinn_all' but with GADGET HDF5 output (needs USE_HDF5)
     "hdf5_output": dict(
         output_redshifts=[20.0, 1.0, 0.0],
@@ -325,6 +354,7 @@ KNOWN_FAILING = []
 # if the executable has it
 REQUIRES = {
     "hdf5_output": "hdf5",
+    "hdf5_lightcone": "hdf5",
     "read_particles_hdf5": "hdf5",
 }
 

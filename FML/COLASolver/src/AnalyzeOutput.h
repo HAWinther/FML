@@ -134,14 +134,6 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
 }
 
 template <int NDIM, class T>
-void output_fml(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
-
-    // Output particles in internal format
-    std::string fileprefix = snapshot_folder + "/" + "fml_z" + redshift_to_string(redshift);
-    sim.get_particles().dump_to_file(fileprefix);
-}
-
-template <int NDIM, class T>
 void output_gadget(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
 
     const std::string redshiftstring = redshift_to_string(redshift);

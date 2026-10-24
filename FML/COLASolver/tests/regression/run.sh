@@ -25,7 +25,7 @@ python3 "$here/cases.py" "$outdir"
 
 failed=""
 for c in $cases; do
-    printf "%-28s" "$c"
+    printf "%-32s" "$c"
     start=$(date +%s)
     if (cd "$outdir/$c" && $MPIRUN "$exe" parameterfile.lua > log.txt 2>&1); then
         echo "ok   ($(( $(date +%s) - start )) s)"

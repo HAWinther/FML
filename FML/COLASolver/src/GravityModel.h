@@ -263,6 +263,76 @@ class GravityModel {
                                std::array<FFTWGrid<NDIM>, NDIM> & force_real) const = 0;
 
     //========================================================================
+    // a / a_eq at scale factor a, from the background: in a matter + radiation
+    // universe 3/2 OmegaM(a) = 3/2 y / (1 + y) with y = a / a_eq.
+    // Returns a large number when radiation is negligible.
+    //========================================================================
+    double a_over_aeq(double a) const {
+        const double H = cosmo->HoverH0_of_a(a);
+        const double r = cosmo->get_OmegaM() / (H * H * a * a * a);
+        if (r >= 1.0 - 1e-12)
+            return 1e30;
+        return r / (1.0 - r);
+    }
+
+    //========================================================================
+    // Growing-mode initial conditions for the LPT growth equations in a
+    // universe with matter and (smooth) radiation, as a power series in y = a/a_eq.
+    // D1 = 1 + 3y/2 is the Meszaros growing mode, and D2, D3a, D3b are the
+    // solutions that vanish as y -> 0 (no growth during radiation domination).
+    // Returns {D1, dD1/dlna, D2, dD2/dlna, D3a, dD3a/dlna, D3b, dD3b/dlna}.
+    // For y -> infinity this tends to the Einstein-de Sitter values
+    // D2 = -3/7 D1^2, D3a = -1/3 D1^3, D3b = 5/21 D1^3. Converges for y < 1.
+    //========================================================================
+    static std::array<double, 8> radiation_matter_growing_mode(double y, int nterms = 200) {
+        const int N = nterms;
+        auto mult = [N](const std::vector<double> & u, const std::vector<double> & v) {
+            std::vector<double> w(N, 0.0);
+            for (int i = 0; i < N; i++)
+                for (int j = 0; i + j < N; j++)
+                    w[i + j] += u[i] * v[j];
+            return w;
+        };
+        // (1+y) D'' + y/2 D' - 3/2 y D + 3/2 y S = 0 with ' = d/dlny, D = sum c_n y^n, c_0 = 0
+        auto solve = [N](const std::vector<double> & S) {
+            std::vector<double> c(N, 0.0);
+            for (int n = 1; n < N; n++) {
+                const double m = n - 1;
+                c[n] = -((m * m + 0.5 * m - 1.5) * c[n - 1] + 1.5 * S[n - 1]) / double(n * n);
+            }
+            return c;
+        };
+        std::vector<double> D1(N, 0.0);
+        D1[0] = 1.0;
+        D1[1] = 1.5;
+        auto D1sq = mult(D1, D1);
+        auto D1cube = mult(D1sq, D1);
+        auto D2 = solve(D1sq);
+        std::vector<double> S3a(N), S3b(N);
+        auto D2D1 = mult(D2, D1);
+        for (int n = 0; n < N; n++) {
+            S3a[n] = 2.0 * D1cube[n];
+            S3b[n] = D2D1[n] - D1cube[n];
+        }
+        auto D3a = solve(S3a);
+        auto D3b = solve(S3b);
+
+        std::array<double, 8> res{};
+        const std::vector<double> * series[4] = {&D1, &D2, &D3a, &D3b};
+        for (int k = 0; k < 4; k++) {
+            double val = 0.0, der = 0.0, yn = 1.0;
+            for (int n = 0; n < N; n++) {
+                val += (*series[k])[n] * yn;
+                der += n * (*series[k])[n] * yn;
+                yn *= y;
+            }
+            res[2 * k] = val;
+            res[2 * k + 1] = der;
+        }
+        return res;
+    }
+
+    //========================================================================
     // Compute and spline growth-factors
     // Fiducial method is LCDM growth equation with an effective GeffG
     //========================================================================
@@ -286,6 +356,16 @@ class GravityModel {
                 aini = astart;
             }
         }
+
+        // Start the growth factors deep in the radiation era (a < a_eq / 10) when radiation matters, so that
+        // the growing-mode initial conditions below are accurate (not possible when we need transfer data
+        // for massive neutrinos)
+        if (not(scaledependent_growth and cosmo->get_fMNu() > 0.0)) {
+            const double y = a_over_aeq(alow);
+            if (y > 0.1 and y < 1e4)
+                alow *= 0.1 / y;
+        }
+        const double y_low = a_over_aeq(alow);
 
         DVector loga_arr(npts_loga);
         for (int i = 0; i < npts_loga; i++) {
@@ -358,17 +438,23 @@ class GravityModel {
                 return GSL_SUCCESS;
             };
 
-            // Initial conditions: we are using the analytial solution for
-            // GR in Einstein de-Sitter to set these
+            // Initial conditions: the growing mode in a matter + radiation universe (exact for y = a/a_eq -> 0
+            // and the Einstein-de Sitter solution for y -> infinity). The decaying mode is absent.
             // For dD1dx_ini this really changes from 1.0 on large scales to 1-3fnu/5 on small scales in EdS
-            const double D1_ini = 1.0;
-            double dD1dx_ini = D1_ini * 1.0;
-            const double D2_ini = -3.0 / 7.0;
-            const double dD2dx_ini = D2_ini * 2.0;
-            const double D3a_ini = -1.0 / 3.0;
-            const double dD3adx_ini = D3a_ini * 3.0;
-            const double D3b_ini = 5.0 / 21.0;
-            const double dD3bdx_ini = D3b_ini * 3.0;
+            std::array<double, 8> ini;
+            if (y_low < 0.5) {
+                ini = radiation_matter_growing_mode(y_low);
+            } else {
+                ini = {1.0, 1.0, -3.0 / 7.0, -6.0 / 7.0, -1.0 / 3.0, -1.0, 5.0 / 21.0, 5.0 / 7.0};
+            }
+            const double D1_ini = ini[0];
+            double dD1dx_ini = ini[1];
+            const double D2_ini = ini[2];
+            const double dD2dx_ini = ini[3];
+            const double D3a_ini = ini[4];
+            const double dD3adx_ini = ini[5];
+            const double D3b_ini = ini[6];
+            const double dD3bdx_ini = ini[7];
 
             // Neutrinos as CDM
             double D1mnu_ini = D1_ini;
@@ -377,14 +463,12 @@ class GravityModel {
             // To solve properly for massive neutrinos we need the transfer-functions
             // and growth rates at the initial redshift
             if (solve_for_neutrinos and koverH0 > 0.0) {
-                dD1dx_ini = transferdata->get_cdm_baryon_growth_rate(koverH0 * H0_hmpc, alow);
-                D1mnu_ini = transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, alow) /
+                dD1dx_ini = D1_ini * transferdata->get_cdm_baryon_growth_rate(koverH0 * H0_hmpc, alow);
+                D1mnu_ini = D1_ini * transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, alow) /
                             transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, alow);
                 dD1mnu_ini = D1mnu_ini * transferdata->get_massive_neutrino_growth_rate(koverH0 * H0_hmpc, alow);
             }
 
-            // The initial conditions
-            // D1 = a/aini, D2 = -3/7 D1^2, D3a = -1/3 D1^3 and D3b = 5/21 D1^3 for growing mode in EdS
             std::vector<double> yini{
                 D1_ini, dD1dx_ini, D2_ini, dD2dx_ini, D3a_ini, dD3adx_ini, D3b_ini, dD3bdx_ini, D1mnu_ini, dD1mnu_ini};
 

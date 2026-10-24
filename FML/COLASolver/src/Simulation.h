@@ -966,7 +966,8 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         }
         return initial_density_field_shifted;
     };
-    if (not shifted) {
+    const bool pofk_every_step = params.pofk.every_step;
+    if (not shifted and pofk_every_step) {
         bin_up_pofk(pofk_particles);
         pofk_particles.scale(boxsize);
         pofk_cb_every_step.push_back({redshift, pofk_particles});
@@ -1006,7 +1007,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         }
 
         // P(k) of the total source (the same caveat about deconvolution as for the neutrinos below)
-        if (not shifted) {
+        if (not shifted and pofk_every_step) {
             PowerSpectrumBinning pofk_total(density_grid_fourier.get_nmesh() / 2);
             pofk_total.subtract_shotnoise = pofk_subtract_shotnoise;
             bin_up_pofk(pofk_total);
@@ -1073,7 +1074,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
     // One way is to bin up <(W*deltaCB)^2>, <deltaNu^2> and the cross
     // <(W*deltaCB) deltaNu> and deconvolve them separately
     //=============================================================
-    if (shifted)
+    if (shifted or not pofk_every_step)
         return;
     PowerSpectrumBinning pofk_total(density_grid_fourier.get_nmesh() / 2);
     pofk_total.subtract_shotnoise = pofk_subtract_shotnoise;
@@ -1106,8 +1107,11 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
     ScopedLPTVelocity<NDIM, T> true_velocities(cola, part, 1.0 / (1.0 + redshift), &timer);
 
     // Every step we (might) have computed Pcb(k) and possibly Ptotal(k). Output these to file
+    // (only the steps since the last output: the files of earlier steps are already written)
     if (pofk_cb_every_step.size() > 0 or pofk_total_every_step.size() > 0) {
         output_pofk_for_every_step(*this);
+        pofk_cb_every_step.clear();
+        pofk_total_every_step.clear();
     }
 
     struct Analysis {
@@ -1132,10 +1136,8 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
          [&]() {
              if (params.output.fileformat == COLASOLVER::ParticleFileFormat::GADGET)
                  output_gadget(*this, redshift, snapshot_folder);
-             else if (params.output.fileformat == COLASOLVER::ParticleFileFormat::HDF5)
-                 output_gadget_hdf5(*this, redshift, snapshot_folder);
              else
-                 output_fml(*this, redshift, snapshot_folder);
+                 output_gadget_hdf5(*this, redshift, snapshot_folder);
          }},
     };
     for (auto & analysis : analyses) {

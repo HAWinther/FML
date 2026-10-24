@@ -5,6 +5,21 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLASolver: growth factors in the radiation era, time steps uniform in D, outputs
+- The growth equations start from the growing mode of a matter + radiation universe (D1 = 1 + 3a/(2a_eq) and the
+  matching 2LPT/3LPT modes), at a < a_eq/10, instead of the Einstein-de Sitter values. Before, the tables
+  contained a decaying mode when they started in the radiation era (e.g. D(z=0)/D(z=1e7) was 3x too small; the
+  simulations were consistent with the table, so P(k, z = 0) only changes by < 5e-4 in the regression cases).
+- `timestep_scalefactor_spacing = "growthfactor"`: steps uniform in D(a). 15-40% smaller time-stepping errors for
+  BullFrog (default unchanged).
+- `plc_output_hdf5file`: lightcone particles as GADGET HDF5 files. `GadgetHDF5Writer::set_periodic_wrap`.
+- `pofk_every_step` (default true) to switch off the P(k) at every step; the files are now written once (they were
+  rewritten at every output). These files no longer subtract shot noise by default when `pofk = false`.
+- **Removed** `output_fileformat = "FML"` (raw dump of the particles; use GADGET or HDF5). The library functions
+  `MPIParticles::dump_to_file/load_from_file` are kept for checkpointing.
+- Regression cases `hdf5_lightcone`, `bullfrog_growthfactor_spacing`; `check_timestepping.py` also tests the
+  growth factor spacing.
+
 ### COLASolver: accurate forces on a grid equal to the particle grid (experimental)
 - `force_early_method` (`none`, `nufft`, `interlaced`) with `force_early_until_redshift`: use an accurate force only
   at early times, when the particles are close to the lattice and CIC is least accurate.

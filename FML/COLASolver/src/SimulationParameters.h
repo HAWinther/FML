@@ -32,8 +32,8 @@ namespace COLASOLVER {
     enum class ICInputType { PowerSpectrum, TransferFunction, TransferInfoFile };
     enum class RandomGeneratorType { GSL, MT19937 };
     enum class TimestepMethod { Quinn, Tassev, FastPM, BullFrog };
-    enum class ScaleFactorSpacing { Linear, Logarithmic, Powerlaw };
-    enum class ParticleFileFormat { GADGET, HDF5, FML };
+    enum class ScaleFactorSpacing { Linear, Logarithmic, Powerlaw, GrowthFactor };
+    enum class ParticleFileFormat { GADGET, HDF5 };
 
     //=============================================================================
     /// Reads parameters from a ParameterMap and remembers what was read so that
@@ -197,7 +197,7 @@ namespace COLASOLVER {
         TimestepMethod method;      // Quinn, Tassev (for COLA mainly), FastPM or BullFrog (see TimeStepping.h)
         std::string algorithm;      // KDK - Kick-Drift-Kick is the main method we use
         double cola_nLPT;           // nLPT. For method = Tassev
-        ScaleFactorSpacing spacing; // linear, logarithmic, powerlaw
+        ScaleFactorSpacing spacing; // linear, logarithmic, powerlaw, growthfactor
         double spacing_power{1.0};  // For spacing = powerlaw
     };
 
@@ -213,7 +213,8 @@ namespace COLASOLVER {
         bool enabled;                          // Compute power-spectrum when we output
         int nmesh;                             // The grid size to use for this
         bool interlacing;                      // Use interlacing for alias reduction?
-        bool subtract_shotnoise{true};         // Subtract shotnoise? (also used for P(k) every step)
+        bool subtract_shotnoise{false};        // Subtract shotnoise? (also used for P(k) every step)
+        bool every_step{true};                 // P(k) of the force density field at every step
         std::string density_assignment_method; // Density assignment method (NGP, CIC, ...)
     };
 
@@ -369,7 +370,8 @@ namespace COLASOLVER {
                          timestep.spacing,
                          {{"linear", ScaleFactorSpacing::Linear},
                           {"logarithmic", ScaleFactorSpacing::Logarithmic},
-                          {"powerlaw", ScaleFactorSpacing::Powerlaw}});
+                          {"powerlaw", ScaleFactorSpacing::Powerlaw},
+                          {"growthfactor", ScaleFactorSpacing::GrowthFactor}});
             if (timestep.spacing == ScaleFactorSpacing::Powerlaw)
                 r.get("timestep_spacing_power", timestep.spacing_power);
 
@@ -384,6 +386,7 @@ namespace COLASOLVER {
 
             // Power-spectrum
             r.get("pofk", pofk.enabled);
+            r.get("pofk_every_step", pofk.every_step);
             if (pofk.enabled) {
                 r.get("pofk_nmesh", pofk.nmesh);
                 r.get("pofk_interlacing", pofk.interlacing);
@@ -418,8 +421,7 @@ namespace COLASOLVER {
                 r.get_choice("output_fileformat",
                              output.fileformat,
                              {{"GADGET", ParticleFileFormat::GADGET},
-                              {"HDF5", ParticleFileFormat::HDF5},
-                              {"FML", ParticleFileFormat::FML}});
+                              {"HDF5", ParticleFileFormat::HDF5}});
             }
             r.get("output_folder", output.folder);
 

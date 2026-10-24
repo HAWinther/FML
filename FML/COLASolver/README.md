@@ -132,6 +132,19 @@ The code currently only does a second order leap-frog, but there are methods imp
 
 Without COLA, FastPM and BullFrog need far fewer steps than Quinn: with 10 steps from z = 19 they get P(k) at z = 0 to about 0.5% for k < 0.1 h/Mpc and 1-2% up to k = 0.5 h/Mpc, while Quinn is off by 7-12% (see `tests/check_timestepping.py`).
 
+The steps are placed by `timestep_scalefactor_spacing`: `linear` (the default), `logarithmic`, `powerlaw` (uniform in a^`timestep_spacing_power`) or `growthfactor` (uniform in the linear growth factor D(a), as used for BullFrog by Rampf, List & Hahn 2024). Steps uniform in D reduce the time-stepping error of BullFrog by 15-40% for the same number of steps (except at 5 steps from z = 19 on small scales), and help FastPM a little; the default is unchanged. Max |P(k)/P_ref - 1| at z = 0 (64^3 particles, 256 Mpc/h, 1x grid, `tests/check_timestepping.py`; the Big Bang rows use interlacing + TSC + deconvolution and a 60-step Big Bang reference):
+
+| Method, start                     | spacing      | 5 steps, k < 0.1 / 0.5 | 10 steps      | 20 steps      |
+|-----------------------------------|--------------|------------------------|---------------|---------------|
+| FastPM, 2LPT z = 19               | linear       | 1.3% / 4.9%            | 0.5% / 2.0%   | 0.2% / 0.7%   |
+| FastPM, 2LPT z = 19               | growthfactor | 1.2% / 5.8%            | 0.4% / 2.0%   | 0.1% / 0.6%   |
+| BullFrog, 2LPT z = 19             | linear       | 0.9% / 2.4%            | 0.4% / 1.3%   | 0.2% / 0.6%   |
+| BullFrog, 2LPT z = 19             | growthfactor | 0.7% / 2.5%            | 0.3% / 1.1%   | 0.1% / 0.4%   |
+| BullFrog, Zel'dovich z = 1e7      | linear       | 0.7% / 4.3%            | 0.4% / 2.6%   | 0.2% / 1.5%   |
+| BullFrog, Zel'dovich z = 1e7      | growthfactor | 0.6% / 2.6%            | 0.3% / 1.8%   | 0.1% / 1.0%   |
+
+Logarithmic spacing is a poor choice when starting at very high redshift (most steps are spent where nothing happens).
+
 ## The force grid, the gradient kernel and the lattice offset
 
 A force grid finer than the particle grid (force_nmesh = 2-4 x particle_Npart_1D) is the usual choice for
@@ -260,10 +273,12 @@ force (64^3 particles, 256 Mpc/h, 1x grid):
 So with an accurate early-time force the start from the Big Bang converges to the same answer as 2LPT initial
 conditions (with CIC it gets worse with more steps as more of them are taken while the force is inaccurate). With
 interlacing + TSC + deconvolution 10 steps from z = 1e7 give P(k) within 0.2% of the 6x grid reference up to
-k = 0.4 h/Mpc (table above). The growth factor tables start before the initial redshift when it is above z = 1e4 (with
-radiation in the background the growth equations are started with the matter-dominated growing mode, which is only
-approximate deep in the radiation era; switching radiation off changes the positions after the one step by 0.35% of
-the displacement).
+k = 0.4 h/Mpc (table above). The growth factor tables start before the initial redshift (and before a_eq/10 when
+there is radiation) with the growing mode of a matter + radiation universe (D1 = 1 + 3a/(2a_eq), Meszaros, and the
+corresponding 2LPT and 3LPT growing modes), so the growth factors are right also deep in the radiation era. NB: the
+Big Bang runs converge to a P(k) that differs from the 2LPT z = 19 runs by up to 0.4% for k < 0.1 h/Mpc and 3% at
+k = 0.5 h/Mpc (64^3, 1x grid, interlacing + TSC + deconvolution); which one is closer to the truth needs a test at
+higher resolution.
 
 ## Radiation, neutrinos and GR: the N-body gauge
 
@@ -291,11 +306,10 @@ For a start at z = 49 the effect on P(k) at z = 0 is about 2% at k = 1e-3 h/Mpc 
 massive neutrinos) and much less than 0.1% for k > 0.01 h/Mpc. `tests/check_nbody_gauge.py` checks that the
 simulation follows the linear N-body gauge evolution from CLASS on the largest scales.
 
-For the time-step spacing there are three options: linear, logarithmic or a powerlaw (free power) spacing in the scalefactor.
 
 # On the fly analysis
 
-The code can do a lot of calculations as we go ahead. First of all it outputs CDM+baryon and total matter power-spectrum for every step (since we have the density field in fourier space this is basically free). On top of that whenever we output we can:
+The code can do a lot of calculations as we go ahead. First of all it outputs CDM+baryon and total matter power-spectrum for every step (`pofk_every_step`, on by default; since we have the density field in fourier space this is basically free). These are written as `pofk_<name>_cb_z<z>.txt` (and `_total_` with massive neutrinos or the N-body gauge) in the output folder, together with linear theory. They use the force grid and the force density assignment (with the window deconvolved, but no interlacing), so they are accurate on large scales and dominated by aliasing above about half the Nyquist frequency of the force grid; use `pofk` at the outputs for an accurate P(k). Shot noise is subtracted if `pofk_subtract_shotnoise = true`. With force interlacing the unshifted copy of the particles is used. On top of that whenever we output we can:
 
 * Compute P(k) : Options: subtract shot-noise, use interlacing for alias reduction (allowing us to use a smaller grid), free choice of density assignment method (NGP, CIC, TSC, PCS, PQS, ...). Included in the output is also the linear theory predictions to easily be able to compare that.
 
@@ -311,7 +325,9 @@ The code can also be set to store the results from the output for post-processin
 
 # Output
 
-The fiducial fileformat for the particles is GADGET. If you want the standard gadget format (pos+vel+id) your particle must have an ID field (get/set_id) otherwise it will only output positions and velocities. With `output_fileformat = "HDF5"` the particles are written as GADGET HDF5 files (`gadget_zX.<task>.hdf5`, readable by e.g. h5py, yt, pynbody and GADGET-4). This needs the HDF5 library: compile with `make clean && make USE_HDF5=true` (set `HDF5_INCLUDE` and `HDF5_LIB` in `../Makefile.local` if HDF5 is not in `$(HOME)/local`). Reading particles (`ic_reconstruct_gadgetfilepath`) works for both binary and HDF5 GADGET files; the format is detected from the file names. The other option is to output in the internal format. This will dump all the data in the particles to disk and can easily be ready again by the library (see MPIParticles).
+The fiducial fileformat for the particles is GADGET. If you want the standard gadget format (pos+vel+id) your particle must have an ID field (get/set_id) otherwise it will only output positions and velocities. With `output_fileformat = "HDF5"` the particles are written as GADGET HDF5 files (`gadget_zX.<task>.hdf5`, readable by e.g. h5py, yt, pynbody and GADGET-4). This needs the HDF5 library: compile with `make clean && make USE_HDF5=true` (set `HDF5_INCLUDE` and `HDF5_LIB` in `../Makefile.local` if HDF5 is not in `$(HOME)/local`). Reading particles (`ic_reconstruct_gadgetfilepath`) works for both binary and HDF5 GADGET files; the format is detected from the file names. (The old `output_fileformat = "FML"`, a raw dump of the particles that could only be read back with the same particle type and number of tasks, has been removed.)
+
+The lightcone particles can be written as ascii (`plc_output_asciifile`), binary GADGET (`plc_output_gadgetfile`) or GADGET HDF5 files (`plc_output_hdf5file`, needs USE_HDF5): `lightcone_<name>/lightcone_cb_hdf5_step<N>[_batch<B>].<task>.hdf5`, one set per step. In all formats the positions are comoving in Mpc/h (not wrapped into the box) and the velocities are peculiar velocities in km/s; the header time is the middle of the step's crossing scale factors.
 
 # External libraries: 
 

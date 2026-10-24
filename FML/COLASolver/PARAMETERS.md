@@ -89,7 +89,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `timestep_algorithm` | string | `"KDK"` | always | The time-stepping algorithm |
 | `timestep_method` | string | `"Quinn"` | always | The time-stepping method. Quinn: standard leapfrog. Tassev: modified leapfrog for COLA. FastPM: leapfrog that follows linear growth exactly (Feng et al. 2016). BullFrog: follows 2LPT growth after every step (Rampf, List & Hahn 2024), not for COLA. Options: `Quinn`, `Tassev`, `FastPM`, `BullFrog` |
 | `timestep_cola_nLPT` | double | `-2.5` | always | The nLPT parameter of the Tassev time-stepping |
-| `timestep_scalefactor_spacing` | string | `"linear"` | always | Spacing of the steps in the scale factor (powerlaw: uniform in a^timestep_spacing_power). Options: `linear`, `logarithmic`, `powerlaw` |
+| `timestep_scalefactor_spacing` | string | `"linear"` | always | Spacing of the steps in the scale factor (powerlaw: uniform in a^timestep_spacing_power, growthfactor: uniform in the linear growth factor D(a), as in Rampf, List & Hahn 2024). Options: `linear`, `logarithmic`, `powerlaw`, `growthfactor` |
 | `timestep_spacing_power` | double | `1` | timestep_scalefactor_spacing = powerlaw | The steps are uniform in a^power |
 
 ## Initial conditions
@@ -160,6 +160,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `plc_ndim_rep` | int | `0` | lightcone = true | Number of dimensions with replicas in both directions (3D: 0 = octant, 3 = full sky) |
 | `plc_output_gadgetfile` | bool | `false` | lightcone = true | Output the lightcone particles in GADGET format |
 | `plc_output_asciifile` | bool | `false` | lightcone = true | Output the lightcone particles in ascii |
+| `plc_output_hdf5file` | bool | `false` | lightcone = true | Output the lightcone particles as GADGET HDF5 files (needs USE_HDF5; positions in Mpc/h, peculiar velocities in km/s) |
 | `plc_output_in_batches` | bool | `false` | lightcone = true | Output in batches to save memory |
 | `plc_make_onion_density_maps` | bool | `false` | lightcone = true | Make (Healpix) density maps delta(z, theta) |
 | `plc_nside` | int | `256` | lightcone = true and plc_make_onion_density_maps = true | Healpix nside of the maps (npix = 12 nside^2) |
@@ -174,7 +175,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `output_folder` | string | *required* | always | Folder to put the output in ("" is the current folder) |
 | `output_redshifts` | double list | *required* | always | The output redshifts (decreasing) |
 | `output_particles` | bool | `true` | always | Write the particles at the output redshifts |
-| `output_fileformat` | string | `"GADGET"` | always | File format for the particles. GADGET: binary GADGET files. HDF5: GADGET HDF5 files (compile with USE_HDF5=true). FML: raw dump of the particles (can be read back by FML). Options: `GADGET`, `HDF5`, `FML` |
+| `output_fileformat` | string | `"GADGET"` | always | File format for the particles. GADGET: binary GADGET files. HDF5: GADGET HDF5 files (compile with USE_HDF5=true). Options: `GADGET`, `HDF5` |
 
 ## Halo finding
 
@@ -191,6 +192,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | Parameter | Type | Default | Used when | Description |
 |---|---|---|---|---|
 | `pofk` | bool | `false` | always | Compute the power-spectrum at every output |
+| `pofk_every_step` | bool | `true` | always | Write P(k) of the density field used for the force at every step (cheap; same grid and assignment as the force, the window is deconvolved): pofk_<name>_cb_z<z>.txt in output_folder |
 | `pofk_nmesh` | int | `0` | pofk = true | Grid size |
 | `pofk_interlacing` | bool | `false` | pofk = true | Use interlaced grids to reduce aliasing |
 | `pofk_subtract_shotnoise` | bool | `false` | pofk = true | Subtract shot-noise |

@@ -198,9 +198,12 @@ namespace FML {
             /// For memory logging add a tag to the vector we have allocated
             void add_memory_label(std::string name);
 
-            /// Dump data to file (internal format)
+            /// Dump data to file (internal format: a raw copy of the particles, one file fileprefix.X per task).
+            /// Meant for checkpointing within the same program: the files can only be read back with
+            /// load_from_file using the same particle type, the same number of tasks and the same machine
+            /// architecture. For portable output use e.g. GADGET (HDF5) files (GadgetUtils)
             void dump_to_file(std::string fileprefix, size_t max_bytesize_buffer = 100 * 1000 * 1000);
-            /// Load data from file (internal format)
+            /// Load data written by dump_to_file (same particle type and number of tasks)
             void load_from_file(std::string fileprefix);
 
             /// Show some info about the class

@@ -4,7 +4,7 @@
 #
 # Runs the same simulation (64^3 particles, Box = 256 Mpc/h, z = 19 -> 0,
 # no COLA unless stated) with the different time-stepping methods and a
-# few number of steps, and compares P(k) at z = 0 to a reference run with
+# few number of steps (-D: steps uniform in the growth factor instead of in a), and compares P(k) at z = 0 to a reference run with
 # many steps. Prints the max relative difference on large scales
 # (k < 0.1 h/Mpc) and up to k = 0.5 h/Mpc.
 #
@@ -60,6 +60,11 @@ runs = {"reference": dict(timestep_method="Quinn", timestep_nsteps=[args.nref])}
 for method in ["Quinn", "FastPM", "BullFrog"]:
     for n in NSTEPS:
         runs[f"{method}_{n}"] = dict(timestep_method=method, timestep_nsteps=[n])
+    # Steps uniform in the growth factor D(a) instead of in a
+    if method != "Quinn":
+        for n in NSTEPS:
+            runs[f"{method}-D_{n}"] = dict(timestep_method=method, timestep_nsteps=[n],
+                                           timestep_scalefactor_spacing="growthfactor")
 for n in NSTEPS:
     runs[f"COLA-Tassev_{n}"] = dict(timestep_method="Tassev", timestep_nsteps=[n], simulation_use_cola=True)
     runs[f"COLA-FastPM_{n}"] = dict(timestep_method="FastPM", timestep_nsteps=[n], simulation_use_cola=True)
@@ -100,7 +105,7 @@ print(f"Max |P(k)/P_ref(k) - 1| at z = 0 (reference: Quinn with {args.nref} step
 print(f"{'method':<14}" + "".join(f"{n:>8} steps" for n in NSTEPS))
 for label, kmask in [("k < 0.1 h/Mpc", large), ("k < 0.5 h/Mpc", mid)]:
     print(f"\n{label}")
-    for method in ["Quinn", "FastPM", "BullFrog", "COLA-Tassev", "COLA-FastPM"]:
+    for method in ["Quinn", "FastPM", "FastPM-D", "BullFrog", "BullFrog-D", "COLA-Tassev", "COLA-FastPM"]:
         print(f"{method:<14}" + "".join(f"{100 * maxdiff(f'{method}_{n}', kmask):>12.2f}%" for n in NSTEPS))
 print()
 

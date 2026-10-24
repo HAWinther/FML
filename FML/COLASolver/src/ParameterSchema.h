@@ -333,8 +333,9 @@ namespace COLASOLVER {
             b.optional("timestep_cola_nLPT", -2.5, "The nLPT parameter of the Tassev time-stepping");
             b.optional("timestep_scalefactor_spacing",
                        "linear",
-                       "Spacing of the steps in the scale factor (powerlaw: uniform in a^timestep_spacing_power)",
-                       {"linear", "logarithmic", "powerlaw"});
+                       "Spacing of the steps in the scale factor (powerlaw: uniform in a^timestep_spacing_power, "
+                       "growthfactor: uniform in the linear growth factor D(a), as in Rampf, List & Hahn 2024)",
+                       {"linear", "logarithmic", "powerlaw", "growthfactor"});
             b.when(is_one_of("timestep_scalefactor_spacing", {"powerlaw"}),
                    "timestep_scalefactor_spacing = powerlaw",
                    [&]() { b.optional("timestep_spacing_power", 1.0, "The steps are uniform in a^power"); });
@@ -523,6 +524,10 @@ namespace COLASOLVER {
                            "Number of dimensions with replicas in both directions (3D: 0 = octant, 3 = full sky)");
                 b.optional("plc_output_gadgetfile", false, "Output the lightcone particles in GADGET format");
                 b.optional("plc_output_asciifile", false, "Output the lightcone particles in ascii");
+                b.always_optional("plc_output_hdf5file",
+                                  false,
+                                  "Output the lightcone particles as GADGET HDF5 files (needs USE_HDF5; positions in "
+                                  "Mpc/h, peculiar velocities in km/s)");
                 b.optional("plc_output_in_batches", false, "Output in batches to save memory");
                 b.optional("plc_make_onion_density_maps", false, "Make (Healpix) density maps delta(z, theta)");
                 if_true("plc_make_onion_density_maps", [&]() {
@@ -541,8 +546,8 @@ namespace COLASOLVER {
             b.optional("output_fileformat",
                        "GADGET",
                        "File format for the particles. GADGET: binary GADGET files. HDF5: GADGET HDF5 files "
-                       "(compile with USE_HDF5=true). FML: raw dump of the particles (can be read back by FML)",
-                       {"GADGET", "HDF5", "FML"});
+                       "(compile with USE_HDF5=true)",
+                       {"GADGET", "HDF5"});
 
             b.section("Halo finding");
             b.optional("fof", false, "Locate friends-of-friends halos at every output");
@@ -559,6 +564,11 @@ namespace COLASOLVER {
 
             b.section("Power-spectrum");
             b.optional("pofk", false, "Compute the power-spectrum at every output");
+            b.always_optional("pofk_every_step",
+                              true,
+                              "Write P(k) of the density field used for the force at every step (cheap; same grid "
+                              "and assignment as the force, the window is deconvolved): pofk_<name>_cb_z<z>.txt in "
+                              "output_folder");
             if_true("pofk", [&]() {
                 b.optional("pofk_nmesh", 0, "Grid size");
                 b.optional("pofk_interlacing", false, "Use interlaced grids to reduce aliasing");

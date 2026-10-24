@@ -36,10 +36,11 @@ reduced bispectrum increases with fNL.
 ## Time-stepping (`check_timestepping.py`)
 
 ```bash
-python3 tests/check_timestepping.py ./nbody /tmp/timestepping   # about 4 minutes, needs numpy
+python3 tests/check_timestepping.py ./nbody /tmp/timestepping   # about 15 minutes, needs numpy
 ```
 
 Runs the same simulation (64^3, z = 19 -> 0) with all the time-stepping methods and 5, 10, 20 and 40 steps
+(FastPM and BullFrog also with steps uniform in the growth factor, `-D`)
 and prints how far P(k) at z = 0 is from a reference run with 200 steps. Checks that FastPM and BullFrog
 get large scales right with few steps and that all methods converge.
 
