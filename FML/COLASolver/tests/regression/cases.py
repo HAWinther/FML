@@ -204,7 +204,7 @@ CASES = {
         force_nbody_gauge=True,
         force_nbody_gauge_filename=INPUT + "/nbody_gauge_lcdm/nbgauge_extra.txt",
     ),
-    # Force grid finer than the particle grid (the fiducial gradient kernel is then discrete_2pt), PCS
+    # Force grid finer than the particle grid (the fiducial gradient kernel is then discrete_4pt and the lattice is offset), PCS
     "fine_force_grid": dict(
         force_nmesh=64,
         force_density_assignment_method="PCS",

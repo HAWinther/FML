@@ -14,7 +14,8 @@
 #  - All methods converge to the reference: < 1.5% for k < 0.5 h/Mpc with 40 steps
 #
 # The force grid is the same as the particle grid (64^3) by default. With FORCE_NMESH=128
-# the errors are smaller still (e.g. BullFrog with 5 steps: 0.08% for k < 0.1 h/Mpc)
+# (fiducial settings: discrete_4pt kernel, half-cell lattice offset) the errors for k < 0.1 h/Mpc
+# are e.g. BullFrog 0.26% / 0.08% and FastPM 1.5% / 0.5% with 5 / 10 steps
 #
 # Usage: python3 check_timestepping.py <path/to/nbody> <outdir> [--nref 200]
 #   MPIRUN      : how to launch (default "mpirun -np 2"; MPIRUN="" for a serial build)

@@ -61,10 +61,11 @@ own linear theory (the PM force resolution slows the growth by about 0.5% at thi
 python3 tests/check_force_grid.py ./nbody /tmp/forcegrid   # about 20 s, needs numpy
 ```
 
-A linear (tiny amplitude) run with a force grid twice the particle grid. With the continuous gradient
-kernel the regular particle lattice of the initial conditions gives spurious forces and the growth of the
-individual large-scale modes scatters by 40-70%; with the fiducial kernel (discrete_2pt when the force grid
-is finer than the particle grid) the growth is right to < 1% with < 2% scatter.
+A linear (tiny amplitude) run with a force grid twice the particle grid (GRID_FACTOR=3 or 4 for other
+ratios). With the continuous gradient kernel and the particles on the grid nodes the regular particle
+lattice of the initial conditions gives spurious forces and the growth of the individual large-scale modes
+scatters by 40-70%; with the fiducial settings (half-cell lattice offset, discrete_4pt kernel up to 3x and discrete_2pt beyond) the growth on
+the largest scales is right to < 1.5% with < 1% scatter between modes.
 
 ## Regression tests (`regression/`)
 

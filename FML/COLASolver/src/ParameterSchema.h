@@ -422,7 +422,8 @@ namespace COLASOLVER {
             b.optional("force_gradient_kernel",
                        "fiducial",
                        "Kernel for D when computing the forces. fiducial = continuous if force_nmesh = "
-                       "particle_Npart_1D and discrete_2pt if force_nmesh is larger (the continuous kernel gives "
+                       "particle_Npart_1D, discrete_4pt if force_nmesh is up to 3x larger and discrete_2pt if it is even "
+                       "larger (the continuous kernel gives "
                        "spurious forces from the particle lattice when the force grid is finer than it)",
                        kernels);
             b.optional("force_linear_massive_neutrinos",

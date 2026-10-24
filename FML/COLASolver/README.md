@@ -132,33 +132,44 @@ The code currently only does a second order leap-frog, but there are methods imp
 
 Without COLA, FastPM and BullFrog need far fewer steps than Quinn: with 10 steps from z = 19 they get P(k) at z = 0 to about 0.5% for k < 0.1 h/Mpc and 1-2% up to k = 0.5 h/Mpc, while Quinn is off by 7-12% (see `tests/check_timestepping.py`).
 
-## The force grid and the gradient kernel
+## The force grid, the gradient kernel and the lattice offset
 
 A force grid finer than the particle grid (force_nmesh = 2-4 x particle_Npart_1D) is the usual choice for
-COLA. Then the regular particle lattice of the initial conditions puts power just below the Nyquist frequency of
-the force grid. With the continuous gradient kernel (D = ik), which is large there, this gives spurious forces:
-the growth of individual large-scale modes is off by tens of percent and there is too much small-scale power
-(+10% at k = 0.2 h/Mpc for 64^3 particles in 256 Mpc/h with a 128^3 grid). The two-point finite difference
-kernel sin(k dx)/dx removes this, so the fiducial gradient kernel is discrete_2pt when force_nmesh >
-particle_Npart_1D and continuous otherwise (where it is the more accurate one). With this P(k) converges
-smoothly with the grid size (-1.9%, +0.5%, +0.2% at k = 0.2 h/Mpc for 2, 3, 4 x the particle grid), and few-step
-time-stepping is much more accurate on a finer grid. See `tests/check_force_grid.py`.
+COLA. Then the regular particle lattice of the initial conditions shows up in the forces. With an integer
+ratio m = force_nmesh / particle_Npart_1D the particles start exactly on the nodes of the force grid, where
+the CIC kernel has a kink, so the assigned density responds to the *size* of the displacement: a rectified
+signal at the lattice frequency, which is the grid Nyquist frequency for m = 2 and lies below it for m >= 3.
+With the continuous gradient kernel (D = ik), which is large near Nyquist, this gives spurious forces: the
+growth of individual large-scale modes is off by tens of percent and there is too much small-scale power.
 
-For a force grid 3 x (or more) the particle grid the lattice also shows up below the Nyquist frequency, where
-the gradient kernel does not suppress it. With CIC assignment a linear test (64^3 particles, 1000 Mpc/h, 192^3 grid)
-then has +2% too much growth and 7% scatter between modes at k = 0.05 h/Mpc (30% scatter with the continuous
-kernel); TSC assignment (force_density_assignment_method = "TSC") removes this (-0.1%, 1.9%). The nonlinear P(k)
-is fine with both (within 0.5% of a 4x grid up to k = 0.2 h/Mpc), so TSC is recommended for 3x grids if the
-largest scales matter.
+The fiducial settings when force_nmesh > particle_Npart_1D therefore are:
+- `ic_lattice_offset = "fiducial"`: the particle lattice is moved by half a force-grid cell, off the nodes,
+  which removes the rectified signal for any assignment method (TSC and PCS are smooth at the nodes anyway).
+- `force_gradient_kernel = "fiducial"`: a finite difference kernel, which vanishes at the Nyquist frequency:
+  the four-point kernel (discrete_4pt) for force grids up to 3x the particle grid and the two-point kernel
+  (discrete_2pt) for finer grids. (With the grid = particle grid the fiducial kernel is the continuous one.)
 
-The reason is that with an integer ratio m = force_nmesh / particle_Npart_1D the particles start exactly on the
-nodes of the force grid, where the CIC kernel has a kink. The assigned density then responds to the *size* of
-the displacement (a rectified signal at the lattice frequency, which is the grid Nyquist frequency for m = 2 and
-lies below it for m >= 3). TSC and PCS are smooth at the nodes and do not have this problem. With
-ic_lattice_offset = "fiducial" (the default) the particle lattice is therefore moved by half a force-grid cell
-when force_nmesh > particle_Npart_1D, which removes the rectified term for any assignment method; in the linear
-test above the scatter between modes drops to the 0.1-2% level. Use ic_lattice_offset = "none" for the old
-behaviour. This option is new and its effect on the nonlinear P(k) is still being benchmarked.
+Tests with 64^3 particles, CIC: P(k) at z = 0 in 256 Mpc/h relative to runs with a 6x grid and TSC (with the
+2pt and 4pt kernels, which agree to 0.2% / 0.5% at k = 0.2 / 0.4 h/Mpc), and the growth of the modes at
+k = 0.028 / 0.053 h/Mpc relative to linear theory in 1000 Mpc/h (`tests/check_force_grid.py`):
+
+| Force grid | Settings                     | P(k), k = 0.2 / 0.4 h/Mpc | Linear growth, k = 0.028 / 0.053 |
+|------------|------------------------------|---------------------------|----------------------------------|
+| 2x         | on nodes, continuous         | +10% / +14%               | 40-70% scatter                   |
+| 2x         | on nodes, discrete_2pt       | -1.8% / -5.1%             | +0.3% / +1.0%                    |
+| 2x         | offset, discrete_2pt         | -1.3% / -5.3%             | -1.3% / -4.3%                    |
+| 2x         | offset, discrete_4pt (fid.)  | +0.9% / +0.8%             | -0.6% / -2.0%                    |
+| 3x         | on nodes, discrete_2pt       | +0.7% / +0.8%             | +1.1% / +2.7% (7% scatter)       |
+| 3x         | offset, discrete_2pt         | +0.6% / +0.9%             | -0.4% / -1.3%                    |
+| 3x         | offset, discrete_4pt (fid.)  | -0.1% / -0.3%             | -0.4% / -1.4%                    |
+| 4x         | offset, discrete_4pt         | -0.4% / -1.6%             | -0.9% / -3.2%                    |
+| 4x         | offset, discrete_2pt (fid.)  | +0.3% / +0.3%             | -0.6% / -2.0%                    |
+
+The remaining ~1-2% scatter between modes at k ~ 0.05 h/Mpc in the linear test is the discreteness of the
+particles themselves (it is the same with TSC on a grid equal to the particle grid). Use
+ic_lattice_offset = "none" and force_gradient_kernel = "discrete_2pt" for the previous behaviour. With the
+continuous kernel a 2x grid is wrong (+10% at k = 0.2 h/Mpc) even with the offset. Deconvolving the
+assignment window in the force amplifies the lattice noise and does not help.
 
 ## Radiation, neutrinos and GR: the N-body gauge
 

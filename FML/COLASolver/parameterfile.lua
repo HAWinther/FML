@@ -283,6 +283,9 @@ ic_reverse_phases = false
 ic_random_field_type = "gaussian"
 -- The grid-size used to generate the IC
 ic_nmesh = particle_Npart_1D
+-- Offset of the particle lattice from the force grid nodes: fiducial (half a force-grid cell if
+-- force_nmesh > particle_Npart_1D, see README), none, half_force_cell
+ic_lattice_offset = "fiducial"
 -- For MG: input LCDM P(k) and use GR to scale back and ensure same IC as for LCDM
 -- ONLY use this if you don't have the P(k) for the MG model or if you want to consider PMG/PLCDM run with same IC at high z
 ic_use_gravity_model_GR = false
@@ -354,7 +357,8 @@ force_density_assignment_method = "CIC"
 -- Options: (fiducial = continuous, discrete_2pt, discrete_4pt)
 force_greens_function_kernel = "fiducial"
 -- The kernel to use for D when computing forces (with fourier)
--- Options: (fiducial = continuous, discrete_2pt, discrete_4pt)
+-- Options: fiducial (= continuous; discrete_4pt if particle_Npart_1D < force_nmesh <= 3 particle_Npart_1D;
+--          discrete_2pt for finer grids), continuous, discrete_2pt, discrete_4pt
 force_gradient_kernel = "fiducial"
 -- Include the effects of massive neutrinos when computing
 -- the density field (density of mnu is the linear prediction)

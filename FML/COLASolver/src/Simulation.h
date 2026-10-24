@@ -211,13 +211,16 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
     // the same as the particle grid. When the force grid is finer the regular particle lattice (of the IC) puts
     // power just below the Nyquist frequency of the grid where ik is large, which gives large spurious forces
     // (tens of percent errors in the growth of individual large-scale modes and too much small-scale power).
-    // The two-point finite difference kernel sin(k dx)/dx suppresses this so we use it then
+    // The finite difference kernels (which vanish at the Nyquist frequency) suppress this. Together with the
+    // half-cell lattice offset (ic_lattice_offset = fiducial) the four-point kernel gives the most accurate
+    // nonlinear P(k) for force grids up to 3 times the particle grid and the two-point kernel for finer grids
+    // (see the README)
     std::string gradient_kernel = params.force.gradient_kernel;
     if ((gradient_kernel == "fiducial" or gradient_kernel == "") and params.force.nmesh > params.particle.Npart_1D) {
-        gradient_kernel = "discrete_2pt";
+        gradient_kernel = params.force.nmesh <= 3 * params.particle.Npart_1D ? "discrete_4pt" : "discrete_2pt";
         if (FML::ThisTask == 0)
-            std::cout << "NB: force_nmesh > particle_Npart_1D so we use force_gradient_kernel = discrete_2pt "
-                         "(set force_gradient_kernel = continuous to use the continuous kernel)\n";
+            std::cout << "NB: force_nmesh > particle_Npart_1D so we use force_gradient_kernel = " << gradient_kernel
+                      << " (set force_gradient_kernel to continuous, discrete_2pt or discrete_4pt to change this)\n";
     }
     FML::NBODY::set_fiducial_gradient_kernel(gradient_kernel);
 
