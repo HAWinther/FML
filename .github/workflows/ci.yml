@@ -1,0 +1,38 @@
+# Build the library examples, run the library tests and build COLASolver on every push and pull request
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++ make openmpi-bin libopenmpi-dev \
+            libfftw3-dev libfftw3-mpi-dev libgsl-dev liblua5.4-dev libhdf5-dev python3-numpy
+
+      - name: Machine settings (Makefile.local)
+        run: cp .github/ci/Makefile.local FML/Makefile.local
+
+      - name: Build the examples
+        run: make -C FML examples -j4
+
+      - name: Library tests (1, 2 and 4 MPI tasks)
+        run: make -C FML test MPIRUN="mpirun --oversubscribe" NP_LIST="1 2 4"
+
+      - name: Build COLASolver (with HDF5)
+        run: make -C FML/COLASolver -j4 USE_HDF5=true
+
+      - name: PARAMETERS.md is up to date with the parameter schema
+        run: |
+          cd FML/COLASolver
+          mpirun --oversubscribe -np 1 ./nbody --parameters /tmp/PARAMETERS.md
+          diff -u PARAMETERS.md /tmp/PARAMETERS.md

@@ -60,8 +60,13 @@ Triangulation/example/voronoi
 Units/example/units
 tests/test_core
 tests/test_grid_tools
+COLASolver/nbody_nohdf5
+GadgetUtils/example/testhdf5
 */example/test
 */examples/test
+
+# Output written by examples and tests
+GadgetUtils/example/output_testhdf5/
 
 # Machine specific build settings
 Makefile.local
@@ -74,3 +79,10 @@ Makefile.local
 .DS_Store
 .vscode/
 .idea/
+
+# Local working files (backups and sync files from the cleanup rounds, notes)
+_backup_before_*.tar
+fml_*.zip
+.sync_md5_device.txt
+Claude outputs/
+DEVELOP/

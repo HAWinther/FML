@@ -1,0 +1,7 @@
+# Machine settings for the GitHub Actions runners (Ubuntu packages)
+LOCAL_PREFIX = /usr
+CXXFLAGS     = -O2 -Wall -Wextra
+LUA_INCLUDE  = /usr/include/lua5.4
+LUA_LINK     = -llua5.4 -ldl
+HDF5_INCLUDE = /usr/include/hdf5/serial
+HDF5_LIB     = /usr/lib/x86_64-linux-gnu/hdf5/serial

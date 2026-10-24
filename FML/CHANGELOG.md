@@ -1,0 +1,76 @@
+# Changelog
+
+All notable changes to FML. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+The entries below are relative to upstream commit `f9f666a` (April 2026).
+
+## [Unreleased]
+
+### COLASolver: accurate forces on a grid equal to the particle grid (experimental)
+- `force_early_method` (`none`, `nufft`, `interlaced`) with `force_early_until_redshift`: use an accurate force only
+  at early times, when the particles are close to the lattice and CIC is least accurate.
+- `force_interlacing_order`: compute the force for several copies of the particles shifted by a fraction of a cell
+  and average it at the particles (cancels the leading aliasing of the assignment and the interpolation).
+- `force_deconvolve_window`: divide the force by W(k)^2. Stable together with interlacing. TSC or PCS with two
+  interlaced grids and deconvolution gives close to the P(k) of a much finer grid on a 1x grid.
+- `force_density_method` (`assignment`, `nufft`, `sheet`, `sheet_nufft`) and `force_interpolation_method`
+  (`fiducial`, `assignment`, `nufft`): exact density and force with non-uniform FFTs, and spectral sheet
+  interpolation. `force_nufft_epsilon`, `force_sheet_refinement`.
+- A warning when these options are used with a force grid finer than the particle grid (they amplify the
+  discreteness of the particles there).
+- Starting from (almost) the Big Bang with BullFrog: `ic_LPT_order = 1` and e.g. `ic_initial_redshift = 1e7`
+  (the growth factor tables now start before the initial redshift).
+- New particle type `ParticleBasicQ` (stores the Lagrangian position, needed for sheet interpolation).
+- README section with accuracy and cost tables. Regression cases `nufft_force`, `sheet_nufft_force`,
+  `interlaced_force`, `bullfrog_bigbang`, `early_force_switch`.
+
+### COLASolver: force grid finer than the particle grid
+- The continuous gradient kernel gives large spurious forces from the particle lattice when
+  `force_nmesh > particle_Npart_1D`. The fiducial gradient kernel is now `discrete_4pt` for force grids up to 3x
+  the particle grid and `discrete_2pt` for finer grids (continuous for grid = particle grid).
+- `ic_lattice_offset` (`fiducial`, `none`, `half_force_cell`): by default the particle lattice is offset by half a
+  force-grid cell when the force grid is finer (particles on the grid nodes make CIC respond to the size of the
+  displacement). `tests/check_force_grid.py`, regression case `fine_force_grid`.
+- **Changes results** for runs with `force_nmesh > particle_Npart_1D` (P(k) is much more accurate). Use
+  `ic_lattice_offset = "none"` and `force_gradient_kernel = "discrete_2pt"` (or `"continuous"`) for the old
+  behaviour.
+
+### COLASolver: new features
+- Time-stepping methods `FastPM` and `BullFrog` (Rampf, List & Hahn 2024) in `TimeStepping.h`;
+  `tests/check_timestepping.py`.
+- GADGET HDF5 snapshots: read and write (`USE_HDF5`, `output_fileformat = "HDF5"`, HDF5 initial conditions are
+  detected automatically), `GadgetUtils/GadgetUtilsHDF5.h`, `./nbody --features`.
+- N-body gauge (radiation, massive neutrinos and GR on large scales): `force_nbody_gauge`,
+  `scripts/make_nbody_gauge_transfer.py` (CLASS via classy), `src/NBodyGauge.h`, scale-dependent initial
+  velocities; `tests/check_nbody_gauge.py`.
+- Parameter schema (`src/ParameterSchema.h`): one table of all parameters with defaults, validation, warnings for
+  unknown keys and `./nbody --parameters PARAMETERS.md` to write the reference.
+- Model registry (`src/Models.h`) and smaller particle types chosen automatically (`src/Particles.h`).
+
+### COLASolver: refactoring and tests
+- `Simulation.h` split into `SimulationParameters.h`, `TimeStepping.h`, `InitialPowerSpectrum.h`,
+  `InitialConditions.h`, `ExternalIC.h`; COLA state in `COLA.h`.
+- Regression suite (`tests/regression`: `run.sh`, `cases.py`, `compare.py`).
+- MG-PICOLA accuracy tests revived (`tests/run_accuracy_tests.sh`), `tests/check_nongaussian.py`.
+
+### Library
+- `NUFFT/NUFFT.h`: non-uniform FFTs (type 1 and 2, MPI and OpenMP), density and force helpers.
+- `Interpolation/SheetInterpolation.h`: spectral sheet interpolation of the displacement field.
+- `GRID::shift_grid_fourier`, `shift_grid_real`, `PARTICLE::shift_particles`,
+  `INTERPOLATION::generate_interlacing_shifts` and `particles_to_fourier_grid_interlaced` (interlacing of any order).
+- `tests/test_grid_tools.cpp`.
+- Faster particle assignment with one thread (no atomic adds).
+
+### Build system
+- One shared `Makefile.config` included by all Makefiles, machine settings in `Makefile.local` (not tracked).
+- Top-level `make examples | examples-extra | python | test | clean`; `tests/test_core.cpp`.
+- `.gitignore`, `.clang-format`, typo fixes (the FFTWGrid methods `create_wisdow`, `load_wisdow`, `save_wisdow` are renamed `create_wisdom`, `load_wisdom`, `save_wisdom`).
+
+### Fixed
+- Non-gaussian initial conditions gave NaN.
+- `FFTWGrid::reallocate`; integer overflow in `get_index_real/fourier` for large grids.
+- Out-of-bounds write in `MPIParticles::create`; check for unwrapped particles and bounds in the task search;
+  communication of more than 2 GB of particles.
+- Lambda in `FUNS` (Global.h); per-thread spline accelerators.
+- Uninitialized GADGET header padding; EuclidEmulator2 boost above z = 10.
+- Reductions with `MPI_Allreduce`, FFTW plan cache, `MPI_Alltoall` counts, ODESolver memory leak, no global
+  `using namespace` in the multigrid solver headers.

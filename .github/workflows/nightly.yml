@@ -1,0 +1,73 @@
+# Longer accuracy checks of COLASolver, every night and on demand
+name: Nightly accuracy checks
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  accuracy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      MPIRUN: mpirun --oversubscribe -np 2
+      OUT: ${{ github.workspace }}/nightly
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++ make openmpi-bin libopenmpi-dev \
+            libfftw3-dev libfftw3-mpi-dev libgsl-dev liblua5.4-dev libhdf5-dev python3-numpy python3-scipy \
+            python3-pip cython3
+          # CLASS (python wrapper) for the N-body gauge check
+          pip3 install --break-system-packages classy
+
+      - name: Build COLASolver
+        run: |
+          cp .github/ci/Makefile.local FML/Makefile.local
+          make -C FML/COLASolver -j4 USE_HDF5=true
+
+      - name: Library tests
+        if: always()
+        run: make -C FML test MPIRUN="mpirun --oversubscribe" NP_LIST="1 2 4"
+
+      - name: Regression cases run and are reproducible (two identical runs)
+        if: always()
+        run: |
+          cd FML/COLASolver/tests/regression
+          ./run.sh ../../nbody "$OUT/regression1"
+          ./run.sh ../../nbody "$OUT/regression2"
+          python3 compare.py "$OUT/regression1" "$OUT/regression2"
+
+      - name: Accuracy vs MG-PICOLA
+        if: always()
+        run: FML/COLASolver/tests/run_accuracy_tests.sh FML/COLASolver/nbody "$OUT/accuracy"
+
+      - name: Non-gaussian initial conditions
+        if: always()
+        run: python3 FML/COLASolver/tests/check_nongaussian.py FML/COLASolver/nbody "$OUT/nongaussian"
+
+      - name: Force grid 2x and 3x the particle grid
+        if: always()
+        run: |
+          GRID_FACTOR=2 python3 FML/COLASolver/tests/check_force_grid.py FML/COLASolver/nbody "$OUT/forcegrid2"
+          GRID_FACTOR=3 python3 FML/COLASolver/tests/check_force_grid.py FML/COLASolver/nbody "$OUT/forcegrid3"
+
+      - name: Time-stepping
+        if: always()
+        run: python3 FML/COLASolver/tests/check_timestepping.py FML/COLASolver/nbody "$OUT/timestepping"
+
+      - name: N-body gauge
+        if: always()
+        run: python3 FML/COLASolver/tests/check_nbody_gauge.py FML/COLASolver/nbody "$OUT/nbgauge"
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-logs
+          path: nightly/**/log.txt
+          retention-days: 14
