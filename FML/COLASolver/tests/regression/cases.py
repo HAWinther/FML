@@ -323,6 +323,34 @@ CASES = {
         ic_input_redshift=20.0,
         output_fileformat="HDF5",
     ),
+    # Massive neutrinos as particles (delta-f) with 0.4 eV, IC from the transfer functions at zini
+    "neutrino_particles": dict(
+        particle_neutrinos=True,
+        simulation_use_cola=False,
+        timestep_method="Quinn",
+        cosmology_OmegaMNu=0.0095,
+        cosmology_OmegaCDM=0.259,
+        force_linear_massive_neutrinos=False,
+        ic_type_of_input="transferinfofile",
+        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.4_zmax200.txt",
+        ic_input_redshift=20.0,
+    ),
+    # CDM, baryons and (fewer) neutrino particles without delta-f weights, HDF5 output (needs USE_HDF5)
+    "neutrino_particles_baryons_hdf5": dict(
+        particle_neutrinos=True,
+        particle_neutrino_Npart_1D=16,
+        particle_neutrino_deltaf=False,
+        particle_baryons=True,
+        simulation_use_cola=False,
+        timestep_method="Quinn",
+        cosmology_OmegaMNu=0.0024,
+        cosmology_OmegaCDM=0.2661,
+        force_linear_massive_neutrinos=False,
+        ic_type_of_input="transferinfofile",
+        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.1_zmax200.txt",
+        ic_input_redshift=20.0,
+        output_fileformat="HDF5",
+    ),
     # The same as 'bullfrog_lightcone' with the lightcone particles in HDF5 (needs USE_HDF5)
     "hdf5_lightcone": dict(
         simulation_use_cola=False,
@@ -412,6 +440,7 @@ REQUIRES = {
     "hdf5_lightcone": "hdf5",
     "two_species_neutrinos_hdf5": "hdf5",
     "read_particles_hdf5": "hdf5",
+    "neutrino_particles_baryons_hdf5": "hdf5",
 }
 
 # The order the cases must run in (the read_* cases need 'cola_quinn_all' / 'hdf5_output')

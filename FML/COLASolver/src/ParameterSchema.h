@@ -357,6 +357,19 @@ namespace COLASOLVER {
                               false,
                               "Evolve CDM and baryons as two sets of particles (particle_Npart_1D^3 of each, IC from "
                               "the CDM and baryon transfer functions at zini). false: one set of CDM+baryon particles");
+            b.always_optional("particle_neutrinos",
+                              false,
+                              "Massive neutrinos as particles with the delta-f method (Elbers et al. 2021): thermal "
+                              "Fermi-Dirac velocities, relativistic equations of motion, the particles only carry the "
+                              "perturbation. Replaces force_linear_massive_neutrinos (needs cosmology_OmegaMNu > 0, "
+                              "transferinfofile, timestep_method = Quinn, no COLA)");
+            b.always_optional("particle_neutrino_Npart_1D",
+                              0,
+                              "particle_neutrinos: number of neutrino particles per dimension (0: particle_Npart_1D)");
+            b.always_optional("particle_neutrino_deltaf",
+                              true,
+                              "particle_neutrinos: use the delta-f weights (false: plain particles, much noisier; for "
+                              "testing)");
             b.always_optional("particle_baryon_lattice",
                               "same",
                               "particle_baryons: start the baryons from the same lattice as the CDM (same, recommended: "

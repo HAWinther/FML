@@ -386,7 +386,7 @@ namespace FML {
 
         /// @brief Internal method. For communication between tasks needed when adding particles to grid
         template <int N>
-        void add_contribution_from_extra_slices(FFTWGrid<N> & density);
+        void add_contribution_from_extra_slices(FFTWGrid<N> & density, double background = -1.0);
 
         /// @brief This returns the a function giving the window function for a given density assignment method as
         /// function of the wave-vector in dimensionless units.
@@ -504,15 +504,20 @@ namespace FML {
             const auto Local_x_start = density.get_local_x_start();
             const int Nmesh = density.get_nmesh();
 
-            // Set whole grid (also extra slices) to -1.0
-            density.fill_real_grid(-1.0);
+            // delta-f particles (get_deltaf_weight) only carry the perturbation: delta = norm * sum w_i W
+            constexpr bool has_deltaf_weight = FML::PARTICLE::has_get_deltaf_weight<T>();
+
+            // Set whole grid (also extra slices) to -1.0 (0 for delta-f particles)
+            density.fill_real_grid(has_deltaf_weight ? 0.0 : -1.0);
 
             // Factor to normalize density to the mean density
             double norm_fac = std::pow((double)Nmesh, N) / double(NumPartTot);
 
             // Check if particles has a get_mass method and if so
             // compute the mean mass
-            constexpr bool has_mass = FML::PARTICLE::has_get_mass<T>();
+            constexpr bool has_mass = FML::PARTICLE::has_get_mass<T>() and not has_deltaf_weight;
+            static_assert(not(FML::PARTICLE::has_get_mass<T>() and has_deltaf_weight),
+                          "[particles_to_grid] A particle cannot have both get_mass and get_deltaf_weight");
             if constexpr (has_mass) {
                 double mean_mass = 0.0;
                 for (size_t i = 0; i < NumPart; i++) {
@@ -543,6 +548,8 @@ namespace FML {
                 double mass = 1.0;
                 if constexpr (has_mass)
                     mass = FML::PARTICLE::GetMass(part[i]);
+                if constexpr (has_deltaf_weight)
+                    mass = FML::PARTICLE::GetDeltafWeight(part[i]);
 
                 std::array<double, N> x;
                 std::array<int, N> ix;
@@ -651,7 +658,7 @@ namespace FML {
 
             // Extra slices only relevant if we have more than 1 task
             if (FML::NTasks > 1)
-                add_contribution_from_extra_slices<N>(density);
+                add_contribution_from_extra_slices<N>(density, has_deltaf_weight ? 0.0 : -1.0);
         }
 
         template <int N, int ORDER, class T>
@@ -953,7 +960,8 @@ namespace FML {
         // on neighbor tasks
         //=======================================================================
         template <int N>
-        void add_contribution_from_extra_slices(FFTWGrid<N> & density) {
+        void add_contribution_from_extra_slices(FFTWGrid<N> & density, double background) {
+            // The extra slices were initialized to the background value (-1 for delta, 0 for delta-f particles)
 
             auto Local_nx = density.get_local_nx();
             auto num_cells_slice = density.get_ntot_real_slice_alloc();
@@ -993,7 +1001,7 @@ namespace FML {
 
                 // Copy over data from temp
                 for (int j = 0; j < num_cells_slice; j++) {
-                    slice_left[j] += (temp[j] + 1.0);
+                    slice_left[j] += (temp[j] - background);
                 }
             }
 
@@ -1027,7 +1035,7 @@ namespace FML {
 
                 // Copy over data from temp
                 for (int j = 0; j < num_cells_slice; j++) {
-                    slice_right[j] += (temp[j] + 1.0);
+                    slice_right[j] += (temp[j] - background);
                 }
             }
         }

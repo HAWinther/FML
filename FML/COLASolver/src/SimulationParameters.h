@@ -192,6 +192,9 @@ namespace COLASOLVER {
         double allocation_factor; // Allocate this many more particles
         bool baryons{false};      // CDM and baryons as two sets of particles (otherwise one set "cb")
         std::string baryon_lattice{"same"}; // same: the baryons start from the CDM lattice, offset: half a spacing
+        bool neutrinos{false};    // Massive neutrinos as particles (delta-f method)
+        int neutrino_Npart_1D{0}; // Number of neutrino particles per dimension (0: particle_Npart_1D)
+        bool neutrino_deltaf{true}; // Use the delta-f weights (false: plain particles, for testing)
     };
 
     struct TimestepSettings {
@@ -360,6 +363,13 @@ namespace COLASOLVER {
             r.get("particle_baryons", particle.baryons);
             if (particle.baryons)
                 r.get("particle_baryon_lattice", particle.baryon_lattice);
+            r.get("particle_neutrinos", particle.neutrinos);
+            if (particle.neutrinos) {
+                r.get("particle_neutrino_Npart_1D", particle.neutrino_Npart_1D);
+                r.get("particle_neutrino_deltaf", particle.neutrino_deltaf);
+                if (particle.neutrino_Npart_1D <= 0)
+                    particle.neutrino_Npart_1D = particle.Npart_1D;
+            }
 
             // Time-stepping
             r.get("timestep_nsteps", timestep.nsteps);
@@ -517,6 +527,30 @@ namespace COLASOLVER {
                     fail("timestep_nsteps cannot be negative");
             if (timestep.spacing == ScaleFactorSpacing::Powerlaw and timestep.spacing_power == 0.0)
                 fail("timestep_spacing_power cannot be 0 (use logarithmic spacing)");
+
+            // Neutrino particles: what is implemented so far
+            if (particle.neutrinos) {
+                auto need = [&](bool ok, const std::string & what) {
+                    if (not ok)
+                        fail("particle_neutrinos = true: " + what + " (not implemented for neutrino particles yet)");
+                };
+                need(timestep.method == TimestepMethod::Quinn, "needs timestep_method = Quinn");
+                need(not simulation.use_cola and not simulation.enforce_LPT_trajectories, "needs simulation_use_cola = false");
+                need(ic.type_of_input == ICInputType::TransferInfoFile,
+                     "needs ic_type_of_input = transferinfofile (the neutrino transfer function at zini)");
+                need(ic.random_field_type == ICRandomFieldType::Gaussian or
+                         ic.random_field_type == ICRandomFieldType::NonGaussian,
+                     "needs ic_random_field_type = gaussian or nongaussian");
+                need(not force.linear_massive_neutrinos,
+                     "needs force_linear_massive_neutrinos = false (the particles replace the linear neutrinos)");
+                need(force.density_method == "assignment" and force.interpolation_method != "nufft",
+                     "needs force_density_method = assignment and force_interpolation_method != nufft");
+                need(force.interlacing_order <= 1 and force.early_method == "none",
+                     "needs force_interlacing_order = 1 and force_early_method = none");
+                need(not force.nbody_gauge, "needs force_nbody_gauge = false");
+                need(not fof.enabled and not pofk_multipole.enabled and not bispectrum.enabled,
+                     "needs fof, pofk_multipole and bispectrum = false");
+            }
 
             // Separate CDM and baryon particles: what is implemented so far
             if (particle.baryons) {

@@ -162,6 +162,17 @@ namespace FML {
         };
 
         //=====================================================================
+        // delta-f weight of a particle (e.g. neutrinos). If a particle has this then the density assignment
+        // (particles_to_grid) gives delta(x) = Nmesh^N / NumPartTot * sum_i w_i W(x - x_i), i.e. the particles
+        // only carry the perturbation (no mean density is subtracted)
+        //=====================================================================
+        SFINAE_TEST_GET(GetDeltafWeight, get_deltaf_weight)
+        template <class... Args>
+        constexpr double GetDeltafWeight([[maybe_unused]] Args &... args) {
+            return 1.0;
+        };
+
+        //=====================================================================
         // Volume of particle
         //=====================================================================
         SFINAE_TEST_GET(GetVolume, get_volume)

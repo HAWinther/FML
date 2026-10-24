@@ -268,6 +268,14 @@ particle_allocation_factor = 1.25
 particle_baryons = false
 -- Start the baryons from the same lattice as the CDM (same, recommended) or offset by half a particle spacing (offset)
 particle_baryon_lattice = "same"
+-- Massive neutrinos as particles with the delta-f method? Needs cosmology_OmegaMNu > 0, ic_type_of_input = transferinfofile
+-- (accurate neutrino transfer functions up to zini, see scripts/make_camb_transfer_tables.py), timestep_method = Quinn
+-- and force_linear_massive_neutrinos = false
+particle_neutrinos = false
+-- Number of neutrino particles per dimension (0: particle_Npart_1D)
+particle_neutrino_Npart_1D = 0
+-- Use the delta-f weights (false: plain particles, much noisier)
+particle_neutrino_deltaf = true
 
 ------------------------------------------------------------
 -- Output

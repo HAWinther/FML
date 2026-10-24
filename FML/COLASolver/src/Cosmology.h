@@ -347,6 +347,8 @@ class Cosmology {
     }
 
     double get_h() const { return h; }
+    double get_Mnu_eV() const { return Mnu_eV; }
+    double get_N_nu() const { return N_nu; }
     double get_As() const { return As; }
     double get_ns() const { return ns; }
     double get_TCMB_kelvin() const { return TCMB_kelvin; }

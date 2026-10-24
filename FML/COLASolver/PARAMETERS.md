@@ -94,6 +94,9 @@ Parameters marked *optional* take the default value if they are not in the param
 |---|---|---|---|---|
 | `particle_Npart_1D` | int | *required* | always | Number of CDM+baryon particles per dimension |
 | `particle_baryons` | bool | `false` | always | Evolve CDM and baryons as two sets of particles (particle_Npart_1D^3 of each, IC from the CDM and baryon transfer functions at zini). false: one set of CDM+baryon particles |
+| `particle_neutrinos` | bool | `false` | always | Massive neutrinos as particles with the delta-f method (Elbers et al. 2021): thermal Fermi-Dirac velocities, relativistic equations of motion, the particles only carry the perturbation. Replaces force_linear_massive_neutrinos (needs cosmology_OmegaMNu > 0, transferinfofile, timestep_method = Quinn, no COLA) |
+| `particle_neutrino_Npart_1D` | int | `0` | always | particle_neutrinos: number of neutrino particles per dimension (0: particle_Npart_1D) |
+| `particle_neutrino_deltaf` | bool | `true` | always | particle_neutrinos: use the delta-f weights (false: plain particles, much noisier; for testing) |
 | `particle_baryon_lattice` | string | `"same"` | always | particle_baryons: start the baryons from the same lattice as the CDM (same, recommended: the baryon-CDM difference then follows linear theory on all scales) or from a lattice offset by half a particle spacing (offset: gives a spurious baryon-CDM difference on small scales). Options: `same`, `offset` |
 | `particle_allocation_factor` | double | `1.5` | always | Allocate this factor more particles than the average per task (particles move between tasks) |
 

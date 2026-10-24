@@ -144,6 +144,12 @@ namespace FML {
 
             double zmin_splines{};
             double zmax_splines{};
+            DVector redshifts_of_files; // The redshifts of the transfer files (low to high)
+
+            /// d log T / d log a from the transfer functions at the redshifts of the files: a local cubic
+            /// (4-point Lagrange) interpolation in log(a) (the cubic spline in z that the T(k,z) splines use is
+            /// inaccurate for the derivative near the ends of the table, ~1-4% for z = 49 in a table that ends at 50)
+            double dlogT_dloga(const Spline2D & spline, double k, double a) const;
             double kmin_hmpc_splines{};
             double kmax_hmpc_splines{};
             bool transfer_is_read{false};
@@ -529,6 +535,8 @@ namespace FML {
             for (auto & k : logk)
                 k = std::log(k);
 
+            redshifts_of_files = redshifts;
+
             // Create splines
             if (transfer_col_cdm >= 0)
                 cdm_transfer_function_spline.create(redshifts, logk, transfer_function_cdm);
@@ -631,8 +639,8 @@ namespace FML {
             double Dnu = mnu_transfer_function_spline(z, std::log(k));
             if (Dnu == 0.0)
                 return 0.0;
-            double dDnudloga = -mnu_transfer_function_spline.deriv_x(z, std::log(k)) / a;
-            return dDnudloga / Dnu;
+            (void)z;
+            return dlogT_dloga(mnu_transfer_function_spline, k, a);
         }
 
         //====================================================================
@@ -651,9 +659,43 @@ namespace FML {
         /// @param[in] a Scalefactor
         //====================================================================
         double LinearTransferData::get_cdm_growth_rate(double k, double a) const {
-            double z = 1.0 / a - 1.0;
-            return -cdm_transfer_function_spline.deriv_x(z, std::log(k)) /
-                   cdm_transfer_function_spline(z, std::log(k)) / a;
+            return dlogT_dloga(cdm_transfer_function_spline, k, a);
+        }
+
+        double LinearTransferData::dlogT_dloga(const Spline2D & spline, double k, double a) const {
+            const double z = 1.0 / a - 1.0;
+            const double logk = std::log(k);
+            const int n = int(redshifts_of_files.size());
+            if (n < 4) {
+                return -spline.deriv_x(z, logk) / spline(z, logk) / a;
+            }
+            // The four files around z (fewer on one side at the ends of the table)
+            int j = int(std::upper_bound(redshifts_of_files.begin(), redshifts_of_files.end(), z) -
+                        redshifts_of_files.begin()) - 2;
+            j = std::max(0, std::min(j, n - 4));
+            double x[4], T[4];
+            for (int i = 0; i < 4; i++) {
+                x[i] = -std::log(1.0 + redshifts_of_files[j + i]);
+                T[i] = spline(redshifts_of_files[j + i], logk);
+            }
+            // Lagrange polynomial through (x_i, T_i): value and derivative at x0 = log(a)
+            const double x0 = std::log(a);
+            double value = 0.0, deriv = 0.0;
+            for (int i = 0; i < 4; i++) {
+                double li = 1.0, dli = 0.0;
+                for (int m = 0; m < 4; m++) {
+                    if (m == i)
+                        continue;
+                    const double fac = (x0 - x[m]) / (x[i] - x[m]);
+                    dli = dli * fac + li / (x[i] - x[m]);
+                    li *= fac;
+                }
+                value += T[i] * li;
+                deriv += T[i] * dli;
+            }
+            if (value == 0.0)
+                return 0.0;
+            return deriv / value;
         }
 
         //====================================================================
@@ -672,9 +714,7 @@ namespace FML {
         /// @param[in] a Scalefactor
         //====================================================================
         double LinearTransferData::get_baryon_growth_rate(double k, double a) const {
-            double z = 1.0 / a - 1.0;
-            return -baryon_transfer_function_spline.deriv_x(z, std::log(k)) /
-                   baryon_transfer_function_spline(z, std::log(k)) / a;
+            return dlogT_dloga(baryon_transfer_function_spline, k, a);
         }
 
         //====================================================================
@@ -731,9 +771,7 @@ namespace FML {
         /// @param[in] a Scalefactor
         //====================================================================
         double LinearTransferData::get_total_growth_rate(double k, double a) const {
-            double z = 1.0 / a - 1.0;
-            return -total_transfer_function_spline.deriv_x(z, std::log(k)) /
-                   total_transfer_function_spline(z, std::log(k)) / a;
+            return dlogT_dloga(total_transfer_function_spline, k, a);
         }
 
         //====================================================================

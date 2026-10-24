@@ -5,6 +5,32 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLASolver: massive neutrinos as particles (delta-f method, optional)
+- `particle_neutrinos = true`: neutrino particles (`particle_neutrino_Npart_1D`, default `particle_Npart_1D`) with the
+  delta-f method of Elbers et al. 2021: Fermi-Dirac thermal momenta (reproducible per particle ID), relativistic
+  drift and kick, and weights w = 1 - f0(y)/f_i so that the particles only carry the perturbation. The force uses
+  delta_m = (1 - f_nu) delta_cb + f_nu delta_nu. `particle_neutrino_deltaf = false` for plain particles. Quinn time
+  stepping only, no COLA (README). Default off: all regression results unchanged bit for bit.
+- P_nu and P_total at the outputs and every step (with the neutrino shot noise sum w^2/N^2); GADGET binary/HDF5 output
+  with the neutrinos as type 3 (and `PartType3/Weights`). Can be combined with `particle_baryons`.
+- Library: particles with a `get_deltaf_weight()` method are assigned with that weight and without the mean
+  (`particles_to_grid`; the MPI boundary slices now take the background value into account);
+  `GadgetWriter::write_gadget_species` takes a list of species with accessors (any particle types, extra HDF5
+  fields).
+- Checked against CAMB for 0.1 and 0.4 eV (P_nu within ~5% for k < 0.15 h/Mpc at z = 0; P_cb and P_total within
+  0.3% of the run with linear neutrinos). Regression cases `neutrino_particles`, `neutrino_particles_baryons_hdf5`.
+- `scripts/make_camb_transfer_tables.py` and the tables `input/camb_data_lcdm_nu0.1_zmax200`, `..._nu0.4_zmax200`
+  (60 redshifts up to z = 200, 3 degenerate massive neutrinos, accurate neutrino transfer functions and CAMB
+  AccuracyBoost = 3: the default CAMB accuracy gives a P_nu that is up to 16% too low below the free-streaming scale).
+
+### Growth rates from the transfer functions
+- `LinearTransferData::get_*_growth_rate` used the derivative of the spline in z, which is inaccurate near the ends of
+  the table (4% at the high-z end, 2% at z = 0). Now a 4-point Lagrange derivative in log(a) through the tabulated
+  redshifts: 0.01-0.1% for CDM and baryons. **Changes results** for scale-dependent growth with massive neutrinos
+  (regression case `scaledep_cola_neutrinos` by up to 0.8%, D_cb(k) from z = 20 to 0 now within 0.1% of CAMB instead
+  of 0.3%) and `two_species_neutrinos_hdf5` (0.5%). The N-body gauge runs are not affected (their tables extend past
+  zini).
+
 ### COLASolver: CDM and baryons as separate particles (optional)
 - `particle_baryons = true`: CDM and baryons in two particle containers (gravity only), IC from the CDM and baryon
   transfer functions at zini (total velocity = growing mode, relative velocity from d log(T_i/T_cb)/dlna), the

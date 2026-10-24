@@ -6,6 +6,7 @@
 #include <climits>
 #include <cmath>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -154,15 +155,48 @@ namespace FML {
                 void set_fields_in_file(std::vector<std::string> fields);
             };
 
-            /// One set of particles (one GADGET particle type) for GadgetWriter::write_gadget_species
-            template <class T>
+            /// One set of particles (one GADGET particle type) for write_gadget_species. The particles are accessed
+            /// through functions so that species with different particle classes can go in the same file (see
+            /// make_gadget_species)
             struct GadgetSpecies {
-                int type{1};            // GADGET particle type (0-5)
-                T * part{nullptr};      // the particles on this task
-                size_t npart{0};        // number of particles on this task
-                size_t npart_total{0};  // total number of particles (over all tasks)
+                int type{1};               // GADGET particle type (0-5)
+                size_t npart{0};           // number of particles on this task
+                size_t npart_total{0};     // total number of particles (over all tasks)
                 double mass_fraction{1.0}; // Omega of this species / OmegaM (sets the particle mass)
+                std::function<void(size_t, double *)> get_pos; // NDIM components of particle i (empty: none)
+                std::function<void(size_t, double *)> get_vel; // NDIM components of particle i (empty: none)
+                std::function<long long int(size_t)> get_id;   // ID of particle i (empty: none)
+                /// Extra per-particle scalars (name, value of particle i), e.g. delta-f weights. Only written to
+                /// HDF5 files (as PartTypeN/<name>)
+                std::vector<std::pair<std::string, std::function<double(size_t)>>> extra_scalars;
             };
+
+            /// A GadgetSpecies for an array of particles of class T (with get_pos, and optionally get_vel and get_id)
+            template <class T>
+            GadgetSpecies
+            make_gadget_species(int type, T * part, size_t npart, size_t npart_total, double mass_fraction) {
+                GadgetSpecies sp;
+                sp.type = type;
+                sp.npart = npart;
+                sp.npart_total = npart_total;
+                sp.mass_fraction = mass_fraction;
+                const int ndim = FML::PARTICLE::GetNDIM(T());
+                if constexpr (FML::PARTICLE::has_get_pos<T>())
+                    sp.get_pos = [part, ndim](size_t i, double * x) {
+                        const auto * p = FML::PARTICLE::GetPos(part[i]);
+                        for (int idim = 0; idim < ndim; idim++)
+                            x[idim] = double(p[idim]);
+                    };
+                if constexpr (FML::PARTICLE::has_get_vel<T>())
+                    sp.get_vel = [part, ndim](size_t i, double * x) {
+                        const auto * v = FML::PARTICLE::GetVel(part[i]);
+                        for (int idim = 0; idim < ndim; idim++)
+                            x[idim] = double(v[idim]);
+                    };
+                if constexpr (FML::PARTICLE::has_get_id<T>())
+                    sp.get_id = [part](size_t i) { return (long long int)FML::PARTICLE::GetID(part[i]); };
+                return sp;
+            }
 
             /// Write files in GADGET format
             class GadgetWriter {
@@ -198,13 +232,12 @@ namespace FML {
                                          double vel_norm,
                                          std::vector<double> OmegaFamilyOverOmegaM = {0., 1., 0., 0., 0., 0.});
 
-                /// Write a single gadget file with several sets of particles (e.g. CDM and baryons kept in separate
-                /// containers), each its own particle type (types must differ). The mass of a particle of a species
-                /// is mass_fraction * OmegaM * rho_crit * Box^3 / npart_total. IDs are written as they are (make them
-                /// unique). No MPI communication (the totals are given)
-                template <class T>
+                /// Write a single gadget file with several sets of particles (e.g. CDM, baryons and neutrinos kept in
+                /// separate containers), each its own particle type (types must differ). The mass of a particle of a
+                /// species is mass_fraction * OmegaM * rho_crit * Box^3 / npart_total. IDs are written as they are
+                /// (make them unique). No MPI communication (the totals are given). Extra scalars are not written
                 void write_gadget_species(std::string filename,
-                                          std::vector<GadgetSpecies<T>> species,
+                                          std::vector<GadgetSpecies> species,
                                           int NumberOfFilesToWrite,
                                           double aexp,
                                           double Boxsize,
@@ -724,17 +757,16 @@ namespace FML {
                 }
             }
 
-            template <class T>
-            void GadgetWriter::write_gadget_species(std::string filename,
-                                                    std::vector<GadgetSpecies<T>> species,
-                                                    int NumberOfFilesToWrite,
-                                                    double aexp,
-                                                    double Boxsize,
-                                                    double OmegaM,
-                                                    double OmegaLambda,
-                                                    double HubbleParam,
-                                                    double pos_norm,
-                                                    double vel_norm) {
+            inline void GadgetWriter::write_gadget_species(std::string filename,
+                                                           std::vector<GadgetSpecies> species,
+                                                           int NumberOfFilesToWrite,
+                                                           double aexp,
+                                                           double Boxsize,
+                                                           double OmegaM,
+                                                           double OmegaLambda,
+                                                           double HubbleParam,
+                                                           double pos_norm,
+                                                           double vel_norm) {
                 std::sort(species.begin(), species.end(), [](auto & a, auto & b) { return a.type < b.type; });
                 std::vector<size_t> npart_type(6, 0), npart_type_tot(6, 0);
                 std::vector<double> mass_in_1e10_msunh(6, 0.0);
@@ -768,33 +800,39 @@ namespace FML {
                 for (auto & sp : species)
                     ntowrite += sp.npart;
                 std::vector<char> buffer;
-
-                auto write_vector_block = [&](auto && get, double norm) {
+                auto all_have = [&](auto member) {
+                    for (auto & sp : species)
+                        if (sp.npart > 0 and not(sp.*member))
+                            return false;
+                    return true;
+                };
+                auto write_vector_block = [&](auto member, double norm) {
                     const size_t bytes = ntowrite * NDIM * sizeof(float);
                     buffer.resize(bytes);
                     float * float_buffer = reinterpret_cast<float *>(buffer.data());
+                    std::vector<double> x(NDIM);
                     size_t count = 0;
                     for (auto & sp : species)
                         for (size_t j = 0; j < sp.npart; j++) {
-                            const auto * x = get(sp.part[j]);
+                            (sp.*member)(j, x.data());
                             for (int idim = 0; idim < NDIM; idim++)
                                 float_buffer[NDIM * count + idim] = float(x[idim] * norm);
                             count++;
                         }
                     write_section(fp, buffer, int(bytes));
                 };
-                if constexpr (FML::PARTICLE::has_get_pos<T>())
-                    write_vector_block([](auto & p) { return FML::PARTICLE::GetPos(p); }, pos_norm);
-                if constexpr (FML::PARTICLE::has_get_vel<T>())
-                    write_vector_block([](auto & p) { return FML::PARTICLE::GetVel(p); }, vel_norm);
-                if constexpr (FML::PARTICLE::has_get_id<T>()) {
+                if (all_have(&GadgetSpecies::get_pos))
+                    write_vector_block(&GadgetSpecies::get_pos, pos_norm);
+                if (all_have(&GadgetSpecies::get_vel))
+                    write_vector_block(&GadgetSpecies::get_vel, vel_norm);
+                if (all_have(&GadgetSpecies::get_id)) {
                     const size_t bytes = sizeof(gadget_particle_id_type) * ntowrite;
                     buffer.resize(bytes);
                     auto * id_buffer = reinterpret_cast<gadget_particle_id_type *>(buffer.data());
                     size_t count = 0;
                     for (auto & sp : species)
                         for (size_t j = 0; j < sp.npart; j++)
-                            id_buffer[count++] = gadget_particle_id_type(FML::PARTICLE::GetID(sp.part[j]));
+                            id_buffer[count++] = gadget_particle_id_type(sp.get_id(j));
                     write_section(fp, buffer, int(bytes));
                 }
             }

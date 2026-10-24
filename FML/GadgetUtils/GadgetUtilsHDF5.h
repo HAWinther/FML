@@ -644,9 +644,8 @@ namespace FML {
 
                 /// Write a single file with several sets of particles (e.g. CDM and baryons kept in separate
                 /// containers), each its own particle type (see GadgetWriter::write_gadget_species). No MPI calls
-                template <class T>
                 void write_gadget_species(std::string filename,
-                                          std::vector<GadgetSpecies<T>> species,
+                                          std::vector<GadgetSpecies> species,
                                           int NumberOfFilesToWrite,
                                           double aexp,
                                           double Boxsize,
@@ -732,13 +731,13 @@ namespace FML {
                         auto gather = [&](auto && get, double norm) {
                             buffer.assign(n * NDIM, 0.0);
                             for (size_t i = 0; i < n; i++) {
-                                const auto * x = get(sp.part[i]);
+                                get(i, &buffer[NDIM * i]);
                                 for (int idim = 0; idim < NDIM; idim++)
-                                    buffer[NDIM * i + idim] = double(x[idim]) * norm;
+                                    buffer[NDIM * i + idim] *= norm;
                             }
                         };
-                        if constexpr (FML::PARTICLE::has_get_pos<T>()) {
-                            gather([](auto & p) { return FML::PARTICLE::GetPos(p); }, pos_norm);
+                        if (sp.get_pos) {
+                            gather(sp.get_pos, pos_norm);
                             for (auto & x : buffer) {
                                 if (not periodic_wrap)
                                     break;
@@ -751,15 +750,21 @@ namespace FML {
                             }
                             HDF5::write_dataset(g, "Coordinates", filetype, H5T_NATIVE_DOUBLE, buffer.data(), n, NDIM);
                         }
-                        if constexpr (FML::PARTICLE::has_get_vel<T>()) {
-                            gather([](auto & p) { return FML::PARTICLE::GetVel(p); }, vel_norm);
+                        if (sp.get_vel) {
+                            gather(sp.get_vel, vel_norm);
                             HDF5::write_dataset(g, "Velocities", filetype, H5T_NATIVE_DOUBLE, buffer.data(), n, NDIM);
                         }
-                        if constexpr (FML::PARTICLE::has_get_id<T>()) {
+                        if (sp.get_id) {
                             std::vector<unsigned long long> ids(n);
                             for (size_t i = 0; i < n; i++)
-                                ids[i] = (unsigned long long)FML::PARTICLE::GetID(sp.part[i]);
+                                ids[i] = (unsigned long long)sp.get_id(i);
                             HDF5::write_dataset(g, "ParticleIDs", H5T_STD_U64LE, H5T_NATIVE_ULLONG, ids.data(), n, 1);
+                        }
+                        for (auto & extra : sp.extra_scalars) {
+                            std::vector<double> values(n);
+                            for (size_t i = 0; i < n; i++)
+                                values[i] = extra.second(i);
+                            HDF5::write_dataset(g, extra.first.c_str(), filetype, H5T_NATIVE_DOUBLE, values.data(), n, 1);
                         }
                     }
                 }
