@@ -564,7 +564,16 @@ namespace COLASOLVER {
         using P = const SimulationParameters &;
         return {
             {"`timestep_method = Quinn`", false, true, [](P p) { return p.timestep.method == TimestepMethod::Quinn; }},
-            {"`simulation_use_cola = false`", true, true, [](P p) { return not p.simulation.use_cola; }},
+            {"`simulation_use_cola = false`", false, true, [](P p) { return not p.simulation.use_cola; }},
+            {"`timestep_method` other than `Tassev` with COLA (the modified Tassev operators get the baryon-CDM relative "
+             "velocity wrong: +30% in P_b-c with 20 linear steps)",
+             true,
+             false,
+             [](P p) { return not p.simulation.use_cola or p.timestep.method != TimestepMethod::Tassev; }},
+            {"`simulation_cola_LPT_order` <= `ic_LPT_order` (with COLA)",
+             true,
+             false,
+             [](P p) { return not p.simulation.use_cola or p.simulation.cola_LPT_order <= p.ic.LPT_order; }},
             {"`simulation_enforce_LPT_trajectories = false`",
              true,
              true,

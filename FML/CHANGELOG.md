@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLASolver: COLA with CDM and baryons as separate particles
+- The species share the COLA frame of the total CDM+baryon field (LPT fields of delta_cb, also scale-dependent);
+  their initial velocities are relative to it (the baryon-CDM relative velocity), evolved by the PM part. The
+  CDM+baryon P(k) equals that of one species with COLA (< 0.01%, also scale-dependent COLA with linear neutrinos).
+- Needs `timestep_method = Quinn` or `FastPM` with baryons: the Tassev operators get the force-free relative mode
+  wrong (+30% in P of delta_c - delta_b with 20 linear steps; Quinn: exact, FastPM: -3.5%).
+- Library: `NBodyInitialConditions` can store the 1LPT field of another density field (for a shared COLA frame).
+- Regression cases `two_species_cola`, `two_species_scaledep_cola_nu`. README: the relative mode at normal amplitude
+  is ~30% below linear on large scales in all runs (displacement representation, see README).
+
 ### COLASolver: refactoring of the particle species (no change in results)
 - `src/Species.h`: one `SpeciesInfo` per particle container (name, GADGET type, mass fraction, weight in delta_cb,
   ID offset, dynamics) and `species_transfer_function`. The every-step and output P(k), linear theory, shot noise

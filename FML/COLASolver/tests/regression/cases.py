@@ -323,6 +323,29 @@ CASES = {
         ic_input_redshift=20.0,
         output_fileformat="HDF5",
     ),
+    # CDM and baryons as separate particles with COLA (shared COLA frame of the CDM+baryon field), Quinn steps
+    "two_species_cola": dict(
+        particle_baryons=True,
+        simulation_use_cola=True,
+        timestep_method="Quinn",
+        ic_type_of_input="transferinfofile",
+        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
+        ic_input_redshift=20.0,
+    ),
+    # CDM and baryons with scale-dependent COLA and linear massive neutrinos
+    "two_species_scaledep_cola_nu": dict(
+        particle_baryons=True,
+        particle_baryon_lattice="offset",
+        simulation_use_cola=True,
+        simulation_use_scaledependent_cola=True,
+        timestep_method="Quinn",
+        cosmology_OmegaMNu=0.0095,
+        cosmology_OmegaCDM=0.259,
+        force_linear_massive_neutrinos=True,
+        ic_type_of_input="transferinfofile",
+        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.4_zmax200.txt",
+        ic_input_redshift=20.0,
+    ),
     # Massive neutrinos as particles (delta-f) with 0.4 eV, IC from the transfer functions at zini
     "neutrino_particles": dict(
         particle_neutrinos=True,

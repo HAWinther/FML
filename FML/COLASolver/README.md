@@ -120,9 +120,22 @@ By default both species start from the same particle lattice (`particle_baryon_l
 
 With the same lattice the CDM+baryon P(k) is the same as that of one species, and the baryon-CDM difference follows linear theory on all scales. With 20 BullFrog steps and a 1x force grid at normal amplitude it is 0.51 / 0.54 / 0.60 / 0.58 / 0.64 / 0.69 % (the nonlinear evolution changes it a little on small scales). With offset lattices the difference grows spuriously for k > k_Ny/8 (worse with a 1x force grid). Time stepping: BullFrog with 20 steps gets the CDM+baryon P(k) at z = 0 to 0.04% for k < 0.1 h/Mpc (relative to 300 logarithmic Quinn steps), and FastPM with 20 steps to 0.3%.
 
+COLA: the two species share the COLA frame of the total CDM+baryon field (the LPT displacements of delta_cb, also scale-dependent), and their initial velocities are set relative to it: the baryon-CDM relative velocity, a^2 H (f_i - f_cb / R_i) Psi_i, is evolved by the PM part like everything else. The CDM+baryon P(k) is then the same as for one species with COLA (to < 0.01%, also with scale-dependent COLA and linear neutrinos). The relative mode is free of forces (its code velocity is constant), so the standard kick and drift integrate it exactly. The modified Tassev operators assume a residual that grows like LPT and get it wrong, so with baryons COLA needs `timestep_method = Quinn` or `FastPM`. P(k) of delta_c - delta_b (the relative mode) relative to Quinn without COLA with 200 logarithmic steps (64^3 of each species in 256 Mpc/h, z_ini = 49, 2x grid, z = 0; COLA with 20 linear steps):
+
+| k (h/Mpc)                                       | 0.025 | 0.05  | 0.1   | 0.2   | 0.4   |
+|-------------------------------------------------|-------|-------|-------|-------|-------|
+| COLA + Quinn, linear amplitude (%)              | 0.0   | 0.0   | 0.0   | 0.0   | +0.1  |
+| COLA + FastPM, linear amplitude (%)             | -4.1  | -3.5  | -3.6  | -3.0  | -3.2  |
+| COLA + Tassev, linear amplitude (%)             | +34   | +29   | +30   | +25   | +26   |
+| COLA + Tassev, logarithmic steps (%)            | +2.5  | +2.1  | +2.2  | +1.9  | +2.0  |
+| COLA + Quinn, normal amplitude (%)              | -0.5  | -0.5  | -0.6  | -1.1  | -0.8  |
+| scale-dependent COLA + Quinn, 0.4 eV linear neutrinos, normal amplitude (%) | +8.1 | +7.9 | +7.9 | +8.9 | +5.8 |
+
+With COLA + Quinn the CDM+baryon P(k) is within 0.2% of the reference for k < 0.6 h/Mpc (Tassev: +1.1% at k = 0.6). NB: at normal amplitude the relative mode on large scales is about 30% smaller (in amplitude, at z = 0 and k = 0.025 h/Mpc) than with linear amplitude in all the runs, with and without COLA: the relative mode is carried by the relative displacement of the CDM and baryon particles, which is probably scrambled where the particles orbit in halos (to be checked with higher resolution). Representing the constant part by different particle masses instead (see the discussion of the compensated mode in Hahn, Rampf & Uhlemann 2021) may avoid this. Measure it from delta_c - delta_b: 1 - sqrt(P_b/P_c) is biased low at normal amplitude by the power the two species share.
+
 Output: P(k) of CDM (`pofk_cdm_zX.txt`), baryons (`pofk_baryon_zX.txt`) and CDM+baryons (`pofk_zX.txt`, as before) with linear theory P_cb (T_i/T_cb)^2. The same files are written for every step. GADGET (binary and HDF5) files have the CDM as type 1 and the baryons as type 2 (a collisionless type: type 0 is SPH gas in GADGET, which many readers expect to have gas fields). Baryon IDs follow the CDM IDs.
 
-Not implemented for two species yet (the code stops with a message): COLA, reading the IC from file, NUFFT / sheet densities, force interlacing and the early-time force, the N-body gauge, the lightcone, FoF, multipoles and the bispectrum (the full list is the table at the end of [PARAMETERS.md](PARAMETERS.md)). Use `ic_input_redshift = ic_initial_redshift` (the two species are made from the transfer functions at zini).
+Not implemented for two species yet (the code stops with a message): COLA with the Tassev operators, reading the IC from file, NUFFT / sheet densities, force interlacing and the early-time force, the N-body gauge, the lightcone, FoF, multipoles and the bispectrum (the full list is the table at the end of [PARAMETERS.md](PARAMETERS.md)). Use `ic_input_redshift = ic_initial_redshift` (the two species are made from the transfer functions at zini).
 
 ## Massive neutrinos as particles (delta-f method)
 

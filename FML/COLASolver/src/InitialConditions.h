@@ -164,7 +164,9 @@ namespace COLASOLVER {
     /// velocity_norm_1LPT(kB) Psi, the rest from velocity_norms; see FML::NBODY::NBodyInitialConditions). With
     /// LPT_order >= 2 the 2LPT term is that of the total field delta_cb. The particles start from the lattice
     /// offset by lattice_shift (in units of the box) in each direction: the fields are evaluated at the offset
-    /// positions and the particles moved there. id_offset is added to the IDs. Returns delta_i(k) (shifted).
+    /// positions and the particles moved there. id_offset is added to the IDs. With store_cb_LPT_fields the LPT
+    /// displacement fields stored in the particles (for COLA) are those of delta_cb, i.e. all the species share the
+    /// COLA frame of the total CDM+baryon field. Returns delta_i(k) (shifted).
     //=============================================================================
     template <int NDIM, class P>
     FFTWGrid<NDIM> generate_species_from_delta_cb(FML::PARTICLE::MPIParticles<P> & particles,
@@ -178,20 +180,22 @@ namespace COLASOLVER {
                                                   double boxsize,
                                                   double zini,
                                                   double lattice_shift,
-                                                  long long int id_offset) {
+                                                  long long int id_offset,
+                                                  bool store_cb_LPT_fields = false) {
         std::array<double, NDIM> shift_vec;
         shift_vec.fill(lattice_shift);
 
         // delta_i(k) on the (offset) lattice: f(q) -> f(q + shift) so that the particle created at q gets the
         // displacement at q + shift (and is then moved there)
         FFTWGrid<NDIM> delta = delta_cb_fourier;
+        const bool need_total = LPT_order >= 2 or store_cb_LPT_fields;
         FFTWGrid<NDIM> delta_total;
-        if (LPT_order >= 2)
+        if (need_total)
             delta_total = delta_cb_fourier;
         FML::GRID::multiply_fourier_by_function_of_k<NDIM>(delta, ratio_of_kBox);
         if (lattice_shift != 0.0) {
             FML::GRID::shift_grid_fourier<NDIM>(delta, shift_vec, +1.0);
-            if (LPT_order >= 2)
+            if (need_total)
                 FML::GRID::shift_grid_fourier<NDIM>(delta_total, shift_vec, +1.0);
         }
 
@@ -206,7 +210,8 @@ namespace COLASOLVER {
                                                     zini,
                                                     velocity_norms,
                                                     velocity_norm_1LPT_of_kBox,
-                                                    LPT_order >= 2 ? &delta_total : nullptr);
+                                                    LPT_order >= 2 ? &delta_total : nullptr,
+                                                    store_cb_LPT_fields ? &delta_total : nullptr);
 
         for (auto & p : particles) {
             auto * pos = FML::PARTICLE::GetPos(p);

@@ -586,7 +586,8 @@ namespace FML {
                                     double zini,
                                     std::vector<double> velocity_norms,
                                     std::function<double(double)> velocity_norm_1LPT_of_kBox = nullptr,
-                                    const FFTWGrid<N> * delta_fourier_2LPT_source = nullptr);
+                                    const FFTWGrid<N> * delta_fourier_2LPT_source = nullptr,
+                                    const FFTWGrid<N> * delta_fourier_1LPT_stored = nullptr);
 
         //=====================================================================
         /// @brief Generate particles from a given power-spectrum using Lagrangian perturbation theory.
@@ -708,6 +709,9 @@ namespace FML {
         /// @param[in] delta_fourier_2LPT_source Optional. If set the 2LPT potential is computed from this density
         /// field instead of delta_fourier (e.g. the total matter density when making the IC for one of several
         /// species). Only for LPT_order <= 2
+        /// @param[in] delta_fourier_1LPT_stored Optional. If set the 1LPT displacement field stored in the particles
+        /// (for COLA) is that of this density field instead of the one the particles are displaced with (e.g. the
+        /// total matter density when several species share the same COLA frame)
         ///
         //=====================================================================
         template <int N, class T>
@@ -723,7 +727,8 @@ namespace FML {
                                     double zini,
                                     std::vector<double> velocity_norms,
                                     std::function<double(double)> velocity_norm_1LPT_of_kBox,
-                                    const FFTWGrid<N> * delta_fourier_2LPT_source) {
+                                    const FFTWGrid<N> * delta_fourier_2LPT_source,
+                                    const FFTWGrid<N> * delta_fourier_1LPT_stored) {
 
             T tmp{};
             if (FML::ThisTask == 0) {
@@ -853,6 +858,9 @@ namespace FML {
                                                                                         interpolation_method);
             };
 
+            // The 1LPT displacement field we store in the particles (if it is not the one we displace with)
+            std::array<std::vector<FML::GRID::FloatType>, N> stored_1LPT;
+
             auto add_displacement = [&]([[maybe_unused]] int nLPT,
                                         char type,
                                         std::array<std::vector<FML::GRID::FloatType>, N> & displacements_nLPT,
@@ -917,7 +925,7 @@ namespace FML {
                                 std::cout << "Storing 1LPT displacement field in particle\n";
                             auto * D = FML::PARTICLE::GetD_1LPT(part_ptr[ind]);
                             for (int idim = 0; idim < N; idim++) {
-                                D[idim] = disp[idim];
+                                D[idim] = delta_fourier_1LPT_stored ? stored_1LPT[idim][ind] : disp[idim];
                             }
                         }
                     }
@@ -1033,6 +1041,11 @@ namespace FML {
                     comp_displacement(nLPT, phi_vel, velocities_1LPT);
                 }
                 comp_displacement(nLPT, phi_1LPT, displacements_1LPT);
+                if (delta_fourier_1LPT_stored and FML::PARTICLE::has_get_D_1LPT<T>()) {
+                    FFTWGrid<N> phi_stored;
+                    FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier(*delta_fourier_1LPT_stored, phi_stored);
+                    comp_displacement(nLPT, phi_stored, stored_1LPT);
+                }
             }
 
             std::array<std::vector<FML::GRID::FloatType>, N> displacements_2LPT;

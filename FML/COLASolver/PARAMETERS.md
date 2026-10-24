@@ -246,7 +246,9 @@ Not everything is implemented yet for CDM and baryons as separate particles (`pa
 | Needs | `particle_baryons` | `particle_neutrinos` |
 |---|---|---|
 | `timestep_method = Quinn` |  | yes |
-| `simulation_use_cola = false` | yes | yes |
+| `simulation_use_cola = false` |  | yes |
+| `timestep_method` other than `Tassev` with COLA (the modified Tassev operators get the baryon-CDM relative velocity wrong: +30% in P_b-c with 20 linear steps) | yes |  |
+| `simulation_cola_LPT_order` <= `ic_LPT_order` (with COLA) | yes |  |
 | `simulation_enforce_LPT_trajectories = false` | yes | yes |
 | `ic_type_of_input = transferinfofile` (the transfer functions of the species at zini) | yes | yes |
 | `ic_random_field_type = gaussian` or `nongaussian` | yes | yes |

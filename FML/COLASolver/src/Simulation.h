@@ -40,6 +40,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -401,8 +402,9 @@ void NBodySimulation<NDIM, T>::init() {
     if (params.force.nbody_gauge)
         setup_nbody_gauge();
 
-    // In the COLA frame v=0 so reset velocities
-    if (cola.enabled) {
+    // In the COLA frame v=0 so reset velocities. With CDM and baryons as separate particles the initial conditions
+    // already have the velocities relative to the shared COLA frame (the baryon-CDM relative velocity)
+    if (cola.enabled and not has_baryons()) {
         cola_initialize_velocities<NDIM, T>(part);
     }
 
@@ -744,19 +746,31 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
                             double shift) {
         if (FML::ThisTask == 0)
             std::cout << "# Making the " << info.name << " particles\n";
+        // With COLA the species share the COLA frame of the total CDM+baryon field and the velocities we set are
+        // relative to it: v_i - v_LPT,cb = a^2 H [(f_i - f_cb / R_i) Psi_i] for 1LPT (Psi_i = R_i Psi_cb) and zero for
+        // 2LPT (the same for all species). For one species this is zero, as in the COLA frame
+        const std::vector<double> residual_velocity_norms(velocity_norms.size(), 0.0);
+        std::function<double(double)> velocity_norm_1LPT = [&](double kBox) {
+            const double logk = clamp_logk(kBox);
+            if (not cola.enabled)
+                return fac * growth_rate(logk);
+            const double f_cb = grav_ic->get_f_1LPT(aini, std::exp(logk) / grav_ic->H0_hmpc);
+            return fac * (growth_rate(logk) - f_cb / ratio(logk));
+        };
         COLASOLVER::generate_species_from_delta_cb<NDIM, T>(
             particles,
             delta_cb_fourier,
             [&](double kBox) { return ratio(clamp_logk(kBox)); },
-            [&](double kBox) { return fac * growth_rate(clamp_logk(kBox)); },
-            velocity_norms,
+            velocity_norm_1LPT,
+            cola.enabled ? residual_velocity_norms : velocity_norms,
             ic.LPT_order,
             info.Npart_1D,
             params.particle.allocation_factor,
             boxsize,
             ic.initial_redshift,
             shift,
-            info.id_offset);
+            info.id_offset,
+            cola.enabled);
     };
     make_species(part, cdm, splines.ratio_cdm, splines.f_cdm, 0.0);
     make_species(part_baryon,
@@ -764,6 +778,18 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
                  splines.ratio_baryon,
                  splines.f_baryon,
                  params.particle.baryon_lattice == "offset" ? 0.5 / double(baryon.Npart_1D) : 0.0);
+
+    // Scale-dependent COLA: the LPT potentials of the total CDM+baryon field (the shared COLA frame)
+    if (cola.enabled and cola.scaledependent) {
+        if (FML::PARTICLE::has_get_D_1LPT<T>() and cola.LPT_order >= 1) {
+            cola.phi_1LPT_ini_fourier = COLASOLVER::compute_phi_1LPT_from_delta<NDIM>(delta_cb_fourier);
+            cola.phi_1LPT_ini_fourier.add_memory_label("phi_1LPT(k,zini)");
+        }
+        if (FML::PARTICLE::has_get_D_2LPT<T>() and cola.LPT_order >= 2 and ic.LPT_order >= 2) {
+            FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_cb_fourier, cola.phi_2LPT_ini_fourier);
+            cola.phi_2LPT_ini_fourier.add_memory_label("phi_2LPT(k,zini)");
+        }
+    }
 }
 
 /// Read the N-body gauge source, check it and store the initial density field of the particles
@@ -1011,7 +1037,9 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
     // For COLA we can do the kick and drift at the same time
     if (cola.enabled) {
         timer.StartTiming("COLA");
-        cola.kick_drift(part, s.apos, s.apos_new, s.delta_time_kick, s.delta_time_drift);
+        for_each_cb_species([&](MPIParticles & particles, const COLASOLVER::SpeciesInfo &) {
+            cola.kick_drift(particles, s.apos, s.apos_new, s.delta_time_kick, s.delta_time_drift);
+        });
         if (not cola.scaledependent and sim.enforce_LPT_trajectories)
             part.communicate_particles();
         timer.EndTiming("COLA");
@@ -1128,6 +1156,9 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
     // In the COLA frame the velocities are relative to LPT. While this object exists the
     // particles have their true velocities
     ScopedLPTVelocity<NDIM, T> true_velocities(cola, part, 1.0 / (1.0 + redshift), &timer);
+    std::optional<ScopedLPTVelocity<NDIM, T>> true_velocities_baryons;
+    if (has_baryons())
+        true_velocities_baryons.emplace(cola, part_baryon, 1.0 / (1.0 + redshift), &timer);
 
     // Every step we (might) have computed Pcb(k) and possibly Ptotal(k). Output these to file
     // (only the steps since the last output: the files of earlier steps are already written)
