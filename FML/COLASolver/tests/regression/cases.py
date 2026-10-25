@@ -380,6 +380,19 @@ CASES = {
         ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.4_zmax200.txt",
         ic_input_redshift=20.0,
     ),
+    # Light neutrinos (0.1 eV in total) as particles with the energy density in the Poisson equation
+    "neutrino_particles_energy_density": dict(
+        particle_neutrinos=True,
+        particle_neutrino_energy_density=True,
+        simulation_use_cola=False,
+        timestep_method="Quinn",
+        cosmology_OmegaMNu=0.0024,
+        cosmology_OmegaCDM=0.2661,
+        force_linear_massive_neutrinos=False,
+        ic_type_of_input="transferinfofile",
+        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.1_zmax200.txt",
+        ic_input_redshift=20.0,
+    ),
     # CDM, baryons and (fewer) neutrino particles without delta-f weights, HDF5 output (needs USE_HDF5)
     "neutrino_particles_baryons_hdf5": dict(
         particle_neutrinos=True,

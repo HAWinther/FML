@@ -73,6 +73,53 @@ namespace COLASOLVER {
         /// the weights). Collective (all tasks must call it)
         double shotnoise();
 
+        /// The mean energy per mass <E/m>(a) of the unperturbed neutrinos (see NEUTRINOS::mean_energy_factor)
+        double mean_energy_factor(double a) const {
+            return COLASOLVER::NEUTRINOS::mean_energy_factor(a, mnu_eV, Tnu0_eV);
+        }
+
+        /// While this object lives the weights of the particles are w_i E_i / (m <E/m>(a)) with E_i / m =
+        /// sqrt(1 + u_i^2), so the (weighted) density field is the energy-density contrast delta_nu = delta rho_nu /
+        /// rho_nu (as in CAMB/CLASS) instead of the mass-density contrast; also its shot noise. The original weights
+        /// are restored (exactly) when it goes out of scope. Does nothing if enabled = false
+        class ScopedEnergyWeights {
+          public:
+            ScopedEnergyWeights(NeutrinoParticles & nu, double a, bool enabled) : nu(nu), enabled(enabled) {
+                if (not enabled)
+                    return;
+                namespace NU = COLASOLVER::NEUTRINOS;
+                auto * p = nu.part.get_particles_ptr();
+                const size_t npart = nu.part.get_npart();
+                const double inv_ac = 1.0 / (a * NU::c_code(nu.boxsize));
+                const double inv_mean = 1.0 / nu.mean_energy_factor(a);
+                saved.resize(npart);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (size_t i = 0; i < npart; i++) {
+                    double v2 = 0.0;
+                    for (int idim = 0; idim < NDIM; idim++)
+                        v2 += p[i].vel[idim] * p[i].vel[idim];
+                    saved[i] = p[i].weight;
+                    p[i].weight = float(double(p[i].weight) * std::sqrt(1.0 + v2 * inv_ac * inv_ac) * inv_mean);
+                }
+            }
+            ~ScopedEnergyWeights() {
+                if (not enabled)
+                    return;
+                auto * p = nu.part.get_particles_ptr();
+                for (size_t i = 0; i < saved.size(); i++)
+                    p[i].weight = saved[i];
+            }
+            ScopedEnergyWeights(const ScopedEnergyWeights &) = delete;
+            ScopedEnergyWeights & operator=(const ScopedEnergyWeights &) = delete;
+
+          private:
+            NeutrinoParticles & nu;
+            bool enabled;
+            std::vector<float> saved;
+        };
+
         /// The neutrino density delta_nu(k) (the grid must be allocated). The k = 0 mode is set to zero
         void density_fourier(FML::GRID::FFTWGrid<NDIM> & density, const std::string & density_assignment_method);
 

@@ -196,6 +196,7 @@ namespace COLASOLVER {
         bool neutrinos{false};    // Massive neutrinos as particles (delta-f method)
         int neutrino_Npart_1D{0}; // Number of neutrino particles per dimension (0: particle_Npart_1D)
         bool neutrino_deltaf{true}; // Use the delta-f weights (false: plain particles, for testing)
+        bool neutrino_energy_density{false}; // Source the Poisson equation with the neutrino energy density
         int sort_every_nsteps{0};   // Reorder the particles in memory by position every this many steps (0: never)
     };
 
@@ -406,6 +407,7 @@ namespace COLASOLVER {
             if (particle.neutrinos) {
                 r.get("particle_neutrino_Npart_1D", particle.neutrino_Npart_1D);
                 r.get("particle_neutrino_deltaf", particle.neutrino_deltaf);
+                r.get("particle_neutrino_energy_density", particle.neutrino_energy_density);
                 if (particle.neutrino_Npart_1D <= 0)
                     particle.neutrino_Npart_1D = particle.Npart_1D;
             }

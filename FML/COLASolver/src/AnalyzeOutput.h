@@ -804,13 +804,29 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         pofk_cb_binning = bin(delta_cb, sim.cb_shotnoise());
         // Neutrino particles: P_nu(k) and the total P(k) of delta_m = (1 - f_nu) delta_cb + f_nu delta_nu
         if (sim.has_neutrino_particles()) {
+            // With particle_neutrino_energy_density: the energy-density contrast of the neutrinos, and the total
+            // is the energy-density contrast of all matter, ((1 - f_nu) delta_cb + f_nu e delta_nu) / (1 - f_nu +
+            // f_nu e) with e = <E/m>(a)
+            const double a = 1.0 / (1.0 + redshift);
+            typename std::remove_reference_t<decltype(sim.get_neutrinos())>::ScopedEnergyWeights energy_weights(
+                sim.get_neutrinos(), a, sim.neutrino_energy_density());
             auto delta_nu = delta_of(sim.get_neutrino_particles());
             if (FML::ThisTask == 0)
                 delta_nu.set_fourier_from_index(0, 0.0);
             const double fnu = cosmo->get_fMNu();
-            pofk_species.push_back({"nu", bin(delta_nu, sim.get_neutrinos().shotnoise())});
-            FML::GRID::linear_combination_fourier<NDIM>(delta_cb, delta_nu, 1.0 - fnu, fnu);
-            pofk_species.push_back({"total", bin(delta_cb, sim.total_shotnoise())});
+            const double nu_shot = sim.get_neutrinos().shotnoise();
+            pofk_species.push_back({"nu", bin(delta_nu, nu_shot)});
+            if (sim.neutrino_energy_density()) {
+                const double e = sim.neutrino_energy_factor(a);
+                const double norm = 1.0 / (1.0 - fnu + fnu * e);
+                FML::GRID::linear_combination_fourier<NDIM>(delta_cb, delta_nu, (1.0 - fnu) * norm, fnu * e * norm);
+                const double shot = ((1.0 - fnu) * (1.0 - fnu) * sim.cb_shotnoise() + fnu * fnu * e * e * nu_shot) *
+                                    norm * norm;
+                pofk_species.push_back({"total", bin(delta_cb, shot)});
+            } else {
+                FML::GRID::linear_combination_fourier<NDIM>(delta_cb, delta_nu, 1.0 - fnu, fnu);
+                pofk_species.push_back({"total", bin(delta_cb, sim.total_shotnoise())});
+            }
         }
     }
 
@@ -852,8 +868,12 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     FML::INTERPOLATION::SPLINE::Spline pofk_cb_linear_spline(kvals, pofk_cb_linear, "Pcb(k) linear spline");
         
     // The shot noise of the (weighted) neutrino particles (collective, so computed on all tasks)
-    const double nu_shotnoise = sim.has_neutrino_particles() ?
-                                    sim.get_neutrinos().shotnoise() * std::pow(simulation_boxsize, NDIM) : 0.0;
+    double nu_shotnoise = 0.0;
+    if (sim.has_neutrino_particles()) {
+        typename std::remove_reference_t<decltype(sim.get_neutrinos())>::ScopedEnergyWeights energy_weights(
+            sim.get_neutrinos(), 1.0 / (1.0 + redshift), sim.neutrino_energy_density());
+        nu_shotnoise = sim.get_neutrinos().shotnoise() * std::pow(simulation_boxsize, NDIM);
+    }
 
     // Output to file
     if (FML::ThisTask == 0) {

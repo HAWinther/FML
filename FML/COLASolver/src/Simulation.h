@@ -223,11 +223,24 @@ class NBodySimulation {
         });
         return shotnoise;
     }
-    /// The shot noise of the total delta_m = (1 - f_nu) delta_cb + f_nu delta_nu with neutrino particles. Collective
-    double total_shotnoise() {
+    /// The shot noise of the total delta_m = (1 - f_nu) delta_cb + f_nu delta_nu with neutrino particles (with
+    /// particle_neutrino_energy_density and a > 0: of (1 - f_nu) delta_cb + f_nu <E/m>(a) delta_nu, the source of
+    /// the Poisson equation). Collective
+    double total_shotnoise(double a = -1.0) {
         const double fnu = cosmo->get_fMNu();
+        if (params.particle.neutrino_energy_density and a > 0.0) {
+            typename COLASOLVER::NeutrinoParticles<NDIM>::ScopedEnergyWeights energy_weights(neutrinos, a, true);
+            const double fnu_eff = fnu * neutrino_energy_factor(a);
+            return (1.0 - fnu) * (1.0 - fnu) * cb_shotnoise() + fnu_eff * fnu_eff * neutrinos.shotnoise();
+        }
         return (1.0 - fnu) * (1.0 - fnu) * cb_shotnoise() + fnu * fnu * neutrinos.shotnoise();
     }
+    /// The mean energy per mass of the neutrinos <E/m>(a) with particle_neutrino_energy_density, otherwise 1
+    double neutrino_energy_factor(double a) const {
+        return params.particle.neutrino_energy_density ? neutrinos.mean_energy_factor(a) : 1.0;
+    }
+    /// Use the energy density of the neutrino particles (particle_neutrino_energy_density)
+    bool neutrino_energy_density() const { return params.particle.neutrino_energy_density; }
     std::shared_ptr<Cosmology> get_cosmology() const { return cosmo; }
     std::shared_ptr<GravityModel<NDIM>> get_gravity_model() const { return grav; }
     std::shared_ptr<GravityModel<NDIM>> get_gravity_model_ic() const { return grav_ic; }

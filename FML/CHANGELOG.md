@@ -5,6 +5,20 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Neutrino particles: energy density in the Poisson equation
+- `particle_neutrino_energy_density` (default false): the neutrino particles source the Poisson equation with their
+  energy density, each weighted by E/m = sqrt(1 + u^2) (u = q/(a m c)), normalised by the mean <E/m>(a) of the
+  unperturbed Fermi-Dirac distribution (checked against scipy to 1e-15). The source is (1 - f_nu) delta_cb +
+  f_nu <E/m>(a) delta_nu, and the neutrino P(k) (every step and at the outputs, with its shot noise) is that of
+  the energy-density contrast, as in CAMB/CLASS; the total P(k) at the outputs is the energy-density contrast of all
+  matter. Only the energy density enters (the Poisson constraint; as in Elbers et al. 2021). Implemented with
+  scoped weights w E / (m <E/m>) that are restored exactly afterwards.
+- <E/m> - 1 for one 0.033 eV neutrino (sum 0.1 eV): 0.33 at z = 50, 0.067 at z = 20, 0.019 at z = 10. Effect on
+  P_cb at z = 0 (1024 Mpc/h, 0.1 eV, from z = 50): +0.033% at k = 0.01 h/Mpc, +0.01% at 0.02 (linear-theory
+  estimate +0.022%); on P_nu a few % at z >= 20. Comparing P_nu with CAMB at z >~ 20 is limited by the delta-f noise
+  (and the white shot-noise model, also for the near-lattice CDM) in both cases.
+- New regression case `neutrino_particles_energy_density`; all other files unchanged bit for bit.
+
 ### Threaded density assignment without atomics, spatial sorting of particles
 - `particles_to_grid` with more than one OpenMP thread: the local x-range is split into chunks of at least
   2 ORDER + 2 slices, the particles of the even chunks are added in parallel, then those of the odd chunks (no two

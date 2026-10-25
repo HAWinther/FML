@@ -47,7 +47,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
     } else if (has_neutrino_particles()) {
         add_neutrino_particles(density_grid_fourier, a);
         if (subtract_shotnoise)
-            total_shotnoise_value = total_shotnoise();
+            total_shotnoise_value = total_shotnoise(a);
     } else if (force.linear_massive_neutrinos and cosmo->get_fMNu() > 0.0 and transferdata) {
         add_linear_neutrinos(density_grid_fourier, a);
     } else {
@@ -165,15 +165,23 @@ void NBodySimulation<NDIM, T>::add_neutrino_particles(FFTWGrid<NDIM> & density_g
     FFTWGrid<NDIM> density_nu(density_grid_fourier.get_nmesh(),
                               density_grid_fourier.get_n_extra_slices_left(),
                               density_grid_fourier.get_n_extra_slices_right());
-    neutrinos.density_fourier(density_nu, current_force.density_assignment_method);
-    if (params.pofk.every_step and not particles_shifted())
-        bin_up_power_spectrum_every_step(density_nu,
-                                         true,
-                                         params.pofk.subtract_shotnoise ? neutrinos.shotnoise() : 0.0,
-                                         a,
-                                         pofk_species_every_step["nu"]);
+    {
+        // With particle_neutrino_energy_density the field is the energy-density contrast (weights w E / (m <E/m>))
+        typename COLASOLVER::NeutrinoParticles<NDIM>::ScopedEnergyWeights energy_weights(
+            neutrinos, a, params.particle.neutrino_energy_density);
+        neutrinos.density_fourier(density_nu, current_force.density_assignment_method);
+        if (params.pofk.every_step and not particles_shifted())
+            bin_up_power_spectrum_every_step(density_nu,
+                                             true,
+                                             params.pofk.subtract_shotnoise ? neutrinos.shotnoise() : 0.0,
+                                             a,
+                                             pofk_species_every_step["nu"]);
+    }
+    // The source of the Poisson equation (normalized to the non-relativistic matter density Omega_M a^-3):
+    // (1 - f_nu) delta_cb + f_nu <E/m>(a) delta_nu
     const double fMNu = cosmo->get_fMNu();
-    FML::GRID::linear_combination_fourier<NDIM>(density_grid_fourier, density_nu, 1.0 - fMNu, fMNu);
+    FML::GRID::linear_combination_fourier<NDIM>(
+        density_grid_fourier, density_nu, 1.0 - fMNu, fMNu * neutrino_energy_factor(a));
 }
 
 /// Linear massive neutrinos: delta_m = (1 - f_nu) delta_cb + f_nu delta_cb(k,zini) T_nu(k,z) / T_cb(k,zini)

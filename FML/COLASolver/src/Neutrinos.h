@@ -28,6 +28,23 @@ namespace COLASOLVER {
         /// The unperturbed (relativistic) Fermi-Dirac occupation number
         inline double fermi_dirac(double y) { return 1.0 / (std::exp(y) + 1.0); }
 
+        /// The mean energy per mass of the unperturbed neutrinos, <E/m> = <sqrt(1 + u^2)> over the Fermi-Dirac
+        /// distribution y^2 / (e^y + 1) with u = y T_nu0 / (a m_nu). The energy density is <E/m> times the mass
+        /// density (-> 1 when non-relativistic)
+        inline double mean_energy_factor(double a, double mnu_eV, double Tnu0_eV) {
+            const double s = Tnu0_eV / (a * mnu_eV);
+            const int n = 20000;
+            const double ymax = 50.0;
+            double num = 0.0, den = 0.0;
+            for (int i = 1; i < n; i++) {
+                const double y = ymax * i / double(n);
+                const double f = y * y * fermi_dirac(y);
+                num += f * std::sqrt(1.0 + (y * s) * (y * s));
+                den += f;
+            }
+            return num / den;
+        }
+
         /// The drift and kick factors for u = q / (a m c)
         inline double drift_factor(double u2) { return 1.0 / std::sqrt(1.0 + u2); }
         inline double kick_factor(double u2) { return (1.0 + 2.0 * u2) / std::sqrt(1.0 + u2); }
