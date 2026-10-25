@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Test of local primordial non-gaussianity
+- `tests/test_fnl.cpp` (run by `make test`, 1/2/4 tasks): generates Phi = phi + fNL (phi^2 - <phi^2>) with
+  `generate_nonlocal_gaussian_random_field_fourier` and recovers fNL = 0, +100, -100 from the reduced bispectrum
+  Q = B / (P1P2 + P2P3 + P3P1) = 2 fNL, plus the same-seed difference (Q(fNL) - Q(0)) / 2 to 3%. The expectation is
+  the exact binned prediction 2 fNL sum_tri (P1P2 + cyc) / N123 / (Pbar1 Pbar2 + cyc), computed in the test: for
+  P ~ k^-3 binning alone raises the estimator by 3% (8 bins on 64^3) to 1.3% (16 bins), so compare to the binned
+  prediction rather than to 2 fNL when measuring fNL at the percent level.
+
 ### Spherical overdensity masses
 - `FML::FOF::SphericalOverdensity` (`FriendsOfFriends/SphericalOverdensity.h`): SO properties around given centers
   (shrinking sphere center, radius and mass for any number of overdensities, velocity and dispersion), using all

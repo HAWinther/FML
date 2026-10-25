@@ -10,11 +10,11 @@ USE_OMP             ?= true
 USE_FFTW            ?= true
 USE_GSL             ?= true
 
-TARGETS := test_core test_grid_tools test_fof test_so
+TARGETS := test_core test_grid_tools test_fof test_so test_fnl
 
 include ../Makefile.config
 
-FML_MODULES := Global Spline
+FML_MODULES := Global Spline ODESolver
 
 TEST_OBJS = test_core.o Global.o
 ifeq ($(USE_GSL),true)
@@ -33,6 +33,15 @@ test_fof: test_fof.o Global.o
 test_so: test_so.o Global.o
 	$(LINK_EXE)
 
+# NonLocalGaussianRandomField.h includes the cosmology helpers that use splines and the ODE solver with GSL
+FNL_OBJS = test_fnl.o Global.o
+ifeq ($(USE_GSL),true)
+FNL_OBJS += Spline.o ODESolver.o
+endif
+
+test_fnl: $(FNL_OBJS)
+	$(LINK_EXE)
+
 MPIRUN  ?= mpirun
 NP_LIST ?= 1 2 4
 
@@ -47,7 +56,7 @@ endif
 
 # Each run must pass; the two "must abort" runs must fail with the expected message
 .PHONY: run
-run: test_core test_grid_tools test_fof test_so
+run: test_core test_grid_tools test_fof test_so test_fnl
 	@set -e; for np in $(NP_LIST); do \
 	  echo "== Running test_core with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_core; \
@@ -57,6 +66,8 @@ run: test_core test_grid_tools test_fof test_so
 	  OMP_NUM_THREADS=2 $(RUN) ./test_fof; \
 	  echo "== Running test_so with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_so; \
+	  echo "== Running test_fnl with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_fnl; \
 	done
 	@echo "== Checking that bad input aborts with a clear message"
 	@! $(RUN1) ./test_core alloc > alloc.log 2>&1 && grep -q "Reached allocation limit" alloc.log && echo "[PASS] allocation limit aborts"

@@ -88,3 +88,4 @@ Claude outputs/
 DEVELOP/
 tests/test_fof
 tests/test_so
+tests/test_fnl
