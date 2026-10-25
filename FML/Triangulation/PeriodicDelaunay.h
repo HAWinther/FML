@@ -138,6 +138,20 @@ namespace FML {
             }
 #endif
 
+            /// Does the watershed group class have a set_pos_circ(const double *) method
+            template <class U, class = void>
+            struct has_set_pos_circ : std::false_type {};
+            template <class U>
+            struct has_set_pos_circ<U, std::void_t<decltype(std::declval<U &>().set_pos_circ((const double *)nullptr))>>
+                : std::true_type {};
+
+            /// Does the watershed group class have a set_leak_quantity(double) method
+            template <class U, class = void>
+            struct has_set_leak_quantity : std::false_type {};
+            template <class U>
+            struct has_set_leak_quantity<U, std::void_t<decltype(std::declval<U &>().set_leak_quantity(0.0))>>
+                : std::true_type {};
+
             /// Map x into [0,1)
             inline double wrap_periodic(double x) {
                 x -= std::floor(x);
@@ -844,6 +858,7 @@ namespace FML {
 
             using Delaunay = MPIPeriodicDelaunay<T, VertexDataWatershed>;
             using Vertex_handle = typename Delaunay::Vertex_handle;
+            using Point = typename Delaunay::Point;
 
             assert_mpi(quantity.size() == NumPart, "[WatershedGeneral] quantity must have size NumPart");
             const auto & vs = D.get_vertex_handles_regular();
@@ -972,6 +987,33 @@ namespace FML {
 #endif
             }
 
+            // The leak quantity of each basin (as in ZOBOV): the lowest quantity at which the basin links to a
+            // neighboring basin. A link between two neighboring particles in different basins has the larger
+            // of the two quantities. Pairs that cross tasks are seen by the task that owns one of the particles
+            std::vector<double> leak_quantity(ntotal_minima, std::numeric_limits<double>::infinity());
+            for (size_t i = 0; i < NumPart; i++) {
+                const IDType a = label[i];
+                if (a == NoWatershedID)
+                    continue;
+                const double qi = vs[i]->info().quantity;
+                D.for_each_adjacent_vertex(vs[i], work, [&](Vertex_handle w) {
+                    if (w->info().point_type == GUARD_POINT)
+                        return;
+                    const IDType b = label[w->info().index];
+                    if (b == NoWatershedID or b == a)
+                        return;
+                    const double link = std::max(qi, double(w->info().quantity));
+                    leak_quantity[a] = std::min(leak_quantity[a], link);
+                    leak_quantity[b] = std::min(leak_quantity[b], link);
+                });
+            }
+#ifdef USE_MPI
+            for (size_t offset = 0; offset < leak_quantity.size(); offset += (size_t(1) << 28)) {
+                const int count = int(std::min(size_t(1) << 28, leak_quantity.size() - offset));
+                MPI_Allreduce(MPI_IN_PLACE, leak_quantity.data() + offset, count, MPI_DOUBLE, MPI_MIN, FML::communicator);
+            }
+#endif
+
             // Store the labels in the tessellation
             for (size_t i = 0; i < NumPart; i++)
                 vs[i]->info().WatershedID = label[i];
@@ -1000,24 +1042,111 @@ namespace FML {
                 }
             }
 
-            // The position of the minima (make sure all tasks have this)
+            // The position of the minima and the circumcenter of the minimum and its NDIM lowest-quantity mutually
+            // adjacent neighbors (as in Revolver, Nadathur et al.): the first neighbor is the neighbor of the minimum
+            // with the lowest quantity, the second the one with the lowest quantity among the common neighbors of
+            // the minimum and the first neighbor, etc. In 3D this is the center of an empty sphere in the basin.
+            // If we can't find such neighbors (or they are degenerate) we use the minimum. Make sure all tasks have this
             std::vector<double> pos_minima(ntotal_minima * CGAL_NDIM, 0.0);
-            for (size_t k = 0; k < minima.size(); k++) {
-                const auto & pos = vs[minima[k]]->point();
-                for (int idim = 0; idim < CGAL_NDIM; idim++)
-                    pos_minima[(size_t(id_start) + k) * CGAL_NDIM + idim] = pos[idim];
+            std::vector<double> pos_circumcenter(ntotal_minima * CGAL_NDIM, 0.0);
+            long long int ncircumcenter_failed = 0;
+            {
+                auto neighbors = [&](Vertex_handle v) {
+                    std::vector<Vertex_handle> result;
+                    D.for_each_adjacent_vertex(v, work, [&](Vertex_handle w) {
+                        if (w->info().point_type != GUARD_POINT)
+                            result.push_back(w);
+                    });
+                    return result;
+                };
+                for (size_t k = 0; k < minima.size(); k++) {
+                    const Vertex_handle vmin = vs[minima[k]];
+                    const auto & pmin = vmin->point();
+                    double * pos = &pos_minima[(size_t(id_start) + k) * CGAL_NDIM];
+                    double * circ = &pos_circumcenter[(size_t(id_start) + k) * CGAL_NDIM];
+                    for (int idim = 0; idim < CGAL_NDIM; idim++)
+                        circ[idim] = pos[idim] = pmin[idim];
+
+                    // Pick the neighbors
+                    std::vector<Vertex_handle> chosen{vmin};
+                    std::vector<Vertex_handle> candidates = neighbors(vmin);
+                    bool ok = true;
+                    for (int n = 0; n < CGAL_NDIM; n++) {
+                        if (n > 0) {
+                            const auto nbor = neighbors(chosen.back());
+                            std::vector<Vertex_handle> common;
+                            for (auto & w : candidates)
+                                if (std::find(nbor.begin(), nbor.end(), w) != nbor.end())
+                                    common.push_back(w);
+                            candidates = common;
+                        }
+                        if (candidates.empty()) {
+                            ok = false;
+                            break;
+                        }
+                        Vertex_handle best = candidates[0];
+                        for (auto & w : candidates)
+                            if (lower(w, best))
+                                best = w;
+                        chosen.push_back(best);
+                    }
+
+                    // The circumcenter (positions relative to the minimum so that it works across the boundary)
+                    if (ok) {
+                        Point q[CGAL_NDIM + 1];
+                        for (int j = 0; j <= CGAL_NDIM; j++) {
+                            double x[CGAL_NDIM];
+                            for (int idim = 0; idim < CGAL_NDIM; idim++) {
+                                double dx = chosen[j]->point()[idim] - pmin[idim];
+                                dx -= std::round(dx);
+                                x[idim] = dx;
+                            }
+#if CGAL_NDIM == 3
+                            q[j] = Point(x[0], x[1], x[2]);
+#elif CGAL_NDIM == 2
+                            q[j] = Point(x[0], x[1]);
+#endif
+                        }
+#if CGAL_NDIM == 3
+                        ok = not CGAL::coplanar(q[0], q[1], q[2], q[3]);
+                        const Point cc = ok ? CGAL::circumcenter(q[0], q[1], q[2], q[3]) : q[0];
+#elif CGAL_NDIM == 2
+                        ok = not CGAL::collinear(q[0], q[1], q[2]);
+                        const Point cc = ok ? CGAL::circumcenter(q[0], q[1], q[2]) : q[0];
+#endif
+                        for (int idim = 0; idim < CGAL_NDIM; idim++)
+                            ok = ok and std::isfinite(cc[idim]);
+                        if (ok)
+                            for (int idim = 0; idim < CGAL_NDIM; idim++)
+                                circ[idim] = detail::wrap_periodic(pmin[idim] + cc[idim]);
+                    }
+                    if (not ok)
+                        ncircumcenter_failed++;
+                }
             }
+            FML::SumOverTasks(&ncircumcenter_failed);
+            if (FML::ThisTask == 0 and ncircumcenter_failed > 0)
+                std::cout << "[WatershedGeneral] Warning: could not compute the circumcenter for " << ncircumcenter_failed
+                          << " basins, using the position of the minimum for these\n";
 #ifdef USE_MPI
-            for (size_t offset = 0; offset < pos_minima.size(); offset += (size_t(1) << 28)) {
-                const int count = int(std::min(size_t(1) << 28, pos_minima.size() - offset));
-                MPI_Allreduce(MPI_IN_PLACE, pos_minima.data() + offset, count, MPI_DOUBLE, MPI_SUM, FML::communicator);
+            for (auto * vec : {&pos_minima, &pos_circumcenter}) {
+                for (size_t offset = 0; offset < vec->size(); offset += (size_t(1) << 28)) {
+                    const int count = int(std::min(size_t(1) << 28, vec->size() - offset));
+                    MPI_Allreduce(MPI_IN_PLACE, vec->data() + offset, count, MPI_DOUBLE, MPI_SUM, FML::communicator);
+                }
             }
 #endif
 
             // Make the groups and bin up the particles
             watershed_groups.resize(ntotal_minima);
-            for (size_t k = 0; k < ntotal_minima; k++)
+            for (size_t k = 0; k < ntotal_minima; k++) {
                 watershed_groups[k].init(&pos_minima[k * CGAL_NDIM]);
+                if constexpr (detail::has_set_pos_circ<U>::value)
+                    watershed_groups[k].set_pos_circ(&pos_circumcenter[k * CGAL_NDIM]);
+                if constexpr (detail::has_set_leak_quantity<U>::value)
+                    watershed_groups[k].set_leak_quantity(leak_quantity[k]);
+            }
+            pos_circumcenter = std::vector<double>();
             pos_minima = std::vector<double>();
             for (size_t i = 0; i < NumPart; i++)
                 if (label[i] != NoWatershedID)

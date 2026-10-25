@@ -15,8 +15,8 @@ EXAMPLE_DIRS := $(sort $(dir $(wildcard */example/Makefile */examples/Makefile *
                 Cosmology/EinsteinBoltzmannSolver/ RamsesUtils/ramses2pk/ COLASolver/
 
 # Examples that need extra libraries (built with make examples-extra)
-#   LuaFileParser, CAMBUtils: LUA   Triangulation: CGAL   Plotting: python + matplotlib
-EXTRA_DIRS   := LuaFileParser/example/ CAMBUtils/example/ Triangulation/example/ Plotting/example/
+#   LuaFileParser, CAMBUtils: LUA   Triangulation: CGAL   VoidFinders: CGAL + FFTW   Plotting: python + matplotlib
+EXTRA_DIRS   := LuaFileParser/example/ CAMBUtils/example/ Triangulation/example/ VoidFinders/example/ Plotting/example/
 # SWIG python wrappers (built with make python)
 PYTHON_DIRS  := MakePythonWrapper/ HaloModel/PythonWrapper/
 

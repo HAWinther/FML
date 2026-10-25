@@ -5,6 +5,21 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### VoidFinders: ZOBOV and voxel void finders as in Revolver
+- New module `FML/VoidFinders` (periodic boxes, MPI). The voids are the watershed zones without merging, with
+  the cuts and outputs of Revolver (Nadathur et al.): center, R_eff, delta_min, delta_avg, lambda, DensRatio.
+  `Void.h`: the catalogue (`Void`, `write_catalogue` in Revolver's column format, sorted by minimum density).
+- `ZobovVoidFinder.h`: watershed on the Voronoi densities, center = circumcenter of the minimum and its 3 lowest
+  density mutually adjacent neighbors, cuts on the minimum density (< mean) and the number of particles (>= 5).
+- `VoxelVoidFinder.h`: CIC + Gaussian smoothing (grid size and smoothing scale as in Revolver, the same truncated
+  kernel as scipy's gaussian_filter) and a parallel 6-neighbor watershed on the grid. `VoxelWatershed` runs the
+  watershed on any density grid (e.g. the DTFE density); `void_density_field` gives the smoothed density.
+- Both can find clusters (overdensities). Checked against independent python implementations of Revolver's
+  algorithms (catalogues equal to 5e-12, the voxel pipeline from the particles identical) and identical on 1-4 tasks.
+- Triangulation: `WatershedBasin::pos_circ` (the circumcenter above) and `quantity_leak` (ZOBOV's leak density:
+  the lowest link to a neighboring basin), set by `WatershedGeneral` for group classes that have
+  `set_pos_circ`/`set_leak_quantity`.
+
 ### Friends-of-friends halos
 - `FriendsOfFriends` warns when groups reach the edge of the buffer copied from the neighbor tasks (they might be cut
   off and found twice); `FML::FOF::FoF_number_of_groups_reaching_buffer_edge`. With a too small buffer a halo on a

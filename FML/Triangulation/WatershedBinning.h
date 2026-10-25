@@ -15,6 +15,10 @@ namespace FML {
         template <class T, int NDIM>
         struct WatershedBasin {
             double pos_min[NDIM];
+            // Circumcenter of the minimum and its NDIM lowest-quantity mutually adjacent neighbors (as in Revolver)
+            double pos_circ[NDIM];
+            // The lowest quantity at which the basin links to a neighboring basin (ZOBOV's leak density)
+            double quantity_leak{0.0};
             double pos_barycenter[NDIM];
             double volume{0.0};
             double volume_min{0.0};
@@ -27,6 +31,7 @@ namespace FML {
             void init(double * pos) {
                 for (int idim = 0; idim < NDIM; idim++) {
                     pos_min[idim] = pos[idim];
+                    pos_circ[idim] = pos[idim];
                     pos_barycenter[idim] = 0.0;
                 }
                 density_min = 1e100;
@@ -36,6 +41,15 @@ namespace FML {
                 mean_quantity = 0;
                 ningroup = 0;
             }
+
+            // Set the circumcenter (called by WatershedGeneral after init)
+            void set_pos_circ(const double * pos) {
+                for (int idim = 0; idim < NDIM; idim++)
+                    pos_circ[idim] = pos[idim];
+            }
+
+            // Set the leak quantity (called by WatershedGeneral after init)
+            void set_leak_quantity(double q) { quantity_leak = q; }
 
             // Add data from a particle belonging to the group
             // We measure distances relative to the minimum point
