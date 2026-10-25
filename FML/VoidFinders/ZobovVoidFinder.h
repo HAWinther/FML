@@ -28,6 +28,13 @@ namespace FML {
             double max_dens_cut{1.0};
             /// Minimum number of particles in a void/cluster
             long long int min_num_particles{5};
+            /// How to merge the zones into voids. None: every zone is a void (Revolver). Threshold: merge zones that
+            /// are linked below link_density_threshold (VIDE). Full: the full ZOBOV hierarchy. With merging the
+            /// catalogue has all the voids in the hierarchy; parent is the id of the void a void is part of
+            /// (-1 for the top-level voids)
+            ZoneMerging merging{ZoneMerging::None};
+            /// Link density (in units of the mean) below which zones are merged (above for clusters)
+            double link_density_threshold{0.2};
         };
 
         namespace detail {
@@ -141,42 +148,55 @@ namespace FML {
 
             // The watershed. For voids the quantity is mass/volume, for clusters volume/mass
             std::vector<detail::ZobovZone> zones;
+            std::vector<FML::TRIANGULATION::WatershedLink> links;
             FML::TRIANGULATION::WatershedDensity(parts.data(),
                                                  NumPart,
                                                  zones,
                                                  options.buffer_fraction,
                                                  options.random_fraction,
-                                                 options.find_clusters);
+                                                 options.find_clusters,
+                                                 &links);
             parts = std::vector<detail::ZobovParticle>();
 
-            // Make the catalogue (the zones are only on task 0)
+            // Merge the zones and make the catalogue (the zones are only on task 0)
             std::vector<Void> voids;
             if (FML::ThisTask == 0) {
-                for (auto & z : zones) {
-                    if (z.n == 0)
-                        continue;
-                    Void v;
-                    v.cluster = options.find_clusters;
-                    const double density_core = options.find_clusters ? 1.0 / z.quantity_min : z.quantity_min;
-                    v.density_min = density_core / mean_density;
-                    v.density_ratio = z.quantity_leak / z.quantity_min;
-                    v.volume = z.volume;
-                    v.radius = std::cbrt(3.0 * z.volume / (4.0 * M_PI));
-                    v.density_avg = z.mass / z.volume / mean_density;
-                    v.nmembers = z.n;
+                std::vector<Zone> zz(zones.size());
+                for (size_t a = 0; a < zones.size(); a++) {
+                    const auto & z = zones[a];
+                    auto & y = zz[a];
+                    y.quantity_core = z.quantity_min;
+                    y.volume = z.volume;
+                    y.mass = z.mass;
+                    y.weight = z.volume;
+                    y.n = z.n;
                     for (int j = 0; j < 3; j++) {
-                        v.pos[j] = z.pos_circ[j];
-                        v.pos_min[j] = z.pos_min[j];
-                        v.pos_barycenter[j] = z.pos_barycenter[j];
+                        y.pos_min[j] = z.pos_min[j];
+                        y.pos_center[j] = z.pos_circ[j];
+                        double dx = z.pos_barycenter[j] - z.pos_min[j];
+                        dx -= std::round(dx);
+                        y.weighted_dx[j] = dx * z.volume;
                     }
-                    const bool pass_density =
-                        options.find_clusters ? v.density_min > options.max_dens_cut : v.density_min < options.min_dens_cut;
-                    if (pass_density and v.nmembers >= options.min_num_particles and v.density_ratio >= 1.0)
-                        voids.push_back(v);
                 }
-                sort_catalogue(voids);
+                std::vector<ZoneLink> zlinks(links.size());
+                for (size_t k = 0; k < links.size(); k++)
+                    zlinks[k] = {links[k].a, links[k].b, links[k].quantity};
+                links = std::vector<FML::TRIANGULATION::WatershedLink>();
+                const double threshold_quantity = options.find_clusters
+                                                      ? 1.0 / (options.link_density_threshold * mean_density)
+                                                      : options.link_density_threshold * mean_density;
+                const auto merged = merge_zones(zz, zlinks, options.merging, threshold_quantity);
+                voids = catalogue_from_merged_zones(merged, options.find_clusters, mean_density, true, [&](const Void & v) {
+                    const bool pass_density = options.find_clusters ? v.density_min > options.max_dens_cut
+                                                                    : v.density_min < options.min_dens_cut;
+                    return pass_density and v.nmembers >= options.min_num_particles and v.density_ratio >= 1.0;
+                });
+                long long int ntop = 0;
+                for (auto & v : voids)
+                    ntop += v.parent < 0;
                 std::cout << "[ZobovVoidFinder] " << zones.size() << " zones, " << voids.size()
-                          << (options.find_clusters ? " clusters" : " voids") << " pass the cuts\n";
+                          << (options.find_clusters ? " clusters" : " voids") << " pass the cuts (" << ntop
+                          << " top-level)\n";
             }
             broadcast_catalogue(voids);
             return voids;

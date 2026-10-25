@@ -10,6 +10,8 @@
 #include <vector>
 
 #include <FML/Global/Global.h>
+#include <FML/VoidFinders/ZoneMerging.h>
+#include <functional>
 
 namespace FML {
 
@@ -57,6 +59,10 @@ namespace FML {
             long long int nmembers{0};
             /// Is this a cluster (overdensity) and not a void
             bool cluster{false};
+            /// With zone merging: the id of the void this void is part of (-1 for a top-level void) and the number of
+            /// zones in it. Without merging every void is one zone with parent -1
+            long long int parent{-1};
+            long long int nzones{1};
 
             /// delta_min (delta_max for clusters)
             double delta_min() const { return density_min - 1.0; }
@@ -67,15 +73,72 @@ namespace FML {
         };
 
         /// Sort a catalogue in increasing order of minimum density (decreasing for clusters) and set the ids.
-        /// Ties are broken by the position of the minimum so the order is reproducible
+        /// Ties are broken by the position of the minimum and the number of zones (larger first) so the order is
+        /// reproducible. On input parent must be the index of the parent in the vector (or -1); it is converted to
+        /// the new ids
         inline void sort_catalogue(std::vector<Void> & voids) {
-            std::sort(voids.begin(), voids.end(), [](const Void & a, const Void & b) {
-                if (a.density_min != b.density_min)
-                    return a.cluster ? a.density_min > b.density_min : a.density_min < b.density_min;
-                return a.pos_min < b.pos_min;
-            });
             for (size_t i = 0; i < voids.size(); i++)
                 voids[i].id = (long long int)(i);
+            std::vector<Void> sorted(voids);
+            std::sort(sorted.begin(), sorted.end(), [](const Void & a, const Void & b) {
+                if (a.density_min != b.density_min)
+                    return a.cluster ? a.density_min > b.density_min : a.density_min < b.density_min;
+                if (a.pos_min != b.pos_min)
+                    return a.pos_min < b.pos_min;
+                return a.nzones > b.nzones;
+            });
+            std::vector<long long int> new_id(voids.size());
+            for (size_t i = 0; i < sorted.size(); i++)
+                new_id[sorted[i].id] = (long long int)(i);
+            for (size_t i = 0; i < sorted.size(); i++) {
+                sorted[i].id = (long long int)(i);
+                if (sorted[i].parent >= 0)
+                    sorted[i].parent = new_id[sorted[i].parent];
+            }
+            voids = std::move(sorted);
+        }
+
+        /// Make a catalogue from merged zones: voids that pass the cuts, parent = index in the result
+        /// (the parent of a void that passes the cuts always passes them too). density_avg is mass/volume
+        /// (in units of mean_density) if use_mass, else the mean of sum_density over the members
+        inline std::vector<Void> catalogue_from_merged_zones(const std::vector<MergedVoid> & merged,
+                                                             bool find_clusters,
+                                                             double mean_density,
+                                                             bool use_mass,
+                                                             std::function<bool(const Void &)> pass_cuts) {
+            std::vector<Void> voids;
+            std::vector<long long int> index(merged.size(), -1);
+            for (size_t a = 0; a < merged.size(); a++) {
+                const auto & m = merged[a];
+                const auto & z = m.sum;
+                if (z.n == 0)
+                    continue;
+                Void v;
+                v.cluster = find_clusters;
+                v.density_min = (find_clusters ? 1.0 / z.quantity_core : z.quantity_core) / mean_density;
+                v.density_ratio = m.quantity_leak / z.quantity_core;
+                v.volume = z.volume;
+                v.radius = std::cbrt(3.0 * z.volume / (4.0 * M_PI));
+                v.density_avg = use_mass ? z.mass / z.volume / mean_density : z.sum_density / double(z.n);
+                v.nmembers = z.n;
+                v.nzones = m.nzones;
+                v.parent = m.parent_zone; // zone index for now
+                for (int j = 0; j < 3; j++) {
+                    v.pos[j] = z.pos_center[j];
+                    v.pos_min[j] = z.pos_min[j];
+                    double x = z.weight > 0.0 ? z.pos_min[j] + z.weighted_dx[j] / z.weight : z.pos_min[j];
+                    x -= std::floor(x);
+                    v.pos_barycenter[j] = x >= 1.0 ? 0.0 : x;
+                }
+                if (not pass_cuts(v))
+                    continue;
+                index[a] = (long long int)(voids.size());
+                voids.push_back(v);
+            }
+            for (auto & v : voids)
+                v.parent = v.parent >= 0 ? index[v.parent] : -1;
+            sort_catalogue(voids);
+            return voids;
         }
 
         /// Write the catalogue to file (only task 0 writes). Distances are multiplied by boxsize.
@@ -90,7 +153,7 @@ namespace FML {
             fp << "# " << voids.size() << (cluster ? " clusters" : " voids") << ", boxsize " << boxsize << "\n";
             fp << "# id x y z R " << (cluster ? "delta_max" : "delta_min") << " delta_avg "
                << (cluster ? "lambda_c" : "lambda_v")
-               << " density_ratio x_min y_min z_min x_barycenter y_barycenter z_barycenter nmembers\n";
+               << " density_ratio x_min y_min z_min x_barycenter y_barycenter z_barycenter nmembers nzones parent\n";
             fp << std::setprecision(8);
             for (auto & v : voids) {
                 fp << v.id << " " << v.pos[0] * boxsize << " " << v.pos[1] * boxsize << " " << v.pos[2] * boxsize << " "
@@ -98,7 +161,7 @@ namespace FML {
                    << " " << v.density_ratio << " " << v.pos_min[0] * boxsize << " " << v.pos_min[1] * boxsize << " "
                    << v.pos_min[2] * boxsize << " " << v.pos_barycenter[0] * boxsize << " "
                    << v.pos_barycenter[1] * boxsize << " " << v.pos_barycenter[2] * boxsize << " " << v.nmembers
-                   << "\n";
+                   << " " << v.nzones << " " << v.parent << "\n";
             }
         }
 

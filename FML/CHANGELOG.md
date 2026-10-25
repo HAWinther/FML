@@ -5,6 +5,19 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### VoidFinders: merging zones into voids (ZOBOV hierarchy, VIDE)
+- `ZoneMerging.h`: `merge_zones` builds the ZOBOV void hierarchy with a union-find over the zone links in
+  increasing order: when two voids join at a link the shallower one is finished (its leak is the link, its parent
+  the deeper void), equivalent to jozov's growing of a void from each zone until a deeper zone is reached.
+- `ZobovOptions::merging` / `VoxelOptions::merging` (and `VoxelWatershed`): `None` (every zone is a void, as in
+  Revolver, the default), `Threshold` (merge through links below `link_density_threshold`, default 0.2 of the mean,
+  as in VIDE) and `Full` (the full hierarchy). The catalogue has all voids of the hierarchy with `parent` (-1 for
+  top-level voids) and `nzones`; `write_catalogue` writes the two as the last columns.
+- Triangulation: `WatershedGeneral`/`WatershedDensity` can return the links between the basins (`WatershedLink`).
+- Checked against an independent brute-force jozov implementation (members, zones, leak ratios and parents
+  identical for ZOBOV and voxel zones, full and threshold), identical on 1-4 tasks; without merging the catalogues
+  are unchanged. The barycenter of a merged void is only meaningful for voids smaller than half the box.
+
 ### VoidFinders: spherical underdensity void finder
 - `SphericalVoidFinder.h`: spheres with integrated density contrast Delta(<R) = delta_threshold (default -0.8)
   around the low density cells of the smoothed density grid (exact particle counts, masses if the particles have

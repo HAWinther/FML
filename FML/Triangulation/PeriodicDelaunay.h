@@ -817,6 +817,33 @@ namespace FML {
         const IDType NoWatershedID = std::numeric_limits<IDType>::max();
         const QuantityType Infinity = std::numeric_limits<QuantityType>::infinity();
 
+        /// A link between two watershed basins: the lowest quantity at which they connect. For a pair of neighboring
+        /// particles in the two basins the link has the larger of the two quantities
+        struct WatershedLink {
+            long long int a{0};
+            long long int b{0};
+            double quantity{0.0};
+        };
+
+        namespace detail {
+            /// Keep only the lowest link for each pair (a < b)
+            inline void reduce_links(std::vector<WatershedLink> & links) {
+                std::sort(links.begin(), links.end(), [](const WatershedLink & x, const WatershedLink & y) {
+                    if (x.a != y.a)
+                        return x.a < y.a;
+                    if (x.b != y.b)
+                        return x.b < y.b;
+                    return x.quantity < y.quantity;
+                });
+                links.erase(std::unique(links.begin(),
+                                        links.end(),
+                                        [](const WatershedLink & x, const WatershedLink & y) {
+                                            return x.a == y.a and x.b == y.b;
+                                        }),
+                            links.end());
+            }
+        } // namespace detail
+
         /// The vertex base for the CGAL tessellation needed for the Watershed algorithm.
         struct VertexDataWatershed {
             void * part_ptr{nullptr};
@@ -846,6 +873,7 @@ namespace FML {
         /// @param[in] quantity Vector with the quantity to watershed on (e.g. the density of the particles).
         /// quantity[i] corresponds to the quantity for particle i.
         /// @param[out] watershed_groups The result of the watershed: a list of watershed groups (only on task 0).
+        /// @param[out] links Optional: the links between the basins (index into watershed_groups), only on task 0.
         ///
         //===============================================================================
 
@@ -854,7 +882,8 @@ namespace FML {
                               T * p,
                               size_t NumPart,
                               std::vector<double> & quantity,
-                              std::vector<U> & watershed_groups) {
+                              std::vector<U> & watershed_groups,
+                              std::vector<WatershedLink> * links = nullptr) {
 
             using Delaunay = MPIPeriodicDelaunay<T, VertexDataWatershed>;
             using Vertex_handle = typename Delaunay::Vertex_handle;
@@ -991,6 +1020,7 @@ namespace FML {
             // neighboring basin. A link between two neighboring particles in different basins has the larger
             // of the two quantities. Pairs that cross tasks are seen by the task that owns one of the particles
             std::vector<double> leak_quantity(ntotal_minima, std::numeric_limits<double>::infinity());
+            std::vector<WatershedLink> local_links;
             for (size_t i = 0; i < NumPart; i++) {
                 const IDType a = label[i];
                 if (a == NoWatershedID)
@@ -1005,7 +1035,40 @@ namespace FML {
                     const double link = std::max(qi, double(w->info().quantity));
                     leak_quantity[a] = std::min(leak_quantity[a], link);
                     leak_quantity[b] = std::min(leak_quantity[b], link);
+                    if (links)
+                        local_links.push_back({std::min(a, b), std::max(a, b), link});
                 });
+                // Keep only the lowest link for each pair of basins now and then to save memory
+                if (links and local_links.size() > 4 * ntotal_minima + 1000000)
+                    detail::reduce_links(local_links);
+            }
+            if (links) {
+                detail::reduce_links(local_links);
+                // Gather on task 0 (where the groups are)
+                links->clear();
+#ifdef USE_MPI
+                if (FML::NTasks > 1) {
+                    MPI_Datatype link_type;
+                    MPI_Type_contiguous(int(sizeof(WatershedLink)), MPI_BYTE, &link_type);
+                    MPI_Type_commit(&link_type);
+                    std::vector<int> counts(FML::NTasks), displs(FML::NTasks, 0);
+                    int n = int(local_links.size());
+                    MPI_Gather(&n, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, FML::communicator);
+                    for (int i = 1; i < FML::NTasks; i++)
+                        displs[i] = displs[i - 1] + counts[i - 1];
+                    if (FML::ThisTask == 0)
+                        links->resize(size_t(displs.back()) + counts.back());
+                    MPI_Gatherv(local_links.data(), n, link_type, links->data(), counts.data(), displs.data(), link_type, 0,
+                                FML::communicator);
+                    MPI_Type_free(&link_type);
+                    if (FML::ThisTask == 0)
+                        detail::reduce_links(*links);
+                } else {
+                    *links = std::move(local_links);
+                }
+#else
+                *links = std::move(local_links);
+#endif
             }
 #ifdef USE_MPI
             for (size_t offset = 0; offset < leak_quantity.size(); offset += (size_t(1) << 28)) {
@@ -1230,7 +1293,8 @@ namespace FML {
                               std::vector<U> & watershed_groups,
                               double buffer_fraction = 0.30,
                               double random_fraction = 0.5,
-                              bool do_density_maximum = false) {
+                              bool do_density_maximum = false,
+                              std::vector<WatershedLink> * links = nullptr) {
 
             static_assert(FML::PARTICLE::has_set_volume<T>(),
                           "[WatershedDensity] We require the particle to have a set_volume / get_volume method");
@@ -1282,7 +1346,7 @@ namespace FML {
             }
 
             // Run general algorithm
-            WatershedGeneral<T, U>(D, p, NumPart, density, watershed_groups);
+            WatershedGeneral<T, U>(D, p, NumPart, density, watershed_groups, links);
         }
 
     } // namespace TRIANGULATION

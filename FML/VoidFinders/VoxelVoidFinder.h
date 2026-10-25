@@ -35,6 +35,10 @@ namespace FML {
             double min_dens_cut{1.0};
             /// Clusters: the maximum density must be above this (in units of the mean)
             double max_dens_cut{1.0};
+            /// How to merge the zones into voids (None: every zone is a void as in Revolver), see ZoneMerging
+            ZoneMerging merging{ZoneMerging::None};
+            /// Link density (in units of the mean) below which zones are merged (above for clusters)
+            double link_density_threshold{0.2};
         };
 
         //========================================================================================
@@ -56,10 +60,17 @@ namespace FML {
         /// @param[in] density The density field in units of the mean density (1 + delta)
         /// @param[in] find_clusters Find maxima instead of minima
         /// @param[in] density_cut Voids: keep the zones with minimum density below this. Clusters: maximum density above
+        /// @param[in] merging How to merge the zones into voids (None: every zone is a void as in Revolver)
+        /// @param[in] link_density_threshold For ZoneMerging::Threshold: merge zones linked below this density (above
+        /// for clusters)
         ///
         //========================================================================================
         inline std::vector<Void>
-        VoxelWatershed(const FML::GRID::FFTWGrid<3> & density, bool find_clusters = false, double density_cut = 1.0) {
+        VoxelWatershed(const FML::GRID::FFTWGrid<3> & density,
+                       bool find_clusters = false,
+                       double density_cut = 1.0,
+                       ZoneMerging merging = ZoneMerging::None,
+                       double link_density_threshold = 0.2) {
 
             const int N = density.get_nmesh();
             const long long int N2 = (long long int)(N) * N;
@@ -240,7 +251,7 @@ namespace FML {
 
             // Bin up: number of voxels, sum of density, barycenter, leak quantity
             std::vector<double> sums(6 * nzones, 0.0);
-            std::vector<double> leak(nzones, std::numeric_limits<double>::infinity());
+            std::vector<ZoneLink> links;
             long long int nunassigned = 0;
             for (int ix = 0; ix < nx; ix++)
                 for (int iy = 0; iy < N; iy++)
@@ -267,47 +278,69 @@ namespace FML {
                             if (b == no_label or b == a)
                                 return;
                             const double link = std::max(qi, double(q.get_real({jx, jy, jz})));
-                            leak[a] = std::min(leak[a], link);
-                            leak[b] = std::min(leak[b], link);
+                            links.push_back({std::min(a, b), std::max(a, b), link});
                         });
+                        if (links.size() > size_t(4 * nzones + 1000000))
+                            reduce_zone_links(links);
                     }
+            reduce_zone_links(links);
             FML::SumOverTasks(&nunassigned);
             if (FML::ThisTask == 0 and nunassigned > 0)
                 std::cout << "[VoxelWatershed] Warning: " << nunassigned << " voxels were not assigned to a zone\n";
 #ifdef USE_MPI
             allreduce(sums, MPI_SUM);
-            allreduce(leak, MPI_MIN);
+            // Gather the links on task 0
+            if (not serial) {
+                MPI_Datatype link_type;
+                MPI_Type_contiguous(int(sizeof(ZoneLink)), MPI_BYTE, &link_type);
+                MPI_Type_commit(&link_type);
+                std::vector<int> counts(FML::NTasks), displs(FML::NTasks, 0);
+                int n = int(links.size());
+                MPI_Gather(&n, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, FML::communicator);
+                for (int i = 1; i < FML::NTasks; i++)
+                    displs[i] = displs[i - 1] + counts[i - 1];
+                std::vector<ZoneLink> all;
+                if (FML::ThisTask == 0)
+                    all.resize(size_t(displs.back()) + counts.back());
+                MPI_Gatherv(links.data(), n, link_type, all.data(), counts.data(), displs.data(), link_type, 0,
+                            FML::communicator);
+                MPI_Type_free(&link_type);
+                links = std::move(all);
+            }
 #endif
 
-            // The catalogue
-            const double voxel_volume = 1.0 / double(N2 * N);
+            // Merge the zones and make the catalogue on task 0
             std::vector<Void> voids;
-            for (long long int a = 0; a < nzones; a++) {
-                const double * c = &core[4 * a];
-                const double * s = &sums[6 * a];
-                Void v;
-                v.cluster = find_clusters;
-                v.density_min = find_clusters ? 1.0 / c[3] : c[3];
-                const bool pass = find_clusters ? v.density_min > density_cut : v.density_min < density_cut;
-                if (not pass)
-                    continue;
-                v.nmembers = (long long int)(s[0]);
-                v.volume = s[0] * voxel_volume;
-                v.radius = std::cbrt(3.0 * v.volume / (4.0 * M_PI));
-                v.density_avg = s[1] / s[0];
-                v.density_ratio = leak[a] / c[3];
-                for (int j = 0; j < 3; j++) {
-                    v.pos[j] = v.pos_min[j] = c[j];
-                    double x = c[j] + s[3 + j] / s[2];
-                    x -= std::floor(x);
-                    v.pos_barycenter[j] = x >= 1.0 ? 0.0 : x;
+            if (FML::ThisTask == 0) {
+                const double voxel_volume = 1.0 / double(N2 * N);
+                std::vector<Zone> zones(nzones);
+                for (long long int a = 0; a < nzones; a++) {
+                    const double * c = &core[4 * a];
+                    const double * sm = &sums[6 * a];
+                    auto & z = zones[a];
+                    z.quantity_core = c[3];
+                    z.n = (long long int)(sm[0]);
+                    z.volume = sm[0] * voxel_volume;
+                    z.mass = z.volume;
+                    z.sum_density = sm[1];
+                    z.weight = sm[2];
+                    for (int j = 0; j < 3; j++) {
+                        z.pos_min[j] = z.pos_center[j] = c[j];
+                        z.weighted_dx[j] = sm[3 + j];
+                    }
                 }
-                voids.push_back(v);
-            }
-            sort_catalogue(voids);
-            if (FML::ThisTask == 0)
+                const double threshold_quantity = find_clusters ? 1.0 / link_density_threshold : link_density_threshold;
+                const auto merged = merge_zones(zones, links, merging, threshold_quantity);
+                voids = catalogue_from_merged_zones(merged, find_clusters, 1.0, false, [&](const Void & v) {
+                    return find_clusters ? v.density_min > density_cut : v.density_min < density_cut;
+                });
+                long long int ntop = 0;
+                for (auto & v : voids)
+                    ntop += v.parent < 0;
                 std::cout << "[VoxelWatershed] " << voids.size() << (find_clusters ? " clusters" : " voids")
-                          << " pass the cut\n";
+                          << " pass the cut (" << ntop << " top-level)\n";
+            }
+            broadcast_catalogue(voids);
             return voids;
         }
 
@@ -421,8 +454,11 @@ namespace FML {
                 std::cout << "[VoxelVoidFinder] Finding " << (options.find_clusters ? "clusters" : "voids") << "\n";
             FML::GRID::FFTWGrid<3> grid;
             void_density_field(p, NumPart, options, grid);
-            auto voids = VoxelWatershed(
-                grid, options.find_clusters, options.find_clusters ? options.max_dens_cut : options.min_dens_cut);
+            auto voids = VoxelWatershed(grid,
+                                        options.find_clusters,
+                                        options.find_clusters ? options.max_dens_cut : options.min_dens_cut,
+                                        options.merging,
+                                        options.link_density_threshold);
             if (density_grid)
                 *density_grid = grid;
             return voids;
