@@ -1,6 +1,7 @@
 #ifndef LIGHTCONE_HEALPIX_HEADER
 #define LIGHTCONE_HEALPIX_HEADER
 
+#include <array>
 #include <FML/Global/Global.h>
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
@@ -171,6 +172,33 @@ class OnionSlice {
         map[ipix] += 1.0;
 #endif
         n_in_map += 1;
+    }
+
+    /// Set the value of a pixel (for maps of a field sampled at the pixel centers, e.g. the potential)
+    void set_pixel(long int ipix, T value) { map[ipix] = value; }
+
+    /// The unit vector of the center of pixel ipix (3D, needs Healpix)
+    std::array<double, 3> pixel_direction([[maybe_unused]] long int ipix) const {
+#ifdef USE_HEALPIX
+        if constexpr (NDIM == 3) {
+            const vec3 v = hmap.pix2vec(ipix);
+            return {v.x, v.y, v.z};
+        }
+#endif
+        throw std::runtime_error("pixel_direction needs NDIM = 3 and Healpix");
+    }
+
+    /// Sum the maps over the tasks to task_to_reduce_to (for maps of a field, not of particle counts)
+    void sum_field_over_tasks(int task_to_reduce_to = 0) {
+        auto npix = get_npix();
+        if constexpr (std::is_same<T, float>::value) {
+            MPI_Reduce((FML::ThisTask == task_to_reduce_to ? MPI_IN_PLACE : &map[0]), &map[0], npix, MPI_FLOAT, MPI_SUM,
+                       task_to_reduce_to, FML::communicator);
+        } else {
+            MPI_Reduce((FML::ThisTask == task_to_reduce_to ? MPI_IN_PLACE : &map[0]), &map[0], npix, MPI_DOUBLE, MPI_SUM,
+                       task_to_reduce_to, FML::communicator);
+        }
+        is_reduced = true;
     }
 
     bool in_map(double r) {
@@ -665,6 +693,10 @@ class OnionSlices {
         }
       }
     }
+
+    /// The index range [start, end) of the maps of the current step
+    std::pair<int, int> current_step_range() const { return {index_maps_current_step_start, index_maps_current_step_end}; }
+    long get_nside() const { return nside; }
 
     OnionSlice<T, NDIM> & get_map(double r) {
       size_t istart_search = index_maps_current_step_start;

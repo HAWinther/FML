@@ -424,6 +424,17 @@ The fiducial fileformat for the particles is GADGET. If you want the standard ga
 
 The lightcone particles can be written as ascii (`plc_output_asciifile`), binary GADGET (`plc_output_gadgetfile`) or GADGET HDF5 files (`plc_output_hdf5file`, needs USE_HDF5): `lightcone_<name>/lightcone_cb_hdf5_step<N>[_batch<B>].<task>.hdf5`, one set per step. In all formats the positions are comoving in Mpc/h (not wrapped into the box) and the velocities are peculiar velocities in km/s; the header time is the middle of the step's crossing scale factors.
 
+With `plc_relativistic_effects = true` the HDF5 files also have `PartType1/Potential` (Phi/c^2 at the particle),
+`RadialVelocity` (km/s), `CosmologicalRedshift` and `ObservedRedshift`, 1 + z_obs = (1 + z)(1 + v_r/c - Phi/c^2): the
+Doppler and gravitational redshift to first order, for an observer at rest with Phi = 0 (the observer's terms only
+add a monopole and dipole). The ascii files get the same as extra columns. Phi is the GR potential from the density
+used for the force at the start of the step (one extra FFT per step while recording; for modified gravity it is still
+the GR potential). With `plc_make_onion_density_maps` there are also Healpix maps of Phi/c^2 at the mid-radius of
+every shell (`OnionMap_phi_cb_imap<N>`, sampled from the potential grid, and their C_ell). Not included (yet): the
+integrated terms (ISW, Shapiro time delay), lensing deflection of the positions, and the transformation of the
+N-body-gauge positions to the Poisson gauge on near-horizon scales. Checked against an independent Poisson solve of
+the z = 0 snapshot: correlation 1.0000 for the particles and maps, with the expected D/a evolution of Phi.
+
 # External libraries: 
 
 We require FFTW3, GSL and LUA. LUA is only for reading the parameterfiles.

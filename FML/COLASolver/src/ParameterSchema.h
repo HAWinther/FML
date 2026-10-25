@@ -608,6 +608,15 @@ namespace COLASOLVER {
                                   "Output the lightcone particles as GADGET HDF5 files (needs USE_HDF5; positions in "
                                   "Mpc/h, peculiar velocities in km/s)");
                 b.optional("plc_output_in_batches", false, "Output in batches to save memory");
+                b.always_optional("plc_relativistic_effects",
+                                  false,
+                                  "Store the potential Phi/c^2 at the lightcone particles and write it with the radial "
+                                  "velocity, the cosmological redshift and the observed redshift 1 + z_obs = (1 + z)(1 + "
+                                  "v_r/c - Phi/c^2) (Doppler + gravitational redshift; observer at rest with Phi = 0) to "
+                                  "the HDF5 and ascii lightcone files. With plc_make_onion_density_maps also Healpix maps "
+                                  "of Phi/c^2 at the shells. Phi from the Poisson equation with the density used for the "
+                                  "force (the GR potential also for modified gravity models). Costs one extra FFT per "
+                                  "step while recording the lightcone");
                 b.optional("plc_make_onion_density_maps", false, "Make (Healpix) density maps delta(z, theta)");
                 if_true("plc_make_onion_density_maps", [&]() {
                     b.optional("plc_nside", 256, "Healpix nside of the maps (npix = 12 nside^2)");

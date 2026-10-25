@@ -5,6 +5,19 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Lightcone: potential, Doppler and gravitational redshift
+- `plc_relativistic_effects` (default false): during the steps that record the lightcone the potential Phi/c^2 =
+  -1.5 Omega_M (H0/c)^2 delta / (a k^2) is computed from the density used for the force (one extra FFT), interpolated
+  to the particles and stored with each lightcone particle (+4 bytes per stored particle). HDF5 lightcone files get
+  `Potential`, `RadialVelocity`, `CosmologicalRedshift` and `ObservedRedshift` (1 + z_obs = (1 + z)(1 + v_r/c -
+  Phi/c^2)), ascii files the same as columns; with onion maps also Healpix maps of Phi/c^2 sampled at the shells'
+  mid-radius (`OnionMap_phi_cb_imap<N>` + C_ell). Library-side: `OnionSlice::pixel_direction`, `set_pixel`,
+  `sum_field_over_tasks`.
+- Validation (512 Mpc/h, 128^3, full sky to z = 0.15): stored Phi vs an independent Poisson solve of the z = 0
+  snapshot: correlation 1.0000, slope 1.008 for the last step and 1.011-1.071 for the shells, as expected from the
+  decay of D/a (1.012-1.062); maps idem. Phi/c^2 rms 2.3e-5, z_obs - z rms 1.2e-3 (Doppler; gravitational 2.6e-5).
+- New regression case `hdf5_lightcone_relativistic`; all other files unchanged bit for bit.
+
 ### Neutrino particles: energy density in the Poisson equation
 - `particle_neutrino_energy_density` (default false): the neutrino particles source the Poisson equation with their
   energy density, each weighted by E/m = sqrt(1 + u^2) (u = q/(a m c)), normalised by the mean <E/m>(a) of the

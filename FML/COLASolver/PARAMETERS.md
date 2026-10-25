@@ -183,6 +183,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `plc_output_asciifile` | bool | `false` | lightcone = true | Output the lightcone particles in ascii |
 | `plc_output_hdf5file` | bool | `false` | lightcone = true | Output the lightcone particles as GADGET HDF5 files (needs USE_HDF5; positions in Mpc/h, peculiar velocities in km/s) |
 | `plc_output_in_batches` | bool | `false` | lightcone = true | Output in batches to save memory |
+| `plc_relativistic_effects` | bool | `false` | lightcone = true | Store the potential Phi/c^2 at the lightcone particles and write it with the radial velocity, the cosmological redshift and the observed redshift 1 + z_obs = (1 + z)(1 + v_r/c - Phi/c^2) (Doppler + gravitational redshift; observer at rest with Phi = 0) to the HDF5 and ascii lightcone files. With plc_make_onion_density_maps also Healpix maps of Phi/c^2 at the shells. Phi from the Poisson equation with the density used for the force (the GR potential also for modified gravity models). Costs one extra FFT per step while recording the lightcone |
 | `plc_make_onion_density_maps` | bool | `false` | lightcone = true | Make (Healpix) density maps delta(z, theta) |
 | `plc_nside` | int | `256` | lightcone = true and plc_make_onion_density_maps = true | Healpix nside of the maps (npix = 12 nside^2) |
 | `plc_da_maps` | double | `0.02` | lightcone = true and plc_make_onion_density_maps = true | Roughly the size of the bins in a for the maps |

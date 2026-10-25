@@ -27,14 +27,17 @@ class LightConeParticle {
     T pos[NDIM];
     T vel[NDIM];
     T mass;
+    T phi{}; // Phi/c^2 at the particle (plc_relativistic_effects)
 
   public:
     T * get_pos() { return pos; }
     T * get_vel() { return vel; }
     T get_mass() { return mass; }
     void set_mass(double _mass) { mass = _mass; }
+    T get_potential() const { return phi; }
+    void set_potential(double _phi) { phi = T(_phi); }
 
-    constexpr int get_ndim() { return NDIM; }
+    constexpr int get_ndim() const { return NDIM; }
 
     // Assign this particle from another particle (of possibly different type)
     template <class U>
@@ -69,6 +72,9 @@ class Lightcone {
 
     // Lightcone parameters
     bool lightcone_on{false};
+
+    // Store the potential at the particles and compute the observed redshift (Doppler + gravitational redshift)
+    bool relativistic_effects{false};
 
     // Initial and final time for the lightcone
     double plc_a_init;
@@ -144,9 +150,45 @@ class Lightcone {
                           double apos,
                           double apos_new,
                           double avel,
-                          double delta_time_drift);
+                          double delta_time_drift,
+                          const std::vector<FML::GRID::FloatType> * potential_at_particles = nullptr,
+                          const FML::GRID::FFTWGrid<NDIM> * potential_grid = nullptr,
+                          const std::string & interpolation_method = "CIC");
 
     bool lightcone_active() const { return lightcone_on; }
+
+    /// Does the step apos -> apos_new record lightcone particles with the potential (plc_relativistic_effects)?
+    /// The same conditions as in create_lightcone
+    bool needs_potential(double apos, double apos_new) const {
+        if (not lightcone_on or not relativistic_effects)
+            return false;
+        if (std::abs(apos_new / apos - 1.0) < 1e-6)
+            return false;
+        return not(apos_new < plc_a_init + 1e-3 or apos > plc_a_finish - 1e-3);
+    }
+
+    /// The radial velocity (km/s), the cosmological redshift and the observed redshift of a lightcone particle (its
+    /// position in Mpc/h relative to the observer, velocity in km/s): 1 + z_obs = (1 + z) (1 + v_r/c - Phi/c^2),
+    /// the Doppler and gravitational redshift to first order (the observer at rest with Phi_obs = 0: these add a
+    /// dipole and a monopole). No integrated terms (ISW, time delay)
+    std::array<double, 3> relativistic_quantities(U & p) {
+        const auto * pos = FML::PARTICLE::GetPos(p);
+        const auto * vel = FML::PARTICLE::GetVel(p);
+        double r2 = 0.0, vr = 0.0;
+        for (int idim = 0; idim < NDIM; idim++) {
+            r2 += double(pos[idim]) * double(pos[idim]);
+            vr += double(vel[idim]) * double(pos[idim]);
+        }
+        const double r = std::sqrt(r2);
+        vr = r > 0.0 ? vr / r : 0.0;
+        const double zcos = 1.0 / get_distance_inv(r / boxsize) - 1.0;
+        const double c_kms = 299792.458;
+        const double zobs = (1.0 + zcos) * (1.0 + vr / c_kms - double(p.get_potential())) - 1.0;
+        return {vr, zcos, zobs};
+    }
+
+    /// Maps of Phi/c^2 sampled at the pixel centers at the mid-radius of the onion shells of the current step
+    void make_potential_maps(const FML::GRID::FFTWGrid<NDIM> & potential_grid, const std::string & interpolation_method);
 
     void create_weak_lensing_maps(std::string particle_type = "cb");
 
@@ -180,6 +222,7 @@ void Lightcone<NDIM, T, U>::read_parameters(ParameterMap & param) {
             throw std::runtime_error("Invalid parameters: plc_output_hdf5file = true needs HDF5: compile with USE_HDF5=true (make USE_HDF5=true)");
 #endif
         make_onion_density_maps = param.get<bool>("plc_make_onion_density_maps");
+        relativistic_effects = param.get<bool>("plc_relativistic_effects", false);
         if (FML::ThisTask == 0) {
             std::cout << "\n# Read in Lightcone.h:\n";
             std::cout << "# lightcone                                : " << lightcone_on << "\n";
@@ -194,6 +237,9 @@ void Lightcone<NDIM, T, U>::read_parameters(ParameterMap & param) {
             std::cout << "# plc_output_hdf5file                      : " << output_hdf5file << "\n";
             std::cout << "# output_in_batches                        : " << output_in_batches << "\n";
             std::cout << "# plc_make_onion_density_maps                        : " << make_onion_density_maps << "\n";
+            std::cout << "# plc_relativistic_effects                 : " << relativistic_effects << "\n";
+            if (relativistic_effects and output_gadgetfile)
+                std::cout << "# NB: the potential and observed redshift are only written to the HDF5 and ascii files\n";
         }
         replicas.read_parameters(param);
 
@@ -255,7 +301,10 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
                                              double apos,
                                              double apos_new,
                                              double avel,
-                                             double delta_time_drift) {
+                                             double delta_time_drift,
+                                             const std::vector<FML::GRID::FloatType> * potential_at_particles,
+                                             const FML::GRID::FFTWGrid<NDIM> * potential_grid,
+                                             const std::string & interpolation_method) {
 
     // In current version of the code we only have one particle type
     const std::string particle_type = "cb";
@@ -379,6 +428,8 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
         // This is what we are going to store and output so lets save some memory
         U p_bare;
         p_bare.assign_from_particle(part[ipart]);
+        if (relativistic_effects and potential_at_particles)
+            p_bare.set_potential((*potential_at_particles)[ipart]);
 
         // Measure the position relative to the observer position
         // and compute the distance per dimension that the particle moves over a full step
@@ -580,6 +631,10 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
             onionslices_curtype.compute_and_output_angular_powerspectrum(plc_folder, "delta_" + particle_type, not output_only_new_maps, fsky);
         }
 
+        // Maps of the potential at the same shells
+        if (relativistic_effects and potential_grid)
+            make_potential_maps(*potential_grid, interpolation_method);
+
         // To reduce memory overhead we can free the map
         // We can easily just read it from file if we need it again
         onionslices_curtype.free();
@@ -591,6 +646,65 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
     }
 
 } // create_lightcone
+
+template <int NDIM, class T, class U>
+void Lightcone<NDIM, T, U>::make_potential_maps([[maybe_unused]] const FML::GRID::FFTWGrid<NDIM> & potential_grid,
+                                                [[maybe_unused]] const std::string & interpolation_method) {
+#ifdef USE_HEALPIX
+    if constexpr (NDIM == 3) {
+        auto & slices = onionslices_of_type["cb"];
+        auto & maps = slices.get_maps();
+        const auto range = slices.current_step_range();
+        struct Point {
+            double pos[NDIM];
+            double * get_pos() { return pos; }
+            constexpr int get_ndim() const { return NDIM; }
+        };
+        for (int imap = range.first; imap < range.second; imap++) {
+            const auto & dmap = maps[imap];
+            OnionSlice<MapRealType, NDIM> phimap;
+            phimap.init(dmap.get_rmin(), dmap.get_rmax(), dmap.get_amin(), dmap.get_amax(), slices.get_nside(), false, 0);
+            const double rmid = 0.5 * (dmap.get_rmin() + dmap.get_rmax());
+            const long npix = phimap.get_npix();
+
+            // The pixel centers at rmid (periodic box) that are in the local domain
+            std::vector<Point> points;
+            std::vector<long> ipixs;
+            for (long ipix = 0; ipix < npix; ipix++) {
+                const auto n = phimap.pixel_direction(ipix);
+                Point pt;
+                for (int idim = 0; idim < NDIM; idim++) {
+                    double x = pos_observer[idim] + rmid * n[idim];
+                    x -= std::floor(x);
+                    if (x >= 1.0)
+                        x = 0.0;
+                    pt.pos[idim] = x;
+                }
+                if (pt.pos[0] >= FML::xmin_domain and pt.pos[0] < FML::xmax_domain) {
+                    points.push_back(pt);
+                    ipixs.push_back(ipix);
+                }
+            }
+            std::vector<FML::GRID::FloatType> values;
+            FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, Point>(
+                potential_grid, points.data(), points.size(), values, interpolation_method);
+            for (size_t i = 0; i < points.size(); i++)
+                phimap.set_pixel(ipixs[i], values[i]);
+            phimap.sum_field_over_tasks(0);
+            if (FML::ThisTask == 0) {
+                const std::string label = "phi_cb";
+                phimap.output(plc_folder + "/OnionMap_" + label + "_imap" + std::to_string(imap));
+                phimap.compute_and_output_angular_powerspectrum(
+                    plc_folder + "/Cell_" + label + "_imap" + std::to_string(imap) + ".txt", label, 0.0);
+            }
+            phimap.free();
+        }
+    }
+#else
+    if (FML::ThisTask == 0)
+        std::cout << "# NB: potential maps need Healpix (USE_HEALPIX)\n";
+#endif
+}
 
 // Compute comoving distance to redshift relation and set up spline interpolation
 // This gives us a spline of chi(loga) in (Mpc/h)
@@ -731,6 +845,28 @@ void Lightcone<NDIM, T, U>::output_hdf5([[maybe_unused]] FML::Vector<U> & part_l
 
     FML::FILEUTILS::GADGET::GadgetHDF5Writer gw(NDIM);
     gw.set_periodic_wrap(false);
+    if (relativistic_effects) {
+        // The same as below plus PartType1/Potential (Phi/c^2), RadialVelocity (km/s), CosmologicalRedshift and
+        // ObservedRedshift
+        auto * p = part_lc.data();
+        auto sp = FML::FILEUTILS::GADGET::make_gadget_species(1, p, npart_lc, npart_lc_global, 1.0);
+        sp.extra_scalars.push_back({"Potential", [p](size_t i) { return double(p[i].get_potential()); }});
+        sp.extra_scalars.push_back({"RadialVelocity", [this, p](size_t i) { return relativistic_quantities(p[i])[0]; }});
+        sp.extra_scalars.push_back(
+            {"CosmologicalRedshift", [this, p](size_t i) { return relativistic_quantities(p[i])[1]; }});
+        sp.extra_scalars.push_back({"ObservedRedshift", [this, p](size_t i) { return relativistic_quantities(p[i])[2]; }});
+        gw.write_gadget_species(fileprefix + "." + std::to_string(FML::ThisTask) + ".hdf5",
+                                {sp},
+                                FML::NTasks,
+                                (astart + aend) / 2.0,
+                                boxsize,
+                                cosmo->get_OmegaM(),
+                                cosmo->get_OmegaLambda(),
+                                cosmo->get_h(),
+                                1.0,
+                                1.0);
+        return;
+    }
     gw.write_gadget_single(fileprefix + "." + std::to_string(FML::ThisTask) + ".hdf5",
                            part_lc.data(),
                            npart_lc,
@@ -787,6 +923,7 @@ void Lightcone<NDIM, T, U>::output_ascii(FML::Vector<U> & part_lc, double astart
     if(output_pos) what_we_output += " pos_vec (Mpc/h) ";
     if(output_vel) what_we_output += " vel_vec (km/s) ";
     if(output_vr) what_we_output += " LOS_velocity (km/s) ";
+    if(relativistic_effects) what_we_output += " Phi/c^2 v_r (km/s) z_cos z_obs ";
 
     // Output header only the first time
     if(ibatch == 0) {
@@ -835,6 +972,14 @@ void Lightcone<NDIM, T, U>::output_ascii(FML::Vector<U> & part_lc, double astart
         }
         vr /= std::sqrt(r_squared);
         fp << std::setw(10) << vr << " ";
+      }
+
+      // The potential, radial velocity and the cosmological and observed redshift
+      if(relativistic_effects) {
+        const auto q = relativistic_quantities(p);
+        fp << std::setw(14) << std::setprecision(7) << p.get_potential() << " " << std::setw(12) << q[0] << " "
+           << std::setw(14) << std::setprecision(9) << q[1] << " " << std::setw(14) << q[2] << " ";
+        fp << std::setprecision(6);
       }
       fp << "\n";
     }

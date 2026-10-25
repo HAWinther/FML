@@ -428,6 +428,26 @@ CASES = {
         output_redshifts=[1.0, 0.0],
         timestep_nsteps=[3, 3],
     ),
+    # The potential, radial velocity and observed redshift of the lightcone particles (HDF5, needs USE_HDF5)
+    "hdf5_lightcone_relativistic": dict(
+        simulation_use_cola=False,
+        timestep_method="BullFrog",
+        lightcone=True,
+        plc_pos_observer=[0.0, 0.0, 0.0],
+        plc_boundary_mpch=20.0,
+        plc_z_init=0.05,
+        plc_z_finish=0.0,
+        plc_use_replicas=False,
+        plc_ndim_rep=3,
+        plc_output_gadgetfile=False,
+        plc_output_asciifile=True,
+        plc_output_hdf5file=True,
+        plc_output_in_batches=True,
+        plc_make_onion_density_maps=False,
+        output_redshifts=[1.0, 0.0],
+        timestep_nsteps=[3, 3],
+        plc_relativistic_effects=True,
+    ),
     # BullFrog from the Big Bang with the steps uniform in the growth factor
     "bullfrog_growthfactor_spacing": dict(
         simulation_use_cola=False,
@@ -496,6 +516,7 @@ KNOWN_FAILING = []
 REQUIRES = {
     "hdf5_output": "hdf5",
     "hdf5_lightcone": "hdf5",
+    "hdf5_lightcone_relativistic": "hdf5",
     "two_species_neutrinos_hdf5": "hdf5",
     "read_particles_hdf5": "hdf5",
     "neutrino_particles_baryons_hdf5": "hdf5",

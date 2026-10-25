@@ -105,6 +105,12 @@ class NBodySimulation {
     /// The massive neutrino particles (only if particle_neutrinos; delta-f method)
     COLASOLVER::NeutrinoParticles<NDIM> neutrinos;
 
+    /// Phi/c^2 in real space for the lightcone (plc_relativistic_effects), computed at scale factor
+    /// lightcone_potential_a from the density field of the step
+    FFTWGrid<NDIM> lightcone_potential;
+    double lightcone_potential_a{-1.0};
+    void compute_lightcone_potential(const FFTWGrid<NDIM> & density_grid_fourier, double a);
+
     /// The initial density field delta_cb(zini,k) computed with the same Nmesh
     /// as the forces (used for linear massive neutrinos and the N-body gauge - not allocated otherwise)
     FFTWGrid<NDIM> initial_density_field_fourier;
@@ -1005,6 +1011,9 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
         timer.StartTiming("ComputeDensityField");
         compute_density_field_fourier(density_grid_fourier, s.apos);
         timer.EndTiming("ComputeDensityField");
+        // The potential for the lightcone (from the same density field as the force)
+        if (lightcone->needs_potential(s.apos, s.apos_new))
+            compute_lightcone_potential(density_grid_fourier, s.apos);
     }
 
     // Compute forces and kick particles (updates velocity)
@@ -1087,7 +1096,35 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
     if (lightcone->lightcone_active() and s.delta_time_drift != 0.0) {
         ScopedLPTVelocity<NDIM, T> true_velocities(cola, part, s.avel_new, &timer);
         timer.StartTiming("Lightcone");
-        lightcone->create_lightcone(part, s.apos, s.apos_new, s.avel_new, s.delta_time_drift);
+        if (lightcone->needs_potential(s.apos, s.apos_new)) {
+            // The potential of this step (if not computed with the force, e.g. with force interlacing: from the
+            // CDM+baryon density only) at the particles
+            if (lightcone_potential_a != s.apos) {
+                const auto nleftright = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(
+                    current_force.density_assignment_method);
+                FFTWGrid<NDIM> density(current_force.nmesh, nleftright.first, nleftright.second);
+                assign_cb_particles_to_grid(density, s.apos);
+                compute_lightcone_potential(density, s.apos);
+            }
+            std::vector<FML::GRID::FloatType> potential;
+            FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, T>(lightcone_potential,
+                                                                                part.get_particles_ptr(),
+                                                                                part.get_npart(),
+                                                                                potential,
+                                                                                current_force.density_assignment_method);
+            lightcone->create_lightcone(part,
+                                        s.apos,
+                                        s.apos_new,
+                                        s.avel_new,
+                                        s.delta_time_drift,
+                                        &potential,
+                                        &lightcone_potential,
+                                        current_force.density_assignment_method);
+            lightcone_potential.free();
+            lightcone_potential_a = -1.0;
+        } else {
+            lightcone->create_lightcone(part, s.apos, s.apos_new, s.avel_new, s.delta_time_drift);
+        }
         timer.EndTiming("Lightcone");
     }
 
@@ -1257,5 +1294,48 @@ void NBodySimulation<NDIM, T>::free() {
 
 // The density field the force is computed from (member functions of NBodySimulation)
 #include "SimulationDensity.h"
+
+
+/// Phi/c^2 in real space from the density contrast delta(k) of the step: Phi/c^2(k) = -1.5 Omega_M (H0/c)^2 delta(k)
+/// / (a k^2) (the GR Poisson equation, k in h/Mpc), with the same window deconvolution as the force. Stored in
+/// lightcone_potential (with the boundaries communicated, ready for interpolation)
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::compute_lightcone_potential(const FFTWGrid<NDIM> & density_grid_fourier, double a) {
+    timer.StartTiming("LightconePotential");
+    lightcone_potential = density_grid_fourier;
+    lightcone_potential.add_memory_label("Lightcone potential");
+    const double boxsize = params.simulation.boxsize;
+    const double c_over_H0 = 2997.92458; // Mpc/h
+    const double norm = -1.5 * cosmo->get_OmegaM() / (a * c_over_H0 * c_over_H0) * boxsize * boxsize;
+    const bool deconvolve = current_force.deconvolve_window;
+    const FML::INTERPOLATION::WindowFunctionTable<NDIM> window(current_force.density_assignment_method,
+                                                               lightcone_potential.get_nmesh());
+    const auto Local_nx = lightcone_potential.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+    for (int islice = 0; islice < Local_nx; islice++) {
+        std::array<double, NDIM> kvec;
+        double kmag2;
+        for (auto && index : lightcone_potential.get_fourier_range(islice, islice + 1)) {
+            lightcone_potential.get_fourier_wavevector_and_norm2_by_index(index, kvec, kmag2);
+            if (kmag2 == 0.0) {
+                lightcone_potential.set_fourier_from_index(index, 0.0);
+                continue;
+            }
+            double fac = norm / kmag2;
+            if (deconvolve) {
+                const double W = window(kvec);
+                fac /= W * W;
+            }
+            lightcone_potential.set_fourier_from_index(
+                index, lightcone_potential.get_fourier_from_index(index) * FML::GRID::FloatType(fac));
+        }
+    }
+    lightcone_potential.fftw_c2r();
+    lightcone_potential.communicate_boundaries();
+    lightcone_potential_a = a;
+    timer.EndTiming("LightconePotential");
+}
 
 #endif
