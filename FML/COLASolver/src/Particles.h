@@ -12,6 +12,8 @@
 //   ParticleCOLAScaleDep  (+ Lagrangian position q)    scale-dependent COLA
 //   ParticleBasicQ        (pos, vel, id, q)            no COLA, but q is needed
 //                                                      (force_density_method = sheet)
+//   ParticleWithMass<P>   (P + a mass)                 particle_baryons with
+//                                                      particle_baryon_relative_mode = mass or mass_ini
 //
 // Free choice of types, so you can for example change to floats to save memory
 // or add fields you want to carry along. See ExampleParticles.h for more examples
@@ -93,6 +95,18 @@ class ParticleCOLAScaleDep : public ParticleCOLA<NDIM> {
     // precision of pos (these are temporarily swapped by some algorithms)
     double q[NDIM];
     double * get_q() { return q; }
+};
+
+/// A particle P with a mass (in units of the mean particle mass of its species). Used for the mass-encoded
+/// baryon-CDM relative mode (particle_baryon_relative_mode = mass or mass_ini): the CDM and baryon particles move
+/// together with the total CDM+baryon flow and the relative density is carried by their masses m = 1 + eps(q). The
+/// density assignment weights the particles by m / <m>
+template <class P>
+class ParticleWithMass : public P {
+  public:
+    double mass;
+    double get_mass() const { return mass; }
+    void set_mass(double _mass) { mass = _mass; }
 };
 
 #endif

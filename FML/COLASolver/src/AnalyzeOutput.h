@@ -171,7 +171,8 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
 }
 
 /// The particle species for the GADGET writers (the types and masses are set in Species.h): CDM (or CDM+baryons)
-/// as type 1, baryons as type 2, neutrinos as type 3 (with their delta-f weights as an extra field in HDF5)
+/// as type 1, baryons as type 2, neutrinos as type 3 (with their delta-f weights as an extra field in HDF5). Particles
+/// with a mass (particle_baryon_relative_mode = mass, mass_ini) have their masses written (MASS block, Masses)
 template <int NDIM, class T>
 std::vector<FML::FILEUTILS::GADGET::GadgetSpecies> gadget_species(NBodySimulation<NDIM, T> & sim) {
     std::vector<FML::FILEUTILS::GADGET::GadgetSpecies> species;
@@ -182,6 +183,9 @@ std::vector<FML::FILEUTILS::GADGET::GadgetSpecies> gadget_species(NBodySimulatio
             info.gadget_type, p, particles.get_npart(), particles.get_npart_total(), info.mass_fraction);
         if constexpr (FML::PARTICLE::has_get_deltaf_weight<P>())
             sp.extra_scalars.push_back({"Weights", [p](size_t i) { return double(p[i].get_deltaf_weight()); }});
+        // The mass-encoded baryon-CDM relative mode: per-particle masses (MassTable 0 for these types)
+        if constexpr (FML::PARTICLE::has_get_mass<P>())
+            sp.get_mass = [p](size_t i) { return double(FML::PARTICLE::GetMass(p[i])); };
         species.push_back(sp);
     });
     return species;

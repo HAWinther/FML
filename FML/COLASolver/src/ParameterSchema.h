@@ -378,6 +378,18 @@ namespace COLASOLVER {
                               "offset by half a particle spacing (offset: gives a spurious baryon-CDM difference on "
                               "small scales)",
                               {"same", "offset"});
+            b.always_optional("particle_baryon_relative_mode",
+                              "displacement",
+                              "particle_baryons: how the baryon-CDM relative density is set up. displacement: each "
+                              "species is displaced by its own linear field (T_i/T_cb) and has its own velocity. mass: "
+                              "both species follow the total CDM+baryon flow (same displacements and velocities) and the "
+                              "relative density is carried by the particle masses m_i = 1 + eps_i(q) with eps_i = "
+                              "delta_cb(zini) (T_i - T_cb)(z=0) / T_cb(zini), the linear relative mode today "
+                              "(Hahn, Rampf & Uhlemann 2021; exact at z = 0 in linear theory, the relative mode is then "
+                              "constant in time). mass_ini: common displacements, masses with eps_i = T_i / T_cb - 1 at "
+                              "zini and each species keeps its own velocity (the relative mode then grows from zini). "
+                              "The mass modes need particle_baryon_lattice = same",
+                              {"displacement", "mass", "mass_ini"});
             b.optional("particle_allocation_factor",
                        1.5,
                        "Allocate this factor more particles than the average per task (particles move between "

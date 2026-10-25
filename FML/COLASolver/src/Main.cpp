@@ -105,7 +105,17 @@ int main(int argc, char ** argv) {
     // Sheet interpolation needs the Lagrangian position q
     const std::string density_method = param.get<std::string>("force_density_method", "assignment");
     const bool need_q = density_method == "sheet" or density_method == "sheet_nufft";
-    if (scaledependent_cola or (use_cola and need_q))
+    // The mass-encoded baryon-CDM relative mode needs a mass in the particles (density assignment only, so no q)
+    const bool need_mass = param.get<bool>("particle_baryons", false) and
+                           param.get<std::string>("particle_baryon_relative_mode", "displacement") != "displacement";
+    if (need_mass) {
+        if (scaledependent_cola)
+            run_simulation<ParticleWithMass<ParticleCOLAScaleDep<NDIM>>>(param, cosmo, grav);
+        else if (use_cola)
+            run_simulation<ParticleWithMass<ParticleCOLA<NDIM>>>(param, cosmo, grav);
+        else
+            run_simulation<ParticleWithMass<ParticleBasic<NDIM>>>(param, cosmo, grav);
+    } else if (scaledependent_cola or (use_cola and need_q))
         run_simulation<ParticleCOLAScaleDep<NDIM>>(param, cosmo, grav);
     else if (use_cola)
         run_simulation<ParticleCOLA<NDIM>>(param, cosmo, grav);

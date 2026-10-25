@@ -642,7 +642,8 @@ namespace FML {
                                     std::vector<double> velocity_norms,
                                     std::function<double(double)> velocity_norm_1LPT_of_kBox = nullptr,
                                     const FFTWGrid<N> * delta_fourier_2LPT_source = nullptr,
-                                    const FFTWGrid<N> * delta_fourier_1LPT_stored = nullptr);
+                                    const FFTWGrid<N> * delta_fourier_1LPT_stored = nullptr,
+                                    const FFTWGrid<N> * mass_contrast_fourier = nullptr);
 
         //=====================================================================
         /// @brief Generate particles from a given power-spectrum using Lagrangian perturbation theory.
@@ -767,6 +768,9 @@ namespace FML {
         /// @param[in] delta_fourier_1LPT_stored Optional. If set the 1LPT displacement field stored in the particles
         /// (for COLA) is that of this density field instead of the one the particles are displaced with (e.g. the
         /// total matter density when several species share the same COLA frame)
+        /// @param[in] mass_contrast_fourier Optional. If set the particles get the masses m = 1 + eps(q) where eps is
+        /// this field (in fourier space) at their Lagrangian (lattice) position. The particle class must have a
+        /// set_mass method
         ///
         //=====================================================================
         template <int N, class T>
@@ -783,7 +787,8 @@ namespace FML {
                                     std::vector<double> velocity_norms,
                                     std::function<double(double)> velocity_norm_1LPT_of_kBox,
                                     const FFTWGrid<N> * delta_fourier_2LPT_source,
-                                    const FFTWGrid<N> * delta_fourier_1LPT_stored) {
+                                    const FFTWGrid<N> * delta_fourier_1LPT_stored,
+                                    const FFTWGrid<N> * mass_contrast_fourier) {
 
             T tmp{};
             if (FML::ThisTask == 0) {
@@ -1067,6 +1072,36 @@ namespace FML {
                     auto q = FML::PARTICLE::GetLagrangianPos(p);
                     for (int idim = 0; idim < N; idim++)
                         q[idim] = pos[idim];
+                }
+            }
+
+            // Masses m = 1 + eps(q) from the mass contrast field at the lattice (before the particles are displaced)
+            if (mass_contrast_fourier) {
+                if constexpr (FML::PARTICLE::has_set_mass<T>()) {
+                    FFTWGrid<N> eps = *mass_contrast_fourier;
+                    eps.fftw_c2r();
+                    eps.communicate_boundaries();
+                    std::vector<FML::GRID::FloatType> eps_at_part;
+                    FML::INTERPOLATION::interpolate_grid_to_particle_positions<N, T>(
+                        eps, part.get_particles_ptr(), part.get_npart(), eps_at_part, interpolation_method);
+                    double eps_min = 1e100, eps_max = -1e100, eps_mean = 0.0;
+                    size_t ind = 0;
+                    for (auto & p : part) {
+                        const double e = eps_at_part[ind++];
+                        FML::PARTICLE::SetMass(p, 1.0 + e);
+                        eps_min = std::min(eps_min, e);
+                        eps_max = std::max(eps_max, e);
+                        eps_mean += e;
+                    }
+                    FML::MinOverTasks(&eps_min);
+                    FML::MaxOverTasks(&eps_max);
+                    FML::SumOverTasks(&eps_mean);
+                    eps_mean /= double(part.get_npart_total());
+                    if (FML::ThisTask == 0)
+                        std::cout << "Storing Mass 1 + eps(q) in particle: eps in [" << eps_min << ", " << eps_max
+                                  << "], mean " << eps_mean << "\n";
+                } else {
+                    assert_mpi(false, "[NBodyInitialConditions] mass_contrast_fourier needs particles with set_mass");
                 }
             }
 

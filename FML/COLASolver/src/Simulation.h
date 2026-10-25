@@ -359,6 +359,15 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
                      "force_nmesh = particle_Npart_1D. With a finer force grid they amplify the discreteness of the "
                      "particles (see README)\n";
 
+    // The baryon-CDM relative mode in the displacements of the particles (a ~50 kpc/h CDM-baryon offset per pair)
+    // gets a spurious discrete-mode growth once the force grid resolves it, and is partly lost in collapsed regions
+    // (P(delta_c - delta_b) ~ 0.5 of linear theory at z = 0 on large scales). See README
+    // (also the part of it that grows after zini with mass_ini)
+    if (params.particle.baryons and params.particle.baryon_relative_mode != "mass" and
+        params.force.nmesh > 2 * params.particle.Npart_1D and FML::ThisTask == 0)
+        std::cout << "WARNING: particle_baryon_relative_mode = " << params.particle.baryon_relative_mode
+                  << " with force_nmesh > 2 particle_Npart_1D: the baryon-CDM relative mode is not reliable (use "
+                     "particle_baryon_relative_mode = mass, see README)\n";
 
     cola.enabled = params.simulation.use_cola;
     cola.scaledependent = params.simulation.use_scaledependent_cola;
@@ -775,10 +784,26 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     const double kmin = transferdata->get_kmin_hmpc_splines();
     const double kmax = transferdata->get_kmax_hmpc_splines();
     auto clamp_logk = [&](double kBox) { return std::log(std::min(std::max(kBox / boxsize, kmin), kmax)); };
+    // The baryon-CDM relative mode: in the displacement (each species its own displacement and velocity), the
+    // masses m = 1 + eps (mass: shared CDM+baryon flow, eps = the linear relative mode today; mass_ini: shared
+    // displacement, eps at zini and each species its own velocity)
+    const std::string & relative_mode = params.particle.baryon_relative_mode;
+    const bool mass_mode = relative_mode == "mass" or relative_mode == "mass_ini";
+    std::pair<Spline, Spline> eps_today;
+    if (relative_mode == "mass") {
+        eps_today = COLASOLVER::two_species_mass_contrast_today(*transferdata, ic.initial_redshift);
+        if (FML::ThisTask == 0) {
+            std::cout << "# Mass-encoded relative mode: eps_b / delta_cb(zini) = ";
+            for (double k : {0.01, 0.1, 1.0})
+                std::cout << eps_today.second(std::log(k)) << " (k = " << k << ") ";
+            std::cout << "\n";
+        }
+    }
     auto make_species = [&](MPIParticles & particles,
                             const COLASOLVER::SpeciesInfo & info,
                             const Spline & ratio,
                             const Spline & growth_rate,
+                            const Spline * eps_of_logk,
                             double shift) {
         if (FML::ThisTask == 0)
             std::cout << "# Making the " << info.name << " particles\n";
@@ -793,10 +818,28 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
             const double f_cb = grav_ic->get_f_1LPT(aini, std::exp(logk) / grav_ic->H0_hmpc);
             return fac * (growth_rate(logk) - f_cb / ratio(logk));
         };
+        std::function<double(double)> displacement_ratio = [&](double kBox) { return ratio(clamp_logk(kBox)); };
+        std::function<double(double)> mass_contrast = nullptr;
+        if (mass_mode) {
+            // Both species are displaced by Psi_cb. mass: the CDM+baryon velocity f_cb Psi_cb (zero in the COLA
+            // frame). mass_ini: the velocity of the species v_i = f_i R_i Psi_cb (f_i R_i - f_cb relative to the COLA
+            // frame)
+            displacement_ratio = [](double) { return 1.0; };
+            velocity_norm_1LPT = [&](double kBox) {
+                const double logk = clamp_logk(kBox);
+                const double f_cb = grav_ic->get_f_1LPT(aini, std::exp(logk) / grav_ic->H0_hmpc);
+                const double f_i = relative_mode == "mass" ? f_cb : growth_rate(logk) * ratio(logk);
+                return fac * (cola.enabled ? f_i - f_cb : f_i);
+            };
+            if (relative_mode == "mass")
+                mass_contrast = [&](double kBox) { return (*eps_of_logk)(clamp_logk(kBox)); };
+            else
+                mass_contrast = [&](double kBox) { return ratio(clamp_logk(kBox)) - 1.0; };
+        }
         COLASOLVER::generate_species_from_delta_cb<NDIM, T>(
             particles,
             delta_cb_fourier,
-            [&](double kBox) { return ratio(clamp_logk(kBox)); },
+            displacement_ratio,
             velocity_norm_1LPT,
             cola.enabled ? residual_velocity_norms : velocity_norms,
             ic.LPT_order,
@@ -806,13 +849,15 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
             ic.initial_redshift,
             shift,
             info.id_offset,
-            cola.enabled);
+            cola.enabled,
+            mass_contrast);
     };
-    make_species(part, cdm, splines.ratio_cdm, splines.f_cdm, 0.0);
+    make_species(part, cdm, splines.ratio_cdm, splines.f_cdm, &eps_today.first, 0.0);
     make_species(part_baryon,
                  baryon,
                  splines.ratio_baryon,
                  splines.f_baryon,
+                 &eps_today.second,
                  params.particle.baryon_lattice == "offset" ? 0.5 / double(baryon.Npart_1D) : 0.0);
 
     // Scale-dependent COLA: the LPT potentials of the total CDM+baryon field (the shared COLA frame)

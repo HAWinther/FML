@@ -360,6 +360,33 @@ CASES = {
         fof_so_definitions=["200m", "500c", "vir"],
         fof_buffer_length_mpch=6.0,
     ),
+    # CDM and baryons with the mass-encoded relative mode (both follow the CDM+baryon flow, masses 1 + eps(q)) and
+    # COLA, FoF and HDF5 output with per-particle masses (needs USE_HDF5)
+    "two_species_mass_cola_fof_hdf5": dict(
+        particle_baryons=True,
+        particle_baryon_relative_mode="mass",
+        simulation_use_cola=True,
+        timestep_method="Quinn",
+        ic_type_of_input="transferinfofile",
+        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
+        ic_input_redshift=20.0,
+        output_fileformat="HDF5",
+        fof=True,
+        fof_nmin_per_halo=10,
+        fof_so_definitions=["200m"],
+        fof_buffer_length_mpch=6.0,
+    ),
+    # CDM and baryons with common displacements, masses at zini and their own velocities (mass_ini), GADGET output
+    # with a MASS block
+    "two_species_mass_ini": dict(
+        particle_baryons=True,
+        particle_baryon_relative_mode="mass_ini",
+        simulation_use_cola=False,
+        timestep_method="Quinn",
+        ic_type_of_input="transferinfofile",
+        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
+        ic_input_redshift=20.0,
+    ),
     # FoF with spherical overdensity masses, text catalogue, COLA
     "fof_so": dict(
         output_redshifts=[1.0, 0.0],
@@ -521,6 +548,7 @@ REQUIRES = {
     "read_particles_hdf5": "hdf5",
     "neutrino_particles_baryons_hdf5": "hdf5",
     "fof_two_species_hdf5": "hdf5",
+    "two_species_mass_cola_fof_hdf5": "hdf5",
 }
 
 # The order the cases must run in (the read_* cases need 'cola_quinn_all' / 'hdf5_output')

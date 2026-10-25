@@ -347,7 +347,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
                                                     double(npart_total));
     } else {
         // CDM and baryons linked together. The particle masses are Omega_i / OmegaCB in units of the mean mass of all
-        // the particles. The linking length is in units of the mean separation of one species and the minimum number
+        // the particles (times 1 + eps with the mass-encoded relative mode). The linking length is in units of the mean separation of one species and the minimum number
         // of particles is that of one species (so the halos are the same as with one species)
         using P = COLASOLVER::FoFParticle<NDIM>;
         std::vector<P> fofpart;
@@ -366,7 +366,8 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
                     q.pos[idim] = pos[idim];
                     q.vel[idim] = vel[idim];
                 }
-                q.mass = mass;
+                // Times the particle mass 1 + eps (particle_baryon_relative_mode = mass, mass_ini; 1 otherwise)
+                q.mass = mass * FML::PARTICLE::GetMass(p);
                 fofpart.push_back(q);
             }
         });

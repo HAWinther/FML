@@ -166,6 +166,9 @@ namespace FML {
                 std::function<void(size_t, double *)> get_pos; // NDIM components of particle i (empty: none)
                 std::function<void(size_t, double *)> get_vel; // NDIM components of particle i (empty: none)
                 std::function<long long int(size_t)> get_id;   // ID of particle i (empty: none)
+                /// Mass of particle i in units of the mean particle mass of the species (empty: all the same). If set
+                /// the MassTable entry of the type is 0 and the masses are written (the MASS block, PartTypeN/Masses)
+                std::function<double(size_t)> get_mass;
                 /// Extra per-particle scalars (name, value of particle i), e.g. delta-f weights. Only written to
                 /// HDF5 files (as PartTypeN/<name>)
                 std::vector<std::pair<std::string, std::function<double(size_t)>>> extra_scalars;
@@ -235,7 +238,8 @@ namespace FML {
                 /// Write a single gadget file with several sets of particles (e.g. CDM, baryons and neutrinos kept in
                 /// separate containers), each its own particle type (types must differ). The mass of a particle of a
                 /// species is mass_fraction * OmegaM * rho_crit * Box^3 / npart_total. IDs are written as they are
-                /// (make them unique). No MPI communication (the totals are given). Extra scalars are not written
+                /// (make them unique). No MPI communication (the totals are given). Extra scalars are not written.
+                /// Species with get_mass get MassTable = 0 and their masses in a MASS block after the IDs
                 void write_gadget_species(std::string filename,
                                           std::vector<GadgetSpecies> species,
                                           int NumberOfFilesToWrite,
@@ -781,6 +785,11 @@ namespace FML {
                                               3.0 * OmegaM * sp.mass_fraction * MplMpl_over_H0Msunh *
                                                   std::pow(Boxsize / HubbleLengthInMpch, 3) / double(sp.npart_total) / 1e10;
                 }
+                // Per-particle masses (MASS block) for the species with get_mass: their MassTable entry is 0
+                std::vector<double> mean_mass_of_type = mass_in_1e10_msunh;
+                for (auto & sp : species)
+                    if (sp.get_mass)
+                        mass_in_1e10_msunh[sp.type] = 0.0;
 
                 std::ofstream fp(filename.c_str(), std::ios::binary | std::ios::out);
                 if (not fp.is_open())
@@ -833,6 +842,20 @@ namespace FML {
                     for (auto & sp : species)
                         for (size_t j = 0; j < sp.npart; j++)
                             id_buffer[count++] = gadget_particle_id_type(sp.get_id(j));
+                    write_section(fp, buffer, int(bytes));
+                }
+                size_t nmass = 0;
+                for (auto & sp : species)
+                    nmass += sp.get_mass ? sp.npart : 0;
+                if (nmass > 0) {
+                    const size_t bytes = sizeof(float) * nmass;
+                    buffer.resize(bytes);
+                    float * float_buffer = reinterpret_cast<float *>(buffer.data());
+                    size_t count = 0;
+                    for (auto & sp : species)
+                        if (sp.get_mass)
+                            for (size_t j = 0; j < sp.npart; j++)
+                                float_buffer[count++] = float(mean_mass_of_type[sp.type] * sp.get_mass(j));
                     write_section(fp, buffer, int(bytes));
                 }
             }

@@ -5,6 +5,22 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Baryons: mass-encoded baryon-CDM relative mode
+- `particle_baryon_relative_mode` (default `displacement`, unchanged): with `mass` both species follow the total
+  CDM+baryon flow and the relative density is carried by the particle masses m_i = 1 + eps_i(q), eps_i =
+  delta_cb(zini) (T_i - T_cb)(z=0) / T_cb(zini) (compensated, Hahn, Rampf & Uhlemann 2021); `mass_ini` uses the
+  relative density at zini and keeps the relative velocity. A particle type with a mass is used only in these modes.
+  The density assignment, the per-species P(k), FoF and SO are mass weighted; GADGET binary files get a MASS block and
+  HDF5 files `PartTypeN/Masses` (MassTable 0 for those types). Library: optional mass contrast in
+  `NBodyInitialConditions` / `generate_species_from_delta_cb`, `GadgetSpecies::get_mass`.
+- Validation (64^3 + 64^3, 256 Mpc/h, z_ini = 49, z = 0): P(delta_c - delta_b) / linear = 1.03 / 1.04 / 0.98 at
+  k = 0.031 / 0.055 / 0.10 h/Mpc with `mass` (G = 0.98 / 0.98 / 0.86 relative to its own linear run) vs 0.49 / 0.52 /
+  0.49 with `displacement` and 0.87 / 0.92 / 0.86 with `mass_ini`; independent of the force grid (4x: unchanged, where
+  `displacement` and `mass_ini` break down); P_cb unchanged (0.02%). `mass` is exact at z = 0 in linear theory and
+  overestimates the relative mode by 1.5% / 4% / 9% at z = 1 / 3 / 10.
+- Warning for `displacement` / `mass_ini` with `force_nmesh > 2 particle_Npart_1D`. New regression cases
+  `two_species_mass_cola_fof_hdf5` and `two_species_mass_ini`; all other files unchanged bit for bit.
+
 ### Lightcone: potential, Doppler and gravitational redshift
 - `plc_relativistic_effects` (default false): during the steps that record the lightcone the potential Phi/c^2 =
   -1.5 Omega_M (H0/c)^2 delta / (a k^2) is computed from the density used for the force (one extra FFT), interpolated

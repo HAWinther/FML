@@ -166,7 +166,9 @@ namespace COLASOLVER {
     /// offset by lattice_shift (in units of the box) in each direction: the fields are evaluated at the offset
     /// positions and the particles moved there. id_offset is added to the IDs. With store_cb_LPT_fields the LPT
     /// displacement fields stored in the particles (for COLA) are those of delta_cb, i.e. all the species share the
-    /// COLA frame of the total CDM+baryon field. Returns delta_i(k) (shifted).
+    /// COLA frame of the total CDM+baryon field. With mass_contrast_of_kBox the particles get the masses
+    /// m = 1 + eps(q) with eps(k) = delta_cb(k) mass_contrast(kB) (the mass-encoded baryon-CDM relative mode).
+    /// Returns delta_i(k) (shifted).
     //=============================================================================
     template <int NDIM, class P>
     FFTWGrid<NDIM> generate_species_from_delta_cb(FML::PARTICLE::MPIParticles<P> & particles,
@@ -181,7 +183,8 @@ namespace COLASOLVER {
                                                   double zini,
                                                   double lattice_shift,
                                                   long long int id_offset,
-                                                  bool store_cb_LPT_fields = false) {
+                                                  bool store_cb_LPT_fields = false,
+                                                  std::function<double(double)> mass_contrast_of_kBox = nullptr) {
         std::array<double, NDIM> shift_vec;
         shift_vec.fill(lattice_shift);
 
@@ -199,6 +202,15 @@ namespace COLASOLVER {
                 FML::GRID::shift_grid_fourier<NDIM>(delta_total, shift_vec, +1.0);
         }
 
+        // The mass contrast eps(k) = delta_cb(k) mass_contrast(kB) (on the same offset lattice)
+        FFTWGrid<NDIM> mass_contrast;
+        if (mass_contrast_of_kBox) {
+            mass_contrast = delta_cb_fourier;
+            FML::GRID::multiply_fourier_by_function_of_k<NDIM>(mass_contrast, mass_contrast_of_kBox);
+            if (lattice_shift != 0.0)
+                FML::GRID::shift_grid_fourier<NDIM>(mass_contrast, shift_vec, +1.0);
+        }
+
         std::vector<FFTWGrid<NDIM>> no_potentials;
         FML::NBODY::NBodyInitialConditions<NDIM, P>(particles,
                                                     Npart_1D,
@@ -211,7 +223,8 @@ namespace COLASOLVER {
                                                     velocity_norms,
                                                     velocity_norm_1LPT_of_kBox,
                                                     LPT_order >= 2 ? &delta_total : nullptr,
-                                                    store_cb_LPT_fields ? &delta_total : nullptr);
+                                                    store_cb_LPT_fields ? &delta_total : nullptr,
+                                                    mass_contrast_of_kBox ? &mass_contrast : nullptr);
 
         for (auto & p : particles) {
             auto * pos = FML::PARTICLE::GetPos(p);
@@ -300,6 +313,32 @@ namespace COLASOLVER {
             throw std::runtime_error("particle_baryons: OmegaCDM and Omegab do not match the transfer functions "
                                      "(w_c T_c + w_b T_b != T_cb)");
         return s;
+    }
+
+    //=============================================================================
+    /// The mass contrast of particle_baryon_relative_mode = mass: eps_i(k) = (T_i - T_cb)(k,z=0) / T_cb(k,zini), the
+    /// linear baryon-CDM relative mode today per unit delta_cb(zini) (Hahn, Rampf & Uhlemann 2021). Splines of log(k)
+    /// (k in h/Mpc) for CDM and baryons (w_c eps_c + w_b eps_b = 0)
+    //=============================================================================
+    inline std::pair<FML::INTERPOLATION::SPLINE::Spline, FML::INTERPOLATION::SPLINE::Spline>
+    two_species_mass_contrast_today(const FML::FILEUTILS::LinearTransferData & transferdata, double zini) {
+        using DVector = FML::INTERPOLATION::SPLINE::DVector;
+        const double aini = 1.0 / (1.0 + zini);
+        const double kmin = transferdata.get_kmin_hmpc_splines();
+        const double kmax = transferdata.get_kmax_hmpc_splines();
+        const int nk = 512;
+        DVector logk(nk), eps_cdm(nk), eps_baryon(nk);
+        for (int i = 0; i < nk; i++) {
+            logk[i] = std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1);
+            const double k = std::exp(logk[i]);
+            const double Tcb_ini = transferdata.get_cdm_baryon_transfer_function(k, aini);
+            const double Tcb_today = transferdata.get_cdm_baryon_transfer_function(k, 1.0);
+            eps_cdm[i] = (transferdata.get_cdm_transfer_function(k, 1.0) - Tcb_today) / Tcb_ini;
+            eps_baryon[i] = (transferdata.get_baryon_transfer_function(k, 1.0) - Tcb_today) / Tcb_ini;
+        }
+        FML::INTERPOLATION::SPLINE::Spline sc(logk, eps_cdm, "(T_cdm-T_cb)(k,z=0)/T_cb(k,zini)");
+        FML::INTERPOLATION::SPLINE::Spline sb(logk, eps_baryon, "(T_b-T_cb)(k,z=0)/T_cb(k,zini)");
+        return {sc, sb};
     }
 
 } // namespace COLASOLVER

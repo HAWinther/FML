@@ -194,6 +194,7 @@ namespace COLASOLVER {
         double allocation_factor; // Allocate this many more particles
         bool baryons{false};      // CDM and baryons as two sets of particles (otherwise one set "cb")
         std::string baryon_lattice{"same"}; // same: the baryons start from the CDM lattice, offset: half a spacing
+        std::string baryon_relative_mode{"displacement"}; // displacement, mass or mass_ini (see ParameterSchema.h)
         bool neutrinos{false};    // Massive neutrinos as particles (delta-f method)
         int neutrino_Npart_1D{0}; // Number of neutrino particles per dimension (0: particle_Npart_1D)
         bool neutrino_deltaf{true}; // Use the delta-f weights (false: plain particles, for testing)
@@ -402,8 +403,10 @@ namespace COLASOLVER {
             r.get("particle_allocation_factor", particle.allocation_factor);
             r.get("particle_sort_every_nsteps", particle.sort_every_nsteps);
             r.get("particle_baryons", particle.baryons);
-            if (particle.baryons)
+            if (particle.baryons) {
                 r.get("particle_baryon_lattice", particle.baryon_lattice);
+                r.get("particle_baryon_relative_mode", particle.baryon_relative_mode);
+            }
             r.get("particle_neutrinos", particle.neutrinos);
             if (particle.neutrinos) {
                 r.get("particle_neutrino_Npart_1D", particle.neutrino_Npart_1D);
@@ -632,6 +635,12 @@ namespace COLASOLVER {
                     fail("timestep_nsteps cannot be negative");
             if (timestep.spacing == ScaleFactorSpacing::Powerlaw and timestep.spacing_power == 0.0)
                 fail("timestep_spacing_power cannot be 0 (use logarithmic spacing)");
+
+            // The mass-encoded relative mode: CDM and baryons start from the same lattice (the masses compensate)
+            if (particle.baryons and particle.baryon_relative_mode != "displacement" and
+                particle.baryon_lattice != "same")
+                fail("particle_baryon_relative_mode = " + particle.baryon_relative_mode +
+                     " needs particle_baryon_lattice = same");
 
             // What is implemented for the particle species beyond one set of CDM+baryon particles
             for (auto & req : species_requirements()) {

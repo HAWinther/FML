@@ -670,6 +670,11 @@ namespace FML {
                                             3.0 * OmegaM * sp.mass_fraction * MplMpl_over_H0Msunh *
                                                 std::pow(Boxsize / HubbleLengthInMpch, 3) / double(sp.npart_total) / 1e10;
                     }
+                    // Per-particle masses (PartTypeN/Masses) for the species with get_mass: their MassTable entry is 0
+                    const auto mean_mass_of_type = mass;
+                    for (auto & sp : species)
+                        if (sp.get_mass)
+                            mass[sp.type] = 0.0;
 
                     HDF5::Handle file(H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT), H5Fclose, filename);
                     {
@@ -759,6 +764,12 @@ namespace FML {
                             for (size_t i = 0; i < n; i++)
                                 ids[i] = (unsigned long long)sp.get_id(i);
                             HDF5::write_dataset(g, "ParticleIDs", H5T_STD_U64LE, H5T_NATIVE_ULLONG, ids.data(), n, 1);
+                        }
+                        if (sp.get_mass) {
+                            std::vector<double> values(n);
+                            for (size_t i = 0; i < n; i++)
+                                values[i] = mean_mass_of_type[sp.type] * sp.get_mass(i);
+                            HDF5::write_dataset(g, "Masses", filetype, H5T_NATIVE_DOUBLE, values.data(), n, 1);
                         }
                         for (auto & extra : sp.extra_scalars) {
                             std::vector<double> values(n);
