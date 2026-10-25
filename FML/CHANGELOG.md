@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### VoidFinders: spherical underdensity void finder
+- `SphericalVoidFinder.h`: spheres with integrated density contrast Delta(<R) = delta_threshold (default -0.8)
+  around the low density cells of the smoothed density grid (exact particle counts, masses if the particles have
+  them), optional random-walk recentering to larger spheres, then the largest non-overlapping spheres are kept
+  (allowed overlap and minimum/maximum radius in units of the mean separation are options). MPI: the particles
+  within the max radius of the domain are copied from the neighbors, overlaps are removed globally.
+- Checked against an independent python implementation (scipy KD-tree; identical catalogue to 5e-13), planted
+  empty spheres are found at R = a / (1 + Delta)^(1/3) as expected, identical on 1-4 tasks (also with recentering).
+- `void_density_field` (VoxelVoidFinder.h) is the density field used for the voxel voids and the candidates.
+
 ### VoidFinders: ZOBOV and voxel void finders as in Revolver
 - New module `FML/VoidFinders` (periodic boxes, MPI). The voids are the watershed zones without merging, with
   the cuts and outputs of Revolver (Nadathur et al.): center, R_eff, delta_min, delta_avg, lambda, DensRatio.

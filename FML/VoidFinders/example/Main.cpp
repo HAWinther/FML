@@ -1,5 +1,6 @@
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Triangulation/DTFE.h>
+#include <FML/VoidFinders/SphericalVoidFinder.h>
 #include <FML/VoidFinders/VoxelVoidFinder.h>
 #include <FML/VoidFinders/ZobovVoidFinder.h>
 #include <random>
@@ -10,8 +11,9 @@
 // ZobovVoidFinder: watershed on the Voronoi densities of the particles (needs CGAL)
 // VoxelVoidFinder: watershed on the CIC density field smoothed with a Gaussian (needs FFTW)
 // VoxelWatershed : the watershed on any density grid, here the DTFE density field
+// SphericalVoidFinder: spheres with integrated density contrast Delta = -0.8 (needs FFTW for the candidates)
 //
-// The voids are the watershed zones (no merging). Positions are in [0,1), the catalogues
+// The watershed voids are the zones (no merging). Positions are in [0,1), the catalogues
 // are written with distances in units of the box size given.
 //=======================================================================================
 
@@ -79,6 +81,17 @@ int main() {
     dtfe.density_to_grid(64, density);
     auto dtfe_voids = FML::VOIDFINDER::VoxelWatershed(density);
     FML::VOIDFINDER::write_catalogue("dtfe_voxel_voids.txt", dtfe_voids, boxsize);
+
+    //=======================================================================================
+    // Spherical voids: grow spheres around low density grid cells until the density inside is
+    // (1 + Delta) times the mean, keep the largest non-overlapping ones (R >= 2 mean separations)
+    //=======================================================================================
+    FML::VOIDFINDER::SphericalOptions spherical_options;
+    spherical_options.delta_threshold = -0.8;
+    spherical_options.recentering_steps = 0; // > 0 to move the centers to get larger spheres (slower)
+    auto spherical_voids =
+        FML::VOIDFINDER::SphericalVoidFinder(part.get_particles_ptr(), part.get_npart(), spherical_options);
+    FML::VOIDFINDER::write_catalogue("spherical_voids.txt", spherical_voids, boxsize);
 
     // The catalogues are the same on all tasks
     if (FML::ThisTask == 0 and not zobov_voids.empty()) {

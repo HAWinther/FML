@@ -22,6 +22,9 @@ namespace FML {
     /// As in Revolver the voids are the watershed basins (zones) without any merging. Both can also find
     /// overdense structures ("clusters") by running the same algorithm on 1/density.
     ///
+    /// SphericalVoidFinder: spheres with a given integrated density contrast (e.g. Padilla et al. 2005), see
+    /// SphericalVoidFinder.h.
+    ///
     /// Positions, volumes and radii are in units of the box (positions in [0,1)); multiply by the box size.
     /// Densities are in units of the mean density.
     //========================================================================================
