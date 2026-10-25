@@ -713,12 +713,12 @@ namespace COLASOLVER {
             });
 
             b.section("Hybrid bias spectra");
-            b.optional("hybridbias",
-                       false,
-                       "Compute the hybrid bias (Lagrangian bias basis) spectra P_ab(k) at every output: the cross "
-                       "spectra of the operators 1, delta_L, delta_L^2, s^2, nabla^2 delta_L advected with the "
-                       "particles (Modi et al. 2020, Kokron et al. 2021). delta_L is the linear field of the IC scaled "
-                       "to the output redshift with the growth factor of the gravity model");
+            b.always_optional("hybridbias",
+                              false,
+                              "Compute the hybrid bias (Lagrangian bias basis) spectra P_ab(k) at every output: the "
+                              "cross spectra of the operators 1, delta_L, delta_L^2, s^2, nabla^2 delta_L advected "
+                              "with the particles (Modi et al. 2020, Kokron et al. 2021). delta_L is the linear field "
+                              "of the IC scaled to the output redshift with the growth factor of the gravity model");
             if_true("hybridbias", [&]() {
                 b.required("hybridbias_nmesh", 0, "Grid size for the advected fields");
                 b.optional("hybridbias_noperators",

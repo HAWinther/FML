@@ -166,6 +166,9 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 - Test (64^3 particles in 500 Mpc/h): P_11 agrees with P(k) of the particles to 0.1%, P_1delta = P_deltadelta =
   P_linear on large scales, identical on 1, 2 and 4 tasks; also runs with scale-dependent COLA and without COLA.
 
+- `hybridbias` is `always_optional` (it was `optional`, which made it required with `all_parameters_must_be_in_file =
+  true`, so existing parameter files without it stopped, e.g. all regression cases).
+
 ### CosmicWeb: ORIGAMI halo grouping
 - `ORIGAMIHalos.h`: the halo step of ORIGAMI (Falck et al. 2012) on the Delaunay tessellation of all particles:
   halo particles (morphology 3) above `core_density_threshold` (default 200 times the mean Voronoi density) that are
