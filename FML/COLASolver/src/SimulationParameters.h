@@ -196,6 +196,7 @@ namespace COLASOLVER {
         bool neutrinos{false};    // Massive neutrinos as particles (delta-f method)
         int neutrino_Npart_1D{0}; // Number of neutrino particles per dimension (0: particle_Npart_1D)
         bool neutrino_deltaf{true}; // Use the delta-f weights (false: plain particles, for testing)
+        int sort_every_nsteps{0};   // Reorder the particles in memory by position every this many steps (0: never)
     };
 
     struct TimestepSettings {
@@ -382,6 +383,7 @@ namespace COLASOLVER {
             // Particles
             r.get("particle_Npart_1D", particle.Npart_1D);
             r.get("particle_allocation_factor", particle.allocation_factor);
+            r.get("particle_sort_every_nsteps", particle.sort_every_nsteps);
             r.get("particle_baryons", particle.baryons);
             if (particle.baryons)
                 r.get("particle_baryon_lattice", particle.baryon_lattice);

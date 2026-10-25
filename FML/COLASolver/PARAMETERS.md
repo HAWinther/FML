@@ -99,6 +99,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `particle_neutrino_deltaf` | bool | `true` | always | particle_neutrinos: use the delta-f weights (false: plain particles, much noisier; for testing) |
 | `particle_baryon_lattice` | string | `"same"` | always | particle_baryons: start the baryons from the same lattice as the CDM (same, recommended: the baryon-CDM difference then follows linear theory on all scales) or from a lattice offset by half a particle spacing (offset: gives a spurious baryon-CDM difference on small scales). Options: `same`, `offset` |
 | `particle_allocation_factor` | double | `1.5` | always | Allocate this factor more particles than the average per task (particles move between tasks) |
+| `particle_sort_every_nsteps` | int | `0` | always | Reorder the particles in memory by position (blocks of 4^3 force-grid cells) every this many steps, which makes the density assignment and the force interpolation faster when the particles have moved far from their initial (lattice) order. 0: never. Changes the results only by round-off (the order of the sums) and the order of the particles in the output |
 
 ## Time-stepping
 

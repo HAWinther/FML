@@ -4,6 +4,7 @@
 //==========================================================
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
+#include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Interpolation/SheetInterpolation.h>
 #include <FML/NUFFT/NUFFT.h>
 #include <FML/Smoothing/SmoothingFourier.h>
@@ -461,6 +462,84 @@ int main() {
         check(maxdiff < 1e-6 * maxref, "particles_to_fourier_grid_sheet with NUFFT equals the NUFFT of the analytic "
                                        "sheet tracers (rel err " + sci(maxdiff / maxref) + ")");
     }
+
+    // sort_particles_by_position: the same order as a stable sort by block (x-major), particles moved whole, and the
+    // density field unchanged up to round-off
+    {
+        const int nb = 16;
+        auto part = random_particles<3>(100000, 13);
+        for (auto & p : part)
+            p.q[0] = &p - part.data(); // the original index
+        auto key = [&](const Particle<3> & p) {
+            long long k = 0;
+            for (int idim = 0; idim < 3; idim++)
+                k = k * nb + std::max(0, std::min(int(p.pos[idim] * nb), nb - 1));
+            return k;
+        };
+        auto expected = part;
+        std::stable_sort(expected.begin(), expected.end(),
+                         [&](const Particle<3> & a, const Particle<3> & b) { return key(a) < key(b); });
+        auto sorted = part;
+        FML::PARTICLE::sort_particles_by_position(sorted.data(), sorted.size(), nb);
+        bool ok = sorted.size() == expected.size();
+        for (size_t i = 0; ok and i < sorted.size(); i++)
+            for (int idim = 0; idim < 3; idim++)
+                ok = ok and sorted[i].pos[idim] == expected[i].pos[idim] and sorted[i].q[idim] == expected[i].q[idim];
+        int nok = ok ? 1 : 0;
+        FML::MinOverTasks(&nok);
+
+        FFTWGrid<3> g1(64, 1, 2), g2(64, 1, 2);
+        FML::INTERPOLATION::particles_to_grid<3, Particle<3>>(part.data(), part.size(), 100000, g1, "CIC");
+        FML::INTERPOLATION::particles_to_grid<3, Particle<3>>(sorted.data(), sorted.size(), 100000, g2, "CIC");
+        double maxdiff = 0.0;
+        for (auto && index : g1.get_real_range())
+            maxdiff = std::max(maxdiff,
+                               std::fabs(double(g1.get_real_from_index(index)) - g2.get_real_from_index(index)));
+        FML::MaxOverTasks(&maxdiff);
+        check(nok == 1 and maxdiff < 1e-12, "sort_particles_by_position = stable sort by block, density unchanged (" +
+                                                 sci(maxdiff) + ")");
+    }
+
+#ifdef USE_OMP
+    // particles_to_grid with several threads (chunks of slices, no atomic adds): equal to the one-thread result up
+    // to round-off, and identical for 2 and 3 threads when the chunked path is used (deterministic)
+    {
+        const int nmesh = 96;
+        auto part = random_particles<3>(200000, 11);
+        const int nthreads_max = omp_get_max_threads();
+        bool ok = true;
+        std::string info;
+        for (std::string method : {"NGP", "CIC", "TSC", "PCS"}) {
+            const int order = FML::INTERPOLATION::interpolation_order_from_name(method);
+            auto nlr = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(method);
+            std::vector<FFTWGrid<3>> grids;
+            for (int nthreads : {1, 2, 3}) {
+                omp_set_num_threads(nthreads);
+                FFTWGrid<3> g(nmesh, nlr.first, nlr.second);
+                FML::INTERPOLATION::particles_to_grid<3, Particle<3>>(
+                    part.data(), part.size(), 200000, g, method);
+                grids.push_back(g);
+            }
+            omp_set_num_threads(nthreads_max);
+            int nchunks = grids[0].get_local_nx() / (2 * order + 2);
+            if (FML::NTasks == 1 and nchunks % 2 == 1)
+                nchunks--;
+            const bool chunked = nchunks >= 4;
+            double maxdiff = 0.0, maxdiff23 = 0.0;
+            for (auto && index : grids[0].get_real_range()) {
+                maxdiff = std::max(maxdiff, std::fabs(double(grids[1].get_real_from_index(index)) -
+                                                      grids[0].get_real_from_index(index)));
+                maxdiff23 = std::max(maxdiff23, std::fabs(double(grids[1].get_real_from_index(index)) -
+                                                          grids[2].get_real_from_index(index)));
+            }
+            FML::MaxOverTasks(&maxdiff);
+            FML::MaxOverTasks(&maxdiff23);
+            ok = ok and maxdiff < 1e-12 and (not chunked or maxdiff23 == 0.0);
+            info += " " + method + ": " + sci(maxdiff) + (chunked ? " (2 = 3 threads: " + sci(maxdiff23) + ")" : "");
+        }
+        check(ok, "particles_to_grid with threads equals one thread, deterministic:" + info);
+    }
+#endif
 
     if (FML::ThisTask == 0)
         std::cout << (fails == 0 ? "All tests passed\n" : std::to_string(fails) + " test(s) FAILED\n");

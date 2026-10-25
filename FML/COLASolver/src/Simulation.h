@@ -896,6 +896,17 @@ void NBodySimulation<NDIM, T>::run() {
                     std::cout << "#=====================================================\n";
                 }
 
+                // Reorder the particles in memory by position (faster density assignment and interpolation)
+                const int sort_every = params.particle.sort_every_nsteps;
+                if (sort_every > 0 and istep < nsteps[ioutput] and istep_total % sort_every == 0) {
+                    timer.StartTiming("SortParticles");
+                    const int nblocks = std::max(1, params.force.nmesh / 4);
+                    for_each_species([&](auto & particles, const COLASOLVER::SpeciesInfo &) {
+                        particles.sort_by_position(nblocks);
+                    });
+                    timer.EndTiming("SortParticles");
+                }
+
                 const auto & s = steps[istep];
                 step({s.apos, s.apos_new, s.avel_new, s.delta_time_drift, s.delta_time_kick, s.velocity_scale});
             }

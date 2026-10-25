@@ -4,8 +4,11 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <functional>
 #include <vector>
 
@@ -550,18 +553,11 @@ namespace FML {
                 norm_fac /= mean_mass;
             }
 
-            // Loop over all particles and add them to the grid
+            // Add one particle to the grid. ATOMIC: atomic adds (a slow compare-and-swap loop for doubles), needed when
+            // several threads can write to the same cell
             auto * density_raw = density.get_real_grid();
-            // Atomic adds (a slow compare-and-swap loop for doubles) are only needed with more than one thread
-#ifdef USE_OMP
-            const bool use_atomic = omp_get_max_threads() > 1;
-#else
-            const bool use_atomic = false;
-#endif
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-            for (size_t i = 0; i < NumPart; i++) {
+            auto add_particle = [&](size_t i, auto atomic_tag) {
+                constexpr bool ATOMIC = decltype(atomic_tag)::value;
 
                 // Particle position
                 const auto * pos = FML::PARTICLE::GetPos(const_cast<T *>(part)[i]);
@@ -662,7 +658,7 @@ namespace FML {
                     // Old version when we did not use OMP: density.add_real(icoord, w * norm_fac * mass);
                     auto index = density.get_index_real(icoord);
                     double mass_to_add = w * norm_fac * mass;
-                    if (use_atomic) {
+                    if constexpr (ATOMIC) {
 #ifdef USE_OMP
 #pragma omp atomic
 #endif
@@ -670,7 +666,7 @@ namespace FML {
                     } else {
                         density_raw[index] += mass_to_add;
                     }
-                   
+
                     // Sum up and unsure weights sum to unity
                     sumweights += w;
                 }
@@ -681,6 +677,76 @@ namespace FML {
                     std::fabs(sumweights - 1.0) < 1e-3,
                     "[particles_to_grid] Possible problem with particles to grid: weights does not sum to unity!");
 #endif
+            };
+
+            //==========================================================
+            // One thread: the particles in order (the results do not depend on how the code is compiled)
+            //
+            // Several threads, without atomics: the local x-range is split into nchunks chunks of at least
+            // 2 ORDER + 2 slices (so the cells written by particles in chunks c and c+2 never overlap; nchunks is even
+            // with one task as the first and last chunk are then neighbors). The particles of the even chunks are added
+            // in parallel, then those of the odd chunks, each chunk in the order of the particles. Every cell then gets
+            // its contributions in the same order for any number of threads > 1 (deterministic; differs from the
+            // one-thread result only by round-off from the order of the sums). The particles are not moved, only
+            // their indices are grouped by chunk (4 bytes per particle). With too few chunks (thin slabs with many
+            // tasks) we fall back to atomic adds.
+            //==========================================================
+#ifdef USE_OMP
+            const int nthreads = omp_get_max_threads();
+#else
+            const int nthreads = 1;
+#endif
+            if (nthreads == 1) {
+                for (size_t i = 0; i < NumPart; i++)
+                    add_particle(i, std::false_type{});
+            } else {
+                const int Local_nx = density.get_local_nx();
+                int nchunks = Local_nx / (2 * ORDER + 2);
+                if (FML::NTasks == 1 and nchunks % 2 == 1)
+                    nchunks--;
+                const bool chunked = nchunks >= 4 and NumPart < size_t(std::numeric_limits<uint32_t>::max());
+                if (not chunked) {
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                    for (size_t i = 0; i < NumPart; i++)
+                        add_particle(i, std::true_type{});
+                } else {
+                    // The chunk of each particle (from the x-slice it is in, clamped to the local range)
+                    auto chunk_of = [&](size_t i) {
+                        const auto * pos = FML::PARTICLE::GetPos(const_cast<T *>(part)[i]);
+                        int ix0 = int(pos[0] * Nmesh) - int(Local_x_start);
+                        ix0 = std::max(0, std::min(ix0, Local_nx - 1));
+                        return int((long long)(ix0)*nchunks / Local_nx);
+                    };
+                    // Counting sort of the particle indices by chunk (stable: each chunk in particle order)
+                    std::vector<size_t> start(nchunks + 1, 0);
+                    std::vector<uint32_t> chunk(NumPart);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                    for (size_t i = 0; i < NumPart; i++)
+                        chunk[i] = uint32_t(chunk_of(i));
+                    for (size_t i = 0; i < NumPart; i++)
+                        start[chunk[i] + 1]++;
+                    for (int c = 0; c < nchunks; c++)
+                        start[c + 1] += start[c];
+                    std::vector<uint32_t> order(NumPart);
+                    {
+                        std::vector<size_t> next(start.begin(), start.end() - 1);
+                        for (size_t i = 0; i < NumPart; i++)
+                            order[next[chunk[i]]++] = uint32_t(i);
+                    }
+                    std::vector<uint32_t>().swap(chunk);
+                    for (int phase = 0; phase < 2; phase++) {
+#ifdef USE_OMP
+#pragma omp parallel for schedule(dynamic, 1)
+#endif
+                        for (int c = phase; c < nchunks; c += 2)
+                            for (size_t k = start[c]; k < start[c + 1]; k++)
+                                add_particle(order[k], std::false_type{});
+                    }
+                }
             }
 
             // Extra slices only relevant if we have more than 1 task

@@ -382,6 +382,13 @@ namespace COLASOLVER {
                        1.5,
                        "Allocate this factor more particles than the average per task (particles move between "
                        "tasks)");
+            b.always_optional("particle_sort_every_nsteps",
+                              0,
+                              "Reorder the particles in memory by position (blocks of 4^3 force-grid cells) every this "
+                              "many steps, which makes the density assignment and the force interpolation faster when "
+                              "the particles have moved far from their initial (lattice) order. 0: never. Changes the "
+                              "results only by round-off (the order of the sums) and the order of the particles in "
+                              "the output");
 
             b.section("Time-stepping");
             b.required("timestep_nsteps",

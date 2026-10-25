@@ -5,6 +5,21 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Threaded density assignment without atomics, spatial sorting of particles
+- `particles_to_grid` with more than one OpenMP thread: the local x-range is split into chunks of at least
+  2 ORDER + 2 slices, the particles of the even chunks are added in parallel, then those of the odd chunks (no two
+  threads write the same cell, no atomic adds). Deterministic: the same result for any number of threads > 1, equal
+  to the one-thread result up to round-off (test in `tests/test_grid_tools.cpp`). Falls back to atomic adds for slabs
+  thinner than 4 chunks. One thread: a plain loop (it was an OpenMP region with one thread). Assignment of 128^3
+  particles to a 256^3 grid (this machine, 2 threads vs 1): TSC 1.5x (lattice order) / 2.1x (shuffled); with atomics
+  2 threads were slower than 1. Default results unchanged except one float32 velocity in one regression file that
+  changed by 1 ulp: the compiler fuses the multiply-adds of the new loop differently (with -ffp-contract=off the
+  old and new code give identical results).
+- `FML::PARTICLE::sort_particles_by_position` / `MPIParticles::sort_by_position(nblocks)`: stable counting sort of the
+  particles by block (x-major), in place (4 bytes per particle). COLASolver `particle_sort_every_nsteps` (default 0 =
+  never): sorts all species every n steps with blocks of 4^3 force cells. 128^3 COLA, 20 steps, sort every 5 steps:
+  kick (force interpolation) -31 to -37%, total -4 to -6% (the FFTs dominate); P(k) identical to the printed digits.
+
 ### Performance (results unchanged bit for bit)
 - COLASolver: the EuclidEmulator2 boost (written with the P(k) every step, on by default) built the emulator from
   scratch for every call, i.e. at every step (reading its data file and setting up 15 2D splines, ~0.2 s, a third of
