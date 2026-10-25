@@ -617,15 +617,27 @@ namespace COLASOLVER {
             b.section("Halo finding");
             b.optional("fof", false, "Locate friends-of-friends halos at every output");
             if_true("fof", [&]() {
-                b.optional("fof_nmin_per_halo", 20, "Minimum number of particles per halo");
-                b.optional("fof_linking_length", 0.2, "The linking length in units of the mean particle separation");
+                b.optional("fof_nmin_per_halo", 20, "Minimum number of particles per halo (of one species with particle_baryons)");
+                b.optional("fof_linking_length",
+                           0.2,
+                           "The linking length in units of the mean particle separation (of one species with "
+                           "particle_baryons)");
                 b.optional("fof_nmesh_max",
                            0,
                            "Maximum grid size used to bin particles to speed up the linking (0: the code chooses)");
                 b.optional("fof_buffer_length_mpch",
                            3.0,
-                           "Buffer region (larger than the largest halo) from neighbor tasks (Mpc/h)");
+                           "Buffer region (larger than the largest halo) from neighbor tasks (Mpc/h). The code warns if "
+                           "halos reach its edge (they might then be cut off and found twice)");
             });
+            b.always_optional("fof_output_fileformat",
+                              "ascii",
+                              "fof: the halo catalogue halos_z<z>.txt (ascii, one row per halo) or halos_z<z>.hdf5 "
+                              "(HDF5, compile with USE_HDF5=true)",
+                              {"ascii", "HDF5"});
+            b.always_optional("fof_massfunction_nbins", 30, "fof: number of logarithmic bins of the mass function");
+            b.always_optional("fof_massfunction_Mmin", 1e10, "fof: smallest mass of the mass function (Msun/h)");
+            b.always_optional("fof_massfunction_Mmax", 1e16, "fof: largest mass of the mass function (Msun/h)");
 
             b.section("Power-spectrum");
             b.optional("pofk", false, "Compute the power-spectrum at every output");

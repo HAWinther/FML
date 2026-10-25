@@ -86,3 +86,4 @@ fml_*.zip
 .sync_md5_device.txt
 Claude outputs/
 DEVELOP/
+tests/test_fof

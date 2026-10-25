@@ -38,7 +38,7 @@ int main() {
     const double box = 1024.0;
     const std::string filename = "../../../TestData/particles_B1024.txt";
     const int ncols = 3;
-    const int nskip_header = 0;
+    const int nskip_header = 1; // the file starts with a header line
     const std::vector<int> cols_to_keep{0, 1, 2};
     auto data = FML::FILEUTILS::read_regular_ascii(filename, ncols, cols_to_keep, nskip_header);
 
@@ -83,7 +83,8 @@ int main() {
     const double linking_length = 0.30;
     const int n_min_FoF_group = 20;
     const bool periodic_box = true;
-    const double Buffersize_over_Boxsize = 3.0/box;
+    // The buffer must be larger than the largest groups (the code warns if groups reach its edge)
+    const double Buffersize_over_Boxsize = 10.0/box;
     const int Ngrid_max = 512;
     std::vector<FoFHalo> LocalFoFGroups;
     FML::FOF::FriendsOfFriends<Particle<NDIM>, NDIM>(

@@ -5,6 +5,21 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Friends-of-friends halos
+- `FriendsOfFriends` warns when groups reach the edge of the buffer copied from the neighbor tasks (they might be cut
+  off and found twice); `FML::FOF::FoF_number_of_groups_reaching_buffer_edge`. With a too small buffer a halo on a
+  task boundary was split in two (the example: 64 instead of 63 halos with 2 tasks), silently.
+- FoF IDs in the particles (`set_fofid`) are now correct with several tasks: only for halos that are kept, and for
+  particles in halos kept by the neighbor task (sent back).
+- `tests/test_fof.cpp` (in `make test`, 1/2/4 tasks): groups, centers and FoF IDs compared with a serial FoF, and the
+  buffer warning. The FoF example reads its test data again (header line) and uses a 10 Mpc/h buffer (it then matches
+  the reference catalogue exactly with any number of tasks).
+- COLASolver (`src/HaloFinding.h`): FoF with CDM and baryons as separate particles (linked together with their
+  masses) and with neutrino particles (CDM+baryons only); halo masses from OmegaCB (changes the masses with massive
+  neutrinos by 1 - f_nu); HDF5 halo catalogue (`fof_output_fileformat`); configurable mass-function bins
+  (`fof_massfunction_nbins`, `_Mmin`, `_Mmax`); the Tinker et al. 2008 and Watson et al. 2013 mass functions in
+  `massfunc_zX.txt` (two new columns). Regression case `fof_two_species_hdf5`.
+
 ### Triangulation: DTFE (Delaunay Tessellation Field Estimator) in 3D
 - `FML/Triangulation/DTFE.h`: `DTFE<T>` makes the periodic MPI tessellation and computes the DTFE density at the
   particles, (D+1) m / volume of the incident tetrahedra. Fields given at the particles are interpolated linearly in

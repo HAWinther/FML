@@ -213,6 +213,10 @@ namespace COLASOLVER {
         int nmesh_max;             // For speeding it up: the maximum gridsize to bin particle to
         double linking_length;     // The linking length in units of the mean partice separation (i.e. ~0.2)
         double buffer_length_mpch; // The buffer region (from nbor tasks) we use in the FoF finding
+        std::string output_fileformat{"ascii"}; // The halo catalogue: ascii or HDF5
+        int massfunction_nbins{30};             // The mass function: number of bins...
+        double massfunction_Mmin{1e10};         // ...and the range (Msun/h)
+        double massfunction_Mmax{1e16};
     };
 
     struct PofkSettings {
@@ -414,6 +418,10 @@ namespace COLASOLVER {
                 r.get("fof_linking_length", fof.linking_length);
                 r.get("fof_nmesh_max", fof.nmesh_max);
                 r.get("fof_buffer_length_mpch", fof.buffer_length_mpch);
+                r.get("fof_output_fileformat", fof.output_fileformat, std::string("ascii"));
+                r.get("fof_massfunction_nbins", fof.massfunction_nbins, 30);
+                r.get("fof_massfunction_Mmin", fof.massfunction_Mmin, 1e10);
+                r.get("fof_massfunction_Mmax", fof.massfunction_Mmax, 1e16);
             }
 
             // Power-spectrum
@@ -476,6 +484,17 @@ namespace COLASOLVER {
                     std::cout << "NB: simulation_cola_LPT_order < 1 so turning off COLA\n";
             }
 #ifndef USE_HDF5
+            if (fof.enabled) {
+                if (fof.output_fileformat != "ascii" and fof.output_fileformat != "HDF5")
+                    fail("fof_output_fileformat must be ascii or HDF5");
+#ifndef USE_HDF5
+                if (fof.output_fileformat == "HDF5")
+                    fail("fof_output_fileformat = HDF5 needs the code compiled with USE_HDF5=true");
+#endif
+                if (not(fof.massfunction_nbins > 0 and fof.massfunction_Mmin > 0.0 and
+                        fof.massfunction_Mmax > fof.massfunction_Mmin))
+                    fail("fof_massfunction_nbins must be > 0 and 0 < fof_massfunction_Mmin < fof_massfunction_Mmax");
+            }
             if (output.particles and output.fileformat == ParticleFileFormat::HDF5)
                 fail("output_fileformat = HDF5 needs HDF5: compile with USE_HDF5=true (make USE_HDF5=true)");
 #endif
@@ -603,7 +622,6 @@ namespace COLASOLVER {
             {"`force_early_method = none`", true, true, [](P p) { return p.force.early_method == "none"; }},
             {"`force_nbody_gauge = false`", true, true, [](P p) { return not p.force.nbody_gauge; }},
             {"`lightcone = false`", true, true, [](P p) { return not p.output.lightcone; }},
-            {"`fof = false`", true, true, [](P p) { return not p.fof.enabled; }},
             {"`pofk_multipole = false`", true, true, [](P p) { return not p.pofk_multipole.enabled; }},
             {"`bispectrum = false`", true, true, [](P p) { return not p.bispectrum.enabled; }},
         };

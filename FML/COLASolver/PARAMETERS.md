@@ -201,10 +201,14 @@ Parameters marked *optional* take the default value if they are not in the param
 | Parameter | Type | Default | Used when | Description |
 |---|---|---|---|---|
 | `fof` | bool | `false` | always | Locate friends-of-friends halos at every output |
-| `fof_nmin_per_halo` | int | `20` | fof = true | Minimum number of particles per halo |
-| `fof_linking_length` | double | `0.2` | fof = true | The linking length in units of the mean particle separation |
+| `fof_nmin_per_halo` | int | `20` | fof = true | Minimum number of particles per halo (of one species with particle_baryons) |
+| `fof_linking_length` | double | `0.2` | fof = true | The linking length in units of the mean particle separation (of one species with particle_baryons) |
 | `fof_nmesh_max` | int | `0` | fof = true | Maximum grid size used to bin particles to speed up the linking (0: the code chooses) |
-| `fof_buffer_length_mpch` | double | `3` | fof = true | Buffer region (larger than the largest halo) from neighbor tasks (Mpc/h) |
+| `fof_buffer_length_mpch` | double | `3` | fof = true | Buffer region (larger than the largest halo) from neighbor tasks (Mpc/h). The code warns if halos reach its edge (they might then be cut off and found twice) |
+| `fof_output_fileformat` | string | `"ascii"` | always | fof: the halo catalogue halos_z<z>.txt (ascii, one row per halo) or halos_z<z>.hdf5 (HDF5, compile with USE_HDF5=true). Options: `ascii`, `HDF5` |
+| `fof_massfunction_nbins` | int | `30` | always | fof: number of logarithmic bins of the mass function |
+| `fof_massfunction_Mmin` | double | `1e+10` | always | fof: smallest mass of the mass function (Msun/h) |
+| `fof_massfunction_Mmax` | double | `1e+16` | always | fof: largest mass of the mass function (Msun/h) |
 
 ## Power-spectrum
 
@@ -260,6 +264,5 @@ Not everything is implemented yet for CDM and baryons as separate particles (`pa
 | `force_early_method = none` | yes | yes |
 | `force_nbody_gauge = false` | yes | yes |
 | `lightcone = false` | yes | yes |
-| `fof = false` | yes | yes |
 | `pofk_multipole = false` | yes | yes |
 | `bispectrum = false` | yes | yes |

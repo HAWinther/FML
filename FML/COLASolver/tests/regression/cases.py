@@ -346,6 +346,18 @@ CASES = {
         ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.4_zmax200.txt",
         ic_input_redshift=20.0,
     ),
+    # FoF halos with CDM and baryons as separate particles (linked together), HDF5 halo catalogue (needs USE_HDF5)
+    "fof_two_species_hdf5": dict(
+        particle_baryons=True,
+        simulation_use_cola=False,
+        timestep_method="Quinn",
+        ic_type_of_input="transferinfofile",
+        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
+        ic_input_redshift=20.0,
+        fof=True,
+        fof_nmin_per_halo=10,
+        fof_output_fileformat="HDF5",
+    ),
     # Massive neutrinos as particles (delta-f) with 0.4 eV, IC from the transfer functions at zini
     "neutrino_particles": dict(
         particle_neutrinos=True,
@@ -464,6 +476,7 @@ REQUIRES = {
     "two_species_neutrinos_hdf5": "hdf5",
     "read_particles_hdf5": "hdf5",
     "neutrino_particles_baryons_hdf5": "hdf5",
+    "fof_two_species_hdf5": "hdf5",
 }
 
 # The order the cases must run in (the read_* cases need 'cola_quinn_all' / 'hdf5_output')

@@ -34,6 +34,11 @@ namespace FML {
         /// Records timings of the FoF search
         Timings foftimer;
 
+        /// The number of groups found in the last call to FriendsOfFriends (summed over tasks) that reach the edge of
+        /// the buffer of particles copied from the neighbor tasks. These might be cut off (and then also found as a
+        /// second, partial group on the neighbor task): increase the buffer if this is not zero
+        size_t FoF_number_of_groups_reaching_buffer_edge{0};
+
         //========================================================================================
         /// Locate friends of friends groups and bin what you want over these groups.
         ///
@@ -251,12 +256,18 @@ namespace FML {
             //=========================================================================
             std::vector<T> boundary_particles{};
             const size_t bytes_per_particle = FML::PARTICLE::GetSize(part[0]);
+            // How many particles we send to / receive from the left and right task (used again at the end to send
+            // the FoF IDs of the boundary particles back to the task they belong to)
+            size_t n_send_left = 0;
+            size_t n_send_right = 0;
+            size_t n_recv_left = 0;
+            size_t n_recv_right = 0;
+            [[maybe_unused]] const int RightTask = (FML::ThisTask + 1) % FML::NTasks;
+            [[maybe_unused]] const int LeftTask = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
 #ifdef USE_MPI
             foftimer.StartTiming("Communicate boundary");
             if (FML::NTasks > 1) {
                 // Count how may particles to send left and right
-                size_t n_send_left = 0;
-                size_t n_send_right = 0;
                 size_t noutside = 0;
                 for (size_t i = 0; i < NumPart; i++) {
                     const auto * pos = FML::PARTICLE::GetPos(part[i]);
@@ -271,14 +282,9 @@ namespace FML {
                     throw std::runtime_error("FoF::Particle detected outside local domain, please ensure all particles "
                                              "have been moved inside domain\n");
 
-                // The MPI id of the left and right task
                 MPI_Status status;
-                const int RightTask = (FML::ThisTask + 1) % FML::NTasks;
-                const int LeftTask = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
 
                 // Communicate how many to send and get how many to receive
-                size_t n_recv_left = 0;
-                size_t n_recv_right = 0;
 
                 // Send left receive from right
                 MPI_Sendrecv(&n_send_left,
@@ -648,6 +654,16 @@ namespace FML {
                 }
             };
 
+            // Does a particle lie within one linking length of the outer edge of the buffer? Then its group might
+            // continue outside the buffer (only boundary particles can be there and only with more than one task)
+            FoF_number_of_groups_reaching_buffer_edge = 0;
+            auto reaches_edge = [&](T & p) {
+                if (FML::NTasks == 1)
+                    return false;
+                const double x = FML::PARTICLE::GetPos(p)[0];
+                return x < xmin - dx_boundary + fof_distance or x > xmax + dx_boundary - fof_distance;
+            };
+
             // ID of the FoF groups
             unsigned int FoFID = 0;
 
@@ -688,6 +704,7 @@ namespace FML {
                     // until we have found all particles in the halo
                     FoFHalo<T, NDIM> newhalo(FoFID);
                     newhalo.add(*curpart, periodic);
+                    bool reaches_buffer_edge = reaches_edge(*curpart);
 
                     while (friend_local_index_list.size() > 0) {
                         // Fetch a particle
@@ -698,6 +715,7 @@ namespace FML {
 
                         // Fetch position relative to first particle
                         newhalo.add(*curpart, periodic);
+                        reaches_buffer_edge = reaches_buffer_edge or reaches_edge(*curpart);
 
                         // Remove particle from list
                         friend_local_index_list.pop_back();
@@ -715,6 +733,8 @@ namespace FML {
                             xhalo += (xhalo < 0.0) ? 1.0 : ((xhalo >= 1.0) ? -1.0 : 0.0);
                         if (xhalo >= FML::xmin_domain and xhalo < FML::xmax_domain) {
                             LocalFoFGroups.push_back(newhalo);
+                            if (reaches_buffer_edge)
+                                FoF_number_of_groups_reaching_buffer_edge++;
                         }
                     }
 
@@ -742,6 +762,20 @@ namespace FML {
                           << " on task 0) "
                              "\n";
 
+            // Warn if groups might be cut off by the buffer
+            FML::SumOverTasks(&FoF_number_of_groups_reaching_buffer_edge);
+            if (FoF_number_of_groups_reaching_buffer_edge > 0 and FML::ThisTask == 0)
+                std::cout << "WARNING: [FriendsOfFriends] " << FoF_number_of_groups_reaching_buffer_edge
+                          << " groups reach the edge of the buffer of particles copied from the neighbor tasks ("
+                          << Buffersize_over_Boxsize << " of the box). They might be cut off and then also found as "
+                          << "a second, partial group on the neighbor task. Increase the buffer (to more than the size "
+                          << "of the largest groups) to be sure the result does not depend on the number of tasks\n";
+
+            // Which of the groups found on this task are kept (local FoFID -> kept)
+            std::vector<char> kept_group(FoFID, 0);
+            for (auto & h : LocalFoFGroups)
+                kept_group[h.id] = 1;
+
             // We need to fix the FoFID of the halos as they start from 0 on each task
             // so that all just have a unique ID
             // We do this such that after mpi-sum we have the sum of the FoFIDs
@@ -759,17 +793,66 @@ namespace FML {
                 h.finalize(periodic);
             }
 
-            // If particles have a set_fofid method then set the ID in the particles
-            // This sets it to no_FoF_id if the particle is not part of a group
+            // If particles have a set_fofid method then set the ID in the particles: the (global) ID of the group it
+            // belongs to, or no_FoF_ID if it does not belong to a group that is kept. A group is kept by the task
+            // where its center is, so the IDs of particles in groups kept by the neighbor task are sent back from
+            // there (the particles we sent to the neighbors come back in the same order)
             if constexpr (FML::PARTICLE::has_set_fofid<T>()) {
-                for (size_t i = 0; i < NumPart_total; i++) {
-                    auto FoFID = particle_id_FoF[i] + addfofid[FML::ThisTask];
-                    if (type_from_globalindex(i) == BOUNDARY_PARTICLE)
-                        FML::PARTICLE::SetFoFID(boundary_particles[localindex_from_globalindex(i)], FoFID);
-                    else if (type_from_globalindex(i) == REGULAR_PARTICLE)
-                        FML::PARTICLE::SetFoFID(part[localindex_from_globalindex(i)], FoFID);
+                auto global_id = [&](size_t localid) {
+                    return (localid != no_FoF_ID and kept_group[localid]) ? localid + size_t(add) : no_FoF_ID;
+                };
+                for (size_t i = 0; i < NumPart; i++)
+                    FML::PARTICLE::SetFoFID(part[i], global_id(particle_id_FoF[i + NumPart_boundary]));
+#ifdef USE_MPI
+                if (FML::NTasks > 1) {
+                    // boundary_particles[0, n_recv_right) came from the right task, the rest from the left task
+                    std::vector<size_t> to_right(n_recv_right), to_left(n_recv_left);
+                    for (size_t i = 0; i < n_recv_right; i++)
+                        to_right[i] = global_id(particle_id_FoF[i]);
+                    for (size_t i = 0; i < n_recv_left; i++)
+                        to_left[i] = global_id(particle_id_FoF[n_recv_right + i]);
+                    std::vector<size_t> from_left(n_send_left), from_right(n_send_right);
+                    MPI_Status status;
+                    MPI_Sendrecv(to_right.data(),
+                                 int(n_recv_right * sizeof(size_t)),
+                                 MPI_BYTE,
+                                 RightTask,
+                                 1,
+                                 from_left.data(),
+                                 int(n_send_left * sizeof(size_t)),
+                                 MPI_BYTE,
+                                 LeftTask,
+                                 1,
+                                 FML::communicator,
+                                 &status);
+                    MPI_Sendrecv(to_left.data(),
+                                 int(n_recv_left * sizeof(size_t)),
+                                 MPI_BYTE,
+                                 LeftTask,
+                                 2,
+                                 from_right.data(),
+                                 int(n_send_right * sizeof(size_t)),
+                                 MPI_BYTE,
+                                 RightTask,
+                                 2,
+                                 FML::communicator,
+                                 &status);
+                    size_t il = 0, ir = 0;
+                    for (size_t i = 0; i < NumPart; i++) {
+                        const auto * pos = FML::PARTICLE::GetPos(part[i]);
+                        if (n_send_left > 0 and pos[0] < xmin + dx_boundary) {
+                            const auto id = from_left[il++];
+                            if (id != no_FoF_ID)
+                                FML::PARTICLE::SetFoFID(part[i], id);
+                        }
+                        if (n_send_right > 0 and pos[0] > xmax - dx_boundary) {
+                            const auto id = from_right[ir++];
+                            if (id != no_FoF_ID)
+                                FML::PARTICLE::SetFoFID(part[i], id);
+                        }
+                    }
                 }
-                // TODO - id should be communicated back for the boundary particles
+#endif
             }
 
             // Boundary particles are finally freed here
