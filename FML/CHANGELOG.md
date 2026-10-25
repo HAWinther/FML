@@ -5,6 +5,21 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### CosmicWeb: T-web, V-web and ORIGAMI
+- New module `FML/CosmicWeb` (MPI). `CosmicWeb.h`: the T-web (Hahn et al. 2007, Forero-Romero et al. 2009), the
+  tidal tensor k_i k_j / k^2 delta(k) of the Gaussian smoothed density field from a grid or from particles, cells
+  classified by the number of eigenvalues above lambda_threshold (void, sheet, filament, knot), with volume and mass
+  fractions and optionally the eigenvalues. `VWeb` does the same for the velocity shear (e.g. from the DTFE) and
+  `classify_tensor` for any symmetric tensor. Eigenvalues with Jacobi rotations (accurate to rounding also for
+  degenerate ones). No GSL needed.
+- `ORIGAMI.h`: ORIGAMI (Falck, Neyrinck & Szalay 2012), the morphology of each particle from the number of
+  orthogonal axes of the initial lattice along which it has been crossed (x, y, z and the two diagonals in each
+  coordinate plane, 4 orthogonal triplets, search a quarter of the row), linear in N^3. The lattice point comes
+  from the particle ID as numbered by `create_particle_grid` (or a user function).
+- Checked: T-web against analytic tidal fields (exact classification, eigenvalues to 1e-15) and a numpy
+  implementation (identical classes), ORIGAMI against a brute-force python implementation (identical bitmasks and
+  morphologies), both identical on 1-4 tasks. Example in `CosmicWeb/example`.
+
 ### VoidFinders: merging zones into voids (ZOBOV hierarchy, VIDE)
 - `ZoneMerging.h`: `merge_zones` builds the ZOBOV void hierarchy with a union-find over the zone links in
   increasing order: when two voids join at a link the shallower one is finished (its leak is the link, its parent
