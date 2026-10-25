@@ -73,7 +73,7 @@ int main() {
             double density_min = watershed_groups[i].density_min;
             double delta_avg = density_avg / mean_density - 1.0;
             double delta_min = density_min / mean_density - 1.0;
-            double radius = std::pow(3.0 * volume / (4.0 * M_PI), 0.33333) * boxsize;
+            double radius = std::pow(3.0 * volume / (4.0 * M_PI), 1.0 / 3.0) * boxsize;
             fp << std::setw(6)  << i << " ";
             fp << std::setw(10) << boxsize * watershed_groups[i].pos_barycenter[0] << " ";
             fp << std::setw(10) << boxsize * watershed_groups[i].pos_barycenter[1] << " ";
@@ -101,7 +101,7 @@ int main() {
     // std::vector<double> volumes;
     // d.VoronoiVolume(volumes);
     // // Assign them to particles
-    // for(auto & p : part) p.set_volume(volumes.pop_front());
+    // for(size_t i = 0; i < part.get_npart(); i++) part[i].set_volume(volumes[i]);
     //=======================================================================================
 
     //=======================================================================================

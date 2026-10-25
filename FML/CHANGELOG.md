@@ -5,6 +5,27 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Triangulation: bug fixes, 2D support and faster tessellation / watershed
+- Watershed results no longer depend on the number of MPI tasks. Every particle is linked to its lowest
+  neighbor (ties broken by position, quantity kept in double instead of float) and the labels are exchanged with
+  the neighbor tasks until converged (was: at most 3 merge passes, which often did not finish). With a large enough
+  buffer the groups are identical to a serial run (50k particles: 2 and 3 tasks differed in 2 and 15 groups before).
+- `WatershedGeneral` copied the whole CGAL triangulation (`auto dt = ...`) and walked the basins with a recursive
+  function (stack overflow for large basins); now a reference and an iterative walk. 2-6x faster.
+- Insertion in random order until the triangulation is 1-sheeted, then along a space filling curve with the last
+  vertex as hint; `dt.is_valid()` only with `DEBUG_TESSELATION`. Tessellation 4-5x faster (200k particles: 14.8 s ->
+  3.1 s). Voronoi volumes computed from the cells around each vertex (1.6x faster, same result as CGAL to 1e-11).
+- Buffer check: counts the cells around local particles that contain a guard point or whose circumsphere extends
+  outside the buffer (the old check missed cases where the volumes were wrong). A warning means increase
+  `buffer_fraction`; without a warning the Voronoi cells are exactly those of a full-box tessellation.
+- 2D: Voronoi areas implemented and the watershed compiles and runs (the guard points wrote out of bounds in 2D).
+  Neighbors are mapped to the original vertices when the triangulation is not 1-sheeted (`random_fraction = 0`),
+  which gave wrong minima before; a warning is printed in that case.
+- Communication: the boundary particles are selected once and reused (`communicate_boundary_values`), MPI messages
+  are split so that counts never overflow `int`, the groups are merged on task 0 with one `MPI_Reduce`. Guard points
+  deterministic (fixed seeds) and placed correctly for all tasks; fixed `size_t` underflow in their count.
+- `WatershedBinning`: `merge` takes a const reference, `finalize` skips empty groups. Example: radius uses `1.0/3.0`.
+
 ### COLASolver: COLA with CDM and baryons as separate particles
 - The species share the COLA frame of the total CDM+baryon field (LPT fields of delta_cb, also scale-dependent);
   their initial velocities are relative to it (the baryon-CDM relative velocity), evolved by the PM part. The

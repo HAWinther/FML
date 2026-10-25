@@ -1,6 +1,8 @@
 #ifndef WATERSHEDBINNING_HEADER
 #define WATERSHEDBINNING_HEADER
 
+#include <algorithm>
+#include <cassert>
 #include <vector>
 #include <FML/Global/Global.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
@@ -69,7 +71,7 @@ namespace FML {
             }
 
             // Merge groups from a different task
-            void merge(struct WatershedBasin & other) {
+            void merge(const WatershedBasin & other) {
                 if (other.ningroup == 0)
                     return;
                 for (int idim = 0; idim < NDIM; idim++) {
@@ -88,6 +90,8 @@ namespace FML {
             // so correct this and make sure the position is inside the box
             // Normalize the mean of quantity
             void finalize() {
+                if (ningroup == 0 or volume <= 0.0)
+                    return;
                 for (int idim = 0; idim < NDIM; idim++) {
                     double x = pos_min[idim] + pos_barycenter[idim] / volume;
                     if (x < 0)
