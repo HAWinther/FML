@@ -638,6 +638,12 @@ namespace COLASOLVER {
             b.always_optional("fof_massfunction_nbins", 30, "fof: number of logarithmic bins of the mass function");
             b.always_optional("fof_massfunction_Mmin", 1e10, "fof: smallest mass of the mass function (Msun/h)");
             b.always_optional("fof_massfunction_Mmax", 1e16, "fof: largest mass of the mass function (Msun/h)");
+            b.always_optional("fof_so_definitions",
+                              std::vector<std::string>{},
+                              "fof: spherical overdensity masses around the FoF halos, e.g. {\"200m\", \"500c\", "
+                              "\"vir\"} (<Delta>m: Delta times the mean CDM+baryon density, <Delta>c: the critical "
+                              "density, vir: Bryan & Norman 1998). Empty: none. The spheres must fit in "
+                              "fof_buffer_length_mpch");
 
             b.section("Power-spectrum");
             b.optional("pofk", false, "Compute the power-spectrum at every output");

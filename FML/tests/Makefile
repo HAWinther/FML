@@ -10,7 +10,7 @@ USE_OMP             ?= true
 USE_FFTW            ?= true
 USE_GSL             ?= true
 
-TARGETS := test_core test_grid_tools test_fof
+TARGETS := test_core test_grid_tools test_fof test_so
 
 include ../Makefile.config
 
@@ -30,6 +30,9 @@ test_grid_tools: test_grid_tools.o Global.o
 test_fof: test_fof.o Global.o
 	$(LINK_EXE)
 
+test_so: test_so.o Global.o
+	$(LINK_EXE)
+
 MPIRUN  ?= mpirun
 NP_LIST ?= 1 2 4
 
@@ -44,7 +47,7 @@ endif
 
 # Each run must pass; the two "must abort" runs must fail with the expected message
 .PHONY: run
-run: test_core test_grid_tools test_fof
+run: test_core test_grid_tools test_fof test_so
 	@set -e; for np in $(NP_LIST); do \
 	  echo "== Running test_core with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_core; \
@@ -52,6 +55,8 @@ run: test_core test_grid_tools test_fof
 	  OMP_NUM_THREADS=2 $(RUN) ./test_grid_tools; \
 	  echo "== Running test_fof with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_fof; \
+	  echo "== Running test_so with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_so; \
 	done
 	@echo "== Checking that bad input aborts with a clear message"
 	@! $(RUN1) ./test_core alloc > alloc.log 2>&1 && grep -q "Reached allocation limit" alloc.log && echo "[PASS] allocation limit aborts"

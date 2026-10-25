@@ -97,6 +97,7 @@ namespace FML {
         template bool ParameterMap::get<bool>(std::string) const;
         template std::vector<double> ParameterMap::get<std::vector<double>>(std::string) const;
         template std::vector<int> ParameterMap::get<std::vector<int>>(std::string) const;
+        template std::vector<std::string> ParameterMap::get<std::vector<std::string>>(std::string) const;
 
         template std::string ParameterMap::get<std::string>(std::string, std::string) const;
         template double ParameterMap::get<double>(std::string, double) const;
@@ -104,5 +105,7 @@ namespace FML {
         template bool ParameterMap::get<bool>(std::string, bool) const;
         template std::vector<double> ParameterMap::get<std::vector<double>>(std::string, std::vector<double>) const;
         template std::vector<int> ParameterMap::get<std::vector<int>>(std::string, std::vector<int>) const;
+        template std::vector<std::string> ParameterMap::get<std::vector<std::string>>(std::string,
+                                                                                      std::vector<std::string>) const;
     } // namespace UTILS
 } // namespace FML

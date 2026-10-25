@@ -217,6 +217,7 @@ namespace COLASOLVER {
         int massfunction_nbins{30};             // The mass function: number of bins...
         double massfunction_Mmin{1e10};         // ...and the range (Msun/h)
         double massfunction_Mmax{1e16};
+        std::vector<std::string> so_definitions; // Spherical overdensity masses around the halos (e.g. 200m, 500c, vir)
     };
 
     struct PofkSettings {
@@ -422,6 +423,7 @@ namespace COLASOLVER {
                 r.get("fof_massfunction_nbins", fof.massfunction_nbins, 30);
                 r.get("fof_massfunction_Mmin", fof.massfunction_Mmin, 1e10);
                 r.get("fof_massfunction_Mmax", fof.massfunction_Mmax, 1e16);
+                r.get("fof_so_definitions", fof.so_definitions, std::vector<std::string>{});
             }
 
             // Power-spectrum
@@ -491,6 +493,19 @@ namespace COLASOLVER {
                 if (fof.output_fileformat == "HDF5")
                     fail("fof_output_fileformat = HDF5 needs the code compiled with USE_HDF5=true");
 #endif
+                for (auto & def : fof.so_definitions) {
+                    bool ok = def == "vir";
+                    if (not ok and def.size() >= 2 and (def.back() == 'm' or def.back() == 'b' or def.back() == 'c')) {
+                        try {
+                            ok = std::stod(def.substr(0, def.size() - 1)) > 0.0;
+                        } catch (...) {
+                            ok = false;
+                        }
+                    }
+                    if (not ok)
+                        fail("fof_so_definitions: unknown definition [" + def +
+                             "] (<Delta>m or <Delta>b: mean CDM+baryon density, <Delta>c: critical density, vir)");
+                }
                 if (not(fof.massfunction_nbins > 0 and fof.massfunction_Mmin > 0.0 and
                         fof.massfunction_Mmax > fof.massfunction_Mmin))
                     fail("fof_massfunction_nbins must be > 0 and 0 < fof_massfunction_Mmin < fof_massfunction_Mmax");

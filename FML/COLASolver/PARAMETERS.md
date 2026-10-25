@@ -209,6 +209,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `fof_massfunction_nbins` | int | `30` | always | fof: number of logarithmic bins of the mass function |
 | `fof_massfunction_Mmin` | double | `1e+10` | always | fof: smallest mass of the mass function (Msun/h) |
 | `fof_massfunction_Mmax` | double | `1e+16` | always | fof: largest mass of the mass function (Msun/h) |
+| `fof_so_definitions` | string list | `{}` | always | fof: spherical overdensity masses around the FoF halos, e.g. {"200m", "500c", "vir"} (<Delta>m: Delta times the mean CDM+baryon density, <Delta>c: the critical density, vir: Bryan & Norman 1998). Empty: none. The spheres must fit in fof_buffer_length_mpch |
 
 ## Power-spectrum
 

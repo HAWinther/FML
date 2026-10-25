@@ -357,6 +357,16 @@ CASES = {
         fof=True,
         fof_nmin_per_halo=10,
         fof_output_fileformat="HDF5",
+        fof_so_definitions=["200m", "500c", "vir"],
+        fof_buffer_length_mpch=6.0,
+    ),
+    # FoF with spherical overdensity masses, text catalogue, COLA
+    "fof_so": dict(
+        output_redshifts=[1.0, 0.0],
+        fof=True,
+        fof_nmin_per_halo=10,
+        fof_so_definitions=["200m", "200c"],
+        fof_buffer_length_mpch=6.0,
     ),
     # Massive neutrinos as particles (delta-f) with 0.4 eV, IC from the transfer functions at zini
     "neutrino_particles": dict(

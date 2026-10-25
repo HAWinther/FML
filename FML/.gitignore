@@ -87,3 +87,4 @@ fml_*.zip
 Claude outputs/
 DEVELOP/
 tests/test_fof
+tests/test_so

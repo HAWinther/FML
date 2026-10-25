@@ -5,6 +5,18 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Spherical overdensity masses
+- `FML::FOF::SphericalOverdensity` (`FriendsOfFriends/SphericalOverdensity.h`): SO properties around given centers
+  (shrinking sphere center, radius and mass for any number of overdensities, velocity and dispersion), using all
+  particles within a search radius (copied from the neighbor tasks), independent of the number of tasks; warns about
+  spheres that do not close within the search radius. `tests/test_so.cpp` (isothermal spheres, 1/2/4 tasks).
+- COLASolver: `fof_so_definitions` (e.g. `{"200m", "200c", "vir"}`): SO masses around the FoF halos in the halo
+  catalogue (text and HDF5, with truncation and overlap flags) and a mass function per definition with the Tinker
+  et al. 2008 fit for the same Delta. Checked against an independent calculation (identical radii and particle
+  counts). README: SO masses with PM forces need R_Delta of several force cells (numbers).
+- `ParameterMap::get` for string lists (was declared but not instantiated).
+- Regression: new case `fof_so`; `fof_two_species_hdf5` now also has SO masses.
+
 ### CosmicWeb: ORIGAMI halo grouping
 - `ORIGAMIHalos.h`: the halo step of ORIGAMI (Falck et al. 2012) on the Delaunay tessellation of all particles:
   halo particles (morphology 3) above `core_density_threshold` (default 200 times the mean Voronoi density) that are
