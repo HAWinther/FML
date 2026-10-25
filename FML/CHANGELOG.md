@@ -5,6 +5,17 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### CosmicWeb: ORIGAMI halo grouping
+- `ORIGAMIHalos.h`: the halo step of ORIGAMI (Falck et al. 2012) on the Delaunay tessellation of all particles:
+  halo particles (morphology 3) above `core_density_threshold` (default 200 times the mean Voronoi density) that are
+  neighbors form the cores, the other halo particles join through their neighbors in rounds (each joins the halo
+  of its densest neighbor that already is in one, so the result does not depend on the order or the number of
+  tasks), the halo particles not connected to a core form their own groups, groups with fewer than 20 particles
+  are dropped (no unbinding). Gives the halo of each particle and a catalogue (particles, core particles, mass,
+  center of mass, densest particle). MPI with label exchange between the tasks.
+- Checked against an independent python implementation on scipy's Delaunay (identical halos, catalogue to 5e-13)
+  and identical on 1-4 tasks. Added to the CosmicWeb example (with USE_CGAL).
+
 ### ComputePowerSpectra: bispectrum fixes
 - The bispectrum shot noise had the wrong sign on the 1/n^2 term (B_obs = B + (P1+P2+P3)/n + 1/n^2): for
   Poisson particles the result was 2/n^2 instead of 0. Matters for sparse tracers (nP ~ 1).

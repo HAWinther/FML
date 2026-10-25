@@ -8,6 +8,8 @@
 
 USE_MPI             ?= true
 USE_FFTW            ?= true
+# The ORIGAMI halo grouping needs CGAL
+USE_CGAL            ?= false
 USE_OMP             ?= false
 USE_DEBUG           ?= false
 
