@@ -371,13 +371,6 @@ namespace COLASOLVER {
                               true,
                               "particle_neutrinos: use the delta-f weights (false: plain particles, much noisier; for "
                               "testing)");
-            b.always_optional("particle_neutrino_energy_density",
-                              false,
-                              "particle_neutrinos: source the Poisson equation with the energy density of the "
-                              "neutrinos (each particle weighted by E/m = sqrt(1 + (q/am)^2)) instead of their mass "
-                              "density. The neutrino P(k) is then that of the energy-density contrast, as in "
-                              "CAMB/CLASS. Matters at high redshift for light neutrinos (<E/m> = 1.04 at z = 50 for "
-                              "0.1 eV)");
             b.always_optional("particle_baryon_lattice",
                               "same",
                               "particle_baryons: start the baryons from the same lattice as the CDM (same, recommended: "
@@ -570,6 +563,15 @@ namespace COLASOLVER {
                        false,
                        "Include massive neutrinos in the density field using linear theory (requires "
                        "ic_type_of_input = transferinfofile)");
+            b.always_optional("force_neutrino_energy_density",
+                              false,
+                              "Source the Poisson equation with the energy density of the massive neutrinos instead of "
+                              "their mass density: f_nu <E/m>(a) delta_nu with <E/m> = <sqrt(1 + (q/am)^2)> over the "
+                              "Fermi-Dirac distribution (both for force_linear_massive_neutrinos, where delta_nu from "
+                              "CAMB/CLASS is already the energy-density contrast, and for particle_neutrinos, where each "
+                              "particle is weighted by its E/m and the neutrino P(k) is then the energy-density "
+                              "contrast). Matters at high redshift for light neutrinos (<E/m> = 1.33 at z = 50 for "
+                              "0.033 eV)");
             b.always_optional("force_nbody_gauge",
                               false,
                               "Run in the N-body gauge: add the linear source from radiation, neutrinos and GR "

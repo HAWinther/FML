@@ -383,7 +383,7 @@ CASES = {
     # Light neutrinos (0.1 eV in total) as particles with the energy density in the Poisson equation
     "neutrino_particles_energy_density": dict(
         particle_neutrinos=True,
-        particle_neutrino_energy_density=True,
+        force_neutrino_energy_density=True,
         simulation_use_cola=False,
         timestep_method="Quinn",
         cosmology_OmegaMNu=0.0024,

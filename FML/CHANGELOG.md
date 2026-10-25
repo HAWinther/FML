@@ -18,9 +18,11 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   decay of D/a (1.012-1.062); maps idem. Phi/c^2 rms 2.3e-5, z_obs - z rms 1.2e-3 (Doppler; gravitational 2.6e-5).
 - New regression case `hdf5_lightcone_relativistic`; all other files unchanged bit for bit.
 
-### Neutrino particles: energy density in the Poisson equation
-- `particle_neutrino_energy_density` (default false): the neutrino particles source the Poisson equation with their
-  energy density, each weighted by E/m = sqrt(1 + u^2) (u = q/(a m c)), normalised by the mean <E/m>(a) of the
+### Neutrinos: energy density in the Poisson equation
+- `force_neutrino_energy_density` (default false): the massive neutrinos source the Poisson equation with their
+  energy density. Linear neutrinos (`force_linear_massive_neutrinos`): f_nu <E/m>(a) delta_nu (delta_nu from the
+  transfer functions is already the energy-density contrast); 0.1 eV: P_cb at z = 0 +0.022% at k = 0.01 h/Mpc, the
+  linear-theory estimate. Neutrino particles: each weighted by E/m = sqrt(1 + u^2) (u = q/(a m c)), normalised by the mean <E/m>(a) of the
   unperturbed Fermi-Dirac distribution (checked against scipy to 1e-15). The source is (1 - f_nu) delta_cb +
   f_nu <E/m>(a) delta_nu, and the neutrino P(k) (every step and at the outputs, with its shot noise) is that of
   the energy-density contrast, as in CAMB/CLASS; the total P(k) at the outputs is the energy-density contrast of all
@@ -30,7 +32,8 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   P_cb at z = 0 (1024 Mpc/h, 0.1 eV, from z = 50): +0.033% at k = 0.01 h/Mpc, +0.01% at 0.02 (linear-theory
   estimate +0.022%); on P_nu a few % at z >= 20. Comparing P_nu with CAMB at z >~ 20 is limited by the delta-f noise
   (and the white shot-noise model, also for the near-lattice CDM) in both cases.
-- New regression case `neutrino_particles_energy_density`; all other files unchanged bit for bit.
+- New regression case `neutrino_particles_energy_density`; all other files unchanged bit for bit. (The option was
+  briefly called `particle_neutrino_energy_density` before it also covered the linear neutrinos.)
 
 ### Threaded density assignment without atomics, spatial sorting of particles
 - `particles_to_grid` with more than one OpenMP thread: the local x-range is split into chunks of at least

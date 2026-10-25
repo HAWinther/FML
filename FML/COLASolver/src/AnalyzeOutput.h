@@ -804,7 +804,7 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         pofk_cb_binning = bin(delta_cb, sim.cb_shotnoise());
         // Neutrino particles: P_nu(k) and the total P(k) of delta_m = (1 - f_nu) delta_cb + f_nu delta_nu
         if (sim.has_neutrino_particles()) {
-            // With particle_neutrino_energy_density: the energy-density contrast of the neutrinos, and the total
+            // With force_neutrino_energy_density: the energy-density contrast of the neutrinos, and the total
             // is the energy-density contrast of all matter, ((1 - f_nu) delta_cb + f_nu e delta_nu) / (1 - f_nu +
             // f_nu e) with e = <E/m>(a)
             const double a = 1.0 / (1.0 + redshift);

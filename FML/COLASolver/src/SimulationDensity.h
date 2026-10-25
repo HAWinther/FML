@@ -166,9 +166,9 @@ void NBodySimulation<NDIM, T>::add_neutrino_particles(FFTWGrid<NDIM> & density_g
                               density_grid_fourier.get_n_extra_slices_left(),
                               density_grid_fourier.get_n_extra_slices_right());
     {
-        // With particle_neutrino_energy_density the field is the energy-density contrast (weights w E / (m <E/m>))
+        // With force_neutrino_energy_density the field is the energy-density contrast (weights w E / (m <E/m>))
         typename COLASOLVER::NeutrinoParticles<NDIM>::ScopedEnergyWeights energy_weights(
-            neutrinos, a, params.particle.neutrino_energy_density);
+            neutrinos, a, params.force.neutrino_energy_density);
         neutrinos.density_fourier(density_nu, current_force.density_assignment_method);
         if (params.pofk.every_step and not particles_shifted())
             bin_up_power_spectrum_every_step(density_nu,
@@ -209,14 +209,17 @@ void NBodySimulation<NDIM, T>::add_linear_neutrinos(FFTWGrid<NDIM> & density_gri
         return (T_mnu / T_cb_ini);
     };
 
-    // The total matter density-field deltaM = (OmegaCB deltaCB + OmegaMNu deltaMNu)/OmegaM
+    // The total matter density-field deltaM = (OmegaCB deltaCB + OmegaMNu deltaMNu)/OmegaM. With
+    // force_neutrino_energy_density the neutrino term is f_nu <E/m>(a) delta_nu (delta_nu from the transfer functions
+    // is the energy-density contrast)
     const double fMNu = cosmo->get_fMNu();
+    const double fMNu_source = fMNu * neutrino_energy_factor(a);
     const auto & delta_ini_grid = initial_density_in_particle_frame();
     FML::GRID::for_each_fourier_mode<NDIM>(density_grid_fourier, [&](size_t fourier_index, double kmag) {
         auto delta_ini = delta_ini_grid.get_fourier_from_index(fourier_index);
         auto deltaCB = density_grid_fourier.get_fourier_from_index(fourier_index);
         auto deltaM =
-            deltaCB * FML::GRID::FloatType(1.0 - fMNu) + delta_ini * FML::GRID::FloatType(norm(kmag) * fMNu);
+            deltaCB * FML::GRID::FloatType(1.0 - fMNu) + delta_ini * FML::GRID::FloatType(norm(kmag) * fMNu_source);
         density_grid_fourier.set_fourier_from_index(fourier_index, deltaM);
     });
 }

@@ -126,6 +126,7 @@ namespace COLASOLVER {
         int nmesh;                             // The gridsize to bin particles to and compute PM forces
         std::string density_assignment_method; // Density assignment (NGP,CIC,TSC,PCS,PQS)
         bool linear_massive_neutrinos;         // Include the effects of massive neutrinos using linear theory
+        bool neutrino_energy_density{false};   // Source the Poisson equation with the neutrino energy density
         bool nbody_gauge{false};               // Add the linear N-body gauge source (radiation, neutrinos, GR)
         std::string nbody_gauge_filename;      // The table T_extra(k,z) (from scripts/make_nbody_gauge_transfer.py)
         std::string greens_function_kernel;    // Kernel used for the Greens function of the Poisson equation
@@ -196,7 +197,6 @@ namespace COLASOLVER {
         bool neutrinos{false};    // Massive neutrinos as particles (delta-f method)
         int neutrino_Npart_1D{0}; // Number of neutrino particles per dimension (0: particle_Npart_1D)
         bool neutrino_deltaf{true}; // Use the delta-f weights (false: plain particles, for testing)
-        bool neutrino_energy_density{false}; // Source the Poisson equation with the neutrino energy density
         int sort_every_nsteps{0};   // Reorder the particles in memory by position every this many steps (0: never)
     };
 
@@ -323,6 +323,7 @@ namespace COLASOLVER {
             r.get("force_nmesh", force.nmesh);
             r.get("force_density_assignment_method", force.density_assignment_method);
             r.get("force_linear_massive_neutrinos", force.linear_massive_neutrinos);
+            r.get("force_neutrino_energy_density", force.neutrino_energy_density);
             r.get("force_nbody_gauge", force.nbody_gauge);
             if (force.nbody_gauge)
                 r.get("force_nbody_gauge_filename", force.nbody_gauge_filename);
@@ -407,7 +408,6 @@ namespace COLASOLVER {
             if (particle.neutrinos) {
                 r.get("particle_neutrino_Npart_1D", particle.neutrino_Npart_1D);
                 r.get("particle_neutrino_deltaf", particle.neutrino_deltaf);
-                r.get("particle_neutrino_energy_density", particle.neutrino_energy_density);
                 if (particle.neutrino_Npart_1D <= 0)
                     particle.neutrino_Npart_1D = particle.Npart_1D;
             }
