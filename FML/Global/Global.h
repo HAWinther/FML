@@ -67,6 +67,10 @@ namespace FML {
     extern int NTasks;
     /// Total number of threads available
     extern int NThreads;
+    /// Number of tasks with fewer cores in their CPU affinity mask than OpenMP threads (Linux), and the smallest
+    /// number of such cores over the tasks (0 if unknown)
+    extern int NTasksThreadsShareCores;
+    extern int MinCoresPerTask;
     /// If MPI and threads can work together with FFTW
     extern bool MPIThreadsOK;  // Set by init_mpi
     extern bool FFTWThreadsOK; // Set by init_fftw

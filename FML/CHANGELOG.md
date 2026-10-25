@@ -5,6 +5,26 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Performance (results unchanged bit for bit)
+- COLASolver: the EuclidEmulator2 boost (written with the P(k) every step, on by default) built the emulator from
+  scratch for every call, i.e. at every step (reading its data file and setting up 15 2D splines, ~0.2 s, a third of
+  the run time of a 64^3 COLA run). It is now built once per cosmology (`src/EE2Boost.h`).
+- `FML::INTERPOLATION::WindowFunctionTable`: the Fourier window of the density assignment from a table of the 1D
+  factors (identical values, no sines and no std::function per mode); used in `bin_up_deconvolved_power_spectrum`,
+  `deconvolve_window_function_fourier` and the force.
+- `particles_to_grid` and `interpolate_grid_vector_to_particle_positions`: the kernel weights and cell indices are
+  computed once per dimension (ORDER*N kernel evaluations per particle instead of ORDER^N*N), multiplied in the
+  same order as before.
+- 3D fast paths without decoding every Fourier index (no integer divisions per mode) in `bin_up_power_spectrum`,
+  `bin_up_deconvolved_power_spectrum` and `compute_force_from_density_fourier` (which also computed the wavevector
+  twice per mode).
+- Run time, 1 thread: 64^3 particles / 128^3 force grid, 20 COLA steps: 12.9 s -> 6.8 s; 128^3 / 256^3: 96.9 s ->
+  66.7 s (the FFTs are now ~60%). All 955 regression files are bit for bit identical.
+- New timers `DensityAssignment+FFT` and `PofkEveryStep` in the summary at the end of a run.
+- Startup warning when the OpenMP threads of a task have fewer cores to run on than threads (CPU affinity, Linux).
+  With OpenMPI's default binding for 1-2 tasks all threads of a task share one core: 2 threads ran 9% slower than 1
+  in the 128^3 test, and 5% faster with `--bind-to none` (README).
+
 ### Test of local primordial non-gaussianity
 - `tests/test_fnl.cpp` (run by `make test`, 1/2/4 tasks): generates Phi = phi + fNL (phi^2 - <phi^2>) with
   `generate_nonlocal_gaussian_random_field_fourier` and recovers fNL = 0, +100, -100 from the reduced bispectrum

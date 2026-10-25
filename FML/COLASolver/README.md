@@ -12,6 +12,12 @@ mpirun -np 4 ./nbody parameterfile.lua
 ./nbody --parameters PARAMETERS.md     # write the reference of all parameters
 ```
 
+With MPI and OpenMP together, make sure the threads of a task get their own cores: OpenMPI binds each task to one
+core by default when running with 1-2 tasks, so all its threads share that core (the code warns about this at
+startup). Use e.g. `OMP_NUM_THREADS=4 mpirun --map-by slot:PE=4 -np 2 ./nbody parameterfile.lua` or
+`mpirun --bind-to none`. The timings of the main parts of a step (density assignment + FFT, P(k) every step, force,
+kick, drift) are printed at the end of the run.
+
 All the parameters, with their type, default value, when they are used and the allowed values, are listed in
 [PARAMETERS.md](PARAMETERS.md) (generated from `src/ParameterSchema.h`). `parameterfile.lua` is a commented
 example. String parameters are checked against the allowed values, and names in the parameterfile that are not

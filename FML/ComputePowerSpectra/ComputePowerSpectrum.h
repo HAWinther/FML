@@ -530,6 +530,40 @@ namespace FML {
             }
         }
 
+        /// @brief Loop over the local Fourier modes of a 3D grid (except k = 0) in the order of the Fourier index, calling
+        /// f(fourier_index, kvec, |k|, weight) with weight = 2 for the modes with 0 < k_z < k_ny (they also represent -k)
+        /// and 1 otherwise. kvec and |k| are computed exactly as in FFTWGrid::get_fourier_wavevector_and_norm_by_index,
+        /// but without decoding the index (no integer divisions per mode). OpenMP over the slices (f must be thread safe)
+        template <class F>
+        void bin_up_fourier_modes_3d(const FFTWGrid<3> & grid, F && f) {
+            const int Nmesh = grid.get_nmesh();
+            const int Local_nx = grid.get_local_nx();
+            const int Local_x_start = grid.get_local_x_start();
+            const int nover2 = Nmesh / 2;
+            const int nover2plus1 = Nmesh / 2 + 1;
+            const double twopi = 2.0 * M_PI;
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (int islice = 0; islice < Local_nx; islice++) {
+                std::array<double, 3> kvec;
+                const int ix = islice + Local_x_start;
+                kvec[0] = twopi * double(ix <= nover2 ? ix : ix - Nmesh);
+                for (int iy = 0; iy < Nmesh; iy++) {
+                    kvec[1] = twopi * double(iy <= nover2 ? iy : iy - Nmesh);
+                    size_t fourier_index = (size_t(islice) * Nmesh + iy) * nover2plus1;
+                    for (int iz = 0; iz < nover2plus1; iz++, fourier_index++) {
+                        if (Local_x_start == 0 and fourier_index == 0)
+                            continue; // DC mode (k=0)
+                        kvec[2] = twopi * double(iz <= nover2 ? iz : iz - Nmesh);
+                        const double kmag = std::sqrt(kvec[0] * kvec[0] + kvec[1] * kvec[1] + kvec[2] * kvec[2]);
+                        const double weight = iz > 0 && iz < nover2 ? 2.0 : 1.0;
+                        f(fourier_index, kvec, kmag, weight);
+                    }
+                }
+            }
+        }
+
         template <int N>
         void bin_up_deconvolved_power_spectrum(const FFTWGrid<N> & fourier_grid,
                                                PowerSpectrumBinning<N> & pofk,
@@ -542,12 +576,26 @@ namespace FML {
             const auto Nmesh = fourier_grid.get_nmesh();
             const auto Local_nx = fourier_grid.get_local_nx();
             const auto Local_x_start = fourier_grid.get_local_x_start();
-            const auto window_function = FML::INTERPOLATION::get_window_function<N>(density_assignment_method, Nmesh);
+            const FML::INTERPOLATION::WindowFunctionTable<N> window_function(density_assignment_method, Nmesh);
 
             // Initialize binning just in case
             pofk.reset();
 
             // Bin up P(k)
+            if constexpr (N == 3) {
+                // The same as the general loop below (same values and summation order, so identical results)
+                // without decoding every Fourier index into (ix, iy, iz)
+                bin_up_fourier_modes_3d(fourier_grid, [&](size_t fourier_index, const std::array<double, N> & kvec,
+                                                          double kmag, double weight) {
+                    auto delta = fourier_grid.get_fourier_from_index(fourier_index);
+                    auto delta_norm = std::norm(delta);
+                    auto window = window_function(kvec);
+                    delta_norm /= (window * window);
+                    pofk.add_to_bin(kmag, delta_norm, weight);
+                });
+                pofk.normalize();
+                return;
+            }
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -596,6 +644,17 @@ namespace FML {
             pofk.reset();
 
             // Bin up P(k)
+            if constexpr (N == 3) {
+                // The same as the general loop below (identical results) without decoding the Fourier indices
+                bin_up_fourier_modes_3d(fourier_grid, [&](size_t fourier_index, const std::array<double, N> &,
+                                                          double kmag, double weight) {
+                    auto delta = fourier_grid.get_fourier_from_index(fourier_index);
+                    auto delta_norm = std::norm(delta);
+                    pofk.add_to_bin(kmag, delta_norm, weight);
+                });
+                pofk.normalize();
+                return;
+            }
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif

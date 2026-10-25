@@ -339,6 +339,61 @@ namespace FML {
                 force_real[idim].set_grid_status_real(idim == 0);
             }
 
+            // Fast path for N = 3: the same operations in the same order as the general loop below (identical
+            // results) without decoding every Fourier index and with a table for the window function
+            if constexpr (N == 3) {
+                const FML::INTERPOLATION::WindowFunctionTable<N> window_table(density_assignment_method_used, Nmesh);
+                const int nover2 = Nmesh / 2;
+                const int nover2plus1 = Nmesh / 2 + 1;
+                const double twopi = 2.0 * M_PI;
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    std::array<double, N> kvec;
+                    std::array<int, N> k_vec_integer;
+                    std::complex<FML::GRID::FloatType> I(0, 1);
+                    const int ix = islice + int(Local_x_start);
+                    k_vec_integer[0] = ix <= nover2 ? ix : ix - Nmesh;
+                    kvec[0] = twopi * double(k_vec_integer[0]);
+                    for (int iy = 0; iy < Nmesh; iy++) {
+                        k_vec_integer[1] = iy <= nover2 ? iy : iy - Nmesh;
+                        kvec[1] = twopi * double(k_vec_integer[1]);
+                        size_t fourier_index = (size_t(islice) * Nmesh + iy) * nover2plus1;
+                        for (int iz = 0; iz < nover2plus1; iz++, fourier_index++) {
+                            if (Local_x_start == 0 and fourier_index == 0) {
+                                for (int idim = 0; idim < N; idim++)
+                                    force_real[idim].set_fourier_from_index(0, 0.0);
+                                continue; // DC mode (k=0)
+                            }
+                            k_vec_integer[2] = iz <= nover2 ? iz : iz - Nmesh;
+                            kvec[2] = twopi * double(k_vec_integer[2]);
+                            const double kmag2 = kvec[0] * kvec[0] + kvec[1] * kvec[1] + kvec[2] * kvec[2];
+                            auto value = force_real[0].get_fourier_from_index(fourier_index);
+                            if (LAPLACE_KERNEL == CONTINUOUS_GREENS_FUNCTION) {
+                                value *= -1.0 / kmag2;
+                            } else {
+                                value *= greens_function_laplace_operator_fourier<N>(kmag2, kvec, Nmesh, LAPLACE_KERNEL);
+                            }
+                            if (DECONVOLVE) {
+                                double W = window_table(kvec);
+                                value /= (W * W);
+                            }
+                            for (int idim = 0; idim < N; idim++) {
+                                force_real[idim].set_fourier_from_index(
+                                    fourier_index,
+                                    I * value *
+                                        FML::GRID::FloatType(gradient_kernel[Nmesh / 2 + k_vec_integer[idim]] *
+                                                             norm_poisson_equation));
+                            }
+                        }
+                    }
+                }
+                for (int idim = 0; idim < N; idim++)
+                    force_real[idim].fftw_c2r();
+                return;
+            }
+
             // Loop over all local fourier grid cells
 #ifdef USE_OMP
 #pragma omp parallel for

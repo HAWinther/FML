@@ -8,6 +8,9 @@
 #include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
+#ifdef __linux__
+#include <sched.h>
+#endif
 
 #include "Global.h"
 #include "SystemMemory.h"
@@ -40,6 +43,8 @@ namespace FML {
     int ThisTask = 0;
     int NTasks = 1;
     int NThreads = 1;
+    int NTasksThreadsShareCores = 0;
+    int MinCoresPerTask = 0;
 
     bool FFTWThreadsOK = false;
     bool MPIThreadsOK = false;
@@ -101,6 +106,24 @@ namespace FML {
         NThreads = 1;
 #endif
 
+        // Count the tasks whose OpenMP threads have fewer cores to run on than threads (e.g. OpenMPI binds each task
+        // to one core by default when np <= 2, so all threads of a task share one core). Reported by info()
+#if defined(USE_OMP) && defined(__linux__)
+        {
+            cpu_set_t mask;
+            CPU_ZERO(&mask);
+            if (sched_getaffinity(0, sizeof(mask), &mask) == 0) {
+                const int ncores = CPU_COUNT(&mask);
+                NTasksThreadsShareCores = ncores < NThreads ? 1 : 0;
+                MinCoresPerTask = ncores;
+#ifdef USE_MPI
+                MPI_Allreduce(MPI_IN_PLACE, &NTasksThreadsShareCores, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+                MPI_Allreduce(MPI_IN_PLACE, &MinCoresPerTask, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+#endif
+            }
+        }
+#endif
+
         // Set range for local domain
         xmin_domain = ThisTask / double(NTasks);
         xmax_domain = (ThisTask + 1) / double(NTasks);
@@ -128,6 +151,12 @@ namespace FML {
 #endif
 #ifdef USE_OMP
             std::cout << "# OpenMP is enabled. Main task has " << NThreads << " threads available\n";
+            if (NTasksThreadsShareCores > 0)
+                std::cout << "# WARNING: " << NTasksThreadsShareCores << " task(s) can only run on " << MinCoresPerTask
+                          << " core(s) (CPU affinity) but have " << NThreads
+                          << " OpenMP threads, so the threads share cores and are slow.\n"
+                          << "#          With OpenMPI use e.g. mpirun --bind-to none (or --map-by slot:PE=" << NThreads
+                          << ")\n";
 #else
             std::cout << "# OpenMP is *not* enabled\n";
 #endif

@@ -24,15 +24,20 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         std::cout << (has_baryons() ? "Adding the CDM and baryon particles to the densityfield\n" :
                                       "Adding particles (baryons+CDM) to the densityfield\n");
     }
+    timer.StartTiming("DensityAssignment+FFT");
     assign_cb_particles_to_grid(density_grid_fourier, a);
+    timer.EndTiming("DensityAssignment+FFT");
 
     // P(k) of the CDM+baryon particles. With force interlacing the particles might be shifted relative to the grid:
     // then we have the linear fields below in the shifted frame and do not bin up P(k) again
     const bool every_step = params.pofk.every_step and not particles_shifted();
     const bool deconvolve = not(force.density_method == "nufft" or force.density_method == "sheet_nufft");
-    if (every_step)
+    if (every_step) {
+        timer.StartTiming("PofkEveryStep");
         bin_up_power_spectrum_every_step(
             density_grid_fourier, deconvolve, subtract_shotnoise ? cb_shotnoise() : 0.0, a, pofk_cb_every_step);
+        timer.EndTiming("PofkEveryStep");
+    }
 
     // The other contributions to delta_m
     bool has_total = true;

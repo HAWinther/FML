@@ -422,6 +422,44 @@ namespace FML {
             return window_function;
         }
 
+        /// @brief The Fourier window of the density assignment, \f$ W(k) = \prod_i {\rm sinc}(\pi k_i / 2k_{\rm ny})^p \f$,
+        /// from a table of the 1D factors (the wavevector components of a grid are \f$ 2\pi n \f$ with integer n). It does
+        /// the same operations as get_window_function, so the values are identical, without the N sines per mode and the
+        /// std::function call. Only for wavevectors of a grid of size Ngrid.
+        template <int N>
+        class WindowFunctionTable {
+          public:
+            WindowFunctionTable(std::string density_assignment_method, int Ngrid)
+                : p(interpolation_order_from_name(density_assignment_method)), Ngrid(Ngrid), table(Ngrid + 1) {
+                assert_mpi(Ngrid > 0, "[WindowFunctionTable] Ngrid must be positive\n");
+                const double twopi = 2.0 * M_PI;
+                const double knyquist = M_PI * Ngrid;
+                for (int n = -Ngrid / 2; n <= Ngrid / 2; n++) {
+                    const double k = twopi * double(n);
+                    const double koverkny = M_PI / 2. * (k / knyquist);
+                    table[n + Ngrid / 2] = koverkny == 0.0 ? 1.0 : std::sin(koverkny) / (koverkny);
+                }
+            }
+            double operator()(const std::array<double, N> & kvec) const {
+                double w = 1.0;
+                for (int idim = 0; idim < N; idim++)
+                    {
+                    // kvec = 2 pi n: round to the nearest integer (inline, std::lround is a library call)
+                    const double n = kvec[idim] * (0.5 / M_PI);
+                    w *= table[int(n + (n >= 0.0 ? 0.5 : -0.5)) + Ngrid / 2];
+                }
+                double res = 1;
+                for (int i = 0; i < p; i++)
+                    res *= w;
+                return res;
+            }
+
+          private:
+            int p;
+            int Ngrid;
+            std::vector<double> table;
+        };
+
         /// @brief Deconvolves the density assignment kernel in Fourier space. We divide the fourier grid by the
         /// FFT of the density assignment kernels \f$ FFT[ H*H*H*...*H ] = FT[H]^p\f$.
         /// @tparam N The dimension of the grid
@@ -437,23 +475,7 @@ namespace FML {
 
             assert_mpi(Ngrid > 0, "[deconvolve_window_function_fourier] Ngrid must be positive\n");
 
-            // The order of the method
-            const int p = interpolation_order_from_name(density_assignment_method);
-
-            // Just sinc to the power = order to the method
-            const double knyquist = M_PI * Ngrid;
-            auto window_function = [&](std::array<double, N> & kvec) -> double {
-                double w = 1.0;
-                for (int idim = 0; idim < N; idim++) {
-                    const double koverkny = M_PI / 2. * (kvec[idim] / knyquist);
-                    w *= koverkny == 0.0 ? 1.0 : std::sin(koverkny) / (koverkny);
-                }
-                // res = pow(w,p);
-                double res = 1;
-                for (int i = 0; i < p; i++)
-                    res *= w;
-                return res;
-            };
+            const WindowFunctionTable<N> window_function(density_assignment_method, Ngrid);
 
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -592,6 +614,35 @@ namespace FML {
 #endif
                 }
 
+                // The kernel weights and (wrapped) cell indices along each dimension. The weight of a cell is the
+                // product of these (multiplied in the order idim = 0, 1, ..., as before, so the result is identical)
+                [[maybe_unused]] std::array<std::array<double, ORDER>, N> w1d;
+                [[maybe_unused]] std::array<std::array<int, ORDER>, N> i1d;
+                if constexpr (ORDER > 1) {
+                    for (int idim = 0; idim < N; idim++) {
+                        for (int j = 0; j < ORDER; j++) {
+                            const int go_left_right_or_stay = xstart[idim] + j;
+#ifdef CELLCENTERSHIFTED
+                            const double dx = std::fabs(-x[idim] + go_left_right_or_stay + 0.5);
+#else
+                            const double dx = std::fabs(-x[idim] + go_left_right_or_stay);
+#endif
+                            w1d[idim][j] = kernel<ORDER>(dx);
+                            // Periodic BC for all but x (we have extra slices - XXX should assert that its not too
+                            // large, but covered by boundscheck in FFTWGrid if this is turned on)! If only 1 task then
+                            // we should also wrap x
+                            int icoord = ix[idim] + go_left_right_or_stay;
+                            if (idim > 0 or FML::NTasks == 1) {
+                                if (icoord >= Nmesh)
+                                    icoord -= Nmesh;
+                                if (icoord < 0)
+                                    icoord += Nmesh;
+                            }
+                            i1d[idim][j] = icoord;
+                        }
+                    }
+                }
+
                 // Loop over all nbor cells
                 [[maybe_unused]] double sumweights = 0.0;
                 for (int i = 0; i < widthtondim; i++) {
@@ -601,33 +652,9 @@ namespace FML {
                         icoord = ix;
                     } else {
                         for (int idim = 0, n = 1; idim < N; idim++, n *= ORDER) {
-                            int go_left_right_or_stay = xstart[idim] + (i / n % ORDER);
-                            ix_nbor[idim] = ix[idim] + go_left_right_or_stay;
-#ifdef CELLCENTERSHIFTED
-                            double dx = std::fabs(-x[idim] + go_left_right_or_stay + 0.5);
-#else
-                            double dx = std::fabs(-x[idim] + go_left_right_or_stay);
-#endif
-                            w *= kernel<ORDER>(dx);
-                        }
-
-                        // Periodic BC for all but x (we have extra slices - XXX should assert that its not too large,
-                        // but covered by boundscheck in FFTWGrid if this is turned on)!
-                        icoord[0] = ix_nbor[0];
-                        for (int idim = 1; idim < N; idim++) {
-                            icoord[idim] = ix_nbor[idim];
-                            if (icoord[idim] >= Nmesh)
-                                icoord[idim] -= Nmesh;
-                            if (icoord[idim] < 0)
-                                icoord[idim] += Nmesh;
-                        }
-
-                        // If only 1 task then we should wrap
-                        if (FML::NTasks == 1) {
-                            if (icoord[0] >= Nmesh)
-                                icoord[0] -= Nmesh;
-                            if (icoord[0] < 0)
-                                icoord[0] += Nmesh;
+                            const int j = i / n % ORDER;
+                            w *= w1d[idim][j];
+                            icoord[idim] = i1d[idim][j];
                         }
                     }
 
@@ -711,7 +738,7 @@ namespace FML {
 
                 // Nearest grid-node in grid
                 // Also do some sanity checks. Probably better to throw here if these tests kick in
-                std::array<int, N> ix, ix_nbor;
+                std::array<int, N> ix;
                 for (int idim = 0; idim < N; idim++) {
                     ix[idim] = int(x[idim]);
                     if (idim == 0) {
@@ -757,32 +784,41 @@ namespace FML {
 #endif
                 }
 
+                // The kernel weights and cell indices along each dimension (periodic in all but x). The weight of a
+                // cell is their product, multiplied in the order idim = 0, 1, ... as before (identical results)
+                std::array<std::array<double, ORDER>, N> w1d;
+                std::array<std::array<int, ORDER>, N> i1d;
+                for (int idim = 0; idim < N; idim++) {
+                    for (int j = 0; j < ORDER; j++) {
+                        const int go_left_right_or_stay = ORDER == 1 ? 0 : xstart[idim] + j;
+#ifdef CELLCENTERSHIFTED
+                        const double dx = std::fabs(-x[idim] + go_left_right_or_stay + 0.5);
+#else
+                        const double dx = std::fabs(-x[idim] + go_left_right_or_stay);
+#endif
+                        w1d[idim][j] = kernel<ORDER>(dx);
+                        int icoord = ix[idim] + go_left_right_or_stay;
+                        if (idim > 0) {
+                            if (icoord >= Nmesh)
+                                icoord -= Nmesh;
+                            if (icoord < 0)
+                                icoord += Nmesh;
+                        }
+                        i1d[idim][j] = icoord;
+                    }
+                }
+
                 // Interpolation
                 std::array<double, N> value;
                 value.fill(0.0);
                 [[maybe_unused]] double sumweight = 0;
                 for (int i = 0; i < widthtondim; i++) {
                     double w = 1.0;
-                    for (int idim = 0, n = 1; idim < N; idim++, n *= ORDER) {
-                        int go_left_right_or_stay = ORDER == 1 ? 0 : xstart[idim] + (i / n % ORDER);
-                        ix_nbor[idim] = ix[idim] + go_left_right_or_stay;
-#ifdef CELLCENTERSHIFTED
-                        double dx = std::fabs(-x[idim] + go_left_right_or_stay + 0.5);
-#else
-                        double dx = std::fabs(-x[idim] + go_left_right_or_stay);
-#endif
-                        w *= kernel<ORDER>(dx);
-                    }
-
-                    // Periodic BC
                     std::array<int, N> icoord;
-                    icoord[0] = ix_nbor[0];
-                    for (int idim = 1; idim < N; idim++) {
-                        icoord[idim] = ix_nbor[idim];
-                        if (icoord[idim] >= Nmesh)
-                            icoord[idim] -= Nmesh;
-                        if (icoord[idim] < 0)
-                            icoord[idim] += Nmesh;
+                    for (int idim = 0, n = 1; idim < N; idim++, n *= ORDER) {
+                        const int j = i / n % ORDER;
+                        w *= w1d[idim][j];
+                        icoord[idim] = i1d[idim][j];
                     }
 
                     // Add up
