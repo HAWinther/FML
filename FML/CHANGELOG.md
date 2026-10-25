@@ -5,6 +5,21 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Triangulation: DTFE (Delaunay Tessellation Field Estimator) in 3D
+- `FML/Triangulation/DTFE.h`: `DTFE<T>` makes the periodic MPI tessellation and computes the DTFE density at the
+  particles, (D+1) m / volume of the incident tetrahedra. Fields given at the particles are interpolated linearly in
+  each Delaunay tetrahedron (constant gradient per tetrahedron) to a `FFTWGrid<3>`.
+- `density_to_grid` (in units of the mean density), `velocity_to_grid` (velocity, divergence, vorticity and the
+  traceless shear, from `get_vel`) and `fields_to_grid` (any number of fields, optionally their gradients). The
+  general `interpolate_to_grid` calls a user function with the density, values and gradients in every grid cell.
+- Grid value at the grid point or averaged over the grid cell (nsub^3 samples), volume or mass weighted. Grid points
+  at (ix,iy,iz)/Nmesh as in the rest of FML. Each task fills its own x-slab (Nmesh divisible by the number of tasks).
+- Samples in tetrahedra that might not be correct (too small buffer) are counted, not used, and give a warning.
+- Validated against analytic fields: linear fields and their gradients exact (1e-15), smooth velocity fields
+  converge with particle number (gradient error ~N^-1/3 at grid points), the volume averaged density integrates to
+  the total mass, identical results (1e-12) on 1-4 tasks. Example in `Triangulation/example/DTFEExample.cpp`.
+- `MPIPeriodicDelaunay::cell_is_reliable` (the buffer check for one cell, used by `num_bad_cells`).
+
 ### Triangulation: bug fixes, 2D support and faster tessellation / watershed
 - Watershed results no longer depend on the number of MPI tasks. Every particle is linked to its lowest
   neighbor (ties broken by position, quantity kept in double instead of float) and the labels are exchanged with

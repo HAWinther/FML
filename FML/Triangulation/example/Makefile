@@ -14,11 +14,14 @@ USE_DEBUG           ?= false
 # Extra defines added when USE_DEBUG = true
 DEBUG_OPTIONS     = -DDEBUG_TESSELATION
 
-TARGETS := voronoi
+TARGETS := voronoi dtfe
 
 include ../../Makefile.config
 
 FML_MODULES := Global FileUtils
 
 voronoi: Main.o Global.o FileUtils.o
+	$(LINK_EXE)
+
+dtfe: DTFEExample.o Global.o
 	$(LINK_EXE)

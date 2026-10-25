@@ -663,7 +663,6 @@ namespace FML {
                 // 6 tetrahedra (v, midpoint(v,w), circumcenter(v,w,x), circumcenter(v,a,b,c)) for w != x in {a,b,c}.
                 // Summing their signed volumes over all cells incident to v gives the volume of the Voronoi cell
                 // (also when the circumcenters are outside the cells). Coordinates are relative to v
-                using Cell_handle = typename PeriodicDelaunay::Cell_handle;
                 using Vec = std::array<double, 3>;
                 auto det = [](const Vec & a, const Vec & b, const Vec & c) {
                     return a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) +
@@ -733,67 +732,60 @@ namespace FML {
 #endif
             }
 
-            /// Count the number of cells (tetrahedra in 3D, triangles in 2D) that have at least one regular particle as a
-            /// vertex and that might not be correct: either because they contain a guard point or because their
-            /// circumsphere extends outside of the region covered by the domain plus buffer (so a particle we do not
-            /// have could be inside it). If this is zero then the Voronoi cells of all the regular particles are
-            /// exactly the same as if we had tessellated the full box. Regular/guard points are identified by their
-            /// position.
-            /// Only implemented for 1-sheeted triangulations (returns 0 otherwise).
-            long long int num_bad_cells() const {
-                if (FML::NTasks == 1 or not dt.is_1_cover())
-                    return 0;
+#if CGAL_NDIM == 3
+            using Cell_handle = typename PeriodicDelaunay::Cell_handle;
+#elif CGAL_NDIM == 2
+            using Cell_handle = typename PeriodicDelaunay::Face_handle;
+#endif
+
+            /// Check if we can trust a cell (tetrahedron in 3D, triangle in 2D): it is exactly the same as in a
+            /// tessellation of the full box if it has no guard points as vertices and its circumsphere is inside the
+            /// region covered by the domain plus buffer (so no particle we do not have can be inside it). Guard points
+            /// are identified by their position. Always true when the buffer covers the whole box. For triangulations
+            /// that are not 1-sheeted we cannot check this and return true.
+            bool cell_is_reliable(Cell_handle c) const {
                 const double width = FML::xmax_domain - FML::xmin_domain;
-                if (width + 2.0 * dx_buffer >= 1.0)
-                    return 0;
-
-                const double xlow = FML::xmin_domain - dx_buffer;
+                if (FML::NTasks == 1 or width + 2.0 * dx_buffer >= 1.0 or not dt.is_1_cover())
+                    return true;
                 const double xhigh = FML::xmax_domain + dx_buffer;
-                const double xcenter = 0.5 * (FML::xmin_domain + FML::xmax_domain);
-                const double x0_guard = xhigh;
                 const double length_guard = 1.0 - width - 2.0 * dx_buffer;
-                auto is_regular = [&](Vertex_handle v) {
-                    const double x = v->point()[0];
-                    return x >= FML::xmin_domain and x < FML::xmax_domain;
-                };
-                auto is_guard = [&](Vertex_handle v) {
-                    const double x = v->point()[0];
-                    return detail::wrap_periodic(x - x0_guard) <= length_guard * (1.0 + 1e-10) + 1e-14;
-                };
+                for (int k = 0; k <= CGAL_NDIM; k++) {
+                    const double x = c->vertex(k)->point()[0];
+                    if (detail::wrap_periodic(x - xhigh) <= length_guard * (1.0 + 1e-10) + 1e-14)
+                        return false;
+                }
+#if CGAL_NDIM == 3
+                const auto pcell = dt.periodic_tetrahedron(c);
+                const Point q0 = dt.point(pcell[0]);
+                const Point cc = CGAL::circumcenter(q0, dt.point(pcell[1]), dt.point(pcell[2]), dt.point(pcell[3]));
+#elif CGAL_NDIM == 2
+                const auto pcell = dt.periodic_triangle(c);
+                const Point q0 = dt.point(pcell[0]);
+                const Point cc = CGAL::circumcenter(q0, dt.point(pcell[1]), dt.point(pcell[2]));
+#endif
+                const double radius = std::sqrt(CGAL::to_double(CGAL::squared_distance(cc, q0)));
+                double x = cc[0];
+                x -= std::round(x - 0.5 * (FML::xmin_domain + FML::xmax_domain));
+                return x - radius >= FML::xmin_domain - dx_buffer and x + radius <= xhigh;
+            }
 
+            /// Count the number of cells (tetrahedra in 3D, triangles in 2D) that have at least one regular particle as a
+            /// vertex and that are not reliable (see cell_is_reliable). If this is zero then the Voronoi cells of all
+            /// the regular particles are exactly the same as if we had tessellated the full box.
+            /// Regular points are identified by their position.
+            long long int num_bad_cells() const {
                 long long int nbad = 0;
 #if CGAL_NDIM == 3
                 for (auto c = dt.cells_begin(); c != dt.cells_end(); ++c) {
-                    const int nvert = 4;
-                    const auto pcell = dt.periodic_tetrahedron(c);
 #elif CGAL_NDIM == 2
                 for (auto c = dt.faces_begin(); c != dt.faces_end(); ++c) {
-                    const int nvert = 3;
-                    const auto pcell = dt.periodic_triangle(c);
 #endif
                     bool has_regular = false;
-                    bool has_guard = false;
-                    for (int k = 0; k < nvert; k++) {
-                        has_regular = has_regular or is_regular(c->vertex(k));
-                        has_guard = has_guard or is_guard(c->vertex(k));
+                    for (int k = 0; k <= CGAL_NDIM; k++) {
+                        const double x = c->vertex(k)->point()[0];
+                        has_regular = has_regular or (x >= FML::xmin_domain and x < FML::xmax_domain);
                     }
-                    if (not has_regular)
-                        continue;
-                    if (has_guard) {
-                        nbad++;
-                        continue;
-                    }
-#if CGAL_NDIM == 3
-                    const Point q0 = dt.point(pcell[0]);
-                    const Point cc = CGAL::circumcenter(q0, dt.point(pcell[1]), dt.point(pcell[2]), dt.point(pcell[3]));
-#elif CGAL_NDIM == 2
-                    const Point q0 = dt.point(pcell[0]);
-                    const Point cc = CGAL::circumcenter(q0, dt.point(pcell[1]), dt.point(pcell[2]));
-#endif
-                    const double radius = std::sqrt(CGAL::to_double(CGAL::squared_distance(cc, q0)));
-                    double x = cc[0];
-                    x -= std::round(x - xcenter);
-                    if (x - radius < xlow or x + radius > xhigh)
+                    if (has_regular and not cell_is_reliable(c))
                         nbad++;
                 }
                 return nbad;
