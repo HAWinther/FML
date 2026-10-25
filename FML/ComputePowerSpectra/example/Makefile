@@ -14,11 +14,14 @@ USE_DEBUG           ?= false
 # Extra defines added when USE_DEBUG = true
 DEBUG_OPTIONS     = -DDEBUG_FFTWGRID -DDEBUG_MPIPARTICLES -DDEBUG_INTERPOL
 
-TARGETS := powspec
+TARGETS := powspec hybridbias
 
 include ../../Makefile.config
 
 FML_MODULES := Global FileUtils
 
 powspec: Main.o Global.o FileUtils.o
+	$(LINK_EXE)
+
+hybridbias: HybridBiasExample.o Global.o
 	$(LINK_EXE)

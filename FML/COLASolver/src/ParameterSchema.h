@@ -693,6 +693,45 @@ namespace COLASOLVER {
                 b.optional("bispectrum_interlacing", true, "Use interlaced grids to reduce aliasing");
                 b.optional("bispectrum_subtract_shotnoise", false, "Subtract shot-noise");
             });
+
+            b.section("Hybrid bias spectra");
+            b.optional("hybridbias",
+                       false,
+                       "Compute the hybrid bias (Lagrangian bias basis) spectra P_ab(k) at every output: the cross "
+                       "spectra of the operators 1, delta_L, delta_L^2, s^2, nabla^2 delta_L advected with the "
+                       "particles (Modi et al. 2020, Kokron et al. 2021). delta_L is the linear field of the IC scaled "
+                       "to the output redshift with the growth factor of the gravity model");
+            if_true("hybridbias", [&]() {
+                b.required("hybridbias_nmesh", 0, "Grid size for the advected fields");
+                b.optional("hybridbias_noperators",
+                           5,
+                           "Use the first noperators of (1, delta, delta^2, s^2, nabla^2 delta): 15 spectra for 5");
+                b.optional("hybridbias_density_assignment_method",
+                           "CIC",
+                           "Density assignment method",
+                           assignment_methods);
+                b.optional("hybridbias_interlacing", true, "Use interlaced grids to reduce aliasing");
+                b.optional("hybridbias_subtract_shotnoise",
+                           false,
+                           "Subtract the Poisson shot noise mean(w_a w_b)/Npart (the usual basis spectra keep it)");
+                b.optional("hybridbias_smoothing_scale",
+                           0.0,
+                           "Smooth the linear field with this scale (Mpc/h) before forming the operators (0: none)");
+                b.optional("hybridbias_smoothing_filter", "gaussian", "The smoothing filter", smoothing_filters);
+                b.optional("hybridbias_kcut_over_nyquist",
+                           1.0,
+                           "Keep only the modes with k < this times the Nyquist frequency of the particle lattice in the "
+                           "linear field (a spherical cut, so the operators are isotropic as assumed in the LPT "
+                           "prediction). 0: keep all the modes of the lattice grid (a cube)");
+                b.optional("hybridbias_zeldovich",
+                           false,
+                           "Also write the Zel'dovich (resummed 1LPT) prediction of the spectra with the same cut and "
+                           "smoothing of the operators: hybridbias_zeldovich_z<z>.txt");
+                b.optional("hybridbias_oneloop",
+                           false,
+                           "Also write the one-loop LPT (CLEFT) prediction of the spectra (no counterterms): "
+                           "hybridbias_oneloop_z<z>.txt");
+            });
             return b.specs;
         }();
         return schema;

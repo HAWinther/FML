@@ -248,6 +248,20 @@ namespace COLASOLVER {
         bool subtract_shotnoise;               // Subtract shotnoise?
     };
 
+    struct HybridBiasSettings {
+        bool enabled;                          // Compute the hybrid bias (Lagrangian bias basis) spectra when we output
+        int nmesh;                             // The grid size for the advected fields
+        int noperators;                        // Use the first noperators of 1, delta, delta^2, s^2, nabla^2 delta
+        std::string density_assignment_method; // Density assignment method (NGP, CIC, ...)
+        bool interlacing;                      // Use interlacing for alias reduction?
+        bool subtract_shotnoise;               // Subtract the Poisson shot noise mean(w_a w_b) / Npart?
+        double smoothing_scale;                // Smoothing of the linear field before forming the operators (Mpc/h)
+        std::string smoothing_filter;          // gaussian, sharpk or tophat
+        double kcut_over_nyquist;              // Spherical cut of the linear field at this times the lattice Nyquist
+        bool zeldovich;                        // Also output the Zel'dovich prediction
+        bool oneloop;                          // Also output the one-loop LPT prediction
+    };
+
     struct OutputSettings {
         std::vector<double> redshifts; // List of output redshift from large to small
         bool particles;                // Output particles?
@@ -287,6 +301,7 @@ namespace COLASOLVER {
         PofkSettings pofk;
         PofkMultipoleSettings pofk_multipole;
         BispectrumSettings bispectrum;
+        HybridBiasSettings hybridbias;
         OutputSettings output;
 
         /// Read all the parameters, check them and print them
@@ -458,6 +473,21 @@ namespace COLASOLVER {
                 r.get("bispectrum_subtract_shotnoise", bispectrum.subtract_shotnoise);
             }
 
+            // Hybrid bias spectra
+            r.get("hybridbias", hybridbias.enabled);
+            if (hybridbias.enabled) {
+                r.get("hybridbias_nmesh", hybridbias.nmesh);
+                r.get("hybridbias_noperators", hybridbias.noperators);
+                r.get("hybridbias_density_assignment_method", hybridbias.density_assignment_method);
+                r.get("hybridbias_interlacing", hybridbias.interlacing);
+                r.get("hybridbias_subtract_shotnoise", hybridbias.subtract_shotnoise);
+                r.get("hybridbias_smoothing_scale", hybridbias.smoothing_scale);
+                r.get("hybridbias_smoothing_filter", hybridbias.smoothing_filter);
+                r.get("hybridbias_kcut_over_nyquist", hybridbias.kcut_over_nyquist);
+                r.get("hybridbias_zeldovich", hybridbias.zeldovich);
+                r.get("hybridbias_oneloop", hybridbias.oneloop);
+            }
+
             // Output
             r.get("output_redshifts", output.redshifts);
             r.get("output_particles", output.particles);
@@ -522,6 +552,25 @@ namespace COLASOLVER {
                          "ic_random_field_type = read_particles)");
                 if (force.sheet_refinement < 1)
                     fail("force_sheet_refinement must be >= 1");
+            }
+            if (hybridbias.enabled) {
+                if (ic.random_field_type == ICRandomFieldType::ReadParticles)
+                    fail("hybridbias needs the linear density field of the initial conditions and particles that start "
+                         "on a regular lattice (not ic_random_field_type = read_particles)");
+                if (hybridbias.noperators < 1 or hybridbias.noperators > 5)
+                    fail("hybridbias_noperators must be 1, ..., 5 (1, delta, delta^2, s^2, nabla^2 delta)");
+                if (hybridbias.nmesh <= 0)
+                    fail("hybridbias_nmesh must be > 0");
+                if (hybridbias.smoothing_scale < 0.0)
+                    fail("hybridbias_smoothing_scale must be >= 0");
+                if (hybridbias.kcut_over_nyquist < 0.0)
+                    fail("hybridbias_kcut_over_nyquist must be >= 0");
+                if ((hybridbias.zeldovich or hybridbias.oneloop) and hybridbias.kcut_over_nyquist <= 0.0)
+                    fail("hybridbias_zeldovich and hybridbias_oneloop need an isotropic cut of the operators "
+                         "(hybridbias_kcut_over_nyquist > 0)");
+                if (hybridbias.oneloop and hybridbias.smoothing_scale > 0.0)
+                    fail("hybridbias_oneloop uses the same filter for the operators and the displacement, so it cannot "
+                         "be used with hybridbias_smoothing_scale > 0");
             }
             if (force.early_method == "interlaced" and force.early_interlacing_order < 2)
                 fail("force_early_interlacing_order must be >= 2");
@@ -641,6 +690,7 @@ namespace COLASOLVER {
             {"`lightcone = false`", true, true, [](P p) { return not p.output.lightcone; }},
             {"`pofk_multipole = false`", true, true, [](P p) { return not p.pofk_multipole.enabled; }},
             {"`bispectrum = false`", true, true, [](P p) { return not p.bispectrum.enabled; }},
+            {"`hybridbias = false`", true, false, [](P p) { return not p.hybridbias.enabled; }},
         };
     }
 

@@ -554,3 +554,37 @@ bispectrum_subtract_shotnoise = false
 -- Density assignment method: NGP, CIC, TSC, PCS, PQS
 bispectrum_density_assignment_method = "PCS"
 
+------------------------------------------------------------
+-- Hybrid bias (Lagrangian bias basis) spectra
+-- The cross spectra P_ab(k) of the operators 1, delta_L, delta_L^2, s^2
+-- and nabla^2 delta_L (delta_L is the linear field of the IC scaled to the
+-- output redshift) advected with the particles. The tracer spectrum for
+-- any bias parameters is P_tt = sum_ab b_a b_b P_ab
+-- Written to snapshot_<name>_z<z>/hybridbias_z<z>.txt
+------------------------------------------------------------
+-- Compute the hybrid bias spectra when we output?
+hybridbias = false
+-- Gridsize for the advected fields
+hybridbias_nmesh = 128
+-- Number of operators: 5 gives (1, delta, delta^2, s^2, nabla^2 delta) and 15 spectra
+hybridbias_noperators = 5
+-- Use interlaced grids for alias reduction?
+hybridbias_interlacing = true
+-- Subtract the Poisson shot noise? (the usual basis spectra keep it)
+hybridbias_subtract_shotnoise = false
+-- Density assignment method: NGP, CIC, TSC, PCS, PQS
+hybridbias_density_assignment_method = "CIC"
+-- Smooth the linear field before forming the operators (Mpc/h; 0 = no smoothing)
+hybridbias_smoothing_scale = 0.0
+-- The smoothing filter: gaussian, sharpk, tophat
+hybridbias_smoothing_filter = "gaussian"
+-- Keep only |k| < this times the Nyquist frequency of the particle lattice in the
+-- linear field (a spherical cut so the operators are isotropic, as assumed in the
+-- LPT prediction). 0: all the modes of the lattice grid
+hybridbias_kcut_over_nyquist = 1.0
+-- Also write the Zel'dovich prediction (same cut and smoothing): hybridbias_zeldovich_z<z>.txt
+hybridbias_zeldovich = false
+-- Also write the one-loop LPT (CLEFT) prediction of all 15 spectra (no counterterms;
+-- needs hybridbias_smoothing_scale = 0): hybridbias_oneloop_z<z>.txt
+hybridbias_oneloop = false
+

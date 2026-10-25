@@ -110,6 +110,9 @@ class NBodySimulation {
     FFTWGrid<NDIM> initial_density_field_fourier;
     // ...and in the frame of the particles when they are shifted (only during compute_density_field_fourier)
     FFTWGrid<NDIM> initial_density_field_shifted;
+    /// The linear density field delta_cb(zini,k) the particles were displaced with, on a grid of the size of the
+    /// particle lattice (only if hybridbias)
+    FFTWGrid<NDIM> hybridbias_linear_field_fourier;
     // Shift of the particles relative to the grid when computing the density (force interlacing)
     std::array<double, NDIM> density_shift{};
     // The force settings used in the current step (params.force or the early-time settings)
@@ -235,6 +238,8 @@ class NBodySimulation {
     const auto & get_pofk_species_every_step() const { return pofk_species_every_step; }
     const auto & get_pofk_every_output() const { return pofk_every_output; }
     const auto & get_pofk_multipoles_every_output() const { return pofk_multipoles_every_output; }
+    /// The linear density field delta_cb(zini,k) of the initial conditions (only if hybridbias)
+    const FFTWGrid<NDIM> & get_hybridbias_linear_field() const { return hybridbias_linear_field_fourier; }
 
     /// The time-stepping (where the steps are and their sizes)
     COLASOLVER::TimeStepping<NDIM> time_stepping() const { return {params.timestep, cosmo, grav}; }
@@ -560,6 +565,15 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
     // Reverse the phases? For doing pair-fixed simulations
     if (ic.reverse_phases) {
         COLASOLVER::reverse_phases<NDIM>(delta_ini_fourier);
+    }
+
+    // Keep the linear field for the hybrid bias spectra (the Lagrangian operators are formed at the lattice points so
+    // we only need the modes the lattice resolves)
+    if (params.hybridbias.enabled) {
+        hybridbias_linear_field_fourier = FFTWGrid<NDIM>(params.particle.Npart_1D);
+        hybridbias_linear_field_fourier.add_memory_label("delta_L(k,zini) for hybrid bias");
+        FML::NUFFT::copy_fourier_modes<NDIM>(
+            delta_ini_fourier, hybridbias_linear_field_fourier, [](const std::array<int, NDIM> &) { return 1.0; });
     }
 
     // Massive neutrino particles (made from the same random field)
@@ -1197,6 +1211,9 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
          }},
         {"FOF", params.fof.enabled, [&]() { compute_fof_halos(*this, redshift, snapshot_folder); }},
         {"Bispectrum", params.bispectrum.enabled, [&]() { compute_bispectrum(*this, redshift, snapshot_folder); }},
+        {"Hybrid bias spectra",
+         params.hybridbias.enabled,
+         [&]() { compute_hybrid_bias_spectra(*this, redshift, snapshot_folder); }},
         {"Output particles",
          params.output.particles,
          [&]() {
@@ -1221,6 +1238,7 @@ void NBodySimulation<NDIM, T>::free() {
     part_baryon.free();
     neutrinos.free();
     initial_density_field_fourier.free();
+    hybridbias_linear_field_fourier.free();
     cola.free();
 }
 

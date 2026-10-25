@@ -2,6 +2,9 @@
 #define ANALYZEANDOUTPUT_HEADER
 
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
+#include <FML/ComputePowerSpectra/HybridBiasSpectra.h>
+#include <FML/ComputePowerSpectra/HybridBiasOneLoop.h>
+#include <FML/ComputePowerSpectra/HybridBiasZeldovich.h>
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/FileUtils/FileUtils.h>
 #include <FML/FriendsOfFriends/FoF.h>
@@ -374,6 +377,237 @@ void compute_bispectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::st
                 }
             }
         }
+    }
+}
+
+/// The hybrid bias (Lagrangian bias basis) spectra P_ab(k) of the operators 1, delta_L, delta_L^2, s^2 and
+/// nabla^2 delta_L advected with the CDM+baryon particles (written to file). delta_L is the linear field of the initial
+/// conditions scaled to the output redshift with the 1LPT growth factor D(k,z) / D(k,zini) of the gravity model
+template <int NDIM, class T>
+void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
+    using namespace FML::CORRELATIONFUNCTIONS::HYBRIDBIAS;
+    const auto & settings = sim.get_parameters().hybridbias;
+    const double boxsize = sim.get_parameters().simulation.boxsize;
+    const double ic_initial_redshift = sim.get_parameters().ic.initial_redshift;
+    const int Npart_1D = sim.get_parameters().particle.Npart_1D;
+    const auto grav = sim.get_gravity_model();
+    const auto transferdata = sim.get_transferdata();
+    const auto & power_initial_spline = sim.get_power_initial_spline();
+    auto & part = sim.get_particles();
+    const double a = 1.0 / (1.0 + redshift);
+    const double aini = 1.0 / (1.0 + ic_initial_redshift);
+
+    HybridBiasOptions options;
+    options.noperators = settings.noperators;
+    options.density_assignment_method = settings.density_assignment_method;
+    options.interlacing = settings.interlacing;
+    options.subtract_shotnoise = settings.subtract_shotnoise;
+    options.smoothing_scale = settings.smoothing_scale / boxsize;
+    options.smoothing_method = settings.smoothing_filter;
+    // The spherical cut of the linear field (in units of 1/box)
+    options.kcut = settings.kcut_over_nyquist * M_PI * Npart_1D;
+
+    if (FML::ThisTask == 0) {
+        std::cout << "\n";
+        std::cout << "#=====================================================\n";
+        std::cout << "# Computing hybrid bias spectra\n";
+        std::cout << "# hybridbias_nmesh                     : " << settings.nmesh << "\n";
+        std::cout << "# hybridbias_noperators                : " << settings.noperators << "\n";
+        std::cout << "# hybridbias_density_assignment_method : " << settings.density_assignment_method << "\n";
+        std::cout << "# hybridbias_interlacing               : " << settings.interlacing << "\n";
+        std::cout << "# hybridbias_subtract_shotnoise        : " << settings.subtract_shotnoise << "\n";
+        std::cout << "# hybridbias_smoothing_scale (Mpc/h)   : " << settings.smoothing_scale << "\n";
+        std::cout << "# hybridbias_kcut_over_nyquist         : " << settings.kcut_over_nyquist << "\n";
+        std::cout << "# hybridbias_zeldovich                 : " << settings.zeldovich << "\n";
+        std::cout << "# hybridbias_oneloop                   : " << settings.oneloop << "\n";
+        std::cout << "#=====================================================\n";
+    }
+
+    // delta_L(k,z) = D(k,z) / D(k,zini) delta_L(k,zini)
+    auto growth_factor_of_kBox = [&](double kBox) {
+        if (kBox <= 0.0)
+            return 1.0;
+        const double k = kBox / boxsize;
+        return grav->get_D_1LPT(a, k / grav->H0_hmpc) / grav->get_D_1LPT(aini, k / grav->H0_hmpc);
+    };
+
+    HybridBiasSpectra<NDIM> spectra;
+    FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::compute_hybrid_bias_spectra<NDIM, T>(part.get_particles_ptr(),
+                                                                              part.get_npart(),
+                                                                              part.get_npart_total(),
+                                                                              sim.get_hybridbias_linear_field(),
+                                                                              Npart_1D,
+                                                                              settings.nmesh,
+                                                                              options,
+                                                                              spectra,
+                                                                              growth_factor_of_kBox);
+    spectra.scale(boxsize);
+
+    // The linear P_cb(k,z) for comparison (= P_{delta,delta} on large scales)
+    std::vector<double> pofk_linear(spectra.pofk[0].n, 0.0);
+    for (int i = 0; i < spectra.pofk[0].n; i++) {
+        const double k = spectra.pofk[0].kbin[i];
+        if (power_initial_spline) {
+            const double D = grav->get_D_1LPT(a, k / grav->H0_hmpc);
+            const double Dini = grav->get_D_1LPT(aini, k / grav->H0_hmpc);
+            pofk_linear[i] = power_initial_spline(k) * std::pow(D / Dini, 2);
+        } else if (transferdata) {
+            pofk_linear[i] = transferdata->get_cdm_baryon_power_spectrum(k, a);
+        }
+    }
+
+    std::ostringstream header;
+    header << "# Hybrid bias spectra at z = " << redshift << " (boxsize " << boxsize << " Mpc/h, Npart_1D " << Npart_1D
+           << ", nmesh " << settings.nmesh << ", " << settings.density_assignment_method
+           << (settings.interlacing ? " with interlacing" : "") << ", shot noise subtracted: " << std::boolalpha
+           << settings.subtract_shotnoise << ")\n";
+    header << "# The tracer power spectrum is P_tt = sum_ab b_a b_b P_ab with b = (1, b1, b2, bs, bnabla) for the "
+              "operators (1, delta_L, delta_L^2 - <delta_L^2>, s^2 - <s^2>, nabla^2 delta_L)\n";
+    spectra.write(snapshot_folder + "/hybridbias_z" + redshift_to_string(redshift) + ".txt",
+                  header.str(),
+                  {{"Pcb_linear(k)", pofk_linear}});
+
+    //=============================================================
+    // The LPT predictions (Zel'dovich and/or one-loop) with the same linear P(k,z) and the same cut and smoothing of
+    // the operators
+    //=============================================================
+    if (not settings.zeldovich and not settings.oneloop)
+        return;
+    if (not power_initial_spline) {
+        if (FML::ThisTask == 0)
+            std::cout << "Warning: no linear P(k) so we cannot compute the LPT predictions of the hybrid bias spectra\n";
+        return;
+    }
+    const auto krange = power_initial_spline.get_xrange();
+    auto pofk_linear_of_k = [&](double k) {
+        if (k < krange.first or k > krange.second)
+            return 0.0;
+        const double D = grav->get_D_1LPT(a, k / grav->H0_hmpc);
+        const double Dini = grav->get_D_1LPT(aini, k / grav->H0_hmpc);
+        return power_initial_spline(k) * std::pow(D / Dini, 2);
+    };
+    const double kcut = options.kcut / boxsize;
+    const double smoothing_scale = settings.smoothing_scale;
+    const std::string filter = settings.smoothing_filter;
+    auto W_operators = [&](double k) {
+        if (k >= kcut)
+            return 0.0;
+        if (smoothing_scale <= 0.0)
+            return 1.0;
+        const double kR = k * smoothing_scale;
+        if (filter == "gaussian")
+            return std::exp(-0.5 * kR * kR);
+        if (filter == "sharpk")
+            return kR < 1.0 ? 1.0 : 0.0;
+        // tophat
+        return kR < 1e-4 ? 1.0 : 3.0 * (std::sin(kR) - kR * std::cos(kR)) / (kR * kR * kR);
+    };
+    // The displacement field of the IC has the modes of the IC grid (we approximate this by a spherical cut)
+    const double kcut_displacement = M_PI * sim.get_parameters().ic.nmesh / boxsize;
+    auto W_displacement = [&](double k) { return k < kcut_displacement ? 1.0 : 0.0; };
+
+    // In the bins at low k with few modes we average the prediction over the modes in the bin (as the measurement
+    // does) instead of evaluating it at the mean k of the bin (this matters for the steep nabla^2 spectra). The
+    // prediction is smooth, so we evaluate it on a log-spaced table spanning these modes and spline it
+    const auto & kbin = spectra.pofk[0].kbin;
+    const int nbins = int(kbin.size());
+    const auto modes = modes_in_bins<NDIM>(spectra.pofk[0], 2.0 * M_PI * 16);
+    double kmode_min = std::numeric_limits<double>::max(), kmode_max = 0.0;
+    for (int i = 0; i < nbins; i++)
+        for (auto & m : modes[i]) {
+            kmode_min = std::min(kmode_min, m.first / boxsize);
+            kmode_max = std::max(kmode_max, m.first / boxsize);
+        }
+    // The k-values to evaluate the prediction at (in h/Mpc): first the table, then the centers of the other bins
+    const int ntable = kmode_max > 0.0 ? 40 : 0;
+    std::vector<double> kall;
+    for (int j = 0; j < ntable; j++)
+        kall.push_back(std::exp(std::log(kmode_min * 0.999) +
+                                std::log(kmode_max * 1.001 / (kmode_min * 0.999)) * j / double(ntable - 1)));
+    std::vector<int> jbin(nbins, -1);
+    for (int i = 0; i < nbins; i++)
+        if (modes[i].empty() and kbin[i] > 0.0) {
+            jbin[i] = int(kall.size());
+            kall.push_back(kbin[i]);
+        }
+    // Each task computes a part of the k-values
+    std::vector<double> klocal;
+    std::vector<int> jlocal;
+    for (int j = 0; j < int(kall.size()); j++)
+        if (j % FML::NTasks == FML::ThisTask) {
+            klocal.push_back(kall[j]);
+            jlocal.push_back(j);
+        }
+
+    // Bin up the prediction at the local k-values and write it to file
+    auto write_prediction = [&](const std::vector<std::vector<double>> & prediction,
+                                const std::string & label,
+                                const std::string & description,
+                                double kcut_displacement_used) {
+        auto theory = spectra;
+        for (size_t p = 0; p < theory.pofk.size(); p++) {
+            std::vector<double> all(kall.size(), 0.0);
+            for (size_t j = 0; j < jlocal.size(); j++)
+                all[jlocal[j]] = prediction[p][j];
+            FML::SumArrayOverTasks(all.data(), int(all.size()));
+            std::vector<double> logk_table(ntable), p_table(ntable);
+            for (int j = 0; j < ntable; j++) {
+                logk_table[j] = std::log(kall[j]);
+                p_table[j] = all[j];
+            }
+            FML::INTERPOLATION::SPLINE::Spline p_spline;
+            if (ntable > 0)
+                p_spline = FML::INTERPOLATION::SPLINE::Spline(logk_table, p_table, "Hybrid bias prediction");
+            for (int i = 0; i < nbins; i++) {
+                double value = 0.0;
+                if (not modes[i].empty()) {
+                    double wsum = 0.0;
+                    for (auto & m : modes[i]) {
+                        value += m.second * p_spline(std::log(m.first / boxsize));
+                        wsum += m.second;
+                    }
+                    value /= wsum;
+                } else if (jbin[i] >= 0) {
+                    value = all[jbin[i]];
+                }
+                theory.pofk[p].pofk[i] = value;
+            }
+            theory.shotnoise[p] = 0.0;
+        }
+        std::ostringstream header;
+        header << "# " << description << " of the hybrid bias spectra at z = " << redshift
+               << " (linear P_cb(k,z), operators cut at k = " << kcut << " h/Mpc"
+               << (smoothing_scale > 0.0 ? " and smoothed with R = " + std::to_string(smoothing_scale) + " Mpc/h " + filter
+                                         : std::string(""))
+               << ", displacement cut at k = " << kcut_displacement_used << " h/Mpc). Same columns as hybridbias_z"
+               << redshift_to_string(redshift)
+               << ".txt (the shot noise is not included; for k < 16 k_fundamental the prediction is averaged over "
+                  "the modes in each bin)\n";
+        theory.write(snapshot_folder + "/hybridbias_" + label + "_z" + redshift_to_string(redshift) + ".txt",
+                     header.str(),
+                     {{"Pcb_linear(k)", pofk_linear}});
+    };
+
+    ZeldovichOptions zoptions;
+    zoptions.noperators = settings.noperators;
+    zoptions.kmin_integration = std::max(1e-5, krange.first);
+    if (settings.zeldovich) {
+        zoptions.kmax_integration = std::min(std::max(kcut, kcut_displacement), krange.second);
+        auto zeldovich = zeldovich_hybrid_bias_spectra(pofk_linear_of_k, W_operators, W_displacement, klocal, zoptions);
+        write_prediction(zeldovich, "zeldovich", "Zel'dovich prediction", kcut_displacement);
+    }
+    if (settings.oneloop) {
+        // One-loop LPT: the same filter for the operators and the displacement (the operator cut)
+        if (FML::ThisTask == 0 and kcut_displacement > kcut * 1.0001)
+            std::cout << "Note: the one-loop prediction uses the operator cut k = " << kcut
+                      << " h/Mpc also for the displacement field (the IC have modes up to " << kcut_displacement
+                      << " h/Mpc)\n";
+        zoptions.kmax_integration = std::min(kcut, krange.second);
+        auto oneloop = oneloop_hybrid_bias_spectra(pofk_linear_of_k, W_operators, klocal, zoptions);
+        write_prediction(oneloop,
+                         "oneloop",
+                         "One-loop LPT (CLEFT, no counterterms) prediction",
+                         kcut);
     }
 }
 

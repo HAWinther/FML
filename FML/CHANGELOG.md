@@ -60,6 +60,82 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 - `ParameterMap::get` for string lists (was declared but not instantiated).
 - Regression: new case `fof_so`; `fof_two_species_hdf5` now also has SO masses.
 
+### ComputePowerSpectra: hybrid bias spectra
+- `HybridBiasSpectra.h` (namespace `FML::CORRELATIONFUNCTIONS::HYBRIDBIAS`): the Lagrangian bias basis spectra of
+  Modi, Chen & White 2020 and Kokron et al. 2021. The operators 1, delta_L, delta_L^2 - <delta_L^2>, s^2 - <s^2> and
+  nabla^2 delta_L are formed from the linear field on a grid of the size of the particle lattice (exact at the
+  lattice points), each particle gets the values at its lattice point (from its ID, or a user function; fetched
+  from the task that owns it with MPI) and the weighted particles give the advected fields. Returns the 15 cross
+  spectra P_ab(k) (and the Poisson shot noise of each), the tracer spectrum sum_ab b_a b_b P_ab for given biases and
+  the cross spectra of a tracer field with the advected operators. The steps (Lagrangian fields, values at the
+  particles, advected fields, spectra) are also available separately. Optional growth factor D(k,z)/D(k,zini) and
+  smoothing of the linear field.
+- Tests: s^2 = (2/3) delta^2 and nabla^2 delta = -k^2 delta exactly for a plane wave, without displacements the
+  advected spectra equal those of the Lagrangian fields exactly, and the result is identical on 1, 2 and 4 tasks.
+  Example in `ComputePowerSpectra/example/HybridBiasExample.cpp`.
+- `bin_up_cross_power_spectrum` was declared with const grids but defined with non-const ones (a call with const
+  grids did not link).
+
+### ComputePowerSpectra: Zel'dovich prediction of the hybrid bias spectra
+- `HybridBiasZeldovich.h`: `zeldovich_hybrid_bias_spectra` gives the Zel'dovich (resummed 1LPT) prediction of all 15
+  basis spectra (including the nabla^2 delta ones) for a linear P(k), with separate filters for the operators and the
+  displacement. The angular structure of the correlators comes from projecting the products of the kernels onto
+  spherical harmonics (no hand-written tensor algebra), the part linear in the correlators is transformed
+  analytically and the rest is integrated over q and mu.
+- Tests: without displacements the delta^2/s^2 spectra agree with direct k-space convolutions to 1e-5; the 10 spectra
+  without nabla^2 agree with ZeNBu (Chen et al.) to 2e-4; spectra measured from particles moved with the Zel'dovich
+  approximation (6 realizations, 128^3 in 500 Mpc/h) agree to ~1-2% (with the cut at half the lattice Nyquist
+  frequency up to 0.5 h/Mpc; with the cut at the Nyquist frequency the lattice sampling affects the operators with
+  power near the cut for k > ~0.4 k_Ny).
+- `HybridBiasOptions::kcut`: a spherical cut of the linear field (isotropic operators, as assumed by the theory).
+  `modes_in_bins`: the Fourier modes in each bin, to average a prediction over the modes of the low-k bins.
+- The operator enum is now in `HybridBiasOperators.h` (shared by both headers).
+
+### ComputePowerSpectra: one-loop LPT prediction of the hybrid bias spectra
+- `HybridBiasOneLoop.h`: `oneloop_hybrid_bias_spectra` gives the one-loop CLEFT prediction (Vlah, Castorina & White
+  2016; the formulation of velocileptors) of all 15 spectra. The nabla^2 delta spectra (not in velocileptors) are
+  derived the same way: nabla^2 delta_L = -k^2 delta_L is a linear operator, so its one-loop terms are those of
+  delta_L with the weight -k^2 on the leg of the operator (U3, A10 = <delta_1 Delta_i Delta_j> and U11, with R_n
+  weighted on the external or internal leg and Q5 on a loop leg); P_d2n and P_s2n are complete at Zel'dovich order.
+  No counterterms or stochastic terms (add them when fitting). The loop spectra Q_n(k) and
+  R_n(k) are computed in k-space with an exact treatment of a sharp cutoff of P(k) (same filter for the operators and
+  the displacement).
+- Tests: agrees with velocileptors' CLEFT (same P(k) with its Gaussian cutoff) to 2.5e-4 for the 10 spectra without
+  nabla^2; converged in qmax and dq to 5e-4. The nabla^2 terms reduce to velocileptors' for a weight 1 (to 1e-6), and
+  the loop corrections to P_1n, P_dn, P_nn agree with the difference between particles moved with 2LPT and with the
+  Zel'dovich approximation (4 realizations at small amplitude) to a few percent, as for P_1d and P_dd. In COLA at
+  z = 0 they reduce the Zel'dovich deficit of P_1n, P_dn, P_nn (-12% to -18% at 0.03 < k < 0.3 h/Mpc) to +5-8%.
+
+### ComputePowerSpectra: f(R) prediction of the hybrid bias spectra (EdS kernels)
+- `HybridBiasModifiedGravity.h`: Hu-Sawicki f(R) in the simplest approximation, EdS loop kernels with the f(R) linear
+  power spectrum. `fofr_linear_growth_ratio` gives D_fR(k,a)/D_GR(a) (agrees with the COLA f(R) gravity model to
+  ~1e-3) and `fofr_linear_power_spectrum` turns P_GR(k,a) into P_fR(k,a) for `zeldovich_hybrid_bias_spectra` /
+  `oneloop_hybrid_bias_spectra`. Missing: the scale dependence of the 2nd/3rd order growth and screening in the
+  kernels (Aviles & Cervantes-Cota 2017; Brando, Li & Koyama 2026).
+- Test (COLA 128^3 in 500 Mpc/h, F5 vs GR with the same IC, standard COLA): the one-loop f(R)/GR ratios follow the
+  screened COLA ratios to ~1-2% for P_11, P_1d, P_dd, P_1n, P_dn, P_nn at k < 0.3 h/Mpc at z = 0 and 1 (Zel'dovich
+  ratios are off by 3-6% at z = 0); the P_1s2 ratio is off by ~7% and P_d2d2, P_s2s2 drift by up to ~5% towards
+  the cut.
+
+### COLASolver: hybrid bias spectra
+- `hybridbias = true` writes the hybrid bias spectra at every output (`hybridbias_zX.txt` in the snapshot folder,
+  with the linear P_cb(k)). The linear field of the initial conditions is kept on a grid of the size of the particle
+  lattice and scaled to the output redshift with the 1LPT growth factor of the gravity model (scale-dependent
+  growth included). Options: `hybridbias_nmesh`, `_noperators`, `_density_assignment_method`, `_interlacing`,
+  `_subtract_shotnoise`, `_smoothing_scale`, `_smoothing_filter`. Not with `particle_baryons` or
+  `ic_random_field_type = read_particles`.
+- `hybridbias_kcut_over_nyquist` (default 1: spherical cut at the lattice Nyquist frequency) and
+  `hybridbias_zeldovich` (write the Zel'dovich prediction with the same P(k), cut and smoothing, averaged over the
+  modes in the low-k bins; the k-values are split over the MPI tasks).
+- `hybridbias_oneloop`: also write the one-loop LPT prediction (`hybridbias_oneloop_zX.txt`; the operator cut is
+  used for the displacement too; not with smoothing). The predictions are computed on a table of 40 log-spaced
+  k-values for the low-k bins and splined (agrees with evaluating every mode to 4e-4); ~20 s per prediction and
+  output on 2 cores, independent of the number of particles. In a COLA run (64^3 in 500 Mpc/h) one loop fixes most
+  of the Zel'dovich deficit in P_11, P_1delta, P_deltadelta and P_1delta2 at z = 0 (P_11: -11% to +1% at
+  0.05 < k < 0.3 h/Mpc).
+- Test (64^3 particles in 500 Mpc/h): P_11 agrees with P(k) of the particles to 0.1%, P_1delta = P_deltadelta =
+  P_linear on large scales, identical on 1, 2 and 4 tasks; also runs with scale-dependent COLA and without COLA.
+
 ### CosmicWeb: ORIGAMI halo grouping
 - `ORIGAMIHalos.h`: the halo step of ORIGAMI (Falck et al. 2012) on the Delaunay tessellation of all particles:
   halo particles (morphology 3) above `core_density_threshold` (default 200 times the mean Voronoi density) that are

@@ -686,8 +686,8 @@ namespace FML {
 
         // Bin up the cross power-spectrum of a given fourier grids
         template <int N>
-        void bin_up_cross_power_spectrum(FFTWGrid<N> & fourier_grid_1,
-                                         FFTWGrid<N> & fourier_grid_2,
+        void bin_up_cross_power_spectrum(const FFTWGrid<N> & fourier_grid_1,
+                                         const FFTWGrid<N> & fourier_grid_2,
                                          PowerSpectrumBinning<N> & pofk) {
 
             assert_mpi(fourier_grid_1.get_nmesh() > 0, "[bin_up_cross_power_spectrum] grid must have Nmesh > 0\n");

@@ -245,6 +245,22 @@ Parameters marked *optional* take the default value if they are not in the param
 | `bispectrum_interlacing` | bool | `true` | bispectrum = true | Use interlaced grids to reduce aliasing |
 | `bispectrum_subtract_shotnoise` | bool | `false` | bispectrum = true | Subtract shot-noise |
 
+## Hybrid bias spectra
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `hybridbias` | bool | `false` | always | Compute the hybrid bias (Lagrangian bias basis) spectra P_ab(k) at every output: the cross spectra of the operators 1, delta_L, delta_L^2, s^2, nabla^2 delta_L advected with the particles (Modi et al. 2020, Kokron et al. 2021). delta_L is the linear field of the IC scaled to the output redshift with the growth factor of the gravity model |
+| `hybridbias_nmesh` | int | *required* | hybridbias = true | Grid size for the advected fields |
+| `hybridbias_noperators` | int | `5` | hybridbias = true | Use the first noperators of (1, delta, delta^2, s^2, nabla^2 delta): 15 spectra for 5 |
+| `hybridbias_density_assignment_method` | string | `"CIC"` | hybridbias = true | Density assignment method. Options: `NGP`, `CIC`, `TSC`, `PCS`, `PQS` |
+| `hybridbias_interlacing` | bool | `true` | hybridbias = true | Use interlaced grids to reduce aliasing |
+| `hybridbias_subtract_shotnoise` | bool | `false` | hybridbias = true | Subtract the Poisson shot noise mean(w_a w_b)/Npart (the usual basis spectra keep it) |
+| `hybridbias_smoothing_scale` | double | `0` | hybridbias = true | Smooth the linear field with this scale (Mpc/h) before forming the operators (0: none) |
+| `hybridbias_smoothing_filter` | string | `"gaussian"` | hybridbias = true | The smoothing filter. Options: `tophat`, `sharpk`, `gaussian` |
+| `hybridbias_kcut_over_nyquist` | double | `1` | hybridbias = true | Keep only the modes with k < this times the Nyquist frequency of the particle lattice in the linear field (a spherical cut, so the operators are isotropic as assumed in the LPT prediction). 0: keep all the modes of the lattice grid (a cube) |
+| `hybridbias_zeldovich` | bool | `false` | hybridbias = true | Also write the Zel'dovich (resummed 1LPT) prediction of the spectra with the same cut and smoothing of the operators: hybridbias_zeldovich_z<z>.txt |
+| `hybridbias_oneloop` | bool | `false` | hybridbias = true | Also write the one-loop LPT (CLEFT) prediction of the spectra (no counterterms): hybridbias_oneloop_z<z>.txt |
+
 ## Options with separate particle species
 
 Not everything is implemented yet for CDM and baryons as separate particles (`particle_baryons`) and for neutrino particles (`particle_neutrinos`). The code stops with a message if one of these is not satisfied (generated from `species_requirements()` in `src/SimulationParameters.h`):
@@ -268,3 +284,4 @@ Not everything is implemented yet for CDM and baryons as separate particles (`pa
 | `lightcone = false` | yes | yes |
 | `pofk_multipole = false` | yes | yes |
 | `bispectrum = false` | yes | yes |
+| `hybridbias = false` | yes |  |
