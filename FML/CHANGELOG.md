@@ -5,6 +5,17 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### ComputePowerSpectra: bispectrum fixes
+- The bispectrum shot noise had the wrong sign on the 1/n^2 term (B_obs = B + (P1+P2+P3)/n + 1/n^2): for
+  Poisson particles the result was 2/n^2 instead of 0. Matters for sparse tracers (nP ~ 1).
+- The bin count N123 included modes with |k| = khigh but the estimator did not, which biased the bins whose upper
+  edge falls on grid modes (always the last bin): for a field with delta(k) = 1 23 of 90 configurations were
+  off by up to 10%, now all are 1. Both now use [klow, khigh) and skip k = 0.
+- P(k) and kmean of the polyspectrum binning use the same mode weights as bin_up_power_spectrum.
+- `compute_trispectrum` from particles called the bispectrum (did not compile).
+- `PolyspectrumBinning(nbins, Nmesh)` had the two arguments swapped in the definition.
+- `get_reduced_spectrum` read out of bounds when nbins < ORDER.
+
 ### CosmicWeb: T-web, V-web and ORIGAMI
 - New module `FML/CosmicWeb` (MPI). `CosmicWeb.h`: the T-web (Hahn et al. 2007, Forero-Romero et al. 2009), the
   tidal tensor k_i k_j / k^2 delta(k) of the Gaussian smoothed density field from a grid or from particles, cells

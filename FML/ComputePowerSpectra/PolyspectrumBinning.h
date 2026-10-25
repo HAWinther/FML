@@ -109,7 +109,7 @@ namespace FML {
         };
 
         template <int N, int ORDER>
-        PolyspectrumBinning<N, ORDER>::PolyspectrumBinning(int Nmesh, int nbins, int bin_type)
+        PolyspectrumBinning<N, ORDER>::PolyspectrumBinning(int nbins, int Nmesh, int bin_type)
             : PolyspectrumBinning(0.0, 2.0 * M_PI * Nmesh / 2.0, nbins, bin_type){};
 
         template <int N, int ORDER>
@@ -320,7 +320,7 @@ namespace FML {
         template <int N, int ORDER>
         double PolyspectrumBinning<N, ORDER>::get_reduced_spectrum(const std::array<int, ORDER> & ik) {
             const double P = get_spectrum(ik);
-            std::vector<double> pi(n);
+            std::vector<double> pi(ORDER);
 
             for (int i = 0; i < ORDER; i++)
                 pi[i] = pofk[ik[i]];

@@ -1061,7 +1061,7 @@ namespace FML {
                                  TrispectrumBinning<N> & tofk,
                                  std::string density_assignment_method,
                                  bool interlacing) {
-            compute_polyspectrum<N, T, 3>(
+            compute_polyspectrum<N, T, 4>(
                 Ngrid, part, NumPart, NumPartTotal, tofk, density_assignment_method, interlacing);
         }
 
@@ -1110,7 +1110,8 @@ namespace FML {
                         polyofk.pofk[i] -= 1.0 / n;
                         std::array<int, 2> ik{i, i};
                         auto index = polyofk.get_index_from_coord(ik);
-                        polyofk.P123[index] -= 1.0 / n;
+                        if (polyofk.N123[index] > 0.0)
+                            polyofk.P123[index] -= 1.0 / n;
                     }
             } else if constexpr (ORDER == 3) {
                 // Subtract shot-noise for both P(k) and B(k1,k2,k3)
@@ -1119,10 +1120,14 @@ namespace FML {
                     for (int i = 0; i < polyofk.n; i++) {
                         polyofk.pofk[i] -= 1.0 / n;
                     }
+                    // For Poisson sampling <d1 d2 d3> = B + (P1 + P2 + P3) / n + 1 / n^2 with P the shot noise
+                    // subtracted power spectrum (which pofk is now)
                     for (size_t i = 0; i < polyofk.P123.size(); i++) {
+                        if (polyofk.N123[i] <= 0.0)
+                            continue;
                         auto ik = polyofk.get_coord_from_index(i);
                         polyofk.P123[i] -=
-                            1.0 / n * (polyofk.pofk[ik[0]] + polyofk.pofk[ik[1]] + polyofk.pofk[ik[2]]) - 1.0 / (n * n);
+                            1.0 / n * (polyofk.pofk[ik[0]] + polyofk.pofk[ik[1]] + polyofk.pofk[ik[2]]) + 1.0 / (n * n);
                     }
                 }
             }
@@ -1174,7 +1179,8 @@ namespace FML {
                 std::array<double, N> kvec;
                 for (auto && fourier_index : grid.get_fourier_range()) {
                     grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
-                    if (not(kmag2 > kmag2_max or kmag2 < kmag2_min)) {
+                    // NB: this must be the same selection as in compute_polyspectrum
+                    if (kmag2 > 0.0 and kmag2 >= kmag2_min and kmag2 < kmag2_max) {
                         grid.set_fourier_from_index(fourier_index, 1.0);
                     }
                 }
@@ -1336,14 +1342,18 @@ namespace FML {
                 for (auto && fourier_index : grid.get_fourier_range()) {
                     grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
-                    // Set to zero outside the bin
-                    if (kmag2 >= kmag2_max or kmag2 < kmag2_min) {
+                    // Set to zero outside the bin [klow, khigh) and the k = 0 mode
+                    // NB: this must be the same selection as in compute_polyspectrum_bincount
+                    if (not(kmag2 > 0.0 and kmag2 >= kmag2_min and kmag2 < kmag2_max)) {
                         grid.set_fourier_from_index(fourier_index, 0.0);
                     } else {
-                        // Compute mean k in the bin
-                        kmean_bin += std::sqrt(kmag2);
-                        pofk_bin[i] += std::norm(grid.get_fourier_from_index(fourier_index));
-                        nk += 1.0;
+                        // Mean k and P(k) in the bin. The modes with 0 < k_z < k_nyquist represent both k and -k
+                        // (as in bin_up_power_spectrum)
+                        const auto last_coord = fourier_index % (Nmesh / 2 + 1);
+                        const double weight = (last_coord > 0 and last_coord < Nmesh / 2) ? 2.0 : 1.0;
+                        kmean_bin += weight * std::sqrt(kmag2);
+                        pofk_bin[i] += weight * std::norm(grid.get_fourier_from_index(fourier_index));
+                        nk += weight;
                     }
                 }
                 FML::SumOverTasks(&kmean_bin);
