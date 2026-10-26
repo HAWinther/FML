@@ -78,18 +78,18 @@ namespace FML {
 #endif
 
             // For fiducial parameters
-            DVector3D empty_3D_array{};
-            DVector2D empty_2D_array{};
+            inline DVector3D empty_3D_array{};
+            inline DVector2D empty_2D_array{};
 
             /// A large value that we can use that ensures that if the observer is at
             /// say (0,0,-effective_infinity) then we have a fixed line of sight
             /// direction (z-axis is this example).
-            double effective_infinity = 1e10;
+            inline double effective_infinity = 1e10;
 
             /// For binning particles to cells. The minimum number of cells to reach the maximum distance
-            int ncells_to_rmax = 8;
+            inline int ncells_to_rmax = 8;
             /// For binning particles to cells. The minimum grid-size.
-            int ngrid_min_size = 10;
+            inline int ngrid_min_size = 10;
 
             /// This is the general algorithm for computing pair counts.
             /// It finds all pairs within a separation rmax and calls the binning_function
@@ -106,7 +106,7 @@ namespace FML {
 
             /// Estimates the correlation function from the paircounts. Most common estimators are included.
             /// NB: assumes normalized paircounts here, e.g. pairs / total_number_of_pairs.
-            double CorrelationFunctionEstimator(double D1D2,
+            inline double CorrelationFunctionEstimator(double D1D2,
                                                 double D1R2,
                                                 double R1D2,
                                                 double R1R2,
@@ -201,8 +201,11 @@ namespace FML {
 #endif
 
                 // Fetch ndim
-                constexpr int ndim = FML::PARTICLE::GetNDIM(T());
-                assert(ndim == FML::PARTICLE::GetNDIM(U()));
+                // (from objects: GetNDIM(T()) needs a particle that can be built at compile time)
+                T tmp_part1;
+                U tmp_part2;
+                constexpr int ndim = FML::PARTICLE::GetNDIM(tmp_part1);
+                static_assert(ndim == FML::PARTICLE::GetNDIM(tmp_part2), "[GeneralPairCounter] Particles must have the same NDIM");
 
                 // Fetch data from the grid
                 auto & cells = grid1.get_cells();
@@ -278,9 +281,11 @@ namespace FML {
                 if (ndim == 2)
                     max_iz = max_iz2 = 0;
 
-                // How many cells in each direction we must search in the second grid
-                int delta_ncells2 = (int)(ceil(rmax * ngrid2)) + 2;
-                if (delta_ncells2 > ngrid2 / 2)
+                // How many cells in each direction we must search in the second grid around the cell of grid2 that
+                // contains the particle (a neighbour within rmax is at most ceil(rmax * ngrid2) cells away; +1 for
+                // round-off). With a periodic box we never need more than the whole grid (each cell once)
+                int delta_ncells2 = (int)(ceil(rmax * ngrid2)) + 1;
+                if (periodic_box and delta_ncells2 > ngrid2 / 2)
                     delta_ncells2 = ngrid2 / 2;
                 int delta_ncells2_high = delta_ncells2, delta_ncells2_low = delta_ncells2;
                 if (delta_ncells2_low + delta_ncells2_high == ngrid2)
@@ -385,9 +390,19 @@ namespace FML {
                                 // Now we find the index of the second grid
                                 // this grid corresponds to
                                 //========================================
-                                int ix_grid2 = (int)(ix0 * (double)ngrid2 / (double)ngrid1);
-                                int iy_grid2 = (int)(iy0 * (double)ngrid2 / (double)ngrid1);
-                                int iz_grid2 = (int)(iz0 * (double)ngrid2 / (double)ngrid1);
+                                // The cell of grid2 that contains the particle. NB: not the cell of grid2 at the
+                                // corner of the cell of grid1: with a finer grid2 (e.g. many more randoms than data)
+                                // the particle can be several cells of grid2 away from it and the search missed pairs
+                                int ix_grid2 = ix0, iy_grid2 = iy0, iz_grid2 = iz0;
+                                if (not auto_pair_binning) {
+                                    const auto * pos_cell = FML::PARTICLE::GetPos(curpart_cell);
+                                    int igrid2[3] = {0, 0, 0};
+                                    for (int idim = 0; idim < ndim; idim++)
+                                        igrid2[idim] = std::min(std::max(int(pos_cell[idim] * ngrid2), 0), ngrid2 - 1);
+                                    ix_grid2 = igrid2[0];
+                                    iy_grid2 = igrid2[1];
+                                    iz_grid2 = igrid2[2];
+                                }
 
                                 // We now want to loop over nearby cells by looking at cube of cells around current cell
                                 int ix2_left, iy2_left, iz2_left, ix2_right, iy2_right, iz2_right;
@@ -583,10 +598,12 @@ namespace FML {
                 assert_mpi(nmubins > 0, "AngularCorrelationFunctionBox :: Error nmubins <= 0\n");
 
                 // Fetch the dimension at compiletime
-                constexpr int NDIM = FML::PARTICLE::GetNDIM(T1());
-                assert_mpi(NDIM > 0 and NDIM <= 3, "AngularCorrelationFunctionBox :: Error NDIM must be 1, 2 or 3\n");
-                assert_mpi(NDIM == FML::PARTICLE::GetNDIM(T2()),
-                           "AngularCorrelationFunctionBox :: Error particles must have same NDIM as method\n");
+                T1 tmp_part1;
+                T2 tmp_part2;
+                constexpr int NDIM = FML::PARTICLE::GetNDIM(tmp_part1);
+                static_assert(NDIM > 0 and NDIM <= 3, "AngularCorrelationFunctionBox :: NDIM must be 1, 2 or 3");
+                static_assert(NDIM == FML::PARTICLE::GetNDIM(tmp_part2),
+                              "AngularCorrelationFunctionBox :: particles must have the same NDIM");
 
                 // Check observer position
                 if (nmubins > 1 or (mumin > -1.0 or mumax < 1.0)) {
@@ -607,6 +624,12 @@ namespace FML {
                 // If the particle pointers are the same then we are doing an auto binning
                 const bool cross_pair_counting = (part1 != part2);
 
+                // With auto pairs the order of the two particles (and so the sign of mu) is arbitrary (it depends on
+                // the order the grid cells are visited). We count every auto pair half at mu and half at -mu (and the
+                // extra quantities for (p1,p2) at mu and for (p2,p1) at -mu), i.e. the counts are symmetric in mu
+                const bool compute_mu = nmubins > 1 or mumax < 1.0 or mumin > -1.0;
+                const bool symmetrize_mu = compute_mu and not cross_pair_counting;
+
                 // Total number of quantities to bin up
                 // As fiducial we only bin up the paircounts themselves
                 const int nquantities = 1 + nextratobin;
@@ -626,9 +649,9 @@ namespace FML {
                 const auto r_bincenter_of_index = [rmin, rmax, nrbins](int i) {
                     return rmin + (rmax - rmin) * (i + 0.5) / double(nrbins);
                 };
-                // How to compute the r-array index ir from a given r
+                // How to compute the r-array index ir from a given r (r < rmax can round to nrbins)
                 const auto ir_index_of_r = [rmin, rmax, nrbins](double r) {
-                    return int((r - rmin) / (rmax - rmin) * nrbins);
+                    return std::min(int((r - rmin) / (rmax - rmin) * nrbins), nrbins - 1);
                 };
                 // Defines the mu-bin centers of all bins
                 auto mu_binedge_of_index = [mumin, mumax, nmubins](int i) {
@@ -640,7 +663,11 @@ namespace FML {
                 };
                 // How to compute the mu-array index imu from a given mu
                 auto imu_of_mu = [mumin, mumax, nmubins](double mu) {
-                    return int((mu - mumin) / (mumax - mumin) * nmubins);
+                    return std::min(int((mu - mumin) / (mumax - mumin) * nmubins), nmubins - 1);
+                };
+                // mu in [mumin, mumax), and mu = 1 included if mumax = 1 (in 1D all the pairs have mu = +-1)
+                auto in_mu_range = [mumin, mumax](double mu) {
+                    return mu >= mumin and (mu < mumax or (mu == mumax and mumax >= 1.0));
                 };
                 //===============================================================
 
@@ -692,7 +719,7 @@ namespace FML {
                         // Skip evaluating mu if we don't need to
                         double mu{};
                         int imu = 0;
-                        if (nmubins > 1 or mumax < 1.0 or mumin > -1.0) {
+                        if (compute_mu) {
                             std::array<double, NDIM> los_direction_local{};
 
                             // Compute the los direction as it depends on the position of the particle
@@ -726,7 +753,32 @@ namespace FML {
                             if constexpr (NDIM >= 3)
                                 dotproduct += dist[2] * los_direction_local[2];
                             mu = dotproduct / r;
-                            if (mu < mumin or mu >= mumax)
+                            if (symmetrize_mu) {
+                                // Half of the pair at mu, half at -mu
+                                for (double sign : {1.0, -1.0}) {
+                                    const double smu = sign * mu;
+                                    if (not in_mu_range(smu))
+                                        continue;
+                                    const int simu = imu_of_mu(smu);
+                                    count_threads[thread_id][nquantities * (ir + simu * nrbins) + 0] +=
+                                        0.5 * weight1 * weight2;
+                                    if (nquantities > 1) {
+                                        std::vector<double> tmp(nquantities - 1, 0.0);
+                                        double sdist[NDIM];
+                                        for (int i = 0; i < NDIM; i++)
+                                            sdist[i] = sign * dist[i];
+                                        if (sign > 0.0)
+                                            extra_quantities_to_bin(sdist, r, smu, p1, p2, tmp.data());
+                                        else
+                                            extra_quantities_to_bin(sdist, r, smu, p2, p1, tmp.data());
+                                        double * storage = &count_threads[thread_id][nquantities * (ir + simu * nrbins) + 1];
+                                        for (int i = 0; i < nquantities - 1; i++)
+                                            storage[i] += 0.5 * tmp[i];
+                                    }
+                                }
+                                return;
+                            }
+                            if (not in_mu_range(mu))
                                 return;
                             imu = imu_of_mu(mu);
                         }
@@ -810,6 +862,20 @@ namespace FML {
                 // Sum over MPI tasks
                 FML::SumArrayOverTasks(count.data(), count.size());
 
+                // The fraction of a shell with mu in [mu0, mu1): uniform in mu in 3D, in the angle in 2D and the two
+                // directions mu = -1, +1 in 1D (with mu = 1 in the last bin if mu1 = 1)
+                auto mu_fraction_of_shell = [&](double mu0, double mu1) {
+                    if (not compute_mu)
+                        return 1.0;
+                    mu0 = std::max(mu0, -1.0);
+                    mu1 = std::min(mu1, 1.0);
+                    if constexpr (NDIM == 3)
+                        return (mu1 - mu0) / 2.0;
+                    if constexpr (NDIM == 2)
+                        return (std::acos(mu0) - std::acos(mu1)) / M_PI;
+                    return 0.5 * ((mu0 <= -1.0 and -1.0 < mu1) ? 1.0 : 0.0) + 0.5 * ((mu0 <= 1.0 and mu1 >= 1.0) ? 1.0 : 0.0);
+                };
+
                 // Normalize to get the correlation function
                 paircounts_array = DVector2D(nmubins, DVector(nrbins, 0.0));
                 corr_func_array = DVector2D(nmubins, DVector(nrbins, 0.0));
@@ -817,9 +883,10 @@ namespace FML {
                     for (int imu = 0; imu < nmubins; imu++) {
                         const int index_in_count = (nquantities * (ir + imu * nrbins) + 0);
                         auto paircounts = count[index_in_count];
-                        double volumebin =
-                            4.0 * M_PI / 3.0 * (std::pow(r_edge_array[ir + 1], 3) - std::pow(r_edge_array[ir], 3));
-                        volumebin *= (mu_edge_array[imu + 1] - mu_edge_array[imu]) / 2.0;
+                        // Volume of the shell (in NDIM dimensions) times the fraction of it in the mu bin
+                        double volumebin = std::pow(M_PI, NDIM / 2.0) / std::tgamma(NDIM / 2.0 + 1.0) *
+                                           (std::pow(r_edge_array[ir + 1], NDIM) - std::pow(r_edge_array[ir], NDIM));
+                        volumebin *= mu_fraction_of_shell(mu_edge_array[imu], mu_edge_array[imu + 1]);
                         paircounts_array[imu][ir] = paircounts * (normalize_paircounts ? 1.0 / numpairs : 1.0);
                         corr_func_array[imu][ir] = paircounts / (numpairs * volumebin) - 1.0;
                     }
@@ -1065,7 +1132,7 @@ namespace FML {
 
                 // D1R2 paircounts
                 DVector2D corr_func_D1R2_array;
-                AngularCorrelationFunctionBox<T1, R1>(part1,
+                AngularCorrelationFunctionBox<T1, R2>(part1,
                                                       npart1,
                                                       rand2,
                                                       nrand2,
@@ -1248,7 +1315,7 @@ namespace FML {
 #ifdef USE_GSL
             /// Compute multipoles xi_ell(r) from a spline xi(mu,r)
             /// xiell(r) = (2ell+1) Int Pell(mu)xi(r,mu)dmu / Int dmu
-            void FromAngularCorrelationToMultipoles(const DVector & r_array,
+            inline void FromAngularCorrelationToMultipoles(const DVector & r_array,
                                                     const Spline2D & xi_mu_r_spline,
                                                     std::vector<DVector> & multipoles,
                                                     double mumin = -1.0,
@@ -1259,13 +1326,14 @@ namespace FML {
                 const int nint = 1000;
 
                 // Legendre polynomials
-                auto P_ell_of_mu = [](double mu, int ell_max) -> DVector {
-                    DVector P_ell_array(ell_max);
-                    if (ell_max >= 0)
+                // P_ell(mu) for ell = 0, ..., nell - 1
+                auto P_ell_of_mu = [](double mu, int nell) -> DVector {
+                    DVector P_ell_array(nell);
+                    if (nell >= 1)
                         P_ell_array[0] = 1.0;
-                    if (ell_max >= 1)
+                    if (nell >= 2)
                         P_ell_array[1] = mu;
-                    for (int ell = 2; ell < ell_max; ell++)
+                    for (int ell = 2; ell < nell; ell++)
                         P_ell_array[ell] =
                             ((2 * ell - 1.) * mu * P_ell_array[ell - 1] - (ell - 1.) * P_ell_array[ell - 2]) / ell;
                     return P_ell_array;

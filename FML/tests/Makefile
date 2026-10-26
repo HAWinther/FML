@@ -10,7 +10,7 @@ USE_OMP             ?= true
 USE_FFTW            ?= true
 USE_GSL             ?= true
 
-TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree
+TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount
 
 include ../Makefile.config
 
@@ -36,6 +36,14 @@ test_so: test_so.o Global.o
 test_kdtree: test_kdtree.o test_kdtree_odr.o Global.o
 	$(LINK_EXE)
 
+PAIRCOUNT_OBJS = test_paircount.o test_paircount_odr.o Global.o
+ifeq ($(USE_GSL),true)
+PAIRCOUNT_OBJS += Spline.o
+endif
+
+test_paircount: $(PAIRCOUNT_OBJS)
+	$(LINK_EXE)
+
 # NonLocalGaussianRandomField.h includes the cosmology helpers that use splines and the ODE solver with GSL
 FNL_OBJS = test_fnl.o Global.o
 ifeq ($(USE_GSL),true)
@@ -59,7 +67,7 @@ endif
 
 # Each run must pass; the two "must abort" runs must fail with the expected message
 .PHONY: run
-run: test_core test_grid_tools test_fof test_so test_fnl test_kdtree
+run: test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount
 	@set -e; for np in $(NP_LIST); do \
 	  echo "== Running test_core with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_core; \
@@ -73,6 +81,8 @@ run: test_core test_grid_tools test_fof test_so test_fnl test_kdtree
 	  OMP_NUM_THREADS=2 $(RUN) ./test_fnl; \
 	  echo "== Running test_kdtree with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_kdtree; \
+	  echo "== Running test_paircount with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_paircount; \
 	done
 	@echo "== Checking that bad input aborts with a clear message"
 	@! $(RUN1) ./test_core alloc > alloc.log 2>&1 && grep -q "Reached allocation limit" alloc.log && echo "[PASS] allocation limit aborts"

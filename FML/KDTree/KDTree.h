@@ -164,7 +164,8 @@ namespace FML {
         KDTree::KDTree(T * part, size_t numpart, double boxsize_, int leaf_size_)
             : boxsize(boxsize_), periodic(boxsize_ > 0.0), leaf_size(std::max(1, leaf_size_)) {
             npts = numpart;
-            ndim = FML::PARTICLE::GetNDIM(T());
+            T tmp;
+            ndim = FML::PARTICLE::GetNDIM(tmp);
             std::vector<double> flat(npts * size_t(ndim));
             for (size_t i = 0; i < npts; i++) {
                 const auto * pos = FML::PARTICLE::GetPos(part[i]);
@@ -435,8 +436,10 @@ namespace FML {
                                double rmax,
                                bool periodic,
                                BinningFunction<T, U> & binning_function) {
-            constexpr int ndim1 = FML::PARTICLE::GetNDIM(T());
-            constexpr int ndim2 = FML::PARTICLE::GetNDIM(U());
+            T tmp1; // (GetNDIM(T()) needs a particle that can be built at compile time)
+            U tmp2;
+            constexpr int ndim1 = FML::PARTICLE::GetNDIM(tmp1);
+            constexpr int ndim2 = FML::PARTICLE::GetNDIM(tmp2);
             static_assert(ndim1 == ndim2, "[GenericPairBinner] The tracers must have the same dimension");
 
             const KDTree tree(tracer2, npart2, periodic ? 1.0 : 0.0);
@@ -470,8 +473,10 @@ namespace FML {
 
             const double rmin_squared = rmin * rmin;
             const double rmax_squared = rmax * rmax;
-            constexpr int ndim = FML::PARTICLE::GetNDIM(T());
-            static_assert(ndim == FML::PARTICLE::GetNDIM(U()),
+            T tmp1; // (GetNDIM(T()) needs a particle that can be built at compile time)
+            U tmp2;
+            constexpr int ndim = FML::PARTICLE::GetNDIM(tmp1);
+            static_assert(ndim == FML::PARTICLE::GetNDIM(tmp2),
                           "[DensityProfileBinner] The tracers must have the same dimension");
 
             // Set up binning

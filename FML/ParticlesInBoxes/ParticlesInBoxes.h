@@ -157,7 +157,8 @@ namespace FML {
             double fraction_empty = nempty / double(ntot);
             
             if (FML::ThisTask == 0) {
-                constexpr int Ndim = FML::PARTICLE::GetNDIM(T());
+                T tmp_ndim; // (GetNDIM(T()) needs a particle that can be built at compile time)
+                constexpr int Ndim = FML::PARTICLE::GetNDIM(tmp_ndim);
                 std::cout << "\n#=====================================================\n";
                 std::cout << "# ParticlesInBoxes Info \n";
                 std::cout << "#=====================================================\n";
@@ -183,7 +184,8 @@ namespace FML {
                        "[ParticlesInBoxes] Particle class must have positions via a get_pos method");
 
             // Set class data
-            constexpr int Ndim = FML::PARTICLE::GetNDIM(T());
+            T tmp_ndim; // (GetNDIM(T()) needs a particle that can be built at compile time)
+            constexpr int Ndim = FML::PARTICLE::GetNDIM(tmp_ndim);
             Ngrid = ngrid;
             Npart = nparticles;
 

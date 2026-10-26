@@ -5,6 +5,23 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### PairCounting: fixes
+- Cross pairs of catalogues of very different size (e.g. data x many more randoms) missed pairs: the search in the
+  finer grid started from the cell at the corner of the cell of the coarser grid. 200 x 200000 points with rmax 0.02:
+  635 of 1380 pairs; 4000 data x 50 times more randoms with rmax 0.1: -1.4% in the last r bin (the opposite order
+  was right). Now the search starts from the cell of the particle. Without a periodic box the search was also capped
+  at half the grid (pairs with r > ~0.5 missed).
+- The correlation function from the box functions used the 3D shell volume in 1D and 2D (xi of random points 4776 in
+  1D and 74 in 2D) and a uniform-in-mu shell fraction in 2D; now the NDIM-dimensional volume and the right fraction.
+- Auto pairs: the sign of mu depended on the order the cells are visited (N(mu > 0) - N(mu < 0) = -13% of the
+  pairs). Every auto pair is now counted half at mu and half at -mu (folded |mu| counts unchanged).
+- Out-of-bounds writes: a pair at r (mu) just below rmax (mumax) could get the bin index nbins (clamped now), and
+  `FromAngularCorrelationToMultipoles` with one multipole. mu = 1 is included in the last bin when mumax = 1 (1D).
+- The header can be included in several translation units (inline functions and variables); particles with default
+  member initializers compile (also in ParticlesInBoxes and KDTree: the dimension is no longer taken from `T()` at
+  compile time); the survey D1R2 counts use the type of the second randoms.
+- New `tests/test_paircount.cpp` (brute force; 1/2/4 MPI tasks).
+
 ### KDTree: new implementation
 - A flat kd-tree (coordinates in one array reordered by node, leaves of 8 points, split at the median of the widest
   dimension, bounding boxes; periodic searches prune with the minimum-image distance to the node boxes, so no
