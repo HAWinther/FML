@@ -2,6 +2,7 @@
 #define KDTREE_HEADER
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <functional>
 #include <iostream>
@@ -95,7 +96,7 @@ namespace FML {
 
         using KDNodePtr = std::shared_ptr<KDNode>;
 
-        KDNodePtr NewKDNodePtr();
+        inline KDNodePtr NewKDNodePtr();
 
         // Square euclidean distance
         inline double dist2(const point_t &, const point_t &);
@@ -168,31 +169,31 @@ namespace FML {
             indexArr neighborhood_indices(const point_t & pt, const double & rad);
         };
 
-        KDNode::KDNode() = default;
+        inline KDNode::KDNode() = default;
 
-        KDNode::KDNode(const point_t & pt, const size_t & idx_, const KDNodePtr & left_, const KDNodePtr & right_) {
+        inline KDNode::KDNode(const point_t & pt, const size_t & idx_, const KDNodePtr & left_, const KDNodePtr & right_) {
             x = pt;
             index = idx_;
             left = left_;
             right = right_;
         }
 
-        KDNode::KDNode(const pointIndex & pi, const KDNodePtr & left_, const KDNodePtr & right_) {
+        inline KDNode::KDNode(const pointIndex & pi, const KDNodePtr & left_, const KDNodePtr & right_) {
             x = pi.first;
             index = pi.second;
             left = left_;
             right = right_;
         }
 
-        KDNode::~KDNode() = default;
+        inline KDNode::~KDNode() = default;
 
-        double KDNode::coord(const size_t & idx) { return x.at(idx); }
-        KDNode::operator bool() { return (!x.empty()); }
-        KDNode::operator point_t() { return x; }
-        KDNode::operator size_t() { return index; }
-        KDNode::operator pointIndex() { return pointIndex(x, index); }
+        inline double KDNode::coord(const size_t & idx) { return x.at(idx); }
+        inline KDNode::operator bool() { return (!x.empty()); }
+        inline KDNode::operator point_t() { return x; }
+        inline KDNode::operator size_t() { return index; }
+        inline KDNode::operator pointIndex() { return pointIndex(x, index); }
 
-        KDNodePtr NewKDNodePtr() {
+        inline KDNodePtr NewKDNodePtr() {
             KDNodePtr mynode = std::make_shared<KDNode>();
             return mynode;
         }
@@ -226,7 +227,7 @@ namespace FML {
 
         inline double dist(const KDNodePtr & a, const KDNodePtr & b) { return std::sqrt(dist2(a, b)); }
 
-        comparer::comparer(size_t idx_) : idx{idx_} {};
+        inline comparer::comparer(size_t idx_) : idx{idx_} {};
 
         inline bool comparer::compare_idx(const pointIndex & a, const pointIndex & b) {
             return (a.first.at(idx) < b.first.at(idx));
@@ -246,7 +247,7 @@ namespace FML {
 
         using pointVec = std::vector<point_t>;
 
-        KDNodePtr KDTree::make_tree(const pointIndexArr::iterator & begin,
+        inline KDNodePtr KDTree::make_tree(const pointIndexArr::iterator & begin,
                                     const pointIndexArr::iterator & end,
                                     const size_t & length,
                                     const size_t & level) {
@@ -287,9 +288,12 @@ namespace FML {
         }
 
         inline double periodic_wrap(double x, double boxsize) {
-            if (x < 0.0)
-                return boxsize + std::fmod(x, boxsize);
-            return std::fmod(x, boxsize);
+            double y = std::fmod(x, boxsize);
+            if (y < 0.0)
+                y += boxsize;
+            if (y >= boxsize) // y = boxsize from round-off for tiny negative x
+                y -= boxsize;
+            return y;
         }
 
         template <typename T>
@@ -320,7 +324,7 @@ namespace FML {
             root = KDTree::make_tree(begin, end, length, level);
         }
 
-        KDTree::KDTree(pointVec point_array, double boxsize) : boxsize(boxsize), periodic(boxsize != 0.0) {
+        inline KDTree::KDTree(pointVec point_array, double boxsize) : boxsize(boxsize), periodic(boxsize != 0.0) {
             leaf = std::make_shared<KDNode>();
 
             // Store ndim and 2^ndim
@@ -354,7 +358,7 @@ namespace FML {
             root = KDTree::make_tree(begin, end, length, level);
         }
 
-        KDNodePtr KDTree::nearest_(const KDNodePtr & branch,
+        inline KDNodePtr KDTree::nearest_(const KDNodePtr & branch,
                                    const point_t & pt,
                                    const size_t & level,
                                    const KDNodePtr & best,
@@ -418,63 +422,60 @@ namespace FML {
         };
 
         // default caller
-        KDNodePtr KDTree::nearest_(const point_t & pt) {
+        inline KDNodePtr KDTree::nearest_(const point_t & pt_in) {
             size_t level = 0;
+            if (!root or !bool(*root))
+                return NewKDNodePtr(); // empty tree
 
-            // Modifications for a periodic box
-            if (periodic) {
-                KDNodePtr nearest_ptr;
-                double nearest_dist = std::numeric_limits<double>::max();
-
-                // Compute the jump for to the periodic images we will visit
-                point_t jump = pt;
-                for (int idim = 0; idim < ndim; idim++) {
-                    jump[idim] = pt[idim] > boxsize / 2 ? -boxsize : +boxsize;
-                }
-
-                // Loop over all periodic images
-                for (int i = 0; i < twotondim; i++) {
-                    point_t search_pt = pt;
-                    for (int idim = 0, n = 1; idim < ndim; idim++, n *= 2) {
-                        search_pt[idim] += (i / n % 2) * jump[idim];
-                    }
-
-                    double branch_dist = dist2(point_t(*root), pt);
-                    auto current_nearest_ptr = nearest_(root,         // beginning of tree
-                                                        search_pt,    // point we are querying
-                                                        level,        // start from level 0
-                                                        root,         // best is the root
-                                                        branch_dist); // best_dist = branch_dist
-
-                    // Check if the minimum distance is the smallest we found so far
-                    point_t current_nearest_pt = point_t(*current_nearest_ptr);
-                    double current_nearest_dist = periodic_dist(current_nearest_pt, pt, boxsize);
-                    if (current_nearest_dist < nearest_dist) {
-                        nearest_dist = current_nearest_dist;
-                        nearest_ptr = current_nearest_ptr;
-                    }
-                }
-                return nearest_ptr;
+            if (not periodic) {
+                double branch_dist = dist2(point_t(*root), pt_in);
+                return nearest_(root, pt_in, level, root, branch_dist);
             }
 
-            // KDNodePtr best = branch;
-            double branch_dist = dist2(point_t(*root), pt);
-            return nearest_(root,         // beginning of tree
-                            pt,           // point we are querying
-                            level,        // start from level 0
-                            root,         // best is the root
-                            branch_dist); // best_dist = branch_dist
+            // Periodic box: first the query point itself (wrapped into the box), then only the periodic images that
+            // can contain a point nearer than the best found so far (the bound is passed on to the searches)
+            point_t pt = pt_in;
+            for (auto & xi : pt)
+                xi = periodic_wrap(xi, boxsize);
+            KDNodePtr best = nearest_(root, pt, level, root, dist2(point_t(*root), pt));
+            double best_dist = periodic_dist(point_t(*best), pt, boxsize);
+
+            // For each direction the jump to the nearest periodic image and the distance to that boundary
+            point_t jump(ndim), dist_boundary(ndim);
+            for (int idim = 0; idim < ndim; idim++) {
+                jump[idim] = pt[idim] > boxsize / 2 ? -boxsize : +boxsize;
+                dist_boundary[idim] = pt[idim] > boxsize / 2 ? boxsize - pt[idim] : pt[idim];
+            }
+            for (int i = 1; i < twotondim; i++) {
+                point_t search_pt = pt;
+                double min_dist2 = 0.0; // the smallest possible distance to a point in this image
+                for (int idim = 0, n = 1; idim < ndim; idim++, n *= 2) {
+                    if (i / n % 2) {
+                        search_pt[idim] += jump[idim];
+                        min_dist2 += dist_boundary[idim] * dist_boundary[idim];
+                    }
+                }
+                if (min_dist2 >= best_dist)
+                    continue;
+                auto candidate = nearest_(root, search_pt, level, best, best_dist);
+                double d = periodic_dist(point_t(*candidate), pt, boxsize);
+                if (d < best_dist) {
+                    best_dist = d;
+                    best = candidate;
+                }
+            }
+            return best;
         };
 
-        point_t KDTree::nearest_point(const point_t & pt) { return point_t(*nearest_(pt)); };
-        size_t KDTree::nearest_index(const point_t & pt) { return size_t(*nearest_(pt)); };
+        inline point_t KDTree::nearest_point(const point_t & pt) { return point_t(*nearest_(pt)); };
+        inline size_t KDTree::nearest_index(const point_t & pt) { return size_t(*nearest_(pt)); };
 
-        pointIndex KDTree::nearest_pointIndex(const point_t & pt) {
+        inline pointIndex KDTree::nearest_pointIndex(const point_t & pt) {
             KDNodePtr Nearest = nearest_(pt);
             return pointIndex(point_t(*Nearest), size_t(*Nearest));
         }
 
-        pointIndexArr
+        inline pointIndexArr
         KDTree::neighborhood_(const KDNodePtr & branch, const point_t & pt, const double & rad, const size_t & level) {
             double d, dx, dx2;
 
@@ -517,133 +518,79 @@ namespace FML {
             return nbh;
         };
 
-        pointIndexArr KDTree::neighborhood(const point_t & pt, const double & rad) {
+        // All the points within a distance rad of pt (the minimum-image distance in a periodic box). Each point is
+        // returned once, also for rad > boxsize/2 (then all the 3^ndim neighbouring images are searched)
+        inline pointIndexArr KDTree::neighborhood(const point_t & pt_in, const double & rad) {
             size_t level = 0;
-            return neighborhood_(root, pt, rad, level);
-        }
+            if (!root or !bool(*root))
+                return pointIndexArr();
+            if (not periodic)
+                return neighborhood_(root, pt_in, rad, level);
 
-        pointVec KDTree::neighborhood_points(const point_t & pt, const double & rad) {
-            size_t level = 0;
+            point_t pt = pt_in;
+            for (auto & xi : pt)
+                xi = periodic_wrap(xi, boxsize);
 
-            // Modification for a periodic box
-            if (periodic) {
-
-                // To avoid duplicated points we can only search over half the box at max
-                double radius = std::min(rad, boxsize / 2);
-
-                // Compute the jump for to the periodic images we will visit
-                point_t jump = pt;
-                for (int idim = 0; idim < ndim; idim++) {
-                    jump[idim] = pt[idim] > boxsize / 2 ? -boxsize : +boxsize;
-
-                    // If the point is too far away from the boundary we don't
-                    // have to search periodic images
-                    double dist_from_boundary = pt[idim] < boxsize / 2 ? pt[idim] : boxsize - pt[idim];
-                    if (dist_from_boundary > radius)
-                        jump[idim] = 0.0;
-                }
-
-                // Loop over all 2^NDIM possible search points
-                std::vector<pointIndexArr> nbh_arr(twotondim);
-                size_t total = 0;
+            if (rad <= boxsize / 2) {
+                // At most one image per direction: the one across the nearest boundary (if within rad). A point
+                // can then not be found in two images (they are a box size apart and 2 rad <= boxsize), except
+                // exactly at rad = boxsize / 2 which we check below
+                pointIndexArr nbh;
                 for (int i = 0; i < twotondim; i++) {
                     point_t search_pt = pt;
                     bool skip = false;
                     for (int idim = 0, n = 1; idim < ndim; idim++, n *= 2) {
-                        // If the point is too far away from the boundary we don't
-                        // have to search periodic images
-                        int add = (i / n % 2);
-                        if (add == 1 and jump[idim] == 0.0) {
+                        if (i / n % 2 == 0)
+                            continue;
+                        const double dist_from_boundary = pt[idim] < boxsize / 2 ? pt[idim] : boxsize - pt[idim];
+                        if (dist_from_boundary > rad) {
                             skip = true;
                             break;
                         }
-
-                        search_pt[idim] += add * jump[idim];
+                        search_pt[idim] += pt[idim] > boxsize / 2 ? -boxsize : +boxsize;
                     }
                     if (skip)
                         continue;
-
-                    nbh_arr[i] = neighborhood_(root, search_pt, radius, level);
-                    total += nbh_arr[i].size();
+                    auto part = neighborhood_(root, search_pt, rad, level);
+                    nbh.insert(nbh.end(), part.begin(), part.end());
                 }
-
-                pointVec nbhp;
-                nbhp.resize(total);
-                total = 0;
-                for (int i = 0; i < twotondim; i++) {
-                    std::transform(nbh_arr[i].begin(), nbh_arr[i].end(), nbhp.begin() + total, [](pointIndex x) {
-                        return x.first;
-                    });
-                    total += nbh_arr[i].size();
-                }
-                return nbhp;
+                if (rad < boxsize / 2)
+                    return nbh;
+                std::sort(nbh.begin(), nbh.end(), [](const pointIndex & a, const pointIndex & b) { return a.second < b.second; });
+                nbh.erase(std::unique(nbh.begin(), nbh.end(), [](const pointIndex & a, const pointIndex & b) { return a.second == b.second; }), nbh.end());
+                return nbh;
             }
 
-            pointIndexArr nbh = neighborhood_(root, pt, rad, level);
-            pointVec nbhp;
-            nbhp.resize(nbh.size());
-            std::transform(nbh.begin(), nbh.end(), nbhp.begin(), [](pointIndex x) { return x.first; });
+            // rad > boxsize / 2: search all the 3^ndim images, keep the points within rad (minimum image) once
+            int threetondim = 1;
+            for (int idim = 0; idim < ndim; idim++)
+                threetondim *= 3;
+            pointIndexArr nbh;
+            for (int i = 0; i < threetondim; i++) {
+                point_t search_pt = pt;
+                for (int idim = 0, n = 1; idim < ndim; idim++, n *= 3)
+                    search_pt[idim] += (i / n % 3 - 1) * boxsize;
+                auto part = neighborhood_(root, search_pt, rad, level);
+                nbh.insert(nbh.end(), part.begin(), part.end());
+            }
+            std::sort(nbh.begin(), nbh.end(), [](const pointIndex & a, const pointIndex & b) { return a.second < b.second; });
+            nbh.erase(std::unique(nbh.begin(), nbh.end(), [](const pointIndex & a, const pointIndex & b) { return a.second == b.second; }), nbh.end());
+            const double r2 = rad * rad;
+            nbh.erase(std::remove_if(nbh.begin(), nbh.end(), [&](const pointIndex & p) { return periodic_dist(p.first, pt, boxsize) > r2; }), nbh.end());
+            return nbh;
+        }
+
+        inline pointVec KDTree::neighborhood_points(const point_t & pt, const double & rad) {
+            pointIndexArr nbh = neighborhood(pt, rad);
+            pointVec nbhp(nbh.size());
+            std::transform(nbh.begin(), nbh.end(), nbhp.begin(), [](const pointIndex & x) { return x.first; });
             return nbhp;
         }
 
-        indexArr KDTree::neighborhood_indices(const point_t & pt, const double & rad) {
-            size_t level = 0;
-
-            if (periodic) {
-                // To avoid duplicated points we can only search over half the box at max
-                double radius = std::min(rad, boxsize / 2);
-
-                // Compute the jump for to the periodic images we will visit
-                point_t jump = pt;
-                for (int idim = 0; idim < ndim; idim++) {
-                    jump[idim] = pt[idim] > boxsize / 2 ? -boxsize : +boxsize;
-
-                    // If the point is too far away from the boundary we don't
-                    // have to search periodic images
-                    double dist_from_boundary = pt[idim] < boxsize / 2 ? pt[idim] : boxsize - pt[idim];
-                    if (dist_from_boundary > radius)
-                        jump[idim] = 0.0;
-                }
-
-                // Loop over all 2^NDIM possible search points
-                std::vector<pointIndexArr> nbh_arr(twotondim);
-                size_t total = 0;
-                for (int i = 0; i < twotondim; i++) {
-                    point_t search_pt = pt;
-                    bool skip = false;
-                    for (int idim = 0, n = 1; idim < ndim; idim++, n *= 2) {
-                        // If the point is too far away from the boundary we don't
-                        // have to search periodic images
-                        int add = (i / n % 2);
-                        if (add == 1 and jump[idim] == 0.0) {
-                            skip = true;
-                            break;
-                        }
-
-                        search_pt[idim] += add * jump[idim];
-                    }
-                    if (skip)
-                        continue;
-
-                    nbh_arr[i] = neighborhood_(root, search_pt, radius, level);
-                    total += nbh_arr[i].size();
-                }
-
-                indexArr nbhi(total);
-                total = 0;
-                for (int i = 0; i < twotondim; i++) {
-                    std::transform(nbh_arr[i].begin(), nbh_arr[i].end(), nbhi.begin() + total, [](pointIndex x) {
-                        return x.second;
-                    });
-                    total += nbh_arr[i].size();
-                }
-                return nbhi;
-            }
-
-            pointIndexArr nbh = neighborhood_(root, pt, rad, level);
-            indexArr nbhi;
-            nbhi.resize(nbh.size());
-            std::transform(nbh.begin(), nbh.end(), nbhi.begin(), [](pointIndex x) { return x.second; });
+        inline indexArr KDTree::neighborhood_indices(const point_t & pt, const double & rad) {
+            pointIndexArr nbh = neighborhood(pt, rad);
+            indexArr nbhi(nbh.size());
+            std::transform(nbh.begin(), nbh.end(), nbhi.begin(), [](const pointIndex & x) { return x.second; });
             return nbhi;
         }
 
@@ -742,7 +689,7 @@ namespace FML {
                     return;
 
                 double r = std::sqrt(dist_squared);
-                int bin_index = int((r - rmin) / (rmax - rmin) * nbins);
+                int bin_index = std::min(int((r - rmin) / (rmax - rmin) * nbins), nbins - 1); // rounding at r ~ rmax
 
                 // Bin up the stuff we want...
                 // Here we just do the bincount

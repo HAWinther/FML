@@ -5,6 +5,20 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### KDTree: fixes
+- The header defined non-inline functions, so it could not be included in two translation units (28 multiple
+  definitions at link time). All are now inline.
+- Periodic nearest neighbour: every query searched all 2^ndim periodic images from a poor starting bound, which made
+  it 50-500 times slower than without a box (0.36 / 2.0 ms per query for 1e5 / 1e6 points). Now the point itself is
+  searched first and only the images that can hold a nearer point, with the best distance as bound: 3 / 5 us.
+- Periodic radius queries with r > boxsize/2 silently used r = boxsize/2 (1014 of 1926 points for r = 0.7). Now all
+  3^ndim images are searched and every point within the minimum-image distance is returned once. The query point is
+  wrapped into the box, `neighborhood()` is periodic like `neighborhood_indices/points()`, and `periodic_wrap` can no
+  longer return boxsize for tiny negative x.
+- `DensityProfileBinner`: the bin index is clamped (r just below rmax could round to nbins).
+- New `tests/test_kdtree.cpp` (brute force: 2D/3D, with and without a box, the edge cases above, the profile binner,
+  1/2/4 MPI tasks).
+
 ### Fixed: scale-dependent COLA with an offset particle lattice
 - With `ic_lattice_offset` (the fiducial half force cell when `force_nmesh > particle_Npart_1D`, introduced earlier in
   this cleanup) scale-dependent COLA interpolated its LPT potentials at the offset Lagrangian positions with CIC,

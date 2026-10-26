@@ -10,7 +10,7 @@ USE_OMP             ?= true
 USE_FFTW            ?= true
 USE_GSL             ?= true
 
-TARGETS := test_core test_grid_tools test_fof test_so test_fnl
+TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree
 
 include ../Makefile.config
 
@@ -31,6 +31,9 @@ test_fof: test_fof.o Global.o
 	$(LINK_EXE)
 
 test_so: test_so.o Global.o
+	$(LINK_EXE)
+
+test_kdtree: test_kdtree.o test_kdtree_odr.o Global.o
 	$(LINK_EXE)
 
 # NonLocalGaussianRandomField.h includes the cosmology helpers that use splines and the ODE solver with GSL
@@ -56,7 +59,7 @@ endif
 
 # Each run must pass; the two "must abort" runs must fail with the expected message
 .PHONY: run
-run: test_core test_grid_tools test_fof test_so test_fnl
+run: test_core test_grid_tools test_fof test_so test_fnl test_kdtree
 	@set -e; for np in $(NP_LIST); do \
 	  echo "== Running test_core with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_core; \
@@ -68,6 +71,8 @@ run: test_core test_grid_tools test_fof test_so test_fnl
 	  OMP_NUM_THREADS=2 $(RUN) ./test_so; \
 	  echo "== Running test_fnl with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_fnl; \
+	  echo "== Running test_kdtree with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_kdtree; \
 	done
 	@echo "== Checking that bad input aborts with a clear message"
 	@! $(RUN1) ./test_core alloc > alloc.log 2>&1 && grep -q "Reached allocation limit" alloc.log && echo "[PASS] allocation limit aborts"

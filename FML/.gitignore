@@ -89,3 +89,4 @@ DEVELOP/
 tests/test_fof
 tests/test_so
 tests/test_fnl
+tests/test_kdtree
