@@ -160,6 +160,8 @@ class DGPSolverCosmology {
         //======================================================================
         // Implement the equation to be solved
         //======================================================================
+        bool count_negative_discriminant = false;
+        long long n_negative_discriminant = 0;
         MultiGridFunction<NDIM, double> Equation =
             [&](MultiGridSolver<NDIM, SolverType> * sol, int level, IndexInt index) {
                 const auto h = sol->get_Gridspacing(level);
@@ -222,15 +224,22 @@ class DGPSolverCosmology {
                 const double cross = phi_xx * phi_xx + phi_yy * phi_yy + phi_zz * phi_zz +
                                      2.0 * (phi_xy * phi_xy + phi_yz * phi_yz + phi_zx * phi_zx);
                 const double sigma = (cross + OmegaM * a * alpha_DGP / beta_DGP * delta - w * laplacian * laplacian);
-                const double disc = 1.0 + 4.0 * (1 - w) * sigma / (alpha_DGP * alpha_DGP);
+                double disc = 1.0 + 4.0 * (1 - w) * sigma / (alpha_DGP * alpha_DGP);
+
+                // The discriminant is > 1/9 if delta >= -1 for any rc, a and phi (the traceless part of phi_ij is
+                // squared and OmegaM a / (beta alpha) < 1/3), so a negative value means a bad density field: we
+                // use zero (no crash inside the OpenMP loop) and the final solution is checked below
+                if (disc < 0.0) {
+                    if (count_negative_discriminant) {
+#ifdef USE_OMP
+#pragma omp atomic
+#endif
+                        n_negative_discriminant++;
+                    }
+                    disc = 0.0;
+                }
                 const double eq = laplacian - 0.5 * alpha_DGP * (std::sqrt(disc) - 1.0) / (1.0 - w);
                 const double deq = -2.0 * NDIM / (h * h);
-
-                // Check for fatal error
-                if (disc < 0.0) {
-                    throw std::runtime_error(
-                        "The discriminant is negative for DGP (this can happen!). Solution fails to remain real!");
-                }
 
                 //======================================================================
                 // Returns the equation and the derivative to the solver
@@ -240,6 +249,29 @@ class DGPSolverCosmology {
 
         // Solve the equation and fetch the solution
         g.solve(Equation, ConvergenceCriterion);
+
+        // The solution is only real if the discriminant is non-negative everywhere on the main grid
+        {
+            count_negative_discriminant = true;
+            g.get_grid(0).communicate_boundaries();
+            const IndexInt NtotLocal = g.get_NtotLocal(0);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (IndexInt i = 0; i < NtotLocal; i++)
+                Equation(&g, 0, i);
+            count_negative_discriminant = false;
+            FML::SumOverTasks(&n_negative_discriminant);
+            if (n_negative_discriminant > 0) {
+                if (FML::ThisTask == 0)
+                    std::cerr << "[DGPSolverCosmology] The discriminant of the DGP equation is negative in "
+                              << n_negative_discriminant << " cells at a = " << a
+                              << ": no real solution. For the normal branch this is not possible with delta >= -1 (the "
+                                 "discriminant is >= 1/9 for any rc and a), so check the density field\n"
+                              << std::flush;
+                FML::abort_mpi(1);
+            }
+        }
         auto sol = g.get_grid(0);
         ConvertToFFTWGrid(sol, fifth_force_potential_real);
 

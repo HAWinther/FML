@@ -7,12 +7,17 @@
 //     mean of the residual subtracted
 //   - FofrSolverCosmology (with FFTW): the cubic of the sqrt method, the sqrt and log methods give the same fifth
 //     force, and the sqrt method converges for |f_R0| = 1e-6 at a = 0.5 (where the log method gives NaN) and for n = 2
+//   - SymmetronSolverCosmology: zero field before symmetry breaking, linear theory for a small cosine density
+//     perturbation (with the discrete Laplacian), screening in a halo
+//   - DGPSolverCosmology: converges with a clustered field
 // Run with: make run (in this folder) or make test (from the top folder)
 //==========================================================
 #include <FML/Global/Global.h>
 #include <FML/MultigridSolver/MultiGridSolver.h>
 #ifdef USE_FFTW
+#include <FML/MultigridSolver/DGPSolver.h>
 #include <FML/MultigridSolver/FofrSolver.h>
+#include <FML/MultigridSolver/SymmetronSolver.h>
 #endif
 
 #include <cmath>
@@ -196,7 +201,7 @@ int main() {
                     r2 += dx * dx;
                 }
                 const double r = std::sqrt(r2) * 20;
-                const double d = 20.0 / (r + 0.1) / (1 + r) / (1 + r) + 0.3 * noise(c);
+                const double d = 20.0 / (r + 0.1) / (1 + r) / (1 + r) + 0.3 * (1.0 + noise(c)); // >= 0
                 delta.set_real_from_index(ri, d);
                 sum += d;
             }
@@ -207,15 +212,18 @@ int main() {
                 delta.set_real_from_index(ri, delta.get_real_from_index(ri) / mean - 1.0);
 
         // Solve and return the fifth force (finite difference gradient) and the number of V-cycles
+        // (the density contrast is multiplied by a * boost: for boost > 1 the halo is denser, but delta >= -1 still)
         auto solve = [&](std::string method, double fofr0, double n, double a, FML::GRID::FFTWGrid<NDIM> & phi,
-                         double eps = 1e-8) {
+                         double eps = 1e-8, double boost = 1.0, int nsweeps = 10) {
             FML::GRID::FFTWGrid<NDIM> d = delta;
             for (int islice = 0; islice < d.get_local_nx(); islice++)
-                for (auto && ri : d.get_real_range(islice, islice + 1))
-                    d.set_real_from_index(ri, d.get_real_from_index(ri) * a);
+                for (auto && ri : d.get_real_range(islice, islice + 1)) {
+                    const double dd = d.get_real_from_index(ri);
+                    d.set_real_from_index(ri, dd > 0 ? dd * a * boost : dd * a);
+                }
             FofrSolverCosmology<NDIM> solver(0.3, n, fofr0, 256.0 / 2997.92458, false);
             solver.set_method(method);
-            solver.set_ngs_steps(10, 10, 20);
+            solver.set_ngs_steps(nsweeps, nsweeps, 2 * nsweeps);
             solver.set_epsilon(eps);
             solver.set_maxsteps(50);
             solver.solve(a, d, phi);
@@ -252,12 +260,98 @@ int main() {
         // the same as with a looser one
         for (double n : {1.0, 2.0}) {
             FML::GRID::FFTWGrid<NDIM> phi1, phi2;
-            const int nv1 = solve("sqrt", 1e-6, n, 0.5, phi1, 1e-14);
-            solve("sqrt", 1e-6, n, 0.5, phi2, 1e-7);
+            // (one sweep per level so that the V-cycles do the work)
+            const int nv1 = solve("sqrt", 1e-6, n, 0.5, phi1, 1e-13, 10.0, 1);
+            solve("sqrt", 1e-6, n, 0.5, phi2, 1e-7, 10.0, 1);
             const double dd = force_difference(phi1, phi2);
             check(nv1 > 0 and dd < 1e-4,
                   "f(R) |f_R0| = 1e-6, n = " + num(n) + ", a = 0.5 with the sqrt method: the solution with residual < "
-                  "1e-7 is within " + num(dd) + " of one with < 1e-14 (" + std::to_string(nv1) + " V-cycles)");
+                  "1e-7 is within " + num(dd) + " of one with < 1e-13 (" + std::to_string(nv1) + " V-cycles)");
+        }
+
+        // 5. Symmetron (assb = 0.5, range 8 Mpc/h today, box 256 Mpc/h). The solver returns forcenorm (phi/phi0)^2
+        const double H0Box = 256.0 / 2997.92458, assb = 0.5, L = 8.0, H0L = L / 2997.92458;
+        auto symmetron_field = [&](double a, FML::GRID::FFTWGrid<NDIM> & d, FML::GRID::FFTWGrid<NDIM> & phi) {
+            SymmetronSolverCosmology<NDIM> solver(0.3, assb, 1.0, L, H0Box, false);
+            solver.set_epsilon(1e-10);
+            solver.solve(a, d, phi);
+            const double forcenorm = 3.0 * 0.3 * a * a * (H0L / H0Box) * (H0L / H0Box) / (assb * assb * assb);
+            for (int islice = 0; islice < phi.get_local_nx(); islice++)
+                for (auto && ri : phi.get_real_range(islice, islice + 1))
+                    phi.set_real_from_index(ri, std::sqrt(phi.get_real_from_index(ri) / forcenorm));
+        };
+        {
+            // Before symmetry breaking the field is zero
+            FML::GRID::FFTWGrid<NDIM> phi;
+            symmetron_field(0.4, delta, phi);
+            double pmax = 0.0;
+            for (int islice = 0; islice < phi.get_local_nx(); islice++)
+                for (auto && ri : phi.get_real_range(islice, islice + 1))
+                    pmax = std::max(pmax, std::abs(phi.get_real_from_index(ri)));
+            FML::MaxOverTasks(&pmax);
+            check(pmax == 0.0, "Symmetron a = 0.4 < assb: zero field (max " + num(pmax) + ")");
+        }
+        {
+            // delta = A cos(2 pi m x): phi = f0 + dphi with D^2 dphi = norm (fac delta f0 + 2 f0^2 dphi)
+            const double a = 1.0, A = 1e-4;
+            const int m = 4;
+            FML::GRID::FFTWGrid<NDIM> d(N, 1, 1), phi;
+            for (int islice = 0; islice < d.get_local_nx(); islice++)
+                for (auto && ri : d.get_real_range(islice, islice + 1)) {
+                    auto c = d.get_coord_from_index(ri);
+                    c[0] += d.get_local_x_start();
+                    d.set_real_from_index(ri, A * std::cos(2 * M_PI * m * (c[0] + 0.5) / N));
+                }
+            symmetron_field(a, d, phi);
+            const double f0 = std::sqrt(1.0 - std::pow(assb / a, 3)), fac = std::pow(assb / a, 3);
+            const double norm = 0.5 * a * a * H0Box * H0Box / (H0L * H0L);
+            const double k2 = 2.0 * N * N * (1.0 - std::cos(2 * M_PI * m / N));
+            const double amp = -norm * fac * f0 * A / (k2 + 2.0 * norm * f0 * f0);
+            double maxerr = 0.0;
+            for (int islice = 0; islice < phi.get_local_nx(); islice++)
+                for (auto && ri : phi.get_real_range(islice, islice + 1)) {
+                    auto c = phi.get_coord_from_index(ri);
+                    c[0] += phi.get_local_x_start();
+                    const double lin = f0 + amp * std::cos(2 * M_PI * m * (c[0] + 0.5) / N);
+                    maxerr = std::max(maxerr, std::abs(phi.get_real_from_index(ri) - lin));
+                }
+            FML::MaxOverTasks(&maxerr);
+            check(maxerr < 1e-4 * std::abs(amp),
+                  "Symmetron: linear theory for a small cosine perturbation (error " + num(maxerr / std::abs(amp)) +
+                      " of the amplitude)");
+        }
+        {
+            // A halo: screened in the center (phi << phi0), unscreened far away
+            FML::GRID::FFTWGrid<NDIM> phi;
+            symmetron_field(1.0, delta, phi);
+            double pmin = 1e30, pmax = 0.0;
+            for (int islice = 0; islice < phi.get_local_nx(); islice++)
+                for (auto && ri : phi.get_real_range(islice, islice + 1)) {
+                    pmin = std::min(pmin, double(phi.get_real_from_index(ri)));
+                    pmax = std::max(pmax, double(phi.get_real_from_index(ri)));
+                }
+            FML::MinOverTasks(&pmin);
+            FML::MaxOverTasks(&pmax);
+            const double f0 = std::sqrt(1.0 - std::pow(assb, 3));
+            check(pmin < 0.3 * f0 and pmax > f0 and pmax < 1.0,
+                  "Symmetron a = 1 with a halo: phi/phi0 from " + num(pmin) + " (screened) to " + num(pmax) +
+                      " (background " + num(f0) + ", vacuum 1)");
+        }
+
+        // 6. DGP (rc H0 = 1, a = 1)
+        {
+            FML::GRID::FFTWGrid<NDIM> phi;
+            const double a = 1.0, rcH0 = 1.0, E2 = 1.0;
+            const double beta = 1.0 + 2.0 * rcH0 * std::sqrt(E2) * (1.0 - 0.3 / (2.0 * E2));
+            DGPSolverCosmology<NDIM> solver(0.3, rcH0, beta, H0Box, false);
+            solver.set_epsilon(1e-8);
+            solver.set_maxsteps(30);
+            solver.solve(a, delta, phi);
+            bool finite = true;
+            for (int islice = 0; islice < phi.get_local_nx(); islice++)
+                for (auto && ri : phi.get_real_range(islice, islice + 1))
+                    finite = finite and std::isfinite(phi.get_real_from_index(ri));
+            check(finite, "DGP rc H0 = 1 with a halo: finite solution");
         }
     }
 #endif

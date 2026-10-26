@@ -5,6 +5,23 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### MultigridSolver: DGP error handling, symmetron tests, examples
+- `DGPSolverCosmology`: a negative discriminant threw an exception inside the OpenMP loop (the program terminated
+  without unwinding). It is now set to zero while iterating and the converged solution is checked: the run stops with
+  a message if it is negative anywhere. For the normal branch the discriminant is > 1/9 for any rc, a and field when
+  delta >= -1, so this only happens for a bad density field.
+- The mean-residual option only uses the arithmetic every solver type supports (the generic example with a
+  user-defined type did not compile).
+- Tests (`tests/test_multigrid.cpp`): symmetron (zero field before symmetry breaking, linear theory for a small cosine
+  perturbation to 5e-7 of the amplitude, screening in a halo with the field below the vacuum value) and DGP with a
+  clustered field. Regression case `symmetron_exact_multigrid`. In COLA (64^3 in 200 Mpc/h, a_ssb = 0.5, L = 4
+  Mpc/h) the exact symmetron P(k) agrees with the approximate screening method on large scales (+4.2% over GR at
+  k = 0.07 h/Mpc) and is more screened on small scales (1.31 vs 1.40 times GR at k = 1 h/Mpc).
+- All examples build and run (the `test` target in the examples Makefile referred to a file that does not exist and
+  is removed).
+- COLASolver symmetron: `GeffOverG` was NaN at k = 0 when a = assb exactly (0 / 0: the background field and the mass
+  both vanish), which made the run fail with NaN positions when a time step landed on assb (with the exact solver or
+  the screening method). It is now 1 when the background field is zero.
 ### HaloModel fixes
 - The NFW Fourier transform was integrated with equal weights across the jump of the profile at Rvir (first order,
   0.4-2% errors that did not decrease with the accuracy setting) and tabulated on 75 x 75 nodes over 16 decades in R

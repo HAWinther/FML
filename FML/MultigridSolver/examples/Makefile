@@ -16,7 +16,7 @@ TARGETS := mgsolver
 include ../../Makefile.config
 
 FML_MODULES := Global MultigridSolver FileUtils
-EXTRA_CLEAN := contsolver poissonsolver fofrsolver symm dgp recon test
+EXTRA_CLEAN := contsolver poissonsolver fofrsolver symm dgp recon
 
 mgsolver: GenericExample.o Global.o
 	$(LINK_EXE)
@@ -38,7 +38,4 @@ dgp: dgpExample.o Global.o
 	$(LINK_EXE)
 
 recon: Reconstruction.o Global.o FileUtils.o
-	$(LINK_EXE)
-
-test: Test.o Global.o FileUtils.o
 	$(LINK_EXE)

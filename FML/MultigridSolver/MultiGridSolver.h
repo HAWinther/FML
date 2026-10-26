@@ -852,7 +852,7 @@ namespace FML {
 #endif
                     for (IndexInt i = 0; i < NtotLocal; i++)
                         res[i] -= mean;
-                    _mean_L[level] = -mean;
+                    _mean_L[level] = T(0.0) - mean;
                 }
 
                 // This sums over all CPUs

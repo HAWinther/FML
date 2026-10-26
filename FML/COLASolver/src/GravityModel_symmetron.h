@@ -86,6 +86,9 @@ class GravityModelSymmetron final : public GravityModel<NDIM> {
         double mass2a2 = a * a * mass_over_H0_squared(a);
         double koverH02 = koverH0 * koverH0;
         double phi = phi_background(a);
+        // No fifth force before symmetry breaking. At a = assb the mass is also zero so k = 0 would give 0 / 0
+        if (phi == 0.0)
+            return 1.0;
         return 1.0 + 2.0 * beta * beta * phi * phi * koverH02 / (koverH02 + mass2a2);
     }
 
