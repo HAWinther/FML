@@ -1,4 +1,8 @@
 #include "SphericalCollapse.h"
+#include <algorithm>
+#include <exception>
+#include <stdexcept>
+#include <string>
 
 namespace FML {
 
@@ -72,9 +76,9 @@ namespace FML {
           const int npts,
           const double delta_infinity) {
 
-        // ODE solver parameters
+        // ODE solver parameters. NB: delta_ini is ~1e-5 so the absolute tolerance must be much smaller than that
         const double hstart = 1e-3;
-        const double epsilon_abs = 1e-6;
+        const double epsilon_abs = 1e-12;
         const double epsilon_rel = 1e-6;
 
         // The first x for which delta > delta_infinity
@@ -88,14 +92,18 @@ namespace FML {
           // Check if we have collapsed
           if(y[0] > delta_infinity){
             if(x < xminover) xminover = x;
+            // Freeze the non-linear solution, but keep evolving the linear one
             dydx[0] = dydx[1] = 0.0;
-            return GSL_SUCCESS;
+            return model.ode_system_linear_growth(x, y + 2, dydx + 2);
           }
           return model.ode_system_non_linear_growth(x, y, dydx);
         };
 
-        // The growing mode has D ~ a = exp(x) so D' = D
-        DVector y_initial{delta_ini, delta_ini, delta_ini, delta_ini};
+        // The growing mode has D ~ a = exp(x) so D' = D. For the non-linear solution we include the second order
+        // growing mode (EdS): delta = delta_L + 17/21 delta_L^2 (without it deltac is biased by ~0.8 delta_ini)
+        const double delta_nl_ini = delta_ini + 17.0 / 21.0 * delta_ini * delta_ini;
+        const double delta_nl_prime_ini = delta_ini + 34.0 / 21.0 * delta_ini * delta_ini;
+        DVector y_initial{delta_nl_ini, delta_nl_prime_ini, delta_ini, delta_ini};
         ODESolver ode;
         ode.set_accuracy(hstart, epsilon_abs, epsilon_rel);
         ode.solve(deriv, x_array, y_initial, gsl_odeiv2_step_rkck);
@@ -137,6 +145,10 @@ namespace FML {
               npts);
           return xminover - xcollapse;
         };
+        // The bracket: delta_ini = 0 never collapses, delta_ini = 1 must collapse before xcollapse
+        if(not(condition(1.0) < 0.0))
+          throw std::runtime_error("[find_delta_ini] No collapse before xcollapse = " + std::to_string(xcollapse) +
+              " even for delta_ini = 1 (xini too close to the collapse time?)");
         return FML::MATH::find_root_bisection(condition, {0.0, 1.0}, epsilon_delta);
       }
 
@@ -174,7 +186,9 @@ namespace FML {
         while(true){
           const int sign1 = virial_condition(x_search) > 0 ? 1 : -1;
           if(sign * sign1 == -1) break;
-          x_search += deltax;
+          if(x_search >= xcollapse)
+            throw std::runtime_error("[compute_times] Found no virialization time before the collapse");
+          x_search = std::min(x_search + deltax, xcollapse);
         }
         const double xvir = FML::MATH::find_root_bisection(virial_condition, {xturnaround, x_search}, epsilon_x);
 
@@ -213,7 +227,8 @@ namespace FML {
           Spline & delta_ini_of_x_spline,
           const double xini,
           const int npts,
-          bool verbose){
+          bool verbose,
+          double zmax){
 
         // Run spherical collapse and extract splines
         auto run_and_generate_delta_splines = [](
@@ -246,10 +261,10 @@ namespace FML {
           return delta_ini;
         };
 
-        // Range we want deltac(z) etc on
-        const double zini = 10.0;
+        // Range we want deltac(z) etc on (outside it the splines are constant)
+        const double zini = zmax;
         const double zend = 0.0;
-        const int npts_z = 100;
+        const int npts_z = std::max(100, int(100.0 * std::log(1.0 + zmax) / std::log(11.0)));
         const auto xcollapse_array = FML::MATH::linspace(std::log(1.0/(1.0+zini)),std::log(1.0/(1.0+zend)),npts_z);
 
         DVector deltac_array(xcollapse_array.size());
@@ -259,11 +274,19 @@ namespace FML {
         DVector xnl_array(xcollapse_array.size());
         DVector delta_ini_array(xcollapse_array.size());
 
+        // In this case the problem is not well posed
+        for(auto xcollapse : xcollapse_array)
+          if(model.muofx(xcollapse) <= 0.0)
+            throw std::runtime_error("Spherical collapse. Negative Geff/G encountered. Problem not well posed!");
+
+        // An exception inside the OpenMP loop must be caught there (and rethrown after the loop)
+        std::exception_ptr exception = nullptr;
 #ifdef USE_OMP
 #pragma omp parallel for schedule(dynamic,1)
 #endif
         for(size_t i = 0; i < xcollapse_array.size(); i++){
           auto xcollapse = xcollapse_array[i];
+          try {
 
           // Generate solution
           Spline delta_spline;
@@ -305,12 +328,15 @@ namespace FML {
           deltac_array[i] = deltac;
           DeltaVir_array[i] = DeltaVir;
           delta_ini_array[i] = delta_ini;
-
-          // In this case the problem is not well posed so return nan
-          if(model.muofx(xcollapse) <= 0.0){
-            throw std::runtime_error("Spherical collapse. Negative Geff/G encountere. Problem not well posed!");
+          } catch(...) {
+#ifdef USE_OMP
+#pragma omp critical
+#endif
+            if(not exception) exception = std::current_exception();
           }
         }
+        if(exception)
+          std::rethrow_exception(exception);
         xta_of_x_spline = Spline(xcollapse_array, xta_array, "loga_turnaround(loga_collapse)");
         xnl_of_x_spline = Spline(xcollapse_array, xnl_array, "loga_nonlinear(loga_collapse)");
         xvir_of_x_spline = Spline(xcollapse_array, xvir_array, "loga_virialization(loga_collapse)");

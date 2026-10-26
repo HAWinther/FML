@@ -33,13 +33,16 @@ namespace FML {
           double x) const {
         const double E = Eofx(x);
         const double mu = muofx(x);
-        const double OmegaMofx = OmegaM * std::exp(-3.0*x) / (E*E);
-        const double OmegaLambdaofx = 1.0 - OmegaMofx;
-        const double w = wofx(x);
+        const double OmegaM_x = OmegaMofx(x);
+        // The force from the smooth (non-matter) components: sum_i OmegaDE_i(x) (1 + 3w_i) from the background
+        // acceleration (a''/a = -H^2/2 sum_i Omega_i (1+3w_i) = H^2 (1 + dlogE/dloga)). For one dark energy fluid this is
+        // OmegaDE (1 + 3w); curvature does not contribute (before 1 - OmegaM was used for OmegaDE, which counted
+        // curvature as dark energy: -4% in DeltaVir for an open model with OmegaM = 0.3)
+        const double OmegaDE_one_plus_3w = -2.0 * (1.0 + logEprimeofx(x)) - OmegaM_x;
         const double drdx_over_r = 1.0 - delta_prime / 3.0 / (1.0+delta);
         double EpoverM = -3.0/10.0 * std::pow(E * roverR, 2) * (
-            OmegaLambdaofx * (1.0 + 3.0*w) +
-            OmegaMofx * (1.0 + (mu - 1.0) * delta / (1.0+delta)) * (1.0+delta) 
+            OmegaDE_one_plus_3w +
+            OmegaM_x * (1.0 + (mu - 1.0) * delta / (1.0+delta)) * (1.0+delta) 
             );
         double EkoverM = 3.0/10.0 * std::pow(E * roverR, 2) * std::pow(drdx_over_r,2);
         return 2.0*EkoverM + EpoverM;

@@ -36,8 +36,29 @@ namespace FML {
           //============================================================
           double OmegaM{0.3};
 
+          // The model is the built-in LCDM model (set_model_lcdm)
+          bool is_lcdm{false};
+
           SphericalCollapseModel(){
             set_model_lcdm();
+          }
+
+          // The LCDM functions refer to this object (OmegaM), so a copy must refer to the copy and not to the original
+          // (which might not exist anymore). The *_lcdm members of the copy get their default initializers below
+          SphericalCollapseModel(const SphericalCollapseModel & rhs) { *this = rhs; }
+          SphericalCollapseModel & operator=(const SphericalCollapseModel & rhs) {
+            OmegaM = rhs.OmegaM;
+            is_lcdm = rhs.is_lcdm;
+            if(is_lcdm) {
+              set_model_lcdm();
+            } else {
+              Eofx = rhs.Eofx;
+              OmegaMofx = rhs.OmegaMofx;
+              logEprimeofx = rhs.logEprimeofx;
+              muofx = rhs.muofx;
+              wofx = rhs.wofx;
+            }
+            return *this;
           }
           SphericalCollapseModel(
               Func1 Eofx,
@@ -82,6 +103,7 @@ namespace FML {
           /// Set the model to be lcdm
           //============================================================
           void set_model_lcdm(){
+            is_lcdm = true;
             Eofx = Eofx_lcdm;
             OmegaMofx = OmegaMofx_lcdm;
             logEprimeofx = logEprimeofx_lcdm;

@@ -5,6 +5,26 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SphericalCollapse fixes
+- DeltaVir in curved models: the virial energy counted curvature as dark energy (OmegaDE = 1 - OmegaM(z)), -4.2%
+  (z = 0) and -2.8% (z = 1) for OmegaM = 0.3, OmegaK = 0.7. The force of the smooth components is now taken from the
+  background acceleration (2(1 + dlogE/dloga) + OmegaM(z) = -sum OmegaDE (1 + 3w)), which also handles several dark
+  energy components and radiation in E(x).
+- The initial conditions of the non-linear equation were the linear growing mode only: deltac was biased by ~0.8
+  delta_ini (+2.1% at z = 10 when starting at a = 1e-3, the default of the free functions, and 2.08 at z = 100). Now
+  the second-order growing mode (delta + 17/21 delta^2); the default start of the free functions is now a = 1e-5
+  (as the classes). EdS deltac = 1.686470 and DeltaVir = 18 pi^2 for any collapse redshift.
+- Tolerances: the absolute ODE tolerance (1e-6) was large compared with delta_ini ~ 1e-5 (delta_ini ~1% too high)
+  and the bisection tolerance of delta_ini (1e-8) biased deltac by ~2e-4 and DeltaVir by ~4e-4 (with noise in
+  deltac(z)). Now 1e-12 and 1e-13. LCDM deltac and DeltaVir agree with an independent integration to ~1e-6.
+- Robustness: the search for the virialization time could loop forever, a failed bracket for delta_ini (no collapse
+  in time) returned garbage silently, the linear solution was corrupted after the collapse (-16%), mu <= 0 was
+  checked after the computation and exceptions inside the OpenMP loop aborted the program. Copies of the default
+  LCDM SphericalCollapseModel referred to the original object (OmegaM of the original, dangling after it is gone).
+  compute_sphericalcollapse_splines and SphericalCollapse::run_at_all_redshifts take an optional zmax (default 10).
+- `tests/test_sphericalcollapse.cpp` (EdS, LCDM, open, w0wa + mu against analytic/independent results; 12 checks
+  failed before and the error checks aborted the program).
+
 ### MultigridSolver: f(R) in terms of sqrt(|f_R|) (the new default)
 - `FofrSolverCosmology::set_method("sqrt")` (the default) solves for u = sqrt(|f_R|) (Bose, Hellwing & Li 2017). The
   equation in a cell is solved exactly in the Gauss-Seidel sweeps: for n = 1 it is a cubic with exactly one positive

@@ -69,7 +69,7 @@ namespace FML {
           DVector & delta_lin_array,
           DVector & delta_lin_prime_array,
           const bool get_arrays = true,
-          const double xini = std::log(1e-3), 
+          const double xini = std::log(1e-5), 
           const double xcollapse = std::log(1.0),
           const int npts = 1000,
           const double delta_infinity = 1e16);
@@ -77,10 +77,10 @@ namespace FML {
       /// Do root finding to figure out the delta_ini that gives collapse at x=xcollapse
       double find_delta_ini(
           const SphericalCollapseModel & model,
-          const double xini = std::log(1e-3), 
+          const double xini = std::log(1e-5), 
           const double xcollapse = std::log(1.0),
           const int npts = 1000,
-          const double epsilon_delta = 1e-8);
+          const double epsilon_delta = 1e-13);
 
       /// Extract useful times from spherical collapse evolution
       /// like turnaround, virialization and non-linear onset
@@ -91,7 +91,7 @@ namespace FML {
           const Spline & delta_spline, 
           const Spline & delta_prime_spline) -> std::tuple<double, double, double, double>;
 
-      /// Do spherical collapse for all times
+      /// Do spherical collapse for collapse at 0 <= z <= zmax (the splines are constant outside this range)
       void compute_sphericalcollapse_splines(
           const SphericalCollapseModel & model,
           Spline & deltac_of_x_spline,
@@ -100,9 +100,10 @@ namespace FML {
           Spline & xta_of_x_spline,
           Spline & xvir_of_x_spline,
           Spline & delta_ini_of_x_spline,
-          const double xini = std::log(1e-3),
+          const double xini = std::log(1e-5),
           const int npts = 1000,
-          bool verbose = false);
+          bool verbose = false,
+          double zmax = 10.0);
 
       //===================================================================================
       /// Class for doing general spherical collapse calculations, i.e. evolve
@@ -213,6 +214,21 @@ namespace FML {
               Spline & delta_ini_of_x_spline,
               Spline & growthfactor_of_x_spline,
               Spline & growthrate_of_x_spline){
+            run_at_all_redshifts(10.0, deltac_of_x_spline, DeltaVir_of_x_spline, xta_of_x_spline, xnl_of_x_spline,
+                xvir_of_x_spline, delta_ini_of_x_spline, growthfactor_of_x_spline, growthrate_of_x_spline);
+          }
+
+          /// As above for 0 <= z <= zmax (the splines are constant outside)
+          void run_at_all_redshifts(
+              double zmax,
+              Spline & deltac_of_x_spline,
+              Spline & DeltaVir_of_x_spline,
+              Spline & xta_of_x_spline,
+              Spline & xnl_of_x_spline,
+              Spline & xvir_of_x_spline,
+              Spline & delta_ini_of_x_spline,
+              Spline & growthfactor_of_x_spline,
+              Spline & growthrate_of_x_spline){
             compute_sphericalcollapse_splines(
                 spc, 
                 deltac_of_x_spline, 
@@ -223,7 +239,8 @@ namespace FML {
                 delta_ini_of_x_spline,
                 xini_spherical_collapse, 
                 npts_spherical_collapse,
-                verbose);
+                verbose,
+                zmax);
 
             compute_growthfactor(
                 spc,
