@@ -53,6 +53,15 @@ struct Particle {
     constexpr int get_ndim() const { return 3; }
 };
 
+// A particle with a default member initializer (not buildable at compile time: the library must not need
+// GetNDIM(T()) in a constant expression)
+struct ParticleWithInit {
+    double pos[3];
+    double mass{1.0};
+    double * get_pos() { return pos; }
+    constexpr int get_ndim() const { return 3; }
+};
+
 int main(int argc, char ** argv) {
     int fails = 0;
     auto check = [&](bool ok, std::string what) {
@@ -214,6 +223,12 @@ int main(int argc, char ** argv) {
             int iok = ok ? 0 : 1;
             FML::SumOverTasks(&iok);
             check(iok == 0, "MPIParticles create/communicate keeps all particles in correct domain");
+        }
+        {
+            FML::PARTICLE::MPIParticles<ParticleWithInit> mp;
+            mp.create_particle_grid(8, 2.0, FML::xmin_domain, FML::xmax_domain);
+            check(mp.get_npart_total() == 512 and mp[0].mass == 1.0,
+                  "MPIParticles of a particle with a default member initializer (create_particle_grid)");
         }
     }
 

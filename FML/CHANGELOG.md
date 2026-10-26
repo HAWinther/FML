@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Particles with default member initializers
+- `MPIParticles::create_particle_grid` and `RamsesReader::read_ramses` took the dimension from `GetNDIM(T())` in a
+  constant expression, which does not compile for a particle class with a default member initializer (e.g.
+  `double mass{1.0};` next to an uninitialized `pos[3]`). They now use a local object (as PairCounting,
+  ParticlesInBoxes and KDTree); no `constexpr ... GetNDIM(T())` is left in the library. `tests/test_core.cpp` checks
+  `MPIParticles` with such a particle.
+
 ### PairCounting: new counting engine
 - The box and survey correlation functions use a new engine (`PAIRCOUNTS::detail`): both catalogues on one grid
   (cells of ~rmax/2, at least ~2 particles per cell), positions/weights sorted by cell in flat arrays, loops over pairs

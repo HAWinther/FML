@@ -209,7 +209,8 @@ namespace FML {
                         p.resize(header.npart);
 
                     // Check that dimensions match
-                    constexpr int ndim = FML::PARTICLE::GetNDIM(T()); 
+                    T tmp_ndim; // (GetNDIM(T()) needs a particle that can be built at compile time)
+                    constexpr int ndim = FML::PARTICLE::GetNDIM(tmp_ndim);
                     assert(ndim == header.ndim);
 
                     // Read the data

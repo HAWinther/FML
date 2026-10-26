@@ -606,7 +606,8 @@ namespace FML {
 #endif
 
             // Total number of particles
-            constexpr int ndim = FML::PARTICLE::GetNDIM(T());
+            T tmp_ndim; // (GetNDIM(T()) needs a particle that can be built at compile time)
+            constexpr int ndim = FML::PARTICLE::GetNDIM(tmp_ndim);
             NpartTotal = FML::power(Npart_1D, ndim);
             NpartLocal_in_use = Local_Npart_1D * FML::power(Npart_1D, ndim - 1);
 
