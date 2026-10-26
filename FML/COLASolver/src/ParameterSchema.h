@@ -346,6 +346,15 @@ namespace COLASOLVER {
                 b.optional("gravity_model_fofr_exact_solution",
                            false,
                            "Solve the exact f(R) equation with the multigrid solver (slow, mainly for testing)");
+                b.when(is_true("gravity_model_fofr_exact_solution"), "gravity_model_fofr_exact_solution = true", [&]() {
+                    b.always_optional("gravity_model_fofr_multigrid_method",
+                                      "sqrt",
+                                      "The field the multigrid solver solves for. sqrt: u = sqrt(|f_R|) with the "
+                                      "equation in a cell solved exactly (a cubic for n = 1), robust for any f_R0, "
+                                      "n and redshift. log: ln|f_R| with Newton steps (the original method; can give "
+                                      "NaN for small f_R0 or at high redshift)",
+                                      {"sqrt", "log"});
+                });
             });
             gravity_is({"Symmetron"}, [&]() {
                 b.optional("gravity_model_symmetron_exact_solution",

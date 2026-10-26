@@ -5,6 +5,23 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### MultigridSolver: f(R) in terms of sqrt(|f_R|) (the new default)
+- `FofrSolverCosmology::set_method("sqrt")` (the default) solves for u = sqrt(|f_R|) (Bose, Hellwing & Li 2017). The
+  equation in a cell is solved exactly in the Gauss-Seidel sweeps: for n = 1 it is a cubic with exactly one positive
+  root, otherwise it is monotone in u (safeguarded Newton, ~2-3 iterations), so f_R stays negative on every level.
+  `"log"` is the original ln|f_R| with Newton steps. On a clustered 64^3 field, of 48 cases (|f_R0| = 1e-4 - 1e-6,
+  n = 0.5 - 4, a = 0.1 - 1) sqrt converged in all and log gave NaN in 29 (and did not converge in 200 V-cycles in one).
+  In COLA (64^3 particles, 128^3 force grid) log fails at the third force calculation for |f_R0| = 1e-6. Where both
+  converge they agree to 0.1-0.5% in the fifth force (different discretizations of the kinetic term) and 0.3% in P(k);
+  for n = 1 the cost is the same, otherwise ~1.2-1.5 times that of log.
+- The log method computes its kinetic term directly (it built two `std::function`s per cell evaluation).
+- A non-finite solution now stops the run with a message (it went on with NaN forces); the min/max of f_R printed are
+  over all tasks.
+- `MultiGridSolver::set_custom_update`: a pointwise solve of the equation in a cell to replace the Newton update.
+- COLASolver: `gravity_model_fofr_multigrid_method` (`sqrt` or `log`). The regression case `fofr_exact_multigrid`
+  changes by < 1e-3 in P(k).
+- Based on a contributed patch (sqrt method, cubic solver and update hook).
+
 ### MultigridSolver: fixes and faster convergence
 - Prolongation: the N-linear interpolation of the coarse-grid correction summed only one of the neighbors (`iAdd =`
   instead of `+=`) and used vertex-centered weights on the cell-centered grids. It is now cell-centered N-linear

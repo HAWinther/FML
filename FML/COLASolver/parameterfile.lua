@@ -172,6 +172,9 @@ if gravity_model == "f(R)" then
   -- Solve exact f(R) equation using the multigridsolver (slow and mainly for testing)
   -- This option takes precedent over the approximate screening model below if both are set
   gravity_model_fofr_exact_solution = false
+  -- The field the multigrid solver solves for: "sqrt" (sqrt|f_R|, robust; the default) or "log" (ln|f_R|, the
+  -- original method, can give NaN for small f_R0 or at high redshift)
+  gravity_model_fofr_multigrid_method = "sqrt"
   -- Approximate screening model (otherwise linear)
   gravity_model_screening = true
   -- Screening efficiency (1.0 is standard)

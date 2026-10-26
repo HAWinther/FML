@@ -99,7 +99,7 @@ For the modified gravity models that has non-trivial non-linear evolution (a scr
 
 * Use the approximate screening model + the linear field equation to ensure that we get the correct linear evolution on large scales. This is probably the best option in general.
 
-* Solve the exact field equation using a multigrid-solver. This is how high-resolution N-body codes like ECOSMOG, ISIS, MG-GADGET does it. This is very slow and if you want to solve it exactly you probably want to use a high-resolution code also, but its useful for testing. The multigrid-solver it also very easy to extend to other models if needed.
+* Solve the exact field equation using a multigrid-solver. This is how high-resolution N-body codes like ECOSMOG, ISIS, MG-GADGET does it. This is very slow and if you want to solve it exactly you probably want to use a high-resolution code also, but its useful for testing. The multigrid-solver it also very easy to extend to other models if needed. For f(R) the solver works with u = sqrt(|f_R|) by default (`gravity_model_fofr_multigrid_method = "sqrt"`), which converges for any f\_R0, n and redshift; the original ln|f_R| variable (`"log"`) can give NaN for small f\_R0 or at high redshift (e.g. |f\_R0| = 1e-6 in a 64^3 run).
 
 # Particles and matter content
 

@@ -33,6 +33,12 @@ namespace FML {
             template <int NDIM, class T>
             using MultiGridFunction = std::function<std::pair<T, T>(MultiGridSolver<NDIM, T> *, int, IndexInt)>;
             using MultiGridConvCrit = std::function<bool(double, double, int)>;
+            /// Optional pointwise solver for the Gauss-Seidel sweeps: given (solver, level, index, source) it returns
+            /// the new value of the field in the cell, the (approximate) solution of L(f) = source there with the
+            /// neighbors held fixed. If set it replaces the Newton update f -> f - (L - source) / (dL/df). Useful when
+            /// the local problem can be solved exactly and robustly (e.g. f(R) in terms of sqrt(f_R), see FofrSolver.h)
+            template <int NDIM, class T>
+            using MultiGridUpdateFunction = std::function<T(MultiGridSolver<NDIM, T> *, int, IndexInt, T)>;
 
             //=============================================
             ///
@@ -164,6 +170,7 @@ namespace FML {
                 // The functions defining the equations to be solved
                 MultiGridFunction<NDIM, T> _Equation;
                 MultiGridConvCrit _ConvergenceCriterion;
+                MultiGridUpdateFunction<NDIM, T> _CustomUpdate{};
 
               public:
                 // Constructors
@@ -194,6 +201,8 @@ namespace FML {
                 // Subtract the mean of the residual (for equations that only determine f up to a constant, see
                 // _subtract_mean_residual)
                 void set_subtract_mean_residual(bool subtract) { _subtract_mean_residual = subtract; }
+                // Replace the Newton update in the Gauss-Seidel sweeps by a pointwise solve (see MultiGridUpdateFunction)
+                void set_custom_update(const MultiGridUpdateFunction<NDIM, T> & update) { _CustomUpdate = update; }
                 // The number of V-cycles of the last solve
                 int get_number_of_vcycles() const { return _istep_vcycle; }
                 // The rms residual on the main grid after the last solve
@@ -1002,6 +1011,15 @@ namespace FML {
 
                     // Only select cells with right color
                     if (color == curcolor) {
+
+                        // A user provided pointwise solve of L(f) = source in this cell
+                        if (_CustomUpdate) {
+                            T source = (level > 0 ? _source[level][i] : T(0));
+                            if (_subtract_mean_residual)
+                                source += _mean_L[level];
+                            f[i] = _CustomUpdate(this, level, i, source);
+                            continue;
+                        }
 
                         // Update the solution f = f - L / (dL/df)
                         auto LdL = _Equation(this, level, i);

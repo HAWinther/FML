@@ -29,6 +29,7 @@ class GravityModelFofR final : public GravityModel<NDIM> {
     int multigrid_nsweeps_first_step{10};
     int multigrid_nsweeps{10};
     double multigrid_solver_residual_convergence{1e-7};
+    std::string multigrid_method{"sqrt"}; // The field the multigrid solver solves for (sqrt or log)
 
   public:
     template <int N>
@@ -119,6 +120,7 @@ class GravityModelFofR final : public GravityModel<NDIM> {
             FofrSolverCosmology<NDIM, double> mgsolver(this->cosmo->get_OmegaM(), nfofr, fofr0, H0Box, verbose);
             mgsolver.set_ngs_steps(multigrid_nsweeps, multigrid_nsweeps, multigrid_nsweeps_first_step);
             mgsolver.set_epsilon(multigrid_solver_residual_convergence);
+            mgsolver.set_method(multigrid_method);
             mgsolver.solve(a, density_real, density_fifth_force);
             // It returns it in real-space so go back to fourier space
             density_fifth_force.fftw_r2c();
@@ -275,6 +277,7 @@ class GravityModelFofR final : public GravityModel<NDIM> {
             multigrid_nsweeps_first_step = param.get<int>("multigrid_nsweeps_first_step");
             multigrid_nsweeps = param.get<int>("multigrid_nsweeps");
             multigrid_solver_residual_convergence = param.get<double>("multigrid_solver_residual_convergence");
+            multigrid_method = param.get<std::string>("gravity_model_fofr_multigrid_method");
         }
         this->scaledependent_growth = true;
     }

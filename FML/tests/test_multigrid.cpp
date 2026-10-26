@@ -5,10 +5,15 @@
 //   - a DGP-type equation (mixed second derivatives, i.e. the 3^3 cells around a cell, and an operator that
 //     only determines the field up to a constant): converges with the cube ordering of the sweeps and the
 //     mean of the residual subtracted
+//   - FofrSolverCosmology (with FFTW): the cubic of the sqrt method, the sqrt and log methods give the same fifth
+//     force, and the sqrt method converges for |f_R0| = 1e-6 at a = 0.5 (where the log method gives NaN) and for n = 2
 // Run with: make run (in this folder) or make test (from the top folder)
 //==========================================================
 #include <FML/Global/Global.h>
 #include <FML/MultigridSolver/MultiGridSolver.h>
+#ifdef USE_FFTW
+#include <FML/MultigridSolver/FofrSolver.h>
+#endif
 
 #include <cmath>
 #include <iomanip>
@@ -162,6 +167,100 @@ int main() {
               "DGP-type equation: residual " + num(s.get_residual()) + " after " +
                   std::to_string(s.get_number_of_vcycles()) + " V-cycles (cube ordering, mean subtracted)");
     }
+
+#ifdef USE_FFTW
+    // 4. f(R)
+    {
+        // The positive root of the cubic u^3 + p u + q (q < 0) for the three cases (one real root with p > 0 and
+        // p < 0, three real roots)
+        double maxerr = 0.0;
+        for (double p : {3.0, 1e-3, -0.5, -3.0, -30.0})
+            for (double q : {-1e-6, -0.1, -2.0, -50.0}) {
+                const double u = FofrSolverCosmology<NDIM>::positive_cubic_root(p, q);
+                maxerr = std::max(maxerr, std::abs(u * u * u + p * u + q) / (std::abs(q) + std::abs(p * u)));
+                if (not(u > 0.0))
+                    maxerr = 1.0;
+            }
+        check(maxerr < 1e-12, "f(R): positive root of the cubic (relative error " + num(maxerr) + ")");
+
+        // A clustered density field
+        FML::GRID::FFTWGrid<NDIM> delta(N, 1, 1);
+        double sum = 0.0;
+        for (int islice = 0; islice < delta.get_local_nx(); islice++)
+            for (auto && ri : delta.get_real_range(islice, islice + 1)) {
+                auto c = delta.get_coord_from_index(ri);
+                c[0] += delta.get_local_x_start();
+                double r2 = 0;
+                for (int k = 0; k < NDIM; k++) {
+                    const double dx = (c[k] + 0.5) / N - 0.4;
+                    r2 += dx * dx;
+                }
+                const double r = std::sqrt(r2) * 20;
+                const double d = 20.0 / (r + 0.1) / (1 + r) / (1 + r) + 0.3 * noise(c);
+                delta.set_real_from_index(ri, d);
+                sum += d;
+            }
+        FML::SumOverTasks(&sum);
+        const double mean = sum / std::pow(double(N), NDIM);
+        for (int islice = 0; islice < delta.get_local_nx(); islice++)
+            for (auto && ri : delta.get_real_range(islice, islice + 1))
+                delta.set_real_from_index(ri, delta.get_real_from_index(ri) / mean - 1.0);
+
+        // Solve and return the fifth force (finite difference gradient) and the number of V-cycles
+        auto solve = [&](std::string method, double fofr0, double n, double a, FML::GRID::FFTWGrid<NDIM> & phi,
+                         double eps = 1e-8) {
+            FML::GRID::FFTWGrid<NDIM> d = delta;
+            for (int islice = 0; islice < d.get_local_nx(); islice++)
+                for (auto && ri : d.get_real_range(islice, islice + 1))
+                    d.set_real_from_index(ri, d.get_real_from_index(ri) * a);
+            FofrSolverCosmology<NDIM> solver(0.3, n, fofr0, 256.0 / 2997.92458, false);
+            solver.set_method(method);
+            solver.set_ngs_steps(10, 10, 20);
+            solver.set_epsilon(eps);
+            solver.set_maxsteps(50);
+            solver.solve(a, d, phi);
+            return solver.get_number_of_vcycles();
+        };
+        // The rms of the y-derivative and of its difference between two solutions
+        auto force_difference = [&](FML::GRID::FFTWGrid<NDIM> & p1, FML::GRID::FFTWGrid<NDIM> & p2) {
+            double s2 = 0.0, d2 = 0.0;
+            for (int islice = 0; islice < p1.get_local_nx(); islice++)
+                for (auto && ri : p1.get_real_range(islice, islice + 1)) {
+                    auto c = p1.get_coord_from_index(ri);
+                    // The y-derivative (no extra slices needed with MPI)
+                    auto cp = c, cm = c;
+                    cp[1] = (c[1] + 1) % N;
+                    cm[1] = (c[1] - 1 + N) % N;
+                    const double f1 = p1.get_real(cp) - p1.get_real(cm), f2 = p2.get_real(cp) - p2.get_real(cm);
+                    s2 += f1 * f1;
+                    d2 += (f1 - f2) * (f1 - f2);
+                }
+            FML::SumOverTasks(&s2);
+            FML::SumOverTasks(&d2);
+            return std::sqrt(d2 / s2);
+        };
+
+        FML::GRID::FFTWGrid<NDIM> phi_log, phi_sqrt;
+        solve("log", 1e-5, 1.0, 1.0, phi_log);
+        const int nv = solve("sqrt", 1e-5, 1.0, 1.0, phi_sqrt);
+        const double diff = force_difference(phi_log, phi_sqrt);
+        check(diff < 0.01 and nv < 20,
+              "f(R) |f_R0| = 1e-5, a = 1: sqrt and log methods agree (rms fifth force difference " + num(diff) +
+                  "; sqrt " + std::to_string(nv) + " V-cycles)");
+
+        // Hard cases for the log method (it gives NaN here): check that sqrt converges to a tight tolerance and is
+        // the same as with a looser one
+        for (double n : {1.0, 2.0}) {
+            FML::GRID::FFTWGrid<NDIM> phi1, phi2;
+            const int nv1 = solve("sqrt", 1e-6, n, 0.5, phi1, 1e-14);
+            solve("sqrt", 1e-6, n, 0.5, phi2, 1e-7);
+            const double dd = force_difference(phi1, phi2);
+            check(nv1 > 0 and dd < 1e-4,
+                  "f(R) |f_R0| = 1e-6, n = " + num(n) + ", a = 0.5 with the sqrt method: the solution with residual < "
+                  "1e-7 is within " + num(dd) + " of one with < 1e-14 (" + std::to_string(nv1) + " V-cycles)");
+        }
+    }
+#endif
 
     if (FML::ThisTask == 0)
         std::cout << (fails == 0 ? "All multigrid tests passed\n" : "Some multigrid tests FAILED\n");
