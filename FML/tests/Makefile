@@ -10,11 +10,11 @@ USE_OMP             ?= true
 USE_FFTW            ?= true
 USE_GSL             ?= true
 
-TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse
+TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel
 
 include ../Makefile.config
 
-FML_MODULES := Global Spline ODESolver Math SphericalCollapse
+FML_MODULES := Global Spline ODESolver Math SphericalCollapse HaloModel FileUtils
 
 TEST_OBJS = test_core.o Global.o
 ifeq ($(USE_GSL),true)
@@ -70,6 +70,10 @@ test_pofk: $(POFK_OBJS)
 test_sphericalcollapse: test_sphericalcollapse.o Global.o Spline.o ODESolver.o Math.o SphericalCollapse.o SphericalCollapseModel.o
 	$(LINK_EXE)
 
+# Halo model (reads the linear P(k) and the HMCode reference in ../HaloModel/example)
+test_halomodel: test_halomodel.o Global.o Spline.o ODESolver.o Math.o SphericalCollapse.o SphericalCollapseModel.o Halomodel.o FileUtils.o
+	$(LINK_EXE)
+
 # Reconstruction, Hessian (GSL eigensolver) and smoothing
 test_reconstruction: test_reconstruction.o Global.o Spline.o ODESolver.o
 	$(LINK_EXE)
@@ -120,6 +124,8 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_multigrid; \
 	  echo "== Running test_sphericalcollapse with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_sphericalcollapse; \
+	  echo "== Running test_halomodel with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_halomodel; \
 	done
 	@echo "== Running test_hybridbias"
 	@OMP_NUM_THREADS=2 $(RUN1) ./test_hybridbias

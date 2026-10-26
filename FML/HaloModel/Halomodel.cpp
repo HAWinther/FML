@@ -3,6 +3,8 @@
 #include <FML/Math/Math.h>
 #include <FML/FileUtils/FileUtils.h>
 #include "Halomodel.h"
+#include <gsl/gsl_sf_expint.h>
+#include <stdexcept>
 
 namespace FML {
 
@@ -31,9 +33,11 @@ namespace FML {
         const double logxmin = logx_array.front();
         const double logxmax = logx_array.back();
 
-        // Compute slope near end-points
-        double slope_min  = logY_of_logx_spline.deriv_x(logxmin*0.99);
-        double slope_max = logY_of_logx_spline.deriv_x(logxmax*1.01);
+        // Compute slope near end-points (just inside the range; before logx*0.99 and logx*1.01 was used which is
+        // outside the range when logx > 0 and far inside when logx << 0)
+        const double dlogx = 0.01 * (logxmax - logxmin);
+        double slope_min  = logY_of_logx_spline.deriv_x(logxmin + dlogx);
+        double slope_max = logY_of_logx_spline.deriv_x(logxmax - dlogx);
 
         // Extrapolation function
         auto logY_extrapolated = [&](double logx){
@@ -71,8 +75,15 @@ namespace FML {
         // Extract data, transform to Delta, normalize and spline
         DVector logk_array, logDelta_array;
         for(size_t i = 0; i < data.size(); i++){
+          if(int(data[i].size()) <= std::max(col_k, col_pofk))
+            throw std::runtime_error("[read_pofk_file] Row " + std::to_string(i) + " of " + filename_pofk + " has too few columns");
           double k = data[i][col_k];
           double pofk = data[i][col_pofk];
+          if(not (k > 0.0 and pofk > 0.0 and std::isfinite(k) and std::isfinite(pofk)))
+            throw std::runtime_error("[read_pofk_file] Row " + std::to_string(i) + " of " + filename_pofk +
+                " has k <= 0 or P(k) <= 0 (we spline log P(k))");
+          if(i > 0 and not (std::log(k) > logk_array.back()))
+            throw std::runtime_error("[read_pofk_file] k must be increasing in " + filename_pofk);
           double Delta_over_pofk = (k*k*k) / (2.0*M_PI*M_PI);
           logk_array.push_back( std::log(k) );
           logDelta_array.push_back( std::log( pofk * Delta_over_pofk * normalization ) );
@@ -109,7 +120,14 @@ namespace FML {
         auto condition = [&](double logR){
           return lognu_of_logR_spline(logR) - lognu_goal;
         };
-        const double logR = FML::MATH::find_root_bisection(condition, {logRmin, logRmax}, epsilon);
+        // If nu = 1 is not in the range (very high z: nu > 1 for all R) we use the end of the range
+        double logR;
+        if(condition(logRmin) > 0.0)
+          logR = logRmin;
+        else if(condition(logRmax) < 0.0)
+          logR = logRmax;
+        else
+          logR = FML::MATH::find_root_bisection(condition, {logRmin, logRmax}, epsilon);
         const double neff = -3.0 - 2.0 * logsigma_of_logR_spline.deriv_x(logR);
         return std::pair(std::exp(logR), neff);
       }
@@ -216,10 +234,12 @@ namespace FML {
       double RofM(
           double M, 
           double OmegaM, 
-          double x){
+          [[maybe_unused]] double x){
+        // R is comoving (as in sigma(R)) so we use the comoving mean matter density (before rho_mean * a^-3 was
+        // used, so M(R) was a factor (1+z)^3 too large for z > 0)
         const double Mpl2overMsunH0overh = 2.493e21;
         const double H0overh_in_hmpc = 1.0 / 2997.92458;
-        const double rho_mean_in_msunh_over_mpch3 = 3.0 * OmegaM * std::exp(-3.0*x) 
+        const double rho_mean_in_msunh_over_mpch3 = 3.0 * OmegaM
           * std::pow(H0overh_in_hmpc,3) * Mpl2overMsunH0overh;
         return std::pow(M / (4.0 * M_PI / 3.0 * rho_mean_in_msunh_over_mpch3), 1.0/3.0);
       }
@@ -241,10 +261,11 @@ namespace FML {
       double MofR(
           double R,
           double OmegaM,
-          double x){
+          [[maybe_unused]] double x){
+        // Comoving R and the comoving mean matter density (see RofM)
         const double Mpl2overMsunH0overh = 2.493e21;
         const double H0overh_in_hmpc = 1.0 / 2997.92458;
-        const double rho_mean_in_msunh_over_mpch3 = 3.0 * OmegaM * std::exp(-3.0*x) 
+        const double rho_mean_in_msunh_over_mpch3 = 3.0 * OmegaM
           * std::pow(H0overh_in_hmpc,3) * Mpl2overMsunH0overh;
         return 4.0 * M_PI / 3.0 * rho_mean_in_msunh_over_mpch3 * std::pow(R, 3);
       }
@@ -285,27 +306,52 @@ namespace FML {
         }
 
         //================================================
-        // Radius integration array
+        // Radius integration arrays (trapezoidal rule in log r). The profile is typically truncated at Rvir so
+        // we integrate [rmin, Rvir] and (if the profile is not zero outside) [Rvir, rmax] separately (before one
+        // equal-weight sum across the jump at Rvir was used: first order accurate, 0.4-2% errors in y(k))
         //================================================
         const double rmin = Rvir/std::pow(10,power_min), rmax = Rvir*std::pow(2,power_max);
-        const int npts_r = (power_max+power_min) * 50 * accuracy_boost;
-        const auto logr_array = FML::MATH::linspace(std::log(rmin), std::log(rmax), npts_r);
-        auto r_array = logr_array;
-        for(auto & r : r_array) r = std::exp(r);
+        const bool zero_outside_Rvir = rho_function(Rvir * (1.0 + 1e-8), M) == 0.0;
+        auto make_r_array = [](double r1, double r2, int n) {
+          auto r_array = FML::MATH::linspace(std::log(r1), std::log(r2), n);
+          for(auto & r : r_array) r = std::exp(r);
+          r_array.front() = r1;
+          r_array.back() = r2;
+          return r_array;
+        };
+        const int npts_r_inside = power_min * 50 * accuracy_boost + 1;
+        const int npts_r_outside = zero_outside_Rvir ? 0 : int(power_max * std::log10(2.0) * 50 * accuracy_boost) + 2;
+        const auto r_inside = make_r_array(rmin, Rvir, npts_r_inside);
+        const double dlogr_inside = std::log(Rvir / rmin) / (npts_r_inside - 1);
+        const auto r_outside = zero_outside_Rvir ? DVector{} : make_r_array(Rvir, rmax, npts_r_outside);
+        const double dlogr_outside = zero_outside_Rvir ? 0.0 : std::log(rmax / Rvir) / (npts_r_outside - 1);
+
+        // rho_function(r, M) is 4 pi r^3 rho / M, i.e. the integrand in dlog r of int 4 pi r^2 rho j0(kr) dr / M
+        DVector rho_inside(r_inside.size()), rho_outside(r_outside.size());
+        for(size_t i = 0; i < r_inside.size(); i++)
+          rho_inside[i] = rho_function(r_inside[i], M);
+        for(size_t i = 0; i < r_outside.size(); i++)
+          rho_outside[i] = rho_function(r_outside[i], M);
+        // The value just inside Rvir (the profile can jump to zero at Rvir)
+        rho_inside.back() = rho_function(Rvir * (1.0 - 1e-12), M);
+
+        auto trapezoid = [](const DVector & r_array, const DVector & rho_array, double dlogr, double k){
+          double integral = 0.0;
+          for(size_t i = 0; i < r_array.size(); i++){
+            const double kr = k * r_array[i];
+            const double j0 = kr < 1e-6 ? 1.0 - kr * kr / 6.0 : std::sin(kr) / kr;
+            const double weight = (i == 0 or i + 1 == r_array.size()) ? 0.5 : 1.0;
+            integral += weight * rho_array[i] * j0;
+          }
+          return integral * dlogr;
+        };
 
         DVector y_array;
         for(const auto k : k_array){
-
-          auto integrand = [&rho_function](double k, double r, double M){
-            return rho_function(r, M) * std::sin(k*r)/(k*r);
-          };
-
           // Integrate up to get the dimensionless y = rho(k,M)/M
-          double integral = 0.0;
-          for(const auto r : r_array){
-            integral += integrand(k, r, M);
-          }
-          integral *= (logr_array[1] - logr_array[0]);
+          double integral = trapezoid(r_inside, rho_inside, dlogr_inside, k);
+          if(not zero_outside_Rvir)
+            integral += trapezoid(r_outside, rho_outside, dlogr_outside, k);
           y_array.push_back(integral);
         }
 
@@ -329,15 +375,16 @@ namespace FML {
           const double OmegaM, 
           const double x,
           const DVector *fiducial_logR_array,
-          const DVector *fiducial_logk_array){
+          const DVector *fiducial_logk_array,
+          const std::function<double(double, double)> & fourier_of_k_and_M){
 
         int accuracy_boost = _ACCURACY_BOOST;
 
         //================================================
-        // k array
+        // k array (before 75 points for 16 decades: up to 3.5% errors in P(k) at k > 10 h/Mpc)
         //================================================
         const double kmin = 1e-8, kmax = 1e8;
-        const int npts_k = 75 * accuracy_boost;
+        const int npts_k = 400 * accuracy_boost;
         auto logk_array = FML::MATH::linspace(std::log(kmin), std::log(kmax), npts_k);
         if(fiducial_logk_array != nullptr)
           logk_array = *fiducial_logk_array;
@@ -348,7 +395,7 @@ namespace FML {
         // R array
         //================================================
         const double Rmin = 1e-8, Rmax = 1e8;
-        const int npts_R = 75 * accuracy_boost;
+        const int npts_R = 400 * accuracy_boost;
         auto logR_array = FML::MATH::linspace(std::log(Rmin), std::log(Rmax), npts_R);
         if(fiducial_logR_array != nullptr)
           logR_array = *fiducial_logR_array;
@@ -363,8 +410,17 @@ namespace FML {
           const double R = R_array[i];
           const double M = MofR(R, OmegaM, x);
           const double Rvir = R / std::pow(DeltaVir,1.0/3.0);
-          const auto result = compute_rho_fourier_single(rho_function, k_array, M, Rvir);
-          yofkandM_array[i] = result;
+          if(fourier_of_k_and_M) {
+            // Analytic Fourier transform (normalized to y -> 1 for k -> 0 as below)
+            DVector y(k_array.size());
+            for(size_t j = 0; j < k_array.size(); j++)
+              y[j] = fourier_of_k_and_M(k_array[j], M);
+            const double norm = y[0];
+            for(auto & yy : y) yy /= norm;
+            yofkandM_array[i] = y;
+          } else {
+            yofkandM_array[i] = compute_rho_fourier_single(rho_function, k_array, M, Rvir);
+          }
         }
         y_of_logR_and_logk_spline = Spline2D(logR_array, logk_array, yofkandM_array, "y(logR,logk)");
       }
@@ -475,7 +531,8 @@ namespace FML {
         // nu array
         //================================================
         const double numin = 1e-10, numax = 10;
-        const int npts_nu = 200 * accuracy_boost;
+        // (200 points gave up to 1% errors at k = 20-100 h/Mpc)
+        const int npts_nu = 600 * accuracy_boost;
         const auto lognu_array = FML::MATH::linspace(std::log(numin),std::log(numax),npts_nu);
 
         //================================================
@@ -723,6 +780,7 @@ namespace FML {
               xini_spherical_collapse);
 
           sc.run_at_all_redshifts(
+              zmax_spherical_collapse,
               deltac_of_x_spline,
               DeltaVir_of_x_spline,
               xta_of_x_spline,
@@ -750,6 +808,10 @@ namespace FML {
       // with the correct data
       //=====================================================
       void HaloModel::compute_at_redshift(double zcollapse){
+        if(not hmcode and zcollapse > zmax_spherical_collapse * (1.0 + 1e-10))
+          throw std::runtime_error("[HaloModel::compute_at_redshift] z = " + std::to_string(zcollapse) +
+              " is larger than the largest redshift of the spherical collapse splines (zmax_spherical_collapse = " +
+              std::to_string(zmax_spherical_collapse) + "): increase it before init()");
         xcollapse = std::log(1.0/(1.0 + zcollapse));
 
         if(verbose){
@@ -838,15 +900,17 @@ namespace FML {
           hmcode_eta   = get_eta_hmcode(xcollapse);
           hmcode_alpha = get_alpha_hmcode();
         }
-        hmcode_cmin *= cofM_multiplier;
-        cofM_0 *= cofM_multiplier;
+        // The concentration parameters used (before hmcode_cmin and cofM_0 themselves were multiplied, so the
+        // multiplier was applied again on every call)
+        cmin_current = hmcode_cmin * cofM_multiplier;
+        cofM_0_current = cofM_0 * cofM_multiplier;
 
         if(verbose) {
           std::cout << "# f        = " << hmcode_f << "\n";
           std::cout << "# kstar    = " << hmcode_kstar << "\n";
           std::cout << "# eta      = " << hmcode_eta << "\n";
           std::cout << "# alpha    = " << hmcode_alpha << "\n";
-          std::cout << "# cmin     = " << hmcode_cmin << "\n";
+          std::cout << "# cmin     = " << cmin_current << "\n";
           std::cout << "# deltac   = " << deltac << "\n";
           std::cout << "# DeltaVir = " << DeltaVir << "\n";
         }
@@ -879,6 +943,10 @@ namespace FML {
         if(verbose){
           std::cout << "Computing fourier transform of rho\n";
         }
+        // The analytic Fourier transform for the (default) NFW profile
+        std::function<double(double,double)> fourier_of_k_and_M = nullptr;
+        if(const auto * nfw = halo_density_profile.target<NFWHaloDensityProfile>(); nfw and use_analytic_nfw_fourier)
+          fourier_of_k_and_M = [&, nfw](double k, double M){ return nfw->fourier(k, M, this); };
         timer.StartTiming("rho");
         compute_rho_fourier(
             rho_function,
@@ -887,7 +955,8 @@ namespace FML {
             OmegaM, 
             xcollapse,
             fiducial_logR_array.get(),
-            fiducial_logk_array.get());
+            fiducial_logk_array.get(),
+            fourier_of_k_and_M);
         timer.EndTiming("rho");
 
         //=====================================================
@@ -1000,13 +1069,14 @@ namespace FML {
       //=====================================================
       cofMFunction get_nfw_halo_mass_concentration_relation(){
         return [&](double M, HaloModel *hm){
+          // The parameters times cofM_multiplier (set in compute_at_redshift)
           if(hm->cofM_model == "Bullock2001"){
             const double zf = hm->formationredshift_of_logM_spline(std::log(M));
             const double z  = std::exp(-hm->xcollapse)-1;
-            return hm->hmcode_cmin * std::max(1.0, (1.0+zf)/(1+z) );
+            return hm->cmin_current * std::max(1.0, (1.0+zf)/(1+z) );
           }
           // Simple c = c0/(1+z) * (M/M0)^(-beta) power-law model
-          return hm->cofM_0 * std::pow(M / hm->cofM_M0, -hm->cofM_beta) * std::exp(hm->xcollapse);
+          return hm->cofM_0_current * std::pow(M / hm->cofM_M0, -hm->cofM_beta) * std::exp(hm->xcollapse);
         };
       }
 
@@ -1015,7 +1085,23 @@ namespace FML {
       // with option of applying the HMCode modifications
       //=====================================================
       RhoFunction get_nfw_halo_density_profile(){
-        return [&](double r, double M, HaloModel *hm){
+        return NFWHaloDensityProfile{};
+      }
+
+      double NFWHaloDensityProfile::fourier(double k, double M, HaloModel *hm) const {
+        // The Fourier transform of the NFW profile truncated at Rvir and normalized to M (e.g. Cooray & Sheth
+        // 2002 eq. 81) with the sine and cosine integrals Si and Ci
+        const double c = hm->halo_mass_concentration_relation(M,hm);
+        const double Rvir = RvirofM(M, hm->DeltaVir, hm->OmegaM, hm->xcollapse);
+        const double rs = Rvir / c;
+        const double ks = k * rs, kc = (1.0 + c) * ks;
+        if(k * Rvir < 1e-6) return 1.0;
+        const double norm = std::log(1 + c) - c/(1 + c);
+        return (std::sin(ks) * (gsl_sf_Si(kc) - gsl_sf_Si(ks)) - std::sin(c * ks) / kc +
+                std::cos(ks) * (gsl_sf_Ci(kc) - gsl_sf_Ci(ks))) / norm;
+      }
+
+      double NFWHaloDensityProfile::operator()(double r, double M, HaloModel *hm) const {
           const double DeltaVir = hm->DeltaVir;
           const double OmegaM = hm->OmegaM;
           const double x = hm->xcollapse;
@@ -1030,9 +1116,9 @@ namespace FML {
           // but not both. Currently we do this in the y-integral
 
           const double rs = Rvir / c;
-          if(r > Rvir) return 0.0;
+          // (a relative margin as Rvir from M might differ in the last digit from the Rvir the caller has)
+          if(r > Rvir * (1.0 + 1e-10)) return 0.0;
           return std::pow(r/rs, 3) / ( (r/rs) * (1 + r/rs) * (1 + r/rs) ) / (std::log(1 + c) - c/(1 + c));
-        };
       }
 
       void HaloModel::output_deltac(
@@ -1084,7 +1170,7 @@ namespace FML {
           int npts_M) const {
         const auto logM_array = FML::MATH::linspace(std::log(Mmin), std::log(Mmax), npts_M);;
         std::ofstream fp(filename);
-        fp << "#  M (Msun/h)    dlogndlogM      n (h/Mpc)^3      R (Mpc/h)    Rvir (Mpc/h)   nu  [z = " << std::to_string(std::exp(-xcollapse)-1) << "]\n";
+        fp << "#  M (Msun/h)    dn/dlnM (h/Mpc)^3      n(>M) (h/Mpc)^3      R (Mpc/h)    Rvir (Mpc/h)   nu  [z = " << std::to_string(std::exp(-xcollapse)-1) << "]\n";
         for(const auto logM : logM_array){
           const double M = std::exp(logM);
           const double R = RofM(M, this->OmegaM, xcollapse);
@@ -1112,6 +1198,12 @@ namespace FML {
           double kmin,
           double kmax,
           int npts_k) const {
+
+        // Outside [kmin_pofk, kmax_pofk] the splines are constant in Delta(k) (P ~ k^-3): wrong
+        if(kmin < kmin_pofk * (1.0 - 1e-10) or kmax > kmax_pofk * (1.0 + 1e-10))
+          throw std::runtime_error("[HaloModel::output_pofk] k-range [" + std::to_string(kmin) + ", " +
+              std::to_string(kmax) + "] is outside the computed range [kmin_pofk, kmax_pofk] = [" +
+              std::to_string(kmin_pofk) + ", " + std::to_string(kmax_pofk) + "]");
 
 #ifdef HMCODETESTING
         Spline logDeltaNL_of_logk_spline;

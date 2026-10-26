@@ -95,3 +95,4 @@ tests/test_survey
 tests/test_pofk
 tests/test_reconstruction
 tests/test_sphericalcollapse
+tests/test_halomodel

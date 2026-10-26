@@ -41,6 +41,13 @@ namespace FML {
       using HaloBiasFunction = std::function<double(double,HaloModel *hm)>;
       using WindowFunction = std::function<double(double)>;
 
+      // The NFW profile 4 pi r^3 rho(r,M) / M truncated at Rvir (the default profile; also has the analytic
+      // Fourier transform, used when this is the profile)
+      struct NFWHaloDensityProfile {
+        double operator()(double r, double M, HaloModel *hm) const;
+        double fourier(double k, double M, HaloModel *hm) const;
+      };
+
       // Fiducial functions (NFW profile, ST mass-function, ...)
       RhoFunction get_nfw_halo_density_profile();
       cofMFunction get_nfw_halo_mass_concentration_relation();
@@ -60,9 +67,16 @@ namespace FML {
       /// The cosmology/gravity model is specified through the spherical-collapse model. 
       /// This currently only handles scale-independent growth.
       //===========================================================
+      // A timer that can be copied (a copy starts with no timings)
+      struct CopyableTimer : public Timer {
+        CopyableTimer() = default;
+        CopyableTimer(const CopyableTimer &) : Timer() {}
+        CopyableTimer & operator=(const CopyableTimer &) { return *this; }
+      };
+
       class HaloModel {
         public:
-          Timer timer;
+          CopyableTimer timer;
           SphericalCollapseModel spcmodel;
           double OmegaM{};
           double fnu{};
@@ -110,6 +124,8 @@ namespace FML {
           std::string halo_profile = "NFW";
           std::string cofM_model = "Bullock2001";
           RhoFunction halo_density_profile = get_nfw_halo_density_profile();
+          // Use the analytic Fourier transform of the NFW profile (if halo_density_profile is the NFW profile)
+          bool use_analytic_nfw_fourier{true};
           cofMFunction halo_mass_concentration_relation = get_nfw_halo_mass_concentration_relation();
 
           //===========================================
@@ -132,12 +148,18 @@ namespace FML {
           double cofM_0    = 4.75;             // For non-Bullock c(M)
           double cofM_M0   = 1e14;             // For non-Bullock c(M)
           double cofM_beta = 0.13;             // For non-Bullock c(M)
+          // The concentration parameters used: hmcode_cmin and cofM_0 times cofM_multiplier (set in
+          // compute_at_redshift)
+          double cmin_current{};
+          double cofM_0_current{};
 
           //===========================================
           // Spherical collapse (accuracy)
           //===========================================
           double xini_spherical_collapse = std::log(1e-5);
           int npts_spherical_collapse = 1000;
+          // deltac(z), DeltaVir(z) from spherical collapse are computed for z <= zmax_spherical_collapse
+          double zmax_spherical_collapse = 10.0;
 
           //===========================================
           // For globally setting accuract parameters instead
@@ -311,7 +333,8 @@ namespace FML {
           const double OmegaM, 
           const double x,
           const DVector *fiducial_logR_array = nullptr,
-          const DVector *fiducial_logk_array = nullptr);
+          const DVector *fiducial_logk_array = nullptr,
+          const std::function<double(double, double)> & fourier_of_k_and_M = nullptr);
 
       void compute_lognu_of_logR(
           const double deltac, 

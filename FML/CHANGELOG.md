@@ -5,6 +5,25 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### HaloModel fixes
+- The NFW Fourier transform was integrated with equal weights across the jump of the profile at Rvir (first order,
+  0.4-2% errors that did not decrease with the accuracy setting) and tabulated on 75 x 75 nodes over 16 decades in R
+  and k (up to 3.5% in P(k) at k > 10 h/Mpc); the one/two-halo integrals used 200 points in nu (1% at k = 20-100).
+  Now the analytic transform for the (default) NFW profile (`use_analytic_nfw_fourier`, `NFWHaloDensityProfile`),
+  the trapezoidal rule up to Rvir for other profiles, 400 x 400 nodes and 600 points in nu. HMCode P(k) vs CAMB
+  (HMcode 2016) for z = 0-2: max error 0.11% for k <= 100 h/Mpc (was 1.7-2.9% at k > 10); vs the example's HMCode
+  output: 0.34% (was 1.6%). Without HMCode P(k) changes by up to -3.8% at k = 10-100 (z = 1), now converged to 0.1%.
+- M(R) used the physical mean density with a comoving R: halo masses were (1+z)^3 too large at z > 0 (n(M) wrong by
+  factors 7 to 7500 at z = 1, also the R, Rvir and nu columns of output_nofM and the power-law c(M)); P(k) unchanged.
+- cofM_multiplier was applied again on every compute_at_redshift call (cmin x1.5 per call). The values used are now
+  cmin_current and cofM_0_current.
+- Robustness: compute_at_redshift aborted at high z (the R where nu = 1 for neff out of range), z beyond the spherical
+  collapse splines (z > 10) silently used z = 10 (now an error; `zmax_spherical_collapse`), output_pofk beyond
+  [kmin_pofk, kmax_pofk] gave a wrong P(k) (now an error), read_pofk_file aborted in GSL on P(k) = 0 (now a clear
+  error) and estimated the end slopes outside the data range, a HaloModel could not be copied (the timer), and the
+  n(M) output header said dlogn/dlogM for dn/dlnM.
+- `tests/test_halomodel.cpp` (9 checks failed before and 2 did not compile).
+
 ### SphericalCollapse fixes
 - DeltaVir in curved models: the virial energy counted curvature as dark energy (OmegaDE = 1 - OmegaM(z)), -4.2%
   (z = 0) and -2.8% (z = 1) for OmegaM = 0.3, OmegaK = 0.7. The force of the smooth components is now taken from the
