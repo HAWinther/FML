@@ -5,6 +5,7 @@
 //   - (r, mu) counts with the observer at infinity: auto pairs symmetric in mu, = brute force folded in |mu|
 //   - the correlation function of uniform random points ~ 0 in 1D, 2D and 3D
 //   - extra quantities binned with the pairs, a pair at r just below rmax, multipoles (with one ell)
+//   - the survey correlation function (Landy-Szalay) of uniform points and its D1R2 counts
 //   - particles with default member initializers; the header in two translation units (test_paircount_odr.cpp)
 // Run with: make run (in this folder) or make test (from the top folder)
 //==========================================================
@@ -236,6 +237,29 @@ int main() {
         DVector r_array, pc, xi;
         RadialCorrelationFunctionBox<Particle<3>>(a.data(), 2, rmin, rmax, nb, r_array, pc, false, xi, false, false);
         check(found and pc.back() == 1.0, "a pair at r just below rmax goes in the last bin");
+    }
+
+    // Survey: uniform data and randoms (not periodic): Landy-Szalay xi ~ 0, and D1R2 = the box cross counts
+    {
+        auto data = make<3>(8000, true);
+        auto randoms = make<3>(40000, true);
+        DVector r_array, dd, dr, rd, rr, xi, observer{0.5, 0.5, 0.5};
+        RadialCorrelationFunctionSurvey<Particle<3>>(data.data(), data.size(), randoms.data(), randoms.size(),
+                                                     data.data(), data.size(), randoms.data(), randoms.size(), 0.02,
+                                                     0.1, 4, r_array, dd, dr, rd, rr, xi, observer, false, false, 0,
+                                                     empty_2D_array, empty_2D_array, empty_2D_array, empty_2D_array, {},
+                                                     "LS");
+        double mx = 0.0;
+        for (auto x : xi)
+            mx = std::max(mx, std::fabs(x));
+        check(mx < 0.05, "survey Landy-Szalay xi of uniform points ~ 0 (max |xi| = " + num(mx) + ")");
+        DVector pc, xib;
+        RadialCorrelationFunctionBox<Particle<3>, Particle<3>>(data.data(), data.size(), randoms.data(), randoms.size(),
+                                                               0.02, 0.1, 4, r_array, pc, true, xib, false, false);
+        double maxdiff = 0.0;
+        for (size_t i = 0; i < pc.size(); i++)
+            maxdiff = std::max(maxdiff, std::fabs(pc[i] - dr[i]) / pc[i]);
+        check(maxdiff < 1e-12 and rd == dr, "survey D1R2 = box cross pair counts (normalized), R1D2 = D1R2 for auto");
     }
 
 #ifdef USE_GSL

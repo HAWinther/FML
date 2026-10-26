@@ -5,6 +5,18 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### PairCounting: new counting engine
+- The box and survey correlation functions use a new engine (`PAIRCOUNTS::detail`): both catalogues on one grid
+  (cells of ~rmax/2, at least ~2 particles per cell), positions/weights sorted by cell in flat arrays, loops over pairs
+  of cells (neighbour offsets pruned by the cell-cell distance, the periodic shift per cell pair instead of per pair,
+  every auto pair once), the binning compiled in (no `std::function` per pair), cells distributed over the MPI tasks
+  by estimated cost (instead of slabs) and over the threads. The survey functions put every catalogue on the grid once
+  (instead of once per pair type) and take the estimator as a new last argument (default "LZ"; "LS" is an alias).
+  `GeneralPairCounter` (with `ParticlesInBoxes`) is unchanged.
+- The counts are identical to the fixed old code (all bins, auto/cross/(r,mu)/weights; the example gives the same
+  output). Speed with 2 threads, 3D: 1e6 points rmax 0.03 9.0 -> 1.9 s, rmax 0.01 1.4 -> 0.38 s; 2e5 points rmax 0.1
+  6.5 -> 2.2 s; (r, mu) with 20 mu bins 3.8x faster; survey with 1e5 data and 2e6 randoms 17.9 -> 6.1 s.
+
 ### PairCounting: fixes
 - Cross pairs of catalogues of very different size (e.g. data x many more randoms) missed pairs: the search in the
   finer grid started from the cell at the corner of the cell of the coarser grid. 200 x 200000 points with rmax 0.02:
