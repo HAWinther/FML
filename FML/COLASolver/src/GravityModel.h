@@ -376,10 +376,14 @@ class GravityModel {
         for (int i = 0; i < npts_logk; i++)
             logkoverH0_arr[i] = std::log(koverH0low) + std::log(koverH0high / koverH0low) * i / double(npts_logk);
 
-        // We can include solving for the massive neutrinos below
-        // However we need the CAMB data to set the IC so its no point
-        // but we leave this as an option (basically the equations in 1605.05283)
-        const bool solve_for_neutrinos = transferdata and scaledependent_growth and cosmo->get_fMNu() > 0.0;
+        // With the transfer functions the neutrino source in the 1LPT equation is exact: fnu T_nu(k,a) / T_cb(k,a)
+        // (source_factor_1LPT), and the initial growth rate is the CDM+baryon growth rate from the transfer functions.
+        // The alternative below (solve_for_neutrinos, a fluid approximation for the neutrinos with a free-streaming
+        // scale: the equations in 1605.05283) is kept for reference but not used: it overestimates the growth of
+        // delta_cb by up to 2% (z = 49 -> 0, 0.4 eV, k ~ 0.01-0.1 h/Mpc) compared with CAMB, while the exact source
+        // agrees with CAMB to 0.02% (k > 0.03 h/Mpc) and 0.1% (k = 0.01 h/Mpc)
+        const bool use_neutrino_transfer = transferdata and scaledependent_growth and cosmo->get_fMNu() > 0.0;
+        const bool solve_for_neutrinos = false;
 
         // A quite general set of LPT equations up to 3rd order
         auto solve_growth_equations = [&](double koverH0) -> std::tuple<DVector, DVector, DVector, DVector, DVector> {
@@ -462,8 +466,9 @@ class GravityModel {
 
             // To solve properly for massive neutrinos we need the transfer-functions
             // and growth rates at the initial redshift
-            if (solve_for_neutrinos and koverH0 > 0.0) {
+            if (use_neutrino_transfer and koverH0 > 0.0)
                 dD1dx_ini = D1_ini * transferdata->get_cdm_baryon_growth_rate(koverH0 * H0_hmpc, alow);
+            if (solve_for_neutrinos and koverH0 > 0.0) {
                 D1mnu_ini = D1_ini * transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, alow) /
                             transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, alow);
                 dD1mnu_ini = D1mnu_ini * transferdata->get_massive_neutrino_growth_rate(koverH0 * H0_hmpc, alow);

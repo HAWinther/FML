@@ -130,6 +130,9 @@ class NBodySimulation {
 
     /// COLA settings and the LPT potentials at the initial time
     ColaState<NDIM, T> cola;
+    // The initial velocities are already relative to the COLA frame (scale-dependent growth with scale-independent
+    // COLA: the residual 1LPT velocity (f(k) - f(0)) Psi), so they are not reset to zero
+    bool ic_velocities_relative_to_cola_frame{false};
 
     /// The lightcone construction
     std::shared_ptr<Lightcone<NDIM, T>> lightcone;
@@ -449,7 +452,7 @@ void NBodySimulation<NDIM, T>::init() {
 
     // In the COLA frame v=0 so reset velocities. With CDM and baryons as separate particles the initial conditions
     // already have the velocities relative to the shared COLA frame (the baryon-CDM relative velocity)
-    if (cola.enabled and not has_baryons()) {
+    if (cola.enabled and not has_baryons() and not ic_velocities_relative_to_cola_frame) {
         cola_initialize_velocities<NDIM, T>(part);
     }
 
@@ -690,6 +693,29 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
             std::cout << "# N-body gauge: growth rate at zini f(k) = " << growth_rate_of_logk(std::log(kmin)) << " (k = "
                       << kmin << " h/Mpc), " << growth_rate_of_logk(std::log(0.1)) << " (k = 0.1 h/Mpc). "
                       << "Scale-independent value " << grav_ic->get_f_1LPT(aini) << "\n";
+    }
+
+    // Scale-dependent growth (massive neutrinos with the transfer functions, modified gravity): the 1LPT velocity
+    // is f(k, zini) Psi (the growth rate at k = 0 for all k overestimated the velocity: for 0.4 eV neutrinos
+    // f = 0.998 instead of f_cb = 0.976 for k >> k_fs, which gave +1.7% in P_cb(z = 0) on linear scales). With
+    // scale-dependent COLA the COLA frame already has this velocity; with scale-independent COLA it has f(k = 0) Psi
+    // and the particles get the residual (f(k) - f(0)) Psi
+    if (not params.force.nbody_gauge and grav_ic->is_growth_scaledependent() and
+        not(cola.enabled and cola.scaledependent)) {
+        const double f0 = cola.enabled ? grav->get_f_1LPT(aini) : 0.0;
+        velocity_norm_1LPT_of_kBox = [&, f0](double kBox) {
+            return fac * (grav_ic->get_f_1LPT(aini, kBox / boxsize / grav_ic->H0_hmpc) - f0);
+        };
+        if (cola.enabled) {
+            ic_velocities_relative_to_cola_frame = true;
+            for (auto & v : velocity_norms)
+                v = 0.0;
+        }
+        if (FML::ThisTask == 0)
+            std::cout << "# Scale-dependent growth rate at zini f(k) = " << grav_ic->get_f_1LPT(aini, 0.01 / grav_ic->H0_hmpc)
+                      << " (k = 0.01 h/Mpc), " << grav_ic->get_f_1LPT(aini, 0.1 / grav_ic->H0_hmpc)
+                      << " (k = 0.1 h/Mpc), " << grav_ic->get_f_1LPT(aini, 1.0 / grav_ic->H0_hmpc)
+                      << " (k = 1 h/Mpc). Scale-independent value " << grav_ic->get_f_1LPT(aini) << "\n";
     }
 
     FML::NBODY::NBodyInitialConditions<NDIM, T>(part,

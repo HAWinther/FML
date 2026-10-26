@@ -5,6 +5,27 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLASolver: linear growth with massive neutrinos
+- The scale-dependent LPT growth factors (used by scale-dependent COLA and for the `Pcb_linear` column of the P(k)
+  output) evolved the neutrinos with a fluid approximation with a free-streaming scale: for 0.4 eV the growth of
+  delta_cb from z = 49 to 0 was 2% too large at k = 0.01-0.1 h/Mpc (4% in P(k)) compared with CAMB. They now use the
+  neutrino transfer functions directly in the source (fnu T_nu(k,a) / T_cb(k,a)) and the CAMB growth rate at the
+  start of the integration; the growth agrees with CAMB to 1e-4. (A Newtonian integration with the CAMB background,
+  initial conditions and neutrino source reproduces CAMB to 1e-4, so linear neutrinos in the force are exact.)
+- The initial 1LPT velocities used the growth rate at k = 0 for all k (0.998 at z = 49 for 0.4 eV, where neutrinos
+  cluster) instead of f(k, zini) (0.976 for k above the free-streaming scale): +1.7% in P_cb(z = 0) on linear scales
+  for runs without scale-dependent COLA. With scale-dependent growth (massive neutrinos with transfer functions, or
+  modified gravity) the velocities now use f(k, zini); with scale-independent COLA the particles get the residual
+  (f(k) - f(0)) Psi relative to the COLA frame.
+- 64^3 particles in 256 Mpc/h, 0.4 eV linear neutrinos at linear amplitude, growth z = 49 -> 0 vs CAMB at k = 0.03
+  h/Mpc: scale-dependent COLA +4.0% -> -0.1%, PM (Quinn) +1.5% -> -0.2%, scale-independent COLA +2.2% -> +0.9% with
+  10 + 10 steps (0.0% with 100 + 100 steps). (Round 35 reported -2.5% / -1.9% / -0.1%: that comparison used the
+  `Pcb_linear` column, which had the error above.) All methods still fall below linear theory at k > 0.1 h/Mpc (-3%
+  at 0.125, -20% at 0.37), unchanged with a 2x finer force grid: particle discreteness of the 64^3 lattice.
+- Regression: the neutrino cases change by -1% (PM, particle neutrinos), -3.3% to -0.7% (two species,
+  scale-dependent COLA, k = 0.03-0.1) and +0.1% (scale-dependent COLA, linear neutrinos) in P(k), and the
+  `D1mnu` columns of the gravitymodel output (now T_nu(k,a) / T_cb(k,zini)); f(R) and mu(a,k) cases change by < 1e-5.
+
 ### MultigridSolver: DGP error handling, symmetron tests, examples
 - `DGPSolverCosmology`: a negative discriminant threw an exception inside the OpenMP loop (the program terminated
   without unwinding). It is now set to zero while iterating and the converged solution is checked: the run stops with
