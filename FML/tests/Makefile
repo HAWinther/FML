@@ -10,7 +10,7 @@ USE_OMP             ?= true
 USE_FFTW            ?= true
 USE_GSL             ?= true
 
-TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey
+TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk
 
 include ../Makefile.config
 
@@ -57,6 +57,15 @@ endif
 test_fnl: $(FNL_OBJS)
 	$(LINK_EXE)
 
+# ComputePowerSpectrum.h includes the LPT and cosmology helpers (splines and the ODE solver with GSL)
+POFK_OBJS = test_pofk.o test_pofk_odr.o Global.o
+ifeq ($(USE_GSL),true)
+POFK_OBJS += Spline.o ODESolver.o
+endif
+
+test_pofk: $(POFK_OBJS)
+	$(LINK_EXE)
+
 MPIRUN  ?= mpirun
 NP_LIST ?= 1 2 4
 
@@ -71,7 +80,7 @@ endif
 
 # Each run must pass; the two "must abort" runs must fail with the expected message
 .PHONY: run
-run: test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey
+run: test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk
 	@set -e; for np in $(NP_LIST); do \
 	  echo "== Running test_core with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_core; \
@@ -89,6 +98,8 @@ run: test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_pairco
 	  OMP_NUM_THREADS=2 $(RUN) ./test_paircount; \
 	  echo "== Running test_survey with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_survey; \
+	  echo "== Running test_pofk with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_pofk; \
 	done
 	@echo "== Checking that bad input aborts with a clear message"
 	@! $(RUN1) ./test_core alloc > alloc.log 2>&1 && grep -q "Reached allocation limit" alloc.log && echo "[PASS] allocation limit aborts"

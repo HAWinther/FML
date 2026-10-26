@@ -86,6 +86,9 @@ namespace FML {
 
         template <int N>
         class FFTWGrid {
+            // The slab layout (slices of Nmesh^(N-2) * (Nmesh/2+1) complex cells) needs N >= 2
+            static_assert(N >= 2, "FFTWGrid: only N >= 2 dimensions are supported");
+
           private:
             // Index for local cells. Using long long int as standard
             using IndexIntType = FML::IndexIntType;

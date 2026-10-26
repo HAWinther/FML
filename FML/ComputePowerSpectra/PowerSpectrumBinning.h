@@ -223,16 +223,16 @@ namespace FML {
             }
         }
 
-        // This method can return values out of bounds
+        // This method can return values out of bounds (-1 for k below the first bin: floor, not truncation towards 0)
         template <int N>
         int PowerSpectrumBinning<N>::get_bin_index(double kvalue, double kmin, double kmax, int n, int bin_type) {
             int index = -1;
             if (bin_type == LINEAR_SPACING) {
-                index = int((kvalue - kmin) / (kmax - kmin) * (n - 1) + 0.5);
+                index = int(std::floor((kvalue - kmin) / (kmax - kmin) * (n - 1) + 0.5));
             } else if (bin_type == LOG_SPACING) {
                 if (kvalue <= 0.0)
                     return -1;
-                index = int(std::log(kvalue / kmin) / std::log(kmax / kmin) * (n - 1) + 0.5);
+                index = int(std::floor(std::log(kvalue / kmin) / std::log(kmax / kmin) * (n - 1) + 0.5));
             } else {
                 assert_mpi(false, "[PowerSpectrumBinning::get_bin_index] Unknown binning type\n");
             }

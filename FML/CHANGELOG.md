@@ -5,6 +5,29 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### ComputePowerSpectra fixes
+- Shot noise for particles with masses or delta-f weights: P(k), the multipoles and the mono-/bispectrum subtracted
+  1/N, now sum m^2/(sum m)^2 (sum w^2/N^2 for delta-f weights) and for the bispectrum S2 (P1 + P2 + P3) + S3 with
+  S3 = sum m^3/(sum m)^3 (new helper `particle_shotnoise`). Unchanged for equal-mass particles. Masses uniform in
+  [0.2, 3]: 1/N left +20% of the shot noise in P(k); delta-f weights uniform in [-1, 1]: -200%.
+- Bispectrum: the bins with fewer than (2pi)^3 ~ 248 triangles were set to zero (the threshold of 1 triangle was
+  applied to the count times the measure 1/(2pi)^3). The bin counts now match a brute-force count of the triangles
+  (also 14 small bins of the test). COLASolver bispectrum output changes for those bins (they had B = 0).
+- NGP with interlacing on one MPI task lost the particles in the last half cell (the shifted particles were put in
+  an extra slice that is only folded back with several tasks): mean density contrast -0.06 in the test.
+- Multipoles from a Fourier grid: without OpenMP the mode counts were multiplied by the number of MPI tasks (summed
+  over the tasks twice).
+- The P(k) bin index truncated towards 0, so k up to a full bin below the first bin was put in the first bin; now -1.
+- PolyspectrumBinning: the binning type passed to the constructor was not stored (always linear in the member),
+  `reset()` did not clear `bincount_is_set` (a later estimate used the zeroed N123), at least 2 bins are required,
+  and the reduced spectrum of an empty bin is 0 (was NaN).
+- `compute_LPT_growth_factors_*` in DisplacementFields.h are inline (ComputePowerSpectrum.h could not be included in
+  two translation units), the declaration and definition of the direct summation agree (`const T *`),
+  `FML::power` returns 0 for a negative exponent instead of recursing forever, and `FFTWGrid<1>` (which crashed in
+  the constructor) is a compile-time error.
+- `tests/test_pofk.cpp` checks all of these against brute force (10 checks failed before). COLASolver output is
+  unchanged (regression: 1168 files identical).
+
 ### Survey: GalaxiesToBox fixes
 - `GalaxiesRandomsToBox` with `shiftPositions` added the minimum instead of subtracting it: for a survey not in the
   first octant the points ended up outside [0,1). `GalaxiesToBox` shifted (and scaled) the observer once per galaxy

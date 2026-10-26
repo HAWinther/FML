@@ -583,6 +583,11 @@ namespace FML {
 
                 // Periodic BC
                 ix[0] -= int(Local_x_start);
+                // NGP uses the cell ix directly: with one task (no extra slices to fold back) wrap x too (e.g. the
+                // half-cell shifted particles for interlacing have x up to 1 + 1/(2Nmesh))
+                if constexpr (ORDER == 1)
+                    if (FML::NTasks == 1 and ix[0] >= Nmesh)
+                        ix[0] -= Nmesh;
                 for (int idim = 1; idim < N; idim++) {
                     if (ix[idim] == Nmesh)
                         ix[idim] = 0;

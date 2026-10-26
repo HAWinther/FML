@@ -1190,7 +1190,7 @@ namespace FML {
             /// @param[out] D_3LPTb_of_loga Spline of the 3LPTa growth factor
             ///
             //=================================================================================
-            void compute_LPT_growth_factors_GeffGLCDM(double OmegaM,
+            inline void compute_LPT_growth_factors_GeffGLCDM(double OmegaM,
                                                       double zini,
                                                       std::function<double(double)> HoverH0_of_a,
                                                       std::function<double(double)> GeffOverG_of_a,
@@ -1300,7 +1300,7 @@ namespace FML {
             /// @param[out] D_3LPTb_of_loga Spline of the 3LPTa growth factor
             ///
             //=================================================================================
-            void compute_LPT_growth_factors_LCDM(double OmegaM,
+            inline void compute_LPT_growth_factors_LCDM(double OmegaM,
                                                  double zini,
                                                  std::function<double(double)> HoverH0_of_a,
                                                  FML::INTERPOLATION::SPLINE::Spline & D_1LPT_of_loga,

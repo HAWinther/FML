@@ -268,10 +268,11 @@ namespace FML {
 #define assert_mpi(Expr, Msg) assert_mpi_impl(#Expr, Expr, __FILE__, __LINE__, Msg)
 
     //============================================
-    /// Simple integer a^b power-function by squaring
+    /// Simple integer a^b power-function by squaring (b >= 0; returns 0 for b < 0 instead of recursing forever)
     //============================================
     constexpr long long int power(int base, int exponent) {
-        return exponent == 0 ?
+        return exponent < 0  ? 0 :
+               exponent == 0 ?
                    1 :
                    (exponent % 2 == 0 ?
                         power(base, exponent / 2) * power(base, exponent / 2) :

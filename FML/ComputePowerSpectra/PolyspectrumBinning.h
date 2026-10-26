@@ -114,6 +114,8 @@ namespace FML {
 
         template <int N, int ORDER>
         PolyspectrumBinning<N, ORDER>::PolyspectrumBinning(double _kmin, double _kmax, int nbins, int bin_type) {
+            assert_mpi(nbins >= 2, "[PolyspectrumBinning] We need at least 2 bins");
+            this->bin_type = bin_type;
             n = nbins;
             kmin = _kmin;
             kmax = _kmax;
@@ -228,6 +230,8 @@ namespace FML {
             std::fill(pofk.begin(), pofk.end(), 0.0);
             std::fill(kmean.begin(), kmean.end(), 0.0);
             nbinnings = 0;
+            // N123 is zeroed so it must be computed again
+            bincount_is_set = false;
         }
 
         template <int N, int ORDER>
@@ -320,6 +324,9 @@ namespace FML {
         template <int N, int ORDER>
         double PolyspectrumBinning<N, ORDER>::get_reduced_spectrum(const std::array<int, ORDER> & ik) {
             const double P = get_spectrum(ik);
+            // An empty bin (or a configuration that is not a triangle) has P = 0 and maybe zero power below
+            if (P == 0.0)
+                return 0.0;
             std::vector<double> pi(ORDER);
 
             for (int i = 0; i < ORDER; i++)

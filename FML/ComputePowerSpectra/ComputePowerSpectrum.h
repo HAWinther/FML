@@ -485,15 +485,7 @@ namespace FML {
                 }
             }
 
-#ifdef USE_MPI
-            for (size_t ell = 0; ell < Pell.size(); ell++) {
-                MPI_Allreduce(MPI_IN_PLACE, Pell[ell].pofk.data(), Pell[ell].n, MPI_DOUBLE, MPI_SUM, FML::communicator);
-                MPI_Allreduce(MPI_IN_PLACE, Pell[ell].count.data(), Pell[ell].n, MPI_DOUBLE, MPI_SUM, FML::communicator);
-                MPI_Allreduce(MPI_IN_PLACE, Pell[ell].kbin.data(), Pell[ell].n, MPI_DOUBLE, MPI_SUM, FML::communicator);
-            }
-#endif
-
-            // Normalize
+            // Normalize (sums over the threads and the MPI tasks)
             for (size_t ell = 0; ell < Pell.size(); ell++)
                 Pell[ell].normalize();
 
@@ -757,10 +749,44 @@ namespace FML {
         }
 
         // Brute force. Add particles to the grid using direct summation
+        //================================================================================
+        /// @brief The shot noise of the density field of a set of particles as assigned by particles_to_grid:
+        /// returns \f$ (S_2, S_3) \f$ with \f$ S_n = \sum m_i^n / (\sum m_i)^n \f$ (the shot noise of the
+        /// power spectrum is \f$ S_2 \f$ and the constant term of the bispectrum \f$ S_3 \f$). For equal masses
+        /// this is \f$ (1/N, 1/N^2) \f$. For particles with get_mass the masses are used and for delta-f particles
+        /// (get_deltaf_weight) \f$ S_n = \sum w_i^n / N^n \f$. Sums over the MPI tasks.
+        //================================================================================
+        template <class T>
+        std::pair<double, double> particle_shotnoise(const T * part, size_t NumPart, size_t NumPartTotal) {
+            const double n = double(NumPartTotal);
+            constexpr bool has_deltaf_weight = FML::PARTICLE::has_get_deltaf_weight<T>();
+            constexpr bool has_mass = FML::PARTICLE::has_get_mass<T>() and not has_deltaf_weight;
+            if constexpr (has_mass or has_deltaf_weight) {
+                double sum1 = 0.0, sum2 = 0.0, sum3 = 0.0;
+                for (size_t i = 0; i < NumPart; i++) {
+                    double m;
+                    if constexpr (has_deltaf_weight)
+                        m = FML::PARTICLE::GetDeltafWeight(const_cast<T &>(part[i]));
+                    else
+                        m = FML::PARTICLE::GetMass(const_cast<T &>(part[i]));
+                    sum1 += m;
+                    sum2 += m * m;
+                    sum3 += m * m * m;
+                }
+                FML::SumOverTasks(&sum1);
+                FML::SumOverTasks(&sum2);
+                FML::SumOverTasks(&sum3);
+                // delta = sum_i w_i W / (N/Nmesh^N) for delta-f particles, sum_i m_i W / (sum m/Nmesh^N) otherwise
+                const double norm = has_deltaf_weight ? n : sum1;
+                return {sum2 / (norm * norm), sum3 / (norm * norm * norm)};
+            }
+            return {1.0 / n, 1.0 / (n * n)};
+        }
+
         // This gives alias free P(k), but scales as O(Npart)*O(Nmesh^N)
         template <int N, class T>
         void
-        compute_power_spectrum_direct_summation(int Ngrid, T * part, size_t NumPart, PowerSpectrumBinning<N> & pofk) {
+        compute_power_spectrum_direct_summation(int Ngrid, const T * part, size_t NumPart, PowerSpectrumBinning<N> & pofk) {
 
             static_assert(
                 FML::PARTICLE::has_get_pos<T>(),
@@ -772,7 +798,7 @@ namespace FML {
                 FML::MinOverTasks(&tmp1);
                 long long int tmp2 = NumPart;
                 FML::MaxOverTasks(&tmp2);
-                double x = FML::PARTICLE::GetPos(part[0])[0];
+                double x = FML::PARTICLE::GetPos(const_cast<T &>(part[0]))[0];
                 double y = x;
                 FML::MaxOverTasks(&x);
                 FML::MinOverTasks(&y);
@@ -801,7 +827,7 @@ namespace FML {
 #pragma omp parallel for reduction(+ : real, imag)
 #endif
                 for (size_t i = 0; i < NumPart; i++) {
-                    auto * x = FML::PARTICLE::GetPos(part[i]);
+                    const auto * x = FML::PARTICLE::GetPos(const_cast<T &>(part[i]));
                     FML::GRID::FloatType kx = 0.0;
                     for (int idim = 0; idim < N; idim++) {
                         kx += kvec[idim] * x[idim];
@@ -936,10 +962,13 @@ namespace FML {
             // XXX Compute variance of pofk
 
             // Subtract shotnoise for monopole
-            if (Pell[0].subtract_shotnoise)
+            if (Pell[0].subtract_shotnoise) {
+                const double shotnoise =
+                    particle_shotnoise(part.get_particles_ptr(), part.get_npart(), part.get_npart_total()).first;
                 for (int i = 0; i < Pell[0].n; i++) {
-                    Pell[0].pofk[i] -= 1.0 / double(part.get_npart_total());
+                    Pell[0].pofk[i] -= shotnoise;
                 }
+            }
         }
 
         //================================================================================
@@ -983,10 +1012,12 @@ namespace FML {
             bin_up_power_spectrum<N>(density_k, pofk);
 
             // Subtract shotnoise
-            if (pofk.subtract_shotnoise)
+            if (pofk.subtract_shotnoise) {
+                const double shotnoise = particle_shotnoise(part, NumPart, NumPartTotal).first;
                 for (int i = 0; i < pofk.n; i++) {
-                    pofk.pofk[i] -= 1.0 / double(NumPartTotal);
+                    pofk.pofk[i] -= shotnoise;
                 }
+            }
         }
 
         // https://arxiv.org/pdf/1506.02729.pdf
@@ -1163,30 +1194,32 @@ namespace FML {
             // Subtract shotnoise if ORDER = 2 or 3
             if constexpr (ORDER == 2) {
                 // Subtract shot-noise (along the diagonal)
-                const double n = double(NumPartTotal);
-                if (polyofk.subtract_shotnoise)
+                if (polyofk.subtract_shotnoise) {
+                    const double shotnoise = particle_shotnoise(part, NumPart, NumPartTotal).first;
                     for (int i = 0; i < polyofk.n; i++) {
-                        polyofk.pofk[i] -= 1.0 / n;
+                        polyofk.pofk[i] -= shotnoise;
                         std::array<int, 2> ik{i, i};
                         auto index = polyofk.get_index_from_coord(ik);
                         if (polyofk.N123[index] > 0.0)
-                            polyofk.P123[index] -= 1.0 / n;
+                            polyofk.P123[index] -= shotnoise;
                     }
+                }
             } else if constexpr (ORDER == 3) {
                 // Subtract shot-noise for both P(k) and B(k1,k2,k3)
-                const double n = double(NumPartTotal);
                 if (polyofk.subtract_shotnoise) {
+                    // S2 = 1/n and S3 = 1/n^2 for equal masses (sum m^2/(sum m)^2 and sum m^3/(sum m)^3 otherwise)
+                    const auto [S2, S3] = particle_shotnoise(part, NumPart, NumPartTotal);
                     for (int i = 0; i < polyofk.n; i++) {
-                        polyofk.pofk[i] -= 1.0 / n;
+                        polyofk.pofk[i] -= S2;
                     }
-                    // For Poisson sampling <d1 d2 d3> = B + (P1 + P2 + P3) / n + 1 / n^2 with P the shot noise
+                    // For Poisson sampling <d1 d2 d3> = B + (P1 + P2 + P3) S2 + S3 with P the shot noise
                     // subtracted power spectrum (which pofk is now)
                     for (size_t i = 0; i < polyofk.P123.size(); i++) {
                         if (polyofk.N123[i] <= 0.0)
                             continue;
                         auto ik = polyofk.get_coord_from_index(i);
                         polyofk.P123[i] -=
-                            1.0 / n * (polyofk.pofk[ik[0]] + polyofk.pofk[ik[1]] + polyofk.pofk[ik[2]]) + 1.0 / (n * n);
+                            S2 * (polyofk.pofk[ik[0]] + polyofk.pofk[ik[1]] + polyofk.pofk[ik[2]]) + S3;
                     }
                 }
             }
@@ -1299,8 +1332,8 @@ namespace FML {
                 N123[i] = N123_current * norm;
 
                 // We cannot have less than 1 generalized triangle so put to zero if small
-                // due to numerical noise
-                if (N123[i] < 1.0)
+                // due to numerical noise. The number of triangles is N123 * (2pi)^N (N123 includes the measure)
+                if (N123[i] * std::pow(2.0 * M_PI, N) < 0.5)
                     N123[i] = 0.0;
             }
 
