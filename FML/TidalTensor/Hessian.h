@@ -1,6 +1,9 @@
 #ifndef HESSIAN_HEADER
 #define HESSIAN_HEADER
 
+#include <algorithm>
+#include <cmath>
+#include <functional>
 #include <vector>
 
 #include <gsl/gsl_eigen.h>
@@ -24,6 +27,8 @@ namespace FML {
         /// the order fxx fxy ... fyy fyz ... etc. in hessian_real
         /// In 2D: [fxx fxy fyy]
         /// In 3D: [fxx fxy fxz fyy fyz fzz]
+        /// The mixed derivatives (i != j) of the Nyquist modes (k_i or k_j at the Nyquist frequency) are set to zero
+        /// (the derivative of the Nyquist mode is not defined on the grid; e.g. f = (-1)^ix g(z) has f_xz = 0)
         ///
         /// @tparam N The dimension we are working in
         ///
@@ -50,6 +55,8 @@ namespace FML {
 
                 auto Local_nx = grid.get_local_nx();
                 auto Local_x_start = grid.get_local_x_start();
+                // The Nyquist frequency 2pi * Nmesh/2 (with a margin for rounding)
+                const double knyquist = M_PI * grid.get_nmesh() * (1.0 - 1e-10);
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -61,6 +68,12 @@ namespace FML {
                           continue; // DC mode (k=0)
 
                         grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+
+                        // The mixed derivatives of the Nyquist modes are zero
+                        if (i1 != i2 and (std::fabs(kvec[i1]) >= knyquist or std::fabs(kvec[i2]) >= knyquist)) {
+                            grid.set_fourier_from_index(fourier_index, 0.0);
+                            continue;
+                        }
 
                         // From f(k) -> -ika ikb f(k) / k^2 = (ka kb / k^2) f(k)
                         auto value = grid.get_fourier_from_index(fourier_index);
@@ -86,7 +99,7 @@ namespace FML {
             f_fourier.fftw_r2c();
 
             // Allocate grids
-            hessian_real.resize(N * (N - 1));
+            hessian_real.resize(N * (N + 1) / 2);
 
             // Compute hessian matrix
             int count = 0;
@@ -101,11 +114,12 @@ namespace FML {
 
         //=================================================================================
         /// For each point in the grid compute eigenvectors and eigenvalues of the tensor
-        /// \f$ H_{ij} \f$ where tensor_real contains the \f$ N(N-1)/2 \f$ grids [ 00,01,02,..,11,12,...,NN ]
+        /// \f$ H_{ij} \f$ where tensor_real contains the \f$ N(N+1)/2 \f$ grids [ 00,01,02,..,11,12,...,NN ]
         ///
         /// Eigenvalues are ordered in descending order
         ///
-        /// Eigenvectors are stored in row major order in the grid vector
+        /// Eigenvectors: component i of the eigenvector of eigenvalue k (eigenvalues[k]) is eigenvectors[i * N + k]
+        /// (the eigenvectors are the columns of the row-major N x N matrix, as in GSL)
         ///
         /// This allocates N grids if compute_eigenvectors = false and N(N+1) grids otherwise
         ///
@@ -137,13 +151,6 @@ namespace FML {
                     eigenvectors[i] = tensor_real[0];
             }
 
-            // Set up the GSL stuff we need
-            gsl_matrix * matrix = gsl_matrix_alloc(N, N);
-            gsl_matrix * evec = gsl_matrix_alloc(N, N);
-            gsl_vector * eval = gsl_vector_alloc(N);
-            gsl_eigen_symm_workspace * workspace = gsl_eigen_symm_alloc(N);
-            gsl_eigen_symmv_workspace * workspacev = gsl_eigen_symmv_alloc(N);
-
             // Solves the full eigensystem
             auto SolveEigensystem = [&](gsl_matrix * _matrix,
                                         gsl_vector * _eval,
@@ -164,55 +171,65 @@ namespace FML {
                     std::sort(_eval->data, _eval->data + _matrix->size1, std::greater<double>());
                 };
 
-            // Loop over all cells
+            // Loop over all cells. Each thread has its own GSL matrices and workspaces
             auto Local_nx = tensor_real[0].get_local_nx();
 #ifdef USE_OMP
-#pragma omp parallel for
+#pragma omp parallel
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
-                for (auto && real_index : tensor_real[0].get_real_range(islice,islice+1)) {
+            {
+                gsl_matrix * matrix = gsl_matrix_alloc(N, N);
+                gsl_matrix * evec = gsl_matrix_alloc(N, N);
+                gsl_vector * eval = gsl_vector_alloc(N);
+                gsl_eigen_symm_workspace * workspace = gsl_eigen_symm_alloc(N);
+                gsl_eigen_symmv_workspace * workspacev = gsl_eigen_symmv_alloc(N);
+#ifdef USE_OMP
+#pragma omp for
+#endif
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && real_index : tensor_real[0].get_real_range(islice,islice+1)) {
 
-                    // Set the matrix
-                    int count = 0;
-                    for (int idim = 0; idim < N; idim++) {
-                        auto value = tensor_real[count].get_real_from_index(real_index);
-                        gsl_matrix_set(matrix, idim, idim, value);
-                        count++;
-                        for (int idim2 = idim + 1; idim2 < N; idim2++) {
-                            value = tensor_real[count].get_real_from_index(real_index);
-                            gsl_matrix_set(matrix, idim, idim2, value);
-                            gsl_matrix_set(matrix, idim2, idim, value);
+                        // Set the matrix
+                        int count = 0;
+                        for (int idim = 0; idim < N; idim++) {
+                            auto value = tensor_real[count].get_real_from_index(real_index);
+                            gsl_matrix_set(matrix, idim, idim, value);
                             count++;
-                        }
-                    }
-
-                    // Compute eigenvectors+eigenvalues or just eigenvalues
-                    // In the latter case we sort the eigenvalues
-                    if (compute_eigenvectors) {
-                        SolveEigensystem(matrix, eval, evec, workspacev);
-
-                        // Set eigenvectors
-                        for (int i = 0; i < N * N; i++) {
-                            eigenvectors[i].set_real_from_index(real_index, evec->data[i]);
-                            // For column major order: gsl_matrix_get(evec, i / N, i % N);
+                            for (int idim2 = idim + 1; idim2 < N; idim2++) {
+                                value = tensor_real[count].get_real_from_index(real_index);
+                                gsl_matrix_set(matrix, idim, idim2, value);
+                                gsl_matrix_set(matrix, idim2, idim, value);
+                                count++;
+                            }
                         }
 
-                    } else {
-                        SolveEigenvalues(matrix, eval, workspace);
-                    }
+                        // Compute eigenvectors+eigenvalues or just eigenvalues
+                        // In the latter case we sort the eigenvalues
+                        if (compute_eigenvectors) {
+                            SolveEigensystem(matrix, eval, evec, workspacev);
 
-                    // Store the eigenvalues
-                    for (int idim = 0; idim < N; idim++)
-                        eigenvalues[idim].set_real_from_index(real_index, eval->data[idim]);
+                            // Set eigenvectors
+                            for (int i = 0; i < N * N; i++) {
+                                eigenvectors[i].set_real_from_index(real_index, evec->data[i]);
+                                // For column major order: gsl_matrix_get(evec, i / N, i % N);
+                            }
+
+                        } else {
+                            SolveEigenvalues(matrix, eval, workspace);
+                        }
+
+                        // Store the eigenvalues
+                        for (int idim = 0; idim < N; idim++)
+                            eigenvalues[idim].set_real_from_index(real_index, eval->data[idim]);
+                    }
                 }
-            }
 
-            // Free up GSL allocations
-            gsl_matrix_free(matrix);
-            gsl_matrix_free(evec);
-            gsl_vector_free(eval);
-            gsl_eigen_symm_free(workspace);
-            gsl_eigen_symmv_free(workspacev);
+                // Free up GSL allocations
+                gsl_matrix_free(matrix);
+                gsl_matrix_free(evec);
+                gsl_vector_free(eval);
+                gsl_eigen_symm_free(workspace);
+                gsl_eigen_symmv_free(workspacev);
+            }
         }
 
     } // namespace HESSIAN

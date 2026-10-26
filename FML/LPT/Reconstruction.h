@@ -26,6 +26,16 @@ namespace FML {
             using MPIParticles = FML::PARTICLE::MPIParticles<T>;
             using FloatType = FML::GRID::FloatType;
 
+            namespace detail {
+                /// Helper particle for RSDReconstructionFourierMethod (only a position)
+                template <int N>
+                struct ReconstructionParticle {
+                    double pos[N];
+                    double * get_pos() { return pos; }
+                    constexpr int get_ndim() const { return N; }
+                };
+            } // namespace detail
+
             //============================================================================
             ///
             /// RSD removal for particles in a periodic box
@@ -40,9 +50,14 @@ namespace FML {
             /// The smoothing filter is an (optional) filter we apply to the density field in
             /// k-space. If R < gridspacing then no smoothing will be done
             ///
-            // This also works for a survey. Then los_direction is the observer position
-            // and we need to have a box big enough so that particles don't wrap around
-            // when shifted!
+            /// The iterative scheme of Burden et al. 2015 (arXiv:1504.02591): with \f$ s \f$ the observed
+            /// (redshift-space) positions and \f$ x_0 = s \f$, iteration n computes \f$ b\Psi_n \f$ from the density
+            /// of the positions \f$ x_{n-1} \f$ and sets \f$ x_n = s - \beta (b\Psi_n(s)\cdot r)r \f$. The first
+            /// iteration overestimates the shift (the density is in redshift space); the iterations converge for
+            /// \f$ \beta < 1 \f$ (3-5 iterations are enough).
+            ///
+            /// Only a periodic box with a fixed line of sight is supported (survey_data = true, a line of sight
+            /// towards an observer, is not implemented and aborts).
             ///
             /// This method assumes scale-independent growth factor, but that is easily changed
             ///
@@ -57,8 +72,7 @@ namespace FML {
             /// @param[in] beta This is beta = f/b the growth-rate over the bias
             /// @param[in] smoothing_options The smoothing filter (gaussian, tophat, sharph) and the smothing scale (in
             /// units of the boxsize)
-            /// @param[in] survey_data If survey data we don't wrap around the box if the particles move too far. For
-            /// survey data make sure you use padding to prevent any issues..
+            /// @param[in] survey_data Must be false (survey data is not supported)
             ///
             //============================================================================
 
@@ -74,13 +88,17 @@ namespace FML {
 
                 static_assert(FML::PARTICLE::has_get_pos<T>(),
                               "[RSDReconstructionFourierMethod] Particle must have a get_pos method");
+                assert_mpi(not survey_data,
+                           "[RSDReconstructionFourierMethod] Survey data (line of sight towards an observer, no "
+                           "periodic box) is not supported\n");
+                assert_mpi(niterations >= 1, "[RSDReconstructionFourierMethod] Need at least one iteration\n");
 
                 // Use N-linear interpolation
                 const std::string interpolation_method = "CIC";
 
-                size_t NumPart = part.get_npart();
-
-                const bool periodic_box = true;
+                // The particles stay at the observed positions s until the end
+                const size_t NumPart = part.get_npart();
+                auto * p = part.get_particles_ptr();
 
                 // Normalize the los_direction to a unit vector
                 assert_mpi(los_direction.size() == N,
@@ -89,31 +107,65 @@ namespace FML {
                 for (int idim = 0; idim < N; idim++) {
                     norm += los_direction[idim] * los_direction[idim];
                 }
-                norm = 1.0 / std::sqrt(norm);
                 assert_mpi(norm > 0.0,
                            "[RSDReconstructionFourierMethod] Line of sight vector cannot be the zero vector\n");
+                norm = 1.0 / std::sqrt(norm);
                 for (int idim = 0; idim < N; idim++) {
                     los_direction[idim] *= norm;
                 }
 
-                // Do this iteratively
+                // The RSD shift beta (bPsi*r)r of each particle (from the last iteration)
+                std::vector<double> shift(NumPart, 0.0);
+
+                auto wrap = [](double x) {
+                    x -= std::floor(x);
+                    return x >= 1.0 ? 0.0 : x;
+                };
+
+                auto nleftright =
+                    FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(density_assignment_method);
+
                 for (int i = 0; i < niterations; i++) {
                     if (FML::ThisTask == 0)
                         std::cout << "[RSDReconstructionFourierMethod] Iteration: " << i + 1 << " / " << niterations
                                   << "\n";
 
-                    // This is the density field for the observed galaxies
-                    // i.e. with RSD in it
-                    auto nleftright =
-                        FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(density_assignment_method);
+                    // The density field of the current estimate of the real-space positions x = s - shift
+                    // (the observed positions in the first iteration)
                     FFTWGrid<N> density(Nmesh, nleftright.first, nleftright.second);
                     density.add_memory_label("FFTWGrid::RSDReconstructionFourierMethod::density");
                     density.set_grid_status_real(true);
-                    FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
-                                                          part.get_npart(),
-                                                          part.get_npart_total(),
-                                                          density,
-                                                          density_assignment_method);
+                    if (i == 0) {
+                        FML::INTERPOLATION::particles_to_grid(
+                            p, NumPart, part.get_npart_total(), density, density_assignment_method);
+                    } else {
+                        // Copies at the shifted positions (they can be on another task)
+                        using Helper = detail::ReconstructionParticle<N>;
+                        std::vector<Helper> shifted(NumPart);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                        for (size_t j = 0; j < NumPart; j++) {
+                            const auto * pos = FML::PARTICLE::GetPos(p[j]);
+                            for (int idim = 0; idim < N; idim++)
+                                shifted[j].pos[idim] = wrap(pos[idim] - shift[j] * los_direction[idim]);
+                        }
+                        long long int nmax = NumPart;
+                        FML::MaxOverTasks(&nmax);
+                        FML::PARTICLE::MPIParticles<Helper> shifted_part;
+                        shifted_part.create(shifted.data(),
+                                            NumPart,
+                                            size_t(2 * nmax + 1000),
+                                            FML::xmin_domain,
+                                            FML::xmax_domain,
+                                            false);
+                        std::vector<Helper>().swap(shifted);
+                        FML::INTERPOLATION::particles_to_grid(shifted_part.get_particles_ptr(),
+                                                              shifted_part.get_npart(),
+                                                              shifted_part.get_npart_total(),
+                                                              density,
+                                                              density_assignment_method);
+                    }
 
                     density.fftw_r2c();
 
@@ -138,89 +190,45 @@ namespace FML {
                     // Free some memory
                     phi_1LPT.free();
 
-                    // Interpolate Psi to particle positions
+                    // Interpolate Psi to the observed particle positions
                     std::array<std::vector<FloatType>, N> Psi_particle_positions;
-                    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N,T>(
-                        Psi, part.get_particles_ptr(), part.get_npart(), Psi_particle_positions, interpolation_method);
+                    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N, T>(
+                        Psi, p, NumPart, Psi_particle_positions, interpolation_method);
                     for (int idim = 0; idim < N; idim++) {
                         Psi[idim].free();
                     }
 
-                    // Subtract the RSD component (Psi*r)*r / (1+beta) for each particle
-                    // Do periodic wrap and communicate particles in case they have left
-                    // the current domain
-                    std::array<double, N> Psi_max;
-                    Psi_max.fill(0.0);
-                    auto * p = part.get_particles_ptr();
+                    // The RSD shift beta (bPsi*r)r
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                    for (size_t i = 0; i < NumPart; i++) {
-                        auto * pos = FML::PARTICLE::GetPos(p[i]);
-
-                        std::array<FloatType, N> r;
-                        if (survey_data) {
-                            double norm = 0.0;
-                            for (int idim = 0; idim < N; idim++) {
-                                r[idim] = pos[idim] - los_direction[idim];
-                                norm += r[idim] * r[idim];
-                            }
-                            norm = 1.0 / std::sqrt(norm);
-                            for (int idim = 0; idim < N; idim++) {
-                                r[idim] *= norm;
-                            }
-                        } else {
-                            for (int idim = 0; idim < N; idim++) {
-                                r[idim] = los_direction[idim];
-                            }
-                        }
-
-                        std::array<FloatType, N> Psi_rsd;
-                        FloatType Psidotr = 0.0;
-                        for (int idim = 0; idim < N; idim++) {
-                            Psidotr += los_direction[idim] * Psi_particle_positions[idim][i];
-                        }
-                        for (int idim = 0; idim < N; idim++) {
-                            Psi_rsd[idim] = Psidotr * los_direction[idim] / (1.0 + beta);
-
-#ifdef USE_OMP
-#pragma omp critical
-#endif
-                            // Maximum shift
-                            if (std::abs(Psi_rsd[idim]) > Psi_max[idim])
-                                Psi_max[idim] = std::abs(Psi_rsd[idim]);
-                        }
-
-                        // For survey we need to have a box big enough so that we don't wrap around
-                        for (int idim = 0; idim < N; idim++) {
-                            pos[idim] -= Psi_rsd[idim];
-                            if (periodic_box) {
-                                if (pos[idim] < 0.0)
-                                    pos[idim] += 1.0;
-                                if (pos[idim] >= 1.0)
-                                    pos[idim] -= 1.0;
-                            } else {
-                                if (pos[idim] < 0.0 or pos[idim] >= 1.0)
-                                    assert_mpi(false,
-                                               "[RSDReconstructionFourierMethod] The particles are outside the box "
-                                               "and we are set not to periodically wrap");
-                            }
-                        }
-                    }
-
-                    // Particles might have moved out so communicate them
-                    part.communicate_particles();
-
-                    // Show maximum shift
-                    for (int idim = 0; idim < N; idim++)
-                        FML::MaxOverTasks(&Psi_max[idim]);
-                    if (FML::ThisTask == 0) {
-                        std::cout << "Maximum shift: ";
+                    for (size_t j = 0; j < NumPart; j++) {
+                        double Psidotr = 0.0;
                         for (int idim = 0; idim < N; idim++)
-                            std::cout << Psi_max[idim] << "    ";
-                        std::cout << "\n";
+                            Psidotr += los_direction[idim] * Psi_particle_positions[idim][j];
+                        shift[j] = beta * Psidotr;
                     }
                 }
+
+                // Subtract the RSD shift, do a periodic wrap and communicate the particles in case they have left the
+                // current domain
+                double max_shift = 0.0;
+#ifdef USE_OMP
+#pragma omp parallel for reduction(max : max_shift)
+#endif
+                for (size_t j = 0; j < NumPart; j++) {
+                    auto * pos = FML::PARTICLE::GetPos(p[j]);
+                    for (int idim = 0; idim < N; idim++)
+                        pos[idim] = wrap(pos[idim] - shift[j] * los_direction[idim]);
+                    max_shift = std::max(max_shift, std::abs(shift[j]));
+                }
+                part.communicate_particles();
+
+                // Show maximum shift
+                FML::MaxOverTasks(&max_shift);
+                if (FML::ThisTask == 0)
+                    std::cout << "[RSDReconstructionFourierMethod] Maximum shift (boxsize units): " << max_shift
+                              << "\n";
             }
         } // namespace LPT
 

@@ -189,6 +189,29 @@ namespace FML {
         /// @param[in] smoothing_method The smoothing filter (tophat, gaussian, sharpk)
         ///
         //===================================================================================
+        //===================================================================================
+        /// The Bessel function J1(x) for x >= 0 (Abramowitz & Stegun 9.4.4 and 9.4.6, absolute error < 1e-7)
+        //===================================================================================
+        inline double bessel_J1(double x) {
+            if (x <= 3.0) {
+                const double y = (x / 3.0) * (x / 3.0);
+                return x * (0.5 +
+                            y * (-0.56249985 +
+                                 y * (0.21093573 +
+                                      y * (-0.03954289 + y * (0.00443319 + y * (-0.00031761 + y * 0.00001109))))));
+            }
+            const double y = 3.0 / x;
+            const double f1 =
+                0.79788456 +
+                y * (0.00000156 +
+                     y * (0.01659667 + y * (0.00017105 + y * (-0.00249511 + y * (0.00113653 + y * (-0.00020033))))));
+            const double theta1 =
+                x - 2.35619449 +
+                y * (0.12499612 +
+                     y * (0.00005650 + y * (-0.00637879 + y * (0.00074348 + y * (0.00079824 + y * (-0.00029166))))));
+            return f1 * std::cos(theta1) / std::sqrt(x);
+        }
+
         template <int N>
         void smoothing_filter_fourier_space(FFTWGrid<N> & fourier_grid,
                                             double smoothing_scale,
@@ -207,12 +230,13 @@ namespace FML {
                 return std::exp(-0.5 * kR2);
             };
             // Top-hat F[ (|x| < R) ]. Implemented only for 2D and 3D
+            // 2D: the Fourier transform of a disk 2 J1(kR) / kR
             std::function<double(double)> filter_tophat_2D = [=](double k2) -> double {
                 double kR2 = k2 * smoothing_scale * smoothing_scale;
                 double kR = std::sqrt(kR2);
                 if (kR2 < 1e-8)
                     return 1.0;
-                return 2.0 / (kR2) * (1.0 - std::cos(kR));
+                return 2.0 * bessel_J1(kR) / kR;
             };
             std::function<double(double)> filter_tophat_3D = [=](double k2) -> double {
                 double kR2 = k2 * smoothing_scale * smoothing_scale;
@@ -400,16 +424,27 @@ namespace FML {
             }
             FML::MinOverTasks(&grid_min);
             FML::MaxOverTasks(&grid_max);
+            assert_mpi(nbins > 0, "[compute_grid_PDF] Need nbins > 0");
+
+            // A constant grid: bins of width 1/nbins around the value
+            if (grid_max == grid_min) {
+                grid_min -= 0.5;
+                grid_max += 0.5;
+            }
 
             // Set up binning
             x.resize(nbins);
-            pdf.resize(nbins, 0.0);
+            pdf.assign(nbins, 0.0);
             for (int i = 0; i < nbins; i++) {
                 x[i] = grid_min + (grid_max - grid_min) / double(nbins) * (i + 0.5);
             }
 
             // For binning over threads
-            std::vector<std::vector<double>> pdfthreads(FML::NThreads, std::vector<double>(nbins, 0.0));
+            int nthreads = FML::NThreads;
+#ifdef USE_OMP
+            nthreads = std::max(nthreads, omp_get_max_threads());
+#endif
+            std::vector<std::vector<double>> pdfthreads(nthreads, std::vector<double>(nbins, 0.0));
 
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -422,13 +457,16 @@ namespace FML {
                 for (auto && real_index : real_grid.get_real_range(islice, islice + 1)) {
                     auto value = real_grid.get_real_from_index(real_index);
                     int ibin = int((value - grid_min) / (grid_max - grid_min) * nbins);
+                    // The largest value is in the last bin
+                    if (ibin == nbins)
+                        ibin = nbins - 1;
                     if (ibin >= 0 and ibin < nbins)
                         pdfthreads[id][ibin] += 1;
                 }
             }
 
             // Sum up over threads
-            for (int i = 0; i < FML::NThreads; i++) {
+            for (int i = 0; i < nthreads; i++) {
                 for (int j = 0; j < nbins; j++) {
                     pdf[j] += pdfthreads[i][j];
                 }

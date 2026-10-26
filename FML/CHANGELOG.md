@@ -5,6 +5,26 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Reconstruction, Hessian and smoothing fixes
+- `RSDReconstructionFourierMethod` removed the wrong RSD shift: (Psi.r)r/(1+beta) instead of beta (Psi.r)r, and
+  each iteration subtracted another shift from the already shifted positions, so more iterations made it worse
+  (Zeldovich test with beta = 0.5: removed / put in = 1.6 after 1 iteration, 3.1 after 3, 4.3 after 8). It now uses
+  the iterative scheme of Burden et al. (2015): the shift of iteration n is beta (Psi_n(s).r)r with Psi_n from the
+  density of the positions of iteration n - 1 and always applied to the observed positions s (removed / put in =
+  0.96 after 3 iterations, rms residual 27% of the RSD shift; stays within 0.8-1.1 with more iterations). The
+  particle count is no longer stale after particles move between tasks. Survey data (`survey_data = true`) was not
+  implemented (the line of sight ignored the observer) and now aborts with a message.
+- Hessian: `SymmetricTensorEigensystem` shared one set of GSL workspaces between the OpenMP threads (wrong
+  eigenvalues/eigenvectors with more than one thread); `ComputeHessianWithFT` allocated N(N-1) grids (out of bounds
+  in 2D, N(N+1)/2 now), and the mixed derivatives of the Nyquist modes are set to zero. The eigenvector layout is
+  documented (component i of eigenvector k is `eigenvectors[i * N + k]`).
+- Smoothing: the 2D tophat filter was 2(1 - cos kR)/(kR)^2 instead of 2 J1(kR)/kR (Bessel J1 from Abramowitz &
+  Stegun, error < 1e-7, as `std::cyl_bessel_j` is missing in libc++). `compute_grid_PDF` added to old values when the
+  output vector was reused, left out the cell(s) with the largest value, divided by zero for a constant grid and could
+  index past the per-thread arrays.
+- `tests/test_reconstruction.cpp` checks these against analytic results (10 checks failed before and the 2D Hessian
+  crashed). COLASolver output is unchanged (regression: 1168 files identical).
+
 ### ComputePowerSpectra fixes
 - Shot noise for particles with masses or delta-f weights: P(k), the multipoles and the mono-/bispectrum subtracted
   1/N, now sum m^2/(sum m)^2 (sum w^2/N^2 for delta-f weights) and for the bispectrum S2 (P1 + P2 + P3) + S3 with
