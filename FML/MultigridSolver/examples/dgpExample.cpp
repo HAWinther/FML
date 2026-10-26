@@ -77,6 +77,13 @@ void DGPSolver() {
     // Set maximum number of steps
     g.set_maxsteps(10);
 
+    // The equation uses the mixed derivatives (the 3^NDIM cells around a cell): sweep in the cube ordering
+    g.set_cube_ordering(true);
+
+    // The equation only determines phi up to a constant and the discretized non-linear term does not have exactly
+    // zero mean, so solve L(phi) = const (otherwise the residual stalls)
+    g.set_subtract_mean_residual(true);
+
     // Set the initial guess
     g.set_initial_guess(phi_background);
 

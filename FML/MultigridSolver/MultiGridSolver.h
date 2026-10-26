@@ -99,7 +99,8 @@ namespace FML {
                 int _Nlevel;          // Number of levels
                 IndexInt _NtotLocal;  // Total number of cells in the main grid
                 bool _periodic{true}; // Periodic grid?
-                bool _verbose;        // Turn on verbose while solving
+                bool _verbose;        // Turn on verbose while solving (only true on task 0)
+                bool _verbose_all_tasks{false}; // Verbose on any task (all tasks must compute what task 0 prints)
 
                 MPIMultiGrid<NDIM, T> _f;      // The solution
                 MPIMultiGrid<NDIM, T> _res;    // The residual
@@ -109,14 +110,37 @@ namespace FML {
 #endif
 
                 // Newton-Gauss-Seidel parameters
-                const int _ngridcolours = 2; // The order we go through the grid (2 = chess-board ordering)
+                // The order we go through the grid: with the chess-board ordering (the fiducial) a cell is
+                // colored by the sum of its coordinates mod 2, so the 2NDIM nearest neighbors of a cell have the
+                // other color. With the cube ordering a cell is colored by the parity of each of its coordinates
+                // (2^NDIM colors) so all the 3^NDIM - 1 cells around it have another color. Use this for equations
+                // that use the cells in get_cube_gridindex (e.g. mixed derivatives): then a sweep over one color
+                // only reads cells of the other colors, so the result does not depend on the number of threads
+                // or tasks (with the chess-board ordering the update of a cell would read diagonal neighbors that
+                // are being updated at the same time)
+                bool _cube_ordering{false};
+                int _ngridcolours = 2;
                 int _ngs_coarse = 10;        // Number of NGS sweeps on coarse grid
                 int _ngs_fine = 10;          // Number of NGS sweeps on the main grid
                 int _ngs_first_step =
                     10;               // Number of NGS sweeps the very first time (in case the guess is not very good)
                 int _maxsteps = 1000; // Maximum number of V-cycles
+                // On the coarsest level we sweep until the residual is reduced by this factor (or we have done
+                // _max_coarsest_sweep_factor * _ngs_coarse sweeps). With MPI the coarsest level has one slice per
+                // task (N = NTasks) so with many tasks it is far from solved by _ngs_coarse sweeps alone
+                double _coarsest_residual_reduction = 0.1;
+                int _max_coarsest_sweep_factor = 50;
 
                 double _eps_converge = 1e-4; // Fiducial convergence criterion for residual or error
+
+                // For equations where L(f + const) = L(f) (e.g. Poisson-type equations with a periodic box) the mean
+                // of L can only vanish if the source has zero mean, which is not exactly true for a discretized
+                // non-linear equation (e.g. DGP). There is then no solution: the residual stalls (each sweep shifts
+                // the cells of a color by a constant). With this option we instead solve L(f) = c where the
+                // constant c is the mean of L (on each level), i.e. the mean is subtracted from the residual and
+                // from L in the Gauss-Seidel sweeps
+                bool _subtract_mean_residual{false};
+                std::vector<T> _mean_L; // The mean of L - source on each level (when _subtract_mean_residual)
 
                 // Residual information
                 double _rms_res;     // The residual on domain grid
@@ -161,6 +185,19 @@ namespace FML {
                 void set_maxsteps(int maxsteps);
                 void set_ngs_sweeps(int ngs_fine, int ngs_coarse, int ngs_first_step);
                 void set_convergence_criterion_residual(bool use_residual);
+                // Use the cube ordering of the Gauss-Seidel sweeps (needed if the equation uses more than the 2NDIM
+                // nearest neighbors, see _cube_ordering)
+                void set_cube_ordering(bool cube_ordering) {
+                    _cube_ordering = cube_ordering;
+                    _ngridcolours = cube_ordering ? FML::power(2, NDIM) : 2;
+                }
+                // Subtract the mean of the residual (for equations that only determine f up to a constant, see
+                // _subtract_mean_residual)
+                void set_subtract_mean_residual(bool subtract) { _subtract_mean_residual = subtract; }
+                // The number of V-cycles of the last solve
+                int get_number_of_vcycles() const { return _istep_vcycle; }
+                // The rms residual on the main grid after the last solve
+                double get_residual() const { return _rms_res; }
 
                 // Fetch info about the grids
                 int get_N(int level = 0);
@@ -319,12 +356,14 @@ namespace FML {
                     }
                 }
 
+                _verbose_all_tasks = verbose;
                 _verbose = verbose and (FML::ThisTask == 0);
                 _f = MPIMultiGrid<NDIM, T>(_N, Nlevels, _periodic, n_extra_slices_left, n_extra_slices_right);
                 _f.add_memory_label("MultiGridSolver::MultiGridSolver::_f");
                 _source = MPIMultiGrid<NDIM, T>(_N, Nlevels, _periodic, 0, 0);
                 _source.add_memory_label("MultiGridSolver::MultiGridSolver::_source");
-                _res = MPIMultiGrid<NDIM, T>(_N, Nlevels, _periodic, 0, 0);
+                // The residual grid is also used for the correction we prolonge up which needs the neighbor cells
+                _res = MPIMultiGrid<NDIM, T>(_N, Nlevels, _periodic, 1, 1);
                 _res.add_memory_label("MultiGridSolver::MultiGridSolver::_res");
                 _Nlevel = _f.get_Nlevel();
                 _NtotLocal = _f.get_NtotLocal();
@@ -391,6 +430,7 @@ namespace FML {
             void MultiGridSolver<NDIM, T>::run_solver() {
                 // Init some variables
                 _istep_vcycle = 0;
+                _mean_L = std::vector<T>(_Nlevel, T(0.0));
                 _rms_res = 0.0;
                 _rms_res_i = 0.0;
                 _rms_res_old = 0.0;
@@ -545,7 +585,7 @@ namespace FML {
                 // Stencil weights. The weight of a cell with coord ix + i is in Coeff[order][order + i]
                 // The accuracy of the method is 2*order
                 static const double Coeff_1[] = {-1 / 2., 0, 1 / 2.};
-                static const double Coeff_2[] = {1 / 12., -2 / 3., 0, 2 / 3., 1 / 12.};
+                static const double Coeff_2[] = {1 / 12., -2 / 3., 0, 2 / 3., -1 / 12.};
                 static const double Coeff_3[] = {-1 / 60., 3 / 20., -3 / 4., 0, 3 / 4., -3. / 20., 1 / 60.};
                 static const double Coeff_4[] = {
                     1 / 280., -4 / 105., 1 / 5., -4 / 5., 0, 4 / 5., -1 / 5., 4 / 105., -1 / 280.};
@@ -588,9 +628,10 @@ namespace FML {
                             coord_new = (coord_new + N) % N;
                             coord_new = coord_new % N;
                         }
+                        // With MPI the x-neighbors are in the extra slices
                         IndexInt index_cell = index;
                         if (idim == 0 and FML::NTasks > 1) {
-                            index_cell += -Npow;
+                            index_cell += i * Npow;
                         } else {
                             index_cell += (coord_new - coord[idim]) * Npow;
                         }
@@ -625,9 +666,10 @@ namespace FML {
                             coord_new = (coord_new + N) % N;
                             coord_new = coord_new % N;
                         }
+                        // With MPI the x-neighbors are in the extra slices
                         IndexInt index_cell = index;
                         if (idim == 0 and FML::NTasks > 1) {
-                            index_cell += -Npow;
+                            index_cell += i * Npow;
                         } else {
                             index_cell += (coord_new - coord[idim]) * Npow;
                         }
@@ -788,6 +830,22 @@ namespace FML {
                         res[i] += _source[level][i];
                 }
 
+                // Subtract the mean (if L(f + const) = L(f) only the residual about the mean can be removed). The mean
+                // of L - source is kept and subtracted from L in the sweeps
+                if (_subtract_mean_residual) {
+                    T mean{0.0};
+                    for (IndexInt i = 0; i < NtotLocal; i++)
+                        mean += res[i];
+                    FML::SumOverTasks(&mean);
+                    mean /= T(double(FML::power(IndexInt(get_N(level)), NDIM)));
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                    for (IndexInt i = 0; i < NtotLocal; i++)
+                        res[i] -= mean;
+                    _mean_L[level] = -mean;
+                }
+
                 // This sums over all CPUs
                 double residual = res.norm();
                 return residual;
@@ -845,8 +903,14 @@ namespace FML {
             }
 
             //================================================
-            // Prolonge up solution phi from course grid
-            // to fine grid. Using trilinear prolongation
+            // Prolonge up the correction from the coarse grid
+            // (Bottom) to the fine grid (Top) with N-linear
+            // interpolation. The grids are cell-centered: the
+            // fine cell 2i (2i+1) is a quarter of a coarse
+            // cell from the center of coarse cell i towards
+            // cell i-1 (i+1), so in each direction the weights
+            // are 3/4 for cell i and 1/4 for the neighbor.
+            // Bottom must have its boundaries communicated
             //================================================
 
             template <int NDIM, class T>
@@ -854,22 +918,10 @@ namespace FML {
                                                              MPIGrid<NDIM, T> & Bottom,
                                                              MPIGrid<NDIM, T> & Top) {
                 constexpr int twotondim = FML::power(2, NDIM);
-                int NTop = get_N(to_level);
-                int NBottom = NTop / 2;
+                const int NTop = get_N(to_level);
+                const int NBottom = NTop / 2;
+                const IndexInt NtotLocalTop = Top.get_NtotLocal();
 
-                IndexInt NtotLocalTop = Top.get_NtotLocal();
-
-                // Compute NTop, Ntop^2, ... , Ntop^{Ndim-1} and similar for Nbottom
-                std::array<IndexInt, NDIM> nBottomPow;
-                nBottomPow[NDIM - 1] = 1;
-                for (int idim = NDIM - 2; idim >= 0; idim--) {
-                    nBottomPow[idim] = nBottomPow[idim + 1] * NBottom;
-                }
-
-                // IndexInt ixStartLocalBottom = Bottom.get_xStartLocal();
-                // IndexInt ixStartLocalTop    = Top.get_xStartLocal();
-
-                // Trilinear prolongation
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -879,53 +931,38 @@ namespace FML {
                         continue;
 #endif
 
-                    std::array<double, NDIM> fac;
-                    std::array<int, NDIM> iplus;
-
-                    //  Global coordinate of top and bottom cell
-                    auto coord_top = Top.globalcoord_from_index(i);
-                    auto coord_bottom = coord_top;
-                    for (int idim = NDIM - 1; idim >= 0; idim--)
-                        coord_bottom[idim] /= 2;
-
-                    // Index of bottom cell
-                    IndexInt iBottom = Bottom.index_from_globalcoord(coord_bottom);
-
-                    // Compute weights
-                    double norm = 1.0;
-                    for (int idim = NDIM - 1; idim >= 0; idim--) {
-                        fac[idim] = coord_top[idim] % 2 == 0 ? 0.0 : 1.0;
-                        iplus[idim] = 1;
-                        if (_periodic and not(idim == 0 and FML::NTasks > 1)) {
-                            iplus[idim] = (coord_bottom[idim] + 1 < NBottom ? 1 : 1 - NBottom);
+                    // Global coordinate of the fine cell, the coarse cell it is in and the coarse neighbor
+                    // towards the fine cell in each direction
+                    const auto coord_top = Top.globalcoord_from_index(i);
+                    std::array<int, NDIM> coord_bottom, coord_nbor;
+                    for (int idim = 0; idim < NDIM; idim++) {
+                        coord_bottom[idim] = coord_top[idim] / 2;
+                        coord_nbor[idim] = coord_bottom[idim] + (coord_top[idim] % 2 == 0 ? -1 : 1);
+                        const bool in_extra_slices = (idim == 0 and FML::NTasks > 1);
+                        if (_periodic and not in_extra_slices) {
+                            coord_nbor[idim] = (coord_nbor[idim] + NBottom) % NBottom;
+                        } else if (not _periodic and (coord_nbor[idim] < 0 or coord_nbor[idim] >= NBottom)) {
+                            // No neighbor at the edge of a non-periodic box: use the cell itself
+                            coord_nbor[idim] = coord_bottom[idim];
                         }
-                        iplus[idim] *= nBottomPow[idim];
-                        norm *= (1.0 + fac[idim]);
                     }
-                    norm = 1.0 / norm;
 
-                    //===================================================================================
-                    // Do N-linear interpolation
-                    // Compute the sum Top[i] = Sum fac_i             * Top[iBottom + d_i]
-                    //                        + Sum fac_i fac_j       * Top[iBottom + d_i + d_j]
-                    //                        + Sum fac_i fac_j fac_k * Top[iBottom + d_i + d_j + d_k]
-                    //                        + ... +
-                    //                        + fac_1 ... fac_NDIM * Top[iBottom + d_1 + ... + d_NDIM]
-                    //===================================================================================
-
-                    // This routine must probably be modified for having a mask
-                    T val = Bottom[iBottom];
-                    for (int k = 1; k < twotondim; k++) {
-                        double termfac = 1.0;
-                        IndexInt iAdd = 0;
-                        std::bitset<NDIM> bits = std::bitset<NDIM>(k);
-                        for (int j = 0; j < NDIM; j++) {
-                            iAdd = bits[j] * iplus[j];
-                            termfac *= 1.0 + bits[j] * (fac[j] - 1.0);
+                    // Sum over the 2^NDIM coarse cells: (3/4)^(NDIM - nbits) (1/4)^nbits
+                    T val{0.0};
+                    for (int k = 0; k < twotondim; k++) {
+                        auto coord = coord_bottom;
+                        double weight = 1.0;
+                        for (int idim = 0; idim < NDIM; idim++) {
+                            if ((k >> idim) & 1) {
+                                coord[idim] = coord_nbor[idim];
+                                weight *= 0.25;
+                            } else {
+                                weight *= 0.75;
+                            }
                         }
-                        val += T(termfac) * Bottom[iBottom + iAdd];
+                        val += T(weight) * Bottom[Bottom.index_from_globalcoord(coord)];
                     }
-                    Top[i] = val * T(norm);
+                    Top[i] = val;
                 }
             }
 
@@ -952,11 +989,16 @@ namespace FML {
                     // Fetch the global coordinate or the current cell
                     auto coord = grid.globalcoord_from_index(i);
 
-                    // Compute cell-color as sum of coordinates mod _ngridcolours
+                    // The color of the cell: sum of coordinates mod 2 (chess-board) or the parity of each coordinate
                     int color = 0;
-                    for (auto & c : coord)
-                        color += c;
-                    color = color % _ngridcolours;
+                    if (_cube_ordering) {
+                        for (int idim = 0; idim < NDIM; idim++)
+                            color += (coord[idim] & 1) << idim;
+                    } else {
+                        for (auto & c : coord)
+                            color += c;
+                        color = color % _ngridcolours;
+                    }
 
                     // Only select cells with right color
                     if (color == curcolor) {
@@ -964,6 +1006,8 @@ namespace FML {
                         // Update the solution f = f - L / (dL/df)
                         auto LdL = _Equation(this, level, i);
                         T l = LdL.first - (level > 0 ? _source[level][i] : T(0));
+                        if (_subtract_mean_residual)
+                            l -= _mean_L[level];
                         T dl = LdL.second;
                         f[i] -= l / dl;
                     }
@@ -989,6 +1033,31 @@ namespace FML {
                     ngs_sweeps = _ngs_coarse;
                 }
 
+                // On the coarsest level: sweep until the residual is reduced by _coarsest_residual_reduction
+                if (level > 0 and level == _Nlevel - 1 and ngs_sweeps > 0) {
+                    _f.get_grid(level).communicate_boundaries();
+                    const double res_start = calculate_residual(level, _res.get_grid(level));
+                    double residual = res_start;
+                    int nsweeps_done = 0;
+                    while (nsweeps_done < _max_coarsest_sweep_factor * ngs_sweeps) {
+                        for (int i = 0; i < ngs_sweeps; i++) {
+                            for (int j = 0; j < _ngridcolours; j++) {
+                                GaussSeidelSweep(level, j, _f[level]);
+                                _f.get_grid(level).communicate_boundaries();
+                            }
+                        }
+                        nsweeps_done += ngs_sweeps;
+                        residual = calculate_residual(level, _res.get_grid(level));
+                        if (not(residual > _coarsest_residual_reduction * res_start))
+                            break;
+                    }
+                    if (_verbose)
+                        std::cout << "        level = " << std::setw(5) << level << " (coarsest) NGS Sweeps = "
+                                  << std::setw(5) << nsweeps_done << " Residual = " << std::setw(10) << residual
+                                  << " (from " << res_start << ")\n\n";
+                    return;
+                }
+
                 // Update boundaries
                 _f.get_grid(level).communicate_boundaries();
 
@@ -1004,30 +1073,33 @@ namespace FML {
                         _f.get_grid(level).communicate_boundaries();
                     }
 
-                    // The residual calculation requires comm so do it outside of the print below
-                    double residual = 0.0;
-                    if ((level > 0 and (i == 1 or i == ngs_sweeps - 1)) or (level == 0)) {
-                        residual = calculate_residual(level, _res.get_grid(level));
-                    }
-
-                    // Calculate residual and output quite often.
-                    // For debug, but this is quite useful so keep it for now
-                    if (_verbose) {
-                        if ((level > 0 and (i == 1 or i == ngs_sweeps - 1)) or (level == 0)) {
+                    // Show the residual as we go along (when verbose; this costs as much as a sweep). We need the
+                    // residual after the last sweep (below) as it is restricted down to the next level
+                    const bool last_sweep = (i == ngs_sweeps - 1);
+                    // (The residual is a sum over tasks so all tasks compute it)
+                    if (_verbose_all_tasks and not last_sweep and (level == 0 or i == 1)) {
+                        double residual = calculate_residual(level, _res.get_grid(level));
+                        if (_verbose) {
                             std::cout << "        level = " << std::setw(5) << level << " NGS Sweep = " << std::setw(5)
                                       << i;
                             std::cout << " Residual = " << std::setw(10) << residual << std::endl;
                         }
                     }
                 }
-                if (_verbose)
+
+                // The residual after the sweeps
+                double residual = calculate_residual(level, _res.get_grid(level));
+                if (_verbose) {
+                    std::cout << "        level = " << std::setw(5) << level << " NGS Sweep = " << std::setw(5)
+                              << ngs_sweeps - 1;
+                    std::cout << " Residual = " << std::setw(10) << residual << std::endl;
                     std::cout << std::endl;
+                }
 
                 // Store domaingrid residual
                 if (level == 0) {
-                    double curres = calculate_residual(level, _res.get_grid(level));
                     _rms_res_old = _rms_res;
-                    _rms_res = curres;
+                    _rms_res = residual;
                 }
             }
 
@@ -1049,15 +1121,13 @@ namespace FML {
                 if (_verbose)
                     std::cout << "    Prolonge solution from level: " << to_level + 1 << " -> " << to_level
                               << std::endl;
+                _res.get_grid(from_level).communicate_boundaries();
                 prolonge_up_array(to_level, _res.get_grid(from_level), _res.get_grid(to_level));
 
                 // Correct solution at to_level (temp array _res contains the correction P[f-R[f]])
                 _f.get_grid(to_level) += _res.get_grid(to_level);
 
-                // Calculate new residual
-                calculate_residual(to_level, _res.get_grid(to_level));
-
-                // Solve on the level we just went up to
+                // Solve on the level we just went up to (this also computes the new residual)
                 solve_current_level(to_level);
 
                 // Continue going up

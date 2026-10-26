@@ -5,6 +5,34 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### MultigridSolver: fixes and faster convergence
+- Prolongation: the N-linear interpolation of the coarse-grid correction summed only one of the neighbors (`iAdd =`
+  instead of `+=`) and used vertex-centered weights on the cell-centered grids. It is now cell-centered N-linear
+  interpolation (weights 3/4, 1/4 per direction) with the neighbors communicated across tasks (the residual grid,
+  used for the correction, now has one extra slice on each side). Poisson: the residual is reduced by 0.14 per V-cycle
+  with 2+2 sweeps (was 0.33); f(R): 0.12 (was 0.15) and 0.03 with 10 sweeps (was 0.04).
+- The residual was computed after every sweep on the main grid (and twice after the last one) and after each
+  prolongation even when not verbose; it is now only computed when needed (verbose output, the last sweep). A V-cycle
+  takes ~55-60% of the time it did, and fewer V-cycles are needed.
+- `get_Gradient(level, index, order)` and `get_Gradient2`: with MPI the x-derivative used the cell x-1 for all points
+  of the stencil (zero derivative); the order-2 first derivative had the wrong sign of its last weight.
+- New `set_cube_ordering(true)`: the Gauss-Seidel sweeps color a cell by the parity of each coordinate (2^NDIM colors)
+  so no cell in the 3^NDIM cube around a cell is updated at the same time. Needed for equations with mixed
+  derivatives: with the chess-board ordering the result depended on the number of threads and tasks.
+- New `set_subtract_mean_residual(true)` for equations where L(f + c) = L(f): solves L(f) = const (the constant is the
+  mean of L on each level). The discretized DGP equation has no exact periodic solution (the non-linear term does
+  not have exactly zero mean), so its residual stalled at ~1e-2 - 1e-6 and the exact DGP solver in COLASolver never
+  reached the tolerance (1000 V-cycles per force calculation, ~12 minutes for a 64^3 grid; the force was accurate to
+  ~3e-4). `DGPSolverCosmology` uses both options and now converges in ~5 V-cycles; the P(k) agrees with the approximate
+  screening method to 0.3%.
+- The coarsest level is swept until its residual is reduced by 10 (with MPI it has one slice per task, so with 16
+  tasks the convergence factor was 0.78 per V-cycle; now 0.14 for any number of tasks).
+- `MPIMultiGrid::restrict_down` is OpenMP parallel; the level check for a single task was the MPI one.
+- `FofrSolverCosmology`, `DGPSolverCosmology`, `SymmetronSolverCosmology`: the density multigrid was constructed with
+  the arguments shifted (`nleft` as `periodic`); same result for the values used.
+- `tests/test_multigrid.cpp` (run by `make test`, 1/2/4 tasks): derivatives, Poisson convergence, DGP-type equation.
+  Regression cases `fofr_exact_multigrid` and `dgp_exact_multigrid`.
+
 ### ComputePowerSpectra: one-loop hybrid bias spectra with the LPT kernels of modified gravity
 - `HybridBiasOneLoopMG.h`: `oneloop_hybrid_bias_spectra_mg` gives the one-loop LPT prediction of all 15 hybrid bias
   spectra with the full scale- and time-dependent kernels (as in Aviles & Cervantes-Cota 2017; Brando, Li & Koyama

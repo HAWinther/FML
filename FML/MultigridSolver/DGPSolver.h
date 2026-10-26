@@ -102,7 +102,7 @@ class DGPSolverCosmology {
         }
 
         // Set up multigrid for density
-        MPIMultiGrid<NDIM, SolverType> density_multigrid(Nmesh, Nlevels, nleft, nright);
+        MPIMultiGrid<NDIM, SolverType> density_multigrid(Nmesh, Nlevels, periodic, nleft, nright);
         auto & grid = density_multigrid.get_grid();
 
 #ifdef USE_OMP
@@ -135,6 +135,16 @@ class DGPSolverCosmology {
         g.set_ngs_sweeps(ngs_fine, ngs_coarse, ngs_first);
         g.set_epsilon(epsilon);
         g.set_maxsteps(maxsteps);
+
+        // The equation uses the mixed derivatives (the 3^NDIM cells around a cell) so sweep over the grid in the
+        // cube ordering (otherwise cells being updated at the same time read each other)
+        g.set_cube_ordering(true);
+
+        // The equation only determines phi up to a constant (L(phi + c) = L(phi)) and the discretized
+        // non-linear term does not have exactly zero mean, so there is no exact solution and the residual
+        // stalls (at ~1e-2 - 1e-4, which never reaches the usual epsilon). Solve L(phi) = const instead
+        // (the constant is the mean of L; it does not affect the force)
+        g.set_subtract_mean_residual(true);
 
         // Set the initial guess
         g.set_initial_guess(f0);

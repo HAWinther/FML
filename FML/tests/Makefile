@@ -10,7 +10,7 @@ USE_OMP             ?= true
 USE_FFTW            ?= true
 USE_GSL             ?= true
 
-TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_hybridbias
+TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias
 
 include ../Makefile.config
 
@@ -70,6 +70,9 @@ test_pofk: $(POFK_OBJS)
 test_reconstruction: test_reconstruction.o Global.o Spline.o ODESolver.o
 	$(LINK_EXE)
 
+test_multigrid: test_multigrid.o Global.o
+	$(LINK_EXE)
+
 test_hybridbias: test_hybridbias.o Global.o
 	$(LINK_EXE)
 
@@ -109,6 +112,8 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_pofk; \
 	  echo "== Running test_reconstruction with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_reconstruction; \
+	  echo "== Running test_multigrid with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_multigrid; \
 	done
 	@echo "== Running test_hybridbias"
 	@OMP_NUM_THREADS=2 $(RUN1) ./test_hybridbias

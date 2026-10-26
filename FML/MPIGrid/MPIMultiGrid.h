@@ -227,7 +227,7 @@ namespace FML {
 
             // Check that _Nlevel is OK
             assert_mpi(_Nlevel > 0, "[MPIMultiGrid] Nlevel must be > 1 (otherwise its no multigrid)\n");
-            if (FML::NTasks > 0) {
+            if (FML::NTasks > 1) {
                 assert_mpi(_Nlevel <= intlog2(N) - intlog2(FML::NTasks) + 1,
                            "[MPIMultiGrid] Nlevel is too large. With MPI the smallest level corresponds to each task "
                            "having jus 2 cell each\n");
@@ -269,23 +269,23 @@ namespace FML {
             auto & TopGrid = _y[from_level];
             auto & BottomGrid = to_grid;
 
-            // Clear bottom array
-            IndexInt NtotLocalBottom = BottomGrid.get_NtotLocal();
-            std::fill_n(&BottomGrid[0], NtotLocalBottom, T(0.0));
-
-            // Loop over top grid
-            IndexInt NtotLocalTop = TopGrid.get_NtotLocal();
-            for (IndexInt index_top = 0; index_top < NtotLocalTop; index_top++) {
-
-                // Convert global coordinate of current cell in top to bottom
-                auto coord = TopGrid.globalcoord_from_index(index_top);
-                for (int idim = 0; idim < NDIM; idim++) {
-                    coord[idim] = coord[idim] / 2;
+            // Loop over the bottom grid and average over the 2^NDIM cells of the top grid in each cell
+            // (the top cells of a bottom cell are on the same task as the number of slices per task halves)
+            constexpr int twotondim = FML::power(2, NDIM);
+            const IndexInt NtotLocalBottom = BottomGrid.get_NtotLocal();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (IndexInt index_bottom = 0; index_bottom < NtotLocalBottom; index_bottom++) {
+                const auto coord_bottom = BottomGrid.globalcoord_from_index(index_bottom);
+                T sum{0.0};
+                for (int k = 0; k < twotondim; k++) {
+                    auto coord = coord_bottom;
+                    for (int idim = 0; idim < NDIM; idim++)
+                        coord[idim] = 2 * coord[idim] + ((k >> idim) & 1);
+                    sum += TopGrid[TopGrid.index_from_globalcoord(coord)];
                 }
-
-                // Add up to restricted grid
-                IndexInt index_bottom = BottomGrid.index_from_globalcoord(coord);
-                BottomGrid[index_bottom] += TopGrid[index_top] * oneovernumcells;
+                BottomGrid[index_bottom] = sum * oneovernumcells;
             }
         }
 

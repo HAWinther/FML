@@ -15,6 +15,8 @@ all the main code paths of the solver:
 | `fine_force_grid` | Force grid twice the particle grid (fiducial gradient kernel becomes discrete_2pt), PCS assignment |
 | `scaledep_cola_fine_force_grid` | Scale-dependent COLA with the force grid twice the particle grid (lattice offset); identical P(k) to `fine_force_grid` in GR |
 | `hybridbias_zeldovich` | Hybrid bias spectra with the Zel'dovich prediction |
+| `fofr_exact_multigrid` | f(R) with the exact field equation (multigrid solver) |
+| `dgp_exact_multigrid` | DGP with the exact field equation (multigrid solver: mixed derivatives, cube ordering of the sweeps, mean of the residual subtracted) |
 | `fastpm_cola_fofr` | FastPM time-stepping with COLA, logarithmic spacing, f(R) gravity |
 | `bullfrog_lightcone` | BullFrog time-stepping (no COLA) with the lightcone |
 | `read_particles_exact` | Reading particles (from `cola_quinn_all`) with exact LPT reconstruction |

@@ -155,6 +155,33 @@ CASES = {
         simulation_cola_LPT_order=1,
         force_density_assignment_method="TSC",
     ),
+    # f(R) and DGP with the exact field equations solved with the multigrid solver
+    "fofr_exact_multigrid": dict(
+        gravity_model="f(R)",
+        gravity_model_fofr_fofr0=1e-5,
+        gravity_model_fofr_nfofr=1.0,
+        gravity_model_fofr_exact_solution=True,
+        gravity_model_screening=True,
+        gravity_model_screening_efficiency=1.0,
+        gravity_model_screening_enforce_largescale_linear=False,
+        gravity_model_screening_linear_scale_hmpc=0.1,
+        multigrid_solver_residual_convergence=1e-7,
+        multigrid_nsweeps=5,
+        multigrid_nsweeps_first_step=10,
+    ),
+    "dgp_exact_multigrid": dict(
+        gravity_model="DGP",
+        gravity_model_dgp_rcH0overc=1.0,
+        gravity_model_dgp_exact_solution=True,
+        gravity_model_screening=True,
+        gravity_model_dgp_smoothing_filter="tophat",
+        gravity_model_dgp_smoothing_scale_over_boxsize=0.0,
+        gravity_model_screening_enforce_largescale_linear=False,
+        gravity_model_screening_linear_scale_hmpc=0.1,
+        multigrid_solver_residual_convergence=1e-7,
+        multigrid_nsweeps=5,
+        multigrid_nsweeps_first_step=10,
+    ),
     # Non-gaussian (local fNL) initial conditions
     "nongaussian": dict(
         ic_random_field_type="nongaussian",
