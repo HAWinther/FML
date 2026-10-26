@@ -5,6 +5,30 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### ComputePowerSpectra: one-loop hybrid bias spectra with the LPT kernels of modified gravity
+- `HybridBiasOneLoopMG.h`: `oneloop_hybrid_bias_spectra_mg` gives the one-loop LPT prediction of all 15 hybrid bias
+  spectra with the full scale- and time-dependent kernels (as in Aviles & Cervantes-Cota 2017; Brando, Li & Koyama
+  2026) of a general mu(k,a) model (`mgmodel_mu`), Hu-Sawicki f(R) (`mgmodel_fofr`) and normal-branch DGP
+  (`mgmodel_dgp`), with or without screening, or LCDM (`mgmodel_gr`), for several output times at once. The kernels
+  are derived directly from the Eulerian quasi-static equations through T Psi(q) = int_k (ik/k^2) Sigma(k)
+  e^(ik.(q + Psi(q))) (set partitions of the legs), which gives the frame-lagging terms and also the transverse part
+  of the second order displacement that a scale-dependent force generates (it enters the third order kernel and the
+  one-loop correlators). The growth ODEs are solved for every node of the loop integrals (no interpolation of the
+  kernels). `mg_linear_growth` gives D(k,a).
+- Tests: with EdS kernels all 15 spectra agree with `oneloop_hybrid_bias_spectra` to 1e-4; the second and third
+  order kernels agree with the Eulerian SPT kernels of the same equations (mapped to LPT) to 1e-5 for f(R) with and
+  without screening, DGP and a mu(k,a) model; LCDM kernels give the expected +0.9% (2nd order) and +1.9% (3rd order)
+  corrections to EdS; the second order loop functions agree with mgpt to 0.1% (f(R), unscreened DGP).
+  `tests/test_hybridbias.cpp` (run by `make test`) checks the EdS limit and the third order kernels against stored
+  Eulerian values.
+- `oneloop_hybrid_bias_spectra` (EdS): the loop spectra are no longer interpolated across the cut (a node on each side
+  of it), which changes the nabla^2 delta spectra near the cut by up to 1.5e-3 (now converged to 1e-4), the
+  refinement of the R-type integrals towards p = k now goes towards p = k (it went the other way), and R1, R2 at r = 1
+  are no longer NaN. The other spectra change by less than 1e-4.
+- COLASolver: `hybridbias_oneloop_kernels` (`EdS`, the default, or `model`: the kernels of the gravity model; f(R)
+  and DGP use their screening setting, the other models G_eff(k,a) without screening, GR the LCDM kernels).
+- Regression cases `scaledep_cola_fine_force_grid` (scale-dependent COLA with an offset lattice: in GR identical P(k)
+  to `fine_force_grid`) and `hybridbias_zeldovich`.
 ### Reconstruction, Hessian and smoothing fixes
 - `RSDReconstructionFourierMethod` removed the wrong RSD shift: (Psi.r)r/(1+beta) instead of beta (Psi.r)r, and
   each iteration subtracted another shift from the already shifted positions, so more iterations made it worse

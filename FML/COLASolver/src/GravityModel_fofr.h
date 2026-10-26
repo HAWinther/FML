@@ -44,6 +44,11 @@ class GravityModelFofR final : public GravityModel<NDIM> {
         assert(this->get_name() == "f(R)");
     }
 
+    /// The model parameters (for the LPT predictions of the hybrid bias spectra)
+    double get_fofr0() const { return fofr0; }
+    double get_nfofr() const { return nfofr; }
+    bool get_use_screening() const { return use_screening_method or solve_exact_equation; }
+
     //========================================================================
     // Print some info
     //========================================================================

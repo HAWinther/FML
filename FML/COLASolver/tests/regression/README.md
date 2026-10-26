@@ -13,6 +13,8 @@ all the main code paths of the solver:
 | `lightcone_dgp` | Lightcone (ascii output), DGP gravity |
 | `nbody_gauge` | N-body gauge: IC from N-body gauge transfer functions plus the linear source from radiation, neutrinos and GR |
 | `fine_force_grid` | Force grid twice the particle grid (fiducial gradient kernel becomes discrete_2pt), PCS assignment |
+| `scaledep_cola_fine_force_grid` | Scale-dependent COLA with the force grid twice the particle grid (lattice offset); identical P(k) to `fine_force_grid` in GR |
+| `hybridbias_zeldovich` | Hybrid bias spectra with the Zel'dovich prediction |
 | `fastpm_cola_fofr` | FastPM time-stepping with COLA, logarithmic spacing, f(R) gravity |
 | `bullfrog_lightcone` | BullFrog time-stepping (no COLA) with the lightcone |
 | `read_particles_exact` | Reading particles (from `cola_quinn_all`) with exact LPT reconstruction |

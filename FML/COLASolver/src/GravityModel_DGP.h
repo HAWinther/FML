@@ -38,6 +38,10 @@ class GravityModelDGP final : public GravityModel<NDIM> {
     using ParameterMap = FML::UTILS::ParameterMap;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
+    /// The model parameters (for the LPT predictions of the hybrid bias spectra)
+    double get_rcH0() const { return rcH0_DGP; }
+    bool get_use_screening() const { return use_screening_method or solve_exact_equation; }
+
     GravityModelDGP() : GravityModel<NDIM>("DGP") {}
     GravityModelDGP(std::shared_ptr<Cosmology> cosmo) : GravityModel<NDIM>(cosmo, "DGP") {}
 

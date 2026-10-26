@@ -208,6 +208,27 @@ CASES = {
         force_nmesh=64,
         force_density_assignment_method="PCS",
     ),
+    # Scale-dependent COLA with a force grid finer than the particle grid (the lattice offset: the LPT fields are
+    # evaluated at the lattice nodes). In GR this gives the same result as standard COLA (fine_force_grid)
+    "scaledep_cola_fine_force_grid": dict(
+        simulation_use_scaledependent_cola=True,
+        force_nmesh=64,
+        force_density_assignment_method="PCS",
+    ),
+    # Hybrid bias spectra with the Zel'dovich prediction
+    "hybridbias_zeldovich": dict(
+        hybridbias=True,
+        hybridbias_nmesh=32,
+        hybridbias_noperators=5,
+        hybridbias_density_assignment_method="PCS",
+        hybridbias_interlacing=True,
+        hybridbias_subtract_shotnoise=False,
+        hybridbias_smoothing_scale=0.0,
+        hybridbias_smoothing_filter="gaussian",
+        hybridbias_kcut_over_nyquist=0.5,
+        hybridbias_zeldovich=True,
+        hybridbias_oneloop=False,
+    ),
     # Force with NUFFTs (exact density and force interpolation, no window functions)
     "nufft_force": dict(
         force_density_method="nufft",

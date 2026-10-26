@@ -10,7 +10,7 @@ USE_OMP             ?= true
 USE_FFTW            ?= true
 USE_GSL             ?= true
 
-TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction
+TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_hybridbias
 
 include ../Makefile.config
 
@@ -70,6 +70,9 @@ test_pofk: $(POFK_OBJS)
 test_reconstruction: test_reconstruction.o Global.o Spline.o ODESolver.o
 	$(LINK_EXE)
 
+test_hybridbias: test_hybridbias.o Global.o
+	$(LINK_EXE)
+
 MPIRUN  ?= mpirun
 NP_LIST ?= 1 2 4
 
@@ -84,7 +87,7 @@ endif
 
 # Each run must pass; the two "must abort" runs must fail with the expected message
 .PHONY: run
-run: test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction
+run: $(TARGETS)
 	@set -e; for np in $(NP_LIST); do \
 	  echo "== Running test_core with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_core; \
@@ -107,6 +110,8 @@ run: test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_pairco
 	  echo "== Running test_reconstruction with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_reconstruction; \
 	done
+	@echo "== Running test_hybridbias"
+	@OMP_NUM_THREADS=2 $(RUN1) ./test_hybridbias
 	@echo "== Checking that bad input aborts with a clear message"
 	@! $(RUN1) ./test_core alloc > alloc.log 2>&1 && grep -q "Reached allocation limit" alloc.log && echo "[PASS] allocation limit aborts"
 ifeq ($(USE_MPI),true)

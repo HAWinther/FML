@@ -788,6 +788,13 @@ namespace COLASOLVER {
                            false,
                            "Also write the one-loop LPT (CLEFT) prediction of the spectra (no counterterms): "
                            "hybridbias_oneloop_z<z>.txt");
+                b.always_optional("hybridbias_oneloop_kernels",
+                                  "EdS",
+                                  "The kernels of the one-loop prediction. EdS: the Einstein-de Sitter kernels with the "
+                                  "linear P(k) of the gravity model. model: the scale- and time-dependent LPT kernels "
+                                  "of the gravity model (f(R) and DGP with their screening if gravity_model_screening, "
+                                  "the other models from G_eff(k,a) without screening, LCDM for GR)",
+                                  {"EdS", "model"});
             });
             return b.specs;
         }();

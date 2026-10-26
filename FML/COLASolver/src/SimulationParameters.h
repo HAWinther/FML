@@ -262,6 +262,7 @@ namespace COLASOLVER {
         double kcut_over_nyquist;              // Spherical cut of the linear field at this times the lattice Nyquist
         bool zeldovich;                        // Also output the Zel'dovich prediction
         bool oneloop;                          // Also output the one-loop LPT prediction
+        std::string oneloop_kernels{"EdS"};    // EdS or model (the scale-dependent kernels of the gravity model)
     };
 
     struct OutputSettings {
@@ -491,6 +492,7 @@ namespace COLASOLVER {
                 r.get("hybridbias_kcut_over_nyquist", hybridbias.kcut_over_nyquist);
                 r.get("hybridbias_zeldovich", hybridbias.zeldovich);
                 r.get("hybridbias_oneloop", hybridbias.oneloop);
+                r.get("hybridbias_oneloop_kernels", hybridbias.oneloop_kernels);
             }
 
             // Output

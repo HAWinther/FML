@@ -4,6 +4,7 @@
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
 #include <FML/ComputePowerSpectra/HybridBiasSpectra.h>
 #include <FML/ComputePowerSpectra/HybridBiasOneLoop.h>
+#include <FML/ComputePowerSpectra/HybridBiasOneLoopMG.h>
 #include <FML/ComputePowerSpectra/HybridBiasZeldovich.h>
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/FileUtils/FileUtils.h>
@@ -17,6 +18,8 @@
 #include <FML/Smoothing/SmoothingFourier.h>
 #include <FML/Spline/Spline.h>
 
+#include "GravityModel_DGP.h"
+#include "GravityModel_fofr.h"
 #include "Species.h"
 
 #include <fstream>
@@ -607,11 +610,67 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
                       << " h/Mpc also for the displacement field (the IC have modes up to " << kcut_displacement
                       << " h/Mpc)\n";
         zoptions.kmax_integration = std::min(kcut, krange.second);
-        auto oneloop = oneloop_hybrid_bias_spectra(pofk_linear_of_k, W_operators, klocal, zoptions);
-        write_prediction(oneloop,
-                         "oneloop",
-                         "One-loop LPT (CLEFT, no counterterms) prediction",
-                         kcut);
+        if (settings.oneloop_kernels == "model") {
+            // The scale- and time-dependent LPT kernels of the gravity model (flat LCDM background)
+            const double OmegaM = sim.get_cosmology()->get_OmegaM();
+            MGModel model = mgmodel_gr(OmegaM);
+            std::string description = "LCDM";
+            if (auto fofr = std::dynamic_pointer_cast<GravityModelFofR<NDIM>>(grav)) {
+                model = mgmodel_fofr(OmegaM, fofr->get_fofr0(), fofr->get_nfofr(), fofr->get_use_screening());
+            } else if (auto dgp = std::dynamic_pointer_cast<GravityModelDGP<NDIM>>(grav)) {
+                model = mgmodel_dgp(OmegaM, dgp->get_rcH0(), dgp->get_use_screening());
+            } else if (grav->get_name() != "GR") {
+                const double H0_hmpc = grav->H0_hmpc;
+                model = mgmodel_mu(OmegaM, [grav, H0_hmpc](double k, double aa) {
+                    return grav->GeffOverG(aa, k / H0_hmpc);
+                });
+            }
+            description = model.name();
+            if (FML::ThisTask == 0)
+                std::cout << "One-loop prediction with the LPT kernels of " << description << "\n";
+            // The loop functions are computed for all the outputs at the first output (the kernels are integrated
+            // from early times once)
+            static std::shared_ptr<MGLoopTables> mg_tables;
+            static std::vector<double> mg_tables_redshifts;
+            if (not mg_tables) {
+                mg_tables_redshifts = sim.get_parameters().output.redshifts;
+                std::vector<double> aouts;
+                std::vector<std::function<double(double)>> pofks;
+                for (double z : mg_tables_redshifts) {
+                    const double aa = 1.0 / (1.0 + z);
+                    aouts.push_back(aa);
+                    pofks.push_back([&, aa](double k) {
+                        if (k < krange.first or k > krange.second)
+                            return 0.0;
+                        const double D = grav->get_D_1LPT(aa, k / grav->H0_hmpc);
+                        const double Dini = grav->get_D_1LPT(aini, k / grav->H0_hmpc);
+                        return power_initial_spline(k) * std::pow(D / Dini, 2);
+                    });
+                }
+                mg_tables = std::make_shared<MGLoopTables>(mg_loop_tables(model, aouts, pofks, W_operators, zoptions));
+            }
+            int io = -1;
+            for (size_t i = 0; i < mg_tables_redshifts.size(); i++)
+                if (std::abs(mg_tables_redshifts[i] - redshift) < 1e-6 * (1.0 + redshift))
+                    io = int(i);
+            std::vector<std::vector<double>> oneloop;
+            if (io >= 0)
+                oneloop = oneloop_hybrid_bias_spectra_mg_from_tables(
+                    *mg_tables, io, pofk_linear_of_k, W_operators, klocal, zoptions);
+            else
+                oneloop = oneloop_hybrid_bias_spectra_mg(
+                    model, {1.0 / (1.0 + redshift)}, {pofk_linear_of_k}, W_operators, klocal, zoptions)[0];
+            write_prediction(oneloop,
+                             "oneloop",
+                             "One-loop LPT (CLEFT, no counterterms; the LPT kernels of " + description + ") prediction",
+                             kcut);
+        } else {
+            auto oneloop = oneloop_hybrid_bias_spectra(pofk_linear_of_k, W_operators, klocal, zoptions);
+            write_prediction(oneloop,
+                             "oneloop",
+                             "One-loop LPT (CLEFT, no counterterms; EdS kernels) prediction",
+                             kcut);
+        }
     }
 }
 

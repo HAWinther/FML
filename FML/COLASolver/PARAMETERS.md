@@ -267,6 +267,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `hybridbias_kcut_over_nyquist` | double | `1` | hybridbias = true | Keep only the modes with k < this times the Nyquist frequency of the particle lattice in the linear field (a spherical cut, so the operators are isotropic as assumed in the LPT prediction). 0: keep all the modes of the lattice grid (a cube) |
 | `hybridbias_zeldovich` | bool | `false` | hybridbias = true | Also write the Zel'dovich (resummed 1LPT) prediction of the spectra with the same cut and smoothing of the operators: hybridbias_zeldovich_z<z>.txt |
 | `hybridbias_oneloop` | bool | `false` | hybridbias = true | Also write the one-loop LPT (CLEFT) prediction of the spectra (no counterterms): hybridbias_oneloop_z<z>.txt |
+| `hybridbias_oneloop_kernels` | string | `"EdS"` | hybridbias = true | The kernels of the one-loop prediction. EdS: the Einstein-de Sitter kernels with the linear P(k) of the gravity model. model: the scale- and time-dependent LPT kernels of the gravity model (f(R) and DGP with their screening if gravity_model_screening, the other models from G_eff(k,a) without screening, LCDM for GR). Options: `EdS`, `model` |
 
 ## Options with separate particle species
 
