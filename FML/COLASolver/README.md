@@ -372,12 +372,36 @@ force (64^3 particles, 256 Mpc/h, 1x grid):
 So with an accurate early-time force the start from the Big Bang converges to the same answer as 2LPT initial
 conditions (with CIC it gets worse with more steps as more of them are taken while the force is inaccurate). With
 interlacing + TSC + deconvolution 10 steps from z = 1e7 give P(k) within 0.2% of the 6x grid reference up to
-k = 0.4 h/Mpc (table above). The growth factor tables start before the initial redshift (and before a_eq/10 when
+k = 0.4 h/Mpc (table above; but see below for the interlaced force at early times). The growth factor tables start before the initial redshift (and before a_eq/10 when
 there is radiation) with the growing mode of a matter + radiation universe (D1 = 1 + 3a/(2a_eq), Meszaros, and the
-corresponding 2LPT and 3LPT growing modes), so the growth factors are right also deep in the radiation era. NB: the
-Big Bang runs converge to a P(k) that differs from the 2LPT z = 19 runs by up to 0.4% for k < 0.1 h/Mpc and 3% at
-k = 0.5 h/Mpc (64^3, 1x grid, interlacing + TSC + deconvolution); which one is closer to the truth needs a test at
-higher resolution.
+corresponding 2LPT and 3LPT growing modes), so the growth factors are right also deep in the radiation era.
+
+Which force to use from the Big Bang: With interlacing + TSC + deconvolution on a 1x grid the Big Bang runs used to
+converge to a P(k) that differs from the 2LPT z = 19 runs by up to 0.4% for k < 0.1 h/Mpc and 3% at k = 0.5 h/Mpc.
+This comes from the interlaced force while the particles are still close to their lattice (z > ~19): it makes the
+modes with k > ~k_Ny/8 grow too fast (at z = 19 a Big Bang run then has +0.6% / +2.3% / +8% / +11% more power at
+k = 0.1 / 0.2 / 0.4 / 0.5 h/Mpc than the 2LPT initial conditions), and starting from the Big Bang gives this error
+much longer to act. With the exact (NUFFT) force the two starts agree. P(k, z = 0) relative to 2LPT at z = 49 with
+the NUFFT force and 100 BullFrog steps (64^3 particles, 256 Mpc/h, 1x grid, fixed amplitude; 80 BullFrog steps,
+linear in a from z = 1e7 and uniform in D from z = 19; `force_early_method = nufft` uses the NUFFT for z > 10):
+
+| Force, start                                   | k = 0.1 | 0.2    | 0.4    | 0.6    |
+|------------------------------------------------|---------|--------|--------|--------|
+| NUFFT, z = 1e7                                 | +0.01%  | +0.02% | +0.09% | +0.25% |
+| NUFFT, 2LPT z = 19 (3LPT: the same)            | -0.02%  | -0.07% | -0.21% | -0.49% |
+| interlaced, z = 1e7                            | +0.17%  | +0.92% | +2.32% | +1.70% |
+| interlaced, z = 1e7, NUFFT for z > 10          | -0.27%  | -0.53% | -0.85% | -1.04% |
+| interlaced, z = 1e7, NUFFT for z > 3           | -0.22%  | -0.42% | -0.53% | -0.56% |
+| interlaced, 2LPT z = 19                        | -0.27%  | -0.54% | -1.00% | -1.76% |
+| CIC, z = 1e7, NUFFT for z > 10                 | -2.64%  | -9.5%  | -22%   | -37%   |
+| CIC, 2LPT z = 19                               | -4.1%   | -13%   | -27%   | -43%   |
+
+So when starting from the Big Bang with a force other than the NUFFT, use `force_early_method = "nufft"` (with
+`force_early_until_redshift` ~ 10): it costs little, as with steps linear in a only a few steps are at z > 10 (here
+8.0 s against 8.4 s without it and 14.7 s with the NUFFT throughout), and the result is then that of 2LPT initial
+conditions at z = 19 with the same force (the code warns otherwise). The rest of the difference to the NUFFT runs is
+the error of the 1x force after z = 19 (see the force sections above); the NUFFT runs differ by < 0.1% for k < 0.3
+h/Mpc between the starts (z = 1e7 is closest to the z = 49 start; a later start loses a little small-scale power).
 
 ## Radiation, neutrinos and GR: the N-body gauge
 

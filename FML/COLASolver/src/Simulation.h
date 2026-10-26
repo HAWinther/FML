@@ -359,6 +359,15 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
                      "force_nmesh = particle_Npart_1D. With a finer force grid they amplify the discreteness of the "
                      "particles (see README)\n";
 
+    // Starting from the Big Bang the force at early times (particles close to the lattice) has to be accurate: the
+    // CIC and interlaced forces make the modes with k > ~k_Ny/8 grow wrongly there (see README)
+    if (params.ic.initial_redshift > 100.0 and params.force.early_method == "none" and
+        params.force.density_method == "assignment" and params.force.interpolation_method != "nufft" and
+        FML::ThisTask == 0)
+        std::cout << "WARNING: starting at z = " << params.ic.initial_redshift
+                  << " without force_early_method: use force_early_method = nufft (force_early_until_redshift ~ 10) "
+                     "for an accurate force while the particles are close to the lattice (see README)\n";
+
     // The baryon-CDM relative mode in the displacements of the particles (a ~50 kpc/h CDM-baryon offset per pair)
     // gets a spurious discrete-mode growth once the force grid resolves it, and is partly lost in collapsed regions
     // (P(delta_c - delta_b) ~ 0.5 of linear theory at z = 0 on large scales). See README

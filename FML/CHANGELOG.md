@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Big Bang starts: the early-time force (resolved open issue)
+- The difference between BullFrog runs from z = 1e7 and from 2LPT at z = 19 (+0.4% at k < 0.1, +3% at k = 0.5 h/Mpc
+  with the interlaced TSC force on a 1x grid) comes from the interlaced force while the particles are close to the
+  lattice: modes with k > ~k_Ny/8 grow too fast at z > ~19. With the NUFFT force the two starts agree (0.02% at
+  k = 0.2, 0.3% at k = 0.4 h/Mpc), and with `force_early_method = nufft` for z > 10 the Big Bang start gives the
+  result of the 2LPT start with the same force, at almost no extra cost. README table; the code now warns when
+  starting at z > 100 without an early force. No change of defaults or results.
+
 ### Baryons: mass-encoded baryon-CDM relative mode
 - `particle_baryon_relative_mode` (default `displacement`, unchanged): with `mass` both species follow the total
   CDM+baryon flow and the relative density is carried by the particle masses m_i = 1 + eps_i(q), eps_i =
