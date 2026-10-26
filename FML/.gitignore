@@ -91,3 +91,4 @@ tests/test_so
 tests/test_fnl
 tests/test_kdtree
 tests/test_paircount
+tests/test_survey

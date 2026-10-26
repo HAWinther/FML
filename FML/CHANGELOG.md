@@ -5,6 +5,15 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Survey: GalaxiesToBox fixes
+- `GalaxiesRandomsToBox` with `shiftPositions` added the minimum instead of subtracting it: for a survey not in the
+  first octant the points ended up outside [0,1). `GalaxiesToBox` shifted (and scaled) the observer once per galaxy
+  (wrong observer for more than one galaxy). The largest redshift (for the r(z) table) was found with a data race over
+  the threads (a galaxy beyond the table could get a wrong distance), and the box extent and z range were per MPI task
+  (different boxes on different tasks); both are now reduced over the threads and tasks. Scaling without shifting and
+  a zero-extent box are now caught by an assert. `tests/test_survey.cpp` checks |x - observer| * boxsize = r(z)
+  against independent values, all points in [0,1) and the same box on all tasks (5 checks failed before).
+
 ### Particles with default member initializers
 - `MPIParticles::create_particle_grid` and `RamsesReader::read_ramses` took the dimension from `GetNDIM(T())` in a
   constant expression, which does not compile for a particle class with a default member initializer (e.g.

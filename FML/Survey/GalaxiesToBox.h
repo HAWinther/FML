@@ -48,7 +48,9 @@
 //
 // The boxsize contains the maximum distance over all the coordinates in Mpc/h
 //
-// OpenMP parallelized and safe to run with MPI
+// OpenMP parallelized. With MPI every task converts its own galaxies, and the box (min/max of the positions, the
+// boxsize and the shift) is computed from the galaxies of all the tasks, so all the tasks use the same coordinates.
+// NB: weights (get_weight) are not copied to the cartesian particles; do that yourself if needed
 //
 //==============================================================================
 
@@ -93,22 +95,27 @@ namespace FML {
             static_assert(FML::PARTICLE::has_get_DEC<T>());
             static_assert(FML::PARTICLE::has_get_z<T>());
 
-            // Find maximum redshift
+            // Find maximum (and minimum) redshift (over all the tasks)
             double z_max = 0.0;
+            double z_min = 0.0;
 #ifdef USE_OMP
-#pragma omp parallel for
+#pragma omp parallel for reduction(max : z_max) reduction(min : z_min)
 #endif
             for (size_t i = 0; i < ngalaxies; i++) {
                 const double z = FML::PARTICLE::GetRedshift(galaxies_ra_dec_z[i]);
                 z_max = std::max(z, z_max);
+                z_min = std::min(z, z_min);
             }
+            FML::MaxOverTasks(&z_max);
+            FML::MinOverTasks(&z_min);
+            assert_mpi(z_min >= 0.0, "[EquitorialToCartesianCoordinates] Negative redshift");
 
-            // Make a z-array
+            // Make a z-array (up to at least z = 1e-3 so the spline exists also if all z = 0 or there are no galaxies)
             const int nz = 10000;
             std::vector<double> z_arr(nz);
             std::vector<double> r_arr(nz);
             for (int i = 0; i < nz; i++) {
-                z_arr[i] = 1.1 * z_max * i / double(nz - 1);
+                z_arr[i] = 1.1 * std::max(z_max, 1e-3) * i / double(nz - 1);
             }
 
             // Solve the ODE for the co-moving distance
@@ -174,6 +181,14 @@ namespace FML {
                 Pos[2] = z;
             }
 
+            // The box of the galaxies of all the tasks
+            FML::MinOverTasks(&min_x);
+            FML::MinOverTasks(&min_y);
+            FML::MinOverTasks(&min_z);
+            FML::MaxOverTasks(&max_x);
+            FML::MaxOverTasks(&max_y);
+            FML::MaxOverTasks(&max_z);
+
             min_max_x = {min_x, max_x};
             min_max_y = {min_y, max_y};
             min_max_z = {min_z, max_z};
@@ -212,8 +227,8 @@ namespace FML {
             observer_position = {0.,0.,0.};
 
             // If we are to scale the positions then they must be shifted so they lie in [0,1)
-            if (scalePositions)
-                assert(shiftPositions);
+            assert_mpi(not scalePositions or shiftPositions,
+                       "[GalaxiesToBox] scalePositions needs shiftPositions (positions in [0,1))");
 
             // Fetch ndim from particles and check that we have the right dimensions
             assert_mpi(FML::PARTICLE::GetNDIM(U()) == 3,
@@ -250,9 +265,18 @@ namespace FML {
 
             if (verbose) {
                 std::cout << "Minimum Pos: " << min_x << " " << min_y << " " << min_z << "\n";
-                std::cout << "Maximum Pos: " << max_x << " " << max_y << " " << max_z << "\n";
+                std::cout << "Extent: " << max_x << " " << max_y << " " << max_z << "\n";
                 std::cout << "Boxsize: " << boxsize << "\n";
             }
+            if (scalePositions)
+                assert_mpi(boxsize > 0.0, "[GalaxiesToBox] The galaxies have no extent (boxsize = 0): cannot scale");
+
+            // The observer (at the origin) with the same shift and scale as the galaxies
+            if (shiftPositions)
+                observer_position = {-min_x, -min_y, -min_z};
+            if (scalePositions)
+                for (auto & x : observer_position)
+                    x /= boxsize;
 
             // Shift positions and possibly scale them so they are in [0,1)
 #ifdef USE_OMP
@@ -265,18 +289,12 @@ namespace FML {
                     Pos[0] -= min_x;
                     Pos[1] -= min_y;
                     Pos[2] -= min_z;
-                    observer_position[0] -= min_x;
-                    observer_position[1] -= min_y;
-                    observer_position[2] -= min_z;
                 }
 
                 if (scalePositions) {
                     Pos[0] /= boxsize;
                     Pos[1] /= boxsize;
                     Pos[2] /= boxsize;
-                    observer_position[0] /= boxsize;
-                    observer_position[1] /= boxsize;
-                    observer_position[2] /= boxsize;
                 }
             }
         }
@@ -330,6 +348,8 @@ namespace FML {
             // Set observer position to be at origin
             observer_position = std::vector<double>(3,0.0);
 
+            assert_mpi(not scalePositions or shiftPositions,
+                       "[GalaxiesRandomsToBox] scalePositions needs shiftPositions (positions in [0,1))");
             double max_x = -1e100, max_y = -1e100, max_z = -1e100;
             double min_x = +1e100, min_y = +1e100, min_z = +1e100;
 #ifdef USE_OMP
@@ -357,6 +377,14 @@ namespace FML {
                 min_z = std::min(Pos[2], min_z);
             }
 
+            // The box of the galaxies and randoms of all the tasks
+            FML::MinOverTasks(&min_x);
+            FML::MinOverTasks(&min_y);
+            FML::MinOverTasks(&min_z);
+            FML::MaxOverTasks(&max_x);
+            FML::MaxOverTasks(&max_y);
+            FML::MaxOverTasks(&max_z);
+
             max_x -= min_x;
             max_y -= min_y;
             max_z -= min_z;
@@ -364,22 +392,27 @@ namespace FML {
             // The boxsize we use is the maximum of the two
             boxsize = 1.05 * std::max(std::max(max_x, max_y), max_z);
 
+            if (scalePositions)
+                assert_mpi(boxsize > 0.0, "[GalaxiesRandomsToBox] No extent (boxsize = 0): cannot scale");
+
+            // Shift so that the smallest coordinate is 0 (NB: subtract the minimum; this was added before, which put
+            // the catalogues outside [0,1) unless the minimum was ~0, e.g. a survey in the first octant)
             if (shiftPositions) {
                 for (auto & p : galaxies_xyz) {
                     auto * Pos = FML::PARTICLE::GetPos(p);
-                    Pos[0] += min_x;
-                    Pos[1] += min_y;
-                    Pos[2] += min_z;
+                    Pos[0] -= min_x;
+                    Pos[1] -= min_y;
+                    Pos[2] -= min_z;
                 }
                 for (auto & p : randoms_xyz) {
                     auto * Pos = FML::PARTICLE::GetPos(p);
-                    Pos[0] += min_x;
-                    Pos[1] += min_y;
-                    Pos[2] += min_z;
+                    Pos[0] -= min_x;
+                    Pos[1] -= min_y;
+                    Pos[2] -= min_z;
                 }
-                observer_position[0] += min_x;
-                observer_position[1] += min_y;
-                observer_position[2] += min_z;
+                observer_position[0] -= min_x;
+                observer_position[1] -= min_y;
+                observer_position[2] -= min_z;
             }
 
             if (scalePositions) {
