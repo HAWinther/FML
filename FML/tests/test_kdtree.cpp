@@ -2,7 +2,7 @@
 // Tests for FML::KDTREE (KDTree/KDTree.h) against brute force:
 //   - nearest neighbour and points within a radius, 2D and 3D, with and without a periodic box
 //   - periodic: queries near the boundaries and outside the box, radius > boxsize/2, duplicate points, empty tree
-//   - the k nearest neighbours (and the distances) if available
+//   - the k nearest neighbours and their distances, a tree from particles
 //   - DensityProfileBinner (OpenMP + MPI) against a brute-force pair count
 // The header is also included in test_kdtree_odr.cpp (the header must be usable from several translation units)
 // Run with: make run (in this folder) or make test (from the top folder)
@@ -84,7 +84,27 @@ int main() {
                 if (std::set<size_t>(found.begin(), found.end()) != truth or found.size() != truth.size())
                     bad_radius++;
             }
+            // The k nearest neighbours (nearest first) and their distances
+            int bad_knn = 0;
+            for (int q = 0; q < 100; q++) {
+                point_t pt(ndim);
+                for (auto & x : pt)
+                    x = L * uniform(rng);
+                std::vector<std::pair<double, size_t>> all;
+                for (size_t i = 0; i < pts.size(); i++)
+                    all.push_back({pdist2(pts[i], pt, boxsize), i});
+                std::sort(all.begin(), all.end());
+                const size_t k = 1 + q % 20;
+                std::vector<double> d2;
+                auto knn = tree.knearest_indices(pt, k, &d2);
+                bool ok = knn.size() == k and d2.size() == k;
+                for (size_t j = 0; ok and j < k; j++)
+                    ok = std::fabs(d2[j] - all[j].first) <= 1e-14 * L * L and
+                         std::fabs(pdist2(pts[knn[j]], pt, boxsize) - all[j].first) <= 1e-14 * L * L;
+                bad_knn += not ok;
+            }
             const std::string label = "box " + std::to_string(boxsize).substr(0, 3) + ", " + std::to_string(ndim) + "D: ";
+            check(bad_knn == 0, label + "k nearest neighbours and distances (" + std::to_string(bad_knn) + " of 100 wrong)");
             check(bad_nearest == 0, label + "nearest neighbour (" + std::to_string(bad_nearest) + " of 300 wrong)");
             check(bad_radius == 0, label + "points within r (" + std::to_string(bad_radius) + " of 300 wrong)");
         }
@@ -120,7 +140,19 @@ int main() {
         check(tree_same.neighborhood_indices(point_t{0.999, 0.0, 0.001}, 0.5).size() == 50,
               "50 identical points on the boundary, r = boxsize/2: each found once");
         KDTree empty(pointVec{}, boxsize);
-        check(empty.neighborhood_indices(point_t{0.5, 0.5, 0.5}, 0.2).empty(), "empty tree");
+        check(empty.neighborhood_indices(point_t{0.5, 0.5, 0.5}, 0.2).empty() and
+                  empty.nearest_index(point_t{0.5, 0.5, 0.5}) == size_t(-1) and
+                  empty.knearest_indices(point_t{0.5, 0.5, 0.5}, 3).empty(),
+              "empty tree");
+        check(tree_same.knearest_indices(point_t{0.5, 0.5, 0.5}, 10).size() == 10, "k nearest of identical points");
+        // The tree from particles = the tree from points
+        std::vector<Point3> particles(pts.size());
+        for (size_t i = 0; i < pts.size(); i++)
+            for (int d = 0; d < 3; d++)
+                particles[i].pos[d] = pts[i][d];
+        KDTree tree_part(particles.data(), particles.size(), boxsize);
+        auto c = tree_part.neighborhood_indices(point_t{0.1, 0.9, 0.5}, 0.15), d = tree.neighborhood_indices(point_t{0.1, 0.9, 0.5}, 0.15);
+        check(std::set<size_t>(c.begin(), c.end()) == std::set<size_t>(d.begin(), d.end()), "tree from particles");
     }
 
     // Tree from particles + DensityProfileBinner against brute force (periodic, unit box)

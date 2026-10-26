@@ -5,6 +5,18 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### KDTree: new implementation
+- A flat kd-tree (coordinates in one array reordered by node, leaves of 8 points, split at the median of the widest
+  dimension, bounding boxes; periodic searches prune with the minimum-image distance to the node boxes, so no
+  periodic images are needed) behind the same interface. New: `knearest_indices` (k nearest, with squared
+  distances), `neighborhood_indices_and_distances`, `size()`; all queries are const (thread safe). The internal
+  node classes (`KDNode`, `KDNodePtr`, `comparer`, `sort_on_idx`) are gone.
+- 3D, uniform points, against the fixed old tree (below): memory 51 instead of ~140 bytes per point; radius queries
+  with ~30 neighbours 4-10 us instead of 30-58 us, with ~3000 neighbours 0.06-0.17 ms instead of 1.6-3.3 ms;
+  building 1e6 / 4e6 points 0.55-0.65 / 3.0-3.7 s instead of 0.9-1.0 / 7-10 s; nearest neighbour the same
+  (2-7 us). `DensityProfileBinner` does one MPI reduction instead of one per profile.
+- `tests/test_kdtree.cpp` also checks the k nearest neighbours and the tree from particles.
+
 ### KDTree: fixes
 - The header defined non-inline functions, so it could not be included in two translation units (28 multiple
   definitions at link time). All are now inline.
