@@ -96,6 +96,11 @@ RUN  =
 RUN1 =
 endif
 
+# Idle OpenMP threads sleep instead of spinning: with more threads than cores (e.g. 4 tasks x 2 threads on a laptop)
+# spinning threads starve the MPI tasks and the many short parallel regions of e.g. the multigrid solver become
+# ~100 times slower (test_multigrid on 4 tasks: 270 s -> 2 s on 2 cores)
+export OMP_WAIT_POLICY = passive
+
 # Each run must pass; the two "must abort" runs must fail with the expected message
 .PHONY: run
 run: $(TARGETS)
