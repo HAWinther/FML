@@ -5,6 +5,19 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Global: FFTW threads, sub-communicators and smaller fixes
+- FFTW was initialized before `init_fml` had counted the OpenMP threads, so with `USE_FFTW_THREADS` (the default for
+  COLASolver) FFTW made all its plans with 1 thread while the startup info said thread support was enabled. FML is now
+  initialized first (and `init_fftw` uses the OpenMP thread count itself). 256^3 r2c + c2r 1.7x faster on 2 cores;
+  COLASolver force calculation ~20% faster on 2 cores (64^3 particles, 128^3 force grid), more with more cores.
+  Results unchanged.
+- `init_fml` reduced the CPU-affinity check over `MPI_COMM_WORLD` instead of `FML::communicator`, so running on a
+  sub-communicator (as documented in Global.h) hung.
+- `assert_mpi` can be used outside namespace FML (`assert_mpi_impl` was not found).
+- `SystemMemory.h` functions are inline (including the header in two files failed to link).
+- `create_folder`: all tasks get the result and throw together (task 0 threw while the others waited in a barrier).
+- `GatherFromTasks` (and the fallback of Min/Max/SumOverTasks) static_asserts that the type is trivially copyable (it
+  sends the bytes).
 ### COLASolver: linear growth with massive neutrinos
 - The scale-dependent LPT growth factors (used by scale-dependent COLA and for the `Pcb_linear` column of the P(k)
   output) evolved the neutrinos with a fluid approximation with a free-streaming scale: for 0.4 eV the growth of

@@ -168,6 +168,9 @@ namespace FML {
     /// Gather a single value from all tasks. Value from task ThisTask is stored in values[ThisTask]
     template <class T>
     std::vector<T> GatherFromTasks(T * value) {
+        static_assert(std::is_trivially_copyable_v<T>,
+                      "GatherFromTasks (and the Min/Max/SumOverTasks fallback) sends the bytes of T: T must be "
+                      "trivially copyable");
         std::vector<T> values(FML::NTasks);
 #ifdef USE_MPI
         MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, FML::communicator);
@@ -370,6 +373,9 @@ namespace FML {
 #undef FUNS
 } // namespace FML
 
+// So that assert_mpi(...) also works outside namespace FML (FML::assert_mpi(...) expands to FML::assert_mpi_impl)
+using FML::assert_mpi_impl;
+
 namespace FML {
 
     //=============================================================
@@ -457,13 +463,13 @@ namespace FML {
             // Initialize MPI
             [[maybe_unused]] MPISetup & m = MPISetup::init(argc, argv);
 
+            // Initialize FML (before FFTW: FFTW makes its plans with FML::NThreads threads)
+            init_fml();
+
 #ifdef USE_FFTW
             // Initialize FFTW
             [[maybe_unused]] FFTWSetup & f = FFTWSetup::init(argc, argv);
 #endif
-
-            // Initialize FML
-            init_fml();
 
             // Show some info to see that all is ok
             info();

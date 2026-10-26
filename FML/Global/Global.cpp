@@ -1,3 +1,4 @@
+#include <cerrno>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
@@ -117,8 +118,8 @@ namespace FML {
                 NTasksThreadsShareCores = ncores < NThreads ? 1 : 0;
                 MinCoresPerTask = ncores;
 #ifdef USE_MPI
-                MPI_Allreduce(MPI_IN_PLACE, &NTasksThreadsShareCores, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-                MPI_Allreduce(MPI_IN_PLACE, &MinCoresPerTask, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+                MPI_Allreduce(MPI_IN_PLACE, &NTasksThreadsShareCores, 1, MPI_INT, MPI_SUM, FML::communicator);
+                MPI_Allreduce(MPI_IN_PLACE, &MinCoresPerTask, 1, MPI_INT, MPI_MIN, FML::communicator);
 #endif
             }
         }
@@ -241,18 +242,19 @@ namespace FML {
     // do this)
     //============================================
     bool create_folder(std::string foldername) {
-        bool ok = true;
+        // Task 0 creates it and all tasks get the result (so all throw if it fails, instead of task 0 throwing
+        // while the others wait)
+        int ok = 1;
         if (FML::ThisTask == 0) {
             int status = mkdir(foldername.c_str(), 0777);
-            ok = not((status < 0) && (errno != EEXIST));
-            if (not ok) {
-                throw std::runtime_error("Failed to create snapshot folder [" + foldername + "]");
-            }
+            ok = ((status < 0) && (errno != EEXIST)) ? 0 : 1;
         }
 #ifdef USE_MPI
-        MPI_Barrier(FML::communicator);
+        MPI_Bcast(&ok, 1, MPI_INT, 0, FML::communicator);
 #endif
-        return ok;
+        if (not ok)
+            throw std::runtime_error("Failed to create folder [" + foldername + "]");
+        return true;
     }
 
     //============================================
@@ -351,8 +353,13 @@ namespace FML {
             if (FML::MPIThreadsOK) {
                 FML::FFTWThreadsOK = INIT_FFTW_THREADS();
                 if (FML::FFTWThreadsOK) {
-                    SET_FFTW_NTHREADS(FML::NThreads);
-                    fftw_nthreads = FML::NThreads;
+                    // (FML::NThreads is only set by init_fml, which may not have been called yet)
+                    int nthreads = FML::NThreads;
+#ifdef USE_OMP
+                    nthreads = std::max(nthreads, omp_get_max_threads());
+#endif
+                    SET_FFTW_NTHREADS(nthreads);
+                    fftw_nthreads = nthreads;
                 }
             }
 #endif
