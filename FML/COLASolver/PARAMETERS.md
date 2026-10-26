@@ -58,8 +58,12 @@ Parameters marked *optional* take the default value if they are not in the param
 
 | Parameter | Type | Default | Used when | Description |
 |---|---|---|---|---|
-| `gravity_model` | string | `"GR"` | always | The gravity model (growth of perturbations and forces). Options: `GR`, `f(R)`, `DGP`, `JBD`, `Symmetron`, `Geff`, `mbeta` |
+| `gravity_model` | string | `"GR"` | always | The gravity model (growth of perturbations and forces). Options: `GR`, `f(R)`, `DGP`, `JBD`, `Symmetron`, `Geff`, `mbeta`, `mu` |
 | `gravity_model_geff_geffofa_filename` | string | *required* | gravity_model = Geff | File with the format [a, Geff/G(a)] |
+| `gravity_model_mu_parametrization` | string | *required* | gravity_model = mu | Poisson equation with G_eff/G = mu(a,k), no screening. DE: mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1). BZ: mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 a^s) (Bertschinger & Zukin 2008). table: mu(a) or mu(a,k) from a file. Options: `DE`, `BZ`, `table` |
+| `gravity_model_mu_mu0` | double | *required* | gravity_model = mu and gravity_model_mu_parametrization = DE | mu0 in mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1) |
+| `gravity_model_mu_BZ_params` | double list | *required* | gravity_model = mu and gravity_model_mu_parametrization = BZ | {beta1, lambda1 (Mpc/h), s} in mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 a^s) (k in h/Mpc) |
+| `gravity_model_mu_filename` | string | *required* | gravity_model = mu and gravity_model_mu_parametrization = table | File with rows 'a mu' or 'a k mu' (k in h/Mpc, a regular grid in a and k; e.g. from hi_class). Splined in log a, log k; the closest value outside |
 | `gravity_model_mbeta_params` | double list | *required* | gravity_model = mbeta | The parameters (beta0, n, m0, m) of beta(a) = beta0 a^n and m(a) = m0 H0 a^m |
 | `gravity_model_fofr_fofr0` | double | *required* | gravity_model = f(R) | The value of f_R today |
 | `gravity_model_fofr_nfofr` | double | `1` | gravity_model = f(R) | The index n of the Hu-Sawicky model |

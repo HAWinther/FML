@@ -61,7 +61,8 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
                                              double H0Box,
                                              double aini,
                                              double a,
-                                             double sign = 1.0);
+                                             double sign = 1.0,
+                                             double lattice_offset = 0.0);
 
 template <int NDIM, class T>
 void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
@@ -76,7 +77,8 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                     double aold,
                                     double a,
                                     double delta_time_kick,
-                                    [[maybe_unused]] double delta_time_drift);
+                                    [[maybe_unused]] double delta_time_drift,
+                                    double lattice_offset = 0.0);
 
 template <int NDIM, class T>
 void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
@@ -319,6 +321,49 @@ void sum_of_LPT_potentials(FML::GRID::FFTWGrid<NDIM> & grid,
     });
 }
 
+//========================================================================
+/// Interpolate the LPT displacement grids of scale-dependent COLA to the Lagrangian positions q of the particles
+/// (stored as the positions while they are swapped). The particle lattice may have been offset from the nodes of the
+/// grids (ic_lattice_offset): the potentials are those of the lattice before the offset, so we interpolate at
+/// q - lattice_offset, i.e. at the grid nodes when the IC grid has Npart_1D cells (exact with CIC; at the offset
+/// positions CIC would smooth the displacements and the COLA frame would miss growth on small scales)
+//========================================================================
+template <int NDIM, class T>
+void interpolate_LPT_grid_to_lagrangian_positions(const std::array<FML::GRID::FFTWGrid<NDIM>, NDIM> & grid_vector_real,
+                                                  FML::PARTICLE::MPIParticles<T> & part,
+                                                  std::array<std::vector<FML::GRID::FloatType>, NDIM> & result,
+                                                  const std::string & interpolation_method,
+                                                  double lattice_offset) {
+    if (lattice_offset == 0.0) {
+        FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, T>(
+            grid_vector_real, part.get_particles_ptr(), part.get_npart(), result, interpolation_method);
+        return;
+    }
+    struct Point {
+        double pos[NDIM];
+        double * get_pos() { return pos; }
+        constexpr int get_ndim() const { return NDIM; }
+    };
+    std::vector<Point> points(part.get_npart());
+    auto * p = part.get_particles_ptr();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+    for (size_t i = 0; i < points.size(); i++) {
+        const auto * q = FML::PARTICLE::GetPos(p[i]);
+        for (int idim = 0; idim < NDIM; idim++) {
+            double x = q[idim] - lattice_offset;
+            if (x < 0.0)
+                x += 1.0;
+            if (x >= 1.0)
+                x -= 1.0;
+            points[i].pos[idim] = x;
+        }
+    }
+    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, Point>(
+        grid_vector_real, points.data(), points.size(), result, interpolation_method);
+}
+
 // This method kick's and drift's the particles one time-step
 // Only 1LPT, though not hard to extend
 // This method can be speed up a lot
@@ -335,7 +380,8 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                     double aold,
                                     double a,
                                     double delta_time_kick,
-                                    [[maybe_unused]] double delta_time_drift) {
+                                    [[maybe_unused]] double delta_time_drift,
+                                    double lattice_offset) {
     if (LPT_order < 1) return;
 
     constexpr bool print_timings = false;
@@ -406,8 +452,8 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
         // Compute at particle positions (this would be faster if we could do direct assignment
         // which we can by using Lagrangian position (we know how this is generated...))
         timer.StartTiming("Interpolation");
-        FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, T>(
-            grid_vector_real, part.get_particles_ptr(), part.get_npart(), result, interpolation_method);
+        interpolate_LPT_grid_to_lagrangian_positions<NDIM, T>(
+            grid_vector_real, part, result, interpolation_method, lattice_offset);
         timer.EndTiming("Interpolation");
     };
 
@@ -653,7 +699,8 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
                                              double H0Box,
                                              double aini,
                                              double a,
-                                             double sign) {
+                                             double sign,
+                                             double lattice_offset) {
     
     if (LPT_order < 1) return;
 
@@ -712,8 +759,8 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
         for (int idim = 0; idim < NDIM; idim++) {
             grid_vector_real[idim].communicate_boundaries();
         }
-        FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, T>(
-            grid_vector_real, part.get_particles_ptr(), part.get_npart(), result, interpolation_method);
+        interpolate_LPT_grid_to_lagrangian_positions<NDIM, T>(
+            grid_vector_real, part, result, interpolation_method, lattice_offset);
     };
 
     auto function_vel_1LPT = [&](double kBox) {
@@ -840,6 +887,8 @@ class ColaState {
     int LPT_order{2};           // The LPT order of COLA
     double aini{1.0};           // The initial scale factor
     double H0Box{1.0};          // H0 * boxsize
+    double lattice_offset{0.0}; // The offset of the particle lattice (ic_lattice_offset) from the lattice of the
+                                // stored LPT potentials (in units of the box)
     std::shared_ptr<GravityModel<NDIM>> grav;
 
     // The LPT potentials at the initial time (only allocated for scale-dependent COLA)
@@ -862,7 +911,8 @@ class ColaState {
                                                              H0Box,
                                                              aini,
                                                              a,
-                                                             sign);
+                                                             sign,
+                                                             lattice_offset);
         } else {
             cola_add_on_LPT_velocity<NDIM, T>(part, grav, LPT_order, aini, a, sign);
         }
@@ -887,7 +937,8 @@ class ColaState {
                                                     aold,
                                                     a,
                                                     delta_time_kick,
-                                                    delta_time_drift);
+                                                    delta_time_drift,
+                                                    lattice_offset);
         } else {
             cola_kick_drift<NDIM, T>(part, grav, LPT_order, aini, aold, a, delta_time_kick, delta_time_drift);
         }

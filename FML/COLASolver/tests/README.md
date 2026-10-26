@@ -33,6 +33,17 @@ Runs gaussian IC and local fNL = 0, +300, -300 with the same seed and checks tha
 same P(k) as the gaussian IC, that the bispectrum responds linearly to fNL and that the large-scale
 reduced bispectrum increases with fNL.
 
+## Phenomenological modified gravity (`check_mu_gravity.py`)
+
+```bash
+python3 tests/check_mu_gravity.py ./nbody /tmp/mu   # about 2 minutes, needs numpy and scipy
+```
+
+Linear-amplitude runs of GR and `gravity_model = mu` (mu0 = 0.5 and a Bertschinger-Zukin mu(a,k)), without COLA
+and with scale-dependent COLA, and checks P_mu / P_GR at z = 0 against (D_mu / D_GR)^2 from an independent solution
+of the growth equation (to 0.1% for k <= 0.1 h/Mpc). The scale-dependent COLA runs also check that the COLA frame is
+right with the particle lattice offset from the force grid (2x force grid).
+
 ## Time-stepping (`check_timestepping.py`)
 
 ```bash

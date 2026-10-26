@@ -387,6 +387,28 @@ CASES = {
         ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
         ic_input_redshift=20.0,
     ),
+    # Phenomenological modified gravity mu(a) = 1 + mu0 Omega_DE(a)/Omega_DE (no screening), COLA
+    "mu_de_cola": dict(
+        gravity_model="mu",
+        gravity_model_mu_parametrization="DE",
+        gravity_model_mu_mu0=0.5,
+    ),
+    # Scale-dependent mu(a,k) (Bertschinger-Zukin) with scale-dependent COLA and a 2x force grid (offset lattice)
+    "mu_bz_scaledep_cola": dict(
+        gravity_model="mu",
+        gravity_model_mu_parametrization="BZ",
+        gravity_model_mu_BZ_params=[4.0 / 3.0, 10.0, 4.0],
+        simulation_use_scaledependent_cola=True,
+        force_nmesh=64,
+    ),
+    # mu(a,k) from a table, without COLA
+    "mu_table": dict(
+        gravity_model="mu",
+        gravity_model_mu_parametrization="table",
+        gravity_model_mu_filename=INPUT + "/mu_table_BZ_example.txt",
+        simulation_use_cola=False,
+        timestep_method="FastPM",
+    ),
     # FoF with spherical overdensity masses, text catalogue, COLA
     "fof_so": dict(
         output_redshifts=[1.0, 0.0],

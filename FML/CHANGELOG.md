@@ -5,6 +5,27 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Fixed: scale-dependent COLA with an offset particle lattice
+- With `ic_lattice_offset` (the fiducial half force cell when `force_nmesh > particle_Npart_1D`, introduced earlier in
+  this cleanup) scale-dependent COLA interpolated its LPT potentials at the offset Lagrangian positions with CIC,
+  which smooths the displacements of the COLA frame: P(k) at z = 0 too low already in linear theory, by 1.4% /
+  5% / 18% / 33% at k = 0.1 / 0.2 / 0.4 / 0.6 h/Mpc (64^3, 256 Mpc/h, 2x grid; relative to scale-independent COLA
+  and Quinn without COLA, which agree to 0.1%), and +8% in the baryon-CDM relative mode with linear neutrinos. Now
+  the potentials are interpolated at q - offset (the grid nodes): scale-dependent COLA agrees with scale-independent
+  COLA to < 0.01% in GR and with 200 Quinn steps to 0.02% for f(R) and mu(a,k) at normal amplitude. Runs with
+  `force_nmesh = particle_Npart_1D` (no offset) are unchanged; no regression case had the offset with
+  scale-dependent COLA (new case `mu_bz_scaledep_cola`, and `tests/check_mu_gravity.py` catches it).
+
+### Gravity model `mu`: phenomenological mu(a,k)
+- `gravity_model = "mu"` with `gravity_model_mu_parametrization` = `DE` (mu = 1 + mu0 Omega_DE(a)/Omega_DE),
+  `BZ` (Bertschinger & Zukin mu(a,k)) or `table` (mu(a) or mu(a,k) from a file, e.g. from hi_class; example
+  `input/mu_table_BZ_example.txt`). No screening. Growth factors with mu(a,k) (scale-dependent growth for a
+  k-dependent mu).
+- Validation (`tests/check_mu_gravity.py`, linear amplitude): P_mu/P_GR = (D_mu/D_GR)^2 from an independent growth
+  solution to 0.05% for k <= 0.1 h/Mpc and 0.2-1.2% up to k = 0.6 h/Mpc (PM force resolution), with and without
+  scale-dependent COLA; growth factors to 3e-5; tables = parametrisations to 0.001%. Regression cases `mu_de_cola`,
+  `mu_bz_scaledep_cola`, `mu_table`; all other files unchanged bit for bit.
+
 ### Big Bang starts: the early-time force (resolved open issue)
 - The difference between BullFrog runs from z = 1e7 and from 2LPT at z = 19 (+0.4% at k < 0.1, +3% at k = 0.5 h/Mpc
   with the interlaced TSC force on a 1x grid) comes from the interlaced force while the particles are close to the

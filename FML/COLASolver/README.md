@@ -83,6 +83,10 @@ For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations)
 
 * Symmetron : The symmetron model. A f(R)-like modified gravity model - just to have a bit of variety.
 
+* Geff : G_eff/G(a) from a file (no scale dependence, no screening).
+
+* mu : Phenomenological modified gravity, the Poisson equation with G_eff/G = mu(a,k) and no screening (as in linear theory, also on small scales): `gravity_model_mu_parametrization = "DE"` with mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1) (the "late-time" parametrisation used by Planck and DES), `"BZ"` with mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 a^s) (Bertschinger & Zukin 2008; k in h/Mpc, lambda1 in Mpc/h), or `"table"` with mu(a) or mu(a,k) from a file with rows `a mu` or `a k mu` on a regular grid (e.g. computed with hi_class; splined in log a and log k, the closest value outside the table; example: `input/mu_table_BZ_example.txt`). The growth factors (1LPT-3LPT) are solved with mu(a,k), so a k-dependent mu gives scale-dependent growth (use scale-dependent COLA, or COLA with the large-scale growth and the rest from the PM part). Only the potential that moves the particles is modified (Sigma, the lensing potential, is not used: the lightcone potential maps are GR). Test (`tests/check_mu_gravity.py`: 64^3 particles, 256 Mpc/h, 2x grid, linear amplitude, IC from GR growth at z = 19): P_mu/P_GR at z = 0 agrees with (D_mu/D_GR)^2 from an independent solution of the growth equation to 0.05% for k <= 0.1 h/Mpc (mu0 = 0.5: P_mu/P_GR = 1.131; BZ with beta1 = 4/3, lambda1 = 10 Mpc/h, s = 4: 1.002-1.18 for k = 0.03-0.6) and to 0.2-1.2% up to k = 0.6 h/Mpc (the force resolution of the PM grid), with and without scale-dependent COLA; the tables reproduce the parametrisations to 0.001%. At normal amplitude COLA (30 steps, scale-dependent for BZ) gives the same response P_mu/P_GR as 200 Quinn steps to 0.02% for k < 0.6 h/Mpc.
+
 # Forces
 
 The code computes PM forces. Particles are binned to a grid (free choice of grid size and density assignment method: NGP, CIC, TSC, PCS, PQS, ...) and used fourier transforms to get the forces. The choice of kernel for this is also a free choice (the fiducial option is the "poor-mans Poisson solver" using the continuous Greens function, but other kernels like the ones in Hamming et al., Hockney & Eastwood and GADGET are also included). 
@@ -135,7 +139,7 @@ COLA: the two species share the COLA frame of the total CDM+baryon field (the LP
 | COLA + Tassev, linear amplitude (%)             | +34   | +29   | +30   | +25   | +26   |
 | COLA + Tassev, logarithmic steps (%)            | +2.5  | +2.1  | +2.2  | +1.9  | +2.0  |
 | COLA + Quinn, normal amplitude (%)              | -0.5  | -0.5  | -0.6  | -1.1  | -0.8  |
-| scale-dependent COLA + Quinn, 0.4 eV linear neutrinos, normal amplitude (%) | +8.1 | +7.9 | +7.9 | +8.9 | +5.8 |
+| scale-dependent COLA + Quinn, 0.4 eV linear neutrinos, normal amplitude (%) | -0.7 | -0.8 | -0.9 | -0.4 | -0.7 |
 
 With COLA + Quinn the CDM+baryon P(k) is within 0.2% of the reference for k < 0.6 h/Mpc (Tassev: +1.1% at k = 0.6). NB: at normal amplitude the relative mode on large scales is about 30% smaller (in amplitude, at z = 0 and k = 0.03 h/Mpc) than linear theory with the default `particle_baryon_relative_mode = "displacement"`, with and without COLA, see below. Measure it from delta_c - delta_b: 1 - sqrt(P_b/P_c) is biased low at normal amplitude by the power the two species share.
 

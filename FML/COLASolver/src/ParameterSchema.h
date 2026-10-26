@@ -267,6 +267,33 @@ namespace COLASOLVER {
             gravity_is({"Geff"}, [&]() {
                 b.required("gravity_model_geff_geffofa_filename", "", "File with the format [a, Geff/G(a)]");
             });
+            gravity_is({"mu"}, [&]() {
+                b.required("gravity_model_mu_parametrization",
+                           "DE",
+                           "Poisson equation with G_eff/G = mu(a,k), no screening. DE: mu = 1 + mu0 "
+                           "Omega_DE(a)/Omega_DE(a=1). BZ: mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 "
+                           "a^s) (Bertschinger & Zukin 2008). table: mu(a) or mu(a,k) from a file",
+                           {"DE", "BZ", "table"});
+                b.when(is_one_of("gravity_model_mu_parametrization", {"DE"}),
+                       "gravity_model_mu_parametrization = DE",
+                       [&]() { b.required("gravity_model_mu_mu0", 0.0, "mu0 in mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1)"); });
+                b.when(is_one_of("gravity_model_mu_parametrization", {"BZ"}),
+                       "gravity_model_mu_parametrization = BZ",
+                       [&]() {
+                           b.required("gravity_model_mu_BZ_params",
+                                      std::vector<double>{1.0, 0.0, 4.0},
+                                      "{beta1, lambda1 (Mpc/h), s} in mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + "
+                                      "lambda1^2 k^2 a^s) (k in h/Mpc)");
+                       });
+                b.when(is_one_of("gravity_model_mu_parametrization", {"table"}),
+                       "gravity_model_mu_parametrization = table",
+                       [&]() {
+                           b.required("gravity_model_mu_filename",
+                                      "",
+                                      "File with rows 'a mu' or 'a k mu' (k in h/Mpc, a regular grid in a and k; "
+                                      "e.g. from hi_class). Splined in log a, log k; the closest value outside");
+                       });
+            });
             gravity_is({"mbeta"}, [&]() {
                 b.required("gravity_model_mbeta_params",
                            std::vector<double>{},

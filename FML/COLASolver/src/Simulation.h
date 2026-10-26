@@ -741,6 +741,8 @@ void NBodySimulation<NDIM, T>::apply_lattice_offset() {
     if (not offset_lattice)
         return;
     const double shift = 0.5 / double(params.force.nmesh);
+    // Scale-dependent COLA interpolates its LPT potentials (of the lattice before the offset) at q - shift
+    cola.lattice_offset = shift;
     if (FML::ThisTask == 0)
         std::cout << "Offsetting the particle lattice by half a force grid cell (" << shift * params.simulation.boxsize
                   << " Mpc/h) in each direction\n";
