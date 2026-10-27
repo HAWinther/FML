@@ -279,7 +279,7 @@ namespace COLASOLVER {
     struct OutputSettings {
         std::vector<double> redshifts; // List of output redshift from large to small
         bool particles;                // Output particles?
-        ParticleFileFormat fileformat; // Fileformat for particles
+        ParticleFileFormat fileformat{ParticleFileFormat::GADGET}; // Fileformat for particles
         std::string folder;            // Folder to store output ("" is the current folder)
         bool lightcone{false};         // Make a lightcone (the settings are read by the Lightcone class)
 
@@ -510,7 +510,8 @@ namespace COLASOLVER {
             // Output
             r.get("output_redshifts", output.redshifts);
             r.get("output_particles", output.particles);
-            if (output.particles) {
+            // (also used for the baryonified particles, which can be written without the ordinary particles)
+            if (output.particles or (baryonification.enabled and baryonification.output_particles)) {
                 r.get_choice("output_fileformat",
                              output.fileformat,
                              {{"GADGET", ParticleFileFormat::GADGET},
