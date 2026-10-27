@@ -629,25 +629,23 @@ namespace FML {
             for (int idim = 0; idim < N; idim++) {
                 force_grid[idim].communicate_boundaries();
             }
-            std::array<std::vector<FML::GRID::FloatType>, N> force;
-            FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N, T>(
-                force_grid, p, NumPart, force, interpolation_method);
+            // Gather, round to the grid value type as before, and kick immediately. Only one particle's
+            // force vector is on the stack; no N x NumPart temporary force arrays are needed.
+            auto kick = [&](size_t index, const std::array<FML::GRID::FloatType, N> & force) {
+                auto * vel = FML::PARTICLE::GetVel(p[index]);
+                double max_change = 0.0;
+                for (int idim = 0; idim < N; idim++) {
+                    const double dvel = -force[idim] * delta_time;
+                    max_change = std::max(max_change, std::abs(dvel));
+                    vel[idim] += dvel;
+                }
+                return max_change;
+            };
+            double max_dvel = FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions_apply<N, T>(
+                force_grid, p, NumPart, interpolation_method, kick);
             if (free_force_grids) {
                 for (int idim = 0; idim < N; idim++) {
                     force_grid[idim].free();
-                }
-            }
-
-            double max_dvel = 0.0;
-#ifdef USE_OMP
-#pragma omp parallel for reduction(max : max_dvel)
-#endif
-            for (size_t i = 0; i < NumPart; i++) {
-                auto * vel = FML::PARTICLE::GetVel(p[i]);
-                for (int idim = 0; idim < N; idim++) {
-                    double dvel = -force[idim][i] * delta_time;
-                    max_dvel = std::max(max_dvel, std::abs(dvel));
-                    vel[idim] += dvel;
                 }
             }
 

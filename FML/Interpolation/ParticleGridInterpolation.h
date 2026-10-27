@@ -145,6 +145,20 @@ namespace FML {
                                                       std::array<std::vector<FloatType>, N> & interpolated_values_vec,
                                                       std::string interpolation_method);
 
+        /// Gather a grid vector and immediately consume each interpolated value, without output arrays.
+        /// apply(index, value) receives an array<FloatType, N>, preserving the buffered gather's rounding.
+        /// It returns a nonnegative double diagnostic; the result is its local maximum (or zero for no particles).
+        /// Calls run concurrently under OpenMP: apply must be thread safe and must not throw. Only the
+        /// calling particle's data should be modified. Grid halos must already have been communicated.
+        template <int N, int ORDER, class T, class Apply>
+        double interpolate_grid_vector_to_particle_positions_apply(const std::array<FFTWGrid<N>, N> & grid,
+                                                                   const T * part, size_t NumPart, Apply && apply);
+
+        template <int N, class T, class Apply>
+        double interpolate_grid_vector_to_particle_positions_apply(const std::array<FFTWGrid<N>, N> & grid,
+                                                                   const T * part, size_t NumPart,
+                                                                   std::string interpolation_method, Apply && apply);
+
         /// @brief Assign particles to a grid to compute the over density field delta.
         ///
         /// @tparam N The dimension of the grid
@@ -887,11 +901,22 @@ namespace FML {
         }
 
         template <int N, int ORDER, class T>
-        void
-        interpolate_grid_vector_to_particle_positions(const std::array<FFTWGrid<N>, N> & grid_vec,
-                                                      const T * part,
-                                                      size_t NumPart,
-                                                      std::array<std::vector<FloatType>, N> & interpolated_values_vec) {
+        void interpolate_grid_vector_to_particle_positions(const std::array<FFTWGrid<N>, N> & grid_vec,
+                                                           const T * part, size_t NumPart,
+                                                           std::array<std::vector<FloatType>, N> & interpolated_values_vec) {
+            for (auto & values : interpolated_values_vec)
+                if (values.size() < NumPart) values.resize(NumPart);
+            auto store = [&](size_t index, const std::array<FloatType, N> & value) {
+                for (int dimension = 0; dimension < N; dimension++)
+                    interpolated_values_vec[dimension][index] = value[dimension];
+                return 0.0;
+            };
+            interpolate_grid_vector_to_particle_positions_apply<N, ORDER, T>(grid_vec, part, NumPart, store);
+        }
+
+        template <int N, int ORDER, class T, class Apply>
+        double interpolate_grid_vector_to_particle_positions_apply(const std::array<FFTWGrid<N>, N> & grid_vec,
+                                                                   const T * part, size_t NumPart, Apply && apply) {
 
             auto nextra = get_extra_slices_needed_by_order<ORDER>();
             assert_mpi(grid_vec.size() > 0,
@@ -921,14 +946,10 @@ namespace FML {
                        "the kernel: the extra slices cannot be filled from the neighbor task (use fewer tasks or a "
                        "larger grid)\n");
 
-            // Allocate memory needed
-            for (auto & i : interpolated_values_vec) {
-                if (i.size() < NumPart)
-                    i.resize(NumPart);
-            }
+            double max_result = 0.0;
 
 #ifdef USE_OMP
-#pragma omp parallel for
+#pragma omp parallel for reduction(max : max_result)
 #endif
             for (size_t ind = 0; ind < NumPart; ind++) {
 
@@ -1042,10 +1063,13 @@ namespace FML {
                            "not sum to unity!");
 #endif
 
-                // Store the interpolated value
+                // Preserve the precision boundary of the original buffered gather before applying an update.
+                std::array<FloatType, N> interpolated_value;
                 for (int idim = 0; idim < N; idim++)
-                    interpolated_values_vec[idim][ind] = value[idim];
+                    interpolated_value[idim] = value[idim];
+                max_result = std::max(max_result, apply(ind, interpolated_value));
             }
+            return max_result;
         }
 
         template <int N, class T>
@@ -1068,6 +1092,24 @@ namespace FML {
                 interpolate_grid_vector_to_particle_positions<N, 4, T>(grid, part, NumPart, interpolated_values);
             if (interpolation_method.compare("PQS") == 0)
                 interpolate_grid_vector_to_particle_positions<N, 5, T>(grid, part, NumPart, interpolated_values);
+        }
+
+        template <int N, class T, class Apply>
+        double interpolate_grid_vector_to_particle_positions_apply(const std::array<FFTWGrid<N>, N> & grid,
+                                                                   const T * part, size_t NumPart,
+                                                                   std::string interpolation_method, Apply && apply) {
+            assert_mpi(is_known_interpolation_method(interpolation_method),
+                       ("[interpolate_grid_vector_to_particle_positions_apply] Unknown interpolation method [" +
+                        interpolation_method + "] (NGP, CIC, TSC, PCS or PQS)\n").c_str());
+            if (interpolation_method == "NGP")
+                return interpolate_grid_vector_to_particle_positions_apply<N, 1, T>(grid, part, NumPart, apply);
+            if (interpolation_method == "CIC")
+                return interpolate_grid_vector_to_particle_positions_apply<N, 2, T>(grid, part, NumPart, apply);
+            if (interpolation_method == "TSC")
+                return interpolate_grid_vector_to_particle_positions_apply<N, 3, T>(grid, part, NumPart, apply);
+            if (interpolation_method == "PCS")
+                return interpolate_grid_vector_to_particle_positions_apply<N, 4, T>(grid, part, NumPart, apply);
+            return interpolate_grid_vector_to_particle_positions_apply<N, 5, T>(grid, part, NumPart, apply);
         }
 
         template <int N, int ORDER, class T>
