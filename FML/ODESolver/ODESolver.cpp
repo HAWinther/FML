@@ -1,13 +1,17 @@
 #include "ODESolver.h"
 
+#include <algorithm>
+#include <cmath>
 #include <memory>
+#include <stdexcept>
+#include <string>
 
 namespace FML {
     namespace SOLVERS {
         namespace ODESOLVER {
 
             void ODESolver::throw_error(std::string errormessage) const {
-#ifdef USE_MPI
+#if defined(USE_MPI) && !defined(ODESOLVER_THROW_ON_ERROR)
                 std::cout << errormessage << std::flush;
                 MPI_Abort(MPI_COMM_WORLD, 1);
                 abort();
@@ -50,6 +54,41 @@ namespace FML {
                 return (p->get_jacobian())(t, y, dfdy, dfdt);
             }
 
+            // Jacobian by forward finite differences of the ODE function: dfdy[i*n + j] = df_i/dy_j with the
+            // step h_j = 1e-8 max(|y_j|, 1e-8), and dfdt with a step 1e-8 max(|t|, 1) backwards along the
+            // direction of integration (so the function is never evaluated beyond the end point)
+            struct FiniteDifferenceJacobian {
+                const ODEFunction & deriv;
+                size_t n;
+                double direction;
+                DVector ytmp, f0, f1;
+                FiniteDifferenceJacobian(const ODEFunction & d, size_t _n, double dir)
+                    : deriv(d), n(_n), direction(dir), ytmp(_n), f0(_n), f1(_n) {}
+                int operator()(double t, const double * y, double * dfdy, double * dfdt) {
+                    int status = deriv(t, y, f0.data());
+                    if (status != GSL_SUCCESS)
+                        return status;
+                    ytmp.assign(y, y + n);
+                    for (size_t j = 0; j < n; j++) {
+                        const double h = 1e-8 * std::max(std::fabs(y[j]), 1e-8);
+                        ytmp[j] = y[j] + h;
+                        status = deriv(t, ytmp.data(), f1.data());
+                        if (status != GSL_SUCCESS)
+                            return status;
+                        for (size_t i = 0; i < n; i++)
+                            dfdy[i * n + j] = (f1[i] - f0[i]) / h;
+                        ytmp[j] = y[j];
+                    }
+                    const double ht = -direction * 1e-8 * std::max(std::fabs(t), 1.0);
+                    status = deriv(t + ht, y, f1.data());
+                    if (status != GSL_SUCCESS)
+                        return status;
+                    for (size_t i = 0; i < n; i++)
+                        dfdt[i] = (f1[i] - f0[i]) / ht;
+                    return GSL_SUCCESS;
+                }
+            };
+
             //==================================================================
             // Constructors
             //==================================================================
@@ -57,17 +96,29 @@ namespace FML {
             ODESolver::ODESolver(double hstart, double abserr, double relerr)
                 : hstart(hstart), abserr(abserr), relerr(relerr) {}
 
-            void ODESolver::solve(ODEFunction & ode_equation,
-                                  DVector & xarr,
-                                  DVector & yinitial,
+            void ODESolver::solve(const ODEFunction & ode_equation,
+                                  const DVector & xarr,
+                                  const DVector & yinitial,
                                   const gsl_odeiv2_step_type * stepper,
-                                  ODEFunctionJacobian & jacobian) {
-                struct ODEParamWrapper equations(ode_equation, jacobian);
+                                  const ODEFunctionJacobian & jacobian) {
                 // If no jacobian is provided pass nullptr to GSL (the dummy no_jacobian does not set dfdy, dfdt
-                // so implicit steppers would use uninitialized memory). We then throw if the stepper needs it.
+                // so implicit steppers would use uninitialized memory). We then throw if the stepper needs it,
+                // unless the jacobian is to be computed by finite differences
                 const bool has_jacobian = (&jacobian != no_jacobian_ptr);
+                if (!has_jacobian && finite_difference_jacobian && xarr.size() >= 2 && !yinitial.empty()) {
+                    FiniteDifferenceJacobian fd(ode_equation, yinitial.size(), xarr[1] > xarr[0] ? 1.0 : -1.0);
+                    const ODEFunctionJacobian fdjac = [&fd](double t, const double * y, double * dfdy, double * dfdt) {
+                        return fd(t, y, dfdy, dfdt);
+                    };
+                    struct ODEParamWrapper equations(ode_equation, fdjac);
+                    solve(ode_wrapper, &equations, xarr, yinitial, stepper, jacobian_wrapper);
+                    return;
+                }
+                struct ODEParamWrapper equations(ode_equation, jacobian);
                 solve(ode_wrapper, &equations, xarr, yinitial, stepper, has_jacobian ? jacobian_wrapper : nullptr);
             }
+
+            void ODESolver::set_finite_difference_jacobian(bool onoff) { finite_difference_jacobian = onoff; }
 
             //==================================================================
             // Class methods
@@ -75,8 +126,8 @@ namespace FML {
 
             void ODESolver::solve(ODEFunctionPointer ode_equation,
                                   void * parameters,
-                                  DVector & xarr,
-                                  DVector & yinitial,
+                                  const DVector & xarr,
+                                  const DVector & yinitial,
                                   const gsl_odeiv2_step_type * stepper,
                                   ODEFunctionPointerJacobian jacobian) {
                 // Store the number of equations and size of x-array
@@ -151,7 +202,8 @@ namespace FML {
                     if (status != GSL_SUCCESS) {
                         ode_driver_ptr.reset();
                         std::string errormessage =
-                            "[ODESolver::solve] GSL gsl_odeiv2_driver_apply returned non-successful\n";
+                            "[ODESolver::solve] GSL gsl_odeiv2_driver_apply returned non-successful at x = " +
+                            std::to_string(x) + " (target " + std::to_string(xnew) + "): " + gsl_strerror(status) + "\n";
                         throw_error(errormessage);
                     }
 

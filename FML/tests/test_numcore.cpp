@@ -7,7 +7,7 @@
 //   - linspace with 0 and 1 points, Airy_Ai outside the spline range, WKB at the turning point
 //   - splines: values/derivatives, 2D splines with decreasing axes, copies keep the warning setting,
 //     evaluation from nested OpenMP regions
-//   - ODESolver: accuracy, exceptions from the ODE function
+//   - ODESolver: accuracy, exceptions from the ODE function, finite-difference jacobian
 // Bad input that must give an error (throw without MPI, MPI_Abort with MPI) is tested with
 // the extra modes (run alone, must fail with the given message):
 //   ./test_numcore spline_npts      "[GSLSpline::create] spline"  "needs at least 3 points"
@@ -223,6 +223,21 @@ int main(int argc, char ** argv) {
                   buffer.str().find("out of bounds") != buffer.str().rfind("out of bounds"),
               "copies keep the out-of-bounds warning setting");
 
+        // Integral (and a > b), moving a spline, and the uniform-grid spline
+        check(std::fabs(s.integral(0.0, 3.0) - (1.0 - std::cos(3.0))) < 1e-6 and
+                  std::fabs(s.integral(3.0, 0.0) + s.integral(0.0, 3.0)) < 1e-15,
+              "1D spline integral");
+        Spline sm(std::move(s2));
+        Spline sm2;
+        sm2 = std::move(sm);
+        check(sm2 and !sm and !s2 and std::fabs(sm2(3.3) - s(3.3)) == 0.0, "moved splines");
+        FML::INTERPOLATION::SPLINE::UniformSpline u(0.0, 0.05, y);
+        double uerr = 0.0;
+        for (double xx = 0.0; xx <= 10.0; xx += 0.0123)
+            uerr = std::max(uerr, std::fabs(u(xx) - std::sin(xx)));
+        check(uerr < 1e-6 and u(-1.0) == y.front() and u(11.0) == y.back(),
+              "uniform-grid spline: max error " + num(uerr));
+
         // 2D with decreasing axes gives the same as increasing axes
         auto f = make_spline2d(false, false);
         auto g = make_spline2d(true, false);
@@ -309,6 +324,33 @@ int main(int argc, char ** argv) {
         check(throws_with([&]() { ODESolver o; o.solve(g, x2, y2, gsl_odeiv2_step_msbdf); }, "requires the jacobian"),
               "ODESolver implicit stepper without jacobian throws");
 #endif
+
+        // An implicit stepper with a finite-difference jacobian (no jacobian given)
+        ODESolver ode3;
+        ode3.set_finite_difference_jacobian(true);
+        double fderr = 0.0;
+        for (auto st : {gsl_odeiv2_step_msbdf, gsl_odeiv2_step_bsimp, gsl_odeiv2_step_rk4imp}) {
+            ode3.solve(g, x2, y2, st);
+            fderr = std::max(fderr, std::fabs(ode3.get_final_data()[0] - exact));
+        }
+        check(fderr < 1e-6, "ODESolver implicit steppers with a finite-difference jacobian: error " + num(fderr));
+        // ... also integrating backwards in time (exp(x) from x = 0 to -5): the same as with the exact jacobian
+        ODEFunction grow = [](double, const double * yy, double * dydx) {
+            dydx[0] = yy[0];
+            return GSL_SUCCESS;
+        };
+        ODEFunctionJacobian Jg = [](double, const double *, double * dfdy, double * dfdt) {
+            dfdy[0] = 1.0;
+            dfdt[0] = 0.0;
+            return GSL_SUCCESS;
+        };
+        ODESolver ode4(1e-3, 1e-10, 1e-10), ode5(1e-3, 1e-10, 1e-10);
+        ode4.set_finite_difference_jacobian(true);
+        ode4.solve(grow, DVector{0.0, -2.5, -5.0}, DVector{1.0}, gsl_odeiv2_step_msbdf);
+        ode5.solve(grow, DVector{0.0, -2.5, -5.0}, DVector{1.0}, gsl_odeiv2_step_msbdf, Jg);
+        const double berr = std::fabs(ode4.get_final_data()[0] / std::exp(-5.0) - 1.0);
+        check(berr < 1e-6 and std::fabs(ode4.get_final_data()[0] / ode5.get_final_data()[0] - 1.0) < 1e-9,
+              "ODESolver backwards with a finite-difference jacobian: error " + num(berr));
 
         // An exception from the ODE function is passed on and the solver can be used again
         ODEFunction bad = [](double t, const double *, double * dydx) {

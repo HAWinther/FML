@@ -6,7 +6,11 @@
 #include <gsl/gsl_interp2d.h>
 #include <gsl/gsl_spline.h>
 #include <gsl/gsl_spline2d.h>
+#include <algorithm>
 #include <iostream>
+#include <stdexcept>
+#include <string>
+#include <utility>
 #include <vector>
 #ifdef USE_OMP
 #include <omp.h>
@@ -93,6 +97,10 @@ namespace FML {
             ///
             /// SPLINE_FIDUCIAL_SPLINE_WARNING    : Show warnings if we evaluate out of bounds
             ///
+            /// SPLINE_THROW_ON_ERROR             : Throw std::runtime_error also with USE_MPI (instead of
+            ///                                     MPI_Abort), so that the caller can catch it (e.g. an MCMC
+            ///                                     rejecting a parameter point)
+            ///
             //====================================================
 
             class GSLSpline {
@@ -143,6 +151,9 @@ namespace FML {
                           const gsl_interp_type * interpoltype = SPLINE_FIDUCIAL_INTERPOL_TYPE);
                 GSLSpline(const GSLSpline & rhs);
                 GSLSpline & operator=(const GSLSpline & rhs);
+                /// Moving takes over the GSL data (no copy)
+                GSLSpline(GSLSpline && rhs) noexcept;
+                GSLSpline & operator=(GSLSpline && rhs) noexcept;
                 ~GSLSpline();
 
                 /// Is the spline created or not?
@@ -170,6 +181,9 @@ namespace FML {
                 double deriv_x(double x) const;
                 /// Get the value of the second derivative of the spline
                 double deriv_xx(double x) const;
+                /// Get the integral of the spline from a to b (a > b gives minus the integral from b to a;
+                /// a and b are clamped to the range of the spline)
+                double integral(double a, double b) const;
 
                 // Some useful info
                 /// Get the range the spline was created on
@@ -259,6 +273,9 @@ namespace FML {
                             const gsl_interp2d_type * interpoltype = SPLINE_FIDUCIAL_INTERPOL_TYPE_2D);
                 GSLSpline2D(const GSLSpline2D & rhs);
                 GSLSpline2D & operator=(const GSLSpline2D & rhs);
+                /// Moving takes over the GSL data (no copy)
+                GSLSpline2D(GSLSpline2D && rhs) noexcept;
+                GSLSpline2D & operator=(GSLSpline2D && rhs) noexcept;
                 ~GSLSpline2D();
 
                 /// Is the spline created or not?
@@ -326,6 +343,41 @@ namespace FML {
                 /// Free up memory associated with the spline
                 void free();
             };
+
+            //====================================================
+            ///
+            /// Cubic spline on a uniform grid x_i = x0 + i dx: evaluation in O(1) (no search, no GSL), for
+            /// tabulated functions evaluated very many times (e.g. spherical Bessel functions in a
+            /// line-of-sight integral). The second derivatives at the end points are taken from one-sided
+            /// 4-point finite differences (better than the natural y'' = 0 for oscillating functions). Outside
+            /// [x0, xmax] it returns the end-point values. Needs at least 4 points. Thread safe.
+            ///
+            //====================================================
+            class UniformSpline {
+              public:
+                UniformSpline() = default;
+                UniformSpline(double x0, double dx, const DVector & y) { create(x0, dx, y); }
+                void create(double x0, double dx, const DVector & y);
+
+                double operator()(double x) const {
+                    const double t = (x - x0) * inv_dx;
+                    if (t <= 0.0)
+                        return y.front();
+                    const size_t i = static_cast<size_t>(t);
+                    if (i >= y.size() - 1)
+                        return y.back();
+                    const double b = t - double(i), a = 1.0 - b;
+                    return a * y[i] + b * y[i + 1] + ((a * a * a - a) * y2[i] + (b * b * b - b) * y2[i + 1]) * dx2_6;
+                }
+                double eval(double x) const { return (*this)(x); }
+                std::pair<double, double> get_xrange() const { return {x0, x0 + double(y.size() - 1) / inv_dx}; }
+                explicit operator bool() const { return !y.empty(); }
+
+              private:
+                double x0{0.0}, inv_dx{1.0}, dx2_6{0.0};
+                DVector y{}, y2{}; // values and second derivatives
+            };
+
         } // namespace SPLINE
     }     // namespace INTERPOLATION
 } // namespace FML

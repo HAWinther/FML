@@ -1,8 +1,25 @@
 #include "Spline.h"
 
+#include <cstdlib>
+
 namespace FML {
     namespace INTERPOLATION {
         namespace SPLINE {
+
+            // An accelerator on its own cache line: the accelerators of the threads are written at every
+            // evaluation, and next to each other in memory (as gsl_interp_accel_alloc gives them) the threads
+            // slow each other down (false sharing; 2D evaluation ~20% slower with 2 threads than without
+            // accelerators). Freed with gsl_interp_accel_free (free)
+            static gsl_interp_accel * alloc_accel() {
+                constexpr size_t line = 64;
+                static_assert(sizeof(gsl_interp_accel) <= line, "gsl_interp_accel larger than a cache line");
+                void * mem = std::aligned_alloc(line, line);
+                if (mem == nullptr)
+                    throw std::bad_alloc();
+                auto * acc = static_cast<gsl_interp_accel *>(mem);
+                gsl_interp_accel_reset(acc);
+                return acc;
+            }
 
 #ifdef USE_OMP
             const int nmax_threads = omp_get_max_threads();
@@ -34,7 +51,7 @@ namespace FML {
 
             // How to handle an error
             void GSLSpline::throw_error(std::string errormessage) const {
-#ifdef USE_MPI
+#if defined(USE_MPI) && !defined(SPLINE_THROW_ON_ERROR)
                 std::cout << errormessage << std::flush;
                 MPI_Abort(MPI_COMM_WORLD, 1);
                 abort();
@@ -45,7 +62,7 @@ namespace FML {
 
             // How to handle an error
             void GSLSpline2D::throw_error(std::string errormessage) const {
-#ifdef USE_MPI
+#if defined(USE_MPI) && !defined(SPLINE_THROW_ON_ERROR)
                 std::cout << errormessage << std::flush;
                 MPI_Abort(MPI_COMM_WORLD, 1);
                 abort();
@@ -108,6 +125,32 @@ namespace FML {
             }
 
             GSLSpline::operator bool() const { return (spline != nullptr); }
+
+            //====================================================
+            // Move constructor and assignment: take over the data
+            //====================================================
+            GSLSpline::GSLSpline(GSLSpline && rhs) noexcept { *this = std::move(rhs); }
+
+            GSLSpline & GSLSpline::operator=(GSLSpline && rhs) noexcept {
+                if (this != &rhs) {
+                    std::swap(spline, rhs.spline);
+#ifdef USE_OMP
+                    std::swap(xaccs, rhs.xaccs);
+#else
+                    std::swap(xacc, rhs.xacc);
+#endif
+                    std::swap(interpoltype_used, rhs.interpoltype_used);
+                    std::swap(size_x, rhs.size_x);
+                    std::swap(xmin, rhs.xmin);
+                    std::swap(xmax, rhs.xmax);
+                    std::swap(dx_min, rhs.dx_min);
+                    std::swap(dx_max, rhs.dx_max);
+                    std::swap(name, rhs.name);
+                    std::swap(out_of_bounds_warning, rhs.out_of_bounds_warning);
+                    rhs.free();
+                }
+                return *this;
+            }
             
             //====================================================
             // Create a GSL spline
@@ -189,10 +232,10 @@ namespace FML {
                 // nthreads = std::max(16, nthreads);
                 xaccs = std::vector<gsl_interp_accel *>(nthreads);
                 for (auto & xa : xaccs) {
-                    xa = gsl_interp_accel_alloc();
+                    xa = alloc_accel();
                 }
 #else
-                xacc = gsl_interp_accel_alloc();
+                xacc = alloc_accel();
 #endif
             }
 
@@ -309,6 +352,23 @@ namespace FML {
                 }
             }
             double GSLSpline::deriv_x(double x) const { return eval_deriv(x, 1); }
+
+            double GSLSpline::integral(double a, double b) const {
+                if (spline == nullptr) {
+                    std::string errormessage = "[GSLSpline::integral] Spline " + name + " has not been created!\n";
+                    throw_error(errormessage);
+                }
+                if (a > b)
+                    return -integral(b, a);
+                a = std::min(std::max(a, xmin), xmax);
+                b = std::min(std::max(b, xmin), xmax);
+#ifdef USE_OMP
+                gsl_interp_accel * xacc_thread = get_thread_accel(xaccs);
+#else
+                gsl_interp_accel * xacc_thread = xacc;
+#endif
+                return gsl_spline_eval_integ(spline, a, b, xacc_thread);
+            }
             double GSLSpline::deriv_xx(double x) const { return eval_deriv(x, 2); }
             std::pair<double, double> GSLSpline::get_xrange() const { return {xmin, xmax}; }
             std::string GSLSpline::get_name() const { return name; }
@@ -402,6 +462,39 @@ namespace FML {
             double GSLSpline2D::operator()(double x, double y) const { return eval(x, y); }
 
             GSLSpline2D::operator bool() const { return (spline != nullptr); }
+
+            //====================================================
+            // Move constructor and assignment: take over the data
+            //====================================================
+            GSLSpline2D::GSLSpline2D(GSLSpline2D && rhs) noexcept { *this = std::move(rhs); }
+
+            GSLSpline2D & GSLSpline2D::operator=(GSLSpline2D && rhs) noexcept {
+                if (this != &rhs) {
+                    std::swap(spline, rhs.spline);
+#ifdef USE_OMP
+                    std::swap(xaccs, rhs.xaccs);
+                    std::swap(yaccs, rhs.yaccs);
+#else
+                    std::swap(xacc, rhs.xacc);
+                    std::swap(yacc, rhs.yacc);
+#endif
+                    std::swap(interpoltype_used, rhs.interpoltype_used);
+                    std::swap(size_x, rhs.size_x);
+                    std::swap(size_y, rhs.size_y);
+                    std::swap(xmin, rhs.xmin);
+                    std::swap(xmax, rhs.xmax);
+                    std::swap(ymin, rhs.ymin);
+                    std::swap(ymax, rhs.ymax);
+                    std::swap(dx_min, rhs.dx_min);
+                    std::swap(dx_max, rhs.dx_max);
+                    std::swap(dy_min, rhs.dy_min);
+                    std::swap(dy_max, rhs.dy_max);
+                    std::swap(name, rhs.name);
+                    std::swap(out_of_bounds_warning, rhs.out_of_bounds_warning);
+                    rhs.free();
+                }
+                return *this;
+            }
 
             //====================================================
             // Create a GSL 2D spline
@@ -498,14 +591,14 @@ namespace FML {
                 xaccs = std::vector<gsl_interp_accel *>(nthreads);
                 yaccs = std::vector<gsl_interp_accel *>(nthreads);
                 for (auto & xa : xaccs) {
-                    xa = gsl_interp_accel_alloc();
+                    xa = alloc_accel();
                 }
                 for (auto & ya : yaccs) {
-                    ya = gsl_interp_accel_alloc();
+                    ya = alloc_accel();
                 }
 #else
-                xacc = gsl_interp_accel_alloc();
-                yacc = gsl_interp_accel_alloc();
+                xacc = alloc_accel();
+                yacc = alloc_accel();
 #endif
             }
 
@@ -679,6 +772,45 @@ namespace FML {
             std::pair<double, double> GSLSpline2D::get_yrange() const { return {ymin, ymax}; }
             std::string GSLSpline2D::get_name() const { return name; }
             void GSLSpline2D::set_out_of_bounds_warning(bool v) { out_of_bounds_warning = v; }
+            //====================================================
+            // UniformSpline: second derivatives from the tridiagonal system
+            //   y2[i-1] + 4 y2[i] + y2[i+1] = 6 (y[i+1] - 2 y[i] + y[i-1]) / dx^2
+            // with the end-point y2 from one-sided 4-point finite differences
+            //====================================================
+            void UniformSpline::create(double x0_in, double dx, const DVector & y_in) {
+                if (y_in.size() < 4)
+                    throw std::invalid_argument("UniformSpline::create: need at least 4 points");
+                if (!(dx > 0.0))
+                    throw std::invalid_argument("UniformSpline::create: dx must be > 0");
+                x0 = x0_in;
+                inv_dx = 1.0 / dx;
+                dx2_6 = dx * dx / 6.0;
+                y = y_in;
+                const size_t n = y.size();
+                const double h2 = dx * dx;
+                y2.assign(n, 0.0);
+                y2[0] = (2.0 * y[0] - 5.0 * y[1] + 4.0 * y[2] - y[3]) / h2;
+                y2[n - 1] = (2.0 * y[n - 1] - 5.0 * y[n - 2] + 4.0 * y[n - 3] - y[n - 4]) / h2;
+
+                // Thomas algorithm for the interior points (sub/super-diagonal 1, diagonal 4)
+                DVector cp(n, 0.0), dp(n, 0.0);
+                for (size_t i = 1; i < n - 1; i++) {
+                    double rhs = 6.0 * (y[i + 1] - 2.0 * y[i] + y[i - 1]) / h2;
+                    if (i == 1)
+                        rhs -= y2[0];
+                    if (i == n - 2)
+                        rhs -= y2[n - 1];
+                    const double m = 4.0 - (i > 1 ? cp[i - 1] : 0.0);
+                    cp[i] = 1.0 / m;
+                    dp[i] = (rhs - (i > 1 ? dp[i - 1] : 0.0)) / m;
+                }
+                for (size_t i = n - 2; i >= 1; i--) {
+                    y2[i] = dp[i] - cp[i] * (i == n - 2 ? 0.0 : y2[i + 1]);
+                    if (i == 1)
+                        break;
+                }
+            }
+
         } // namespace SPLINE
     }     // namespace INTERPOLATION
 } // namespace FML

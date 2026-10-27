@@ -69,7 +69,8 @@ namespace FML {
             /// like rkf45 or rk8pd are often much more efficient: for y'' = -y on [0,1000] with the fiducial accuracy
             /// rk2 needs ~350000 function calls (error 2e-5) and rk8pd ~15000 (error 2e-7).
             /// The implicit steppers rk1imp, rk2imp, rk4imp, bsimp and msbdf require the jacobian
-            /// (an error is thrown if it is not provided):
+            /// (an error is thrown if it is not provided, unless set_finite_difference_jacobian(true) was called:
+            /// then it is computed by forward finite differences of the ODE function):
             /// gsl_odeiv2_step_rk2;
             /// gsl_odeiv2_step_rk4;
             /// gsl_odeiv2_step_rkf45;
@@ -86,6 +87,9 @@ namespace FML {
             ///
             /// USE_MPI                    : Use MPI (only change is in how errors are handled)
             ///
+            /// ODESOLVER_THROW_ON_ERROR   : Throw std::runtime_error also with USE_MPI (instead of MPI_Abort),
+            ///                              so that the caller can catch it (e.g. an MCMC rejecting a point)
+            ///
             /// ODESOLVER_FIDUCIAL_STEPPER : The choice of stepper
             ///
             //===================================================
@@ -98,6 +102,7 @@ namespace FML {
                 double relerr = 1e-7;
 
                 bool verbose = false;
+                bool finite_difference_jacobian = false;
 
                 int nequations = 1;
                 int num_x_points = 0;
@@ -115,19 +120,23 @@ namespace FML {
 
                 void solve(ODEFunctionPointer ode_equation,
                            void * parameters,
-                           DVector & xarr,
-                           DVector & yinitial,
+                           const DVector & xarr,
+                           const DVector & yinitial,
                            const gsl_odeiv2_step_type * stepper = ODESOLVER_FIDUCIAL_STEPPER,
                            ODEFunctionPointerJacobian jacobian = nullptr);
                 
                 /// Solve the ODE defined by the ode_equation. We solve it from the first to the last point in the xarr
                 /// and store the value of the solution in all points in xarr. The initial value is in yinitial and
                 /// we have the option to choose a stepper and provide the jacobian if the stepper requires that
-                void solve(ODEFunction & ode_equation,
-                           DVector & xarr,
-                           DVector & yinitial,
+                void solve(const ODEFunction & ode_equation,
+                           const DVector & xarr,
+                           const DVector & yinitial,
                            const gsl_odeiv2_step_type * stepper = ODESOLVER_FIDUCIAL_STEPPER,
-                           ODEFunctionJacobian & jacobian = *no_jacobian_ptr);
+                           const ODEFunctionJacobian & jacobian = *no_jacobian_ptr);
+
+                /// Implicit steppers without a jacobian: compute it by forward finite differences of the ODE
+                /// function (relative step 1e-8; n + 2 calls per jacobian) instead of throwing
+                void set_finite_difference_jacobian(bool onoff);
 
                 /// Show info while solving or not
                 void set_verbose(bool onoff);
