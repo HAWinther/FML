@@ -94,6 +94,22 @@ lattice of the initial conditions gives spurious forces and the growth of the in
 scatters by 40-70%; with the fiducial settings (half-cell lattice offset, discrete_4pt kernel up to 3x and discrete_2pt beyond) the growth on
 the largest scales is right to < 1.5% with < 1% scatter between modes.
 
+## Lightcone (`check_lightcone.py`)
+
+```bash
+python3 tests/check_lightcone.py ./nbody /tmp/lightcone   # about 15 s, needs numpy and scipy (healpy for the maps)
+```
+
+32^3 particles in 256 Mpc/h. `cola`: the lightcone positions with COLA and scale-dependent COLA in 10 steps are
+within a median 0.085 Mpc/h of those of a 200 step run (0.25 without COLA; 0.49 when the LPT displacement of the
+step was counted twice). `batches`: an octant with replicas where a step has more crossings than particles per
+task, with 2 and 4 tasks, with and without `plc_output_in_batches`: all give the same particles (the number expected
+from the mean density) and every batch has one file per task. `zfinish`: with `plc_z_finish` inside a step the
+number of particles just above r(z_finish) is the same as with 200 steps. `coverage`: without replicas an
+incomplete octant is an error. `healpix`: the octant maps (zero outside, zero mean inside) are the full sky maps
+restricted to the octant and their C_ell the pseudo-C_ell divided by fsky (without USE_HEALPIX: the maps are an
+error when reading the parameters). Run the tests separately by naming them after the outdir.
+
 ## Regression tests (`regression/`)
 
 Small simulations covering all the main code paths, for checking that a change does not change the
