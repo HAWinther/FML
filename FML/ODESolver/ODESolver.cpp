@@ -1,5 +1,7 @@
 #include "ODESolver.h"
 
+#include <memory>
+
 namespace FML {
     namespace SOLVERS {
         namespace ODESOLVER {
@@ -61,7 +63,10 @@ namespace FML {
                                   const gsl_odeiv2_step_type * stepper,
                                   ODEFunctionJacobian & jacobian) {
                 struct ODEParamWrapper equations(ode_equation, jacobian);
-                solve(ode_wrapper, &equations, xarr, yinitial, stepper, jacobian_wrapper);
+                // If no jacobian is provided pass nullptr to GSL (the dummy no_jacobian does not set dfdy, dfdt
+                // so implicit steppers would use uninitialized memory). We then throw if the stepper needs it.
+                const bool has_jacobian = (&jacobian != no_jacobian_ptr);
+                solve(ode_wrapper, &equations, xarr, yinitial, stepper, has_jacobian ? jacobian_wrapper : nullptr);
             }
 
             //==================================================================
@@ -86,13 +91,31 @@ namespace FML {
                     throw_error(errormessage);
                 }
 
+                // Implicit steppers need the jacobian (GSL would call a null function pointer)
+                if (jacobian == nullptr) {
+                    for (auto st : {gsl_odeiv2_step_rk1imp,
+                                    gsl_odeiv2_step_rk2imp,
+                                    gsl_odeiv2_step_rk4imp,
+                                    gsl_odeiv2_step_bsimp,
+                                    gsl_odeiv2_step_msbdf}) {
+                        if (stepper == st) {
+                            std::string errormessage = "[ODESolver::solve] The stepper " + std::string(stepper->name) +
+                                                       " requires the jacobian, but none was provided\n";
+                            throw_error(errormessage);
+                        }
+                    }
+                }
+
                 // Are we integrating forward or backward?
                 double sign = xarr[1] > xarr[0] ? 1.0 : -1.0;
 
                 // Set up the ODE system
                 gsl_odeiv2_system ode_system = {ode_equation, jacobian, size_t(yinitial.size()), parameters};
-                gsl_odeiv2_driver * ode_driver =
-                    gsl_odeiv2_driver_alloc_y_new(&ode_system, stepper, std::abs(hstart) * sign, abserr, relerr);
+                // The driver is freed also if an exception is thrown (e.g. by the users ODE function)
+                std::unique_ptr<gsl_odeiv2_driver, decltype(&gsl_odeiv2_driver_free)> ode_driver_ptr(
+                    gsl_odeiv2_driver_alloc_y_new(&ode_system, stepper, std::abs(hstart) * sign, abserr, relerr),
+                    &gsl_odeiv2_driver_free);
+                gsl_odeiv2_driver * ode_driver = ode_driver_ptr.get();
 
                 // Initialize with the initial condition
                 double x = xarr[0];
@@ -126,7 +149,7 @@ namespace FML {
                     // Integrate from x -> xnew
                     const int status = gsl_odeiv2_driver_apply(ode_driver, &x, xnew, y.data());
                     if (status != GSL_SUCCESS) {
-                        gsl_odeiv2_driver_free(ode_driver);
+                        ode_driver_ptr.reset();
                         std::string errormessage =
                             "[ODESolver::solve] GSL gsl_odeiv2_driver_apply returned non-successful\n";
                         throw_error(errormessage);
@@ -147,7 +170,6 @@ namespace FML {
                     data[i] = y;
                     derivative_data[i] = dydx;
                 }
-                gsl_odeiv2_driver_free(ode_driver);
             }
 
             void ODESolver::set_verbose(bool onoff) { verbose = onoff; }

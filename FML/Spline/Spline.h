@@ -56,12 +56,25 @@ namespace FML {
             /// e.g to gsl_interp_linear, then the second derivative
             /// deriv_xx etc. will not work
             ///
+            /// NB: natural boundary conditions mean f'' = 0 at the end-points. If the function
+            /// does not have f'' = 0 there the spline is less accurate close to the ends (for sin(x)
+            /// on [0,10] with 101 points: |f-err| 3e-4, |f'-err| 2e-2 at the ends vs 1e-7 and 8e-6 inside
+            /// and deriv_xx is exactly 0 at the ends). Extend the range if you need derivatives at the ends.
+            ///
             /// If evaluating out of bounds it will return the closest
-            /// value. To get a warning when this happens call
+            /// value, i.e. x is clamped to [xmin,xmax]. The same clamping is used for
+            /// the derivatives: deriv_x(x > xmax) returns deriv_x(xmax) (the end-point slope),
+            /// not the derivative of the (constant) clamped function. The same holds for 2D splines.
+            /// To get a warning when this happens call
             /// set_out_of_bounds_warning(true) before using the spline
             /// or set the define SPLINE_FIDUCIAL_SPLINE_WARNING to be true
             ///
-            /// Errors are handled via the throw_error function
+            /// The x-array (and y-array for 2D) must be strictly monotone (increasing or decreasing,
+            /// decreasing arrays are reversed) and have at least the minimum number of points the
+            /// interpolation type needs (3 for cubic, 4 for bicubic), otherwise an error is thrown.
+            ///
+            /// Errors are handled via the throw_error function (throws std::runtime_error, or prints
+            /// the message and calls MPI_Abort with USE_MPI)
             ///
             /// Compile time defines:
             ///
@@ -254,13 +267,14 @@ namespace FML {
                             int ny,
                             std::string splinename = "NoName",
                             const gsl_interp2d_type * interpoltype = SPLINE_FIDUCIAL_INTERPOL_TYPE_2D);
-                /// Create a spline from vectors to x, y and z. Size of z must be nx * ny.
+                /// Create a spline from vectors to x, y and z. Size of z must be nx * ny with z[ix + nx * iy] = f(x[ix],
+                /// y[iy]).
                 void create(const DVector & x,
                             const DVector & y,
                             const DVector & z,
                             std::string splinename = "NoName",
                             const gsl_interp2d_type * interpoltype = SPLINE_FIDUCIAL_INTERPOL_TYPE_2D);
-                /// Create a spline from vectors to x, y and z. Size of z must be (nx, ny).
+                /// Create a spline from vectors to x, y and z. Size of z must be (nx, ny) with z[ix][iy] = f(x[ix], y[iy]).
                 void create(const DVector & x,
                             const DVector & y,
                             const DVector2D & z,
@@ -273,7 +287,8 @@ namespace FML {
                 /// Get the value of the spline (if out of bounds we use the closest value)
                 double eval(double x, double y) const;
                 /// General method to fetch derivatives. derivx is the number of x-derivatives and derivy is the number
-                /// of y-derivatives (how many are available depends on the spline method).
+                /// of y-derivatives (how many are available depends on the spline method). Allowed:
+                /// (0,0), (1,0), (0,1), (2,0), (1,1), (0,2); anything else throws.
                 double eval_deriv(double x, double y, int derivx, int derivy) const;
                 /// Get the value of the x-derivative of the spline
                 double deriv_x(double x, double y) const;

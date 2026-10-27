@@ -11,10 +11,23 @@ namespace FML {
             // lookup cache so if we cannot safely get a unique one (more threads than
             // when the spline was created, or nested parallel regions where thread ids
             // are not unique) we return nullptr which GSL handles with a binary search
+            //
+            // Inside an inactive (one-thread) region nested in an active one, e.g. a library
+            // '#pragma omp parallel for' called from a user's parallel loop, omp_get_thread_num() is 0
+            // for all the threads of the outer team, so we use the thread number in the
+            // (one) active region instead
             static inline gsl_interp_accel * get_thread_accel(const std::vector<gsl_interp_accel *> & accs) {
+                const int level = omp_get_level();
+                if (level <= 1) {
+                    const int id = omp_get_thread_num();
+                    return id < int(accs.size()) ? accs[id] : nullptr;
+                }
                 if (omp_get_active_level() > 1)
                     return nullptr;
-                const int id = omp_get_thread_num();
+                int id = 0;
+                for (int l = 1; l <= level; l++)
+                    if (omp_get_team_size(l) > 1)
+                        id = omp_get_ancestor_thread_num(l);
                 return id < int(accs.size()) ? accs[id] : nullptr;
             }
 #endif
@@ -75,7 +88,9 @@ namespace FML {
                         create(rhs.spline->x, rhs.spline->y, rhs.size_x, rhs.name, rhs.interpoltype_used);
                     } else {
                         free();
+                        name = rhs.name;
                     }
+                    out_of_bounds_warning = rhs.out_of_bounds_warning;
                 }
                 return *this;
             }
@@ -85,10 +100,10 @@ namespace FML {
             //====================================================
             GSLSpline::GSLSpline(const GSLSpline & rhs) {
                 // We just create the spline from scratch instead of copying all the data
+                out_of_bounds_warning = rhs.out_of_bounds_warning;
+                name = rhs.name;
                 if (rhs.spline != nullptr) {
                     create(rhs.spline->x, rhs.spline->y, rhs.size_x, rhs.name, rhs.interpoltype_used);
-                } else {
-                    free();
                 }
             }
 
@@ -106,11 +121,21 @@ namespace FML {
                 if (spline != nullptr) {
                     free();
                 }
+                name = splinename;
+
+                // Check that we have enough points (GSL would otherwise abort the program)
+                const int nmin = std::max(2, int(gsl_interp_type_min_size(interpoltype)));
+                if (nx < nmin) {
+                    std::string errormessage = "[GSLSpline::create] spline " + name + " needs at least " +
+                                               std::to_string(nmin) + " points for interpolation type " +
+                                               std::string(interpoltype->name) + ", got " + std::to_string(nx) + "\n";
+                    throw_error(errormessage);
+                }
 
                 // Check if array is increasing
                 int sign_one = x[1] > x[0] ? 1.0 : -1.0;
                 for (int i = 1; i < nx; i++) {
-                    if ((x[i] - x[i - 1]) * sign_one <= 0) {
+                    if (!((x[i] - x[i - 1]) * sign_one > 0)) {
                         std::string errormessage =
                             "[GSLSpline::create] x-array for spline " + name + " is not monotone\n";
                         throw_error(errormessage);
@@ -348,7 +373,9 @@ namespace FML {
                                rhs.interpoltype_used);
                     } else {
                         free();
+                        name = rhs.name;
                     }
+                    out_of_bounds_warning = rhs.out_of_bounds_warning;
                 }
                 return *this;
             }
@@ -358,6 +385,8 @@ namespace FML {
             //====================================================
             GSLSpline2D::GSLSpline2D(const GSLSpline2D & rhs) {
                 // We just create the spline from scratch instead of copying all the data
+                out_of_bounds_warning = rhs.out_of_bounds_warning;
+                name = rhs.name;
                 if (rhs.spline != nullptr) {
                     create(rhs.spline->xarr,
                            rhs.spline->yarr,
@@ -366,8 +395,6 @@ namespace FML {
                            rhs.size_y,
                            rhs.name,
                            rhs.interpoltype_used);
-                } else {
-                    free();
                 }
             }
 
@@ -389,6 +416,50 @@ namespace FML {
                 // Clean up if we already have a spline
                 if (spline != nullptr) {
                     free();
+                }
+                name = splinename;
+
+                // Check that we have enough points (GSL would otherwise abort the program)
+                const int nmin = std::max(2, int(gsl_interp2d_type_min_size(interpoltype)));
+                if (nx < nmin || ny < nmin) {
+                    std::string errormessage = "[GSLSpline2D::create] spline " + name + " needs at least " +
+                                               std::to_string(nmin) + " points in each direction for interpolation type " +
+                                               std::string(interpoltype->name) + ", got (" + std::to_string(nx) + "," +
+                                               std::to_string(ny) + ")\n";
+                    throw_error(errormessage);
+                }
+
+                // Check that the arrays are monotone. GSL requires increasing arrays
+                // so if an array is decreasing we reverse it (and z accordingly) like for 1D splines
+                const int sign_x = x[1] > x[0] ? 1 : -1;
+                const int sign_y = y[1] > y[0] ? 1 : -1;
+                for (int i = 1; i < nx; i++) {
+                    if (!((x[i] - x[i - 1]) * sign_x > 0))
+                        throw_error("[GSLSpline2D::create] x-array for spline " + name + " is not monotone\n");
+                }
+                for (int i = 1; i < ny; i++) {
+                    if (!((y[i] - y[i - 1]) * sign_y > 0))
+                        throw_error("[GSLSpline2D::create] y-array for spline " + name + " is not monotone\n");
+                }
+                DVector xx, yy, zz;
+                if (sign_x < 0 || sign_y < 0) {
+                    xx = DVector(nx);
+                    yy = DVector(ny);
+                    zz = DVector(size_t(nx) * size_t(ny));
+                    for (int ix = 0; ix < nx; ix++)
+                        xx[ix] = x[sign_x < 0 ? nx - 1 - ix : ix];
+                    for (int iy = 0; iy < ny; iy++)
+                        yy[iy] = y[sign_y < 0 ? ny - 1 - iy : iy];
+                    for (int iy = 0; iy < ny; iy++) {
+                        const int iy_old = sign_y < 0 ? ny - 1 - iy : iy;
+                        for (int ix = 0; ix < nx; ix++) {
+                            const int ix_old = sign_x < 0 ? nx - 1 - ix : ix;
+                            zz[ix + size_t(nx) * iy] = z[ix_old + size_t(nx) * iy_old];
+                        }
+                    }
+                    x = xx.data();
+                    y = yy.data();
+                    z = zz.data();
                 }
 
                 // Set class variables
@@ -517,7 +588,8 @@ namespace FML {
                     std::string errormessage = "[GSLSpline2D::eval_deriv] Spline " + name + " has not been created!\n";
                     throw_error(errormessage);
                 }
-                if (n < 0 || n >= int(derivfunc.size())) {
+                if (derivx < 0 || derivy < 0 || derivx + derivy > 2 || n >= int(derivfunc.size()) ||
+                    derivfunc[n] == nullptr) {
                     std::string errormessage =
                         "[GSLSpline2D::eval_deriv] (" + std::to_string(derivx) + "," + std::to_string(derivy) + ") " +
                         "Expected (0,0) = f, (1,0) = f_x, (0,1), f_y, (2,0) = f_xx, (0,2) = f_yy or (1,1) = f_xy!\n";

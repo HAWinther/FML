@@ -1,5 +1,9 @@
 #include "Math.h"
 
+#ifdef USE_GSL
+#include <gsl/gsl_sf_airy.h>
+#endif
+
 namespace FML {
     namespace MATH {
 
@@ -47,6 +51,9 @@ namespace FML {
         //=======================================================================
         // Find a zero of a given function on a given interval using bisection
         // If no root is found it will throw an error
+        // The accuracy is relative to the size of the interval: we stop when
+        // x_high - x_low < epsilon * (xrange_high - xrange_low) or when the interval
+        // cannot be split further in floating point. Returns the lower end of the final interval
         //=======================================================================
         double find_root_bisection(const std::function<double(double)> & function,
                                    std::pair<double, double> xrange,
@@ -60,16 +67,27 @@ namespace FML {
             // Accuracy we want
             const double delta_x = (x_high - x_low) * epsilon;
 
-            // Sanity check
+            // Sanity check (written such that it also catches NaN)
+            if (std::isnan(y_low) || std::isnan(y_high)) {
+                throw std::runtime_error("Error find_root_bisection. f(xlow) or f(xhigh) is NaN!");
+            }
             if (y_low * y_high > 0.0) {
                 throw std::runtime_error("Error binary_search_for_value. f(xlow) and f(xhigh) "
                                          "have the same sign!");
             }
 
+            // NB: f = 0 is treated as being on the side of x_low (callers rely on this, e.g. SphericalCollapse
+            // where f = 0 means "no collapse" on part of the range), so a root exactly at x_low returns x_low
+            // and a root exactly at x_high returns a value within the accuracy of x_high
+
             // Do the binary search
-            [[maybe_unused]] int count = 0;
-            while (x_high - x_low > delta_x) {
+            const int max_iterations = 10000;
+            int count = 0;
+            while (x_high - x_low > delta_x && count < max_iterations) {
                 double x_mid = (x_high + x_low) / 2.0;
+                // The interval cannot be split further (epsilon too small for the precision)
+                if (x_mid <= x_low || x_mid >= x_high)
+                    break;
                 double y_mid = function(x_mid) * sign;
                 if (y_mid > 0.0) {
                     x_high = x_mid;
@@ -102,6 +120,15 @@ namespace FML {
             double y_high = y(x_high) - y_value;
             double y_low = y(x_low) - y_value;
 
+            // Root exactly at an end-point
+            if (y_low == 0.0)
+                return x_low;
+            if (y_high == 0.0)
+                return x_high;
+            if (std::isnan(y_low) || std::isnan(y_high)) {
+                throw std::runtime_error("Error find_root_bisection. f(xlow) or f(xhigh) is NaN!");
+            }
+
             // If the endpoints are both larger than zero do
             // a coarse grid search to see if we can find a good value
             // If not then throw an error
@@ -125,12 +152,21 @@ namespace FML {
                     }
                 }
             }
-            xrange.first = x_low;
+            xrange = {x_low, x_high};
 
             auto function = [&](double x) -> double { return (y(x) - y_value); };
             return find_root_bisection(function, xrange, epsilon);
         }
 #endif
+
+        // Where to start the downward recursion for j_ell(x)/j_(ell-1)(x) such that j_lstart/j_(lstart-1) ~ 0 is
+        // accurate for all ell <= lmax. Starting at lmax itself (as was done when 1.2x or 1.6x < lmax) gave
+        // up to 10-30% errors for ell close to lmax when x is just below lmax (e.g. j_10(6.86), j_100(84))
+        static int j_ell_recursion_lstart(int lmax, double x) {
+            int lstart = std::max(lmax, int(lmax < 10 ? 5 * x : (lmax < 100 ? 1.6 * x : 1.2 * x)));
+            const int lsafe = int(std::max(double(lmax), x) + 4.0 * std::cbrt(x)) + 20;
+            return std::max(lstart, lsafe);
+        }
 
         //=======================================================================
         // Hyperspherical bessel function Phi_ell^nu(chi) for a flat and open Universe K <= 0.0
@@ -158,7 +194,9 @@ namespace FML {
 
             // Start the recursion at a large enough lmax such that j_ell/j_ell-1 ~ 0
             // and bring it down to lmax where we start to store the values
-            int lstart = std::max(lmax, int(lmax < 10 ? 5 * chinu : (lmax < 100 ? 1.6 * chinu : 1.2 * chinu)));
+            // (for K > 0 we keep the old start as the square roots below become imaginary for large k)
+            int lstart = K <= 0.0 ? j_ell_recursion_lstart(lmax, chinu)
+                                  : std::max(lmax, int(lmax < 10 ? 5 * chinu : (lmax < 100 ? 1.6 * chinu : 1.2 * chinu)));
             double h = 0.0;
             double sqrtnu2chi2old = std::sqrt(chinu2 - chi * chi * K * (lstart + 1) * (lstart + 1));
             for (int k = lstart; k >= lmax + 1; k--) {
@@ -189,7 +227,7 @@ namespace FML {
         DVector j_ell_array(int lmax, const double x) {
             // Start the recursion at a large enough lmax such that j_ell/j_ell-1 ~ 0
             // and bring it down to lmax where we start to store the values
-            int lstart = std::max(lmax, int(lmax < 10 ? 5 * x : (lmax < 100 ? 1.6 * x : 1.2 * x)));
+            int lstart = j_ell_recursion_lstart(lmax, x);
             double h = 0.0;
             for (int k = lstart; k >= lmax + 1; k--) {
                 h = x / (2 * k + 1 - x * h);
@@ -203,8 +241,18 @@ namespace FML {
             }
 
             // Transform ratios into j_ell
+            // Close to a zero of j_0 the ratio j_1/j_0 is not accurate (catastrophic cancellation)
+            // so we normalize with j_1 in that case (the zeros of j0 and j1 are interlaced)
             res[0] = x == 0.0 ? 1.0 : std::sin(x) / x;
-            for (int ell = 1; ell <= lmax; ell++) {
+            int ell_norm = 0;
+            if (lmax >= 1 && x > 1.0) {
+                const double j1 = (std::sin(x) / x - std::cos(x)) / x;
+                if (std::fabs(res[0]) < 1e-2 * std::fabs(j1)) {
+                    res[1] = j1;
+                    ell_norm = 1;
+                }
+            }
+            for (int ell = ell_norm + 1; ell <= lmax; ell++) {
                 res[ell] *= res[ell - 1];
             }
 
@@ -220,9 +268,10 @@ namespace FML {
 
             // The implementation fails for the largest arguments so simply put to zero
             // to avoid any issues with this
+            // (before 0 was returned, but |j_ell| ~ 1/x here): use the recursion instead
             const double arg_max_gsl = 9000.0;
             if (ell < 500 && arg > arg_max_gsl)
-                return 0.0;
+                return j_ell_array(ell, arg)[ell];
 
             return gsl_sf_bessel_jl(ell, arg);
         }
@@ -235,11 +284,11 @@ namespace FML {
             if (arg == 0.0)
                 return ell == 0 ? 1.0 : 0.0;
 
-            // The implementation fails for the largest arguments so simply put to zero
-            // to avoid any issues with this
+            // The implementation fails (throws) for the largest arguments. Before 0 was returned here, but
+            // |j_ell| ~ 1/x so we use the recursion instead
             const double arg_max_libcxx = 14000.0;
             if (arg > arg_max_libcxx)
-                return 0.0;
+                return j_ell_array(ell, arg)[ell];
             return std::sph_bessel(ell, arg); // NOLINT
         }
 #endif
@@ -267,6 +316,10 @@ namespace FML {
 
         // Linearly spaced array ala Python Numpy linspace
         DVector linspace(double xmin, double xmax, int num) {
+            if (num <= 0)
+                return DVector();
+            if (num == 1)
+                return DVector{xmin};
             DVector res(num);
             double delta_x = (xmax - xmin) / double(num - 1);
             for (int i = 0; i < num - 1; i++) {
@@ -368,7 +421,15 @@ namespace FML {
             }
 
             double Ai(double z) {
-                // Asymptotic values
+                // Outside the spline range use GSL (the leading order asymptotic formulas used before
+                // were 0.9% off for z > 5 and 0.03% for z < -50). Fall back to them if GSL fails
+                // (GSL is only used in [-1e6,100] since it calls the GSL error handler on underflow; outside the
+                // asymptotic formulas are accurate to better than 1e-4)
+                if ((z < z_min && z > -1e6) || (z > z_max && z < 100.0)) {
+                    gsl_sf_result result;
+                    if (gsl_sf_airy_Ai_e(z, GSL_PREC_DOUBLE, &result) == GSL_SUCCESS)
+                        return result.val;
+                }
                 if (z < z_min)
                     return std::sin(2.0 / 3.0 * std::pow(-z, 1.5) + M_PI / 4.) / std::sqrt(M_PI * std::sqrt(-z));
                 if (z > z_max)
@@ -518,7 +579,13 @@ namespace FML {
             // For small curvatures then alpha -> infty
             const double sqrtellellp1 = std::sqrt(ell * (ell + 1));
             const double alpha = nu / sqrtellellp1, a2 = alpha * alpha;
-            const double w = alpha * chi * sincKchi, w2 = w * w;
+            double w = alpha * chi * sincKchi;
+            // At the turning point w = 1 the expressions below are 0/0 (NaN, or inaccurate due to
+            // cancellations very close to it) so evaluate it just next to it (the function is smooth there)
+            const double w_eps = 1e-6;
+            if (std::fabs(w - 1.0) < w_eps)
+                w = w < 1.0 ? 1.0 - w_eps : 1.0 + w_eps;
+            const double w2 = w * w;
             const double sign = w < 1.0 ? 1.0 : -1.0;
             const double sqrtw2m1 = std::sqrt(sign * (1 - w2));
             double S{};

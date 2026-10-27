@@ -5,6 +5,60 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Spline, ODESolver, Math: numerical core fixes
+- `MATH::find_root_bisection(Spline, y_value, xrange)`: a range given as (high, low) became (low, low) and always
+  threw "same sign" (y = x^2 = 4 on (5,0)); a root exactly at an end-point of the spline range (e.g. `y_value =
+  y(xmax)`) threw instead of returning the end-point. Both fixed; results for the normal case are unchanged.
+- `MATH::find_root_bisection(function, xrange, epsilon)`: looped forever when epsilon times the range was below the
+  floating point spacing at the root (epsilon = 1e-17 on [1,2], or [1e10, 1e10+1] with epsilon = 1e-7). It now stops
+  when the interval cannot be split further (and after 10000 iterations). A NaN at an end-point passed the bracket
+  check and gave a wrong root (3.0 instead of 1.25 for sqrt(x-1) - 0.5 on (0,3)); it now throws. The tolerance
+  semantics (relative to the range) and the treatment of f = 0 (on the side of xlow, which SphericalCollapse relies
+  on) are unchanged and documented, so HaloModel, SphericalCollapse and RecombinationHistory give identical results.
+- `MATH::j_ell_array`: j_ell for all ell >= 1 was normalized with j_0 = sin(x)/x, which loses all precision at the
+  zeros of j_0: at x = 2 pi j_4 was 5e-13 instead of 0.186, at x = 10 pi j_28 was 70 times too small. It now
+  normalizes with j_1 when |j_0| < 0.01 |j_1|. The downward recursion started at lmax when 1.2x (1.6x, 5x) < lmax,
+  i.e. assumed j_(lmax+1) = 0: j_10(6.862) with lmax = 10 was 12% off, j_100(84) with lmax = 100 29% off, j_5(1.19)
+  with lmax = 5 1% off. It now starts at least at max(lmax, x) + 4 x^(1/3) + 20 (also in
+  `Hyperspherical_j_ell_array` for K <= 0). Accuracy vs scipy is now < 1e-12 relative to the envelope for lmax = 5 to
+  3000 (was up to 5e-3). The PowerSpectrum Bessel splines (keta_max = 8000, 16 samples per oscillation, ell_max =
+  4000) change by at most 5e-11 of the envelope (98.7% of the values bit-identical); the EinsteinBoltzmannSolver
+  example output (background, recombination, perturbations, transfer, P(k), C_ell) is byte-identical.
+- `MATH::j_ell`: returned 0 for x > 14000 for all ell (|j_ell| ~ 1/x there, libstdc++ `std::sph_bessel` throws for
+  such arguments); it now uses the recursion (j_10(20000) = -2.921094e-5 as scipy). Same for the GSL version (x >
+  9000, ell < 500).
+- `MATH::linspace`: num = 1 returned {xmax} (numpy: {xmin}), num = 0 wrote out of bounds (crash); now {xmin} and {}.
+- `MATH::Airy_Ai`: outside the spline range [-50, 5] the leading order asymptotic formulas were used: 0.9% too large
+  just above z = 5 (a 0.9% jump at z = 5), 3e-4 below z = -50. It now uses `gsl_sf_airy_Ai` there (in [-1e6, 100],
+  the asymptotic formulas outside). Values inside [-50, 5] are unchanged. `HyperSphericalBesselWKB` changes only
+  where it uses these arguments, and at the turning point (chi nu = sqrt(ell(ell+1))) it returned NaN (0 within
+  ~1e-12 of it, 1% off within 1e-10): w is now kept 1e-6 away from 1 (changes < 5e-5 relative within 1e-6 of the
+  turning point, where the WKB approximation is good to ~3e-4 anyway).
+- `SPLINE::Spline2D::eval_deriv(x, y, 2, 1)` called a null function pointer (segfault) and invalid combinations like
+  (4,-1) silently returned f_x; only (0,0), (1,0), (0,1), (2,0), (1,1), (0,2) are accepted now.
+- Splines: too few points (nx = 1 read x[1] out of bounds, nx < 3 for cubic / < 4 for bicubic aborted in GSL) and
+  non-monotone 2D axes (GSL abort) now give an error via `throw_error` with the spline name (the "not monotone"
+  message printed the previous name). 2D splines with decreasing x and/or y arrays are now reversed like in 1D.
+  Copies (copy constructor and assignment) keep the out-of-bounds warning setting. The natural boundary conditions
+  (f'' = 0 at the ends: for sin on [0,10] with 101 points f' is 2e-2 off at the ends vs 8e-6 inside) and the
+  clamping of x out of range also for the derivatives (deriv_x(x > xmax) = deriv_x(xmax), relied on near the ends by
+  e.g. HaloModel `powerlaw_extend_logY_of_logx_spline`) are unchanged and documented.
+- Splines with OpenMP: in an inactive (one-thread) parallel region nested in an active one (a library `omp parallel
+  for` called from a user's parallel loop) all threads got thread number 0 and shared one GSL accelerator (data race).
+  The accelerator is now picked with the thread number of the active level. Results are bit-identical.
+- `ODESolver`: implicit steppers (rk1imp, rk2imp, rk4imp, bsimp, msbdf) used without a Jacobian with the
+  `std::function` interface got a dummy Jacobian that never set dfdy, dfdt (uninitialized memory, valgrind); the
+  function pointer interface would call a null pointer. Both now give an error. The GSL driver is freed if the ODE
+  function throws (leaked before). Documented that `get_data()` is data[ix][icomponent], that the derivatives are
+  computed from the ODE function, and that rkf45/rk8pd are much more efficient than the fiducial rk2 (y'' = -y on
+  [0,1000]: 350000 vs 15000 function calls); the fiducial stepper is unchanged.
+- Tests (`tests/test_numcore.cpp`, 26 checks with MPI / 31 without, < 1 s): the cases above against scipy/analytic
+  values, plus four bad-input modes that must stop with a clear message. With the old code: 9 FAIL, then a segfault
+  in `linspace(.., 0)`; the bad-input modes gave two GSL aborts, a segfault and one silent run.
+- Regression: no change in test_core, test_halomodel, test_sphericalcollapse, test_survey, test_fnl and
+  test_reconstruction (identical output with 1 and 2 tasks); test_pofk and test_paircount differ only in round-off
+  digits (1e-16, 1e-14) that also change between runs of the old code (thread reduction order).
+
 ### RamsesUtils fixes
 - `read_ramses` with `keep_only_particles_in_domain = false` returned an empty vector (the particles were written
   beyond the size of the vector, which was only reserved). `read_ramses_single` allocated the whole file and filled

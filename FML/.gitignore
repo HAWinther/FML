@@ -99,3 +99,4 @@ tests/test_halomodel
 tests/test_gadget
 tests/test_ramses
 tests/test_camb
+tests/test_numcore

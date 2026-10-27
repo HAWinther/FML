@@ -10,7 +10,7 @@ USE_OMP             ?= true
 USE_FFTW            ?= true
 USE_GSL             ?= true
 
-TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb
+TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore
 
 include ../Makefile.config
 
@@ -96,6 +96,10 @@ test_ramses: test_ramses.o test_ramses_odr.o Global.o
 test_camb: test_camb.o test_camb_odr.o Global.o Spline.o
 	$(LINK_EXE)
 
+# Numerical core: splines, ODE solver and math functions (GSL)
+test_numcore: test_numcore.o Global.o Spline.o ODESolver.o Math.o
+	$(LINK_EXE)
+
 MPIRUN  ?= mpirun
 NP_LIST ?= 1 2 4
 
@@ -149,6 +153,8 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_ramses; \
 	  echo "== Running test_camb with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_camb; \
+	  echo "== Running test_numcore with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_numcore; \
 	done
 	@echo "== Running test_hybridbias"
 	@OMP_NUM_THREADS=2 $(RUN1) ./test_hybridbias
@@ -158,3 +164,6 @@ ifeq ($(USE_MPI),true)
 	@! $(MPIRUN) -np 2 ./test_core unwrapped > unwrapped.log 2>&1 && grep -q "outside \[0,1)" unwrapped.log && echo "[PASS] unwrapped particle aborts"
 endif
 	@rm -f alloc.log unwrapped.log
+	@for m in "spline_npts:needs at least 3 points" "spline2d_deriv:eval_deriv] (2,1)" "spline2d_monotone:is not monotone" "ode_nojacobian:requires the jacobian"; do \
+	  ! $(RUN1) ./test_numcore $${m%%:*} > numcore.log 2>&1 && grep -qF "$${m#*:}" numcore.log && echo "[PASS] test_numcore $${m%%:*} gives an error" || exit 1; \
+	done; rm -f numcore.log

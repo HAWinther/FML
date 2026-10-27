@@ -38,7 +38,7 @@ namespace FML {
 #endif
         using DVector = std::vector<double>;
 
-        /// Python linspace. Generate a linearly spaced array
+        /// Python linspace. Generate a linearly spaced array (num = 1 gives {xmin}, num <= 0 an empty array)
         DVector linspace(double xmin, double xmax, int num);
         
         /// Python logspace. Generate a log spaced array
@@ -52,13 +52,19 @@ namespace FML {
                                                double epsilon = 1e-7);
 #endif
 
-        /// Find roots \f$ f(x) = 0 \f$ using bisection
+        /// Find roots \f$ f(x) = 0 \f$ using bisection. f must have different signs at the end-points (throws
+        /// if not, or if f is NaN there). The accuracy epsilon is relative to the size of the range:
+        /// we stop when the bracket is smaller than epsilon * |xrange.second - xrange.first| (or cannot be split
+        /// further in floating point) and return the lower end of the bracket. Points with f = 0 are treated as being on the side of
+        /// xlow (so a root exactly at xlow returns xlow)
         double find_root_bisection(const std::function<double(double)> & function,
                                    std::pair<double, double> xrange,
                                    double epsilon = 1e-7);
 
 #ifdef USE_GSL
         /// Find roots \f$ f(x) = 0 \f$ using bisection with f given as a spline. Requires GSL.
+        /// The range can be given in any order; {0,0} means the full range of the spline. If f has the same sign
+        /// at both end-points a coarse grid is searched for a sign change.
         double find_root_bisection(const Spline & y,
                                    double y_value,
                                    std::pair<double, double> xrange = {0.0, 0.0},

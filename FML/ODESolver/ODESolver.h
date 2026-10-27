@@ -63,7 +63,13 @@ namespace FML {
             /// auto solution = ode.get_data();
             ///---------------------------------------------------
             ///
-            /// Choices of steppers (fiducial one set below):
+            /// If the solver throws (or the GSL driver fails) the old data is not valid.
+            ///
+            /// Choices of steppers (fiducial one set below). NB: the fiducial rk2 is robust, but higher order steppers
+            /// like rkf45 or rk8pd are often much more efficient: for y'' = -y on [0,1000] with the fiducial accuracy
+            /// rk2 needs ~350000 function calls (error 2e-5) and rk8pd ~15000 (error 2e-7).
+            /// The implicit steppers rk1imp, rk2imp, rk4imp, bsimp and msbdf require the jacobian
+            /// (an error is thrown if it is not provided):
             /// gsl_odeiv2_step_rk2;
             /// gsl_odeiv2_step_rk4;
             /// gsl_odeiv2_step_rkf45;
@@ -133,10 +139,10 @@ namespace FML {
                 /// Get the solution for a given component at the end point
                 double get_final_data_by_component(int icomponent) const;
 
-                /// Get all the data z_ij = ( y_i(xarr_j) )
+                /// Get all the data z_ij = ( y_j(xarr_i) ), i.e. data[ix][icomponent]
                 DVector2D get_data() const;
 
-                /// Get all the data transposed z_ji = ( y_i(xarr_j) )
+                /// Get all the data transposed z_ij = ( y_i(xarr_j) ), i.e. data[icomponent][ix]
                 DVector2D get_data_transpose() const;
 
                 /// Get the data for a particular component y_i(xarr)
@@ -145,7 +151,8 @@ namespace FML {
                 /// Get the data at a particular x-index y(xarr_i)
                 DVector get_data_by_xindex(int ix) const;
 
-                /// Get all the data for the derivatives ( dy_i/dx(xarr) )_i=1^nequations
+                /// Get all the data for the derivatives z_ij = ( dy_j/dx(xarr_i) ), i.e. data[ix][icomponent]. The
+                /// derivatives are computed by calling the ODE function at the solution (not finite differences)
                 DVector2D get_derivative_data() const;
 
                 /// Get the data dy_i/dx(xarr) for the derivatives for a particular component
