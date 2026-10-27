@@ -41,6 +41,9 @@ class BoxReplicas {
   public:
     size_t get_n_replicas() { return n_replicas_total; }
 
+    /// The number of replicas in the negative and positive direction along idim (currently in use)
+    std::pair<int, int> get_replica_range(int idim) const { return {n_per_dim_left[idim], n_per_dim_right[idim]}; }
+
     void read_parameters(FML::UTILS::ParameterMap & param) {
         use_replicas = param.get<bool>("plc_use_replicas");
         if (FML::ThisTask == 0) {

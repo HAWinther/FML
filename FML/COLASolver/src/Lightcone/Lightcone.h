@@ -97,6 +97,8 @@ class Lightcone {
     bool output_asciifile{false};
     bool output_hdf5file{false};
     bool output_in_batches{false};
+    // Output in batches in the current step (only if the particles may not fit in one batch; the same on all tasks)
+    bool batches_this_step{false};
     bool store_particles{false};
 
     // Boxsize of the simulation
@@ -138,6 +140,9 @@ class Lightcone {
 
     // Useful function - volume of a shell (in any dim)
     double volume_shell(double rlow, double rhigh);
+
+    // The fraction of the lightcone shell rlow < r < rhigh that is in the x-domain of this task
+    double local_fraction_of_shell(double rlow, double rhigh);
 
   public:
     Lightcone(std::shared_ptr<Cosmology> cosmo) : cosmo(cosmo){};
@@ -373,32 +378,38 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
     // If we output in batches, set the maximum number to store
     // We just use the number of particles we have on the task for simplicity 
     // Can be changed to a user-provided number in case memory is really tight
-    size_t npart_per_batch = part.get_npart();
+    const size_t npart_per_batch = std::max(part.get_npart(), size_t(1));
     int ibatch = 0;
+    size_t npart_in_written_batches = 0;
 
     // Estimate how many particles we should reserve based on the volume and the average number density
+    // (the global number times the fraction of the shell in the domain of this task)
     // If no output method is picked then we don't save anything
     store_particles = output_asciifile or output_gadgetfile or output_hdf5file;
+    const double num_particles_expected = mean_density[particle_type] * fsky * volume_shell(r_lc_new, r_lc_old);
     size_t num_particles_to_allocate =
-        ceil(mean_density[particle_type] * fsky * volume_shell(r_lc_new, r_lc_old) * particle_allocation_factor);
-    if(store_particles and output_in_batches) {
-      // No need for output in batches
-      if(num_particles_to_allocate < npart_per_batch) 
-        output_in_batches = false;
-      else
-        num_particles_to_allocate = npart_per_batch;
+        ceil(num_particles_expected * local_fraction_of_shell(r_lc_new, r_lc_old) * particle_allocation_factor);
+    // Output in batches in this step only if the particles may not fit in one batch on some task. This is decided
+    // for each step (and the same on all tasks as the filenames depend on it)
+    batches_this_step = false;
+    if (store_particles and output_in_batches) {
+        int need_batches = num_particles_to_allocate >= npart_per_batch ? 1 : 0;
+        FML::MaxOverTasks(&need_batches);
+        batches_this_step = need_batches == 1;
+        if (batches_this_step)
+            num_particles_to_allocate = std::min(num_particles_to_allocate, npart_per_batch);
     }
     if (FML::ThisTask == 0) {
         if (store_particles) {
             std::cout << "# We will allocate storage for " << num_particles_to_allocate / double(part.get_npart())
-                      << " times the number of particles we have\n";
-            if(output_in_batches)
-              std::cout << "# We output in batches of " << num_particles_to_allocate << "\n";
+                      << " times the number of particles we have (task 0)\n";
+            if(batches_this_step)
+              std::cout << "# We output in batches of " << npart_per_batch << " (task 0)\n";
             std::cout << "# Memory consumption for particles: "
-                      << num_particles_to_allocate * sizeof(U) / double(1024. * 1024.) / FML::NTasks
-                      << " MB average per task. The particle-size is " << sizeof(U) << " bytes\n";
+                      << num_particles_to_allocate * sizeof(U) / double(1024. * 1024.)
+                      << " MB on task 0. The particle-size is " << sizeof(U) << " bytes\n";
         } else {
-            std::cout << "# We expect roughly ~ " << size_t(num_particles_to_allocate / particle_allocation_factor) << " particles in the slice\n";
+            std::cout << "# We expect roughly ~ " << size_t(num_particles_expected) << " particles in the slice\n";
             std::cout << "# NB: No output picked so we will not store and output any particles\n";
         }
         if(make_onion_density_maps)
@@ -549,8 +560,10 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
                     // Check if we should output
                     // Note: the way we do it is not great as other treads have to pause while we output
                     // Can be improved, but requires a lot of work
-                    if(part_lc.size() == npart_per_batch) {
+                    // (only with batches: then the output does no MPI communication)
+                    if (batches_this_step and part_lc.size() >= npart_per_batch) {
                       output_particles(part_lc, a_old, a_new, particle_type, ibatch);
+                      npart_in_written_batches += part_lc.size();
                       part_lc.resize(0);
                       ibatch++;
                     }
@@ -585,10 +598,8 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
     }
 
     // Get number of particles and err_rmse across all procs
-    size_t npart_lc_global = part_lc.size();
+    size_t npart_lc_global = part_lc.size() + npart_in_written_batches;
     size_t npart_remaining_to_be_output = part_lc.size();
-    if(output_in_batches)
-      npart_lc_global += ibatch * npart_per_batch;
     FML::SumOverTasks(&npart_lc_global);
     FML::SumOverTasks(&npart_remaining_to_be_output);
 
@@ -606,7 +617,16 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
     }
 
     // Write to file if there are particles in the lightcone
-    if (npart_remaining_to_be_output > 0) {
+    if (batches_this_step) {
+        // The tasks have written different numbers of batches: all tasks write the same number (empty if
+        // needed) so that each batch has NTasks files (as the headers say)
+        int nbatches = ibatch + (part_lc.size() > 0 ? 1 : 0);
+        FML::MaxOverTasks(&nbatches);
+        while (ibatch < nbatches) {
+            output_particles(part_lc, a_old, a_new, particle_type, ibatch++);
+            part_lc.resize(0);
+        }
+    } else if (npart_remaining_to_be_output > 0) {
         output_particles(part_lc, a_old, a_new, particle_type, ibatch++);
     }
     if(FML::ThisTask == 0)
@@ -781,7 +801,7 @@ void Lightcone<NDIM, T, U>::output_gadget(FML::Vector<U> & part_lc, double astar
 
     const int nfiles = FML::NTasks;
     std::string fileprefix;
-    if(output_in_batches)
+    if(batches_this_step)
       fileprefix =
         plc_folder + "/" + "lightcone_" + label + "_gadget_step" + std::to_string(plc_step) + "_batch" + std::to_string(ibatch) + ".";
     else
@@ -798,7 +818,7 @@ void Lightcone<NDIM, T, U>::output_gadget(FML::Vector<U> & part_lc, double astar
     size_t npart_lc_global = npart_lc;
    
     // If we output all files at the same time then its fine to do MPI calls
-    if(not output_in_batches) {
+    if(not batches_this_step) {
       FML::SumOverTasks(&npart_lc_global);
     } else {
       // In this case we don't have a good way of getting the total number of particles in all files
@@ -835,14 +855,14 @@ void Lightcone<NDIM, T, U>::output_hdf5([[maybe_unused]] FML::Vector<U> & part_l
                                         [[maybe_unused]] int ibatch) {
 #ifdef USE_HDF5
     std::string fileprefix = plc_folder + "/" + "lightcone_" + label + "_hdf5_step" + std::to_string(plc_step);
-    if (output_in_batches)
+    if (batches_this_step)
         fileprefix += "_batch" + std::to_string(ibatch);
     if (FML::ThisTask == 0)
         std::cout << "# Writing lightcone to HDF5 file(s): " << fileprefix << ".X.hdf5\n";
 
     size_t npart_lc = part_lc.size();
     size_t npart_lc_global = npart_lc;
-    if (not output_in_batches)
+    if (not batches_this_step)
         FML::SumOverTasks(&npart_lc_global);
 
     FML::FILEUTILS::GADGET::GadgetHDF5Writer gw(NDIM);
@@ -906,7 +926,7 @@ void Lightcone<NDIM, T, U>::output_ascii(FML::Vector<U> & part_lc, double astart
 
     size_t npart = part_lc.size();
     size_t npart_total = npart;
-    if(not output_in_batches) 
+    if(not batches_this_step) 
       FML::SumOverTasks(&npart_total);
     
     std::ofstream fp;
@@ -934,7 +954,7 @@ void Lightcone<NDIM, T, U>::output_ascii(FML::Vector<U> & part_lc, double astart
         << std::to_string(aend) << "]\n";
       fp << "# The corresponding comoving distances is in [" << get_distance(aend) * boxsize << " -> "
         << get_distance(astart) * boxsize << "] Mpc/h\n";
-      if(output_in_batches)
+      if(batches_this_step)
         fp << "# This file is written in batches so no particle number information can be written here\n";
       else {
         fp << "# This file has " << npart << " / " << npart_total << " particles\n";
@@ -1005,6 +1025,33 @@ double Lightcone<NDIM, T, U>::volume_shell(double rlow, double rhigh) {
         return 2.0 * (rhigh - rlow);
     else
         throw std::runtime_error("Volume-shell only implemented for ndim = 1,2,3");
+}
+
+// The fraction of the lightcone shell rlow < r < rhigh (units of the box) that is in the x-domain of this task,
+// for reserving memory for the lightcone particles. The cross section of the shell at x (relative to the observer)
+// is taken proportional to (rhigh^2 - x^2)^((NDIM-1)/2) - (rlow^2 - x^2)^((NDIM-1)/2), i.e. the same fraction of
+// the full sphere at all x (exact for an observer at the origin), over the x-range of the box and its replicas
+template <int NDIM, class T, class U>
+double Lightcone<NDIM, T, U>::local_fraction_of_shell(double rlow, double rhigh) {
+    if (FML::NTasks == 1)
+        return 1.0;
+    const auto nrep = replicas.get_replica_range(0);
+    const double xmin = -pos_observer[0] - nrep.first;
+    const double xmax = 1.0 - pos_observer[0] + nrep.second;
+    const int npts = 1000 * (nrep.first + nrep.second + 1);
+    const double dx = (xmax - xmin) / npts;
+    auto cross_section = [&](double r, double x) { return r * r > x * x ? std::pow(r * r - x * x, 0.5 * (NDIM - 1)) : 0.0; };
+    double local = 0.0, total = 0.0;
+    for (int i = 0; i < npts; i++) {
+        const double x = xmin + (i + 0.5) * dx;
+        const double w = cross_section(rhigh, x) - cross_section(rlow, x);
+        // The position in the box
+        const double xbox = x + pos_observer[0] - std::floor(x + pos_observer[0]);
+        total += w;
+        if (xbox >= FML::xmin_domain and xbox < FML::xmax_domain)
+            local += w;
+    }
+    return total > 0.0 ? local / total : 1.0 / FML::NTasks;
 }
 
 template <int NDIM, class T, class U>
