@@ -577,6 +577,9 @@ namespace COLASOLVER {
             if (output.particles and output.fileformat == ParticleFileFormat::HDF5)
                 fail("output_fileformat = HDF5 needs HDF5: compile with USE_HDF5=true (make USE_HDF5=true)");
 #endif
+            // The multipoles are stored for ell = 0, ..., ellmax: a negative ellmax would write out of bounds
+            if (pofk_multipole.enabled and pofk_multipole.ellmax < 0)
+                fail("pofk_multipole_ellmax must be >= 0");
             // N-body gauge: the IC must be the N-body gauge transfer functions at the initial redshift
             if (force.density_method == "sheet" or force.density_method == "sheet_nufft") {
                 if (ic.random_field_type == ICRandomFieldType::ReadParticles)

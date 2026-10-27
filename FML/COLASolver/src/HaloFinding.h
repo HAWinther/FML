@@ -398,7 +398,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     const double mass_norm = COLASOLVER::halo_particle_mass_msunh(OmegaCB, boxsize, H0_hmpc, size_t(npart_total));
     // Code positions are in [0,1) -> Mpc/h
     const double pos_norm = boxsize;
-    // Code velocities are a^2 dxdt / ((H0 Box) -> peculiar km/s
+    // Code velocities are a^2 dx/dt / (H0 Box) -> peculiar km/s
     const double vel_norm = 100.0 * boxsize * (1.0 + redshift);
     for (auto & g : halos) {
         g.mass *= mass_norm;
@@ -427,22 +427,28 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     for (int i = 0; i < nbins; i++)
         logM[i] = std::log(massmin) + dlogM * (i + 0.5);
 
-    // n(>M) and dn/dlnM of a set of masses
+    // n(>M) and dn/dlnM of a set of masses, both at the bin centers M = exp(logM[i]): dn/dlnM counts the halos in
+    // [Mmin e^(i dlogM), Mmin e^((i+1) dlogM)) (floor: halos below Mmin are not in bin 0) and n(>M) all halos
+    // (also those above Mmax) with mass >= the bin center
     auto mass_function = [&](const std::function<double(const Halo &)> & mass_of,
                              std::vector<double> & nofM,
                              std::vector<double> & dnofM) {
         nofM.assign(nbins, 0.0);
         dnofM.assign(nbins, 0.0);
         for (auto & g : halos) {
-            int index = int(std::log(mass_of(g) / massmin) / dlogM);
-            if (index >= 0 and index < nbins) {
-                dnofM[index] += 1.0;
-            }
+            const double x = std::log(mass_of(g) / massmin) / dlogM;
+            const double index = std::floor(x);
+            if (index >= 0.0 and index < double(nbins))
+                dnofM[int(index)] += 1.0;
+            // The last bin center <= mass
+            const double icenter = std::floor(x - 0.5);
+            if (icenter >= 0.0)
+                nofM[int(std::min(icenter, double(nbins - 1)))] += 1.0;
         }
         FML::SumArrayOverTasks(dnofM.data(), nbins);
-        nofM[nbins - 1] = dnofM[nbins - 1];
+        FML::SumArrayOverTasks(nofM.data(), nbins);
         for (int i = nbins - 2; i >= 0; i--) {
-            nofM[i] = nofM[i + 1] + dnofM[i];
+            nofM[i] += nofM[i + 1];
         }
         for (int i = 0; i < nbins; i++) {
             nofM[i] /= std::pow(boxsize, NDIM);
