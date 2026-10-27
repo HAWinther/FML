@@ -2,12 +2,14 @@
 // Tests for the spherical overdensity properties of halos (FriendsOfFriends/SphericalOverdensity.h): singular
 // isothermal spheres (mean enclosed density 3 N / (4 pi R_max r^2)) on a uniform background, some of them on the
 // boundaries of the task domains, must give the analytic radius, mass and center for any number of tasks, and
-// spheres larger than the search radius must be reported as truncated.
+// spheres larger than the search radius must be reported as truncated. Halos with a core as large as the halo and
+// ~100 particles (as at the resolution of a PM simulation) must not collapse to a few particles.
 // Run with: make run (in this folder) or make test (from the top folder)
 //==========================================================
 #include <FML/FriendsOfFriends/SphericalOverdensity.h>
 #include <FML/Global/Global.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <iomanip>
@@ -129,6 +131,78 @@ int main() {
     FML::FOF::SphericalOverdensity<Particle, NDIM>(
         local.data(), local.size(), total_mass, guess, initial_radius, low, search_radius);
     check(FML::FOF::SO_number_of_truncated_halos == centers.size(), label + "spheres larger than the search radius reported");
+
+    // Resolution test: NFW-like halos with a core as large as the halo (as halos in a PM/COLA simulation where R200
+    // is about the force resolution), rho ~ 1 / ((r + r_c) (r + r_s)^2) with r_s = r_c = 2 R200, truncated at 2 R200,
+    // with ~100 particles inside R200. The mean density in the core is only a little above Delta, the center is not
+    // on a particle and the innermost particles are Poisson noise, so a sphere grown from the center that stops at
+    // the first particle below the threshold often has 1-2 particles. The outermost crossing gives the expected
+    // M200 on average (the flat profile makes the radius of each halo noisy)
+    {
+        const double R200 = 0.02, rs = 2.0 * R200, rc = rs, rt = 2.0 * R200, Delta = 200.0;
+        const int nbg = 10000;
+        // Halos on the domain boundaries for 1, 2 and 4 tasks and in between; > 2 rt apart
+        std::vector<std::array<double, 3>> cnfw;
+        for (int ix = 0; ix < 4; ix++)
+            for (int iy = 0; iy < 3; iy++)
+                cnfw.push_back({0.25 * ix, 0.2 + 0.3 * iy, 0.15 + 0.2 * ((ix + iy) % 4)});
+        // Tabulated enclosed mass of the profile (in units of the mass within rt) and its inverse
+        const int ntab = 20000;
+        std::vector<double> rtab(ntab + 1), mtab(ntab + 1, 0.0);
+        for (int i = 0; i <= ntab; i++)
+            rtab[i] = rt * i / double(ntab);
+        auto shell = [&](double r) { return r * r / ((r + rc) * (r + rs) * (r + rs)); };
+        for (int i = 1; i <= ntab; i++)
+            mtab[i] = mtab[i - 1] + 0.5 * (shell(rtab[i - 1]) + shell(rtab[i])) * (rtab[i] - rtab[i - 1]);
+        for (auto & m : mtab)
+            m /= mtab.back();
+        const double f200 = mtab[ntab / 2];
+        // Halo particles per halo so that the expected mean density inside R200 is Delta times the mean density:
+        // f200 Nh + nbg V200 = Delta V200 (nbg + nhalos Nh)
+        const double V200 = 4.0 * M_PI / 3.0 * R200 * R200 * R200;
+        const int Nh = int(std::lround((Delta - 1.0) * nbg * V200 / (f200 - Delta * V200 * cnfw.size())));
+        std::vector<Particle> allnfw;
+        std::mt19937 gen2(7);
+        for (int i = 0; i < nbg; i++)
+            allnfw.push_back({{uni(gen2), uni(gen2), uni(gen2)}, {0.0, 0.0, 0.0}});
+        for (auto & c : cnfw)
+            for (int i = 0; i < Nh; i++) {
+                const double u = uni(gen2);
+                const size_t k = std::upper_bound(mtab.begin(), mtab.end(), u) - mtab.begin();
+                const size_t k1 = std::min(std::max(k, size_t(1)), size_t(ntab));
+                const double r = rtab[k1 - 1] + (rtab[k1] - rtab[k1 - 1]) * (u - mtab[k1 - 1]) / (mtab[k1] - mtab[k1 - 1]);
+                const double mu = 2.0 * uni(gen2) - 1.0, phi = 2.0 * M_PI * uni(gen2);
+                const double sn = std::sqrt(1.0 - mu * mu);
+                allnfw.push_back({{wrap(c[0] + r * sn * std::cos(phi)), wrap(c[1] + r * sn * std::sin(phi)), wrap(c[2] + r * mu)},
+                                  {0.0, 0.0, 0.0}});
+            }
+        const double total = double(allnfw.size());
+        const double M200 = Delta * total * V200;
+        std::vector<Particle> localnfw;
+        for (auto & p : allnfw)
+            if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+                localnfw.push_back(p);
+        std::vector<std::array<double, 3>> gnfw;
+        for (auto & c : cnfw)
+            if (c[0] >= FML::xmin_domain and c[0] < FML::xmax_domain)
+                gnfw.push_back({wrap(c[0] + 0.002), wrap(c[1] - 0.002), c[2]});
+        std::vector<double> rinit(gnfw.size(), R200);
+        auto sonfw = FML::FOF::SphericalOverdensity<Particle, NDIM>(
+            localnfw.data(), localnfw.size(), total, gnfw, rinit, {Delta}, 0.1);
+        double sumerr = 0.0, minfrac = 1e30;
+        for (auto & h : sonfw) {
+            const double err = h.mass[0] / M200 - 1.0;
+            sumerr += err;
+            minfrac = std::min(minfrac, double(h.npart[0]) / M200);
+        }
+        size_t nnfw = sonfw.size();
+        FML::SumOverTasks(&sumerr);
+        FML::SumOverTasks(&nnfw);
+        FML::MinOverTasks(&minfrac);
+        check(nnfw == cnfw.size(), label + "all cored NFW halos measured");
+        check(minfrac > 0.25, label + "cored NFW halos with N200 = " + num(M200) + ": no halo collapses to a few particles (min N/N200 = " + num(minfrac) + ")");
+        check(std::fabs(sumerr / double(cnfw.size())) < 0.1, label + "mean M200 of the cored NFW halos (mean rel. error " + num(sumerr / double(cnfw.size())) + ")");
+    }
 
     if (FML::ThisTask == 0)
         std::cout << (fails == 0 ? "All SO tests passed\n" : std::to_string(fails) + " SO test(s) FAILED\n");

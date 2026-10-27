@@ -117,10 +117,15 @@ namespace FML {
         ///   1. the center is refined with a shrinking sphere (Power et al. 2003): starting from the guess and radius
         ///      initial_radius[i], move to the center of mass of the particles inside and shrink the radius by 10%
         ///      until fewer than max(nmin_center, 10% of the starting number) particles are left
-        ///   2. the sphere around the center is grown until the mean enclosed density falls below each threshold
-        ///      (thresholds in units of the mean density of the particles, i.e. Delta). The radius is defined by
-        ///      M(<R) / (4pi/3 R^3) = Delta rho_mean with M(<R) the mass of the particles inside, so it lies between
-        ///      the last particle inside and the first particle outside.
+        ///   2. the radius for each threshold (in units of the mean density of the particles, i.e. Delta) is the
+        ///      OUTERMOST radius where the mean enclosed density is still above the threshold (as e.g. Rockstar):
+        ///      with the particles sorted by distance r_i and M_i the mass of particles 0..i, the halo is particles
+        ///      0..i for the largest i with M_i / (4pi/3 r_i^3) >= Delta rho_mean, and the radius is defined by
+        ///      M_i / (4pi/3 R^3) = Delta rho_mean, so it lies between particle i and the first particle outside.
+        ///      Growing the sphere from the center and stopping at the FIRST particle below the threshold is not
+        ///      well defined at simulation resolution: the few innermost particles are Poisson noise around a
+        ///      (shrinking sphere) center that is not on a particle, so the sphere often stops after 1-2 particles
+        ///      even for halos with hundreds of particles inside R_Delta.
         /// All particles (on this task and within search_radius of it on the neighbor tasks) are used, not only the
         /// members of the FoF group. The search radius (box units) is the same for any number of tasks so the result
         /// does not depend on it; halos whose sphere has not reached the overdensity within it are flagged as truncated
@@ -308,22 +313,23 @@ namespace FML {
                 }
                 for (size_t it = 0; it < thresholds.size(); it++) {
                     const double rho_threshold = thresholds[it] * total_mass;
-                    // The first particle (beyond the first two) where the mean density inside falls below the
-                    // threshold. The particle at the center is always inside
-                    size_t i = 1;
-                    while (i < all.size() and cummass[i] / ball_volume(std::sqrt(all[i].first)) >= rho_threshold)
-                        i++;
-                    if (i == all.size()) {
-                        // Did not reach the threshold within the search radius
+                    // The outermost particle where the mean density inside (including it) is still above the
+                    // threshold (see above). Search from the outside in
+                    size_t n = all.size();
+                    while (n > 0 and cummass[n - 1] / ball_volume(std::sqrt(all[n - 1].first)) < rho_threshold)
+                        n--;
+                    if (n == all.size() and n > 0) {
+                        // Still above the threshold at the last particle: did not reach it within the search radius
                         h.truncated = true;
-                        h.mass[it] = all.empty() ? 0.0 : cummass.back();
+                        h.mass[it] = cummass.back();
                         h.npart[it] = (long long int)all.size();
                         h.radius[it] = search_radius;
                         continue;
                     }
-                    const double Min = cummass[i - 1];
+                    // n = 0 (no particle has an enclosed density above the threshold): radius and mass 0
+                    const double Min = n > 0 ? cummass[n - 1] : 0.0;
                     h.mass[it] = Min;
-                    h.npart[it] = (long long int)i;
+                    h.npart[it] = (long long int)n;
                     h.radius[it] = std::pow(Min / (rho_threshold * volume_factor), 1.0 / NDIM);
                 }
                 if (h.truncated)
