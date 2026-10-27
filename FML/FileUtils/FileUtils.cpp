@@ -1,94 +1,110 @@
 #include "FileUtils.h"
-#include <cassert>
+#include <cerrno>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <random>
 #include <sstream>
+#include <stdexcept>
 
 namespace FML {
     namespace FILEUTILS {
 
-        // Read a regular ascii files with nskip header lines and containing ncol columns
-        // nestimated_lines is the amount we allocate for originally. Reallocated if file is larger
-        // Not perfect for really large files due to all the allocations we have to do
+        namespace {
+
+            // Parse a line of numbers into row (cleared first). Everything after a '#' is a comment. Returns false if
+            // the line has no numbers (blank or a comment line, or a line starting with '!' or '/'). Throws on a
+            // token that is not a number (nan, inf and values below the smallest normal double are accepted).
+            bool parse_line(const std::string & line,
+                            std::vector<double> & row,
+                            const std::string & filename,
+                            size_t linenumber,
+                            const std::string & caller) {
+                row.clear();
+                const size_t first = line.find_first_not_of(" \t\r");
+                if (first == std::string::npos or line[first] == '#' or line[first] == '!' or line[first] == '/')
+                    return false;
+                std::istringstream ss(line.substr(0, line.find('#')));
+                std::string token;
+                while (ss >> token) {
+                    const char * begin = token.c_str();
+                    char * end = nullptr;
+                    errno = 0;
+                    const double value = std::strtod(begin, &end);
+                    // ERANGE: overflow gives +-inf (kept), underflow gives a denormal or 0 (kept)
+                    if (end == begin or *end != '\0')
+                        throw std::runtime_error("[" + caller + "] Could not read [" + token + "] as a number on line " +
+                                                 std::to_string(linenumber) + " of [" + filename + "]");
+                    row.push_back(value);
+                }
+                return not row.empty();
+            }
+
+            // The common reader for read_regular_ascii(_subsampled)
+            DVector2D read_regular_ascii_impl(const std::string & filename,
+                                              int ncols,
+                                              const std::vector<int> & cols_to_keep,
+                                              int nskip,
+                                              size_t nestimated_lines,
+                                              double fraction_to_read,
+                                              unsigned int randomSeed) {
+                const std::string caller = "read_regular_ascii";
+                if (cols_to_keep.empty() or nskip < 0 or ncols <= 0)
+                    throw std::runtime_error("[" + caller + "] Need ncols > 0, nskip >= 0 and columns to keep");
+                for (auto & i : cols_to_keep)
+                    if (i < 0 or i >= ncols)
+                        throw std::runtime_error("[" + caller + "] Column " + std::to_string(i) + " to keep is not in [0, " +
+                                                 std::to_string(ncols) + ")");
+
+                std::ifstream fp(filename.c_str());
+                if (!fp)
+                    throw std::runtime_error("[" + caller + "] Failed to open [" + filename + "]\n");
+
+                std::mt19937 generator(randomSeed);
+                auto udist = std::uniform_real_distribution<double>(0.0, 1.0);
+
+                DVector2D result;
+                result.reserve(nestimated_lines);
+                DVector row;
+                row.reserve(ncols);
+                DVector newline(cols_to_keep.size());
+
+                std::string line;
+                size_t linenumber = 0;
+                for (int i = 0; i < nskip; i++) {
+                    std::getline(fp, line);
+                    linenumber++;
+#ifdef DEBUG_READASCII
+                    std::cout << "Skipping headerline: " << line << "\n";
+#endif
+                }
+
+                while (std::getline(fp, line)) {
+                    linenumber++;
+                    if (not parse_line(line, row, filename, linenumber, caller))
+                        continue;
+                    if (int(row.size()) != ncols)
+                        throw std::runtime_error("[" + caller + "] Found " + std::to_string(row.size()) +
+                                                 " columns on line " + std::to_string(linenumber) + " of [" + filename +
+                                                 "], expected " + std::to_string(ncols));
+                    if (fraction_to_read < 1.0 and udist(generator) >= fraction_to_read)
+                        continue;
+                    for (size_t i = 0; i < cols_to_keep.size(); i++)
+                        newline[i] = row[cols_to_keep[i]];
+                    result.push_back(newline);
+                }
+                return result;
+            }
+        } // namespace
+
         DVector2D read_regular_ascii(std::string filename,
                                      int ncols,
                                      std::vector<int> cols_to_keep,
                                      int nskip,
                                      size_t nestimated_lines) {
-
-            // Sanity check
-            assert(cols_to_keep.size() > 0 and nskip >= 0 and ncols > 0);
-            for (auto & i : cols_to_keep)
-                assert(i < ncols and i >= 0);
-
-            // Open file
-            std::ifstream fp(filename.c_str());
-            if (!fp) {
-                throw std::runtime_error("[read_regular_ascii] Failed to open [" + filename + "]\n");
-            }
-
-            // Allocate memory for reading
-            int ntokeep = int(cols_to_keep.size());
-            DVector2D result;
-            result.reserve(nestimated_lines);
-
-            // For reading the file
-            DVector newline(ntokeep);
-            DVector temp(ncols);
-
-            // Read and skip header lines
-            for (int i = 0; i < nskip; i++) {
-                std::string line;
-                std::getline(fp, line);
-#ifdef DEBUG_READASCII
-                std::cout << "Skipping headerline: " << line << "\n";
-#endif
-            }
-
-            // Read first entry and check that it has the right number of columns
-            std::string line;
-            std::getline(fp, line);
-            std::stringstream ss;
-            ss << line;
-            int count = 0;
-            while (ss >> line) {
-                temp[count] = std::stod(line);
-                ++count;
-            }
-            for (int i = 0; i < ntokeep; i++)
-                newline[i] = temp[cols_to_keep[i]];
-            result.push_back(newline);
-            if (count != ncols) {
-                throw std::runtime_error("Found ncols " + std::to_string(count) + " which differs from specified " +
-                                         std::to_string(ncols) + "\n");
-            }
-
-            // Read the rest of the file
-            while (1) {
-                fp >> temp[0];
-                if (fp.eof())
-                    break;
-                for (int i = 1; i < ncols; i++)
-                    fp >> temp[i];
-                for (int i = 0; i < ntokeep; i++)
-                    newline[i] = temp[cols_to_keep[i]];
-#ifdef DEBUG_READASCII
-                if (result.size() < 10) {
-                    std::cout << "Line " << result.size() - 1 << " : ";
-                    for (auto e : result[result.size() - 1])
-                        std::cout << e << " ";
-                    std::cout << std::endl;
-                }
-#endif
-                result.push_back(newline);
-            }
-            return result;
+            return read_regular_ascii_impl(filename, ncols, cols_to_keep, nskip, nestimated_lines, 1.0, 0);
         }
 
-        // Read a regular ascii files with nskip header lines and containing ncol columns
-        // nestimated_lines is the amount we allocate for originally. Reallocated if file is larger
-        // Not perfect for really large files due to all the allocations we have to do
         DVector2D read_regular_ascii_subsampled(std::string filename,
                                                 int ncols,
                                                 std::vector<int> cols_to_keep,
@@ -96,144 +112,53 @@ namespace FML {
                                                 size_t nestimated_lines,
                                                 double fraction_to_read,
                                                 unsigned int randomSeed) {
-            std::mt19937 generator(randomSeed);
-            auto udist = std::uniform_real_distribution<double>(0.0, 1.0);
-
-            // Sanity check
-            assert(cols_to_keep.size() > 0 and nskip >= 0 and ncols > 0);
-            for (auto & i : cols_to_keep)
-                assert(i < ncols and i >= 0);
-
-            // Open file
-            std::ifstream fp(filename.c_str());
-            if (!fp) {
-                throw std::runtime_error("[read_regular_ascii] Failed to open [" + filename + "]\n");
-            }
-
-            // Allocate memory for reading
-            int ntokeep = int(cols_to_keep.size());
-            DVector2D result;
-            result.reserve(nestimated_lines);
-
-            // For reading the file
-            DVector newline(ntokeep);
-            DVector temp(ncols);
-
-            // Read and skip header lines
-            for (int i = 0; i < nskip; i++) {
-                std::string line;
-                std::getline(fp, line);
-#ifdef DEBUG_READASCII
-                std::cout << "Skipping headerline: " << line << "\n";
-#endif
-            }
-
-            // Read first entry and check that it has the right number of columns
-            std::string line;
-            std::getline(fp, line);
-            std::stringstream ss;
-            ss << line;
-            int count = 0;
-            while (ss >> line) {
-                temp[count] = std::stod(line);
-                ++count;
-            }
-            for (int i = 0; i < ntokeep; i++)
-                newline[i] = temp[cols_to_keep[i]];
-            result.push_back(newline);
-            if (count != ncols) {
-                throw std::runtime_error("Found ncols " + std::to_string(count) + " which differs from specified " +
-                                         std::to_string(ncols) + "\n");
-            }
-
-            // Read the rest of the file
-            while (1) {
-                fp >> temp[0];
-                if (fp.eof())
-                    break;
-                for (int i = 1; i < ncols; i++)
-                    fp >> temp[i];
-                for (int i = 0; i < ntokeep; i++)
-                    newline[i] = temp[cols_to_keep[i]];
-#ifdef DEBUG_READASCII
-                if (result.size() < 10) {
-                    std::cout << "Line " << result.size() - 1 << " : ";
-                    for (auto e : result[result.size() - 1])
-                        std::cout << e << " ";
-                    std::cout << std::endl;
-                }
-#endif
-                if (fraction_to_read >= 1.0)
-                    result.push_back(newline);
-                else if (udist(generator) < fraction_to_read)
-                    result.push_back(newline);
-            }
-            return result;
+            return read_regular_ascii_impl(
+                filename, ncols, cols_to_keep, nskip, nestimated_lines, fraction_to_read, randomSeed);
         }
 
-        /// Read a regular file and extract two columns (numbering starting with 0)
         std::pair<DVector, DVector> read_file_and_extract_two_columns(std::string filename, int col1, int col2) {
             auto data = loadtxt(filename);
-
             DVector x, y;
-            for (auto & row : data) {
-                x.push_back(row[col1]);
-                y.push_back(row[col2]);
+            x.reserve(data.size());
+            y.reserve(data.size());
+            for (size_t i = 0; i < data.size(); i++) {
+                const int ncol = int(data[i].size());
+                if (col1 < 0 or col2 < 0 or col1 >= ncol or col2 >= ncol)
+                    throw std::runtime_error("[read_file_and_extract_two_columns] Columns " + std::to_string(col1) +
+                                             ", " + std::to_string(col2) + " not found in data row " +
+                                             std::to_string(i) + " of [" + filename + "] (" + std::to_string(ncol) +
+                                             " columns)");
+                x.push_back(data[i][col1]);
+                y.push_back(data[i][col2]);
             }
             return {x, y};
         }
 
-        /// Similar to pythons loadtxt function
-        /// Gives warning if file is not regular
-        /// Skips lines starting with #, ! or /
         DVector2D loadtxt(std::string filename, int nreserve_rows, int nreserve_cols) {
-
-            // Open file
             std::ifstream fp(filename.c_str());
-            if (!fp) {
+            if (!fp)
                 throw std::runtime_error("[loadtxt] Failed to open [" + filename + "]\n");
-            }
 
-            // Allocate memory for reading
             DVector2D result;
-            result.reserve(nreserve_rows);
+            result.reserve(std::max(nreserve_rows, 1));
+            DVector row;
+            row.reserve(std::max(nreserve_cols, 1));
 
-            // Read the file line by line
-            while (true) {
-
-                // Read line
-                std::string line;
-                std::getline(fp, line);
-
-                if (!fp)
-                    break;
-
-                // Skip line if # or ! or /
-                if (line[0] == '#' or line[0] == '!' or line[0] == '/')
-                    continue;
-
-                // Read line as a set of doubles
-                std::stringstream ss;
-                std::vector<double> row;
-                row.reserve(nreserve_cols);
-                ss << line;
-                while (ss >> line) {
-                    row.push_back(std::stod(line));
-                }
-
-                // Add to result
-                result.push_back(row);
+            std::string line;
+            size_t linenumber = 0;
+            while (std::getline(fp, line)) {
+                linenumber++;
+                if (parse_line(line, row, filename, linenumber, "loadtxt"))
+                    result.push_back(row);
             }
 
             // Check if the result is regular
-            size_t size = result.size();
-            if (size > 0) {
-                size_t ncol1 = result[0].size();
-                size_t ncolmin = ncol1;
-                size_t ncolmax = 0;
-                for (size_t j = 1; j < size; j++) {
-                    ncolmin = std::min(ncolmin, result[j].size());
-                    ncolmax = std::max(ncolmax, result[j].size());
+            if (not result.empty()) {
+                size_t ncolmin = result[0].size();
+                size_t ncolmax = result[0].size();
+                for (auto & r : result) {
+                    ncolmin = std::min(ncolmin, r.size());
+                    ncolmax = std::max(ncolmax, r.size());
                 }
                 if (ncolmin != ncolmax) {
                     std::cout << "[loadtxt] Warning the file " + filename + " is not regular\n";
@@ -241,7 +166,6 @@ namespace FML {
                     std::cout << "The maximum number of columns is " << ncolmax << "\n";
                 }
             }
-
             return result;
         }
 

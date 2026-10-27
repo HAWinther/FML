@@ -2,7 +2,9 @@
 #define FOFBINNING_HEADER
 #include <FML/Global/Global.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cassert>
 #include <vector>
 
@@ -34,12 +36,12 @@ namespace FML {
             /// Mass of the halo (units is the same as those in the particles; get_mass)
             double mass{0.0};
             /// Center of the halo
-            std::array<double, NDIM> pos;
+            std::array<double, NDIM> pos{};
             /// Velocity of the halo
-            std::array<double, NDIM> vel;
-            /// RMS velocity of the particles in the halo
+            std::array<double, NDIM> vel{};
+            /// RMS velocity of the particles in the halo (velocity dispersion per dimension)
             /// Contains <v^2> before finalizing
-            std::array<double, NDIM> vel_rms;
+            std::array<double, NDIM> vel_rms{};
 
             // To be able to use this with MPIParticles we need these methods
             constexpr int get_ndim() const { return NDIM; }
@@ -53,7 +55,7 @@ namespace FML {
 
             size_t get_npart() const { return np; };
             size_t get_id() const { return id; };
-            double get_velocity_dispersion() const { return vel_rms; };
+            std::array<double, NDIM> get_velocity_dispersion() const { return vel_rms; };
 
 #ifdef STORE_MEMBERS_PTRS
             // If you want access to all particles in the end
@@ -129,9 +131,10 @@ namespace FML {
             /// @param[in] periodic (Optional) Is the box periodic?
             void finalize([[maybe_unused]] bool periodic = true) {
 
-                // Veloity dispersion. v_rms contains <v^2> at this point
+                // Velocity dispersion. v_rms contains <v^2> at this point (<v^2> - <v>^2 can be slightly negative from
+                // round-off when all the particles have (nearly) the same velocity)
                 for (int idim = 0; idim < NDIM; idim++)
-                    vel_rms[idim] = std::sqrt(vel_rms[idim] - vel[idim] * vel[idim]);
+                    vel_rms[idim] = std::sqrt(std::max(0.0, vel_rms[idim] - vel[idim] * vel[idim]));
 
 #ifdef STORE_MEMBERS_PTRS
                 // Free up memory

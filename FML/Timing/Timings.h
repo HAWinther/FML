@@ -6,6 +6,7 @@
 #include <iostream>
 #include <map>
 #include <mutex>
+#include <string>
 
 #ifdef USE_MPI
 #include <mpi.h>
@@ -28,7 +29,7 @@ namespace FML {
             // For keeping timings
             std::map<std::string, TimePoint> timings;
             std::map<std::string, double> elapsed_time_sec;
-            std::mutex timings_mutex;
+            mutable std::mutex timings_mutex;
 
             // Get the current time
             TimePoint getTime() { return std::chrono::steady_clock::now(); }
@@ -41,15 +42,33 @@ namespace FML {
           public:
             Timings() = default;
 
+            // Copies get the timings recorded so far (and their own lock)
+            Timings(const Timings & rhs) {
+                std::lock_guard<std::mutex> guard(rhs.timings_mutex);
+                timings = rhs.timings;
+                elapsed_time_sec = rhs.elapsed_time_sec;
+            }
+            Timings & operator=(const Timings & rhs) {
+                if (this != &rhs) {
+                    std::scoped_lock guard(timings_mutex, rhs.timings_mutex);
+                    timings = rhs.timings;
+                    elapsed_time_sec = rhs.elapsed_time_sec;
+                }
+                return *this;
+            }
+
             /// Output all the recorded timings
             void PrintAllTimings() const {
 #ifdef USE_MPI
                 int ThisTask = 0;
-                MPI_Comm_rank(FML::communicator, &ThisTask);
+                int initialized = 0;
+                MPI_Initialized(&initialized);
+                if (initialized)
+                    MPI_Comm_rank(FML::communicator, &ThisTask);
                 if (ThisTask > 0)
                     return;
 #endif
-                std::cout << "\n";
+                std::lock_guard<std::mutex> guard(timings_mutex);                std::cout << "\n";
                 std::cout << "============================================\n";
                 std::cout << "All the recorded timings for task 0:\n";
                 std::cout << "============================================\n";
@@ -71,16 +90,12 @@ namespace FML {
                 auto start_time = std::chrono::steady_clock::now();
                 std::lock_guard<std::mutex> guard(timings_mutex);
 
-                auto it = timings.find(name);
-                if (it != timings.end()) {
-                    it->second = start_time;
-                } else {
-                    timings[name] = start_time;
-                    elapsed_time_sec[name] = 0.0;
-                }
+                timings[name] = start_time;
+                elapsed_time_sec.try_emplace(name, 0.0);
             }
 
-            /// End timing 
+            /// End timing (the time since the last StartTiming with this name is added to its total; a second
+            /// EndTiming without a new StartTiming adds nothing and returns 0)
             /// @param[in] name The label to give to the timing
             /// @param[in] print Optional: print timing to screen right away
             ///
@@ -97,30 +112,24 @@ namespace FML {
                 double time_sec = 0.0;
                 double tot_time_sec = 0.0;
 
-                // Find current time
+                // Find the start time (and remove it: the timing is no longer running)
                 auto it = timings.find(name);
-                if (it != timings.end()) {
-                    auto start_time = it->second;
-                    time_sec = timeInSeconds(start_time, end_time);
+                if (it == timings.end()) {
+                    if (print)
+                        std::cout << "Can't print elapsed time. No running timing [" << name << "]\n";
+                    return 0.0;
                 }
+                time_sec = timeInSeconds(it->second, end_time);
+                timings.erase(it);
 
-                // Find total elapsed time
-                auto it2 = elapsed_time_sec.find(name);
-                if (it2 == elapsed_time_sec.end()) {
-                    elapsed_time_sec[name] = time_sec;
-                } else {
-                    it2->second += time_sec;
-                    tot_time_sec = it2->second;
-                }
+                // Add to the total elapsed time
+                auto & total = elapsed_time_sec[name];
+                total += time_sec;
+                tot_time_sec = total;
 
                 if (print) {
-                    if (tot_time_sec == 0.0) {
-                        if (time_sec == 0.0) {
-                            std::cout << "Can't print elapsed time. Start time for time-point [" << name
-                                      << "] was not found\n";
-                        } else {
-                            std::cout << "Elapsed time for [" << name << "]: " << time_sec << " sec\n";
-                        }
+                    if (tot_time_sec == time_sec) {
+                        std::cout << "Elapsed time for [" << name << "]: " << time_sec << " sec\n";
                     } else {
                         std::cout << "Current elapsed time for [" << name << "]: " << time_sec
                                   << " sec. Total: " << tot_time_sec << " sec\n";
@@ -130,15 +139,23 @@ namespace FML {
                 return time_sec;
             }
 
-            /// Print to screen total time for a given label
-            /// @param[in] name The label to print the time of
-            ///
-            void PrintTotalTime(const char * name) { PrintTotalTime(std::string(name)); }
+            /// Total time recorded for a label (0 if it has never been ended)
+            double GetTotalTime(const std::string & name) const {
+                std::lock_guard<std::mutex> guard(timings_mutex);
+                auto it = elapsed_time_sec.find(name);
+                return it == elapsed_time_sec.end() ? 0.0 : it->second;
+            }
 
             /// Print to screen total time for a given label
             /// @param[in] name The label to print the time of
             ///
-            void PrintTotalTime(std::string name) {
+            void PrintTotalTime(const char * name) const { PrintTotalTime(std::string(name)); }
+
+            /// Print to screen total time for a given label
+            /// @param[in] name The label to print the time of
+            ///
+            void PrintTotalTime(std::string name) const {
+                std::lock_guard<std::mutex> guard(timings_mutex);
                 auto it = elapsed_time_sec.find(name);
                 if (it != elapsed_time_sec.end()) {
                     double time_sec = it->second;

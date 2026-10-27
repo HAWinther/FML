@@ -5,6 +5,41 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Utilities: FileUtils, RandomGenerator, FoFBinning, MemoryLogging, Timings, ParameterMap, Matplotlibcpp
+- `FileUtils::read_regular_ascii` (used by COLASolver for the input P(k) / transfer file): a comment line or a token
+  like `nan` after the first data line made it loop forever (adding the same row until memory ran out), a first line
+  with more columns than `ncols` wrote out of bounds and a later line with another number of columns silently shifted
+  the data. Both readers now read line by line: blank lines, lines starting with #, ! or / and everything after a #
+  are skipped, nan / inf / denormals are read, and a wrong number of columns or a token that is not a number gives an
+  error with the line number. `loadtxt` returned an empty row for a blank line (callers then read out of bounds) and
+  threw "stod" for values below 2.2e-308. `read_file_and_extract_two_columns` was declared without the filename (could
+  not be called). `read_regular_ascii_subsampled` always kept the first line.
+- `RandomGenerator`: `set_normal_sigma` did nothing for the GSL generator (the argument shadowed the member: rms 1
+  instead of 10), and assigning a GSL generator to another (`b = a`) made them share the state (copies and `clone`
+  were fine). Documented that `std::normal_distribution` (mt19937 + normal numbers) differs between standard
+  libraries, and that seeds 0 and 1 are the same for GSL's ranlxd1. `GaussianRandomField::
+  generate_white_noise_field_real` printed every value of the first slice (debug output).
+- `FoFHalo` (FoFBinning.h): `get_velocity_dispersion()` did not compile (returned an array as a double), and the
+  velocity dispersion was NaN when <v^2> - <v>^2 rounded below zero (all members with the same velocity: 981 of 3000
+  components in a test); now clamped at 0.
+- `MemoryLog` (COLASolver builds with it): the singleton was created without synchronisation and `add_label` searched
+  the allocation map before taking the lock (data races with allocations from OpenMP threads). The limit of 100000
+  allocations counted all allocations ever made, so long runs stopped logging; it now counts the allocations alive
+  at the same time (the memory-vs-time history is capped separately). When the log stops, `print` still shows the
+  resident set size. Getters for the memory in use, the peak, the number of allocations, labels.
+- `Timings`: a second `EndTiming` without a new `StartTiming` added the time again; it now adds nothing and returns 0.
+  `Timings` is copyable (the mutex made every class holding it non-copyable) and has `GetTotalTime`.
+- `ParameterMap::get(name, fiducial)` returned the fiducial value when the parameter existed with another type (an
+  int 5 read as double gave the fiducial value); it is now an error with readable type names. Missing includes.
+- `Matplotlibcpp.h`: without numpy (`-DWITHOUT_NUMPY`, as in the Plotting example) the first call to `plot`, `xlim`
+  etc. crashed (segfault: Python was called before the interpreter was started); all functions now start it first.
+  `Py_SetProgramName` (deprecated from Python 3.11) is only called for older versions, and `register` is no longer
+  defined away for code that includes the header.
+- `tests/test_utils.cpp` (21 checks; the old code hangs in the first one).
+- Regression: identical except the FoF halo positions and velocities in fof_two_species_hdf5 (1 ulp) and the SO
+  velocity dispersion of halos with a single particle in R_200m (0 vs 1e-6 km/s): floating-point contraction (FMA)
+  differences from the changed code layout; with -ffp-contract=off the outputs are identical.
+
 ### FFTLog fixes
 - The output grid was one log-step off: the transform b[n] was labelled with r[n] = kcrc e^{-L} / k[0] ... instead
   of kcrc e^{-L + L/N} / k[0] ..., so xi(r) was evaluated at the wrong r (and normalised with the wrong (2 pi r)^-1.5).

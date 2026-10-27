@@ -5,6 +5,8 @@
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <stdexcept>
+#include <string>
 #include <variant>
 #include <vector>
 
@@ -76,11 +78,12 @@ namespace FML {
             /// Get a reference to the underlying map
             std::map<std::string, ParameterTypes> & get_map();
 
-            /// Fetch a value. If it doesn't exist we throw an error
+            /// Fetch a value. If it doesn't exist or has another type we throw an error (std::runtime_error)
             template <typename T>
             T get(std::string name) const;
 
-            /// Fetch a value. If it doesn't exist we use the provided fiducial value
+            /// Fetch a value. If it doesn't exist we use the provided fiducial value. If it exists with another type
+            /// it is an error (std::runtime_error)
             template <typename T>
             T get(std::string name, T fiducial_value) const;
         };

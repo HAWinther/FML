@@ -35,11 +35,6 @@ namespace FML {
     FMLSetup & fmlsetup = FMLSetup::init();
 #endif
 
-#ifdef MEMORY_LOGGING
-    // If we use memory logging initialize it
-    [[maybe_unused]] MemoryLog * MemoryLog::instance = nullptr;
-#endif
-
     // Number of MPI tasks and (max) OpenMP threads
     int ThisTask = 0;
     int NTasks = 1;

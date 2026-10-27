@@ -86,8 +86,6 @@ namespace FML {
                     for (auto & real_index : grid.get_real_range(slice, slice + 1)) {
                         auto value = _rng->generate_normal() * norm;
                         grid.set_real_from_index(real_index, value);
-                        if (slice + Local_x_start == 0)
-                            std::cout << value << "\n";
                     }
                 }
             }

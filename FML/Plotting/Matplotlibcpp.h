@@ -1,14 +1,16 @@
 #ifndef MATPLOTLIBCXX_HEADER
 #define MATPLOTLIBCXX_HEADER
 //#pragma once
+// Old Python and numpy headers use the keyword register (removed in C++17): define it away while including them
 #if __cplusplus > 199711L
-#define register // Deprecated in C++11.
-#endif           // #if __cplusplus > 199711L
+#define FML_MATPLOTLIBCPP_UNDEF_REGISTER
+#define register
+#endif
 
 //====================================================================
 //
 // Make plots with matplotlib from within C++
-// Works with Python2.7
+// Works with Python 3 (and 2.7), with or without numpy (-DWITHOUT_NUMPY)
 //
 // Slightly modified from the library at: https://github.com/lava/matplotlib-cpp
 // Licence: https://github.com/lava/matplotlib-cpp/blob/master/LICENSE
@@ -45,10 +47,14 @@
 #endif
 #endif // WITHOUT_NUMPY
 
+#ifdef FML_MATPLOTLIBCPP_UNDEF_REGISTER
+#undef register
+#undef FML_MATPLOTLIBCPP_UNDEF_REGISTER
+#endif
+
 #if PY_MAJOR_VERSION >= 3
 #define PyString_FromString PyUnicode_FromString
 #define PyInt_FromLong PyLong_FromLong
-#define PyString_FromString PyUnicode_FromString
 #endif
 
 namespace FML {
@@ -149,13 +155,16 @@ namespace FML {
 #endif
 
                     _interpreter() {
-                        // optional but recommended
+                        // Set the program name (optional; Py_SetProgramName is deprecated from Python 3.11)
 #if PY_MAJOR_VERSION >= 3
+#if PY_VERSION_HEX < 0x030B0000
                         wchar_t name[] = L"plotting";
+                        Py_SetProgramName(name);
+#endif
 #else
                         char name[] = "plotting";
-#endif
                         Py_SetProgramName(name);
+#endif
                         Py_Initialize();
 
 #ifndef WITHOUT_NUMPY
@@ -261,6 +270,7 @@ namespace FML {
             inline void backend(const std::string & name) { detail::s_backend = name; }
 
             inline bool annotate(std::string annotation, double x, double y) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * xy = PyTuple_New(2);
                 PyObject * str = PyString_FromString(annotation.c_str());
 
@@ -381,6 +391,7 @@ namespace FML {
 
             template <typename Numeric>
             PyObject * get_array(const std::vector<Numeric> & v) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * list = PyList_New(v.size());
                 for (size_t i = 0; i < v.size(); ++i) {
                     PyList_SetItem(list, i, PyFloat_FromDouble(v.at(i)));
@@ -819,6 +830,7 @@ namespace FML {
             }
 
             inline bool subplots_adjust(const std::map<std::string, double> & keywords = {}) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * kwargs = PyDict_New();
                 for (std::map<std::string, double>::const_iterator it = keywords.begin(); it != keywords.end(); ++it) {
                     PyDict_SetItemString(kwargs, it->first.c_str(), PyFloat_FromDouble(it->second));
@@ -1057,6 +1069,7 @@ namespace FML {
 
             template <typename Numeric>
             bool named_plot(const std::string & name, const std::vector<Numeric> & y, const std::string & format = "") {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * kwargs = PyDict_New();
                 PyDict_SetItemString(kwargs, "label", PyString_FromString(name.c_str()));
 
@@ -1084,6 +1097,7 @@ namespace FML {
                             const std::vector<Numeric> & x,
                             const std::vector<Numeric> & y,
                             const std::string & format = "") {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * kwargs = PyDict_New();
                 PyDict_SetItemString(kwargs, "label", PyString_FromString(name.c_str()));
 
@@ -1112,6 +1126,7 @@ namespace FML {
                                 const std::vector<Numeric> & x,
                                 const std::vector<Numeric> & y,
                                 const std::string & format = "") {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * kwargs = PyDict_New();
                 PyDict_SetItemString(kwargs, "label", PyString_FromString(name.c_str()));
 
@@ -1141,6 +1156,7 @@ namespace FML {
                                 const std::vector<Numeric> & x,
                                 const std::vector<Numeric> & y,
                                 const std::string & format = "") {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * kwargs = PyDict_New();
                 PyDict_SetItemString(kwargs, "label", PyString_FromString(name.c_str()));
 
@@ -1170,6 +1186,7 @@ namespace FML {
                               const std::vector<Numeric> & x,
                               const std::vector<Numeric> & y,
                               const std::string & format = "") {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * kwargs = PyDict_New();
                 PyDict_SetItemString(kwargs, "label", PyString_FromString(name.c_str()));
 
@@ -1218,6 +1235,7 @@ namespace FML {
 
             template <typename Numeric>
             void text(Numeric x, Numeric y, const std::string & s = "") {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * args = PyTuple_New(3);
                 PyTuple_SetItem(args, 0, PyFloat_FromDouble(x));
                 PyTuple_SetItem(args, 1, PyFloat_FromDouble(y));
@@ -1314,6 +1332,7 @@ namespace FML {
 
             template <typename Numeric>
             void ylim(Numeric left, Numeric right) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * list = PyList_New(2);
                 PyList_SetItem(list, 0, PyFloat_FromDouble(left));
                 PyList_SetItem(list, 1, PyFloat_FromDouble(right));
@@ -1331,6 +1350,7 @@ namespace FML {
 
             template <typename Numeric>
             void xlim(Numeric left, Numeric right) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * list = PyList_New(2);
                 PyList_SetItem(list, 0, PyFloat_FromDouble(left));
                 PyList_SetItem(list, 1, PyFloat_FromDouble(right));
@@ -1347,6 +1367,7 @@ namespace FML {
             }
 
             inline double * xlim() {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * args = PyTuple_New(0);
                 PyObject * res = PyObject_CallObject(detail::_interpreter::get().s_python_function_xlim, args);
                 PyObject * left = PyTuple_GetItem(res, 0);
@@ -1364,6 +1385,7 @@ namespace FML {
             }
 
             inline double * ylim() {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * args = PyTuple_New(0);
                 PyObject * res = PyObject_CallObject(detail::_interpreter::get().s_python_function_ylim, args);
                 PyObject * left = PyTuple_GetItem(res, 0);
@@ -1480,6 +1502,7 @@ namespace FML {
 
             inline void tick_params(const std::map<std::string, std::string> & keywords,
                                     const std::string axis = "both") {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 // construct positional args
                 PyObject * args;
                 args = PyTuple_New(1);
@@ -1503,6 +1526,7 @@ namespace FML {
             }
 
             inline void subplot(long nrows, long ncols, long plot_number) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 // construct positional args
                 PyObject * args = PyTuple_New(3);
                 PyTuple_SetItem(args, 0, PyFloat_FromDouble(nrows));
@@ -1519,6 +1543,7 @@ namespace FML {
 
             inline void
             subplot2grid(long nrows, long ncols, long rowid = 0, long colid = 0, long rowspan = 1, long colspan = 1) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * shape = PyTuple_New(2);
                 PyTuple_SetItem(shape, 0, PyLong_FromLong(nrows));
                 PyTuple_SetItem(shape, 1, PyLong_FromLong(ncols));
@@ -1544,6 +1569,7 @@ namespace FML {
             }
 
             inline void title(const std::string & titlestr, const std::map<std::string, std::string> & keywords = {}) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * pytitlestr = PyString_FromString(titlestr.c_str());
                 PyObject * args = PyTuple_New(1);
                 PyTuple_SetItem(args, 0, pytitlestr);
@@ -1564,6 +1590,7 @@ namespace FML {
 
             inline void suptitle(const std::string & suptitlestr,
                                  const std::map<std::string, std::string> & keywords = {}) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * pysuptitlestr = PyString_FromString(suptitlestr.c_str());
                 PyObject * args = PyTuple_New(1);
                 PyTuple_SetItem(args, 0, pysuptitlestr);
@@ -1583,6 +1610,7 @@ namespace FML {
             }
 
             inline void axis(const std::string & axisstr) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * str = PyString_FromString(axisstr.c_str());
                 PyObject * args = PyTuple_New(1);
                 PyTuple_SetItem(args, 0, str);
@@ -1596,6 +1624,7 @@ namespace FML {
             }
 
             inline void xscale(const std::string & xscale) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * str = PyString_FromString(xscale.c_str());
                 PyObject * args = PyTuple_New(1);
                 PyTuple_SetItem(args, 0, str);
@@ -1609,6 +1638,7 @@ namespace FML {
             }
 
             inline void yscale(const std::string & yscale) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * str = PyString_FromString(yscale.c_str());
                 PyObject * args = PyTuple_New(1);
                 PyTuple_SetItem(args, 0, str);
@@ -1622,6 +1652,7 @@ namespace FML {
             }
 
             inline void xlabel(const std::string & str, const std::map<std::string, std::string> & keywords = {}) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * pystr = PyString_FromString(str.c_str());
                 PyObject * args = PyTuple_New(1);
                 PyTuple_SetItem(args, 0, pystr);
@@ -1641,6 +1672,7 @@ namespace FML {
             }
 
             inline void ylabel(const std::string & str, const std::map<std::string, std::string> & keywords = {}) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * pystr = PyString_FromString(str.c_str());
                 PyObject * args = PyTuple_New(1);
                 PyTuple_SetItem(args, 0, pystr);
@@ -1660,6 +1692,7 @@ namespace FML {
             }
 
             inline void grid(bool flag) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * pyflag = flag ? Py_True : Py_False;
                 Py_INCREF(pyflag);
 
@@ -1705,6 +1738,7 @@ namespace FML {
             }
 
             inline void xkcd() {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * res;
                 PyObject * kwargs = PyDict_New();
 
@@ -1732,6 +1766,7 @@ namespace FML {
 
             template <typename Numeric>
             inline void pause(Numeric interval) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * args = PyTuple_New(1);
                 PyTuple_SetItem(args, 0, PyFloat_FromDouble(interval));
 
@@ -1744,6 +1779,7 @@ namespace FML {
             }
 
             inline void save(const std::string & filename) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * pyfilename = PyString_FromString(filename.c_str());
 
                 PyObject * args = PyTuple_New(1);
@@ -1779,6 +1815,7 @@ namespace FML {
 
             inline std::vector<std::array<double, 2>> ginput(const int numClicks = 1,
                                                              const std::map<std::string, std::string> & keywords = {}) {
+                detail::_interpreter::get(); // the interpreter must be initialized before calling Python
                 PyObject * args = PyTuple_New(1);
                 PyTuple_SetItem(args, 0, PyLong_FromLong(numClicks));
 

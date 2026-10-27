@@ -10,11 +10,11 @@ USE_OMP             ?= true
 USE_FFTW            ?= true
 USE_GSL             ?= true
 
-TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator
+TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils
 
 include ../Makefile.config
 
-FML_MODULES := Global Spline ODESolver Math SphericalCollapse HaloModel FileUtils GadgetUtils FFTLog
+FML_MODULES := Global Spline ODESolver Math SphericalCollapse HaloModel FileUtils GadgetUtils FFTLog ParameterMap
 
 TEST_OBJS = test_core.o Global.o
 ifeq ($(USE_GSL),true)
@@ -108,6 +108,10 @@ test_fftlog: test_fftlog.o Global.o FFTLog.o
 test_emulator: test_emulator.o test_emulator_odr.o Global.o
 	$(LINK_EXE)
 
+# Small utilities: FileUtils, RandomGenerator, FoFBinning, MemoryLogging, Timings, ParameterMap
+test_utils: test_utils.o Global.o FileUtils.o ParameterMap.o
+	$(LINK_EXE)
+
 MPIRUN  ?= mpirun
 NP_LIST ?= 1 2 4
 
@@ -167,6 +171,8 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_fftlog; \
 	  echo "== Running test_emulator with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_emulator; \
+	  echo "== Running test_utils with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_utils; \
 	done
 	@echo "== Running test_hybridbias"
 	@OMP_NUM_THREADS=2 $(RUN1) ./test_hybridbias

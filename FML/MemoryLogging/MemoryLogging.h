@@ -2,10 +2,14 @@
 #define MEMORYLOG_HEADER
 
 #include <chrono>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <mutex>
+#include <new>
+#include <string>
 #include <typeinfo>
 #include <vector>
 
@@ -26,10 +30,13 @@ namespace FML {
     //=======================================================
     // Do not log allocations smaller than a minimum size
     // The standard size is 0
-    // Set a limit to how many items we can have in the log
+    // Set a limit to how many allocations we can have in the log
     // at the same time to avoid it taking up too much memory
     // If this limit is reached then we clear the memory associated
-    // with the logger and stop logging any more allocations
+    // with the logger and stop logging any more allocations.
+    // The memory-vs-time history keeps at most this many entries
+    // (later changes are not added to the history, but the
+    // allocations and the peak are still tracked)
     //=======================================================
 #ifndef MIN_BYTES_TO_LOG
 #define MIN_BYTES_TO_LOG 0
@@ -48,9 +55,7 @@ namespace FML {
     //=======================================================
     class MemoryLog {
       private:
-        static MemoryLog * instance;
-
-        // Lock
+        // Lock (all members below are only accessed with it held)
         std::mutex mymutex{};
 
         // The first allocation
@@ -75,6 +80,15 @@ namespace FML {
         size_t max_allocations_to_log = MAX_ALLOCATIONS_IN_MEMORY;
         size_t nallocation{0};
         bool stop_logging{false};
+        bool history_full{false};
+
+        // Record the memory in use now (called with the lock held)
+        void record_time() {
+            if (history_full)
+                return;
+            memory_vs_time[std::chrono::steady_clock::now()] = memory_in_use;
+            history_full = memory_vs_time.size() >= max_allocations_to_log;
+        }
 
         // Private constructor and destructor
         MemoryLog() {
@@ -87,9 +101,10 @@ namespace FML {
         ~MemoryLog() = default;
 
       public:
+        /// The (only) instance. Created on first use (thread safe) and never deleted, so it can be used until the
+        /// end of the program (also from destructors of static objects)
         static MemoryLog * get() {
-            if (not instance)
-                instance = new MemoryLog;
+            static MemoryLog * instance = new MemoryLog;
             return instance;
         }
 
@@ -98,8 +113,36 @@ namespace FML {
         MemoryLog & operator=(const MemoryLog & arg) = delete;
         MemoryLog & operator=(const MemoryLog && arg) = delete;
 
+        /// Bytes currently allocated (of what we log)
+        size_t get_memory_in_use() {
+            std::lock_guard<std::mutex> guard(mymutex);
+            return memory_in_use;
+        }
+        /// Peak of get_memory_in_use so far
+        size_t get_peak_memory_use() {
+            std::lock_guard<std::mutex> guard(mymutex);
+            return peak_memory_use;
+        }
+        /// Number of allocations currently logged
+        size_t get_number_of_allocations() {
+            std::lock_guard<std::mutex> guard(mymutex);
+            return allocations.size();
+        }
+        /// The label of an allocation ("" if it has none)
+        std::string get_label(void * ptr) {
+            std::lock_guard<std::mutex> guard(mymutex);
+            auto it = labels.find(ptr);
+            return it == labels.end() ? std::string("") : it->second;
+        }
+        /// Is the logger still logging (false after too many allocations at the same time)
+        bool is_logging() {
+            std::lock_guard<std::mutex> guard(mymutex);
+            return not stop_logging;
+        }
+
         // Add a new allocation label
         void add_label(void * ptr, std::string name) {
+            std::lock_guard<std::mutex> guard(mymutex);
             if (stop_logging)
                 return;
             if (allocations.find(ptr) == allocations.end()) {
@@ -107,74 +150,72 @@ namespace FML {
                                  " to\n";
                 return;
             }
-            std::lock_guard<std::mutex> guard(mymutex);
             labels[ptr] = name;
         }
         void add_label(void * ptr, size_t size, std::string name) {
-            if (stop_logging or size < min_bytes_to_log)
+            if (size < min_bytes_to_log)
                 return;
             add_label(ptr, name);
         }
 
         void add(void * ptr, size_t size) {
-            if (stop_logging or size < min_bytes_to_log)
+            if (size < min_bytes_to_log)
                 return;
             std::lock_guard<std::mutex> guard(mymutex);
+            if (stop_logging)
+                return;
             allocations[ptr] = size;
+            nallocation++;
 
             memory_in_use += size;
             if (memory_in_use > peak_memory_use)
                 peak_memory_use = memory_in_use;
+            record_time();
 
-            auto time = std::chrono::steady_clock::now();
-            memory_vs_time[time] = memory_in_use;
-            nallocation++;
-
-            // If we have saturated then stop logging
-            stop_logging = nallocation >= max_allocations_to_log;
+            // If we have too many allocations at the same time then stop logging
+            if (allocations.size() >= max_allocations_to_log) {
+                stop_logging = true;
+                clear();
+            }
         }
 
+        // Free the memory of the log (called with the lock held)
         void clear() {
             allocations.clear();
+            labels.clear();
             memory_vs_time.clear();
         }
 
         // Remove an allocation and log info
         void remove(void * ptr, size_t size) {
-            if (stop_logging or size < min_bytes_to_log)
+            if (size < min_bytes_to_log)
                 return;
+            std::lock_guard<std::mutex> guard(mymutex);
+            if (stop_logging)
+                return;
+            auto it = allocations.find(ptr);
+            if (it == allocations.end())
+                return; // Allocated before we started logging (or below the limit)
 
 #ifdef DEBUG_MEMORYLOG
-            std::string name = labels[ptr];
             if (ThisTask == 0)
-                std::cout << "===> MemoryLog::remove Freeing[" << name << "]" << std::endl;
+                std::cout << "===> MemoryLog::remove Freeing[" << labels[ptr] << "]" << std::endl;
 #endif
-            std::lock_guard<std::mutex> guard(mymutex);
-            allocations.erase(ptr);
+            memory_in_use -= it->second;
+            allocations.erase(it);
             labels.erase(ptr);
-
-            memory_in_use -= size;
-
-            auto time = std::chrono::steady_clock::now();
-            memory_vs_time[time] = memory_in_use;
+            record_time();
         }
 
-        // Print the total memory in use
+        /// Print the memory in use (collective with MPI: all tasks must call it)
         void print() {
+            std::lock_guard<std::mutex> guard(mymutex);
+
             // Check if any task has saturated the allocation limit
             char ok = stop_logging ? 0 : 1;
 #ifdef USE_MPI
             MPI_Allreduce(MPI_IN_PLACE, &ok, 1, MPI_CHAR, MPI_MIN, FML::communicator);
 #endif
-            if (ok == 0) {
-                clear();
-                stop_logging = true;
-
-                if (ThisTask == 0)
-                    std::cout << "Warning: The memory log has stopped working "
-                              << " due to max number of allocation having been reached\n";
-                return;
-            }
 
             // Fetch system memory usage
             auto sysmem = get_system_memory_use();
@@ -210,10 +251,23 @@ namespace FML {
                 std::cout << "Max over tasks:  " << std::setw(15) << max_sys_rssmemory / 1.0e6 << " MB\n";
             }
 
+            if (ok == 0) {
+                clear();
+                stop_logging = true;
+                if (ThisTask == 0)
+                    std::cout << "\nWarning: The memory log of allocations has stopped working due to max number of "
+                                 "allocations ("
+                              << max_allocations_to_log << ") having been reached\n"
+                              << "\n#=====================================================\n"
+                              << std::flush;
+                return;
+            }
+
             if (ThisTask == 0) {
                 std::cout << "\n";
                 std::cout << "For info below we are only tracking allocation of standard\n";
-                std::cout << "container (Vector) and only allocations larger than " << min_bytes_to_log << " bytes\n\n";
+                std::cout << "container (Vector) and only allocations larger than " << min_bytes_to_log << " bytes\n";
+                std::cout << "(not FFTW grids, which use fftw_malloc)\n\n";
             }
 
             long long int min_memory = memory_in_use;
@@ -258,7 +312,11 @@ namespace FML {
             }
             if (not memory_vs_time.empty()) {
                 if (ThisTask == 0)
-                    std::cout << "Total memory as function of time:\n";
+                    std::cout << "Total memory as function of time"
+                              << (history_full ? " (only the first " + std::to_string(max_allocations_to_log) +
+                                                     " changes)" :
+                                                 std::string(""))
+                              << ":\n";
                 for (auto && m : memory_vs_time) {
                     double time_in_sec =
                         std::chrono::duration_cast<std::chrono::duration<double>>(m.first - time_start).count();

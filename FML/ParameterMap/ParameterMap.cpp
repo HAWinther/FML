@@ -3,6 +3,23 @@
 namespace FML {
     namespace UTILS {
 
+        namespace {
+            // Readable names of the types in ParameterTypes (in the same order)
+            const char * type_names[] = {"bool",
+                                         "int",
+                                         "double",
+                                         "std::string",
+                                         "std::vector<int>",
+                                         "std::vector<double>",
+                                         "std::vector<std::string>"};
+            static_assert(sizeof(type_names) / sizeof(type_names[0]) == std::variant_size_v<ParameterTypes>);
+
+            template <typename T>
+            std::string type_name() {
+                return type_names[ParameterTypes(T{}).index()];
+            }
+        } // namespace
+
         std::ostream & operator<<(std::ostream & s, std::vector<double> const & v) {
             s << "[";
             for (auto & e : v)
@@ -62,30 +79,20 @@ namespace FML {
         // Fetch a parameter from the map
         template <typename T>
         T ParameterMap::get(std::string name) const {
-            T value{};
-            try {
-                value = std::get<T>(parameters.at(name));
-            } catch (const std::out_of_range & e) {
-                std::string errormessage =
-                    "[ParameterMap::get] Required parameter [" + name + "] was not found in the parameter map\n";
-                throw_error(errormessage);
-            } catch (const std::bad_variant_access & e) {
-                std::string errormessage = "[ParameterMap::get] The type of the parameter [" + name + "] => [" +
-                                           typeid(value).name() + "] does not match that in the parameter map\n";
-                throw_error(errormessage);
-            }
-            return value;
+            auto it = parameters.find(name);
+            if (it == parameters.end())
+                throw_error("[ParameterMap::get] Required parameter [" + name + "] was not found in the parameter map\n");
+            if (not std::holds_alternative<T>(it->second))
+                throw_error("[ParameterMap::get] Parameter [" + name + "] was requested as [" + type_name<T>() +
+                            "] but it is a [" + type_names[it->second.index()] + "] in the parameter map\n");
+            return std::get<T>(it->second);
         }
 
         template <typename T>
         T ParameterMap::get(std::string name, T fiducial_value) const {
-            T value{};
-            try {
-                value = std::get<T>(parameters.at(name));
-            } catch (...) {
-                value = fiducial_value;
-            }
-            return value;
+            if (not contains(name))
+                return fiducial_value;
+            return get<T>(name);
         }
 
         bool ParameterMap::contains(std::string name) const { return parameters.count(name) != 0; }

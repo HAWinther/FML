@@ -7,6 +7,7 @@
 #include <memory>
 #include <numeric>
 #include <random>
+#include <string>
 #include <vector>
 #ifdef USE_GSL
 #include <gsl/gsl_randist.h>
@@ -53,7 +54,16 @@ namespace FML {
             RandomGenerator(std::vector<unsigned int> seed) : RandomGenerator() { set_seed(seed); }
 
             /// Set the standard deviation sigma used when generating a normal distributed random number
-            void set_normal_sigma(double sigma) { normal_dist = std::normal_distribution<double>{0.0, sigma}; }
+            void set_normal_sigma(double _sigma) {
+                sigma = _sigma;
+                normal_dist = std::normal_distribution<double>{0.0, sigma};
+            }
+
+            /// The standard deviation used for normal distributed random numbers
+            double get_normal_sigma() const { return sigma; }
+
+            /// The name of the generator
+            std::string get_name() const { return name; }
 
             /// Make a clone of the state of the random number generator
             virtual std::unique_ptr<RandomGenerator> clone() const { return std::make_unique<RandomGenerator>(*this); }
@@ -73,6 +83,9 @@ namespace FML {
             virtual double generate_uniform() { return uniform_dist(generator); }
 
             /// Generate a random number with a normal distribution N(0,sigma) where sigma by default is 1.
+            /// NB: std::normal_distribution is implementation defined, so the numbers differ between standard
+            /// libraries (e.g. GCC's libstdc++ and Clang's libc++ on Mac) for the same seed. Use the GSL generator
+            /// for numbers that are the same everywhere.
             virtual double generate_normal() { return normal_dist(generator); }
         };
 
@@ -97,10 +110,20 @@ namespace FML {
                 random_generator = std::shared_ptr<gsl_rng>(gsl_rng_clone(rhs.random_generator.get()), gsl_rng_free);
             }
 
+            // Assignment copies the state (the default would share it between the two objects)
+            my_gsl_rng & operator=(const my_gsl_rng & rhs) {
+                if (this != &rhs) {
+                    assert(rhs.random_generator);
+                    gsl_rng_memcpy(random_generator.get(), rhs.random_generator.get());
+                }
+                return *this;
+            }
+
             gsl_rng * get() { return random_generator.get(); }
         };
 
         /// Generate random numbers using the GSL library (fiducial: gsl_rng_ranlxd1)
+        /// NB: for ranlxd1 the seed 0 is the same as the seed 1 (GSL uses its default seed 1 for 0)
         class GSLRandomGenerator : public RandomGenerator {
           private:
             my_gsl_rng rng;
