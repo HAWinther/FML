@@ -68,8 +68,8 @@ namespace FML {
         /// Fourier transform, decolvolve the window function for the assignment above.
         /// With interlacing bin to a grid and an interlaced grid (displaced by dx/2 in all directions)
         /// Fourier transform both and add the together to cancel the leading aliasing contributions
-        /// bin up power-spectrum and subtract shot-noise 1/NumPartTotal. Note that with interlacing we change the
-        /// particle positions, but when returning they should be in the same state as when we started.
+        /// bin up power-spectrum and subtract shot-noise 1/NumPartTotal. Interlacing uses virtual assignment
+        /// offsets and never modifies particle positions.
         ///
         /// @tparam N The dimension of the particles.
         /// @tparam T The particle class. Must have a get_pos() method.
