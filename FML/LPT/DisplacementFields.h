@@ -6,9 +6,11 @@
 #include <cstdio>
 #include <functional>
 #include <numeric>
+#include <type_traits>
 #include <vector>
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/LPT/Dealiasing.h>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h>
@@ -38,9 +40,14 @@ namespace FML {
             template <int N>
             void compute_1LPT_potential_fourier(const FFTWGrid<N> & delta_fourier, FFTWGrid<N> & phi_1LPT_fourier);
 
+            /// Optional Padding uses a >=3N/2 work mesh for the quadratic source.
+            /// See LPT/README.md for Nyquist conventions, memory cost and examples.
             template <int N>
-            void compute_2LPT_potential_fourier(const FFTWGrid<N> & delta_fourier, FFTWGrid<N> & phi_2LPT_fourier);
+            void compute_2LPT_potential_fourier(const FFTWGrid<N> & delta_fourier, FFTWGrid<N> & phi_2LPT_fourier,
+                                                Dealiasing dealiasing = Dealiasing::None);
 
+            /// Optional Padding uses a >=2N work mesh for all nonlinear sources,
+            /// retaining the full intermediate second-order bandwidth until cropping.
             // Slightly different syntax here as we have to compute phi_1LPT and phi_2LPT to compute 3LPT so do it all
             template <int N>
             void compute_3LPT_potential_fourier(const FFTWGrid<N> & delta_fourier,
@@ -49,7 +56,8 @@ namespace FML {
                                                 FFTWGrid<N> & phi_3LPT_a_fourier,
                                                 FFTWGrid<N> & phi_3LPT_b_fourier,
                                                 std::array<FFTWGrid<N>, N> & phi_3LPT_Avec_fourier,
-                                                bool ignore_curl_term);
+                                                bool ignore_curl_term,
+                                                Dealiasing dealiasing = Dealiasing::None);
 
             // Augmented LPT potential (Kitaura and Hess 2013)
             template <int N>
@@ -79,7 +87,8 @@ namespace FML {
                                                  std::array<FFTWGrid<N>, N> & Psi,
                                                  std::array<FFTWGrid<N>, N> & dPsidt,
                                                  double dlogDdt,
-                                                 bool ignore_curl_term);
+                                                 bool ignore_curl_term,
+                                                Dealiasing dealiasing = Dealiasing::None);
 
             template <int N, class T>
             void assign_displacement_fields_scaledependent(MPIParticles<T> & part,
@@ -324,7 +333,16 @@ namespace FML {
             ///
             //=================================================================================
             template <int N>
-            void compute_2LPT_potential_fourier(const FFTWGrid<N> & delta, FFTWGrid<N> & phi_2LPT) {
+            void compute_2LPT_potential_fourier(const FFTWGrid<N> & delta, FFTWGrid<N> & phi_2LPT,
+                                                Dealiasing dealiasing) {
+                if (dealiasing == Dealiasing::Padding) {
+                    auto padded = detail::resize_lpt_fourier(delta, detail::padded_lpt_mesh(delta.get_nmesh(), 2));
+                    FFTWGrid<N> potential;
+                    compute_2LPT_potential_fourier(padded, potential);
+                    phi_2LPT = detail::resize_lpt_fourier(potential, delta.get_nmesh(),
+                                                        delta.get_n_extra_slices_left(), delta.get_n_extra_slices_right());
+                    return;
+                }
 
                 // We require delta to exist and if phi_2LPT is allocated it must have the same size as delta
                 assert_mpi(delta.get_nmesh() > 0,
@@ -551,10 +569,9 @@ namespace FML {
             }
 
             //===========================================================================================
-            /// In this method we have so far given completely up what we do in the other methods
-            /// and try to be as memory efficient as possible. We can reduce the memory footprint of
-            /// this method with some work. Right now we allocate ~15 grid at the same time. It is possible to
-            /// get that down to ~10. This method is not well tested!
+            /// The potential construction retains the first-order Hessian and streams the second-order
+            /// Hessian in two batches through N work grids. With all 3D potentials and curl requested,
+            /// its peak is about 17 full grids including the input, before caller-owned outputs and FFT workspace overhead.
             /// The units of the dlogDdt term is what sets the units of dPsidt
             /// In this methods the displacement field is assumed to be on the EdS/LCDM form
             /// Psi = D Psi1LPT + D^2 Psi2LPT + D^3 Psi3LPT i.e. each term multiplied with powers of D
@@ -578,7 +595,8 @@ namespace FML {
                                                  std::array<FFTWGrid<N>, N> & Psi,
                                                  std::array<FFTWGrid<N>, N> & dPsidt,
                                                  double dlogDdt,
-                                                 bool ignore_curl_term) {
+                                                 bool ignore_curl_term,
+                                                Dealiasing dealiasing) {
 
                 // We require delta to exist
                 assert_mpi(delta_fourier.get_nmesh() > 0,
@@ -601,7 +619,7 @@ namespace FML {
                                                phi_3LPT_a_fourier,
                                                phi_3LPT_b_fourier,
                                                phi_3LPT_Avec_fourier,
-                                               ignore_curl_term);
+                                               ignore_curl_term, dealiasing);
 
                 // Make the displacement field
                 for (int idim = 0; idim < N; idim++) {
@@ -693,10 +711,9 @@ namespace FML {
             }
 
             //===========================================================================================
-            /// In this method we have so far given completely up what we do in the other methods
-            /// and try to be as memory efficient as possible. We can reduce the memory footprint of
-            /// this method with some work. Right now we allocate ~15 grid at the same time. It is possible to
-            /// get that down to ~10. This method is not well tested!
+            /// The potential construction retains the first-order Hessian and streams the second-order
+            /// Hessian in two batches through N work grids. With all 3D potentials and curl requested,
+            /// its peak is about 17 full grids including the input, before caller-owned outputs and FFT workspace overhead.
             /// The potentials we output are normalized such that we can get the displacement field as
             /// Psi = D phi_1LPT + D phi_2LPT + D phi_3LPT_a + D phi_3PT_b + D x A_3LPT
             ///
@@ -718,10 +735,35 @@ namespace FML {
                                                 FFTWGrid<N> & phi_3LPT_a_fourier,
                                                 FFTWGrid<N> & phi_3LPT_b_fourier,
                                                 std::array<FFTWGrid<N>, N> & phi_3LPT_Avec_fourier,
-                                                bool ignore_curl_term) {
+                                                bool ignore_curl_term,
+                                                Dealiasing dealiasing) {
 
                 // Only works for N = 2 and N = 3
                 static_assert(N == 2 or N == 3);
+                if (dealiasing == Dealiasing::Padding) {
+                    // Keep the full second-order bandwidth until the third-order
+                    // products are complete. Cropping phi2 early loses real UV couplings.
+                    auto padded = detail::resize_lpt_fourier(delta_fourier,
+                                                            detail::padded_lpt_mesh(delta_fourier.get_nmesh(), 3));
+                    FFTWGrid<N> p1, p2, pa, pb;
+                    std::array<FFTWGrid<N>, N> avec;
+                    compute_3LPT_potential_fourier<N>(padded, p1, p2, pa, pb, avec, ignore_curl_term);
+                    auto crop = [&](FFTWGrid<N> & field) {
+                        auto result = detail::resize_lpt_fourier(field, delta_fourier.get_nmesh(),
+                                                               delta_fourier.get_n_extra_slices_left(),
+                                                               delta_fourier.get_n_extra_slices_right());
+                        field.free();
+                        return result;
+                    };
+                    phi_1LPT_fourier = crop(p1);
+                    phi_2LPT_fourier = crop(p2);
+                    phi_3LPT_a_fourier = crop(pa);
+                    phi_3LPT_b_fourier = crop(pb);
+                    if (!ignore_curl_term)
+                        for (int d = 0; d < (N == 2 ? 1 : N); d++)
+                            phi_3LPT_Avec_fourier[d] = crop(avec[d]);
+                    return;
+                }
 
                 // We require delta to exist
                 assert_mpi(delta_fourier.get_nmesh() > 0,
@@ -821,141 +863,168 @@ namespace FML {
                 // Back to fourier space: We now have -k^2 phi_2LPT in this grid
                 phi_2LPT_fourier.fftw_r2c();
 
-                // Time to compute all the phi_2LPT_ij terms
-                FFTWGrid<N> phi_2LPT_ij[num_pairs];
-                for (int i = 0; i < num_pairs; i++) {
-                    phi_2LPT_ij[i] = FFTWGrid<N>(Nmesh, nleft, nright);
-                    phi_2LPT_ij[i].add_memory_label("FFTWGrid::compute_3LPT_potential_fourier::phi_2LPT_ij" +
-                                                    std::to_string(i));
-                    phi_2LPT_ij[i].set_grid_status_real(false);
-                }
-
-                if (FML::ThisTask == 0)
-                    std::cout << "Computing phi_2LPT_ij for all i,j...\n";
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    [[maybe_unused]] double kmag2;
-                    [[maybe_unused]] std::array<double, N> kvec;
-                    for (auto && fourier_index : phi_2LPT_fourier.get_fourier_range(islice, islice + 1)) {
-                        if (Local_x_start == 0 and fourier_index == 0)
-                            continue; // DC mode (k=0)
-
-                        // Get wavevector and magnitude
-                        phi_2LPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
-                        auto value = -phi_2LPT_fourier.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
-
-                        int pair = 0;
-                        for (int idim1 = 0; idim1 < N; idim1++) {
-                            for (int idim2 = idim1; idim2 < N; idim2++) {
-                                phi_2LPT_ij[pair++].set_fourier_from_index(fourier_index,
-                                                                           -value * FML::GRID::FloatType(kvec[idim1] * kvec[idim2]));
-                            }
-                        }
-                    }
-                }
-
-                // Deal with DC mode
-                if (Local_x_start == 0)
-                    for (auto & g : phi_2LPT_ij)
-                        g.set_fourier_from_index(0, 0.0);
-
-                // Fourier transform it all to real-space (the loop below reads these in real space)
-                for (int i = 0; i < num_pairs; i++)
-                    phi_2LPT_ij[i].fftw_c2r();
-
-                // Compute phi_3LPT_a
+                // The 3a source only needs the first-order Hessian. Form it before the second-order
+                // derivatives, then reuse a reduced batch of work grids for the mixed sources.
                 phi_3LPT_a_fourier = FFTWGrid<N>(Nmesh, nleft, nright);
                 phi_3LPT_a_fourier.add_memory_label("FFTWGrid::compute_3LPT_potential_fourier::phi_3LPT_a_fourier");
-                // Compute phi_3LPT_b
-                phi_3LPT_b_fourier = FFTWGrid<N>(Nmesh, nleft, nright);
-                phi_3LPT_b_fourier.add_memory_label("FFTWGrid::compute_3LPT_potential_fourier::phi_3LPT_b_fourier");
-                // And then finally the A-terms (for N=2 we only have 1 component)
-                if (not ignore_curl_term)
-                    for (int idim = 0; idim < N; idim++) {
-                        phi_3LPT_Avec_fourier[idim] = FFTWGrid<N>(Nmesh, nleft, nright);
-                        phi_3LPT_Avec_fourier[idim].add_memory_label(
-                            "FFTWGrid::compute_3LPT_potential_fourier::phi_3LPT_Avec_fourier" + std::to_string(idim));
-                        if constexpr (N == 2)
-                            break;
-                    }
-
-                if (FML::ThisTask == 0)
-                    std::cout << "Computing phi_3LPT...\n";
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
                 for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && real_index : phi_2LPT_fourier.get_real_range(islice, islice + 1)) {
-
+                    for (auto && index : phi_3LPT_a_fourier.get_real_range(islice, islice + 1)) {
                         if constexpr (N == 2) {
-                            auto psi1_xx = phi_1LPT_ij[0].get_real_from_index(real_index);
-                            auto psi1_xy = phi_1LPT_ij[1].get_real_from_index(real_index);
-                            auto psi1_yy = phi_1LPT_ij[2].get_real_from_index(real_index);
-                            auto psi2_xx = phi_2LPT_ij[0].get_real_from_index(real_index);
-                            auto psi2_xy = phi_2LPT_ij[1].get_real_from_index(real_index);
-                            auto psi2_yy = phi_2LPT_ij[2].get_real_from_index(real_index);
+                            const auto xx = phi_1LPT_ij[0].get_real_from_index(index);
+                            const auto xy = phi_1LPT_ij[1].get_real_from_index(index);
+                            const auto yy = phi_1LPT_ij[2].get_real_from_index(index);
+                            phi_3LPT_a_fourier.set_real_from_index(index, xx * yy - xy * xy);
+                        } else {
+                            const auto xx = phi_1LPT_ij[0].get_real_from_index(index);
+                            const auto xy = phi_1LPT_ij[1].get_real_from_index(index);
+                            const auto zx = phi_1LPT_ij[2].get_real_from_index(index);
+                            const auto yy = phi_1LPT_ij[3].get_real_from_index(index);
+                            const auto yz = phi_1LPT_ij[4].get_real_from_index(index);
+                            const auto zz = phi_1LPT_ij[5].get_real_from_index(index);
+                            auto value = xx * yy * zz;
+                            value += 2.0 * xy * yz * zx;
+                            value += -xx * yz * yz;
+                            value += -yy * zx * zx;
+                            value += -zz * xy * xy;
+                            phi_3LPT_a_fourier.set_real_from_index(index, value);
+                        }
+                    }
+                }
 
-                            auto value_a = psi1_xx * psi1_yy - psi1_xy * psi1_xy;
-                            auto value_b = psi1_xx * psi2_yy - psi1_xy * psi2_xy;
+                phi_3LPT_b_fourier = FFTWGrid<N>(Nmesh, nleft, nright);
+                phi_3LPT_b_fourier.add_memory_label("FFTWGrid::compute_3LPT_potential_fourier::phi_3LPT_b_fourier");
+                if (not ignore_curl_term) {
+                    constexpr int num_Avec = N == 2 ? 1 : N;
+                    for (int dimension = 0; dimension < num_Avec; dimension++) {
+                        phi_3LPT_Avec_fourier[dimension] = FFTWGrid<N>(Nmesh, nleft, nright);
+                        phi_3LPT_Avec_fourier[dimension].add_memory_label(
+                            "FFTWGrid::compute_3LPT_potential_fourier::phi_3LPT_Avec_fourier" + std::to_string(dimension));
+                    }
+                }
 
-                            phi_3LPT_a_fourier.set_real_from_index(real_index, value_a);
-                            phi_3LPT_b_fourier.set_real_from_index(real_index, value_b);
-                            if (not ignore_curl_term) {
-                                // Curl is a scalar in 2D (only the 'z' component is nonzero)
-                                auto Az = psi2_xy * (psi1_yy - psi1_xx) - psi1_xy * (psi2_yy - psi2_xx);
-                                phi_3LPT_Avec_fourier[0].set_real_from_index(real_index, Az);
+                // Keep just one batch of H2 derivatives: diagonals first, then off-diagonals.
+                // Cache the diagonal contributions in the output grids before reusing the work grids.
+                // This avoids retaining all six H2 meshes and avoids six separate Fourier/source passes.
+                std::array<FFTWGrid<N>, N> hessian2;
+                for (int component = 0; component < N; component++) {
+                    hessian2[component] = FFTWGrid<N>(Nmesh, nleft, nright);
+                    hessian2[component].add_memory_label(
+                        "FFTWGrid::compute_3LPT_potential_fourier::work_phi_2LPT_ij_" + std::to_string(component));
+                }
+                auto make_hessian_batch = [&](auto diagonal_tag) {
+                    constexpr bool diagonal = decltype(diagonal_tag)::value;
+                    constexpr int count = diagonal ? N : N * (N - 1) / 2;
+                    for (int component = 0; component < count; component++)
+                        hessian2[component].set_grid_status_real(false);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                    for (int islice = 0; islice < Local_nx; islice++) {
+                        double kmag2;
+                        std::array<double, N> kvec;
+                        for (auto && index : phi_2LPT_fourier.get_fourier_range(islice, islice + 1)) {
+                            if (Local_x_start == 0 and index == 0) {
+                                for (int component = 0; component < count; component++)
+                                    hessian2[component].set_fourier_from_index(index, 0.0);
+                                continue;
+                            }
+                            phi_2LPT_fourier.get_fourier_wavevector_and_norm2_by_index(index, kvec, kmag2);
+                            const auto value = -phi_2LPT_fourier.get_fourier_from_index(index) / FML::GRID::FloatType(kmag2);
+                            if constexpr (diagonal) {
+                                for (int row = 0; row < N; row++)
+                                    hessian2[row].set_fourier_from_index(index, -value * FML::GRID::FloatType(kvec[row] * kvec[row]));
+                            } else {
+                                int component = 0;
+                                for (int row = 0; row < N; row++)
+                                    for (int col = row + 1; col < N; col++)
+                                        hessian2[component++].set_fourier_from_index(
+                                            index, -value * FML::GRID::FloatType(kvec[row] * kvec[col]));
                             }
                         }
-                        if constexpr (N == 3) {
-                            auto psi1_xx = phi_1LPT_ij[0].get_real_from_index(real_index);
-                            auto psi1_xy = phi_1LPT_ij[1].get_real_from_index(real_index);
-                            auto psi1_zx = phi_1LPT_ij[2].get_real_from_index(real_index);
-                            auto psi1_yy = phi_1LPT_ij[3].get_real_from_index(real_index);
-                            auto psi1_yz = phi_1LPT_ij[4].get_real_from_index(real_index);
-                            auto psi1_zz = phi_1LPT_ij[5].get_real_from_index(real_index);
-
-                            auto psi2_xx = phi_2LPT_ij[0].get_real_from_index(real_index);
-                            auto psi2_xy = phi_2LPT_ij[1].get_real_from_index(real_index);
-                            auto psi2_zx = phi_2LPT_ij[2].get_real_from_index(real_index);
-                            auto psi2_yy = phi_2LPT_ij[3].get_real_from_index(real_index);
-                            auto psi2_yz = phi_2LPT_ij[4].get_real_from_index(real_index);
-                            auto psi2_zz = phi_2LPT_ij[5].get_real_from_index(real_index);
-
-                            auto value_a = psi1_xx * psi1_yy * psi1_zz;
-                            value_a += 2.0 * psi1_xy * psi1_yz * psi1_zx;
-                            value_a += -psi1_xx * psi1_yz * psi1_yz;
-                            value_a += -psi1_yy * psi1_zx * psi1_zx;
-                            value_a += -psi1_zz * psi1_xy * psi1_xy;
-
-                            auto value_b = 0.5 * psi1_xx * (psi2_yy + psi2_zz);
-                            value_b += 0.5 * psi1_yy * (psi2_zz + psi2_xx);
-                            value_b += 0.5 * psi1_zz * (psi2_xx + psi2_yy);
-                            value_b += -psi1_xy * psi2_xy - psi1_yz * psi2_yz - psi1_zx * psi2_zx;
-
-                            phi_3LPT_a_fourier.set_real_from_index(real_index, value_a);
-                            phi_3LPT_b_fourier.set_real_from_index(real_index, value_b);
+                    }
+                    for (int component = 0; component < count; component++) hessian2[component].fftw_c2r();
+                };
+                make_hessian_batch(std::true_type{});
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && index : phi_3LPT_b_fourier.get_real_range(islice, islice + 1)) {
+                        const auto h2xx = hessian2[0].get_real_from_index(index);
+                        const auto h2yy = hessian2[1].get_real_from_index(index);
+                        if constexpr (N == 2) {
+                            const auto h1xx = phi_1LPT_ij[0].get_real_from_index(index);
+                            phi_3LPT_b_fourier.set_real_from_index(index, h1xx * h2yy);
+                            if (not ignore_curl_term)
+                                phi_3LPT_Avec_fourier[0].set_real_from_index(index, h2yy - h2xx);
+                        } else {
+                            const auto h1xx = phi_1LPT_ij[0].get_real_from_index(index);
+                            const auto h1yy = phi_1LPT_ij[3].get_real_from_index(index);
+                            const auto h1zz = phi_1LPT_ij[5].get_real_from_index(index);
+                            const auto h2zz = hessian2[2].get_real_from_index(index);
+                            auto value = 0.5 * h1xx * (h2yy + h2zz);
+                            value += 0.5 * h1yy * (h2zz + h2xx);
+                            value += 0.5 * h1zz * (h2xx + h2yy);
+                            phi_3LPT_b_fourier.set_real_from_index(index, value);
+                            // These differences retain the grid precision of the original curl expression.
                             if (not ignore_curl_term) {
-                                auto value_Avec_x = psi1_zx * psi2_xy - psi2_zx * psi1_xy;
-                                value_Avec_x += psi1_yz * (psi2_yy - psi2_zz) - psi2_yz * (psi1_yy - psi1_zz);
-                                auto value_Avec_y = psi1_xy * psi2_yz - psi2_xy * psi1_yz;
-                                value_Avec_y += psi1_zx * (psi2_zz - psi2_xx) - psi2_zx * (psi1_zz - psi1_xx);
-                                auto value_Avec_z = psi1_yz * psi2_zx - psi2_yz * psi1_zx;
-                                value_Avec_z += psi1_xy * (psi2_xx - psi2_yy) - psi2_xy * (psi1_xx - psi1_yy);
-                                phi_3LPT_Avec_fourier[0].set_real_from_index(real_index, value_Avec_x);
-                                phi_3LPT_Avec_fourier[1].set_real_from_index(real_index, value_Avec_y);
-                                phi_3LPT_Avec_fourier[2].set_real_from_index(real_index, value_Avec_z);
+                                phi_3LPT_Avec_fourier[0].set_real_from_index(index, h2yy - h2zz);
+                                phi_3LPT_Avec_fourier[1].set_real_from_index(index, h2zz - h2xx);
+                                phi_3LPT_Avec_fourier[2].set_real_from_index(index, h2xx - h2yy);
                             }
                         }
                     }
                 }
 
-                // Free up memory
-                for (int i = 0; i < num_pairs; i++) {
-                    phi_1LPT_ij[i].free();
-                    phi_2LPT_ij[i].free();
+                make_hessian_batch(std::false_type{});
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    for (auto && index : phi_3LPT_b_fourier.get_real_range(islice, islice + 1)) {
+                        const auto h2xy = hessian2[0].get_real_from_index(index);
+                        const auto h1xx = phi_1LPT_ij[0].get_real_from_index(index);
+                        const auto h1xy = phi_1LPT_ij[1].get_real_from_index(index);
+                        if constexpr (N == 2) {
+                            phi_3LPT_b_fourier.set_real_from_index(
+                                index, phi_3LPT_b_fourier.get_real_from_index(index) - h1xy * h2xy);
+                            if (not ignore_curl_term) {
+                                const auto h1yy = phi_1LPT_ij[2].get_real_from_index(index);
+                                const auto difference = phi_3LPT_Avec_fourier[0].get_real_from_index(index);
+                                phi_3LPT_Avec_fourier[0].set_real_from_index(
+                                    index, h2xy * (h1yy - h1xx) - h1xy * difference);
+                            }
+                        } else {
+                            const auto h1xz = phi_1LPT_ij[2].get_real_from_index(index);
+                            const auto h1yy = phi_1LPT_ij[3].get_real_from_index(index);
+                            const auto h1yz = phi_1LPT_ij[4].get_real_from_index(index);
+                            const auto h1zz = phi_1LPT_ij[5].get_real_from_index(index);
+                            const auto h2xz = hessian2[1].get_real_from_index(index);
+                            const auto h2yz = hessian2[2].get_real_from_index(index);
+                            // Preserve the original accumulator type: at least double because of the factor 0.5.
+                            using SourceType = decltype(0.5 * FML::GRID::FloatType{});
+                            SourceType value = phi_3LPT_b_fourier.get_real_from_index(index);
+                            value += -h1xy * h2xy - h1yz * h2yz - h1xz * h2xz;
+                            phi_3LPT_b_fourier.set_real_from_index(index, value);
+                            if (not ignore_curl_term) {
+                                auto Ax = h1xz * h2xy - h2xz * h1xy;
+                                Ax += h1yz * phi_3LPT_Avec_fourier[0].get_real_from_index(index) - h2yz * (h1yy - h1zz);
+                                auto Ay = h1xy * h2yz - h2xy * h1yz;
+                                Ay += h1xz * phi_3LPT_Avec_fourier[1].get_real_from_index(index) - h2xz * (h1zz - h1xx);
+                                auto Az = h1yz * h2xz - h2yz * h1xz;
+                                Az += h1xy * phi_3LPT_Avec_fourier[2].get_real_from_index(index) - h2xy * (h1xx - h1yy);
+                                phi_3LPT_Avec_fourier[0].set_real_from_index(index, Ax);
+                                phi_3LPT_Avec_fourier[1].set_real_from_index(index, Ay);
+                                phi_3LPT_Avec_fourier[2].set_real_from_index(index, Az);
+                            }
+                        }
+                    }
                 }
+                for (auto & grid : hessian2) grid.free();
+                for (auto & grid : phi_1LPT_ij) grid.free();
 
                 // Fourier transform and voila we have -k^2phi_3LPT_a stored in phi_3LPT_a
                 phi_3LPT_a_fourier.fftw_r2c();
