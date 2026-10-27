@@ -97,3 +97,5 @@ tests/test_reconstruction
 tests/test_sphericalcollapse
 tests/test_halomodel
 tests/test_gadget
+tests/test_ramses
+tests/test_camb

@@ -10,7 +10,7 @@ USE_OMP             ?= true
 USE_FFTW            ?= true
 USE_GSL             ?= true
 
-TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget
+TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb
 
 include ../Makefile.config
 
@@ -88,6 +88,14 @@ test_hybridbias: test_hybridbias.o Global.o
 test_gadget: test_gadget.o Global.o GadgetUtils.o
 	$(LINK_EXE)
 
+# RamsesUtils (writes small synthetic RAMSES snapshots)
+test_ramses: test_ramses.o test_ramses_odr.o Global.o
+	$(LINK_EXE)
+
+# CAMBUtils (reads the tables in ../COLASolver/input)
+test_camb: test_camb.o test_camb_odr.o Global.o Spline.o
+	$(LINK_EXE)
+
 MPIRUN  ?= mpirun
 NP_LIST ?= 1 2 4
 
@@ -137,6 +145,10 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_halomodel; \
 	  echo "== Running test_gadget with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_gadget; \
+	  echo "== Running test_ramses with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_ramses; \
+	  echo "== Running test_camb with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_camb; \
 	done
 	@echo "== Running test_hybridbias"
 	@OMP_NUM_THREADS=2 $(RUN1) ./test_hybridbias

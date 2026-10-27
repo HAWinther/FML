@@ -3,7 +3,11 @@
 
 #include <FML/Global/Global.h>
 #include <FML/Spline/Spline.h>
+#include <algorithm>
+#include <atomic>
 #include <fstream>
+#include <limits>
+#include <numeric>
 #include <iomanip>
 #include <iostream>
 
@@ -44,7 +48,7 @@ namespace FML {
         };
        
         /// The format of transferfiles from CAMB
-        FileFormatTransfer camb_transfer_format{
+        inline FileFormatTransfer camb_transfer_format{
             .n_transfer_header_lines = 1,
             .ncol_transfer_file = 13,
             .transfer_col_k = 0,
@@ -63,7 +67,7 @@ namespace FML {
         };
         
         /// The format of transferfiles from CAMB
-        FileFormatTransfer axioncamb_transfer_format{
+        inline FileFormatTransfer axioncamb_transfer_format{
             .n_transfer_header_lines = 1,
             .ncol_transfer_file = 9,
             .transfer_col_k = 0,
@@ -82,7 +86,7 @@ namespace FML {
         };
 
         /// The format of pofkfiles from CAMB
-        FileFormatPower camb_power_format{
+        inline FileFormatPower camb_power_format{
             .n_pofk_header_lines = 1,
             .ncol_pofk_file = 2,
             .pofk_col_k = 0,
@@ -90,7 +94,7 @@ namespace FML {
         };
         
         /// The format of transferfiles from CLASS (NB: assumes CLASS run with format=camb)
-        FileFormatTransfer class_transfer_format{
+        inline FileFormatTransfer class_transfer_format{
             .n_transfer_header_lines = 8,
             .ncol_transfer_file = 7,
             .transfer_col_k = 0,
@@ -109,7 +113,7 @@ namespace FML {
         };
 
         /// The format of pofkfiles from CLASS (NB: assumes CLASS run with format=camb)
-        FileFormatPower class_power_format{
+        inline FileFormatPower class_power_format{
             .n_pofk_header_lines = 4,
             .ncol_pofk_file = 2,
             .pofk_col_k = 0,
@@ -144,6 +148,14 @@ namespace FML {
 
             double zmin_splines{};
             double zmax_splines{};
+
+            /// T(k) from a spline: for k > kmax of the tables a power law with the slope at kmax (before T was
+            /// constant there, so P(k) grew as k^ns)
+            double eval_transfer(const Spline2D & spline, double z, double k) const;
+
+            /// The old matter-weighted total transfer function (constant Omega_nu): used for the P_cb and P_nu power
+            /// spectra where it cancels (so they are unchanged to the last digit)
+            double get_total_transfer_function_matter_weighted(double k, double a) const;
             DVector redshifts_of_files; // The redshifts of the transfer files (low to high)
 
             /// d log T / d log a from the transfer functions at the redshifts of the files: a local cubic
@@ -254,7 +266,7 @@ namespace FML {
         //====================================================================
         // Set the fileformat
         //====================================================================
-        void LinearTransferData::set_fileformat(std::string format) {
+        inline void LinearTransferData::set_fileformat(std::string format) {
             fileformat = format;
             
             struct FileFormatTransfer tmp;
@@ -299,7 +311,7 @@ namespace FML {
         //====================================================================
         /// Free up all memory
         //====================================================================
-        void LinearTransferData::free() {
+        inline void LinearTransferData::free() {
             cdm_transfer_function_spline.free();
             baryon_transfer_function_spline.free();
             photon_transfer_function_spline.free();
@@ -320,7 +332,7 @@ namespace FML {
         /// the first entry is k and the other entries can be found as LinearTransferData::transfer_col_cdm etc.
         /// @param[in] filename Filename of a CAMB T(k) file
         //====================================================================
-        DVector2D LinearTransferData::read_transfer_single(std::string filename) const {
+        inline DVector2D LinearTransferData::read_transfer_single(std::string filename) const {
             FML::assert_mpi(transfer_col_k >= 0, "Fileformat is not correct");
             FML::assert_mpi(n_transfer_header_lines >= 0, "Fileformat is not correct");
             FML::assert_mpi(ncol_transfer_file > 0, "Fileformat is not correct");
@@ -365,7 +377,7 @@ namespace FML {
         /// Read a single power-spectrum file and return the data as (k, P(k))
         /// @param[in] filename Filename of a CAMB P(k) file
         //====================================================================
-        std::pair<DVector, DVector> LinearTransferData::read_power_single(std::string filename) const {
+        inline std::pair<DVector, DVector> LinearTransferData::read_power_single(std::string filename) const {
             FML::assert_mpi(pofk_col_k >= 0, "Fileformat is not correct");
             FML::assert_mpi(n_pofk_header_lines >= 0, "Fileformat is not correct");
             FML::assert_mpi(ncol_pofk_file > 0, "Fileformat is not correct");
@@ -407,20 +419,20 @@ namespace FML {
         }
 
         /// The smallest redshift the splines reach
-        double LinearTransferData::get_zmin_splines() const { return zmin_splines; }
+        inline double LinearTransferData::get_zmin_splines() const { return zmin_splines; }
         /// The largest redshift the splines reach
-        double LinearTransferData::get_zmax_splines() const { return zmax_splines; }
+        inline double LinearTransferData::get_zmax_splines() const { return zmax_splines; }
         /// The smallest scale the splines reach
-        double LinearTransferData::get_kmin_hmpc_splines() const { return kmin_hmpc_splines; }
+        inline double LinearTransferData::get_kmin_hmpc_splines() const { return kmin_hmpc_splines; }
         /// The largest redshift the splines reach
-        double LinearTransferData::get_kmax_hmpc_splines() const { return kmax_hmpc_splines; }
+        inline double LinearTransferData::get_kmax_hmpc_splines() const { return kmax_hmpc_splines; }
 
         //====================================================================
         /// Read an infofile with the format (folder num_redshift) and then each line contains (transferfile_i
-        /// redshift_i) The redshifts have to be ordered from low to high.
+        /// redshift_i). The files are sorted by redshift if they are not ordered from low to high.
         /// @param[in] infofile Filename of infofile containing info about transfer data from CAMB
         //====================================================================
-        void LinearTransferData::read_transfer(std::string infofile, bool verbose) {
+        inline void LinearTransferData::read_transfer(std::string infofile, bool verbose) {
 
             DVector k;
             DVector2D transfer_function_cdm;
@@ -454,7 +466,8 @@ namespace FML {
 
             // Read all files
             DVector redshifts(nredshift);
-            zmax_splines = 0.0;
+            zmin_splines = std::numeric_limits<double>::max();
+            zmax_splines = -std::numeric_limits<double>::max();
             for (int i = 0; i < nredshift; i++) {
 
                 // Read filename
@@ -465,7 +478,7 @@ namespace FML {
                 double znow;
                 fp >> znow;
                 redshifts[i] = znow;
-                zmin_splines = std::max(redshifts[i], zmin_splines);
+                zmin_splines = std::min(redshifts[i], zmin_splines);
                 zmax_splines = std::max(redshifts[i], zmax_splines);
 
                 // Make filename and open file. Assumes all files have the same length
@@ -529,6 +542,39 @@ namespace FML {
             }
             if (FML::ThisTask == 0)
                 std::cout << "\n";
+
+            // The redshifts must be increasing (the splines need it): sort if the infofile is not ordered
+            std::vector<size_t> order(nredshift);
+            std::iota(order.begin(), order.end(), 0);
+            std::stable_sort(order.begin(), order.end(), [&](size_t i, size_t j) { return redshifts[i] < redshifts[j]; });
+            for (int i = 1; i < nredshift; i++)
+                if (redshifts[order[i]] == redshifts[order[i - 1]])
+                    throw std::runtime_error("Error in read_transfer: two files with the same redshift " +
+                                             std::to_string(redshifts[order[i]]) + " in " + infofile);
+            if (not std::is_sorted(redshifts.begin(), redshifts.end())) {
+                if (FML::ThisTask == 0)
+                    std::cout << "read_transfer: the files in " << infofile << " are not ordered in redshift: sorting them\n";
+                auto reorder = [&](auto & v) {
+                    if (v.empty())
+                        return;
+                    auto tmp = v;
+                    for (int i = 0; i < nredshift; i++)
+                        v[i] = tmp[order[i]];
+                };
+                reorder(redshifts);
+                reorder(transfer_function_cdm);
+                reorder(transfer_function_baryon);
+                reorder(transfer_function_photon);
+                reorder(transfer_function_nu);
+                reorder(transfer_function_mnu);
+                reorder(transfer_function_total);
+                reorder(transfer_function_nonu);
+                reorder(transfer_function_totde);
+                reorder(transfer_function_weyl);
+                reorder(transfer_function_vcdm);
+                reorder(transfer_function_vb);
+                reorder(transfer_function_vbvc);
+            }
 
             // Change to log
             auto logk = k;
@@ -594,9 +640,9 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_weyl_transfer_function(double k, double a) const {
+        inline double LinearTransferData::get_weyl_transfer_function(double k, double a) const {
             double z = 1.0 / a - 1.0;
-            return weyl_transfer_function_spline(z, std::log(k));
+            return eval_transfer(weyl_transfer_function_spline, z, k);
         }
 
         //====================================================================
@@ -604,9 +650,9 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_photon_transfer_function(double k, double a) const {
+        inline double LinearTransferData::get_photon_transfer_function(double k, double a) const {
             double z = 1.0 / a - 1.0;
-            return photon_transfer_function_spline(z, std::log(k));
+            return eval_transfer(photon_transfer_function_spline, z, k);
         }
 
         //====================================================================
@@ -614,9 +660,9 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_neutrino_transfer_function(double k, double a) const {
+        inline double LinearTransferData::get_neutrino_transfer_function(double k, double a) const {
             double z = 1.0 / a - 1.0;
-            return nu_transfer_function_spline(z, std::log(k));
+            return eval_transfer(nu_transfer_function_spline, z, k);
         }
 
         //====================================================================
@@ -624,9 +670,9 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_massive_neutrino_transfer_function(double k, double a) const {
+        inline double LinearTransferData::get_massive_neutrino_transfer_function(double k, double a) const {
             double z = 1.0 / a - 1.0;
-            return mnu_transfer_function_spline(z, std::log(k));
+            return eval_transfer(mnu_transfer_function_spline, z, k);
         }
 
         //====================================================================
@@ -634,12 +680,19 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_massive_neutrino_growth_rate(double k, double a) const {
+        inline double LinearTransferData::get_massive_neutrino_growth_rate(double k, double a) const {
             double z = 1.0 / a - 1.0;
             double Dnu = mnu_transfer_function_spline(z, std::log(k));
             if (Dnu == 0.0)
                 return 0.0;
-            (void)z;
+            // T_nu oscillates in time faster than the redshift spacing of typical tables resolves at high z: with
+            // the 60 tables up to z = 200 (input/camb_data_*_zmax200) f_nu is 8-66% off at z >= 150 and
+            // k >= 0.05 h/Mpc (fine for z <= 49, k <= 0.1). Use denser tables near the redshift of interest
+            static std::atomic<bool> warned{false};
+            if (z > 50.0 and FML::ThisTask == 0 and not warned.exchange(true))
+                std::cout << "Warning: get_massive_neutrino_growth_rate at z = " << z
+                          << " > 50: the neutrino growth rate from the tables can be inaccurate at high z (it needs "
+                             "a fine redshift spacing of the tables)\n";
             return dlogT_dloga(mnu_transfer_function_spline, k, a);
         }
 
@@ -648,9 +701,9 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_cdm_transfer_function(double k, double a) const {
+        inline double LinearTransferData::get_cdm_transfer_function(double k, double a) const {
             double z = 1.0 / a - 1.0;
-            return cdm_transfer_function_spline(z, std::log(k));
+            return eval_transfer(cdm_transfer_function_spline, z, k);
         }
 
         //====================================================================
@@ -658,11 +711,35 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_cdm_growth_rate(double k, double a) const {
+        inline double LinearTransferData::get_cdm_growth_rate(double k, double a) const {
             return dlogT_dloga(cdm_transfer_function_spline, k, a);
         }
 
-        double LinearTransferData::dlogT_dloga(const Spline2D & spline, double k, double a) const {
+        inline double LinearTransferData::eval_transfer(const Spline2D & spline, double z, double k) const {
+            if (k <= kmax_hmpc_splines)
+                return spline(z, std::log(k));
+            const double logkmax = std::log(kmax_hmpc_splines);
+            const double T = spline(z, logkmax);
+            const double T1 = spline(z, logkmax - 0.1);
+            if (T <= 0.0 or T1 <= 0.0)
+                return T;
+            // (a finite difference: the derivative of the spline at the end point is less accurate)
+            const double slope = std::log(T / T1) / 0.1;
+            return T * std::exp(slope * (std::log(k) - logkmax));
+        }
+
+        inline double LinearTransferData::dlogT_dloga(const Spline2D & spline, double k, double a) const {
+            // Outside the redshift range of the tables we use the value at the end (before the Lagrange polynomial
+            // was extrapolated: e.g. f_cb = 1.07 at z = 332 for tables up to z = 200)
+            const double zin = 1.0 / a - 1.0;
+            const double zmargin = 1e-8 * (1.0 + zmax_splines);
+            if (zin > zmax_splines + zmargin or zin < zmin_splines - zmargin) {
+                static std::atomic<bool> warned{false};
+                if (FML::ThisTask == 0 and not warned.exchange(true))
+                    std::cout << "Warning: growth rate requested at z = " << zin << " outside the range of the transfer "
+                              << "tables [" << zmin_splines << ", " << zmax_splines << "]: using the value at the end\n";
+                a = 1.0 / (1.0 + std::min(std::max(zin, zmin_splines), zmax_splines));
+            }
             const double z = 1.0 / a - 1.0;
             const double logk = std::log(k);
             const int n = int(redshifts_of_files.size());
@@ -703,9 +780,9 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_baryon_transfer_function(double k, double a) const {
+        inline double LinearTransferData::get_baryon_transfer_function(double k, double a) const {
             double z = 1.0 / a - 1.0;
-            return baryon_transfer_function_spline(z, std::log(k));
+            return eval_transfer(baryon_transfer_function_spline, z, k);
         }
 
         //====================================================================
@@ -713,7 +790,7 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_baryon_growth_rate(double k, double a) const {
+        inline double LinearTransferData::get_baryon_growth_rate(double k, double a) const {
             return dlogT_dloga(baryon_transfer_function_spline, k, a);
         }
 
@@ -723,7 +800,7 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_cdm_baryon_transfer_function(double k, double a) const {
+        inline double LinearTransferData::get_cdm_baryon_transfer_function(double k, double a) const {
             return (Omegab * get_baryon_transfer_function(k, a) + OmegaCDM * get_cdm_transfer_function(k, a)) /
                    (Omegab + OmegaCDM);
         }
@@ -733,7 +810,7 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_cdm_baryon_growth_rate(double k, double a) const {
+        inline double LinearTransferData::get_cdm_baryon_growth_rate(double k, double a) const {
             double deltaB_over_delta_CDM = get_baryon_transfer_function(k, a) / get_cdm_transfer_function(k, a);
             double fac = Omegab / OmegaCDM * deltaB_over_delta_CDM;
             return (get_cdm_growth_rate(k, a) + fac * get_baryon_growth_rate(k, a)) / (1.0 + fac);
@@ -744,10 +821,16 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_total_transfer_function(double k, double a) const {
-            /// Alternative way (which at least works for CAMB)  
-            //double z = 1.0 / a - 1.0;
-            //return total_transfer_function_spline(z, std::log(k));
+        inline double LinearTransferData::get_total_transfer_function(double k, double a) const {
+            // The total column of the tables if we have it (it has the right weight of the neutrinos also when they
+            // are not fully non-relativistic: the matter-weighted sum with a constant OmegaMNu was 0.2% off at z = 49
+            // and 2% at z = 200 for 0.4 eV)
+            if (transfer_col_total >= 0)
+                return eval_transfer(total_transfer_function_spline, 1.0 / a - 1.0, k);
+            return get_total_transfer_function_matter_weighted(k, a);
+        }
+
+        inline double LinearTransferData::get_total_transfer_function_matter_weighted(double k, double a) const {
             return (
                   Omegab * get_baryon_transfer_function(k, a) 
                 + OmegaCDM * get_cdm_transfer_function(k, a) 
@@ -760,7 +843,7 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_total_power_spectrum(double k, double a) const {
+        inline double LinearTransferData::get_total_power_spectrum(double k, double a) const {
             double Ttot = get_total_transfer_function(k, a) * (k * h) * (k * h);
             return Ttot * Ttot * get_primordial_power_spectrum(k);
         }
@@ -770,7 +853,7 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_total_growth_rate(double k, double a) const {
+        inline double LinearTransferData::get_total_growth_rate(double k, double a) const {
             return dlogT_dloga(total_transfer_function_spline, k, a);
         }
 
@@ -778,7 +861,7 @@ namespace FML {
         /// Primordial power-spectrum today in units of (Mpc/h)^3
         /// @param[in] k Fourier wavenumber in h/Mpc
         //====================================================================
-        double LinearTransferData::get_primordial_power_spectrum(double k) const {
+        inline double LinearTransferData::get_primordial_power_spectrum(double k) const {
             return 2.0 * M_PI * M_PI / (k * k * k) * As * std::pow(k * h / kpivot_mpc, ns - 1.0);
         }
 
@@ -787,9 +870,12 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_cdm_baryon_power_spectrum(double k, double a) const {
-            double Tcdm_over_Ttot = get_cdm_baryon_transfer_function(k, a) / get_total_transfer_function(k, a);
-            return get_total_power_spectrum(k, a) * Tcdm_over_Ttot * Tcdm_over_Ttot;
+        inline double LinearTransferData::get_cdm_baryon_power_spectrum(double k, double a) const {
+            // (with the matter-weighted total, which cancels: as before to the last digit)
+            const double Ttot_mw = get_total_transfer_function_matter_weighted(k, a);
+            double Tcdm_over_Ttot = get_cdm_baryon_transfer_function(k, a) / Ttot_mw;
+            const double Ttot = Ttot_mw * (k * h) * (k * h);
+            return Ttot * Ttot * get_primordial_power_spectrum(k) * Tcdm_over_Ttot * Tcdm_over_Ttot;
         }
 
         //====================================================================
@@ -797,15 +883,18 @@ namespace FML {
         /// @param[in] k Fourier wavenumber in h/Mpc
         /// @param[in] a Scalefactor
         //====================================================================
-        double LinearTransferData::get_massive_neutrino_power_spectrum(double k, double a) const {
-            double Tmnu_over_Ttot = get_massive_neutrino_transfer_function(k, a) / get_total_transfer_function(k, a);
-            return get_total_power_spectrum(k, a) * Tmnu_over_Ttot * Tmnu_over_Ttot;
+        inline double LinearTransferData::get_massive_neutrino_power_spectrum(double k, double a) const {
+            // (with the matter-weighted total, which cancels: as before to the last digit)
+            const double Ttot_mw = get_total_transfer_function_matter_weighted(k, a);
+            double Tmnu_over_Ttot = get_massive_neutrino_transfer_function(k, a) / Ttot_mw;
+            const double Ttot = Ttot_mw * (k * h) * (k * h);
+            return Ttot * Ttot * get_primordial_power_spectrum(k) * Tmnu_over_Ttot * Tmnu_over_Ttot;
         }
 
         //====================================================================
         /// Output some of the data we have read in and splines to see that its ok
         //====================================================================
-        void LinearTransferData::output(std::string filename, double a) const {
+        inline void LinearTransferData::output(std::string filename, double a) const {
             const int nk = 100;
             const double kmin = 1e-4;
             const double kmax = 10.0;

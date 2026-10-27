@@ -4,7 +4,10 @@ ic_type_of_input_fileformat = "CAMB"), with accurate massive neutrino transfer f
 
 The redshifts are uniform in log(1+z) from 0 to zmax (the growth rates are computed from the tables with a 4-point
 Lagrange derivative in log(a), so the spacing should be fine enough: the default 60 redshifts up to z = 200 give
-the growth rates to ~1e-4). The massive neutrinos are N_nu = 3 degenerate species, as in COLASolver. The default CAMB accuracy is not enough for
+the growth rates of CDM and baryons to ~1e-4; the infofile has the exact redshifts: with 3 decimals the growth
+rates at z = 0.15-1 were 0.3-0.6% off). NB: the massive neutrino growth rate (used for the initial velocities of
+neutrino particles) needs a much finer spacing at high z: with these 60 redshifts it is 8-66% off at z >= 150 and
+k >= 0.05 h/Mpc (fine at z <= 49). The massive neutrinos are N_nu = 3 degenerate species, as in COLASolver. The default CAMB accuracy is not enough for
 the massive neutrino transfer function below the free-streaming scale: for 3 x 0.033 eV P_nu(k, z = 0) is 3% / 13% /
 16% too low at k = 0.014 / 0.05 / 0.1 h/Mpc (relative to AccuracyBoost = 3, which agrees with CLASS without the ncdm
 fluid approximation), so we use --accuracy 3 by default (CDM and baryons are unaffected).
@@ -54,7 +57,7 @@ def make_tables(outdir, prefix, OmegaM=0.3175, Omegab=0.049, OmegaMNu=0.0, h=0.6
              "v_b-v_c"]
     files = []
     for iz, z in enumerate(zout):
-        fn = f"{prefix}_transfer_z{z:.3f}.dat"
+        fn = f"{prefix}_transfer_z{z:.3f}.dat"  # (the file name only; the exact redshift goes in the infofile)
         np.savetxt(os.path.join(datadir, fn), td.transfer_data[:, :, iz].T, fmt="%14.6E",
                    header="".join(f"{n:>15}" for n in names))
         files.append((z, fn))
@@ -63,7 +66,7 @@ def make_tables(outdir, prefix, OmegaM=0.3175, Omegab=0.049, OmegaMNu=0.0, h=0.6
     with open(infofile, "w") as f:
         f.write(f"{datadir} {len(files)}\n")
         for z, fn in files:
-            f.write(f"{fn}  {z:.3f}\n")
+            f.write(f"{fn}  {z:.10g}\n")
     print(f"Wrote {len(files)} tables to {datadir} and {infofile}")
 
 

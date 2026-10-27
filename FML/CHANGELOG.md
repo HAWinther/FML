@@ -5,6 +5,47 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### RamsesUtils fixes
+- `read_ramses` with `keep_only_particles_in_domain = false` returned an empty vector (the particles were written
+  beyond the size of the vector, which was only reserved). `read_ramses_single` allocated the whole file and filled
+  only the particles in the local domain: with MPI the rest were zero particles (id 0 at the origin). A CPU file
+  without particles crashed the reader (division by zero) and a particle at exactly x = 1 was dropped on all tasks.
+- The boxsize and velocities assumed Mpc = 3.08e24 cm: for newer RAMSES versions (3.0857e24, e.g. TestData/
+  ExampleRamsesSnapshot) they were 0.18% too large (boxsize 1001.84 instead of 1000 Mpc/h). Both are now computed
+  from unit_l, unit_t and aexp, which is right for either constant.
+- The `header_XXXXX.txt` file is optional: without it the format is taken from `part_file_descriptor.txt` (newer
+  RAMSES), otherwise the default/set format is used (the module's example could not read the bundled snapshot).
+  `write_icdeltab` is inline (the header could not be included in two translation units); `get_npart` returns size_t.
+- `tests/test_ramses.cpp` (synthetic snapshots written by the test: both Mpc constants, header file or
+  part_file_descriptor.txt, an empty CPU file, a particle at x = 1, 1-4 tasks). The old code crashed on the empty
+  CPU file.
+
+### CAMBUtils fixes
+- The total-matter transfer function was the matter-weighted sum with a constant OmegaMNu, wrong while the neutrinos
+  are not fully non-relativistic: P_total / P_cb was 0.2% off at z = 51 and 1.9% at z = 200 (0.4 eV) compared with
+  CAMB. It now uses the total column of the tables (now 6e-6). P_cb and P_nu are unchanged to the last digit (the
+  total cancels there). In COLASolver this changes only the linear total-matter P(k) column and the "total"
+  species transfer function of the outputs, for runs with massive neutrinos.
+- Above the largest k of the tables T(k) was constant, so P(k) grew as k^ns (P(5 kmax)/P(kmax) = 4.7); it is now a
+  power law with the slope at kmax. Growth rates requested outside the redshift range of the tables were
+  extrapolated with the 4-point Lagrange polynomial (f_cb = 1.07 at z = 332 for tables up to z = 200); now the value
+  at the end of the table (with a warning). `get_zmin_splines` returned the largest redshift. An infofile not
+  ordered in redshift aborted in GSL; the files are now sorted (with a message). The header could not be included
+  in two translation units (33 multiple definitions): everything is inline now.
+- The massive neutrino growth rate from the 60-redshift tables (input/camb_data_*_zmax200) is 8-66% off at z >= 150
+  and k >= 0.05 h/Mpc (T_nu oscillates in time faster than the table spacing resolves; fine for z <= 49): documented,
+  with a warning above z = 50 (it is used for the initial velocities of neutrino particles, where T_nu/T_cb is small).
+- `scripts/make_camb_transfer_tables.py` wrote the redshifts to the infofile with 3 decimals: the growth rates at
+  z = 0.15-1 were 0.3-0.6% off (the 4-point Lagrange derivative used slightly wrong redshifts). Now 10 significant
+  digits (the existing tables in input/ are not regenerated: they are regression inputs).
+- `tests/test_camb.cpp` (P_cb and P_total/P_cb vs CAMB at z = 0, 51, 200, k > kmax, z outside the tables, an
+  unordered infofile; 4 checks failed before and the unordered infofile aborted).
+- Regression: the total-matter P(k) of the neutrino cases changes by 1e-6 - 1e-5 at z <= 4 and 1e-3 at z = 20, and the
+  `D1_Tk` columns of the gravitymodel output at k = 10 h/Mpc for nbody_gauge (tables up to k = 2.1 h/Mpc) by 2.5e-4;
+  everything else (particles, cb/cdm/baryon P(k), snapshots) is bit-identical. The SO velocity dispersion of FoF
+  halos with a single particle inside R_200m (exactly 0, the round-off of v^2 - v^2) changes from 0 to 1e-6 km/s
+  with the new build (no other halo property changes).
+
 ### GadgetUtils fixes
 - Reading a file with several particle types into particles with `set_family` while keeping only the particles in
   the local domain (MPI) set the type with the indices of the whole file: writes past the end of the vector and wrong

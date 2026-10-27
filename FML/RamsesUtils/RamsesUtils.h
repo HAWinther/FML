@@ -1,12 +1,14 @@
 #ifndef READWRITERAMSES_HEADER
 #define READWRITERAMSES_HEADER
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <regex>
 #include <sstream>
 #include <stdlib.h>
@@ -204,9 +206,9 @@ namespace FML {
                     auto header = read_particle_header(fp);
                     fclose(fp);
 
-                    // Allocate particles
-                    if (p.size() < size_t(header.npart))
-                        p.resize(header.npart);
+                    // Allocate particles (only the ones we keep: before the whole file was allocated so with MPI the
+                    // vector ended with zero particles)
+                    p.resize(keep_only_particles_in_domain ? size_t(npart_in_domain_in_file[ifile]) : size_t(header.npart));
 
                     // Check that dimensions match
                     T tmp_ndim; // (GetNDIM(T()) needs a particle that can be built at compile time)
@@ -228,7 +230,10 @@ namespace FML {
                         p.reserve(nallocate);
                         p.resize(npart_in_domain);
                     } else {
-                        p.reserve(npart * buffer_factor);
+                        // (before only reserved: the particles were written beyond the size of the vector which then had
+                        // size 0)
+                        p.reserve(size_t(double(npart) * std::max(buffer_factor, 1.0)));
+                        p.resize(npart);
                     }
 
                     std::vector<long long int> npart_task(FML::NTasks);
@@ -270,7 +275,7 @@ namespace FML {
                 double get_omega_b() { return omega_b; }
                 double get_aexp() { return aexp; }
                 double get_h() { return h0/100.; }
-                int get_npart() { return npart; }
+                size_t get_npart() { return npart; }
                 int get_levelmin() { return levelmin; }
                 int get_levelmax() { return levelmax; }
 
@@ -300,6 +305,10 @@ namespace FML {
                     fread(&skip1, sizeof(int), 1, fp);
                     fread(buffer, sizeof(char), skip1, fp);
                     fread(&skip2, sizeof(int), 1, fp);
+                    assert(skip1 == skip2);
+                    // An empty record (e.g. a CPU file without particles)
+                    if (n == 0)
+                        return 0;
                     int bytes_per_element = skip1 / n;
                     assert(bytes_per_element * n == skip1);
                     assert(skip1 == skip2);
@@ -341,11 +350,12 @@ namespace FML {
                     fscanf(fp, "unit_t      =  %lf\n", &unit_t);
                     fclose(fp);
 
-                    // Calculate boxsize in Mpc/h
-                    // RAMSES uses Mpc/cm = 3.08e24 instead of (the more accurate) 3.08567758e24:
-                    // (see amr/units.f90 and https://groups.google.com/g/pynbody-users/c/ZSXesVlgi3o/m/k3VOhs3wDAAJ)
+                    // Calculate the boxsize in Mpc/h from the units: unit_l = L (Mpc/h) * Mpc_cm * aexp / h and
+                    // unit_t = aexp^2 * Mpc_cm / (H0 * 1e5) so L = unit_l * aexp / (unit_t * 1e7) whatever value of Mpc_cm
+                    // RAMSES used (older versions 3.08e24, newer 3.0857e24: before 3.08e24 was assumed, 0.18% off for
+                    // newer outputs)
                     if (verbose) std::cout << "WARNING: overriding read boxlen = " << boxlen;
-                    boxlen = unit_l * h0 / 100.0 / aexp / 3.08e24;
+                    boxlen = unit_l * aexp / (unit_t * 1e7);
                     if (verbose) std::cout << " with boxlen = " << boxlen << " calculated from unit_l = " << unit_l << "\n";
 
                     // Read how many particles there is in the files
@@ -384,7 +394,10 @@ namespace FML {
                     std::string headerfile = snapdir + "header_" + snapnum + ".txt";
                     FILE *fp = fopen(headerfile.c_str(), "r");
                     if (fp == nullptr) {
-                        throw_error("[RamsesReader::read_header] Error opening header file " + headerfile);
+                        // No header file (it is optional): try the part_file_descriptor.txt, otherwise use the default
+                        // (or the format set with set_file_format)
+                        read_part_file_descriptor();
+                        return;
                     }
 
                     char fieldcstr[50]; // big enough to hold "pos vel mass iord level family tag"
@@ -424,6 +437,51 @@ namespace FML {
                     }
                 }
 
+                // The file format from part_file_descriptor.txt (newer RAMSES), e.g. lines " 1, position_x, d"
+                void read_part_file_descriptor() {
+                    std::string descfile = snapdir + "part_file_descriptor.txt";
+                    std::ifstream fp(descfile);
+                    if (not fp.good()) {
+                        if (verbose)
+                            std::cout << "No header or part_file_descriptor.txt found: using the default file format\n";
+                        return;
+                    }
+                    const std::map<std::string, std::string> names{{"position_x", "POS"}, {"position_y", "POS"},
+                                                                   {"position_z", "POS"}, {"velocity_x", "VEL"},
+                                                                   {"velocity_y", "VEL"}, {"velocity_z", "VEL"},
+                                                                   {"mass", "MASS"},      {"identity", "ID"},
+                                                                   {"levelp", "LEVEL"},   {"family", "FAMILY"},
+                                                                   {"tag", "TAG"}};
+                    std::vector<std::string> fields;
+                    std::string line;
+                    while (std::getline(fp, line)) {
+                        if (line.empty() or line[0] == '#')
+                            continue;
+                        std::stringstream ss(line);
+                        std::string ivar, name;
+                        std::getline(ss, ivar, ',');
+                        std::getline(ss, name, ',');
+                        name.erase(0, name.find_first_not_of(" "));
+                        name.erase(name.find_last_not_of(" ") + 1);
+                        auto it = names.find(name);
+                        if (it == names.end()) {
+                            if (verbose)
+                                std::cout << "Unknown field " << name << " in " << descfile << ": using the default file format\n";
+                            return;
+                        }
+                        // position_x,y,z (and velocity_x,y,z) are one entry
+                        if (fields.empty() or fields.back() != it->second or (it->second != "POS" and it->second != "VEL"))
+                            fields.push_back(it->second);
+                    }
+                    set_file_format(fields);
+                    if (verbose) {
+                        std::cout << "Detected format ";
+                        for (auto & field : fields)
+                            std::cout << " " << field;
+                        std::cout << " from " << descfile << "\n";
+                    }
+                }
+
                 // Count how many particles are in each file and how many fall into the local domain
                 void count_particles_in_files() {
                     npart_in_file.resize(ncpu);
@@ -444,14 +502,15 @@ namespace FML {
                         auto header = read_particle_header(fp);
 
                         // Read x position
-                        std::vector<char> buffer(header.npart * 8);
+                        std::vector<char> buffer(size_t(header.npart) * 8);
                         read_section(fp, buffer.data(), header.npart);
 
                         // Count how many positions fall into the local domain
                         RamsesPosType * pos = (RamsesPosType *)buffer.data();
                         int nindomain = 0;
                         for (int j = 0; j < header.npart; j++) {
-                            if (pos[j] >= FML::xmin_domain and pos[j] < FML::xmax_domain)
+                            const RamsesPosType x = wrap_position(pos[j]);
+                            if (x >= FML::xmin_domain and x < FML::xmax_domain)
                                 nindomain++;
                         }
                         npart_in_domain_in_file[i] = nindomain;
@@ -459,6 +518,15 @@ namespace FML {
 
                         fclose(fp);
                     }
+                }
+
+                // Periodic wrap to [0,1) (a particle exactly at x = 1 was dropped on all tasks)
+                static RamsesPosType wrap_position(RamsesPosType x) {
+                    if (x >= 1.0)
+                        x -= 1.0;
+                    if (x < 0.0)
+                        x += 1.0;
+                    return x >= 1.0 ? 0.0 : x;
                 }
 
                 ParticleFileHeader read_particle_header(FILE * fp) {
@@ -499,7 +567,8 @@ namespace FML {
                 void store_velocity(RamsesVelType * vel, char * is_in_domain, T * p, const int dim, const int np) {
                     if constexpr (not FML::PARTICLE::has_get_vel<T>())
                         return;
-                    RamsesVelType velfac = 100.0 * boxlen / aexp;
+                    // Peculiar velocity in km/s: v * unit_l / unit_t (cm/s) (= 100 * boxlen / aexp)
+                    RamsesVelType velfac = unit_l / unit_t / 1e5;
                     int count = 0;
                     for (int i = 0; i < np; i++) {
                         if (is_in_domain[i] == 1) {
@@ -621,8 +690,14 @@ namespace FML {
                     // Store npcu globally
                     ncpu = header.ncpu;
 
+                    // An empty file (e.g. a CPU without particles)
+                    if (header.npart == 0) {
+                        fclose(fp);
+                        return;
+                    }
+
                     // Allocate memory for buffer
-                    std::vector<char> buffer(header.npart * 8);
+                    std::vector<char> buffer(size_t(header.npart) * 8);
                     std::vector<char> is_in_domain(header.npart);
 
                     // Verbose
@@ -643,6 +718,9 @@ namespace FML {
                                 throw_error("[RamsesReader::read_particle_file] Field POS has size " +
                                             std::to_string(bytes_per_element) + " but size set to " +
                                             std::to_string(sizeof(RamsesPosType)));
+                            RamsesPosType * posbuf = (RamsesPosType *)buffer.data();
+                            for (int i = 0; i < header.npart; i++)
+                                posbuf[i] = wrap_position(posbuf[i]);
 
                             // Set the book-keeping array that tells us if a particle is in the domain or not
                             if (j == 0) {
@@ -800,7 +878,7 @@ namespace FML {
             // and levelmin
             //====================================================
 
-            void write_icdeltab(const std::string filename,
+            inline void write_icdeltab(const std::string filename,
                                 const float _astart,
                                 const float _omega_m,
                                 const float _omega_l,
