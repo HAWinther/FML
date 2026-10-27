@@ -11,6 +11,7 @@
 #include "Species.h"
 
 #include <array>
+#include <climits>
 #include <cmath>
 #include <fstream>
 #include <functional>
@@ -196,6 +197,11 @@ namespace COLASOLVER {
         const int stride = NDIM + 3;
         std::vector<double> all = local;
 #ifdef USE_MPI
+        // MPI counts and displacements are int: fail clearly instead of overflowing (~ INT_MAX / 6 halos in all)
+        long long int ntotal = (long long int)local.size();
+        FML::SumOverTasks(&ntotal);
+        if (ntotal > (long long int)INT_MAX)
+            throw std::runtime_error("[flag_overlapping_so_halos] Too many halos for the MPI gather (int counts)");
         int n = int(local.size());
         std::vector<int> counts(FML::NTasks), displs(FML::NTasks, 0);
         MPI_Allgather(&n, 1, MPI_INT, counts.data(), 1, MPI_INT, FML::communicator);
@@ -579,6 +585,12 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
             }
         }
         const int stride = 3 + 3 * NDIM + (do_so ? 3 * NDIM + 2 + 3 * nso : 0);
+        // MPI counts and displacements are int: fail clearly instead of overflowing
+        long long int ntotal = (long long int)local.size();
+        FML::SumOverTasks(&ntotal);
+        if (ntotal > (long long int)INT_MAX)
+            throw std::runtime_error("The HDF5 halo catalogue is too large for the MPI gather to task 0 (int counts): "
+                                     "use fof_output_fileformat = ascii");
         int n = int(local.size());
         std::vector<int> counts(FML::NTasks, n), displs(FML::NTasks, 0);
 #ifdef USE_MPI
