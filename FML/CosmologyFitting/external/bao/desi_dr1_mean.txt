@@ -1,0 +1,13 @@
+# [z] [value at z] [quantity]
+0.295 7.92512927 DV_over_rs
+0.510 13.62003080 DM_over_rs
+0.510 20.98334647 DH_over_rs
+0.706 16.84645313 DM_over_rs
+0.706 20.07872919 DH_over_rs
+0.930 21.70841761 DM_over_rs
+0.930 17.87612922 DH_over_rs
+1.317 27.78720817 DM_over_rs
+1.317 13.82372285 DH_over_rs
+1.491 26.07217182 DV_over_rs
+2.330 39.70838281 DM_over_rs
+2.330 8.52256583 DH_over_rs
