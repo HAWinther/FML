@@ -23,6 +23,7 @@
 
 #include <cmath>
 #include <filesystem>
+#include <functional>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -62,6 +63,12 @@ class OnionSlice {
     size_t n_in_map{};
     bool is_reduced;
     bool is_normalized;
+
+    // The fraction of the sky that is observed (covered by the lightcone), set when the map is normalized or
+    // masked. The pixels outside are 0 and the C_ell are divided by this
+    double fsky_observed{1.0};
+    // The number of particles in the observed pixels (for the shot-noise; set when the map is normalized)
+    double n_in_observed_pixels{-1.0};
 
     // For checking if a particle is in a map
     double epsilon{1e-5};
@@ -220,6 +227,41 @@ class OnionSlice {
         throw std::runtime_error("pixel_direction needs NDIM = 3 and Healpix");
     }
 
+    /// The unit vector of the center of pixel ipix (any NDIM; for NDIM = 3 needs Healpix)
+    std::array<double, NDIM> direction_of_pixel([[maybe_unused]] long int ipix) const {
+        std::array<double, NDIM> n{};
+        if constexpr (NDIM == 1) {
+            n[0] = ipix == 0 ? -1.0 : 1.0;
+        } else if constexpr (NDIM == 2) {
+            const double theta = -M_PI + 2.0 * M_PI * (ipix + 0.5) / double(vmap.size());
+            n[0] = std::cos(theta);
+            n[1] = std::sin(theta);
+        } else {
+            const auto v = pixel_direction(ipix);
+            for (int idim = 0; idim < NDIM; idim++)
+                n[idim] = v[idim];
+        }
+        return n;
+    }
+
+    /// The function telling if a direction n at distance r (units of the box) is observed (covered by the lightcone)
+    using IsObserved = std::function<bool(const std::array<double, NDIM> &, double)>;
+
+    /// Set the pixels outside the observed region at distance r (the pixel centers) to zero and record fsky_observed
+    void apply_mask(const IsObserved & is_observed, double r) {
+        reconstruct_from_chunkpix();
+        const long npix = get_npix();
+        long nobserved = 0;
+        for (long ipix = 0; ipix < npix; ipix++) {
+            if (is_observed(direction_of_pixel(ipix), r))
+                nobserved++;
+            else
+                map[ipix] = 0.0;
+        }
+        fsky_observed = nobserved / double(npix);
+    }
+    double get_fsky_observed() const { return fsky_observed; }
+
     /// Sum the maps over the tasks to task_to_reduce_to (for maps of a field, not of particle counts)
     void sum_field_over_tasks(int task_to_reduce_to = 0) {
         reconstruct_from_chunkpix();
@@ -331,7 +373,11 @@ class OnionSlice {
     }
 
     // Create a density contrast out of the map
-    void normalize_map(double mean_density) {
+    // If is_observed is given only the pixels in the part of the sky covered by the lightcone (the pixel centers
+    // at the mid-radius of the shell) are used: the others (also those cut by the boundary, so the particles in
+    // them are not used) are set to delta = 0, and the mean is subtracted over the observed pixels only.
+    // Otherwise all pixels are observed
+    void normalize_map(double mean_density, const IsObserved & is_observed = nullptr) {
         if (is_normalized)
             return;
         
@@ -358,19 +404,38 @@ class OnionSlice {
         double mean_npart_per_pixel = mean_density * volume / double(npix);
         double norm = 1.0 / mean_npart_per_pixel;
 
+        // The observed pixels (all if is_observed is not given)
+        const double r_mid = 0.5 * (rmin + rmax);
+        std::vector<char> observed(npix, 1);
+        if (is_observed) {
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (long ipix = 0; ipix < npix; ipix++)
+                observed[ipix] = is_observed(direction_of_pixel(ipix), r_mid) ? 1 : 0;
+        }
+
         double mean = 0.0;
+        double nobserved = 0.0;
+        double count_observed = 0.0;
         double minval = std::numeric_limits<double>::max();
         double maxval = -std::numeric_limits<double>::max();
 #ifdef USE_OMP
-#pragma omp parallel for reduction(+ : mean) reduction(max : maxval) reduction(min : minval)
+#pragma omp parallel for reduction(+ : mean, nobserved, count_observed) reduction(max : maxval) reduction(min : minval)
 #endif
         for (int ipix = 0; ipix < npix; ipix++) {
             if(map[ipix] < 0.0) {
               std::cout << "# WARNING: Negative pixel " << ipix << " / " << npix << " has " << map[ipix] << "\n";
               throw std::runtime_error("Negative pixels. This should never happen!");
             }
+            if (not observed[ipix]) {
+                map[ipix] = 0.0;
+                continue;
+            }
+            count_observed += map[ipix];
             map[ipix] = map[ipix] * T(norm) - 1.0;
             mean += map[ipix];
+            nobserved += 1.0;
             minval = std::min(minval, double(map[ipix]));
             maxval = std::max(maxval, double(map[ipix]));
         }
@@ -380,17 +445,19 @@ class OnionSlice {
           FML::MinOverTasks(&minval);
           FML::MaxOverTasks(&maxval);
           FML::SumOverTasks(&mean);
+          FML::SumOverTasks(&count_observed);
         }
-        mean /= npix;
+        mean = nobserved > 0.0 ? mean / nobserved : 0.0;
+        fsky_observed = nobserved / double(npix);
+        n_in_observed_pixels = count_observed;
 
-        // XXX If fsky != 1.0 then we should mask out things when computing the mean to get accurate numbers XXX
-
-        // Subtract off monopole (its better for alm->Cell computation)
+        // Subtract off monopole (its better for alm->Cell computation), in the observed pixels
 #ifdef USE_OMP
 #pragma omp parallel for 
 #endif
         for (int ipix = 0; ipix < npix; ipix++)
-          map[ipix] -= mean;
+          if (observed[ipix])
+            map[ipix] -= mean;
 
         if (FML::ThisTask == 0) {
             std::cout << "# Normalized map has delta_min = " << minval << " delta_mean = " << mean
@@ -398,6 +465,8 @@ class OnionSlice {
             if(not is_reduced)
               std::cout << "# NB: The min/max values are not accurate as we have not reduced over tasks yet\n";
             std::cout << "# We have subtracted the monopole corresponding to delta_mean != 0 from the map\n";
+            if (fsky_observed < 1.0)
+              std::cout << "# Only the observed fsky = " << fsky_observed << " of the sky is used (delta = 0 outside)\n";
         }
 
         is_normalized = true;
@@ -559,9 +628,10 @@ class OnionSlice {
       // Estimate Cell's
       PowSpec mySpec(1,nlmax);
       extract_powspec(alm,mySpec);
+      // With a part of the sky observed (the rest zero) the pseudo-C_ell is ~fsky C_ell
       std::vector<T> Cell(nlmax);
       for(int l = 0; l < nlmax; l++)
-        Cell[l] = mySpec.tt(l);
+        Cell[l] = mySpec.tt(l) / (fsky_observed > 0.0 ? fsky_observed : 1.0);
 
       //// Compute it for a given binning of ells
       //std::vector<T> Cell_output(ells.size(), 0.0);
@@ -584,9 +654,13 @@ class OnionSlice {
       return {};
     }
     
-    void compute_and_output_angular_powerspectrum(std::string filename, std::string label, double fsky) {
+    // The C_ell (divided by the observed fsky). With subtract_shotnoise (for maps of particle counts) also
+    // C_ell - 4 pi fsky / N, with N the number of particles in the (observed pixels of the) map
+    void compute_and_output_angular_powerspectrum(std::string filename, std::string label, bool subtract_shotnoise) {
       auto Cell = get_angular_powerspectum();
-      T shotnoise = get_n_in_map() > 0 ? fsky * 4.0 * M_PI / T(get_n_in_map()) : 0.0;
+      const double fsky = fsky_observed;
+      const double n_particles = n_in_observed_pixels >= 0.0 ? n_in_observed_pixels : double(get_n_in_map());
+      T shotnoise = subtract_shotnoise and n_particles > 0 ? fsky * 4.0 * M_PI / T(n_particles) : 0.0;
       std::ofstream fp(filename);
       if(shotnoise > 0.0)
         fp << "# ell           C_ell         C_ell-C_ell^SN   fsky = " << fsky << " label = " << label << "\n";
@@ -750,9 +824,9 @@ class OnionSlices {
       throw std::runtime_error("Error in adding particle to map");
     }
 
-    void normalize_maps(double mean_density) {
+    void normalize_maps(double mean_density, const typename OnionSlice<T, NDIM>::IsObserved & is_observed = nullptr) {
       for (auto & m : maps)
-        m.normalize_map(mean_density);
+        m.normalize_map(mean_density, is_observed);
     }
 
     void reduce_over_tasks() {
@@ -774,13 +848,13 @@ class OnionSlices {
       }
     }
     
-    void compute_and_output_angular_powerspectrum(std::string folder, std::string label, bool output_all, double fsky) {
+    void compute_and_output_angular_powerspectrum(std::string folder, std::string label, bool output_all, bool subtract_shotnoise) {
       size_t istart = output_all ? 0 : index_maps_current_step_start;
       size_t iend = output_all ? maps.size() : index_maps_current_step_end;
       for (size_t imap = istart; imap < iend; imap++) {
         std::string filename = folder + "/Cell_" + label + "_imap" + std::to_string(imap) + ".txt";
         std::cout << "# Outputting power-spectrum for imap = " << imap << "\n";
-        maps[imap].compute_and_output_angular_powerspectrum(filename, label, fsky);
+        maps[imap].compute_and_output_angular_powerspectrum(filename, label, subtract_shotnoise);
       }
     }
     

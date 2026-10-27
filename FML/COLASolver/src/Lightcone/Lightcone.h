@@ -164,6 +164,23 @@ class Lightcone {
 
     bool lightcone_active() const { return lightcone_on; }
 
+    /// Is the direction n (unit vector) at distance r (units of the box) from the observer inside the region
+    /// covered by the lightcone, i.e. by the box and its replicas (a point on the boundary is outside)? Without
+    /// replicas (plc_use_replicas = false) the box covers -o_i <= r n_i < 1 - o_i (o = plc_pos_observer), with
+    /// replicas everything in the first plc_ndim_rep directions and r n_i >= -o_i in the others (for o = 0: the
+    /// half-space n_i >= 0, i.e. fsky = 2^(ndim_rep-NDIM)). Used for the pixel centers of the onion maps
+    bool is_observed(const std::array<double, NDIM> & n, double r) const {
+        const double eps = 1e-10;
+        for (int idim = 0; idim < NDIM; idim++) {
+            const double x = r * n[idim];
+            if (idim >= replicas.get_ndim_rep() and x < -pos_observer[idim] + eps)
+                return false;
+            if (not replicas.uses_replicas() and x > 1.0 - pos_observer[idim] - eps)
+                return false;
+        }
+        return true;
+    }
+
     /// Does the step apos -> apos_new record lightcone particles with the potential (plc_relativistic_effects)?
     /// The same conditions as in create_lightcone
     bool needs_potential(double apos, double apos_new) const {
@@ -229,6 +246,12 @@ void Lightcone<NDIM, T, U>::read_parameters(ParameterMap & param) {
             throw std::runtime_error("Invalid parameters: plc_output_hdf5file = true needs HDF5: compile with USE_HDF5=true (make USE_HDF5=true)");
 #endif
         make_onion_density_maps = param.get<bool>("plc_make_onion_density_maps");
+#ifndef USE_HEALPIX
+        // Check this here and not at the first lightcone step
+        if (make_onion_density_maps and NDIM == 3)
+            throw std::runtime_error("Invalid parameters: plc_make_onion_density_maps = true needs Healpix: compile with "
+                                     "USE_HEALPIX=true (make USE_HEALPIX=true)");
+#endif
         relativistic_effects = COLASOLVER::get_parameter<bool>(param, "plc_relativistic_effects");
         if (FML::ThisTask == 0) {
             std::cout << "\n# Read in Lightcone.h:\n";
@@ -663,8 +686,9 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
         // Reduce over tasks so that task 0 have a complete map
         onionslices_curtype.reduce_over_tasks();
         
-        // Normalize map so that it becomes a density contrast
-        onionslices_curtype.normalize_maps(mean_density[particle_type]);
+        // Normalize map so that it becomes a density contrast (over the observed part of the sky, zero outside)
+        onionslices_curtype.normalize_maps(mean_density[particle_type],
+                                           [this](const std::array<double, NDIM> & n, double r) { return is_observed(n, r); });
 
         if (FML::ThisTask == 0) {
 
@@ -673,9 +697,9 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
             const bool only_one_task_outputs = true;
             onionslices_curtype.output(plc_folder, "delta_" + particle_type, not output_only_new_maps, only_one_task_outputs);
 
-            // Compute angular power-spectra and output it
-            // We subtract shot-noise. If no shot-noise subtraction just put fsky = 0.0
-            onionslices_curtype.compute_and_output_angular_powerspectrum(plc_folder, "delta_" + particle_type, not output_only_new_maps, fsky);
+            // Compute angular power-spectra (divided by the observed fsky) and output it with and without shot-noise
+            const bool subtract_shotnoise = true;
+            onionslices_curtype.compute_and_output_angular_powerspectrum(plc_folder, "delta_" + particle_type, not output_only_new_maps, subtract_shotnoise);
         }
 
         // Maps of the potential at the same shells
@@ -742,7 +766,7 @@ void Lightcone<NDIM, T, U>::make_potential_maps([[maybe_unused]] const FML::GRID
                 const std::string label = "phi_cb";
                 phimap.output(plc_folder + "/OnionMap_" + label + "_imap" + std::to_string(imap));
                 phimap.compute_and_output_angular_powerspectrum(
-                    plc_folder + "/Cell_" + label + "_imap" + std::to_string(imap) + ".txt", label, 0.0);
+                    plc_folder + "/Cell_" + label + "_imap" + std::to_string(imap) + ".txt", label, false);
             }
             phimap.free();
         }
@@ -1187,6 +1211,12 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
             }
         }
 
+        // Only the part of the sky observed in all the delta-maps is complete: this is the observed part at the
+        // distance of the kappa-map (the region covered by the box and its replicas can only shrink with the
+        // distance). Zero outside
+        kappa_maps[i].apply_mask([this](const std::array<double, NDIM> & n, double r) { return is_observed(n, r); },
+                                 kappa_maps[i].get_rmax());
+
         // Output the kappa-map and free the memory (the first map is all zeros so skip this)
         std::cout << "# Outputting kappa-map with ";
         std::cout << "a = " << kappa_maps[i].get_amin() << " ";
@@ -1210,7 +1240,7 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
 
         // Compute and output C_kappakappa(ell)
         std::string filename_cell = plc_folder + "/Cell_kappa_" + particle_type + "_imap" + std::to_string(i) + ".txt";
-        kappa_maps[i].compute_and_output_angular_powerspectrum(filename_cell, "kappa_" + particle_type, fsky);
+        kappa_maps[i].compute_and_output_angular_powerspectrum(filename_cell, "kappa_" + particle_type, false);
         kappa_maps[i].free();
 
         // Free the density-map no longer needed

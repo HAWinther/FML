@@ -297,7 +297,8 @@ class BoxReplicas {
 
     bool is_flagged_in_use(size_t coord) { return in_use_flag[coord] == INTERSECTING_LC; }
 
-    int get_ndim_rep() { return ndim_rep; }
+    int get_ndim_rep() const { return ndim_rep; }
+    bool uses_replicas() const { return use_replicas; }
 };
 
 #endif
