@@ -223,6 +223,11 @@ class GravityModel {
             init_transferdata(param.get<std::string>("ic_input_filename"), COLASOLVER::get_parameter<std::string>(param, "ic_type_of_input_fileformat"));
         }
         this->scaledependent_growth = this->cosmo->get_fMNu() > 0.0;
+        // The growth factors with massive neutrinos are computed from the transfer functions (and start at their
+        // highest redshift). Without them we would dereference a null pointer in compute_growth_factors
+        FML::assert_mpi(not(this->cosmo->get_OmegaMNu() > 0.0 and not transferdata),
+                        "cosmology_OmegaMNu > 0 needs ic_type_of_input = transferinfofile (the growth factors with "
+                        "massive neutrinos are computed from the transfer functions)");
     
         // Experimental option with finite-difference forces (instead of fourier)
         force_use_finite_difference_force = COLASOLVER::get_parameter<bool>(param, "force_use_finite_difference_force");
