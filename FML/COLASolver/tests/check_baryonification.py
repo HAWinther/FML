@@ -91,8 +91,12 @@ def main():
         assert 'baryonification_gas_mass_scale_msunh = 100000000000000' in text
         assert '# velocities = unchanged' in text and '# halo_mass_definition = 200c' in text
         rows = [line for line in text.splitlines() if line and not line.startswith('#')]
+        assert '# rejected_unresolved = ' in text and '# rejected_support_over_half_box = 0' in text
         if rows:
             halos = np.loadtxt(manifest, ndmin=2)
+            # Hosts have at least baryonification_fof_min_particles (20) particles inside R200c
+            particle_mass = float(text.split('# particle_mass_msunh = ')[1].split()[0])
+            assert (halos[:, 3] >= 20 * particle_mass * (1 - 1e-12)).all(), 'Host with an unresolved M200c'
             # M200c/R200c definition at z=0: input length and mass conventions cannot be mixed.
             if z == '0.000':
                 density = halos[:, 3] / (4 * np.pi / 3 * halos[:, 4]**3)
@@ -105,6 +109,12 @@ def main():
         assert (pos >= 0).all() and (pos < 128).all()
     assert moved, 'No nonzero correction exercised: inspect selected_host_count in the manifests'
     print('[PASS] nonzero correction, unit conversions, provenance, particle attributes, and unchanged later evolution')
+
+    # Hosts whose support reaches half the box are skipped and counted, not a fatal error
+    support = run('support', dict(baryonification=True, baryonification_max_radius_over_r200=1000.0))
+    text = (support / 'output' / 'snapshot_Reg_z0.000' / 'baryonification_z0.000.txt').read_text()
+    assert '# selected_host_count = 0' in text and '# rejected_support_over_half_box = 0' not in text, text[:800]
+    print('[PASS] hosts with a support over half the box are rejected and reported')
 
     run('invalid_model', dict(baryonification=True, baryonification_model='unknown'), 'baryonification_model')
     run('invalid_units_value', dict(baryonification=True, baryonification_gas_mass_scale_msunh=-1), 'mass scale')

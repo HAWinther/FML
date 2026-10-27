@@ -511,7 +511,10 @@ Each snapshot folder gets:
 
 The profiles have finite support and a uniform background, not the correlated two-halo term. The host catalogue
 and its prepared profiles are replicated on every MPI rank in this first integration. Support must be smaller than
-half the box; the code rejects larger supports rather than clipping them. See `FML/Baryonification/README.md` for
+half the box; hosts whose support `baryonification_max_radius_over_r200 * R200c` reaches half the box are skipped
+(counted as `rejected_support_over_half_box`) rather than clipped. Hosts are also skipped if their SO sphere is
+truncated by the buffer, if they lie inside a more massive host, or if fewer than `baryonification_fof_min_particles`
+particles are inside R200c (`rejected_unresolved`). See `FML/Baryonification/README.md` for
 the memory cost and numerical assumptions. Check halo completeness, SO mass resolution, concentration and profile
 calibration, and cutoff/table convergence before interpreting the corrected spectra. This option does not correct
 lightcone maps, velocities, or redshift-space multipoles and makes no hydrodynamical accuracy claim.

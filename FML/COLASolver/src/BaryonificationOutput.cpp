@@ -122,17 +122,24 @@ namespace COLASOLVER {
         const double mass_per_particle = halo_particle_mass_msunh(omega, box, 1.0 / 2997.92458, total);
         const double background_mass_per_box_volume = mass_per_particle * double(total);
         std::vector<HostHalo> local;
-        long long truncated = 0, nested = 0, below_cut = 0;
+        long long truncated = 0, nested = 0, unresolved = 0, below_cut = 0, too_large = 0;
         for (const auto & h : records) {
             if (h.so_truncated) { ++truncated; continue; }
             if (h.so_overlap) { ++nested; continue; }
+            // An M200c from fewer particles than a FoF seed is noise, not a host
+            if (h.so_npart[0] < s.fof_min_particles) { ++unresolved; continue; }
             const double mass = h.so_mass[0] * mass_per_particle;
             if (mass < s.min_halo_mass_msunh || h.so_radius[0] <= 0.0) { ++below_cut; continue; }
+            // The periodic Baryonifier needs a support (box units) below half the box: skip such a host rather than
+            // aborting the run
+            if (s.max_radius_over_r200 * h.so_radius[0] >= 0.5) { ++too_large; continue; }
             local.push_back({h.so_pos, mass, h.so_radius[0]});
         }
         FML::SumOverTasks(&truncated);
         FML::SumOverTasks(&nested);
+        FML::SumOverTasks(&unresolved);
         FML::SumOverTasks(&below_cut);
+        FML::SumOverTasks(&too_large);
         const auto hosts = all_hosts(local);
         std::vector<HaloDisplacement> corrections;
         std::vector<double> concentrations;
@@ -165,7 +172,8 @@ namespace COLASOLVER {
                 << "\n# boxsize_mpch = " << box << "\n# particle_mass_msunh = " << mass_per_particle
                 << "\n# mean_density_msunh_per_mpch3 = " << background_mass_per_box_volume / (box * box * box)
                 << "\n# selected_host_count = " << hosts.size() << "\n# rejected_truncated = " << truncated
-                << "\n# rejected_nested = " << nested << "\n# rejected_below_cut = " << below_cut
+                << "\n# rejected_nested = " << nested << "\n# rejected_unresolved = " << unresolved
+                << "\n# rejected_below_cut = " << below_cut << "\n# rejected_support_over_half_box = " << too_large
                 << "\n# velocities = unchanged\n# halo_mass_definition = 200c\n"
                 << "# pofk_nmesh = " << params.pofk.nmesh << "\n# pofk_density_assignment_method = "
                 << params.pofk.density_assignment_method << "\n# pofk_interlacing = " << params.pofk.interlacing
@@ -216,6 +224,8 @@ namespace COLASOLVER {
         }
         if (FML::ThisTask == 0)
             std::cout << "Baryonification at z=" << redshift << ": " << hosts.size()
-                      << " hosts; rejected " << truncated << " truncated and " << nested << " nested halos\n";
+                      << " hosts; rejected " << truncated << " truncated, " << nested << " nested, " << unresolved
+                      << " with fewer than " << s.fof_min_particles << " particles in R200c and " << too_large
+                      << " whose support reaches half the box\n";
     }
 }
