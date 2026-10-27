@@ -32,6 +32,8 @@
 
 using namespace FML::FILEUTILS;
 
+const double * units_si_constant_address();
+
 int fails = 0;
 void check(bool ok, std::string what) {
     if (FML::ThisTask == 0)
@@ -273,12 +275,37 @@ void test_units() {
               rel(assigned.k_b, 1) < 1e-12,
           "Units: copy and assignment (did not compile), Planck units c = hbar = G = k_b = 1");
     ConstantsAndUnits pp("ParticlePhysics"), cosmo("Cosmology"), si;
+    namespace SI = FML::UTILS::SI;
+    check(si.c == SI::c and si.G == SI::G and si.k_b == SI::k_b and si.eV == SI::eV and
+              si.m_e == SI::m_e and si.sigma_T == SI::sigma_T and si.Mpc == SI::Mpc and si.alpha == SI::alpha and
+              si.epsilon_0 == SI::epsilon_0 and si.xhi0 == SI::xhi0 and si.xhi1 == SI::xhi1,
+          "Units: SI instances use the shared physical and atomic constants");
+    check(si.yr == 31557600.0 and si.Gyr == 1e9 * SI::yr,
+          "Units: shared Julian year is exactly 365.25 days");
+#if (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L
+    check(units_si_constant_address() == &SI::c,
+          "Units: inline SI constants have one address across translation units");
+#endif
     check(rel(pp.eV, 1) < 1e-12 and rel(pp.c, 1) < 1e-12 and rel(pp.hbar, 1) < 1e-12 and rel(cosmo.Mpc, 1) < 1e-12 and
               rel(cosmo.H0_over_h, 1) < 1e-12 and rel(cosmo.Msun, 1) < 1e-12 and rel(si.km, 1000) < 1e-15,
           "Units: particle physics (eV = c = hbar = 1), cosmology (Mpc = H0/h = Msun = 1), SI");
     ConstantsAndUnits km(1e-3, 1.0, 1.0, 1.0, 1.0);
     check(rel(km.length_to_SI(2.0), 2000.0) < 1e-15 and rel(km.c, 2.99792458e5) < 1e-15,
           "Units: user units with km as the length unit (m = 1e-3): 2 units = 2000 m, c = 299792.458");
+    ConstantsAndUnits custom(0.002, 7.0, 11.0, 13.0, 17.0);
+    bool consistent = true;
+    for (const auto & u : {si, planck, pp, cosmo, custom}) {
+        consistent = consistent and rel(u.k_b * u.K / u.J, SI::k_b) < 1e-12 and
+            rel(u.G * u.kg * u.s * u.s / (u.m * u.m * u.m), SI::G) < 1e-12 and
+            rel(u.hbar / (u.J * u.s), SI::hbar) < 1e-12 and
+            rel(u.k_e * u.Co * u.Co / (u.N * u.m * u.m), SI::k_e) < 1e-12 and
+            rel(u.sigma_T / (u.m * u.m), SI::sigma_T) < 1e-12 and
+            rel(u.lambda_2s1s * u.s, SI::lambda_2s1s) < 1e-12 and
+            rel(u.epsilon_0 / u.J, SI::epsilon_0) < 1e-12 and
+            rel(u.H0_over_h * u.s, SI::H0_over_h) < 1e-12 and
+            rel(u.yr / u.s, SI::yr) < 1e-12 and u.alpha == SI::alpha;
+    }
+    check(consistent, "Units: shared constants round-trip through every built-in system and nontrivial custom units");
 }
 
 int main() {

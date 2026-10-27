@@ -119,7 +119,7 @@ test_emulator: test_emulator.o test_emulator_odr.o Global.o
 	$(LINK_EXE)
 
 # Small utilities: FileUtils, RandomGenerator, FoFBinning, MemoryLogging, Timings, ParameterMap
-test_utils: test_utils.o Global.o FileUtils.o ParameterMap.o
+test_utils: test_utils.o test_units_odr.o Global.o FileUtils.o ParameterMap.o
 	$(LINK_EXE)
 
 # Particle <-> grid interpolation

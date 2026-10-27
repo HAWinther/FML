@@ -16,28 +16,60 @@ namespace FML {
 namespace FML {
     namespace UTILS {
 
+        // Shared SI constants. Compile-time values are independent of ConstantsAndUnits instances.
+        // The cosmology solver keeps its Constants namespace as an alias to this namespace.
+        // Retain C++14 support for this standalone header; C++17 gives constants one address across TUs.
+#if (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L
+#define FML_UNITS_INLINE inline
+#else
+#define FML_UNITS_INLINE
+#endif
+        namespace SI {
+            FML_UNITS_INLINE constexpr double m = 1.0;
+            FML_UNITS_INLINE constexpr double s = 1.0;
+            FML_UNITS_INLINE constexpr double kg = 1.0;
+            FML_UNITS_INLINE constexpr double K = 1.0;
+            FML_UNITS_INLINE constexpr double Co = 1.0;
+            FML_UNITS_INLINE constexpr double mm = 1e-3 * m;
+            FML_UNITS_INLINE constexpr double cm = 1e-2 * m;
+            FML_UNITS_INLINE constexpr double km = 1e3 * m;
+            FML_UNITS_INLINE constexpr double N = kg * m / (s * s);
+            FML_UNITS_INLINE constexpr double J = 1.0;
+            FML_UNITS_INLINE constexpr double W = J / s;
+            FML_UNITS_INLINE constexpr double eV = 1.602176634e-19 * J;
+            FML_UNITS_INLINE constexpr double MeV = 1e6 * eV;
+            FML_UNITS_INLINE constexpr double pc = 3.08567758149e16 * m;
+            FML_UNITS_INLINE constexpr double kpc = 1e3 * pc;
+            FML_UNITS_INLINE constexpr double Mpc = 1e6 * pc;
+            FML_UNITS_INLINE constexpr double Gpc = 1e3 * Mpc;
+            FML_UNITS_INLINE constexpr double Msun = 1.98847e30 * kg;
+            FML_UNITS_INLINE constexpr double yr = 365.25 * 24.0 * 3600.0 * s; // Julian year
+            FML_UNITS_INLINE constexpr double Gyr = 1e9 * yr;
+            FML_UNITS_INLINE constexpr double velocity = m / s;
+            FML_UNITS_INLINE constexpr double density = kg / (m * m * m);
+
+            // Fundamental and atomic constants. Values preserve the cosmology solver's SI table.
+            FML_UNITS_INLINE constexpr double c = 2.99792458e8;
+            FML_UNITS_INLINE constexpr double G = 6.67430e-11;
+            FML_UNITS_INLINE constexpr double k_b = 1.380649e-23;
+            FML_UNITS_INLINE constexpr double k_e = 8.9875517923e9;
+            FML_UNITS_INLINE constexpr double hbar = 1.054571817e-34;
+            FML_UNITS_INLINE constexpr double m_e = 9.1093837015e-31;
+            FML_UNITS_INLINE constexpr double m_H = 1.6735575e-27;
+            FML_UNITS_INLINE constexpr double sigma_T = 6.6524587321e-29;
+            FML_UNITS_INLINE constexpr double alpha = 7.2973525693e-3;
+            FML_UNITS_INLINE constexpr double lambda_2s1s = 8.227;
+            FML_UNITS_INLINE constexpr double epsilon_0 = 13.605693122994 * eV;
+            FML_UNITS_INLINE constexpr double xhi0 = 24.587387 * eV;
+            FML_UNITS_INLINE constexpr double xhi1 = 4.0 * epsilon_0;
+            FML_UNITS_INLINE constexpr double H0_over_h = 100.0 * km / s / Mpc;
+        }
+#undef FML_UNITS_INLINE
+
         /// Class for dealing with physical units. Contains physical constants and conversion factors from SI to
         /// whatever units you want.
         class ConstantsAndUnits {
           private:
-            // Constants in SI units (do not change)
-            // These are used to set the units below
-            double G_SI = 6.67430e-11;
-            double c_SI = 2.99792458e8;
-            double k_b_SI = 1.38064852e-23;
-            double k_e_SI = 8.9875517923e9;
-            double hbar_SI = 1.054571817e-34;
-            double eV_SI = 1.60217653e-19;
-            double m_e_SI = 9.10938356e-31;
-            double m_H_SI = 1.6735575e-27;
-            double Msun_SI = 1.98847e30;
-            double sigma_T_SI = 6.6524587158e-29;
-            double lambda_2s1s_SI = 8.227;
-            double epsilon_0_eV = 13.605693122994;
-            double xhi0_eV = 24.587387;
-            double xhi1_eV = 4.0 * epsilon_0_eV;
-            double pc_SI = 3.08567758e16;
-
             std::string description = "SI units";
 
             void throw_error(std::string errormessage) const {
@@ -67,6 +99,8 @@ namespace FML {
             // Physical constants set by the units
             /// Boltzmanns constant
             double k_b{0.0};
+            /// Fine-structure constant (dimensionless in every unit system)
+            double alpha{0.0};
             /// Coloumbs constant
             double k_e{0.0};
             /// The gravitational constant
@@ -174,23 +208,23 @@ namespace FML {
                     Co = 1.0;
                 } else if (type == "Planck") {
                     description = "Planck Units (c=hbar=G=kb=1)";
-                    m = sqrt((c_SI * c_SI * c_SI) / (hbar_SI * G_SI));
-                    s = c_SI * m;
-                    kg = G_SI * (m * m * m) / (s * s);
-                    K = k_b_SI * kg * (m * m) / (s * s);
-                    Co = sqrt(k_e_SI * kg * (m * m * m) / (s * s));
+                    m = sqrt((SI::c * SI::c * SI::c) / (SI::hbar * SI::G));
+                    s = SI::c * m;
+                    kg = SI::G * (m * m * m) / (s * s);
+                    K = SI::k_b * kg * (m * m) / (s * s);
+                    Co = sqrt(SI::k_e * kg * (m * m * m) / (s * s));
                 } else if (type == "ParticlePhysics") {
                     description = "Particle Physics Units (c=hbar=kb=1) with eV = 1";
-                    kg = (c_SI * c_SI) / eV_SI;
-                    s = (c_SI * c_SI) / (kg * hbar_SI);
-                    m = s / c_SI;
-                    K = k_b_SI / (s * s) * m * m * kg;
+                    kg = (SI::c * SI::c) / SI::eV;
+                    s = (SI::c * SI::c) / (kg * SI::hbar);
+                    m = s / SI::c;
+                    K = SI::k_b / (s * s) * m * m * kg;
                     Co = 1.0;
                 } else if (type == "Cosmology") {
                     description = "Cosmo Units (Mpc, Hubble time, Solar-masses, Kelvin)";
-                    m = 1.0 / (1e6 * pc_SI); // Megaparsecs
-                    s = 1e5 / (1e6 * pc_SI); // Hubble-time 1/(H0/h)
-                    kg = 1.0 / Msun_SI;      // Solar masses
+                    m = 1.0 / (1e6 * SI::pc); // Megaparsecs
+                    s = 1e5 / (1e6 * SI::pc); // Hubble-time 1/(H0/h)
+                    kg = 1.0 / SI::Msun;      // Solar masses
                     K = 1.0;                 // Kelvin
                     Co = 1.0;                // Coulomb
                 } else {
@@ -200,37 +234,38 @@ namespace FML {
                 }
 
                 // Derived units
-                mm = 1e-3 * m;              // Millimeters when SI
-                cm = 1e-2 * m;              // Centimeters when SI
-                km = 1e3 * m;               // Kilometers when SI
-                N = kg * m / (s * s);       // Newton when SI
-                J = N * m;                  // Joule when SI
-                W = J / s;                  // Watt when SI
-                eV = eV_SI * J;             // Electronvolt when SI
-                MeV = eV * 1e6;             // Megaelectronvolt when SI
-                Mpc = 1e6 * pc_SI * m;      // Megaparsec when SI
-                kpc = 1e-3 * Mpc;           // kiloparsec when SI
-                Gpc = 1e3 * Mpc;            // Gigaparsecs when SI
-                Msun = Msun_SI * kg;        // Mass of sun
-                velocity = m / s;           // Velocity
-                density = kg / (m * m * m); // Density
+                mm = 1e-3 * m;                       // Millimeters when SI
+                cm = 1e-2 * m;                       // Centimeters when SI
+                km = 1e3 * m;                        // Kilometers when SI
+                N = kg * m / (s * s);                // Newton when SI
+                J = N * m;                           // Joule when SI
+                W = J / s;                           // Watt when SI
+                eV = SI::eV * J;                     // Electronvolt when SI
+                MeV = eV * 1e6;                      // Megaelectronvolt when SI
+                Mpc = 1e6 * SI::pc * m;              // Megaparsec when SI
+                kpc = 1e-3 * Mpc;                    // kiloparsec when SI
+                Gpc = 1e3 * Mpc;                     // Gigaparsecs when SI
+                Msun = SI::Msun * kg;                // Mass of sun
+                velocity = m / s;                    // Velocity
+                density = kg / (m * m * m);          // Density
 
                 // The physical constants we use in the code in the desired units
-                k_b = k_b_SI * J / K;                 // Bolzmanns constant
-                k_e = k_e_SI * N * m * m / (Co * Co); // Columbs constant
-                G = G_SI * N * m * m / (kg * kg);     // Gravitational constant
-                hbar = hbar_SI * J * s;               // Reduced Plancks constant
-                c = c_SI * m / s;                     // Speed of light
-                m_e = m_e_SI * kg;                    // Mass of electron
-                m_H = m_H_SI * kg;                    // Mass of hydrogen atom
-                sigma_T = sigma_T_SI * m * m;         // Thomas scattering cross-section
-                lambda_2s1s = lambda_2s1s_SI / s;     // Transition rate 2s->1s for hydrogen
-                epsilon_0 = epsilon_0_eV * eV;        // Ionization energy for the ground state of hydrogen
-                H0_over_h = 100 * km / s / Mpc;       // Hubble constant without little 'h', i.e. H0 / h
-                xhi0 = xhi0_eV * eV;                  // Ionization energy for neutral Helium
-                xhi1 = xhi1_eV * eV;                  // Ionization energy for singly ionized Helium
-                yr = 60. * 60. * 24 * 365.24 * s;     // One year
-                Gyr = 1e9 * yr;                       // Gigayear
+                alpha = SI::alpha;
+                k_b = SI::k_b * J / K;                              // Bolzmanns constant
+                k_e = SI::k_e * N * m * m / (Co * Co);              // Columbs constant
+                G = SI::G * N * m * m / (kg * kg);                  // Gravitational constant
+                hbar = SI::hbar * J * s;                            // Reduced Plancks constant
+                c = SI::c * m / s;                                  // Speed of light
+                m_e = SI::m_e * kg;                                 // Mass of electron
+                m_H = SI::m_H * kg;                                 // Mass of hydrogen atom
+                sigma_T = SI::sigma_T * m * m;                      // Thomson scattering cross-section
+                lambda_2s1s = SI::lambda_2s1s / s;                  // Transition rate 2s->1s for hydrogen
+                epsilon_0 = SI::epsilon_0 * J;                      // Ionization energy for the ground state of hydrogen
+                H0_over_h = 100 * km / s / Mpc;                     // Hubble constant without little 'h', i.e. H0 / h
+                xhi0 = SI::xhi0 * J;                                // Ionization energy for neutral Helium
+                xhi1 = SI::xhi1 * J;                                // Ionization energy for singly ionized Helium
+                yr = SI::yr * s;                                    // One year
+                Gyr = 1e9 * yr;                                     // Gigayear
             }
 
             /// Convert a length in your unit to SI unit
