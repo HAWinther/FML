@@ -29,6 +29,29 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   the outputs before and after are identical. The 1-ulp snapshot difference in round 55 was this too, not the exact
   restore of the positions.
 
+### New Einstein-Boltzmann solver, MCMC samplers and cosmology fitting
+- `Cosmology/`: a new Einstein–Boltzmann solver (namespace `FML::COSMOLOGY`), in the folders `Background`, `Models`, `Recombination`, `Perturbations`, `Spectra` and `EinsteinBoltzmannSolver` (the program
+  `./cmb`, parameter files, tests, report). RECFAST recombination, massive neutrinos, curvature, lensing, tensor and
+  isocurvature modes, Halofit, two-point functions and a library of dark-energy and modified-gravity models; validated against
+  CLASS module by module (`Cosmology/EinsteinBoltzmannSolver/README.md`). It uses FML's `Spline` and `ODESolver`.
+- `Cosmology/Legacy/`: the previous teaching solver (`BackgroundCosmology`, `RecombinationHistory`,
+  `LinearPerturbations`, `LinearPowerSpectra`, `EinsteinBoltzmannSolver`), unchanged apart from the paths, until it
+  is removed.
+- `MCMC/` (namespace `FML::MCMC`): `Posterior`, `Sampler` (adaptive Metropolis–Hastings, parallel chains over
+  OpenMP/MPI, fast/slow parameters, checkpoints), `Minimizer` (best fit, profiles, Hessian); example and tests.
+- `Spline`: move constructor and assignment (no copy of the GSL data), `GSLSpline::integral(a, b)`, `UniformSpline`
+  (cubic spline on a uniform grid with O(1) evaluation), and the per-thread accelerators on their own cache lines
+  (they were next to each other in memory, and threads writing them slowed each other down: 2D evaluation in an
+  OpenMP loop was ~20% slower with 2 threads than without accelerators; now about as fast or faster). The define
+  `SPLINE_THROW_ON_ERROR` makes errors exceptions also with MPI.
+- `ODESolver`: `solve` takes const references (temporaries and lambdas can be passed),
+  `set_finite_difference_jacobian(true)` lets the implicit steppers run without a jacobian (forward finite
+  differences), the error message of a failed step gives x and the GSL error, and the define
+  `ODESOLVER_THROW_ON_ERROR` makes errors exceptions also with MPI. Tests in `tests/test_numcore.cpp`.
+- `CosmologyFitting/` (namespace `FML::COSMOLOGY::FITTING`): theory and likelihoods (SN, BAO, Planck distance priors,
+  BBN, Planck 2018 plik_lite and lensing, mock CMB), `SampledParameterMap`, the program `./mcmc`, parameter files and
+  data.
+
 ### FFTWGrid, MPIGrid, MPIParticles, particle helpers, LPT, RandomFields, NBody, PGD fixes
 - `FFTWGrid`: with a planner flag other than FFTW_ESTIMATE the first transform used freed memory (the plan creation
   replaced the buffer; segfault with 2 tasks); in 2D the in-place MPI FFT overwrote the right extra slices (FFTW uses

@@ -1,0 +1,112 @@
+\documentclass[aps,prd,twocolumn,nofootinbib,superscriptaddress,floatfix]{revtex4-2}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{bm}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!60!black,citecolor=blue!60!black,urlcolor=blue!60!black]{hyperref}
+
+\graphicspath{{figures/}}
+
+% Notation
+\newcommand{\Hp}{\mathcal{H}}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\Mpc}{\,\mathrm{Mpc}}
+\newcommand{\hMpc}{\,h\,\mathrm{Mpc}^{-1}}
+\newcommand{\Om}{\Omega}
+\newcommand{\gt}{\tilde g}
+\newcommand{\muK}{\,\mu\mathrm{K}^2}
+
+\begin{document}
+
+\title{A line-of-sight Einstein--Boltzmann solver for the CMB and the matter power spectrum}
+
+\author{H. A. Winther}
+\email{h.a.winther@astro.uio.no}
+\affiliation{Institute of Theoretical Astrophysics, University of Oslo, P.O.~Box 1029 Blindern, N-0315 Oslo, Norway}
+
+\date{\today}
+
+\begin{abstract}
+We describe a new C++ Einstein--Boltzmann code that computes the angular power spectra of the cosmic microwave
+background (CMB) temperature and $E$-mode polarization, and the linear matter power spectrum, for a flat
+$\Lambda$CDM model. The calculation is split into four modules: the background expansion, the recombination
+history, the linear perturbations, and the line-of-sight integration. The code includes photon polarization, massless
+neutrinos, helium and a tanh model of reionization. For the fiducial model ($h=0.67$, $\Om_{b}=0.05$,
+$\Om_{\rm CDM}=0.267$) we find radiation--matter equality at $z=3400$, an age of $13.85$\,Gyr and last scattering
+at $z_*=1085$ (with reionization; $1090$ without) with sound horizon $r_s(z_*)=144.9\Mpc$. The first acoustic peak
+lies at $\ell=221$ and $P(k)$ peaks at $k=0.0167\hMpc$. Every module agrees with the CLASS code run with the same
+physics, the TT spectrum to better than $1.1\%$ for $2\le\ell\le2000$ and $P(k)$ to $0.11\%$. The unlensed TT spectrum
+matches the shape of the Planck 2018 data, and the residuals at $\ell\gtrsim 1000$ follow the pattern expected from
+gravitational lensing. Including lensing with the full-sky correlation-function method lowers the $\chi^2$ against
+the 83 binned Planck high-$\ell$ points from 781 to 220; the lensed TT agrees with CLASS to $10^{-3}$ for $\ell\le2000$. We also show that supernova distances alone prefer
+$h\simeq0.70$ when the density parameters are held fixed. Finally, we extend the code to open and closed universes
+using hyperspherical Bessel functions; for $|\Om_K|\le0.2$ the spectra agree with CLASS as well as in the flat case.
+We also add a massive neutrino species; the suppression of the matter power spectrum (16\% at $k=0.5\hMpc$ for
+$m_\nu=0.3$\,eV) and of the lensing potential agree with CLASS to $5\times10^{-4}$. Finally, we compute the real-space two-point
+functions: the CMB angular correlation functions, the matter correlation function with its BAO peak at
+$100\,h^{-1}\Mpc$, and the angular power spectrum and correlation function of the matter projected over a redshift
+distribution, which agree with CLASS to $2\times10^{-3}$. Replacing the Peebles recombination model by RECFAST
+reduces the rms differences from CLASS to 0.048\% in TT and
+0.32\% in EE for $30\le\ell\le1000$. Lastly, we describe a library of eleven
+dark-energy and modified-gravity models: quintessence, coupled quintessence, dark scattering, early dark energy,
+interacting dark energy, $\mu$--$\Sigma$, DGP, Brans--Dicke, $f(R)$, the cubic Galileon, and Horndeski gravity in the
+$\alpha$ basis. They are validated with constraint equations, independent growth calculations and reconstructions of
+one theory from another, and against CLASS, hi\_class and CLASS\_EDE where these apply.
+\end{abstract}
+
+\maketitle
+
+% ===========================================================================
+\section{Introduction}
+% ===========================================================================
+
+The anisotropies of the CMB and the clustering of matter on large scales are the two cleanest probes of the
+early Universe. Both are set by linear physics. Small primordial curvature fluctuations, generated during inflation,
+evolve under gravity and under photon--baryon interactions. The result is a set of transfer functions that map the
+primordial spectrum onto the observed spectra. Computing these transfer functions is the job of an
+Einstein--Boltzmann solver. Public codes such as CMBFAST~\cite{Seljak1996}, CAMB~\cite{Lewis2000} and
+CLASS~\cite{Lesgourgues2011,Blas2011} do this to sub-percent precision and are the basis of all modern parameter
+estimates, including those of Planck~\cite{Planck2018params}.
+
+This paper describes the four milestones of writing such a code from scratch. The structure follows the physics:
+\begin{enumerate}
+\item \textbf{Background cosmology} (Sec.~\ref{sec:m1}): the expansion history $H(x)$, conformal time and distances.
+      We test it against supernova data.
+\item \textbf{Recombination history} (Sec.~\ref{sec:m2}): the free electron fraction $X_e$, the optical depth $\tau$
+      and the visibility function $\gt$, which decide when and where CMB photons last scatter.
+\item \textbf{Perturbations} (Sec.~\ref{sec:m3}): the linearized Einstein and Boltzmann equations for dark matter,
+      baryons, photons (temperature and polarization) and massless neutrinos, solved for each Fourier mode $k$.
+\item \textbf{Power spectra} (Sec.~\ref{sec:m4}): the line-of-sight integration~\cite{Seljak1996} that gives the
+      photon transfer functions $\Theta_\ell(k)$ and the angular spectra $C_\ell^{TT}$, $C_\ell^{EE}$, $C_\ell^{TE}$,
+      together with the matter power spectrum $P(k)$.
+\end{enumerate}
+Each module is a separate C++ class that takes the previous one as input. Each section below gives the theory, the
+implementation and tests, and the results for one milestone. Sec.~\ref{sec:validation} compares all modules with CLASS,
+and Sec.~\ref{sec:conclusions} concludes. The course project also includes Markov chain Monte Carlo (MCMC) fits of
+supernova data; as instructed, these are omitted here.
+
+Throughout we use the time variable $x=\ln a$, the conformal Hubble factor $\Hp=aH$, and primes for derivatives with
+respect to $x$. The perturbations use the conformal Newtonian gauge and the conventions of
+Callin~\cite{Callin2006} and Dodelson~\cite{Dodelson2003}. Internally the code works in SI units.
+
+The fiducial model is $h=0.67$, $\Om_{b0}=0.05$, $\Om_{\rm CDM0}=0.267$, $\Om_{K0}=0$, $T_{\rm CMB}=2.7255$\,K,
+$N_{\rm eff}=3.046$, $Y_p=0.245$, reionization at $z_{\rm re}=8$ ($\Delta z=0.5$) and helium reionization at
+$z=3.5$ ($\Delta z=0.5$), with primordial amplitude $A_s=2.1\times10^{-9}$ and tilt $n_s=0.965$ at
+$k_{\rm pivot}=0.05\Mpc^{-1}$. $\Om_{\Lambda0}$ is fixed by flatness.
+
+\input{sections/m1}
+\input{sections/m2}
+\input{sections/m3}
+\input{sections/m4}
+\input{sections/validation}
+\input{sections/curvature}
+\input{sections/neutrinos}
+\input{sections/twopoint}
+\input{sections/recfast}
+\input{sections/models}
+\input{sections/conclusions}
+
+\input{sections/bibliography}
+
+\end{document}

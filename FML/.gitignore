@@ -11,10 +11,23 @@ __pycache__/
 CAMBUtils/example/cambreader
 COLASolver/nbody
 ComputePowerSpectra/example/powspec
-Cosmology/BackgroundCosmology/example/cosmo
-Cosmology/EinsteinBoltzmannSolver/CMFB
-Cosmology/LinearPerturbations/example/pert
-Cosmology/RecombinationHistory/example/rec
+Cosmology/Legacy/BackgroundCosmology/example/cosmo
+Cosmology/Legacy/EinsteinBoltzmannSolver/CMFB
+Cosmology/Legacy/LinearPerturbations/example/pert
+Cosmology/Legacy/RecombinationHistory/example/rec
+MCMC/example/mcmc
+MCMC/example/chains/*
+!MCMC/example/chains/.gitkeep
+Cosmology/EinsteinBoltzmannSolver/cmb
+Cosmology/EinsteinBoltzmannSolver/milestones
+Cosmology/EinsteinBoltzmannSolver/benchmark
+Cosmology/EinsteinBoltzmannSolver/tests/test_*
+!Cosmology/EinsteinBoltzmannSolver/tests/test_*.cpp
+CosmologyFitting/mcmc
+CosmologyFitting/tests/test_*
+!CosmologyFitting/tests/test_*.cpp
+MCMC/tests/test_*
+!MCMC/tests/test_*.cpp
 Emulator/example/ee2
 FFTLog/example/fftlog
 FFTWGrid/example/fftwgrid
@@ -67,6 +80,22 @@ GadgetUtils/example/testhdf5
 
 # Output written by examples and tests
 GadgetUtils/example/output_testhdf5/
+Cosmology/EinsteinBoltzmannSolver/data/*
+!Cosmology/EinsteinBoltzmannSolver/data/.gitkeep
+CosmologyFitting/data/*
+!CosmologyFitting/data/.gitkeep
+MCMC/tests/data/
+# MCMC chains (the summaries and plots are kept)
+CosmologyFitting/chains/*
+!CosmologyFitting/chains/*.summary.txt
+!CosmologyFitting/chains/*.png
+# Large supernova data (CosmologyFitting/python/fetch_sn_data.py); Union3 is kept
+CosmologyFitting/external/sn/PantheonPlus/
+CosmologyFitting/external/sn/DESY5/
+# LaTeX by-products of the solver's report
+Cosmology/EinsteinBoltzmannSolver/report/*.aux
+Cosmology/EinsteinBoltzmannSolver/report/*.out
+Cosmology/EinsteinBoltzmannSolver/report/*Notes.bib
 
 # Machine specific build settings
 Makefile.local

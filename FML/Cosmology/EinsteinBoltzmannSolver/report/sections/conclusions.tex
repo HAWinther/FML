@@ -1,0 +1,60 @@
+% ===========================================================================
+\section{Conclusions}\label{sec:conclusions}
+% ===========================================================================
+
+We have written a modular Einstein--Boltzmann solver and used it to compute the CMB temperature and polarization
+spectra and the matter power spectrum for a flat $\Lambda$CDM model. The four milestones gave:
+\begin{enumerate}
+\item The background. Radiation--matter equality is at $z=3400$ and acceleration starts at $z=0.63$, before
+      matter--$\Lambda$ equality at $z=0.29$, because the negative pressure of $\Lambda$ counts twice in the
+      acceleration equation. The Universe is $13.85$\,Gyr old, older than a matter-only universe could be. Supernova
+      distances require an accelerating expansion ($\chi^2=31$ versus 317 for a matter-only universe) and prefer
+      $h\approx0.70$ when the density parameters are held fixed.
+\item The recombination history. The huge number of photons per baryon delays recombination until
+      $k_BT\approx\epsilon_0/50$. Photons decouple at $z=1090$, when the Universe is $372\,000$ years old (or at
+      $z_*=1085$ including reionization). The baryons, outnumbered by the photons, follow at $z_d=1060$, with sound
+      horizon $147\Mpc$. Saha equilibrium ignores the $n=2$ bottleneck and would predict decoupling $\sim200$ units of
+      redshift too early and no freeze-out.
+\item The perturbations show the main physics of structure formation: acoustic oscillations of the photon--baryon
+      fluid, driven by decaying potentials and damped by photon diffusion; the stagnation of dark matter growth in the
+      radiation era; baryons falling into dark matter wells after decoupling; the decay of the potentials in the
+      $\Lambda$ era; and the brief generation of polarization during decoupling.
+\item The spectra reproduce the Planck TT, EE and TE data and the SDSS galaxy power spectrum without any fitting. The
+      CMB peaks are the acoustic oscillations frozen at decoupling and projected over $\chi_*$, with spacing set by
+      $\ell_A=\pi\chi_*/r_s=303$. Their heights encode the baryon and matter densities, and the turnover of $P(k)$ at
+      $k_{\rm eq}$ is the memory of radiation--matter equality. The oscillating residuals of the unlensed TT spectrum are
+      explained by gravitational lensing: with our lensing module the $\chi^2$ against the 83 Planck high-$\ell$ bins
+      falls from 781 to 220, and the lensed spectra and the lensing B modes agree with CLASS.
+\end{enumerate}
+All modules agree with CLASS at the percent level or better. As an extension, the code also handles open and
+closed universes (Sec.~\ref{sec:curvature}), with hyperspherical Bessel functions and the discrete modes of a closed
+space; for $-0.2\le\Om_K\le0.2$ it agrees with CLASS as well as in the flat case, and the first acoustic peak
+follows the geometric prediction $\ell_{\rm peak}\simeq0.73\,\pi r(\chi_*)/r_s$. With a massive neutrino species
+(Sec.~\ref{sec:neutrinos}) the code reproduces the free-streaming suppression of the matter power spectrum,
+$\approx-7f_\nu$ on small scales, and of the lensing potential, with the effect of the mass agreeing with CLASS to
+$5\times10^{-4}$ in $P(k)$ and $C_\ell^{TT}$.
+The two-point functions of Sec.~\ref{sec:twopoint} show the acoustic physics in real space: a shoulder near $1^\circ$
+in the CMB temperature correlation, alternating radial and tangential polarization around hot spots, and the BAO
+shell at $r_d$ in the matter correlation function and, projected, at $r_d/\chi$ in $w(\theta)$.
+
+The recombination model was the largest remaining physical approximation. With RECFAST (Sec.~\ref{sec:recfast}),
+$X_e$ agrees with CLASS's RECFAST to $3.3\times10^{-4}$, and the TT and EE spectra agree to a few
+$10^{-3}$ (rms) up to $\ell=2000$, compared with 1--3\% for the Peebles model. The model library of
+Sec.~\ref{sec:models} extends the code to eleven dark-energy and modified-gravity models. Each is validated against
+its $\Lambda$CDM limit, the unused constraint equations and independent calculations, and against CLASS, hi\_class
+and CLASS\_EDE where these apply. Natural next steps are:
+\begin{itemize}
+\item Nonlinear corrections to $P(k)$ (halofit or HMcode) for weak-lensing and galaxy-clustering predictions, and
+      their extension to modified gravity.
+\item Horndeski gravity with $\alpha_T\neq0$, and models built directly from the Horndeski functions $G_i(\phi,X)$.
+\item Several massive neutrino species with different masses (the code has one), and $B$-mode polarization from
+      tensor modes.
+\item MCMC parameter estimation with the full code; the MCMC fits of the course project are omitted from this report
+      as instructed.
+\end{itemize}
+The code takes about one minute to run on a laptop, which is fast enough for such exploratory work.
+
+\begin{acknowledgments}
+We thank the authors of CLASS for making their code public, which was invaluable for validation. This work used the
+GNU Scientific Library, NumPy, SciPy and Matplotlib.
+\end{acknowledgments}

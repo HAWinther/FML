@@ -1,166 +1,179 @@
-#include <FML/Cosmology/BackgroundCosmology/BackgroundCosmology.h>
-#include <FML/Cosmology/LinearPerturbations/Perturbations.h>
-#include <FML/Cosmology/LinearPowerSpectra/PowerSpectrum.h>
-#include <FML/Cosmology/RecombinationHistory/RecombinationHistory.h>
-#include <FML/Global/Global.h>
+// =============================================================================
+// Einstein-Boltzmann solver: main program
+//
+// Pipeline:
+//   1. BackgroundCosmology   - H(x), eta(x), t(x), distances
+//   2. RecombinationHistory  - X_e(x), tau(x), visibility function g(x)
+//   3. Perturbations         - Phi, Psi, delta, v, Theta_ell (x, k), source functions
+//   4. PowerSpectrum         - C_ell (lensed), P(k), two-point functions
+//
+// Usage:
+//   ./cmb [parameter file] [name=value ...]
+//   ./cmb --write-defaults params/default.ini      write a complete parameter file with all defaults
+// Every cosmological, precision and output parameter can be set in the file or on the command line
+// (see ParameterFile.h and params/default.ini). Examples:
+//   ./cmb                                  fiducial model, outputs in data/
+//   ./cmb params/planck2018.ini lensing=true
+//   ./cmb m_nu=0.06 OmegaK=0.01 output_dir=data/test
+// The parameters actually used are written to <output_dir>/params_used.ini.
+// =============================================================================
 
-void read_parameters(FML::UTILS::ParameterMap & p);
+#include <FML/Cosmology/Background/BackgroundCosmology.h>
+#include <FML/Cosmology/Background/CosmologyParameters.h>
+#include <FML/Cosmology/Perturbations/Isocurvature.h>
+#include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
+#include <FML/Cosmology/Perturbations/Perturbations.h>
+#include <FML/Cosmology/Spectra/PowerSpectrum.h>
+#include <FML/Cosmology/Recombination/RecombinationHistory.h>
+#include <FML/Cosmology/Perturbations/Tensors.h>
+#include <FML/Cosmology/Common.h>
 
-int main() {
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <filesystem>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
 
-    auto & Units = FML::COSMOLOGY::Constants;
+using namespace FML::COSMOLOGY;
 
-    FML::COSMOLOGY::Constants = FML::UTILS::ConstantsAndUnits("SI");
-
-    // Time the run
-    FML::UTILS::Timings timer;
-    timer.StartTiming("CMFB");
-
-    //===================================================================
-    // 0) Set up parameter container and read in parameters
-    // (right now set in the method at the end of main)
-    //===================================================================
-    FML::UTILS::ParameterMap p;
-    read_parameters(p);
-
-    //===================================================================
-    // 1) Solve the background cosmology
-    //===================================================================
-    auto lcdm = std::make_shared<FML::COSMOLOGY::BackgroundCosmology>(p);
-    lcdm->solve();
-    lcdm->info();
-
-    // Output background quantities
-    if (FML::ThisTask == 0) {
-        lcdm->output("output/background.txt");
-    }
-
-    //===================================================================
-    // 2) Solve the recombination history (Saha+Peebles or use recfast)
-    //===================================================================
-    auto rec = std::make_shared<FML::COSMOLOGY::RecombinationHistory>(lcdm, p);
-    rec->solve();
-    rec->info();
-
-    // Output recombination quantities
-    if (FML::ThisTask == 0) {
-        rec->output("output/recombination.txt");
-    }
-
-    //===================================================================
-    // 3) Integrate the perturbations. Splines up transfer and source functions
-    //===================================================================
-    auto pert = std::make_shared<FML::COSMOLOGY::Perturbations>(lcdm, rec, p);
-    pert->solve();
-    pert->info();
-
-    // Output the newtonian gauge perturbations for a given value of k
-    if (FML::ThisTask == 0) {
-        const double k = 0.01 / Units.Mpc;
-        pert->output_perturbations(k, "output/perturbations.txt");
-    }
-
-    // Output transfer functions at z = 0.0
-    if (FML::ThisTask == 0) {
-        const double z = 0.0;
-        pert->output_transfer(std::log(1.0 / (1.0 + z)), "output/transfer.txt");
-    }
-
-    //===================================================================
-    // 4) Compute power-spectra and correlation functions
-    //===================================================================
-    auto power = std::make_shared<FML::COSMOLOGY::PowerSpectrum>(lcdm, rec, pert, p);
-    power->solve();
-    power->info();
-
-    // Output Cells (tons of other things we can output also)
-    if (FML::ThisTask == 0) {
-        power->output_angular_power_spectra("output/cell.txt");
-    }
-
-    // Output matter power-spectrum at z = 0.0
-    if (FML::ThisTask == 0) {
-        const double z = 0.0;
-        power->output_matter_power_spectrum(std::log(1.0 / (1.0 + z)), "output/pofk.txt");
-    }
-
-    // Output correlation functions at z = 0.0 (requires FFTW to give any output and a high ketamax to be accurate)
-    if (FML::ThisTask == 0) {
-        const double z = 0.0;
-        power->output_correlation_function(std::log(1.0 / (1.0 + z)), "output/corr.txt");
-    }
-
-    // Print the timing
-    timer.EndTiming("CMFB");
-    if (FML::ThisTask == 0)
-        timer.PrintAllTimings();
+namespace {
+  std::string tag(double v) {
+    char s[32];
+    std::snprintf(s, sizeof(s), "%g", v);
+    return s;
+  }
 }
 
-// Set the parameters of the run
-void read_parameters(FML::UTILS::ParameterMap & p) {
-    auto && pmap = p.get_map();
+int run(int argc, char** argv);
 
-    // Some units needed below
-    auto & Units = FML::COSMOLOGY::Constants;
-    const double Kelvin = Units.K;
-    const double Mpc = Units.Mpc;
-
-    // Add cosmological parameters
-    pmap["CosmologyLabel"] = std::string("LCDM");
-    pmap["PhysicalParameters"] = true; // Supply physical parameters? i.e. Omegah^2 instead of Omega's
-    pmap["OmegaBh2"] = 0.0245;         // Baryon density OmegaB h^2
-    pmap["OmegaCDMh2"] = 0.10976;      // CDM density OmegaCDM h^2
-    pmap["OmegaKh2"] = 0.0;            // Curvature density OmegaK h^2
-    pmap["OmegaLambdah2"] = 0.35574;   // Dark energy density OmegaLambda h^2
-    pmap["TCMB"] = 2.7255 * Kelvin;    // CMB temperature in your temperature units
-    pmap["h"] = 0.7;                   // Hubble constant H0 / (100km/s/Mpc)
-    pmap["Neff"] = 3.046;              // Effective number of neutrinos
-
-    // Add recombination parameters
-    pmap["userecfast"] = false;         // Use recfast? (Must be compiled and linked to work)
-    pmap["RecFudgeFactor"] = 1.14;      // Fudgefactor in Peebles equation in Recfast
-    pmap["Yp"] = 0.24;                  // Helium abundance
-    pmap["reionization"] = true;        // Include reionization?
-    pmap["z_reion"] = 11.0;             // Reionization redshift
-    pmap["delta_z_reion"] = 0.5;        // Reionization width
-    pmap["helium_reionization"] = true; // Double Helium reionization?
-    pmap["z_helium_reion"] = 3.5;       // Double Helium reionization redshift
-    pmap["delta_z_helium_reion"] = 0.5; // Double Helium reionization width
-
-    // Add perturbation parameters
-    pmap["polarization"] = true;    // Include photon polarization?
-    pmap["neutrinos"] = true;       // Include massless neutrinos?
-    pmap["n_ell_theta"] = 12;       // Number of temperature multipoles to keep in the Boltzmann hierarchy
-    pmap["n_ell_nu"] = 12;          // Number of Nu multipoles to keep in the Boltzmann hierarchy
-    pmap["keta_min"] = 0.1;         // Range we integrate perturbations over
-    pmap["keta_max"] = 8000.0;      // Integrate k from k_min*eta0 -> k_max*eta0. Also used for power-spectrum
-    pmap["k_max_pert"] = 0.0 / Mpc; // If we want to much higher kmax for perturbations than Cell's use this
-                                    // (remove or use 0.0 to let keta_max determine the max)
-
-    // Add power spectrum parameters
-    pmap["A_s"] = 2e-9;                            // Primordial amplitude
-    pmap["n_s"] = 0.96;                            // Spectral indez
-    pmap["kpivot"] = 0.05 / Mpc;                   // Pivot scale
-    pmap["ell_max"] = 4000;                        // Maximum ell to compute Cell's for
-    pmap["CellOutputRedshift"] = 0.0;              // Redshift to compute Cell at
-    pmap["compute_temperature_cells"] = true;      // Compute Cell TT?
-    pmap["compute_polarization_cells"] = not true; // Compute Cell EE (and TE if both are true)?
-    pmap["compute_lensing_cells"] = not true;      // Compute Cell lensing potential?
-    pmap["compute_neutrino_cells"] = not true;     // Compute neutrino Cell?
-    pmap["compute_corr_function"] = true;          // Copmute correlation functions?
-
-    // Accuracy settings (NB: keta_max and n_ell's also impact the accuracy)
-    pmap["pert_integration_nk_per_logint"] = 25;  // Number of k's per logarithmic interval, 100 for high accuracy
-    pmap["pert_spline_all_ells"] = false;         // Spline all the Theta_ell(k,x) etc. multipoles otherwise just 0,1,2
-    pmap["pert_x_initial"] = -15.0;               // When to start the integration x = log(aini)
-    pmap["pert_delta_x"] = 0.05;                  // Sampling in x for splines of perturbation
-    pmap["bessel_nsamples_per_osc"] = 16;         // Sampling of bessel functions
-    pmap["los_integration_nsamples_per_osc"] = 8; // Sampling of line of sight integrals
-    pmap["los_integration_loga_nsamples"] = 300;  // Sampling of line of sight integrals
-    pmap["cell_nsamples_per_osc"] = 32;           // Sampling of Cell integration
-
-    // Show all that we have in the map
-    if (FML::ThisTask == 0)
-        p.info();
+int main(int argc, char** argv) {
+  try {
+    return run(argc, argv);
+  } catch (const std::exception& e) {
+    std::cerr << "Error: " << e.what() << "\n";
+    return 1;
+  }
 }
 
+int run(int argc, char** argv) {
+  using Constants::Mpc;
+  std::string file;
+  std::vector<std::string> overrides;
+  for (int i = 1; i < argc; i++) {
+    const std::string a = argv[i];
+    if (a == "--write-defaults" && i + 1 < argc) {
+      ParameterFile::write(RunSettings{}, argv[++i]);
+      std::cout << "Wrote " << argv[i] << "\n";
+      return 0;
+    } else if (a == "-h" || a == "--help") {
+      std::cout << "Usage: " << argv[0] << " [parameter file] [name=value ...]\n"
+                << "       " << argv[0] << " --write-defaults <file>\n";
+      return 0;
+    } else if (a.find('=') != std::string::npos) overrides.push_back(a);
+    else if (file.empty()) file = a;
+    else { std::cerr << "Unexpected argument '" << a << "' (see --help)\n"; return 1; }
+  }
+
+  RunSettings s;
+  try {
+    s = ParameterFile::read(file, overrides);
+  } catch (const std::exception& e) {
+    std::cerr << "Error in the parameters: " << e.what() << "\n";
+    return 1;
+  }
+  Utils::Timer timer("total");
+  const std::string out = s.output_dir + "/";
+  std::filesystem::create_directories(s.output_dir);
+  ParameterFile::write(s, out + "params_used.ini");
+  s.cosmo.print();
+  s.cosmo.write(out + "params.txt");
+
+  // Step 1: background
+  BackgroundCosmology cosmo(s.cosmo);
+  cosmo.solve(s.bg_x_start, s.bg_x_end, s.bg_n_points);
+  cosmo.info();
+  if (s.write_background) cosmo.output(out + "background.txt");
+
+  // Step 2: recombination and reionization
+  RecombinationHistory rec(cosmo, s.rec);
+  rec.solve();
+  rec.info();
+  if (s.write_recombination) rec.output(out + "recombination.txt");
+
+  // Step 3: perturbations (with isocurvature modes: one solution per independent component, Isocurvature.h;
+  // the perturbation outputs are those of the first, which contains the adiabatic mode)
+  const auto comp_opts = Isocurvature::components(s.cosmo, s.pert);
+  Perturbations pert(cosmo, rec, comp_opts[0]);
+  pert.solve();
+  pert.info();
+  std::vector<std::unique_ptr<Perturbations>> extra;
+  for (size_t i = 1; i < comp_opts.size(); i++) {
+    extra.push_back(std::make_unique<Perturbations>(cosmo, rec, comp_opts[i]));
+    extra.back()->solve();
+  }
+  if (!extra.empty()) std::cout << "Isocurvature: " << comp_opts.size() << " independent components\n";
+  const auto& ks = pert.get_k_array();
+  for (double k_Mpc : s.perturbation_k_output) {
+    double k = k_Mpc / Mpc;
+    const double K = cosmo.get_K();
+    if (K > 0.0) {  // closed universe: nearest physical mode k = sqrt(K (nu^2 - 1)), integer nu >= 3
+      const double nu = std::max(3.0, std::round(std::sqrt(k * k / K + 1.0)));
+      k = std::sqrt(K * (nu * nu - 1.0));
+    }
+    if (k < ks.front() * (1 - 1e-12) || k > ks.back() * (1 + 1e-12)) {
+      std::cerr << "Skipping perturbation output at k = " << k_Mpc << "/Mpc (outside the k-range)\n";
+      continue;
+    }
+    pert.output(k, out + "perturbations_k" + tag(k_Mpc) + ".txt");
+  }
+
+  // Step 4: power spectra and two-point functions (tensor modes when r > 0)
+  PowerSpectrum power(cosmo, rec, pert, s.ps);
+  for (const auto& e : extra) power.add_component(*e);
+  std::unique_ptr<Tensors> tensors;
+  if (s.compute_cells && s.cosmo.r > 0.0) {
+    tensors = std::make_unique<Tensors>(cosmo, rec, s.tensor);
+    tensors->solve();
+    tensors->info();
+    tensors->output_cells(out + "cells_tensor.txt");
+    power.set_tensors(tensors.get());
+  }
+  if (s.compute_cells) {
+    power.solve();
+    power.info();
+    power.output_cells(out + "cells.txt");
+    if (s.ps.lensing) power.output_cells_lensed(out + "cells_lensed.txt");
+    if (!s.transfer_ells.empty()) power.output_transfer(out + "transfer.txt", s.transfer_ells);
+    if (s.cmb_correlation) {  // unlensed (and lensed), and with the beam if one is given
+      std::vector<bool> lensed = {false};
+      if (s.ps.lensing) lensed.push_back(true);
+      for (bool l : lensed) {
+        const std::string base = out + "cmb_correlation_" + (l ? "lensed" : "unlensed");
+        power.output_cmb_correlation(base + ".txt", l);
+        if (s.cmb_correlation_beam_fwhm > 0.0)
+          power.output_cmb_correlation(base + "_beam" + tag(s.cmb_correlation_beam_fwhm) + "deg.txt", l,
+                                       s.cmb_correlation_beam_fwhm * M_PI / 180.0);
+      }
+    }
+  }
+  if (s.write_matter_power)
+    for (double z : s.matter_power_z)
+      power.output_matter_power(out + (z == 0.0 ? std::string("matter_power.txt") : "matter_power_z" + tag(z) + ".txt"),
+                                z == 0.0 ? 0.0 : -std::log1p(z));
+  if (s.matter_correlation) {
+    power.output_matter_correlation(out + "matter_correlation.txt", 0.0, s.matter_correlation_smoothing * Mpc / s.cosmo.h);
+    std::cout << "sigma_8 = " << power.get_sigma8() << " (linear)\n";
+  }
+  for (double z0 : s.angular_z)
+    power.output_angular_matter(out + "angular_cl_z" + tag(z0) + ".txt", out + "angular_w_z" + tag(z0) + ".txt",
+                                TwoPoint::RedshiftWindow::gaussian(z0, s.angular_sigma_z, s.angular_bias),
+                                s.angular_ell_max);
+
+  std::cout << "Outputs written to " << s.output_dir << "/\n";
+  timer.print();
+  return 0;
+}

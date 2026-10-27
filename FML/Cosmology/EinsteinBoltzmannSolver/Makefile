@@ -1,27 +1,36 @@
 #===================================================================
 # FML: Cosmology/EinsteinBoltzmannSolver
 #
+#   make             ./cmb (the solver: ./cmb params/planck2018.ini)
+#   make milestones  ./milestones (the data of the report), make benchmark  ./benchmark
+#   make test        build and run the tests in tests/ (from this folder)
+#
 # Compiler, library paths and how the options below are used are set
 # in ../../Makefile.config. Override for your machine in Makefile.local
-# there, or on the command line, e.g. make USE_MPI=false USE_DEBUG=true
+# there, or on the command line, e.g. make USE_OMP=false USE_DEBUG=true
 #===================================================================
 
-# FFTW is optional (needed for correlation functions via FFTLog)
 USE_OMP             ?= true
 USE_GSL             ?= true
 USE_MPI             ?= false
-USE_FFTW            ?= false
 
-TARGETS := CMFB
+TARGETS := cmb
 
 include ../../Makefile.config
+include Cosmology.mk
 
-FML_MODULES := Spline ODESolver ParameterMap Math Global FFTLog Cosmology/BackgroundCosmology Cosmology/RecombinationHistory Cosmology/LinearPerturbations Cosmology/LinearPowerSpectra
+FML_MODULES := $(COSMO_MODULES) $(COSMO_FML_MODULES)
+EXTRA_CLEAN := milestones benchmark
 
-CMFB_OBJS = Main.o BackgroundCosmology.o Spline.o ODESolver.o ParameterMap.o RecombinationHistory.o Math.o Perturbations.o PowerSpectrum.o Global.o
-ifeq ($(USE_FFTW),true)
-CMFB_OBJS += FFTLog.o
-endif
-
-CMFB: $(CMFB_OBJS)
+cmb: Main.o $(COSMO_OBJS)
 	$(LINK_EXE)
+
+milestones: Milestones.o $(COSMO_OBJS)
+	$(LINK_EXE)
+
+benchmark: Benchmark.o $(COSMO_OBJS)
+	$(LINK_EXE)
+
+.PHONY: test
+test:
+	@$(MAKE) --no-print-directory -C tests run

@@ -1,0 +1,8 @@
+planck_TT_chi2_unlensed 780.7
+planck_TT_chi2_lensed 220.2
+planck_TT_nbins 83
+pp_peak_ell 34
+pp_peak_value 1.4082e-07
+BB_l1000 0.0901
+BB_peak_ell 887
+BB_peak 0.0944

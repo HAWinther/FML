@@ -1,0 +1,4 @@
+chi2_fiducial 141.674
+N 31
+h_best_fixed_Omegas 0.6988
+chi2_best 30.668
