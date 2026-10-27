@@ -242,7 +242,11 @@ namespace FML {
             if constexpr (HasAppendToBuffer<T>::value) {
                 t.append_to_buffer(buffer);
             } else {
-                // Fiducial method for communication. Assumes no dynamic allocated memory in class
+                // Fiducial method for communication: a raw copy of the bytes. A particle that owns memory (e.g. a
+                // std::vector member) must provide append_to_buffer, assign_from_buffer and get_particle_byte_size
+                static_assert(std::is_trivially_copyable_v<T>,
+                              "Particle is not trivially copyable (e.g. has a std::vector member): it must provide "
+                              "append_to_buffer, assign_from_buffer and get_particle_byte_size");
                 std::memcpy(buffer, &t, GetSize(t));
             }
         };
@@ -251,7 +255,10 @@ namespace FML {
             if constexpr (HasAssignFromBuffer<T>::value) {
                 t.assign_from_buffer(buffer);
             } else {
-                // Fiducial method for communication. Assumes no dynamic allocated memory in class
+                // Fiducial method for communication: a raw copy of the bytes (see AppendToBuffer)
+                static_assert(std::is_trivially_copyable_v<T>,
+                              "Particle is not trivially copyable (e.g. has a std::vector member): it must provide "
+                              "append_to_buffer, assign_from_buffer and get_particle_byte_size");
                 std::memcpy(&t, buffer, GetSize(t));
             }
         };
@@ -429,7 +436,7 @@ namespace FML {
                     std::cout << "# Particle has [Velocity] (" << sizeof(FML::PARTICLE::GetVel(tmp)[0]) * N
                               << " bytes)\n";
 
-                if constexpr (FML::PARTICLE::has_set_mass<T>())
+                if constexpr (FML::PARTICLE::has_get_mass<T>())
                     std::cout << "# Particle has [Mass] (" << sizeof(FML::PARTICLE::GetMass(tmp)) << " bytes)\n";
 
                 if constexpr (FML::PARTICLE::has_set_id<T>())

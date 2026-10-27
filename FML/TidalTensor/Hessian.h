@@ -131,12 +131,16 @@ namespace FML {
                                         std::vector<FFTWGrid<N>> & eigenvectors,
                                         bool compute_eigenvectors = false) {
 
-            assert_mpi(tensor_real.size() > 0, "[SymmetricTensorEigensystem] tensor_real is not allocated\n");
+            // We read all the N(N+1)/2 components [00,01,..,0N,11,12,...,NN] in every cell
+            assert_mpi(tensor_real.size() == size_t(N * (N + 1) / 2),
+                       "[SymmetricTensorEigensystem] tensor_real must have N(N+1)/2 grids (as from "
+                       "ComputeHessianWithFT)\n");
             assert_mpi(tensor_real[0].get_nmesh() > 0,
                        "[SymmetricTensorEigensystem] tensor_real[0] is not allocated\n");
             for (size_t i = 1; i < tensor_real.size(); i++)
-                assert_mpi(tensor_real[i].get_nmesh() == tensor_real[i - 1].get_nmesh(),
-                           "[SymmetricTensorEigensystem] tensor_real[i] is not allocated\n");
+                assert_mpi(tensor_real[i].get_nmesh() == tensor_real[0].get_nmesh() and
+                               tensor_real[i].get_local_nx() == tensor_real[0].get_local_nx(),
+                           "[SymmetricTensorEigensystem] the grids in tensor_real must all have the same size\n");
 
             // N eigenvalues
             eigenvalues.resize(N);

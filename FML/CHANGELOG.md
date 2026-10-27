@@ -5,6 +5,17 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### ParticleTypes, TidalTensor: guards
+- The fiducial particle communication (`AppendToBuffer` / `AssignFromBuffer` when the particle has no
+  `append_to_buffer` / `assign_from_buffer`, used by `MPIParticles::communicate_particles` and `dump_to_file`) copies
+  the raw bytes. For a particle that owns memory (e.g. a `std::vector` member) this compiled and then corrupted memory
+  when particles moved between tasks; it is now a compile error (`static_assert(std::is_trivially_copyable_v<T>)`)
+  telling you to provide the three methods. All the particle types in the library, tests, examples and COLASolver
+  pass it.
+- `PARTICLE::info` showed [Mass] only for particles with `set_mass` (now `get_mass`).
+- `HESSIAN::SymmetricTensorEigensystem` reads all N(N+1)/2 components in every cell but only checked that the
+  tensor was non-empty (out of bounds reads for a shorter vector); it now requires N(N+1)/2 grids of the same size.
+
 ### MPIGrid non-periodic edges, WKB Bessel function for ell = 0
 - `MPIGrid::communicate_boundaries` for non-periodic grids decided the edges of the box from the task id (task 0 and
   task NTasks-1). With fewer slices than tasks the last tasks have no cells, so the last task with cells got the
