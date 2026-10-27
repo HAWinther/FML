@@ -17,10 +17,8 @@ struct MyType {
         for (int i = 0; i < N; i++)
             y[i] = x;
     }
-    MyType(const MyType & rhs) {
-        for (int i = 0; i < N; i++)
-            y[i] = rhs.y[i];
-    }
+    // The grids are sent between tasks as bytes: the type must be trivially copyable (default copy)
+    MyType(const MyType & rhs) = default;
     // We need to define all the arithmetic functions
 #define OPS(OP)                                                                                                        \
     auto operator OP(const MyType & rhs)->MyType & {                                                                   \

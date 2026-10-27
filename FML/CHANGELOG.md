@@ -172,7 +172,9 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 - `SystemMemory.h` functions are inline (including the header in two files failed to link).
 - `create_folder`: all tasks get the result and throw together (task 0 threw while the others waited in a barrier).
 - `GatherFromTasks` (and the fallback of Min/Max/SumOverTasks) static_asserts that the type is trivially copyable (it
-  sends the bytes).
+  sends the bytes). The `MultigridSolver` generic example's `MyType` had a user-written copy constructor and did
+  not compile with this check: it is now defaulted (the grids are sent between tasks as bytes).
+
 ### COLASolver: linear growth with massive neutrinos
 - The scale-dependent LPT growth factors (used by scale-dependent COLA and for the `Pcb_linear` column of the P(k)
   output) evolved the neutrinos with a fluid approximation with a free-streaming scale: for 0.4 eV the growth of
