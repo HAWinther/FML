@@ -641,7 +641,8 @@ namespace FML {
             // extra slices than the left task has slices (NLocal-1-i < 0) we get the left tasks extra slice which
             // it received in an earlier iteration
             for (int i = 0; i < nsend_to_right; i++) {
-                const bool do_not_store = not _periodic and FML::ThisTask == 0;
+                // (the edges of the box: with N < NTasks some tasks have no cells, so test the slices, not the task id)
+                const bool do_not_store = not _periodic and _xStartLocal == 0;
                 T * slice_left_torecv = _y.data() + _NperSlice * (_n_extra_slices_left - 1 - i);
                 send_slice_right(_NLocal - 1 - i, recv_array);
                 if (not do_not_store)
@@ -651,7 +652,7 @@ namespace FML {
             // Send leftmost slices left and store in extra right slices: slice NLocal+i is slice i of the right
             // task (or its extra right slice i - NLocal received in an earlier iteration)
             for (int i = 0; i < nsend_to_left; i++) {
-                const bool do_not_store = not _periodic and FML::ThisTask == FML::NTasks - 1;
+                const bool do_not_store = not _periodic and _xStartLocal + _NLocal == _N;
                 T * slice_right_torecv = _y.data() + _NtotLocalLeft + _NtotLocal + _NperSlice * i;
                 send_slice_left(i, recv_array);
                 if (not do_not_store)

@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### MPIGrid non-periodic edges, WKB Bessel function for ell = 0
+- `MPIGrid::communicate_boundaries` for non-periodic grids decided the edges of the box from the task id (task 0 and
+  task NTasks-1). With fewer slices than tasks the last tasks have no cells, so the last task with cells got the
+  wrapped slice from task 0 in its right ghost slice. The edges are now found from the slices.
+- `MATH::HyperSphericalBesselWKB(0, ...)` returned NaN (the WKB formula divides by sqrt(ell(ell+1))); ell = 0 is now
+  the exact sin(nu chi) / (nu sin_K(chi)). Tests in `test_grids.cpp` (4 tasks) and `test_numcore.cpp`.
+
 ### COLASolver refactoring: gravity models, parameter defaults, parallel build
 - Gravity models: the force from the density (finite-difference or Fourier) was written out in each of the 8 models
   and the fifth-force pipeline (exact multigrid solution, screening approximation with the optional large-scale linear

@@ -340,6 +340,29 @@ void test_mpigrid_ghosts() {
         check(all_tasks(ok), "MPIGrid non-periodic ghosts: neighbors inside the box, untouched outside");
     }
 
+    // Non-periodic with fewer slices than tasks (the last tasks have no cells): the right edge of the box is the
+    // last task with cells, which must not get the wrapped slice from the first task
+    if (FML::NTasks > 2) {
+        const int N = FML::NTasks - 1;
+        MPIGrid<2, double> g(N, false, 1, 1);
+        bool ok = true;
+        if (g.get_NLocal() > 0) {
+            for (IndexInt i = -N; i < g.get_NtotLocal() + N; i++)
+                g[i] = -7.0;
+            for (IndexInt i = 0; i < g.get_NtotLocal(); i++)
+                g[i] = 100 * g.globalcoord_from_index(i)[0];
+        }
+        g.communicate_boundaries();
+        if (g.get_NLocal() > 0) {
+            const int xl = g.get_xStartLocal() - 1, xr = g.get_xStartLocal() + g.get_NLocal();
+            const double expl = xl < 0 ? -7.0 : 100.0 * xl;
+            const double expr = xr >= N ? -7.0 : 100.0 * xr;
+            for (int iy = 0; iy < N; iy++)
+                ok = ok and g[-N + iy] == expl and g[g.get_NtotLocal() + iy] == expr;
+        }
+        check(all_tasks(ok), "MPIGrid non-periodic ghosts with tasks without cells (N = NTasks - 1)");
+    }
+
     // send_slice gives one slice (and with one task the slice itself)
     {
         MPIGrid<3, double> g(8, true, 1, 1);

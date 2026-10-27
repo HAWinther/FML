@@ -551,6 +551,10 @@ namespace FML {
                 sincKchi = chi > 1e-8 ? std::sin(chi) / chi : 1.0;
             }
 
+            // ell = 0 is known exactly (the WKB formula below divides by sqrt(ell(ell+1)))
+            if (ell == 0)
+                return std::sin(nu * chi) / (nu * chi * sincKchi);
+
             // For small curvatures then alpha -> infty
             const double sqrtellellp1 = std::sqrt(ell * (ell + 1));
             const double alpha = nu / sqrtellellp1, a2 = alpha * alpha;

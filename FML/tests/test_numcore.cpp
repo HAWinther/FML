@@ -192,6 +192,12 @@ int main(int argc, char ** argv) {
 
         const double w = FML::MATH::HyperSphericalBesselWKB(10, 1.0, std::sqrt(110.0), 0.0);
         check(std::isfinite(w) and close(w, 7.862800300679687e-02, 1e-2), "WKB j_10 at the turning point: " + num(w));
+
+        // ell = 0 is exact: sin(nu chi) / (nu sin_K(chi)) (the WKB formula divides by sqrt(ell(ell+1)))
+        const double w0 = FML::MATH::HyperSphericalBesselWKB(0, 1.0, 5.0, 0.0);
+        const double w0open = FML::MATH::HyperSphericalBesselWKB(0, 3.0, 0.7, -1.0);
+        check(close(w0, std::sin(5.0) / 5.0, 1e-14) and close(w0open, std::sin(2.1) / (3.0 * std::sinh(0.7)), 1e-14),
+              "WKB ell = 0 (flat and open): " + num(w0) + " " + num(w0open));
     }
 
     //==========================================================
