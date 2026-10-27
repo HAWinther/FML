@@ -202,7 +202,9 @@ namespace FML {
                         if (fp.good())
                             return {fileprefix + ".hdf5"};
                     }
-                    const int nfiles = get_num_files(fileprefix + ".0.hdf5");
+                    // Always read the header of this snapshot (not one read earlier, possibly of another snapshot)
+                    read_header(fileprefix + ".0.hdf5");
+                    const int nfiles = header.num_files;
                     std::vector<std::string> filenames;
                     for (int i = 0; i < nfiles; i++)
                         filenames.push_back(fileprefix + "." + std::to_string(i) + ".hdf5");
@@ -239,7 +241,11 @@ namespace FML {
                         HDF5::throw_error("[GadgetHDF5Reader] No Time in the header of " + filename);
                     if (not HDF5::read_attribute(h, "Redshift", H5T_NATIVE_DOUBLE, &header.redshift, 1))
                         header.redshift = 1.0 / header.time - 1.0;
-                    if (not HDF5::read_attribute(h, "BoxSize", H5T_NATIVE_DOUBLE, &header.BoxSize, 1))
+                    // BoxSize is one number (GADGET) or three (SWIFT; we assume a cubic box)
+                    double boxsize3[3];
+                    if (HDF5::read_attribute(h, "BoxSize", H5T_NATIVE_DOUBLE, boxsize3, 3))
+                        header.BoxSize = boxsize3[0];
+                    else if (not HDF5::read_attribute(h, "BoxSize", H5T_NATIVE_DOUBLE, &header.BoxSize, 1))
                         HDF5::throw_error("[GadgetHDF5Reader] No BoxSize in the header of " + filename);
                     if (not HDF5::read_attribute(h, "NumFilesPerSnapshot", H5T_NATIVE_INT, &header.num_files, 1))
                         header.num_files = 1;
@@ -276,9 +282,10 @@ namespace FML {
                 /// Get the header (assumes it has been read)
                 GadgetHeader get_header() const { return header; }
 
-                /// The number of files in the snapshot (from the header of filename)
+                /// The number of files in the snapshot (from the header of filename if given, otherwise the last
+                /// header read)
                 int get_num_files(const std::string & filename = "") {
-                    if (not header_is_read)
+                    if (not header_is_read or not filename.empty())
                         read_header(filename);
                     return header.num_files;
                 }
@@ -332,6 +339,8 @@ namespace FML {
                         print_header_info(header);
 
                     const double pos_norm = 1.0 / header.BoxSize;
+                    // NB: this assumes the GADGET convention (Velocities = sqrt(a) dx/dt). SWIFT snapshots (as far as
+                    // we know) store the peculiar velocity a dx/dt instead, which we do not detect
                     const double vel_norm = std::sqrt(header.time) * velocity_unit_in_kms;
 
                     // Without family in the particle we only read dark matter
@@ -533,7 +542,7 @@ namespace FML {
                         mass[i] = npart_family_tot[i] == 0 ?
                                       0.0 :
                                       3.0 * OmegaM * OmegaFamilyOverOmegaM[i] * MplMpl_over_H0Msunh *
-                                          std::pow(Boxsize / HubbleLengthInMpch, 3) / double(npart_family_tot[1]) / 1e10;
+                                          std::pow(Boxsize / HubbleLengthInMpch, 3) / double(npart_family_tot[i]) / 1e10;
 
                     HDF5::Handle file(H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT), H5Fclose, filename);
 

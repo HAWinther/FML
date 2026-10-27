@@ -5,6 +5,38 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### GadgetUtils fixes
+- Reading a file with several particle types into particles with `set_family` while keeping only the particles in
+  the local domain (MPI) set the type with the indices of the whole file: writes past the end of the vector and wrong
+  types (2000 of 5000 particles with 2 tasks, 3991 with 4). The type is now set when the particle is added.
+- `write_gadget_single` (binary and HDF5) divided the mass of every type by the number of type 1 particles: with
+  types 0/1/3 of 1000/3000/1000 particles the MassTable of types 0 and 3 was 3x too small (69384 and 34692 instead
+  of 208152 and 104076 x 1e10 Msun/h). Now the number of particles of the type. In the binary writer particles with
+  `get_family` and the default OmegaFamilyOverOmegaM got NumPart_Total = 0 and MassTable = 0 (the totals are now
+  summed over the tasks as in the HDF5 writer: with families the call is collective). Particles with a family
+  outside 0-5 made the writer abort on an assert (or write garbage with NDEBUG); they are now skipped.
+- IDs were written as 32 bit int: an ID of 3000000000 was read back as -1294967296. The writers now use 8 byte IDs
+  if some ID does not fit in an int or there are more than 2^31 particles (no MPI calls; 4 bytes otherwise, as
+  before). The reader takes the ID size (4 or 8), and float or double for POS/VEL/MASS, from the block sizes, so
+  files with 64 bit IDs can be read.
+- The reader guessed the bytes per particle from the file size including the header: files with 288 or fewer
+  particles were rejected and a file with no particles crashed (division by zero). The block sizes are now checked
+  against the header and files with no particles are skipped.
+- New in the reader: format 2 (SNAP) files (labelled blocks, unknown blocks are skipped) and the MASS block (types
+  with MassTable = 0; stored with `set_mass` in 1e10 Msun/h, only for these particles). Files written by
+  `write_gadget_species` with per-particle masses (COLASolver mass-encoded baryon mode) could not be read back.
+- The endianness was only detected once: a reader used for a big-endian and then a little-endian file aborted. The
+  HDF5 reader kept the number of files of the first snapshot it read (a 2-file snapshot after a 1-file one: 300 of
+  600 particles, no error). `BoxSize` with 3 elements (SWIFT) is accepted by the HDF5 reader.
+- Blocks larger than 2^31 - 1 bytes (about 179M particles per file) now give a clear error instead of a wrong block
+  size. `GADGET_ONLY_DM` applies to the reader and the writer (`GADGET_ONLY_READ_DM`, used by the writer before,
+  is the same). `write_section` takes the size as `size_t`.
+- Tests: `tests/test_gadget.cpp` (all the cases above, binary and HDF5, 1-4 tasks; on the old code every part except the plain dark matter round trip fails
+  or aborts). The `MassTable` check of `GadgetUtils/example/TestHDF5.cpp` expected the old (wrong) ratio.
+- Output: COLASolver snapshots (binary and HDF5, one or several species, with and without masses) are bit-identical.
+  Changed: the MassTable of types other than 1 and NumPart_Total for particles with `get_family`
+  (`write_gadget_single`), and files with IDs >= 2^31 (8 byte IDs instead of truncated ones).
+
 ### Global: FFTW threads, sub-communicators and smaller fixes
 - FFTW was initialized before `init_fml` had counted the OpenMP threads, so with `USE_FFTW_THREADS` (the default for
   COLASolver) FFTW made all its plans with 1 thread while the startup info said thread support was enabled. FML is now

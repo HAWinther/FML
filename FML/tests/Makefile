@@ -10,11 +10,11 @@ USE_OMP             ?= true
 USE_FFTW            ?= true
 USE_GSL             ?= true
 
-TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel
+TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget
 
 include ../Makefile.config
 
-FML_MODULES := Global Spline ODESolver Math SphericalCollapse HaloModel FileUtils
+FML_MODULES := Global Spline ODESolver Math SphericalCollapse HaloModel FileUtils GadgetUtils
 
 TEST_OBJS = test_core.o Global.o
 ifeq ($(USE_GSL),true)
@@ -84,6 +84,10 @@ test_multigrid: test_multigrid.o Global.o
 test_hybridbias: test_hybridbias.o Global.o
 	$(LINK_EXE)
 
+# GadgetUtils (binary GADGET format; the HDF5 part only with USE_HDF5=true)
+test_gadget: test_gadget.o Global.o GadgetUtils.o
+	$(LINK_EXE)
+
 MPIRUN  ?= mpirun
 NP_LIST ?= 1 2 4
 
@@ -131,6 +135,8 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_sphericalcollapse; \
 	  echo "== Running test_halomodel with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_halomodel; \
+	  echo "== Running test_gadget with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_gadget; \
 	done
 	@echo "== Running test_hybridbias"
 	@OMP_NUM_THREADS=2 $(RUN1) ./test_hybridbias

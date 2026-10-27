@@ -96,3 +96,4 @@ tests/test_pofk
 tests/test_reconstruction
 tests/test_sphericalcollapse
 tests/test_halomodel
+tests/test_gadget

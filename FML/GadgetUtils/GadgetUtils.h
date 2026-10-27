@@ -5,6 +5,7 @@
 #include <cassert>
 #include <climits>
 #include <cmath>
+#include <cstdint>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -45,13 +46,30 @@
 //
 // When we read we return positions in [0,1).
 //
+// Reading: format 1 and format 2 (blocks preceded by a 4-character label block) files, either
+// endianness, POS/VEL in float or double, 4 or 8 byte IDs (from the block size), and the MASS
+// block (particles of the types with MassTable = 0). The masses (in 1e10 Msun/h) are stored with
+// set_mass if the particle has it (only for the particles in the MASS block). Files with no
+// particles are skipped. In format 2 files blocks other than POS, VEL, ID and MASS are skipped,
+// in format 1 files the blocks after the MASS block are ignored.
+//
+// Writing: IDs are written with 4 bytes unless some ID does not fit in an int (or the total number
+// of particles is larger than 2^31) in which case they are written with 8 bytes. Blocks larger
+// than 2^31 bytes (the limit of the format) give an error: use more files.
+//
 // Errors are handled via throw_error in the class below (with MPI it aborts and otherwise
 // throws a runtime error)
 //
 // Compile time defines:
-// GADGET_LONG_INT_IDS  : Use long long int for IDs otherwise use int
+// GADGET_LONG_INT_IDS  : Always write 8 byte IDs
+// GADGET_ONLY_DM       : Only read type 1 particles and write all particles as type 1
+//                        (GADGET_ONLY_READ_DM is the same)
 //
 //====================================================================================
+
+#if defined(GADGET_ONLY_READ_DM) and not defined(GADGET_ONLY_DM)
+#define GADGET_ONLY_DM
+#endif
 
 namespace FML {
     namespace FILEUTILS {
@@ -64,7 +82,7 @@ namespace FML {
             // This is 1/H0 in units of Mpc/h used to set the mass of particles
             extern const double HubbleLengthInMpch;
 
-            // The ID type we use
+            // The (smallest) ID type we write
 #ifdef GADGET_LONG_INT_IDS
             using gadget_particle_id_type = long long int;
 #else
@@ -108,14 +126,19 @@ namespace FML {
 
                 bool endian_swap{false};
                 bool header_is_read{false};
+                // Format 2: every block is preceded by a block with a 4 character label
+                bool format2{false};
 
                 // The dimensions of the positions and velocities in the files.
                 int NDIM{3};
 
-                // The fields we assume is in the file
+                // The fields we assume is in the file (format 1). MASS is added if needed
                 std::vector<std::string> fields_in_file = {"POS", "VEL", "ID"};
 
                 void throw_error(std::string errormessage) const;
+
+                /// Read a format 2 label block. Returns false at the end of the file
+                bool read_label(std::ifstream & fp, std::string & label);
 
               public:
                 GadgetReader() = default;
@@ -139,10 +162,10 @@ namespace FML {
                                  bool only_keep_part_in_domain,
                                  bool verbose);
 
-                /// Read a section of a gadget file
+                /// Read a section (block) of a gadget file. The buffer is resized to the size of the block
                 void read_section(std::ifstream & fp, std::vector<char> & buffer);
 
-                /// Read the gadget header
+                /// Read the gadget header (detects the endianness and format 1 / format 2)
                 void read_header(std::ifstream & fp);
 
                 /// Get the header (assumes it has been read)
@@ -151,7 +174,7 @@ namespace FML {
                 /// Get the number of gadget files
                 int get_num_files(std::string filename = "");
 
-                /// If non-standard file, set the fields that are in the file (only POS,VEL,ID implemented)
+                /// If non-standard file, set the fields that are in the file (POS,VEL,ID,MASS implemented)
                 void set_fields_in_file(std::vector<std::string> fields);
             };
 
@@ -210,6 +233,9 @@ namespace FML {
 
                 void throw_error(std::string errormessage) const;
 
+                /// Write n IDs (id(i)) with 4 bytes, or 8 bytes if long_ids
+                void write_ids(std::ofstream & fp, size_t n, bool long_ids, const std::function<long long int(size_t)> & id);
+
               public:
                 GadgetWriter() = default;
                 GadgetWriter(int ndim);
@@ -220,6 +246,8 @@ namespace FML {
                 /// OmegaFamilyOverOmegaM). If you only have CDM particles in the usual spot then
                 /// this array is just (0,1,0,0,0,0). If you have baryons in 0 with OmegaB=0.05 and cdm in 1 with
                 /// OmegaCDM = 0.25 then this is (1/6,5/6,0,0,0,0)
+                /// No MPI communication if the particles have no family and OmegaFamilyOverOmegaM[1] = 1 (otherwise
+                /// the number of particles of each type is summed over the tasks: all tasks must call this)
                 template <class T>
                 void write_gadget_single(std::string filename,
                                          T * part,
@@ -251,8 +279,8 @@ namespace FML {
                                           double pos_norm,
                                           double vel_norm);
 
-                /// Write a gadget section
-                void write_section(std::ofstream & fp, std::vector<char> & buffer, int bytes);
+                /// Write a gadget section (error if larger than 2^31 - 1 bytes, the limit of the format)
+                void write_section(std::ofstream & fp, std::vector<char> & buffer, size_t bytes);
 
                 /// Write the gadget header (DM only)
                 void write_header(std::ofstream & fp,
@@ -357,32 +385,12 @@ namespace FML {
 
                 verbose = verbose and FML::ThisTask == 0;
 
-                std::vector<char> buffer;
-                float * float_buffer;
-                gadget_particle_id_type * id_buffer;
-
-                // Open file and get the number of bytes
+                // Open file and read the header
                 std::ifstream fp(filename.c_str(), std::ios::binary);
-                size_t bytes_in_file;
                 if (not fp.is_open()) {
                     std::string errormessage = "[GadgetReader::read_gadget_single] File " + filename + " is not open\n";
                     throw_error(errormessage);
                 }
-                fp.seekg(0, fp.end);
-                bytes_in_file = fp.tellg();
-                fp.seekg(0, fp.beg);
-                if (bytes_in_file <= 256) {
-                    std::string errormessage =
-                        "[GadgetReader::read_gadget_single] The file contains less than just a header!\n";
-                    throw_error(errormessage);
-                }
-
-                // Warning if the file is too large
-                if(size_t(int(bytes_in_file)) != bytes_in_file){
-                  std::cout << "Warning: The file is huge! Sections might have too much data that cannot be stored in an int\n";
-                }
-
-                // Read header
                 read_header(fp);
                 if (verbose)
                     print_header_info(header);
@@ -393,16 +401,26 @@ namespace FML {
                 // Velocities normalized to peculiar in km/s
                 const double vel_norm = sqrt(header.time);
 
-                // Compute how many bytes per particle
-                unsigned int NumPartDM = header.npart[1];
-                unsigned int NumPartFileTot = 0;
-                for (int i = 0; i < 6; i++) {
-                    NumPartFileTot += header.npart[i];
-                }
+                // The particles of type t are [type_start[t], type_start[t+1]) in the file
+                size_t type_start[7];
+                type_start[0] = 0;
+                for (int t = 0; t < 6; t++)
+                    type_start[t + 1] = type_start[t] + size_t(header.npart[t]);
+                const size_t NumPartFileTot = type_start[6];
+                auto type_of = [&](size_t i) {
+                    int t = 0;
+                    while (i >= type_start[t + 1])
+                        t++;
+                    return t;
+                };
+
+                // Nothing to read
+                if (NumPartFileTot == 0)
+                    return;
 
 #ifndef GADGET_ONLY_DM
                 if constexpr (FML::PARTICLE::has_set_family<T>() == false) {
-                    if (NumPartFileTot != NumPartDM) {
+                    if (NumPartFileTot != size_t(header.npart[1])) {
                         std::string errormessage = "[GadgetReader::read_gadget_single] Particle type does not have "
                                                    "set_family, but Gadget file contains multiple species! Either use "
                                                    "define GADGET_ONLY_DM or add methods to particle\n";
@@ -411,185 +429,175 @@ namespace FML {
                 }
 #endif
 
-                const int bytes_per_particle = (bytes_in_file / NumPartFileTot);
-
-                // Expected bytes if file based on the fields
-                int bytes_per_particle_expected = 0;
-                for (auto & field : fields_in_file) {
-                    if (field == "POS")
-                        bytes_per_particle_expected += NDIM * sizeof(float);
-                    else if (field == "VEL")
-                        bytes_per_particle_expected += NDIM * sizeof(float);
-                    else if (field == "ID")
-                        bytes_per_particle_expected += sizeof(gadget_particle_id_type);
-                    else {
-                        std::cout << "Warning: unknown field in file [" << field
-                                  << "]. Only POS, VEL and ID are read and implemented\n";
-                        assert(false);
-                    }
-                }
-                if (bytes_per_particle != bytes_per_particle_expected) {
-                    std::string errormessage =
-                        "[GadgetReader::read_gadget_single] BytesPerParticle = " + std::to_string(bytes_per_particle) +
-                        " != ExpectedBytes =" + std::to_string(bytes_per_particle_expected) +
-                        ". Change the ID size in GadgetUtils? Otherwise check that "
-                        "fields_in_file in this file is correct!\n";
-                    throw_error(errormessage);
-                }
+                // The number of particles in the MASS block (types with MassTable = 0)
+                size_t NumPartWithMass = 0;
+                for (int t = 0; t < 6; t++)
+                    if (header.mass[t] == 0.0)
+                        NumPartWithMass += header.npart[t];
 
                 // Check if the vector has enough capacity to store the elements if not
-                // reallcate it. We add the particles to the back of the part array
-#ifdef GADGET_ONLY_DM
-                if (part.capacity() < part.size() + NumPartDM)
-                    part.reserve(part.size() + NumPartDM);
-#else
+                // reallocate it. We add the particles to the back of the part array
                 if (part.capacity() < part.size() + NumPartFileTot)
                     part.reserve(part.size() + NumPartFileTot);
-#endif
 
-                // Allocate buffer
-                size_t bytes = NDIM * sizeof(float) * NumPartFileTot;
-                buffer = std::vector<char>(bytes);
-                float_buffer = reinterpret_cast<float *>(buffer.data());
-                id_buffer = reinterpret_cast<gadget_particle_id_type *>(buffer.data());
+                // Which particles in the file we keep (in the domain, and type 1 for GADGET_ONLY_DM)
+                std::vector<char> keep(NumPartFileTot, 1);
+                const size_t index_start = part.size();
+                bool pos_is_read = false;
 
-                // Allocate temp storage for knowing if a particles is in the domain or not
-                std::vector<char> is_in_domain;
-                if (only_keep_part_in_domain) {
-                    is_in_domain = std::vector<char>(NumPartFileTot, 1);
-                    // We need to read POS first to know if a particle is in the domain
-                    FML::assert_mpi(fields_in_file[0] == "POS", "Error: Position has to be first in file if only_keep_part_in_domain is set");
-                }
+                // Size of the elements in a block (float or double, int or long long) with n * ncomp elements
+                auto element_size = [&](const std::string & field, size_t bytes, size_t n, size_t ncomp) {
+                    for (size_t size : {size_t(4), size_t(8)})
+                        if (bytes == size * n * ncomp)
+                            return size;
+                    throw_error("[GadgetReader::read_gadget_single] The " + field + " block in " + filename + " has " +
+                                std::to_string(bytes) + " bytes, expected 4 or 8 bytes times " +
+                                std::to_string(n * ncomp) + "\n");
+                    return size_t(0);
+                };
+                // Element i of a block of floats/doubles (as double)
+                auto real_value = [&](const std::vector<char> & buffer, size_t size, size_t i) -> double {
+                    if (size == 4)
+                        return double(reinterpret_cast<const float *>(buffer.data())[i]);
+                    return reinterpret_cast<const double *>(buffer.data())[i];
+                };
+                auto swap_block = [&](std::vector<char> & buffer, size_t size) {
+                    if (not endian_swap)
+                        return;
+                    if (size == 4)
+                        swap_endian_vector(reinterpret_cast<int32_t *>(buffer.data()), buffer.size() / 4);
+                    else
+                        swap_endian_vector(reinterpret_cast<int64_t *>(buffer.data()), buffer.size() / 8);
+                };
+                auto check_pos_is_read = [&](const std::string & field) {
+                    if (not pos_is_read)
+                        throw_error("[GadgetReader::read_gadget_single] The " + field + " block comes before POS in " +
+                                    filename + " (POS has to be read first)\n");
+                };
 
-                // Read the file
-                size_t index_start = part.size();
-                for (auto & field : fields_in_file) {
-
+                // Process a block
+                std::vector<char> buffer;
+                auto process_block = [&](const std::string & field) {
                     if (field == "POS") {
-                        // Read particle positions and assign to particles
-                        bytes = sizeof(float) * NDIM * NumPartFileTot;
+                        const size_t size = element_size(field, buffer.size(), NumPartFileTot, NDIM);
+                        swap_block(buffer, size);
                         if (verbose)
-                            std::cout << "Reading POS bytes = " << bytes
-                                      << " BytesPerParticle: " << sizeof(float) * NDIM << "\n";
-                        buffer.resize(bytes);
-                        read_section(fp, buffer);
-                        if (endian_swap)
-                          swap_endian_vector((float *) buffer.data(), buffer.size() / sizeof(float));
-
-                        size_t index = index_start;
-                        for (unsigned int i = 0; i < NumPartFileTot; i++) {
-                            auto x = float_buffer[NDIM * i] * pos_norm;
-                            if (x >= 1.0)
-                                x -= 1.0;
-                            if (x < 0.0)
-                                x += 1.0;
-                            assert_mpi(x >= 0.0 and x < 1.0,
+                            std::cout << "Reading POS bytes = " << buffer.size() << "\n";
+                        std::vector<double> x(NDIM);
+                        for (size_t i = 0; i < NumPartFileTot; i++) {
+                            for (int idim = 0; idim < NDIM; idim++) {
+                                x[idim] = real_value(buffer, size, NDIM * i + idim) * pos_norm;
+                                if (x[idim] >= 1.0)
+                                    x[idim] -= 1.0;
+                                if (x[idim] < 0.0)
+                                    x[idim] += 1.0;
+                            }
+                            assert_mpi(x[0] >= 0.0 and x[0] < 1.0,
                                        "[read_gadet_single] Particle has x position outside the boxsize even after "
                                        "periodic wrap");
-                            if (only_keep_part_in_domain) {
-                                if (not(x >= FML::xmin_domain and x < FML::xmax_domain)) {
-                                    is_in_domain[i] = 0;
-                                    continue;
-                                }
-                            }
-
+                            const int type = type_of(i);
 #ifdef GADGET_ONLY_DM
-                            if (i < header.npart[0])
+                            if (type != 1) {
+                                keep[i] = 0;
                                 continue;
-                            if (i >= header.npart[0] + header.npart[1])
-                                continue;
+                            }
 #endif
+                            if (only_keep_part_in_domain and not(x[0] >= FML::xmin_domain and x[0] < FML::xmax_domain)) {
+                                keep[i] = 0;
+                                continue;
+                            }
                             part.push_back(T{});
-
-                            // Check if positions exists in Particle and assign
+                            auto & p = part.back();
                             if constexpr (FML::PARTICLE::has_get_pos<T>()) {
-                                auto * pos = FML::PARTICLE::GetPos(part[index++]);
-                                for (int idim = 0; idim < NDIM; idim++) {
-                                    pos[idim] = float_buffer[NDIM * i + idim] * pos_norm;
-                                    if (pos[idim] >= 1.0)
-                                        pos[idim] -= 1.0;
-                                    if (pos[idim] < 0.0)
-                                        pos[idim] += 1.0;
-                                }
+                                auto * pos = FML::PARTICLE::GetPos(p);
+                                for (int idim = 0; idim < NDIM; idim++)
+                                    pos[idim] = x[idim];
                             }
+                            if constexpr (FML::PARTICLE::has_set_family<T>())
+                                FML::PARTICLE::SetFamily(p, type);
                         }
-
-#ifndef GADGET_ONLY_DM
-                        // Set the family. Not needed if we only read DM
-                        if constexpr (FML::PARTICLE::has_set_family<T>()) {
-                            index = index_start;
-                            for (int type = 0; type < 6; type++) {
-                                for (unsigned int i = 0; i < header.npart[type]; i++) {
-                                    FML::PARTICLE::SetFamily(part[index + i], type);
-                                }
-                                index += header.npart[type];
-                            }
-                        }
-#endif
-
+                        pos_is_read = true;
                     } else if (field == "VEL") {
-                        // Read particle velocities and assign to particles
-                        bytes = sizeof(float) * NDIM * NumPartFileTot;
-                        if (verbose)
-                            std::cout << "Reading VEL bytes = " << bytes
-                                      << " BytesPerParticle: " << sizeof(float) * NDIM << "\n";
-                        buffer.resize(bytes);
-                        read_section(fp, buffer);
-                        if (endian_swap)
-                          swap_endian_vector((float *) buffer.data(), buffer.size() / sizeof(float));
-
-                        // Check if velocities exists in Particle
+                        check_pos_is_read(field);
+                        const size_t size = element_size(field, buffer.size(), NumPartFileTot, NDIM);
+                        swap_block(buffer, size);
                         if constexpr (FML::PARTICLE::has_get_vel<T>()) {
                             size_t index = index_start;
-                            for (unsigned int i = 0; i < NumPartFileTot; i++) {
-                                if (only_keep_part_in_domain) {
-                                    if (is_in_domain[i] == 0)
-                                        continue;
-                                }
-#ifdef GADGET_ONLY_DM
-                                if (i < header.npart[0])
+                            for (size_t i = 0; i < NumPartFileTot; i++) {
+                                if (not keep[i])
                                     continue;
-                                if (i >= header.npart[0] + header.npart[1])
-                                    continue;
-#endif
                                 auto * vel = FML::PARTICLE::GetVel(part[index++]);
-                                for (int idim = 0; idim < NDIM; idim++) {
-                                    vel[idim] = float_buffer[NDIM * i + idim] * vel_norm;
-                                }
+                                for (int idim = 0; idim < NDIM; idim++)
+                                    vel[idim] = real_value(buffer, size, NDIM * i + idim) * vel_norm;
                             }
                         }
                     } else if (field == "ID") {
-                        // Read particle IDs (if they exist) and assign to particles
-                        bytes = sizeof(gadget_particle_id_type) * NumPartFileTot;
-                        if (verbose)
-                            std::cout << "Reading ID bytes = " << bytes
-                                      << " BytesPerParticle: " << sizeof(gadget_particle_id_type) << "\n";
-                        buffer.resize(bytes);
-                        read_section(fp, buffer);
-                        if (endian_swap)
-                          swap_endian_vector((gadget_particle_id_type *) buffer.data(), buffer.size() / sizeof(gadget_particle_id_type));
-
-                        // Check if particle has ID
+                        check_pos_is_read(field);
+                        const size_t size = element_size(field, buffer.size(), NumPartFileTot, 1);
+                        swap_block(buffer, size);
                         if constexpr (FML::PARTICLE::has_set_id<T>()) {
                             size_t index = index_start;
-                            for (unsigned int i = 0; i < NumPartFileTot; i++) {
-                                if (only_keep_part_in_domain) {
-                                    if (is_in_domain[i] == 0)
-                                        continue;
-                                }
-#ifdef GADGET_ONLY_DM
-                                if (i < header.npart[0])
+                            for (size_t i = 0; i < NumPartFileTot; i++) {
+                                if (not keep[i])
                                     continue;
-                                if (i >= header.npart[0] + header.npart[1])
-                                    continue;
-#endif
-                                FML::PARTICLE::SetID(part[index++], id_buffer[i]);
+                                const long long int id = size == 4 ?
+                                                             (long long int)(reinterpret_cast<int32_t *>(buffer.data())[i]) :
+                                                             (long long int)(reinterpret_cast<int64_t *>(buffer.data())[i]);
+                                FML::PARTICLE::SetID(part[index++], id);
                             }
                         }
+                    } else if (field == "MASS") {
+                        check_pos_is_read(field);
+                        const size_t size = element_size(field, buffer.size(), NumPartWithMass, 1);
+                        swap_block(buffer, size);
+                        if constexpr (FML::PARTICLE::has_set_mass<T>()) {
+                            size_t index = index_start;
+                            size_t count = 0;
+                            for (size_t i = 0; i < NumPartFileTot; i++) {
+                                const bool has_mass = header.mass[type_of(i)] == 0.0;
+                                const double mass = has_mass ? real_value(buffer, size, count++) : 0.0;
+                                if (not keep[i])
+                                    continue;
+                                if (has_mass)
+                                    FML::PARTICLE::SetMass(part[index], mass);
+                                index++;
+                            }
+                        }
+                    } else {
+                        if (verbose)
+                            std::cout << "Skipping block [" << field << "]\n";
+                    }
+                };
+
+                if (format2) {
+                    // The blocks are labeled: read all of them and use the ones we know
+                    std::string label;
+                    while (read_label(fp, label)) {
+                        read_section(fp, buffer);
+                        if (label == "MASS" and NumPartWithMass == 0)
+                            continue;
+                        process_block(label);
+                    }
+                } else {
+                    auto fields = fields_in_file;
+                    if (NumPartWithMass > 0 and std::find(fields.begin(), fields.end(), "MASS") == fields.end())
+                        fields.push_back("MASS");
+                    for (auto & field : fields) {
+                        if (field == "MASS") {
+                            if (NumPartWithMass == 0)
+                                continue;
+                            // Files without the MASS block (all masses in the MassTable equal to 0)
+                            if (fp.peek() == std::ifstream::traits_type::eof())
+                                break;
+                        }
+                        read_section(fp, buffer);
+                        process_block(field);
                     }
                 }
+                if (not pos_is_read)
+                    throw_error("[GadgetReader::read_gadget_single] No POS block in " + filename + "\n");
             }
-            
+
             // For multiple species
             template <class T>
             void GadgetWriter::write_gadget_single(std::string filename,
@@ -608,7 +616,6 @@ namespace FML {
 
                 std::vector<char> buffer;
                 float * float_buffer;
-                gadget_particle_id_type * id_buffer;
 
                 // Make filename using
                 std::ofstream fp(filename.c_str(), std::ios::binary | std::ios::out);
@@ -617,19 +624,31 @@ namespace FML {
                     throw_error(errormessage);
                 }
 
+                // The family (GADGET type) of a particle (-1 if it is not written)
+                auto family_of = [&]([[maybe_unused]] size_t i) -> int {
+#ifndef GADGET_ONLY_DM
+                    if constexpr (FML::PARTICLE::has_get_family<T>()) {
+                        const int family = int(FML::PARTICLE::GetFamily(part[i]));
+                        return (family >= 0 and family < 6) ? family : -1;
+                    }
+#endif
+                    return 1;
+                };
+                constexpr bool use_family =
+#ifdef GADGET_ONLY_DM
+                    false;
+#else
+                    FML::PARTICLE::has_get_family<T>();
+#endif
+
                 // Count how many of each type we have
                 std::vector<size_t> npart_family(6, 0);
                 std::vector<size_t> npart_family_tot(6, 0);
-#ifdef GADGET_ONLY_READ_DM
-                npart_family[1] = NumPart;
-                npart_family_tot[1] = NumPartTot;
-                OmegaFamilyOverOmegaM = {0.0, 1.0, 0.0, 0.0, 0.0, 0.0};
-#else
-                if constexpr (FML::PARTICLE::has_get_family<T>()) {
+                if constexpr (use_family) {
                     // Multiple species
                     for (size_t i = 0; i < NumPart; i++) {
-                        auto family = FML::PARTICLE::GetFamily(part[i]);
-                        if (family >= 0 and family < 6)
+                        const int family = family_of(i);
+                        if (family >= 0)
                             npart_family[family]++;
                     }
                 } else {
@@ -637,22 +656,34 @@ namespace FML {
                     npart_family[1] = NumPart;
                     npart_family_tot[1] = NumPartTot;
                 }
+#ifdef GADGET_ONLY_DM
+                OmegaFamilyOverOmegaM = {0.0, 1.0, 0.0, 0.0, 0.0, 0.0};
 #endif
 
-                // If OmegaCDM/OmegaM = 1 then we only have CDM and do not need to sum up over tasks
-                // to compute the total number of particles and avoids MPI calls
-                if(OmegaFamilyOverOmegaM[1] != 1.0){
-                  npart_family_tot = npart_family;
-                  FML::SumArrayOverTasks(npart_family_tot.data(), npart_family_tot.size());
+                // If we only have CDM and OmegaCDM/OmegaM = 1 then we know the total number of particles
+                // (this avoids MPI calls), otherwise sum over tasks
+                if (use_family or OmegaFamilyOverOmegaM[1] != 1.0) {
+                    npart_family_tot = npart_family;
+                    FML::SumArrayOverTasks(npart_family_tot.data(), npart_family_tot.size());
                 }
 
                 // Take as input std::vector<double> OmegaFamilyOverOmegaM(6, 1.0);
                 std::vector<double> mass_in_1e10_msunh(6, 0.0);
                 for (int i = 0; i < 6; i++) {
-                    mass_in_1e10_msunh[i] = npart_family_tot[i] == 0 ? 0.0 : 3.0 * OmegaM * OmegaFamilyOverOmegaM[i] * MplMpl_over_H0Msunh *
-                                            std::pow(Boxsize / HubbleLengthInMpch, 3) / double(npart_family_tot[1]) /
-                                            1e10;
+                    mass_in_1e10_msunh[i] = npart_family_tot[i] == 0 ?
+                                                0.0 :
+                                                3.0 * OmegaM * OmegaFamilyOverOmegaM[i] * MplMpl_over_H0Msunh *
+                                                    std::pow(Boxsize / HubbleLengthInMpch, 3) /
+                                                    double(npart_family_tot[i]) / 1e10;
                 }
+
+                // Count how many particles to write
+                size_t ntowrite = 0;
+                for (int i = 0; i < 6; i++) {
+                    ntowrite += npart_family[i];
+                }
+                if (ntowrite > size_t(UINT_MAX))
+                    throw_error("[GadgetWriter::write_gadget_single] Too many particles for one file. Use more files\n");
 
                 write_header_general(fp,
                                      npart_family,
@@ -665,99 +696,59 @@ namespace FML {
                                      OmegaLambda,
                                      HubbleParam);
 
-                // Count how many particles to write
-                unsigned int ntowrite = 0;
-                for (int i = 0; i < 6; i++) {
-                    ntowrite += npart_family[i];
+                // The indices of the particles we write sorted by family
+                std::vector<size_t> order;
+                order.reserve(ntowrite);
+                if constexpr (use_family) {
+                    for (int curfamily = 0; curfamily < 6; curfamily++)
+                        if (npart_family[curfamily] > 0)
+                            for (size_t j = 0; j < NumPart; j++)
+                                if (family_of(j) == curfamily)
+                                    order.push_back(j);
+                } else {
+                    for (size_t j = 0; j < NumPart; j++)
+                        order.push_back(j);
                 }
-                unsigned int bytes = ntowrite * NDIM * sizeof(float);
-                buffer = std::vector<char>(bytes);
 
-                // If particles have family then sort POS of them by family in the buffer
+                // POS
                 if constexpr (FML::PARTICLE::has_get_pos<T>()) {
-                    bytes = ntowrite * NDIM * sizeof(float);
+                    const size_t bytes = ntowrite * NDIM * sizeof(float);
                     buffer.resize(bytes);
                     float_buffer = reinterpret_cast<float *>(buffer.data());
-                    size_t count = 0;
-                    for (int curfamily = 0; curfamily < 6; curfamily++) {
-                        if (npart_family[curfamily] > 0) {
-                            for (size_t j = 0; j < ntowrite; j++) {
-                                auto * pos = FML::PARTICLE::GetPos(part[j]);
-                                if constexpr (FML::PARTICLE::has_get_family<T>()) {
-                                    auto family = FML::PARTICLE::GetFamily(part[j]);
-                                    if (family == curfamily) {
-                                        for (int idim = 0; idim < NDIM; idim++)
-                                            float_buffer[NDIM * count + idim] = float(pos[idim]) * pos_norm;
-                                        count++;
-                                    }
-                                } else {
-                                    for (int idim = 0; idim < NDIM; idim++)
-                                        float_buffer[NDIM * count + idim] = float(pos[idim]) * pos_norm;
-                                    count++;
-                                }
-                            }
-                        }
+                    for (size_t count = 0; count < ntowrite; count++) {
+                        auto * pos = FML::PARTICLE::GetPos(part[order[count]]);
+                        for (int idim = 0; idim < NDIM; idim++)
+                            float_buffer[NDIM * count + idim] = float(pos[idim]) * pos_norm;
                     }
-                    assert(count == ntowrite);
                     write_section(fp, buffer, bytes);
                 }
 
-                // If particles have family then sort VEL of them by family in the buffer
+                // VEL
                 if constexpr (FML::PARTICLE::has_get_vel<T>()) {
-                    bytes = ntowrite * NDIM * sizeof(float);
+                    const size_t bytes = ntowrite * NDIM * sizeof(float);
                     buffer.resize(bytes);
                     float_buffer = reinterpret_cast<float *>(buffer.data());
-                    size_t count = 0;
-                    for (int curfamily = 0; curfamily < 6; curfamily++) {
-                        if (npart_family[curfamily] > 0) {
-                            for (size_t j = 0; j < ntowrite; j++) {
-                                if constexpr (FML::PARTICLE::has_get_family<T>()) {
-                                    auto family = FML::PARTICLE::GetFamily(part[j]);
-                                    if (family == curfamily) {
-                                        auto * vel = FML::PARTICLE::GetVel(part[j]);
-                                        for (int idim = 0; idim < NDIM; idim++)
-                                            float_buffer[NDIM * count + idim] = float(vel[idim]) * vel_norm;
-                                        count++;
-                                    }
-                                } else {
-                                    auto * vel = FML::PARTICLE::GetVel(part[j]);
-                                    for (int idim = 0; idim < NDIM; idim++)
-                                        float_buffer[NDIM * count + idim] = float(vel[idim]) * vel_norm;
-                                    count++;
-                                }
-                            }
-                        }
+                    for (size_t count = 0; count < ntowrite; count++) {
+                        auto * vel = FML::PARTICLE::GetVel(part[order[count]]);
+                        for (int idim = 0; idim < NDIM; idim++)
+                            float_buffer[NDIM * count + idim] = float(vel[idim]) * vel_norm;
                     }
-                    assert(count == ntowrite);
                     write_section(fp, buffer, bytes);
                 }
 
-                // If particles have family then sort ID of them by family in the buffer
+                // ID (8 bytes if some ID does not fit in an int or if there are more than 2^31 particles)
                 if constexpr (FML::PARTICLE::has_get_id<T>()) {
-                    bytes = sizeof(gadget_particle_id_type) * ntowrite;
-                    buffer.resize(bytes);
-                    id_buffer = reinterpret_cast<gadget_particle_id_type *>(buffer.data());
-                    size_t count = 0;
-                    for (int curfamily = 0; curfamily < 6; curfamily++) {
-                        if (npart_family[curfamily] > 0) {
-                            for (size_t j = 0; j < ntowrite; j++) {
-                                if constexpr (FML::PARTICLE::has_get_family<T>()) {
-                                    auto family = FML::PARTICLE::GetFamily(part[j]);
-                                    if (family == curfamily) {
-                                        auto id = FML::PARTICLE::GetID(part[j]);
-                                        id_buffer[count] = id;
-                                        count++;
-                                    }
-                                } else {
-                                    auto id = FML::PARTICLE::GetID(part[j]);
-                                    id_buffer[count] = id;
-                                    count++;
-                                }
-                            }
-                        }
+                    size_t ntot = 0;
+                    for (auto n : npart_family_tot)
+                        ntot += n;
+                    bool long_ids = sizeof(gadget_particle_id_type) == 8 or ntot > size_t(INT_MAX) + 1;
+                    for (size_t j = 0; j < NumPart and not long_ids; j++) {
+                        const long long int id = (long long int)FML::PARTICLE::GetID(part[j]);
+                        long_ids = id > INT_MAX or id < INT_MIN;
                     }
-                    assert(count == ntowrite);
-                    write_section(fp, buffer, bytes);
+                    write_ids(fp, ntowrite, long_ids, [&](size_t count) {
+                        return (long long int)FML::PARTICLE::GetID(part[order[count]]);
+                    });
                 }
             }
 
@@ -791,6 +782,12 @@ namespace FML {
                     if (sp.get_mass)
                         mass_in_1e10_msunh[sp.type] = 0.0;
 
+                size_t ntowrite = 0;
+                for (auto & sp : species)
+                    ntowrite += sp.npart;
+                if (ntowrite > size_t(UINT_MAX))
+                    throw_error("[GadgetWriter::write_gadget_species] Too many particles for one file. Use more files\n");
+
                 std::ofstream fp(filename.c_str(), std::ios::binary | std::ios::out);
                 if (not fp.is_open())
                     throw_error("[GadgetWriter::write_gadget_species] File " + filename + " is not open\n");
@@ -805,9 +802,6 @@ namespace FML {
                                      OmegaLambda,
                                      HubbleParam);
 
-                size_t ntowrite = 0;
-                for (auto & sp : species)
-                    ntowrite += sp.npart;
                 std::vector<char> buffer;
                 auto all_have = [&](auto member) {
                     for (auto & sp : species)
@@ -828,21 +822,26 @@ namespace FML {
                                 float_buffer[NDIM * count + idim] = float(x[idim] * norm);
                             count++;
                         }
-                    write_section(fp, buffer, int(bytes));
+                    write_section(fp, buffer, bytes);
                 };
                 if (all_have(&GadgetSpecies::get_pos))
                     write_vector_block(&GadgetSpecies::get_pos, pos_norm);
                 if (all_have(&GadgetSpecies::get_vel))
                     write_vector_block(&GadgetSpecies::get_vel, vel_norm);
                 if (all_have(&GadgetSpecies::get_id)) {
-                    const size_t bytes = sizeof(gadget_particle_id_type) * ntowrite;
-                    buffer.resize(bytes);
-                    auto * id_buffer = reinterpret_cast<gadget_particle_id_type *>(buffer.data());
-                    size_t count = 0;
+                    // 8 byte IDs if some ID does not fit in an int or if there are more than 2^31 particles
+                    size_t ntot = 0;
                     for (auto & sp : species)
-                        for (size_t j = 0; j < sp.npart; j++)
-                            id_buffer[count++] = gadget_particle_id_type(sp.get_id(j));
-                    write_section(fp, buffer, int(bytes));
+                        ntot += sp.npart_total;
+                    bool long_ids = sizeof(gadget_particle_id_type) == 8 or ntot > size_t(INT_MAX) + 1;
+                    std::vector<long long int> ids;
+                    ids.reserve(ntowrite);
+                    for (auto & sp : species)
+                        for (size_t j = 0; j < sp.npart; j++) {
+                            ids.push_back(sp.get_id(j));
+                            long_ids = long_ids or ids.back() > INT_MAX or ids.back() < INT_MIN;
+                        }
+                    write_ids(fp, ntowrite, long_ids, [&](size_t count) { return ids[count]; });
                 }
                 size_t nmass = 0;
                 for (auto & sp : species)
@@ -856,7 +855,7 @@ namespace FML {
                         if (sp.get_mass)
                             for (size_t j = 0; j < sp.npart; j++)
                                 float_buffer[count++] = float(mean_mass_of_type[sp.type] * sp.get_mass(j));
-                    write_section(fp, buffer, int(bytes));
+                    write_section(fp, buffer, bytes);
                 }
             }
 

@@ -68,30 +68,41 @@ namespace FML {
 
                 int bytes_start, bytes_end;
                 fp.read((char *)&bytes_start, sizeof(bytes_start));
+                if (not fp)
+                    throw_error("[GadgetReader::read_section] Could not read the block size (end of file?)\n");
                 if (endian_swap)
                     bytes_start = swap_endian(bytes_start);
-                
-                if (buffer.size() > 0) {
-                    if (buffer.size() < size_t(bytes_start)) {
-                        std::string errormessage = "[GadgetReader::read_section] Buffersize is too small\n";
-                        throw_error(errormessage);
-                    }
-                } else {
-                    buffer = std::vector<char>(bytes_start);
-                }
-                
+                if (bytes_start < 0)
+                    throw_error("[GadgetReader::read_section] Negative block size in file\n");
+
                 // NB: we do not swap endian-ness here, the caller will have to do that
                 // depending on what type of data we are reading
+                buffer.resize(size_t(bytes_start));
                 fp.read(buffer.data(), bytes_start);
 
                 fp.read((char *)&bytes_end, sizeof(bytes_end));
+                if (not fp)
+                    throw_error("[GadgetReader::read_section] The file ended inside a block\n");
                 if (endian_swap)
                     bytes_end = swap_endian(bytes_end);
-                
+
                 if (bytes_start != bytes_end) {
                     std::string errormessage = "[GadgetReader::read_section] Error in file BytesStart != ByteEnd!\n";
                     throw_error(errormessage);
                 }
+            }
+
+            bool GadgetReader::read_label(std::ifstream & fp, std::string & label) {
+                if (fp.peek() == std::ifstream::traits_type::eof())
+                    return false;
+                std::vector<char> buffer;
+                read_section(fp, buffer);
+                if (buffer.size() != 8)
+                    throw_error("[GadgetReader::read_label] Expected a label block of 8 bytes in a format 2 file\n");
+                label = std::string(buffer.data(), 4);
+                while (not label.empty() and (label.back() == ' ' or label.back() == '\0'))
+                    label.pop_back();
+                return true;
             }
 
             void GadgetReader::read_header(std::ifstream & fp) {
@@ -100,23 +111,42 @@ namespace FML {
                     throw_error(errormessage);
                 }
 
+                // Detect the format and the endianness from the first block size: 256 (the header, format 1)
+                // or 8 (the label block, format 2)
+                endian_swap = false;
+                format2 = false;
                 int bytes_start, bytes_end;
                 fp.read((char *)&bytes_start, sizeof(bytes_start));
-                if(bytes_start != sizeof(header)) {
+                if (not fp)
+                    throw_error("[GadgetReader::read_header] Could not read the header\n");
+                if (bytes_start == 8 or swap_endian(bytes_start) == 8) {
+                    format2 = true;
+                    endian_swap = bytes_start != 8;
+                    fp.seekg(0, fp.beg);
+                    std::string label;
+                    read_label(fp, label);
+                    if (label != "HEAD")
+                        throw_error("[GadgetReader::read_header] Format 2 file without a HEAD block first\n");
+                    fp.read((char *)&bytes_start, sizeof(bytes_start));
+                    if (endian_swap)
+                        bytes_start = swap_endian(bytes_start);
+                } else if (bytes_start != int(sizeof(header))) {
                     // Ok lets try to swap endian and see if that works better
                     endian_swap = true;
                     bytes_start = swap_endian(bytes_start);
-                    if (bytes_start != sizeof(header)) {
-                        std::string errormessage =
-                            "[GadgetReader::read_header] Error: ByteStart != sizeof(header) even after endian-swap\n";
-                        throw_error(errormessage);
-                    }
+                }
+                if (bytes_start != int(sizeof(header))) {
+                    std::string errormessage = "[GadgetReader::read_header] Error: not a GADGET file (the first block "
+                                               "is not a 256 byte header or a format 2 label in either endianness)\n";
+                    throw_error(errormessage);
                 }
                 fp.read((char *)&header, bytes_start);
                 fp.read((char *)&bytes_end, sizeof(bytes_end));
-                if(endian_swap) 
+                if (not fp)
+                    throw_error("[GadgetReader::read_header] The file ended inside the header\n");
+                if(endian_swap)
                     bytes_end = swap_endian(bytes_end);
-                
+
                 if (bytes_start != bytes_end) {
                     std::string errormessage = "[GadgetReader::read_header] Error: we find that BytesStart != ByteEnd!\n";
                     throw_error(errormessage);
@@ -153,18 +183,44 @@ namespace FML {
 
             GadgetWriter::GadgetWriter(int ndim) : NDIM(ndim) {}
 
-            void GadgetWriter::write_section(std::ofstream & fp, std::vector<char> & buffer, int bytes) {
+            void GadgetWriter::write_section(std::ofstream & fp, std::vector<char> & buffer, size_t bytes) {
                 if (not fp.is_open()) {
                     std::string errormessage = "[GadgetWriter::write_section] File is not open\n";
                     throw_error(errormessage);
                 }
-                if (buffer.size() < size_t(bytes)) {
+                if (buffer.size() < bytes) {
                     std::string errormessage = "[GadgetWriter::write_section] Buffersize too small\n";
                     throw_error(errormessage);
                 }
-                fp.write((char *)&bytes, sizeof(bytes));
+                if (bytes > size_t(INT_MAX)) {
+                    std::string errormessage = "[GadgetWriter::write_section] A block of " + std::to_string(bytes) +
+                                               " bytes is larger than the 2^31 - 1 bytes a GADGET block can have. "
+                                               "Write the particles to more files\n";
+                    throw_error(errormessage);
+                }
+                const int marker = int(bytes);
+                fp.write((char *)&marker, sizeof(marker));
                 fp.write(buffer.data(), bytes);
-                fp.write((char *)&bytes, sizeof(bytes));
+                fp.write((char *)&marker, sizeof(marker));
+            }
+
+            void GadgetWriter::write_ids(std::ofstream & fp,
+                                         size_t n,
+                                         bool long_ids,
+                                         const std::function<long long int(size_t)> & id) {
+                std::vector<char> buffer;
+                if (long_ids) {
+                    buffer.resize(n * sizeof(int64_t));
+                    auto * id_buffer = reinterpret_cast<int64_t *>(buffer.data());
+                    for (size_t i = 0; i < n; i++)
+                        id_buffer[i] = int64_t(id(i));
+                } else {
+                    buffer.resize(n * sizeof(int32_t));
+                    auto * id_buffer = reinterpret_cast<int32_t *>(buffer.data());
+                    for (size_t i = 0; i < n; i++)
+                        id_buffer[i] = int32_t(id(i));
+                }
+                write_section(fp, buffer, buffer.size());
             }
 
             // Simple thing only for dark matter particles
@@ -261,7 +317,8 @@ namespace FML {
             }
 
             int GadgetReader::get_num_files(std::string filename) {
-                if (not header_is_read) {
+                // Read the header of filename if given (not one we read earlier, possibly of another snapshot)
+                if (not header_is_read or not filename.empty()) {
                     std::ifstream fp(filename.c_str(), std::ios::binary);
                     if (not fp.is_open()) {
                         std::string errormessage = "[GadgetReader::get_num_files] File " + filename + " is not open\n";

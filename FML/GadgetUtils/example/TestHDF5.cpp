@@ -161,7 +161,9 @@ int main(int argc, char ** argv) {
         check(std::fabs(header.time - aexp) < 1e-12 and std::fabs(header.BoxSize - boxsize) < 1e-12 and
                   header.num_files == nfiles,
               "Header (Time, BoxSize, NumFilesPerSnapshot) is correct");
-        check(header.mass[0] > 0 and std::fabs(header.mass[1] / header.mass[0] - 8.0) < 1e-10,
+        // The mass of a particle of type i is OmegaFamilyOverOmegaM[i] * OmegaM * rho_crit * Box^3 / NumPart_Total[i]
+        const double n0 = header.npartTotal[0], n1 = header.npartTotal[1];
+        check(header.mass[0] > 0 and std::fabs(header.mass[1] / header.mass[0] - 8.0 * n0 / n1) < 1e-10,
               "MassTable follows OmegaFamilyOverOmegaM");
 
         //=========================================================
