@@ -174,6 +174,11 @@ int main(int argc, char ** argv) {
         // padding (alignment) and with FFTW_MEASURE planning preserving the data
 #ifdef USE_FFTW
         {
+#if defined(USE_FFTW_THREADS) && !defined(USE_MPI)
+            check(FML::FFTWThreadsOK, "FFTW threading initializes without MPI");
+            check(FML::GRID::get_fftw_nthreads() == FML::NThreads,
+                  "FFTW uses the available OpenMP threads without MPI");
+#endif
             FML::GRID::FFTWGrid<3> a(32, 1, 1), b(32, 2, 3);
             FML::GRID::FFTWGrid<2> c(64);
             double err = 0.0;

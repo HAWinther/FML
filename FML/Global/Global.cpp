@@ -345,7 +345,11 @@ namespace FML {
 
         void init_fftw([[maybe_unused]] int * argc, [[maybe_unused]] char *** argv) {
 #if defined(USE_FFTW) && defined(USE_FFTW_THREADS)
-            if (FML::MPIThreadsOK) {
+            // MPI thread support is only a prerequisite when MPI is enabled.
+#ifdef USE_MPI
+            if (FML::MPIThreadsOK)
+#endif
+            {
                 FML::FFTWThreadsOK = INIT_FFTW_THREADS();
                 if (FML::FFTWThreadsOK) {
                     // (FML::NThreads is only set by init_fml, which may not have been called yet)
