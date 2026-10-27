@@ -73,7 +73,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `gravity_model_dgp_rcH0overc` | double | *required* | gravity_model = DGP | The cross-over scale rc H0 / c |
 | `gravity_model_screening` | bool | `true` | gravity_model in {mbeta, f(R), Symmetron, DGP} | Use the approximate screening model (otherwise linear) |
 | `gravity_model_dgp_smoothing_filter` | string | `"tophat"` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the filter used to smooth the density field. Options: `tophat`, `sharpk`, `gaussian` |
-| `gravity_model_dgp_smoothing_scale_over_boxsize` | double | `1` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the smoothing scale R/boxsize |
+| `gravity_model_dgp_smoothing_scale_over_boxsize` | double | `1` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the smoothing scale R/boxsize (the default 1 smooths over the whole box, which makes the screening very weak; see GravityModel_DGP.h) |
 | `gravity_model_screening_enforce_largescale_linear` | bool | `false` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true | Combine the screened solution with the linear solution to get the correct linear evolution on large scales |
 | `gravity_model_screening_linear_scale_hmpc` | double | `0.05` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true | Use the linear solution for k < k* and the screened solution for k > k* (h/Mpc) |
 | `gravity_model_screening_efficiency` | double | `1` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true and gravity_model in {mbeta, f(R)} | Screening efficiency (1 is standard). Increases or decreases the amount of screening |
@@ -259,7 +259,7 @@ Parameters marked *optional* take the default value if they are not in the param
 |---|---|---|---|---|
 | `pofk` | bool | `false` | always | Compute the power-spectrum at every output |
 | `pofk_every_step` | bool | `true` | always | Write P(k) of the density field used for the force at every step (cheap; same grid and assignment as the force, the window is deconvolved): pofk_<name>_cb_z<z>.txt in output_folder |
-| `pofk_nmesh` | int | `0` | pofk = true | Grid size |
+| `pofk_nmesh` | int | *required* | pofk = true | Grid size |
 | `pofk_interlacing` | bool | `false` | pofk = true | Use interlaced grids to reduce aliasing |
 | `pofk_subtract_shotnoise` | bool | `false` | pofk = true | Subtract shot-noise |
 | `pofk_density_assignment_method` | string | `"CIC"` | pofk = true | Density assignment method. Options: `NGP`, `CIC`, `TSC`, `PCS`, `PQS` |

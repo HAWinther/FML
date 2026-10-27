@@ -91,6 +91,16 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
                                       FFTWGrid<NDIM> & density_fourier,
                                       FFTWGrid<NDIM> & density_fifth_force) const override {
         // Approximate screening method
+        //
+        // NB: this is not the spherical Vainshtein solution of the field equation. That solution (the one the
+        // multigrid solver DGPSolver.h solves, reduced to spherical symmetry) is
+        //   fac = 8 OmegaM (rc H0)^2 / (9 beta^2 a^3) * delta,
+        // with the density contrast delta (and 1 + fac >= 0), while the code below uses 1 + delta (it is passed the
+        // density rho/rhobar, see FML::NBODY::compute_delta_fifth_force_density_screening) and no 1/a^3: it does not
+        // tend to 1 (no screening) for delta -> 0 (0.990 at a = 1 for rcH0 = 1) and screens much less at z > 0
+        // (0.77 instead of 0.26 for delta = 100 at a = 1/3). It is kept as it is because it gives results closer to
+        // the exact (multigrid) solution in simulations; the default smoothing of the density field over the whole
+        // box (gravity_model_dgp_smoothing_scale_over_boxsize = 1) also makes the screening very weak.
         const double OmegaM = this->cosmo->get_OmegaM();
         auto screening_function_dgp = [=, eff = this->screening_efficiency](double density_contrast) {
             double fac = 8.0 * OmegaM * std::pow(rcH0_DGP * (GeffOverG(a) - 1.0), 2) * (density_contrast);

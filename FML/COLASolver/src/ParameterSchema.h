@@ -326,7 +326,8 @@ namespace COLASOLVER {
                                    smoothing_filters);
                         b.optional("gravity_model_dgp_smoothing_scale_over_boxsize",
                                    1.0,
-                                   "Screening approximation: the smoothing scale R/boxsize");
+                                   "Screening approximation: the smoothing scale R/boxsize (the default 1 smooths over the whole "
+                                   "box, which makes the screening very weak; see GravityModel_DGP.h)");
                     });
                     b.optional("gravity_model_screening_enforce_largescale_linear",
                                false,
@@ -736,7 +737,7 @@ namespace COLASOLVER {
                               "and assignment as the force, the window is deconvolved): pofk_<name>_cb_z<z>.txt in "
                               "output_folder");
             if_true("pofk", [&]() {
-                b.optional("pofk_nmesh", 0, "Grid size");
+                b.required("pofk_nmesh", 0, "Grid size");
                 b.optional("pofk_interlacing", false, "Use interlaced grids to reduce aliasing");
                 b.optional("pofk_subtract_shotnoise", false, "Subtract shot-noise");
                 b.optional("pofk_density_assignment_method", "CIC", "Density assignment method", assignment_methods);
