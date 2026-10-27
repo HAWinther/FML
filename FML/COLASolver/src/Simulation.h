@@ -708,10 +708,22 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
             f[i] = transferdata->get_cdm_baryon_growth_rate(std::exp(logk[i]), aini);
         }
         growth_rate_of_logk.create(logk, f, "f_cb(k,zini)");
-        velocity_norm_1LPT_of_kBox = [&, kmin, kmax](double kBox) {
+        // With COLA the velocities are relative to the COLA frame, which has the growth rate of the gravity model
+        // (at k = 0 for scale-independent COLA) for 1LPT and all of the 2LPT velocity. Zeroing the velocities (as for
+        // scale-independent growth) would replace f_nbg(k) by f(0) (0.75% too large velocity on the largest scales)
+        const bool relative_to_cola_frame = cola.enabled;
+        velocity_norm_1LPT_of_kBox = [&, kmin, kmax, relative_to_cola_frame](double kBox) {
             const double k = std::min(std::max(kBox / boxsize, kmin), kmax);
-            return fac * growth_rate_of_logk(std::log(k));
+            const double f_frame = not relative_to_cola_frame ? 0.0 :
+                                   cola.scaledependent       ? grav->get_f_1LPT(aini, kBox / boxsize / grav->H0_hmpc) :
+                                                               grav->get_f_1LPT(aini);
+            return fac * (growth_rate_of_logk(std::log(k)) - f_frame);
         };
+        if (relative_to_cola_frame) {
+            ic_velocities_relative_to_cola_frame = true;
+            for (auto & v : velocity_norms)
+                v = 0.0;
+        }
         if (FML::ThisTask == 0)
             std::cout << "# N-body gauge: growth rate at zini f(k) = " << growth_rate_of_logk(std::log(kmin)) << " (k = "
                       << kmin << " h/Mpc), " << growth_rate_of_logk(std::log(0.1)) << " (k = 0.1 h/Mpc). "
@@ -868,28 +880,33 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
         if (FML::ThisTask == 0)
             std::cout << "# Making the " << info.name << " particles\n";
         // With COLA the species share the COLA frame of the total CDM+baryon field and the velocities we set are
-        // relative to it: v_i - v_LPT,cb = a^2 H [(f_i - f_cb / R_i) Psi_i] for 1LPT (Psi_i = R_i Psi_cb) and zero for
-        // 2LPT (the same for all species). For one species this is zero, as in the COLA frame
+        // relative to it: v_i - v_frame = a^2 H [(f_i - f_frame / R_i) Psi_i] for 1LPT (Psi_i = R_i Psi_cb) and zero
+        // for 2LPT (the same for all species). The frame velocity is f_frame Psi_cb with f_frame = f_cb(k) for
+        // scale-dependent COLA, but the growth rate at k = 0 for scale-independent COLA (the frame adds back
+        // grav->get_f_1LPT(a), as for one species). Using f_cb(k) there with scale-dependent growth gave the
+        // velocities (f_cb(k) - f(0)) Psi_cb too little (-1.75% rms for 0.4 eV neutrinos)
         const std::vector<double> residual_velocity_norms(velocity_norms.size(), 0.0);
+        auto f_frame = [&](double logk) {
+            return cola.scaledependent ? grav_ic->get_f_1LPT(aini, std::exp(logk) / grav_ic->H0_hmpc) :
+                                         grav->get_f_1LPT(aini);
+        };
         std::function<double(double)> velocity_norm_1LPT = [&](double kBox) {
             const double logk = clamp_logk(kBox);
             if (not cola.enabled)
                 return fac * growth_rate(logk);
-            const double f_cb = grav_ic->get_f_1LPT(aini, std::exp(logk) / grav_ic->H0_hmpc);
-            return fac * (growth_rate(logk) - f_cb / ratio(logk));
+            return fac * (growth_rate(logk) - f_frame(logk) / ratio(logk));
         };
         std::function<double(double)> displacement_ratio = [&](double kBox) { return ratio(clamp_logk(kBox)); };
         std::function<double(double)> mass_contrast = nullptr;
         if (mass_mode) {
-            // Both species are displaced by Psi_cb. mass: the CDM+baryon velocity f_cb Psi_cb (zero in the COLA
-            // frame). mass_ini: the velocity of the species v_i = f_i R_i Psi_cb (f_i R_i - f_cb relative to the COLA
-            // frame)
+            // Both species are displaced by Psi_cb. mass: the CDM+baryon velocity f_cb Psi_cb. mass_ini: the velocity
+            // of the species v_i = f_i R_i Psi_cb. With COLA relative to the frame velocity f_frame Psi_cb
             displacement_ratio = [](double) { return 1.0; };
             velocity_norm_1LPT = [&](double kBox) {
                 const double logk = clamp_logk(kBox);
                 const double f_cb = grav_ic->get_f_1LPT(aini, std::exp(logk) / grav_ic->H0_hmpc);
                 const double f_i = relative_mode == "mass" ? f_cb : growth_rate(logk) * ratio(logk);
-                return fac * (cola.enabled ? f_i - f_cb : f_i);
+                return fac * (cola.enabled ? f_i - f_frame(logk) : f_i);
             };
             if (relative_mode == "mass")
                 mass_contrast = [&](double kBox) { return (*eps_of_logk)(clamp_logk(kBox)); };
