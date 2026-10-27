@@ -5,6 +5,79 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLASolver review fixes: lightcone, halos, initial conditions, validation
+Lightcone:
+- With COLA (also scale-dependent), the lightcone no longer counts the LPT displacement of a step twice. The COLA
+  drift is now done after the lightcone. With 10 steps, the median position error vs a 200-step run went from
+  0.49 to 0.085 Mpc/h. Snapshots are unchanged.
+- Without `plc_output_in_batches`, a step with more crossings than particles on a task flushed the buffer to the
+  same unsuffixed file, losing up to 96% of the particles. With MPI it crashed (`MPI_ERR_TRUNCATE`, a collective
+  called from one rank). Now:
+  - the buffer is only flushed in batch mode;
+  - batch mode is decided per step (it was switched off for the rest of the run after one small shell);
+  - every batch has one file per task (NumFiles was wrong);
+  - memory is reserved per task instead of the global estimate on every task.
+- Particles are no longer lost when `plc_z_finish` or `plc_z_init` falls inside a step. The chord approximation
+  of r(a) used to cut them.
+- Without replicas, an incomplete octant (r(z_init) > 1 - max(`plc_pos_observer`) boxsize) is an error on all
+  tasks.
+- Onion density and kappa maps with fsky < 1 (the octant without replicas):
+  - they are normalized over the observed pixels and are zero outside. Before, unobserved pixels were set to
+    delta = -1 and the mean was taken over the whole sky, which shifted the observed pixels by about +0.8;
+  - C_ell are divided by the observed fsky, which is written in the header;
+  - `plc_make_onion_density_maps` without Healpix is now a parameter error.
+- New test: `tests/check_lightcone.py`.
+
+Halos:
+- FoF/SO: the SO radius is now the outermost radius where the mean enclosed density is above Delta (as in
+  Rockstar).
+  - Before, the sphere stopped at the first particle below the threshold, counted from the center. That gave 1-2
+    particles even for halos with hundreds of particles: a 750-particle FoF halo had N200c = 1, against 22.
+  - SO masses, radii and N in halo catalogues and the SO mass functions change.
+  - Halos whose density is nowhere above Delta at the simulation resolution still get 1-2 particles.
+- Mass function:
+  - halos just below `fof_massfunction_Mmin` are no longer counted in the first bin (`int()` instead of
+    `floor`);
+  - n(>M) is the number density of halos with mass at or above the mass written in the first column.
+- Baryonification:
+  - hosts with fewer than `baryonification_fof_min_particles` particles inside R200c are skipped
+    (`rejected_unresolved`);
+  - hosts whose support `max_radius_over_r200 * R200c` reaches half the box are skipped
+    (`rejected_support_over_half_box`) instead of aborting the run.
+- The halo gathers fail with a clear error instead of overflowing their int MPI counts.
+- `pofk_multipole_ellmax < 0` is rejected.
+- New tests: `tests/check_halos.py` and `FML/tests/test_so.cpp`.
+
+Initial conditions:
+- Initial velocities with COLA:
+  - CDM+baryon particles with scale-independent COLA and scale-dependent growth (massive neutrinos) got wrong
+    initial velocities: residual against f_cb(k) but frame with f(0); 1.75% rms for 0.4 eV.
+  - The N-body gauge with COLA lost its scale-dependent initial growth rate (0.75% on the largest scales).
+- `cosmology_OmegaMNu > 0` without `ic_type_of_input = transferinfofile` is an error instead of a segfault.
+- `read_particles`:
+  - Exact reconstruction handles offset particle lattices. It was off by 1-2% with the default offset when
+    `force_nmesh > Npart_1D`, and by a factor of several with half_force_cell.
+  - Exact reconstruction with COLA and scale-dependent growth is an error, since f(k) is not known per particle.
+  - Grid reconstruction deconvolves the window before interpolating the displacements. With COLA it keeps the
+    velocities from the file, relative to the frame. With PCS, P(k) at k = 0.37 h/Mpc went from -25% to +1.6% vs
+    the original run.
+  - The file header (a, BoxSize, Omega0, h) is checked against the parameter file.
+- A warning when the input P(k)/T(k) does not reach the largest k of the IC grid. Beyond the table it was held
+  constant without notice.
+- New test: `tests/check_initial_conditions.py`.
+
+Validation:
+- The FoF validation was compiled out in HDF5 builds. A bad SO definition aborted after the whole run, and bad
+  mass-function bins segfaulted.
+- `pofk_nmesh` is required (it was optional with default 0, which gave a SIGFPE at the first output).
+- All grid sizes and bin counts must be > 0.
+- New test: `tests/check_validation.py`.
+
+DGP:
+- The screening approximation is documented as not being the spherical Vainshtein solution: it uses 1 + delta,
+  and there is no 1/a^3. It is kept since it gives results closer to the exact solution.
+- The default smoothing over the whole box, which makes the screening very weak, is documented.
+
 ### ParticleTypes, TidalTensor: guards
 - The fiducial particle communication (`AppendToBuffer` / `AssignFromBuffer` when the particle has no
   `append_to_buffer` / `assign_from_buffer`, used by `MPIParticles::communicate_particles` and `dump_to_file`) copies
