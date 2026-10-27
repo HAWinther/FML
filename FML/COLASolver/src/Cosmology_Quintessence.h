@@ -1,6 +1,8 @@
 #ifndef COSMOLOGY_QUINTESSENCE_HEADER
 #define COSMOLOGY_QUINTESSENCE_HEADER
 
+#include "ParameterDefaults.h"
+
 #include "Cosmology_ScalarField.h"
 
 #include <cmath>
@@ -29,8 +31,8 @@ class CosmologyQuintessence final : public CosmologyScalarField {
     void read_parameters(ParameterMap & param) override {
         Cosmology::read_parameters(param);
         potential = param.get<std::string>("cosmology_quintessence_potential");
-        phi_ini = param.get<double>("cosmology_quintessence_phi_ini", 0.0);
-        dphidlna_ini = param.get<double>("cosmology_quintessence_dphidlna_ini", 0.0);
+        phi_ini = COLASOLVER::get_parameter<double>(param, "cosmology_quintessence_phi_ini");
+        dphidlna_ini = COLASOLVER::get_parameter<double>(param, "cosmology_quintessence_dphidlna_ini");
         if (potential == "exponential") {
             lambda = param.get<double>("cosmology_quintessence_lambda");
         } else if (potential == "inverse_power_law") {

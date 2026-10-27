@@ -1,6 +1,8 @@
 #ifndef SIMULATION_HEADER
 #define SIMULATION_HEADER
 
+#include "ParameterDefaults.h"
+
 #include <FML/CAMBUtils/CAMBReader.h>
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
 #include <FML/FFTWGrid/FFTWGrid.h>
@@ -359,8 +361,8 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
 
     // The (experimental) finite difference force: only the stencils 2, 4 and 6 are implemented and the gradient is
     // the finite difference stencil, so an explicitly chosen Fourier gradient kernel would be ignored
-    if (param.get<bool>("force_use_finite_difference_force", false)) {
-        const int stencil_order = param.get<int>("force_finite_difference_stencil_order", 4);
+    if (COLASOLVER::get_parameter<bool>(param, "force_use_finite_difference_force")) {
+        const int stencil_order = COLASOLVER::get_parameter<int>(param, "force_finite_difference_stencil_order");
         if (not FML::NBODY::is_valid_finite_difference_stencil_order(stencil_order))
             throw std::runtime_error("Parameterfile: force_finite_difference_stencil_order = " +
                                      std::to_string(stencil_order) +

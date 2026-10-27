@@ -5,6 +5,30 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLASolver refactoring: gravity models, parameter defaults, parallel build
+- Gravity models: the force from the density (finite-difference or Fourier) was written out in each of the 8 models
+  and the fifth-force pipeline (exact multigrid solution, screening approximation with the optional large-scale linear
+  blend, linear fifth force, adding the Newtonian part) in each of f(R), symmetron, DGP and m(a)/beta(a). Now
+  `GravityModel::compute_force_from_total_density` does the former and the new base class `GravityModelScreened`
+  (GravityModel_Screened.h) the latter, with the screening and multigrid parameters; a model only provides
+  `GeffOverG`, its screened fifth force and (optionally) its multigrid solver. The models are 40% shorter (1914 ->
+  1294 lines incl. the new base class) and a new screened model needs only these parts. Results are bit-identical
+  (regression, and an m(a)/beta(a) run: the gravitymodel output differs only for a > 2.5, beyond the phi(a) spline,
+  which only goes to a = 1, where the 3LPT growth factors were already numerically unstable).
+- Parameter defaults are only defined in the parameter table (ParameterSchema.h): the settings structs and the models
+  read optional parameters with `COLASOLVER::get_parameter<T>(param, name)` (ParameterDefaults.h), which takes the
+  default from the table, instead of repeating it in the code (21 defaults were written twice). Reading a name that is
+  not in the table is an error, and `tests/check_parameter_names.py` (run by CI) checks that every name the code reads
+  is in the table, also for code paths the regression does not run.
+- The simulation is compiled once per particle type (7 types) in its own file (src/RunSimulation_*.cpp) instead of all
+  in Main.cpp, so `make -j` compiles them in parallel: with 8 or more cores a full build takes about as long as one
+  file (~50 s here vs 160 s for the old Main.cpp); with 2 cores the total is longer (each file parses the headers:
+  ~350 s of CPU in total).
+- Regression: identical except the FoF halos at round-off level. These files (and one float in the z = 0 snapshot of
+  two_species_mass_ini) change with the code layout through floating-point contraction (FMA): with -ffp-contract=off
+  the outputs before and after are identical. The 1-ulp snapshot difference in round 55 was this too, not the exact
+  restore of the positions.
+
 ### FFTWGrid, MPIGrid, MPIParticles, particle helpers, LPT, RandomFields, NBody, PGD fixes
 - `FFTWGrid`: with a planner flag other than FFTW_ESTIMATE the first transform used freed memory (the plan creation
   replaced the buffer; segfault with 2 tasks); in 2D the in-place MPI FFT overwrote the right extra slices (FFTW uses

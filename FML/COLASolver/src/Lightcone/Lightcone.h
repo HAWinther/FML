@@ -1,6 +1,8 @@
 #ifndef LIGHTCONE_HEADER
 #define LIGHTCONE_HEADER
 
+#include "../ParameterDefaults.h"
+
 #include "Lightcone_Healpix.h"
 #include "Lightcone_Replicas.h"
 #include <FML/GadgetUtils/GadgetUtils.h>
@@ -216,13 +218,13 @@ void Lightcone<NDIM, T, U>::read_parameters(ParameterMap & param) {
         plc_a_finish = 1.0 / (1.0 + plc_z_finish);
         output_gadgetfile = param.get<bool>("plc_output_gadgetfile");
         output_asciifile = param.get<bool>("plc_output_asciifile");
-        output_hdf5file = param.get<bool>("plc_output_hdf5file", false);
+        output_hdf5file = COLASOLVER::get_parameter<bool>(param, "plc_output_hdf5file");
 #ifndef USE_HDF5
         if (output_hdf5file)
             throw std::runtime_error("Invalid parameters: plc_output_hdf5file = true needs HDF5: compile with USE_HDF5=true (make USE_HDF5=true)");
 #endif
         make_onion_density_maps = param.get<bool>("plc_make_onion_density_maps");
-        relativistic_effects = param.get<bool>("plc_relativistic_effects", false);
+        relativistic_effects = COLASOLVER::get_parameter<bool>(param, "plc_relativistic_effects");
         if (FML::ThisTask == 0) {
             std::cout << "\n# Read in Lightcone.h:\n";
             std::cout << "# lightcone                                : " << lightcone_on << "\n";

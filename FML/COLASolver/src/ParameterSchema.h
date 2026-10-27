@@ -6,6 +6,7 @@
 #include <FML/ParameterMap/ParameterMap.h>
 
 #include "Models.h"
+#include "ParameterDefaults.h"
 #include "SimulationParameters.h"
 
 #include <algorithm>
@@ -864,6 +865,19 @@ namespace COLASOLVER {
         }
         return prev[b.size()];
     }
+
+    //=============================================================================
+    /// Register the lookup of the default values in the table (ParameterDefaults.h: get_parameter)
+    //=============================================================================
+    inline const bool parameter_default_lookup_registered = []() {
+        parameter_default_lookup() = [](const std::string & name) -> const ParameterValue * {
+            for (auto & spec : parameter_schema<3>())
+                if (spec.name == name)
+                    return &spec.default_value;
+            return nullptr;
+        };
+        return true;
+    }();
 
     //=============================================================================
     /// Read the parameterfile (a Lua script) into param using the schema

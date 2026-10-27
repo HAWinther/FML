@@ -1,7 +1,7 @@
 #include "Models.h"
 #include "ParameterSchema.h"
 #include "Particles.h"
-#include "Simulation.h"
+#include "RunSimulation.h"
 
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
@@ -26,17 +26,6 @@ using ParameterMap = FML::UTILS::ParameterMap;
 constexpr int NDIM = NDIM_SPACE;
 
 /// Run the simulation with the particle type T
-template <class T>
-void run_simulation(const ParameterMap & param,
-                    std::shared_ptr<Cosmology> cosmo,
-                    std::shared_ptr<GravityModel<NDIM>> grav) {
-    FML::PARTICLE::info<T>();
-    NBodySimulation<NDIM, T> sim(cosmo, grav);
-    ParameterMap p = param;
-    sim.read_parameters(p);
-    sim.init();
-    sim.run();
-}
 
 int main(int argc, char ** argv) {
     if (argc == 1) {
@@ -100,14 +89,14 @@ int main(int argc, char ** argv) {
     // turned off (see SimulationParameters.h)
     //=============================================================
     const bool use_cola =
-        param.get<bool>("simulation_use_cola") and param.get<int>("simulation_cola_LPT_order", 2) >= 1;
+        param.get<bool>("simulation_use_cola") and COLASOLVER::get_parameter<int>(param, "simulation_cola_LPT_order") >= 1;
     const bool scaledependent_cola = use_cola and param.get<bool>("simulation_use_scaledependent_cola");
     // Sheet interpolation needs the Lagrangian position q
-    const std::string density_method = param.get<std::string>("force_density_method", "assignment");
+    const std::string density_method = COLASOLVER::get_parameter<std::string>(param, "force_density_method");
     const bool need_q = density_method == "sheet" or density_method == "sheet_nufft";
     // The mass-encoded baryon-CDM relative mode needs a mass in the particles (density assignment only, so no q)
-    const bool need_mass = param.get<bool>("particle_baryons", false) and
-                           param.get<std::string>("particle_baryon_relative_mode", "displacement") != "displacement";
+    const bool need_mass = COLASOLVER::get_parameter<bool>(param, "particle_baryons") and
+                           COLASOLVER::get_parameter<std::string>(param, "particle_baryon_relative_mode") != "displacement";
     if (need_mass) {
         if (scaledependent_cola)
             run_simulation<ParticleWithMass<ParticleCOLAScaleDep<NDIM>>>(param, cosmo, grav);

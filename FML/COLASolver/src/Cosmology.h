@@ -1,6 +1,8 @@
 #ifndef COSMOLOGY_HEADER
 #define COSMOLOGY_HEADER
 
+#include "ParameterDefaults.h"
+
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
@@ -181,7 +183,7 @@ class Cosmology {
         Omegab = param.get<double>("cosmology_Omegab");
         OmegaCDM = param.get<double>("cosmology_OmegaCDM");
         OmegaM = Omegab + OmegaCDM + OmegaMNu;
-        OmegaK = param.get<double>("cosmology_OmegaK", 0.0);
+        OmegaK = COLASOLVER::get_parameter<double>(param, "cosmology_OmegaK");
         h = param.get<double>("cosmology_h");
         As = param.get<double>("cosmology_As");
         ns = param.get<double>("cosmology_ns");

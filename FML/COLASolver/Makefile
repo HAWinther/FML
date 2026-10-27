@@ -29,8 +29,11 @@ OPTIONS     += -DNDIM_SPACE=$(NDIM_SPACE)
 FML_MODULES := Global Spline ODESolver GadgetUtils ParameterMap FileUtils Math
 EXTRA_VPATH := src
 
-nbody: Main.o BaryonificationOutput.o Global.o Spline.o ODESolver.o GadgetUtils.o ParameterMap.o FileUtils.o Math.o
+# The simulation is compiled once per particle type, each in its own file (use make -j to compile them in parallel)
+RUN_SIMULATION_OBJS := RunSimulation_COLAScaleDepWithMass.o RunSimulation_COLAWithMass.o RunSimulation_BasicWithMass.o RunSimulation_COLAScaleDep.o RunSimulation_COLA.o RunSimulation_BasicQ.o RunSimulation_Basic.o
+
+nbody: Main.o $(RUN_SIMULATION_OBJS) BaryonificationOutput.o Global.o Spline.o ODESolver.o GadgetUtils.o ParameterMap.o FileUtils.o Math.o
 	$(LINK_EXE)
 
 # Rebuild if build options change
-Main.o: Makefile
+Main.o $(RUN_SIMULATION_OBJS): Makefile

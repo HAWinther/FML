@@ -5,6 +5,7 @@
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/ParameterMap/ParameterMap.h>
 #include "BaryonificationParameters.h"
+#include "ParameterDefaults.h"
 
 #include <cmath>
 #include <functional>
@@ -45,16 +46,25 @@ namespace COLASOLVER {
       public:
         explicit ParameterReader(const ParameterMap & param) : param(param) {}
 
-        /// Read a required parameter
+        /// Read a parameter that must be in the map (required, or its condition in the table holds)
         template <class V>
         void get(const std::string & name, V & value) {
-            value = param.get<V>(name);
+            value = get_required_parameter<V>(param, name);
             record(name, value);
         }
 
-        /// Read an optional parameter
+        /// Read a parameter that might not be in the map: then the default value from the parameter table
+        template <class V>
+        void get_optional(const std::string & name, V & value) {
+            value = get_parameter<V>(param, name);
+            record(name, value);
+        }
+
+        /// Read an optional parameter whose default is defined next to the setting (the parameter table takes the
+        /// default from there too, e.g. BaryonificationSettings)
         template <class V>
         void get(const std::string & name, V & value, const V & default_value) {
+            check_parameter_name(name);
             value = param.get<V>(name, default_value);
             record(name, value);
         }
@@ -62,7 +72,7 @@ namespace COLASOLVER {
         /// Read a string parameter that must be one of the given options
         template <class E>
         void get_choice(const std::string & name, E & value, const std::vector<std::pair<std::string, E>> & options) {
-            const auto str = param.get<std::string>(name);
+            const auto str = get_required_parameter<std::string>(param, name);
             record(name, str);
             for (auto & option : options) {
                 if (option.first == str) {
@@ -319,8 +329,8 @@ namespace COLASOLVER {
             r.get("simulation_use_cola", simulation.use_cola);
             r.get("simulation_use_scaledependent_cola", simulation.use_scaledependent_cola);
             if (simulation.use_cola) {
-                r.get("simulation_enforce_LPT_trajectories", simulation.enforce_LPT_trajectories, false);
-                r.get("simulation_cola_LPT_order", simulation.cola_LPT_order, 2);
+                r.get_optional("simulation_enforce_LPT_trajectories", simulation.enforce_LPT_trajectories);
+                r.get_optional("simulation_cola_LPT_order", simulation.cola_LPT_order);
             }
 
             // Computing forces
@@ -333,28 +343,26 @@ namespace COLASOLVER {
                 r.get("force_nbody_gauge_filename", force.nbody_gauge_filename);
             r.get("force_greens_function_kernel", force.greens_function_kernel);
             r.get("force_gradient_kernel", force.gradient_kernel);
-            r.get("force_density_method", force.density_method, std::string("assignment"));
+            r.get_optional("force_density_method", force.density_method);
             if (force.density_method == "nufft" or force.density_method == "sheet_nufft")
-                r.get("force_nufft_epsilon", force.nufft_epsilon, 1e-5);
+                r.get_optional("force_nufft_epsilon", force.nufft_epsilon);
             if (force.density_method == "sheet" or force.density_method == "sheet_nufft")
-                r.get("force_sheet_refinement", force.sheet_refinement, 2);
-            r.get("force_interlacing_order", force.interlacing_order, 1);
-            r.get("force_deconvolve_window", force.deconvolve_window, false);
-            r.get("force_early_method", force.early_method, std::string("none"));
+                r.get_optional("force_sheet_refinement", force.sheet_refinement);
+            r.get_optional("force_interlacing_order", force.interlacing_order);
+            r.get_optional("force_deconvolve_window", force.deconvolve_window);
+            r.get_optional("force_early_method", force.early_method);
             if (force.early_method != "none") {
-                r.get("force_early_until_redshift", force.early_until_redshift, 10.0);
+                r.get_optional("force_early_until_redshift", force.early_until_redshift);
                 if (force.early_method == "interlaced") {
-                    r.get("force_early_interlacing_order", force.early_interlacing_order, 2);
-                    r.get("force_early_density_assignment_method",
-                          force.early_density_assignment_method,
-                          std::string("TSC"));
+                    r.get_optional("force_early_interlacing_order", force.early_interlacing_order);
+                    r.get_optional("force_early_density_assignment_method", force.early_density_assignment_method);
                 }
             }
-            r.get("force_interpolation_method", force.interpolation_method, std::string("fiducial"));
+            r.get_optional("force_interpolation_method", force.interpolation_method);
             if (force.interpolation_method == "fiducial")
                 force.interpolation_method = force.density_method == "nufft" ? "nufft" : "assignment";
             if (force.interpolation_method == "nufft")
-                r.get("force_nufft_epsilon", force.nufft_epsilon, 1e-5);
+                r.get_optional("force_nufft_epsilon", force.nufft_epsilon);
 
             // Initial conditions
             r.get_choice("ic_type_of_input",
@@ -362,7 +370,7 @@ namespace COLASOLVER {
                          {{"powerspectrum", ICInputType::PowerSpectrum},
                           {"transferfunction", ICInputType::TransferFunction},
                           {"transferinfofile", ICInputType::TransferInfoFile}});
-            r.get("ic_type_of_input_fileformat", ic.type_of_input_fileformat, std::string("CAMB"));
+            r.get_optional("ic_type_of_input_fileformat", ic.type_of_input_fileformat);
             r.get("ic_input_filename", ic.input_filename);
             r.get_choice("ic_random_field_type",
                          ic.random_field_type,
@@ -444,11 +452,11 @@ namespace COLASOLVER {
                 r.get("fof_linking_length", fof.linking_length);
                 r.get("fof_nmesh_max", fof.nmesh_max);
                 r.get("fof_buffer_length_mpch", fof.buffer_length_mpch);
-                r.get("fof_output_fileformat", fof.output_fileformat, std::string("ascii"));
-                r.get("fof_massfunction_nbins", fof.massfunction_nbins, 30);
-                r.get("fof_massfunction_Mmin", fof.massfunction_Mmin, 1e10);
-                r.get("fof_massfunction_Mmax", fof.massfunction_Mmax, 1e16);
-                r.get("fof_so_definitions", fof.so_definitions, std::vector<std::string>{});
+                r.get_optional("fof_output_fileformat", fof.output_fileformat);
+                r.get_optional("fof_massfunction_nbins", fof.massfunction_nbins);
+                r.get_optional("fof_massfunction_Mmin", fof.massfunction_Mmin);
+                r.get_optional("fof_massfunction_Mmax", fof.massfunction_Mmax);
+                r.get_optional("fof_so_definitions", fof.so_definitions);
             }
 
             baryonification.read(r);
@@ -509,7 +517,7 @@ namespace COLASOLVER {
                               {"HDF5", ParticleFileFormat::HDF5}});
             }
             r.get("output_folder", output.folder);
-            r.get("lightcone", output.lightcone, false);
+            r.get_optional("lightcone", output.lightcone);
 
             validate();
             r.print("NBodySimulation::read_parameters");

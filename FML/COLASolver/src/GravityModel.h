@@ -1,11 +1,14 @@
 #ifndef GRAVITYMODEL_HEADER
 #define GRAVITYMODEL_HEADER
 
+#include "ParameterDefaults.h"
+
 #include <FML/CAMBUtils/CAMBReader.h>
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/LPT/DisplacementFields.h>
 #include <FML/MPIParticles/MPIParticles.h>
+#include <FML/NBody/NBody.h>
 #include <FML/ODESolver/ODESolver.h>
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
@@ -217,13 +220,13 @@ class GravityModel {
         // The growth factor splines must start before the simulation (e.g. when starting at very high redshift)
         alow = std::min(alow, aini / 10.0);
         if (param.get<std::string>("ic_type_of_input") == "transferinfofile") {
-            init_transferdata(param.get<std::string>("ic_input_filename"), param.get<std::string>("ic_type_of_input_fileformat", "CAMB"));
+            init_transferdata(param.get<std::string>("ic_input_filename"), COLASOLVER::get_parameter<std::string>(param, "ic_type_of_input_fileformat"));
         }
         this->scaledependent_growth = this->cosmo->get_fMNu() > 0.0;
     
         // Experimental option with finite-difference forces (instead of fourier)
-        force_use_finite_difference_force = param.get<bool>("force_use_finite_difference_force", false);
-        force_finite_difference_stencil_order = param.get<int>("force_finite_difference_stencil_order", 4);
+        force_use_finite_difference_force = COLASOLVER::get_parameter<bool>(param, "force_use_finite_difference_force");
+        force_finite_difference_stencil_order = COLASOLVER::get_parameter<int>(param, "force_finite_difference_stencil_order");
     }
 
     //========================================================================
@@ -261,6 +264,30 @@ class GravityModel {
                                FFTWGrid<NDIM> & density_fourier,
                                std::string density_assignment_method_used,
                                std::array<FFTWGrid<NDIM>, NDIM> & force_real) const = 0;
+
+    //========================================================================
+    // The force D Phi from the (total) density that sources it, D^2 Phi = norm_poisson_equation * density:
+    // with finite differences of the potential (force_use_finite_difference_force) or in Fourier space.
+    // Shared by all gravity models.
+    //========================================================================
+    void compute_force_from_total_density(FFTWGrid<NDIM> & density_fourier,
+                                          double norm_poisson_equation,
+                                          const std::string & density_assignment_method_used,
+                                          std::array<FFTWGrid<NDIM>, NDIM> & force_real) const {
+        if (force_use_finite_difference_force) {
+            // A stencil of order 2, 4 or 6 (phi(i+/-1), phi(i+/-2), ...) needs stencil_order/2 boundary slices
+            const int stencil_order = force_finite_difference_stencil_order;
+            const int nboundary_cells = stencil_order / 2;
+            FFTWGrid<NDIM> potential_real;
+            FML::NBODY::compute_potential_real_from_density_fourier<NDIM>(
+                density_fourier, potential_real, norm_poisson_equation, nboundary_cells);
+            FML::NBODY::compute_force_from_potential_real<NDIM>(
+                potential_real, force_real, density_assignment_method_used, stencil_order);
+        } else {
+            FML::NBODY::compute_force_from_density_fourier<NDIM>(
+                density_fourier, force_real, density_assignment_method_used, norm_poisson_equation);
+        }
+    }
 
     //========================================================================
     // a / a_eq at scale factor a, from the background: in a matter + radiation
