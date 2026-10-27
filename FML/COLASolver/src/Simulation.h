@@ -519,6 +519,15 @@ void NBodySimulation<NDIM, T>::setup_initial_power_spectrum() {
     };
     make_splines("");
 
+    // The splines are constant beyond the table, so modes of the IC grid with k > k_max of the input would silently get
+    // P(k_max). Only a warning: the power there is often negligible (and a table only slightly too short is common)
+    const double kmax_grid = std::sqrt(double(NDIM)) * M_PI * ic.nmesh / boxsize;
+    if (FML::ThisTask == 0 and ic.random_field_type != COLASOLVER::ICRandomFieldType::ReadParticles and
+        not table.k.empty() and table.k.back() < kmax_grid)
+        std::cout << "WARNING: the input P(k) / T(k) only goes to k = " << table.k.back()
+                  << " h/Mpc, but the IC grid has modes up to sqrt(NDIM) pi ic_nmesh / simulation_boxsize = "
+                  << kmax_grid << " h/Mpc. P(k) is taken to be constant (P(k_max)) beyond the table\n";
+
     if (FML::ThisTask == 0) {
         std::cout << "\n";
         std::cout << "#=====================================================\n";
