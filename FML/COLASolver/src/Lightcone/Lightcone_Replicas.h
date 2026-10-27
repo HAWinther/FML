@@ -3,7 +3,9 @@
 
 #include <FML/Global/Global.h>
 #include <FML/ParameterMap/ParameterMap.h>
+#include <algorithm>
 #include <array>
+#include <string>
 #include <iostream>
 #include <vector>
 
@@ -77,18 +79,27 @@ class BoxReplicas {
         }
     }
 
-    void init(double a_init, double R_init) {
+    /// observer: the position of the observer (plc_pos_observer, in units of the box)
+    void init(double a_init, double R_init, const Point & observer) {
         if (replicas_initialized)
             return;
 
         // Initialize the number of replicas to cover the whole lightcone
         // (will be adjusted below)
         int n_rep = use_replicas ? std::ceil(R_init + 1.0) : 0;
-        if (not use_replicas and R_init > 1.0) {
-            if (FML::ThisTask == 0) {
-                throw std::runtime_error("We do not use replicas, but R_init / boxsize > 1 so lightcone quadrant will "
-                                         "not be complete. Reduce z_init, increase boxsize or add using replicas");
-            }
+
+        // Without replicas the box covers the octant (all n_i >= 0) only up to the distance from the observer to
+        // the faces x_i = 1 of the box, i.e. R <= 1 - max(o_i). Beyond this the lightcone would be incomplete
+        // (holes in the octant), which is an error
+        if (not use_replicas) {
+            const double R_complete = 1.0 - *std::max_element(observer.begin(), observer.end());
+            FML::assert_mpi(R_init <= R_complete,
+                            ("We do not use replicas, but the lightcone at plc_z_init has radius R_init = " +
+                             std::to_string(R_init) + " boxsize > 1 - max(plc_pos_observer) = " +
+                             std::to_string(R_complete) +
+                             " boxsize, so the lightcone octant will not be complete. Reduce plc_z_init, "
+                             "increase the boxsize, move the observer (towards the origin) or use replicas")
+                                .c_str());
         }
 
         // Initialize how many replicas we have along each direction

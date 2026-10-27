@@ -296,7 +296,7 @@ void Lightcone<NDIM, T, U>::init(std::vector<std::string> & particle_types) {
     plc_step = -1;
 
     // Init the replicas
-    replicas.init(plc_a_init, get_distance(plc_a_init));
+    replicas.init(plc_a_init, get_distance(plc_a_init), pos_observer);
 }
 
 // Creates the lightcone every step
@@ -356,6 +356,10 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
     const double a_new = std::min(apos_new, plc_a_finish);
     const double r_lc_new = get_distance(a_new);
     const double r_lc_new_squared = r_lc_new * r_lc_new;
+    // The same as fractions of the step (the particles move linearly in a over the step). A particle is in the
+    // lightcone if it is inside r_lc_old at a_old and outside r_lc_new at a_new
+    const double frac_old = a_old > apos ? (a_old - apos) / (apos_new - apos) : 0.0;
+    const double frac_new = a_new < apos_new ? (a_new - apos) / (apos_new - apos) : 1.0;
 
     if (FML::ThisTask == 0) {
         std::cout << "\n";
@@ -477,10 +481,10 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
                 for (int idim = 0; idim < NDIM; idim++)
                     pos[idim] += replica_shift[idim];
 
-                // Compute radial comoving distance to the particle before the step
+                // Compute radial comoving distance to the particle before the step (at a_old)
                 double r_old_squared = 0.0;
                 for (int idim = 0; idim < NDIM; idim++) {
-                    double dx = pos[idim];
+                    double dx = frac_old == 0.0 ? pos[idim] : pos[idim] + delta_pos[idim] * frac_old;
                     r_old_squared += dx * dx;
                 }
 
@@ -488,10 +492,10 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
                 if (r_old_squared > r_lc_old_squared)
                     continue;
 
-                // Compute radial comoving distance to the particle after a full step
+                // Compute radial comoving distance to the particle after the step (at a_new)
                 double r_new_squared = 0.0;
                 for (int idim = 0; idim < NDIM; idim++) {
-                    double dx = pos[idim] + delta_pos[idim];
+                    double dx = frac_new == 1.0 ? pos[idim] + delta_pos[idim] : pos[idim] + delta_pos[idim] * frac_new;
                     r_new_squared += dx * dx;
                 }
 
@@ -505,14 +509,35 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
                 double fraction_of_step_to_take{};
 
                 // METHOD 1 - The L-PICOLA method. Approximative, but much less operations
+                // (r_lc(a) is approximated by the chord over the step [apos, apos_new])
                 const double r_old = std::sqrt(r_old_squared);
                 const double r_new = std::sqrt(r_new_squared);
                 a_cross = apos + (apos_new - apos) * (r_lc_apos - r_old) / ((r_new - r_old) - (r_lc_apos_new - r_lc_apos));
                 fraction_of_step_to_take = (a_cross - apos) / (apos_new - apos);
 
-                // Check that is we cross before/after the light-cone starts/ends then we do not add the particle
-                // This can only kick in if the lightcone starts or ends in the middle of a step
-                if(a_cross > plc_a_finish or a_cross < plc_a_init) continue;
+                // If the lightcone starts or ends inside the step we know from the tests above that the particle
+                // crosses the lightcone in [a_old, a_new], but the chord can put the crossing outside it (and
+                // rejecting those particles loses particles). Then solve |x + f dx| = r_lc(apos + f (apos_new - apos))
+                // for f in [frac_old, frac_new] by bisection
+                const bool partial_step = frac_old > 0.0 or frac_new < 1.0;
+                if (partial_step and (fraction_of_step_to_take < frac_old or fraction_of_step_to_take > frac_new)) {
+                    double flow = frac_old, fhigh = frac_new;
+                    for (int iter = 0; iter < 40; iter++) {
+                        const double f = 0.5 * (flow + fhigh);
+                        double r2 = 0.0;
+                        for (int idim = 0; idim < NDIM; idim++) {
+                            const double dx = pos[idim] + delta_pos[idim] * f;
+                            r2 += dx * dx;
+                        }
+                        const double r_lc = get_distance(apos + (apos_new - apos) * f);
+                        if (r2 > r_lc * r_lc)
+                            fhigh = f;
+                        else
+                            flow = f;
+                    }
+                    fraction_of_step_to_take = 0.5 * (flow + fhigh);
+                    a_cross = apos + (apos_new - apos) * fraction_of_step_to_take;
+                }
 
                 // Take a fraction of a step and get the crossing distance
                 double r_crossing_squared = 0.0;
