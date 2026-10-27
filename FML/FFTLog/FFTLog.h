@@ -52,9 +52,14 @@ namespace FML {
             /// The usual 2-point correlation function xi(r) is just \f$ \xi_0^2(r) \f$
             /// The input k-values must be logarithmically spaced.
             /// The resulting \f$ \xi_l^m(r) \f$ will be evaluated at the dual r-values
-            ///   \f$ r[0] = 1/k[N-1], \ldots, r[N-1] = 1/k[0] \f$
+            ///   \f$ r[i] \approx 1/k[N-1-i] \f$ (times a factor close to 1 chosen to reduce ringing; the returned
+            ///   r-array is the right one)
+            /// q is the FFTLog bias: the transform is done for \f$ k^{-q} \times \f$ the integrand. q = 0 is fine for
+            /// \f$ \ell = 0 \f$; for higher \f$ \ell \f$ a negative q (e.g. q = -1 for \f$ \ell = 2,4 \f$, m = 2) can be
+            /// much more accurate at small r.
             //==========================================================================
-            std::pair<DVector, DVector> ComputeXiLM(int ell, int m, const DVector & k, const DVector & pk);
+            std::pair<DVector, DVector>
+            ComputeXiLM(int ell, int m, const DVector & k, const DVector & pk, double q = 0.0);
 
             //==========================================================================
             /// @brief Compute the discrete Hankel transform of the function a(r). See the FFTLog

@@ -59,11 +59,12 @@ namespace FML {
             // We assume the EE2 datafile is in the same folder as this header with a .dat ending instead of .h
             // If this does not work with your compiler simply define path_to_ee2_datafile below
 #ifdef __FILE__  
-            std::string _temp_this_filepath = __FILE__;
-            std::string _temp_this_filepath_no_ending = _temp_this_filepath.substr(0, _temp_this_filepath.size()-1);
-            std::string path_to_ee2_datafile = _temp_this_filepath_no_ending + "dat";
+            // (inline: the header can be included in several translation units)
+            inline std::string _temp_this_filepath = __FILE__;
+            inline std::string _temp_this_filepath_no_ending = _temp_this_filepath.substr(0, _temp_this_filepath.size()-1);
+            inline std::string path_to_ee2_datafile = _temp_this_filepath_no_ending + "dat";
 #else 
-            std::string path_to_ee2_datafile = "EuclidEmulator2.dat";
+            inline std::string path_to_ee2_datafile = "EuclidEmulator2.dat";
 #endif
 
             // Base units
@@ -87,7 +88,7 @@ namespace FML {
             const double Lbox = 1000 * Mpc;
             const double Tgamma = 2.7255 * Kelvin;
 
-            bool does_ee2_datafile_exist() {
+            inline bool does_ee2_datafile_exist() {
                 std::ifstream f(path_to_ee2_datafile.c_str());
                 if (not f.good()) {
                     return false;
@@ -95,7 +96,7 @@ namespace FML {
                 return true;
             }
 
-            void set_path_to_ee2_data(std::string filename) { path_to_ee2_datafile = filename; }
+            inline void set_path_to_ee2_data(std::string filename) { path_to_ee2_datafile = filename; }
 
             class Cosmology {
               public:
@@ -105,6 +106,10 @@ namespace FML {
                 double maxima[8] = {0.06, 0.40, 0.15, 1.00, 0.73, -0.7, 0.7, 2.5e-9};
                 std::string names[8] = {"OmegaB", "OmegaM", "SumMnu", "n_s", "h", "w_0", "w_a", "A_s"};
                 Cosmology() = default;
+                // The GSL objects are owned: copies get their own
+                Cosmology(const Cosmology & rhs) { *this = rhs; }
+                Cosmology & operator=(const Cosmology & rhs);
+                ~Cosmology();
                 Cosmology(double Omega_b,
                           double Omega_m,
                           double Sum_m_nu,
@@ -132,9 +137,10 @@ namespace FML {
                 typedef struct {
                     Cosmology * csm_instance;
                 } a2t_parameters;
-                gsl_integration_workspace * gsl_wsp;
-                gsl_interp_accel * acc;
-                gsl_spline * z2nStep_spline;
+                gsl_integration_workspace * gsl_wsp{nullptr};
+                gsl_interp_accel * acc{nullptr};
+                gsl_spline * z2nStep_spline{nullptr};
+                void free_gsl();
                 void isoprob_tf();
                 void compute_z2nStep_spline();
                 double Hubble(double a);
@@ -148,7 +154,7 @@ namespace FML {
                 double a2Hubble(double a);
             };
 
-            Cosmology::Cosmology(double Omega_b,
+            inline Cosmology::Cosmology(double Omega_b,
                                  double Omega_m,
                                  double Sum_m_nu,
                                  double n_s,
@@ -180,9 +186,59 @@ namespace FML {
                 isoprob_tf();
             }
 
-            bool Cosmology::is_good_to_use() { return good_parameter_ranges() and does_ee2_datafile_exist(); }
+            inline void Cosmology::free_gsl() {
+                if (gsl_wsp)
+                    gsl_integration_workspace_free(gsl_wsp);
+                if (acc)
+                    gsl_interp_accel_free(acc);
+                if (z2nStep_spline)
+                    gsl_spline_free(z2nStep_spline);
+                gsl_wsp = nullptr;
+                acc = nullptr;
+                z2nStep_spline = nullptr;
+            }
 
-            bool Cosmology::good_parameter_ranges() {
+            inline Cosmology::~Cosmology() { free_gsl(); }
+
+            inline Cosmology & Cosmology::operator=(const Cosmology & rhs) {
+                if (this == &rhs)
+                    return *this;
+                free_gsl();
+                for (int i = 0; i < 8; i++) {
+                    cosmo[i] = rhs.cosmo[i];
+                    cosmo_tf[i] = rhs.cosmo_tf[i];
+                    minima[i] = rhs.minima[i];
+                    maxima[i] = rhs.maxima[i];
+                    names[i] = rhs.names[i];
+                }
+                Omega_gamma_0 = rhs.Omega_gamma_0;
+                Omega_nu_0 = rhs.Omega_nu_0;
+                Omega_DE_0 = rhs.Omega_DE_0;
+                rho_crit = rhs.rho_crit;
+                T_gamma_0 = rhs.T_gamma_0;
+                T_nu_0 = rhs.T_nu_0;
+                EPSCOSMO = rhs.EPSCOSMO;
+                nSteps = rhs.nSteps;
+                nTable = rhs.nTable;
+                t0 = rhs.t0;
+                t10 = rhs.t10;
+                Delta_t = rhs.Delta_t;
+                Neff = rhs.Neff;
+                H0 = rhs.H0;
+                if (rhs.gsl_wsp)
+                    gsl_wsp = gsl_integration_workspace_alloc(1000);
+                if (rhs.acc)
+                    acc = gsl_interp_accel_alloc();
+                if (rhs.z2nStep_spline) {
+                    z2nStep_spline = gsl_spline_alloc(gsl_interp_cspline, rhs.z2nStep_spline->size);
+                    gsl_spline_init(z2nStep_spline, rhs.z2nStep_spline->x, rhs.z2nStep_spline->y, rhs.z2nStep_spline->size);
+                }
+                return *this;
+            }
+
+            inline bool Cosmology::is_good_to_use() { return good_parameter_ranges() and does_ee2_datafile_exist(); }
+
+            inline bool Cosmology::good_parameter_ranges() {
                 bool good = true;
                 for (int i = 0; i < 8; i++) {
                     if (cosmo[i] < minima[i] || cosmo[i] > maxima[i]) {
@@ -197,7 +253,7 @@ namespace FML {
                 return good;
             }
 
-            void Cosmology::print_errors() {
+            inline void Cosmology::print_errors() {
                 for (int i = 0; i < 8; i++) {
                     if (cosmo[i] < minima[i] || cosmo[i] > maxima[i]) {
                         std::cout << "EuclidEmulator2::Error Cosmology parameter " << names[i] << " has range ["
@@ -218,28 +274,28 @@ namespace FML {
                 }
             }
 
-            void Cosmology::isoprob_tf() {
+            inline void Cosmology::isoprob_tf() {
                 for (int i = 0; i < 8; i++) {
                     cosmo_tf[i] = 2 * (cosmo[i] - minima[i]) / (maxima[i] - minima[i]) - 1.0;
                 }
             }
 
-            double Cosmology::Omega_matter(double a) { return cosmo[1] / (a * a * a); }
+            inline double Cosmology::Omega_matter(double a) { return cosmo[1] / (a * a * a); }
 
-            double Cosmology::Omega_gamma(double a) {
+            inline double Cosmology::Omega_gamma(double a) {
                 double rho_gamma_0 =
                     M_PI * M_PI / 15.0 * std::pow(kB, 4) / (std::pow(hbar, 3) * std::pow(c, 5)) * std::pow(Tgamma, 4);
                 Omega_gamma_0 = rho_gamma_0 / rho_crit;
                 return Omega_gamma_0 / (a * a * a * a);
             }
 
-            double Cosmology::T_gamma(double a) { return Tgamma / a; }
+            inline double Cosmology::T_gamma(double a) { return Tgamma / a; }
 
-            double Cosmology::T_nu(double a) {
+            inline double Cosmology::T_nu(double a) {
                 return std::pow(Neff / 3.0, 0.25) * std::pow(4.0 / 11.0, 1. / 3.) * Tgamma / a;
             }
 
-            double Cosmology::rho_nu_i_integrand(double p, void * params) {
+            inline double Cosmology::rho_nu_i_integrand(double p, void * params) {
                 rho_nu_parameters * rho_nu_pars = reinterpret_cast<rho_nu_parameters *>(params);
                 double T_nu = rho_nu_pars->csm_instance->T_nu_0;
                 double mnui = rho_nu_pars->mnu_i;
@@ -248,7 +304,7 @@ namespace FML {
                 return y * std::sqrt(mnui * mnui * c * c * c * c + p2 * c * c);
             }
 
-            double Cosmology::Omega_nu(double a) {
+            inline double Cosmology::Omega_nu(double a) {
                 rho_nu_parameters rho_nu_pars;
                 gsl_function F;
                 double rho_nu_i, error;
@@ -264,24 +320,24 @@ namespace FML {
                 return 3 * rho_nu_i / rho_crit;
             }
 
-            double Cosmology::Omega_DE(double a) {
+            inline double Cosmology::Omega_DE(double a) {
                 double w_0 = cosmo[5];
                 double w_a = cosmo[6];
                 return Omega_DE_0 * std::pow(a, -3.0 * (1 + w_0 + w_a)) * std::exp(-3 * (1 - a) * w_a);
             }
 
-            double Cosmology::a2Hubble(double a) {
+            inline double Cosmology::a2Hubble(double a) {
                 H0 = 100 * cosmo[4] * kilometer / second / Mpc;
                 return H0 * std::sqrt(Cosmology::Omega_matter(a) + Cosmology::Omega_gamma(a) + Cosmology::Omega_nu(a) +
                                       Cosmology::Omega_DE(a));
             }
 
-            double Cosmology::a2t_integrand(double lna, void * params) {
+            inline double Cosmology::a2t_integrand(double lna, void * params) {
                 a2t_parameters * a2t_pars = reinterpret_cast<a2t_parameters *>(params);
                 return 1. / (a2t_pars->csm_instance->a2Hubble(std::exp(lna)));
             }
 
-            double Cosmology::a2t(double a) {
+            inline double Cosmology::a2t(double a) {
                 a2t_parameters a2t_params;
                 gsl_function F;
                 double result, error;
@@ -293,7 +349,7 @@ namespace FML {
                 return result;
             }
 
-            void Cosmology::compute_z2nStep_spline() {
+            inline void Cosmology::compute_z2nStep_spline() {
                 double t_current, z;
                 double avec[101] = {0};
                 double frac_nStep[101] = {0};
@@ -309,7 +365,7 @@ namespace FML {
                 gsl_spline_init(z2nStep_spline, avec, frac_nStep, nTable);
             }
 
-            double Cosmology::compute_step_number(double z) {
+            inline double Cosmology::compute_step_number(double z) {
                 if (std::abs(z) < EPSCOSMO) {
                     return 100.0;
                 } else {
@@ -323,12 +379,16 @@ namespace FML {
                 const int nk = 613;
                 const int n_coeffs[14] = {53, 53, 117, 117, 53, 117, 117, 117, 117, 521, 117, 1539, 173, 457};
                 const int lmax = 16;
-                gsl_interp_accel * logk2pc_acc[15];
-                gsl_interp_accel * logz2pc_acc[15];
-                gsl_spline2d * logklogz2pc_spline[15];
+                gsl_interp_accel * logk2pc_acc[15]{};
+                gsl_interp_accel * logz2pc_acc[15]{};
+                gsl_spline2d * logklogz2pc_spline[15]{};
                 double * pc[15];
                 double * pce_coeffs[14];
                 double * pce_multiindex[14];
+                // The memory mapped data file (unmapped in the destructor)
+                double * mapped_data{nullptr};
+                size_t mapped_size{0};
+                int mapped_fd{-1};
                 std::array<std::vector<double>, 8> univ_legendre;
                 void read_in_ee2_data_file();
                 void pc_2d_interp();
@@ -347,12 +407,15 @@ namespace FML {
                                double w_a,
                                double A_s);
                 ~EuclidEmulator();
+                // Owns GSL objects and the memory mapped data file: no copies (use a (shared) pointer)
+                EuclidEmulator(const EuclidEmulator &) = delete;
+                EuclidEmulator & operator=(const EuclidEmulator &) = delete;
                 void compute_boost(std::vector<double> redshift, int n_redshift);
                 std::pair<std::vector<double>, std::vector<double>> compute_boost(double redshift);
                 std::pair<std::vector<double>, std::vector<double>> get_boost(int iz);
             };
 
-            EuclidEmulator::EuclidEmulator(Cosmology cosmo) : csm(cosmo) {
+            inline EuclidEmulator::EuclidEmulator(Cosmology cosmo) : csm(cosmo) {
                 read_in_ee2_data_file();
                 pc_2d_interp();
                 if (not csm.good_parameter_ranges()) {
@@ -360,7 +423,7 @@ namespace FML {
                 }
             }
 
-            EuclidEmulator::EuclidEmulator(double OmegaB,
+            inline EuclidEmulator::EuclidEmulator(double OmegaB,
                                            double OmegaM,
                                            double Sum_m_nu,
                                            double n_s,
@@ -370,13 +433,22 @@ namespace FML {
                                            double A_s)
                 : EuclidEmulator(Cosmology(OmegaB, OmegaM, Sum_m_nu, n_s, h, w_0, w_a, A_s)) {}
 
-            EuclidEmulator::~EuclidEmulator() {
+            inline EuclidEmulator::~EuclidEmulator() {
                 for (int i = 0; i < 15; i++) {
-                    gsl_spline2d_free(logklogz2pc_spline[i]);
+                    if (logklogz2pc_spline[i])
+                        gsl_spline2d_free(logklogz2pc_spline[i]);
+                    if (logk2pc_acc[i])
+                        gsl_interp_accel_free(logk2pc_acc[i]);
+                    if (logz2pc_acc[i])
+                        gsl_interp_accel_free(logz2pc_acc[i]);
                 }
+                if (mapped_data)
+                    munmap(mapped_data, mapped_size);
+                if (mapped_fd >= 0)
+                    close(mapped_fd);
             }
 
-            void EuclidEmulator::read_in_ee2_data_file() {
+            inline void EuclidEmulator::read_in_ee2_data_file() {
                 off_t size;
                 struct stat s;
                 double * data;
@@ -389,15 +461,35 @@ namespace FML {
                     }
                 }
 
+                // (open returns -1 on failure: before !fp was tested, so a missing file gave a segfault)
                 int fp = open(path_to_ee2_datafile.c_str(), O_RDONLY);
-                if (!fp) {
+                if (fp < 0) {
                     std::cerr << "Unable to open " << path_to_ee2_datafile << "\n";
                     throw std::runtime_error("Error: the EuclidEmulator2 file (EuclidEmulator2.dat) can not be found. "
                                              "Use set_path_to_ee2_data to set this path\n");
                 }
-                [[maybe_unused]] auto status = fstat(fp, &s);
+                if (fstat(fp, &s) != 0) {
+                    close(fp);
+                    throw std::runtime_error("Error: cannot stat the EuclidEmulator2 file " + path_to_ee2_datafile);
+                }
                 size = s.st_size;
+                size_t expected_size = size_t(15) * nk * nz + nk;
+                for (int i = 0; i < 14; i++)
+                    expected_size += 9 * size_t(n_coeffs[i]);
+                if (size_t(size) != expected_size * sizeof(double)) {
+                    close(fp);
+                    throw std::runtime_error("Error: the EuclidEmulator2 file " + path_to_ee2_datafile +
+                                             " has the wrong size (" + std::to_string(size) + " bytes, expected " +
+                                             std::to_string(expected_size * sizeof(double)) + ")");
+                }
                 data = (double *)mmap(0, size, PROT_READ, MAP_PRIVATE, fp, 0);
+                if (data == MAP_FAILED) {
+                    close(fp);
+                    throw std::runtime_error("Error: cannot memory map the EuclidEmulator2 file " + path_to_ee2_datafile);
+                }
+                mapped_data = data;
+                mapped_size = size;
+                mapped_fd = fp;
                 for (int i = 0; i < 15; i++) {
                     pc[i] = &data[idx];
                     idx += nk * nz;
@@ -418,9 +510,9 @@ namespace FML {
                 assert(idx == int(size / sizeof(double)));
             }
 
-            void EuclidEmulator::pc_2d_interp() {
-                double logk[nk];
-                double stp[nz];
+            inline void EuclidEmulator::pc_2d_interp() {
+                std::vector<double> logk(nk);
+                std::vector<double> stp(nz);
                 for (int i = 0; i < nk; i++)
                     logk[i] = std::log(kvec[i]);
                 for (int i = nz - 1; i >= 0; i--)
@@ -429,19 +521,22 @@ namespace FML {
                     logk2pc_acc[i] = gsl_interp_accel_alloc();
                     logz2pc_acc[i] = gsl_interp_accel_alloc();
                     logklogz2pc_spline[i] = gsl_spline2d_alloc(gsl_interp2d_bicubic, nk, nz);
-                    gsl_spline2d_init(logklogz2pc_spline[i], logk, stp, pc[i], nk, nz);
+                    gsl_spline2d_init(logklogz2pc_spline[i], logk.data(), stp.data(), pc[i], nk, nz);
                 }
             }
 
-            std::pair<std::vector<double>, std::vector<double>> EuclidEmulator::compute_boost(double redshift) {
+            inline std::pair<std::vector<double>, std::vector<double>> EuclidEmulator::compute_boost(double redshift) {
                 std::vector<double> redshifts(1, redshift);
                 compute_boost(redshifts, 1);
                 return get_boost(0);
             }
-            void EuclidEmulator::compute_boost(std::vector<double> redshift, int n_redshift) {
+            inline void EuclidEmulator::compute_boost(std::vector<double> redshift, int n_redshift) {
                 double pc_weight;
                 double basisfunc;
-                double stp_no[n_redshift];
+                if (n_redshift < 0 or n_redshift > nz or n_redshift > int(redshift.size()))
+                    throw std::runtime_error("EuclidEmulator2::compute_boost: at most " + std::to_string(nz) +
+                                             " redshifts (and not more than the size of the redshift vector)");
+                std::vector<double> stp_no(n_redshift);
                 for (int iz = 0; iz < n_redshift; iz++) {
                     // Outside this range the emulator has no data (stp_no would be left unset and the
                     // boost would be garbage) so we throw and let the caller decide what to do
@@ -486,7 +581,11 @@ namespace FML {
                 }
             }
 
-            std::pair<std::vector<double>, std::vector<double>> EuclidEmulator::get_boost(int iz) {
+            // The boost on the emulator's k-grid (kvec, h/Mpc). NB: outside [kvec[0], kvec[nk-1]] (~0.0087 - 9.4 h/Mpc)
+            // the emulator has no information; a spline of the result is constant there
+            inline std::pair<std::vector<double>, std::vector<double>> EuclidEmulator::get_boost(int iz) {
+                if (iz < 0 or iz >= nz)
+                    throw std::runtime_error("EuclidEmulator2::get_boost: iz out of range");
                 std::vector<double> boost(nk), k(nk);
                 for (int ik = 0; ik < nk; ik++) {
                     boost[ik] = std::pow(10.0, Bvec[iz][ik]);

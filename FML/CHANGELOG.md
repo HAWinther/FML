@@ -5,6 +5,34 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### FFTLog fixes
+- The output grid was one log-step off: the transform b[n] was labelled with r[n] = kcrc e^{-L} / k[0] ... instead
+  of kcrc e^{-L + L/N} / k[0] ..., so xi(r) was evaluated at the wrong r (and normalised with the wrong (2 pi r)^-1.5).
+  For P(k) = exp(-k^2) with N = 1024 over k = 1e-4 - 1e4 the error was 2.7% (ell = 0, 0.05 < r < 10); for an LCDM
+  P(k) with N = 4096 xi(r = 100 Mpc/h) was 1.6% too high and the BAO peak 0.45% too small in r. Now 3e-9.
+- The bias q != 0 gave wrong results (the phase of the coefficients used arg Gamma(x_+) - arg Gamma(x_-) instead of
+  the sum). It now works, and `ComputeXiLM` takes the bias as a new last argument (default 0, as before): with
+  q = -1 xi_2 and xi_4 are accurate to 1e-14 also at small r (with q = 0 they ring there).
+- log Gamma of the coefficients was computed as log(Gamma(z)), which under/overflows for |Im z| >~ 470 (many points
+  over few decades, e.g. N = 8192 over 8 decades): now the log of the Lanczos formula (and a stable reflection).
+  The public `DiscreteHankelTransform` (with precomputed coefficients) was declared with a different signature than
+  it was defined with and could not be linked.
+- `tests/test_fftlog.cpp` (xi_ell for ell = 0, 2, 4 of exp(-k^2) against the analytic result, N = 8192, the round
+  trip and precomputed coefficients; 5 checks failed before).
+
+### Emulator (EuclidEmulator2) fixes
+- A missing data file gave a segfault (`open` returns -1, `!fp` was tested; the size and `mmap` were not checked),
+  more than 101 redshifts overflowed a buffer, copies of the emulator double-freed the splines and the
+  accelerators, the memory mapped file and the GSL objects of `Cosmology` leaked, and the header could not be
+  included in two translation units (34 multiple definitions). Now errors with a message, `EuclidEmulator` is not
+  copyable (COLASolver holds it in a shared pointer), `Cosmology` copies its GSL objects, everything is freed, and
+  the globals/functions are inline. The boost is unchanged (to the last digit). Outside the k-range of the emulator
+  (0.0087 - 9.4 h/Mpc) a spline of the boost is constant: documented.
+- COLASolver passed A_s at its own pivot (`cosmology_kpivot_mpc`) to EuclidEmulator2, which uses 0.05/Mpc: for
+  kpivot = 0.002 and ns = 0.96 the non-linear boost (the P_NL column of the P(k) output) was 3-7% off at k = 0.3-3
+  h/Mpc. It is now converted (A_s (0.05/kpivot)^(ns-1)); no change for the default pivot 0.05.
+- `tests/test_emulator.cpp` (reference boosts, errors, copies; + test_emulator_odr.cpp).
+
 ### Spline, ODESolver, Math: numerical core fixes
 - `MATH::find_root_bisection(Spline, y_value, xrange)`: a range given as (high, low) became (low, low) and always
   threw "same sign" (y = x^2 = 4 on (5,0)); a root exactly at an end-point of the spline range (e.g. `y_value =

@@ -42,7 +42,9 @@ class CosmologyLCDM final : public Cosmology {
     // The fiducial option is to use the EuclidEmulator2
     //========================================================================
     Spline get_nonlinear_matter_power_spectrum_boost(double redshift) const override {
-        return ee2_boost.boost(Omegab, OmegaM, Mnu_eV, ns, h, -1.0, 0.0, As, redshift);
+        // EuclidEmulator2 takes A_s at the pivot 0.05/Mpc: convert from our pivot (the factor is 1 for kpivot = 0.05)
+        const double As_ee2 = As * std::pow(0.05 / kpivot_mpc, ns - 1.0);
+        return ee2_boost.boost(Omegab, OmegaM, Mnu_eV, ns, h, -1.0, 0.0, As_ee2, redshift);
     }
 
   protected:

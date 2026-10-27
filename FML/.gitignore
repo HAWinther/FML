@@ -100,3 +100,5 @@ tests/test_gadget
 tests/test_ramses
 tests/test_camb
 tests/test_numcore
+tests/test_fftlog
+tests/test_emulator

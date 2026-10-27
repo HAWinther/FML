@@ -7,38 +7,40 @@ namespace FML {
     namespace SOLVERS {
         namespace FFTLog {
 
-            /// @brief Computes the Gamma function using the Lanczos approximation
-            /// See https://en.wikipedia.org/wiki/Lanczos_approximation
-            static CDouble gamma(CDouble z) {
-
+            /// @brief log Gamma(z) from the log of the Lanczos formula (g = 7, see
+            /// https://en.wikipedia.org/wiki/Lanczos_approximation). Gamma itself under/overflows for |Im z| >~ 470
+            /// (log(gamma(z)) gave -inf with a random phase or NaN). For Re z < 1/2 the reflection formula with a
+            /// stable log(sin(pi z))
+            static CDouble lngamma(CDouble z) {
                 if (z.real() < 0.5) {
-                    return M_PI / (std::sin(M_PI * z) * gamma(1. - z));
+                    // log(pi / sin(pi z)) - log Gamma(1 - z) with log(sin(pi z)) computed without overflow:
+                    // sin(pi z) = (e^{i pi z} - e^{-i pi z}) / 2i, factor out the larger exponential
+                    const CDouble I(0, 1);
+                    const CDouble ipz = I * M_PI * z;
+                    const double s = ipz.real() >= 0 ? 1.0 : -1.0;
+                    const CDouble logsin = s * ipz + std::log((1.0 - std::exp(-2.0 * s * ipz)) / (2.0 * I * s));
+                    return std::log(M_PI) - logsin - lngamma(1. - z);
                 }
-
-                // Formula below is for gamma(1+z) so remove 1 to get z
                 z -= 1;
-
-                // Lanczos coefficients for g = 7 with way too many digits
                 const double g = 7;
-                static std::array<double, 9> p = {0.999999999999809932276847,
-                                                  676.5203681218850985670091,
-                                                  -1259.13921672240287047156,
-                                                  771.3234287776530788486528,
-                                                  -176.615029162140599065845,
-                                                  12.50734327868690481445893,
-                                                  -0.13857109526572011689554,
-                                                  9.984369578019570859563e-6,
-                                                  1.505632735149311558340e-7};
+                static const std::array<double, 9> p = {0.999999999999809932276847,
+                                                        676.5203681218850985670091,
+                                                        -1259.13921672240287047156,
+                                                        771.3234287776530788486528,
+                                                        -176.615029162140599065845,
+                                                        12.50734327868690481445893,
+                                                        -0.13857109526572011689554,
+                                                        9.984369578019570859563e-6,
+                                                        1.505632735149311558340e-7};
                 CDouble Ag = p[0];
-                for (int n = 1; n < int(p.size()); n++) {
+                for (int n = 1; n < int(p.size()); n++)
                     Ag += p[n] / (z + double(n));
-                }
-
-                return std::sqrt(2 * M_PI) * std::pow(z + g + 0.5, z + 0.5) * std::exp(-z - g - 0.5) * Ag;
+                const CDouble t = z + g + 0.5;
+                return 0.5 * std::log(2 * M_PI) + (z + 0.5) * std::log(t) - t + std::log(Ag);
             }
 
             static void lngamma_4(double x, double y, double * lnr, double * arg) {
-                const CDouble w = std::log(gamma(CDouble(x, y)));
+                const CDouble w = lngamma(CDouble(x, y));
                 if (lnr)
                     *lnr = w.real();
                 if (arg)
@@ -84,7 +86,7 @@ namespace FML {
                     for (int m = 0; m <= N / 2; m++) {
                         lngamma_4(xp, m * y, &lnrp, &phip);
                         lngamma_4(xm, m * y, &lnrm, &phim);
-                        u[m] = std::polar(std::exp(q * std::log(2) + lnrp - lnrm), m * t + phip - phim);
+                        u[m] = std::polar(std::exp(q * std::log(2) + lnrp - lnrm), m * t + phip + phim);
                     }
                 }
 
@@ -102,18 +104,22 @@ namespace FML {
                                                                 double mu,
                                                                 double q,
                                                                 double kcrc,
-                                                                int noring,
-                                                                CDouble * u) {
+                                                                bool noring,
+                                                                CVector * u_precomputed) {
                 const int N = int(r.size());
                 const double L = std::log(r[N - 1] / r[0]) * N / (N - 1.);
                 CVector b(N);
                 CVector ulocal;
-                if (u == nullptr) {
+                const CDouble * u = nullptr;
+                if (u_precomputed == nullptr) {
                     if (noring) {
                         kcrc = goodkr(N, mu, q, L, kcrc);
                     }
                     ulocal = ComputeCoefficients(N, mu, q, L, kcrc);
                     u = ulocal.data();
+                } else {
+                    assert(int(u_precomputed->size()) == N);
+                    u = u_precomputed->data();
                 }
 
                 // Compute the convolution b = a*u using FFTs
@@ -145,8 +151,10 @@ namespace FML {
                     b[N - n - 1] = tmp;
                 }
 
-                // Compute k's corresponding to input r's (or vice versa)
-                const double k0r0 = kcrc * std::exp(-L);
+                // Compute k's corresponding to input r's (or vice versa). The output k[n] corresponds to b[n] for
+                // k[0] r[N-1] = kcrc, i.e. k[0] = kcrc exp(-L + L/N) / r[0] (before exp(-L) was used: the output grid was
+                // one log-step too small, e.g. 1.6% in xi(r = 100 Mpc/h) for an LCDM P(k) with N = 4096)
+                const double k0r0 = kcrc * std::exp(-L + L / N);
                 DVector k(N);
                 k[0] = k0r0 / r[0];
                 for (int n = 1; n < N; n++) {
@@ -155,24 +163,24 @@ namespace FML {
                 return {k, b};
             }
 
-            std::pair<DVector, DVector> ComputeXiLM(int ell, int m, const DVector & k, const DVector & pk) {
+            std::pair<DVector, DVector> ComputeXiLM(int ell, int m, const DVector & k, const DVector & pk, double q) {
                 assert(k.size() == pk.size());
 
-                // Set the integrand
+                // Set the integrand (biased with k^-q, undone on the output with r^-q)
                 CVector a(k.size());
                 for (size_t i = 0; i < k.size(); i++) {
-                    a[i] = std::pow(k[i], m - 0.5) * pk[i];
+                    a[i] = std::pow(k[i], m - 0.5 - q) * pk[i];
                 }
 
                 // Transform
-                auto result = DiscreteHankelTransform(k, a, ell + 0.5, 0, 1, 1, nullptr);
+                auto result = DiscreteHankelTransform(k, a, ell + 0.5, q, 1, true, nullptr);
                 auto & r = result.first;
                 auto & b = result.second;
 
                 // Set output and normalize
                 DVector xi(k.size());
                 for (size_t i = 0; i < xi.size(); i++) {
-                    xi[i] = std::pow(2 * M_PI * r[i], -1.5) * b[i].real();
+                    xi[i] = std::pow(2 * M_PI * r[i], -1.5) * std::pow(r[i], -q) * b[i].real();
                 }
 
                 return {r, xi};

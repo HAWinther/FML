@@ -10,11 +10,11 @@ USE_OMP             ?= true
 USE_FFTW            ?= true
 USE_GSL             ?= true
 
-TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore
+TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator
 
 include ../Makefile.config
 
-FML_MODULES := Global Spline ODESolver Math SphericalCollapse HaloModel FileUtils GadgetUtils
+FML_MODULES := Global Spline ODESolver Math SphericalCollapse HaloModel FileUtils GadgetUtils FFTLog
 
 TEST_OBJS = test_core.o Global.o
 ifeq ($(USE_GSL),true)
@@ -100,6 +100,14 @@ test_camb: test_camb.o test_camb_odr.o Global.o Spline.o
 test_numcore: test_numcore.o Global.o Spline.o ODESolver.o Math.o
 	$(LINK_EXE)
 
+# FFTLog (FFTW)
+test_fftlog: test_fftlog.o Global.o FFTLog.o
+	$(LINK_EXE)
+
+# EuclidEmulator2 (GSL; the data file is ../Emulator/EuclidEmulator2.dat)
+test_emulator: test_emulator.o test_emulator_odr.o Global.o
+	$(LINK_EXE)
+
 MPIRUN  ?= mpirun
 NP_LIST ?= 1 2 4
 
@@ -155,6 +163,10 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_camb; \
 	  echo "== Running test_numcore with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_numcore; \
+	  echo "== Running test_fftlog with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_fftlog; \
+	  echo "== Running test_emulator with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_emulator; \
 	done
 	@echo "== Running test_hybridbias"
 	@OMP_NUM_THREADS=2 $(RUN1) ./test_hybridbias
