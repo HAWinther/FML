@@ -74,10 +74,16 @@ namespace FML {
                 Seed = seed;
                 std::seed_seq seeds(begin(Seed), end(Seed));
                 generator = std_random_generator_type(seeds);
+                // Reset the state of the normal distribution (std::normal_distribution caches a number, so without this
+                // the first number after setting the seed depends on what was drawn before)
+                normal_dist.reset();
             }
 
             /// Set the seed (single number)
-            virtual void set_seed(unsigned int seed) { set_seed(std::vector<unsigned int>(STDRANDOM_SEEDSIZE, seed)); }
+            virtual void set_seed(unsigned int seed) {
+                set_seed(std::vector<unsigned int>(STDRANDOM_SEEDSIZE, seed));
+                normal_dist.reset();
+            }
 
             /// Generate a random number uniformly distributed in [0,1)
             virtual double generate_uniform() { return uniform_dist(generator); }

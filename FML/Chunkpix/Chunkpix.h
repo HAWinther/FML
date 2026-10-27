@@ -3,7 +3,16 @@
 #ifdef USE_HEALPIX
 
 #include <FML/Global/Global.h>
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <iostream>
 #include <numeric>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #pragma GCC diagnostic push 
 #pragma GCC diagnostic ignored "-Wdeprecated-copy"
@@ -17,21 +26,28 @@ namespace FML {
 
     namespace CHUNKPIX {
         
-        typedef uint16_t int2;
-        
+        /// Type of chunk indices (there are 12 nside_chunks^2 chunks, e.g. 786432 for nside_chunks = 256, so a
+        /// 16 bit integer is not enough)
+        typedef std::int64_t ChunkIndex;
+
+        /// A sparse Healpix map (RING ordering): the npix = 12 nside^2 pixels are split into 12 nside_chunks^2
+        /// chunks of consecutive pixel indices and only the chunks that has been written to are allocated
         template <class T>
         class Chunkpix {
             private:
                 long nside{};
                 long nside_chunks{};
                 long npix{};
-                int nchunks{};
-                int npix_per_chunk{};
-                
+                long nchunks{};
+                long npix_per_chunk{};
+
                 // Data
                 std::vector<T> cmap;
-                std::vector<int2> active_chunks_values;
-                int n_active_chunks{};
+                // The chunk index (in the full map) of the active chunks in the order they were activated
+                std::vector<ChunkIndex> active_chunks_values;
+                // Map from chunk index to its position (key) in active_chunks_values
+                std::unordered_map<ChunkIndex, long> active_chunks_keys;
+                long n_active_chunks{};
 
             public:
                 Chunkpix() = default;
@@ -42,34 +58,40 @@ namespace FML {
 
                 double chunk_sparsity();
 
-                int2 ipix2chunk(int ipix_full);
-                
-                std::pair<size_t,size_t> chunk2ipix_ranges(int2 chunk);
+                ChunkIndex ipix2chunk(long ipix_full);
 
-                void increase_ipix_count(int ipix_full, T count_increase);
+                std::pair<size_t, size_t> chunk2ipix_ranges(ChunkIndex chunk);
+
+                void increase_ipix_count(long ipix_full, T count_increase);
 
                 void reconstruct_full_map(Healpix_Map<T> & full_map);
 
-                void deallocate_full_map();
-
                 void clean();
 
+                long get_nside() const { return nside; }
+                long get_npix() const { return npix; }
+                long get_n_active_chunks() const { return n_active_chunks; }
         };
 
         template <class T>
         void Chunkpix<T>::init(long _nside, long _nside_chunks) {
+            if (_nside <= 0 or _nside_chunks <= 0)
+                throw std::runtime_error("Chunkpix error: nside and nside_chunks must be positive");
+            if (_nside_chunks > _nside)
+                throw std::runtime_error("Chunkpix error, choose nside_chunks <= nside");
+            // Otherwise npix is not a multiple of nchunks and the last pixels would be in no chunk
+            if (_nside % _nside_chunks != 0)
+                throw std::runtime_error("Chunkpix error: nside (" + std::to_string(_nside) +
+                                         ") must be a multiple of nside_chunks (" + std::to_string(_nside_chunks) +
+                                         ")");
+
             nside = _nside;
             nside_chunks = _nside_chunks;
 
-            npix = 12*nside*nside;
-            nchunks = 12*nside_chunks*nside_chunks;
-            npix_per_chunk = npix/nchunks;
+            npix = 12 * nside * nside;
+            nchunks = 12 * nside_chunks * nside_chunks;
+            npix_per_chunk = npix / nchunks;
 
-            if (nside_chunks > nside){
-                const std::string err_str = "Chunkpix error, choose nside_chunks < nside ";
-                throw std::runtime_error(err_str);
-            } 
-            
             initialize_cmap();
         }
 
@@ -79,6 +101,7 @@ namespace FML {
             n_active_chunks = 0;
             active_chunks_values.resize(0);
             active_chunks_values.shrink_to_fit();
+            active_chunks_keys = std::unordered_map<ChunkIndex, long>();
             cmap.resize(0);
             cmap.shrink_to_fit();
         }
@@ -86,86 +109,91 @@ namespace FML {
         // Fraction of memory of a cmap compared to a full map
         template <class T>
         double Chunkpix<T>::chunk_sparsity() {
-            return double(n_active_chunks / nchunks);
+            return nchunks > 0 ? double(n_active_chunks) / double(nchunks) : 0.0;
         }
 
         // Return the chunk in the full-size map where a pixel belongs to
         template <class T>
-        int2 Chunkpix<T>::ipix2chunk(int ipix_full) {
-            return int2(ipix_full / npix_per_chunk);
+        ChunkIndex Chunkpix<T>::ipix2chunk(long ipix_full) {
+            return ChunkIndex(ipix_full / npix_per_chunk);
         }
 
-        // Return the range of the pixels belonging to a chunk
+        // Return the range of the pixels belonging to a chunk (first and last pixel, inclusive)
         template <class T>
-        std::pair<size_t,size_t> Chunkpix<T>::chunk2ipix_ranges(int2 chunk) {
-            return {(size_t) npix_per_chunk*chunk, (size_t) npix_per_chunk*(chunk+1)-1 };
+        std::pair<size_t, size_t> Chunkpix<T>::chunk2ipix_ranges(ChunkIndex chunk) {
+            return {size_t(npix_per_chunk) * size_t(chunk), size_t(npix_per_chunk) * size_t(chunk + 1) - 1};
         }
 
         // Increase the count number in cmap for the corresponding pixel.
         // This operation may activate a new chunk.
         template <class T>
-        void Chunkpix<T>::increase_ipix_count(int ipix_full, T count_increase) {
+        void Chunkpix<T>::increase_ipix_count(long ipix_full, T count_increase) {
+            if (ipix_full < 0 or ipix_full >= npix)
+                throw std::runtime_error("Chunkpix error: pixel index " + std::to_string(ipix_full) +
+                                         " is outside [0, npix = " + std::to_string(npix) + ")");
             // Chunk the pixel is in
-            int2 chunk_value = ipix2chunk(ipix_full);
+            const ChunkIndex chunk_value = ipix2chunk(ipix_full);
             // Is this chunk active?
-            // TODO This can be a bottleneck. Optimize if necessary. Hash-table?
-            auto it = std::find(active_chunks_values.begin(),
-                                active_chunks_values.end(),
-                                chunk_value);
-            int2 chunk_key = it - active_chunks_values.begin();
-
-            if(it == active_chunks_values.end()) {
+            long chunk_key;
+            auto it = active_chunks_keys.find(chunk_value);
+            if (it == active_chunks_keys.end()) {
                 // Chunk not in the list. Activate it.
+                chunk_key = n_active_chunks;
                 n_active_chunks++;
                 active_chunks_values.push_back(chunk_value);
+                active_chunks_keys[chunk_value] = chunk_key;
                 // Allocate and initialize new chunk pixels to 0
-                cmap.resize(n_active_chunks*npix_per_chunk, 0.0);
+                cmap.resize(size_t(n_active_chunks) * size_t(npix_per_chunk), T(0));
+            } else {
+                chunk_key = it->second;
             }
 
             // Add count
-            std::size_t ipix_chunk = ipix_full % npix_per_chunk
-                                                        + (size_t)chunk_key * npix_per_chunk; 
+            const size_t ipix_chunk = size_t(ipix_full % npix_per_chunk) + size_t(chunk_key) * size_t(npix_per_chunk);
             cmap[ipix_chunk] += count_increase;
         }
 
         // Reconstruct a full-size map from cmap
         template <class T>
-        void Chunkpix<T>::reconstruct_full_map(Healpix_Map<T> & full_map){
-            full_map.SetNside(nside, Healpix_Ordering_Scheme::RING);
-            full_map.fill(0.0);
-            
-            int counter = 0;
+        void Chunkpix<T>::reconstruct_full_map(Healpix_Map<T> & full_map) {
+            full_map.SetNside(int(nside), Healpix_Ordering_Scheme::RING);
+            full_map.fill(T(0));
+
             // Copy chunk by chunk
-            for(size_t key=0; key<(size_t)n_active_chunks; key++){
-                auto i_full = chunk2ipix_ranges(active_chunks_values[key]);
-                auto i_cmap = chunk2ipix_ranges(key);
-                for(size_t i=0; i<=i_full.second-i_full.first; i++){
+            double sum_cmap = 0.0;
+            for (size_t key = 0; key < size_t(n_active_chunks); key++) {
+                const auto i_full = chunk2ipix_ranges(active_chunks_values[key]);
+                const auto i_cmap = chunk2ipix_ranges(ChunkIndex(key));
+                for (size_t i = 0; i <= i_full.second - i_full.first; i++) {
                     full_map[i_full.first + i] = cmap[i_cmap.first + i];
-                    counter += cmap[i_cmap.first + i];
+                    sum_cmap += double(cmap[i_cmap.first + i]);
                 }
             }
 
-            // Check count conservation
-            auto * start = &full_map[0];
-            auto * end = &full_map[npix];
-            auto c0 = std::accumulate(cmap.begin(), cmap.end(), 0);
-            auto c1 = std::accumulate(start, end, 0);
-            if ( c0 != c1) {
-                std::string err_msg = "Error reconstructing full healpix map from chunkpix, task"
-                        + std::to_string(FML::ThisTask) + " \n"
-                        + std::to_string(c0) + "\t" + std::to_string(c1) + "\t"
-                        + std::to_string(counter) + "\n";
+            // Check count conservation (in floating point: the counts can be weights)
+            double sum_full = 0.0;
+            double sum_abs_full = 0.0;
+            for (long i = 0; i < npix; i++) {
+                sum_full += double(full_map[i]);
+                sum_abs_full += std::fabs(double(full_map[i]));
+            }
+            if (std::fabs(sum_full - sum_cmap) > 1e-6 * std::max(1.0, sum_abs_full)) {
+                std::string err_msg = "Error reconstructing full healpix map from chunkpix, task " +
+                                      std::to_string(FML::ThisTask) + "\n" + std::to_string(sum_cmap) + "\t" +
+                                      std::to_string(sum_full) + "\n";
                 std::cout << err_msg;
                 throw std::runtime_error(err_msg);
             }
         }
-        
+
         template <class T>
-        void Chunkpix<T>::clean(){
+        void Chunkpix<T>::clean() {
+            n_active_chunks = 0;
             cmap.clear();
             cmap.shrink_to_fit();
             active_chunks_values.clear();
             active_chunks_values.shrink_to_fit();
+            active_chunks_keys = std::unordered_map<ChunkIndex, long>();
         }
 
     } // namespace CHUNKPIX

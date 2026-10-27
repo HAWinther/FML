@@ -7,6 +7,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <utility>
 #include <vector>
 #ifdef USE_FFTW
 #include <fftw3.h>
@@ -131,7 +132,21 @@ namespace FML {
 
 #ifdef USE_FFTW
             // Get a (cached) FFTW plan for transforming this grid. r2c = true for real to complex
+            // (the grid data is preserved and stays at the same address)
             my_fftw_plan get_fftw_plan(bool r2c);
+#endif
+
+            // The local slab decomposition for a given Nmesh. Returns the number of complex cells FFTW needs
+            // locally for the main grid (can be larger than Local_nx * NmeshTotComplexSlice)
+            static ptrdiff_t compute_local_size(int Nmesh, ptrdiff_t & Local_nx, ptrdiff_t & Local_x_start);
+
+            // Number of reals at the start of the right extra slices that FFTW may use as scratch space
+            // in an in-place transform (and that we therefore must back up)
+            ptrdiff_t get_nreal_right_to_backup() const;
+
+#ifdef USE_MPI
+            // MPI_Sendrecv of a byte buffer of any size (split into chunks whose count fits in an int)
+            static void sendrecv_bytes(char * sendbuf, char * recvbuf, size_t bytes, int dest, int source);
 #endif
 
           public:
@@ -151,6 +166,9 @@ namespace FML {
             // Copying and assignment from grids with the same dimension only is allowed
             FFTWGrid(const FFTWGrid & rhs) = default;
             FFTWGrid & operator=(const FFTWGrid & rhs) = default;
+            // Moving takes over the memory. The moved-from grid is left empty (as a default constructed grid)
+            FFTWGrid(FFTWGrid && rhs) noexcept;
+            FFTWGrid & operator=(FFTWGrid && rhs) noexcept;
 
             // Pointers to various parts of the grid
             FloatType * get_real_grid_left(); /// The left most slice (slice ix = -nleft_extra,...,-2,-1)
@@ -163,7 +181,8 @@ namespace FML {
 #ifdef USE_FFTW
             my_fftw_complex * get_fftw_grid(); /// The fftw_complex cast of get_fourier_gride
 #endif
-            /// Free all the memory associated with the grid
+            /// Free all the memory associated with the grid and reset it to an empty grid (as if default
+            /// constructed, only the label is kept)
             void free();
 
             /// Perform real-to-complex fourier transform
@@ -270,10 +289,11 @@ namespace FML {
             /// The number of cells per slice that we alloc. Useful to jump from slice to slice
             ptrdiff_t get_ntot_real_slice_alloc() const;
 
-            /// Check if we have NaN in any of the grids
+            /// Check if we have NaN or Inf anywhere in the allocated grid (including the extra slices)
             bool nan_in_grids() const;
 
             /// Send slices to the neighboring CPUs which stores them in the left and right extra slice storage
+            /// (with more extra slices than local slices they are forwarded from tasks further away)
             void communicate_boundaries();
 
             /// This creates FFTW wisdom (but overwrites the arrays so must be done before setting the arrays)
@@ -295,9 +315,11 @@ namespace FML {
             void add_memory_label(std::string label);
 
             /// Save to file (adds .X to fileprefix where X is ThisTask). A raw copy of the grid meant for
-            /// checkpointing: read it back with load_from_file with the same number of tasks
+            /// checkpointing: read it back with load_from_file with the same number of tasks.
+            /// Aborts (assert_mpi) if the file cannot be written
             void dump_to_file(std::string fileprefix);
-            /// Load a grid written by dump_to_file (same number of tasks)
+            /// Load a grid written by dump_to_file (same number of tasks). Aborts (assert_mpi) if the file
+            /// cannot be read, is truncated or does not match the current domain decomposition
             void load_from_file(std::string fileprefix);
 
             void reallocate(int Nmesh, int nleft, int nright) { *this = FFTWGrid(Nmesh, nleft, nright); }
@@ -617,8 +639,10 @@ namespace FML {
 #endif
             assert_mpi(plan != nullptr, "[FFTWGrid::get_fftw_plan] FFTW failed to create a plan\n");
 
+            // Restore the data in place: the buffer must keep its address (callers may hold pointers into it)
+            // and its alignment (the plan is cached for this alignment)
             if (flag != FFTW_ESTIMATE)
-                fourier_grid_raw = std::move(backup);
+                std::copy(backup.begin(), backup.end(), fourier_grid_raw.begin());
 
             FML::GRID::store_fftw_plan(key, plan);
             return plan;
@@ -642,6 +666,7 @@ namespace FML {
             FloatType * begin = (FloatType *)fourier_grid_raw.data();
             FloatType * end = begin + NmeshTotRealAlloc;
             std::fill(begin, end, val);
+            grid_is_in_real_space = true;
         }
 
         template <int N>
@@ -665,6 +690,7 @@ namespace FML {
                     set_real_from_index(real_index, value);
                 }
             }
+            grid_is_in_real_space = true;
 
             communicate_boundaries();
         }
@@ -674,11 +700,12 @@ namespace FML {
 #ifdef DEBUG_FFTWGRID
             if (grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
-                    std::cout << "Warning: [FFTWGrid::fill_real_grid] The grid status is [Realspace]. Label: " + name +
+                    std::cout << "Warning: [FFTWGrid::fill_fourier_grid] The grid status is [Realspace]. Label: " + name +
                                      "\n";
             }
 #endif
             std::fill(fourier_grid_raw.begin(), fourier_grid_raw.end(), val);
+            grid_is_in_real_space = false;
         }
 
         template <int N>
@@ -686,7 +713,7 @@ namespace FML {
 #ifdef DEBUG_FFTWGRID
             if (grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
-                    std::cout << "Warning: [FFTWGrid::fill_real_grid] The grid status is [Realspace]. Label: " + name +
+                    std::cout << "Warning: [FFTWGrid::fill_fourier_grid] The grid status is [Realspace]. Label: " + name +
                                      "\n";
             }
 #endif
@@ -701,17 +728,47 @@ namespace FML {
                     set_fourier_from_index(fourier_index, value);
                 }
             }
+            grid_is_in_real_space = false;
         }
 
-        // We copy over slices
+#ifdef USE_MPI
+        template <int N>
+        void FFTWGrid<N>::sendrecv_bytes(char * sendbuf, char * recvbuf, size_t bytes, int dest, int source) {
+            // MPI counts are int so send large buffers in chunks (a slice can be > 2GB for huge grids)
+            const size_t maxchunk = size_t(1) << 30;
+            size_t offset = 0;
+            do {
+                const int nbytes = int(std::min(maxchunk, bytes - offset));
+                MPI_Status status;
+                MPI_Sendrecv(sendbuf + offset,
+                             nbytes,
+                             MPI_CHAR,
+                             dest,
+                             0,
+                             recvbuf + offset,
+                             nbytes,
+                             MPI_CHAR,
+                             source,
+                             0,
+                             FML::communicator,
+                             &status);
+                offset += size_t(nbytes);
+            } while (offset < bytes);
+        }
+#endif
+
+        // We copy over slices. If we have more extra slices than local slices (thin slabs) then the slices
+        // beyond the local ones are taken from the neighbors extra slices, which have already been received at that
+        // point (the right slices are filled from the nearest one and outwards, the left ones likewise), so the
+        // ghosts always hold the (periodic) neighbor slices no matter how many we have. This relies on all tasks
+        // having the same Local_nx (true as we require NTasks to divide Nmesh)
         template <int N>
         void FFTWGrid<N>::communicate_boundaries() {
-            int n_to_recv_right = n_extra_x_slices_right;
-            int n_to_recv_left = n_extra_x_slices_left;
-            if (n_to_recv_right > Local_nx)
-                n_to_recv_right = int(Local_nx);
-            if (n_to_recv_left > Local_nx)
-                n_to_recv_left = int(Local_nx);
+            const int n_to_recv_right = n_extra_x_slices_right;
+            const int n_to_recv_left = n_extra_x_slices_left;
+            if (n_to_recv_right + n_to_recv_left == 0)
+                return;
+            assert_mpi(Local_nx > 0, "[FFTWGrid::communicate_boundaries] Grid is not allocated\n");
 
 #ifdef DEBUG_FFTWGRID
             if (FML::ThisTask == 0) {
@@ -724,57 +781,103 @@ namespace FML {
             int rightcpu = (FML::ThisTask + 1) % FML::NTasks;
             int leftcpu = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
 #endif
-            int bytes_slice = int(NmeshTotRealSlice * sizeof(FloatType));
+            const size_t bytes_slice = size_t(NmeshTotRealSlice) * sizeof(FloatType);
 
+            // Slice i to the right of the main grid is slice i of the right task (or for i >= Local_nx its extra
+            // slice i - Local_nx which was received in iteration i - Local_nx)
             for (int i = 0; i < n_to_recv_right; i++) {
                 FloatType * slice_left_tosend = get_real_grid() + NmeshTotRealSlice * (i);
                 FloatType * slice_right_torecv = get_real_grid_right() + NmeshTotRealSlice * (i);
                 char * sendbuf = reinterpret_cast<char *>(slice_left_tosend);
                 char * recvbuf = reinterpret_cast<char *>(slice_right_torecv);
 #ifdef USE_MPI
-                MPI_Status status;
-                MPI_Sendrecv(sendbuf,
-                             bytes_slice,
-                             MPI_CHAR,
-                             leftcpu,
-                             0,
-                             recvbuf,
-                             bytes_slice,
-                             MPI_CHAR,
-                             rightcpu,
-                             0,
-                             FML::communicator,
-                             &status);
+                sendrecv_bytes(sendbuf, recvbuf, bytes_slice, leftcpu, rightcpu);
 #else
                 std::memcpy(recvbuf, sendbuf, bytes_slice);
 #endif
             }
 
+            // Slice -1-i is slice Local_nx-1-i of the left task (or for i >= Local_nx its extra slice
+            // Local_nx-1-i < 0 which was received in iteration i - Local_nx)
             for (int i = 0; i < n_to_recv_left; i++) {
                 FloatType * slice_right_tosend = get_real_grid() + NmeshTotRealSlice * (Local_nx - 1 - i);
                 FloatType * slice_left_torecv =
                     get_real_grid_left() + NmeshTotRealSlice * (n_extra_x_slices_left - 1 - i);
                 char * sendbuf = reinterpret_cast<char *>(slice_right_tosend);
                 char * recvbuf = reinterpret_cast<char *>(slice_left_torecv);
-
 #ifdef USE_MPI
-                MPI_Status status;
-                MPI_Sendrecv(sendbuf,
-                             bytes_slice,
-                             MPI_CHAR,
-                             rightcpu,
-                             0,
-                             recvbuf,
-                             bytes_slice,
-                             MPI_CHAR,
-                             leftcpu,
-                             0,
-                             FML::communicator,
-                             &status);
+                sendrecv_bytes(sendbuf, recvbuf, bytes_slice, rightcpu, leftcpu);
 #else
                 std::memcpy(recvbuf, sendbuf, bytes_slice);
 #endif
             }
+        }
+
+        template <int N>
+        ptrdiff_t FFTWGrid<N>::compute_local_size(int Nmesh, ptrdiff_t & Local_nx, ptrdiff_t & Local_x_start) {
+            ptrdiff_t NmeshTotComplex = 0;
+            std::vector<ptrdiff_t> NmeshPerDimFourier(N, Nmesh);
+            NmeshPerDimFourier[N - 1] = Nmesh / 2 + 1;
+#ifdef USE_MPI
+#ifdef USE_FFTW
+            NmeshTotComplex =
+                MPI_FFTW_LOCAL_SIZE(N, NmeshPerDimFourier.data(), FML::communicator, &Local_nx, &Local_x_start);
+#else
+            // If we don't have FFTW, but want to use this class
+            Local_nx = Nmesh / FML::NTasks;
+            Local_x_start = FML::ThisTask * Local_nx;
+            NmeshTotComplex = ptrdiff_t(Nmesh / 2 + 1) * ptrdiff_t(FML::power(Nmesh, N - 1)) / ptrdiff_t(FML::NTasks);
+#endif
+#else
+            Local_nx = Nmesh;
+            Local_x_start = 0;
+            NmeshTotComplex = 1;
+            for (int i = 0; i < N; i++)
+                NmeshTotComplex *= NmeshPerDimFourier[i];
+#endif
+            return NmeshTotComplex;
+        }
+
+        template <int N>
+        ptrdiff_t FFTWGrid<N>::get_nreal_right_to_backup() const {
+            if (n_extra_x_slices_right == 0)
+                return 0;
+            // FFTW may use all of its local array (NmeshTotComplex complex numbers) in an in-place transform. With MPI
+            // this can be larger than the Local_nx slices we use (e.g. in 2D when the transposed dimension
+            // Nmesh/2+1 is not divisible by NTasks) and then the excess overlaps with the right extra slices.
+            // We also always keep the first Nmesh/2+1 reals (as has always been done)
+            const ptrdiff_t nreal_right = NmeshTotRealSlice * n_extra_x_slices_right;
+            const ptrdiff_t nreal_excess = 2 * (NmeshTotComplex - Local_nx * NmeshTotComplexSlice);
+            return std::min(nreal_right, std::max(ptrdiff_t(Nmesh / 2 + 1), nreal_excess));
+        }
+
+        template <int N>
+        FFTWGrid<N>::FFTWGrid(FFTWGrid && rhs) noexcept {
+            *this = std::move(rhs);
+        }
+
+        template <int N>
+        FFTWGrid<N> & FFTWGrid<N>::operator=(FFTWGrid && rhs) noexcept {
+            if (this == &rhs)
+                return *this;
+            // Take over the buffer (keeps its address and alignment) and leave rhs empty
+            fourier_grid_raw = std::move(rhs.fourier_grid_raw);
+            Vector<ComplexType>().swap(rhs.fourier_grid_raw);
+            Nmesh = std::exchange(rhs.Nmesh, 0);
+            Local_nx = std::exchange(rhs.Local_nx, 0);
+            Local_x_start = std::exchange(rhs.Local_x_start, 0);
+            NmeshTotRealAlloc = std::exchange(rhs.NmeshTotRealAlloc, 0);
+            NmeshTotComplexAlloc = std::exchange(rhs.NmeshTotComplexAlloc, 0);
+            NmeshTotReal = std::exchange(rhs.NmeshTotReal, 0);
+            NmeshTotComplex = std::exchange(rhs.NmeshTotComplex, 0);
+            NmeshTotRealSlice = std::exchange(rhs.NmeshTotRealSlice, 0);
+            NmeshTotComplexSlice = std::exchange(rhs.NmeshTotComplexSlice, 0);
+            n_extra_x_slices_left = std::exchange(rhs.n_extra_x_slices_left, 0);
+            n_extra_x_slices_right = std::exchange(rhs.n_extra_x_slices_right, 0);
+            grid_is_in_real_space = std::exchange(rhs.grid_is_in_real_space, true);
+            name = std::move(rhs.name);
+            rhs.name.clear();
+            return *this;
         }
 
         template <int N>
@@ -791,23 +894,7 @@ namespace FML {
 #endif
 
             // Total number of complex gridcells in the local grid
-            std::vector<ptrdiff_t> NmeshPerDimFourier(N, Nmesh);
-            NmeshPerDimFourier[N - 1] = Nmesh / 2 + 1;
-#ifdef USE_MPI
-#ifdef USE_FFTW
-            NmeshTotComplex =
-                MPI_FFTW_LOCAL_SIZE(N, NmeshPerDimFourier.data(), FML::communicator, &Local_nx, &Local_x_start);
-#else
-            // If we don't have FFTW, but want to use this class
-            Local_nx = Nmesh / FML::NTasks;
-            Local_x_start = FML::ThisTask * Local_nx;
-            NmeshTotComplex = ptrdiff_t(Nmesh / 2 + 1) * ptrdiff_t(FML::power(Nmesh, N - 1)) / ptrdiff_t(FML::NTasks);
-#endif
-#else
-            NmeshTotComplex = 1;
-            for (int i = 0; i < N; i++)
-                NmeshTotComplex *= NmeshPerDimFourier[i];
-#endif
+            NmeshTotComplex = compute_local_size(Nmesh, Local_nx, Local_x_start);
 
             // Total number of real gridcells in the local grid.
             // NB: This will differ from the number of real cells we allocate!
@@ -938,20 +1025,18 @@ namespace FML {
             }
 #endif
 
+            // Plans are cached so this is only expensive the first time
+            // (planning preserves the data and the buffer so we fetch pointers after this)
+            my_fftw_plan plan_r2c = get_fftw_plan(true);
+
             //=================================================================================
-            // Make a copy of the first few cells that might be overwritten when doing the FFT
-            // This might mess up extra right slices we have if we don't make a copy here
+            // Make a copy of the cells in the right extra slices that FFTW might use as scratch
+            // space when doing the in-place FFT (see get_nreal_right_to_backup)
             //=================================================================================
             FloatType * real_grid_right = get_real_grid_right();
-            std::vector<FloatType> right_copy;
-            if (n_extra_x_slices_right > 0) {
-                right_copy = std::vector<FloatType>(Nmesh / 2 + 1);
-                for (int i = 0; i < Nmesh / 2 + 1; i++)
-                    right_copy[i] = real_grid_right[i];
-            }
+            const ptrdiff_t nright_copy = get_nreal_right_to_backup();
+            std::vector<FloatType> right_copy(real_grid_right, real_grid_right + nright_copy);
 
-            // Plans are cached so this is only expensive the first time
-            my_fftw_plan plan_r2c = get_fftw_plan(true);
             EXECUTE_R2C_NEW_ARRAY(plan_r2c, get_real_grid(), get_fftw_grid());
             grid_is_in_real_space = false;
 
@@ -969,10 +1054,7 @@ namespace FML {
             //=================================================================================
             // Copy back data we copied
             //=================================================================================
-            if (n_extra_x_slices_right > 0) {
-                for (int i = 0; i < Nmesh / 2 + 1; i++)
-                    real_grid_right[i] = right_copy[i];
-            }
+            std::copy(right_copy.begin(), right_copy.end(), real_grid_right);
 
 #else
             assert_mpi(false, "[FFTWGrid::fftw_r2c] Compiled without FFTW support so cannot take Fourier transforms\n");
@@ -994,30 +1076,25 @@ namespace FML {
             }
 #endif
 
+            // Plans are cached so this is only expensive the first time
+            // (planning preserves the data and the buffer so we fetch pointers after this)
+            my_fftw_plan plan_c2r = get_fftw_plan(false);
+
             //=================================================================================
-            // Make a copy of the first few cells that might be overwritten when doing the FFT
-            // This might mess up extra right slices we have if we don't make a copy here
+            // Make a copy of the cells in the right extra slices that FFTW might use as scratch
+            // space when doing the in-place FFT (see get_nreal_right_to_backup)
             //=================================================================================
             FloatType * real_grid_right = get_real_grid_right();
-            std::vector<FloatType> right_copy;
-            if (n_extra_x_slices_right > 0) {
-                right_copy = std::vector<FloatType>(Nmesh / 2 + 1);
-                for (int i = 0; i < Nmesh / 2 + 1; i++)
-                    right_copy[i] = real_grid_right[i];
-            }
+            const ptrdiff_t nright_copy = get_nreal_right_to_backup();
+            std::vector<FloatType> right_copy(real_grid_right, real_grid_right + nright_copy);
 
-            // Plans are cached so this is only expensive the first time
-            my_fftw_plan plan_c2r = get_fftw_plan(false);
             EXECUTE_C2R_NEW_ARRAY(plan_c2r, get_fftw_grid(), get_real_grid());
             grid_is_in_real_space = true;
 
             //=================================================================================
             // Copy back data we copied
             //=================================================================================
-            if (n_extra_x_slices_right > 0) {
-                for (int i = 0; i < Nmesh / 2 + 1; i++)
-                    real_grid_right[i] = right_copy[i];
-            }
+            std::copy(right_copy.begin(), right_copy.end(), real_grid_right);
 
 #else
             assert_mpi(false, "[FFTWGrid::fftw_c2r] Compiled without FFTW support so cannot take Fourier transforms\n");
@@ -1140,7 +1217,8 @@ namespace FML {
             const int nover2plus1 = Nmesh / 2 + 1;
             std::array<int, N> coord;
             coord[N - 1] = index % nover2plus1;
-            for (int idim = N - 2, n = nover2plus1; idim >= 0; idim--, n *= Nmesh) {
+            IndexIntType n = nover2plus1;
+            for (int idim = N - 2; idim >= 0; idim--, n *= Nmesh) {
                 coord[idim] = (index / n) % Nmesh;
             }
             return coord;
@@ -1181,7 +1259,8 @@ namespace FML {
             } else {
                 std::array<int, N> coord;
                 coord[N - 1] = index % nover2plus1;
-                for (int idim = N - 2, n = nover2plus1; idim >= 0; idim--, n *= Nmesh) {
+                IndexIntType n = nover2plus1;
+                for (int idim = N - 2; idim >= 0; idim--, n *= Nmesh) {
                     coord[idim] = (index / n) % Nmesh;
                 }
                 coord[0] += Local_x_start;
@@ -1229,7 +1308,8 @@ namespace FML {
                 fcoord[0] = twopi * double(ix <= nover2 ? ix : ix - Nmesh);
             } else {
                 fcoord[N - 1] = index % nover2plus1;
-                for (int idim = N - 2, n = nover2plus1; idim >= 0; idim--, n *= Nmesh) {
+                IndexIntType n = nover2plus1;
+                for (int idim = N - 2; idim >= 0; idim--, n *= Nmesh) {
                     fcoord[idim] = double((index / n) % Nmesh);
                 }
                 fcoord[0] += Local_x_start;
@@ -1264,7 +1344,8 @@ namespace FML {
                 fcoord[0] = (ix <= nover2 ? ix : ix - Nmesh);
             } else {
                 fcoord[N - 1] = index % nover2plus1;
-                for (int idim = N - 2, n = nover2plus1; idim >= 0; idim--, n *= Nmesh) {
+                IndexIntType n = nover2plus1;
+                for (int idim = N - 2; idim >= 0; idim--, n *= Nmesh) {
                     fcoord[idim] = ((index / n) % Nmesh);
                 }
                 fcoord[0] += Local_x_start;
@@ -1299,8 +1380,10 @@ namespace FML {
 
         template <int N>
         void FFTWGrid<N>::free() {
-            fourier_grid_raw.clear();
-            fourier_grid_raw.shrink_to_fit();
+            // Reset to an empty grid (releases the memory), but keep the label
+            std::string label = name;
+            *this = FFTWGrid<N>();
+            name = label;
         }
 
         template <int N>
@@ -1323,9 +1406,10 @@ namespace FML {
         template <int N>
         bool FFTWGrid<N>::nan_in_grids() const {
             bool found = false;
-            for (int i = 0; i < NmeshTotComplexAlloc; i++) {
-                if (fourier_grid_raw[i] != fourier_grid_raw[i]) {
-                    std::cout << "[FFTWGrid::nan_in_grids] Found NaN in grid. Index = " << i << "\n";
+            for (ptrdiff_t i = 0; i < NmeshTotComplexAlloc; i++) {
+                const ComplexType & z = fourier_grid_raw[i];
+                if (not std::isfinite(z.real()) or not std::isfinite(z.imag())) {
+                    std::cout << "[FFTWGrid::nan_in_grids] Found NaN or Inf in grid. Index = " << i << "\n";
                     found = true;
                     break;
                 }
@@ -1339,12 +1423,11 @@ namespace FML {
             std::string filename = fileprefix + "." + std::to_string(FML::ThisTask);
             auto myfile = std::fstream(filename, std::ios::out | std::ios::binary);
 
-            // If we fail to write give a warning, but continue
+            // If we fail to open the file throw an error (a checkpoint we cannot read back is useless)
             if (not myfile.good()) {
-                std::string error = "[FFTWGrid::dump_to_file] Failed to save the grid data on task " +
-                                    std::to_string(FML::ThisTask) + " Filename: " + filename;
-                std::cout << error << "\n";
-                return;
+                std::string error = "[FFTWGrid::dump_to_file] Failed to open file for writing on task " +
+                                    std::to_string(FML::ThisTask) + " Filename: " + filename + "\n";
+                assert_mpi(false, error.c_str());
             }
 
             // Write header data
@@ -1367,6 +1450,11 @@ namespace FML {
             myfile.write((char *)fourier_grid_raw.data(), bytes);
 
             myfile.close();
+            if (myfile.fail()) {
+                std::string error = "[FFTWGrid::dump_to_file] Failed to write the grid data on task " +
+                                    std::to_string(FML::ThisTask) + " Filename: " + filename + "\n";
+                assert_mpi(false, error.c_str());
+            }
         }
 
         template <int N>
@@ -1378,33 +1466,86 @@ namespace FML {
             // If we fail to load a file throw an error
             if (not myfile.good()) {
                 std::string error = "[FFTWGrid::load_from_file] Failed to read the grid from file on task " +
-                                    std::to_string(FML::ThisTask) + " Filename: " + filename;
+                                    std::to_string(FML::ThisTask) + " Filename: " + filename + "\n";
+                assert_mpi(false, error.c_str());
+            }
+            auto check_read = [&](const char * what) {
+                if (not myfile.good()) {
+                    std::string error = "[FFTWGrid::load_from_file] File is truncated or unreadable (failed to read " +
+                                        std::string(what) + ") on task " + std::to_string(FML::ThisTask) +
+                                        " Filename: " + filename + "\n";
+                    assert_mpi(false, error.c_str());
+                }
+            };
+
+            // Read header data (into temporaries, the grid is only changed once everything is validated)
+            int NDIM, _Nmesh, _nleft, _nright;
+            ptrdiff_t _Local_nx, _Local_x_start, _NmeshTotComplexAlloc, _NmeshTotRealAlloc, _NmeshTotComplex,
+                _NmeshTotComplexSlice, _NmeshTotRealSlice;
+            bool _grid_is_in_real_space;
+            myfile.read((char *)&NDIM, sizeof(NDIM));
+            check_read("the header");
+            assert_mpi(N == NDIM,
+                       "[FFTWGrid::load_from_file] The dimension of the grid does not match what is in the file\n");
+            myfile.read((char *)&_Nmesh, sizeof(_Nmesh));
+            myfile.read((char *)&_nleft, sizeof(_nleft));
+            myfile.read((char *)&_nright, sizeof(_nright));
+            myfile.read((char *)&_Local_nx, sizeof(_Local_nx));
+            myfile.read((char *)&_Local_x_start, sizeof(_Local_x_start));
+            myfile.read((char *)&_NmeshTotComplexAlloc, sizeof(_NmeshTotComplexAlloc));
+            myfile.read((char *)&_NmeshTotRealAlloc, sizeof(_NmeshTotRealAlloc));
+            myfile.read((char *)&_NmeshTotComplex, sizeof(_NmeshTotComplex));
+            myfile.read((char *)&_NmeshTotComplexSlice, sizeof(_NmeshTotComplexSlice));
+            myfile.read((char *)&_NmeshTotRealSlice, sizeof(_NmeshTotRealSlice));
+            myfile.read((char *)&_grid_is_in_real_space, sizeof(_grid_is_in_real_space));
+            check_read("the header");
+
+            // The file must have been written with the same domain decomposition as we have now
+            bool ok = _Nmesh > 0 and _nleft >= 0 and _nright >= 0;
+#ifdef USE_MPI
+            ok = ok and _Nmesh % FML::NTasks == 0;
+#endif
+            ptrdiff_t expected_Local_nx = 0, expected_Local_x_start = 0, expected_NmeshTotComplex = 0;
+            if (ok)
+                expected_NmeshTotComplex = compute_local_size(_Nmesh, expected_Local_nx, expected_Local_x_start);
+            const ptrdiff_t expected_slice = ptrdiff_t(_Nmesh / 2 + 1) * ptrdiff_t(FML::power(_Nmesh, N - 2));
+            ok = ok and _Local_nx == expected_Local_nx and _Local_x_start == expected_Local_x_start and
+                 _NmeshTotComplex == expected_NmeshTotComplex and _NmeshTotComplexSlice == expected_slice and
+                 _NmeshTotRealSlice == 2 * expected_slice and
+                 _NmeshTotComplexAlloc == expected_NmeshTotComplex + expected_slice * (_nleft + _nright) and
+                 _NmeshTotRealAlloc == 2 * _NmeshTotComplexAlloc;
+            if (not ok) {
+                std::string error =
+                    "[FFTWGrid::load_from_file] The grid in the file does not match the current domain decomposition "
+                    "(it must be read with the same number of tasks as it was written with) on task " +
+                    std::to_string(FML::ThisTask) + " File has Nmesh = " + std::to_string(_Nmesh) +
+                    " Local_nx = " + std::to_string(_Local_nx) + " Local_x_start = " + std::to_string(_Local_x_start) +
+                    ", expected Local_nx = " + std::to_string(expected_Local_nx) +
+                    " Local_x_start = " + std::to_string(expected_Local_x_start) + " Filename: " + filename + "\n";
                 assert_mpi(false, error.c_str());
             }
 
-            // Write header data
-            int NDIM;
-            myfile.read((char *)&NDIM, sizeof(NDIM));
-            assert_mpi(N == NDIM,
-                       "[FFTWGrid::load_from_file] The dimension of the grid does not match what is in the file");
-            myfile.read((char *)&Nmesh, sizeof(Nmesh));
-            myfile.read((char *)&n_extra_x_slices_left, sizeof(n_extra_x_slices_left));
-            myfile.read((char *)&n_extra_x_slices_right, sizeof(n_extra_x_slices_right));
-            myfile.read((char *)&Local_nx, sizeof(Local_nx));
-            myfile.read((char *)&Local_x_start, sizeof(Local_x_start));
-            myfile.read((char *)&NmeshTotComplexAlloc, sizeof(NmeshTotComplexAlloc));
-            myfile.read((char *)&NmeshTotRealAlloc, sizeof(NmeshTotRealAlloc));
-            myfile.read((char *)&NmeshTotComplex, sizeof(NmeshTotComplex));
-            myfile.read((char *)&NmeshTotComplexSlice, sizeof(NmeshTotComplexSlice));
-            myfile.read((char *)&NmeshTotRealSlice, sizeof(NmeshTotRealSlice));
-            myfile.read((char *)&grid_is_in_real_space, sizeof(grid_is_in_real_space));
-
             // Allocate and read main grid
-            size_t bytes = sizeof(ComplexType) * NmeshTotComplexAlloc;
-            fourier_grid_raw.resize(NmeshTotComplexAlloc);
-            myfile.read((char *)fourier_grid_raw.data(), bytes);
-
+            Vector<ComplexType> data(_NmeshTotComplexAlloc);
+            size_t bytes = sizeof(ComplexType) * _NmeshTotComplexAlloc;
+            myfile.read((char *)data.data(), bytes);
+            check_read("the grid data");
             myfile.close();
+
+            fourier_grid_raw = std::move(data);
+            Nmesh = _Nmesh;
+            n_extra_x_slices_left = _nleft;
+            n_extra_x_slices_right = _nright;
+            Local_nx = _Local_nx;
+            Local_x_start = _Local_x_start;
+            NmeshTotComplexAlloc = _NmeshTotComplexAlloc;
+            NmeshTotRealAlloc = _NmeshTotRealAlloc;
+            NmeshTotComplex = _NmeshTotComplex;
+            NmeshTotComplexSlice = _NmeshTotComplexSlice;
+            NmeshTotRealSlice = _NmeshTotRealSlice;
+            NmeshTotReal = ptrdiff_t(Local_nx) * ptrdiff_t(FML::power(Nmesh, N - 1));
+            grid_is_in_real_space = _grid_is_in_real_space;
+            add_memory_label(name.empty() ? "FFTWGrid" : name);
         }
 
 #ifdef USE_GSL

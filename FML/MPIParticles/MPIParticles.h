@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
@@ -173,7 +174,7 @@ namespace FML {
             /// Access particles through indexing operator
             T & operator[](size_t i);
             /// Get a reference to the i'th particle
-            T & get_part(int i);
+            T & get_part(size_t i);
 
             /// Get the idim component of the position for particle ipart
             auto get_pos(size_t ipart, int idim);
@@ -326,9 +327,9 @@ namespace FML {
                 std::cout << "#                   " << max_memory_in_mb << " MB (max)\n";
                 std::cout << "# Total particles across all tasks is " << NpartTotal << "\n";
                 std::cout << "# Task 0 has " << NpartLocal_in_use << " parts. Capacity: " << p.size() << "\n";
-                std::cout << "# The buffer is " << mean_fraction_filled << " %% (mean)\n";
-                std::cout << "#               " << min_fraction_filled << " %% (min)\n";
-                std::cout << "#               " << max_fraction_filled << " %% (max) filled across tasks\n";
+                std::cout << "# The buffer is " << mean_fraction_filled << " % (mean)\n";
+                std::cout << "#               " << min_fraction_filled << " % (min)\n";
+                std::cout << "#               " << max_fraction_filled << " % (max) filled across tasks\n";
                 std::cout << "#\n";
                 std::cout << "#=====================================================\n";
                 std::cout << "\n";
@@ -392,6 +393,23 @@ namespace FML {
             p.resize(p.capacity());
         }
 
+        /// Bring the x-coordinate of a particle given to MPIParticles::create into [0,1): x = 1.0 (or a tiny
+        /// negative x that wraps to 1.0 after rounding, e.g. -1e-17) is a valid periodic position that would otherwise
+        /// be in no task's range [xmin,xmax). x = 1.0 is treated as communicate_particles does (just below 1.0) and a
+        /// tiny negative x becomes 0.0. Anything else outside [0,1) (or NaN) is an error
+        template <class U>
+        void mpiparticles_wrap_boundary_position(U & x) {
+            if (x == U(1.0))
+                x = std::nextafter(x, U(0.0));
+            else if (x < U(0.0) and x + U(1.0) == U(1.0))
+                x = U(0.0);
+            if (not(x >= U(0.0) and x < U(1.0))) {
+                std::string errmsg = "[MPIParticles::create] Particle with x = " + std::to_string(double(x)) +
+                                     " is outside [0,1). Particles must be wrapped (periodic) before calling create\n";
+                assert_mpi(false, errmsg.c_str());
+            }
+        }
+
         template <class T>
         void MPIParticles<T>::create(T * part,
                                      size_t NumPartinpart,
@@ -424,12 +442,14 @@ namespace FML {
             if (all_tasks_has_the_same_particles) {
                 size_t count = 0;
                 for (size_t i = 0; i < NumPartinpart; i++) {
-                    auto * pos = FML::PARTICLE::GetPos(part[i]);
-                    if (pos[0] >= xmin and pos[0] < xmax) {
+                    auto x = FML::PARTICLE::GetPos(part[i])[0];
+                    mpiparticles_wrap_boundary_position(x);
+                    if (x >= xmin and x < xmax) {
                         // Check that we are not past allocation limit before writing
                         assert_mpi(count < nallocate,
                                    "[MPIParticle::create] Reached allocation limit. Increase nallocate\n");
                         p[count] = part[i];
+                        FML::PARTICLE::GetPos(p[count])[0] = x;
                         count++;
                     }
                 }
@@ -449,7 +469,6 @@ namespace FML {
             // just in case the total amount of particles are too large
             if (not all_tasks_has_the_same_particles) {
 
-                const auto nmax_per_batch = nallocate;
                 // Read in batches
                 size_t start = 0;
                 size_t count = 0;
@@ -457,6 +476,12 @@ namespace FML {
                 bool more_to_process_locally = NumPartinpart > 0;
                 while (more_to_process_globally) {
                     if (more_to_process_locally) {
+                        // We can only read as many as we have free space for (we keep the particles that belong
+                        // to us from earlier batches and receive particles from other tasks)
+                        const size_t nmax_per_batch = nallocate - count;
+                        assert_mpi(nmax_per_batch > 0,
+                                   "[MPIParticle::create] Reached allocation limit while reading particles in batches "
+                                   "(no room for more particles). Increase nallocate\n");
                         size_t nbatch = start + nmax_per_batch < NumPartinpart ? start + nmax_per_batch : NumPartinpart;
                         more_to_process_locally = nbatch < NumPartinpart;
 
@@ -465,6 +490,7 @@ namespace FML {
                             assert_mpi(count < nallocate,
                                        "[MPIParticle::create] Reached allocation limit. Increase nallocate\n");
                             p[count] = part[i];
+                            mpiparticles_wrap_boundary_position(FML::PARTICLE::GetPos(p[count])[0]);
                             count++;
                         }
                         start = nbatch;
@@ -504,7 +530,7 @@ namespace FML {
         }
 
         template <class T>
-        T & MPIParticles<T>::get_part(int i) {
+        T & MPIParticles<T>::get_part(size_t i) {
             return p[i];
         }
 
@@ -611,10 +637,19 @@ namespace FML {
             NpartTotal = FML::power(Npart_1D, ndim);
             NpartLocal_in_use = Local_Npart_1D * FML::power(Npart_1D, ndim - 1);
 
-            // Allocate particle struct
-            size_t NpartToAllocate =
-                buffer_factor <= 1.0 ? NpartLocal_in_use : size_t(double(NpartLocal_in_use) * buffer_factor);
-            assert(NpartToAllocate >= NpartLocal_in_use);
+            // Allocate particle struct. The capacity is buffer_factor times the largest number of lattice slices
+            // that the local x-range [xmin_local, xmax_local) can hold (for any uniform shift of the lattice), not
+            // times the number of slices we got: with Npart_1D not divisible by NTasks a task can get fewer slices
+            // than its share of the volume (or no slice at all if Npart_1D < NTasks) and would otherwise have no room
+            // for particles moving in. When the domain holds a whole number of slices (the usual case) this is the
+            // same as buffer_factor * NpartLocal_in_use
+            const double nslices_domain = double(Npart_1D) * (xmax_local - xmin_local);
+            const size_t max_slices = size_t(std::max(0.0, std::ceil(nslices_domain - 1e-9)));
+            const size_t npart_per_slice = size_t(FML::power(Npart_1D, ndim - 1));
+            size_t NpartToAllocate = size_t(std::ceil(std::max(buffer_factor, 1.0) * double(max_slices * npart_per_slice)));
+            NpartToAllocate = std::max(NpartToAllocate, size_t(NpartLocal_in_use));
+            assert_mpi(NpartToAllocate >= NpartLocal_in_use,
+                       "[MPIParticles::create_particle_grid] Allocation is smaller than the number of particles\n");
             p.resize(NpartToAllocate);
             add_memory_label("MPIParticles::create_particle_grid");
 
@@ -895,7 +930,6 @@ namespace FML {
 
         template <class T>
         void MPIParticles<T>::dump_to_file(std::string fileprefix, size_t max_bytesize_buffer) {
-            std::ios_base::sync_with_stdio(false);
             std::string filename = fileprefix + "." + std::to_string(FML::ThisTask);
             auto myfile = std::fstream(filename, std::ios::out | std::ios::binary);
 
@@ -904,16 +938,10 @@ namespace FML {
                 std::string error = "[MPIParticles::dump_to_file] Failed to save the particle data on task " +
                                     std::to_string(FML::ThisTask) + " Filename: " + filename;
                 std::cout << error << "\n";
-                std::ios_base::sync_with_stdio(true);
                 return;
             }
 
             int ndim = FML::PARTICLE::GetNDIM(T());
-
-            // Compute total bytes to write
-            size_t total_bytes_to_write = 0;
-            for (auto & part : p)
-                total_bytes_to_write += FML::PARTICLE::GetSize(part);
 
             // Write header data
             size_t NpartLocalAllocated = p.size();
@@ -924,22 +952,25 @@ namespace FML {
             myfile.write((char *)x_min_per_task.data(), sizeof(double) * FML::NTasks);
             myfile.write((char *)x_max_per_task.data(), sizeof(double) * FML::NTasks);
 
-            if (NpartLocal_in_use == 0)
+            if (NpartLocal_in_use == 0) {
+                myfile.close();
                 return;
+            }
 
             // Allocate a write buffer
             std::vector<char> buffer_data(max_bytesize_buffer);
             assert_mpi(max_bytesize_buffer > size_t(100 * FML::PARTICLE::GetSize(p[0])),
                        "[MPIParticles::dump_to_file] Buffer size is likely too small, can't even fit 100 particles\n");
 
-            // Write in chunks
+            if (FML::ThisTask == 0)
+                std::cout << "# Writing particles to " << fileprefix << ".X\n";
+
+            // Write in chunks (only the particles in use)
             size_t nwritten = 0;
             while (nwritten < NpartLocal_in_use) {
 
-                size_t n_to_write = NpartLocal_in_use;
+                size_t n_to_write = NpartLocal_in_use - nwritten;
                 size_t nbytes_to_write = 0;
-
-                std::cout << "Writing " << nwritten << std::endl;
 
                 char * buffer = buffer_data.data();
                 for (size_t i = 0; i < n_to_write; i++) {
@@ -952,19 +983,23 @@ namespace FML {
                     buffer += bytes;
                     nbytes_to_write += bytes;
                 }
+                assert_mpi(n_to_write > 0,
+                           "[MPIParticles::dump_to_file] A particle does not fit in the buffer. Increase "
+                           "max_bytesize_buffer\n");
                 myfile.write((char *)&n_to_write, sizeof(n_to_write));
                 myfile.write((char *)&nbytes_to_write, sizeof(nbytes_to_write));
                 myfile.write((char *)buffer_data.data(), nbytes_to_write);
 
                 nwritten += n_to_write;
             }
+            if (not myfile.good())
+                std::cout << "[MPIParticles::dump_to_file] Error writing the particle data on task " +
+                                 std::to_string(FML::ThisTask) + " Filename: " + filename + "\n";
             myfile.close();
-            std::ios_base::sync_with_stdio(true);
         }
 
         template <class T>
         void MPIParticles<T>::load_from_file(std::string fileprefix) {
-            std::ios_base::sync_with_stdio(false);
             std::string filename = fileprefix + "." + std::to_string(FML::ThisTask);
             auto myfile = std::ifstream(filename, std::ios::binary);
 
@@ -990,11 +1025,16 @@ namespace FML {
             x_max_per_task.resize(FML::NTasks);
             myfile.read((char *)x_min_per_task.data(), sizeof(double) * FML::NTasks);
             myfile.read((char *)x_max_per_task.data(), sizeof(double) * FML::NTasks);
+            assert_mpi(myfile.good() and NpartLocal_in_use <= NpartLocalAllocated,
+                       "[MPIParticles::load_from_file] Error reading the header of the file\n");
 
             // Allocate memory
             p.resize(NpartLocalAllocated);
             if (NpartLocal_in_use == 0)
                 return;
+
+            if (FML::ThisTask == 0)
+                std::cout << "# Reading particles from " << fileprefix << ".X\n";
 
             // Allocate a read buffer
             std::vector<char> buffer_data;
@@ -1007,21 +1047,29 @@ namespace FML {
                 size_t nbytes_to_read{};
                 myfile.read((char *)&n_to_read, sizeof(n_to_read));
                 myfile.read((char *)&nbytes_to_read, sizeof(nbytes_to_read));
+                // Never read more particles than the file says we have (files from older versions could contain
+                // more, and n_to_read = 0 would never finish)
+                assert_mpi(myfile.good() and n_to_read > 0 and n_to_read <= NpartLocal_in_use - nread,
+                           "[MPIParticles::load_from_file] Corrupt file: the chunks do not add up to the number of "
+                           "particles in the header\n");
                 if (buffer_data.size() < nbytes_to_read)
                     buffer_data.resize(1.25 * nbytes_to_read);
                 char * buffer = buffer_data.data();
-                std::cout << "Reading " << n_to_read << " / " << NpartLocal_in_use << " " << nbytes_to_read << " "
-                          << buffer_data.size() << std::endl;
                 myfile.read(buffer, nbytes_to_read);
+                assert_mpi(myfile.good(), "[MPIParticles::load_from_file] Error reading particle data\n");
+                size_t bytes_processed = 0;
                 for (size_t i = 0; i < n_to_read; i++) {
                     FML::PARTICLE::AssignFromBuffer(p[nread + i], buffer);
-                    buffer += FML::PARTICLE::GetSize(p[nread + i]);
+                    auto bytes = FML::PARTICLE::GetSize(p[nread + i]);
+                    buffer += bytes;
+                    bytes_processed += bytes;
+                    assert_mpi(bytes_processed <= nbytes_to_read,
+                               "[MPIParticles::load_from_file] Corrupt file: particle data larger than the chunk\n");
                 }
 
                 nread += n_to_read;
             }
             myfile.close();
-            std::ios_base::sync_with_stdio(true);
         }
 
     } // namespace PARTICLE

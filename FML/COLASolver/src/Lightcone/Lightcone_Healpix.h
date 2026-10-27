@@ -23,7 +23,16 @@
 
 #include <cmath>
 #include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <iterator>
+#include <limits>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 template <class T, int NDIM>
 class OnionSlice {
@@ -32,12 +41,16 @@ class OnionSlice {
     Healpix_Map<T> hmap;
     Healpix_Ordering_Scheme ordering = Healpix_Ordering_Scheme::RING;
     FML::CHUNKPIX::Chunkpix<T> cmap;
+    // The pixelization (for vec2pix) when the map is stored as chunks (hmap is then not allocated)
+    Healpix_Base hbase;
 #endif
     // For 2D
     std::vector<T> vmap;
     T * map;
 
-    bool use_chunkpix;
+    // If true the map is (still) stored in cmap. It is converted to the full map hmap (and this is set to false)
+    // in reduce_over_tasks (before the sum over tasks) or normalize_map, whichever comes first
+    bool use_chunkpix{false};
     long nside_chunks;
 
     // Radial ranges for the map
@@ -103,6 +116,8 @@ class OnionSlice {
 #ifdef USE_HEALPIX
           if (_use_chunkpix) {
             cmap.init(_nside, _nside_chunks);
+            hbase.SetNside(_nside, ordering);
+            hmap = Healpix_Map<T>();
           } else {
             hmap.SetNside(_nside, ordering);
             hmap.fill(0.0);
@@ -138,6 +153,21 @@ class OnionSlice {
 
     auto * get_map_data() { return map; }
 
+    /// If the map is stored with chunkpix: reconstruct the full map (hmap) from the chunks and free the chunks.
+    /// Afterwards the map is an ordinary full map (also on tasks that have no particles in it: all zero)
+    void reconstruct_from_chunkpix() {
+#ifdef USE_HEALPIX
+        if constexpr (NDIM == 3) {
+            if (use_chunkpix) {
+                cmap.reconstruct_full_map(hmap);
+                cmap.clean();
+                use_chunkpix = false;
+                set_map_pointer();
+            }
+        }
+#endif
+    }
+
     template<class U>
     long int get_pixel_index([[maybe_unused]] U * pos) {
       if constexpr(NDIM == 1) {
@@ -155,6 +185,8 @@ class OnionSlice {
       if constexpr(NDIM == 3) {
 #ifdef USE_HEALPIX
         vec3 _pos(pos[0], pos[1], pos[2]);
+        if (use_chunkpix)
+            return hbase.vec2pix(_pos);
         return hmap.vec2pix(_pos);
 #else
         throw std::runtime_error("Healpix is not installed");
@@ -190,6 +222,7 @@ class OnionSlice {
 
     /// Sum the maps over the tasks to task_to_reduce_to (for maps of a field, not of particle counts)
     void sum_field_over_tasks(int task_to_reduce_to = 0) {
+        reconstruct_from_chunkpix();
         auto npix = get_npix();
         if constexpr (std::is_same<T, float>::value) {
             MPI_Reduce((FML::ThisTask == task_to_reduce_to ? MPI_IN_PLACE : &map[0]), &map[0], npix, MPI_FLOAT, MPI_SUM,
@@ -218,6 +251,8 @@ class OnionSlice {
         return vmap.size();
       if constexpr(NDIM == 3) {
 #ifdef USE_HEALPIX
+        if (use_chunkpix)
+            return cmap.get_nside();
         return hmap.Nside(); 
 #else
         throw std::runtime_error("Healpix is not installed");
@@ -230,6 +265,8 @@ class OnionSlice {
         return vmap.size();
       if constexpr(NDIM == 3) {
 #ifdef USE_HEALPIX
+        if (use_chunkpix)
+            return cmap.get_npix();
         return hmap.Npix(); 
 #else
         throw std::runtime_error("Healpix is not installed");
@@ -240,6 +277,9 @@ class OnionSlice {
     void reduce_over_tasks(int task_to_reduce_to = 0) {
         if (is_reduced)
             return;
+
+        // With chunkpix: make the full map first so that it is the full maps that are summed over tasks
+        reconstruct_from_chunkpix();
 
         // Compute how many particles we have added to the map
         FML::SumOverTasks(&n_in_map);
@@ -301,13 +341,8 @@ class OnionSlice {
           return;
         }
 
-#ifdef USE_HEALPIX
-        // If we use chunkpix then we construct the map here
-        if (use_chunkpix) {
-            cmap.reconstruct_full_map(hmap);
-            map = &hmap[0];
-        }
-#endif
+        // If we use chunkpix (and have not reduced over tasks) then we construct the map here
+        reconstruct_from_chunkpix();
 
         auto npix = get_npix();
         double volume = 0.0;
@@ -369,6 +404,7 @@ class OnionSlice {
     }
 
     void output(std::string filename) {
+        reconstruct_from_chunkpix();
 #ifdef USE_HEALPIX
         // This requires c++ 17 so we only include it if really needed
         if (std::filesystem::remove(filename)) {
@@ -507,6 +543,7 @@ class OnionSlice {
       }
 
 #ifdef USE_HEALPIX
+      reconstruct_from_chunkpix();
       // Compute alm's
       const int nside = get_nside();
       const int nlmax = 2*nside ;

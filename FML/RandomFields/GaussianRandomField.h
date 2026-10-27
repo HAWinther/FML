@@ -119,6 +119,13 @@ namespace FML {
             /// @param[in] fix_amplitude If true then we only draw phases and set \f$ |\delta(k)| \f$ directly from the
             /// input power-spectrum.
             ///
+            /// NB: Known issue: the random numbers are generated line by line (along the last dimension) with one seed
+            /// per line drawn as (unsigned int)(INT_MAX * uniform) as in N-GenIC / 2LPTic. As there are only ~2^31
+            /// possible seeds some lines get identical seeds by the birthday problem (expected ~Nmesh^4 / 2^32 lines
+            /// in 3D, e.g. we find 13, 225 and 4136 duplicated lines for Nmesh = 512, 1024, 2048 with mt19937 and seed
+            /// 1234) and these lines have perfectly correlated random numbers. This is kept for now for compatibility
+            /// with N-GenIC / 2LPTic (the same seed gives the same initial conditions as these codes).
+            ///
             //=================================================================================
             template <int N>
             void generate_gaussian_random_field_fourier(FFTWGrid<N> & grid,
@@ -167,6 +174,9 @@ namespace FML {
 
                 // Set up seeds for the random number generator
                 // and ensure that all tasks use the same seed
+                // NB: Known issue: INT_MAX * uniform only gives ~2^31 different seeds so with Nmesh^(N-1) lines some
+                // lines get the same seed by the birthday problem (~Nmesh^(2N-2)/2^32 of them) and these lines then
+                // have perfectly correlated random numbers. Kept for now for compatibility with N-GenIC / 2LPTic.
                 IndexIntType num_seeds = FML::power(Nmesh, N - 1);
                 std::vector<unsigned int> seedtable(num_seeds, 0);
                 if (FML::ThisTask == 0) {
@@ -290,8 +300,17 @@ namespace FML {
 
             // Specialization for N=3 to have the random seeds agree with what is done in N-GenIC / PICOLA / MPICOLA
             // allowing to create the same IC as them given the same seed
+            //
+            /// NB: Known issue (kept for now for compatibility with N-GenIC / 2LPTic so that the same seed gives the
+            /// same initial conditions): the seed of each (i,j) line of modes along the last dimension is drawn as
+            /// (unsigned int)(INT_MAX * uniform). With Nmesh^2 lines drawn from ~2^31 possible seeds some lines get
+            /// identical seeds by the birthday problem (expected number ~ Nmesh^4 / 2^32) and these lines then
+            /// have exactly the same (perfectly correlated) sequence of random numbers. E.g. with the mt19937 generator
+            /// and seed 1234 we find 13, 225 and 4136 duplicated lines for Nmesh = 512, 1024 and 2048 (other seeds
+            /// and GSL give similar numbers).
+            //
             template <>
-            void generate_gaussian_random_field_fourier(FFTWGrid<3> & grid,
+            inline void generate_gaussian_random_field_fourier(FFTWGrid<3> & grid,
                                                         RandomGenerator * rng,
                                                         std::function<double(double)> Pofk_of_kBox_over_volume,
                                                         bool fix_amplitude) {
@@ -317,6 +336,11 @@ namespace FML {
                 // The strange way it's done here (instead of just filling the N^2 table directly)
                 // is just to keep compatibility with PICOLA which allows for creating exactly the same IC when rng is
                 // GSL and we use the same seed
+                // NB: Known issue: INT_MAX * uniform only gives ~2^31 different seeds so for Nmesh^2 lines some
+                // lines get the same seed (birthday problem, expected ~Nmesh^4/2^32 duplicates: e.g. 13, 225 and 4136
+                // duplicated lines for Nmesh = 512, 1024, 2048 with mt19937 and seed 1234) and these lines have
+                // perfectly correlated random numbers. This is inherited from N-GenIC / 2LPTic and kept for now for
+                // compatibility (same seed => same IC as these codes).
                 std::vector<unsigned int> seedtable(Nmesh * Nmesh, 0);
                 if (FML::ThisTask == 0)
                     for (int i = 0; i < Nmesh / 2; i++) {

@@ -5,6 +5,66 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### FFTWGrid, MPIGrid, MPIParticles, particle helpers, LPT, RandomFields, NBody, PGD fixes
+- `FFTWGrid`: with a planner flag other than FFTW_ESTIMATE the first transform used freed memory (the plan creation
+  replaced the buffer; segfault with 2 tasks); in 2D the in-place MPI FFT overwrote the right extra slices (FFTW uses
+  more local memory than Local_nx slices when Nmesh/2+1 does not divide by the tasks); no move operations, so moving
+  a grid copied it (+64 MB peak for a 34 MB grid); thin slabs (more extra slices than local slices) got zeros in the
+  far ghost slices (now forwarded); `load_from_file` accepted truncated files and files from another decomposition
+  (and never set NmeshTotReal), `dump_to_file` only warned when it could not write (both now errors); MPI byte counts
+  are sent in chunks of at most 1 GB (one slice above 2 GB overflowed an int, 3D Nmesh 16384); `nan_in_grids` also
+  finds inf; `free()` resets the grid. The normal 3D path is bit-identical.
+- `MPIGrid`: the index functions overflowed int for N >= 2048 (wrong neighbor cells in the multigrid solver for
+  2048^3), `a + b` (and -, *, /) returned a reference to a temporary (segfault), periodic ghosts were zero with one
+  task, the farthest left ghost was wrong for thin slabs, plus documentation fixes in MPIMultiGrid.
+- `MPIParticles`: the lattice buffer was `allocation_factor` times the local number of particles, so with Npart_1D
+  not divisible by the number of tasks the tasks with fewer lattice slices than average had almost no room (Npart_1D
+  = 10 on 4 tasks: a half-lattice shift aborted with "Too many particles received"; tasks with no slices had none).
+  It is now based on the most lattice slices the domain can hold. `create` from a buffer read in batches aborted
+  ("Reached allocation limit") and dropped particles at x = 1.0 or -1e-17 (now wrapped as in
+  `communicate_particles`); `dump_to_file` wrote particles past the end of the buffer when there were more particles
+  than fit in it (and `load_from_file` overran). Positions after `shift_particles` are always in [0,1) (y = -1e-17 gave
+  1.0), and the interlaced density assignment (P(k) output and `force_interlacing`) now restores the positions
+  exactly instead of shifting back (which changed them in the last digit, so computing an interlaced P(k) changed
+  the rest of the run at round-off level). Particles with their own `append_to_buffer`/`assign_from_buffer` did not
+  compile, overloaded (const / non-const) or template methods were not detected (`get_pos` then aborted at run time),
+  `SimpleGalaxy.h` did not compile, `ParticlesInBoxes` wrote out of bounds for x < -1/ngrid.
+- `Chunkpix` and the lightcone with `plc_use_chunkpix = true`: the chunk index was 16 bit (12 nside_chunks^2 chunks:
+  wrong pixels for `plc_nside_chunks = 256`, the value suggested in parameterfile.lua) and the COLASolver chunkpix path
+  crashed (division by zero, and the maps were reconstructed after the reduction over tasks). Now the maps are
+  reconstructed before the reduction and are identical to the maps without chunkpix.
+- LPT: the 3LPT "b" term and the curl term read the second-order potential derivatives in Fourier space as if they
+  were real space (`LPT_order = 3`: phi_3LPT_b had correlation -0.002 with the right answer); now equal to an
+  independent computation to 1e-13. `compute_3LPT_displacement_field` (unused) did not compile and applied the factors
+  twice; the ALPT potential was NaN and the spherical-collapse potential was its source; a non-Gaussian field with a
+  0/0 ratio at k = 0 was NaN everywhere; the growth-factor helpers assumed flat LCDM for dlogH/dloga (D1(a=1) -3% for
+  w = -0.8) and stopped short of a = 1; `set_seed` did not reset the cached normal number (all white-noise slices
+  started with the same value); `GaussianRandomField.h` could not be included in two translation units. The
+  Gaussian + 2LPT initial conditions are bit-identical.
+- Documented (not changed, for compatibility with N-GenIC / 2LPTic): the per-line seeds are drawn as INT_MAX times a
+  uniform number, so some lines get the same seed and identical random numbers (with GSL and seed 1234: 20, 249 and
+  4239 lines for Nmesh = 512, 1024, 2048).
+- NBody: the `discrete_4pt` Green's function had +sin^2 where it should be -sin^2 (force 11% low on a plane wave with
+  `force_greens_function_kernel = discrete_4pt`); the finite-difference force ignored the Green's function and the
+  window deconvolution (now as the Fourier force: equal to it to 1e-15 with the matching gradient kernel); the drift
+  deadlocked when a task had no particles; the periodic wrap could give exactly 1.0 and handled only one box length;
+  missing includes and ODR (10 multiple definitions); too few extra slices or an invalid stencil order (std::terminate
+  inside OpenMP) are now clear errors, and COLASolver rejects `force_finite_difference_stencil_order` other than 2, 4,
+  6 and an explicit `force_gradient_kernel` with the finite-difference force (which does not use it). The library
+  example used km/s for the IC velocities and the kick factor at the mid-step time for the first and last steps.
+- PGD: empty tasks aborted; an `MPIParticles` overload communicates the particles; documented the normalisation (Dai,
+  Feng & Seljak 2018 eq. 2.8 have 4 pi G rho / H0^2 = 1.5 OmegaM; the example's 1.5 OmegaM a agrees at a = 1) and the
+  k_lowpass / k_highpass meaning. Python wrapper: no linking with (possibly another) libpython, bounds check, no
+  double free.
+- Tests: `tests/test_grids.cpp`, `test_particles.cpp`, `test_lpt.cpp` (+ `test_lpt_odr.cpp`), `test_nbody.cpp`
+  (+ `test_nbody_odr.cpp`), and five bad-input runs; each fails, crashes, hangs or does not compile with the old code.
+- Regression: identical except a 1-ulp difference in one float of a z = 0 snapshot (two_species_mass_ini, which
+  computes interlaced spectra at its earlier outputs: the exact restore of the positions) and the FoF halos at round-off level.
+- Measured (not changed): the first derivatives of the LPT potentials use +k_Nyquist on the Nyquist planes, which in
+  x and y gives a grid-scale checkerboard in the 2LPT displacement (8.7% rms of Psi_2 on 64^3; z is not affected).
+  Setting the Nyquist derivative to zero changes P(k) of a 96^3 run (384 Mpc/h, COLA, z = 49 -> 0) by < 2e-6 for
+  k < kNy/2 and < 6e-5 up to 1.5 kNy (particle Nyquist frequency), and the initial P(k) by < 1e-6.
+
 ### LuaFileParser, FoF, Interpolation, Units fixes
 - `LuaFileParser` (reads COLASolver's parameter files): every optional parameter that was not in the file left a value
   on the Lua stack, which was never checked or emptied: after about 50 such parameters memory was overwritten. A

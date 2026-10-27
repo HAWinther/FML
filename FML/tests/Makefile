@@ -11,7 +11,7 @@ USE_FFTW            ?= true
 USE_GSL             ?= true
 USE_LUA             ?= true
 
-TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation
+TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_lpt test_nbody
 
 include ../Makefile.config
 
@@ -125,6 +125,22 @@ test_interpolation: test_interpolation.o Global.o
 test_lua: test_lua.o test_lua_odr.o Global.o
 	$(LINK_EXE)
 
+# FFTWGrid and MPIGrid
+test_grids: test_grids.o Global.o
+	$(LINK_EXE)
+
+# MPIParticles, particle reflection, ParticlesInBoxes (Chunkpix only with USE_HEALPIX)
+test_particles: test_particles.o Global.o
+	$(LINK_EXE)
+
+# LPT displacement fields and random fields
+test_lpt: test_lpt.o test_lpt_odr.o Global.o Spline.o ODESolver.o
+	$(LINK_EXE)
+
+# NBody forces, drift and PGD
+test_nbody: test_nbody.o test_nbody_odr.o Global.o Spline.o ODESolver.o
+	$(LINK_EXE)
+
 MPIRUN  ?= mpirun
 NP_LIST ?= 1 2 4
 
@@ -188,6 +204,14 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_utils; \
 	  echo "== Running test_interpolation with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_interpolation; \
+	  echo "== Running test_grids with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_grids; \
+	  echo "== Running test_particles with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_particles; \
+	  echo "== Running test_lpt with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_lpt; \
+	  echo "== Running test_nbody with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_nbody; \
 	done
 	@echo "== Running test_hybridbias"
 	@OMP_NUM_THREADS=2 $(RUN1) ./test_hybridbias
@@ -197,6 +221,12 @@ ifeq ($(USE_MPI),true)
 	@! $(MPIRUN) -np 2 ./test_core unwrapped > unwrapped.log 2>&1 && grep -q "outside \[0,1)" unwrapped.log && echo "[PASS] unwrapped particle aborts"
 endif
 	@rm -f alloc.log unwrapped.log
+	@for m in "truncated:File is truncated or unreadable" "decomposition:does not match the current domain decomposition" "dumpfail:Failed to open file for writing"; do \
+	  ! $(RUN1) ./test_grids $${m%%:*} > grids.log 2>&1 && grep -qF "$${m#*:}" grids.log && echo "[PASS] test_grids $${m%%:*} gives an error" || exit 1; \
+	done; rm -f grids.log
+	@for m in "fdslices:needs at least stencil_order/2 extra slices" "stencil:Unknown stencil_order"; do \
+	  ! $(RUN1) ./test_nbody $${m%%:*} > nbody.log 2>&1 && grep -qF "$${m#*:}" nbody.log && echo "[PASS] test_nbody $${m%%:*} gives an error" || exit 1; \
+	done; rm -f nbody.log
 	@! $(RUN1) ./test_interpolation unknown > interp.log 2>&1 && grep -qF "Unknown density assignment method" interp.log && echo "[PASS] test_interpolation unknown method gives an error"
 ifeq ($(USE_MPI),true)
 	@! $(MPIRUN) -np 4 ./test_interpolation thin > interp.log 2>&1 && grep -qF "Fewer slices on a task" interp.log && echo "[PASS] test_interpolation too thin slabs give an error"

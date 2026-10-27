@@ -17,7 +17,7 @@ namespace FML {
 
         //===========================================================================================
         ///
-        /// A stack of _Nlevel MPIGrids with \f$ N^{\rm NDIM} / 2^{\rm Level} \f$ cells in each level
+        /// A stack of _Nlevel MPIGrids with \f$ (N / 2^{\rm Level})^{\rm NDIM} \f$ cells in each level
         ///
         /// Compile time defines:
         ///
@@ -29,15 +29,15 @@ namespace FML {
         class MPIMultiGrid {
           private:
             int _N{0};                                 // Number of cells per dim in domain-grid [0]
-            int _NtotLocal{0};                         // Total number of cells in domain-grid [0]
+            IndexInt _NtotLocal{0};                    // Total number of cells in domain-grid [0]
             int _Nlevel{0};                            // Number of levels
             std::vector<int> _NinLevel{};              // Number of cells per dim in each level
             std::vector<IndexInt> _NtotLocalinLevel{}; // Total number of cells in each level
             std::vector<MPIGrid<NDIM, T>> _y{};        // The grid data
 
             bool _periodic{true};         // Periodic box
-            int _n_extra_slices_left{0};  // Extra x-slices on the right
-            int _n_extra_slices_right{0}; // Extra x-slices on the left
+            int _n_extra_slices_left{0};  // Extra x-slices on the left
+            int _n_extra_slices_right{0}; // Extra x-slices on the right
 
           public:
             // Constructors
@@ -203,10 +203,10 @@ namespace FML {
             // Also check that N is a power of 2
             //==================================================================================
             assert_mpi(N > 0 and FML::power(2, intlog2(N)) == N,
-                       "[MPIMultiGrid] N must be positive and a power of 2 for this class too work\n");
+                       "[MPIMultiGrid] N must be positive and a power of 2 for this class to work\n");
             if (FML::NTasks > 1) {
                 assert_mpi(FML::power(2, intlog2(FML::NTasks)) == FML::NTasks,
-                           "[MPIMultiGrid] FML::NTasks must be a power of 2 for this class too work with MPI\n");
+                           "[MPIMultiGrid] FML::NTasks must be a power of 2 for this class to work with MPI\n");
             }
 
             //==================================================================================
@@ -226,11 +226,11 @@ namespace FML {
             _y.resize(_Nlevel);
 
             // Check that _Nlevel is OK
-            assert_mpi(_Nlevel > 0, "[MPIMultiGrid] Nlevel must be > 1 (otherwise its no multigrid)\n");
+            assert_mpi(_Nlevel > 0, "[MPIMultiGrid] Nlevel must be >= 1\n");
             if (FML::NTasks > 1) {
                 assert_mpi(_Nlevel <= intlog2(N) - intlog2(FML::NTasks) + 1,
                            "[MPIMultiGrid] Nlevel is too large. With MPI the smallest level corresponds to each task "
-                           "having jus 2 cell each\n");
+                           "having just 1 slice each\n");
             } else {
                 assert_mpi(_Nlevel <= intlog2(_N),
                            "[MPIMultiGrid] Nlevel is too large. Coarsest level will have less than 1 cell\n");
@@ -322,8 +322,8 @@ namespace FML {
 
         template <int NDIM, class T>
         void MPIMultiGrid<NDIM, T>::free() {
-            _y.clear();
-            _y.shrink_to_fit();
+            // Release the memory and reset all variables (an empty, default constructed multigrid)
+            *this = MPIMultiGrid<NDIM, T>();
         }
     } // namespace GRID
 } // namespace FML

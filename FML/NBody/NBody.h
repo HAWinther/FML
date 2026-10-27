@@ -11,12 +11,23 @@
 
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
+#include <FML/Interpolation/ParticleGridInterpolation.h>
+#include <FML/LPT/DisplacementFields.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/ODESolver/ODESolver.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/RandomFields/GaussianRandomField.h>
 #include <FML/RandomFields/NonLocalGaussianRandomField.h>
+#include <FML/Smoothing/SmoothingFourier.h>
 #include <FML/Timing/Timings.h>
+
+#include <array>
+#include <cmath>
+#include <functional>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace FML {
 
@@ -83,18 +94,41 @@ namespace FML {
         };
         
         /// The choice of the fourier greens-function for D^2 is set by this global and used by methods below.
-        int FIDUCIAL_LAPLACE_KERNEL = GreensFunctionLaplaceOperatorKernels::CONTINUOUS_GREENS_FUNCTION;
+        inline int FIDUCIAL_LAPLACE_KERNEL = GreensFunctionLaplaceOperatorKernels::CONTINUOUS_GREENS_FUNCTION;
         /// The choice of fourier kernel for gradient D is set by this global and used by methods below.
-        int FIDUCIAL_GRADIENT_KERNEL = GradientKernels::CONTINUOUS_GRADIENT;
+        inline int FIDUCIAL_GRADIENT_KERNEL = GradientKernels::CONTINUOUS_GRADIENT;
         /// The choice of deconvolving the density assignment and interpolation when computing the force is set by this global.
-        bool FIDUCIAL_DECONVOLVE_FORCE = false;
+        /// This is used both by the Fourier force (compute_force_from_density_fourier) and by the finite difference
+        /// force (compute_force_from_potential_real).
+        inline bool FIDUCIAL_DECONVOLVE_FORCE = false;
         
-        double gradient_kernel_fourier(double k_j, int Nmesh, int KERNEL);
-        void set_fiducial_gradient_kernel(std::string kernel);
+        inline double gradient_kernel_fourier(double k_j, int Nmesh, int KERNEL);
+        inline void set_fiducial_gradient_kernel(std::string kernel);
 
         template <int NDIM>
         double greens_function_laplace_operator_fourier(double kmag2, std::array<double, NDIM> & kvec, int Nmesh, int KERNEL);
-        void set_fiducial_greens_functions_kernel(std::string kernel);
+        inline void set_fiducial_greens_functions_kernel(std::string kernel);
+
+        /// Periodic wrap of a coordinate to [0,1). For positions in [-1,2) (except when the result would round to
+        /// exactly 1.0) this does exactly the same operations as x -= 1 if x >= 1, x += 1 if x < 0 (so the results
+        /// are bit-identical). Larger shifts are wrapped with floor and the (rounding) result 1.0 is mapped to 0.0
+        template <class F>
+        inline void periodic_wrap_unit_box(F & x) {
+            if (x >= 1.0)
+                x -= 1.0;
+            if (x < 0.0)
+                x += 1.0;
+            if (x >= 1.0 or x < 0.0) {
+                x -= std::floor(x);
+                if (x >= 1.0 or x < 0.0)
+                    x = 0.0;
+            }
+        }
+
+        /// The finite difference stencils implemented in compute_force_from_potential_real
+        inline bool is_valid_finite_difference_stencil_order(int stencil_order) {
+            return stencil_order == 2 or stencil_order == 4 or stencil_order == 6;
+        }
 
         template <int N>
         void compute_force_from_potential_real(FFTWGrid<N> & potential_real,
@@ -460,8 +494,8 @@ namespace FML {
         //===================================================================================
         template <int N, class T>
         void DriftParticles(MPIParticles<T> & part, double delta_time, bool periodic_box) {
-            if (part.get_npart() == 0)
-                return;
+            // NB: no early return for tasks without particles: the drift and the communication of the particles
+            // are collective so all tasks have to take part (delta_time is the same on all tasks)
             if (delta_time == 0.0)
                 return;
 
@@ -492,8 +526,7 @@ namespace FML {
         //===================================================================================
         template <int N, class T>
         void DriftParticles(T * p, size_t NumPart, double delta_time, bool periodic_box) {
-            if (NumPart == 0)
-                return;
+            // NB: no early return if NumPart == 0 as MaxOverTasks below is collective
             if (delta_time == 0.0)
                 return;
 
@@ -517,13 +550,9 @@ namespace FML {
                     pos[idim] += disp;
                     max_disp = std::max(max_disp, std::abs(disp));
 
-                    // Periodic wrap
-                    if (periodic_box) {
-                        if (pos[idim] >= 1.0)
-                            pos[idim] -= 1.0;
-                        if (pos[idim] < 0.0)
-                            pos[idim] += 1.0;
-                    }
+                    // Periodic wrap (to [0,1) also for displacements larger than the box)
+                    if (periodic_box)
+                        periodic_wrap_unit_box(pos[idim]);
                 }
             }
             FML::MaxOverTasks(&max_disp);
@@ -625,7 +654,7 @@ namespace FML {
             FML::MaxOverTasks(&max_dvel);
 
             if (FML::ThisTask == 0)
-                std::cout << "[Kick] Max delta_vel * delta_time : " << max_dvel * delta_time << "\n";
+                std::cout << "[Kick] Max delta_vel : " << max_dvel << "\n";
         }
 
         template <int N, class T>
@@ -808,10 +837,10 @@ namespace FML {
                 std::cout << "# The initial redshift zini = " << zini << "\n";
                 if (FML::PARTICLE::has_get_pos<T>())
                     std::cout << "# Particle has [Position] x_code = x / Box ("
-                              << sizeof(FML::PARTICLE::GetVel(tmp)[0]) * N << " bytes)\n";
+                              << sizeof(FML::PARTICLE::GetPos(tmp)[0]) * N << " bytes)\n";
                 if (FML::PARTICLE::has_get_vel<T>())
                     std::cout << "# Particle has [Velocity] v_code = a^2 dxdt / (H0 Box) ("
-                              << sizeof(FML::PARTICLE::GetPos(tmp)[0]) * N << " bytes)\n";
+                              << sizeof(FML::PARTICLE::GetVel(tmp)[0]) * N << " bytes)\n";
                 if (FML::PARTICLE::has_set_mass<T>())
                     std::cout << "# Particle has [Mass] (" << sizeof(FML::PARTICLE::GetMass(tmp)) << " bytes)\n";
                 if (FML::PARTICLE::has_set_id<T>())
@@ -833,7 +862,7 @@ namespace FML {
                               << sizeof(FML::PARTICLE::GetLagrangianPos(tmp)[0]) * N << " bytes)\n";
                 std::cout << "# Total size of particle is " << FML::PARTICLE::GetSize(tmp) << " bytes\n";
                 std::cout << "# We will make " << Npart_1D << "^" << N << " particles\n";
-                std::cout << "# Plus a buffer with room for " << (buffer_factor - 1.0) * 100.0 << "%% more particles\n";
+                std::cout << "# Plus a buffer with room for " << (buffer_factor - 1.0) * 100.0 << "% more particles\n";
                 std::cout << "# We will allocate ~"
                           << buffer_factor * double(FML::PARTICLE::GetSize(tmp)) * double(FML::power(Npart_1D, N)) /
                                  1e6 / double(FML::NTasks)
@@ -851,6 +880,12 @@ namespace FML {
             assert_mpi(LPT_order == 1 or LPT_order == 2 or LPT_order == 3,
                        "[NBodyInitialConditions] Only 1LPT, 2LPT and 3LPT implemented so valid choices here are "
                        "LPT_order = 1, 2 or 3");
+            // One velocity factor per displacement field: 1LPT, 2LPT, 3LPTa, 3LPTb
+            const size_t n_velocity_norms_needed = LPT_order == 3 ? 4 : size_t(LPT_order);
+            assert_mpi(velocity_norms.size() >= n_velocity_norms_needed,
+                       "[NBodyInitialConditions] velocity_norms must have (at least) one factor per displacement "
+                       "field: 1 for LPT_order = 1, 2 for LPT_order = 2 and 4 (1LPT, 2LPT, 3LPTa, 3LPTb) for "
+                       "LPT_order = 3");
             const std::string interpolation_method = "CIC"; // We use n-linear interpolation below
             const auto nextra_cic =
                 FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(interpolation_method);
@@ -952,10 +987,7 @@ namespace FML {
                         pos[idim] += dpos_nLPT;
 
                         // Periodic BC
-                        if (pos[idim] >= 1.0)
-                            pos[idim] -= 1.0;
-                        if (pos[idim] < 0.0)
-                            pos[idim] += 1.0;
+                        periodic_wrap_unit_box(pos[idim]);
 
                         // Compute maximum displacement
                         if (std::fabs(dpos_nLPT) > max_disp_nLPT)
@@ -1439,6 +1471,11 @@ namespace FML {
         
         //===================================================================================
         /// @brief Compute the force DPhi from the potential using finite differencing
+        /// If the global FIDUCIAL_DECONVOLVE_FORCE is set we deconvolve the density assignment and the force
+        /// interpolation (the window function of force_interpolation_method squared) exactly as in
+        /// compute_force_from_density_fourier (we do this on a copy of the potential in Fourier space before taking
+        /// the finite differences). The potential must have at least stencil_order/2 extra slices on the left and
+        /// on the right (see compute_potential_real_from_density_fourier).
         /// 
         /// @param[in]  potential_real The gravitational potential in real-space
         /// @param[out] force_grid_real Grids containing the gradient
@@ -1453,12 +1490,50 @@ namespace FML {
                                                std::string force_interpolation_method,
                                                int stencil_order) {
 
+            // Validate the input before any (OpenMP) parallel region: throwing inside it calls std::terminate
+            assert_mpi(is_valid_finite_difference_stencil_order(stencil_order),
+                       "[compute_force_from_potential_real] Unknown stencil_order: only 2, 4 and 6 are implemented");
+            assert_mpi(potential_real.get_n_extra_slices_left() >= stencil_order / 2 and
+                           potential_real.get_n_extra_slices_right() >= stencil_order / 2,
+                       "[compute_force_from_potential_real] The potential needs at least stencil_order/2 extra slices "
+                       "on the left and on the right (n_boundary_slices_to_be_allocated in "
+                       "compute_potential_real_from_density_fourier)");
+
             const auto Nmesh = potential_real.get_nmesh();
             const auto Local_nx = potential_real.get_local_nx();
+            const auto Local_x_start = potential_real.get_local_x_start();
             const double one_over_h = double(Nmesh);
 
+            // Deconvolve the density assignment + force interpolation (as in compute_force_from_density_fourier)
+            FFTWGrid<N> potential_deconvolved;
+            if (FIDUCIAL_DECONVOLVE_FORCE) {
+                const FML::INTERPOLATION::WindowFunctionTable<N> window_table(force_interpolation_method, Nmesh);
+                potential_deconvolved = potential_real;
+                potential_deconvolved.add_memory_label(
+                    "FFTWGrid::compute_force_from_potential_real::potential_deconvolved");
+                potential_deconvolved.fftw_r2c();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    double kmag2;
+                    std::array<double, N> kvec;
+                    for (auto && fourier_index : potential_deconvolved.get_fourier_range(islice, islice + 1)) {
+                        if (Local_x_start == 0 and fourier_index == 0)
+                            continue; // DC mode (k=0)
+                        potential_deconvolved.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                        const double W = window_table(kvec);
+                        auto value = potential_deconvolved.get_fourier_from_index(fourier_index);
+                        value /= (W * W);
+                        potential_deconvolved.set_fourier_from_index(fourier_index, value);
+                    }
+                }
+                potential_deconvolved.fftw_c2r();
+            }
+            FFTWGrid<N> & potential = FIDUCIAL_DECONVOLVE_FORCE ? potential_deconvolved : potential_real;
+
             // Make sure boundaries are set
-            potential_real.communicate_boundaries();
+            potential.communicate_boundaries();
 
             // Allocate grid
             auto nextra =
@@ -1487,8 +1562,8 @@ namespace FML {
 #pragma omp parallel for
 #endif
             for (int islice = 0; islice < Local_nx; islice++) {
-                for (auto && real_index : potential_real.get_real_range(islice, islice + 1)) {
-                    const auto coord = potential_real.get_coord_from_index(real_index); // XXX Check this
+                for (auto && real_index : potential.get_real_range(islice, islice + 1)) {
+                    const auto coord = potential.get_coord_from_index(real_index);
 
                     [[maybe_unused]] std::array<FML::GRID::FloatType, N> dPhidx_pm1{};
                     [[maybe_unused]] std::array<FML::GRID::FloatType, N> dPhidx_pm2{};
@@ -1505,8 +1580,8 @@ namespace FML {
                             add_to_coord(coord_minus, idim, -1);
 
                             // Fetch values and compute derivative
-                            auto Phi_i_plus_one = potential_real.get_real(coord_plus);
-                            auto Phi_i_minus_one = potential_real.get_real(coord_minus);
+                            auto Phi_i_plus_one = potential.get_real(coord_plus);
+                            auto Phi_i_minus_one = potential.get_real(coord_minus);
                             dPhidx_pm1[idim] = (Phi_i_plus_one - Phi_i_minus_one) / 2.0;
                         }
                     }
@@ -1522,8 +1597,8 @@ namespace FML {
                             add_to_coord(coord_minus, idim, -2);
 
                             // Fetch values and compute derivative
-                            auto Phi_i_plus_two = potential_real.get_real(coord_plus);
-                            auto Phi_i_minus_two = potential_real.get_real(coord_minus);
+                            auto Phi_i_plus_two = potential.get_real(coord_plus);
+                            auto Phi_i_minus_two = potential.get_real(coord_minus);
                             dPhidx_pm2[idim] = (Phi_i_plus_two - Phi_i_minus_two) / 4.0;
                         }
                     }
@@ -1539,8 +1614,8 @@ namespace FML {
                             add_to_coord(coord_minus, idim, -3);
 
                             // Fetch values and compute derivative
-                            auto Phi_i_plus_three = potential_real.get_real(coord_plus);
-                            auto Phi_i_minus_three = potential_real.get_real(coord_minus);
+                            auto Phi_i_plus_three = potential.get_real(coord_plus);
+                            auto Phi_i_minus_three = potential.get_real(coord_minus);
                             dPhidx_pm3[idim] = (Phi_i_plus_three - Phi_i_minus_three) / 6.0;
                         }
                     }
@@ -1562,8 +1637,6 @@ namespace FML {
                                 (0.1 * dPhidx_pm3[idim] - 0.6 * dPhidx_pm2[idim] + 1.5 * dPhidx_pm1[idim]) * one_over_h;
                             force_grid_real[idim].set_real_from_index(real_index, DPhi);
                         }
-                    } else {
-                        throw std::runtime_error("stencil_order != 2,4,6 are not implemented yet");
                     }
                 }
             }
@@ -1605,10 +1678,19 @@ namespace FML {
                     for (int idim = 0; idim < NDIM; idim++) {
                         double _sin = std::sin(kvec[idim] * dx);
                         double _cos = std::cos(kvec[idim] * dx);
-                        sum2 += _sin*_sin * (9.0 - 8.0 * (_cos - 1.0) + _sin * _sin);
+                        // D^2 = -(D4)^2 with the 4-point gradient D4 = (8 sin(k dx) - sin(2k dx)) / (6 dx) (see
+                        // gradient_kernel_fourier) = sin(k dx) (4 - cos(k dx)) / (3 dx) so that
+                        // D4^2 = sin^2 (16 - 8cos + cos^2) / (9 dx^2) = sin^2 (9 - 8(cos - 1) - sin^2) / (9 dx^2)
+                        sum2 += _sin*_sin * (9.0 - 8.0 * (_cos - 1.0) - _sin * _sin);
                     }
+                    // D4 vanishes not only for k = 0, but also when every component is 0 or the Nyquist frequency
+                    // (sin(k dx) = 0 up to rounding): we set the potential of these modes to zero (as for k = 0).
+                    // Otherwise sum2 (before the factor 1/(9 dx^2) below) is at least ~ 9 (2pi/Nmesh)^2 > 1e-16 for any
+                    // Nmesh < 10^9, while rounding gives sum2 ~ 1e-31 for these modes. They are self-conjugate
+                    // modes where the gradient is (numerically) zero so this does not change the force.
+                    if (sum2 < 1e-20)
+                        return 0.0;
                     sum2 *= 1.0 / (9.0 * dx * dx);
-                    if(sum2 == 0.0) return 0.0;
                     return -1.0 / sum2;
                     break;
                 }
@@ -1627,7 +1709,7 @@ namespace FML {
         ///            (see enum GreensFunctionLaplaceOperatorKernels for options)
         ///
         //===================================================================================
-        void set_fiducial_greens_functions_kernel(std::string kernel) {
+        inline void set_fiducial_greens_functions_kernel(std::string kernel) {
             if (kernel == "" or kernel == "fiducial") {
                 return;
             } else if(kernel == "continuous") {
@@ -1652,7 +1734,7 @@ namespace FML {
         ///            (see enum GradientKernels for options)
         ///
         //===================================================================================
-        double gradient_kernel_fourier(double k_j, int Nmesh, int KERNEL) {
+        inline double gradient_kernel_fourier(double k_j, int Nmesh, int KERNEL) {
             const double dx = 1.0 / double(Nmesh);
             switch (KERNEL) {
                 case CONTINUOUS_GRADIENT: {
@@ -1683,7 +1765,7 @@ namespace FML {
         ///            (see enum GradientKernels for options)
         ///
         //===================================================================================
-        void set_fiducial_gradient_kernel(std::string kernel) {
+        inline void set_fiducial_gradient_kernel(std::string kernel) {
             if (kernel == "" or kernel == "fiducial") {
                 return;
             } else if(kernel == "continuous") {
@@ -1699,6 +1781,10 @@ namespace FML {
 
         //===================================================================================
         /// @brief Compute Phi(x) from the density field in fourier space Phi = F^-1( 1/D^2 * delta * norm )
+        /// The kernel used for 1/D^2 is the one set by the global FIDUCIAL_LAPLACE_KERNEL (as in
+        /// compute_force_from_density_fourier). The deconvolution of the density assignment and force interpolation
+        /// (FIDUCIAL_DECONVOLVE_FORCE) is not done here (we don't know the assignment method), but in
+        /// compute_force_from_potential_real.
         ///
         /// @param[in]  density_grid_fourier The density field (already in fourier space)
         /// @param[out] potential_real The gravitational potential in real-space
@@ -1713,7 +1799,7 @@ namespace FML {
                                                          double norm_poisson_equation,
                                                          int n_boundary_slices_to_be_allocated) {
 
-            const int LAPLACE_KERNEL = CONTINUOUS_GREENS_FUNCTION;
+            const int LAPLACE_KERNEL = FIDUCIAL_LAPLACE_KERNEL;
             const auto Nmesh = density_grid_fourier.get_nmesh();
             const auto Local_nx = density_grid_fourier.get_local_nx();
             const auto Local_x_start = density_grid_fourier.get_local_x_start();
@@ -1735,7 +1821,7 @@ namespace FML {
                         continue; // DC mode (k=0)
                     }
 
-                    // Compute potential (-1/k^2) * delta(k) * (3/2 OmegaM a)
+                    // Compute potential (1/D^2) * delta(k) * norm (with 1/D^2 = -1/k^2 for the continuous kernel)
                     density_grid_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
                     auto value = density_grid_fourier.get_fourier_from_index(fourier_index);
                     if (LAPLACE_KERNEL == CONTINUOUS_GREENS_FUNCTION) {
@@ -1764,7 +1850,7 @@ namespace FML {
         /// @param[in] boxsize_mpch Boxsize in units of Mpc/h
         ///
         //===================================================================================
-        double
+        inline double
         compute_sigma_of_R(std::function<double(double)> Pofk_of_kBox_over_volume, double R_mpch, double boxsize_mpch) {
             using ODEFunction = FML::SOLVERS::ODESOLVER::ODEFunction;
             using DVector = FML::SOLVERS::ODESOLVER::DVector;

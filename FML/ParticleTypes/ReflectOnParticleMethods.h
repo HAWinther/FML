@@ -7,6 +7,8 @@
 #include <iostream>
 #include <tuple>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 #include <FML/Global/Global.h>
 
@@ -56,20 +58,39 @@ decltype(auto) get_NthArgOf(Ts &&... ts) {
 // and provide a Get method for that quantity. This is useful for making general
 // algorithms that don't need a quantity, but can do more stuff if it has that quantity
 //=======================================================================
+// The method counts as present if &C::method is well-formed (a single non-overloaded method) or if it can be
+// called with no arguments or with one argument (overloaded e.g. const and non-const methods, template methods)
+namespace FML {
+    namespace PARTICLE {
+        namespace SFINAE_DETAIL {
+            /// An argument convertible to anything (to detect methods that take one argument, e.g. setters)
+            struct AnyArgument {
+                template <class U>
+                operator U() const;
+            };
+        } // namespace SFINAE_DETAIL
+    } // namespace PARTICLE
+} // namespace FML
 #define SFINAE_STRUCT(name, getmethod)                                                                                 \
+    template <typename T, typename = void>                                                                             \
+    struct Has##name##_address : std::false_type {};                                                                   \
     template <typename T>                                                                                              \
-    class Has##name {                                                                                                  \
-        typedef char one;                                                                                              \
-        struct two {                                                                                                   \
-            char x[2];                                                                                                 \
-        };                                                                                                             \
-        template <typename C>                                                                                          \
-        static one test(decltype(&C::getmethod));                                                                      \
-        template <typename C>                                                                                          \
-        static two test(...);                                                                                          \
-                                                                                                                       \
-      public:                                                                                                          \
-        enum { value = sizeof(test<T>(0)) == sizeof(char) };                                                           \
+    struct Has##name##_address<T, std::void_t<decltype(&T::getmethod)>> : std::true_type {};                          \
+    template <typename T, typename = void>                                                                             \
+    struct Has##name##_call0 : std::false_type {};                                                                     \
+    template <typename T>                                                                                              \
+    struct Has##name##_call0<T, std::void_t<decltype(std::declval<T &>().getmethod())>> : std::true_type {};           \
+    template <typename T, typename = void>                                                                             \
+    struct Has##name##_call1 : std::false_type {};                                                                     \
+    template <typename T>                                                                                              \
+    struct Has##name##_call1<                                                                                          \
+        T,                                                                                                             \
+        std::void_t<decltype(std::declval<T &>().getmethod(std::declval<SFINAE_DETAIL::AnyArgument>()))>>              \
+        : std::true_type {};                                                                                           \
+    template <typename T>                                                                                              \
+    struct Has##name {                                                                                                 \
+        static constexpr bool value =                                                                                  \
+            Has##name##_address<T>::value or Has##name##_call0<T>::value or Has##name##_call1<T>::value;               \
     };
 
 #define SFINAE_HAS(name, getmethod)                                                                                    \
@@ -80,7 +101,7 @@ decltype(auto) get_NthArgOf(Ts &&... ts) {
 
 #define SFINAE_GET(name, getmethod)                                                                                    \
     template <typename T,                                                                                              \
-              typename B = typename std::enable_if<Has##name<T>::value, decltype(&T::getmethod)>::type,                \
+              typename B = typename std::enable_if<Has##name<T>::value>::type,                                         \
               class... Args>                                                                                           \
     auto name(T & p, Args... args) {                                                                                   \
         return p.getmethod(args...);                                                                                   \
@@ -88,7 +109,7 @@ decltype(auto) get_NthArgOf(Ts &&... ts) {
 
 #define SFINAE_CONSTEXPR_GET(name, getmethod)                                                                          \
     template <typename T,                                                                                              \
-              typename B = typename std::enable_if<Has##name<T>::value, decltype(&T::getmethod)>::type,                \
+              typename B = typename std::enable_if<Has##name<T>::value>::type,                                         \
               class... Args>                                                                                           \
     constexpr auto name(const T & p, Args... args) {                                                                   \
         return p.getmethod(args...);                                                                                   \
@@ -96,7 +117,7 @@ decltype(auto) get_NthArgOf(Ts &&... ts) {
 
 #define SFINAE_SET(name, setmethod)                                                                                    \
     template <typename T,                                                                                              \
-              typename B = typename std::enable_if<Has##name<T>::value, decltype(&T::setmethod)>::type,                \
+              typename B = typename std::enable_if<Has##name<T>::value>::type,                                         \
               class... Args>                                                                                           \
     auto name(T & p, Args... args) {                                                                                   \
         return p.setmethod(args...);                                                                                   \
@@ -203,8 +224,12 @@ namespace FML {
         // provide these methods yourself in the class
         //=====================================================================
         SFINAE_TEST_GET(GetSize, get_particle_byte_size)
-        SFINAE_TEST_GET(AppendToBuffer, append_to_buffer)
-        SFINAE_TEST_GET(AssignFromBuffer, assign_from_buffer)
+        // AppendToBuffer / AssignFromBuffer: use the particle's own method if it has one, otherwise copy the raw
+        // bytes (a single function each, so that a particle with custom methods gives no ambiguous overloads)
+        SFINAE_STRUCT(AppendToBuffer, append_to_buffer)
+        SFINAE_HAS(AppendToBuffer, append_to_buffer)
+        SFINAE_STRUCT(AssignFromBuffer, assign_from_buffer)
+        SFINAE_HAS(AssignFromBuffer, assign_from_buffer)
         template <class... Args>
         constexpr int GetSize([[maybe_unused]] Args &... args) {
             // Fiducial method. Assumes no dynamic allocated memory in class
@@ -212,21 +237,23 @@ namespace FML {
             using ParticleType = NthTypeOf<0, Args...>;
             return sizeof(ParticleType);
         };
-        template <class T, class... Args>
-        void AppendToBuffer(T & t, Args... args) {
-            // Fiducial method for communication. Assumes no dynamic allocated memory in class
-            static_assert(sizeof...(args) == 1);
-            using BufferType = NthTypeOf<0, Args...>;
-            static_assert(std::is_same<char *, BufferType>::value);
-            std::memcpy(get_NthArgOf<0>(args...), &t, GetSize(t));
+        template <class T>
+        void AppendToBuffer(T & t, char * buffer) {
+            if constexpr (HasAppendToBuffer<T>::value) {
+                t.append_to_buffer(buffer);
+            } else {
+                // Fiducial method for communication. Assumes no dynamic allocated memory in class
+                std::memcpy(buffer, &t, GetSize(t));
+            }
         };
-        template <class T, class... Args>
-        void AssignFromBuffer(T & t, Args... args) {
-            // Fiducial method for communication. Assumes no dynamic allocated memory in class
-            static_assert(sizeof...(args) == 1);
-            using BufferType = NthTypeOf<0, Args...>;
-            static_assert(std::is_same<char *, BufferType>::value);
-            std::memcpy(&t, get_NthArgOf<0>(args...), GetSize(t));
+        template <class T>
+        void AssignFromBuffer(T & t, char * buffer) {
+            if constexpr (HasAssignFromBuffer<T>::value) {
+                t.assign_from_buffer(buffer);
+            } else {
+                // Fiducial method for communication. Assumes no dynamic allocated memory in class
+                std::memcpy(&t, buffer, GetSize(t));
+            }
         };
 
         //=====================================================================
@@ -395,11 +422,11 @@ namespace FML {
                 std::cout << "# Dimension is " << N << "\n";
 
                 if constexpr (FML::PARTICLE::has_get_pos<T>())
-                    std::cout << "# Particle has [Position] (" << sizeof(FML::PARTICLE::GetVel(tmp)[0]) * N
+                    std::cout << "# Particle has [Position] (" << sizeof(FML::PARTICLE::GetPos(tmp)[0]) * N
                               << " bytes)\n";
 
                 if constexpr (FML::PARTICLE::has_get_vel<T>())
-                    std::cout << "# Particle has [Velocity] (" << sizeof(FML::PARTICLE::GetPos(tmp)[0]) * N
+                    std::cout << "# Particle has [Velocity] (" << sizeof(FML::PARTICLE::GetVel(tmp)[0]) * N
                               << " bytes)\n";
 
                 if constexpr (FML::PARTICLE::has_set_mass<T>())
@@ -439,7 +466,7 @@ namespace FML {
                               << sizeof(FML::PARTICLE::GetdDdloga_1LPT(tmp)[0]) * N << " bytes)\n";
                 if constexpr (FML::PARTICLE::has_get_D_2LPT<T>())
                     std::cout << "# Particle has [2LPT Displacement field] ("
-                              << sizeof(FML::PARTICLE::GetD_1LPT(tmp)[0]) * N << " bytes)\n";
+                              << sizeof(FML::PARTICLE::GetD_2LPT(tmp)[0]) * N << " bytes)\n";
                 if constexpr (FML::PARTICLE::has_get_dDdloga_2LPT<T>())
                     std::cout << "# Particle has [2LPT Displacement field derivative] ("
                               << sizeof(FML::PARTICLE::GetdDdloga_2LPT(tmp)[0]) * N << " bytes)\n";
@@ -479,10 +506,27 @@ namespace FML {
             }
         }
 
+        /// @brief Wrap a coordinate periodically into [0,1) assuming it is in [-1,2) (i.e. it has been shifted by
+        /// less than the boxsize). The result is always in [0,1): x + 1 can round to exactly 1.0 for tiny negative
+        /// x (e.g. -1e-17) and then we use 0.0 (the closest point of [0,1) in the periodic sense).
+        template <class U>
+        inline U wrap_coordinate_periodic(U x) {
+            if (x >= U(1.0))
+                x -= U(1.0);
+            if (x < U(0.0))
+                x += U(1.0);
+            if (x == U(1.0))
+                x = U(0.0);
+            return x;
+        }
+
         /// @brief Shift the positions of a set of particles: \f$ x \to x + {\rm sign}\cdot s \f$.
+        /// NB: a shift followed by the opposite shift does not in general give back exactly the same positions
+        /// (floating point round-off, wrapping). To restore the exact original positions save them first with
+        /// save_particle_positions and use restore_particle_positions instead of shifting back.
         /// @param[in] part Pointer to the first particle
         /// @param[in] NumPart Number of particles
-        /// @param[in] shift The shift (in units of the boxsize)
+        /// @param[in] shift The shift (in units of the boxsize, |shift| < 1)
         /// @param[in] sign +1 or -1 (to undo a shift)
         /// @param[in] wrap_type 0: no periodic wrapping, 1: wrap all coordinates into [0,1), 2: wrap all but the
         /// x-coordinate (so particles stay on the task they belong to; with MPI the grid then needs one extra
@@ -498,33 +542,65 @@ namespace FML {
                 for (int idim = 0; idim < NDIM; idim++) {
                     pos[idim] += sign * shift[idim];
                     const bool wrap = (wrap_type == 1) or (wrap_type == 2 and idim > 0);
-                    if (wrap) {
-                        if (pos[idim] >= 1.0)
-                            pos[idim] -= 1.0;
-                        if (pos[idim] < 0.0)
-                            pos[idim] += 1.0;
-                    }
+                    if (wrap)
+                        pos[idim] = wrap_coordinate_periodic(pos[idim]);
                 }
+            }
+        }
+
+        /// @brief Copy of the positions of a set of particles (NDIM values per particle) so that they can be
+        /// restored exactly with restore_particle_positions (e.g. after shift_particles)
+        template <class T, int NDIM>
+        auto save_particle_positions(T * part, size_t NumPart) {
+            using PosType = std::remove_cv_t<std::remove_reference_t<decltype(FML::PARTICLE::GetPos(part[0])[0])>>;
+            std::vector<PosType> saved(NumPart * NDIM);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (size_t i = 0; i < NumPart; i++) {
+                const auto * pos = FML::PARTICLE::GetPos(part[i]);
+                for (int idim = 0; idim < NDIM; idim++)
+                    saved[i * NDIM + idim] = pos[idim];
+            }
+            return saved;
+        }
+
+        /// @brief Restore the positions saved by save_particle_positions (bit-for-bit)
+        template <class T, int NDIM, class U>
+        void restore_particle_positions(T * part, size_t NumPart, const std::vector<U> & saved) {
+            assert_mpi(saved.size() == NumPart * NDIM,
+                       "[restore_particle_positions] The number of saved positions does not match NumPart\n");
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (size_t i = 0; i < NumPart; i++) {
+                auto * pos = FML::PARTICLE::GetPos(part[i]);
+                for (int idim = 0; idim < NDIM; idim++)
+                    pos[idim] = saved[i * NDIM + idim];
             }
         }
 
         // Swap positions with Lagrangian position (if that exists)
         template <class T>
         void swap_eulerian_and_lagrangian_positions(T * part, size_t NumPart) {
-            if constexpr (not FML::PARTICLE::has_get_q<T>())
+            if constexpr (not FML::PARTICLE::has_get_q<T>()) {
+                (void)part;
+                (void)NumPart;
                 return;
-            constexpr T p{};
-            constexpr int N = p.get_ndim();
+            } else {
+                T tmp{};
+                constexpr int N = FML::PARTICLE::GetNDIM(tmp);
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (size_t ind = 0; ind < NumPart; ind++) {
-                auto pos_eulerian = FML::PARTICLE::GetPos(part[ind]);
-                auto pos_lagrangian = FML::PARTICLE::GetLagrangianPos(part[ind]);
-                for (int idim = 0; idim < N; idim++) {
-                    auto tmp = pos_eulerian[idim];
-                    pos_eulerian[idim] = pos_lagrangian[idim];
-                    pos_lagrangian[idim] = tmp;
+                for (size_t ind = 0; ind < NumPart; ind++) {
+                    auto pos_eulerian = FML::PARTICLE::GetPos(part[ind]);
+                    auto pos_lagrangian = FML::PARTICLE::GetLagrangianPos(part[ind]);
+                    for (int idim = 0; idim < N; idim++) {
+                        auto tmp_pos = pos_eulerian[idim];
+                        pos_eulerian[idim] = pos_lagrangian[idim];
+                        pos_lagrangian[idim] = tmp_pos;
+                    }
                 }
             }
         }
@@ -538,5 +614,7 @@ namespace FML {
 #undef SFINAE_SET
 #undef SFINAE_TEST_GET
 #undef SFINAE_TEST_SET
+#undef SFINAE_CONSTEXPR_GET
+#undef SFINAE_CONSTEXPR_TEST_GET
 
 #endif

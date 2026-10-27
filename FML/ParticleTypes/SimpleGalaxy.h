@@ -18,10 +18,10 @@ class SimpleGalaxy {
     double get_DEC() const { return DEC; }
     double get_z() const { return z; }
     double get_weight() const { return weight; }
-    void set_RA(double _RA) { return RA = _RA; }
-    void set_DEC(double _DEC) { return DEC = _DEC; }
-    void set_z(double _z) { return z = _z; }
-    void set_weight(double _weight) { return weight = _weight; }
+    void set_RA(double _RA) { RA = _RA; }
+    void set_DEC(double _DEC) { DEC = _DEC; }
+    void set_z(double _z) { z = _z; }
+    void set_weight(double _weight) { weight = _weight; }
 };
 
 #endif

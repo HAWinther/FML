@@ -181,10 +181,13 @@ int main() {
     // Generate initial conditions
     //============================================================
 
+    // The factors to multiply the nLPT displacement fields by to get the velocities in code units
+    // v_code = a^2 dx/dt / (H0 Box) = f_i H/H0 a^2 Psi_i (Psi in units of the boxsize), the units the time-stepping
+    // below uses (the same as COLASolver). NB: 100 * box * f_i H/H0 * a would give peculiar velocities in km/s
     std::vector<double> velocity_norms(4);
     for (int i = 0; i < 4; i++) {
         velocity_norms[i] =
-            100.0 * box * H_over_H0_of_loga(std::log(aini)) * aini * growth_rate_f_of_loga[i](std::log(aini));
+            H_over_H0_of_loga(std::log(aini)) * aini * aini * growth_rate_f_of_loga[i](std::log(aini));
     }
 
     FML::PARTICLE::MPIParticles<Particle> part;
@@ -224,11 +227,19 @@ int main() {
     // The prefactor to delta in the Poisson equation
     auto poisson_factor = [&](double a) { return 1.5 * OmegaM * a; };
 
-    auto compute_vel_timestep = [&](double alow, double ahigh) {
-        // For the kick step we have an extra 'a' coming from the force via the Poisson equation
-        const double amid = (ahigh + alow) / 2.;
+    auto compute_vel_timestep = [&](double alow, double ahigh, int istep) {
+        // For the kick step we have an extra 'a' coming from the force via the Poisson equation. The force is
+        // computed at the time of the positions (apos_old below) with poisson_factor(apos_old) so we normalize to
+        // that time: the midpoint of the kick, except in the first step (kick from aini, the force time, to
+        // aini + da/2) and in the last step (synchronization kick ending at aend, the force time). This is the same
+        // as kick_timestep in COLASolver/src/TimeStepping.h
+        double aforce = (ahigh + alow) / 2.;
+        if (istep == 0)
+            aforce = alow;
+        else if (istep == nsteps)
+            aforce = ahigh;
         ODEFunction deriv = [&](double a, [[maybe_unused]] const double * t, double * dtda) {
-            dtda[0] = 1.0 / (a * a * a * HoverH0(a)) * poisson_factor(a) / poisson_factor(amid);
+            dtda[0] = 1.0 / (a * a * a * HoverH0(a)) * poisson_factor(a) / poisson_factor(aforce);
             return GSL_SUCCESS;
         };
 
@@ -268,7 +279,7 @@ int main() {
         // Timesteps: first step we displace pos and vel by 1/2 timestep to do leapfrog
         // Last time-step we synchronize back by only moving vel
         const double delta_time_pos = compute_pos_timestep(apos_old, apos_new);
-        const double delta_time_vel = compute_vel_timestep(avel_old, avel_new);
+        const double delta_time_vel = compute_vel_timestep(avel_old, avel_new, i);
         const double norm_poisson_equation = poisson_factor(apos_old);
 
         // Particles -> density field(x) -> density fielk(k)

@@ -3,7 +3,10 @@
 
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <cassert>
+#include <cmath>
 #include <iostream>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace FML {
@@ -154,7 +157,7 @@ namespace FML {
                     nempty++;
                 ntot += cell.np;
             }
-            double fraction_empty = nempty / double(ntot);
+            double fraction_empty = cells.size() > 0 ? nempty / double(cells.size()) : 0.0;
             
             if (FML::ThisTask == 0) {
                 T tmp_ndim; // (GetNDIM(T()) needs a particle that can be built at compile time)
@@ -175,13 +178,24 @@ namespace FML {
             create(particles.data(), particles.size(), ngrid);
         }
 
+        /// The cell index in [0,ngrid) of a coordinate. Positions must be in [0,1). As before positions in
+        /// (-1/ngrid,0) (e.g. -1e-17 from round-off) end up in the first cell (truncation towards zero), anything
+        /// further outside is an error (it used to give a cell index that wrapped around)
+        template <class U>
+        int particles_in_boxes_cell_coord(U x, int ngrid) {
+            const double ix = std::trunc(double(x) * ngrid);
+            // (also catches NaN)
+            if (not(ix >= 0.0 and ix < double(ngrid)))
+                throw std::runtime_error("ParticlesInBoxes positions has to be in [0,1). pos = " +
+                                         std::to_string(double(x)) + "\n");
+            return int(ix);
+        }
+
         template <class T>
         void ParticlesInBoxes<T>::create(const T * particles, size_t nparticles, int ngrid) {
-            if (nparticles == 0)
-                return;
-
             assert_mpi(FML::PARTICLE::has_get_pos<T>(),
                        "[ParticlesInBoxes] Particle class must have positions via a get_pos method");
+            assert_mpi(ngrid > 0, "[ParticlesInBoxes] ngrid must be positive");
 
             // Set class data
             T tmp_ndim; // (GetNDIM(T()) needs a particle that can be built at compile time)
@@ -189,52 +203,37 @@ namespace FML {
             Ngrid = ngrid;
             Npart = nparticles;
 
-            // Allocate cells
+            // Allocate cells (also with no particles so that we never keep the cells of a previous call)
             size_t ncells = 1;
             for (int i = 0; i < Ndim; i++)
                 ncells *= ngrid;
             cells.resize(ncells);
             for (auto & cell : cells)
                 cell.init();
+            if (nparticles == 0)
+                return;
+
+            // Index of cell particle belong to
+            auto cell_index = [&](const T & part) {
+                const auto * Pos = FML::PARTICLE::GetPos(const_cast<T &>(part));
+                size_t index = 0;
+                for (int j = 0; j < Ndim; j++)
+                    index = index * ngrid + size_t(particles_in_boxes_cell_coord(Pos[j], ngrid));
+                assert(index < ncells);
+                return index;
+            };
 
             // Count number of particles in each cell
-            for (size_t i = 0; i < nparticles; i++) {
-                const auto * Pos = FML::PARTICLE::GetPos(const_cast<T&>(particles[i]));
-
-                // Index of cell particle belong to
-                size_t index = 0;
-                for (int j = 0; j < Ndim; j++) {
-                    int ix = (int)(Pos[j] * ngrid);
-                    index = index * ngrid + ix;
-                    if (ix >= ngrid)
-                        throw std::runtime_error(
-                            "ParticlesInBoxes positions has to be in [0,1). pos = " + std::to_string(Pos[j]) + "\n");
-                }
-                assert(index < ncells);
-
-                // Increase count in cell
-                ++cells[index];
-            }
+            for (size_t i = 0; i < nparticles; i++)
+                ++cells[cell_index(particles[i])];
 
             // Allocate memory
             for (auto & cell : cells)
                 cell.allocate(cell.np);
 
             // Add particles to cell
-            for (size_t i = 0; i < nparticles; i++) {
-                const auto * Pos = FML::PARTICLE::GetPos(const_cast<T&>(particles[i]));
-                //const auto * Pos = FML::PARTICLE::GetPos(particles[i]);
-
-                // Index of cell particle belong to
-                size_t index = 0;
-                for (int j = 0; j < Ndim; j++) {
-                    int ix = (int)(Pos[j] * ngrid);
-                    index = index * ngrid + ix;
-                }
-
-                // Add particles
-                cells[index].add(particles[i]);
-            }
+            for (size_t i = 0; i < nparticles; i++)
+                cells[cell_index(particles[i])].add(particles[i]);
         }
 
         template <class T>

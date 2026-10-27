@@ -411,12 +411,18 @@ namespace FML {
                                                                 kernel_values);
 
                 const auto Local_nx = phi_fourier.get_local_nx();
+                const auto Local_x_start = phi_fourier.get_local_x_start();
 
                 // Transform to delta by multiplying by sqrt(P(k) / Pprimodial(k))
                 for (int islice = 0; islice < Local_nx; islice++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : phi_fourier.get_fourier_range(islice, islice + 1)) {
+                        // The DC mode (k=0) is zero. We skip it as the ratio is often 0/0 = NaN there
+                        if (Local_x_start == 0 and fourier_index == 0) {
+                            phi_fourier.set_fourier_from_index(fourier_index, 0.0);
+                            continue;
+                        }
                         phi_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
                         auto rescaling_factor = std::sqrt(Pofk_of_kBox_over_Pofk_primordal(kmag));
                         auto value = phi_fourier.get_fourier_from_index(fourier_index);

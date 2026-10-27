@@ -1329,7 +1329,8 @@ namespace FML {
             // Bin particles to grid
             particles_to_grid<N, T>(part, NumPart, NumPartTot, density_grid_fourier, density_assignment_method);
 
-            // Shift particles
+            // Shift particles (the positions are restored exactly afterwards)
+            const auto saved_pos = FML::PARTICLE::save_particle_positions<T, N>(part, NumPart);
             const double shift = 1.0 / double(2 * Ngrid);
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -1350,19 +1351,8 @@ namespace FML {
                 "FFTWGrid::particles_to_fourier_grid_interlacing::density_grid_fourier2");
             particles_to_grid<N, T>(part, NumPart, NumPartTot, density_grid_fourier2, density_assignment_method);
 
-            // Shift particles back as not to ruin anything
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-            for (size_t i = 0; i < NumPart; i++) {
-                auto * pos = FML::PARTICLE::GetPos(part[i]);
-                pos[0] -= shift;
-                for (int idim = 1; idim < N; idim++) {
-                    pos[idim] -= shift;
-                    if (pos[idim] < 0.0)
-                        pos[idim] += 1.0;
-                }
-            }
+            // Restore the positions (bit-for-bit)
+            FML::PARTICLE::restore_particle_positions<T, N>(part, NumPart, saved_pos);
 
             // Fourier transform
             density_grid_fourier.fftw_r2c();
@@ -1571,10 +1561,12 @@ namespace FML {
             grid_shifted.add_memory_label("FFTWGrid::particles_to_fourier_grid_interlaced::grid_shifted");
             density_grid_fourier.fill_fourier_grid(0.0);
             density_grid_fourier.set_grid_status_real(false);
+            // The positions are restored exactly afterwards (shifting back changes them in the last digit)
+            const auto saved_pos = FML::PARTICLE::save_particle_positions<T, N>(part, NumPart);
             for (auto & shift : shifts) {
                 FML::PARTICLE::shift_particles<T, N>(part, NumPart, shift, +1.0, wrap_type);
                 particles_to_grid<N, T>(part, NumPart, NumPartTot, grid_shifted, density_assignment_method);
-                FML::PARTICLE::shift_particles<T, N>(part, NumPart, shift, -1.0, wrap_type);
+                FML::PARTICLE::restore_particle_positions<T, N>(part, NumPart, saved_pos);
                 grid_shifted.fftw_r2c();
 
                 // The particles were moved by +s so the field is delta(x - s): shift it back

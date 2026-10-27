@@ -183,6 +183,9 @@ void pgd(MPIParticles<Particle> & part,
     std::cout << "#=====================================================\n";
   }
 
+  // NB: the paper (1804.00671 eq. 2.8) defines alpha with the prefactor 4 pi G rhobar / H0^2 = 1.5 OmegaM (no
+  // factor of a, the time dependence is in the fitted alpha(a)). Here we use the code-unit Poisson prefactor
+  // 1.5 OmegaM a, which is the same only at z = 0 (see the documentation of potential_gradient_decent_method)
   FML::PGD::potential_gradient_decent_method<3,Particle>(part.get_particles_ptr(),
       part.get_npart(),
       kl,
@@ -192,7 +195,8 @@ void pgd(MPIParticles<Particle> & part,
       ngrid,
       "CIC");
 
-  // Particles have moved to make sure they are on the right CPU
+  // The particles have moved (potential_gradient_decent_method does not communicate them) so make sure they are on
+  // the right task
   part.communicate_particles();
 }
 

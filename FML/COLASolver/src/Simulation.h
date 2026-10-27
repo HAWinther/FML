@@ -351,6 +351,21 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
     FML::NBODY::FIDUCIAL_DECONVOLVE_FORCE = params.force.deconvolve_window;
     current_force = params.force;
 
+    // The (experimental) finite difference force: only the stencils 2, 4 and 6 are implemented and the gradient is
+    // the finite difference stencil, so an explicitly chosen Fourier gradient kernel would be ignored
+    if (param.get<bool>("force_use_finite_difference_force", false)) {
+        const int stencil_order = param.get<int>("force_finite_difference_stencil_order", 4);
+        if (not FML::NBODY::is_valid_finite_difference_stencil_order(stencil_order))
+            throw std::runtime_error("Parameterfile: force_finite_difference_stencil_order = " +
+                                     std::to_string(stencil_order) +
+                                     " is not implemented. Valid options are: 2 4 6");
+        if (params.force.gradient_kernel != "fiducial" and params.force.gradient_kernel != "")
+            throw std::runtime_error("Parameterfile: force_gradient_kernel = " + params.force.gradient_kernel +
+                                     " is not used with force_use_finite_difference_force = true (the gradient is "
+                                     "the finite difference stencil set by force_finite_difference_stencil_order). "
+                                     "Use force_gradient_kernel = fiducial");
+    }
+
     // The accurate force options (NUFFT, deconvolution, early-time force) remove the smoothing of the force
     // near the grid Nyquist frequency. With a grid finer than the particle grid the modes between the particle
     // and the grid Nyquist frequency are dominated by the discreteness of the particles and these options then
@@ -1249,6 +1264,8 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const StepInfo & s) {
     std::array<std::vector<FML::GRID::FloatType>, NDIM> force_sum;
     for (auto & f : force_sum)
         f.assign(npart, 0.0);
+    // The positions are restored exactly after each shift (shifting back changes them in the last digit)
+    const auto saved_pos = FML::PARTICLE::save_particle_positions<T, NDIM>(p, npart);
     for (auto & shift : shifts) {
         FML::PARTICLE::shift_particles<T, NDIM>(p, npart, shift, +1.0, wrap_type);
         density_shift = shift;
@@ -1279,7 +1296,7 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const StepInfo & s) {
                 force_sum[idim][i] += force_particle[idim][i] * norm;
         timer.EndTiming("Kick");
 
-        FML::PARTICLE::shift_particles<T, NDIM>(p, npart, shift, -1.0, wrap_type);
+        FML::PARTICLE::restore_particle_positions<T, NDIM>(p, npart, saved_pos);
     }
     density_shift = {};
 

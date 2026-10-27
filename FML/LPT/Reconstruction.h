@@ -47,8 +47,12 @@ namespace FML {
             /// so we can use Fourier methods.
             /// Then we subtract the RSD which is given by \f$ \Psi_{\rm rsd} = \beta (b\Psi\cdot r)r) \f$
             /// Here \f$ \beta = f / b \f$ growth-rate over galaxy bias.
-            /// The smoothing filter is an (optional) filter we apply to the density field in
-            /// k-space. If R < gridspacing then no smoothing will be done
+            /// The smoothing filter is a filter we apply to the density field in k-space. It is always applied
+            /// (also when R is smaller than the grid spacing: e.g. a gaussian filter still damps the modes by
+            /// exp(-k^2R^2/2)). Use R = 0 for no smoothing.
+            ///
+            /// NB: the window of the density assignment (particles to grid) and of the interpolation of the
+            /// displacement field back to the particles (CIC) are not deconvolved.
             ///
             /// The iterative scheme of Burden et al. 2015 (arXiv:1504.02591): with \f$ s \f$ the observed
             /// (redshift-space) positions and \f$ x_0 = s \f$, iteration n computes \f$ b\Psi_n \f$ from the density
@@ -70,7 +74,7 @@ namespace FML {
             /// @param[in] Nmesh The size of the grid we use
             /// @param[in] niterations How many iterations to do (not too many and not too few, 3 is good)
             /// @param[in] beta This is beta = f/b the growth-rate over the bias
-            /// @param[in] smoothing_options The smoothing filter (gaussian, tophat, sharph) and the smothing scale (in
+            /// @param[in] smoothing_options The smoothing filter (gaussian, tophat, sharpk) and the smothing scale (in
             /// units of the boxsize)
             /// @param[in] survey_data Must be false (survey data is not supported)
             ///

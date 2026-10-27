@@ -20,8 +20,7 @@ Data * getData(int n) {
 // Free up the memory we have allocated
 void freeData(Data * f) {
     std::cout << "Freeing up memory\n";
-    if (f->n > 0)
-        delete[] f->x;
+    delete[] f->x;
     delete f;
 }
 

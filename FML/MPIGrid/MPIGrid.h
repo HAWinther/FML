@@ -59,8 +59,8 @@ namespace FML {
             int _N{0};                    // Gridcells per dimension in the global grid
             int _NLocal{0};               // Gridcells in the x-dimension for current task
             int _xStartLocal{0};          // The ix-index the local task starts at
-            int _LeftTask{0};             // The id of the task on the right
-            int _RightTask{0};            // The id of the task on the left
+            int _LeftTask{0};             // The id of the task on the left
+            int _RightTask{0};            // The id of the task on the right
             int _n_extra_slices_left{0};  // Extra x-slices to the left
             int _n_extra_slices_right{0}; // Extra x-slices to the right
 
@@ -77,6 +77,11 @@ namespace FML {
             // Helper functions for bounds-checking
             void assert_index(IndexInt index) const;
             void assert_coord(const std::array<int, NDIM> & coord) const;
+
+#ifdef USE_MPI
+            // MPI_Sendrecv of a byte buffer of any size (split into chunks whose count fits in an int)
+            static void sendrecv_bytes(char * sendbuf, char * recvbuf, size_t bytes, int dest, int source);
+#endif
 
           public:
             // Constructors
@@ -140,10 +145,14 @@ namespace FML {
             // The rms of the main grid sqrt(Sum y^2/N)
             double norm();
 
-            // Communicate all the extra slices left and right
+            // Communicate all the extra slices left and right. With more extra slices than local slices the
+            // slices are forwarded from tasks further away. With one task (periodic) the ghosts are copies of the
+            // periodic images of our own slices. For a non-periodic grid the ghosts outside the box are not touched
             void communicate_boundaries();
 
-            // Send a slice of the grid to the left or right task
+            // Send slice ix (local index, can be an extra slice) of the grid to the left or right task and receive
+            // the corresponding slice from the other neighbor in recv_slice (resized to one slice).
+            // With one task the slice itself is returned
             void send_slice_left(int ix, std::vector<T> & recv_slice);
             void send_slice_right(int ix, std::vector<T> & recv_slice);
 
@@ -202,14 +211,14 @@ namespace FML {
         template <int NDIM, class T>
         void MPIGrid<NDIM, T>::add_memory_label([[maybe_unused]] std::string label) {
 #ifdef MEMORY_LOGGING
-            FML::MemoryLog::get()->add_label(_y.data(), _y.capacity() * sizeof(ComplexType), label);
+            FML::MemoryLog::get()->add_label(_y.data(), _y.capacity() * sizeof(T), label);
 #endif
         }
 
 #define OPS(OP)                                                                                                        \
     template <int NDIM, class T>                                                                                       \
     auto MPIGrid<NDIM, T>::operator OP(const MPIGrid<NDIM, T> & rhs)->MPIGrid<NDIM, T> & {                             \
-        assert_mpi(_NtotLocal == rhs._NtotLocal, "");                                                                  \
+        assert_mpi(_NtotLocal == rhs._NtotLocal, "[MPIGrid::operator" #OP "] Grids have different sizes\n");         \
         for (IndexInt i = 0; i < _NtotLocal; i++) {                                                                    \
             this->_y[_NtotLocalLeft + i] OP rhs._y[rhs._NtotLocalLeft + i];                                            \
         }                                                                                                              \
@@ -237,7 +246,7 @@ namespace FML {
 
 #define OPS(OP)                                                                                                        \
     template <int NDIM, class T>                                                                                       \
-    auto operator OP(MPIGrid<NDIM, T> lhs, const MPIGrid<NDIM, T> & rhs)->MPIGrid<NDIM, T> & {                         \
+    auto operator OP(MPIGrid<NDIM, T> lhs, const MPIGrid<NDIM, T> & rhs)->MPIGrid<NDIM, T> {                           \
         lhs OP## = rhs;                                                                                                \
         return lhs;                                                                                                    \
     }
@@ -424,10 +433,11 @@ namespace FML {
             assert_coord(coord);
 #endif
             IndexInt index = 0;
-            for (int idim = NDIM - 1, n = 1; idim >= 0; idim--, n *= _N) {
-                index += globalcoord[idim] * n;
+            IndexInt n = 1;
+            for (int idim = NDIM - 1; idim >= 0; idim--, n *= _N) {
+                index += IndexInt(globalcoord[idim]) * n;
                 if (idim == 0)
-                    index -= _xStartLocal * n;
+                    index -= IndexInt(_xStartLocal) * n;
             }
             return index;
         }
@@ -438,8 +448,9 @@ namespace FML {
             assert_coord(coord);
 #endif
             IndexInt index = 0;
-            for (int idim = NDIM - 1, n = 1; idim >= 0; idim--, n *= _N)
-                index += coord[idim] * n;
+            IndexInt n = 1;
+            for (int idim = NDIM - 1; idim >= 0; idim--, n *= _N)
+                index += IndexInt(coord[idim]) * n;
             return index;
         }
 
@@ -488,7 +499,7 @@ namespace FML {
             assert_mpi(coord[0] + _n_extra_slices_left >= 0,
                        "[MPIGrid::assert_coord] x-coordinate is too small. Do not correspond to a cell in the grid\n");
             assert_mpi(coord[0] - _n_extra_slices_right < _NLocal,
-                       "[MPIGrid::assert_coord] x-coordinate is too small. Do not correspond to a cell in the grid\n");
+                       "[MPIGrid::assert_coord] x-coordinate is too large. Do not correspond to a cell in the grid\n");
         }
 
         template <int NDIM, class T>
@@ -551,69 +562,69 @@ namespace FML {
 
         template <int NDIM, class T>
         void MPIGrid<NDIM, T>::free() {
-            _y.clear();
-            _y.shrink_to_fit();
+            // Release the memory and reset all variables (an empty, default constructed grid)
+            *this = MPIGrid<NDIM, T>();
         }
 
+#ifdef USE_MPI
         template <int NDIM, class T>
-        void MPIGrid<NDIM, T>::send_slice_right([[maybe_unused]] int ix, [[maybe_unused]] std::vector<T> & recv_slice) {
-            if (FML::NTasks == 1)
+        void MPIGrid<NDIM, T>::sendrecv_bytes(char * sendbuf, char * recvbuf, size_t bytes, int dest, int source) {
+            // MPI counts are int so send large buffers in chunks
+            const size_t maxchunk = size_t(1) << 30;
+            size_t offset = 0;
+            do {
+                const int nbytes = int(std::min(maxchunk, bytes - offset));
+                MPI_Status status;
+                MPI_Sendrecv(sendbuf + offset,
+                             nbytes,
+                             MPI_CHAR,
+                             dest,
+                             0,
+                             recvbuf + offset,
+                             nbytes,
+                             MPI_CHAR,
+                             source,
+                             0,
+                             FML::communicator,
+                             &status);
+                offset += size_t(nbytes);
+            } while (offset < bytes);
+        }
+#endif
+
+        template <int NDIM, class T>
+        void MPIGrid<NDIM, T>::send_slice_right(int ix, std::vector<T> & recv_slice) {
+            recv_slice.resize(_NperSlice);
+            T * slice_tosend = _y.data() + _NtotLocalLeft + _NperSlice * ix;
+            if (FML::NTasks == 1) {
+                // We are our own right and left neighbor
+                std::copy(slice_tosend, slice_tosend + _NperSlice, recv_slice.data());
                 return;
+            }
 
 #ifdef USE_MPI
-            const int bytes_slice = _NperSlice * sizeof(T);
-            recv_slice.resize(bytes_slice);
-
-            T * slice_tosend = _y.data() + _NtotLocalLeft + _NperSlice * ix;
+            const size_t bytes_slice = size_t(_NperSlice) * sizeof(T);
             char * sendbuf = reinterpret_cast<char *>(slice_tosend);
-
-            T * slice_torecv = recv_slice.data();
-            char * recvbuf = reinterpret_cast<char *>(slice_torecv);
-
-            MPI_Status status;
-            MPI_Sendrecv(sendbuf,
-                         bytes_slice,
-                         MPI_CHAR,
-                         _RightTask,
-                         0,
-                         recvbuf,
-                         bytes_slice,
-                         MPI_CHAR,
-                         _LeftTask,
-                         0,
-                         FML::communicator,
-                         &status);
+            char * recvbuf = reinterpret_cast<char *>(recv_slice.data());
+            sendrecv_bytes(sendbuf, recvbuf, bytes_slice, _RightTask, _LeftTask);
 #endif
         }
 
         template <int NDIM, class T>
-        void MPIGrid<NDIM, T>::send_slice_left([[maybe_unused]] int ix, [[maybe_unused]] std::vector<T> & recv_slice) {
-            if (FML::NTasks == 1)
+        void MPIGrid<NDIM, T>::send_slice_left(int ix, std::vector<T> & recv_slice) {
+            recv_slice.resize(_NperSlice);
+            T * slice_tosend = _y.data() + _NtotLocalLeft + _NperSlice * ix;
+            if (FML::NTasks == 1) {
+                // We are our own right and left neighbor
+                std::copy(slice_tosend, slice_tosend + _NperSlice, recv_slice.data());
                 return;
+            }
 
 #ifdef USE_MPI
-            const int bytes_slice = _NperSlice * sizeof(T);
-            recv_slice.resize(bytes_slice);
-
-            T * slice_tosend = _y.data() + _NtotLocalLeft + _NperSlice * ix;
+            const size_t bytes_slice = size_t(_NperSlice) * sizeof(T);
             char * sendbuf = reinterpret_cast<char *>(slice_tosend);
-
-            T * slice_torecv = recv_slice.data();
-            char * recvbuf = reinterpret_cast<char *>(slice_torecv);
-
-            MPI_Status status;
-            MPI_Sendrecv(sendbuf,
-                         bytes_slice,
-                         MPI_CHAR,
-                         _LeftTask,
-                         0,
-                         recvbuf,
-                         bytes_slice,
-                         MPI_CHAR,
-                         _RightTask,
-                         0,
-                         FML::communicator,
-                         &status);
+            char * recvbuf = reinterpret_cast<char *>(recv_slice.data());
+            sendrecv_bytes(sendbuf, recvbuf, bytes_slice, _LeftTask, _RightTask);
 #endif
         }
 
@@ -625,16 +636,20 @@ namespace FML {
             // Buffer to receive data in
             std::vector<T> recv_array(_NperSlice);
 
-            // Send rightmost slices right and store in extra left slices
+            // Send rightmost slices right and store in extra left slices. We fill the extra left slices from the
+            // nearest (slice -1) and outwards: slice -1-i is slice NLocal-1-i of the left task. If we have more
+            // extra slices than the left task has slices (NLocal-1-i < 0) we get the left tasks extra slice which
+            // it received in an earlier iteration
             for (int i = 0; i < nsend_to_right; i++) {
                 const bool do_not_store = not _periodic and FML::ThisTask == 0;
-                T * slice_left_torecv = _y.data() + _NperSlice * i;
-                send_slice_right(_NLocal - nsend_to_right + i, recv_array);
+                T * slice_left_torecv = _y.data() + _NperSlice * (_n_extra_slices_left - 1 - i);
+                send_slice_right(_NLocal - 1 - i, recv_array);
                 if (not do_not_store)
                     std::memcpy(slice_left_torecv, recv_array.data(), _NperSlice * sizeof(T));
             }
 
-            // Send leftmost slices left and store in extra right slices
+            // Send leftmost slices left and store in extra right slices: slice NLocal+i is slice i of the right
+            // task (or its extra right slice i - NLocal received in an earlier iteration)
             for (int i = 0; i < nsend_to_left; i++) {
                 const bool do_not_store = not _periodic and FML::ThisTask == FML::NTasks - 1;
                 T * slice_right_torecv = _y.data() + _NtotLocalLeft + _NtotLocal + _NperSlice * i;
