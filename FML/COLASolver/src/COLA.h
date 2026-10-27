@@ -78,7 +78,8 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                     double a,
                                     double delta_time_kick,
                                     [[maybe_unused]] double delta_time_drift,
-                                    double lattice_offset = 0.0);
+                                    double lattice_offset = 0.0,
+                                    bool do_drift = true);
 
 template <int NDIM, class T>
 void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
@@ -88,7 +89,9 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
                      double aold,
                      double a,
                      double delta_time_kick,
-                     [[maybe_unused]] double delta_time_drift);
+                     [[maybe_unused]] double delta_time_drift,
+                     bool do_kick = true,
+                     bool do_drift = true);
 
 //========================================================================
 // Add on LPT velocity
@@ -179,6 +182,8 @@ void cola_add_on_LPT_velocity(FML::PARTICLE::MPIParticles<T> & part,
 // a is the scale factor for the new position
 // aold is the scale factor for the old position
 // aini is the scale factor for which displacement fields in particles are stored
+// do_kick / do_drift: only update the velocities / positions (the two parts are independent, so a kick followed
+// by a drift gives exactly the same result as doing both at once)
 template <int NDIM, class T>
 void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
                      std::shared_ptr<GravityModel<NDIM>> & grav,
@@ -187,7 +192,9 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
                      double aold,
                      double a,
                      double delta_time_kick,
-                     [[maybe_unused]] double delta_time_drift) {
+                     [[maybe_unused]] double delta_time_drift,
+                     bool do_kick,
+                     bool do_drift) {
     if (LPT_order < 1) return;
 
     constexpr int LPT_order_particle = (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() and
@@ -253,16 +260,20 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
         if (LPT_order >= 1) {
             auto * D1 = FML::PARTICLE::GetD_1LPT(p);
             for (int idim = 0; idim < NDIM; idim++) {
-                pos[idim] += D1[idim] * fac1_pos;
-                vel[idim] += D1[idim] * fac1_vel;
+                if (do_drift)
+                    pos[idim] += D1[idim] * fac1_pos;
+                if (do_kick)
+                    vel[idim] += D1[idim] * fac1_vel;
             }
         }
 
         if (LPT_order >= 2) {
             auto * D2 = FML::PARTICLE::GetD_2LPT(p);
             for (int idim = 0; idim < NDIM; idim++) {
-                pos[idim] += D2[idim] * fac2_pos;
-                vel[idim] += D2[idim] * fac2_vel;
+                if (do_drift)
+                    pos[idim] += D2[idim] * fac2_pos;
+                if (do_kick)
+                    vel[idim] += D2[idim] * fac2_vel;
             }
         }
 
@@ -270,10 +281,14 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
             auto * D3a = FML::PARTICLE::GetD_3LPTa(p);
             auto * D3b = FML::PARTICLE::GetD_3LPTb(p);
             for (int idim = 0; idim < NDIM; idim++) {
-                pos[idim] += D3a[idim] * fac3a_pos;
-                pos[idim] += D3b[idim] * fac3b_pos;
-                vel[idim] += D3a[idim] * fac3a_vel;
-                vel[idim] += D3b[idim] * fac3b_vel;
+                if (do_drift) {
+                    pos[idim] += D3a[idim] * fac3a_pos;
+                    pos[idim] += D3b[idim] * fac3b_pos;
+                }
+                if (do_kick) {
+                    vel[idim] += D3a[idim] * fac3a_vel;
+                    vel[idim] += D3b[idim] * fac3b_vel;
+                }
             }
         }
 
@@ -364,9 +379,58 @@ void interpolate_LPT_grid_to_lagrangian_positions(const std::array<FML::GRID::FF
         grid_vector_real, points.data(), points.size(), result, interpolation_method);
 }
 
+// The particle storage used for the velocity kick in cola_kick_drift_scaledependent (dDdloga_1LPT for 1LPT
+// particles, D_2LPT otherwise)
+template <class T>
+auto * cola_scaledependent_vel_storage(T & p, int LPT_order_particle) {
+    if constexpr (FML::PARTICLE::has_get_D_2LPT<T>()) {
+        if (LPT_order_particle != 1)
+            return FML::PARTICLE::GetD_2LPT(p);
+    }
+    if constexpr (FML::PARTICLE::has_get_dDdloga_1LPT<T>()) {
+        return FML::PARTICLE::GetdDdloga_1LPT(p);
+    } else {
+        // Not reached: the particle has D_2LPT or cola_kick_drift_scaledependent fails before
+        return FML::PARTICLE::GetD_1LPT(p);
+    }
+}
+
+// Complete the step of cola_kick_drift_scaledependent(..., do_drift = false): add the stored position displacement
+template <int NDIM, class T>
+void cola_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part, int LPT_order) {
+    if (LPT_order < 1) return;
+    constexpr int LPT_order_particle = (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() and
+                               FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>()) ?
+                                  3 :
+                                  (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() ?
+                                       2 :
+                                       (FML::PARTICLE::has_get_D_1LPT<T>() ? 1 : 0));
+    const size_t np = part.get_npart();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+    for (size_t i = 0; i < np; i++) {
+        auto & p = part[i];
+        auto * pos = FML::PARTICLE::GetPos(p);
+        auto * D_pos = cola_scaledependent_vel_storage<T>(p, LPT_order_particle);
+        for (int idim = 0; idim < NDIM; idim++)
+            pos[idim] += D_pos[idim];
+
+        // Periodic wrap
+        for (int idim = 0; idim < NDIM; idim++) {
+            if (pos[idim] >= 1.0)
+                pos[idim] -= 1.0;
+            if (pos[idim] < 0.0)
+                pos[idim] += 1.0;
+        }
+    }
+}
+
 // This method kick's and drift's the particles one time-step
 // Only 1LPT, though not hard to extend
 // This method can be speed up a lot
+// With do_drift = false only the velocities are updated and the position displacement is stored in the particles
+// (see cola_drift_scaledependent, which completes the step)
 template <int NDIM, class T>
 void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                     std::shared_ptr<GravityModel<NDIM>> & grav,
@@ -381,7 +445,8 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                     double a,
                                     double delta_time_kick,
                                     [[maybe_unused]] double delta_time_drift,
-                                    double lattice_offset) {
+                                    double lattice_offset,
+                                    bool do_drift) {
     if (LPT_order < 1) return;
 
     constexpr bool print_timings = false;
@@ -656,22 +721,20 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
         auto * pos = FML::PARTICLE::GetPos(p);
         auto * vel = FML::PARTICLE::GetVel(p);
 
-        if (LPT_order_particle == 1) {
-            // 1LPT: we are using D1 and dDdloga_1LPT
-            auto * D_pos = FML::PARTICLE::GetD_1LPT(p);
-            auto * D_vel = FML::PARTICLE::GetdDdloga_1LPT(p);
-            for (int idim = 0; idim < NDIM; idim++) {
+        // 1LPT: we are using D1 and dDdloga_1LPT, otherwise D1 and D2 as temp storage
+        auto * D_pos = FML::PARTICLE::GetD_1LPT(p);
+        auto * D_vel = cola_scaledependent_vel_storage<T>(p, LPT_order_particle);
+        for (int idim = 0; idim < NDIM; idim++) {
+            if (do_drift)
                 pos[idim] += D_pos[idim];
-                vel[idim] += D_vel[idim];
-            }
-        } else {
-            // 1LPT + 2LPT: we are using D1 and D2 as temp storage
-            auto * D_pos = FML::PARTICLE::GetD_1LPT(p);
-            auto * D_vel = FML::PARTICLE::GetD_2LPT(p);
-            for (int idim = 0; idim < NDIM; idim++) {
-                pos[idim] += D_pos[idim];
-                vel[idim] += D_vel[idim];
-            }
+            vel[idim] += D_vel[idim];
+        }
+        // Keep the position displacement for cola_drift_scaledependent: in the velocity storage as D1 is
+        // overwritten when adding on the LPT velocity (cola_add_on_LPT_velocity_scaledependent)
+        if (not do_drift) {
+            for (int idim = 0; idim < NDIM; idim++)
+                D_vel[idim] = D_pos[idim];
+            continue;
         }
 
         // Periodic wrap
@@ -941,6 +1004,39 @@ class ColaState {
                                                     lattice_offset);
         } else {
             cola_kick_drift<NDIM, T>(part, grav, LPT_order, aini, aold, a, delta_time_kick, delta_time_drift);
+        }
+    }
+
+    /// kick_drift in two parts: first the COLA kick (the velocities), then drift (the positions from aold to a).
+    /// Between the two the particles are at aold, e.g. for the lightcone, which drifts them with the true velocity.
+    /// The result is identical to kick_drift
+    void kick(FML::PARTICLE::MPIParticles<T> & part, double aold, double a, double delta_time_kick) {
+        if (scaledependent) {
+            // This also computes the position displacement (stored in the particles until drift)
+            cola_kick_drift_scaledependent<NDIM, T>(part,
+                                                    grav,
+                                                    LPT_order,
+                                                    phi_1LPT_ini_fourier,
+                                                    phi_2LPT_ini_fourier,
+                                                    phi_3LPTa_ini_fourier,
+                                                    phi_3LPTb_ini_fourier,
+                                                    H0Box,
+                                                    aini,
+                                                    aold,
+                                                    a,
+                                                    delta_time_kick,
+                                                    0.0,
+                                                    lattice_offset,
+                                                    false);
+        } else {
+            cola_kick_drift<NDIM, T>(part, grav, LPT_order, aini, aold, a, delta_time_kick, 0.0, true, false);
+        }
+    }
+    void drift(FML::PARTICLE::MPIParticles<T> & part, double aold, double a) {
+        if (scaledependent) {
+            cola_drift_scaledependent<NDIM, T>(part, LPT_order);
+        } else {
+            cola_kick_drift<NDIM, T>(part, grav, LPT_order, aini, aold, a, 0.0, 0.0, false, true);
         }
     }
 

@@ -1098,7 +1098,7 @@ void NBodySimulation<NDIM, T>::set_force_settings_for_step(double a) {
         std::cout << "Using the early-time force (" << f.early_method << ") at z = " << 1.0 / a - 1.0 << "\n";
 }
 
-/// One kick-drift step: density -> force -> kick -> (COLA kick-drift) -> lightcone -> drift
+/// One kick-drift step: density -> force -> kick -> COLA kick -> lightcone -> COLA drift -> drift
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
     const auto & sim = params.simulation;
@@ -1189,19 +1189,25 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
                      "operators\n";
     }
 
-    // For COLA we can do the kick and drift at the same time
+    // For COLA we can do the kick and drift at the same time. The lightcone drifts the particles from apos with
+    // their true velocity (which includes the LPT velocity), so then the COLA drift (the LPT displacement over
+    // the step) is done after the lightcone
+    const bool make_lightcone = lightcone->lightcone_active() and s.delta_time_drift != 0.0;
     if (cola.enabled) {
         timer.StartTiming("COLA");
         for_each_cb_species([&](MPIParticles & particles, const COLASOLVER::SpeciesInfo &) {
-            cola.kick_drift(particles, s.apos, s.apos_new, s.delta_time_kick, s.delta_time_drift);
+            if (make_lightcone)
+                cola.kick(particles, s.apos, s.apos_new, s.delta_time_kick);
+            else
+                cola.kick_drift(particles, s.apos, s.apos_new, s.delta_time_kick, s.delta_time_drift);
         });
-        if (not cola.scaledependent and sim.enforce_LPT_trajectories)
+        if (not make_lightcone and not cola.scaledependent and sim.enforce_LPT_trajectories)
             part.communicate_particles();
         timer.EndTiming("COLA");
     }
 
     // Build the lightcone (with the true velocities of the particles)
-    if (lightcone->lightcone_active() and s.delta_time_drift != 0.0) {
+    if (make_lightcone) {
         ScopedLPTVelocity<NDIM, T> true_velocities(cola, part, s.avel_new, &timer);
         timer.StartTiming("Lightcone");
         if (lightcone->needs_potential(s.apos, s.apos_new)) {
@@ -1234,6 +1240,15 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
             lightcone->create_lightcone(part, s.apos, s.apos_new, s.avel_new, s.delta_time_drift);
         }
         timer.EndTiming("Lightcone");
+    }
+    if (cola.enabled and make_lightcone) {
+        timer.StartTiming("COLA");
+        for_each_cb_species([&](MPIParticles & particles, const COLASOLVER::SpeciesInfo &) {
+            cola.drift(particles, s.apos, s.apos_new);
+        });
+        if (not cola.scaledependent and sim.enforce_LPT_trajectories)
+            part.communicate_particles();
+        timer.EndTiming("COLA");
     }
 
     // Drift particles (updates positions)
