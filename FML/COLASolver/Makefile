@@ -29,7 +29,7 @@ OPTIONS     += -DNDIM_SPACE=$(NDIM_SPACE)
 FML_MODULES := Global Spline ODESolver GadgetUtils ParameterMap FileUtils Math
 EXTRA_VPATH := src
 
-nbody: Main.o Global.o Spline.o ODESolver.o GadgetUtils.o ParameterMap.o FileUtils.o Math.o
+nbody: Main.o BaryonificationOutput.o Global.o Spline.o ODESolver.o GadgetUtils.o ParameterMap.o FileUtils.o Math.o
 	$(LINK_EXE)
 
 # Rebuild if build options change

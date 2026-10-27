@@ -467,6 +467,55 @@ The code can do a lot of calculations as we go ahead. First of all it outputs CD
 
 The code can also be set to store the results from the output for post-processing when the simulation is over if you want that. The code can also easily (small modification) be set to read data and analyse it and the library this is part of has many more algorithms one can use to compute things like real space correlation functions, tessellations, watershed (void finding) etc.
 
+# Snapshot baryonification
+
+`baryonification = true` runs the standalone `FML/Baryonification` method on a temporary particle copy at each
+output. It needs 3D GR, one CDM+baryon particle species, `cosmology_OmegaMNu = 0`, and `pofk = true`. All extra halo
+finding, sorting, displacement, and MPI redistribution take place on the copy. The live particles and their
+subsequent evolution are unchanged. Ordinary FoF output need not be enabled.
+
+```lua
+baryonification = true
+baryonification_model = "schneider2019"
+baryonification_gas_mass_scale_msunh = 1e14
+baryonification_stellar_mass_scale_msunh = 2.5e11
+baryonification_min_halo_mass_msunh = 1e12
+baryonification_gas_ejection_radius_over_r200 = 4.0
+baryonification_fof_buffer_mpch = 3.0
+baryonification_output_particles = false
+```
+
+Every dimensionful parameter has a unit suffix: `_msunh` means Msun/h and `_mpch` means **comoving** Mpc/h.
+Dimensionless radius ratios use `_over_r200`; the halo definition here is always **200c**. All parameters and
+defaults are in `PARAMETERS.md`. The module's baryon fraction is taken from the cosmology, Omega_b/Omega_m.
+
+The correction locates FoF seeds, measures spherical-overdensity M200c/R200c with shrinking-sphere centres, and
+rejects truncated SO measurements, nested halos and hosts below the mass threshold. Choose a halo search buffer
+larger than the halos being measured; rejected counts are recorded. Halo masses are converted to Msun/h, while
+centres/radii passed to the module remain in box units and the common background is converted to mass per
+box-unit volume. The concentration prescription is explicitly an illustrative power law:
+`c200c = concentration_norm * (M200c/concentration_pivot_mass_msunh)^concentration_mass_slope *
+(1+z)^concentration_redshift_power`, with every parameter prefixed by `baryonification_`.
+It is not fitted from unresolved PM halo cores.
+
+Each snapshot folder gets:
+
+- `pofk_baryonified_zX.txt`: k [h/Mpc], corrected and original P(k) [(Mpc/h)^3], their ratio, and a ratio-valid flag.
+  Both spectra use identical `pofk_*` settings on the copy after halo finding. For zero/nonpositive control power
+  (e.g. empty bins or shot-noise subtraction), the ratio is 0 with valid=0 rather than an infinity/NaN.
+- `baryonification_zX.txt`: resolved settings and units, actual baryon fraction, rejection counts, and the selected
+  host catalogue (positions/radii in comoving Mpc/h, masses in Msun/h, concentration).
+- With `baryonification_output_particles = true`, separate `gadget_baryonified_zX.<task>` files, or HDF5 files
+  when `output_fileformat = "HDF5"`. This is independent of `output_particles`. IDs and masses are preserved;
+  velocities are the uncorrected physical output velocities (the normal Gadget velocity conversion still applies).
+
+The profiles have finite support and a uniform background, not the correlated two-halo term. The host catalogue
+and its prepared profiles are replicated on every MPI rank in this first integration. Support must be smaller than
+half the box; the code rejects larger supports rather than clipping them. See `FML/Baryonification/README.md` for
+the memory cost and numerical assumptions. Check halo completeness, SO mass resolution, concentration and profile
+calibration, and cutoff/table convergence before interpreting the corrected spectra. This option does not correct
+lightcone maps, velocities, or redshift-space multipoles and makes no hydrodynamical accuracy claim.
+
 # Output
 
 The fiducial fileformat for the particles is GADGET. If you want the standard gadget format (pos+vel+id) your particle must have an ID field (get/set_id) otherwise it will only output positions and velocities. With `output_fileformat = "HDF5"` the particles are written as GADGET HDF5 files (`gadget_zX.<task>.hdf5`, readable by e.g. h5py, yt, pynbody and GADGET-4). This needs the HDF5 library: compile with `make clean && make USE_HDF5=true` (set `HDF5_INCLUDE` and `HDF5_LIB` in `../Makefile.local` if HDF5 is not in `$(HOME)/local`). Reading particles (`ic_reconstruct_gadgetfilepath`) works for both binary and HDF5 GADGET files; the format is detected from the file names. (The old `output_fileformat = "FML"`, a raw dump of the particles that could only be read back with the same particle type and number of tasks, has been removed.)

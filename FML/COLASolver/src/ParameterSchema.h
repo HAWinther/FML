@@ -687,6 +687,15 @@ namespace COLASOLVER {
                        "(compile with USE_HDF5=true)",
                        {"GADGET", "HDF5"});
 
+            b.section("Baryonification (snapshot post-processing)");
+            b.always_optional("baryonification", false, "Correct a temporary snapshot copy; 3D GR, no massive neutrinos, single CDM+baryon species; needs pofk=true");
+            if_true("baryonification", [&]() {
+                BaryonificationSettings defaults;
+                defaults.parameters([&](const char * name, auto &, const auto & value, const char * description) {
+                    b.always_optional(std::string("baryonification_") + name, value, description);
+                });
+            });
+
             b.section("Halo finding");
             b.optional("fof", false, "Locate friends-of-friends halos at every output");
             if_true("fof", [&]() {

@@ -31,6 +31,9 @@ jobs:
       - name: Build COLASolver (with HDF5)
         run: make -C FML/COLASolver -j4 USE_HDF5=true
 
+      - name: COLASolver baryonification parameter and snapshot-copy tests
+        run: make -C FML/COLASolver/tests run USE_MPI=false USE_OMP=false
+
       - name: PARAMETERS.md is up to date with the parameter schema
         run: |
           cd FML/COLASolver

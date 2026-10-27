@@ -4,6 +4,7 @@
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/ParameterMap/ParameterMap.h>
+#include "BaryonificationParameters.h"
 
 #include <cmath>
 #include <functional>
@@ -301,6 +302,7 @@ namespace COLASOLVER {
         ParticleSettings particle;
         TimestepSettings timestep;
         FoFSettings fof;
+        BaryonificationSettings baryonification;
         PofkSettings pofk;
         PofkMultipoleSettings pofk_multipole;
         BispectrumSettings bispectrum;
@@ -449,6 +451,8 @@ namespace COLASOLVER {
                 r.get("fof_so_definitions", fof.so_definitions, std::vector<std::string>{});
             }
 
+            baryonification.read(r);
+
             // Power-spectrum
             r.get("pofk", pofk.enabled);
             r.get("pofk_every_step", pofk.every_step);
@@ -514,6 +518,18 @@ namespace COLASOLVER {
         /// Check that the parameters are consistent. Throws if not
         void validate() {
             auto fail = [](const std::string & msg) { throw std::runtime_error("Invalid parameters: " + msg); };
+
+            if (baryonification.enabled) {
+                baryonification.validate();
+                if (particle.baryons || particle.neutrinos)
+                    fail("baryonification currently needs a single CDM+baryon particle species");
+                if (!pofk.enabled)
+                    fail("baryonification needs pofk = true (uses its mesh, assignment and shot-noise settings)");
+#ifndef USE_HDF5
+                if (baryonification.output_particles && output.fileformat == ParticleFileFormat::HDF5)
+                    fail("baryonification_output_particles with HDF5 needs USE_HDF5=true");
+#endif
+            }
 
             // COLA
             if (simulation.use_cola and simulation.cola_LPT_order > ic.LPT_order)

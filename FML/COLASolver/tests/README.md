@@ -1,5 +1,20 @@
 # Tests
 
+## Snapshot baryonification
+
+`make run` in this folder builds the fast parameter/unit-suffix and snapshot-copy tests (no GSL/FFTW/Lua required).
+The end-to-end check needs the normal COLASolver executable and numpy:
+
+```bash
+python3 tests/check_baryonification.py ./nbody /tmp/baryonification
+```
+
+It exercises nonzero feedback at two outputs, checks that original outputs and later evolution are byte-identical
+to a run without correction, and verifies the empty-catalogue identity control, mass/radius conversions, recorded
+settings, preserved IDs/velocities, and invalid configurations. HDF5 corrected output is tested when compiled in
+(with dataset checks when h5py is available). Run with MPIRUN="mpirun -np 1", 2 or 4 to check the MPI decompositions.
+The integration uses reduced profile-table resolution for speed; numerical profile tests live in `FML/Baryonification/tests`.
+
 All the scripts take the `nbody` executable and a folder to put the outputs in. They use
 `mpirun -np 2` by default; set `MPIRUN` to change this (e.g. `MPIRUN=""` for a serial build).
 

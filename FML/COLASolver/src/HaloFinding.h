@@ -39,6 +39,12 @@ class NBodySimulation;
 
 namespace COLASOLVER {
 
+    /// Equal-mass CDM+baryon particle mass in Msun/h (boxsize in comoving Mpc/h).
+    inline double halo_particle_mass_msunh(double omega_cb, double boxsize, double H0_hmpc, size_t npart_total) {
+        const double MplMpl_over_H0Msunh = 2.49264e21;
+        return 3.0 * omega_cb * MplMpl_over_H0Msunh * std::pow(boxsize * H0_hmpc, 3) / double(npart_total);
+    }
+
     /// A halo as written to the catalogue (code units: positions in [0,1), velocities in code units, mass in units
     /// of the mass of a CDM+baryon particle of one species)
     template <int NDIM>
@@ -389,7 +395,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     // Convert to physical units
     // Code masses are in units of the mean mass -> Msun/h
     const double MplMpl_over_H0Msunh = 2.49264e21;
-    const double mass_norm = 3.0 * OmegaCB * MplMpl_over_H0Msunh * std::pow(boxsize * H0_hmpc, 3) / double(npart_total);
+    const double mass_norm = COLASOLVER::halo_particle_mass_msunh(OmegaCB, boxsize, H0_hmpc, size_t(npart_total));
     // Code positions are in [0,1) -> Mpc/h
     const double pos_norm = boxsize;
     // Code velocities are a^2 dxdt / ((H0 Box) -> peculiar km/s

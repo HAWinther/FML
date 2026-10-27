@@ -21,6 +21,8 @@
 #include "GravityModel_DGP.h"
 #include "GravityModel_fofr.h"
 #include "Species.h"
+#include "OutputUtils.h"
+#include "SnapshotPowerSpectrum.h"
 
 #include <fstream>
 #include <iostream>
@@ -36,13 +38,6 @@
 
 template <int NDIM, class T>
 class NBodySimulation;
-
-/// The redshift formatted as used in filenames
-inline std::string redshift_to_string(double redshift) {
-    std::stringstream stream;
-    stream << std::fixed << std::setprecision(3) << redshift;
-    return stream.str();
-}
 
 template <int NDIM, class T>
 void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
@@ -809,14 +804,8 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     // Separate CDM and baryon particles: P(k) of each and of delta_cb = w_c delta_c + w_b delta_b
     std::vector<std::pair<std::string, FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM>>> pofk_species;
     if (sim.get_species().size() == 1) {
-        FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM, T>(pofk_nmesh,
-                                                                   part.get_particles_ptr(),
-                                                                   part.get_npart(),
-                                                                   part.get_npart_total(),
-                                                                   pofk_cb_binning,
-                                                                   pofk_density_assignment_method,
-                                                                   pofk_interlacing);
-        pofk_cb_binning.scale(simulation_boxsize);
+        pofk_cb_binning = COLASOLVER::measure_snapshot_power_spectrum<NDIM>(
+            part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), settings, simulation_boxsize);
     } else {
         const auto nleftright =
             FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(pofk_density_assignment_method);

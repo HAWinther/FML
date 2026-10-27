@@ -64,6 +64,10 @@ jobs:
         if: always()
         run: python3 FML/COLASolver/tests/check_nbody_gauge.py FML/COLASolver/nbody "$OUT/nbgauge"
 
+      - name: Snapshot baryonification and unchanged subsequent evolution
+        if: always()
+        run: python3 FML/COLASolver/tests/check_baryonification.py FML/COLASolver/nbody "$OUT/baryonification"
+
       - name: Keep the logs
         if: always()
         uses: actions/upload-artifact@v4

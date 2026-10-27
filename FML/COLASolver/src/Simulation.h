@@ -17,6 +17,7 @@
 #include <FML/Timing/Timings.h>
 
 #include "AnalyzeOutput.h"
+#include "BaryonificationOutput.h"
 #include "COLA.h"
 #include "Cosmology.h"
 #include "ExternalIC.h"
@@ -324,6 +325,11 @@ template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
     parameters = std::make_shared<ParameterMap>(param);
     params.read(param);
+    if (params.baryonification.enabled) {
+        if (NDIM != 3 || grav->get_name() != "GR" || cosmo->get_OmegaMNu() != 0.0)
+            throw std::runtime_error("baryonification currently requires NDIM=3, gravity_model=GR and cosmology_OmegaMNu=0");
+        params.baryonification.profile_model(cosmo->get_Omegab() / cosmo->get_OmegaM()).validate();
+    }
 
     // We cannot use COLA if the particle type is not compatible with it
     if (params.simulation.use_cola and not FML::PARTICLE::has_get_D_1LPT<T>()) {
@@ -1352,6 +1358,14 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
         std::function<void()> run;
     };
     const std::vector<Analysis> analyses{
+        {"Baryonification",
+         params.baryonification.enabled,
+         [&]() {
+             if constexpr (NDIM == 3)
+                 COLASOLVER::output_baryonified_snapshot(
+                     COLASOLVER::copy_baryonification_particles(part.get_particles_ptr(), part.get_npart()),
+                     params, cosmo, redshift, snapshot_folder);
+         }},
         {"Power-spectrum",
          params.pofk.enabled,
          [&]() { pofk_every_output.push_back({redshift, compute_power_spectrum(*this, redshift, snapshot_folder)}); }},

@@ -12,6 +12,7 @@ USE_GSL             ?= true
 USE_LUA             ?= true
 
 TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_lpt test_nbody
+TARGETS += test_baryonification
 
 include ../Makefile.config
 
@@ -20,6 +21,7 @@ TARGETS += test_lua
 endif
 
 FML_MODULES := Global Spline ODESolver Math SphericalCollapse HaloModel FileUtils GadgetUtils FFTLog ParameterMap
+EXTRA_VPATH += $(FML_ROOT)/Baryonification/tests
 
 TEST_OBJS = test_core.o Global.o
 ifeq ($(USE_GSL),true)
@@ -39,6 +41,9 @@ test_so: test_so.o Global.o
 	$(LINK_EXE)
 
 test_kdtree: test_kdtree.o test_kdtree_odr.o Global.o
+	$(LINK_EXE)
+
+test_baryonification: test_baryonification.o test_baryonification_odr.o Global.o
 	$(LINK_EXE)
 
 PAIRCOUNT_OBJS = test_paircount.o test_paircount_odr.o Global.o
@@ -212,6 +217,8 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_lpt; \
 	  echo "== Running test_nbody with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_nbody; \
+	  echo "== Running test_baryonification with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_baryonification; \
 	done
 	@echo "== Running test_hybridbias"
 	@OMP_NUM_THREADS=2 $(RUN1) ./test_hybridbias

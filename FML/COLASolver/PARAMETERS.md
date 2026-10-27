@@ -205,6 +205,39 @@ Parameters marked *optional* take the default value if they are not in the param
 | `output_particles` | bool | `true` | always | Write the particles at the output redshifts |
 | `output_fileformat` | string | `"GADGET"` | always | File format for the particles. GADGET: binary GADGET files. HDF5: GADGET HDF5 files (compile with USE_HDF5=true). Options: `GADGET`, `HDF5` |
 
+## Baryonification (snapshot post-processing)
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `baryonification` | bool | `false` | always | Correct a temporary snapshot copy; 3D GR, no massive neutrinos, single CDM+baryon species; needs pofk=true |
+| `baryonification_model` | string | `"schneider2019"` | baryonification = true | Finite-support Schneider2019 profile family; illustrative, uncalibrated defaults |
+| `baryonification_output_particles` | bool | `false` | baryonification = true | Write a separate corrected snapshot; velocities are unchanged |
+| `baryonification_min_halo_mass_msunh` | double | `1e+12` | baryonification = true | Minimum host M200c (Msun/h) |
+| `baryonification_gas_mass_scale_msunh` | double | `1e+14` | baryonification = true | Gas-slope mass scale M_c (Msun/h) |
+| `baryonification_stellar_mass_scale_msunh` | double | `2.5e+11` | baryonification = true | Stellar-fraction pivot M1 (Msun/h) |
+| `baryonification_gas_mass_exponent` | double | `0.3` | baryonification = true | Exponent mu in beta=3-(M_c/M200c)^mu |
+| `baryonification_gas_core_radius_over_r200` | double | `0.1` | baryonification = true | Gas core radius / R200c |
+| `baryonification_gas_ejection_radius_over_r200` | double | `4` | baryonification = true | Gas ejection radius / R200c |
+| `baryonification_truncation_radius_over_r200` | double | `4` | baryonification = true | NFW truncation radius / R200c |
+| `baryonification_stellar_radius_over_r200` | double | `0.015` | baryonification = true | Central stellar scale R_h / R200c |
+| `baryonification_stellar_amplitude` | double | `0.09` | baryonification = true | Stellar mass fraction at M1 |
+| `baryonification_stellar_total_exponent` | double | `0.32` | baryonification = true | Total stellar fraction power-law exponent |
+| `baryonification_stellar_central_exponent` | double | `0.6` | baryonification = true | Central stellar fraction power-law exponent |
+| `baryonification_relax_collisionless` | bool | `true` | baryonification = true | Apply collisionless contraction/expansion |
+| `baryonification_relaxation_amplitude` | double | `0.3` | baryonification = true | Dimensionless collisionless relaxation amplitude |
+| `baryonification_relaxation_exponent` | double | `2` | baryonification = true | Dimensionless collisionless relaxation exponent |
+| `baryonification_concentration_norm` | double | `5` | baryonification = true | Illustrative c200c normalization; not a fitted relation |
+| `baryonification_concentration_pivot_mass_msunh` | double | `1e+14` | baryonification = true | Concentration pivot mass (Msun/h) |
+| `baryonification_concentration_mass_slope` | double | `-0.1` | baryonification = true | c=c0*(M200c/Mpivot)^slope*(1+z)^redshift_power |
+| `baryonification_concentration_redshift_power` | double | `-1` | baryonification = true | Power of (1+z) in the concentration relation |
+| `baryonification_fof_linking_length` | double | `0.2` | baryonification = true | FoF seed linking length / mean particle separation |
+| `baryonification_fof_min_particles` | int | `20` | baryonification = true | Minimum particles in a FoF seed halo |
+| `baryonification_fof_nmesh_max` | int | `0` | baryonification = true | Maximum FoF search mesh (0: automatic) |
+| `baryonification_fof_buffer_mpch` | double | `3` | baryonification = true | Halo/SO search buffer (comoving Mpc/h); larger than halo radii |
+| `baryonification_profile_radial_bins` | int | `2048` | baryonification = true | Number of positive profile-table radii |
+| `baryonification_min_radius_over_r200` | double | `1e-06` | baryonification = true | First positive profile radius / R200c |
+| `baryonification_max_radius_over_r200` | double | `30` | baryonification = true | Finite profile support / R200c; must be smaller than half the box |
+
 ## Halo finding
 
 | Parameter | Type | Default | Used when | Description |
