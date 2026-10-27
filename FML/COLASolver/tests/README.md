@@ -110,6 +110,20 @@ incomplete octant is an error. `healpix`: the octant maps (zero outside, zero me
 restricted to the octant and their C_ell the pseudo-C_ell divided by fsky (without USE_HEALPIX: the maps are an
 error when reading the parameters). Run the tests separately by naming them after the outdir.
 
+## Initial conditions (`check_initial_conditions.py`)
+
+```bash
+python3 tests/check_initial_conditions.py ./nbody /tmp/ics   # about 15 s, needs numpy
+```
+
+Checks that the velocities at the initial redshift are the same with and without COLA (0 steps) for CDM + baryon
+particles with linear massive neutrinos, one species and the N-body gauge; that massive neutrinos without the
+transfer functions give an error; that reading particles with exact LPT reconstruction from an offset lattice
+(fiducial offset with a 2x force grid, half_force_cell) reproduces the P(k) of the original run, that the
+reconstruction from the density field (PCS) with COLA is within 2.5%, and that a file with another BoxSize or h, or
+exact reconstruction with scale-dependent growth and COLA, is an error; and the warning for an input P(k) that does
+not reach the largest k of the IC grid.
+
 ## Regression tests (`regression/`)
 
 Small simulations covering all the main code paths, for checking that a change does not change the
