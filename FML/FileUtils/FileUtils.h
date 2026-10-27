@@ -1,5 +1,6 @@
 #ifndef FILEUTILS_HEADER
 #define FILEUTILS_HEADER
+#include <FML/FileUtils/DataPath.h>
 #include <string>
 #include <utility>
 #include <vector>

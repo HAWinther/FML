@@ -314,31 +314,6 @@ namespace FML {
         // Useful methods
         //=======================================================================
 
-        // Linearly spaced array ala Python Numpy linspace
-        DVector linspace(double xmin, double xmax, int num) {
-            if (num <= 0)
-                return DVector();
-            if (num == 1)
-                return DVector{xmin};
-            DVector res(num);
-            double delta_x = (xmax - xmin) / double(num - 1);
-            for (int i = 0; i < num - 1; i++) {
-                res[i] = xmin + delta_x * i;
-            }
-            // Just to make sure its exactly xmax at the endpoint
-            res[num - 1] = xmax;
-            return res;
-        }
-        
-        // Log spaced array ala Python Numpy logspace
-        DVector logspace(double xmin, double xmax, int num, double base) {
-            if(base <= 0.0) throw std::runtime_error("logspace::Cannot have base <= 0.0\n");
-            DVector res = linspace(xmin, xmax, num);
-            for (int i = 0; i < num; i++) {
-                res[i] = std::pow(base, res[i]);
-            }
-            return res;
-        }
 
 #ifdef USE_GSL
         // Airy function implemented as a singleton

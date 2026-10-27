@@ -21,6 +21,11 @@ namespace FML {
         /// This namespace deals with creating and using splines
         namespace SPLINE {
 
+            /// Bicubic interpolation, or bilinear if either axis has fewer than four points.
+            inline const gsl_interp2d_type * spline2d_type(size_t nx, size_t ny) {
+                return nx >= 4 && ny >= 4 ? gsl_interp2d_bicubic : gsl_interp2d_bilinear;
+            }
+
             // Type aliases
             class GSLSpline;
             class GSLSpline2D;

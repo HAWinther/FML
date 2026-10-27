@@ -12,7 +12,7 @@ USE_GSL             ?= true
 USE_LUA             ?= true
 
 TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_lpt test_nbody
-TARGETS += test_baryonification
+TARGETS += test_baryonification test_numericalmethods
 
 include ../Makefile.config
 
@@ -107,6 +107,9 @@ test_camb: test_camb.o test_camb_odr.o Global.o Spline.o
 	$(LINK_EXE)
 
 # Numerical core: splines, ODE solver and math functions (GSL)
+test_numericalmethods: test_numericalmethods.o NumericalMethods.o
+	$(LINK_EXE)
+
 test_numcore: test_numcore.o Global.o Spline.o ODESolver.o Math.o
 	$(LINK_EXE)
 

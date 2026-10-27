@@ -1,6 +1,9 @@
 #ifndef _MATH_HEADER
 #define _MATH_HEADER
 
+#include <FML/Math/Grids.h>
+#include <FML/Math/NumericalMethods.h>
+
 #ifdef USE_GSL
 #include <gsl/gsl_sf_bessel.h>
 #endif
@@ -37,12 +40,6 @@ namespace FML {
         using ODEFunction = FML::SOLVERS::ODESOLVER::ODEFunction;
 #endif
         using DVector = std::vector<double>;
-
-        /// Python linspace. Generate a linearly spaced array (num = 1 gives {xmin}, num <= 0 an empty array)
-        DVector linspace(double xmin, double xmax, int num);
-        
-        /// Python logspace. Generate a log spaced array
-        DVector logspace(double xmin, double xmax, int num, double base = 10.0);
 
 #if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || (__cplusplus >= 201703L))
         /// Find roots \f$ f(x) = 0 \f$ using Newtons method. Requires C++17

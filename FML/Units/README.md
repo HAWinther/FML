@@ -24,8 +24,9 @@ and `xhi1` are **energies in joules**, not numeric electronvolt values. `alpha` 
 from the shared SI table. Constructing another unit system never changes the SI table.
 
 The cosmology solver's existing `FML::COSMOLOGY::Constants` namespace is an alias to `FML::UTILS::SI`, exposed by
-`Cosmology/Numerics/Utils.h`. Existing `Constants::...` and `using namespace Constants` callers continue to work.
-Numerical helpers, spline/ODE aliases, and timing remain in the cosmology numerics module; including `Units.h`
+`Cosmology/Common.h`. Existing `Constants::...` and `using namespace Constants` callers continue to work.
+Numerical implementations live in shared Math, Spline, FileUtils and Timing modules. Cosmology aliases remain
+in `Common.h`; including `Units.h`
 alone does not pull in GSL, splines or the cosmology solver.
 
 The consolidation retains all values previously used by the cosmology solver. `ConstantsAndUnits` now uses those
