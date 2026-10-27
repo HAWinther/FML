@@ -103,3 +103,5 @@ tests/test_numcore
 tests/test_fftlog
 tests/test_emulator
 tests/test_utils
+tests/test_interpolation
+tests/test_lua

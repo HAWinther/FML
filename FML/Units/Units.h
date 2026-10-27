@@ -3,8 +3,14 @@
 
 #include <cmath>
 #include <iostream>
+#include <stdexcept>
+#include <string>
 #ifdef USE_MPI
 #include <mpi.h>
+namespace FML {
+    // The MPI communicator used by the library (defined in Global.cpp)
+    extern MPI_Comm communicator;
+} // namespace FML
 #endif
 
 namespace FML {
@@ -45,15 +51,17 @@ namespace FML {
             }
 
           public:
-            /// Size of your length unit in meters
+            // NB: the units below are what one meter, second, ... is in your units, i.e. a length of x meters is
+            // x * m in your units (e.g. m = 1e-3 for km as the length unit)
+            /// One meter in your length unit
             double m = 1.0;
-            /// Size of your time unit in seconds
+            /// One second in your time unit
             double s = 1.0;
-            /// Size of your mass unit in kg
+            /// One kilogram in your mass unit
             double kg = 1.0;
-            /// Size of your temperature unit in kelvin
+            /// One kelvin in your temperature unit
             double K = 1.0;
-            /// Size of your charge unit in coloumbs
+            /// One coulomb in your charge unit
             double Co = 1.0;
 
             // Physical constants set by the units
@@ -145,6 +153,9 @@ namespace FML {
                 init("User units");
             }
 
+            ConstantsAndUnits(const ConstantsAndUnits &) = default;
+            ConstantsAndUnits(ConstantsAndUnits &&) = default;
+            ConstantsAndUnits & operator=(const ConstantsAndUnits &) = default;
             ConstantsAndUnits & operator=(ConstantsAndUnits && other) = default;
 
             /// Initialize the units and compute all the constants in the desired unit system
@@ -259,7 +270,10 @@ namespace FML {
             void info() {
 #ifdef USE_MPI
                 int ThisTask = 0;
-                MPI_Comm_rank(FML::communicator, &ThisTask);
+                int initialized = 0;
+                MPI_Initialized(&initialized);
+                if (initialized)
+                    MPI_Comm_rank(FML::communicator, &ThisTask);
                 if (ThisTask > 0)
                     return;
 #endif

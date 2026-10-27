@@ -5,6 +5,48 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### LuaFileParser, FoF, Interpolation, Units fixes
+- `LuaFileParser` (reads COLASolver's parameter files): every optional parameter that was not in the file left a value
+  on the Lua stack, which was never checked or emptied: after about 50 such parameters memory was overwritten. A
+  COLASolver parameter file with only the required parameters aborted with "realloc(): invalid next size" (and
+  hung); the regression files set nearly everything. Values of the wrong type were silently ignored (`fof = 1` gave
+  the default `false`, a required one was reported as not found), `2.5` read as an integer gave 0, a string in an
+  array of numbers was read as 0 and a non-string in an array of strings was a null pointer. Now a value of the wrong
+  type is always an error saying what was expected, the stack is left as it was, `open` closes the previous file and
+  everything is inline (13 multiple definitions with two translation units). `tests/test_lua.cpp` (+ four bad-input
+  runs; built with USE_LUA=true, the default in tests/Makefile).
+- `FriendsOfFriends`: a user halo class (`FoFHaloClass`, the documented way to bin other quantities) did not compile
+  (the groups were always `FoFHalo`). The mean particle separation was N^(-1/3) also in 2D (2D linking distance 0.0093
+  instead of 0.002 for 100 x 100 particles). The grid of cells used to find neighbors was sized only from the linking
+  length (up to 1024^3 cells, 24 bytes each: 6.3 GB for 256^3 particles on one task); it now has at most about one
+  cell per particle (the groups do not depend on it; the order in which particles are added changes the halo
+  positions in the last digit). Positions at exactly 1.0 (from wrapping -1e-17) are clamped to the grid, the globals
+  in the header are inline, the cell storage is a local vector (was a global raw pointer, leaked on exceptions), group
+  ID offsets are 64 bit, and the sort of the particles (in place) is documented. Tests in `tests/test_fof.cpp`.
+- Particle-grid interpolation:
+  - The vector interpolation (forces) with NGP gave weight 0 to the particle's cell when the particle was in the
+    right half of the cell in any dimension: 87.5% of the particles got zero force with
+    `force_interpolation_method = NGP` (also in the original code). Now weight 1, as in the scalar version.
+  - Density assignment: a particle in the local domain within round-off of the slab boundary could get the cell of
+    the neighbor task (x = 63/90 has int(90 x) = 62 while the task starts at 63, e.g. a lattice with 90 particles on 10
+    tasks): NGP lost the particle (a whole lattice plane), higher orders wrote outside the grid. It now uses the
+    nearest cell in the domain (as the interpolation already did).
+  - Fewer slices on a task than the kernel needs as extra slices (e.g. Nmesh 8 on 8 tasks with TSC) silently lost
+    mass (sum(delta) = -10 for TSC) and gave wrong interpolation: now an error.
+  - An unknown method name (e.g. "cic") did nothing: now an error. With `-DCELLCENTERSHIFTED` TSC and PQS used an
+    uninitialized start cell (segfault). Sheet interpolation: the MPI counts were in bytes as int (overflow above 54M
+    particles per task); now elements of a contiguous MPI type.
+  - Documented that the two-grid interlacing (used for the P(k) output) uses exp(i k.s) also on the Nyquist planes
+    (not the shift of a real grid, cos(k s), but only |delta(k)|^2 is used; changing it would change the last P(k)
+    bins by ~3%), and that threads give bit-identical results only with at least 4(2 ORDER + 2) slices per task
+    (else atomic adds).
+  - `tests/test_interpolation.cpp` (+ two bad-input runs; NGP: 87.6% wrong and a lost plane with the old code).
+- `ConstantsAndUnits`: could not be copied (a declared move assignment deleted the copy constructor), `info()` did not
+  compile with MPI without Global.h, and the members were documented as the size of the unit in SI (they are one SI
+  unit in your units). The constants are unchanged. Tests in `tests/test_utils.cpp`.
+- Regression: identical except the FoF halos (positions and velocities in the last digit, mass 3e-16) from the
+  smaller FoF cell grid.
+
 ### Utilities: FileUtils, RandomGenerator, FoFBinning, MemoryLogging, Timings, ParameterMap, Matplotlibcpp
 - `FileUtils::read_regular_ascii` (used by COLASolver for the input P(k) / transfer file): a comment line or a token
   like `nan` after the first data line made it loop forever (adding the same row until memory ran out), a first line

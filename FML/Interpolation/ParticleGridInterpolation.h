@@ -231,12 +231,21 @@ namespace FML {
         //===================================================================================================
         //===================================================================================================
 
+        /// Is the name a known density assignment / interpolation method (NGP, CIC, TSC, PCS, PQS)?
+        inline bool is_known_interpolation_method(const std::string & method) {
+            return method == "NGP" or method == "CIC" or method == "TSC" or method == "PCS" or method == "PQS";
+        }
+
         template <int N, class T>
         void particles_to_grid(const T * part,
                                size_t NumPart,
                                size_t NumPartTot,
                                FFTWGrid<N> & density,
                                std::string density_assignment_method) {
+            assert_mpi(is_known_interpolation_method(density_assignment_method),
+                       ("[particles_to_grid] Unknown density assignment method [" + density_assignment_method +
+                        "] (NGP, CIC, TSC, PCS or PQS)\n")
+                           .c_str());
             if (density_assignment_method.compare("NGP") == 0)
                 particles_to_grid<N, 1, T>(part, NumPart, NumPartTot, density);
             if (density_assignment_method.compare("CIC") == 0)
@@ -255,6 +264,10 @@ namespace FML {
                                                     size_t NumPart,
                                                     std::vector<FloatType> & interpolated_values,
                                                     std::string interpolation_method) {
+            assert_mpi(is_known_interpolation_method(interpolation_method),
+                       ("[interpolate_grid_to_particle_positions] Unknown interpolation method [" +
+                        interpolation_method + "] (NGP, CIC, TSC, PCS or PQS)\n")
+                           .c_str());
             if (interpolation_method.compare("NGP") == 0)
                 interpolate_grid_to_particle_positions<N, 1, T>(grid, part, NumPart, interpolated_values);
             if (interpolation_method.compare("CIC") == 0)
@@ -502,8 +515,8 @@ namespace FML {
         // NumPartTot: total number of particles across tasks
         // NB: part.size() might not be equal to NumPart as we might have a buffer with
         //
-        // All particles are assumed to have the same mass (can easily be changed, see
-        // comments WEIGHTS below)
+        // Particles with get_mass are weighted by their mass (normalized by the mean mass), delta-f particles
+        // (get_deltaf_weight) by their weight
         //==============================================================================
 
         template <int N, int ORDER, class T>
@@ -525,9 +538,16 @@ namespace FML {
             constexpr int widthtondim = FML::power(ORDER, N);
 
             // Info about the grid
-            // const auto Local_nx      = density.get_local_nx();
+            const auto Local_nx = density.get_local_nx();
             const auto Local_x_start = density.get_local_x_start();
             const int Nmesh = density.get_nmesh();
+            // Particles may be up to spare_right cells to the right of the local domain if the grid has more extra
+            // slices than the kernel needs (e.g. the half-cell shifted particles for interlacing)
+            const int spare_right = density.get_n_extra_slices_right() - nextra.second;
+            assert_mpi(FML::NTasks == 1 or Local_nx >= std::max(nextra.first, nextra.second + std::max(0, spare_right)),
+                       "[particles_to_grid] Fewer slices on a task than extra slices needed by the kernel: the "
+                       "contributions to the extra slices would reach beyond the neighbor task (use fewer tasks or a "
+                       "larger grid)\n");
 
             // delta-f particles (get_deltaf_weight) only carry the perturbation: delta = norm * sum w_i W
             constexpr bool has_deltaf_weight = FML::PARTICLE::has_get_deltaf_weight<T>();
@@ -588,6 +608,18 @@ namespace FML {
                 if constexpr (ORDER == 1)
                     if (FML::NTasks == 1 and ix[0] >= Nmesh)
                         ix[0] -= Nmesh;
+                // A particle in the local domain can be in the cell just outside it from round-off: xmin_domain =
+                // ThisTask / NTasks is not exactly Local_x_start / Nmesh (e.g. a particle at x = 63/90 has
+                // int(x * 90) = 62 with 10 tasks). Use the nearest cell in the domain (as in the interpolation)
+                if (FML::NTasks > 1) {
+                    if (ix[0] < 0) {
+                        x[0] += ix[0];
+                        ix[0] = 0;
+                    } else if (ix[0] > int(Local_nx) - 1 + spare_right) {
+                        x[0] += ix[0] - (int(Local_nx) - 1 + spare_right);
+                        ix[0] = int(Local_nx) - 1 + spare_right;
+                    }
+                }
                 for (int idim = 1; idim < N; idim++) {
                     if (ix[idim] == Nmesh)
                         ix[idim] = 0;
@@ -612,6 +644,10 @@ namespace FML {
                         if (x[idim] > 0.5)
                             xstart[idim] += 1;
                     }
+#else
+                    // Nodes at the cell centers: the nearest node is the particle's own cell
+                    for (int idim = 0; idim < N; idim++)
+                        xstart[idim] = -ORDER / 2;
 #endif
                 }
 
@@ -694,7 +730,8 @@ namespace FML {
             // its contributions in the same order for any number of threads > 1 (deterministic; differs from the
             // one-thread result only by round-off from the order of the sums). The particles are not moved, only
             // their indices are grouped by chunk (4 bytes per particle). With too few chunks (thin slabs with many
-            // tasks) we fall back to atomic adds.
+            // tasks: fewer than 4 (2 ORDER + 2) slices per task, e.g. Nmesh 512 on 32 tasks) we fall back to atomic
+            // adds, and the result then depends on the order of the additions (not bit-identical between runs).
             //==========================================================
 #ifdef USE_OMP
             const int nthreads = omp_get_max_threads();
@@ -789,6 +826,10 @@ namespace FML {
             const auto Local_x_start = grid_vec[0].get_local_x_start();
             const int Nmesh = grid_vec[0].get_nmesh();
             const int spare_right = std::max(0, grid_vec[0].get_n_extra_slices_right() - nextra.second);
+            assert_mpi(FML::NTasks == 1 or Local_nx >= std::max(nextra.first, nextra.second + spare_right),
+                       "[interpolate_grid_to_particle_positions] Fewer slices on a task than extra slices needed by "
+                       "the kernel: the extra slices cannot be filled from the neighbor task (use fewer tasks or a "
+                       "larger grid)\n");
 
             // Allocate memory needed
             for (auto & i : interpolated_values_vec) {
@@ -852,6 +893,10 @@ namespace FML {
                         if (x[idim] > 0.5)
                             xstart[idim] += 1;
                     }
+#else
+                    // Nodes at the cell centers: the nearest node is the particle's own cell
+                    for (int idim = 0; idim < N; idim++)
+                        xstart[idim] = -ORDER / 2;
 #endif
                 }
 
@@ -867,7 +912,9 @@ namespace FML {
 #else
                         const double dx = std::fabs(-x[idim] + go_left_right_or_stay);
 #endif
-                        w1d[idim][j] = kernel<ORDER>(dx);
+                        // (NGP: the particle's own cell, weight 1 as in the scalar version; kernel<1>(dx) is 0 for
+                        // dx > 0.5, i.e. for particles in the right half of their cell)
+                        w1d[idim][j] = ORDER == 1 ? 1.0 : kernel<ORDER>(dx);
                         int icoord = ix[idim] + go_left_right_or_stay;
                         if (idim > 0) {
                             if (icoord >= Nmesh)
@@ -917,6 +964,10 @@ namespace FML {
                                                            size_t NumPart,
                                                            std::array<std::vector<FloatType>, N> & interpolated_values,
                                                            std::string interpolation_method) {
+            assert_mpi(is_known_interpolation_method(interpolation_method),
+                       ("[interpolate_grid_vector_to_particle_positions] Unknown interpolation method [" +
+                        interpolation_method + "] (NGP, CIC, TSC, PCS or PQS)\n")
+                           .c_str());
             if (interpolation_method.compare("NGP") == 0)
                 interpolate_grid_vector_to_particle_positions<N, 1, T>(grid, part, NumPart, interpolated_values);
             if (interpolation_method.compare("CIC") == 0)
@@ -950,6 +1001,10 @@ namespace FML {
             const auto Local_x_start = grid.get_local_x_start();
             const int Nmesh = grid.get_nmesh();
             const int spare_right = std::max(0, grid.get_n_extra_slices_right() - nextra.second);
+            assert_mpi(FML::NTasks == 1 or Local_nx >= std::max(nextra.first, nextra.second + spare_right),
+                       "[interpolate_grid_to_particle_positions] Fewer slices on a task than extra slices needed by "
+                       "the kernel: the extra slices cannot be filled from the neighbor task (use fewer tasks or a "
+                       "larger grid)\n");
 
             // Allocate memory needed
             interpolated_values.resize(NumPart);
@@ -1011,6 +1066,10 @@ namespace FML {
                         if (x[idim] > 0.5)
                             xstart[idim] += 1;
                     }
+#else
+                    // Nodes at the cell centers: the nearest node is the particle's own cell
+                    for (int idim = 0; idim < N; idim++)
+                        xstart[idim] = -ORDER / 2;
 #endif
                 }
 
@@ -1318,6 +1377,10 @@ namespace FML {
             for (int islice = 0; islice < Local_nx; islice++) {
                 const std::complex<FML::GRID::FloatType> I(0, 1);
                 for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
+                    // NB: on the Nyquist planes this is not the shift of the (real) grid (that is cos(k_d s), as in
+                    // shift_grid_fourier), so the result is not Hermitian symmetric there. It is used for P(k), where
+                    // only |delta(k)|^2 enters, so it is kept as it is (cos(k_N s) = 0 for the half-cell shift would
+                    // drop the shifted grid on these planes and change the last P(k) bins by ~3%)
                     auto kvec = density_grid_fourier.get_fourier_wavevector_from_index(fourier_index);
                     auto ksum = kvec[0];
                     for (int idim = 1; idim < N; idim++)

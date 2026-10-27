@@ -2,10 +2,14 @@
 #define LUAFILEPARSER_HEADER
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <ios>
 #include <iostream>
+#include <limits>
+#include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #ifdef USE_MPI
@@ -26,6 +30,11 @@ namespace FML {
         /// Read Lua scripts. Useful to use Lua scripts as parameterfiles
         /// and in conjunction with ParameterMap
         ///
+        /// A parameter that is not set (nil) gives the default value, or an
+        /// error if it is required. A parameter that is set with the wrong
+        /// type (e.g. 1 for a boolean, 2.5 for an integer, a string in an
+        /// array of numbers) is always an error.
+        ///
         //===============================================================
         class LuaFileParser {
           private:
@@ -34,6 +43,10 @@ namespace FML {
             // Deal with error handling in reading
             void throw_error(std::string errormessage) const;
             void parameter_not_found(std::string name, bool found, bool required) const;
+            bool push_global(const std::string & name,
+                             bool required,
+                             bool (*is_ok)(lua_State *, int),
+                             const char * expected) const;
 
           public:
             /// For more verbose lookup, i.e.  lfp.read_int("myint", default_value, lfp.required);
@@ -49,7 +62,7 @@ namespace FML {
             LuaFileParser(const LuaFileParser &) = delete;
             LuaFileParser & operator=(const LuaFileParser &) = delete;
 
-            /// Open a file
+            /// Open a file (closes the file opened before, if any)
             void open(std::string filename);
             /// Close a file. If file is not open then close does nothing
             void close();
@@ -132,7 +145,7 @@ namespace FML {
         };
 
         /// How to handle errors
-        void LuaFileParser::throw_error(std::string errormessage) const {
+        inline void LuaFileParser::throw_error(std::string errormessage) const {
 #ifdef USE_MPI
             std::cout << errormessage << std::flush;
             MPI_Abort(MPI_COMM_WORLD, 1);
@@ -142,28 +155,31 @@ namespace FML {
 #endif
         }
 
-        LuaFileParser::LuaFileParser(std::string filename) { open(filename); }
+        inline LuaFileParser::LuaFileParser(std::string filename) { open(filename); }
 
-        LuaFileParser::~LuaFileParser() { close(); }
+        inline LuaFileParser::~LuaFileParser() { close(); }
 
-        void LuaFileParser::open(std::string filename) {
+        inline void LuaFileParser::open(std::string filename) {
+            close();
             L = luaL_newstate();
             luaL_openlibs(L);
             if (luaL_loadfile(L, filename.c_str()) or lua_pcall(L, 0, 0, 0)) {
+                const char * msg = lua_tostring(L, -1);
                 std::string errormessage =
-                    "[LuaFileParser::open] Cannot open parameterfile " + std::string(lua_tostring(L, -1)) + "\n";
+                    "[LuaFileParser::open] Cannot open parameterfile " + std::string(msg ? msg : filename) + "\n";
+                close();
                 throw_error(errormessage);
             }
         }
 
-        void LuaFileParser::close() {
+        inline void LuaFileParser::close() {
             if (L != nullptr) {
                 lua_close(L);
                 L = nullptr;
             }
         }
 
-        void LuaFileParser::parameter_not_found(std::string name, bool found, bool required) const {
+        inline void LuaFileParser::parameter_not_found(std::string name, bool found, bool required) const {
             if (not found and required) {
                 std::string errormessage =
                     "[LuaFileParser::read] Required parameter " + name + " not found in the parameter file\n";
@@ -171,93 +187,113 @@ namespace FML {
             }
         }
 
-        int LuaFileParser::read_int(std::string name, int default_value, bool required) {
-            int val = default_value;
+        // Push the global variable name on the Lua stack; returns false (with nothing pushed) if it is not set (nil).
+        // If it is set but its value is not accepted by is_ok we stop with an error saying what was expected
+        inline bool LuaFileParser::push_global(const std::string & name,
+                                               bool required,
+                                               bool (*is_ok)(lua_State *, int),
+                                               const char * expected) const {
             lua_getglobal(L, name.c_str());
-            bool found = lua_isnumber(L, -1);
-            parameter_not_found(name, found, required);
-            if (found) {
-                val = lua_tointeger(L, -1);
+            if (lua_isnil(L, -1)) {
                 lua_pop(L, 1);
+                parameter_not_found(name, false, required);
+                return false;
             }
+            if (not is_ok(L, -1)) {
+                std::string type = luaL_typename(L, -1);
+                lua_pop(L, 1);
+                throw_error("[LuaFileParser::read] Parameter " + name + " is a " + type + " in the parameter file, " +
+                            "expected " + expected + "\n");
+            }
+            return true;
+        }
+
+        namespace LUAFILEPARSER_DETAIL {
+            inline bool is_number(lua_State * L, int i) { return lua_isnumber(L, i); }
+            inline bool is_integer(lua_State * L, int i) {
+                if (not lua_isnumber(L, i))
+                    return false;
+                const lua_Number x = lua_tonumber(L, i);
+                return x == std::floor(x) and std::fabs(x) <= double(std::numeric_limits<int>::max());
+            }
+            inline bool is_string(lua_State * L, int i) { return lua_isstring(L, i); }
+            inline bool is_boolean(lua_State * L, int i) { return lua_isboolean(L, i); }
+            inline bool is_table(lua_State * L, int i) { return lua_istable(L, i); }
+        } // namespace LUAFILEPARSER_DETAIL
+
+        inline int LuaFileParser::read_int(std::string name, int default_value, bool required) {
+            if (not push_global(name, required, LUAFILEPARSER_DETAIL::is_integer, "an integer"))
+                return default_value;
+            const int val = int(lua_tonumber(L, -1));
+            lua_pop(L, 1);
             return val;
         }
 
-        double LuaFileParser::read_double(std::string name, double default_value, bool required) {
-            double val = default_value;
-            lua_getglobal(L, name.c_str());
-            bool found = lua_isnumber(L, -1);
-            parameter_not_found(name, found, required);
-            if (found) {
-                val = lua_tonumber(L, -1);
-                lua_pop(L, 1);
-            }
+        inline double LuaFileParser::read_double(std::string name, double default_value, bool required) {
+            if (not push_global(name, required, LUAFILEPARSER_DETAIL::is_number, "a number"))
+                return default_value;
+            const double val = lua_tonumber(L, -1);
+            lua_pop(L, 1);
             return val;
         }
 
-        std::string LuaFileParser::read_string(std::string name, std::string default_value, bool required) {
-            std::string val = default_value;
-            lua_getglobal(L, name.c_str());
-            bool found = lua_isstring(L, -1);
-            parameter_not_found(name, found, required);
-            if (found) {
-                val = lua_tostring(L, -1);
-                lua_pop(L, 1);
-            }
+        inline std::string LuaFileParser::read_string(std::string name, std::string default_value, bool required) {
+            if (not push_global(name, required, LUAFILEPARSER_DETAIL::is_string, "a string"))
+                return default_value;
+            std::string val = lua_tostring(L, -1);
+            lua_pop(L, 1);
             return val;
         }
 
-        bool LuaFileParser::read_bool(std::string name, bool default_value, bool required) {
-            bool val = default_value;
-            lua_getglobal(L, name.c_str());
-            bool found = lua_isboolean(L, -1);
-            parameter_not_found(name, found, required);
-            if (found) {
-                val = bool(lua_toboolean(L, -1));
-                lua_pop(L, 1);
-            }
+        inline bool LuaFileParser::read_bool(std::string name, bool default_value, bool required) {
+            if (not push_global(name, required, LUAFILEPARSER_DETAIL::is_boolean, "true or false"))
+                return default_value;
+            const bool val = bool(lua_toboolean(L, -1));
+            lua_pop(L, 1);
             return val;
         }
 
         template <class T>
         std::vector<T> LuaFileParser::read_number_array(std::string name, std::vector<T> default_value, bool required) {
+            if (not push_global(name, required, LUAFILEPARSER_DETAIL::is_table, "an array of numbers {...}"))
+                return default_value;
             std::vector<T> val;
-            lua_getglobal(L, name.c_str());
-            bool found = lua_istable(L, -1);
-            parameter_not_found(name, found, required);
-            if (found) {
-                int n = luaL_len(L, -1);
-                for (int i = 1; i <= n; i++) {
-                    lua_pushinteger(L, i);
-                    lua_gettable(L, -2);
-                    val.push_back(T(lua_tonumber(L, -1)));
-                    lua_pop(L, 1);
+            const int n = int(luaL_len(L, -1));
+            for (int i = 1; i <= n; i++) {
+                lua_rawgeti(L, -1, i);
+                const bool ok = std::is_integral_v<T> ? LUAFILEPARSER_DETAIL::is_integer(L, -1) :
+                                                         LUAFILEPARSER_DETAIL::is_number(L, -1);
+                if (not ok) {
+                    std::string type = luaL_typename(L, -1);
+                    lua_pop(L, 2);
+                    throw_error("[LuaFileParser::read] Element " + std::to_string(i) + " of " + name + " is a " +
+                                type + ", expected " + (std::is_integral_v<T> ? "an integer" : "a number") + "\n");
                 }
+                val.push_back(T(lua_tonumber(L, -1)));
                 lua_pop(L, 1);
-            } else {
-                val = default_value;
             }
+            lua_pop(L, 1);
             return val;
         }
 
-        std::vector<std::string>
+        inline std::vector<std::string>
         LuaFileParser::read_string_array(std::string name, std::vector<std::string> default_value, bool required) {
+            if (not push_global(name, required, LUAFILEPARSER_DETAIL::is_table, "an array of strings {...}"))
+                return default_value;
             std::vector<std::string> val;
-            lua_getglobal(L, name.c_str());
-            bool found = lua_istable(L, -1);
-            parameter_not_found(name, found, required);
-            if (found) {
-                int n = luaL_len(L, -1);
-                for (int i = 1; i <= n; i++) {
-                    lua_pushinteger(L, i);
-                    lua_gettable(L, -2);
-                    val.push_back(std::string(lua_tostring(L, -1)));
-                    lua_pop(L, 1);
+            const int n = int(luaL_len(L, -1));
+            for (int i = 1; i <= n; i++) {
+                lua_rawgeti(L, -1, i);
+                if (not lua_isstring(L, -1)) {
+                    std::string type = luaL_typename(L, -1);
+                    lua_pop(L, 2);
+                    throw_error("[LuaFileParser::read] Element " + std::to_string(i) + " of " + name + " is a " +
+                                type + ", expected a string\n");
                 }
+                val.push_back(std::string(lua_tostring(L, -1)));
                 lua_pop(L, 1);
-            } else {
-                val = default_value;
             }
+            lua_pop(L, 1);
             return val;
         }
     } // namespace FILEUTILS

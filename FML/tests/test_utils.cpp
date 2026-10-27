@@ -7,6 +7,7 @@
 //   - MemoryLogging (LogAllocator): more allocations over time than the limit, allocations from several threads
 //   - Timings: a second EndTiming does not count twice, totals over restarts, copies
 //   - ParameterMap: a parameter with another type is an error also with a fiducial value
+//   - Units: copies (did not compile), the unit systems
 // Run with: make run (in this folder) or make test (from the top folder)
 //==========================================================
 #include <FML/FileUtils/FileUtils.h>
@@ -16,6 +17,7 @@
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/RandomGenerator/RandomGenerator.h>
 #include <FML/Timing/Timings.h>
+#include <FML/Units/Units.h>
 
 #include <chrono>
 #include <cmath>
@@ -260,6 +262,25 @@ void test_parametermap() {
     check(not error_of([&] { p.get<int>("missing"); }).empty(), "ParameterMap: missing required parameter throws");
 }
 
+void test_units() {
+    using FML::UTILS::ConstantsAndUnits;
+    ConstantsAndUnits planck("Planck");
+    ConstantsAndUnits copy = planck;
+    ConstantsAndUnits assigned;
+    assigned = copy;
+    auto rel = [](double a, double b) { return std::fabs(a / b - 1); };
+    check(rel(assigned.c, 1) < 1e-12 and rel(assigned.hbar, 1) < 1e-12 and rel(assigned.G, 1) < 1e-12 and
+              rel(assigned.k_b, 1) < 1e-12,
+          "Units: copy and assignment (did not compile), Planck units c = hbar = G = k_b = 1");
+    ConstantsAndUnits pp("ParticlePhysics"), cosmo("Cosmology"), si;
+    check(rel(pp.eV, 1) < 1e-12 and rel(pp.c, 1) < 1e-12 and rel(pp.hbar, 1) < 1e-12 and rel(cosmo.Mpc, 1) < 1e-12 and
+              rel(cosmo.H0_over_h, 1) < 1e-12 and rel(cosmo.Msun, 1) < 1e-12 and rel(si.km, 1000) < 1e-15,
+          "Units: particle physics (eV = c = hbar = 1), cosmology (Mpc = H0/h = Msun = 1), SI");
+    ConstantsAndUnits km(1e-3, 1.0, 1.0, 1.0, 1.0);
+    check(rel(km.length_to_SI(2.0), 2000.0) < 1e-15 and rel(km.c, 2.99792458e5) < 1e-15,
+          "Units: user units with km as the length unit (m = 1e-3): 2 units = 2000 m, c = 299792.458");
+}
+
 int main() {
     test_fileutils();
     test_random();
@@ -268,6 +289,7 @@ int main() {
         test_memorylog();
     test_timings();
     test_parametermap();
+    test_units();
 
     if (FML::ThisTask == 0)
         std::cout << (fails == 0 ? "All utility tests passed\n" : std::to_string(fails) + " utility test(s) FAILED\n");

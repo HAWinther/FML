@@ -1,7 +1,9 @@
 //==========================================================
 // Tests for the friends-of-friends halo finder (FriendsOfFriends/FoF.h): the groups, their centers and the FoF IDs
 // stored in the particles must be the same as from a simple serial FoF, for any number of tasks, and groups that
-// reach the edge of the buffer copied from the neighbor tasks must be reported.
+// reach the edge of the buffer copied from the neighbor tasks must be reported. Also: a custom halo class (did not
+// compile), the linking length in 2D (used N^(-1/3) as the mean separation) and a particle at y = 1.0 (outside the
+// grid of cells).
 // Run with: make run (in this folder) or make test (from the top folder)
 //==========================================================
 #include <FML/FriendsOfFriends/FoF.h>
@@ -263,9 +265,74 @@ void test(bool filament, double buffer) {
     check(ok, label + "the FoF IDs in the particles are one-to-one with the groups");
 }
 
+// A user halo class (FoFHaloClass) with an extra quantity
+struct MyHalo : public FML::FOF::FoFHalo<Particle, NDIM> {
+    using FoFHalo::FoFHalo;
+    double ymax{-1.0};
+    void add(Particle & p, bool periodic) {
+        FoFHalo::add(p, periodic);
+        ymax = std::max(ymax, p.pos[1]);
+    }
+};
+
+struct Particle2D {
+    double pos[2];
+    double * get_pos() { return pos; }
+    constexpr int get_ndim() const { return 2; }
+};
+
+void test_extra() {
+    // Two groups of 3 particles: one around y = 1 (one particle at exactly y = 1.0) and one in the middle
+    std::vector<Particle> part;
+    const double d = 1e-3;
+    auto add = [&](double x, double y, double z) {
+        if (x >= FML::xmin_domain and x < FML::xmax_domain)
+            part.push_back({{x, y, z}, 0, 0});
+    };
+    for (int i = 0; i < 3; i++) {
+        add(0.501 + i * d, 1.0 - i * d, 0.5);
+        add(0.501 + i * d, 0.5, 0.5 + i * d);
+    }
+    // Background particles (far from each other) to set the mean separation: 4096 particles -> linking length 0.2
+    // gives 0.2 / 16 = 0.0125 > d
+    for (int i = 0; i < 16; i++)
+        for (int j = 0; j < 16; j++)
+            for (int k = 0; k < 16; k++)
+                add((i + 0.25) / 16, (j + 0.25) / 16, (k + 0.25) / 16);
+    std::vector<MyHalo> halos;
+    FML::FOF::FriendsOfFriends<Particle, NDIM, MyHalo>(part.data(), part.size(), 0.2, 3, true, 0.05, halos);
+    size_t n = halos.size();
+    double ymax = 0.0;
+    for (auto & h : halos)
+        ymax = std::max(ymax, h.ymax);
+    FML::SumOverTasks(&n);
+    FML::MaxOverTasks(&ymax);
+    check(n == 2 and ymax == 1.0,
+          "custom halo class (did not compile) with a particle at y = 1.0: " + std::to_string(n) + " groups");
+
+    // 2D: 100 x 100 lattice, one particle moved 0.5 mean separations towards its neighbor: no link with b = 0.2
+    std::vector<Particle2D> p2;
+    const int n2 = 100;
+    for (int i = 0; i < n2; i++)
+        for (int j = 0; j < n2; j++) {
+            Particle2D p{{(i + 0.5) / n2, (j + 0.5) / n2}};
+            if (i == 50 and j == 50)
+                p.pos[0] += 0.5 / n2;
+            if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+                p2.push_back(p);
+        }
+    std::vector<FML::FOF::FoFHalo<Particle2D, 2>> h2;
+    FML::FOF::FriendsOfFriends<Particle2D, 2>(p2.data(), p2.size(), 0.2, 2, true, 0.05, h2);
+    size_t ng = h2.size();
+    FML::SumOverTasks(&ng);
+    check(ng == 0, "2D: particles 0.5 mean separations apart are not linked with b = 0.2 (" + std::to_string(ng) +
+                       " groups; the linking distance used N^(-1/3))");
+}
+
 int main() {
     test(false, 0.05);
     test(true, 0.05);
+    test_extra();
     if (FML::ThisTask == 0)
         std::cout << (fails == 0 ? "All FoF tests passed\n" : std::to_string(fails) + " FoF test(s) FAILED\n");
     return fails == 0 ? 0 : 1;

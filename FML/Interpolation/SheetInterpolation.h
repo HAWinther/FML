@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -21,6 +22,52 @@
 
 namespace FML {
     namespace INTERPOLATION {
+
+#ifdef USE_MPI
+        namespace detail {
+            /// Send send[t] to task t and return what all the tasks sent to us (in task order). The counts are in
+            /// elements of type T (as a contiguous MPI type), so byte counts above 2^31 are fine
+            template <class T>
+            std::vector<T> alltoallv_elements(std::vector<std::vector<T>> & send) {
+                std::vector<int> nsend(FML::NTasks), nrecv(FML::NTasks), sdispl(FML::NTasks), rdispl(FML::NTasks);
+                std::vector<T> sendbuf;
+                size_t nsendtot = 0;
+                for (auto & v : send)
+                    nsendtot += v.size();
+                sendbuf.reserve(nsendtot);
+                for (int t = 0; t < FML::NTasks; t++) {
+                    nsend[t] = int(send[t].size());
+                    sdispl[t] = int(sendbuf.size());
+                    sendbuf.insert(sendbuf.end(), send[t].begin(), send[t].end());
+                    std::vector<T>().swap(send[t]);
+                }
+                MPI_Alltoall(nsend.data(), 1, MPI_INT, nrecv.data(), 1, MPI_INT, FML::communicator);
+                size_t ntot = 0;
+                for (int t = 0; t < FML::NTasks; t++) {
+                    rdispl[t] = int(ntot);
+                    ntot += nrecv[t];
+                }
+                assert_mpi(nsendtot < size_t(std::numeric_limits<int>::max()) and
+                               ntot < size_t(std::numeric_limits<int>::max()),
+                           "[alltoallv_elements] Too many elements on a task\n");
+                std::vector<T> recv(ntot);
+                MPI_Datatype type;
+                MPI_Type_contiguous(int(sizeof(T)), MPI_BYTE, &type);
+                MPI_Type_commit(&type);
+                MPI_Alltoallv(sendbuf.data(),
+                              nsend.data(),
+                              sdispl.data(),
+                              type,
+                              recv.data(),
+                              nrecv.data(),
+                              rdispl.data(),
+                              type,
+                              FML::communicator);
+                MPI_Type_free(&type);
+                return recv;
+            }
+        } // namespace detail
+#endif
 
         //================================================================================
         // Spectral sheet interpolation (Hahn, Abel & Kaehler 2013; Stuecker et al 2020; List, Hahn & Rampf 2024).
@@ -67,24 +114,7 @@ namespace FML {
                 owner = std::max(0, std::min(FML::NTasks - 1, owner));
                 send[owner].push_back(p);
             }
-            std::vector<int> nsend(FML::NTasks), nrecv(FML::NTasks), sdispl(FML::NTasks), rdispl(FML::NTasks);
-            std::vector<T> sendbuf;
-            sendbuf.reserve(part.size());
-            for (int t = 0; t < FML::NTasks; t++) {
-                nsend[t] = int(send[t].size() * sizeof(T));
-                sdispl[t] = int(sendbuf.size() * sizeof(T));
-                sendbuf.insert(sendbuf.end(), send[t].begin(), send[t].end());
-                std::vector<T>().swap(send[t]);
-            }
-            MPI_Alltoall(nsend.data(), 1, MPI_INT, nrecv.data(), 1, MPI_INT, FML::communicator);
-            size_t ntot = 0;
-            for (int t = 0; t < FML::NTasks; t++) {
-                rdispl[t] = int(ntot);
-                ntot += nrecv[t];
-            }
-            part.resize(ntot / sizeof(T));
-            MPI_Alltoallv(sendbuf.data(), nsend.data(), sdispl.data(), MPI_CHAR, part.data(), nrecv.data(),
-                          rdispl.data(), MPI_CHAR, FML::communicator);
+            part = detail::alltoallv_elements(send);
 #else
             (void)part;
 #endif
@@ -171,23 +201,7 @@ namespace FML {
 
             std::vector<Record> recv;
 #ifdef USE_MPI
-            std::vector<int> nsend(FML::NTasks), nrecv(FML::NTasks), sdispl(FML::NTasks), rdispl(FML::NTasks);
-            std::vector<Record> sendbuf;
-            for (int t = 0; t < FML::NTasks; t++) {
-                nsend[t] = int(send[t].size() * sizeof(Record));
-                sdispl[t] = int(sendbuf.size() * sizeof(Record));
-                sendbuf.insert(sendbuf.end(), send[t].begin(), send[t].end());
-                std::vector<Record>().swap(send[t]);
-            }
-            MPI_Alltoall(nsend.data(), 1, MPI_INT, nrecv.data(), 1, MPI_INT, FML::communicator);
-            size_t ntot = 0;
-            for (int t = 0; t < FML::NTasks; t++) {
-                rdispl[t] = int(ntot);
-                ntot += nrecv[t];
-            }
-            recv.resize(ntot / sizeof(Record));
-            MPI_Alltoallv(sendbuf.data(), nsend.data(), sdispl.data(), MPI_CHAR, recv.data(), nrecv.data(),
-                          rdispl.data(), MPI_CHAR, FML::communicator);
+            recv = detail::alltoallv_elements(send);
 #else
             recv = send[0];
 #endif

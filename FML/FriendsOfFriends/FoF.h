@@ -4,7 +4,11 @@
 #include <FML/Global/Global.h>
 #include <FML/Timing/Timings.h>
 #include <algorithm>
+#include <array>
 #include <cassert>
+#include <cmath>
+#include <limits>
+#include <vector>
 #include <iostream>
 #include <iterator>
 #include <map>
@@ -16,9 +20,6 @@ namespace FML {
     //========================================================================================
     namespace FOF {
 
-        // Memory for particlegrid. Allocated in ParticlesToCells and freed in FriendsOfFriends
-        size_t * particlegriddata{nullptr};
-
         /// If a particle belongs to no FoF group it is given this FoF ID
         const constexpr size_t no_FoF_ID = std::numeric_limits<size_t>::max();
 
@@ -28,26 +29,29 @@ namespace FML {
         /// The maximum grid we are allowed to use to bin the particle to
         /// This is just to have a memory limit in what the algorithm is
         /// allowed to allocate. This value is used if user do not provide it.
-        int FoF_Ngrid_max = 1024;
+        inline int FoF_Ngrid_max = 1024;
 
         using Timings = FML::UTILS::Timings;
         /// Records timings of the FoF search
-        Timings foftimer;
+        inline Timings foftimer;
 
         /// The number of groups found in the last call to FriendsOfFriends (summed over tasks) that reach the edge of
         /// the buffer of particles copied from the neighbor tasks. These might be cut off (and then also found as a
         /// second, partial group on the neighbor task): increase the buffer if this is not zero
-        size_t FoF_number_of_groups_reaching_buffer_edge{0};
+        inline size_t FoF_number_of_groups_reaching_buffer_edge{0};
 
         //========================================================================================
         /// Locate friends of friends groups and bin what you want over these groups.
         ///
         /// @tparam T The particle class
         /// @tparam NDIM The number of dimensions
-        /// @tparam FoFHaloClass The FoF group class, determined what to be binned up over the FoF group
+        /// @tparam FoFHaloClass The FoF group class, determined what to be binned up over the FoF group. It needs the
+        /// members of FoFHalo used here: a constructor from the (size_t) id, the members id and np, add(particle,
+        /// periodic), finalize(periodic) and get_pos() (the center, used to decide which task keeps the group).
+        /// A class derived from FoFHalo (with using FoFHalo::FoFHalo;) works.
         ///
         /// @param[in] part Pointer to particles. If the particle has a set_fofid then we will also store the FoFID in
-        /// the particles.
+        /// the particles. NB: the particles are sorted (by their y-coordinate) in place.
         /// @param[in] NumPart Number of local particles
         /// @param[in] linking_length The distance in units of mean particle separation (in [0,1)) required to have a
         /// link between two particles. Typical value is 0.2.
@@ -57,7 +61,8 @@ namespace FML {
         /// boxsize. Typical value for N-body simulations is (3 Mpc/h) / boxsize.
         /// @param[out] LocalFoFGroups The results: list of FoF groups.
         /// @param[in] Ngrid (Optional) The maximum gridsize we use to bin the particles to in order to speed up the
-        /// calculation. The default FoF_Ngrid_max is set in the header. Larger value means more memory needed.
+        /// calculation. The default FoF_Ngrid_max is set in the header. Larger value means more memory needed. The
+        /// grid used has at most about one cell per particle (the result does not depend on the grid).
         ///
         //========================================================================================
         template <class T, int NDIM, class FoFHaloClass>
@@ -103,7 +108,8 @@ namespace FML {
                               size_t NumPart,
                               T * part_boundary,
                               size_t NumPart_boundary,
-                              std::vector<FoFCell> & PartCells) {
+                              std::vector<FoFCell> & PartCells,
+                              std::vector<size_t> & particlegriddata) {
 
             // Total length of domain
             const double dx_cells = 1.0 / Ngrid;
@@ -132,10 +138,11 @@ namespace FML {
                                              "Should not happen ever!\n");
                 }
 
+                // (clamped to the grid: e.g. y = 1.0 from wrapping -1e-17 to the box)
                 size_t index_cell = 0;
                 for (int idim = 0; idim < NDIM; idim++) {
                     auto dx = (pos[idim] - xmin_box * (idim == 0 ? 1 : 0));
-                    coord[idim] = int(dx * Ngrid);
+                    coord[idim] = std::clamp(int(dx * Ngrid), 0, (idim == 0 ? Local_nx : Ngrid) - 1);
                     index_cell = index_cell * Ngrid + coord[idim];
                 }
                 return index_cell;
@@ -153,8 +160,8 @@ namespace FML {
             }
 
             // Allocate all the data
-            particlegriddata = new size_t[NumPart_boundary + NumPart];
-            size_t * ptr = &particlegriddata[0];
+            particlegriddata.assign(NumPart_boundary + NumPart, 0);
+            size_t * ptr = particlegriddata.data();
 
             // Allocate cells
             int np_max = 0;
@@ -210,13 +217,16 @@ namespace FML {
             // Compute fof search distance
             size_t NumPart_tot = NumPart;
             FML::SumOverTasks(&NumPart_tot);
-            const double mean_particle_separation = 1.0 / std::pow(NumPart_tot, 1.0 / 3.0);
+            const double mean_particle_separation = 1.0 / std::pow(double(NumPart_tot), 1.0 / NDIM);
             const double fof_distance = linking_length * mean_particle_separation;
             const double fof_distance2 = fof_distance * fof_distance;
 
-            // Compute grid-size for faster linking
-            if(Ngrid == 0) Ngrid = FoF_Ngrid_max;
+            // Compute grid-size for faster linking: cells larger than 2 linking distances (so only 2^NDIM cells need to
+            // be searched) and about one particle per cell at most (smaller cells only cost memory)
+            if (Ngrid <= 0)
+                Ngrid = FoF_Ngrid_max;
             Ngrid = std::min(int(0.5 / fof_distance), Ngrid);
+            Ngrid = std::max(1, std::min(Ngrid, int(1.0 / mean_particle_separation)));
 
             // Set how the size of the grid-cube we need to search
             const constexpr int twotondim = FML::power(2, NDIM);
@@ -445,6 +455,7 @@ namespace FML {
             // Bin particles to a grid for faster linking
             //=========================================================================
             std::vector<FoFCell> PartCells;
+            std::vector<size_t> particlegriddata;
             int Local_nx{};
             foftimer.StartTiming("ParticlesToCells");
             ParticlesToCells<T, NDIM>(Ngrid,
@@ -454,7 +465,8 @@ namespace FML {
                                       NumPart,
                                       boundary_particles.data(),
                                       boundary_particles.size(),
-                                      PartCells);
+                                      PartCells,
+                                      particlegriddata);
             foftimer.EndTiming("ParticlesToCells");
 
             //=========================================================================
@@ -547,7 +559,7 @@ namespace FML {
                 std::array<int, NDIM> di;
                 for (int idim = 0; idim < NDIM; idim++) {
                     double ix = (pos1[idim] - (xmin - dx_boundary) * (idim == 0 ? 1 : 0)) * Ngrid;
-                    coord[idim] = int(ix);
+                    coord[idim] = std::clamp(int(ix), 0, (idim == 0 ? Local_nx : Ngrid) - 1);
                     di[idim] = (ix - coord[idim] > 0.5) ? +1 : -1;
                 }
 
@@ -665,7 +677,7 @@ namespace FML {
             };
 
             // ID of the FoF groups
-            unsigned int FoFID = 0;
+            size_t FoFID = 0;
 
             // Recursively find all friends of friends
             foftimer.StartTiming("FoFLinking");
@@ -702,7 +714,7 @@ namespace FML {
                     // We are here if we found a group (2 or more particles)
                     // Go through all friends and the friend of these friends
                     // until we have found all particles in the halo
-                    FoFHalo<T, NDIM> newhalo(FoFID);
+                    FoFHaloClass newhalo(FoFID);
                     newhalo.add(*curpart, periodic);
                     bool reaches_buffer_edge = reaches_edge(*curpart);
 
@@ -748,7 +760,8 @@ namespace FML {
             foftimer.EndTiming("FoFLinking");
 
             // Grid no longer needed, free up memory
-            delete[] particlegriddata;
+            particlegriddata = std::vector<size_t>();
+            PartCells = std::vector<FoFCell>();
 
             // Show timings
             if (FML::ThisTask == 0)
@@ -779,15 +792,15 @@ namespace FML {
             // We need to fix the FoFID of the halos as they start from 0 on each task
             // so that all just have a unique ID
             // We do this such that after mpi-sum we have the sum of the FoFIDs
-            std::vector<int> addfofid(FML::NTasks, 0);
+            std::vector<long long int> addfofid(FML::NTasks, 0);
             for (int i = FML::ThisTask + 1; i < FML::NTasks; i++)
-                addfofid[i] = FoFID;
+                addfofid[i] = (long long int)FoFID;
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, addfofid.data(), NTasks, MPI_INT, MPI_SUM, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, addfofid.data(), NTasks, MPI_LONG_LONG, MPI_SUM, FML::communicator);
 #endif
      
             // Finalize computation of halos
-            auto add = addfofid[FML::ThisTask];
+            const size_t add = size_t(addfofid[FML::ThisTask]);
             for (auto & h : LocalFoFGroups) {
                 h.id += add;
                 h.finalize(periodic);
