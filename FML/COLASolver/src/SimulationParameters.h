@@ -549,7 +549,6 @@ namespace COLASOLVER {
                 if (FML::ThisTask == 0)
                     std::cout << "NB: simulation_cola_LPT_order < 1 so turning off COLA\n";
             }
-#ifndef USE_HDF5
             if (fof.enabled) {
                 if (fof.output_fileformat != "ascii" and fof.output_fileformat != "HDF5")
                     fail("fof_output_fileformat must be ascii or HDF5");
@@ -574,9 +573,19 @@ namespace COLASOLVER {
                         fof.massfunction_Mmax > fof.massfunction_Mmin))
                     fail("fof_massfunction_nbins must be > 0 and 0 < fof_massfunction_Mmin < fof_massfunction_Mmax");
             }
+#ifndef USE_HDF5
             if (output.particles and output.fileformat == ParticleFileFormat::HDF5)
                 fail("output_fileformat = HDF5 needs HDF5: compile with USE_HDF5=true (make USE_HDF5=true)");
 #endif
+            // Grid sizes and bin counts (0 would divide by zero or allocate nothing when the analysis runs)
+            if (force.nmesh <= 0 or ic.nmesh <= 0 or particle.Npart_1D <= 0)
+                fail("force_nmesh, ic_nmesh and particle_Npart_1D must be > 0");
+            if (pofk.enabled and pofk.nmesh <= 0)
+                fail("pofk_nmesh must be > 0");
+            if (pofk_multipole.enabled and pofk_multipole.nmesh <= 0)
+                fail("pofk_multipole_nmesh must be > 0");
+            if (bispectrum.enabled and (bispectrum.nmesh <= 0 or bispectrum.nbins <= 0))
+                fail("bispectrum_nmesh and bispectrum_nbins must be > 0");
             // The multipoles are stored for ell = 0, ..., ellmax: a negative ellmax would write out of bounds
             if (pofk_multipole.enabled and pofk_multipole.ellmax < 0)
                 fail("pofk_multipole_ellmax must be >= 0");
