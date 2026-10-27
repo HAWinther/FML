@@ -33,14 +33,59 @@ namespace COLASOLVER {
 
     using GadgetHeader = FML::FILEUTILS::GADGET::GadgetHeader;
 
+    /// What the header of the files we read must agree with (the simulation we run)
+    struct ExpectedGadgetHeader {
+        double scale_factor;
+        double boxsize;  // Mpc/h
+        double OmegaM;   // Total matter (what we write); OmegaCDM + Omegab is also accepted
+        double Omega_cb; // OmegaCDM + Omegab
+        double h;
+    };
+
+    inline ExpectedGadgetHeader expected_gadget_header(const SimulationParameters & params, const Cosmology & cosmo) {
+        return {params.ic.a_initial(),
+                params.simulation.boxsize,
+                cosmo.get_OmegaM(),
+                cosmo.get_OmegaCDM() + cosmo.get_Omegab(),
+                cosmo.get_h()};
+    }
+
+    /// Check that the header of the files agrees with the simulation. The reader scales the positions by the BoxSize
+    /// of the file (so a file in kpc/h, BoxSize = 1000 x simulation_boxsize, is fine) but nothing else would tell us
+    /// that the box or the cosmology is not the one we simulate. Omega0 and HubbleParam are only checked when set
+    inline void check_gadget_header(const GadgetHeader & header,
+                                    const ExpectedGadgetHeader & expected,
+                                    const std::string & fileprefix,
+                                    const std::string & caller) {
+        auto close = [](double x, double y, double rtol) { return std::fabs(x - y) <= rtol * std::fabs(y); };
+        auto fail = [&](const std::string & what) {
+            const std::string error = "[" + caller + "] The header of " + fileprefix + " does not match the simulation: " + what;
+            FML::assert_mpi(false, error.c_str());
+        };
+        // Relative tolerance on a (the files store a in single or double precision): 1e-4 is dz = 2e-3 at z = 20
+        if (not close(header.time, expected.scale_factor, 1e-4))
+            fail("a = " + std::to_string(header.time) + " in the file, the initial redshift ic_initial_redshift gives a = " +
+                 std::to_string(expected.scale_factor));
+        if (not(close(header.BoxSize, expected.boxsize, 1e-5) or close(header.BoxSize, 1000.0 * expected.boxsize, 1e-5)))
+            fail("BoxSize = " + std::to_string(header.BoxSize) + " in the file, simulation_boxsize = " +
+                 std::to_string(expected.boxsize) + " Mpc/h (or x1000 for kpc/h)");
+        if (header.Omega0 > 0.0 and
+            not(close(header.Omega0, expected.OmegaM, 1e-3) or close(header.Omega0, expected.Omega_cb, 1e-3)))
+            fail("Omega0 = " + std::to_string(header.Omega0) + " in the file, the cosmology has OmegaM = " +
+                 std::to_string(expected.OmegaM));
+        if (header.HubbleParam > 0.0 and not close(header.HubbleParam, expected.h, 1e-3))
+            fail("HubbleParam = " + std::to_string(header.HubbleParam) + " in the file, cosmology_h = " +
+                 std::to_string(expected.h));
+    }
+
     /// Read particles from gadget files (all tasks read the same files and only keep the particles
-    /// in their domain) and check that they are at the expected scale factor. The files can be
+    /// in their domain) and check that they are at the expected scale factor, box and cosmology. The files can be
     /// binary (fileprefix.0, fileprefix.1, ...) or HDF5 (fileprefix.hdf5 or fileprefix.0.hdf5, ...)
     /// Returns the particles (as FML::Vector so they can be moved into MPIParticles) and the header
     template <class T>
     std::pair<FML::Vector<T>, GadgetHeader> read_gadget_particles(const std::string & fileprefix,
                                                                   double allocation_factor,
-                                                                  double expected_scale_factor,
+                                                                  const ExpectedGadgetHeader & expected,
                                                                   const std::string & caller) {
         FML::Vector<T> particles;
         const bool only_keep_part_in_domain = true;
@@ -66,11 +111,7 @@ namespace COLASOLVER {
         if (FML::ThisTask == 0)
             FML::FILEUTILS::GADGET::print_header_info(header);
 
-        // Check that the redshift in the file matched the initial redshift
-        const std::string error = "[" + caller +
-                                  "] The redshift in the gadgetfile we read does not match the initial redshift of "
-                                  "the simulation";
-        FML::assert_mpi(std::fabs(header.time - expected_scale_factor) < 1e-3, error.c_str());
+        check_gadget_header(header, expected, fileprefix, caller);
 
         return {std::move(particles), header};
     }
@@ -84,14 +125,18 @@ namespace COLASOLVER {
     }
 
     /// The displacement field Psi = D phi (from an LPT potential in fourier space) at the
-    /// (Eulerian) positions of the particles
+    /// (Eulerian) positions of the particles. The interpolation with the assignment kernel multiplies each mode by
+    /// the window W(k) again (the density was already deconvolved once), so we deconvolve it here too (without this
+    /// the displacements were W Psi: P(k, z = 0) -16% at k = 0.25 h/Mpc with PCS, 32^3)
     template <int NDIM, class T>
     std::array<std::vector<FML::GRID::FloatType>, NDIM>
     displacement_field_at_particles(const FML::GRID::FFTWGrid<NDIM> & phi_fourier,
                                     FML::PARTICLE::MPIParticles<T> & part,
                                     const std::string & assignment_method) {
+        auto phi_deconvolved = phi_fourier;
+        FML::INTERPOLATION::deconvolve_window_function_fourier<NDIM>(phi_deconvolved, assignment_method);
         std::array<FML::GRID::FFTWGrid<NDIM>, NDIM> psi_vector;
-        FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector<NDIM>(phi_fourier, psi_vector);
+        FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector<NDIM>(phi_deconvolved, psi_vector);
         for (int idim = 0; idim < NDIM; idim++) {
             psi_vector[idim].communicate_boundaries();
         }
@@ -104,11 +149,42 @@ namespace COLASOLVER {
         return displacements;
     }
 
+    /// The offset s (in units of the particle spacing, in [-1/2, 1/2)) of a regular lattice q = (i + s) / N from the
+    /// approximate Lagrangian positions (q_vec = q + small 2LPT term). We take the circular mean of the
+    /// fractional part of q_vec N over all particles: lattices are often offset (COLASolver offsets its lattice by
+    /// half a force cell when force_nmesh > Npart_1D, other codes put particles at cell centres)
+    template <int NDIM, class T>
+    std::array<double, NDIM> estimate_lattice_offset(FML::PARTICLE::MPIParticles<T> & part,
+                                                     double disp_factor,
+                                                     int Npart_1D) {
+        std::array<double, 2 * NDIM> sum{};
+        auto * part_ptr = part.get_particles_ptr();
+        for (size_t ind = 0; ind < part.get_npart(); ind++) {
+            auto * pos = FML::PARTICLE::GetPos(part_ptr[ind]);
+            auto * v = FML::PARTICLE::GetVel(part_ptr[ind]);
+            for (int idim = 0; idim < NDIM; idim++) {
+                const double theta = 2.0 * M_PI * Npart_1D * (pos[idim] - v[idim] * disp_factor);
+                sum[2 * idim] += std::cos(theta);
+                sum[2 * idim + 1] += std::sin(theta);
+            }
+        }
+        FML::SumArrayOverTasks(sum.data(), 2 * NDIM);
+        std::array<double, NDIM> offset;
+        for (int idim = 0; idim < NDIM; idim++) {
+            offset[idim] = std::atan2(sum[2 * idim + 1], sum[2 * idim]) / (2.0 * M_PI);
+            // Below 1e-4 of a particle spacing this is the round-off of the positions in the file (and of the sum):
+            // the lattice is at q = i / N
+            if (std::fabs(offset[idim]) < 1e-4)
+                offset[idim] = 0.0;
+        }
+        return offset;
+    }
+
     //=============================================================================
     /// Reconstruct the LPT displacements exactly from the positions and velocities of
     /// the particles. This always works for 1LPT initial conditions. For 2LPT
     /// (regular_q_grid_and_2LPT = true) it assumes the particles were displaced from
-    /// a regular grid (i.e. it does not work for a glass)
+    /// a regular grid (i.e. it does not work for a glass), possibly offset (we estimate the offset)
     //=============================================================================
     template <int NDIM, class T>
     void exact_LPT_reconstruction(FML::PARTICLE::MPIParticles<T> & part,
@@ -124,6 +200,18 @@ namespace COLASOLVER {
         const double f2_over_f1 = f_2LPT / f_1LPT;
         const double v_factor_2LPT = 1.0 / (1.0 - f2_over_f1);
         const int Npart_1D = std::round(std::pow(part.get_npart_total(), 1.0 / NDIM));
+        // Assuming the lattice is at q = i / N gave wrong D1, D2 for an offset lattice (P(k) 0.9% off with
+        // COLASolver's own fiducial offset and force_nmesh = 2 Npart_1D, a factor 2-8 with half a particle spacing)
+        std::array<double, NDIM> lattice_offset{};
+        if (regular_q_grid_and_2LPT) {
+            lattice_offset = estimate_lattice_offset<NDIM, T>(part, disp_factor, Npart_1D);
+            if (FML::ThisTask == 0) {
+                std::cout << "# Lattice offset of the particles (in units of the particle spacing):";
+                for (int idim = 0; idim < NDIM; idim++)
+                    std::cout << " " << lattice_offset[idim];
+                std::cout << "\n";
+            }
+        }
         auto * part_ptr = part.get_particles_ptr();
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -149,7 +237,8 @@ namespace COLASOLVER {
                 std::array<double, NDIM> q_exact;
                 for (int idim = 0; idim < NDIM; idim++) {
                     // Compute exact q
-                    q_exact[idim] = std::round(q_vec[idim] * Npart_1D) / double(Npart_1D);
+                    q_exact[idim] = (std::round(q_vec[idim] * Npart_1D - lattice_offset[idim]) + lattice_offset[idim]) /
+                                    double(Npart_1D);
                     // Compute exact D2
                     disp2[idim] = (q_vec[idim] - q_exact[idim]) * v_factor_2LPT;
                     if (disp2[idim] >= 0.5)
@@ -195,8 +284,9 @@ namespace COLASOLVER {
     /// The result is smoothed with the reconstruct_* settings
     template <int NDIM, class T>
     void delta_from_gadget_particles(FML::GRID::FFTWGrid<NDIM> & delta_fourier,
-                                     const ICSettings & ic,
-                                     double allocation_factor) {
+                                     const SimulationParameters & params,
+                                     const Cosmology & cosmo) {
+        const auto & ic = params.ic;
         if (FML::ThisTask == 0) {
             std::cout << "\n";
             std::cout << "#=====================================================\n";
@@ -204,8 +294,10 @@ namespace COLASOLVER {
             std::cout << "#=====================================================\n";
         }
 
-        auto gadget =
-            read_gadget_particles<T>(ic.reconstruct_gadgetfilepath, allocation_factor, ic.a_initial(), "read_phases");
+        auto gadget = read_gadget_particles<T>(ic.reconstruct_gadgetfilepath,
+                                               params.particle.allocation_factor,
+                                               expected_gadget_header(params, cosmo),
+                                               "read_phases");
 
         // Move them into MPIParticles
         FML::PARTICLE::MPIParticles<T> temppart;
@@ -249,7 +341,7 @@ namespace COLASOLVER {
 
         auto gadget = read_gadget_particles<T>(ic.reconstruct_gadgetfilepath,
                                                params.particle.allocation_factor,
-                                               ic.a_initial(),
+                                               expected_gadget_header(params, *cosmo),
                                                "read_ic");
         auto & externalpart = gadget.first;
         const double scale_factor = gadget.second.time;
@@ -279,6 +371,12 @@ namespace COLASOLVER {
                 std::cout << "Doing exact reconstruction of the LPT displacement fields\n";
             FML::assert_mpi(sim.use_scaledependent_cola == false,
                             "Exact 1LPT reconstruction only implemented for scaleindependent cola");
+            // We get Psi from the velocities by dividing by the growth rate f(a). With scale-dependent growth (massive
+            // neutrinos, modified gravity) the velocity is f(k) Psi and the displacements in the COLA frame would be
+            // wrong (without COLA they are not used)
+            FML::assert_mpi(not(sim.use_cola and grav_ic->is_growth_scaledependent()),
+                            "ic_reconstruct_exact = true with COLA needs scale-independent growth (the velocities are "
+                            "f(k) Psi). Use ic_reconstruct_exact = false");
             const bool regular_q_grid_and_2LPT = ic.LPT_order > 1;
             exact_LPT_reconstruction<NDIM, T>(part,
                                               scale_factor,

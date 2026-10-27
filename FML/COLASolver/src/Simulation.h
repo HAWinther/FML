@@ -991,7 +991,7 @@ void NBodySimulation<NDIM, T>::setup_nbody_gauge() {
 /// Compute delta(k) from particles in gadget files (used to take the phases from them)
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::read_phases(FFTWGrid<NDIM> & delta_fourier) {
-    COLASOLVER::delta_from_gadget_particles<NDIM, T>(delta_fourier, params.ic, params.particle.allocation_factor);
+    COLASOLVER::delta_from_gadget_particles<NDIM, T>(delta_fourier, params, *cosmo);
 }
 
 /// Read the particles from gadget files. With COLA we also reconstruct the LPT displacement fields
@@ -1003,6 +1003,14 @@ void NBodySimulation<NDIM, T>::read_ic() {
                                              grav_ic,
                                              cola.phi_1LPT_ini_fourier,
                                              cola.phi_2LPT_ini_fourier);
+
+    // With the LPT fields reconstructed from the density field the COLA frame velocity is only an approximation to the
+    // velocities in the file (smoothed, from the Eulerian density). Keep the velocities of the file: store them relative
+    // to the frame instead of replacing them by it. (The exact reconstruction reproduces them, so nothing to do there)
+    if (cola.enabled and not params.ic.reconstruct_exact) {
+        cola.add_on_LPT_velocity(part, params.ic.a_initial(), -1.0);
+        ic_velocities_relative_to_cola_frame = true;
+    }
 }
 
 //=============================================================================
