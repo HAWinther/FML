@@ -1,0 +1,56 @@
+# Initial phase-space finder validation, 28 October 2026
+
+This records a first independent single-snapshot implementation. It is not a production completeness/purity calibration or a claim of ROCKSTAR equivalence.
+
+## Regression and manufactured-truth checks
+
+GCC 12 `-O2 -Wall -Wextra`, OpenMP; MPICH with 2 threads per rank for MPI. Serial sanitizer build: Clang 19, AddressSanitizer plus UndefinedBehaviorSanitizer, with leak detection. C++ is formatted using `FML/.clang-format` and clang-format 19.
+
+- Standalone and main-suite targets pass in serial/OpenMP, on 2 and 4 MPI ranks and under sanitizers.
+- Existing FoF, KD-tree, Newtonian short-range gravity and Yukawa regression executables pass after the shared spline-potential extraction. The entire unrelated FML test suite was not rerun.
+- Exact-opening isolated binding potentials agree with independent direct pair sums, excluding self potential; unequal-mass pair energies and circular-velocity shells agree with analytic results.
+- Two velocity-separated but spatially overlapping 200-particle populations are recovered as two objects with their correct memberships. Particle permutation, axis rotation, velocity boost, periodic translation, unit rescaling and thread-count changes preserve the tested memberships.
+- The smooth-host/cold-subhalo case retains the 150-particle subhalo, recovers 772 of 800 injected host particles in its eligible FoF parent and removes all five high-energy debris particles. The density-saddle check removes a false extra seed that appeared without that check. This is one controlled case, not a universal false-positive bound.
+- Isotropic Plummer realizations at 1000 and 4000 particles give one recovered object, bound masses .968 and .95975 (input total mass 1), and Vmax 5.24675 and 5.13085 versus the untruncated analytic value 5.06557. Vmax deviations are about 3.6% and 1.3%; the initial FoF boundary omits some outer particles. Plummer membership agrees exactly between the complete serial and distributed analyses on tested ranks. Normal-distribution fixture streams can differ between C++ standard libraries, so the Clang fixture realization need not be identical to GCC's.
+- MPI tests cover periodic and multi-slab FoF links, chains wider than a slab, empty particle ranks, tiny message chunks, complete-parent routing, local assignment return, SO-seed spatial routing and global ID uniqueness. Option mismatch, parent-size and iteration/work limits fail explicitly.
+- The text-input example smoke test writes two halo rows and 400 particle assignments. FML particle import, explicit HOD mass/radius and exclusive halo-history adapters are exercised.
+
+## Optional external ROCKSTAR comparison
+
+Reference: [yt-project/rockstar at 10869df8e16ca4da2f4a929bccd00c4bcae937fd](https://github.com/yt-project/rockstar/tree/10869df8e16ca4da2f4a929bccd00c4bcae937fd), reporting version 0.99.9-RC3. It was built outside FML with GCC 12, C99 `-O2 -fcommon`, without source modifications. No external source is bundled. The reproduction harness is `compare_rockstar.py` plus the optional `rockstar_fixture` target.
+
+The same isolated 4000-particle Plummer realization has scale radius .015 Mpc/h and truncation radius .15 Mpc/h. Finite truncation and normalization slightly modify the analytic equilibrium. It uses boxsize 1 Mpc/h, a=1, Omega_m=.3, Omega_Lambda=.7, h=.7 and mass per particle 20,815,247.025 Msun/h. FML uses G derived from `FML/Units/Units.h`. Both use initial linking parameter .28 and input resolution/support scale .0005 Mpc/h. The single-process ROCKSTAR calculation is nonperiodic; this cloud is away from the box boundaries. Softening, centring, unbinding and mass-boundary conventions differ. Particle-ID overlap against ROCKSTAR was not measured.
+
+| Quantity | FML | ROCKSTAR |
+|---|---|---|
+| Objects | 1 | 1 |
+| Reported mass (Msun/h) | 7.9909733e+10 (exclusive isolated-bound) | 8.014e+10 (bound M200b) |
+| Vmax (km/s) | 97.09516431 | 97.05143700 |
+
+Vmax differs by 0.0451%; reported masses differ by -0.2873% despite their distinct definitions. Centre separation is 0.00046179 Mpc/h. This catches gross errors in a controlled case; it does not validate cosmological halo statistics or subhalo purity.
+
+## Small local performance cases
+
+Median of three separate process runs, without our own concurrent builds/tests. Full `find_distributed` pipeline, including validation, label convergence, routing, hierarchy, unbinding and properties. The input is one Plummer parent; resolving many parents and the largest-parent load imbalance is a separate scaling problem. Peak RSS includes runtime/startup, outputs and the synthetic fixture; it is process peak across the increasing-size sequence, not isolated workspace. Every rank generates the same fixture before selecting its owned particles for this benchmark; the library does not all-gather those particles. Timings on a shared machine are approximate.
+
+| Particles | Serial, 1 thread (s) | Serial, 4 threads (s) | Peak RSS, 4-thread process (MiB) |
+|---|---|---|---|
+| 1000 | 0.0376 | 0.0318 | 5.13 |
+| 4000 | 0.3214 | 0.2277 | 10.02 |
+| 16000 | 3.1029 | 1.6177 | 25.45 |
+
+| Particles | MPI ranks (2 threads each) | Maximum-rank time (s) | Max ghosts | Max particles routed to one owner | Max process peak RSS (MiB) |
+|---|---|---|---|---|---|
+| 1000 | 1 | 0.0346 | 0 | 1000 | 26.96 |
+| 1000 | 2 | 0.0384 | 473 | 978 | 29.04 |
+| 1000 | 4 | 0.0395 | 473 | 971 | 28.90 |
+| 4000 | 1 | 0.2626 | 0 | 4000 | 31.48 |
+| 4000 | 2 | 0.2662 | 1549 | 3917 | 33.34 |
+| 4000 | 4 | 0.2447 | 1549 | 3873 | 32.60 |
+| 16000 | 1 | 2.1895 | 0 | 16000 | 47.46 |
+| 16000 | 2 | 2.2184 | 4855 | 15702 | 48.16 |
+| 16000 | 4 | 2.1998 | 4855 | 15511 | 43.54 |
+
+All cases recover one object. A single parent remains on one rank, so more MPI ranks do not materially accelerate its phase-space analysis. OpenMP accelerates potential evaluation; much hierarchy and property work remains serial. Work in these small cases grows faster than particle count, and repeated potential evaluations are substantial. More aggressive spatial FoF linking, reusable query buffers, faster potential/centre evaluation, work-balanced parent assignment and distributed processing of exceptionally large parents are worthwhile future performance work. The last requires a different ownership/work distribution contract.
+
+Production follow-ups: cosmological ROCKSTAR catalogue/ID comparisons, completeness and purity across resolved mergers and tidal stripping, calibrated seed thresholds, temporal stabilization, SO or tidal host boundaries, orphan reassignment conventions, percolating parents, large-parent load balancing and total-memory controls. The current output is a documented isolated-bound, exclusive-membership catalogue, not a general SO/virial catalogue.

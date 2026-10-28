@@ -2,6 +2,7 @@
 #define FML_SHORT_RANGE_GRAVITY_HEADER
 
 #include <FML/ShortRangeGravity/Yukawa.h>
+#include <FML/ShortRangeGravity/Softening.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -114,18 +115,7 @@ namespace FML::SHORT_RANGE_GRAVITY {
             return filter * (1 + alpha_ * ratio * std::exp(-z * z));
         }
         /// Positive spline-softened Newtonian Green function, before coupling/mass.
-        double newtonian_green(double r) const {
-            if (!std::isfinite(r) || r < 0)
-                throw std::invalid_argument("[ShortRangeGravity] Separation must be finite and nonnegative");
-            const double h = options_.softening_support, u = r / h;
-            if (u >= 1)
-                return 1 / r;
-            if (u < .5)
-                return (14.0 / 5 - 16.0 / 3 * u * u + 48.0 / 5 * std::pow(u, 4) - 32.0 / 5 * std::pow(u, 5)) / h;
-            return (16.0 / 5 - 1 / (15 * u) - 32.0 / 3 * u * u + 16 * u * u * u - 48.0 / 5 * std::pow(u, 4) +
-                    32.0 / 15 * std::pow(u, 5)) /
-                   h;
-        }
+        double newtonian_green(double r) const { return newtonian_spline_green(r, options_.softening_support); }
         /// Full softened pair potential per unit source mass, including coupling. Numerical softening uses
         /// effective separation s=1/newtonian_green(r): Phi_Y=-G exp(-s/lambda)/s, exactly Yukawa beyond h.
         double potential(double r) const {

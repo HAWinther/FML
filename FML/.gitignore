@@ -170,3 +170,9 @@ HaloHistory/example/example
 tests/test_pt_direct
 tests/test_perturbation
 tests/test_halo_history
+
+# Phase-space halo finder executables
+PhaseSpaceHaloFinder/tests/test_phase_space_halos
+PhaseSpaceHaloFinder/example/phase_halos
+tests/test_phase_space_halos
+PhaseSpaceHaloFinder/tests/rockstar_fixture
