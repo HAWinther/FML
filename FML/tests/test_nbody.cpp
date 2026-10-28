@@ -22,9 +22,12 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 using namespace FML;
@@ -99,8 +102,140 @@ double rel_diff(std::array<FFTWGrid, 3> & a, std::array<FFTWGrid, 3> & b) {
     return maxval > 0.0 ? maxdiff / maxval : 1e100;
 }
 
+// Reference PGD pipeline with the previous buffered interpolation/update. Keep the
+// stored FloatType forces so exact comparisons detect changes at precision boundaries.
+template <int N, class T>
+double buffered_pgd(std::vector<T> & particles, const std::string & method, double alpha) {
+    using Grid = FML::GRID::FFTWGrid<N>;
+    size_t total = particles.size();
+    FML::SumOverTasks(&total);
+    const auto halo = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(method);
+    Grid density(24, halo.first, halo.second);
+    FML::INTERPOLATION::particles_to_fourier_grid<N, T>(
+        particles.data(), particles.size(), total, density, method, false);
+    std::function<double(double)> filter = [](double k2) {
+        const double high = k2 / 10000.0 < 10.0 ? k2 / 10000.0 : 10.0;
+        const double low = k2 / 4.0 < 0.01 ? 100.0 : 4.0 / k2;
+        return std::exp(-high * high - low);
+    };
+    FML::GRID::custom_smoothing_filter_fourier_space(density, filter);
+    std::array<Grid, N> force_grid;
+    NBODY::compute_force_from_density_fourier<N>(density, force_grid, method, 1.5);
+    density.free();
+    for (auto & grid : force_grid)
+        grid.communicate_boundaries();
+    std::array<std::vector<FloatType>, N> force;
+    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N, T>(
+        force_grid, particles.data(), particles.size(), force, method);
+    for (auto & grid : force_grid)
+        grid.free();
+    double maximum = 0;
+    for (size_t i = 0; i < particles.size(); ++i)
+        for (int d = 0; d < N; ++d) {
+            const double disp = -force[d][i] * alpha;
+            maximum = std::max(maximum, std::abs(disp));
+            particles[i].pos[d] += disp;
+            NBODY::periodic_wrap_unit_box(particles[i].pos[d]);
+        }
+    FML::MaxOverTasks(&maximum);
+    return maximum;
+}
+
+template <int N, class Position>
+struct PGDParticle {
+    Position pos[N];
+    double vel[N];
+    uint64_t id;
+    Position * get_pos() { return pos; }
+    constexpr int get_ndim() const { return N; }
+};
+
+template <int N, class Position>
+void check_streamed_pgd(const std::string & label) {
+    using P = PGDParticle<N, Position>;
+    // Include a completely empty task, exact slab edges, and neighboring floating-point values.
+    std::vector<P> original(FML::NTasks > 1 && FML::ThisTask == 0 ? 0 : 512);
+    for (size_t i = 0; i < original.size(); ++i) {
+        for (int d = 0; d < N; ++d) {
+            const Position lo = d == 0 ? Position(FML::xmin_domain) : Position(0);
+            const Position hi = d == 0 ? Position(FML::xmax_domain) : Position(1);
+            Position x = Position(double(lo) + (double(hi) - lo) * uniform(31 * i + d + 7));
+            if (i % 7 == 0)
+                x = lo;
+            if (i % 7 == 1 || x >= hi)
+                x = std::nextafter(hi, lo);
+            original[i].pos[d] = x;
+            original[i].vel[d] = uniform(19 * i + d);
+        }
+        original[i].id = i + 12345;
+    }
+    bool positions = true, attributes = true, diagnostics = true, wrapped = true;
+    bool large_displacement = false;
+    for (const std::string method : {"NGP", "CIC", "TSC", "PCS", "PQS"})
+        for (const double alpha : {0.0, 0.03, -0.02, 10000.0}) {
+            auto expected = original, actual = original;
+#ifdef USE_OMP
+            if (omp_get_max_threads() > 1) {
+                // Thin slabs use atomic deposition. Two nonoverlapping clouds, each
+                // with identical positions, make its sums repeatable without disabling
+                // threading in the interpolation/update under test.
+                for (size_t i = 0; i < expected.size(); ++i) {
+                    for (int d = 0; d < N; ++d)
+                        expected[i].pos[d] = original.front().pos[d];
+                    expected[i].pos[0] = alpha == 0.03
+                                             ? std::nextafter(Position(FML::xmax_domain), Position(FML::xmin_domain))
+                                             : Position(FML::xmin_domain);
+                    expected[i].pos[1] = i < expected.size() / 2 ? Position(0.2) : Position(0.6);
+                }
+                actual = expected;
+            }
+#endif
+            const double maximum = buffered_pgd<N>(expected, method, alpha);
+            large_displacement = large_displacement || maximum > 1;
+            std::ostringstream output, reference;
+            reference.copyfmt(std::cout);
+            if (FML::ThisTask == 0)
+                reference << "[potential_gradient_decent_method] Maximum displacement : " << maximum
+                          << " = " << maximum * 24 << " grid-cells\n";
+            auto * previous = std::cout.rdbuf(output.rdbuf());
+            PGD::potential_gradient_decent_method<N, P>(
+                actual.data(), actual.size(), 2.0, 100.0, alpha, 1.5, 24, method);
+            std::cout.rdbuf(previous);
+            const std::string prefix = "[potential_gradient_decent_method] Maximum displacement : ";
+            const auto start = output.str().find(prefix);
+            diagnostics = diagnostics && (FML::ThisTask == 0
+                                              ? start != std::string::npos && output.str().substr(start) == reference.str()
+                                              : output.str().find(prefix) == std::string::npos);
+            for (size_t i = 0; i < actual.size(); ++i) {
+                positions = positions && std::memcmp(actual[i].pos, expected[i].pos, sizeof(actual[i].pos)) == 0;
+                attributes = attributes && actual[i].id == original[i].id &&
+                             std::memcmp(actual[i].vel, original[i].vel, sizeof(actual[i].vel)) == 0;
+                for (int d = 0; d < N; ++d)
+                    wrapped = wrapped && actual[i].pos[d] >= 0 && actual[i].pos[d] < 1;
+            }
+        }
+    int bad[] = {int(!positions), int(!attributes), int(!diagnostics), int(!wrapped), int(!large_displacement)};
+    for (auto & value : bad)
+        FML::MaxOverTasks(&value);
+    check(!bad[0], label + ": PGD positions match buffered updates bit-for-bit for all assignment methods");
+    check(!bad[1], label + ": PGD preserves velocities and IDs");
+    check(!bad[2], label + ": PGD maximum-displacement diagnostic is unchanged");
+    check(!bad[3] && !bad[4], label + ": PGD wraps displacements larger than a box");
+}
+
+void check_streamed_pgd_suite() {
+    check_streamed_pgd<2, double>("2D double");
+    check_streamed_pgd<3, double>("3D double");
+    check_streamed_pgd<2, float>("2D float");
+    check_streamed_pgd<3, float>("3D float");
+}
+
 int main(int argc, char ** argv) {
     std::string mode = argc > 1 ? argv[1] : "all";
+    if (mode == "streamed_pgd") {
+        check_streamed_pgd_suite();
+        return fails == 0 ? 0 : 1;
+    }
     const int Nmesh = 16;
     const double dx = 1.0 / Nmesh;
 
@@ -420,6 +555,8 @@ int main(int argc, char ** argv) {
                   num(ratio));
         mp.communicate_particles();
     }
+
+    check_streamed_pgd_suite();
 
     if (FML::ThisTask == 0)
         std::cout << (fails == 0 ? "All NBody tests passed\n" : std::to_string(fails) + " NBody test(s) FAILED\n");

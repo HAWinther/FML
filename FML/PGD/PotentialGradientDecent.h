@@ -122,33 +122,26 @@ namespace FML {
             for (int idim = 0; idim < N; idim++)
                 force_real[idim].communicate_boundaries();
 
-            std::array<std::vector<FML::GRID::FloatType>, N> force;
-            FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N, T>(force_real,
-                                                                                    p,
-                                                                                    NumPart,
-                                                                                    force,
-                                                                                    interpolation_method);
-
-            // Free memory
-            for (int idim = 0; idim < N; idim++)
-                force_real[idim].free();
-
-            // Add displacement to particles
-            double max_disp = 0.0;
-#ifdef USE_OMP
-#pragma omp parallel for reduction(max : max_disp)
-#endif
-            for (size_t i = 0; i < NumPart; i++) {
+            // Consume each complete interpolated vector at the original position,
+            // avoiding N particle-sized force arrays.
+            auto apply = [&](size_t i, const std::array<FML::GRID::FloatType, N> & force) {
+                double max_disp = 0.0;
                 auto * pos = FML::PARTICLE::GetPos(p[i]);
                 for (int idim = 0; idim < N; idim++) {
-                    double disp = -force[idim][i] * displacement_factor;
+                    double disp = -force[idim] * displacement_factor;
                     max_disp = std::max(max_disp, std::abs(disp));
                     pos[idim] += disp;
 
                     // Periodic wrap (to [0,1) also for displacements larger than the box)
                     FML::NBODY::periodic_wrap_unit_box(pos[idim]);
                 }
-            }
+                return max_disp;
+            };
+            double max_disp = FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions_apply<N, T>(
+                force_real, p, NumPart, interpolation_method, apply);
+
+            for (int idim = 0; idim < N; idim++)
+                force_real[idim].free();
             FML::MaxOverTasks(&max_disp);
             if (FML::ThisTask == 0)
                 std::cout << "[potential_gradient_decent_method] Maximum displacement : " << max_disp << " = "
