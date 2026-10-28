@@ -3,6 +3,7 @@
 // perturbation k-grid to keep the run time short.
 // =============================================================================
 
+#include <algorithm>
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
 #include "TestHelpers.h"
 #include <FML/Cosmology/Common.h>
@@ -295,6 +296,29 @@ int main() {
             bb &= lp.get_Dell_BB_lensed(l) > 0.0;
         check("lensed BB > 0", bb);
         check("lensing lowers the first peak", lp.get_Dell_TT_lensed(220) < lp.get_Dell_TT(220));
+    }
+
+    std::cout << "Multipole list and k-range\n";
+    {
+        // every ell up to 30 is computed (EE has the reionization feature there; a spline between sparse nodes
+        // was off by 2.5% at ell = 17)
+        const auto & ells = ps.get_ells();
+        bool all = true;
+        for (int l = 2; l <= 30; l++)
+            all &= std::find(ells.begin(), ells.end(), l) != ells.end();
+        check("the default ell list has every ell = 2..30", all);
+        // ell beyond k_max r_* (here k_max = 0.3/Mpc, k_max r_* ~ 4200): Theta_ell = 0 and C_ell = 0 gave NaN
+        // spectra at every ell; now a clear error
+        PowerSpectrumOptions sbig = so;
+        sbig.ell_max = 4500;
+        PowerSpectrum psb(cosmo, rec, pert, sbig);
+        bool threw = false;
+        try {
+            psb.solve();
+        } catch (const std::invalid_argument & e) {
+            threw = std::string(e.what()).find("k-range") != std::string::npos;
+        }
+        check("ell_max beyond the k-range gives an error (not NaN spectra)", threw);
     }
 
     return Test::summary();

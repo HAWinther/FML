@@ -44,9 +44,12 @@ namespace FML::COSMOLOGY {
     void PowerSpectrum::make_ell_list() {
         ells = options.ells;
         if (ells.empty()) {
-            for (int l = 2; l <= 10; l++)
+            // Every ell up to 30: the spline of log D_ell between sparser nodes misses the reionization feature
+            // of EE (2.5% at ell = 17 with nodes at 10, 12, 15, 20, 25; Planck's low-ell likelihoods use each
+            // ell = 2..29)
+            for (int l = 2; l <= 30; l++)
                 ells.push_back(l);
-            for (int l : {12, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90})
+            for (int l : {35, 40, 50, 60, 70, 80, 90})
                 ells.push_back(l);
             // With lensing the unlensed spectra are needed beyond ell_max
             const int l_top = options.ell_max +
@@ -71,6 +74,15 @@ namespace FML::COSMOLOGY {
         const double k_max = options.k_max > 0.0 ? options.k_max : kp.back();
         if (k_min < kp.front() || k_max > kp.back())
             throw std::invalid_argument("PowerSpectrum: LOS k-range outside the perturbation k-range");
+        // Theta_ell(k) is ~0 for k r < ell (r: transverse distance to last scattering), so the largest ell needs
+        // k_max r_* > ell
+        const double chi_ls = cosmo.sinK(cosmo.eta0() - cosmo.eta_of_x(rec.x_visibility_peak()));
+        if (k_max * chi_ls < 1.05 * ells.back())
+            throw std::invalid_argument("PowerSpectrum: the k-range (k_max = " + std::to_string(k_max * Mpc) +
+                                        "/Mpc) does not reach ell = " + std::to_string(ells.back()) +
+                                        " (needs k_max > " + std::to_string(1.05 * ells.back() / chi_ls * Mpc) +
+                                        "/Mpc, better 1.2x that): increase pert_k_max or lower ell_max / "
+                                        "lensing_delta_ell");
         const double dk_lin = 2.0 * M_PI / (cosmo.eta0() * options.n_k_per_oscillation);
         k_los.clear();
         for (double k = k_min; k < k_max; k += std::min(dk_lin, k * options.dlnk_max))
@@ -494,10 +506,17 @@ namespace FML::COSMOLOGY {
             const double l = ells[il], f = l * (l + 1.0) / (2.0 * M_PI);
             ell_d[il] = l;
             cells[il] = cell(0, 0, il);
+            if (!(cells[il] > 0.0))
+                throw std::runtime_error("PowerSpectrum: C_ell^TT = " + std::to_string(cells[il]) + " at ell = " +
+                                         std::to_string(ells[il]) + " (the k-range is too small for this ell?)");
             log_D[il] = std::log(f * cells[il]);
             if (pol) {
                 cells_EE[il] = cell(1, 1, il);
                 cells_TE[il] = cell(0, 1, il);
+                if (!(cells_EE[il] > 0.0))
+                    throw std::runtime_error("PowerSpectrum: C_ell^EE = " + std::to_string(cells_EE[il]) +
+                                             " at ell = " + std::to_string(ells[il]) +
+                                             " (the k-range is too small for this ell?)");
                 log_DEE[il] = std::log(f * cells_EE[il]);
                 DTE[il] = f * cells_TE[il];
             }

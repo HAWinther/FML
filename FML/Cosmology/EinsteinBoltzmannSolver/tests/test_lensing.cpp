@@ -146,5 +146,30 @@ int main() {
         check_close("weak deflections: Delta C_l linear in C_phiphi", lin, 0.0, 1e-2);
         check_rel("weak deflections: C_l^BB linear in C_phiphi", r2.bb[1000] / r1.bb[1000], 2.0, 1e-2);
     }
+
+    std::cout << "Truncation of the input at L (Gauss-Legendre points L + n_mu_extra)\n";
+    {
+        // Lensed BB near lmax_out is sensitive to how the sharp cut of the input C_l at L is handled: the lensed
+        // correlation functions have power above L, aliased by the transform back to C_l with only N = L nodes
+        // (19% low at lmax_out = L - 833 for LCDM). Reference: the same spectra continued to 2 L.
+        const int lout = 2000, L = 2800, Lref = 5600;
+        std::vector<double> tt, ee, te, pp, tt2, ee2, te2, pp2;
+        synthetic(Lref, 1.0, tt2, ee2, te2, pp2);
+        synthetic(L, 1.0, tt, ee, te, pp);
+        const auto ref = Lensing::lens(tt2, ee2, te2, {}, pp2, lout);
+        const auto def = Lensing::lens(tt, ee, te, {}, pp, lout);
+        Lensing::Options o0;
+        o0.n_mu_extra = 0;
+        const auto n0 = Lensing::lens(tt, ee, te, {}, pp, lout, o0);
+        double err_def = 0.0, err0 = 0.0;
+        for (int l = lout - 200; l <= lout; l++) {
+            err_def = std::max(err_def, std::fabs(def.bb[l] / ref.bb[l] - 1.0));
+            err0 = std::max(err0, std::fabs(n0.bb[l] / ref.bb[l] - 1.0));
+        }
+        std::cout << "    lensed BB at lmax_out - 200..lmax_out: default " << err_def << ", n_mu_extra = 0 " << err0
+                  << "\n";
+        check_close("lensed BB near lmax_out with the input cut at L (5% here)", err_def, 0.0, 0.07);
+        check("more Gauss-Legendre points than L reduce the truncation error", err_def < 0.5 * err0);
+    }
     return Test::summary();
 }

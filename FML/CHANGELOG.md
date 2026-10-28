@@ -5,6 +5,31 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (Einstein-Boltzmann solver): review against CLASS; lensing quadrature, low-ell multipoles, k-range check
+- Reviewed the background, species (incl. massive neutrinos), RECFAST and Peebles recombination, reionization,
+  perturbations (tight coupling, hierarchies, curvature, sources), line-of-sight C_ell, P(k), lensing, Halofit and
+  tensor modes, and compared independently with CLASS 3.3.2 (RECFAST, matched reionization) for Planck 2018,
+  m_nu = 0.15 eV, Omega_K = +-0.05, lensing, tensors (r = 0.05) and Halofit: H(z), d_A 1e-6; X_e 3e-4; z_*, r_s 1e-6;
+  TT 3e-4 rms (ell 30-1000), 3e-3 above; P(k) < 1e-3 (k < 0.3/Mpc); Halofit P_NL 1e-3 (k < 1/Mpc); tensor C_ell
+  ~0.3% (ell < 300); lensed TT, EE 3e-3.
+- Lensing (Lensing.h): the Gauss-Legendre quadrature used N = L points (the comment said "as in CLASS"; CLASS uses
+  L + 1000). The lensed correlation functions have power above L, which N = L aliases in the transform back to
+  C_ell: lensed BB at ell_max was 19% low (4% at ell_max - 250), lensed TT 4e-3. Default now L + 1000: with CLASS's
+  unlensed spectra as input the lensed spectra agree with CLASS to 1e-4 (L = 7000); with the default
+  lensing_delta_ell lensed BB is 1% up to ell_max - 500 and 4% at ell_max (lensing_delta_ell = 1500: 1%).
+- Default ell list: every ell up to 30 (was 2-10, 12, 15, 20, 25, 30). The spline of log D_ell between the sparse
+  nodes missed the reionization feature of EE: up to 2.5% (flat) and 4.7% (closed) at ell = 11-23, and TE 1e-3.
+  Planck's low-ell likelihoods use each ell = 2-29.
+- An ell list beyond the k-range (k_max r_* < ell, e.g. ell_max > ~3150 with lensing and pert_k_max = 0.3) gave
+  C_ell = 0 at the top, log(0) in the C_ell spline and NaN spectra at every ell without an error. Now an
+  invalid_argument naming the k_max needed, and non-positive C_ell^TT/EE are an error.
+- ./cmb with ell_max < 1000 failed at the end ("ell = 1000 not in the list": the default transfer_ells include
+  1000) after writing cells.txt, without matter_power.txt and the other outputs. transfer.txt now skips ells that
+  were not computed, with a warning.
+- tests/reference/regression.txt updated (no fused multiply-adds): only the lensed values change (BB by up to 20% at
+  ell_max = 800, TT by 5e-4 there). New checks in test_lensing (truncation at L) and test_power_spectrum (ell list,
+  k-range error).
+
 ### PM force: Nyquist component of the continuous gradient
 - NBody / COLASolver: the PM force with the default continuous gradient kernel now sets the Nyquist component of
   the gradient to zero on even meshes. The LPT code already does this, and the discrete gradients are effectively

@@ -157,8 +157,20 @@ int run(int argc, char ** argv) {
         power.output_cells(out + "cells.txt");
         if (s.ps.lensing)
             power.output_cells_lensed(out + "cells_lensed.txt");
-        if (!s.transfer_ells.empty())
-            power.output_transfer(out + "transfer.txt", s.transfer_ells);
+        if (!s.transfer_ells.empty()) {
+            // only the ells where C_ell was computed (the default list goes to ell = 1000, above a small ell_max)
+            std::vector<int> tl;
+            const auto & computed = power.get_ells();
+            for (int l : s.transfer_ells) {
+                if (std::find(computed.begin(), computed.end(), l) != computed.end())
+                    tl.push_back(l);
+                else
+                    std::cerr << "Warning: transfer_ells: ell = " << l
+                              << " is not in the computed ell list, skipped\n";
+            }
+            if (!tl.empty())
+                power.output_transfer(out + "transfer.txt", tl);
+        }
         if (s.cmb_correlation) { // unlensed (and lensed), and with the beam if one is given
             std::vector<bool> lensed = {false};
             if (s.ps.lensing)

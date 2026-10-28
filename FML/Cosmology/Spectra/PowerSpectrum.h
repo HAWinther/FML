@@ -91,7 +91,9 @@ namespace FML::COSMOLOGY {
 
         // CMB lensing (Lensing.h): computes the lensing potential C_ell^phiphi and the lensed TT, EE, TE, BB
         // up to ell_max. The unlensed spectra and C_ell^phiphi are then computed up to
-        // ell_max + lensing_delta_ell (default max(500, ell_max/3)), since lensing moves power in ell.
+        // ell_max + lensing_delta_ell (default max(500, ell_max/3)), since lensing moves power in ell. Lensed TT,
+        // EE, TE are then accurate to < 1e-3 up to ell_max; lensed BB to 1% up to ell_max - 500 and ~4% at ell_max
+        // (lensing_delta_ell = 1500: 1% at ell_max). The k-range must reach the largest ell: k_max r_* > ell.
         bool lensing = false;
         int lensing_delta_ell = -1;
         // C_ell^phiphi from the full LOS integral below this ell and the Limber approximation above it.

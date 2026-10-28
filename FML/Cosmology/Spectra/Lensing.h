@@ -37,10 +37,11 @@ namespace FML::COSMOLOGY {
         struct Options {
             int c2_order = 2; // order in C_gl,2 (0, 1 or 2)
             int c0_order = 0; // 1: include the first order in C_gl (more accurate, slower)
-            // Gauss-Legendre points: L + n_mu_extra. N = L (as in CLASS) treats the input as band-limited at L;
-            // more points resolve the sharp truncation of the input C_l at L, which changes the lensed
-            // spectra near lmax_out unless L - lmax_out is large.
-            int n_mu_extra = 0;
+            // Gauss-Legendre points: L + n_mu_extra (CLASS: num_mu_minus_lmax = 1000). The lensed correlation
+            // functions have power above L, and with N = L nodes it is aliased in the transform back to C_l: lensed
+            // BB at lmax_out = L - 833 was 19% low (4% with 1000 extra points, the remainder is the truncation of
+            // the input at L; lensing_delta_ell = 1500 gives 1%). Lensed TT, EE: 4e-3 and 2e-3 -> < 7e-4.
+            int n_mu_extra = 1000;
         };
 
         struct Result {
