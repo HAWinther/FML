@@ -18,6 +18,7 @@
 
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
+#include <FML/Global/ChunkedExchange.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 
 namespace FML {
@@ -542,6 +543,7 @@ namespace FML {
             const int nsrc = src.get_nmesh();
             const int ndst = dst.get_nmesh();
             const int mmax = std::min(nsrc, ndst) / 2; // keep |m| < mmax
+            assert_mpi(nsrc > 0 && ndst > 0, "[NUFFT::copy_fourier_modes] Grids must be allocated");
             const int ndst_per_task = ndst / FML::NTasks;
 
             dst.fill_fourier_grid(0.0);
@@ -570,43 +572,16 @@ namespace FML {
                 }
             }
 
-            std::vector<Mode> recv;
-#ifdef USE_MPI
-            std::vector<int> nsend(FML::NTasks), nrecv(FML::NTasks), sdispl(FML::NTasks), rdispl(FML::NTasks);
-            for (int t = 0; t < FML::NTasks; t++)
-                nsend[t] = int(send[t].size() * sizeof(Mode));
-            MPI_Alltoall(nsend.data(), 1, MPI_INT, nrecv.data(), 1, MPI_INT, FML::communicator);
-            std::vector<Mode> sendbuf;
-            for (int t = 0; t < FML::NTasks; t++) {
-                sdispl[t] = int(sendbuf.size() * sizeof(Mode));
-                sendbuf.insert(sendbuf.end(), send[t].begin(), send[t].end());
-            }
-            size_t ntot = 0;
-            for (int t = 0; t < FML::NTasks; t++) {
-                rdispl[t] = int(ntot);
-                ntot += nrecv[t];
-            }
-            recv.resize(ntot / sizeof(Mode));
-            MPI_Alltoallv(sendbuf.data(),
-                          nsend.data(),
-                          sdispl.data(),
-                          MPI_CHAR,
-                          recv.data(),
-                          nrecv.data(),
-                          rdispl.data(),
-                          MPI_CHAR,
-                          FML::communicator);
-#else
-            recv = send[0];
-#endif
             const auto dst_x_start = dst.get_local_x_start();
-            for (auto & mode : recv) {
-                std::array<int, N> coord;
-                for (int idim = 0; idim < N; idim++)
-                    coord[idim] = mode.coord[idim];
-                coord[0] -= int(dst_x_start);
-                dst.set_fourier(coord, mode.value);
-            }
+            FML::COMMUNICATION::exchange_records_chunked(send, [&](const Mode * modes, size_t count) {
+                for (size_t i = 0; i < count; ++i) {
+                    std::array<int, N> coord;
+                    for (int idim = 0; idim < N; idim++)
+                        coord[idim] = modes[i].coord[idim];
+                    coord[0] -= int(dst_x_start);
+                    dst.set_fourier(coord, modes[i].value);
+                }
+            });
         }
 
         //================================================================================

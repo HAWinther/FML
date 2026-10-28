@@ -10,6 +10,8 @@
 #include <FML/Smoothing/SmoothingFourier.h>
 
 #include <complex>
+#include <climits>
+#include <limits>
 #include <iomanip>
 #include <sstream>
 #include <random>
@@ -156,7 +158,120 @@ void test_nufft(int nmesh, size_t npart, double epsilon, double sigma = 2.0) {
               ") matches direct sum: max rel err " + sci(maxerr / maxval));
 }
 
-int main() {
+void test_chunked_exchange() {
+    struct Record {
+        unsigned long long source, dest, index;
+    };
+    using namespace FML::COMMUNICATION;
+    const auto capacity = detail::records_per_chunk<Record>(std::numeric_limits<size_t>::max());
+    check(capacity == size_t(INT_MAX) / sizeof(Record) && capacity * sizeof(Record) <= size_t(INT_MAX) &&
+              detail::records_per_chunk<Record>(sizeof(Record) - 1) == 0 &&
+              detail::chunk_count(capacity + 1, capacity) == 2 &&
+              detail::chunk_count(std::numeric_limits<unsigned long long>::max(), 1) ==
+                  std::numeric_limits<unsigned long long>::max(),
+          "record chunk arithmetic handles byte counts beyond INT_MAX without large allocations");
+    for (int pattern = 0; pattern < 3; ++pattern)
+        for (size_t bytes : {sizeof(Record), 3 * sizeof(Record) + 7, size_t(INT_MAX) + 1}) {
+            auto count = [pattern](int source, int dest) -> size_t {
+                if (pattern == 0)
+                    return 0;
+                if (pattern == 1)
+                    return source == 0 && dest == FML::NTasks - 1 ? 17 : 0;
+                return (source + dest) % 3 == 0 ? 0 : size_t(7 + 3 * source + dest);
+            };
+            std::vector<std::vector<Record>> send(FML::NTasks);
+            std::vector<std::vector<char>> seen(FML::NTasks);
+            for (int task = 0; task < FML::NTasks; ++task) {
+                for (size_t i = 0; i < count(FML::ThisTask, task); ++i)
+                    send[task].push_back({static_cast<unsigned long long>(FML::ThisTask),
+                                          static_cast<unsigned long long>(task), i});
+                seen[task].resize(count(task, FML::ThisTask), 0);
+            }
+            bool ok = true;
+            exchange_records_chunked(send, [&](const Record * records, size_t n) {
+                for (size_t i = 0; i < n; ++i) {
+                    const auto & r = records[i];
+                    if (r.dest != static_cast<unsigned long long>(FML::ThisTask) ||
+                        r.source >= seen.size() || r.index >= seen[r.source].size()) {
+                        ok = false;
+                        continue;
+                    }
+                    if (seen[r.source][r.index]++)
+                        ok = false;
+                }
+            }, bytes + size_t(FML::ThisTask) * sizeof(Record));
+            for (const auto & source : seen)
+                for (char n : source)
+                    ok = ok && n == 1;
+            for (const auto & peer : send)
+                ok = ok && peer.empty() && peer.capacity() == 0;
+            int bad = !ok;
+            FML::MaxOverTasks(&bad);
+            check(!bad, "chunked exchange delivers every record exactly once, pattern " + std::to_string(pattern) +
+                            ", byte limit " + std::to_string(bytes));
+        }
+}
+
+template <int N>
+void test_mode_redistribution(int source_mesh, int dest_mesh) {
+    FFTWGrid<N> source(source_mesh), dest(dest_mesh);
+    auto value = [](const std::array<int, N> & m) {
+        double real = 1, imag = 3;
+        for (int d = 0; d < N; ++d) {
+            real += (d + 1) * m[d];
+            imag += (d + 2) * m[d] * m[d];
+        }
+        return FML::GRID::ComplexType(real, imag);
+    };
+    std::function<double(const std::array<int, N> &)> factor = [](const std::array<int, N> & m) {
+        double scale = 1;
+        for (auto k : m)
+            scale += 0.25 * k * k;
+        return scale;
+    };
+    source.set_grid_status_real(false);
+    for (auto index : source.get_fourier_range())
+        source.set_fourier_from_index(index, value(source.get_fourier_integer_wavevector_from_index(index)));
+    dest.fill_fourier_grid(FML::GRID::ComplexType(123, 456));
+    FML::NUFFT::copy_fourier_modes<N>(source, dest, factor);
+    const int cutoff = std::min(source_mesh, dest_mesh) / 2;
+    int bad = dest.get_grid_status_real();
+    for (auto index : dest.get_fourier_range()) {
+        const auto m = dest.get_fourier_integer_wavevector_from_index(index);
+        bool keep = true;
+        for (auto k : m)
+            keep = keep && std::abs(k) < cutoff;
+        const auto expected = keep ? value(m) * FloatType(factor(m)) : FML::GRID::ComplexType(0);
+        bad = bad || dest.get_fourier_from_index(index) != expected;
+    }
+    for (auto index : source.get_fourier_range())
+        bad = bad || source.get_fourier_from_index(index) != value(source.get_fourier_integer_wavevector_from_index(index));
+    FML::MaxOverTasks(&bad);
+    check(!bad, "NUFFT mode redistribution preserves exact coefficients, factor and cutoff: " + std::to_string(N) +
+                    "D " + std::to_string(source_mesh) + " -> " + std::to_string(dest_mesh));
+}
+
+void test_redistribution_suite() {
+    test_chunked_exchange();
+    for (const auto meshes : {std::array<int, 2>{8, 16}, {16, 8}, {12, 8}, {8, 8}, {7, 11}, {2, 2}}) {
+        // FFTWGrid intentionally requires divisibility by the MPI task count.
+        if (meshes[0] % FML::NTasks || meshes[1] % FML::NTasks)
+            continue;
+        test_mode_redistribution<2>(meshes[0], meshes[1]);
+        test_mode_redistribution<3>(meshes[0], meshes[1]);
+    }
+}
+
+int main(int argc, char ** argv) {
+    if (argc > 1 && std::string(argv[1]) == "chunk_limit") {
+        std::vector<std::vector<int>> send(FML::NTasks);
+        FML::COMMUNICATION::exchange_records_chunked(send, [](const int *, size_t) {},
+                                                    FML::ThisTask == 0 ? sizeof(int) - 1 : sizeof(int));
+        return 1; // The invalid limit must terminate collectively before reaching here.
+    }
+    test_redistribution_suite();
+    if (argc > 1 && std::string(argv[1]) == "redistribution")
+        return fails == 0 ? 0 : 1;
 
     //===========================================================
     // 1. shift_grid_fourier: exact for band-limited fields, cos(k s) at Nyquist
