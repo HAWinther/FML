@@ -5,6 +5,29 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLASolver: small fixes from the review (neutrino background, spline ranges, early force, cleanup)
+- Neutrino background: for m_nu/T_nu > 1000 (late times or large masses) it now uses the non-relativistic limit
+  instead of the constant end value of the spline.
+  - rho_nu was up to 0.3% low, and p_nu up to 1000x too large.
+  - The neutrino sound speed now uses the mass of one neutrino.
+- Spline ranges:
+  - The growth-factor splines now reach a = 10 and k = 100 h/Mpc; they stopped at a ~ 9.89 and k ~ 93.
+  - The transfer-info k-table now reaches kmax, and the lightcone r(a) table now reaches alow.
+  - The m(a),beta(a) phi(a) spline now extends to a = 10 (it was constant beyond a = 1).
+  - Outputs change at the 1e-5 level.
+- Tabulated cosmology: dlogH/dloga (w_DE) at the end of the table, normally today, is now accurate (w_DE(z=0) was
+  off by up to 5e-3).
+- JBD: H(a) beyond a = 10 is now consistent with dlogH/dloga.
+- Linear massive neutrinos and the N-body gauge with `force_early_method`: the initial delta_cb used in the later
+  steps is now assigned with the late-time density assignment. The neutrino term had the early-time window, which
+  made P_total up to 0.2% off.
+- External ICs:
+  - Exact 2LPT reconstruction now stops with a clear error if the number of particles is not N^3.
+  - q is now corrected by Psi_2LPT also for scale-dependent COLA.
+- Lightcone maps: 64-bit pixel loops and MPI reductions in chunks.
+- Removed the unused `ExampleParticles.h`, `ReadParameters.h` and the T(k,zini) spline.
+- New tests: `tests/check_early_force.py`; `tests/test_models.cpp` is extended.
+
 ### COLA initial velocities with GR initial conditions and modified gravity
 - COLASolver: with `ic_use_gravity_model_GR = true` and a modified-gravity model, COLA now starts from the GR
   initial velocities of the IC. Before, COLA started with the growth rate of the gravity model instead.
