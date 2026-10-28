@@ -130,7 +130,15 @@ namespace FML {
             if (store_eigenvalues)
                 for (auto & g : result.eigenvalues)
                     g = FML::GRID::FFTWGrid<3>(N);
-            std::array<double, 4> volume{}, mass{};
+            // Fixed slice-local sums avoid shared counters and keep the reduction
+            // order independent of the OpenMP thread count (64 bytes per slice).
+            struct alignas(64) SliceCounts {
+                std::array<double, 4> volume{}, mass{};
+            };
+            std::vector<SliceCounts> slice_counts(tensor[0].get_local_nx());
+#ifdef USE_OMP
+#pragma omp parallel for schedule(static)
+#endif
             for (int ix = 0; ix < tensor[0].get_local_nx(); ix++)
                 for (int iy = 0; iy < N; iy++)
                     for (int iz = 0; iz < N; iz++) {
@@ -149,10 +157,16 @@ namespace FML {
                         if (store_eigenvalues)
                             for (int k = 0; k < 3; k++)
                                 result.eigenvalues[k].set_real(c, FML::GRID::FloatType(e[k]));
-                        volume[type] += 1.0;
+                        slice_counts[ix].volume[type] += 1.0;
                         if (density)
-                            mass[type] += density->get_real(c);
+                            slice_counts[ix].mass[type] += density->get_real(c);
                     }
+            std::array<double, 4> volume{}, mass{};
+            for (const auto & counts : slice_counts)
+                for (int k = 0; k < 4; ++k) {
+                    volume[k] += counts.volume[k];
+                    mass[k] += counts.mass[k];
+                }
             FML::SumArrayOverTasks(volume.data(), 4);
             FML::SumArrayOverTasks(mass.data(), 4);
             const double vtot = volume[0] + volume[1] + volume[2] + volume[3];
@@ -177,6 +191,9 @@ namespace FML {
 #ifdef USE_FFTW
             const int N = delta.get_nmesh();
             FML::GRID::FFTWGrid<3> delta_k(N);
+#ifdef USE_OMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
             for (int ix = 0; ix < delta.get_local_nx(); ix++)
                 for (int iy = 0; iy < N; iy++)
                     for (int iz = 0; iz < N; iz++)
@@ -186,18 +203,23 @@ namespace FML {
             const int jj[6] = {0, 1, 2, 1, 2, 2};
             for (int c = 0; c < 6; c++) {
                 tensor[c] = delta_k;
-                std::array<double, 3> kvec;
-                double k2;
-                for (auto && index : tensor[c].get_fourier_range()) {
-                    tensor[c].get_fourier_wavevector_and_norm2_by_index(index, kvec, k2);
-                    if (k2 == 0.0) {
-                        tensor[c].set_fourier_from_index(index, 0.0);
-                        continue;
+#ifdef USE_OMP
+#pragma omp parallel for schedule(static)
+#endif
+                for (int ix = 0; ix < tensor[c].get_local_nx(); ++ix) {
+                    std::array<double, 3> kvec;
+                    double k2;
+                    for (auto && index : tensor[c].get_fourier_range(ix, ix + 1)) {
+                        tensor[c].get_fourier_wavevector_and_norm2_by_index(index, kvec, k2);
+                        if (k2 == 0.0) {
+                            tensor[c].set_fourier_from_index(index, 0.0);
+                            continue;
+                        }
+                        const double filter = std::exp(-0.5 * k2 * smoothing_scale * smoothing_scale);
+                        tensor[c].set_fourier_from_index(index,
+                                                         tensor[c].get_fourier_from_index(index) *
+                                                             FML::GRID::FloatType(kvec[ii[c]] * kvec[jj[c]] / k2 * filter));
                     }
-                    const double filter = std::exp(-0.5 * k2 * smoothing_scale * smoothing_scale);
-                    tensor[c].set_fourier_from_index(index,
-                                                     tensor[c].get_fourier_from_index(index) *
-                                                         FML::GRID::FloatType(kvec[ii[c]] * kvec[jj[c]] / k2 * filter));
                 }
                 tensor[c].fftw_c2r();
             }
@@ -222,6 +244,9 @@ namespace FML {
             tidal_tensor(delta, options.smoothing_scale, tensor);
             // The (unsmoothed) density 1 + delta for the mass fractions
             FML::GRID::FFTWGrid<3> density(delta.get_nmesh());
+#ifdef USE_OMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
             for (int ix = 0; ix < delta.get_local_nx(); ix++)
                 for (int iy = 0; iy < delta.get_nmesh(); iy++)
                     for (int iz = 0; iz < delta.get_nmesh(); iz++)
@@ -282,6 +307,9 @@ namespace FML {
             const bool diagonal[6] = {true, false, false, true, false, true};
             for (int c = 0; c < 6; c++) {
                 tensor[c] = FML::GRID::FFTWGrid<3>(N);
+#ifdef USE_OMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
                 for (int ix = 0; ix < divergence.get_local_nx(); ix++)
                     for (int iy = 0; iy < N; iy++)
                         for (int iz = 0; iz < N; iz++) {

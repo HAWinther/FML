@@ -13,6 +13,7 @@ USE_LUA             ?= true
 
 TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_lpt test_nbody
 TARGETS += test_baryonification test_numericalmethods test_interlacing_offset test_streamed_kick test_lightcone test_random_fields
+TARGETS += test_cosmicweb
 
 include ../Makefile.config
 
@@ -38,6 +39,9 @@ test_core: $(TEST_OBJS)
 	$(LINK_EXE)
 
 test_grid_tools: test_grid_tools.o Global.o
+	$(LINK_EXE)
+
+test_cosmicweb: test_cosmicweb.o Global.o
 	$(LINK_EXE)
 
 test_fof: test_fof.o Global.o
@@ -186,6 +190,8 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_core; \
 	  echo "== Running test_grid_tools with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_grid_tools; \
+	  echo "== Running test_cosmicweb with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_cosmicweb; \
 	  echo "== Running test_fof with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_fof; \
 	  echo "== Running test_so with $$np task(s)"; \
