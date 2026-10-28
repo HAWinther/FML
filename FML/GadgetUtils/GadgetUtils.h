@@ -436,9 +436,9 @@ namespace FML {
                     if (header.mass[t] == 0.0)
                         NumPartWithMass += header.npart[t];
 
-                // Check if the vector has enough capacity to store the elements if not
-                // reallocate it. We add the particles to the back of the part array
-                if (part.capacity() < part.size() + NumPartFileTot)
+                // Reserve the whole file only for unfiltered reads. Filtered reads append
+                // only local particles, reusing existing capacity and growing as needed.
+                if (not only_keep_part_in_domain and part.capacity() < part.size() + NumPartFileTot)
                     part.reserve(part.size() + NumPartFileTot);
 
                 // Which particles in the file we keep (in the domain, and type 1 for GADGET_ONLY_DM)

@@ -271,6 +271,75 @@ int main(int argc, char ** argv) {
     }
 
     //==========================================================
+    // Domain filtering must not reserve storage for particles that will be discarded.
+    // Each task uses its own file and temporarily selects the same small test domain.
+    //==========================================================
+    if (run("filtered_capacity")) {
+        const size_t nfile = 4096;
+        auto part = make_particles<Particle>(0, nfile);
+        for (size_t i = 0; i < nfile; i++)
+            part[i].pos[0] = (double(i) + 0.5) / nfile;
+        const std::string filename = prefix + "filtered_capacity." + mytask;
+        GadgetWriter gw;
+        gw.write_gadget_single(filename, part.data(), nfile, nfile, 1,
+                               aexp, box, OmegaM, 0.7, 0.7, box, vel_norm);
+        my_files.push_back(filename);
+
+        const double saved_xmin = FML::xmin_domain, saved_xmax = FML::xmax_domain;
+        FML::xmin_domain = 0.0;
+        FML::xmax_domain = 0.01;
+        std::vector<Particle> expected;
+        for (const auto & p : part)
+            if (p.pos[0] < FML::xmax_domain)
+                expected.push_back(p);
+        GadgetReader reader;
+        std::vector<Particle> read;
+        read.reserve(nfile / 8);
+        const size_t capacity = read.capacity();
+        const Particle sentinel = make_particles<Particle>(nfile, nfile + 1)[0];
+        read.push_back(sentinel);
+        reader.read_gadget_single(filename, read, true, false);
+        check(read.capacity() == capacity,
+              "filtered read reuses sufficient capacity instead of reserving the whole file");
+        reader.read_gadget_single(filename, read, true, false);
+        check(read.capacity() == capacity,
+              "repeated filtered append reuses sufficient capacity");
+
+        auto matches = [](const Particle & p, const Particle & q) {
+            if (p.id != q.id)
+                return false;
+            for (int d = 0; d < 3; d++)
+                if (std::fabs(p.pos[d] - q.pos[d]) > 2e-7 or
+                    std::fabs(p.vel[d] - q.vel[d]) > 2e-5)
+                    return false;
+            return true;
+        };
+        bool ok = read.size() == 1 + 2 * expected.size();
+        if (ok) {
+            ok = matches(read[0], sentinel);
+            for (size_t i = 1; i < read.size(); i++)
+                ok = matches(read[i], expected[(i - 1) % expected.size()]) and ok;
+        }
+        check(ok, "filtered append preserves existing particles, positions, velocities and IDs");
+
+        FML::xmin_domain = FML::xmax_domain = 0.5;
+        std::vector<Particle> empty;
+        reader.read_gadget_single(filename, empty, true, false);
+        check(empty.empty() and empty.capacity() == 0,
+              "empty filtered domain allocates no particle storage");
+
+        std::vector<Particle> all;
+        reader.read_gadget_single(filename, all, false, false);
+        ok = all.size() == part.size();
+        if (ok)
+            for (size_t i = 0; i < all.size(); i++)
+                ok = matches(all[i], part[i]) and ok;
+        check(ok, "unfiltered read retains every particle regardless of the local domain");
+        FML::xmin_domain = saved_xmin;
+        FML::xmax_domain = saved_xmax;
+    }
+
+    //==========================================================
     // Several types in one particle class: MassTable and the type of each particle after reading with MPI
     //==========================================================
     if (run("types")) {
