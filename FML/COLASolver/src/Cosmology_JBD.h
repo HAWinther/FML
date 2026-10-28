@@ -306,9 +306,12 @@ class CosmologyJBD final : public Cosmology {
     //========================================================================
     // Spline evaluation wrappers (for Hubble function and scalar field)
     //========================================================================
-    double HoverH0_of_a(double a) const override { return std::exp(logE_of_loga_spline(std::log(a))); }
+    // Beyond the end of the splines (a > ahigh = 10) log(E) and log(phi) are continued linearly with the slope at the
+    // end, consistent with the derivatives (the spline derivatives there are the slopes at the end; E and phi used
+    // to be held constant)
+    double HoverH0_of_a(double a) const override { return std::exp(extrapolated(logE_of_loga_spline, std::log(a))); }
     double dlogHdloga_of_a(double a) const override { return logE_of_loga_spline.deriv_x(std::log(a)); }
-    double phi_of_a(double a) const { return std::exp(logphi_of_loga_spline(std::log(a))); }
+    double phi_of_a(double a) const { return std::exp(extrapolated(logphi_of_loga_spline, std::log(a))); }
     double dlogphi_dloga_of_a(double a) const { return logphi_of_loga_spline.deriv_x(std::log(a)); }
 
     //========================================================================
@@ -364,6 +367,13 @@ class CosmologyJBD final : public Cosmology {
     }
 
   protected:
+    static double extrapolated(const Spline & spline, double loga) {
+        const double xmax = spline.get_xrange().second;
+        if (loga > xmax)
+            return spline(xmax) + spline.deriv_x(xmax) * (loga - xmax);
+        return spline(loga);
+    }
+
     //========================================================================
     // Parameters specific to the JBD model
     //========================================================================

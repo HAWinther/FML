@@ -260,9 +260,30 @@ class CosmologyTabulated final : public Cosmology {
                 z_max_OmegaDE = 1.0 / a - 1.0;
             }
         }
-        logE2_spline.create(x, logE2, "Tabulated log(E^2)(log(a))");
         xmin_spline = x.front();
         xmax_spline = x.back();
+        // The natural end condition of the spline (zero second derivative) biases the derivative at the end of the
+        // table, which is usually today (w_DE(z = 0) = -0.99976 for an LCDM table). Add six points beyond the end
+        // from the cubic through the last four points, so that the end condition is applied away from the table
+        // (only the spline in [xmin_spline, xmax_spline] is used). For an LCDM table with dlog(a) = 0.023 the error in
+        // dlogH/dloga at the end goes from 6e-3 to 6e-6 (as good as a not-a-knot end condition; 1e-4 with 3 points)
+        const size_t n = x.size();
+        const double hx = x[n - 1] - x[n - 2];
+        DVector x_ext(x), logE2_ext(logE2);
+        for (int j = 1; j <= 6; j++) {
+            const double xe = x[n - 1] + j * hx;
+            double value = 0.0;
+            for (size_t i = n - 4; i < n; i++) {
+                double weight = 1.0;
+                for (size_t m = n - 4; m < n; m++)
+                    if (m != i)
+                        weight *= (xe - x[m]) / (x[i] - x[m]);
+                value += weight * logE2[i];
+            }
+            x_ext.push_back(xe);
+            logE2_ext.push_back(value);
+        }
+        logE2_spline.create(x_ext, logE2_ext, "Tabulated log(E^2)(log(a))");
         rhoDE_low = std::exp(logE2.front()) - rho_other(std::exp(x.front()));
         rhoDE_high = std::exp(logE2.back()) - rho_other(std::exp(x.back()));
         // Consistent with what the table has today

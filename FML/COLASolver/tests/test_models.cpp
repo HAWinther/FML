@@ -8,14 +8,21 @@
 //     values from scipy). The code used 1.5 OmegaM instead of (3/5) g, right only for OmegaM ~ 0.32
 //  3. Neutrino background: the Fermi-Dirac integrals for rho_nu and p_nu (reference values from scipy) also for
 //     y = m/T > 1000, where the splines used to be held constant, and the sound speed with the mass of one neutrino
+//  4. Tabulated H(z) (LCDM): dlogH/dloga and w_DE at the end of the table (a = 1)
+//  5. JBD beyond the end of its splines (a > 10): H(a) consistent with dlogH/dloga
 //
 // Build and run: make test_models && ./test_models (in this folder)
 //==========================================================================
+#include "../src/Cosmology_JBD.h"
 #include "../src/Cosmology_LCDM.h"
+#include "../src/Cosmology_Tabulated.h"
 #include "../src/GravityModel_mbeta.h"
 
 #include <array>
 #include <cmath>
+#include <cstdio>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 
@@ -154,6 +161,62 @@ int main() {
                                    cosmo->get_neutrino_temperature_eV(1.0) / (cosmo->get_Mnu_eV() / 3.0);
         check(std::fabs(cs / cs_expected - 1.0) < 1e-10,
               "neutrino sound speed today: " + std::to_string(cs) + " (expected " + std::to_string(cs_expected) + ")");
+    }
+
+    // 4. Tabulated H(z) of an LCDM background: dlogH/dloga at the end of the table (a = 1). The natural end condition
+    //    of the spline gave dlogH/dloga 6e-3 off (w_DE(z = 0) = -0.994) for this table with dlog(a) = 0.023
+    {
+        auto param = cosmology_parameters(0.25);
+        auto lcdm = std::make_shared<CosmologyLCDM>();
+        quietly([&]() {
+            lcdm->read_parameters(param);
+            lcdm->init();
+        });
+        const std::string filename = "test_models_tabulated_lcdm.txt";
+        {
+            std::ofstream fp(filename);
+            fp << std::setprecision(17);
+            const int n = 400;
+            for (int i = 0; i < n; i++) {
+                const double z = std::exp(std::log(1e4 + 1.0) * i / double(n - 1)) - 1.0;
+                fp << z << " " << lcdm->HoverH0_of_a(1.0 / (1.0 + z)) << "\n";
+            }
+        }
+        param["cosmology_tabulated_filename"] = filename;
+        param["cosmology_tabulated_format"] = std::string("H");
+        auto tab = std::make_shared<CosmologyTabulated>();
+        quietly([&]() {
+            tab->read_parameters(param);
+            tab->init();
+        });
+        std::remove(filename.c_str());
+        for (double a : {1.0, 0.98, 0.5}) {
+            const double err = tab->dlogHdloga_of_a(a) - lcdm->dlogHdloga_of_a(a);
+            check(std::fabs(err) < 1e-5 and std::fabs(tab->w_DE(a) + 1.0) < 1e-5,
+                  "Tabulated LCDM at a = " + std::to_string(a) + ": dlogH/dloga - LCDM = " + std::to_string(err) +
+                      ", w_DE + 1 = " + std::to_string(tab->w_DE(a) + 1.0));
+        }
+    }
+
+    // 5. JBD beyond the end of the splines (a > 10): H(a) must be consistent with dlogH/dloga (H was held constant
+    //    while dlogH/dloga was the slope at the end)
+    {
+        auto param = cosmology_parameters(0.25);
+        param["cosmology_JBD_wBD"] = 100.0;
+        param["cosmology_JBD_GeffG_today"] = 1.0;
+        param["cosmology_JBD_density_parameter_definition"] = std::string("hi-class");
+        auto jbd = std::make_shared<CosmologyJBD>();
+        quietly([&]() {
+            jbd->read_parameters(param);
+            jbd->init();
+        });
+        for (double a : {9.9, 20.0}) {
+            const double fd = std::log(jbd->HoverH0_of_a(a * 1.01) / jbd->HoverH0_of_a(a / 1.01)) / std::log(1.0201);
+            const double err = jbd->dlogHdloga_of_a(a) - fd;
+            check(std::fabs(err) < 1e-6,
+                  "JBD at a = " + std::to_string(a) + ": dlogH/dloga = " + std::to_string(jbd->dlogHdloga_of_a(a)) +
+                      ", finite difference of H = " + std::to_string(fd));
+        }
     }
 
     std::cout << (fails == 0 ? "All model tests passed\n" : std::to_string(fails) + " model test(s) FAILED\n");
