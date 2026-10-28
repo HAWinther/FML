@@ -39,6 +39,13 @@ import_array();
   }
 }
   
+// Python only reads Data through the accessors below: n is read-only (writing it would defeat the bounds check in
+// get_x) and the raw pointer x is not exposed (assigning it would make two objects own and free the same array).
+// Objects are only made by getData (no default constructor)
+%immutable Data::n;
+%ignore Data::x;
+%nodefaultctor Data;
+
 // The functions and data structures you want available in Python (have to be repeated here)
 struct Data {
   int n;

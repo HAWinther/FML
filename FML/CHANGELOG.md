@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### MakePythonWrapper: builds with current SWIG; safe Data example
+- The bundled numpy.i (2015) used the Python 2 API (PyString_Check, PyInt_Check, PyCObject), which SWIG 4.3+ no
+  longer maps: the wrapper did not compile with current SWIG (4.5.1). Replaced by numpy.i from NumPy 2.3.4
+  (tools/swig/numpy.i); builds and runs with SWIG 4.1.1 and 4.5.1, NumPy 2.3.
+- The example exposed Data.n and Data.x as writable attributes: setting n defeated the bounds check in get_x
+  (segfault on reading past the array) and assigning x made two objects own the same array (double free when they
+  were deleted). n is now read-only, the raw pointer x is not exposed and Data has no default constructor
+  (objects only from getData); test.py checks this.
+- Makefile: the wrapper object no longer recompiles on every make (check_python is an order-only prerequisite).
+
 ### Cosmology (Einstein-Boltzmann solver): review against CLASS; lensing quadrature, low-ell multipoles, k-range check
 - Reviewed the background, species (incl. massive neutrinos), RECFAST and Peebles recombination, reionization,
   perturbations (tight coupling, hierarchies, curvature, sources), line-of-sight C_ell, P(k), lensing, Halofit and

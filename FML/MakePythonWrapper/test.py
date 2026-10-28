@@ -18,6 +18,15 @@ try:
 except IndexError as e:
   print("IndexError:", e)
 
+# n is read-only and the raw pointer x is not exposed (writing them could crash python)
+try:
+  data.n = 100
+  raise RuntimeError("Data.n is writable")
+except AttributeError:
+  print("Data.n is read-only")
+if hasattr(data, "x"):
+  raise RuntimeError("Data.x (a raw pointer) is exposed")
+
 # Python owns the data (%newobject getData in InterfaceFile.i) so the memory we
 # allocated in C++ is freed (by freeData) when the object is deleted
 del data

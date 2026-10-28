@@ -55,7 +55,7 @@ check_python:
 $(SWIGWRAPPER): $(SWIGFILE) numpy.i
 	swig -c++ -python $(filter -D%,$(OPTIONS)) -o $(SWIGWRAPPER) $(SWIGFILE)
 
-$(SWIGWRAPPERO): $(SWIGWRAPPER) check_python
+$(SWIGWRAPPERO): $(SWIGWRAPPER) | check_python
 	$(CC) -c -o $@ $(SWIGWRAPPER) $(OPTIONS) $(INC)
 
 # The library that can be called from python
