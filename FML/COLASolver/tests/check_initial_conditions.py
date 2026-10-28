@@ -6,6 +6,8 @@
 #     same velocities with and without COLA (the COLA frame velocity is added back at output):
 #     - CDM + baryon particles, linear 0.4 eV neutrinos (scale-dependent growth), scale-independent COLA
 #     - one species with the same cosmology (control)
+#     - CDM + baryons on offset lattices (particle_baryon_lattice = offset) with scale-dependent COLA (the frame of
+#       the baryons on their own lattice), 2LPT and 1LPT, also with the particle lattice offset from a 2x force grid
 #     - the N-body gauge (scale-dependent growth rate of the transfer functions) with COLA, 4000 Mpc/h box
 #  2. Massive neutrinos without ic_type_of_input = transferinfofile give a clear error (not a segfault)
 #  3. Reading particles (ic_random_field_type = read_particles):
@@ -114,13 +116,28 @@ nu04 = dict(cosmology_OmegaMNu=0.0095,
             ic_input_filename=cases.INPUT + "/transfer_infofile_lcdm_nu0.4_zmax200.txt",
             ic_input_redshift=ZINI,
             **at_zini)
-for label, extra in [("two_species", dict(particle_baryons=True)), ("one_species", dict())]:
+npart = cases.BASE["particle_Npart_1D"]**3
+# Scale-dependent COLA with the baryons on the offset lattice: their COLA frame must be that of their own lattice (it
+# was interpolated between the nodes: 22% rms). With 2LPT the frame has the scale-dependent 2LPT growth rate f_2(k)
+# and the IC f_2(k = 0) (4e-4 rms for both species), with 1LPT they are the same
+offset_scaledep = dict(particle_baryons=True, particle_baryon_lattice="offset", simulation_use_scaledependent_cola=True)
+lpt1 = dict(ic_LPT_order=1, simulation_cola_LPT_order=1)
+tolerance = {"two_species_offset_scaledep": 1e-3, "two_species_offset_scaledep_force64": 1e-3}
+for label, extra in [("two_species", dict(particle_baryons=True)), ("one_species", dict()),
+                     ("two_species_offset_scaledep", offset_scaledep),
+                     ("two_species_offset_scaledep_force64", dict(offset_scaledep, force_nmesh=64)),
+                     ("two_species_offset_scaledep_1LPT", dict(offset_scaledep, **lpt1)),
+                     ("two_species_offset_scaledep_1LPT_force64", dict(offset_scaledep, force_nmesh=64, **lpt1))]:
     v = {}
     for cola in [True, False]:
         d, _ = run(f"vel_{label}_cola{int(cola)}", dict(nu04, simulation_use_cola=cola, **extra))
         ids, pos, v[cola] = read_gadget(os.path.join(d, snap_zini))
-    err = np.sqrt(np.mean((v[True] - v[False])**2) / np.mean(v[False]**2))
-    check(err < 1e-4, f"{label}, 0.4 eV linear neutrinos: velocities with COLA = without COLA (rms rel. diff {err:.2e})")
+    # Each species separately (the baryon IDs follow those of the CDM)
+    species = [("cdm", ids < npart), ("baryon", ids >= npart)] if "two_species" in label else [("all", ids >= 0)]
+    for name, sel in species:
+        err = np.sqrt(np.mean((v[True][sel] - v[False][sel])**2) / np.mean(v[False][sel]**2))
+        check(err < tolerance.get(label, 1e-4), f"{label} ({name}), 0.4 eV linear neutrinos: velocities with COLA = without COLA (rms rel. "
+              f"diff {err:.2e})")
 
 # N-body gauge: the difference f_nbg(k) - f(0) matters on the largest scales, so compare the velocities averaged
 # over 4^3 cells of the 4000 Mpc/h box

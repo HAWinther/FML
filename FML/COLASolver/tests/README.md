@@ -118,7 +118,8 @@ python3 tests/check_initial_conditions.py ./nbody /tmp/ics   # about 15 s, needs
 ```
 
 Checks that the velocities at the initial redshift are the same with and without COLA (0 steps) for CDM + baryon
-particles with linear massive neutrinos, one species and the N-body gauge; that massive neutrinos without the
+particles with linear massive neutrinos, one species, the N-body gauge, and CDM + baryons on offset lattices with
+scale-dependent COLA (the frame of the baryons on their own lattice: it was 22% off); that massive neutrinos without the
 transfer functions give an error; that reading particles with exact LPT reconstruction from an offset lattice
 (fiducial offset with a 2x force grid, half_force_cell) reproduces the P(k) of the original run, that the
 reconstruction from the density field (PCS) with COLA is within 2.5%, and that a file with another BoxSize or h, or

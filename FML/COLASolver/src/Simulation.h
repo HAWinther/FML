@@ -943,12 +943,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
                                                             mass_contrast);
     };
     make_species(part, cdm, splines.ratio_cdm, splines.f_cdm, &eps_today.first, 0.0);
-    make_species(part_baryon,
-                 baryon,
-                 splines.ratio_baryon,
-                 splines.f_baryon,
-                 &eps_today.second,
-                 params.particle.baryon_lattice == "offset" ? 0.5 / double(baryon.Npart_1D) : 0.0);
+    const double baryon_shift = params.particle.baryon_lattice == "offset" ? 0.5 / double(baryon.Npart_1D) : 0.0;
+    make_species(part_baryon, baryon, splines.ratio_baryon, splines.f_baryon, &eps_today.second, baryon_shift);
 
     // Scale-dependent COLA: the LPT potentials of the total CDM+baryon field (the shared COLA frame)
     if (cola.enabled and cola.scaledependent) {
@@ -959,6 +955,28 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
         if (FML::PARTICLE::has_get_D_2LPT<T>() and cola.LPT_order >= 2 and ic.LPT_order >= 2) {
             FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_cb_fourier, cola.phi_2LPT_ini_fourier);
             cola.phi_2LPT_ini_fourier.add_memory_label("phi_2LPT(k,zini)");
+        }
+        // The baryons on the offset lattice: the potentials of the shifted field, as for their IC (see
+        // ColaState::ShiftedSpecies)
+        if (baryon_shift != 0.0) {
+            if (FML::ThisTask == 0)
+                std::cout << "Storing the LPT potentials of the offset baryon lattice for scale-dependent COLA\n";
+            typename ColaState<NDIM, T>::ShiftedSpecies sp;
+            sp.part = &part_baryon;
+            sp.shift = baryon_shift;
+            FFTWGrid<NDIM> delta_shifted = delta_cb_fourier;
+            std::array<double, NDIM> shift_vec;
+            shift_vec.fill(baryon_shift);
+            FML::GRID::shift_grid_fourier<NDIM>(delta_shifted, shift_vec, +1.0);
+            if (cola.phi_1LPT_ini_fourier) {
+                sp.phi_1LPT_ini_fourier = COLASOLVER::compute_phi_1LPT_from_delta<NDIM>(delta_shifted);
+                sp.phi_1LPT_ini_fourier.add_memory_label("phi_1LPT(k,zini) baryons");
+            }
+            if (cola.phi_2LPT_ini_fourier) {
+                FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_shifted, sp.phi_2LPT_ini_fourier);
+                sp.phi_2LPT_ini_fourier.add_memory_label("phi_2LPT(k,zini) baryons");
+            }
+            cola.shifted_species.push_back(std::move(sp));
         }
     }
 }
