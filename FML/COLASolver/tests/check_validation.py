@@ -11,6 +11,8 @@
 #    previous snapshot at another redshift), also when splitting the total number of steps
 #  - gravity_model_fofr_fofr0 < 0 (ODE failure), gravity_model_mbeta_params without 4 numbers (read out of
 #    bounds), cosmology_ede_n = 1 (ODE failure), a Tabulated H/H0 table that does not reach z = 0 (H(a=1) != H0)
+#  - exact LPT reconstruction with 2LPT from GADGET files with a number of particles that is not N^3 (went on as if
+#    the particles were on the lattice of round(cbrt(N)))
 #  - command line: no parameterfile, an unknown option and --parameters to a file that cannot be written give
 #    a non-zero exit code
 # and that these now work:
@@ -21,6 +23,7 @@
 #   MPIRUN : how to launch (default "mpirun -np 2"; MPIRUN="" for a serial build)
 #==========================================================================
 import os
+import struct
 import subprocess
 import sys
 
@@ -108,6 +111,49 @@ with open(htable, "w") as f:
         f.write(f"{z} {(Om * (1 + z)**3 + 1 - Om)**0.5}\n")
 rejected("tabulated_H_without_z0", dict(cosmology_model="Tabulated", cosmology_tabulated_filename=htable,
                                         cosmology_tabulated_format="H"), "must reach z = 0")
+
+# Exact LPT reconstruction (2LPT) from particles that are not on a regular N^3 lattice: a 16^3 snapshot with one
+# particle removed (Npart_1D was taken as round(cbrt(4095)) = 16 and the reconstruction went on as for a lattice)
+rc, out = run("snapshot_16", dict(output_redshifts=[20.0, 19.0], timestep_nsteps=[0, 1]))
+check(rc == 0, "snapshot_16 (input for the next check) runs", out)
+
+
+def copy_gadget_without_one_particle(prefix_in, prefix_out):
+    """Copy a (multi-file) GADGET-1 snapshot (one particle type) and remove the last particle of the first file"""
+    files = sorted(f for f in os.listdir(os.path.dirname(prefix_in))
+                   if f.startswith(os.path.basename(prefix_in) + "."))
+    os.makedirs(os.path.dirname(prefix_out), exist_ok=True)
+    for ifile, fn in enumerate(files):
+        with open(os.path.join(os.path.dirname(prefix_in), fn), "rb") as f:
+            blocks = []
+            while True:
+                size = f.read(4)
+                if not size:
+                    break
+                blocks.append(bytearray(f.read(struct.unpack("<I", size)[0])))
+                f.read(4)
+        header, count = blocks[0], sum(struct.unpack("<6I", blocks[0][:24]))
+        itype = [i for i, n in enumerate(struct.unpack("<6I", header[:24])) if n > 0][0]
+        # npartTotal (offset 96) in all files, npart (offset 0) and the blocks in the first file
+        struct.pack_into("<I", header, 96 + 4 * itype, struct.unpack_from("<I", header, 96 + 4 * itype)[0] - 1)
+        if ifile == 0:
+            struct.pack_into("<I", header, 4 * itype, count - 1)
+            for b in range(1, len(blocks)):
+                del blocks[b][len(blocks[b]) // count * (count - 1):]
+        with open(prefix_out + "." + fn.split(".")[-1], "wb") as f:
+            for b in blocks:
+                f.write(struct.pack("<I", len(b)) + bytes(b) + struct.pack("<I", len(b)))
+
+
+snap = os.path.join(outdir, "snapshot_16", "output", "snapshot_Reg_z20.000", "gadget_z20.000")
+copy_gadget_without_one_particle(snap, os.path.join(outdir, "snapshot_16_minus_one", "gadget_z20.000"))
+rejected("read_exact_not_a_cube", dict(ic_random_field_type="read_particles", ic_reconstruct_exact=True,
+                                       ic_reconstruct_gadgetfilepath=os.path.join(outdir, "snapshot_16_minus_one",
+                                                                                  "gadget_z20.000"),
+                                       ic_reconstruct_assigment_method="PCS", ic_reconstruct_interlacing=True,
+                                       ic_reconstruct_smoothing_filter="sharpk",
+                                       ic_reconstruct_dimless_smoothing_scale=0.01),
+         "is not Npart_1D^3", before_ic=False)
 
 # Now working
 geff = os.path.join(outdir, "geff_with_header.txt")

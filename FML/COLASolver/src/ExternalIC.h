@@ -202,6 +202,17 @@ namespace COLASOLVER {
         const double f2_over_f1 = f_2LPT / f_1LPT;
         const double v_factor_2LPT = 1.0 / (1.0 - f2_over_f1);
         const int Npart_1D = std::round(std::pow(part.get_npart_total(), 1.0 / NDIM));
+        if (regular_q_grid_and_2LPT) {
+            // The reconstruction of q below assumes a regular lattice of Npart_1D^NDIM particles
+            size_t npart_lattice = 1;
+            for (int idim = 0; idim < NDIM; idim++)
+                npart_lattice *= size_t(Npart_1D);
+            const std::string error = "Exact LPT reconstruction with 2LPT IC assumes the particles are on a regular "
+                                      "lattice, but the number of particles in the files (" +
+                                      std::to_string(part.get_npart_total()) + ") is not Npart_1D^" +
+                                      std::to_string(NDIM) + " for any Npart_1D. Use ic_reconstruct_exact = false";
+            FML::assert_mpi(npart_lattice == part.get_npart_total(), error.c_str());
+        }
         // Assuming the lattice is at q = i / N gave wrong D1, D2 for an offset lattice (P(k) 0.9% off with
         // COLASolver's own fiducial offset and force_nmesh = 2 Npart_1D, a factor 2-8 with half a particle spacing)
         std::array<double, NDIM> lattice_offset{};
@@ -456,6 +467,7 @@ namespace COLASOLVER {
         // 2LPT displacement fields. Scale-independent COLA needs the displacement field in the particles
         // (NB: we should interpolate it to the Lagrangian positions, but we use the Eulerian position)
         // and we update the Lagrangian position q -= Psi_2LPT. For scale-dependent COLA we store the potential
+        // (and also update q: it was left at x - Psi_1LPT)
         if (FML::PARTICLE::has_get_D_2LPT<T>() and sim.cola_LPT_order >= 2) {
             if (FML::ThisTask == 0)
                 std::cout << "Reconstructing 2LPT displacement field from the density field\n";
@@ -464,7 +476,7 @@ namespace COLASOLVER {
             FML::GRID::FFTWGrid<NDIM> & phi_2LPT_fourier = sim.use_scaledependent_cola ? phi_2LPT_ini_fourier : temp;
             FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_fourier, phi_2LPT_fourier);
 
-            if (not sim.use_scaledependent_cola) {
+            if (not sim.use_scaledependent_cola or FML::PARTICLE::has_get_q<T>()) {
                 auto displacements =
                     displacement_field_at_particles<NDIM, T>(phi_2LPT_fourier, part, ic.reconstruct_assigment_method);
 
@@ -473,9 +485,11 @@ namespace COLASOLVER {
 #pragma omp parallel for
 #endif
                 for (size_t ind = 0; ind < part.get_npart(); ind++) {
-                    auto * D = FML::PARTICLE::GetD_2LPT(part_ptr[ind]);
-                    for (int idim = 0; idim < NDIM; idim++) {
-                        D[idim] = displacements[idim][ind];
+                    if (not sim.use_scaledependent_cola) {
+                        auto * D = FML::PARTICLE::GetD_2LPT(part_ptr[ind]);
+                        for (int idim = 0; idim < NDIM; idim++) {
+                            D[idim] = displacements[idim][ind];
+                        }
                     }
                     if constexpr (FML::PARTICLE::has_get_q<T>()) {
                         auto * q = FML::PARTICLE::GetLagrangianPos(part_ptr[ind]);
