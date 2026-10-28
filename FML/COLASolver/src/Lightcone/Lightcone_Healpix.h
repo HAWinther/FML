@@ -265,27 +265,30 @@ class OnionSlice {
     /// Sum the maps over the tasks to task_to_reduce_to (for maps of a field, not of particle counts)
     void sum_field_over_tasks(int task_to_reduce_to = 0) {
         reconstruct_from_chunkpix();
-        auto npix = get_npix();
+        sum_map_to_task(task_to_reduce_to);
+        is_reduced = true;
+    }
+
+    /// MPI_Reduce (sum) of the map to task_to_reduce_to. In chunks, as the count of MPI_Reduce is an int and
+    /// npix = 12 nside^2 > INT_MAX for nside >= 16384
+    void sum_map_to_task([[maybe_unused]] int task_to_reduce_to) {
 #ifdef USE_MPI
-        if constexpr (std::is_same<T, float>::value) {
-            MPI_Reduce((FML::ThisTask == task_to_reduce_to ? MPI_IN_PLACE : &map[0]),
-                       &map[0],
-                       npix,
-                       MPI_FLOAT,
-                       MPI_SUM,
-                       task_to_reduce_to,
-                       FML::communicator);
-        } else {
-            MPI_Reduce((FML::ThisTask == task_to_reduce_to ? MPI_IN_PLACE : &map[0]),
-                       &map[0],
-                       npix,
-                       MPI_DOUBLE,
+        static_assert(std::is_same<T, float>::value or std::is_same<T, double>::value,
+                      "We only support float and double for onion maps");
+        const MPI_Datatype datatype = std::is_same<T, float>::value ? MPI_FLOAT : MPI_DOUBLE;
+        const long npix = get_npix();
+        const long chunk = 1L << 30;
+        for (long start = 0; start < npix; start += chunk) {
+            const int count = int(std::min(chunk, npix - start));
+            MPI_Reduce((FML::ThisTask == task_to_reduce_to ? MPI_IN_PLACE : &map[start]),
+                       &map[start],
+                       count,
+                       datatype,
                        MPI_SUM,
                        task_to_reduce_to,
                        FML::communicator);
         }
 #endif
-        is_reduced = true;
     }
 
     bool in_map(double r) {
@@ -350,31 +353,11 @@ class OnionSlice {
             std::cout << "#              We have added n = " << n_in_map << " particles to the map\n";
         }
 
-        auto npix = get_npix();
+        const long npix = get_npix();
 
-#ifdef USE_MPI
-        // Reduce map over tasks (different if float or double)
-        if constexpr (std::is_same<T, float>::value) {
-            MPI_Reduce((FML::ThisTask == task_to_reduce_to ? MPI_IN_PLACE : &map[0]),
-                       &map[0],
-                       npix,
-                       MPI_FLOAT,
-                       MPI_SUM,
-                       task_to_reduce_to,
-                       FML::communicator);
-        } else if (std::is_same<T, double>::value) {
-            MPI_Reduce((FML::ThisTask == task_to_reduce_to ? MPI_IN_PLACE : &map[0]),
-                       &map[0],
-                       npix,
-                       MPI_DOUBLE,
-                       MPI_SUM,
-                       task_to_reduce_to,
-                       FML::communicator);
-        } else {
-            throw std::runtime_error("We only support float and double for onion maps");
-        }
+        // Reduce map over tasks
+        sum_map_to_task(task_to_reduce_to);
 
-#endif
         if (FML::ThisTask == task_to_reduce_to) {
             // Sanity check - count particles in map and compare to n_in_map
             double count = 0.0;
@@ -383,7 +366,7 @@ class OnionSlice {
 #ifdef USE_OMP
 #pragma omp parallel for reduction(+ : count) reduction(min : minval) reduction(max : maxval)
 #endif
-            for (int ipix = 0; ipix < npix; ipix++) {
+            for (long ipix = 0; ipix < npix; ipix++) {
                 count += double(map[ipix]);
                 minval = std::min(minval, double(map[ipix]));
                 maxval = std::max(maxval, double(map[ipix]));
@@ -450,7 +433,7 @@ class OnionSlice {
 #ifdef USE_OMP
 #pragma omp parallel for reduction(+ : mean, nobserved, count_observed) reduction(max : maxval) reduction(min : minval)
 #endif
-        for (int ipix = 0; ipix < npix; ipix++) {
+        for (long ipix = 0; ipix < npix; ipix++) {
             if (map[ipix] < 0.0) {
                 std::cout << "# WARNING: Negative pixel " << ipix << " / " << npix << " has " << map[ipix] << "\n";
                 throw std::runtime_error("Negative pixels. This should never happen!");
@@ -482,7 +465,7 @@ class OnionSlice {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-        for (int ipix = 0; ipix < npix; ipix++)
+        for (long ipix = 0; ipix < npix; ipix++)
             if (observed[ipix])
                 map[ipix] -= mean;
 
@@ -532,7 +515,7 @@ class OnionSlice {
             fp << "# " << rmin << " " << rmax << " " << amin << " " << amax << " " << get_nside() << "\n";
             auto npix = get_npix();
             const double r = (rmin + rmax) / 2.0; // Physical distance
-            for (int i = 0; i < npix; i++) {
+            for (long i = 0; i < npix; i++) {
                 double theta = -M_PI + 2.0 * M_PI * (i + 0.5) / double(npix);
                 fp << std::setw(15) << r << " " << std::setw(15) << theta << " " << std::setw(15) << map[i] << "\n";
             }

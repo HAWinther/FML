@@ -1247,7 +1247,7 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
             std::cout << "# Adding delta i = " << i << " ";
             std::cout << "[" << rmin * boxsize << " -> " << rmax * boxsize << " Mpc/h] ";
             std::cout << "to kappa-map j = " << j << " rmap = " << r_kappa_map * boxsize << " Mpc/h\n";
-            for (int k = 0; k < npix; k++) {
+            for (long k = 0; k < npix; k++) {
                 kappa_map_data[k] += delta_map_data[k] * integral;
             }
         }
@@ -1270,7 +1270,7 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
         double kappa_max = -std::numeric_limits<double>::max();
         double kappa_mean = 0.0;
         const auto * kappa_data = kappa_maps[i].get_map_data();
-        for (int k = 0; k < npix; k++) {
+        for (long k = 0; k < npix; k++) {
             const double kappa = kappa_data[k];
             kappa_min = std::min(kappa_min, kappa);
             kappa_max = std::max(kappa_max, kappa);
