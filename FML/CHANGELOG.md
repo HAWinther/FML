@@ -5,6 +5,43 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLASolver: clear errors for unsupported or inconsistent settings
+These used to crash late, hang or be silently ignored. Now they stop with a message, mostly when the parameters
+are read.
+
+COLA and time stepping:
+- `simulation_cola_LPT_order = 3`: the COLA particles only store the 1LPT and 2LPT displacements, so this aborted
+  after the IC. The docs are corrected.
+- `simulation_enforce_LPT_trajectories` with COLA turned off by `simulation_cola_LPT_order < 1`: the particles
+  never moved.
+- Tassev with `timestep_cola_nLPT = 0`: 0/0, which segfaulted.
+- `timestep_algorithm` other than KDK: it was ignored.
+- An output with 0 steps after the first: it wrote the previous snapshot at another redshift. This is also checked
+  when the total number of steps is split over the outputs.
+
+Gravity models and cosmologies:
+- `gravity_model_fofr_fofr0 <= 0`: the ODE failed.
+- `gravity_model_mbeta_params` without 4 numbers: out-of-bounds read.
+- `cosmology_ede_n = 1`: the ODE failed.
+- A Tabulated H/H0 table that does not reach z = 0: H(a=1) was silently not H0.
+- The Geff file reader skips empty lines and lines starting with #. A header line made it loop forever.
+
+Parameters that were read in too few cases:
+- `force_nufft_epsilon` is also read for `force_early_method = nufft`.
+- `pofk_subtract_shotnoise` is also read with `pofk_every_step` (it was only read with `pofk = true`).
+- `ic_sigma8(_redshift)` are only needed with `ic_sigma8_normalization`.
+
+Other fixes:
+- Symmetron screening: zero fifth force before symmetry breaking, where PhiCrit/PhiNewton could be 0/0.
+- JBD restores the format of `std::cout` after its init. Later small numbers, such as As, were printed as
+  0.00000000.
+- DGP cosmology: a message when `cosmology_OmegaK` is replaced by the closure value.
+- `nbody` prints the message of an error and stops all tasks, instead of a backtrace.
+- `nbody` gives a non-zero exit code with no parameterfile, an unknown `--option`, or `--parameters` to a file
+  that cannot be written.
+
+New tests are in `tests/check_validation.py`.
+
 ### Polyspectrum and portability correctness
 
 - Nonlinear Fourier-shell estimators now enforce true wavevector closure, padding high-frequency products
