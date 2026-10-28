@@ -76,14 +76,7 @@ namespace FML::BARYONIFICATION {
         /// get_pos() and get_ndim(), as in the rest of FML. This module is specifically three-dimensional.
         template <class T>
         std::vector<std::array<double, 3>> displacements(T * particles, size_t count) const {
-            detail::require(count == 0 || particles != nullptr, "Baryonifier: null particle array");
-            // Validate before entering OpenMP; ordinary input errors must remain catchable exceptions.
-            for (size_t i = 0; i < count; ++i) {
-                detail::require(particles[i].get_ndim() == 3, "Baryonifier: particles must be three-dimensional");
-                for (size_t d = 0; d < 3; ++d)
-                    detail::require(std::isfinite(particles[i].get_pos()[d]),
-                                    "Baryonifier: non-finite particle position");
-            }
+            validate_particles(particles, count);
             std::vector<std::array<double, 3>> shifts(count);
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -98,15 +91,18 @@ namespace FML::BARYONIFICATION {
         /// Position-only post-processing. IDs, masses, velocities, and all other particle fields are untouched.
         template <class T>
         void apply(T * particles, size_t count) const {
-            const auto shifts = displacements(particles, count);
+            validate_particles(particles, count);
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
             for (size_t i = 0; i < count; ++i) {
                 auto * x = particles[i].get_pos();
+                // Complete the vector displacement at the original position before
+                // modifying any component. The field is independent of other particles.
+                const auto shift = displacement_at({double(x[0]), double(x[1]), double(x[2])});
                 using Position = std::remove_reference_t<decltype(x[0])>;
                 for (size_t d = 0; d < 3; ++d) {
-                    const double moved = double(x[d]) + shifts[i][d];
+                    const double moved = double(x[d]) + shift[d];
                     x[d] = Position(periodic ? FML::KDTREE::periodic_wrap(moved, boxsize) : moved);
                     // Casting to float can round a wrapped position back to boxsize.
                     if (periodic && double(x[d]) >= boxsize)
@@ -116,6 +112,18 @@ namespace FML::BARYONIFICATION {
         }
 
       private:
+        template <class T>
+        static void validate_particles(T * particles, size_t count) {
+            detail::require(count == 0 || particles != nullptr, "Baryonifier: null particle array");
+            // Validate the whole input before OpenMP or any in-place changes.
+            for (size_t i = 0; i < count; ++i) {
+                detail::require(particles[i].get_ndim() == 3, "Baryonifier: particles must be three-dimensional");
+                for (size_t d = 0; d < 3; ++d)
+                    detail::require(std::isfinite(particles[i].get_pos()[d]),
+                                    "Baryonifier: non-finite particle position");
+            }
+        }
+
         std::vector<HaloDisplacement> halos;
         double boxsize, max_support = 0.0;
         bool periodic;

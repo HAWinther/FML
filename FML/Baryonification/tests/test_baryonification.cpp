@@ -38,6 +38,11 @@ namespace {
         double * get_pos() { return pos; }
         int get_ndim() const { return 3; }
     };
+    struct FloatParticle {
+        float pos[3];
+        float * get_pos() { return pos; }
+        int get_ndim() const { return 3; }
+    };
     RadialMapping analytic_mapping() {
         std::vector<double> r, source, target;
         for (int i = 0; i <= 10000; ++i) {
@@ -213,6 +218,41 @@ int main() {
     Baryonifier isolated({halos[0]}, 4, false);
     check(isolated.displacement_at({3.9, 1, 1}) == std::array<double, 3>{},
           "nonperiodic mode does not use halo images");
+
+    // Independent buffered application of the public displacement array: the streamed
+    // path must preserve operation order, position casts and periodic edge handling.
+    auto matches_buffered = [](const Baryonifier & f, auto input, bool periodic) {
+        auto expected = input;
+        const auto shifts = f.displacements(expected.data(), expected.size());
+        for (size_t i = 0; i < expected.size(); ++i) {
+            auto * x = expected[i].get_pos();
+            using Position = std::remove_reference_t<decltype(x[0])>;
+            for (size_t d = 0; d < 3; ++d) {
+                const double moved = double(x[d]) + shifts[i][d];
+                x[d] = Position(periodic ? FML::KDTREE::periodic_wrap(moved, 4) : moved);
+                if (periodic && double(x[d]) >= 4)
+                    x[d] = Position(0);
+            }
+        }
+        f.apply(input.data(), input.size());
+        for (size_t i = 0; i < input.size(); ++i)
+            for (size_t d = 0; d < 3; ++d)
+                if (input[i].get_pos()[d] != expected[i].get_pos()[d])
+                    return false;
+        return true;
+    };
+    check(matches_buffered(field, original, true) && matches_buffered(isolated, original, false),
+          "streamed double positions exactly match buffered application in periodic and nonperiodic modes");
+    std::vector<FloatParticle> floats{{{-0.1f, 1.01f, 1.02f}},
+                                      {{0.4f, 1.02f, 1.03f}},
+                                      {{3.9f, 1.01f, 1.02f}},
+                                      {{8.1f, 1.01f, 1.02f}}};
+    check(matches_buffered(field, floats, true) && matches_buffered(isolated, floats, false),
+          "streamed float positions exactly match buffered application, including unwrapped inputs");
+    FloatParticle rounded_edge{{-1e-8f, 0, 0}};
+    empty.apply(&rounded_edge, 1);
+    check(rounded_edge.pos[0] == 0,
+          "a wrapped float that rounds to the box size is restored to zero");
     // Invert a genuinely nonlinear cumulative table, independently of the cubic-source transport above.
     std::vector<double> inverse_r, inverse_m;
     for (int i = 0; i <= 10000; ++i) {
@@ -243,10 +283,19 @@ int main() {
     auto bad = original;
     if (!bad.empty()) {
         bad.back().pos[0] = nan;
-        check(rejects([&] { field.apply(bad.data(), bad.size()); }) &&
-                  (bad.size() == 1 || bad.front().pos[0] == original.front().pos[0]),
+        const bool rejected = rejects([&] { field.apply(bad.data(), bad.size()); });
+        bool untouched = true;
+        for (size_t i = 0; i < bad.size(); ++i)
+            for (size_t d = 0; d < 3; ++d)
+                untouched = untouched && (i == bad.size() - 1 && d == 0
+                                              ? std::isnan(bad[i].pos[d])
+                                              : bad[i].pos[d] == original[i].pos[d]);
+        check(rejected && untouched,
               "bad input is rejected before any particles are modified");
     }
+    check(rejects([&] { field.apply<Particle>(nullptr, 1); }) &&
+              rejects([&] { field.displacements<Particle>(nullptr, 1); }),
+          "both particle interfaces reject a null nonempty array");
     FML::SumOverTasks(&failures);
     if (FML::ThisTask == 0)
         std::cout << (failures ? "BARYONIFICATION FAILED\n" : "ALL BARYONIFICATION TESTS PASSED\n");
