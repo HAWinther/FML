@@ -138,9 +138,9 @@ COLA: the two species share the COLA frame of the total CDM+baryon field (the LP
 | COLA + Quinn, linear amplitude (%)              | 0.0   | 0.0   | 0.0   | 0.0   | +0.1  |
 | COLA + FastPM, linear amplitude (%)             | -4.1  | -3.5  | -3.6  | -3.0  | -3.2  |
 | COLA + Tassev, linear amplitude (%)             | +34   | +29   | +30   | +25   | +26   |
-| COLA + Tassev, logarithmic steps (%)            | +2.5  | +2.1  | +2.2  | +1.9  | +2.0  |
+| COLA + Tassev, logarithmic steps (%)            | +1.3  | +1.1  | +1.2  | +1.0  | +1.0  |
 | COLA + Quinn, normal amplitude (%)              | -0.5  | -0.5  | -0.6  | -1.1  | -0.8  |
-| scale-dependent COLA + Quinn, 0.4 eV linear neutrinos, normal amplitude (%) | -0.7 | -0.8 | -0.9 | -0.4 | -0.7 |
+| scale-dependent COLA + Quinn, 0.4 eV linear neutrinos, normal amplitude (%) | -0.4 | -0.4 | -0.6 | -0.8 | -0.6 |
 
 With COLA + Quinn the CDM+baryon P(k) is within 0.2% of the reference for k < 0.6 h/Mpc (Tassev: +1.1% at k = 0.6). NB: at normal amplitude the relative mode on large scales is about 30% smaller (in amplitude, at z = 0 and k = 0.03 h/Mpc) than linear theory with the default `particle_baryon_relative_mode = "displacement"`, with and without COLA, see below. Measure it from delta_c - delta_b: 1 - sqrt(P_b/P_c) is biased low at normal amplitude by the power the two species share.
 
