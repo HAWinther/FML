@@ -17,9 +17,11 @@ namespace FML::SHORT_RANGE_GRAVITY {
             for (auto i : fourier.get_fourier_range(slice, slice + 1)) {
                 const auto k = fourier.get_fourier_wavevector_from_index(i);
                 const double k2 = k[0] * k[0] + k[1] * k[1] + k[2] * k[2];
-                fourier.set_fourier_from_index(i,
-                                               fourier.get_fourier_from_index(i) *
-                                                   FML::GRID::FloatType(std::exp(-k2 * rs_over_box * rs_over_box)));
+                const double multiplier =
+                    kernel.has_yukawa() ?
+                        kernel.long_range_filter(k2 / kernel.options().boxsize / kernel.options().boxsize) :
+                        std::exp(-k2 * rs_over_box * rs_over_box);
+                fourier.set_fourier_from_index(i, fourier.get_fourier_from_index(i) * FML::GRID::FloatType(multiplier));
             }
     }
 } // namespace FML::SHORT_RANGE_GRAVITY

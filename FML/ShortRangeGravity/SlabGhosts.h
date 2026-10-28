@@ -43,16 +43,32 @@ namespace FML::SHORT_RANGE_GRAVITY {
         result.particles = owned;
 #ifdef USE_MPI
         const auto & o = kernel.options();
-        const std::array<double, 7>
-            settings{xmin, xmax, o.boxsize, o.split_scale, o.softening_support, o.cutoff_tolerance, o.coupling};
+        const auto model = kernel.model_parameters();
+        constexpr int nsettings = 10;
+        const std::array<double, nsettings> settings{xmin,
+                                                     xmax,
+                                                     o.boxsize,
+                                                     o.split_scale,
+                                                     o.softening_support,
+                                                     o.cutoff_tolerance,
+                                                     o.coupling,
+                                                     model[0],
+                                                     model[1],
+                                                     model[2]};
         std::vector<double> all_settings(std::size_t(FML::NTasks) * settings.size());
-        MPI_Allgather(settings.data(), 7, MPI_DOUBLE, all_settings.data(), 7, MPI_DOUBLE, FML::communicator);
+        MPI_Allgather(settings.data(),
+                      nsettings,
+                      MPI_DOUBLE,
+                      all_settings.data(),
+                      nsettings,
+                      MPI_DOUBLE,
+                      FML::communicator);
         for (int rank = 0; rank < FML::NTasks; ++rank) {
-            const auto base = std::size_t(rank) * 7;
-            if (all_settings[base] != (rank ? all_settings[base - 6] : 0) ||
+            const auto base = std::size_t(rank) * nsettings;
+            if (all_settings[base] != (rank ? all_settings[base - (nsettings - 1)] : 0) ||
                 (rank == FML::NTasks - 1 && all_settings[base + 1] != o.boxsize))
                 invalid = 1;
-            for (int j = 2; j < 7; ++j)
+            for (int j = 2; j < nsettings; ++j)
                 if (all_settings[base + j] != settings[j])
                     invalid = 1;
         }
@@ -60,7 +76,7 @@ namespace FML::SHORT_RANGE_GRAVITY {
         if (invalid)
             throw std::invalid_argument("[ShortRangeGravity] Slabs must partition the box and kernels must agree");
         const auto needed = [&](const Particle & p, int rank) {
-            const auto base = std::size_t(rank) * 7;
+            const auto base = std::size_t(rank) * nsettings;
             return detail::distance_to_periodic_slab(p.position[0],
                                                      all_settings[base],
                                                      all_settings[base + 1],

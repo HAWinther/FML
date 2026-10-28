@@ -13,7 +13,7 @@ USE_LUA             ?= true
 
 TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_lpt test_nbody
 TARGETS += test_baryonification test_numericalmethods test_interlacing_offset test_streamed_kick test_lightcone test_random_fields test_timestepping test_transfers
-TARGETS += test_cosmicweb test_short_range test_control test_morphology test_environment
+TARGETS += test_cosmicweb test_short_range test_yukawa test_control test_morphology test_environment
 
 include ../Makefile.config
 
@@ -67,6 +67,9 @@ test_morphology: test_morphology.o Global.o
 	$(LINK_EXE)
 
 test_spectra: test_spectra.o Global.o
+	$(LINK_EXE)
+
+test_yukawa: test_yukawa.o Global.o
 	$(LINK_EXE)
 
 test_short_range: test_short_range.o Global.o
@@ -221,6 +224,8 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_core; \
 	  echo "== Running test_grid_tools with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_grid_tools; \
+	  echo "== Running test_yukawa with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_yukawa; \
 	  echo "== Running test_short_range with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_short_range; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_control; \

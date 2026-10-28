@@ -157,3 +157,6 @@ tests/test_morphology
 Environment/tests/test_environment
 Environment/example/example
 tests/test_environment
+
+ShortRangeGravity/tests/test_yukawa
+tests/test_yukawa

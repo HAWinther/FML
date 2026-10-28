@@ -1,10 +1,10 @@
 # Short-range gravity: P3M and monopole TreePM building blocks
 
-Header-only C++17 module in `FML::SHORT_RANGE_GRAVITY`. Initial support is three-dimensional Newtonian gravity in a cubic periodic box, positive or zero source masses, one common comoving softening support, and a cutoff smaller than half the box. This module provides force calculations; it does not change COLASolver or its integration scheme (backlog item 47).
+Header-only C++17 module in `FML::SHORT_RANGE_GRAVITY`. Support is three-dimensional Newtonian or Newtonian-plus-Yukawa gravity in a cubic periodic box, positive or zero source masses, one common softening support, and a cutoff smaller than half the box. Newtonian gravity remains the default. This module provides force calculations; it does not change COLASolver or its integration scheme (backlog item 47).
 
 See [tests/RESULTS.md](tests/RESULTS.md) for measured validation, timings and current limitations.
 
-## Force split and softening
+## Newtonian force split and softening
 
 Use a Gaussian long-range potential filter `exp(-k^2 rs^2)`. The complementary unsoftened pair acceleration is
 
@@ -17,6 +17,39 @@ The compact cubic-spline density has support `h=softening_support`, with `W=8/(p
 These are the Gaussian split and cubic-spline density conventions described in the [GADGET-2 code paper](https://wwwmpa.mpa-garching.mpg.de/~volker/gadget/gadget2-paper.pdf). The implementation is independent.
 
 `cutoff_tolerance` determines the radius where the short-range pair force, relative to unsoftened Newtonian gravity, falls below the requested tolerance. The force is then truncated, without tapering. The tolerance bounds this individual pair's window; **it does not bound the relative error in a many-particle net force**, particularly near cancellations. Require `h <= cutoff < boxsize/2`. Omitted periodic images have exponentially small but nonzero tails. Check cutoff and split-scale convergence for production use.
+
+## Optional Newtonian-plus-Yukawa model
+
+```cpp
+Kernel newtonian(options);                         // Existing model and default.
+Kernel also_newtonian(options, Newtonian{});        // Explicit selection.
+Kernel modified(options, NewtonYukawa{1.0/3, 10});  // alpha dimensionless; lambda=10 in the coordinate length unit.
+```
+
+The point-particle potential outside the softening support is `Phi=-coupling*m/r [1+alpha exp(-r/lambda)]`. The force multiplier is `1+alpha (1+r/lambda) exp(-r/lambda)`. Finite positive lambda and finite alpha are required; negative alpha, including repulsive and cancellation cases, is supported. A zero alpha takes the Newtonian force path exactly, including its original cutoff. The model is selected once in an immutable `Kernel`; search backends and particle ownership are shared.
+
+The long-range Fourier potential kernel is proportional to
+
+```
+exp(-k^2 rs^2)/k^2 + alpha exp[-(k^2+mu^2) rs^2]/(k^2+mu^2), mu=1/lambda.
+```
+
+`apply_long_range_filter` supplies the corresponding density multiplier before the ordinary continuous-k Newtonian PM solve. The Yukawa piece uses the Helmholtz-aware factor `exp[-(k^2+mu^2)rs^2]`; it is not the common Gaussian filter applied to both full potentials. The analytic complementary short-range Yukawa Green function is
+
+```
+[exp(-mu*r) erfc(q-z) + exp(mu*r) erfc(q+z)]/(2r),
+q=r/(2rs), z=mu*rs.
+```
+
+This is the [Yukawa Ewald decomposition, equations 30–32](https://link.aps.org/accepted/10.1103/PhysRevE.103.043204). Forces are derivatives of the potentials. Scaled erfc evaluation avoids overflowing `exp(mu*r)`. Series and positive heat-kernel integrals resolve small-radius and extreme-range limits. For negative alpha, stable Newtonian-minus-Yukawa differences preserve small forces instead of subtracting two rounded, almost equal accelerations. Near a many-particle cancellation, force accuracy still needs component-based absolute tolerances; a relative error in a nearly zero net force is not controlled by the cutoff or tree opening alone.
+
+Yukawa softening is a numerical **pair-potential prescription**, not the Yukawa field of the spline's extended density (the Newtonian shell theorem does not apply to Yukawa gravity). Let `gN(r)` be the positive spline-softened Newtonian Green function and `s(r)=1/gN(r)`. Define the softened Yukawa term as `exp[-s(r)/lambda]/s(r)`. Its coefficient is `Newtonian_soft_coefficient * (1+s/lambda) exp(-s/lambda)`. This is finite at the centre, matches the exact point Yukawa law outside the support where `s=r`, and tends to the existing Newtonian spline as lambda grows. Both potentials and their forces match smoothly at the support boundary. The short-range force subtracts the matching Ewald long-range force; it does not multiply the softened force by an unsoftened split window.
+
+For nonzero alpha the cutoff conservatively solves `(1+abs(alpha))*Newtonian_short_window=cutoff_tolerance`. The point Yukawa short force is positive and no larger than the Newtonian short force, as follows from its positive heat-kernel integral. Thus this bounds the combined omitted pair force relative to the Newtonian point force outside the softening support, including negative alpha; it does not promise a relative bound against a cancelled total force. The octree additionally resolves lambda in its opening rule. This is deliberately conservative and can make very short-range Yukawa trees slower, even when that contribution is small. Cell-list geometry and ghost routing use the resulting cutoff without changing their algorithms.
+
+`potential(r)` is the full isolated softened pair potential per unit source mass, including coupling; `full_coefficient(r)` is its acceleration coefficient. `long_range_potential` and `long_range_coefficient` expose the Ewald long component (the latter excludes coupling, matching the original Newtonian API). `untruncated_potential` and `untruncated_coefficient` expose the short component with coupling; `coefficient` additionally truncates it. The old `softened_coefficient` remains the Newtonian spline helper. The PM force sets its zero Fourier mode to zero; uniform-potential constants and periodic potential-energy conventions are not supplied by these isolated-pair helpers.
+
+Lambda and all other lengths use the same coordinate unit. The library does not infer a scale factor: for fixed physical range with comoving coordinates, pass `lambda_comoving=lambda_physical/a` at the force epoch. Rebuild the kernel, search structures and ghosts whenever the model, split or softening changes. The large-lambda limit is Newtonian gravity with coupling `(1+alpha)*coupling`; the small-lambda limit recovers Newtonian gravity at fixed nonzero separation and for the softened model. These are linear pair interactions, not an environmental screening prescription.
 
 ## API
 
@@ -67,7 +100,7 @@ auto result = CellList(sources.particles, kernel).compute(owned);
 // Or Octree(sources.particles, kernel).compute(owned).
 ```
 
-This is collective on `FML::communicator`. Slabs, in rank order, must form a contiguous partition of `[0,L)`; bounds are in the same length unit as positions. Owned particles must already have migrated to their slabs. IDs must be globally unique; the function checks local source IDs, but does not globally gather IDs to validate that contract. All ranks must use identical box, split, softening, cutoff tolerance and coupling. Empty particle slabs are supported; zero-width domains are not.
+This is collective on `FML::communicator`. Slabs, in rank order, must form a contiguous partition of `[0,L)`; bounds are in the same length unit as positions. Owned particles must already have migrated to their slabs. IDs must be globally unique; the function checks local source IDs, but does not globally gather IDs to validate that contract. All ranks must use identical box, split, softening, cutoff tolerance, coupling and interaction model (including alpha and lambda). Model mismatches are rejected collectively. Empty particle slabs are supported; zero-width domains are not.
 
 The exchange sends each source once to every remote slab within the cutoff, including periodic and nonadjacent slabs. It does not replicate particle payloads through an all-gather. Only small settings/count arrays are exchanged globally. A rank's result starts with its owned particles, followed by ghosts with base-box positions. Buffers pack fields explicitly and exchange bounded chunks with 64-bit counts, avoiding padding and MPI int-count overflow. Sender/receiver rounds agree collectively. The current implementation scans local particles per destination and uses a ring exchange with global round counts; it favours simplicity over communication overlap. Narrow slabs or a large cutoff can still require nearly all particles as ghosts. Ghost storage is not bounded by `max_cells`. Rebuild ghosts and local search structures after each drift; the function does not modify ownership or velocities. `sent_particles` and `received_particles` expose traffic per rank.
 
@@ -81,7 +114,7 @@ OMP_NUM_THREADS=4 FML/ShortRangeGravity/tests/test_short_range --benchmark
 OMP_NUM_THREADS=2 mpirun -np 4 FML/ShortRangeGravity/tests/test_short_range --benchmark
 ```
 
-The test is also registered in the main `FML/tests` suite. FFTW and GSL are needed by the PM validation (via NBody headers); the pair kernel, cell list and octree themselves have no external dependencies. The ghost helper uses FML Global/MPI. Make clean when changing compiler, precision or MPI options in the same build directory.
+Both `test_short_range` and `test_yukawa` are registered in the main `FML/tests` suite. The Yukawa tests add 100-digit Ewald reference values, independent periodic image sums, softened potential derivatives, range limits, negative-alpha cancellation cases and MPI model-agreement checks. `tests/generate_yukawa_reference.py` regenerates the reference header with mpmath at 100 digits; format that header with `FML/.clang-format` after regeneration. FFTW and GSL are needed by the PM validation (via NBody headers); the pair kernel, cell list and octree themselves have no external dependencies. The ghost helper uses FML Global/MPI. Make clean when changing compiler, precision or MPI options in the same build directory.
 
 Tests include independent spline enclosed-mass quadrature; split and zero-separation limits; tolerance cutoffs; direct/cell/tree agreement for uniform/clustered/coincident/periodic particles; cell aliases and empty catalogues; thread determinism; monopole acceptance and tighter opening; periodic Ewald validation at multiple split/softening scales; FML force sign and normalization; length/mass-unit invariance; ghost completeness, empty/nonadjacent slabs and multi-batch messages; and collective input errors. The benchmark reports maximum-rank build-plus-force and ghost-exchange times, global candidate counts, maximum-rank relative RMS force error and maximum ghost payload bytes for 8000 uniform/clustered particles. It deliberately holds a replicated catalogue for the direct reference in the test harness; the force/ghost implementation does not gather that catalogue. Ghost payload bytes exclude vector capacity, owned particles, tree/cell metadata, communication buffers and allocator overhead; they are not RSS. Timings are machine dependent and are not production scaling claims.
 

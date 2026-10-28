@@ -1,6 +1,7 @@
 #ifndef FML_SHORT_RANGE_GRAVITY_HEADER
 #define FML_SHORT_RANGE_GRAVITY_HEADER
 
+#include <FML/ShortRangeGravity/Yukawa.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -39,21 +40,32 @@ namespace FML::SHORT_RANGE_GRAVITY {
     class Kernel {
         Options options_;
         double cutoff_;
+        bool yukawa_model_{false};
+        double alpha_{0}, lambda_{1};
         double inverse_sqrt_pi_{1.0 / std::sqrt(std::acos(-1.0))};
 
-      public:
-        explicit Kernel(Options options = {}) : options_(options) {
+        Kernel(Options options, double alpha, double lambda, bool yukawa_model)
+            : options_(options), yukawa_model_(yukawa_model), alpha_(alpha), lambda_(lambda) {
+            if (!std::isfinite(alpha) || !std::isfinite(lambda) || lambda <= 0)
+                throw std::invalid_argument("[ShortRangeGravity] Require finite alpha and finite positive lambda");
             const auto positive = [](double x) { return std::isfinite(x) && x > 0; };
             if (!positive(options.boxsize) || !positive(options.split_scale) || !positive(options.softening_support) ||
                 !std::isfinite(options.coupling) || options.coupling < 0 || !positive(options.cutoff_tolerance) ||
                 options.cutoff_tolerance >= 1 || options.max_cells == 0)
                 throw std::invalid_argument("[ShortRangeGravity] Invalid length, coupling, tolerance or cell budget");
+            const auto exceeds_tolerance = [&](double q) {
+                if (alpha_ == 0)
+                    return short_range_window(q) > options.cutoff_tolerance;
+                // |F_N,short+alpha F_Y,short| <= (1+|alpha|) F_N,short outside softening.
+                const double log_window = -q * q + std::log(detail::erfcx_positive(q) + 2 * q * inverse_sqrt_pi_);
+                return log_window + std::log1p(std::abs(alpha_)) > std::log(options.cutoff_tolerance);
+            };
             double lo = 0, hi = 1;
-            while (short_range_window(hi) > options.cutoff_tolerance)
+            while (exceeds_tolerance(hi))
                 hi *= 2;
             for (int iteration = 0; iteration < 80; ++iteration) {
                 const double mid = (lo + hi) * .5;
-                if (short_range_window(mid) > options.cutoff_tolerance)
+                if (exceeds_tolerance(mid))
                     lo = mid;
                 else
                     hi = mid;
@@ -65,13 +77,102 @@ namespace FML::SHORT_RANGE_GRAVITY {
             // Catch unusable scales before entering a parallel force loop.
             if (!positive(std::pow(options.softening_support, -3)) || !positive(std::pow(options.split_scale, -3)))
                 throw std::invalid_argument("[ShortRangeGravity] Length scale outside representable force range");
+            if (alpha_ != 0)
+                (void)detail::yukawa_quadrature();
+        }
+
+      public:
+        explicit Kernel(Options options = {}) : Kernel(options, 0, 1, false) {}
+        Kernel(Options options, Newtonian) : Kernel(options) {}
+        Kernel(Options options, NewtonYukawa model) : Kernel(options, model.alpha, model.lambda, true) {}
+        bool has_yukawa() const { return alpha_ != 0; }
+        double yukawa_alpha() const { return alpha_; }
+        double yukawa_lambda() const { return lambda_; }
+        std::array<double, 3> model_parameters() const {
+            return {yukawa_model_ ? 1.0 : 0.0, alpha_, yukawa_model_ ? lambda_ : 0.0};
+        }
+        bool tree_scale_resolved(double diameter, double opening_angle) const {
+            return diameter <
+                   opening_angle * (has_yukawa() ? std::min(options_.split_scale, lambda_) : options_.split_scale);
         }
         const Options & options() const { return options_; }
         double cutoff() const { return cutoff_; }
         double long_range_filter(double k_squared) const {
             if (!std::isfinite(k_squared) || k_squared < 0)
                 throw std::invalid_argument("[ShortRangeGravity] k squared must be finite and nonnegative");
-            return std::exp(-k_squared * options_.split_scale * options_.split_scale);
+            const double filter = std::exp(-k_squared * options_.split_scale * options_.split_scale);
+            if (!has_yukawa() || k_squared == 0)
+                return filter;
+            const double x = std::sqrt(k_squared) * lambda_;
+            const double ratio = x > 1 ? 1 / (1 + (1 / x) * (1 / x)) : x * x / (1 + x * x);
+            const double z = options_.split_scale / lambda_;
+            if (alpha_ < 0) {
+                const double complement = x > 1 ? ((1 / x) * (1 / x)) / (1 + (1 / x) * (1 / x)) : 1 / (1 + x * x);
+                const double difference = complement + ratio * (-std::expm1(-z * z));
+                return filter * ((1 + alpha_) - alpha_ * difference);
+            }
+            return filter * (1 + alpha_ * ratio * std::exp(-z * z));
+        }
+        /// Positive spline-softened Newtonian Green function, before coupling/mass.
+        double newtonian_green(double r) const {
+            if (!std::isfinite(r) || r < 0)
+                throw std::invalid_argument("[ShortRangeGravity] Separation must be finite and nonnegative");
+            const double h = options_.softening_support, u = r / h;
+            if (u >= 1)
+                return 1 / r;
+            if (u < .5)
+                return (14.0 / 5 - 16.0 / 3 * u * u + 48.0 / 5 * std::pow(u, 4) - 32.0 / 5 * std::pow(u, 5)) / h;
+            return (16.0 / 5 - 1 / (15 * u) - 32.0 / 3 * u * u + 16 * u * u * u - 48.0 / 5 * std::pow(u, 4) +
+                    32.0 / 15 * std::pow(u, 5)) /
+                   h;
+        }
+        /// Full softened pair potential per unit source mass, including coupling. Numerical softening uses
+        /// effective separation s=1/newtonian_green(r): Phi_Y=-G exp(-s/lambda)/s, exactly Yukawa beyond h.
+        double potential(double r) const {
+            const double g = newtonian_green(r);
+            return -options_.coupling * g *
+                   (has_yukawa() ? detail::combined_yukawa_factor(alpha_, -1 / (g * lambda_)) : 1);
+        }
+        double full_coefficient(double r) const {
+            (void)newtonian_green(r); // Validate radius before entering the low-level Newtonian formula.
+            const double base = softened_coefficient(r);
+            if (!has_yukawa())
+                return options_.coupling * base;
+            const double s = 1 / newtonian_green(r);
+            return options_.coupling * base *
+                   (detail::combined_yukawa_factor(alpha_, detail::log_yukawa_force_window(s / lambda_)));
+        }
+        double long_range_potential(double r) const {
+            (void)newtonian_green(r);
+            const double rs = options_.split_scale;
+            const double n = r == 0 ? inverse_sqrt_pi_ / rs : std::erf(r / (2 * rs)) / r;
+            if (alpha_ < 0)
+                return -options_.coupling *
+                       ((1 + alpha_) * n - alpha_ * detail::yukawa_long_difference(r, rs, lambda_)[0]);
+            return -options_.coupling * (n + (has_yukawa() ? alpha_ * detail::yukawa_long(r, rs, lambda_)[0] : 0));
+        }
+        double untruncated_potential(double r) const {
+            if (r < options_.softening_support) {
+                if (alpha_ < 0) {
+                    const double g = newtonian_green(r), rs = options_.split_scale;
+                    const double nl = r == 0 ? inverse_sqrt_pi_ / rs : std::erf(r / (2 * rs)) / r;
+                    const double x = 1 / (g * lambda_);
+                    const double difference =
+                        rs / lambda_ < .5 ? -g * detail::exponential_remainder(-x) -
+                                                detail::yukawa_long_difference(r, rs, lambda_, true)[0] :
+                                            -g * std::expm1(-x) - detail::yukawa_long_difference(r, rs, lambda_)[0];
+                    return -options_.coupling * ((1 + alpha_) * (g - nl) - alpha_ * difference);
+                }
+                return potential(r) - long_range_potential(r);
+            }
+            (void)newtonian_green(r);
+            const double n = std::erfc(r / (2 * options_.split_scale)) / r;
+            if (alpha_ < 0)
+                return -options_.coupling *
+                       ((1 + alpha_) * n -
+                        alpha_ * detail::yukawa_short_difference(r, options_.split_scale, lambda_)[0]);
+            return -options_.coupling *
+                   (n + (has_yukawa() ? alpha_ * detail::yukawa_short(r, options_.split_scale, lambda_)[0] : 0));
         }
         /// Coefficient of the full spline-softened Newtonian acceleration, without coupling or source mass.
         double softened_coefficient(double r) const {
@@ -84,7 +185,7 @@ namespace FML::SHORT_RANGE_GRAVITY {
             return (64.0 / 3 - 48 * u + 192.0 / 5 * u * u - 32.0 / 3 * u * u * u - 1 / (15 * u * u * u)) / (h * h * h);
         }
         /// Gaussian long-range acceleration coefficient. Series avoids cancellation close to r=0.
-        double long_range_coefficient(double r) const {
+        double newtonian_long_range_coefficient(double r) const {
             const double rs = options_.split_scale;
             const double q = r / (2 * rs);
             if (q < .05) {
@@ -94,13 +195,44 @@ namespace FML::SHORT_RANGE_GRAVITY {
             }
             return (std::erf(q) - 2 * inverse_sqrt_pi_ * q * std::exp(-q * q)) / (r * r * r);
         }
+        /// Complete long-range radial force coefficient, before coupling/mass.
+        double long_range_coefficient(double r) const {
+            (void)newtonian_green(r);
+            const double n = newtonian_long_range_coefficient(r);
+            if (alpha_ < 0)
+                return (1 + alpha_) * n - alpha_ * detail::yukawa_long_difference(r, options_.split_scale, lambda_)[1];
+            return n + (has_yukawa() ? alpha_ * detail::yukawa_long(r, options_.split_scale, lambda_)[1] : 0);
+        }
         /// Untruncated short-range coefficient; public for split/softening validation.
         double untruncated_coefficient(double r) const {
             if (!std::isfinite(r) || r < 0)
                 throw std::invalid_argument("[ShortRangeGravity] Separation must be finite and nonnegative");
+            double n;
             if (r < options_.softening_support)
-                return options_.coupling * (softened_coefficient(r) - long_range_coefficient(r));
-            return options_.coupling * short_range_window(r / (2 * options_.split_scale)) / (r * r * r);
+                n = softened_coefficient(r) - newtonian_long_range_coefficient(r);
+            else
+                n = short_range_window(r / (2 * options_.split_scale)) / (r * r * r);
+            if (!has_yukawa())
+                return options_.coupling * n;
+            if (alpha_ < 0) {
+                double difference;
+                if (r < options_.softening_support) {
+                    const double separation = 1 / newtonian_green(r);
+                    const double full_difference =
+                        softened_coefficient(r) * (-std::expm1(detail::log_yukawa_force_window(separation / lambda_)));
+                    difference = full_difference - detail::yukawa_long_difference(r, options_.split_scale, lambda_)[1];
+                } else
+                    difference = detail::yukawa_short_difference(r, options_.split_scale, lambda_)[1];
+                return options_.coupling * ((1 + alpha_) * n - alpha_ * difference);
+            }
+            double y;
+            if (r < options_.softening_support) {
+                const double s = 1 / newtonian_green(r);
+                y = softened_coefficient(r) * detail::yukawa_force_window(s / lambda_) -
+                    detail::yukawa_long(r, options_.split_scale, lambda_)[1];
+            } else
+                y = detail::yukawa_short(r, options_.split_scale, lambda_)[1];
+            return options_.coupling * (n + alpha_ * y);
         }
         double coefficient(double r) const { return r >= cutoff_ ? 0 : untruncated_coefficient(r); }
     };
