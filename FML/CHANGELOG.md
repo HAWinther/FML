@@ -5,6 +5,20 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Polyspectrum and portability correctness
+
+- Nonlinear Fourier-shell estimators now enforce true wavevector closure, padding high-frequency products
+  and their geometry masks together. `PolyspectrumBinning::dealias = false` reproduces legacy modulo-grid
+  closure. The corrected default excludes ambiguous even-mesh Nyquist planes for nonlinear orders and can
+  substantially increase memory use near Nyquist; see `ComputePowerSpectra/README.md`.
+- Geometry counts are cached automatically with mesh, bin-edge and closure-policy checks. Shell work grids
+  no longer copy unused deposition halos. Odd meshes count the last stored Fourier plane's conjugate partner.
+- LPT and polyspectra share the Fourier resizing implementation in `FFTWGrid/FourierResampling.h`.
+- Serial COLASolver map reductions no longer reference MPI symbols. Spherical Bessel backend selection checks
+  the standard-library feature macro, supporting libc++ through GSL or the existing recurrence.
+- Cosmology reference comparisons measure TE changes on the TT/EE covariance scale at TE zero crossings.
+  Reference data and tolerances are unchanged; deterministic tests reject real changes and nonfinite outputs.
+
 ### COLASolver review fixes: lightcone, halos, initial conditions, validation
 Lightcone:
 - With COLA (also scale-dependent), the lightcone no longer counts the LPT displacement of a step twice. The COLA

@@ -339,13 +339,13 @@ namespace FML {
             void
             compute_2LPT_potential_fourier(const FFTWGrid<N> & delta, FFTWGrid<N> & phi_2LPT, Dealiasing dealiasing) {
                 if (dealiasing == Dealiasing::Padding) {
-                    auto padded = detail::resize_lpt_fourier(delta, detail::padded_lpt_mesh(delta.get_nmesh(), 2));
+                    auto padded = FML::GRID::resize_fourier_grid(delta, detail::padded_lpt_mesh(delta.get_nmesh(), 2));
                     FFTWGrid<N> potential;
                     compute_2LPT_potential_fourier(padded, potential);
-                    phi_2LPT = detail::resize_lpt_fourier(potential,
-                                                          delta.get_nmesh(),
-                                                          delta.get_n_extra_slices_left(),
-                                                          delta.get_n_extra_slices_right());
+                    phi_2LPT = FML::GRID::resize_fourier_grid(potential,
+                                                              delta.get_nmesh(),
+                                                              delta.get_n_extra_slices_left(),
+                                                              delta.get_n_extra_slices_right());
                     return;
                 }
 
@@ -752,16 +752,16 @@ namespace FML {
                 if (dealiasing == Dealiasing::Padding) {
                     // Keep the full second-order bandwidth until the third-order
                     // products are complete. Cropping phi2 early loses real UV couplings.
-                    auto padded = detail::resize_lpt_fourier(delta_fourier,
-                                                             detail::padded_lpt_mesh(delta_fourier.get_nmesh(), 3));
+                    auto padded = FML::GRID::resize_fourier_grid(delta_fourier,
+                                                                 detail::padded_lpt_mesh(delta_fourier.get_nmesh(), 3));
                     FFTWGrid<N> p1, p2, pa, pb;
                     std::array<FFTWGrid<N>, N> avec;
                     compute_3LPT_potential_fourier<N>(padded, p1, p2, pa, pb, avec, ignore_curl_term);
                     auto crop = [&](FFTWGrid<N> & field) {
-                        auto result = detail::resize_lpt_fourier(field,
-                                                                 delta_fourier.get_nmesh(),
-                                                                 delta_fourier.get_n_extra_slices_left(),
-                                                                 delta_fourier.get_n_extra_slices_right());
+                        auto result = FML::GRID::resize_fourier_grid(field,
+                                                                     delta_fourier.get_nmesh(),
+                                                                     delta_fourier.get_n_extra_slices_left(),
+                                                                     delta_fourier.get_n_extra_slices_right());
                         field.free();
                         return result;
                     };

@@ -28,6 +28,11 @@ namespace FML {
 
     /// This namespace contains various grids for holding data shared across different tasks.
     namespace GRID {
+        /// Number of full-complex modes represented by a stored r2c coefficient.
+        inline int fourier_mode_multiplicity(int last_coord, int nmesh) {
+            return last_coord == 0 || (nmesh % 2 == 0 && last_coord == nmesh / 2) ? 1 : 2;
+        }
+
 
         // Include type definitions
 #include "FFTWGlobal.h"

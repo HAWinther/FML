@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <iostream>
 #include <numeric>
+#include <map>
 #include <random>
 #include <sstream>
 #include <string>
@@ -142,6 +143,12 @@ void test_high_frequency_triangle_closure() {
           "high-frequency N123 counts exactly closed triangles: measured " + num(measured) + ", expected " +
               std::to_string(closed) + ", modulo-grid count " + std::to_string(wrapped));
 
+    b.dealias = false;
+    compute_polyspectrum_bincount<3, 3>(Nmesh, b);
+    check(std::abs(b.get_bincount(shell, shell, shell) * std::pow(2 * M_PI, 3) - double(wrapped)) < 1e-6,
+          "explicit legacy closure reproduces the modulo-grid count");
+    b.dealias = true;
+
     // None of the signed triples of these three wavevectors sums to zero.
     // Their all-positive sum is (16,0,0), so the original mesh spuriously
     // produces a nonzero bispectrum unless the product is de-aliased.
@@ -157,6 +164,40 @@ void test_high_frequency_triangle_closure() {
           "non-closing high-frequency plane waves have zero bispectrum (measured " + num(bispectrum) + ")");
 }
 
+void test_four_point_closure() {
+    constexpr int Nmesh = 16, shell = 3;
+    TrispectrumBinning<3> bins(0.0, 2 * M_PI * 7.9, 6, TrispectrumBinning<3>::LINEAR_SPACING);
+    std::vector<std::array<int, 3>> modes;
+    for (int x = -7; x <= 7; x++)
+        for (int y = -7; y <= 7; y++)
+            for (int z = -7; z <= 7; z++) {
+                const double k2 = 4 * M_PI * M_PI * (x * x + y * y + z * z);
+                if (k2 >= bins.klow[shell] * bins.klow[shell] && k2 < bins.khigh[shell] * bins.khigh[shell])
+                    modes.push_back({x, y, z});
+            }
+    // Two independent integer pair sums give the exact number of closed quartets.
+    std::map<std::array<int, 3>, long long> pairs;
+    for (const auto & a : modes)
+        for (const auto & b : modes)
+            ++pairs[{a[0] + b[0], a[1] + b[1], a[2] + b[2]}];
+    long long exact = 0;
+    for (const auto & entry : pairs) {
+        const auto & k = entry.first;
+        auto opposite = pairs.find({-k[0], -k[1], -k[2]});
+        if (opposite != pairs.end())
+            exact += entry.second * opposite->second;
+    }
+    Grid<3> field(Nmesh);
+    field.fill_real_grid([](const std::array<double, 3> & x) { return std::cos(2 * M_PI * 4 * x[0]); });
+    field.fftw_r2c();
+    compute_trispectrum(field, bins);
+    const double measure = std::pow(2 * M_PI, 3);
+    const double count = bins.get_bincount(shell, shell, shell, shell) * measure;
+    check(std::abs(count - double(exact)) < 1e-5, "four-point geometry matches unwrapped integer pair sums");
+    const double moment = bins.get_spectrum(shell, shell, shell, shell) * count;
+    check(std::abs(moment - 3.0 / 8) < 1e-12, "de-aliased fourth moment of cos(4x) is 3/8, not the wrapped 1/2");
+}
+
 void test_automatic_geometry_cache() {
     constexpr int Nmesh = 16;
     BispectrumBinning<3> geometry(0.0, 2.0 * M_PI * Nmesh / 4, 6, BispectrumBinning<3>::LINEAR_SPACING);
@@ -169,6 +210,17 @@ void test_automatic_geometry_cache() {
     BispectrumBinning<3> result(0.0, 2.0 * M_PI * Nmesh / 4, 6, BispectrumBinning<3>::LINEAR_SPACING);
     compute_bispectrum(field, result);
     check(result.bincount_is_set, "bispectrum estimation retains reusable geometry counts");
+
+    check(result.has_bincount(Nmesh), "computed geometry has the matching mesh identity");
+    check(!result.has_bincount(2 * Nmesh), "geometry cache rejects a different mesh");
+    result.klow[0] += 0.01;
+    check(!result.has_bincount(Nmesh), "geometry cache rejects changed bin edges");
+    result.klow[0] -= 0.01;
+    result.dealias = false;
+    check(!result.has_bincount(Nmesh), "geometry cache rejects a different closure policy");
+    result.dealias = true;
+    result.reset();
+    check(!result.has_bincount(Nmesh), "reset invalidates computed geometry");
 }
 
 void test_fourier_multiplicities() {
@@ -382,6 +434,7 @@ int main() {
     }
 
     test_high_frequency_triangle_closure();
+    test_four_point_closure();
     test_automatic_geometry_cache();
     test_fourier_multiplicities();
 

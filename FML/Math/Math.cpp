@@ -278,7 +278,7 @@ namespace FML {
         }
 #endif
 
-#if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || (__cplusplus >= 201703L))
+#if defined(__cpp_lib_math_special_functions) && __cpp_lib_math_special_functions >= 201603L
         // Standard library implementation. Only for C++17 onwards
         double j_ell_cxx(const int ell, const double arg) {
             // For x=0 we have 0/0
@@ -296,18 +296,20 @@ namespace FML {
 
         // Function to get the spherical Bessel function j_n(x)
         double j_ell(const int ell, const double arg) {
+            if (ell < 0 || !std::isfinite(arg) || arg < 0)
+                throw std::invalid_argument("j_ell: order and argument must be nonnegative and finite");
             // In this regime the function is ~1e-6 times the maximum value so put it to zero
             // to avoid issues with the library functions failing to compute it
             if (ell >= 10 && arg < (1.0 - 2.6 / std::sqrt(ell)) * ell)
                 return 0.0;
 
-#if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || (__cplusplus >= 201703L))
+#if defined(__cpp_lib_math_special_functions) && __cpp_lib_math_special_functions >= 201603L
             return j_ell_cxx(ell, arg);
 #else
 #ifdef USE_GSL
             return j_ell_gsl(ell, arg);
 #endif
-            throw std::runtime_error("No j_ell implementation available");
+            return j_ell_array(ell, arg)[ell];
 #endif
         }
 

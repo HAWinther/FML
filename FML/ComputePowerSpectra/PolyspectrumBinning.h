@@ -44,7 +44,31 @@ namespace FML {
 
             /// If we have precomputed the volume factor (N123) or not and have it available for algorithms to use
             bool bincount_is_set{false};
+            /// True integer-wavevector closure. False retains legacy modulo-grid closure.
+            /// Nonlinear estimates exclude even-mesh Nyquist planes when enabled.
+            bool dealias{true};
 
+            bool has_bincount(int nmesh) {
+                if (!bincount_is_set || cached_low != klow || cached_high != khigh || cached_dealias != dealias)
+                    return false;
+                if (cached_mesh == 0)
+                    cached_mesh = nmesh; // legacy explicitly imported counts
+                return cached_mesh == nmesh;
+            }
+            void mark_bincount_computed(int nmesh) {
+                cached_mesh = nmesh;
+                cached_low = klow;
+                cached_high = khigh;
+                cached_dealias = dealias;
+                bincount_is_set = true;
+            }
+
+          private:
+            int cached_mesh{-1};
+            std::vector<double> cached_low, cached_high;
+            bool cached_dealias{true};
+
+          public:
             PolyspectrumBinning() = default;
             PolyspectrumBinning(double _kmin, double _kmax, int nbins, int bin_type = LINEAR_SPACING);
             PolyspectrumBinning(int nbins, int Nmesh, int bin_type = LINEAR_SPACING);
@@ -91,7 +115,12 @@ namespace FML {
 
             /// Copy over the volume factor N123 (useful to save computations if we do many calculations with
             /// the same setup)
-            void set_bincount(std::vector<double> & N123_external);
+            void set_bincount(const std::vector<double> & N123_external);
+            /// Import with an explicit mesh identity (preferred to the legacy overload).
+            void set_bincount(const std::vector<double> & counts, int nmesh) {
+                set_bincount(counts);
+                mark_bincount_computed(nmesh);
+            }
 
             /// This is just to make it easier to add binning of several spectra... just for testing
             void combine(PolyspectrumBinning & rhs);
@@ -237,6 +266,7 @@ namespace FML {
         template <int N, int ORDER>
         void PolyspectrumBinning<N, ORDER>::free() {
             // We only bother to free the things that take up memory
+            bincount_is_set = false;
             P123.clear();
             P123.shrink_to_fit();
             N123.clear();
@@ -397,13 +427,14 @@ namespace FML {
                     pofk[i] = (pofk[i] * nbinnings + rhs.pofk[i]) / (nbinnings + 1.0);
             }
             nbinnings++;
+            bincount_is_set = false;
         }
 
         template <int N, int ORDER>
-        void PolyspectrumBinning<N, ORDER>::set_bincount(std::vector<double> & N123_external) {
+        void PolyspectrumBinning<N, ORDER>::set_bincount(const std::vector<double> & N123_external) {
             assert_mpi(N123_external.size() == N123.size(), "[set_bincount] Incompatible size of N123 array");
             N123 = N123_external;
-            bincount_is_set = true;
+            mark_bincount_computed(0);
         }
     } // namespace CORRELATIONFUNCTIONS
 } // namespace FML

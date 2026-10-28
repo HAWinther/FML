@@ -1,12 +1,16 @@
 // =============================================================================
 // Regression test: key outputs of several configurations and models at reduced resolution, compared with stored
-// reference values (tests/reference/regression.txt). Guards refactorings that must not change
+// reference values (tests/reference/regression.txt). TE uses the TT/EE covariance scale
+// so its zero crossings do not amplify relative errors. Guards refactorings that must not change
 // the results.
 //
-//   ./test_regression              compare (relative tolerance 3e-7; 1e-4 when compiled with fused multiply-adds)
+//   ./test_regression              compare (scaled tolerance 3e-7; 1e-4 when compiled with fused multiply-adds)
 //   ./test_regression --update     rewrite the reference file (only after an intended change)
 // The current values are also written to data/regression_last.txt.
 //
+// TE uses |delta TE| / sqrt(TT*EE), an absolute correlation error; all other
+// observables keep |delta X| / |X_ref|. This remains sensitive to physical changes
+// without dividing by an arbitrarily small cross spectrum at a zero crossing.
 // The tolerance is set by the numerical noise of the adaptive ODE solvers: changing the order of
 // floating-point operations or of the state vector, or ode_relerr by one part in 1e9, moves the outputs
 // by up to ~1e-7 (high-ell C_ell, lensed BB). Physics changes show up far above this. The reference values were made
@@ -20,6 +24,7 @@
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include "TestHelpers.h"
+#include "RegressionMetric.h"
 #include <FML/Cosmology/Common.h>
 
 #include <algorithm>
@@ -211,18 +216,18 @@ int main(int argc, char ** argv) {
             missing++;
             continue;
         }
-        changes.push_back({std::fabs(v - ref[k]) / std::max(std::fabs(ref[k]), 1e-300), k});
+        changes.push_back({Test::regression_error(k, v, ref), k});
     }
     std::sort(changes.rbegin(), changes.rend());
     Test::check("all values present in the reference", missing == 0 && ref.size() == values.size());
-    std::cout << "  largest relative changes:\n";
+    std::cout << "  largest scaled changes:\n";
     for (size_t i = 0; i < std::min<size_t>(5, changes.size()); i++)
         std::cout << "    " << changes[i].first << "  " << changes[i].second << "\n";
     const double worst = changes.empty() ? 0.0 : changes[0].first;
 #if defined(__FMA__) || defined(__ARM_FEATURE_FMA) || defined(__aarch64__)
-    Test::check_close("outputs unchanged (relative 1e-4 with FMA)", worst, 0.0, 1e-4);
+    Test::check_close("outputs unchanged (scaled 1e-4 with FMA)", worst, 0.0, 1e-4);
 #else
-    Test::check_close("outputs unchanged (relative 3e-7)", worst, 0.0, 3e-7);
+    Test::check_close("outputs unchanged (scaled 3e-7)", worst, 0.0, 3e-7);
 #endif
     return Test::summary();
 }

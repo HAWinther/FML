@@ -164,6 +164,10 @@ int main(int argc, char ** argv) {
         check(close(d[100], 7.933616953491621e-06, 1e-8), "j_ell_array j_100(84.012) with lmax = 100: " + num(d[100]));
         auto e = FML::MATH::j_ell_array(5, 1.187);
         check(close(e[5], 2.146883323046425e-04, 1e-10), "j_ell_array j_5(1.187) with lmax = 5: " + num(e[5]));
+        check(FML::MATH::j_ell(0, 0.0) == 1.0 && FML::MATH::j_ell(3, 0.0) == 0.0 &&
+                  close(FML::MATH::j_ell(0, 1.2), std::sin(1.2) / 1.2, 1e-12) &&
+                  close(FML::MATH::j_ell(1, 1.2), std::sin(1.2) / (1.2 * 1.2) - std::cos(1.2) / 1.2, 1e-12),
+              "scalar spherical Bessel backend agrees with analytic j0/j1 and origin limits");
         const double j10 = FML::MATH::j_ell(10, 20000.0);
         const double j2 = FML::MATH::j_ell(2, 14001.0);
         check(close(j10, -2.921094489548591e-05, 1e-8) and close(j2, -6.293323508535110e-05, 1e-8),

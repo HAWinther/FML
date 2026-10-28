@@ -447,8 +447,8 @@ void test_dealiased_LPT() {
         const double error = max_diff_fourier<3>(*entry.first, cropped) / maxabs<3>(cropped);
         check(error > 1e-3, "high-frequency fixture exposes legacy nonlinear aliasing (rel err " + num(error) + ")");
     }
-    auto padded = detail::resize_lpt_fourier(input, detail::padded_lpt_mesh(Nmesh, 3));
-    auto restored = detail::resize_lpt_fourier(padded, Nmesh, 1, 1);
+    auto padded = FML::GRID::resize_fourier_grid(input, detail::padded_lpt_mesh(Nmesh, 3));
+    auto restored = FML::GRID::resize_fourier_grid(padded, Nmesh, 1, 1);
     compare(restored, delta, "Fourier padding/cropping normalization");
     check(max_diff_fourier<3>(input, delta) < tolerance, "de-aliasing preserves the input grid");
     check(restored.get_n_extra_slices_left() == 1 && restored.get_n_extra_slices_right() == 1,
@@ -475,8 +475,8 @@ void test_dealiased_LPT() {
     for (int mesh : meshes) {
         auto modes = plane_waves<2>({{6, 1}, {-5, 3}}, {0.2, 0.3}, {0.2, 0.7});
         auto small = make_delta_fourier<2>(modes, mesh);
-        auto large = detail::resize_lpt_fourier(small, detail::padded_lpt_mesh(mesh, 3));
-        auto back = detail::resize_lpt_fourier(large, mesh);
+        auto large = FML::GRID::resize_fourier_grid(small, detail::padded_lpt_mesh(mesh, 3));
+        auto back = FML::GRID::resize_fourier_grid(large, mesh);
         check(max_diff_fourier<2>(back, modes) < tolerance,
               "2D Fourier resize round trip (mesh " + std::to_string(mesh) + ")");
         FML::GRID::FFTWGrid<2> q1, q2, qa, qb;

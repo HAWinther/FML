@@ -15,6 +15,9 @@
 #endif
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/FourierResampling.h>
+#include <numeric>
+#include <climits>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/LPT/Reconstruction.h>        // For particles->redshiftspace
@@ -462,7 +465,7 @@ namespace FML {
 
                     // Special treatment of k = 0 plane
                     auto last_coord = fourier_index % (Nmesh / 2 + 1);
-                    double weight = last_coord > 0 and last_coord < Nmesh / 2 ? 2.0 : 1.0;
+                    double weight = FML::GRID::fourier_mode_multiplicity(last_coord, Nmesh);
 
                     // Compute kvec, |kvec| and |delta|^2
                     fourier_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
@@ -550,7 +553,7 @@ namespace FML {
                             continue; // DC mode (k=0)
                         kvec[2] = twopi * double(iz <= nover2 ? iz : iz - Nmesh);
                         const double kmag = std::sqrt(kvec[0] * kvec[0] + kvec[1] * kvec[1] + kvec[2] * kvec[2]);
-                        const double weight = iz > 0 && iz < nover2 ? 2.0 : 1.0;
+                        const double weight = FML::GRID::fourier_mode_multiplicity(iz, Nmesh);
                         f(fourier_index, kvec, kmag, weight);
                     }
                 }
@@ -604,7 +607,7 @@ namespace FML {
                     // auto coord = fourier_grid.get_fourier_coord_from_index(fourier_index);
                     // int last_coord = coord[N-1];
                     auto last_coord = fourier_index % (Nmesh / 2 + 1);
-                    double weight = last_coord > 0 && last_coord < Nmesh / 2 ? 2.0 : 1.0;
+                    double weight = FML::GRID::fourier_mode_multiplicity(last_coord, Nmesh);
 
                     fourier_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
@@ -664,7 +667,7 @@ namespace FML {
                     // auto coord = fourier_grid.get_fourier_coord_from_index(fourier_index);
                     // int last_coord = coord[N-1];
                     auto last_coord = fourier_index % (Nmesh / 2 + 1);
-                    double weight = last_coord > 0 && last_coord < Nmesh / 2 ? 2.0 : 1.0;
+                    double weight = FML::GRID::fourier_mode_multiplicity(last_coord, Nmesh);
 
                     auto delta = fourier_grid.get_fourier_from_index(fourier_index);
                     auto delta_norm = std::norm(delta);
@@ -717,7 +720,7 @@ namespace FML {
                     // auto coord = fourier_grid.get_fourier_coord_from_index(fourier_index);
                     // int last_coord = coord[N-1];
                     auto last_coord = fourier_index % (Nmesh / 2 + 1);
-                    double weight = last_coord > 0 && last_coord < Nmesh / 2 ? 2.0 : 1.0;
+                    double weight = FML::GRID::fourier_mode_multiplicity(last_coord, Nmesh);
 
                     auto delta_1 = fourier_grid_1.get_fourier_from_index(fourier_index);
                     auto delta_2 = fourier_grid_2.get_fourier_from_index(fourier_index);
@@ -1250,13 +1253,44 @@ namespace FML {
             }
         }
 
+        namespace detail {
+            template <int ORDER>
+            int polyspectrum_work_mesh(int nmesh, const std::vector<double> & khigh, bool dealias) {
+                if (!dealias || ORDER == 2 || ORDER * *std::max_element(khigh.begin(), khigh.end()) < 2 * M_PI * nmesh)
+                    return nmesh;
+                // Only the zero mode of the ORDER-fold product is needed. Excluding
+                // input Nyquist planes gives |sum n_i| < ORDER*Nmesh/2 in each axis.
+                const long long multiple = std::lcm(2LL, static_cast<long long>(FML::NTasks));
+                const long long minimum = (ORDER * static_cast<long long>(nmesh) + 1) / 2;
+                const long long padded = ((minimum + multiple - 1) / multiple) * multiple;
+                assert_mpi(padded <= INT_MAX, "[polyspectrum] Padded mesh exceeds int range");
+                return int(padded);
+            }
+            template <int N, int ORDER>
+            bool polyspectrum_uses_mode(const FFTWGrid<N> & grid,
+                                        const std::array<double, N> & wave,
+                                        double k2,
+                                        double low2,
+                                        double high2,
+                                        bool dealias) {
+                if (!(k2 > 0 && k2 >= low2 && k2 < high2))
+                    return false;
+                if (dealias && ORDER > 2 && grid.get_nmesh() % 2 == 0)
+                    for (auto k : wave)
+                        if (std::abs(k) >= M_PI * grid.get_nmesh())
+                            return false;
+                return true;
+            }
+        } // namespace detail
+
         //================================================================================
         /// @brief This method is used by compute_polyspectrum. It computes the number of
         /// generalized triangles of the bins needed to normalize the polyspectra up to symmetry (i.e. we only compute
         /// it for \f$ k_1 \leq k_2 \leq k_3 \f$ and only for valid triangle configurations \f$ k_1 + k_2 \geq k_3 \f$
         /// and then set rest using symmetry). If one is to compute many spectra with the same Nmesh and binning then
         /// one can precompute N123 and set it using polyofk.set_bincount(N123) (which sets polyofk.bincount_is_set =
-        /// true and avoid a call to this function) This speeds up the polyspectrum estimation by a factor of 2.
+        /// true and avoid a call to this function). Counts computed here are cached automatically; reuse checks
+        /// the source mesh, shell edges and closure policy. Prefer set_bincount(counts, Nmesh) for imported data.
         ///
         /// @tparam N The dimension we work in
         /// @tparam ORDER The order (mono = 2, bi = 3, tri = 4)
@@ -1269,11 +1303,16 @@ namespace FML {
         void compute_polyspectrum_bincount(int Nmesh, PolyspectrumBinning<N, ORDER> & polyofk) {
 
             const auto nbins = polyofk.n;
+            assert_mpi(Nmesh > 0 && nbins > 0 && polyofk.klow.size() == size_t(nbins) &&
+                           polyofk.khigh.size() == size_t(nbins),
+                       "[compute_polyspectrum_bincount] Mesh and shell binning must be initialized");
             const auto klow = polyofk.klow;
             const auto khigh = polyofk.khigh;
             const auto kbin = polyofk.kbin;
             auto & N123 = polyofk.N123;
             const size_t nbins_tot = N123.size();
+
+            const int work_mesh = detail::polyspectrum_work_mesh<ORDER>(Nmesh, khigh, polyofk.dealias);
 
             // Allocate grids
             std::vector<FFTWGrid<N>> N_k(nbins);
@@ -1297,7 +1336,12 @@ namespace FML {
                 for (auto && fourier_index : grid.get_fourier_range()) {
                     grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
                     // NB: this must be the same selection as in compute_polyspectrum
-                    if (kmag2 > 0.0 and kmag2 >= kmag2_min and kmag2 < kmag2_max) {
+                    if (detail::polyspectrum_uses_mode<N, ORDER>(grid,
+                                                                 kvec,
+                                                                 kmag2,
+                                                                 kmag2_min,
+                                                                 kmag2_max,
+                                                                 polyofk.dealias)) {
                         grid.set_fourier_from_index(fourier_index, 1.0);
                     }
                 }
@@ -1305,6 +1349,8 @@ namespace FML {
 
             // Transform to real space
             for (int i = 0; i < nbins; i++) {
+                if (work_mesh != Nmesh)
+                    N_k[i] = FML::GRID::resize_fourier_grid(N_k[i], work_mesh);
                 N_k[i].fftw_c2r();
             }
 
@@ -1323,7 +1369,7 @@ namespace FML {
                 // Compute number of triangles in current bin
                 // Norm represents integration measure dx^N / (2pi)^N
                 double N123_current = 0.0;
-                const double norm = std::pow(1.0 / double(Nmesh) / (2.0 * M_PI), N);
+                const double norm = std::pow(1.0 / double(work_mesh) / (2.0 * M_PI), N);
                 const auto Local_nx = N_k[0].get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for reduction(+ : N123_current)
@@ -1382,6 +1428,7 @@ namespace FML {
                 // Set value
                 N123[i] = N123[index];
             }
+            polyofk.mark_bincount_computed(Nmesh);
         }
 
         template <int N>
@@ -1403,7 +1450,6 @@ namespace FML {
         void compute_polyspectrum(const FFTWGrid<N> & fourier_grid, PolyspectrumBinning<N, ORDER> & polyofk) {
 
             const auto Nmesh = fourier_grid.get_nmesh();
-            const auto Local_nx = fourier_grid.get_local_nx();
             const auto nbins = polyofk.n;
 
             assert_mpi(nbins > 0, "[compute_polyspectrum] nbins has to be >=0\n");
@@ -1427,13 +1473,18 @@ namespace FML {
             const std::vector<double> & khigh = polyofk.khigh;
 
             // Compute the bincount N123 if it does not already exist
-            if (not polyofk.bincount_is_set)
+            if (!polyofk.has_bincount(Nmesh))
                 compute_polyspectrum_bincount<N, ORDER>(Nmesh, polyofk);
+
+            const int work_mesh = detail::polyspectrum_work_mesh<ORDER>(Nmesh, khigh, polyofk.dealias);
 
             // Allocate grids
             std::vector<FFTWGrid<N>> F_k(nbins);
             for (int i = 0; i < nbins; i++) {
-                F_k[i] = fourier_grid;
+                F_k[i] = FFTWGrid<N>(Nmesh);
+                F_k[i].set_grid_status_real(false);
+                for (auto index : fourier_grid.get_fourier_range())
+                    F_k[i].set_fourier_from_index(index, fourier_grid.get_fourier_from_index(index));
                 F_k[i].add_memory_label("FFTWGrid::compute_polyspectrum::F_" + std::to_string(i));
             }
 
@@ -1461,13 +1512,18 @@ namespace FML {
 
                     // Set to zero outside the bin [klow, khigh) and the k = 0 mode
                     // NB: this must be the same selection as in compute_polyspectrum_bincount
-                    if (not(kmag2 > 0.0 and kmag2 >= kmag2_min and kmag2 < kmag2_max)) {
+                    if (!detail::polyspectrum_uses_mode<N, ORDER>(grid,
+                                                                  kvec,
+                                                                  kmag2,
+                                                                  kmag2_min,
+                                                                  kmag2_max,
+                                                                  polyofk.dealias)) {
                         grid.set_fourier_from_index(fourier_index, 0.0);
                     } else {
                         // Mean k and P(k) in the bin. The modes with 0 < k_z < k_nyquist represent both k and -k
                         // (as in bin_up_power_spectrum)
                         const auto last_coord = fourier_index % (Nmesh / 2 + 1);
-                        const double weight = (last_coord > 0 and last_coord < Nmesh / 2) ? 2.0 : 1.0;
+                        const double weight = FML::GRID::fourier_mode_multiplicity(last_coord, Nmesh);
                         kmean_bin += weight * std::sqrt(kmag2);
                         pofk_bin[i] += weight * std::norm(grid.get_fourier_from_index(fourier_index));
                         nk += weight;
@@ -1489,8 +1545,12 @@ namespace FML {
 #endif
 
                 // Transform to real space
+                if (work_mesh != Nmesh)
+                    grid = FML::GRID::resize_fourier_grid(grid, work_mesh);
                 grid.fftw_c2r();
             }
+
+            const auto Local_nx = F_k[0].get_local_nx();
 
             // We now have F_k and N_k for all bins
             for (size_t i = 0; i < nbins_tot; i++) {
@@ -1528,7 +1588,7 @@ namespace FML {
                 FML::SumOverTasks(&F123_current);
 
                 // Normalize by the integration measure dx^N / (2pi)^N
-                F123_current *= std::pow(1.0 / double(Nmesh) / (2.0 * M_PI), N);
+                F123_current *= std::pow(1.0 / double(work_mesh) / (2.0 * M_PI), N);
 
                 // Set the result
                 const double N123_current = N123[i];

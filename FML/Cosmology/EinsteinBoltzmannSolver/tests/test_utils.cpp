@@ -6,6 +6,7 @@
 #include <FML/Cosmology/Background/CosmologyParameters.h>
 #include <FML/Cosmology/Common.h>
 #include "TestHelpers.h"
+#include "RegressionMetric.h"
 
 #include <cmath>
 #include <iomanip>
@@ -279,6 +280,20 @@ static void test_parameters() {
 }
 
 int main() {
+    {
+        const std::map<std::string, double> reference{{"model.TT(50)", 100.0},
+                                                      {"model.EE(50)", 1.0},
+                                                      {"model.TE(50)", 0.0}};
+        check("TE zero crossing accepts roundoff on the covariance scale",
+              Test::regression_error("model.TE(50)", 1e-8, reference) < 3e-7);
+        check("TE covariance metric rejects a physical change",
+              Test::regression_error("model.TE(50)", 1e-3, reference) > 3e-7);
+        check("autospectra retain their strict relative comparison",
+              Test::regression_error("model.TT(50)", 100.001, reference) > 3e-7);
+        check("regression metric rejects nonfinite outputs",
+              std::isinf(Test::regression_error("model.TE(50)", std::numeric_limits<double>::quiet_NaN(), reference)));
+    }
+
     test_grids_and_quadrature();
     test_spline1d();
     test_uniform_spline();

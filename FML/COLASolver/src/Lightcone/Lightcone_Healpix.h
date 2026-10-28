@@ -266,6 +266,7 @@ class OnionSlice {
     void sum_field_over_tasks(int task_to_reduce_to = 0) {
         reconstruct_from_chunkpix();
         auto npix = get_npix();
+#ifdef USE_MPI
         if constexpr (std::is_same<T, float>::value) {
             MPI_Reduce((FML::ThisTask == task_to_reduce_to ? MPI_IN_PLACE : &map[0]),
                        &map[0],
@@ -283,6 +284,7 @@ class OnionSlice {
                        task_to_reduce_to,
                        FML::communicator);
         }
+#endif
         is_reduced = true;
     }
 
@@ -350,6 +352,7 @@ class OnionSlice {
 
         auto npix = get_npix();
 
+#ifdef USE_MPI
         // Reduce map over tasks (different if float or double)
         if constexpr (std::is_same<T, float>::value) {
             MPI_Reduce((FML::ThisTask == task_to_reduce_to ? MPI_IN_PLACE : &map[0]),
@@ -371,6 +374,7 @@ class OnionSlice {
             throw std::runtime_error("We only support float and double for onion maps");
         }
 
+#endif
         if (FML::ThisTask == task_to_reduce_to) {
             // Sanity check - count particles in map and compare to n_in_map
             double count = 0.0;

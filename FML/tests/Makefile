@@ -12,7 +12,7 @@ USE_GSL             ?= true
 USE_LUA             ?= true
 
 TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_lpt test_nbody
-TARGETS += test_baryonification test_numericalmethods test_interlacing_offset test_streamed_kick
+TARGETS += test_baryonification test_numericalmethods test_interlacing_offset test_streamed_kick test_lightcone
 
 include ../Makefile.config
 
@@ -27,6 +27,9 @@ TEST_OBJS = test_core.o Global.o
 ifeq ($(USE_GSL),true)
 TEST_OBJS += Spline.o
 endif
+
+test_lightcone: test_lightcone.o Global.o Spline.o ParameterMap.o
+	$(LINK_EXE)
 
 test_core: $(TEST_OBJS)
 	$(LINK_EXE)
@@ -226,6 +229,8 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_particles; \
 	  echo "== Running test_lpt with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_lpt; \
+	  echo "== Running test_lightcone with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_lightcone; \
 	  echo "== Running test_nbody with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_nbody; \
 	  echo "== Running test_streamed_kick with $$np task(s)"; \
