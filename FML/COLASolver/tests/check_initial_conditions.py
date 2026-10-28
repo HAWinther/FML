@@ -13,6 +13,8 @@
 #     - COLA of lower LPT order than the IC (COLA order 1 with 2LPT and 3LPT IC, order 2 with 3LPT IC): the frame
 #       does not have the higher orders, the particles must keep their IC velocity. LCDM and 0.4 eV neutrinos, one
 #       and two species, scale-independent and scale-dependent COLA, and the N-body gauge
+#     - ic_use_gravity_model_GR with modified gravity (f(R), mu(a,k), mu(a)): the IC have the GR growth rate, the
+#       frame that of the gravity model. One and two species, scale-independent and scale-dependent COLA, order 1 and 2
 #  2. Massive neutrinos without ic_type_of_input = transferinfofile give a clear error (not a segfault)
 #  3. Reading particles (ic_random_field_type = read_particles):
 #     - exact LPT reconstruction from an offset lattice (COLASolver's own fiducial offset with a 2x force grid,
@@ -170,6 +172,42 @@ for base, cosmo in [(lcdm, "LCDM"), (nu04, "0.4 eV linear neutrinos")]:
                          ("one_species_cola1_ic3", cola1_ic3), ("one_species_cola2_ic3", cola2_ic3),
                          ("one_species_scaledep_cola2_ic3", dict(scaledep, **cola2_ic3))]:
         compare_velocities(f"{label}_{tag}", base, extra, cosmo)
+
+# ic_use_gravity_model_GR with modified gravity: the IC have the growth rate of GR but the COLA frame that of the
+# gravity model (f(k = 0) for scale-independent COLA, f(k) for scale-dependent COLA), so the particles must get the
+# difference for the orders the frame has (COLA started with the growth rate of the gravity model: 6% rms for the
+# BZ mu(a,k) below with scale-dependent COLA, 11.5% for mu = 1.2 with both, 0.2% from the 2LPT velocity alone with
+# two species). Models: f(R) (|fR0| = 1e-4: close to GR
+# at zini, the bug was 6e-7 with scale-dependent COLA, hence the tighter tolerance), a scale-dependent mu(a,k) (BZ
+# with lambda1 = 30 Mpc/h, s = 1: mu = 4/3 for k >~ 0.15 h/Mpc already at zini) and mu(a) = 1.2 from a table
+# (f(k = 0) differs from GR). One and two species, scale-independent and scale-dependent COLA, COLA order 1 and 2.
+# (A sharper transition in f(k) gives a larger difference from the splined f(k) of the scale-dependent COLA frame:
+# 1e-5 for lambda1 = 300 Mpc/h)
+fofr = dict(gravity_model="f(R)",
+            gravity_model_fofr_fofr0=1e-4,
+            gravity_model_fofr_nfofr=1.0,
+            gravity_model_fofr_exact_solution=False,
+            gravity_model_screening=False,
+            gravity_model_screening_efficiency=1.0,
+            gravity_model_screening_enforce_largescale_linear=False,
+            gravity_model_screening_linear_scale_hmpc=0.1)
+mu_bz = dict(gravity_model="mu", gravity_model_mu_parametrization="BZ", gravity_model_mu_BZ_params=[4.0 / 3.0, 30.0,
+                                                                                                   1.0])
+mu_table = os.path.join(outdir, "mu_table_constant.txt")
+np.savetxt(mu_table, np.column_stack([np.logspace(-3, 0, 31), np.full(31, 1.2)]), header="a mu")
+mu_const = dict(gravity_model="mu", gravity_model_mu_parametrization="table", gravity_model_mu_filename=mu_table)
+for model, mg in [("fofr", fofr), ("mubz", mu_bz), ("mu1.2", mu_const)]:
+    base = dict(lcdm, ic_use_gravity_model_GR=True, **mg)
+    for label, extra in [("one_species", dict()), ("one_species_scaledep", scaledep),
+                         ("two_species", dict(particle_baryons=True)),
+                         ("two_species_scaledep", dict(particle_baryons=True, **scaledep))]:
+        if model == "mu1.2" and "scaledep" in label:
+            continue  # (scale-independent growth: scale-dependent COLA is the standard COLA then)
+        for order in [1, 2]:
+            name = f"{label}_cola{order}_{model}_icGR"
+            if model == "fofr":
+                tolerance[name] = 2e-7
+            compare_velocities(name, base, dict(extra, simulation_cola_LPT_order=order), f"{model}, IC from GR")
 
 # N-body gauge: the difference f_nbg(k) - f(0) matters on the largest scales, so compare the velocities averaged
 # over 4^3 cells of the 4000 Mpc/h box
