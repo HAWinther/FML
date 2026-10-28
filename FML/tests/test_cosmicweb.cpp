@@ -40,9 +40,7 @@ std::vector<int> thread_counts() {
     return {1};
 #endif
 }
-bool near(double a, double b, double tol) {
-    return std::isfinite(a) && std::isfinite(b) && std::abs(a - b) <= tol;
-}
+bool near(double a, double b, double tol) { return std::isfinite(a) && std::isfinite(b) && std::abs(a - b) <= tol; }
 bool same_grid(const Grid & a, const Grid & b, double tol) {
     if (a.get_nmesh() != b.get_nmesh())
         return false;
@@ -80,7 +78,9 @@ bool compact_layout(const CW::CosmicWeb & result) {
            result.classification_bytes.get_data().size() == cells;
 }
 
-void test_storage_lifecycle(const Tensor & tensor, const Grid & density, double threshold,
+void test_storage_lifecycle(const Tensor & tensor,
+                            const Grid & density,
+                            double threshold,
                             const CW::CosmicWeb & reference) {
     CW::CosmicWeb result = reference;
     CW::classify_tensor(tensor, threshold, result, CW::ClassificationStorage::Bytes, true, &density);
@@ -95,12 +95,13 @@ void test_storage_lifecycle(const Tensor & tensor, const Grid & density, double 
               same_grid(moved.to_fftw_grid(), reference.classification, 0),
           "byte-grid copies and moves preserve data and reset moved-from layout metadata");
     bool bounds = true;
-    for (const auto coord : {std::array<int, 3>{-1, 0, 0}, {0, -1, 0}, {0, 0, mesh},
-                             {int(moved.get_local_nx()), 0, 0}}) {
+    for (const auto coord :
+         {std::array<int, 3>{-1, 0, 0}, {0, -1, 0}, {0, 0, mesh}, {int(moved.get_local_nx()), 0, 0}}) {
         try {
             (void)moved.get_real(coord);
             bounds = false;
-        } catch (const std::out_of_range &) {}
+        } catch (const std::out_of_range &) {
+        }
     }
     check(bounds, "byte-grid coordinate access rejects all slab boundaries outside the stored domain");
     size_t flat = 0;
@@ -108,7 +109,8 @@ void test_storage_lifecycle(const Tensor & tensor, const Grid & density, double 
     for (int ix = 0; ix < result.get_local_nx(); ++ix)
         for (int iy = 0; iy < mesh; ++iy)
             for (int iz = 0; iz < mesh; ++iz)
-                dense = dense && result.classification_bytes.get_data()[flat++] == result.get_classification({ix, iy, iz});
+                dense =
+                    dense && result.classification_bytes.get_data()[flat++] == result.get_classification({ix, iy, iz});
     check(dense && flat == result.classification_bytes.size_bytes(),
           "byte labels are tightly packed in local x/y/z order with no FFT row padding");
     // The original function-pointer signature remains available as well as old call syntax.
@@ -137,9 +139,13 @@ CW::CosmicWeb serial_reference(const Tensor & tensor, double threshold, const Gr
     double volume[4]{}, mass[4]{};
     for (auto index : tensor[0].get_real_range()) {
         double e[3];
-        CW::symmetric_eigenvalues(tensor[0].get_real_from_index(index), tensor[1].get_real_from_index(index),
-                                 tensor[2].get_real_from_index(index), tensor[3].get_real_from_index(index),
-                                 tensor[4].get_real_from_index(index), tensor[5].get_real_from_index(index), e);
+        CW::symmetric_eigenvalues(tensor[0].get_real_from_index(index),
+                                  tensor[1].get_real_from_index(index),
+                                  tensor[2].get_real_from_index(index),
+                                  tensor[3].get_real_from_index(index),
+                                  tensor[4].get_real_from_index(index),
+                                  tensor[5].get_real_from_index(index),
+                                  e);
         int type = 0;
         for (int d = 0; d < 3; ++d) {
             type += e[d] > threshold;
@@ -184,7 +190,8 @@ void test_classification_and_vweb() {
             tensor[c].set_real_from_index(index, Float(value));
             shear[c].set_real_from_index(index, Float(value / normalization - (ii[c] == jj[c] ? 0.25 : 0)));
         }
-        density.set_real_from_index(index, Float(0.125 + 0.01 * (coord[0] + 3 * coord[1] + 5 * coord[2]) + 0.001 * type));
+        density.set_real_from_index(index,
+                                    Float(0.125 + 0.01 * (coord[0] + 3 * coord[1] + 5 * coord[2]) + 0.001 * type));
         divergence.set_real_from_index(index, Float(0.75));
     }
     const auto reference = serial_reference(tensor, threshold, &density);
@@ -206,7 +213,8 @@ void test_classification_and_vweb() {
         CW::CosmicWeb actual, vweb;
         CW::classify_tensor(tensor, threshold, actual, true, &density);
         check(same_result(actual, reference, 1e-12),
-              "classification and weighted fractions match the previous scalar calculation, threads=" + std::to_string(threads));
+              "classification and weighted fractions match the previous scalar calculation, threads=" +
+                  std::to_string(threads));
         if (threads == 1)
             first = actual;
         check(same_result(actual, first, 0), "classification, eigenvalues and fractions are thread-count independent");
@@ -279,23 +287,27 @@ void test_tidal_tensor_and_tweb() {
                 for (int c = 0; c < 6; ++c) {
                     double expected = 0;
                     for (const auto & wave : waves) {
-                        const double norm = wave.mode[0] * wave.mode[0] + wave.mode[1] * wave.mode[1] + wave.mode[2] * wave.mode[2];
+                        const double norm =
+                            wave.mode[0] * wave.mode[0] + wave.mode[1] * wave.mode[1] + wave.mode[2] * wave.mode[2];
                         expected += wave.mode[ii[c]] * wave.mode[jj[c]] / norm *
                                     std::exp(-0.5 * 4 * M_PI * M_PI * norm * radius * radius) * wave_value(wave, x);
                     }
                     analytic = analytic && near(tensor[c].get_real_from_index(index), expected, tolerance);
                     consistent = consistent && near(tensor[c].get_real_from_index(index),
-                                                     reference_tensor[c].get_real_from_index(index), tolerance);
+                                                    reference_tensor[c].get_real_from_index(index),
+                                                    tolerance);
                 }
             }
-            check(analytic && consistent, "all six tidal components match smoothed plane waves, threads=" + std::to_string(threads));
+            check(analytic && consistent,
+                  "all six tidal components match smoothed plane waves, threads=" + std::to_string(threads));
             CW::TWebOptions options;
             options.smoothing_scale = radius;
             options.lambda_threshold = 0.05;
             options.store_eigenvalues = true;
             CW::CosmicWeb actual;
             CW::TWeb(delta, options, actual);
-            check(same_result(actual, reference, tolerance), "T-web agrees with scalar classification and unsmoothed mass weights");
+            check(same_result(actual, reference, tolerance),
+                  "T-web agrees with scalar classification and unsmoothed mass weights");
             if (threads == 1)
                 first = actual;
             check(same_result(actual, first, tolerance), "T-web outputs agree across thread counts");
@@ -309,7 +321,45 @@ void test_tidal_tensor_and_tweb() {
     check(same_grid(delta, original, 0), "tidal tensor and T-web leave the input density unchanged");
 }
 
+// The tidal tensor of a field reflected in z (iz -> -iz) is the reflected tensor, with the sign of the xz and yz
+// components flipped. On an even mesh this fails if the mixed derivatives of the (self-conjugate) Nyquist modes are
+// taken with +k_Ny instead of being zero
+void test_tidal_tensor_reflection() {
+    Grid delta(mesh), mirror(mesh);
+    unsigned int state = 12345u + 1000u * FML::ThisTask;
+    for (auto index : delta.get_real_range()) {
+        state = state * 1664525u + 1013904223u;
+        delta.set_real_from_index(index, Float(double(state >> 8) / double(1u << 24) - 0.5));
+    }
+    for (int ix = 0; ix < delta.get_local_nx(); ix++)
+        for (int iy = 0; iy < mesh; iy++)
+            for (int iz = 0; iz < mesh; iz++)
+                mirror.set_real({ix, iy, iz}, delta.get_real({ix, iy, (mesh - iz) % mesh}));
+    Tensor t, tm;
+    CW::tidal_tensor(delta, 0.0, t);
+    CW::tidal_tensor(mirror, 0.0, tm);
+    double maxerr = 0.0, maxval = 0.0;
+    for (int c = 0; c < 6; c++) {
+        const double sign = ((ii[c] == 2) != (jj[c] == 2)) ? -1.0 : 1.0;
+        for (int ix = 0; ix < delta.get_local_nx(); ix++)
+            for (int iy = 0; iy < mesh; iy++)
+                for (int iz = 0; iz < mesh; iz++) {
+                    const double a = tm[c].get_real({ix, iy, iz});
+                    const double b = sign * t[c].get_real({ix, iy, (mesh - iz) % mesh});
+                    maxerr = std::max(maxerr, std::abs(a - b));
+                    maxval = std::max(maxval, std::abs(b));
+                }
+    }
+    FML::MaxOverTasks(&maxerr);
+    FML::MaxOverTasks(&maxval);
+    check(maxerr <= 1e-10 * maxval,
+          "tidal tensor of a reflected field is the reflected tensor (Nyquist mixed terms), "
+          "relative error " +
+              std::to_string(maxerr / maxval));
+}
+
 int main() {
+    test_tidal_tensor_reflection();
     test_classification_and_vweb();
     test_tidal_tensor_and_tweb();
     if (FML::NTasks == 1) {

@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### CosmicWeb: Nyquist mixed derivatives in the tidal tensor
+- CosmicWeb: `tidal_tensor` (T-web) now sets the mixed components k_i k_j / k^2 (i != j) of the Nyquist modes to zero
+  on even meshes, as `TidalTensor/Hessian.h`, the LPT code and the PM force already do. Before, they used +k_Ny,
+  and the tensor of a reflected field differed from the reflected tensor by about 60%.
+  - Only the Nyquist modes change; the classification can change in a few cells.
+  - New reflection test in `tests/test_cosmicweb.cpp`.
+
 ### Chunkpix: chunks that save memory (NEST), no reallocation of the whole map
 - The chunks were runs of consecutive RING pixel indices, i.e. pieces of the iso-latitude rings (32 full rings per
   chunk for nside = 8192, plc_nside_chunks = 8). A partial sky (a task's slab of lightcone particles, an octant)

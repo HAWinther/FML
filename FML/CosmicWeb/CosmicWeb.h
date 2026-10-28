@@ -61,8 +61,10 @@ namespace FML {
           public:
             ByteClassificationGrid() = default;
             explicit ByteClassificationGrid(const FML::GRID::FFTWGrid<3> & layout)
-                : nmesh(layout.get_nmesh()), local_nx(layout.get_local_nx()), local_x_start(layout.get_local_x_start()) {
-                if (nmesh <= 0 || local_nx < 0 || local_x_start < 0 || local_nx > nmesh || local_x_start > nmesh - local_nx)
+                : nmesh(layout.get_nmesh()), local_nx(layout.get_local_nx()),
+                  local_x_start(layout.get_local_x_start()) {
+                if (nmesh <= 0 || local_nx < 0 || local_x_start < 0 || local_nx > nmesh ||
+                    local_x_start > nmesh - local_nx)
                     throw std::invalid_argument("ByteClassificationGrid: invalid grid layout");
                 size_t cells = size_t(local_nx);
                 for (int d = 0; d < 2; ++d) {
@@ -134,10 +136,12 @@ namespace FML {
                 return has_byte_classification() ? classification_bytes.get_local_nx() : classification.get_local_nx();
             }
             ptrdiff_t get_local_x_start() const {
-                return has_byte_classification() ? classification_bytes.get_local_x_start() : classification.get_local_x_start();
+                return has_byte_classification() ? classification_bytes.get_local_x_start() :
+                                                   classification.get_local_x_start();
             }
             int get_classification(const std::array<int, 3> & c) const {
-                return has_byte_classification() ? int(classification_bytes.get_real(c)) : int(classification.get_real(c));
+                return has_byte_classification() ? int(classification_bytes.get_real(c)) :
+                                                   int(classification.get_real(c));
             }
             Grid classification_as_grid() const {
                 return has_byte_classification() ? classification_bytes.to_fftw_grid() : classification;
@@ -284,7 +288,12 @@ namespace FML {
                                     CosmicWeb & result,
                                     bool store_eigenvalues = false,
                                     const FML::GRID::FFTWGrid<3> * density = nullptr) {
-            classify_tensor(tensor, lambda_threshold, result, ClassificationStorage::FFTWGrid, store_eigenvalues, density);
+            classify_tensor(tensor,
+                            lambda_threshold,
+                            result,
+                            ClassificationStorage::FFTWGrid,
+                            store_eigenvalues,
+                            density);
         }
 
         //========================================================================================
@@ -311,6 +320,10 @@ namespace FML {
             delta_k.fftw_r2c();
             const int ii[6] = {0, 0, 0, 1, 1, 2};
             const int jj[6] = {0, 1, 2, 1, 2, 2};
+            // On an even mesh the Nyquist mode is its own mirror image, so a mixed derivative k_i k_j (i != j) of it
+            // is ambiguous (+k_Ny or -k_Ny): it is set to zero, as in TidalTensor/Hessian.h and the LPT code (k_i^2
+            // is kept)
+            const double knyquist = M_PI * N * (1.0 - 1e-10);
             for (int c = 0; c < 6; c++) {
                 tensor[c] = delta_k;
 #ifdef USE_OMP
@@ -325,10 +338,16 @@ namespace FML {
                             tensor[c].set_fourier_from_index(index, 0.0);
                             continue;
                         }
+                        if (ii[c] != jj[c] and N % 2 == 0 and
+                            (std::fabs(kvec[ii[c]]) >= knyquist or std::fabs(kvec[jj[c]]) >= knyquist)) {
+                            tensor[c].set_fourier_from_index(index, 0.0);
+                            continue;
+                        }
                         const double filter = std::exp(-0.5 * k2 * smoothing_scale * smoothing_scale);
-                        tensor[c].set_fourier_from_index(index,
-                                                         tensor[c].get_fourier_from_index(index) *
-                                                             FML::GRID::FloatType(kvec[ii[c]] * kvec[jj[c]] / k2 * filter));
+                        tensor[c].set_fourier_from_index(
+                            index,
+                            tensor[c].get_fourier_from_index(index) *
+                                FML::GRID::FloatType(kvec[ii[c]] * kvec[jj[c]] / k2 * filter));
                     }
                 }
                 tensor[c].fftw_c2r();
@@ -361,8 +380,12 @@ namespace FML {
                 for (int iy = 0; iy < delta.get_nmesh(); iy++)
                     for (int iz = 0; iz < delta.get_nmesh(); iz++)
                         density.set_real({ix, iy, iz}, 1.0 + delta.get_real({ix, iy, iz}));
-            classify_tensor(tensor, options.lambda_threshold, result, options.classification_storage,
-                            options.store_eigenvalues, &density);
+            classify_tensor(tensor,
+                            options.lambda_threshold,
+                            result,
+                            options.classification_storage,
+                            options.store_eigenvalues,
+                            &density);
             if (FML::ThisTask == 0) {
                 std::cout << "[TWeb] lambda_th = " << options.lambda_threshold << " R = " << options.smoothing_scale
                           << ". Volume (mass) fractions:";
@@ -449,7 +472,12 @@ namespace FML {
                          double lambda_threshold,
                          CosmicWeb & result,
                          bool store_eigenvalues = false) {
-            VWeb(shear, divergence, normalization, lambda_threshold, result, ClassificationStorage::FFTWGrid,
+            VWeb(shear,
+                 divergence,
+                 normalization,
+                 lambda_threshold,
+                 result,
+                 ClassificationStorage::FFTWGrid,
                  store_eigenvalues);
         }
 
