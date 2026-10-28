@@ -190,7 +190,8 @@ namespace COLASOLVER {
     /// displacement fields stored in the particles (for COLA) are those of delta_cb, i.e. all the species share the
     /// COLA frame of the total CDM+baryon field. With mass_contrast_of_kBox the particles get the masses
     /// m = 1 + eps(q) with eps(k) = delta_cb(k) mass_contrast(kB) (the mass-encoded baryon-CDM relative mode).
-    /// Returns delta_i(k) (shifted).
+    /// With velocity_norm_2LPT_of_kBox the 2LPT velocity is velocity_norm_2LPT(kB) Psi_2LPT (instead of
+    /// velocity_norms[1] Psi_2LPT). Returns delta_i(k) (shifted).
     //=============================================================================
     template <int NDIM, class P>
     FFTWGrid<NDIM> generate_species_from_delta_cb(FML::PARTICLE::MPIParticles<P> & particles,
@@ -206,7 +207,8 @@ namespace COLASOLVER {
                                                   double lattice_shift,
                                                   long long int id_offset,
                                                   bool store_cb_LPT_fields = false,
-                                                  std::function<double(double)> mass_contrast_of_kBox = nullptr) {
+                                                  std::function<double(double)> mass_contrast_of_kBox = nullptr,
+                                                  std::function<double(double)> velocity_norm_2LPT_of_kBox = nullptr) {
         std::array<double, NDIM> shift_vec;
         shift_vec.fill(lattice_shift);
 
@@ -246,7 +248,8 @@ namespace COLASOLVER {
                                                     velocity_norm_1LPT_of_kBox,
                                                     LPT_order >= 2 ? &delta_total : nullptr,
                                                     store_cb_LPT_fields ? &delta_total : nullptr,
-                                                    mass_contrast_of_kBox ? &mass_contrast : nullptr);
+                                                    mass_contrast_of_kBox ? &mass_contrast : nullptr,
+                                                    velocity_norm_2LPT_of_kBox);
 
         for (auto & p : particles) {
             auto * pos = FML::PARTICLE::GetPos(p);
