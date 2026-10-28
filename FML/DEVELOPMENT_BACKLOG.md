@@ -1,6 +1,6 @@
 # FML remaining-work backlog
 
-Updated 28 October 2026, including tested initial implementations of items 25–32, 35–36 and 38. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
+Updated 29 October 2026, including completed Engineering item 1 and tested initial implementations of items 25–32, 35–36 and 38. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
 
 ## Completed in this sequence
 
@@ -13,6 +13,7 @@ Updated 28 October 2026, including tested initial implementations of items 25–
 - Pruning inactive non-Gaussian random-field kernels and transforms.
 - Reusable FFTLog plans, aligned buffers, and coefficient caching.
 - Multi-slab spherical-void particle exchange, without the slab-width-triggered all-particle fallback.
+- Multi-slab spherical-overdensity measurements with serialized selective exchange and adaptive centering coverage.
 - Survey Fourier multipoles (0, 2, 4), weighted noise, physical geometry and MPI catalogue routing.
 - Survey window multipoles (0–8), model mixing matrices, output-band averaging and global IC modeling.
 - Local/fixed-LOS survey displacement solving and RecIso/RecSym data/random reconstruction.
@@ -32,9 +33,11 @@ Items 28–30 have initial implementations in `HOD/HOD.h` and `CountsInCells/Spa
 
 ## Engineering work, suggested order
 
+Item 1 is complete. Continue with item 2; the remaining Engineering items are pending. See `FriendsOfFriends/SphericalOverdensity.md` for the multi-slab exchange contract and regression coverage.
+
 | # | Task | Concrete scope | Effort |
 |---|---|---|---|
-| 1 | Multi-slab spherical-overdensity measurements | Remove the slab-width restriction; preserve particle serialization, periodic/unwrapped distances, centering, velocities, masses and truncation flags. | Medium |
+| 1 | ~~Multi-slab spherical-overdensity measurements~~ (completed) | Removed the slab-width restriction; preserved particle serialization, periodic/unwrapped distances, centering, velocities, masses and truncation flags. | Medium |
 | 2 | Explicit multigrid termination status | Distinguish convergence, maximum iterations and nonfinite failure; return final residual and iteration count. | Small–medium |
 | 3 | Faster pair-count rank assignment | Replace repeated rank-load scans with a deterministic min-heap, retaining tie-breaking behavior. | Small |
 | 4 | Better pair-count workload estimates | Use neighboring candidate occupancy rather than only same-cell occupancy, especially for cross-catalogues. | Medium |

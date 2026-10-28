@@ -176,3 +176,6 @@ PhaseSpaceHaloFinder/tests/test_phase_space_halos
 PhaseSpaceHaloFinder/example/phase_halos
 tests/test_phase_space_halos
 PhaseSpaceHaloFinder/tests/rockstar_fixture
+
+# Multi-slab spherical-overdensity regression executable
+tests/test_so_multislab
