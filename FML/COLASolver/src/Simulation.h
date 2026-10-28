@@ -148,7 +148,6 @@ class NBodySimulation {
     // Splines used to generate the IC
     Spline power_primordial_spline{"P_primordial(k)"}; // Spline of primordial power-spectrum (h/Mpc) vs (Mpc/h)^3
     Spline power_initial_spline{"P(k,zini)"};          // Spline of baryon-CDM power-spectrum (h/Mpc) vs (Mpc/h)^3
-    Spline transfer_initial_spline{"T(k,zini)"};       // Spline of baryon-CDM transfer function (h/Mpc) vs Mpc^2
 
     //=============================================================================
     // Some of the stuff we compute and output is small so we also keep it
@@ -524,7 +523,6 @@ void NBodySimulation<NDIM, T>::setup_initial_power_spectrum() {
     auto make_splines = [&](std::string label) {
         power_initial_spline.create(table.k, table.power, "P(k,zini)" + label);
         power_primordial_spline.create(table.k, table.power_primordial, "P_primordial(k)" + label);
-        transfer_initial_spline.create(table.k, table.transfer, "T(k,zini)" + label);
     };
     make_splines("");
 

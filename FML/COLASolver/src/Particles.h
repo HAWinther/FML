@@ -16,7 +16,7 @@
 //                                                      particle_baryon_relative_mode = mass or mass_ini
 //
 // Free choice of types, so you can for example change to floats to save memory
-// or add fields you want to carry along. See ExampleParticles.h for more examples
+// or add fields you want to carry along. See FML/ParticleTypes for more examples
 // and FML/ParticleTypes/ReflectOnParticleMethods.h for the standard methods
 //=============================================================================
 

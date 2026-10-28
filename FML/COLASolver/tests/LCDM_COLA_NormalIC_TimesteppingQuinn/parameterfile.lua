@@ -2,7 +2,7 @@
 -- Simulation parameter file
 -- This is a LUA script so you can write simple code
 -- and use parameter names to set other parameters
--- See ReadParameters.h for which parameters are read
+-- See PARAMETERS.md (or run ./nbody --parameters) for all the parameters
 -- and what the standard value is
 -- Include other paramfile into this: dofile("param.lua")
 ------------------------------------------------------------
@@ -10,7 +10,7 @@
 -- Don't allow any parameters to take optional values?
 -- If so we have to provide everything. If not most of the
 -- parameters below don't have to be provided and fiduicial values
--- are used instead (see ReadParameters.h for fiducial values)
+-- are used instead (see PARAMETERS.md for the default values)
 all_parameters_must_be_in_file = true
 
 ------------------------------------------------------------
