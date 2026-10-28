@@ -77,11 +77,11 @@ Items 22–23 were explicitly deferred. Item 24 is grouped here as related KD-tr
 | 29 | kNN-CDF statistics | Batched random query points, distributions of kth-neighbor distances and explicit self-exclusion conventions. |
 | 30 | Counts-in-cells | Counts/density PDFs and factorial moments, with explicit window and shot-noise conventions. |
 | 31 | Density-split and marked clustering | Environment quantiles and cross-correlations; normalized marks and well-defined noise treatment. |
-| 32 | Control variates and ensemble summaries | Matched-phase ZA/2LPT/COLA controls, fitted coefficients and surrogate means, cross spectra, streaming covariance and reproducible metadata. |
+| 32 | Control variates and ensemble summaries (initial implementation) | Matched-phase ZA/2LPT/COLA controls, fitted coefficients and surrogate means, cross spectra, streaming covariance and reproducible metadata. |
 | 33 | 3PCF and anisotropic higher-order estimators | Spherical-harmonic neighbor accumulations, then bispectrum multipoles. |
 | 34 | Connected four-point statistics | Explicit connected subtraction and supported configurations; start with covariance/collapsed configurations rather than claiming a general trispectrum. |
 | 35 | Faster perturbative predictions | FFTLog/FAST-PT-style supported one-loop terms, preserving direct quadrature for unsupported scale-dependent kernels; later IR-resummed biased-tracer RSD templates. |
-| 36 | Morphology statistics | Excursion-set volume, surface area, curvature and Euler characteristic, with explicit voxel/boundary conventions. |
+| 36 | Morphology statistics (initial implementation) | Excursion-set volume, surface area, curvature and Euler characteristic, with explicit voxel/boundary conventions. |
 | 37 | Integrated lensing observables | Tomographic convergence/shear and projected galaxy–matter correlations, with source distributions and units; begin with Born projections. |
 | 38 | Halo histories and external substructure interfaces | Stable particle-ID overlap merger trees and external subhalo catalogue integration. |
 
@@ -100,6 +100,8 @@ The scientific implementations should be checked against independent analytic or
 | 45 | Broader distributed snapshot IO | Benchmark binary/HDF5/Ramses read patterns and peak memory first, then choose collective or chunked improvements. |
 
 Items 25–30 now have tested initial implementations. Next options are production validation of these workflows, resuming the engineering queue with item 1, or new science item 31 (density-split and marked clustering). Items 2–5 are good subsequent bounded changes. The larger observational workflow is 25–27; new mock/statistics work can follow with 28–32.
+
+Items 32 and 36 now also have tested initial implementations. `EnsembleStatistics/` provides streaming covariance, independently trained full/diagonal control variates, independent surrogate-mean uncertainty, phase provenance and a matched Fourier auto/cross-spectrum adapter. `Morphology/` provides distributed closed-voxel excursion volume, surface area, integrated mean curvature and Euler characteristic, with open/periodic boundaries and separate Crofton normalization. Both include runnable examples and analytic/independent-reference serial/MPI tests. Production follow-ups are matched ZA/2LPT/COLA versus N-body calibration and continuum Gaussian-field morphology/resolution validation; see each module's README. Items 31, 33–35 and 37–38 remain pending.
 
 ## Short-range gravity extension
 

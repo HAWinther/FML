@@ -142,3 +142,13 @@ tests/test_nbody
 # Short-range gravity standalone and main-suite executables
 ShortRangeGravity/tests/test_short_range
 tests/test_short_range
+
+# Ensemble and voxel morphology executables
+EnsembleStatistics/tests/test_control
+EnsembleStatistics/tests/test_spectra
+EnsembleStatistics/example/example
+Morphology/tests/test_morphology
+Morphology/example/example
+tests/test_control
+tests/test_spectra
+tests/test_morphology
