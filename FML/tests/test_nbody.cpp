@@ -8,6 +8,7 @@
 //   - the periodic wrap after the drift never gives 1.0 and handles displacements larger than the box
 //   - PGD with tasks without particles (aborted) and the size of the PGD displacement
 //   - NBody.h and PotentialGradientDecent.h can be included in several translation units (test_nbody_odr.cpp)
+//   - NBodyInitialConditions applies the optional scale-dependent 2LPT velocity norm(k) at the k of the 2LPT field
 // Bad input that must stop with a clear message:
 //   ./test_nbody fdslices : potential with fewer than stencil_order/2 extra slices (read out of bounds before)
 //   ./test_nbody stencil  : stencil order that is not implemented (threw inside an OpenMP region: std::terminate)
@@ -23,6 +24,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <sstream>
@@ -604,6 +606,85 @@ int main(int argc, char ** argv) {
               "PGD displacement is -alpha norm grad grad^-2 delta (towards the overdensity), measured/expected = " +
                   num(ratio));
         mp.communicate_particles();
+    }
+
+    //=====================================================
+    // 8. NBodyInitialConditions with a scale-dependent 2LPT velocity norm(k): v_2LPT = norm(k) Psi_2LPT(k) with k the
+    // wavenumber of the 2LPT field. delta = A [cos(k1 x) + cos(k1 y) + cos(k2 z)]: the 2LPT source phi_ii phi_jj -
+    // phi_ij^2 has the modes (k1, k1, 0) in the x-y plane and (k1, 0, k2), (0, k1, k2), so the z-velocity is
+    // norm(sqrt(k1^2 + k2^2)) Psi_2LPT,z. Compared with the same IC with the constant norm velocity_norms[1]
+    //=====================================================
+    {
+        const int Np = 16, n1 = 1, n2 = 3;
+        const double A = 0.05, k1 = 2.0 * M_PI * n1, k2 = 2.0 * M_PI * n2;
+        auto make_ic = [&](bool with_z, std::function<double(double)> norm2) {
+            FFTWGrid delta(Np, 1, 1);
+            delta.fill_real_grid([&](std::array<double, 3> & x) -> FloatType {
+                return A * (std::cos(k1 * x[0]) + std::cos(k1 * x[1]) + (with_z ? std::cos(k2 * x[2]) : 0.0));
+            });
+            delta.fftw_r2c();
+            MPIParticles<Particle> mp;
+            std::vector<FFTWGrid> potentials;
+            // No 1LPT velocity: the velocities are the 2LPT velocities
+            const std::vector<double> norms{0.0, norm2 ? 0.0 : 1.0};
+            NBODY::NBodyInitialConditions<3, Particle>(mp,
+                                                       Np,
+                                                       2.0,
+                                                       delta,
+                                                       potentials,
+                                                       2,
+                                                       1.0,
+                                                       10.0,
+                                                       norms,
+                                                       nullptr,
+                                                       nullptr,
+                                                       nullptr,
+                                                       nullptr,
+                                                       norm2);
+            return mp;
+        };
+        auto g = [](double kBox) { return 1.0 + kBox / (2.0 * M_PI); };
+        // Compare the velocities (component idim) of b with factor * those of a, particle by particle (the same order:
+        // the same lattice and displacements on the same tasks)
+        auto compare = [&](MPIParticles<Particle> & a, MPIParticles<Particle> & b, int idim, double factor) {
+            double maxerr = 0.0, maxv = 0.0, maxdpos = 0.0;
+            for (size_t i = 0; i < a.get_npart(); i++) {
+                maxerr = std::max(maxerr, std::fabs(b[i].vel[idim] - factor * a[i].vel[idim]));
+                maxv = std::max(maxv, std::fabs(a[i].vel[idim]));
+                for (int j = 0; j < 3; j++)
+                    maxdpos = std::max(maxdpos, std::fabs(b[i].pos[j] - a[i].pos[j]));
+            }
+            FML::MaxOverTasks(&maxerr);
+            FML::MaxOverTasks(&maxv);
+            FML::MaxOverTasks(&maxdpos);
+            return std::array<double, 3>{maxerr / maxv, maxv, maxdpos};
+        };
+        // Two plane waves in x and y: one 2LPT shell |k| = sqrt(2) k1
+        auto a = make_ic(false, nullptr);
+        auto b = make_ic(false, g);
+        const double expected_xy = g(std::sqrt(2.0) * k1);
+        for (int idim = 0; idim < 2; idim++) {
+            auto r = compare(a, b, idim, expected_xy);
+            check(a.get_npart() == b.get_npart() and r[0] < 1e-5 and r[1] > 0.0 and r[2] == 0.0,
+                  "NBodyInitialConditions: 2LPT velocity " + std::string(1, "xyz"[idim]) +
+                      " = norm(k) Psi_2LPT at |k| = sqrt(2) k1 (rel. error " + num(r[0]) +
+                      ", positions unchanged: max diff " + num(r[2]) + ")");
+        }
+        // With the third wave: the z-velocity comes from the shell |k| = sqrt(k1^2 + k2^2)
+        auto c = make_ic(true, nullptr);
+        auto d = make_ic(true, g);
+        auto r = compare(c, d, 2, g(std::sqrt(k1 * k1 + k2 * k2)));
+        check(r[0] < 1e-5 and r[1] > 0.0 and r[2] == 0.0,
+              "NBodyInitialConditions: 2LPT z-velocity = norm(k) Psi_2LPT at |k| = sqrt(k1^2 + k2^2) (rel. error " +
+                  num(r[0]) + ")");
+        // A constant norm(k) is the same as velocity_norms[1]
+        auto e = make_ic(true, [](double) { return 1.0; });
+        double maxerr = 0.0;
+        for (int idim = 0; idim < 3; idim++)
+            maxerr = std::max(maxerr, compare(c, e, idim, 1.0)[0]);
+        check(maxerr < 1e-6,
+              "NBodyInitialConditions: a constant 2LPT velocity norm(k) = velocity_norms[1] (rel. diff " + num(maxerr) +
+                  ")");
     }
 
     check_streamed_pgd_suite();

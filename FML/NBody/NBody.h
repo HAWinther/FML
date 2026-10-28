@@ -678,7 +678,8 @@ namespace FML {
                                     std::function<double(double)> velocity_norm_1LPT_of_kBox = nullptr,
                                     const FFTWGrid<N> * delta_fourier_2LPT_source = nullptr,
                                     const FFTWGrid<N> * delta_fourier_1LPT_stored = nullptr,
-                                    const FFTWGrid<N> * mass_contrast_fourier = nullptr);
+                                    const FFTWGrid<N> * mass_contrast_fourier = nullptr,
+                                    std::function<double(double)> velocity_norm_2LPT_of_kBox = nullptr);
 
         //=====================================================================
         /// @brief Generate particles from a given power-spectrum using Lagrangian perturbation theory.
@@ -808,6 +809,9 @@ namespace FML {
         /// @param[in] mass_contrast_fourier Optional. If set the particles get the masses m = 1 + eps(q) where eps is
         /// this field (in fourier space) at their Lagrangian (lattice) position. The particle class must have a
         /// set_mass method
+        /// @param[in] velocity_norm_2LPT_of_kBox Optional. As velocity_norm_1LPT_of_kBox for the 2LPT velocity
+        /// (instead of velocity_norms[1]): \f$ v_{\rm 2LPT}(k) = {\rm norm}(k) \Psi_{\rm 2LPT}(k) \f$ with \f$ k \f$
+        /// the wavenumber of the 2LPT field
         ///
         //=====================================================================
         template <int N, class T>
@@ -825,7 +829,8 @@ namespace FML {
                                     std::function<double(double)> velocity_norm_1LPT_of_kBox,
                                     const FFTWGrid<N> * delta_fourier_2LPT_source,
                                     const FFTWGrid<N> * delta_fourier_1LPT_stored,
-                                    const FFTWGrid<N> * mass_contrast_fourier) {
+                                    const FFTWGrid<N> * mass_contrast_fourier,
+                                    std::function<double(double)> velocity_norm_2LPT_of_kBox) {
 
             T tmp{};
             if (FML::ThisTask == 0) {
@@ -1149,6 +1154,30 @@ namespace FML {
                 }
             }
 
+            // The velocity norm(k) Psi_nLPT(k) for a scale-dependent velocity norm (e.g. a scale-dependent growth rate)
+            auto comp_scaledependent_velocity = [&](int nLPT,
+                                                    const FFTWGrid<N> & phi_nLPT,
+                                                    const std::function<double(double)> & norm_of_kBox,
+                                                    std::array<std::vector<FML::GRID::FloatType>, N> & velocities) {
+                FFTWGrid<N> phi_vel = phi_nLPT;
+                auto Local_nx = phi_vel.get_local_nx();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (int islice = 0; islice < Local_nx; islice++) {
+                    [[maybe_unused]] double kmag;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    for (auto && fourier_index : phi_vel.get_fourier_range(islice, islice + 1)) {
+                        phi_vel.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                        const double norm = kmag > 0.0 ? norm_of_kBox(kmag) : 0.0;
+                        phi_vel.set_fourier_from_index(fourier_index,
+                                                       phi_vel.get_fourier_from_index(fourier_index) *
+                                                           FML::GRID::FloatType(norm));
+                    }
+                }
+                comp_displacement(nLPT, phi_vel, velocities);
+            };
+
             // Compute and add displacements
             // NB: we must do this in one go as add_displacement changes the position of the particles
             std::array<std::vector<FML::GRID::FloatType>, N> displacements_1LPT;
@@ -1156,25 +1185,8 @@ namespace FML {
             if (LPT_order >= 1) {
                 const int nLPT = 1;
                 // Scale-dependent 1LPT velocity: the displacement of phi_1LPT(k) * norm(k)
-                if (velocity_norm_1LPT_of_kBox) {
-                    FFTWGrid<N> phi_vel = phi_1LPT;
-                    auto Local_nx = phi_vel.get_local_nx();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-                    for (int islice = 0; islice < Local_nx; islice++) {
-                        [[maybe_unused]] double kmag;
-                        [[maybe_unused]] std::array<double, N> kvec;
-                        for (auto && fourier_index : phi_vel.get_fourier_range(islice, islice + 1)) {
-                            phi_vel.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
-                            const double norm = kmag > 0.0 ? velocity_norm_1LPT_of_kBox(kmag) : 0.0;
-                            phi_vel.set_fourier_from_index(fourier_index,
-                                                           phi_vel.get_fourier_from_index(fourier_index) *
-                                                               FML::GRID::FloatType(norm));
-                        }
-                    }
-                    comp_displacement(nLPT, phi_vel, velocities_1LPT);
-                }
+                if (velocity_norm_1LPT_of_kBox)
+                    comp_scaledependent_velocity(nLPT, phi_1LPT, velocity_norm_1LPT_of_kBox, velocities_1LPT);
                 comp_displacement(nLPT, phi_1LPT, displacements_1LPT);
                 if (delta_fourier_1LPT_stored and FML::PARTICLE::has_get_D_1LPT<T>()) {
                     FFTWGrid<N> phi_stored;
@@ -1184,11 +1196,15 @@ namespace FML {
             }
 
             std::array<std::vector<FML::GRID::FloatType>, N> displacements_2LPT;
+            std::array<std::vector<FML::GRID::FloatType>, N> velocities_2LPT;
             if (LPT_order >= 2) {
                 const int nLPT = 2;
                 // Store potential if asked for
                 if (phi_nLPT_potentials.size() > 0)
                     phi_nLPT_potentials[0] = phi_2LPT;
+                // Scale-dependent 2LPT velocity: the displacement of phi_2LPT(k) * norm(k)
+                if (velocity_norm_2LPT_of_kBox)
+                    comp_scaledependent_velocity(nLPT, phi_2LPT, velocity_norm_2LPT_of_kBox, velocities_2LPT);
                 comp_displacement(nLPT, phi_2LPT, displacements_2LPT);
             }
 
@@ -1229,8 +1245,16 @@ namespace FML {
 
             if (LPT_order >= 2) {
                 const int nLPT = 2;
-                add_displacement(nLPT, 0, displacements_2LPT, velocity_norms[1]);
+                add_displacement(nLPT,
+                                 0,
+                                 displacements_2LPT,
+                                 velocity_norms[1],
+                                 velocity_norm_2LPT_of_kBox ? &velocities_2LPT : nullptr);
                 for (auto & d : displacements_2LPT) {
+                    d.clear();
+                    d.shrink_to_fit();
+                }
+                for (auto & d : velocities_2LPT) {
                     d.clear();
                     d.shrink_to_fit();
                 }
