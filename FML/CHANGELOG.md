@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLA keeps the initial velocity of the LPT orders its frame does not have
+- COLASolver: with COLA and `simulation_cola_LPT_order` < `ic_LPT_order`, the IC velocity of the LPT orders the
+  COLA frame does not carry is now kept: 2LPT and 3LPT with COLA order 1, and 3LPT with COLA order 2.
+  - Before, these velocities were dropped. With COLA order 1 and 2LPT IC in LCDM at z = 20, the initial
+    velocities were 1.7% rms off.
+  - COLA order 1 runs with 2LPT IC now have up to about 2% more nonlinear power at z = 0. In a GR 64^3 test, a
+    30-step run is now within 0.5% of a 200-step no-COLA run at k = 0.6 h/Mpc, against 2.8% before.
+  - Runs with the COLA order equal to the IC order are unchanged.
+  - Regression: `fofr_cola1_tsc` changes, by up to 2.3% in P(k).
+
 ### Scale-dependent 2LPT initial velocities
 - NBody: `NBodyInitialConditions` takes an optional scale-dependent 2LPT velocity norm,
   `velocity_norm_2LPT_of_kBox`. The default is unchanged.
