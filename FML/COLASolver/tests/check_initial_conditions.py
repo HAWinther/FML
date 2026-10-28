@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #==========================================================================
-# Checks of the initial conditions (about 1 minute, needs numpy)
+# Checks of the initial conditions (about 2 minutes, needs numpy)
 #
 #  1. COLA frame velocities: with 0 steps the particles written at the initial redshift must have the
 #     same velocities with and without COLA (the COLA frame velocity is added back at output):
@@ -10,6 +10,9 @@
 #     - CDM + baryons on offset lattices (particle_baryon_lattice = offset) with scale-dependent COLA (the frame of
 #       the baryons on their own lattice), 2LPT and 1LPT, also with the particle lattice offset from a 2x force grid
 #     - the N-body gauge (scale-dependent growth rate of the transfer functions) with COLA, 4000 Mpc/h box
+#     - COLA of lower LPT order than the IC (COLA order 1 with 2LPT and 3LPT IC, order 2 with 3LPT IC): the frame
+#       does not have the higher orders, the particles must keep their IC velocity. LCDM and 0.4 eV neutrinos, one
+#       and two species, scale-independent and scale-dependent COLA, and the N-body gauge
 #  2. Massive neutrinos without ic_type_of_input = transferinfofile give a clear error (not a segfault)
 #  3. Reading particles (ic_random_field_type = read_particles):
 #     - exact LPT reconstruction from an offset lattice (COLASolver's own fiducial offset with a 2x force grid,
@@ -125,6 +128,21 @@ offset_scaledep = dict(particle_baryons=True, particle_baryon_lattice="offset", 
 scaledep = dict(simulation_use_scaledependent_cola=True)
 lpt1 = dict(ic_LPT_order=1, simulation_cola_LPT_order=1)
 tolerance = {}
+
+
+def compare_velocities(label, base, extra, description):
+    v = {}
+    for cola in [True, False]:
+        d, _ = run(f"vel_{label}_cola{int(cola)}", dict(base, simulation_use_cola=cola, **extra))
+        ids, pos, v[cola] = read_gadget(os.path.join(d, snap_zini))
+    # Each species separately (the baryon IDs follow those of the CDM)
+    species = [("cdm", ids < npart), ("baryon", ids >= npart)] if "two_species" in label else [("all", ids >= 0)]
+    for name, sel in species:
+        err = np.sqrt(np.mean((v[True][sel] - v[False][sel])**2) / np.mean(v[False][sel]**2))
+        check(err < tolerance.get(label, 1e-5), f"{label} ({name}), {description}: velocities with COLA = without "
+              f"COLA (rms rel. diff {err:.2e})")
+
+
 for label, extra in [("two_species", dict(particle_baryons=True)), ("one_species", dict()),
                      ("two_species_scaledep", dict(particle_baryons=True, **scaledep)),
                      ("one_species_scaledep", scaledep),
@@ -132,16 +150,26 @@ for label, extra in [("two_species", dict(particle_baryons=True)), ("one_species
                      ("two_species_offset_scaledep_force64", dict(offset_scaledep, force_nmesh=64)),
                      ("two_species_offset_scaledep_1LPT", dict(offset_scaledep, **lpt1)),
                      ("two_species_offset_scaledep_1LPT_force64", dict(offset_scaledep, force_nmesh=64, **lpt1))]:
-    v = {}
-    for cola in [True, False]:
-        d, _ = run(f"vel_{label}_cola{int(cola)}", dict(nu04, simulation_use_cola=cola, **extra))
-        ids, pos, v[cola] = read_gadget(os.path.join(d, snap_zini))
-    # Each species separately (the baryon IDs follow those of the CDM)
-    species = [("cdm", ids < npart), ("baryon", ids >= npart)] if "two_species" in label else [("all", ids >= 0)]
-    for name, sel in species:
-        err = np.sqrt(np.mean((v[True][sel] - v[False][sel])**2) / np.mean(v[False][sel]**2))
-        check(err < tolerance.get(label, 1e-5), f"{label} ({name}), 0.4 eV linear neutrinos: velocities with COLA = without COLA (rms rel. "
-              f"diff {err:.2e})")
+    compare_velocities(label, nu04, extra, "0.4 eV linear neutrinos")
+
+# A COLA frame of lower LPT order than the IC (simulation_cola_LPT_order < ic_LPT_order): the frame only has the
+# orders up to simulation_cola_LPT_order and the particles must keep the IC velocity of the higher orders (the 2LPT
+# velocity was dropped with COLA order 1: 1.7% rms in LCDM, and the 3LPT velocity with COLA order 2)
+lcdm = dict(ic_type_of_input="transferinfofile",
+            ic_input_filename=cases.INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
+            ic_input_redshift=ZINI,
+            **at_zini)
+cola1 = dict(simulation_cola_LPT_order=1, ic_LPT_order=2)
+cola1_ic3 = dict(simulation_cola_LPT_order=1, ic_LPT_order=3)
+cola2_ic3 = dict(simulation_cola_LPT_order=2, ic_LPT_order=3)
+for base, cosmo in [(lcdm, "LCDM"), (nu04, "0.4 eV linear neutrinos")]:
+    tag = "lcdm" if base is lcdm else "nu04"
+    for label, extra in [("one_species_cola1", cola1), ("one_species_scaledep_cola1", dict(scaledep, **cola1)),
+                         ("two_species_cola1", dict(particle_baryons=True, **cola1)),
+                         ("two_species_scaledep_cola1", dict(particle_baryons=True, **scaledep, **cola1)),
+                         ("one_species_cola1_ic3", cola1_ic3), ("one_species_cola2_ic3", cola2_ic3),
+                         ("one_species_scaledep_cola2_ic3", dict(scaledep, **cola2_ic3))]:
+        compare_velocities(f"{label}_{tag}", base, extra, cosmo)
 
 # N-body gauge: the difference f_nbg(k) - f(0) matters on the largest scales, so compare the velocities averaged
 # over 4^3 cells of the 4000 Mpc/h box
@@ -154,16 +182,18 @@ nbg = dict(simulation_boxsize=BOX,
            force_nbody_gauge=True,
            force_nbody_gauge_filename=cases.INPUT + "/nbody_gauge_lcdm/nbgauge_extra.txt",
            **at_zini)
-vmean = {}
-for cola in [True, False]:
-    d, _ = run(f"vel_nbody_gauge_cola{int(cola)}", dict(nbg, simulation_use_cola=cola))
-    ids, pos, vel = read_gadget(os.path.join(d, snap_zini))
-    cell = np.floor(pos / BOX * 4).astype(int) % 4
-    index = (cell[:, 0] * 4 + cell[:, 1]) * 4 + cell[:, 2]
-    counts = np.bincount(index, minlength=64)
-    vmean[cola] = np.array([np.bincount(index, weights=vel[:, i], minlength=64) / counts for i in range(3)])
-err = np.sqrt(np.mean((vmean[True] - vmean[False])**2) / np.mean(vmean[False]**2))
-check(err < 1e-3, f"N-body gauge: large-scale velocities with COLA = without COLA (rms rel. diff {err:.2e})")
+for label, extra in [("", dict()), ("_cola1", cola1)]:
+    vmean = {}
+    for cola in [True, False]:
+        d, _ = run(f"vel_nbody_gauge{label}_cola{int(cola)}", dict(nbg, simulation_use_cola=cola, **extra))
+        ids, pos, vel = read_gadget(os.path.join(d, snap_zini))
+        cell = np.floor(pos / BOX * 4).astype(int) % 4
+        index = (cell[:, 0] * 4 + cell[:, 1]) * 4 + cell[:, 2]
+        counts = np.bincount(index, minlength=64)
+        vmean[cola] = np.array([np.bincount(index, weights=vel[:, i], minlength=64) / counts for i in range(3)])
+    err = np.sqrt(np.mean((vmean[True] - vmean[False])**2) / np.mean(vmean[False]**2))
+    # (round-off now; the bugs were 0.75% for f(0) instead of f_nbg(k) and 7e-4 for the 2LPT velocity with COLA order 1)
+    check(err < 1e-5, f"N-body gauge{label}: large-scale velocities with COLA = without COLA (rms rel. diff {err:.2e})")
 
 #==========================================================================
 # 2. Massive neutrinos need the transfer functions
