@@ -5,6 +5,40 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLASolver: COLA, time stepping, DGP 2LPT, fNL and m(a)/beta(a) fixes
+- `simulation_use_scaledependent_cola` (default true) only gives scale-dependent COLA when the growth is
+  scale-dependent (massive neutrinos, k-dependent gravity).
+  - In GR, standard COLA is used: the same result about 4x faster and with 40% less memory. A message is printed.
+  - Exact LPT reconstruction of read particles works without COLA.
+- `simulation_enforce_LPT_trajectories` with COLA gave velocities close to the initial ones. They now follow LPT.
+- Non-linear step spacing (logarithmic, power-law, growth-factor):
+  - Quinn kicks are now normalized at the force time (they used the midpoint).
+  - Tassev drifts are now weighted at the velocity time.
+  - Linear growth error with 20 logarithmic Quinn steps goes from -0.76% to -0.38%. Linear spacing is unchanged.
+- DGP 2LPT growth: the Vainshtein term now only adds to the D1^2 source, and only with screening. D2 was
+  0.5-0.7% too small, and 2% without screening.
+- The scale-independent COLA frame kick now includes the source factors of the growth equations: 1 - f_nu for
+  2LPT and higher, and the DGP term.
+- Scale-dependent COLA with `particle_baryon_lattice = "offset"`: the baryon COLA frame is now computed on their
+  own lattice. Their initial velocities were 22% off.
+- Non-gaussian IC: fNL now multiplies Phi = (3/5) g(z) zeta at `ic_fnl_redshift`, with g = D/a.
+  - z = 0 is the large-scale-structure convention; a matter-era redshift is the CMB convention.
+  - The code used 1.5 OmegaM instead of (3/5) g(0). The effective fNL was therefore 0.84 fNL for OmegaM = 0.25
+    and 2.5 fNL in EdS, and about right (1.006) for OmegaM = 0.32.
+- m(a),beta(a):
+  - phi(a) now includes the integral from 0 to a = 0.001, which was 3-25% of phi(a = 1).
+  - phi(a) is only computed with screening.
+- `gravity_model_dgp_smoothing_scale_over_boxsize` now defaults to 0. The old default of 1 smoothed over the whole
+  box, which made the screening very weak.
+- New and extended tests: `tests/check_cola.py`, `tests/test_cola_frame.cpp`, `tests/test_models.cpp` and
+  `tests/check_initial_conditions.py`.
+- Regression cases that change:
+  - `nocola_tassev_log` and `powerlaw_spacing`, from the time stepping fix.
+  - `dgp_exact_multigrid` and `lightcone_dgp`, from the DGP 2LPT fix.
+  - `two_species_scaledep_cola_nu`, from the baryon COLA frame.
+  - `scaledep_cola_fine_force_grid`, at round-off: it now uses standard COLA.
+  - `nongaussian`, by 1.5e-4.
+
 ### Shared growth and cosmological timestep interfaces
 
 - Extract Quinn/Tassev/FastPM/BullFrog coefficient generation into `NBody/TimeStepping.h`,
