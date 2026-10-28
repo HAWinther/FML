@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Hybrid bias spectra: accuracy notes
+- COLASolver README: the hybrid bias spectra need the correct large-scale growth, and a force grid finer than the
+  particle lattice.
+  - Plain PM with 10 Quinn steps gave P_1delta/P_11 = 1.045 at k = 0.016 h/Mpc, against 1.004 with COLA or FastPM
+    steps.
+  - With `force_nmesh` = `particle_Npart_1D`, grid artifacts of up to 7% appear at low k.
+  - The measurement and the Zel'dovich prediction were checked independently and agree; no code change.
+
 ### COLASolver: small fixes from the review (neutrino background, spline ranges, early force, cleanup)
 - Neutrino background: for m_nu/T_nu > 1000 (late times or large masses) it now uses the non-relativistic limit
   instead of the constant end value of the spline.
