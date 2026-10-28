@@ -138,3 +138,7 @@ tests/test_grids
 tests/test_particles
 tests/test_lpt
 tests/test_nbody
+
+# Short-range gravity standalone and main-suite executables
+ShortRangeGravity/tests/test_short_range
+tests/test_short_range
