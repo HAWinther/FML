@@ -28,8 +28,9 @@ jobs:
       - name: Library tests (1, 2 and 4 MPI tasks)
         run: make -C FML test MPIRUN="mpirun --oversubscribe" NP_LIST="1 2 4"
 
+      # make examples already built COLASolver without HDF5 and make does not track the flags: rebuild (-B)
       - name: Build COLASolver (with HDF5)
-        run: make -C FML/COLASolver -j4 USE_HDF5=true
+        run: make -C FML/COLASolver -B -j4 USE_HDF5=true && ldd FML/COLASolver/nbody | grep -q hdf5
 
       - name: COLASolver baryonification parameter and snapshot-copy tests
         run: make -C FML/COLASolver/tests run USE_MPI=false USE_OMP=false
