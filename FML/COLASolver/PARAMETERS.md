@@ -17,7 +17,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `simulation_boxsize` | double | *required* | always | Boxsize of the simulation (Mpc/h) |
 | `simulation_name` | string | *required* | always | Label used in the output filenames |
 | `simulation_use_cola` | bool | `false` | always | Use the COLA method |
-| `simulation_use_scaledependent_cola` | bool | `true` | always | If the gravity model has scale-dependent growth: use scale-dependent COLA. If false we use the k = 0 limit of the growth factors when doing COLA |
+| `simulation_use_scaledependent_cola` | bool | `true` | always | If the growth is scale-dependent (massive neutrinos, k-dependent gravity models): use scale-dependent COLA. If false we use the k = 0 limit of the growth factors when doing COLA. With scale-independent growth (or without COLA) it is set to false (standard COLA gives the same result at a much lower cost) |
 | `simulation_enforce_LPT_trajectories` | bool | `false` | simulation_use_cola = true | Do not compute the PM force, just let particles follow the LPT trajectories |
 | `simulation_cola_LPT_order` | int | `2` | simulation_use_cola = true | The LPT order of COLA (1 or 2). Has to be <= ic_LPT_order. If < 1 COLA is turned off |
 

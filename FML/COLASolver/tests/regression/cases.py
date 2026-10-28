@@ -249,8 +249,9 @@ CASES = {
         force_nmesh=64,
         force_density_assignment_method="PCS",
     ),
-    # Scale-dependent COLA with a force grid finer than the particle grid (the lattice offset: the LPT fields are
-    # evaluated at the lattice nodes). In GR this gives the same result as standard COLA (fine_force_grid)
+    # simulation_use_scaledependent_cola = true in GR with a force grid finer than the particle grid: the growth is
+    # scale-independent, so standard COLA is used and the result is that of fine_force_grid (scale-dependent COLA with
+    # the lattice offset is covered by mu_bz_scaledep_cola)
     "scaledep_cola_fine_force_grid": dict(
         simulation_use_scaledependent_cola=True,
         force_nmesh=64,

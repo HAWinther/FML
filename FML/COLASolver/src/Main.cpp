@@ -114,7 +114,17 @@ int run(int argc, char ** argv) {
     //=============================================================
     const bool use_cola = param.get<bool>("simulation_use_cola") and
                           COLASOLVER::get_parameter<int>(param, "simulation_cola_LPT_order") >= 1;
-    const bool scaledependent_cola = use_cola and param.get<bool>("simulation_use_scaledependent_cola");
+    // Scale-dependent COLA only when the growth is scale-dependent (massive neutrinos, k-dependent gravity): otherwise
+    // it gives the same result as standard COLA at a much higher cost (4x the time and 40% more memory for 64^3 in
+    // GR). The parameter is set to the value used so that the rest of the code (and the output) sees it
+    const bool scaledependent_cola_requested = param.get<bool>("simulation_use_scaledependent_cola");
+    const bool scaledependent_cola = use_cola and scaledependent_cola_requested and grav->is_growth_scaledependent();
+    if (scaledependent_cola_requested and not scaledependent_cola) {
+        param["simulation_use_scaledependent_cola"] = false;
+        if (FML::ThisTask == 0 and use_cola)
+            std::cout << "NB: simulation_use_scaledependent_cola = true, but the growth is scale-independent: using "
+                         "standard COLA (simulation_use_scaledependent_cola = false)\n";
+    }
     // Sheet interpolation needs the Lagrangian position q
     const std::string density_method = COLASOLVER::get_parameter<std::string>(param, "force_density_method");
     const bool need_q = density_method == "sheet" or density_method == "sheet_nufft";

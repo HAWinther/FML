@@ -175,8 +175,10 @@ namespace COLASOLVER {
             b.optional("simulation_use_cola", false, "Use the COLA method");
             b.optional("simulation_use_scaledependent_cola",
                        true,
-                       "If the gravity model has scale-dependent growth: use scale-dependent COLA. If false we use "
-                       "the k = 0 limit of the growth factors when doing COLA");
+                       "If the growth is scale-dependent (massive neutrinos, k-dependent gravity models): use "
+                       "scale-dependent COLA. If false we use the k = 0 limit of the growth factors when doing COLA. "
+                       "With scale-independent growth (or without COLA) it is set to false (standard COLA gives the "
+                       "same result at a much lower cost)");
             if_true("simulation_use_cola", [&]() {
                 b.optional("simulation_enforce_LPT_trajectories",
                            false,

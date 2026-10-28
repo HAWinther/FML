@@ -13,7 +13,7 @@ all the main code paths of the solver:
 | `lightcone_dgp` | Lightcone (ascii output), DGP gravity |
 | `nbody_gauge` | N-body gauge: IC from N-body gauge transfer functions plus the linear source from radiation, neutrinos and GR |
 | `fine_force_grid` | Force grid twice the particle grid (fiducial gradient kernel becomes discrete_2pt), PCS assignment |
-| `scaledep_cola_fine_force_grid` | Scale-dependent COLA with the force grid twice the particle grid (lattice offset); identical P(k) to `fine_force_grid` in GR |
+| `scaledep_cola_fine_force_grid` | `simulation_use_scaledependent_cola = true` in GR with the force grid twice the particle grid: standard COLA is used (scale-independent growth), identical to `fine_force_grid` |
 | `hybridbias_zeldovich` | Hybrid bias spectra with the Zel'dovich prediction |
 | `fofr_exact_multigrid` | f(R) with the exact field equation (multigrid solver) |
 | `symmetron_exact_multigrid` | Symmetron with the exact field equation (multigrid solver) |

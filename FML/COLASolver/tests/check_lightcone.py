@@ -2,8 +2,8 @@
 #==========================================================================
 # Checks of the lightcone (32^3 particles in 256 Mpc/h)
 #
-#  cola     : the lightcone positions with COLA and scale-dependent COLA (10 steps) compared to a 200 step
-#             run (median distance to the nearest particle). The lightcone drifts the particles from the start
+#  cola     : the lightcone positions with COLA (GR) and scale-dependent COLA (a k-dependent mu(a,k)) with 10 steps
+#             compared to a 200 step run of the same model (median distance to the nearest particle). The lightcone drifts the particles from the start
 #             of the step with their true velocity, so the COLA drift (the LPT displacement over the step) must
 #             come after it (it was counted twice: median 0.52 Mpc/h with 10 steps, 0.09 when fixed)
 #  batches  : an octant with replicas where a step has more crossings than particles per task. Without
@@ -108,11 +108,20 @@ def report(ok, msg):
 
 
 if "cola" in tests:
-    ref, _ = run("cola_ref", dict(timestep_nsteps=[200]))
-    tree = cKDTree(lightcone_ascii(ref))
-    for name, over in [("cola", {}), ("cola_scaledependent", dict(simulation_use_scaledependent_cola=True)),
+    # Scale-dependent COLA is only used with scale-dependent growth: a k-dependent mu(a,k), with its own reference
+    bz = dict(gravity_model="mu", gravity_model_mu_parametrization="BZ",
+              gravity_model_mu_BZ_params=[4.0 / 3.0, 10.0, 4.0])
+    trees = {}
+    for label, model in [("", {}), ("_bz", bz)]:
+        ref, _ = run("cola_ref" + label, dict(model, timestep_nsteps=[200]))
+        trees[label] = cKDTree(lightcone_ascii(ref))
+    for name, over in [("cola", {}),
+                       ("cola_scaledependent", dict(bz, simulation_use_scaledependent_cola=True)),
                        ("nocola", dict(simulation_use_cola=False))]:
         d, _ = run(name, over)
+        if name == "cola_scaledependent" and "Scaledependent COLA" not in open(os.path.join(d, "log.txt")).read():
+            report(False, f"{name}: scale-dependent COLA was not used")
+        tree = trees["_bz" if name == "cola_scaledependent" else ""]
         x = lightcone_ascii(d)
         dist = np.median(tree.query(x)[0])
         if name == "nocola":

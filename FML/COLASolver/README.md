@@ -25,6 +25,7 @@ parameters (e.g. misspelled ones) give a warning with a suggestion for what was 
 
 The particle type is chosen automatically to use as little memory as possible: 56 bytes per particle without COLA,
 80 bytes with scale-independent COLA and 104 bytes with scale-dependent COLA (in 3D, see `src/Particles.h`).
+Scale-dependent COLA is only used when the growth is scale-dependent (see [COLA](#cola)).
 
 How the code is organised:
 
@@ -196,7 +197,7 @@ Not implemented for neutrino particles yet (the code stops with a message): time
 
 # COLA
 
-The code supports COLA with 1LPT or 2LPT (`simulation_cola_LPT_order`; the IC can be 3LPT), and it can be turned off or on. The way it does this is that it stored the initial displacement fields in the particles when creating the IC. However it also supports COLA with scaledependent growth if you want to use that (its slower, but as long as the PM grid one uses for forces is larger than the number of particles - as we typically want it to be - this extra cost is not that bad). The scale-dependent version is used if `simulation_use_scaledependent_cola = true` (the default).
+The code supports COLA with 1LPT or 2LPT (`simulation_cola_LPT_order`; the IC can be 3LPT), and it can be turned off or on. The way it does this is that it stored the initial displacement fields in the particles when creating the IC. However it also supports COLA with scaledependent growth if you want to use that (its slower, but as long as the PM grid one uses for forces is larger than the number of particles - as we typically want it to be - this extra cost is not that bad). The scale-dependent version is used if `simulation_use_scaledependent_cola = true` (the default) and the growth is scale-dependent (massive neutrinos, or a gravity model with k-dependent growth such as f(R), the symmetron or a k-dependent mu). With scale-independent growth it would give the same result as standard COLA at a much higher cost (4x the time and 40% more memory for 64^3 particles in GR), so standard COLA is used then and the parameter is set to false (a message says so).
 
 Some useful things about COLA simulations: you want to use as big a PM grid as possible to get high enough force-resolution on small scales if you care about halos. For locating halos you want to use a slightly lower linking length and you probably want to calibrate the masses and velocities to get a better fit to high-resolution simulations. If you only care about DM then this is of much less importance, you just want to make sure the grid you use is big enough as to have the largest scales smaller than ~ 1/2 the (grid and particle) nyquist frequency. Number of steps and time-step distribution is also important to get as accurate as possible results for the smallest cost. If you want tips for "best settings" see for example 1509.04685 (there are some other good papers on this that I will add when I remember them again).
 

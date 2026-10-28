@@ -54,10 +54,10 @@ reduced bispectrum increases with fNL.
 python3 tests/check_mu_gravity.py ./nbody /tmp/mu   # about 2 minutes, needs numpy and scipy
 ```
 
-Linear-amplitude runs of GR and `gravity_model = mu` (mu0 = 0.5 and a Bertschinger-Zukin mu(a,k)), without COLA
-and with scale-dependent COLA, and checks P_mu / P_GR at z = 0 against (D_mu / D_GR)^2 from an independent solution
-of the growth equation (to 0.1% for k <= 0.1 h/Mpc). The scale-dependent COLA runs also check that the COLA frame is
-right with the particle lattice offset from the force grid (2x force grid).
+Linear-amplitude runs of GR and `gravity_model = mu` (mu0 = 0.5 and a Bertschinger-Zukin mu(a,k)), without COLA and
+with COLA (scale-dependent COLA for the k-dependent BZ mu), and checks P_mu / P_GR at z = 0 against (D_mu / D_GR)^2
+from an independent solution of the growth equation (to 0.1% for k <= 0.1 h/Mpc). The scale-dependent COLA runs also
+check that the COLA frame is right with the particle lattice offset from the force grid (2x force grid).
 
 ## Time-stepping (`check_timestepping.py`)
 
@@ -100,15 +100,16 @@ the largest scales is right to < 1.5% with < 1% scatter between modes.
 python3 tests/check_lightcone.py ./nbody /tmp/lightcone   # about 15 s, needs numpy and scipy (healpy for the maps)
 ```
 
-32^3 particles in 256 Mpc/h. `cola`: the lightcone positions with COLA and scale-dependent COLA in 10 steps are
-within a median 0.085 Mpc/h of those of a 200 step run (0.25 without COLA; 0.49 when the LPT displacement of the
-step was counted twice). `batches`: an octant with replicas where a step has more crossings than particles per
-task, with 2 and 4 tasks, with and without `plc_output_in_batches`: all give the same particles (the number expected
-from the mean density) and every batch has one file per task. `zfinish`: with `plc_z_finish` inside a step the
-number of particles just above r(z_finish) is the same as with 200 steps. `coverage`: without replicas an
-incomplete octant is an error. `healpix`: the octant maps (zero outside, zero mean inside) are the full sky maps
-restricted to the octant and their C_ell the pseudo-C_ell divided by fsky (without USE_HEALPIX: the maps are an
-error when reading the parameters). Run the tests separately by naming them after the outdir.
+32^3 particles in 256 Mpc/h. `cola`: the lightcone positions with COLA and scale-dependent COLA (with a k-dependent
+mu(a,k): it is only used with scale-dependent growth) in 10 steps are within a median 0.085 Mpc/h of those of a 200
+step run (0.25 without COLA; 0.49 when the LPT displacement of the step was counted twice). `batches`: an octant
+with replicas where a step has more crossings than particles per task, with 2 and 4 tasks, with and without
+`plc_output_in_batches`: all give the same particles (the number expected from the mean density) and every batch has
+one file per task. `zfinish`: with `plc_z_finish` inside a step the number of particles just above r(z_finish) is
+the same as with 200 steps. `coverage`: without replicas an incomplete octant is an error. `healpix`: the octant
+maps (zero outside, zero mean inside) are the full sky maps restricted to the octant and their C_ell the
+pseudo-C_ell divided by fsky (without USE_HEALPIX: the maps are an error when reading the parameters). Run the tests
+separately by naming them after the outdir.
 
 ## Initial conditions (`check_initial_conditions.py`)
 

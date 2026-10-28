@@ -371,14 +371,15 @@ namespace COLASOLVER {
         if (ic.reconstruct_exact) {
             if (FML::ThisTask == 0)
                 std::cout << "Doing exact reconstruction of the LPT displacement fields\n";
-            FML::assert_mpi(sim.use_scaledependent_cola == false,
-                            "Exact 1LPT reconstruction only implemented for scaleindependent cola");
             // We get Psi from the velocities by dividing by the growth rate f(a). With scale-dependent growth (massive
             // neutrinos, modified gravity) the velocity is f(k) Psi and the displacements in the COLA frame would be
             // wrong (without COLA they are not used)
             FML::assert_mpi(not(sim.use_cola and grav_ic->is_growth_scaledependent()),
                             "ic_reconstruct_exact = true with COLA needs scale-independent growth (the velocities are "
                             "f(k) Psi). Use ic_reconstruct_exact = false");
+            FML::assert_mpi(sim.use_scaledependent_cola == false,
+                            "Exact LPT reconstruction is only implemented for scale-independent COLA (set "
+                            "simulation_use_scaledependent_cola = false)");
             const bool regular_q_grid_and_2LPT = ic.LPT_order > 1;
             exact_LPT_reconstruction<NDIM, T>(part,
                                               scale_factor,
