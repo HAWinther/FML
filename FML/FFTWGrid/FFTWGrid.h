@@ -297,6 +297,13 @@ namespace FML {
             /// Check if we have NaN or Inf anywhere in the allocated grid (including the extra slices)
             bool nan_in_grids() const;
 
+            /// Local allocation for a zero-halo grid, without allocating a mesh.
+            static size_t storage_bytes(int nmesh) {
+                assert_mpi(nmesh > 0 && nmesh % FML::NTasks == 0, "[FFTWGrid::storage_bytes] Invalid mesh size");
+                ptrdiff_t nx, start;
+                return size_t(compute_local_size(nmesh, nx, start)) * sizeof(ComplexType);
+            }
+
             /// Send slices to the neighboring CPUs which stores them in the left and right extra slice storage
             /// (with more extra slices than local slices they are forwarded from tasks further away)
             void communicate_boundaries();

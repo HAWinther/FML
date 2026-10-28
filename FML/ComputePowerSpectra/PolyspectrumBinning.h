@@ -2,11 +2,29 @@
 #define POLYSPECTRUMBINNING_HEADER
 #include <FML/Global/Global.h>
 #include <array>
+#include <algorithm>
+#include <functional>
+#include <stdexcept>
 #include <cmath>
 #include <vector>
 
 namespace FML {
     namespace CORRELATIONFUNCTIONS {
+
+        struct PolyspectrumOptions {
+            /// Zero retains all needed shells. Otherwise cap the resident shell count.
+            size_t max_cached_shells{0};
+            /// Per-rank cache budget; zero is unlimited. Excludes the input, one
+            /// source-resolution padding scratch grid, MPI remapping buffers, FFT workspace and result arrays.
+            size_t shell_memory_budget_bytes{0};
+            /// Canonical configurations per collective; zero requests one batch (up to INT_MAX).
+            size_t reduction_batch_size{4096};
+        };
+        struct PolyspectrumStatistics {
+            size_t shell_grid_bytes{0}, peak_cached_shells{0};
+            size_t geometry_shell_builds{0}, field_shell_builds{0};
+            size_t geometry_reduction_batches{0}, field_reduction_batches{0}, metadata_reduction_batches{0};
+        };
 
         /// Class for storing the results from general polyspectrum
         template <int N, int ORDER>
@@ -47,9 +65,52 @@ namespace FML {
             /// True integer-wavevector closure. False retains legacy modulo-grid closure.
             /// Nonlinear estimates exclude even-mesh Nyquist planes when enabled.
             bool dealias{true};
+            PolyspectrumOptions options;
+            PolyspectrumStatistics statistics;
+            using Configuration = std::array<int, ORDER>;
+
+            /// Empty restores all configurations. Inputs are canonicalized and deduplicated.
+            void set_configurations(std::vector<Configuration> configurations) {
+                for (auto & cfg : configurations) {
+                    for (auto bin : cfg)
+                        if (bin < 0 || bin >= n)
+                            throw std::invalid_argument("[PolyspectrumBinning] Selected bin is out of range");
+                    std::sort(cfg.begin(), cfg.end());
+                }
+                std::sort(configurations.begin(), configurations.end());
+                configurations.erase(std::unique(configurations.begin(), configurations.end()), configurations.end());
+                if (selected == configurations)
+                    return;
+                selected = std::move(configurations);
+                bincount_is_set = false;
+            }
+            std::vector<Configuration> configurations() {
+                std::vector<Configuration> result;
+                if (!selected.empty()) {
+                    for (const auto & cfg : selected)
+                        if (compute_this_configuration(cfg))
+                            result.push_back(cfg);
+                    return result;
+                }
+                Configuration cfg{};
+                std::function<void(int, int)> enumerate = [&](int depth, int first) {
+                    if (depth == ORDER) {
+                        if (compute_this_configuration(cfg))
+                            result.push_back(cfg);
+                        return;
+                    }
+                    for (int bin = first; bin < n; bin++) {
+                        cfg[depth] = bin;
+                        enumerate(depth + 1, bin);
+                    }
+                };
+                enumerate(0, 0);
+                return result;
+            }
 
             bool has_bincount(int nmesh) {
-                if (!bincount_is_set || cached_low != klow || cached_high != khigh || cached_dealias != dealias)
+                if (!bincount_is_set || cached_low != klow || cached_high != khigh || cached_dealias != dealias ||
+                    cached_selected != selected)
                     return false;
                 if (cached_mesh == 0)
                     cached_mesh = nmesh; // legacy explicitly imported counts
@@ -60,10 +121,12 @@ namespace FML {
                 cached_low = klow;
                 cached_high = khigh;
                 cached_dealias = dealias;
+                cached_selected = selected;
                 bincount_is_set = true;
             }
 
           private:
+            std::vector<Configuration> selected, cached_selected;
             int cached_mesh{-1};
             std::vector<double> cached_low, cached_high;
             bool cached_dealias{true};
@@ -212,6 +275,8 @@ namespace FML {
         // Symmetry: we only need to compute ik1 <= ik2 <= ...
         template <int N, int ORDER>
         bool PolyspectrumBinning<N, ORDER>::compute_this_configuration(const std::array<int, ORDER> & ik) {
+            if (!selected.empty() && !std::binary_search(selected.begin(), selected.end(), ik))
+                return false;
             double ksum = 0.0;
             for (int ii = 1; ii < ORDER; ii++) {
                 if (ik[ii - 1] > ik[ii]) {
@@ -411,7 +476,8 @@ namespace FML {
 
         template <int N, int ORDER>
         void PolyspectrumBinning<N, ORDER>::combine(PolyspectrumBinning<N, ORDER> & rhs) {
-            assert_mpi(n == rhs.n and bin_type == rhs.bin_type,
+            assert_mpi(n == rhs.n and bin_type == rhs.bin_type && klow == rhs.klow && khigh == rhs.khigh &&
+                           dealias == rhs.dealias && selected == rhs.selected,
                        "[PolyspectrumBinning::combine] Incompatible binnings\n");
             if (nbinnings == 0) {
                 P123 = rhs.P123;
@@ -434,6 +500,19 @@ namespace FML {
         void PolyspectrumBinning<N, ORDER>::set_bincount(const std::vector<double> & N123_external) {
             assert_mpi(N123_external.size() == N123.size(), "[set_bincount] Incompatible size of N123 array");
             N123 = N123_external;
+            if (!selected.empty()) {
+                const auto requested = configurations();
+                std::vector<double> values;
+                for (const auto & cfg : requested)
+                    values.push_back(N123[get_index_from_coord(cfg)]);
+                std::fill(N123.begin(), N123.end(), 0.0);
+                for (size_t i = 0; i < requested.size(); i++) {
+                    auto cfg = requested[i];
+                    do {
+                        N123[get_index_from_coord(cfg)] = values[i];
+                    } while (std::next_permutation(cfg.begin(), cfg.end()));
+                }
+            }
             mark_bincount_computed(0);
         }
     } // namespace CORRELATIONFUNCTIONS

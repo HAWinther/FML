@@ -223,6 +223,122 @@ void test_automatic_geometry_cache() {
     check(!result.has_bincount(Nmesh), "reset invalidates computed geometry");
 }
 
+template <int N, int ORDER>
+void test_shell_workspace() {
+    constexpr int mesh = 16, nbins = 6;
+    Grid<N> input(mesh);
+    input.fill_real_grid([](const std::array<double, N> & x) {
+        uint64_t h = 1234567;
+        for (int d = 0; d < N; d++) {
+            h ^= uint64_t(std::llround(x[d] * mesh)) + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+        }
+        h ^= h >> 30;
+        h *= 0xbf58476d1ce4e5b9ull;
+        h ^= h >> 27;
+        h *= 0x94d049bb133111ebull;
+        h ^= h >> 31;
+        double u = double(h >> 11) * 0x1p-53 - 0.5;
+        return u + 0.8 * u * u + 0.2 * std::sin(2 * M_PI * x[0]);
+    });
+    input.fftw_r2c();
+    PolyspectrumBinning<N, ORDER> full(nbins, mesh);
+    full.options.reduction_batch_size = 1;
+    compute_polyspectrum<N, ORDER>(input, full);
+    const size_t configs = full.configurations().size();
+    auto compare = [&](const std::vector<double> & a, const std::vector<double> & b, const std::string & label) {
+        double diff = 0, scale = 0;
+        for (size_t i = 0; i < a.size(); i++) {
+            diff = std::max(diff, std::abs(a[i] - b[i]));
+            scale = std::max(scale, std::abs(b[i]));
+        }
+        check(diff / std::max(scale, 1e-30) < 2e-11,
+              label + " (" + std::to_string(N) + "D order " + std::to_string(ORDER) + ")");
+    };
+    PolyspectrumBinning<N, ORDER> limited(nbins, mesh);
+    limited.options.max_cached_shells = ORDER;
+    limited.options.shell_memory_budget_bytes = 0;
+    limited.options.reduction_batch_size = 7;
+    compute_polyspectrum<N, ORDER>(input, limited);
+    compare(limited.P123, full.P123, "bounded shell cache preserves spectra");
+    compare(limited.N123, full.N123, "bounded shell cache preserves geometry");
+    compare(limited.pofk, full.pofk, "one-pass shell powers agree");
+    compare(limited.kmean, full.kmean, "one-pass mean wavenumbers agree");
+    check(limited.statistics.peak_cached_shells <= ORDER, "resident shell count respects both budgets");
+    check(limited.statistics.geometry_reduction_batches == (configs + 6) / 7 &&
+              limited.statistics.field_reduction_batches == (configs + 6) / 7 &&
+              limited.statistics.metadata_reduction_batches == 1,
+          "canonical configuration sums use bounded collective batches");
+    limited.options.max_cached_shells = 0;
+    limited.options.shell_memory_budget_bytes = ORDER * full.statistics.shell_grid_bytes;
+    compute_polyspectrum<N, ORDER>(input, limited);
+    check(limited.statistics.peak_cached_shells <= ORDER, "byte-only shell budget limits resident grids");
+    check(limited.statistics.geometry_shell_builds == 0, "changing the workspace does not discard reusable geometry");
+    compare(limited.P123, full.P123, "cached geometry and bounded workspace preserve repeated spectra");
+    using Config = std::array<int, ORDER>;
+    Config mixed{}, diagonal{};
+    for (int d = 0; d < ORDER; d++)
+        mixed[d] = d + 1;
+    diagonal.fill(1);
+    Config reversed = mixed;
+    std::reverse(reversed.begin(), reversed.end());
+    PolyspectrumBinning<N, ORDER> selected(nbins, mesh);
+    selected.set_configurations({mixed, reversed, diagonal});
+    selected.options.max_cached_shells = ORDER;
+    compute_polyspectrum<N, ORDER>(input, selected);
+    bool same = true, zero = true;
+    for (size_t i = 0; i < selected.P123.size(); i++) {
+        auto cfg = selected.get_coord_from_index(i);
+        std::sort(cfg.begin(), cfg.end());
+        bool requested = cfg == mixed || cfg == diagonal;
+        if (requested) {
+            same = same && std::abs(selected.P123[i] - full.P123[i]) < 2e-11 * std::max(1e-15, std::abs(full.P123[i]));
+            same = same && std::abs(selected.N123[i] - full.N123[i]) < 2e-11 * std::max(1.0, std::abs(full.N123[i]));
+        } else
+            zero = zero && selected.P123[i] == 0 && selected.N123[i] == 0;
+    }
+    check(same && zero, "selected configurations retain all permutations and zero unrequested results");
+    compare(selected.pofk, full.pofk, "selected configurations retain auxiliary powers for all shells");
+    selected.set_bincount(full.N123, mesh);
+    compute_polyspectrum<N, ORDER>(input, selected);
+    bool unrequested_zero = true;
+    for (size_t i = 0; i < selected.N123.size(); i++) {
+        auto cfg = selected.get_coord_from_index(i);
+        std::sort(cfg.begin(), cfg.end());
+        if (cfg != mixed && cfg != diagonal)
+            unrequested_zero = unrequested_zero && selected.N123[i] == 0;
+    }
+    check(selected.statistics.geometry_shell_builds == 0 && unrequested_zero,
+          "selected configurations reuse externally supplied full geometry without exposing unrequested counts");
+    selected.set_configurations({reversed, diagonal, mixed});
+    check(selected.has_bincount(mesh), "equivalent canonical selections preserve cached geometry");
+    selected.set_configurations({diagonal});
+    selected.options.max_cached_shells = 1;
+    compute_polyspectrum<N, ORDER>(input, selected);
+    check(selected.statistics.peak_cached_shells == 1 && selected.statistics.field_shell_builds == 1,
+          "diagonal selection needs one shell even at higher order");
+    const auto diagonal_index = selected.get_index_from_coord(diagonal);
+    check(std::abs(selected.P123[diagonal_index] - full.P123[diagonal_index]) <
+              2e-11 * std::max(1e-15, std::abs(full.P123[diagonal_index])),
+          "a low-frequency selection agrees without padding the unrequested upper shells");
+    bool rejected = false;
+    try {
+        selected.set_configurations({mixed});
+        compute_polyspectrum<N, ORDER>(input, selected);
+    } catch (const std::invalid_argument &) {
+        rejected = true;
+    }
+    check(rejected, "a budget smaller than one configuration is rejected before FFTs");
+    selected.options.max_cached_shells = 0;
+    selected.options.shell_memory_budget_bytes = ORDER * full.statistics.shell_grid_bytes - 1;
+    rejected = false;
+    try {
+        compute_polyspectrum<N, ORDER>(input, selected);
+    } catch (const std::invalid_argument &) {
+        rejected = true;
+    }
+    check(rejected, "byte budget below a complete configuration is rejected");
+}
+
 void test_fourier_multiplicities() {
     for (int Nmesh : {16, 15}) {
         // FFTWGrid requires the mesh width to be divisible by the MPI rank count.
@@ -437,6 +553,10 @@ int main() {
     test_four_point_closure();
     test_automatic_geometry_cache();
     test_fourier_multiplicities();
+    test_shell_workspace<3, 2>();
+    test_shell_workspace<3, 3>();
+    test_shell_workspace<3, 4>();
+    test_shell_workspace<2, 3>();
 
     if (FML::ThisTask == 0)
         std::cout << (fails == 0 ? "All P(k) tests passed\n" : std::to_string(fails) + " P(k) test(s) FAILED\n");
