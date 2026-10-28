@@ -1,33 +1,15 @@
 #ifndef FML_COUNTER_BASED_RANDOM_FIELD_H
 #define FML_COUNTER_BASED_RANDOM_FIELD_H
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/RandomGenerator/CounterBasedRandom.h>
 #include <array>
 #include <cmath>
 #include <complex>
 #include <cstdint>
 #include <functional>
 namespace FML::RANDOM::COUNTER_BASED {
-    /// Independent implementation of Philox4x32-10. Constants and known-answer
-    /// tests follow DEShawResearch/random123 (tests/kat_vectors).
-    inline std::array<uint32_t, 4> philox4x32(std::array<uint32_t, 4> counter, std::array<uint32_t, 2> key) {
-        for (int round = 0; round < 10; round++) {
-            const uint64_t p0 = uint64_t(0xD2511F53u) * counter[0];
-            const uint64_t p1 = uint64_t(0xCD9E8D57u) * counter[2];
-            counter = {uint32_t(p1 >> 32) ^ counter[1] ^ key[0],
-                       uint32_t(p1),
-                       uint32_t(p0 >> 32) ^ counter[3] ^ key[1],
-                       uint32_t(p0)};
-            key[0] += 0x9E3779B9u;
-            key[1] += 0xBB67AE85u;
-        }
-        return counter;
-    }
     inline uint32_t signed_counter(int wave) {
         return wave >= 0 ? uint32_t(wave) * 2u : uint32_t(-int64_t(wave) * 2 - 1);
-    }
-    /// A midpoint on a 52-bit uniform grid, strictly inside (0,1).
-    inline double uniform_open(uint32_t a, uint32_t b) {
-        return (double((uint64_t(a) << 20) | (b >> 12)) + 0.5) * 0x1p-52;
     }
     template <int N>
     void generate_fourier(FML::GRID::FFTWGrid<N> & grid,

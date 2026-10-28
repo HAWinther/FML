@@ -1,6 +1,6 @@
 # FML remaining-work backlog
 
-Updated 28 October 2026, including the survey workflow delivery for items 25–27. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. Initial implementations of items 25–27 are now available and tested; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
+Updated 28 October 2026, including the initial science workflows for items 25–30. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. Initial implementations of items 25–30 are now available and tested; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
 
 ## Completed in this sequence
 
@@ -16,12 +16,19 @@ Updated 28 October 2026, including the survey workflow delivery for items 25–2
 - Survey Fourier multipoles (0, 2, 4), weighted noise, physical geometry and MPI catalogue routing.
 - Survey window multipoles (0–8), model mixing matrices, output-band averaging and global IC modeling.
 - Local/fixed-LOS survey displacement solving and RecIso/RecSym data/random reconstruction.
+- HOD central/satellite mocks with halo-ID-keyed Philox streams, NFW/particle satellites and velocity/concentration controls.
+- Batched kNN distances and streamed CDFs with explicit self-exclusion and distributed query samples.
+- Counts/density PDFs, factorial moments and explicit Poisson self-counting summaries for unit-weight tracers.
 
 These completions do not cover all the follow-ups below. Other ongoing COLASolver/transfer-function edits are outside this backlog update.
 
 ## Survey workflow status
 
 Items 25–27 have initial implementations in `Survey/SurveyPower.h`, `Survey/SurveyWindow.h` and `Survey/SurveyReconstruction.h`. The standalone example and tests are in `Survey/workflow_example/` and `Survey/tests/`. Read `Survey/README.md` for conventions and limits. Independent DFT, explicit random-pair, analytic Gaussian convolution and manufactured displacement tests pass in serial, float/OpenMP, sanitizer and MPI builds. Production mock recovery, external pypower/pyrecon numerical comparisons, and application-specific mesh/padding/binning convergence remain follow-up validation work.
+
+## HOD and spatial-statistics status
+
+Items 28–30 have initial implementations in `HOD/HOD.h` and `CountsInCells/SpatialStatistics.h`. Tests and the HOD-to-statistics example are under those module folders. Both build without FFTW/GSL. HOD supports conditional/independent central-satellite occupations, prepared halo/member data, NFW or particle satellites and stable identity pairs. Spatial summaries use the existing KD-tree with replicated ordered tracers and distributed query samples; they do not implement the deferred KD-tree optimizations. Unit-weight counts, rectangular nonperiodic full-cell windows and periodic spherical cells are supported. Calibrated occupation fits, dedicated assembly-bias prescriptions, weighted estimators, arbitrary-mask boundary corrections and distributed tracer searches remain extensions. See each module README for the exact conventions.
 
 ## Engineering work, suggested order
 
@@ -92,7 +99,7 @@ The scientific implementations should be checked against independent analytic or
 | 44 | DTFE output/boundary memory improvements | Profile requested-output allocation and boundary traffic; consider batched boundary fields. |
 | 45 | Broader distributed snapshot IO | Benchmark binary/HDF5/Ramses read patterns and peak memory first, then choose collective or chunked improvements. |
 
-Items 25–27 now have tested initial implementations. Next options are production validation of the survey workflow, resuming the engineering queue with item 1, or new science item 28. Items 2–5 are good subsequent bounded changes. The larger observational workflow is 25–27; new mock/statistics work can follow with 28–32.
+Items 25–30 now have tested initial implementations. Next options are production validation of these workflows, resuming the engineering queue with item 1, or new science item 31 (density-split and marked clustering). Items 2–5 are good subsequent bounded changes. The larger observational workflow is 25–27; new mock/statistics work can follow with 28–32.
 
 ## Short-range gravity extension
 
