@@ -6,12 +6,15 @@
 //     a = 0.001 (missing amin^p of it: 3% for p = 0.5, 25% for p = 0.2)
 //  2. Non-gaussian IC: the large-scale potential is Phi = (3/5) g zeta with g(z = 0) = D(1)/D_EdS(1) (reference
 //     values from scipy). The code used 1.5 OmegaM instead of (3/5) g, right only for OmegaM ~ 0.32
+//  3. Neutrino background: the Fermi-Dirac integrals for rho_nu and p_nu (reference values from scipy) also for
+//     y = m/T > 1000, where the splines used to be held constant, and the sound speed with the mass of one neutrino
 //
 // Build and run: make test_models && ./test_models (in this folder)
 //==========================================================================
 #include "../src/Cosmology_LCDM.h"
 #include "../src/GravityModel_mbeta.h"
 
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <sstream>
@@ -103,6 +106,54 @@ int main() {
               "g(z = 0) for OmegaM = " + std::to_string(OmegaM) + ", OmegaK = " + std::to_string(r[1]) + ": " +
                   std::to_string(g) + " (scipy " + std::to_string(r[2]) +
                   "); the old factor 1.5 OmegaM gave fNL_eff / fNL = " + std::to_string(1.5 * OmegaM / (0.6 * g)));
+    }
+
+    // 3. Neutrino Boltzmann integrals F(y) = int x^2 sqrt(x^2 + y^2) / (e^x + 1) dx and
+    //    G(y) = int x^4 / (3 sqrt(x^2 + y^2)) / (e^x + 1) dx over F(0) (reference: scipy quad). The splines used to
+    //    stop at y = 1000 and hold the end value of F / (F(0) + C y) (0.28% low at y = 1e4) and of G (G falls as 1/y:
+    //    10x too large at y = 1e4)
+    {
+        auto param = cosmology_parameters(0.25);
+        param["cosmology_OmegaMNu"] = 0.6 / 93.14 / (0.7 * 0.7); // Mnu = 0.6 eV
+        auto cosmo = std::make_shared<CosmologyLCDM>();
+        quietly([&]() {
+            cosmo->read_parameters(param);
+            cosmo->init();
+        });
+        const std::vector<std::array<double, 3>> nu_refs{{1.0, 1.0639626203517059, 0.3153347125924614},
+                                                         {10.0, 3.3658091566873827, 0.12135914816042563},
+                                                         {100.0, 31.752700846855834, 0.01366565960247472},
+                                                         {999.0, 317.0066003881602, 0.0013700023905826686},
+                                                         {1001.0, 317.64124001676225, 0.001367265206827081},
+                                                         {1e4, 3173.218877658416, 0.00013686531818528702},
+                                                         {1e5, 31732.186744134033, 1.3686533893784033e-05},
+                                                         {1e6, 317321.8672380953, 1.3686533914536596e-06}};
+        const double F0 = 7.0 / 120.0 * std::pow(M_PI, 4);
+        for (auto & r : nu_refs) {
+            const double errF = cosmo->get_neutrino_boltzmann_integral_energydensity(r[0]) / F0 / r[1] - 1.0;
+            const double errG = cosmo->get_neutrino_boltzmann_integral_pressure(r[0]) / F0 / r[2] - 1.0;
+            check(std::fabs(errF) < 1e-5 and std::fabs(errG) < 1e-4,
+                  "neutrino F(y), G(y) at y = " + std::to_string(r[0]) + ": F / scipy - 1 = " + std::to_string(errF) +
+                      ", G / scipy - 1 = " + std::to_string(errG));
+        }
+        // Non-relativistic today and later: rho_nu ~ a^-3 (dlog(rho_nu)/dloga = -3 + O(1/y^2)), w_nu ~ 1/y
+        for (double a : {1.0, 10.0}) {
+            const double y = cosmo->get_Mnu_eV() / cosmo->get_N_nu() / cosmo->get_neutrino_temperature_eV(a);
+            const double dlogrho = cosmo->get_drhoNudloga_exact(a) / cosmo->get_rhoNu_exact(a);
+            const double w = cosmo->get_pNu_exact(a) / cosmo->get_rhoNu_exact(a);
+            // <p/rho> -> <x^2>/(3 y^2) = I4 / (3 I2 y^2) with I4 / I2 = 15 zeta(5) / zeta(3)
+            const double w_expected = 15.0 * 1.03692775514336 / 1.20205690315959 / (3.0 * y * y);
+            check(std::fabs(dlogrho + 3.0) < 1e-5 and std::fabs(w / w_expected - 1.0) < 1e-3,
+                  "Mnu = 0.6 eV at a = " + std::to_string(a) + " (y = " + std::to_string(y) +
+                      "): dlog(rho_nu)/dloga = " + std::to_string(dlogrho) +
+                      ", w_nu / expected - 1 = " + std::to_string(w / w_expected - 1.0));
+        }
+        // The sound speed uses the mass of one neutrino (Mnu / N_nu), not the sum
+        const double cs = cosmo->get_neutrino_sound_speed_cs_over_c(1.0);
+        const double cs_expected = std::sqrt(25.0 * 1.03692775514336 / 1.20205690315959 / 3.0) *
+                                   cosmo->get_neutrino_temperature_eV(1.0) / (cosmo->get_Mnu_eV() / 3.0);
+        check(std::fabs(cs / cs_expected - 1.0) < 1e-10,
+              "neutrino sound speed today: " + std::to_string(cs) + " (expected " + std::to_string(cs_expected) + ")");
     }
 
     std::cout << (fails == 0 ? "All model tests passed\n" : std::to_string(fails) + " model test(s) FAILED\n");

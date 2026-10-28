@@ -19,11 +19,13 @@
 const double riemann_zeta3 = std::riemann_zeta(3.0);
 const double riemann_zeta4 = std::riemann_zeta(4.0);
 const double riemann_zeta5 = std::riemann_zeta(5.0);
+const double riemann_zeta7 = std::riemann_zeta(7.0);
 #else
 // clang does not have riemann_zeta so hardcode it
 const double riemann_zeta3 = 1.20205690315959;
 const double riemann_zeta4 = 1.08232323371113;
 const double riemann_zeta5 = 1.03692775514336;
+const double riemann_zeta7 = 1.00834927738192;
 #endif
 
 /// Base class for a general cosmology
@@ -113,12 +115,13 @@ class Cosmology {
             return std::pair<double, double>(ode.get_final_data_by_component(0), ode.get_final_data_by_component(1));
         };
 
-        // Compute and spline F(y) / (F(0) + C y). This converges to 1 in both ends
-        // so no issue with splines evaluated out of bounds (as it returns closest value)
-        // For pressure we divide by just compute G(y) / (G(0) as p->0 for large y so no need to be very careful there
+        // Compute and spline F(y) / (F(0) + C y) and G(y) / G(0) for y <= ymax.
+        // For y > ymax we use the non-relativistic expansions instead (see
+        // get_neutrino_boltzmann_integral_energydensity) since F(y) / (F(0) + C y) only converges to 1 as 1 - 3.15/y
+        // and G(y) falls as 1/y, so holding the last spline value would be biased.
         const int npts = 200;
         const double ymin = 0.01;
-        const double ymax = 1000.0;
+        const double ymax = neutrino_boltzmann_integral_ymax;
         std::vector<double> y_arr(npts), E_arr(npts), p_arr(npts);
         for (int i = 0; i < npts; i++) {
             y_arr[i] = i == 0 ? 0.0 : std::exp(std::log(ymin) + std::log(ymax / ymin) * (i - 1) / double(npts - 2));
@@ -130,45 +133,57 @@ class Cosmology {
                                                                 E_arr,
                                                                 "Neutrino boltzmann integral - energydensity");
         neutrino_boltzmann_integral_pressure_spline.create(y_arr, p_arr, "Neutrino boltzmann integral - pressure");
+
+        // F(0) (= 6 eta(4) up to the integration accuracy). A member, not a function-static, so that it is set when
+        // the splines are made (and is not shared between instances)
+        neutrino_boltzmann_integral_norm = get_neutrino_boltzmann_integral_energydensity(0.0);
     }
 
     // Boltzmann integral for energy density F(y) (where y is proportional to the mass)
+    // For y > ymax we use the non-relativistic expansion, with I_n = int x^n / (e^x + 1) dx = (1-2^-n) n! zeta(n+1):
+    // F(y) = I_2 y + I_4 / (2y) - I_6 / (8y^3) + ... (the next term is ~1e-17 relative at y = 1000)
     double get_neutrino_boltzmann_integral_energydensity(double y) const {
+        if (y > neutrino_boltzmann_integral_ymax)
+            return twoeta3 * y + nu_I4 / (2.0 * y) - nu_I6 / (8.0 * y * y * y);
         return neutrino_boltzmann_integral_energydensity_spline(y) * (sixeta4 + twoeta3 * y);
     }
+    // G(y) = int x^4 / (3 sqrt(x^2+y^2)) / (e^x + 1) dx = I_4 / (3y) - I_6 / (6y^3) + ... for y > ymax
     double get_neutrino_boltzmann_integral_pressure(double y) const {
+        if (y > neutrino_boltzmann_integral_ymax)
+            return nu_I4 / (3.0 * y) - nu_I6 / (6.0 * y * y * y);
         return neutrino_boltzmann_integral_pressure_spline(y) * sixeta4 / 3.0;
     }
     // Boltzmann integral for energy density derivative dF(y)/dlogy
     double get_dneutrino_boltzmann_integral_energydensity_dlogy(double y) const {
+        if (y > neutrino_boltzmann_integral_ymax)
+            return twoeta3 * y - nu_I4 / (2.0 * y) + 3.0 * nu_I6 / (8.0 * y * y * y);
         return y * (neutrino_boltzmann_integral_energydensity_spline.deriv_x(y) * (sixeta4 + twoeta3 * y) +
                     twoeta3 * neutrino_boltzmann_integral_energydensity_spline(y));
     }
     // rhoNu / rhocrit0 used for exact treatment of neutrinos going from relativistic -> non-relativistic
     double get_rhoNu_exact(double a) const {
-        static double norm = get_neutrino_boltzmann_integral_energydensity(0);
         double y = Mnu_eV / get_neutrino_temperature_eV(a) / N_nu;
-        return OmegaNu / (a * a * a * a) * get_neutrino_boltzmann_integral_energydensity(y) / norm;
+        return OmegaNu / (a * a * a * a) * get_neutrino_boltzmann_integral_energydensity(y) /
+               neutrino_boltzmann_integral_norm;
     }
     // pNu / rhocrit0 used for exact treatment of neutrinos going from relativistic -> non-relativistic
     double get_pNu_exact(double a) const {
-        static double norm = get_neutrino_boltzmann_integral_energydensity(0);
         double y = Mnu_eV / get_neutrino_temperature_eV(a) / N_nu;
-        return OmegaNu / (a * a * a * a) * get_neutrino_boltzmann_integral_pressure(y) / norm;
+        return OmegaNu / (a * a * a * a) * get_neutrino_boltzmann_integral_pressure(y) /
+               neutrino_boltzmann_integral_norm;
     }
     // Derivative of rhoNu
     double get_drhoNudloga_exact(double a) const {
-        static double norm = get_neutrino_boltzmann_integral_energydensity(0);
         double y = Mnu_eV / get_neutrino_temperature_eV(a) / N_nu;
         return OmegaNu / (a * a * a * a) *
                (-4.0 * get_neutrino_boltzmann_integral_energydensity(y) +
                 get_dneutrino_boltzmann_integral_energydensity_dlogy(y)) /
-               norm;
+               neutrino_boltzmann_integral_norm;
     }
     // Sound speed over c in non-relativitic limit (1408.2995). Truncating at the free radiation sounds speed if
-    // evaluated for very larger redshifts
+    // evaluated for very larger redshifts. This uses the mass of one neutrino (Mnu / N_nu, degenerate masses)
     double get_neutrino_sound_speed_cs_over_c(double a) const {
-        return std::min(nu_sound_speed_factor * get_neutrino_temperature_eV(a) / Mnu_eV, 1.0 / std::sqrt(3.0));
+        return std::min(nu_sound_speed_factor * get_neutrino_temperature_eV(a) / (Mnu_eV / N_nu), 1.0 / std::sqrt(3.0));
     }
 
     // Free streaming scale for the neutrinos (1408.2995)
@@ -447,6 +462,12 @@ class Cosmology {
     const double nu_sound_speed_factor{std::sqrt(25.0 * riemann_zeta5 / riemann_zeta3 / 3.0)};
     Spline neutrino_boltzmann_integral_energydensity_spline{"neutrino_boltzmann_integral_energydensity_spline"};
     Spline neutrino_boltzmann_integral_pressure_spline{"neutrino_boltzmann_integral_pressure_spline"};
+    double neutrino_boltzmann_integral_norm{1.0};
+    // Splines of the Boltzmann integrals for y <= ymax, non-relativistic expansions above (I_4, I_6 are their
+    // coefficients)
+    const double neutrino_boltzmann_integral_ymax{1000.0};
+    const double nu_I4{22.5 * riemann_zeta5};
+    const double nu_I6{(63.0 / 64.0) * 720.0 * riemann_zeta7};
     Constants units;
 
     //========================================================================
