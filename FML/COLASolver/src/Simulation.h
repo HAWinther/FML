@@ -1243,11 +1243,15 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
     const bool make_lightcone = lightcone->lightcone_active() and s.delta_time_drift != 0.0;
     if (cola.enabled) {
         timer.StartTiming("COLA");
+        // The COLA kick subtracts the LPT force from the COLA velocities (which get the PM force). When enforcing the
+        // LPT trajectories there is no PM kick, so there must be no COLA kick either: the COLA velocities stay zero
+        // and the particles have the LPT velocity (with it the velocities were close to the initial LPT velocity)
+        const double delta_time_kick_cola = sim.enforce_LPT_trajectories ? 0.0 : s.delta_time_kick;
         for_each_cb_species([&](MPIParticles & particles, const COLASOLVER::SpeciesInfo &) {
             if (make_lightcone)
-                cola.kick(particles, s.apos, s.apos_new, s.delta_time_kick);
+                cola.kick(particles, s.apos, s.apos_new, delta_time_kick_cola);
             else
-                cola.kick_drift(particles, s.apos, s.apos_new, s.delta_time_kick, s.delta_time_drift);
+                cola.kick_drift(particles, s.apos, s.apos_new, delta_time_kick_cola, s.delta_time_drift);
         });
         if (not make_lightcone and not cola.scaledependent and sim.enforce_LPT_trajectories)
             part.communicate_particles();

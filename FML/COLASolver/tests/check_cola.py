@@ -5,6 +5,10 @@
 #  1. simulation_use_scaledependent_cola = true only gives scale-dependent COLA when the growth is scale-dependent:
 #     in GR it is turned off (with a message, same result as false) and with massive neutrinos it is used. Reading
 #     particles with exact LPT reconstruction without COLA works with the default (true)
+#  2. simulation_enforce_LPT_trajectories = true: the particles follow 2LPT. The Lagrangian position and the 1LPT and
+#     2LPT displacements of each particle are solved for from its positions at z = 20, 1 and 0, and its velocities at
+#     z = 20, 1 and 0 must be the 2LPT velocities a^2 H (dD1/dlna Psi1 + dD2/dlna Psi2) of the growth factors (the COLA
+#     kick of the LPT force was done without the PM kick: the velocities stayed close to the initial ones)
 #
 # Usage: python3 check_cola.py <path/to/nbody> <outdir>
 #   MPIRUN : how to launch (default "mpirun -np 2"; MPIRUN="" for a serial build)
@@ -137,6 +141,38 @@ except RuntimeError:
     text = ""
 check("Doing exact reconstruction" in text, "exact LPT reconstruction without COLA (simulation_use_scaledependent_cola "
       "= true)")
+
+#==========================================================================
+# 2. Enforcing the LPT trajectories with COLA
+#==========================================================================
+d, _ = run("enforce_LPT", dict(simulation_enforce_LPT_trajectories=True,
+                               output_redshifts=[ZINI, 1.0, 0.0],
+                               timestep_nsteps=[0, 3, 3],
+                               pofk=False))
+box = cases.BASE["simulation_boxsize"]
+growth = table(d, "gravitymodel_Reg_k0.0001.txt")
+cosmo = table(d, "cosmology_Reg.txt")
+loga = np.log(growth[:, 0])
+D1 = lambda lna, n=0: local_fit(loga, growth[:, 2], lna)[n]  # noqa: E731
+D2 = lambda lna, n=0: local_fit(loga, growth[:, 4], lna)[n]  # noqa: E731
+E = lambda lna: local_fit(np.log(cosmo[:, 0]), cosmo[:, 1], lna)[0]  # noqa: E731
+snaps = {z: read_gadget(os.path.join(d, snap.format(z))) for z in [ZINI, 1.0, 0.0]}
+ids, x0, _ = snaps[ZINI]
+# Positions relative to z = 20 (unwrapped): x(z) - x(zini) = (D1(a) - D1(ai)) Psi1 + (D2(a) - D2(ai)) Psi2
+dx = {z: (snaps[z][1] - x0 + box / 2) % box - box / 2 for z in [1.0, 0.0]}
+a = {z: 1.0 / (1.0 + z) for z in [ZINI, 1.0, 0.0]}
+M = np.array([[D1(np.log(a[z])) - D1(np.log(a[ZINI])), D2(np.log(a[z])) - D2(np.log(a[ZINI]))] for z in [1.0, 0.0]])
+Minv = np.linalg.inv(M)
+psi1 = Minv[0, 0] * dx[1.0] + Minv[0, 1] * dx[0.0]
+psi2 = Minv[1, 0] * dx[1.0] + Minv[1, 1] * dx[0.0]
+for z in [ZINI, 1.0, 0.0]:
+    la = np.log(a[z])
+    # GADGET velocities: v = 100 sqrt(a) E(a) dx/dlna (x in Mpc/h)
+    v_lpt = 100.0 * np.sqrt(a[z]) * E(la) * (D1(la, 1) * psi1 + D2(la, 1) * psi2)
+    v = snaps[z][2]
+    err = np.sqrt(np.mean((v - v_lpt)**2) / np.mean(v_lpt**2))
+    check(err < 1e-4, f"simulation_enforce_LPT_trajectories: the velocities at z = {z:g} are the 2LPT velocities (rms "
+          f"rel. diff {err:.1e}, rms v = {np.sqrt(np.mean(v**2)):.1f} km/s)")
 
 if failures:
     print(f"{len(failures)} check(s) failed")
