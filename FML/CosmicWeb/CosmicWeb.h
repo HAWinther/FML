@@ -3,7 +3,10 @@
 
 #include <array>
 #include <cmath>
+#include <cstdint>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <FML/FFTWGrid/FFTWGrid.h>
@@ -40,10 +43,79 @@ namespace FML {
             return (type >= 0 and type < 4) ? names[type] : "unknown";
         }
 
+        enum class ClassificationStorage { FFTWGrid, Bytes };
+
+        /// A tightly packed local slab: one byte per physical cell, with no FFT
+        /// padding or halos. Coordinates are local (ix, iy, iz); z varies fastest.
+        class ByteClassificationGrid {
+            int nmesh{0};
+            ptrdiff_t local_nx{0}, local_x_start{0};
+            std::vector<std::uint8_t> values;
+
+            size_t index(const std::array<int, 3> & c) const {
+                if (c[0] < 0 || c[0] >= local_nx || c[1] < 0 || c[1] >= nmesh || c[2] < 0 || c[2] >= nmesh)
+                    throw std::out_of_range("ByteClassificationGrid: coordinate outside local slab");
+                return (size_t(c[0]) * nmesh + size_t(c[1])) * nmesh + size_t(c[2]);
+            }
+
+          public:
+            ByteClassificationGrid() = default;
+            explicit ByteClassificationGrid(const FML::GRID::FFTWGrid<3> & layout)
+                : nmesh(layout.get_nmesh()), local_nx(layout.get_local_nx()), local_x_start(layout.get_local_x_start()) {
+                if (nmesh <= 0 || local_nx < 0 || local_x_start < 0 || local_nx > nmesh || local_x_start > nmesh - local_nx)
+                    throw std::invalid_argument("ByteClassificationGrid: invalid grid layout");
+                size_t cells = size_t(local_nx);
+                for (int d = 0; d < 2; ++d) {
+                    if (cells > values.max_size() / size_t(nmesh))
+                        throw std::length_error("ByteClassificationGrid: cell count exceeds addressable storage");
+                    cells *= size_t(nmesh);
+                }
+                values.resize(cells);
+            }
+            ByteClassificationGrid(const ByteClassificationGrid &) = default;
+            ByteClassificationGrid & operator=(const ByteClassificationGrid &) = default;
+            ByteClassificationGrid(ByteClassificationGrid && other) noexcept { *this = std::move(other); }
+            ByteClassificationGrid & operator=(ByteClassificationGrid && other) noexcept {
+                if (this != &other) {
+                    values = std::move(other.values);
+                    nmesh = std::exchange(other.nmesh, 0);
+                    local_nx = std::exchange(other.local_nx, 0);
+                    local_x_start = std::exchange(other.local_x_start, 0);
+                }
+                return *this;
+            }
+            int get_nmesh() const { return nmesh; }
+            ptrdiff_t get_local_nx() const { return local_nx; }
+            ptrdiff_t get_local_x_start() const { return local_x_start; }
+            size_t size_bytes() const { return values.size(); }
+            const std::vector<std::uint8_t> & get_data() const { return values; }
+            std::uint8_t get_real(const std::array<int, 3> & c) const { return values[index(c)]; }
+            void set_real(const std::array<int, 3> & c, std::uint8_t type) { values[index(c)] = type; }
+
+            /// Explicit allocation/conversion; all MPI ranks must use the original layout.
+            FML::GRID::FFTWGrid<3> to_fftw_grid() const {
+                if (nmesh == 0)
+                    return {};
+                FML::GRID::FFTWGrid<3> grid(nmesh);
+                assert_mpi(grid.get_local_nx() == local_nx && grid.get_local_x_start() == local_x_start,
+                           "[ByteClassificationGrid] MPI layout changed before conversion");
+#ifdef USE_OMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
+                for (int ix = 0; ix < local_nx; ++ix)
+                    for (int iy = 0; iy < nmesh; ++iy)
+                        for (int iz = 0; iz < nmesh; ++iz) {
+                            const std::array<int, 3> c{ix, iy, iz};
+                            grid.set_real(c, FML::GRID::FloatType(get_real(c)));
+                        }
+                return grid;
+            }
+        };
+
         /// The result of the classification
         struct CosmicWeb {
             using Grid = FML::GRID::FFTWGrid<3>;
-            /// The class of every cell (0 = void, 1 = sheet, 2 = filament, 3 = knot), stored as a number
+            /// Default FFTWGrid output (unallocated when byte storage is requested).
             Grid classification{};
             /// The eigenvalues lambda_1 >= lambda_2 >= lambda_3 (only if asked for)
             std::array<Grid, 3> eigenvalues{};
@@ -51,6 +123,25 @@ namespace FML {
             std::array<double, 4> volume_fraction{};
             /// The fraction of the mass (only from the particle methods, otherwise zero)
             std::array<double, 4> mass_fraction{};
+            /// Optional compact storage; classification stays unallocated in byte mode.
+            ByteClassificationGrid classification_bytes{};
+
+            bool has_byte_classification() const { return classification_bytes.get_nmesh() != 0; }
+            int get_nmesh() const {
+                return has_byte_classification() ? classification_bytes.get_nmesh() : classification.get_nmesh();
+            }
+            ptrdiff_t get_local_nx() const {
+                return has_byte_classification() ? classification_bytes.get_local_nx() : classification.get_local_nx();
+            }
+            ptrdiff_t get_local_x_start() const {
+                return has_byte_classification() ? classification_bytes.get_local_x_start() : classification.get_local_x_start();
+            }
+            int get_classification(const std::array<int, 3> & c) const {
+                return has_byte_classification() ? int(classification_bytes.get_real(c)) : int(classification.get_real(c));
+            }
+            Grid classification_as_grid() const {
+                return has_byte_classification() ? classification_bytes.to_fftw_grid() : classification;
+            }
         };
 
         /// Options for the T-web
@@ -63,6 +154,8 @@ namespace FML {
             bool store_eigenvalues{false};
             /// Density assignment for the particle method (NGP, CIC, TSC, PCS, PQS)
             std::string density_assignment_method{"CIC"};
+            /// Opt in to one byte per physical cell instead of an FFTWGrid.
+            ClassificationStorage classification_storage{ClassificationStorage::FFTWGrid};
         };
 
         /// The eigenvalues e[0] >= e[1] >= e[2] of the symmetric matrix [[a00,a01,a02],[a01,a11,a12],[a02,a12,a22]].
@@ -115,6 +208,7 @@ namespace FML {
         /// @param[in] tensor The components xx, xy, xz, yy, yz, zz
         /// @param[in] lambda_threshold The threshold for the eigenvalues
         /// @param[out] result The classification, the volume fractions (and the eigenvalues if store_eigenvalues)
+        /// @param[in] storage FFTWGrid or tightly packed byte labels
         /// @param[in] store_eigenvalues Also return the eigenvalues
         /// @param[in] density Optional: the density (in units of the mean) to get the mass fractions
         ///
@@ -122,11 +216,15 @@ namespace FML {
         inline void classify_tensor(const std::array<FML::GRID::FFTWGrid<3>, 6> & tensor,
                                     double lambda_threshold,
                                     CosmicWeb & result,
+                                    ClassificationStorage storage,
                                     bool store_eigenvalues = false,
                                     const FML::GRID::FFTWGrid<3> * density = nullptr) {
             const int N = tensor[0].get_nmesh();
             result = CosmicWeb();
-            result.classification = FML::GRID::FFTWGrid<3>(N);
+            if (storage == ClassificationStorage::Bytes)
+                result.classification_bytes = ByteClassificationGrid(tensor[0]);
+            else
+                result.classification = FML::GRID::FFTWGrid<3>(N);
             if (store_eigenvalues)
                 for (auto & g : result.eigenvalues)
                     g = FML::GRID::FFTWGrid<3>(N);
@@ -153,7 +251,10 @@ namespace FML {
                                               e);
                         const int type =
                             int(e[0] > lambda_threshold) + int(e[1] > lambda_threshold) + int(e[2] > lambda_threshold);
-                        result.classification.set_real(c, FML::GRID::FloatType(type));
+                        if (storage == ClassificationStorage::Bytes)
+                            result.classification_bytes.set_real(c, std::uint8_t(type));
+                        else
+                            result.classification.set_real(c, FML::GRID::FloatType(type));
                         if (store_eigenvalues)
                             for (int k = 0; k < 3; k++)
                                 result.eigenvalues[k].set_real(c, FML::GRID::FloatType(e[k]));
@@ -175,6 +276,15 @@ namespace FML {
                 result.volume_fraction[k] = volume[k] / vtot;
                 result.mass_fraction[k] = mtot > 0.0 ? mass[k] / mtot : 0.0;
             }
+        }
+
+        /// Compatibility overload: the original API retains FFTWGrid storage.
+        inline void classify_tensor(const std::array<FML::GRID::FFTWGrid<3>, 6> & tensor,
+                                    double lambda_threshold,
+                                    CosmicWeb & result,
+                                    bool store_eigenvalues = false,
+                                    const FML::GRID::FFTWGrid<3> * density = nullptr) {
+            classify_tensor(tensor, lambda_threshold, result, ClassificationStorage::FFTWGrid, store_eigenvalues, density);
         }
 
         //========================================================================================
@@ -251,7 +361,8 @@ namespace FML {
                 for (int iy = 0; iy < delta.get_nmesh(); iy++)
                     for (int iz = 0; iz < delta.get_nmesh(); iz++)
                         density.set_real({ix, iy, iz}, 1.0 + delta.get_real({ix, iy, iz}));
-            classify_tensor(tensor, options.lambda_threshold, result, options.store_eigenvalues, &density);
+            classify_tensor(tensor, options.lambda_threshold, result, options.classification_storage,
+                            options.store_eigenvalues, &density);
             if (FML::ThisTask == 0) {
                 std::cout << "[TWeb] lambda_th = " << options.lambda_threshold << " R = " << options.smoothing_scale
                           << ". Volume (mass) fractions:";
@@ -293,6 +404,7 @@ namespace FML {
         /// @param[in] normalization The factor (e.g. -1/H)
         /// @param[in] lambda_threshold The threshold
         /// @param[out] result The classification and volume fractions
+        /// @param[in] storage FFTWGrid or tightly packed byte labels
         /// @param[in] store_eigenvalues Also return the eigenvalues
         ///
         //========================================================================================
@@ -301,6 +413,7 @@ namespace FML {
                          double normalization,
                          double lambda_threshold,
                          CosmicWeb & result,
+                         ClassificationStorage storage,
                          bool store_eigenvalues = false) {
             const int N = divergence.get_nmesh();
             std::array<FML::GRID::FFTWGrid<3>, 6> tensor;
@@ -320,13 +433,24 @@ namespace FML {
                             tensor[c].set_real(co, FML::GRID::FloatType(normalization * v));
                         }
             }
-            classify_tensor(tensor, lambda_threshold, result, store_eigenvalues);
+            classify_tensor(tensor, lambda_threshold, result, storage, store_eigenvalues);
             if (FML::ThisTask == 0) {
                 std::cout << "[VWeb] lambda_th = " << lambda_threshold << ". Volume fractions:";
                 for (int k = 0; k < 4; k++)
                     std::cout << " " << web_type_name(k) << " " << result.volume_fraction[k];
                 std::cout << "\n";
             }
+        }
+
+        /// Compatibility overload: the original API retains FFTWGrid storage.
+        inline void VWeb(const std::array<FML::GRID::FFTWGrid<3>, 6> & shear,
+                         const FML::GRID::FFTWGrid<3> & divergence,
+                         double normalization,
+                         double lambda_threshold,
+                         CosmicWeb & result,
+                         bool store_eigenvalues = false) {
+            VWeb(shear, divergence, normalization, lambda_threshold, result, ClassificationStorage::FFTWGrid,
+                 store_eigenvalues);
         }
 
     } // namespace COSMICWEB

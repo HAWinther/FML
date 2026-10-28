@@ -52,8 +52,14 @@ bool same_grid(const Grid & a, const Grid & b, double tol) {
     return true;
 }
 bool same_result(const CW::CosmicWeb & a, const CW::CosmicWeb & b, double tol) {
-    if (!same_grid(a.classification, b.classification, 0))
+    if (a.get_nmesh() != b.get_nmesh() || a.get_local_nx() != b.get_local_nx() ||
+        a.get_local_x_start() != b.get_local_x_start())
         return false;
+    for (int ix = 0; ix < a.get_local_nx(); ++ix)
+        for (int iy = 0; iy < a.get_nmesh(); ++iy)
+            for (int iz = 0; iz < a.get_nmesh(); ++iz)
+                if (a.get_classification({ix, iy, iz}) != b.get_classification({ix, iy, iz}))
+                    return false;
     for (int k = 0; k < 3; ++k) {
         if (a.eigenvalues[k].get_nmesh() != b.eigenvalues[k].get_nmesh())
             return false;
@@ -65,6 +71,61 @@ bool same_result(const CW::CosmicWeb & a, const CW::CosmicWeb & b, double tol) {
             !near(a.mass_fraction[k], b.mass_fraction[k], tol))
             return false;
     return true;
+}
+
+bool compact_layout(const CW::CosmicWeb & result) {
+    const size_t cells = size_t(result.get_local_nx()) * result.get_nmesh() * result.get_nmesh();
+    return result.has_byte_classification() && result.classification.get_nmesh() == 0 &&
+           result.classification.get_ntot_fourier_alloc() == 0 && result.classification_bytes.size_bytes() == cells &&
+           result.classification_bytes.get_data().size() == cells;
+}
+
+void test_storage_lifecycle(const Tensor & tensor, const Grid & density, double threshold,
+                            const CW::CosmicWeb & reference) {
+    CW::CosmicWeb result = reference;
+    CW::classify_tensor(tensor, threshold, result, CW::ClassificationStorage::Bytes, true, &density);
+    check(compact_layout(result) && same_result(result, reference, 0),
+          "switching grid storage to bytes releases the FFT buffer and preserves every result");
+    auto converted = result.classification_as_grid();
+    check(same_grid(converted, reference.classification, 0) && compact_layout(result),
+          "explicit byte-to-FFTW conversion is exact and leaves byte storage compact");
+    auto copied = result.classification_bytes;
+    auto moved = std::move(copied);
+    check(copied.get_nmesh() == 0 && copied.get_local_nx() == 0 && copied.get_data().empty() &&
+              same_grid(moved.to_fftw_grid(), reference.classification, 0),
+          "byte-grid copies and moves preserve data and reset moved-from layout metadata");
+    bool bounds = true;
+    for (const auto coord : {std::array<int, 3>{-1, 0, 0}, {0, -1, 0}, {0, 0, mesh},
+                             {int(moved.get_local_nx()), 0, 0}}) {
+        try {
+            (void)moved.get_real(coord);
+            bounds = false;
+        } catch (const std::out_of_range &) {}
+    }
+    check(bounds, "byte-grid coordinate access rejects all slab boundaries outside the stored domain");
+    size_t flat = 0;
+    bool dense = true;
+    for (int ix = 0; ix < result.get_local_nx(); ++ix)
+        for (int iy = 0; iy < mesh; ++iy)
+            for (int iz = 0; iz < mesh; ++iz)
+                dense = dense && result.classification_bytes.get_data()[flat++] == result.get_classification({ix, iy, iz});
+    check(dense && flat == result.classification_bytes.size_bytes(),
+          "byte labels are tightly packed in local x/y/z order with no FFT row padding");
+    // The original function-pointer signature remains available as well as old call syntax.
+    void (*legacy)(const Tensor &, double, CW::CosmicWeb &, bool, const Grid *) = &CW::classify_tensor;
+    legacy(tensor, threshold, result, true, &density);
+    check(!result.has_byte_classification() && result.classification_bytes.get_data().capacity() == 0 &&
+              same_result(result, reference, 0),
+          "switching bytes back to the legacy grid releases byte storage and preserves the original API");
+    CW::classify_tensor(tensor, threshold, result, CW::ClassificationStorage::Bytes, false, &density);
+    bool no_eigenvalues = true;
+    for (const auto & grid : result.eigenvalues)
+        no_eigenvalues = no_eigenvalues && grid.get_nmesh() == 0;
+    check(compact_layout(result) && no_eigenvalues,
+          "byte mode without requested eigenvalues allocates neither FFT labels nor eigenvalue grids");
+    CW::ByteClassificationGrid empty;
+    check(empty.get_data().empty() && empty.to_fftw_grid().get_nmesh() == 0,
+          "default byte grids remain empty when explicitly converted");
 }
 
 // Frozen scalar classification/counting order from before the parallelization.
@@ -149,7 +210,12 @@ void test_classification_and_vweb() {
         if (threads == 1)
             first = actual;
         check(same_result(actual, first, 0), "classification, eigenvalues and fractions are thread-count independent");
-        CW::VWeb(shear, divergence, normalization, threshold, vweb, true);
+        CW::CosmicWeb compact;
+        CW::classify_tensor(tensor, threshold, compact, CW::ClassificationStorage::Bytes, true, &density);
+        check(compact_layout(compact) && same_result(compact, actual, 0),
+              "byte classification matches grid labels, eigenvalues and fractions exactly");
+        void (*legacy_vweb)(const Tensor &, const Grid &, double, double, CW::CosmicWeb &, bool) = &CW::VWeb;
+        legacy_vweb(shear, divergence, normalization, threshold, vweb, true);
         bool vweb_ok = same_grid(vweb.classification, reference.classification, 0);
         for (int d = 0; d < 3; ++d)
             vweb_ok = vweb_ok && same_grid(vweb.eigenvalues[d], reference.eigenvalues[d], tolerance);
@@ -159,7 +225,10 @@ void test_classification_and_vweb() {
         if (threads == 1)
             first_vweb = vweb;
         check(same_result(vweb, first_vweb, 0), "V-web outputs are thread-count independent");
+        CW::VWeb(shear, divergence, normalization, threshold, compact, CW::ClassificationStorage::Bytes, true);
+        check(compact_layout(compact) && same_result(compact, vweb, 0), "V-web supports identical compact output");
     }
+    test_storage_lifecycle(tensor, density, threshold, first);
     for (auto & grid : tensor)
         grid.fill_real_grid(0);
     CW::classify_tensor(tensor, 0, first, false);
@@ -230,6 +299,11 @@ void test_tidal_tensor_and_tweb() {
             if (threads == 1)
                 first = actual;
             check(same_result(actual, first, tolerance), "T-web outputs agree across thread counts");
+            options.classification_storage = CW::ClassificationStorage::Bytes;
+            CW::CosmicWeb compact;
+            CW::TWeb(delta, options, compact);
+            check(compact_layout(compact) && same_result(compact, actual, tolerance),
+                  "T-web byte option preserves labels, eigenvalues and unsmoothed mass fractions");
         }
     }
     check(same_grid(delta, original, 0), "tidal tensor and T-web leave the input density unchanged");
@@ -238,6 +312,46 @@ void test_tidal_tensor_and_tweb() {
 int main() {
     test_classification_and_vweb();
     test_tidal_tensor_and_tweb();
+    if (FML::NTasks == 1) {
+        Grid layout(7);
+        CW::ByteClassificationGrid bytes(layout);
+        for (int ix = 0; ix < 7; ++ix)
+            for (int iy = 0; iy < 7; ++iy)
+                for (int iz = 0; iz < 7; ++iz)
+                    bytes.set_real({ix, iy, iz}, std::uint8_t((ix + iy + iz) % 4));
+        const auto grid = bytes.to_fftw_grid();
+        bool exact = bytes.size_bytes() == 343;
+        for (int ix = 0; ix < 7; ++ix)
+            for (int iy = 0; iy < 7; ++iy)
+                for (int iz = 0; iz < 7; ++iz)
+                    exact = exact && grid.get_real({ix, iy, iz}) == (ix + iy + iz) % 4;
+        check(exact, "odd-mesh byte rows convert exactly to padded FFTW rows");
+    }
+    // Exercise the particle overload without conflating storage with the threaded
+    // deposition fallback's variable floating-point summation order.
+    set_threads(1);
+    struct Particle {
+        double pos[3];
+        double * get_pos() { return pos; }
+        constexpr int get_ndim() const { return 3; }
+    };
+    Grid layout(mesh);
+    std::vector<Particle> particles;
+    for (int ix = 0; ix < layout.get_local_nx(); ++ix)
+        for (int iy = 0; iy < mesh; ++iy)
+            for (int iz = 0; iz < mesh; ++iz) {
+                const int global_x = ix + int(layout.get_local_x_start());
+                if ((global_x + iy + iz) % 3)
+                    particles.push_back({{(global_x + 0.25) / mesh, (iy + 0.25) / mesh, (iz + 0.25) / mesh}});
+            }
+    // The original four-field aggregate initialization must retain its meaning.
+    CW::TWebOptions options{0.03, 0.05, false, "NGP"};
+    CW::CosmicWeb regular, compact;
+    CW::TWeb(particles.data(), particles.size(), mesh, options, regular);
+    options.classification_storage = CW::ClassificationStorage::Bytes;
+    CW::TWeb(particles.data(), particles.size(), mesh, options, compact);
+    check(compact_layout(compact) && same_result(compact, regular, tolerance),
+          "particle T-web propagates byte storage and retains legacy option initialization");
     if (FML::ThisTask == 0)
         std::cout << (failures ? "COSMICWEB TESTS FAILED\n" : "ALL COSMICWEB TESTS PASSED\n");
     return failures ? 1 : 0;
