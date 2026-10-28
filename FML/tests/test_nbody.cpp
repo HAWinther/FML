@@ -9,6 +9,8 @@
 //   - PGD with tasks without particles (aborted) and the size of the PGD displacement
 //   - NBody.h and PotentialGradientDecent.h can be included in several translation units (test_nbody_odr.cpp)
 //   - NBodyInitialConditions applies the optional scale-dependent 2LPT velocity norm(k) at the k of the 2LPT field
+//   - the force of the reflection of a density field is the reflection of the force on an even mesh (the continuous
+//     gradient used +k_Ny for the Nyquist modes)
 // Bad input that must stop with a clear message:
 //   ./test_nbody fdslices : potential with fewer than stencil_order/2 extra slices (read out of bounds before)
 //   ./test_nbody stencil  : stencil order that is not implemented (threw inside an OpenMP region: std::terminate)
@@ -278,6 +280,93 @@ void test_explicit_force_options() {
         invalid_value = true;
     }
     check(invalid_name && invalid_value, "invalid force options are rejected before parallel force work");
+}
+
+//==========================================================
+// Nyquist modes of the force: on an even mesh the Nyquist component n_i = Nmesh/2 is its own mirror image
+// n_i = -Nmesh/2, so the gradient i k_i of it depends on the sign the code picks for k_i. The force of the
+// reflection x_a -> -x_a of a density field must be the reflection of the force (the a-component odd, the others
+// even), which holds on the grid only if the Nyquist component of the gradient is zero. The input is white noise
+// (full power at the Nyquist frequency). Returns max |F_refl(x) - P F(R x)| / max |F| over all components/axes.
+//==========================================================
+template <int N>
+std::vector<double> gather_all_cells(const FML::GRID::FFTWGrid<N> & g) {
+    const int n = g.get_nmesh();
+    std::vector<double> out(size_t(FML::power(n, N)), 0.0);
+    for (int islice = 0; islice < g.get_local_nx(); islice++)
+        for (auto && ri : g.get_real_range(islice, islice + 1)) {
+            auto c = g.get_coord_from_index(ri);
+            c[0] += g.get_local_x_start();
+            size_t at = 0;
+            for (int idim = 0; idim < N; idim++)
+                at = at * n + c[idim];
+            out[at] = g.get_real_from_index(ri);
+        }
+    FML::SumArrayOverTasks(out.data(), int(out.size()));
+    return out;
+}
+
+template <int N>
+double force_reflection_error(int Nmesh, const NBODY::ForceOptions & options, bool finite_difference = false) {
+    auto hash = [](const std::array<int, N> & c) {
+        uint64_t h = 0x9E3779B97F4A7C15ULL;
+        for (int idim = 0; idim < N; idim++) {
+            h ^= uint64_t(c[idim]) + 0x9E3779B97F4A7C15ULL + (h << 6) + (h >> 2);
+            h *= 0xBF58476D1CE4E5B9ULL;
+            h ^= h >> 29;
+        }
+        return double(h >> 11) / double(1ULL << 53) - 0.5;
+    };
+    // The force of the density field reflected in axis (-1: not reflected), gathered on all tasks
+    auto compute = [&](int axis) {
+        FML::GRID::FFTWGrid<N> density(Nmesh, 2, 2);
+        for (int islice = 0; islice < density.get_local_nx(); islice++)
+            for (auto && ri : density.get_real_range(islice, islice + 1)) {
+                auto c = density.get_coord_from_index(ri);
+                c[0] += density.get_local_x_start();
+                if (axis >= 0)
+                    c[axis] = (Nmesh - c[axis]) % Nmesh;
+                density.set_real_from_index(ri, hash(c));
+            }
+        density.fftw_r2c();
+        std::array<FML::GRID::FFTWGrid<N>, N> force;
+        if (finite_difference) {
+            FML::GRID::FFTWGrid<N> potential;
+            NBODY::compute_potential_real_from_density_fourier<N>(density, potential, 1.5, 2, options);
+            NBODY::compute_force_from_potential_real<N>(potential, force, "CIC", 4, options);
+        } else {
+            NBODY::compute_force_from_density_fourier<N>(density, force, "CIC", 1.5, options);
+        }
+        std::array<std::vector<double>, N> out;
+        for (int idim = 0; idim < N; idim++)
+            out[idim] = gather_all_cells<N>(force[idim]);
+        return out;
+    };
+    const auto original = compute(-1);
+    const size_t ncells = size_t(FML::power(Nmesh, N));
+    double maxval = 0.0, maxerr = 0.0;
+    for (int axis = 0; axis < N; axis++) {
+        const auto reflected = compute(axis);
+        for (size_t at = 0; at < ncells; at++) {
+            // The index of the mirror cell
+            std::array<int, N> c;
+            size_t rest = at;
+            for (int idim = N - 1; idim >= 0; idim--) {
+                c[idim] = int(rest % Nmesh);
+                rest /= Nmesh;
+            }
+            c[axis] = (Nmesh - c[axis]) % Nmesh;
+            size_t mirror = 0;
+            for (int idim = 0; idim < N; idim++)
+                mirror = mirror * Nmesh + c[idim];
+            for (int idim = 0; idim < N; idim++) {
+                const double sign = idim == axis ? -1.0 : 1.0;
+                maxval = std::max(maxval, std::fabs(original[idim][at]));
+                maxerr = std::max(maxerr, std::fabs(reflected[idim][at] - sign * original[idim][mirror]));
+            }
+        }
+    }
+    return maxerr / maxval;
 }
 
 int main(int argc, char ** argv) {
@@ -685,6 +774,56 @@ int main(int argc, char ** argv) {
         check(maxerr < 1e-6,
               "NBodyInitialConditions: a constant 2LPT velocity norm(k) = velocity_norms[1] (rel. diff " + num(maxerr) +
                   ")");
+    }
+
+    //=====================================================
+    // 9. The force is covariant under reflections x_a -> -x_a also for the Nyquist modes of an even mesh (the
+    // continuous gradient used +k_Ny for them, see force_reflection_error). The discrete gradients and the finite
+    // difference force are (numerically) zero there already; an odd mesh has no Nyquist mode
+    //=====================================================
+    {
+        struct Case {
+            int laplace;
+            int gradient;
+            bool deconvolve;
+            bool finite_difference;
+            std::string name;
+        };
+        const std::vector<Case> cases{
+            {NBODY::CONTINUOUS_GREENS_FUNCTION, NBODY::CONTINUOUS_GRADIENT, false, false, "default (continuous)"},
+            {NBODY::CONTINUOUS_GREENS_FUNCTION, NBODY::CONTINUOUS_GRADIENT, true, false, "continuous, deconvolved"},
+            {NBODY::DISCRETE_GREENS_FUNCTION_FROM_TWO_POINT,
+             NBODY::CONTINUOUS_GRADIENT,
+             false,
+             false,
+             "discrete_2pt Laplace, continuous gradient"},
+            {NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT,
+             NBODY::DISCRETE_FOUR_POINT_GRADIENT,
+             false,
+             false,
+             "discrete_4pt"},
+            {NBODY::CONTINUOUS_GREENS_FUNCTION,
+             NBODY::CONTINUOUS_GRADIENT,
+             false,
+             true,
+             "finite difference, stencil 4"},
+        };
+        for (auto & c : cases) {
+            const auto options = force_options(c.laplace, c.gradient, c.deconvolve);
+            const double err3 = force_reflection_error<3>(16, options, c.finite_difference);
+            check(err3 < 1e-10,
+                  "3D force (Nmesh = 16) is covariant under reflections (" + c.name + ", rel. err " + num(err3) + ")");
+        }
+        // The general (N != 3) loop of compute_force_from_density_fourier and an odd mesh
+        const double err2 = force_reflection_error<2>(16, NBODY::ForceOptions{});
+        check(err2 < 1e-10,
+              "2D force (Nmesh = 16) is covariant under reflections (default, rel. err " + num(err2) + ")");
+        // (the number of tasks must divide Nmesh)
+        if (15 % FML::NTasks == 0) {
+            const double errodd = force_reflection_error<3>(15, NBODY::ForceOptions{});
+            check(errodd < 1e-10,
+                  "3D force (Nmesh = 15) is covariant under reflections (default, rel. err " + num(errodd) + ")");
+        }
     }
 
     check_streamed_pgd_suite();

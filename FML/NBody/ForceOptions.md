@@ -21,7 +21,10 @@ while another thread is using it.
 
 For finite-difference forces, the potential calculation uses `laplace_kernel`;
 the force calculation uses `deconvolve` and its explicit `stencil_order` argument.
-`gradient_kernel` applies to Fourier force differentiation. The potential routine
+`gradient_kernel` applies to Fourier force differentiation. For an even mesh every
+gradient kernel is zero for the Nyquist component k_i = k_Ny (the continuous kernel
+i k_i too: that mode is its own mirror image, so its derivative is ambiguous), which
+keeps the force of a reflected density field the reflected force. The potential routine
 does not deconvolve: deconvolution is performed by the subsequent force routine,
 using the density-assignment/interpolation kernel supplied there.
 

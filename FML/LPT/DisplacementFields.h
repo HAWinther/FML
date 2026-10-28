@@ -41,6 +41,7 @@ namespace FML {
                 /// image n_i = -Nmesh/2, so these derivatives of it depend on the sign we pick for k_i (and break
                 /// reflection symmetry); the derivative of the band-limited field there is zero. k_i^2 is unambiguous
                 /// and uses kvec itself. Never true for odd meshes (|n_i| < Nmesh/2). See also TidalTensor/Hessian.h.
+                /// Also used for the continuous gradient of the PM force (NBODY::gradient_kernel_fourier).
                 template <int N>
                 std::array<double, N> odd_derivative_wavevector(std::array<double, N> kvec, int Nmesh) {
                     // The Nyquist frequency 2pi * Nmesh/2 (with a margin for rounding)

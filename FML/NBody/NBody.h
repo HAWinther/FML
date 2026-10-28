@@ -355,7 +355,8 @@ namespace FML {
                 return res;
             };
 
-            // Make the force-kernel (D/i)_j = k_j for the continuous case)
+            // Make the force-kernel (D/i)_j = k_j for the continuous case (zero for the Nyquist component of an even
+            // mesh)
             std::vector<double> gradient_kernel(2 * (Nmesh / 2 + 1), 0.0);
             for (int i = -Nmesh / 2; i <= Nmesh / 2; i++) {
                 double k_j = 2.0 * M_PI * i;
@@ -1750,6 +1751,9 @@ namespace FML {
         //===================================================================================
         /// @brief This function returns the equivalent of D/i = k_vec for different kernels
         ///
+        /// All kernels are zero for the Nyquist component \f$ |k_j| = k_{\rm Ny} \f$ of an even mesh (see the
+        /// continuous kernel below).
+        ///
         /// @tparam N The dimension of the grid
         ///
         /// @param[in] k_j The component of the fourier wavevector
@@ -1762,7 +1766,11 @@ namespace FML {
             const double dx = 1.0 / double(Nmesh);
             switch (KERNEL) {
                 case CONTINUOUS_GRADIENT: {
-                    return k_j;
+                    // On an even mesh the Nyquist mode k_j = k_Ny is its own mirror image k_j = -k_Ny, so i k_j of it
+                    // depends on the sign we pick (FFTWGrid uses +k_Ny) and the force of a reflected density field
+                    // would not be the reflected force. The gradient of the band-limited field is zero there (as
+                    // for the discrete kernels, sin(k_Ny dx) = 0, and the LPT displacements)
+                    return FML::COSMOLOGY::LPT::detail::odd_derivative_wavevector<1>({k_j}, Nmesh)[0];
                     break;
                 }
                 case DISCRETE_TWO_POINT_GRADIENT: {
