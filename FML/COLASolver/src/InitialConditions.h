@@ -1,5 +1,6 @@
 #ifndef INITIALCONDITIONS_HEADER
 #define INITIALCONDITIONS_HEADER
+#include <FML/InitialConditions/SpeciesIC.h>
 
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/CAMBUtils/CAMBReader.h>
@@ -274,97 +275,21 @@ namespace COLASOLVER {
     }
 
 
-    //=============================================================================
-    /// The ratios T_i / T_cb and the growth rates f_i of CDM and baryons at zini for the initial conditions with
-    /// separate CDM and baryon particles: delta_i(k) = delta_cb(k) R_i(k,zini) with R_i = T_i / T_cb from the
-    /// transfer functions (w_c R_c + w_b R_b = 1). The 1LPT velocity uses f_i = f_cb + dlog(R_i)/dlna where f_cb is
-    /// the growth rate of the gravity model (so the total CDM+baryon velocity is exactly the growing mode, as for one
-    /// species, and the relative velocity comes from the transfer functions). Splines of log(k) (k in h/Mpc).
-    //=============================================================================
-    struct TwoSpeciesICSplines {
-        FML::INTERPOLATION::SPLINE::Spline ratio_cdm, ratio_baryon, f_cdm, f_baryon;
-    };
+    using TwoSpeciesICSplines = FML::INITIALCONDITIONS::TwoSpeciesICSplines;
     template <int NDIM>
-    TwoSpeciesICSplines two_species_ic_splines(const FML::FILEUTILS::LinearTransferData & transferdata,
+    TwoSpeciesICSplines two_species_ic_splines(const FML::INITIALCONDITIONS::TransferProvider & provider,
                                                const GravityModel<NDIM> & grav_ic,
                                                double zini,
                                                double weight_cdm,
                                                double weight_baryon) {
-        using DVector = FML::INTERPOLATION::SPLINE::DVector;
-        const double aini = 1.0 / (1.0 + zini);
-        if (aini < 1.0 / (1.0 + transferdata.get_zmax_splines()) * (1.0 - 1e-10))
-            throw std::runtime_error("particle_baryons: the transfer functions only go up to z = " +
-                                     std::to_string(transferdata.get_zmax_splines()) + " (need zini)");
-
-        const double kmin = transferdata.get_kmin_hmpc_splines();
-        const double kmax = transferdata.get_kmax_hmpc_splines();
-        const int nk = 512;
-        DVector logk(nk), ratio_cdm(nk), ratio_baryon(nk), f_cdm(nk), f_baryon(nk);
-        double max_err = 0.0;
-        // dlog(R_i)/dlna by finite differences over +-dx in log(a) (one-sided at the end of the table)
-        const double dx = 0.05;
-        const double xini = std::log(aini);
-        const double xmin_table = std::log(1.0 / (1.0 + transferdata.get_zmax_splines()));
-        const double xlo = std::max(xini - dx, xmin_table), xhi = xini + dx;
-        auto ratios = [&](double k, double a) {
-            const double Tcb = transferdata.get_cdm_baryon_transfer_function(k, a);
-            return std::pair<double, double>(transferdata.get_cdm_transfer_function(k, a) / Tcb,
-                                             transferdata.get_baryon_transfer_function(k, a) / Tcb);
-        };
-        for (int i = 0; i < nk; i++) {
-            logk[i] = std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1);
-            const double k = std::exp(logk[i]);
-            const auto r = ratios(k, aini), rlo = ratios(k, std::exp(xlo)), rhi = ratios(k, std::exp(xhi));
-            ratio_cdm[i] = r.first;
-            ratio_baryon[i] = r.second;
-            const double fcb = grav_ic.get_f_1LPT(aini, k / grav_ic.H0_hmpc);
-            f_cdm[i] = fcb + std::log(rhi.first / rlo.first) / (xhi - xlo);
-            f_baryon[i] = fcb + std::log(rhi.second / rlo.second) / (xhi - xlo);
-            max_err = std::max(max_err, std::fabs(weight_cdm * ratio_cdm[i] + weight_baryon * ratio_baryon[i] - 1.0));
-        }
-        TwoSpeciesICSplines s;
-        s.ratio_cdm.create(logk, ratio_cdm, "T_cdm/T_cb(k,zini)");
-        s.ratio_baryon.create(logk, ratio_baryon, "T_b/T_cb(k,zini)");
-        s.f_cdm.create(logk, f_cdm, "f_cdm(k,zini)");
-        s.f_baryon.create(logk, f_baryon, "f_b(k,zini)");
-        if (FML::ThisTask == 0) {
-            std::cout << "# Two species IC at z = " << zini << ": T_b/T_c = ";
-            for (double k : {0.01, 0.1, 1.0})
-                std::cout << s.ratio_baryon(std::log(k)) / s.ratio_cdm(std::log(k)) << " (k = " << k << ") ";
-            std::cout << "\n# f_cdm, f_b at k = 0.1: " << s.f_cdm(std::log(0.1)) << " " << s.f_baryon(std::log(0.1))
-                      << ". Max |w_c T_c/T_cb + w_b T_b/T_cb - 1| = " << max_err << "\n";
-        }
-        if (max_err > 1e-2)
-            throw std::runtime_error("particle_baryons: OmegaCDM and Omegab do not match the transfer functions "
-                                     "(w_c T_c + w_b T_b != T_cb)");
-        return s;
+        return FML::INITIALCONDITIONS::two_species_ic_splines(
+            provider,
+            [&grav_ic](double k_hmpc, double a) { return grav_ic.get_f_1LPT(a, k_hmpc / grav_ic.H0_hmpc); },
+            zini,
+            weight_cdm,
+            weight_baryon);
     }
-
-    //=============================================================================
-    /// The mass contrast of particle_baryon_relative_mode = mass: eps_i(k) = (T_i - T_cb)(k,z=0) / T_cb(k,zini), the
-    /// linear baryon-CDM relative mode today per unit delta_cb(zini) (Hahn, Rampf & Uhlemann 2021). Splines of log(k)
-    /// (k in h/Mpc) for CDM and baryons (w_c eps_c + w_b eps_b = 0)
-    //=============================================================================
-    inline std::pair<FML::INTERPOLATION::SPLINE::Spline, FML::INTERPOLATION::SPLINE::Spline>
-    two_species_mass_contrast_today(const FML::FILEUTILS::LinearTransferData & transferdata, double zini) {
-        using DVector = FML::INTERPOLATION::SPLINE::DVector;
-        const double aini = 1.0 / (1.0 + zini);
-        const double kmin = transferdata.get_kmin_hmpc_splines();
-        const double kmax = transferdata.get_kmax_hmpc_splines();
-        const int nk = 512;
-        DVector logk(nk), eps_cdm(nk), eps_baryon(nk);
-        for (int i = 0; i < nk; i++) {
-            logk[i] = std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1);
-            const double k = std::exp(logk[i]);
-            const double Tcb_ini = transferdata.get_cdm_baryon_transfer_function(k, aini);
-            const double Tcb_today = transferdata.get_cdm_baryon_transfer_function(k, 1.0);
-            eps_cdm[i] = (transferdata.get_cdm_transfer_function(k, 1.0) - Tcb_today) / Tcb_ini;
-            eps_baryon[i] = (transferdata.get_baryon_transfer_function(k, 1.0) - Tcb_today) / Tcb_ini;
-        }
-        FML::INTERPOLATION::SPLINE::Spline sc(logk, eps_cdm, "(T_cdm-T_cb)(k,z=0)/T_cb(k,zini)");
-        FML::INTERPOLATION::SPLINE::Spline sb(logk, eps_baryon, "(T_b-T_cb)(k,z=0)/T_cb(k,zini)");
-        return {sc, sb};
-    }
+    using FML::INITIALCONDITIONS::two_species_mass_contrast_today;
 
 } // namespace COLASOLVER
 

@@ -1,7 +1,9 @@
 #ifndef INITIALPOWERSPECTRUM_HEADER
 #define INITIALPOWERSPECTRUM_HEADER
 
-#include <FML/CAMBUtils/CAMBReader.h>
+#include <FML/InitialConditions/CAMBTransferProvider.h>
+#include <FML/InitialConditions/LinearInput.h>
+#include <FML/InitialConditions/InternalTransferLoader.h>
 #include <FML/FileUtils/FileUtils.h>
 #include <FML/Global/Global.h>
 #include <FML/NBody/NBody.h>
@@ -31,48 +33,7 @@ namespace COLASOLVER {
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
     using LinearTransferData = FML::FILEUTILS::LinearTransferData;
 
-    /// P(k), P_primordial(k) and T(k) of baryons+CDM at the initial redshift.
-    /// Units: k in h/Mpc, P in (Mpc/h)^3 and T in Mpc^2
-    struct LinearPowerSpectrumTable {
-        DVector k;
-        DVector power;
-        DVector power_primordial;
-        DVector transfer;
-
-        void resize(size_t n) {
-            k.resize(n);
-            power.resize(n);
-            power_primordial.resize(n);
-            transfer.resize(n);
-        }
-
-        /// Multiply the power-spectra by factor (and the transfer function by sqrt(factor))
-        void scale(double factor) {
-            for (auto & p : power)
-                p *= factor;
-            for (auto & p : power_primordial)
-                p *= factor;
-            for (auto & t : transfer)
-                t *= std::sqrt(factor);
-        }
-
-        void print_sample(const std::string & description) const {
-            if (FML::ThisTask != 0)
-                return;
-            std::cout << "\n";
-            std::cout << "#=====================================================\n";
-            std::cout << "# " << description << "\n";
-            std::cout << "# Found n: " << k.size() << " k-values (sample of it below):\n";
-            std::cout << "#=====================================================\n";
-            std::cout << "# k (h/Mpc)      P(k,zini)  (Mpc/h)^3    T(k,zini)  (Mpc)^2\n";
-            const size_t every = std::max(size_t(1), k.size() / 10);
-            for (size_t i = 0; i < k.size(); i += every) {
-                std::cout << std::setw(15) << k[i] << " ";
-                std::cout << std::setw(15) << power[i] << " ";
-                std::cout << std::setw(15) << transfer[i] << "\n";
-            }
-        }
-    };
+    using LinearPowerSpectrumTable = FML::INITIALCONDITIONS::LinearPowerSpectrumTable;
 
     //=============================================================================
     /// Read the input power-spectrum / transfer function (as given by ic.type_of_input)
@@ -82,11 +43,14 @@ namespace COLASOLVER {
     /// T_i(k,z) and store them in transferdata (which is shared with the gravity model)
     //=============================================================================
     template <int NDIM>
-    LinearPowerSpectrumTable read_initial_power_spectrum(const ICSettings & ic,
-                                                         std::shared_ptr<Cosmology> cosmo,
-                                                         std::shared_ptr<GravityModel<NDIM>> grav,
-                                                         std::shared_ptr<GravityModel<NDIM>> grav_ic,
-                                                         std::shared_ptr<LinearTransferData> & transferdata) {
+    LinearPowerSpectrumTable
+    read_initial_power_spectrum(const ICSettings & ic,
+                                std::shared_ptr<Cosmology> cosmo,
+                                std::shared_ptr<GravityModel<NDIM>> grav,
+                                std::shared_ptr<GravityModel<NDIM>> grav_ic,
+                                std::shared_ptr<LinearTransferData> & transferdata,
+                                std::shared_ptr<FML::INITIALCONDITIONS::TransferProvider> * provider_out = nullptr,
+                                double boxsize_mpch = 0.0) {
 
         const double ainput = 1.0 / (1.0 + ic.input_redshift);
         const double aini = 1.0 / (1.0 + ic.initial_redshift);
@@ -97,84 +61,61 @@ namespace COLASOLVER {
                    grav_ic->get_D_1LPT(ainput, k_hmpc / grav_ic->H0_hmpc);
         };
 
-        // Read a two column ascii file with a single header line
-        auto read_two_columns = [&]() {
-            const int ncols = 2;
-            std::vector<int> cols_to_keep{0, 1};
-            const int nheaderlines = 1;
-            return FML::FILEUTILS::read_regular_ascii(ic.input_filename, ncols, cols_to_keep, nheaderlines);
-        };
+        std::shared_ptr<FML::INITIALCONDITIONS::TransferProvider> provider;
+        if (ic.type_of_input == ICInputType::TransferInfoFile) {
+            transferdata = grav->get_transferdata();
+            if (not transferdata) {
+                transferdata = std::make_shared<LinearTransferData>(cosmo->get_Omegab(),
+                                                                    cosmo->get_OmegaCDM(),
+                                                                    cosmo->get_OmegaMNu(),
+                                                                    cosmo->get_kpivot_mpc(),
+                                                                    cosmo->get_As(),
+                                                                    cosmo->get_ns(),
+                                                                    cosmo->get_h(),
+                                                                    ic.type_of_input_fileformat);
+                transferdata->read_transfer(ic.input_filename);
 
-        LinearPowerSpectrumTable table;
-        switch (ic.type_of_input) {
-            case ICInputType::PowerSpectrum: {
-                // Fileformat: [k (h/Mpc)  P(k)  (Mpc/h)^3]
-                auto pofkdata = read_two_columns();
-                table.resize(pofkdata.size());
-                for (size_t i = 0; i < table.k.size(); i++) {
-                    table.k[i] = pofkdata[i][0];
-                    const double k_hmpc = table.k[i];
-                    const double k_mpc = table.k[i] * cosmo->get_h();
-                    const double DinioverDinput = D_ini_over_D_input(k_hmpc);
-                    table.power_primordial[i] = cosmo->get_primordial_pofk(k_hmpc);
-                    table.power[i] = DinioverDinput * DinioverDinput * pofkdata[i][1];
-                    table.transfer[i] = std::sqrt(table.power[i] / table.power_primordial[i]) / (k_mpc * k_mpc);
-                }
-                break;
+                // Make sure the gravity model also gets a pointer to this
+                grav->set_transferdata(transferdata);
             }
-            case ICInputType::TransferFunction: {
-                // Fileformat: [k (h/Mpc)  T(k)  (Mpc)^2]
-                auto tofkdata = read_two_columns();
-                table.resize(tofkdata.size());
-                for (size_t i = 0; i < table.k.size(); i++) {
-                    table.k[i] = tofkdata[i][0];
-                    const double k_hmpc = table.k[i];
-                    const double k_mpc = table.k[i] * cosmo->get_h();
-                    const double DinioverDinput = D_ini_over_D_input(k_hmpc);
-                    table.power_primordial[i] = cosmo->get_primordial_pofk(k_hmpc);
-                    table.transfer[i] = DinioverDinput * tofkdata[i][1];
-                    table.power[i] = table.power_primordial[i] * std::pow(table.transfer[i] * k_mpc * k_mpc, 2);
-                }
-                break;
-            }
-            case ICInputType::TransferInfoFile: {
-                // Read in all transfer functions T_i(k,z) unless the gravity model already has done so
-                transferdata = grav->get_transferdata();
-                if (not transferdata) {
-                    transferdata = std::make_shared<LinearTransferData>(cosmo->get_Omegab(),
-                                                                        cosmo->get_OmegaCDM(),
-                                                                        cosmo->get_OmegaMNu(),
-                                                                        cosmo->get_kpivot_mpc(),
-                                                                        cosmo->get_As(),
-                                                                        cosmo->get_ns(),
-                                                                        cosmo->get_h(),
-                                                                        ic.type_of_input_fileformat);
-                    transferdata->read_transfer(ic.input_filename);
 
-                    // Make sure the gravity model also gets a pointer to this
-                    grav->set_transferdata(transferdata);
-                }
-
-                // For consistency we generate the arrays at the input redshift and use growth-factors
-                // to bring them to the initial time (this way we can pick backscaling or not by
-                // selecting ic_input_redshift)
-                const int nk = 1000;
-                const double kmin = transferdata->get_kmin_hmpc_splines();
-                const double kmax = transferdata->get_kmax_hmpc_splines();
-                table.resize(nk);
-                for (size_t i = 0; i < table.k.size(); i++) {
-                    const double k_hmpc = std::exp(std::log(kmin) + std::log(kmax / kmin) * i / double(nk));
-                    table.k[i] = k_hmpc;
-                    table.transfer[i] = transferdata->get_cdm_baryon_transfer_function(table.k[i], ainput);
-                    table.power[i] = transferdata->get_cdm_baryon_power_spectrum(table.k[i], ainput);
-                    const double DinioverDinput = D_ini_over_D_input(k_hmpc);
-                    table.power_primordial[i] = cosmo->get_primordial_pofk(k_hmpc);
-                    table.transfer[i] *= DinioverDinput;
-                    table.power[i] *= DinioverDinput * DinioverDinput;
-                }
-                break;
-            }
+            provider = std::make_shared<FML::INITIALCONDITIONS::CAMBTransferProvider>(transferdata);
         }
+        if (ic.type_of_input == ICInputType::InternalTransfer) {
+            if (cosmo->get_name() != "LCDM" || grav->get_name() != "GR" || cosmo->get_OmegaK() != 0 ||
+                cosmo->get_OmegaMNu() != 0)
+                throw std::invalid_argument(
+                    "internal_transfer currently requires flat LCDM, GR and no massive neutrinos");
+            if (!(boxsize_mpch > 0))
+                throw std::invalid_argument("internal_transfer needs a positive box size");
+            provider = FML::INITIALCONDITIONS::load_internal_transfers(
+                {ic.input_filename,
+                 cosmo->get_h(),
+                 cosmo->get_Omegab(),
+                 cosmo->get_OmegaCDM(),
+                 cosmo->get_TCMB_kelvin(),
+                 cosmo->get_Neff(),
+                 cosmo->get_As(),
+                 cosmo->get_ns(),
+                 cosmo->get_kpivot_mpc(),
+                 {2 * M_PI / boxsize_mpch,
+                  std::sqrt(double(NDIM)) * M_PI * ic.nmesh / boxsize_mpch,
+                  std::min(aini, ainput),
+                  std::max({1.0, aini, ainput})},
+                 ic.sigma8_normalization});
+        }
+        auto type = ic.type_of_input == ICInputType::PowerSpectrum ?
+                        FML::INITIALCONDITIONS::LinearInputType::PowerSpectrum :
+                    ic.type_of_input == ICInputType::TransferFunction ?
+                        FML::INITIALCONDITIONS::LinearInputType::TransferFunction :
+                        FML::INITIALCONDITIONS::LinearInputType::TransferInfoFile;
+        auto table = FML::INITIALCONDITIONS::prepare_linear_input(
+            {type, ic.input_filename, ainput, cosmo->get_h()},
+            D_ini_over_D_input,
+            [cosmo](double k) { return cosmo->get_primordial_pofk(k); },
+            provider.get());
+        if (provider_out)
+            *provider_out = provider;
 
         table.print_sample("Read [" + ic.input_filename + "] at z = " + std::to_string(ic.input_redshift) +
                            " and scaled to z = " + std::to_string(ic.initial_redshift));

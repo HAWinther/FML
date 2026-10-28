@@ -219,6 +219,25 @@ namespace FML {
             double get_total_transfer_function(double k_hmpc, double a) const;
             double get_weyl_transfer_function(double k_hmpc, double a) const;
 
+            /// theta/(aH R), in Newtonian gauge. species: 0=CDM, 1=baryon, 2=CDM+baryon.
+            /// CAMB stores -theta/(aH k_Mpc^2); this is a direct velocity, not dln(delta)/dlna.
+            double get_newtonian_velocity_divergence_transfer(int species, double k_hmpc, double a) const {
+                const double z = 1.0 / a - 1.0;
+                const double k_mpc = k_hmpc * h;
+                auto velocity = [&](const Spline2D & spline) {
+                    return -eval_transfer(spline, z, k_hmpc) * k_mpc * k_mpc;
+                };
+                if (species == 0 && transfer_col_vcdm >= 0)
+                    return velocity(vcdm_transfer_function_spline);
+                if (species == 1 && transfer_col_vb >= 0)
+                    return velocity(vb_transfer_function_spline);
+                if (species == 2 && transfer_col_vcdm >= 0 && transfer_col_vb >= 0)
+                    return (OmegaCDM * velocity(vcdm_transfer_function_spline) +
+                            Omegab * velocity(vb_transfer_function_spline)) /
+                           (OmegaCDM + Omegab);
+                throw std::runtime_error("[LinearTransferData] Direct Newtonian velocity column is unavailable");
+            }
+
             // Growth-rates
             double get_baryon_growth_rate(double k_hmpc, double a) const;
             double get_cdm_baryon_growth_rate(double k_hmpc, double a) const;
@@ -237,13 +256,13 @@ namespace FML {
             void set_As(double _As) { As = _As; }
             void set_ns(double _ns) { ns = _ns; }
             void set_kpivot_mpc(double _kpivot_mpc) { kpivot_mpc = _kpivot_mpc; }
-            double get_As() { return As; }
-            double get_ns() { return ns; }
-            double get_h() { return h; }
-            double get_kpivot_mpc() { return kpivot_mpc; }
-            double get_Omegab() { return Omegab; }
-            double get_OmegaCDM() { return OmegaCDM; }
-            double get_OmegaMNu() { return OmegaMNu; }
+            double get_As() const { return As; }
+            double get_ns() const { return ns; }
+            double get_h() const { return h; }
+            double get_kpivot_mpc() const { return kpivot_mpc; }
+            double get_Omegab() const { return Omegab; }
+            double get_OmegaCDM() const { return OmegaCDM; }
+            double get_OmegaMNu() const { return OmegaMNu; }
 
             /// Output some sample data
             void output(std::string filename, double a) const;

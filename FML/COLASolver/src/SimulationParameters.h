@@ -33,7 +33,7 @@ namespace COLASOLVER {
     // Options that are given as strings in the parameterfile
     //=============================================================================
     enum class ICRandomFieldType { Gaussian, NonGaussian, ReadParticles, ReadPhases };
-    enum class ICInputType { PowerSpectrum, TransferFunction, TransferInfoFile };
+    enum class ICInputType { PowerSpectrum, TransferFunction, TransferInfoFile, InternalTransfer };
     enum class RandomGeneratorType { GSL, MT19937 };
     enum class RandomFieldBackend { NGenIC, Philox };
     using TimestepMethod = FML::NBODY::TimestepMethod;
@@ -168,7 +168,7 @@ namespace COLASOLVER {
         int LPT_order;                        // The LPT order to use to make IC (1,2,3)
 
         // Input file (power-spectrum / transfer functions)
-        ICInputType type_of_input;            // powerspectrum, transferfunction, transferinfofile
+        ICInputType type_of_input;            // powerspectrum, transferfunction, transferinfofile or internal_transfer
         std::string type_of_input_fileformat; // Format, CAMB, CLASS (with format=camb), ..., for transfer files
         std::string input_filename;           // The filename
         double input_redshift;                // The redshift of P(k,z) / T(k,z) that we read in
@@ -372,7 +372,8 @@ namespace COLASOLVER {
                          ic.type_of_input,
                          {{"powerspectrum", ICInputType::PowerSpectrum},
                           {"transferfunction", ICInputType::TransferFunction},
-                          {"transferinfofile", ICInputType::TransferInfoFile}});
+                          {"transferinfofile", ICInputType::TransferInfoFile},
+                          {"internal_transfer", ICInputType::InternalTransfer}});
             r.get_optional("ic_type_of_input_fileformat", ic.type_of_input_fileformat);
             r.get("ic_input_filename", ic.input_filename);
             r.get_choice("ic_random_field_type",
@@ -699,6 +700,8 @@ namespace COLASOLVER {
             if (timestep.spacing == ScaleFactorSpacing::Powerlaw and timestep.spacing_power == 0.0)
                 fail("timestep_spacing_power cannot be 0 (use logarithmic spacing)");
 
+            if (particle.neutrinos && ic.type_of_input == ICInputType::InternalTransfer)
+                fail("internal_transfer does not yet support massive-neutrino particle ICs");
             // The mass-encoded relative mode: CDM and baryons start from the same lattice (the masses compensate)
             if (particle.baryons and particle.baryon_relative_mode != "displacement" and
                 particle.baryon_lattice != "same")
@@ -737,10 +740,13 @@ namespace COLASOLVER {
              true,
              true,
              [](P p) { return not p.simulation.enforce_LPT_trajectories; }},
-            {"`ic_type_of_input = transferinfofile` (the transfer functions of the species at zini)",
+            {"`ic_type_of_input = transferinfofile` or `internal_transfer` (species transfers at zini)",
              true,
              true,
-             [](P p) { return p.ic.type_of_input == ICInputType::TransferInfoFile; }},
+             [](P p) {
+                 return p.ic.type_of_input == ICInputType::TransferInfoFile ||
+                        p.ic.type_of_input == ICInputType::InternalTransfer;
+             }},
             {"`ic_random_field_type = gaussian` or `nongaussian`",
              true,
              true,

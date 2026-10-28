@@ -580,3 +580,13 @@ its model adapters, output scheduling and step reporting.
 
 Force discretization uses per-simulation [ForceOptions](../NBody/ForceOptions.md),
 passed explicitly to the gravity calculation, including early-time force switching.
+
+## Shared linear inputs and optional internal transfers
+
+Power/transfer preparation and species-ratio helpers now use the shared
+[InitialConditions module](../InitialConditions/README.md). Simple P(k,z=0) input
+remains supported without a Boltzmann solve. Optional builds with
+`USE_INTERNAL_COSMOLOGY=true` add `ic_type_of_input = "internal_transfer"`, using
+a matching solver .ini file and explicitly converted CDM-synchronous density
+transfers. The first release requires flat GR LCDM without massive neutrinos.
+See the module guide for units, gauges, coverage checks and validation.

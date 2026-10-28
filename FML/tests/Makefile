@@ -12,7 +12,7 @@ USE_GSL             ?= true
 USE_LUA             ?= true
 
 TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_lpt test_nbody
-TARGETS += test_baryonification test_numericalmethods test_interlacing_offset test_streamed_kick test_lightcone test_random_fields test_timestepping
+TARGETS += test_baryonification test_numericalmethods test_interlacing_offset test_streamed_kick test_lightcone test_random_fields test_timestepping test_transfers
 TARGETS += test_cosmicweb
 
 include ../Makefile.config
@@ -28,6 +28,9 @@ TEST_OBJS = test_core.o Global.o
 ifeq ($(USE_GSL),true)
 TEST_OBJS += Spline.o
 endif
+
+test_transfers: test_transfers.o Global.o Spline.o FileUtils.o
+	$(LINK_EXE)
 
 test_timestepping: test_timestepping.o Global.o Spline.o ODESolver.o ParameterMap.o
 	$(LINK_EXE)
@@ -241,6 +244,8 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_particles; \
 	  echo "== Running test_lpt with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_lpt; \
+	  echo "== Running test_transfers with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_transfers; \
 	  echo "== Running test_timestepping with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_timestepping; \
 	  echo "== Running test_random_fields with $$np task(s)"; \

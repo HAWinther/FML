@@ -92,6 +92,7 @@ class NBodySimulation {
     /// Linear perturbations, transfer functions, initial pofk
     /// This is only used if ic_type_of_input == transferinfofile
     std::shared_ptr<LinearTransferData> transferdata;
+    std::shared_ptr<FML::INITIALCONDITIONS::TransferProvider> ic_transfers;
 
     /// A copy of the parameterfile (passed on to the models we create)
     std::shared_ptr<ParameterMap> parameters;
@@ -513,7 +514,13 @@ void NBodySimulation<NDIM, T>::setup_initial_power_spectrum() {
     const auto & ic = params.ic;
     const double boxsize = params.simulation.boxsize;
 
-    auto table = COLASOLVER::read_initial_power_spectrum<NDIM>(ic, cosmo, grav, grav_ic, transferdata);
+    auto table = COLASOLVER::read_initial_power_spectrum<NDIM>(ic,
+                                                               cosmo,
+                                                               grav,
+                                                               grav_ic,
+                                                               transferdata,
+                                                               &ic_transfers,
+                                                               params.simulation.boxsize);
     auto make_splines = [&](std::string label) {
         power_initial_spline.create(table.k, table.power, "P(k,zini)" + label);
         power_primordial_spline.create(table.k, table.power_primordial, "P_primordial(k)" + label);
@@ -549,7 +556,9 @@ void NBodySimulation<NDIM, T>::setup_initial_power_spectrum() {
                                             redshift,
                                             R_mpch);
     };
-    const double sigma8_today = sigma_of_R(8.0, 0.0);
+    const bool sigma8_covered = ic.type_of_input != COLASOLVER::ICInputType::InternalTransfer ||
+                                (table.k.front() <= 1e-5 && table.k.back() >= 100.0);
+    const double sigma8_today = sigma8_covered ? sigma_of_R(8.0, 0.0) : 0.0;
 
     // Normalize P(k) to a given sigma8 value. We then need to update the splines,
     // the transfer data and the cosmology
@@ -566,6 +575,8 @@ void NBodySimulation<NDIM, T>::setup_initial_power_spectrum() {
         if (transferdata) {
             transferdata->set_As(transferdata->get_As() * pofk_norm_factor);
         }
+        if (!transferdata && ic_transfers)
+            ic_transfers->rescale_primordial_power(pofk_norm_factor);
         cosmo->set_As(cosmo->get_As() * pofk_norm_factor);
 
         if (FML::ThisTask == 0) {
@@ -581,7 +592,11 @@ void NBodySimulation<NDIM, T>::setup_initial_power_spectrum() {
     if (FML::ThisTask == 0) {
         std::cout << "\n";
         std::cout << "#=====================================================\n";
-        std::cout << "# Sigma(R = 8 Mpc/h, z = 0.0 ) : " << std::setw(15) << sigma8_today << "\n";
+        if (sigma8_covered)
+            std::cout << "# Sigma(R = 8 Mpc/h, z = 0.0 ) : " << std::setw(15) << sigma8_today << "\n";
+        else
+            std::cout << "# Sigma8 not evaluated: strict transfer input does not cover the integration range "
+                         "[1e-5,100] h/Mpc\n";
         if (ic.sigma8_normalization) {
             std::cout << "# We will normalize to Sigma8 = " << std::setw(15) << ic.sigma8 << " at z = " << std::setw(15)
                       << ic.sigma8_redshift << "\n";
@@ -910,10 +925,10 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     const auto & ic = params.ic;
     const double boxsize = params.simulation.boxsize;
     const double aini = ic.a_initial();
-    FML::assert_mpi(transferdata != nullptr, "particle_baryons needs the transfer functions (transferinfofile)");
+    FML::assert_mpi(ic_transfers != nullptr, "particle_baryons needs the transfer functions (transferinfofile)");
     const auto & cdm = species[0];
     const auto & baryon = species[1];
-    const auto splines = COLASOLVER::two_species_ic_splines<NDIM>(*transferdata,
+    const auto splines = COLASOLVER::two_species_ic_splines<NDIM>(*ic_transfers,
                                                                   *grav_ic,
                                                                   ic.initial_redshift,
                                                                   cdm.weight_cb,
@@ -924,8 +939,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
                                              fac * grav_ic->get_f_2LPT(aini),
                                              fac * grav_ic->get_f_3LPTa(aini),
                                              fac * grav_ic->get_f_3LPTb(aini)};
-    const double kmin = transferdata->get_kmin_hmpc_splines();
-    const double kmax = transferdata->get_kmax_hmpc_splines();
+    const double kmin = ic_transfers->range().kmin_hmpc;
+    const double kmax = ic_transfers->range().kmax_hmpc;
     auto clamp_logk = [&](double kBox) { return std::log(std::min(std::max(kBox / boxsize, kmin), kmax)); };
     // The baryon-CDM relative mode: in the displacement (each species its own displacement and velocity), the
     // masses m = 1 + eps (mass: shared CDM+baryon flow, eps = the linear relative mode today; mass_ini: shared
@@ -934,7 +949,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     const bool mass_mode = relative_mode == "mass" or relative_mode == "mass_ini";
     std::pair<Spline, Spline> eps_today;
     if (relative_mode == "mass") {
-        eps_today = COLASOLVER::two_species_mass_contrast_today(*transferdata, ic.initial_redshift);
+        eps_today = COLASOLVER::two_species_mass_contrast_today(*ic_transfers, ic.initial_redshift);
         if (FML::ThisTask == 0) {
             std::cout << "# Mass-encoded relative mode: eps_b / delta_cb(zini) = ";
             for (double k : {0.01, 0.1, 1.0})

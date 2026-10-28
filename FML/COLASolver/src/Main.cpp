@@ -52,6 +52,9 @@ int run(int argc, char ** argv) {
         // The optional features this executable was compiled with (used by the tests)
         if (FML::ThisTask == 0) {
             std::cout << "FEATURES:";
+#ifdef USE_INTERNAL_COSMOLOGY
+            std::cout << " internal_cosmology";
+#endif
 #ifdef USE_HDF5
             std::cout << " hdf5";
 #endif

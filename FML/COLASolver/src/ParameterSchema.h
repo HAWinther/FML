@@ -493,8 +493,9 @@ namespace COLASOLVER {
             b.required("ic_type_of_input",
                        "powerspectrum",
                        "The input: powerspectrum (file with [k (h/Mpc), P(k) (Mpc/h)^3]), transferfunction (file "
-                       "with [k (h/Mpc), T(k) Mpc^2]) or transferinfofile (file listing T(k,z) files from CAMB/CLASS)",
-                       {"powerspectrum", "transferfunction", "transferinfofile"});
+                       "with [k (h/Mpc), T(k) Mpc^2]) or transferinfofile (file listing T(k,z) files from CAMB/CLASS), "
+                       "or internal_transfer (FML solver .ini; optional compiled feature)",
+                       {"powerspectrum", "transferfunction", "transferinfofile", "internal_transfer"});
             b.optional("ic_type_of_input_fileformat",
                        "CAMB",
                        "Format of the transfer function files (CLASS run with format=camb)",

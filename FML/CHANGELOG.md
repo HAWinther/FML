@@ -26,6 +26,19 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   - Runs with the COLA order equal to the IC order are unchanged.
   - Regression: `fofr_cola1_tsc` changes, by up to 2.3% in P(k).
 
+### Shared transfer providers and gauge-converted IC input
+
+- Move linear input preparation and CDM/baryon ratio/mass-mode helpers into `InitialConditions`.
+  Existing simple P(k), single-transfer and CAMB-table inputs preserve their arithmetic.
+- Add explicit species, k/a ranges, density/velocity gauges, unit-curvature density transfers,
+  direct Newtonian velocities and density growth rates. Missing direct velocities are not synthesized.
+- Add an owning internal-solver provider with native Newtonian and CDM-synchronous density views;
+  validate converted density/velocity transfers against independent CAMB values.
+- Optional COLASolver builds (`USE_INTERNAL_COSMOLOGY=true`) support `internal_transfer` input for
+  flat GR LCDM with CDM/baryons and no massive neutrinos. Existing builds need no Boltzmann solver.
+  Cosmology/domain checks precede solving; see `InitialConditions/README.md` for conventions.
+
+
 ### Scale-dependent 2LPT initial velocities
 - NBody: `NBodyInitialConditions` takes an optional scale-dependent 2LPT velocity norm,
   `velocity_norm_2LPT_of_kBox`. The default is unchanged.

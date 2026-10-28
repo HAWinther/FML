@@ -128,7 +128,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `ic_random_field_backend` | string | `"ngenic"` | always | Fourier mode sampling: ngenic preserves legacy line seeds and IC; philox uses independent mode counters. Options: `ngenic`, `philox` |
 | `ic_nmesh` | int | *required* | always | The grid size used to generate the IC |
 | `ic_lattice_offset` | string | `"fiducial"` | always | Offset of the initial particle lattice from the nodes of the force grid. fiducial: half a force grid cell if force_nmesh > particle_Npart_1D, otherwise none. With particles exactly on the nodes of a finer grid, CIC responds to the size of the displacement and gives large spurious forces (see the force grid section of README.md). Options: `fiducial`, `none`, `half_force_cell` |
-| `ic_type_of_input` | string | *required* | always | The input: powerspectrum (file with [k (h/Mpc), P(k) (Mpc/h)^3]), transferfunction (file with [k (h/Mpc), T(k) Mpc^2]) or transferinfofile (file listing T(k,z) files from CAMB/CLASS). Options: `powerspectrum`, `transferfunction`, `transferinfofile` |
+| `ic_type_of_input` | string | *required* | always | The input: powerspectrum (file with [k (h/Mpc), P(k) (Mpc/h)^3]), transferfunction (file with [k (h/Mpc), T(k) Mpc^2]) or transferinfofile (file listing T(k,z) files from CAMB/CLASS), or internal_transfer (FML solver .ini; optional compiled feature). Options: `powerspectrum`, `transferfunction`, `transferinfofile`, `internal_transfer` |
 | `ic_type_of_input_fileformat` | string | `"CAMB"` | always | Format of the transfer function files (CLASS run with format=camb). Options: `CAMB`, `CLASS`, `AXIONCAMB` |
 | `ic_input_filename` | string | *required* | always | The input file |
 | `ic_input_redshift` | double | *required* | always | The redshift of the input P(k) / T(k) |
@@ -315,7 +315,7 @@ Not everything is implemented yet for CDM and baryons as separate particles (`pa
 | `timestep_method` other than `Tassev` with COLA (the modified Tassev operators get the baryon-CDM relative velocity wrong: +30% in P_b-c with 20 linear steps) | yes |  |
 | `simulation_cola_LPT_order` <= `ic_LPT_order` (with COLA) | yes |  |
 | `simulation_enforce_LPT_trajectories = false` | yes | yes |
-| `ic_type_of_input = transferinfofile` (the transfer functions of the species at zini) | yes | yes |
+| `ic_type_of_input = transferinfofile` or `internal_transfer` (species transfers at zini) | yes | yes |
 | `ic_random_field_type = gaussian` or `nongaussian` | yes | yes |
 | `ic_LPT_order = 1` or `2` | yes |  |
 | `force_linear_massive_neutrinos = false` (the particles replace the linear neutrinos) |  | yes |
