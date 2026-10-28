@@ -307,7 +307,8 @@ class GravityModel {
                                double H0Box,
                                FFTWGrid<NDIM> & density_fourier,
                                std::string density_assignment_method_used,
-                               std::array<FFTWGrid<NDIM>, NDIM> & force_real) const = 0;
+                               std::array<FFTWGrid<NDIM>, NDIM> & force_real,
+                               const FML::NBODY::ForceOptions & options = {}) const = 0;
 
     //========================================================================
     // The force D Phi from the (total) density that sources it, D^2 Phi = norm_poisson_equation * density:
@@ -317,7 +318,8 @@ class GravityModel {
     void compute_force_from_total_density(FFTWGrid<NDIM> & density_fourier,
                                           double norm_poisson_equation,
                                           const std::string & density_assignment_method_used,
-                                          std::array<FFTWGrid<NDIM>, NDIM> & force_real) const {
+                                          std::array<FFTWGrid<NDIM>, NDIM> & force_real,
+                                          const FML::NBODY::ForceOptions & options = {}) const {
         if (force_use_finite_difference_force) {
             // A stencil of order 2, 4 or 6 (phi(i+/-1), phi(i+/-2), ...) needs stencil_order/2 boundary slices
             const int stencil_order = force_finite_difference_stencil_order;
@@ -326,16 +328,19 @@ class GravityModel {
             FML::NBODY::compute_potential_real_from_density_fourier<NDIM>(density_fourier,
                                                                           potential_real,
                                                                           norm_poisson_equation,
-                                                                          nboundary_cells);
+                                                                          nboundary_cells,
+                                                                          options);
             FML::NBODY::compute_force_from_potential_real<NDIM>(potential_real,
                                                                 force_real,
                                                                 density_assignment_method_used,
-                                                                stencil_order);
+                                                                stencil_order,
+                                                                options);
         } else {
             FML::NBODY::compute_force_from_density_fourier<NDIM>(density_fourier,
                                                                  force_real,
                                                                  density_assignment_method_used,
-                                                                 norm_poisson_equation);
+                                                                 norm_poisson_equation,
+                                                                 options);
         }
     }
 

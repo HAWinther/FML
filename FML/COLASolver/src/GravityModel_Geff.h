@@ -40,12 +40,14 @@ class GravityModelGeff : public GravityModel<NDIM> {
                        [[maybe_unused]] double H0Box,
                        FFTWGrid<NDIM> & density_fourier,
                        std::string density_assignment_method_used,
-                       std::array<FFTWGrid<NDIM>, NDIM> & force_real) const override {
+                       std::array<FFTWGrid<NDIM>, NDIM> & force_real,
+                       const FML::NBODY::ForceOptions & options = {}) const override {
         const double norm_poisson_equation = 1.5 * this->cosmo->get_OmegaM() * a * GeffOverG(a);
         this->compute_force_from_total_density(density_fourier,
                                                norm_poisson_equation,
                                                density_assignment_method_used,
-                                               force_real);
+                                               force_real,
+                                               options);
     }
 
     //========================================================================

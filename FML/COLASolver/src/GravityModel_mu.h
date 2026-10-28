@@ -85,13 +85,15 @@ class GravityModelMu final : public GravityModel<NDIM> {
                        double H0Box,
                        FFTWGrid<NDIM> & density_fourier,
                        std::string density_assignment_method_used,
-                       std::array<FFTWGrid<NDIM>, NDIM> & force_real) const override {
+                       std::array<FFTWGrid<NDIM>, NDIM> & force_real,
+                       const FML::NBODY::ForceOptions & options = {}) const override {
         const double OmegaM_a = 1.5 * this->cosmo->get_OmegaM() * a;
         auto force_from = [&](FFTWGrid<NDIM> & source, double norm_poisson_equation) {
             this->compute_force_from_total_density(source,
                                                    norm_poisson_equation,
                                                    density_assignment_method_used,
-                                                   force_real);
+                                                   force_real,
+                                                   options);
         };
         if (not scale_dependent()) {
             force_from(density_fourier, OmegaM_a * mu_of_a_k(a, 0.0));

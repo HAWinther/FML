@@ -5,6 +5,15 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Explicit force discretization options
+
+- Replace mutable NBody force globals/setters with typed per-call `ForceOptions` for Laplacian,
+  gradient and deconvolution choices. Default calls retain continuous kernels without deconvolution.
+- Pass options through COLASolver gravity models and per-step force switching, isolating simulations
+  from each other's choices. Existing parameter names and kernel formulas are unchanged.
+- See `NBody/ForceOptions.md` for migration of direct global-setting code and custom gravity overrides.
+
+
 ### COLASolver: COLA, time stepping, DGP 2LPT, fNL and m(a)/beta(a) fixes
 - `simulation_use_scaledependent_cola` (default true) only gives scale-dependent COLA when the growth is
   scale-dependent (massive neutrinos, k-dependent gravity).

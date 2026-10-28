@@ -126,6 +126,7 @@ class NBodySimulation {
     std::array<double, NDIM> density_shift{};
     // The force settings used in the current step (params.force or the early-time settings)
     COLASOLVER::ForceSettings current_force;
+    FML::NBODY::ForceOptions force_options;
     void set_force_settings_for_step(double a);
 
     /// The linear N-body gauge source (if force_nbody_gauge)
@@ -340,7 +341,7 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
         throw std::runtime_error("Set to use COLA, but particle-type does not even have 1LPT growthfactors!");
     }
 
-    FML::NBODY::set_fiducial_greens_functions_kernel(params.force.greens_function_kernel);
+    force_options.laplace_kernel = FML::NBODY::laplace_kernel_from_name(params.force.greens_function_kernel);
 
     // The fiducial gradient kernel: the continuous kernel (D = ik) is the most accurate when the force grid is
     // the same as the particle grid. When the force grid is finer the regular particle lattice (of the IC) puts
@@ -357,8 +358,8 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
             std::cout << "NB: force_nmesh > particle_Npart_1D so we use force_gradient_kernel = " << gradient_kernel
                       << " (set force_gradient_kernel to continuous, discrete_2pt or discrete_4pt to change this)\n";
     }
-    FML::NBODY::set_fiducial_gradient_kernel(gradient_kernel);
-    FML::NBODY::FIDUCIAL_DECONVOLVE_FORCE = params.force.deconvolve_window;
+    force_options.gradient_kernel = FML::NBODY::gradient_kernel_from_name(gradient_kernel);
+    force_options.deconvolve = params.force.deconvolve_window;
     current_force = params.force;
 
     // The (experimental) finite difference force: only the stencils 2, 4 and 6 are implemented and the gradient is
@@ -1159,7 +1160,7 @@ void NBodySimulation<NDIM, T>::set_force_settings_for_step(double a) {
         current_force.density_assignment_method = f.early_density_assignment_method;
         current_force.deconvolve_window = true;
     }
-    FML::NBODY::FIDUCIAL_DECONVOLVE_FORCE = current_force.deconvolve_window;
+    force_options.deconvolve = current_force.deconvolve_window;
     if (early and FML::ThisTask == 0)
         std::cout << "Using the early-time force (" << f.early_method << ") at z = " << 1.0 / a - 1.0 << "\n";
 }
@@ -1198,7 +1199,8 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
                             grav->H0_hmpc * sim.boxsize,
                             density_grid_fourier,
                             force.density_assignment_method,
-                            force_real);
+                            force_real,
+                            force_options);
         timer.EndTiming("ComputeForce");
 
         timer.StartTiming("Kick");
@@ -1374,7 +1376,8 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const StepInfo & s) {
                             grav->H0_hmpc * sim.boxsize,
                             density_grid_fourier,
                             force.density_assignment_method,
-                            force_real);
+                            force_real,
+                            force_options);
         timer.EndTiming("ComputeForce");
 
         timer.StartTiming("Kick");

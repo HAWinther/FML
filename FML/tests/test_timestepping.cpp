@@ -121,7 +121,15 @@ class TestGravity : public GravityModel<3> {
         D_2LPT_of_loga.create(x, d2);
     }
     double GeffOverG(double a, double = 0) const override { return 1 + 0.1 * a; }
-    void compute_force(double, double, FFTWGrid<3> &, std::string, std::array<FFTWGrid<3>, 3> &) const override {}
+    void use_finite_difference(bool enabled) { force_use_finite_difference_force = enabled; }
+    void compute_force(double a,
+                       double,
+                       FFTWGrid<3> & density,
+                       std::string method,
+                       std::array<FFTWGrid<3>, 3> & force,
+                       const FML::NBODY::ForceOptions & options) const override {
+        compute_force_from_total_density(density, 1.5 * cosmo->get_OmegaM() * a, method, force, options);
+    }
 };
 void test_schedules() {
     // Nonlinear D(a) ensures growth spacing tests an actual inverse, rather than D=a.
@@ -157,6 +165,27 @@ void test_schedules() {
     }
     check(correct, "all spacing policies match independent schedules with nonlinear growth and negative power");
     check(synchronized, "staggered schedules are continuous and synchronize at the output epoch");
+}
+void test_cola_force_options() {
+    auto cosmo = std::make_shared<TestCosmology>();
+    auto grav = std::make_shared<TestGravity>(cosmo);
+    FML::GRID::FFTWGrid<3> density(16);
+    density.fill_real_grid([](const std::array<double, 3> & x) { return std::cos(6 * M_PI * x[0]); });
+    density.fftw_r2c();
+    const FML::NBODY::ForceOptions options{FML::NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT,
+                                           FML::NBODY::DISCRETE_FOUR_POINT_GRADIENT,
+                                           true};
+    bool matches = true;
+    for (bool finite_difference : {false, true}) {
+        grav->use_finite_difference(finite_difference);
+        std::array<FML::GRID::FFTWGrid<3>, 3> actual, expected;
+        grav->compute_force(0.5, 1, density, "CIC", actual, options);
+        FML::NBODY::compute_force_from_density_fourier<3>(density, expected, "CIC", 1.5 * 0.3 * 0.5, options);
+        for (int d = 0; d < 3; d++)
+            for (auto i : actual[d].get_real_range())
+                matches = matches && near(actual[d].get_real_from_index(i), expected[d].get_real_from_index(i), 1e-12);
+    }
+    check(matches, "COLASolver forwards explicit options through Fourier and finite-difference gravity paths");
 }
 void test_cola_adapter() {
     auto cosmo = std::make_shared<TestCosmology>();
@@ -246,6 +275,7 @@ int main() {
     test_growing_modes();
     test_schedules();
     test_cola_adapter();
+    test_cola_force_options();
     test_contracts();
     FML::SumOverTasks(&failures);
     return failures ? 1 : 0;

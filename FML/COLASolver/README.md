@@ -577,3 +577,6 @@ The Quinn, Tassev, FastPM and BullFrog coefficient generator is shared with the
 library through [NBody/TimeStepping.h](../NBody/TimeStepping.h); see the
 [interface and growth conventions](../NBody/TimeStepping.md). COLASolver retains
 its model adapters, output scheduling and step reporting.
+
+Force discretization uses per-simulation [ForceOptions](../NBody/ForceOptions.md),
+passed explicitly to the gravity calculation, including early-time force switching.

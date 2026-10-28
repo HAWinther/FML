@@ -82,10 +82,10 @@ double uniform(uint64_t i) {
     return double(z >> 11) / double(1ULL << 53);
 }
 
-void set_kernels(int laplace, int gradient, bool deconvolve) {
-    NBODY::FIDUCIAL_LAPLACE_KERNEL = laplace;
-    NBODY::FIDUCIAL_GRADIENT_KERNEL = gradient;
-    NBODY::FIDUCIAL_DECONVOLVE_FORCE = deconvolve;
+NBODY::ForceOptions force_options(int laplace, int gradient, bool deconvolve) {
+    return {static_cast<NBODY::GreensFunctionLaplaceOperatorKernels>(laplace),
+            static_cast<NBODY::GradientKernels>(gradient),
+            deconvolve};
 }
 
 // max |a - b| / max |b| over all components and tasks
@@ -111,8 +111,12 @@ double buffered_pgd(std::vector<T> & particles, const std::string & method, doub
     FML::SumOverTasks(&total);
     const auto halo = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(method);
     Grid density(24, halo.first, halo.second);
-    FML::INTERPOLATION::particles_to_fourier_grid<N, T>(
-        particles.data(), particles.size(), total, density, method, false);
+    FML::INTERPOLATION::particles_to_fourier_grid<N, T>(particles.data(),
+                                                        particles.size(),
+                                                        total,
+                                                        density,
+                                                        method,
+                                                        false);
     std::function<double(double)> filter = [](double k2) {
         const double high = k2 / 10000.0 < 10.0 ? k2 / 10000.0 : 10.0;
         const double low = k2 / 4.0 < 0.01 ? 100.0 : 4.0 / k2;
@@ -125,8 +129,11 @@ double buffered_pgd(std::vector<T> & particles, const std::string & method, doub
     for (auto & grid : force_grid)
         grid.communicate_boundaries();
     std::array<std::vector<FloatType>, N> force;
-    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N, T>(
-        force_grid, particles.data(), particles.size(), force, method);
+    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N, T>(force_grid,
+                                                                            particles.data(),
+                                                                            particles.size(),
+                                                                            force,
+                                                                            method);
     for (auto & grid : force_grid)
         grid.free();
     double maximum = 0;
@@ -182,9 +189,9 @@ void check_streamed_pgd(const std::string & label) {
                 for (size_t i = 0; i < expected.size(); ++i) {
                     for (int d = 0; d < N; ++d)
                         expected[i].pos[d] = original.front().pos[d];
-                    expected[i].pos[0] = alpha == 0.03
-                                             ? std::nextafter(Position(FML::xmax_domain), Position(FML::xmin_domain))
-                                             : Position(FML::xmin_domain);
+                    expected[i].pos[0] = alpha == 0.03 ?
+                                             std::nextafter(Position(FML::xmax_domain), Position(FML::xmin_domain)) :
+                                             Position(FML::xmin_domain);
                     expected[i].pos[1] = i < expected.size() / 2 ? Position(0.2) : Position(0.6);
                 }
                 actual = expected;
@@ -195,17 +202,17 @@ void check_streamed_pgd(const std::string & label) {
             std::ostringstream output, reference;
             reference.copyfmt(std::cout);
             if (FML::ThisTask == 0)
-                reference << "[potential_gradient_decent_method] Maximum displacement : " << maximum
-                          << " = " << maximum * 24 << " grid-cells\n";
+                reference << "[potential_gradient_decent_method] Maximum displacement : " << maximum << " = "
+                          << maximum * 24 << " grid-cells\n";
             auto * previous = std::cout.rdbuf(output.rdbuf());
-            PGD::potential_gradient_decent_method<N, P>(
-                actual.data(), actual.size(), 2.0, 100.0, alpha, 1.5, 24, method);
+            PGD::potential_gradient_decent_method<N,
+                                                  P>(actual.data(), actual.size(), 2.0, 100.0, alpha, 1.5, 24, method);
             std::cout.rdbuf(previous);
             const std::string prefix = "[potential_gradient_decent_method] Maximum displacement : ";
             const auto start = output.str().find(prefix);
-            diagnostics = diagnostics && (FML::ThisTask == 0
-                                              ? start != std::string::npos && output.str().substr(start) == reference.str()
-                                              : output.str().find(prefix) == std::string::npos);
+            diagnostics = diagnostics && (FML::ThisTask == 0 ? start != std::string::npos &&
+                                                                   output.str().substr(start) == reference.str() :
+                                                               output.str().find(prefix) == std::string::npos);
             for (size_t i = 0; i < actual.size(); ++i) {
                 positions = positions && std::memcmp(actual[i].pos, expected[i].pos, sizeof(actual[i].pos)) == 0;
                 attributes = attributes && actual[i].id == original[i].id &&
@@ -230,6 +237,47 @@ void check_streamed_pgd_suite() {
     check_streamed_pgd<3, float>("3D float");
 }
 
+void test_explicit_force_options() {
+    FFTWGrid density(16);
+    density.fill_real_grid([](const std::array<double, 3> & x) {
+        return std::cos(2 * M_PI * 3 * x[0]) + 0.3 * std::cos(2 * M_PI * 5 * x[1]);
+    });
+    FFTWGrid real_density = density;
+    density.fftw_r2c();
+    const NBODY::ForceOptions standard{};
+    const auto different =
+        force_options(NBODY::DISCRETE_GREENS_FUNCTION_FROM_TWO_POINT, NBODY::DISCRETE_FOUR_POINT_GRADIENT, true);
+    std::array<FFTWGrid, 3> first, second, repeated, defaults, from_real;
+    NBODY::compute_force_from_density_fourier<3>(density, first, "CIC", 1.5, standard);
+    NBODY::compute_force_from_density_fourier<3>(density, second, "CIC", 1.5, different);
+    NBODY::compute_force_from_density_fourier<3>(density, repeated, "CIC", 1.5, standard);
+    NBODY::compute_force_from_density_fourier<3>(density, defaults, "CIC", 1.5);
+    NBODY::compute_force_from_density_real<3>(real_density, from_real, "CIC", 1.5, different);
+    check(rel_diff(first, repeated) == 0 && rel_diff(first, defaults) == 0,
+          "interleaved explicit force choices preserve independent calls and fixed defaults");
+    check(rel_diff(first, second) > 1e-3, "explicit force options change the selected discretization");
+    check(rel_diff(second, from_real) < 1e-12, "real-density wrapper forwards every force option");
+    check(NBODY::laplace_kernel_from_name("fiducial") == standard.laplace_kernel &&
+              NBODY::gradient_kernel_from_name("") == standard.gradient_kernel &&
+              NBODY::laplace_kernel_from_name("discrete_2pt") == different.laplace_kernel &&
+              NBODY::gradient_kernel_from_name("discrete_4pt") == different.gradient_kernel,
+          "kernel names parse into typed choices with deterministic fiducial defaults");
+    bool invalid_name = false, invalid_value = false;
+    try {
+        NBODY::gradient_kernel_from_name("missing");
+    } catch (const std::exception &) {
+        invalid_name = true;
+    }
+    try {
+        auto invalid = standard;
+        invalid.laplace_kernel = static_cast<NBODY::GreensFunctionLaplaceOperatorKernels>(99);
+        NBODY::compute_force_from_density_fourier<3>(density, repeated, "CIC", 1.5, invalid);
+    } catch (const std::exception &) {
+        invalid_value = true;
+    }
+    check(invalid_name && invalid_value, "invalid force options are rejected before parallel force work");
+}
+
 int main(int argc, char ** argv) {
     std::string mode = argc > 1 ? argv[1] : "all";
     if (mode == "streamed_pgd") {
@@ -243,6 +291,8 @@ int main(int argc, char ** argv) {
     FFTWGrid density(Nmesh, 1, 1);
     density.fill_real_grid([&](std::array<double, 3> & x) -> FloatType { return noise(x, Nmesh); });
     density.fftw_r2c();
+
+    test_explicit_force_options();
 
     //=====================================================
     // Bad input: fewer extra slices than the stencil needs
@@ -322,14 +372,15 @@ int main(int argc, char ** argv) {
     // 2. Fourier force on a plane wave with the 4-point kernels: F = sin(kx) / D4(k)
     //=====================================================
     {
-        set_kernels(NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT, NBODY::DISCRETE_FOUR_POINT_GRADIENT, false);
+        const auto options =
+            force_options(NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT, NBODY::DISCRETE_FOUR_POINT_GRADIENT, false);
         const int n = 3;
         const double k = 2.0 * M_PI * n;
         FFTWGrid wave(Nmesh, 1, 1);
         wave.fill_real_grid([&](std::array<double, 3> & x) -> FloatType { return std::cos(k * x[1]); });
         wave.fftw_r2c();
         std::array<FFTWGrid, 3> force;
-        NBODY::compute_force_from_density_fourier<3>(wave, force, "CIC", 1.0);
+        NBODY::compute_force_from_density_fourier<3>(wave, force, "CIC", 1.0, options);
         const double D4 = (8.0 * std::sin(k * dx) - std::sin(2.0 * k * dx)) / (6.0 * dx);
         double maxerr = 0.0;
         for (auto && i : force[1].get_real_range()) {
@@ -379,17 +430,16 @@ int main(int argc, char ** argv) {
              "discrete_4pt, stencil 4, deconvolved"},
         };
         for (auto & c : cases) {
-            set_kernels(c.laplace, c.gradient, c.deconvolve);
+            const auto options = force_options(c.laplace, c.gradient, c.deconvolve);
             std::array<FFTWGrid, 3> force_fourier;
-            NBODY::compute_force_from_density_fourier<3>(density, force_fourier, "CIC", 1.5);
+            NBODY::compute_force_from_density_fourier<3>(density, force_fourier, "CIC", 1.5, options);
             FFTWGrid potential;
             std::array<FFTWGrid, 3> force_fd;
-            NBODY::compute_potential_real_from_density_fourier<3>(density, potential, 1.5, c.stencil / 2);
-            NBODY::compute_force_from_potential_real<3>(potential, force_fd, "CIC", c.stencil);
+            NBODY::compute_potential_real_from_density_fourier<3>(density, potential, 1.5, c.stencil / 2, options);
+            NBODY::compute_force_from_potential_real<3>(potential, force_fd, "CIC", c.stencil, options);
             const double err = rel_diff(force_fd, force_fourier);
             check(err < 1e-10, "finite difference force = Fourier force (" + c.name + ", rel. diff " + num(err) + ")");
         }
-        set_kernels(NBODY::CONTINUOUS_GREENS_FUNCTION, NBODY::CONTINUOUS_GRADIENT, false);
     }
 
     //=====================================================
