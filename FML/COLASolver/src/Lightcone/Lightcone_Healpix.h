@@ -121,7 +121,8 @@ class OnionSlice {
 #ifdef USE_HEALPIX
             if (_use_chunkpix) {
                 cmap.init(_nside, _nside_chunks);
-                hbase.SetNside(_nside, ordering);
+                // pixel indices in the ordering of the chunks (NEST for nside = 2^k: the chunks are compact patches)
+                hbase.SetNside(_nside, cmap.ordering());
                 hmap = Healpix_Map<T>();
             } else {
                 hmap.SetNside(_nside, ordering);

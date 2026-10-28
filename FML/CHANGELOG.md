@@ -5,6 +5,20 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Chunkpix: chunks that save memory (NEST), no reallocation of the whole map
+- The chunks were runs of consecutive RING pixel indices, i.e. pieces of the iso-latitude rings (32 full rings per
+  chunk for nside = 8192, plc_nside_chunks = 8). A partial sky (a task's slab of lightcone particles, an octant)
+  allocated most of them: with healpy, 58-100% of the chunks for MPI slabs covering 3-16% of the sky, so the
+  memory saving that is the point of Chunkpix was mostly lost. For nside = 2^k the chunks are now in NEST ordering
+  (a chunk = one pixel of an nside_chunks map, a compact patch): 8-20% for the same slabs, and a test with a 5%
+  sky cap allocates 7%. Chunkpix::ordering() gives the ordering of the pixel indices (the lightcone computes them
+  with it); reconstruct_full_map still gives a RING map. Other nside: RING chunks as before.
+- The chunks were one vector resized for every new chunk: up to twice the memory of all the chunks while it was
+  reallocated and copied (more than the full map when most chunks are active). Now one vector per chunk.
+- Checked: COLASolver lightcone onion maps (delta and kappa, full sky, 4 MPI tasks) and their C_ell are bit-identical
+  with and without plc_use_chunkpix; tests/test_particles.cpp (with USE_HEALPIX) compares the maps with directly
+  filled RING maps for nside = 256 (NEST) and 48 (RING).
+
 ### MakePythonWrapper: builds with current SWIG; safe Data example
 - The bundled numpy.i (2015) used the Python 2 API (PyString_Check, PyInt_Check, PyCObject), which SWIG 4.3+ no
   longer maps: the wrapper did not compile with current SWIG (4.5.1). Replaced by numpy.i from NumPy 2.3.4

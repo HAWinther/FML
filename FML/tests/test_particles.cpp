@@ -465,6 +465,9 @@ void test_chunkpix() {
         FML::CHUNKPIX::Chunkpix<double> c;
         c.init(512, 256);
         const long npix = 12L * 512 * 512;
+        // indices in the ordering of the chunks (NEST for nside = 2^k); the full map is RING
+        Healpix_Base hb(512, c.ordering(), SET_NSIDE);
+        auto to_ring = [&](long i) { return c.ordering() == NEST ? long(hb.nest2ring(int(i))) : i; };
         c.increase_ipix_count(npix - 1, 1.0);
         c.increase_ipix_count(65536L * 4 + 1, 0.25);
         c.increase_ipix_count(65536L * 4 + 1, 0.25);
@@ -473,8 +476,9 @@ void test_chunkpix() {
         double sum = 0.0;
         for (long i = 0; i < npix; i++)
             sum += full[i];
-        check(full.Npix() == npix and full[npix - 1] == 1.0 and full[65536 * 4 + 1] == 0.5 and sum == 1.5,
-              "Chunkpix with 786432 chunks and fractional weights");
+        check(c.ordering() == NEST and full.Scheme() == RING and full.Npix() == npix and
+                  full[to_ring(npix - 1)] == 1.0 and full[to_ring(65536 * 4 + 1)] == 0.5 and sum == 1.5,
+              "Chunkpix with 786432 chunks and fractional weights (NEST chunks, RING map)");
     }
     {
         FML::CHUNKPIX::Chunkpix<double> c;
@@ -489,6 +493,55 @@ void test_chunkpix() {
             threw = true;
         }
         check(threw, "Chunkpix: nside not a multiple of nside_chunks is an error");
+    }
+    {
+        // The point of the chunks: a map of part of the sky only allocates about that fraction of them. A cap of
+        // 5% of the sky (as a task's slab of particles in a lightcone shell): NEST chunks (compact patches)
+        // allocate ~5-10%; RING chunks (runs along the iso-latitude rings) allocated most of them
+        const long nside = 256;
+        FML::CHUNKPIX::Chunkpix<double> c;
+        c.init(nside, 8);
+        Healpix_Base hb(int(nside), c.ordering(), SET_NSIDE);
+        Healpix_Map<double> direct(int(nside), RING, SET_NSIDE);
+        direct.fill(0.0);
+        std::mt19937 gen(3);
+        std::uniform_real_distribution<double> U(0.0, 1.0);
+        const double cos_max = 1.0 - 2.0 * 0.05;   // cap around the x-axis with fsky = 0.05
+        for (int i = 0; i < 200000; i++) {
+            const double mu = cos_max + (1.0 - cos_max) * U(gen), ph = 2.0 * M_PI * U(gen), s = std::sqrt(1 - mu * mu);
+            const vec3 v(mu, s * std::cos(ph), s * std::sin(ph));
+            c.increase_ipix_count(hb.vec2pix(v), 1.0);
+            direct[direct.vec2pix(v)] += 1.0;
+        }
+        const double sparsity = c.chunk_sparsity();
+        Healpix_Map<double> full;
+        c.reconstruct_full_map(full);
+        bool same = full.Scheme() == RING;
+        for (long i = 0; same and i < 12 * nside * nside; i++)
+            same = full[i] == direct[i];
+        check(same, "Chunkpix map = the map filled directly (RING)");
+        check(sparsity < 0.12, "Chunkpix: a 5% sky cap allocates < 12% of the chunks (" + std::to_string(sparsity) + ")");
+    }
+    {
+        // nside not a power of two: RING chunks (NEST is not defined), same map
+        FML::CHUNKPIX::Chunkpix<double> c;
+        c.init(48, 8);
+        Healpix_Base hb(48, c.ordering(), SET_NSIDE);
+        Healpix_Map<double> direct(48, RING, SET_NSIDE);
+        direct.fill(0.0);
+        std::mt19937 gen(5);
+        std::uniform_real_distribution<double> U(-1.0, 1.0);
+        for (int i = 0; i < 1000; i++) {
+            const vec3 v(U(gen), U(gen), U(gen));
+            c.increase_ipix_count(hb.vec2pix(v), 0.5);
+            direct[direct.vec2pix(v)] += 0.5;
+        }
+        Healpix_Map<double> full;
+        c.reconstruct_full_map(full);
+        bool same = c.ordering() == RING;
+        for (long i = 0; same and i < 12 * 48 * 48; i++)
+            same = full[i] == direct[i];
+        check(same, "Chunkpix with nside = 48 (RING chunks) = the map filled directly");
     }
     {
         // OnionSlice with chunkpix: the chunks are made into full maps before the sum over tasks and the result

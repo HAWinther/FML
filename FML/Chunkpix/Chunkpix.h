@@ -30,8 +30,15 @@ namespace FML {
         /// 16 bit integer is not enough)
         typedef std::int64_t ChunkIndex;
 
-        /// A sparse Healpix map (RING ordering): the npix = 12 nside^2 pixels are split into 12 nside_chunks^2
-        /// chunks of consecutive pixel indices and only the chunks that has been written to are allocated
+        /// A sparse Healpix map: the npix = 12 nside^2 pixels are split into 12 nside_chunks^2 chunks of consecutive
+        /// pixel indices and only the chunks that have been written to are allocated.
+        ///
+        /// The pixel indices are in the ordering() of the map: NEST when nside is a power of two (then a chunk is
+        /// the set of pixels inside one pixel of an nside_chunks map, a compact patch of the sky, so a map that
+        /// covers part of the sky allocates about that fraction of the chunks), RING otherwise (a chunk is then a
+        /// run of (nside/nside_chunks)^2 pixels along the iso-latitude rings, e.g. 32 full rings for nside = 8192 and
+        /// nside_chunks = 8, so a partial sky allocates most chunks). Compute the indices with a Healpix_Base of the
+        /// same ordering. reconstruct_full_map always gives a RING map.
         template <class T>
         class Chunkpix {
           private:
@@ -40,9 +47,10 @@ namespace FML {
             long npix{};
             long nchunks{};
             long npix_per_chunk{};
+            Healpix_Ordering_Scheme scheme{Healpix_Ordering_Scheme::RING};
 
-            // Data
-            std::vector<T> cmap;
+            // Data: one vector per active chunk (no reallocation and copy of all the chunks when one is added)
+            std::vector<std::vector<T>> cmap;
             // The chunk index (in the full map) of the active chunks in the order they were activated
             std::vector<ChunkIndex> active_chunks_values;
             // Map from chunk index to its position (key) in active_chunks_values
@@ -68,6 +76,8 @@ namespace FML {
 
             void clean();
 
+            /// The ordering of the pixel indices passed to increase_ipix_count
+            Healpix_Ordering_Scheme ordering() const { return scheme; }
             long get_nside() const { return nside; }
             long get_npix() const { return npix; }
             long get_n_active_chunks() const { return n_active_chunks; }
@@ -91,6 +101,8 @@ namespace FML {
             npix = 12 * nside * nside;
             nchunks = 12 * nside_chunks * nside_chunks;
             npix_per_chunk = npix / nchunks;
+            // NEST needs nside = 2^k (then nside_chunks, a divisor of nside, is a power of two too)
+            scheme = (nside & (nside - 1)) == 0 ? Healpix_Ordering_Scheme::NEST : Healpix_Ordering_Scheme::RING;
 
             initialize_cmap();
         }
@@ -143,30 +155,29 @@ namespace FML {
                 active_chunks_values.push_back(chunk_value);
                 active_chunks_keys[chunk_value] = chunk_key;
                 // Allocate and initialize new chunk pixels to 0
-                cmap.resize(size_t(n_active_chunks) * size_t(npix_per_chunk), T(0));
+                cmap.emplace_back(size_t(npix_per_chunk), T(0));
             } else {
                 chunk_key = it->second;
             }
 
             // Add count
-            const size_t ipix_chunk = size_t(ipix_full % npix_per_chunk) + size_t(chunk_key) * size_t(npix_per_chunk);
-            cmap[ipix_chunk] += count_increase;
+            cmap[size_t(chunk_key)][size_t(ipix_full % npix_per_chunk)] += count_increase;
         }
 
         // Reconstruct a full-size map from cmap
         template <class T>
         void Chunkpix<T>::reconstruct_full_map(Healpix_Map<T> & full_map) {
-            full_map.SetNside(int(nside), Healpix_Ordering_Scheme::RING);
+            full_map.SetNside(int(nside), scheme);
             full_map.fill(T(0));
 
             // Copy chunk by chunk
             double sum_cmap = 0.0;
             for (size_t key = 0; key < size_t(n_active_chunks); key++) {
                 const auto i_full = chunk2ipix_ranges(active_chunks_values[key]);
-                const auto i_cmap = chunk2ipix_ranges(ChunkIndex(key));
+                const auto & chunk = cmap[key];
                 for (size_t i = 0; i <= i_full.second - i_full.first; i++) {
-                    full_map[i_full.first + i] = cmap[i_cmap.first + i];
-                    sum_cmap += double(cmap[i_cmap.first + i]);
+                    full_map[i_full.first + i] = chunk[i];
+                    sum_cmap += double(chunk[i]);
                 }
             }
 
@@ -184,6 +195,9 @@ namespace FML {
                 std::cout << err_msg;
                 throw std::runtime_error(err_msg);
             }
+            // The full map is always RING
+            if (scheme == Healpix_Ordering_Scheme::NEST)
+                full_map.swap_scheme();
         }
 
         template <class T>
