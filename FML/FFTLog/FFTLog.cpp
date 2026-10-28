@@ -1,6 +1,9 @@
 #include "FFTLog.h"
 #include <array>
 #include <iostream>
+#include <limits>
+#include <stdexcept>
+#include <utility>
 #include <tgmath.h>
 
 namespace FML {
@@ -99,106 +102,181 @@ namespace FML {
                 return u;
             }
 
-            std::pair<DVector, CVector> DiscreteHankelTransform(const DVector & r,
-                                                                const CVector & a,
-                                                                double mu,
-                                                                double q,
-                                                                double kcrc,
-                                                                bool noring,
-                                                                CVector * u_precomputed) {
-                const int N = int(r.size());
-                const double L = std::log(r[N - 1] / r[0]) * N / (N - 1.);
-                CVector b(N);
-                CVector ulocal;
-                const CDouble * u = nullptr;
-                if (u_precomputed == nullptr) {
-                    if (noring) {
-                        kcrc = goodkr(N, mu, q, L, kcrc);
+            struct Workspace::Impl {
+                size_t n;
+                fftw_complex * input = nullptr;
+                fftw_complex * output = nullptr;
+                fftw_plan forward = nullptr;
+                fftw_plan reverse = nullptr;
+                Statistics stats;
+                CVector coefficients;
+                double mu = 0, q = 0, L = 0, requested_kr = 0, effective_kr = 0;
+                bool noring = false;
+
+                explicit Impl(size_t n) : n(n) {}
+                ~Impl() {
+                    if (forward) fftw_destroy_plan(forward);
+                    if (reverse) fftw_destroy_plan(reverse);
+                    fftw_free(input);
+                    fftw_free(output);
+                }
+            };
+
+            Workspace::Workspace(unsigned flags) : planner_flags(flags) {}
+            Workspace::~Workspace() = default;
+            Workspace::Workspace(Workspace &&) noexcept = default;
+            Workspace & Workspace::operator=(Workspace &&) noexcept = default;
+            void Workspace::clear() noexcept { impl.reset(); }
+            size_t Workspace::size() const noexcept { return impl ? impl->n : 0; }
+            size_t Workspace::buffer_bytes() const noexcept { return 2 * size() * sizeof(fftw_complex); }
+            Workspace::Statistics Workspace::statistics() const noexcept {
+                return impl ? impl->stats : Statistics{};
+            }
+
+            void Workspace::prepare(size_t n) {
+                if (n < 2 || n > size_t(std::numeric_limits<int>::max()) ||
+                    n > std::numeric_limits<size_t>::max() / (2 * sizeof(fftw_complex)))
+                    throw std::invalid_argument("FFTLog: transform length must be in [2, INT_MAX] and fit in memory");
+                if (size() == n) return;
+                // Build separately so allocation/planning failure preserves the previous workspace.
+                auto next = std::make_unique<Impl>(n);
+                next->input = fftw_alloc_complex(n);
+                next->output = fftw_alloc_complex(n);
+                if (!next->input || !next->output) throw std::bad_alloc();
+                std::memset(next->input, 0, n * sizeof(fftw_complex));
+                std::memset(next->output, 0, n * sizeof(fftw_complex));
+                next->forward = fftw_plan_dft_1d(int(n), next->input, next->output, FFTW_FORWARD, planner_flags);
+                next->reverse = fftw_plan_dft_1d(int(n), next->output, next->output, FFTW_BACKWARD, planner_flags);
+                if (!next->forward || !next->reverse)
+                    throw std::runtime_error("FFTLog: FFTW could not create transform plans");
+                next->stats = statistics();
+                next->stats.plan_builds += 2;
+                impl.swap(next);
+            }
+
+            static double logarithmic_span(const DVector & r) {
+                if (r.size() < 2 || r.size() > size_t(std::numeric_limits<int>::max()))
+                    throw std::invalid_argument("FFTLog: transform length must be in [2, INT_MAX]");
+                const double L = std::log(r.back() / r.front()) * r.size() / (r.size() - 1.0);
+                if (!(r.front() > 0) || !std::isfinite(r.front()) || !std::isfinite(r.back()) ||
+                    !(L > 0) || !std::isfinite(L))
+                    throw std::invalid_argument("FFTLog: expected a positive, increasing logarithmic grid");
+                return L;
+            }
+
+            DVector Workspace::execute(const DVector & r, double mu, double q, double kr,
+                                       bool noring, const CVector * supplied) {
+                const double L = logarithmic_span(r);
+                if (!(kr > 0) || !std::isfinite(kr))
+                    throw std::invalid_argument("FFTLog: kcrc must be positive and finite");
+                auto & state = *impl;
+                const size_t n = state.n;
+                const CVector * u = supplied;
+                if (!supplied) {
+                    if (state.coefficients.empty() || state.mu != mu || state.q != q || state.L != L ||
+                        state.requested_kr != kr || state.noring != noring) {
+                        const double effective = noring ? goodkr(int(n), mu, q, L, kr) : kr;
+                        auto coefficients = ComputeCoefficients(int(n), mu, q, L, effective);
+                        state.coefficients = std::move(coefficients);
+                        state.mu = mu;
+                        state.q = q;
+                        state.L = L;
+                        state.requested_kr = kr;
+                        state.effective_kr = effective;
+                        state.noring = noring;
+                        ++state.stats.coefficient_builds;
                     }
-                    ulocal = ComputeCoefficients(N, mu, q, L, kcrc);
-                    u = ulocal.data();
-                } else {
-                    assert(int(u_precomputed->size()) == N);
-                    u = u_precomputed->data();
+                    kr = state.effective_kr;
+                    u = &state.coefficients;
                 }
-
-                // Compute the convolution b = a*u using FFTs
-                // NB: don't use FFTW_MEASURE as it will overwrite the a-array. To use this we must
-                // take a copy and copy back after the plans have been made
-                fftw_complex * grid_in = reinterpret_cast<fftw_complex *>(const_cast<CDouble *>(a.data()));
-                fftw_complex * grid_out = reinterpret_cast<fftw_complex *>(b.data());
-                fftw_plan forward_plan = fftw_plan_dft_1d(N, grid_in, grid_out, FFTW_FORWARD, FFTW_ESTIMATE);
-                fftw_plan reverse_plan = fftw_plan_dft_1d(N, grid_out, grid_out, FFTW_BACKWARD, FFTW_ESTIMATE);
-
-                // Transform
-                fftw_execute(forward_plan);
-
-                // Multiply by u
-                const double fftw_norm = 1.0 / double(N);
-                for (int m = 0; m < N; m++) {
-                    b[m] *= u[m] * fftw_norm;
+                // Supplied coefficients retain the historical convention: no goodkr adjustment,
+                // even with noring=true. They are read on every call and never cached.
+                fftw_execute(state.forward);
+                const double norm = 1.0 / double(n);
+                for (size_t i = 0; i < n; ++i) {
+                    const auto value = CDouble(state.output[i][0], state.output[i][1]) * ((*u)[i] * norm);
+                    state.output[i][0] = value.real();
+                    state.output[i][1] = value.imag();
                 }
+                fftw_execute(state.reverse);
+                DVector k(n);
+                // The reversed output satisfies k[0] * r[n-1] = kr. Include one
+                // log step relative to exp(-L), since L is n steps rather than n-1.
+                k[0] = kr * std::exp(-L + L / n) / r[0];
+                for (size_t i = 1; i < n; ++i) k[i] = k[0] * std::exp(i * L / n);
+                return k;
+            }
 
-                // Transform back
-                fftw_execute(reverse_plan);
-                fftw_destroy_plan(forward_plan);
-                fftw_destroy_plan(reverse_plan);
-
-                // Reverse b array
-                for (int n = 0; n < N / 2; n++) {
-                    const auto tmp = b[n];
-                    b[n] = b[N - n - 1];
-                    b[N - n - 1] = tmp;
+            std::pair<DVector, CVector> DiscreteHankelTransform(const DVector & r, const CVector & a,
+                                                               Workspace & workspace, double mu, double q,
+                                                               double kcrc, bool noring, CVector * u) {
+                logarithmic_span(r);
+                if (a.size() != r.size() || (u && u->size() != r.size()))
+                    throw std::invalid_argument("FFTLog: input and coefficient lengths must match the grid");
+                workspace.prepare(r.size());
+                auto & state = *workspace.impl;
+                for (size_t i = 0; i < r.size(); ++i) {
+                    state.input[i][0] = a[i].real();
+                    state.input[i][1] = a[i].imag();
                 }
-
-                // Compute k's corresponding to input r's (or vice versa). The output k[n] corresponds to b[n] for
-                // k[0] r[N-1] = kcrc, i.e. k[0] = kcrc exp(-L + L/N) / r[0] (before exp(-L) was used: the output grid
-                // was one log-step too small, e.g. 1.6% in xi(r = 100 Mpc/h) for an LCDM P(k) with N = 4096)
-                const double k0r0 = kcrc * std::exp(-L + L / N);
-                DVector k(N);
-                k[0] = k0r0 / r[0];
-                for (int n = 1; n < N; n++) {
-                    k[n] = k[0] * std::exp(n * L / N);
+                auto k = workspace.execute(r, mu, q, kcrc, noring, u);
+                CVector b(r.size());
+                for (size_t i = 0; i < r.size(); ++i) {
+                    const auto & value = state.output[r.size() - 1 - i];
+                    b[i] = CDouble(value[0], value[1]);
                 }
-                return {k, b};
+                return {std::move(k), std::move(b)};
+            }
+
+            std::pair<DVector, CVector> DiscreteHankelTransform(const DVector & r, const CVector & a,
+                                                               double mu, double q, double kcrc,
+                                                               bool noring, CVector * u) {
+                Workspace workspace;
+                return DiscreteHankelTransform(r, a, workspace, mu, q, kcrc, noring, u);
+            }
+
+            std::pair<DVector, DVector> ComputeXiLM(int ell, int m, const DVector & k, const DVector & pk,
+                                                  Workspace & workspace, double q) {
+                logarithmic_span(k);
+                if (k.size() != pk.size())
+                    throw std::invalid_argument("FFTLog: spectrum and grid lengths must match");
+                workspace.prepare(k.size());
+                auto & state = *workspace.impl;
+                // Fill aligned input directly and normalize output directly, avoiding two temporary complex vectors.
+                for (size_t i = 0; i < k.size(); ++i) {
+                    state.input[i][0] = std::pow(k[i], m - 0.5 - q) * pk[i];
+                    state.input[i][1] = 0;
+                }
+                auto r = workspace.execute(k, ell + 0.5, q, 1, true, nullptr);
+                DVector xi(k.size());
+                for (size_t i = 0; i < xi.size(); ++i)
+                    xi[i] = std::pow(2 * M_PI * r[i], -1.5) * std::pow(r[i], -q) * state.output[k.size() - 1 - i][0];
+                return {std::move(r), std::move(xi)};
             }
 
             std::pair<DVector, DVector> ComputeXiLM(int ell, int m, const DVector & k, const DVector & pk, double q) {
-                assert(k.size() == pk.size());
-
-                // Set the integrand (biased with k^-q, undone on the output with r^-q)
-                CVector a(k.size());
-                for (size_t i = 0; i < k.size(); i++) {
-                    a[i] = std::pow(k[i], m - 0.5 - q) * pk[i];
-                }
-
-                // Transform
-                auto result = DiscreteHankelTransform(k, a, ell + 0.5, q, 1, true, nullptr);
-                auto & r = result.first;
-                auto & b = result.second;
-
-                // Set output and normalize
-                DVector xi(k.size());
-                for (size_t i = 0; i < xi.size(); i++) {
-                    xi[i] = std::pow(2 * M_PI * r[i], -1.5) * std::pow(r[i], -q) * b[i].real();
-                }
-
-                return {r, xi};
+                Workspace workspace;
+                return ComputeXiLM(ell, m, k, pk, workspace, q);
             }
 
+            std::pair<DVector, DVector> ComputeCorrelationFunction(const DVector & k, const DVector & pk,
+                                                                  Workspace & workspace) {
+                return ComputeXiLM(0, 2, k, pk, workspace);
+            }
             std::pair<DVector, DVector> ComputeCorrelationFunction(const DVector & k, const DVector & pk) {
-                return ComputeXiLM(0, 2, k, pk);
+                Workspace workspace;
+                return ComputeCorrelationFunction(k, pk, workspace);
             }
 
-            std::pair<DVector, DVector> ComputePowerSpectrum(const DVector & r, const DVector & xi) {
-                auto result = ComputeXiLM(0, 2, r, xi);
-
-                // Normalize. There is a factor (2pi)^3 difference relative to xi(r)
-                for (auto & pk : result.second) {
-                    pk *= 8 * M_PI * M_PI * M_PI;
-                }
-
+            std::pair<DVector, DVector> ComputePowerSpectrum(const DVector & r, const DVector & xi,
+                                                            Workspace & workspace) {
+                auto result = ComputeXiLM(0, 2, r, xi, workspace);
+                for (auto & pk : result.second) pk *= 8 * M_PI * M_PI * M_PI;
                 return result;
+            }
+            std::pair<DVector, DVector> ComputePowerSpectrum(const DVector & r, const DVector & xi) {
+                Workspace workspace;
+                return ComputePowerSpectrum(r, xi, workspace);
             }
         } // namespace FFTLog
     } // namespace SOLVERS

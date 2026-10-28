@@ -6,6 +6,7 @@
 #include <complex>
 #include <cstring>
 #include <fftw3.h>
+#include <memory>
 #include <vector>
 
 namespace FML {
@@ -33,6 +34,53 @@ namespace FML {
             using CDouble = std::complex<double>;
             using CVector = std::vector<CDouble>;
             using DVector = std::vector<double>;
+
+            /// Reusable aligned FFT buffers, plans and one cached coefficient set.
+            /// Prepare/destroy serially; use a separate workspace per concurrent caller.
+            class Workspace {
+              public:
+                struct Statistics {
+                    size_t plan_builds = 0;
+                    size_t coefficient_builds = 0;
+                };
+                explicit Workspace(unsigned planner_flags = FFTW_ESTIMATE);
+                ~Workspace();
+                Workspace(Workspace &&) noexcept;
+                Workspace & operator=(Workspace &&) noexcept;
+                Workspace(const Workspace &) = delete;
+                Workspace & operator=(const Workspace &) = delete;
+
+                void prepare(size_t n);
+                void clear() noexcept;
+                size_t size() const noexcept;
+                size_t buffer_bytes() const noexcept;
+                Statistics statistics() const noexcept;
+
+              private:
+                struct Impl;
+                std::unique_ptr<Impl> impl;
+                unsigned planner_flags;
+                DVector execute(const DVector &, double, double, double, bool, const CVector *);
+                friend std::pair<DVector, CVector> DiscreteHankelTransform(
+                    const DVector &, const CVector &, Workspace &, double, double, double, bool, CVector *);
+                friend std::pair<DVector, DVector> ComputeXiLM(
+                    int, int, const DVector &, const DVector &, Workspace &, double);
+            };
+
+            std::pair<DVector, DVector>
+            ComputeCorrelationFunction(const DVector & k, const DVector & pk, Workspace & workspace);
+            std::pair<DVector, DVector>
+            ComputePowerSpectrum(const DVector & r, const DVector & xi, Workspace & workspace);
+            std::pair<DVector, DVector>
+            ComputeXiLM(int ell, int m, const DVector & k, const DVector & pk, Workspace & workspace, double q = 0.0);
+            std::pair<DVector, CVector> DiscreteHankelTransform(const DVector & r,
+                                                             const CVector & a,
+                                                             Workspace & workspace,
+                                                             double mu,
+                                                             double q = 0,
+                                                             double kcrc = 1,
+                                                             bool noring = true,
+                                                             CVector * u = nullptr);
 
             //==========================================================================
             /// @brief Compute the correlation function xi(r) from a power spectrum P(k), sampled
@@ -65,8 +113,8 @@ namespace FML {
             /// @brief Compute the discrete Hankel transform of the function a(r). See the FFTLog
             /// documentation for a description of exactly what this function computes.
             /// If u is NULL, the transform coefficients will be computed and discarded
-            /// afterwards. If you plan on performing many consecutive transforms, it is
-            /// more efficient to pre-compute the u coefficients.
+            /// afterwards. For repeated transforms, the Workspace overload reuses plans,
+            /// aligned buffers and coefficients. Supplied u bypasses the noring adjustment.
             //==========================================================================
             std::pair<DVector, CVector> DiscreteHankelTransform(const DVector & r,
                                                                 const CVector & a,
