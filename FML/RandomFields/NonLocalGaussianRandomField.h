@@ -61,14 +61,16 @@ namespace FML {
             ///
             //======================================================================
             template <int N>
-            void generate_nonlocal_gaussian_random_field_fourier(FFTWGrid<N> & phi_fourier,
-                                                                 RandomGenerator * rng,
-                                                                 std::function<double(double)> Pofk_of_kBox_over_volume,
-                                                                 bool fix_amplitude,
-                                                                 double fNL,
-                                                                 std::string type_of_fnl,
-                                                                 double u = 0.0,
-                                                                 std::vector<double> kernel_values = {}) {
+            void
+            generate_nonlocal_gaussian_random_field_fourier(FFTWGrid<N> & phi_fourier,
+                                                            RandomGenerator * rng,
+                                                            std::function<double(double)> Pofk_of_kBox_over_volume,
+                                                            bool fix_amplitude,
+                                                            double fNL,
+                                                            std::string type_of_fnl,
+                                                            double u = 0.0,
+                                                            std::vector<double> kernel_values = {},
+                                                            const GAUSSIAN::RandomFieldOptions & random_options = {}) {
 
                 // Ensure that <phi> = 0 in the end (this costs 2 extra FT)
                 // This is not really needed as all terms apart from phi^2 mean to zero
@@ -122,7 +124,8 @@ namespace FML {
                 FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier(phi_fourier,
                                                                               rng,
                                                                               white_noise,
-                                                                              fix_amplitude);
+                                                                              fix_amplitude,
+                                                                              random_options);
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -399,7 +402,8 @@ namespace FML {
                 double fNL,
                 std::string type_of_fnl,
                 double u = 0.0,
-                std::vector<double> kernel_values = {}) {
+                std::vector<double> kernel_values = {},
+                const GAUSSIAN::RandomFieldOptions & random_options = {}) {
 
                 // Generate a gaussian random field delta using a primordial power-spectrum
                 FFTWGrid<N> & phi_fourier = delta_fourier;
@@ -410,7 +414,8 @@ namespace FML {
                                                                 fNL,
                                                                 type_of_fnl,
                                                                 u,
-                                                                kernel_values);
+                                                                kernel_values,
+                                                                random_options);
 
                 const auto Local_nx = phi_fourier.get_local_nx();
                 const auto Local_x_start = phi_fourier.get_local_x_start();

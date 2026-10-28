@@ -34,6 +34,7 @@ namespace COLASOLVER {
     enum class ICRandomFieldType { Gaussian, NonGaussian, ReadParticles, ReadPhases };
     enum class ICInputType { PowerSpectrum, TransferFunction, TransferInfoFile };
     enum class RandomGeneratorType { GSL, MT19937 };
+    enum class RandomFieldBackend { NGenIC, Philox };
     enum class TimestepMethod { Quinn, Tassev, FastPM, BullFrog };
     enum class ScaleFactorSpacing { Linear, Logarithmic, Powerlaw, GrowthFactor };
     enum class ParticleFileFormat { GADGET, HDF5 };
@@ -161,8 +162,9 @@ namespace COLASOLVER {
         int nmesh;                              // The Nmesh used to generate the IC (use particle_Npart_1D)
         std::string lattice_offset{"fiducial"}; // Offset of the particle lattice from the force grid nodes
         int random_seed;                        // The random seed
-        RandomGeneratorType random_generator;   // The generator: GSL or MT19937
-        int LPT_order;                          // The LPT order to use to make IC (1,2,3)
+        RandomFieldBackend random_field_backend{RandomFieldBackend::NGenIC};
+        RandomGeneratorType random_generator; // The generator: GSL or MT19937
+        int LPT_order;                        // The LPT order to use to make IC (1,2,3)
 
         // Input file (power-spectrum / transfer functions)
         ICInputType type_of_input;            // powerspectrum, transferfunction, transferinfofile
@@ -387,6 +389,9 @@ namespace COLASOLVER {
             r.get_choice("ic_random_generator",
                          ic.random_generator,
                          {{"GSL", RandomGeneratorType::GSL}, {"MT19937", RandomGeneratorType::MT19937}});
+            r.get_choice("ic_random_field_backend",
+                         ic.random_field_backend,
+                         {{"ngenic", RandomFieldBackend::NGenIC}, {"philox", RandomFieldBackend::Philox}});
             r.get("ic_LPT_order", ic.LPT_order);
             r.get("ic_fix_amplitude", ic.fix_amplitude);
             r.get("ic_reverse_phases", ic.reverse_phases);

@@ -5,6 +5,19 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Polyspectrum workspaces and selectable Fourier random fields
+
+- Optional shell-count and per-rank byte limits bound the polyspectrum shell cache. A deterministic LRU
+  schedule pins each configuration's shells and rebuilds evicted grids when needed; full caching remains
+  available. Statistics expose resident grids, shell builds and reduction batches.
+- Canonical configuration integrals and shell metadata use batched MPI reductions. Selected configurations
+  avoid unrequested FFTs/integrals and unnecessary high-frequency padding, while preserving dense accessors.
+- New mode-keyed Philox4x32-10 Gaussian sampling avoids line-seed collisions and is independent of MPI slab
+  decomposition and OpenMP thread count. It supports fixed amplitudes, streams, and the non-Gaussian helpers.
+- COLASolver's `ic_random_field_backend` selects `ngenic` or `philox`. **`ngenic` remains the default**, preserving
+  the existing line seeding (including repeated seeds), GSL/MT19937 paths and initial conditions. The selector
+  stays optional in strict parameter files. See `RandomFields/README.md` for reproducibility conventions.
+
 ### COLASolver: clear errors for unsupported or inconsistent settings
 These used to crash late, hang or be silently ignored. Now they stop with a message, mostly when the parameters
 are read.

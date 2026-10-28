@@ -67,6 +67,11 @@ namespace COLASOLVER {
                                         std::shared_ptr<GravityModel<NDIM>> grav_ic,
                                         RandomGenerator * rng) {
 
+        FML::RANDOM::GAUSSIAN::RandomFieldOptions random_options;
+        random_options.backend = ic.random_field_backend == RandomFieldBackend::Philox ?
+                                     FML::RANDOM::GAUSSIAN::RandomFieldBackend::Philox :
+                                     FML::RANDOM::GAUSSIAN::RandomFieldBackend::NGenIC;
+        random_options.seed = static_cast<uint32_t>(ic.random_seed);
         if (ic.random_field_type == ICRandomFieldType::Gaussian) {
 
             auto Pofk_of_kBox_over_volume = [&](double kBox) {
@@ -75,7 +80,8 @@ namespace COLASOLVER {
             FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier<NDIM>(delta_ini_fourier,
                                                                                 rng,
                                                                                 Pofk_of_kBox_over_volume,
-                                                                                ic.fix_amplitude);
+                                                                                ic.fix_amplitude,
+                                                                                random_options);
 
         } else if (ic.random_field_type == ICRandomFieldType::NonGaussian) {
 
@@ -101,7 +107,10 @@ namespace COLASOLVER {
                 Pofk_of_kBox_over_volume_primordial,
                 ic.fix_amplitude,
                 ic.fnl,
-                ic.fnl_type);
+                ic.fnl_type,
+                0.0,
+                {},
+                random_options);
         }
     }
 

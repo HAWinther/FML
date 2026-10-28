@@ -14,6 +14,7 @@
 
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/RandomGenerator/RandomGenerator.h>
+#include <FML/RandomFields/CounterBasedRandomField.h>
 
 namespace FML {
     namespace RANDOM {
@@ -31,6 +32,14 @@ namespace FML {
         //=================================================================================
 
         namespace GAUSSIAN {
+            enum class RandomFieldBackend { NGenIC, Philox };
+            struct RandomFieldOptions {
+                RandomFieldBackend backend{RandomFieldBackend::NGenIC};
+                /// Seed and stream apply only to Philox; NGenIC uses the supplied stateful RNG.
+                uint64_t seed{1234};
+                uint32_t stream{0};
+            };
+
 
             template <int N>
             using FFTWGrid = FML::GRID::FFTWGrid<N>;
@@ -457,6 +466,32 @@ namespace FML {
                 }
             }
 
+            /// Select the mode-keyed backend explicitly. The four-argument API and
+            /// the NGenIC path above are unchanged, including generator state updates.
+            template <int N>
+            void generate_gaussian_random_field_fourier(FFTWGrid<N> & grid,
+                                                        RandomGenerator * rng,
+                                                        std::function<double(double)> power,
+                                                        bool fixed,
+                                                        const RandomFieldOptions & options) {
+                if (options.backend == RandomFieldBackend::NGenIC) {
+                    generate_gaussian_random_field_fourier<N>(grid, rng, power, fixed);
+                } else {
+                    if constexpr (N >= 2 && N <= 3)
+                        COUNTER_BASED::generate_fourier(grid, options.seed, options.stream, power, fixed);
+                    else
+                        assert_mpi(false, "[Philox random field] Two or three dimensions are supported");
+                }
+            }
+            template <int N>
+            void generate_gaussian_random_field_real(FFTWGrid<N> & grid,
+                                                     RandomGenerator * rng,
+                                                     std::function<double(double)> power,
+                                                     bool fixed,
+                                                     const RandomFieldOptions & options) {
+                generate_gaussian_random_field_fourier<N>(grid, rng, power, fixed, options);
+                grid.fftw_c2r();
+            }
         } // namespace GAUSSIAN
     } // namespace RANDOM
 } // namespace FML

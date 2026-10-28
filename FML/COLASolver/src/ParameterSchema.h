@@ -475,6 +475,11 @@ namespace COLASOLVER {
                        "MT19937",
                        "The random number generator (GSL is gsl_rng_ranlxd1 as used in 2LPTic, for comparisons)",
                        {"GSL", "MT19937"});
+            b.always_optional("ic_random_field_backend",
+                              "ngenic",
+                              "Fourier mode sampling: ngenic preserves legacy line seeds and IC; philox uses "
+                              "independent mode counters",
+                              {"ngenic", "philox"});
             b.required("ic_nmesh", 0, "The grid size used to generate the IC");
             b.always_optional(
                 "ic_lattice_offset",

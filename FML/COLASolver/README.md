@@ -563,3 +563,11 @@ Many people have helped improve the code, here is a list of a few:
 * Herman Slettmoen
 
 * Renate Mauland-Hus
+
+### Fourier random-field backend
+
+`ic_random_field_backend = "ngenic"` retains the existing N-GenIC/2LPTic-compatible
+line seeding (including repeated seeds) and remains the default. Set it to
+`"philox"` for the mode-keyed, MPI/thread-independent alternative. The existing
+`ic_random_generator` choice (`GSL`/`MT19937`) applies to the legacy backend.
+See [RandomFields](../RandomFields/README.md) for reproducibility conventions.
