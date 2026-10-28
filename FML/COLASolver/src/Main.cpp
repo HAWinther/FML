@@ -25,15 +25,28 @@
 using ParameterMap = FML::UTILS::ParameterMap;
 constexpr int NDIM = NDIM_SPACE;
 
-/// Run the simulation with the particle type T
+int run(int argc, char ** argv);
 
 int main(int argc, char ** argv) {
+    // Errors (invalid parameters, files that cannot be read, ...) are exceptions: print the message and stop all
+    // tasks (an uncaught exception printed a backtrace, and could leave the other tasks waiting)
+    try {
+        return run(argc, argv);
+    } catch (std::exception & e) {
+        std::cout << std::flush;
+        std::cerr << "ERROR (task " << FML::ThisTask << "): " << e.what() << std::endl;
+        FML::abort_mpi(1);
+    }
+    return 1;
+}
+
+int run(int argc, char ** argv) {
     if (argc == 1) {
         if (FML::ThisTask == 0) {
             std::cout << "Missing parameterfile. Run as: ./nbody parameterfile.lua\n";
             std::cout << "To see all the parameters run: ./nbody --parameters\n";
         }
-        return 0;
+        return 1;
     }
     if (std::strcmp(argv[1], "--features") == 0) {
         // The optional features this executable was compiled with (used by the tests)
@@ -54,12 +67,23 @@ int main(int argc, char ** argv) {
             if (argc > 2) {
                 std::ofstream file(argv[2]);
                 COLASOLVER::print_parameter_reference<NDIM>(file);
+                file.close();
+                if (not file) {
+                    std::cerr << "ERROR: could not write the parameter reference to " << argv[2] << "\n";
+                    return 1;
+                }
                 std::cout << "Wrote the parameter reference to " << argv[2] << "\n";
             } else {
                 COLASOLVER::print_parameter_reference<NDIM>(std::cout);
             }
         }
         return 0;
+    }
+    if (std::strncmp(argv[1], "--", 2) == 0) {
+        if (FML::ThisTask == 0)
+            std::cerr << "Unknown option " << argv[1] << ". Run as: ./nbody parameterfile.lua, ./nbody --parameters "
+                      << "[file] or ./nbody --features\n";
+        return 1;
     }
 
     //=============================================================
@@ -113,4 +137,5 @@ int main(int argc, char ** argv) {
         run_simulation<ParticleBasicQ<NDIM>>(param, cosmo, grav);
     else
         run_simulation<ParticleBasic<NDIM>>(param, cosmo, grav);
+    return 0;
 }

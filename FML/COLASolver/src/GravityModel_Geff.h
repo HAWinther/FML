@@ -12,6 +12,8 @@
 #include "Cosmology.h"
 #include "GravityModel.h"
 #include <iostream>
+#include <sstream>
+#include <string>
 
 using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
@@ -69,15 +71,21 @@ class GravityModelGeff : public GravityModel<NDIM> {
         std::ifstream fp(geffofa_filename.c_str());
         FML::assert_mpi(fp.good(), "GeffG file count not be opened\n");
         std::vector<double> aarr, geffarr;
-        while (true) {
+        // Rows "a GeffG"; empty lines and lines starting with # are skipped (a header line used to make the
+        // reader loop forever: >> failed without reaching eof)
+        std::string line;
+        while (std::getline(fp, line)) {
+            const auto first = line.find_first_not_of(" \t\r");
+            if (first == std::string::npos or line[first] == '#')
+                continue;
+            std::istringstream is(line);
             double newa, newgeff;
-            fp >> newa;
-            if (fp.eof())
-                break;
-            fp >> newgeff;
+            FML::assert_mpi(static_cast<bool>(is >> newa >> newgeff),
+                            ("GeffG file: could not read the row [" + line + "] (expected 'a GeffG')").c_str());
             aarr.push_back(newa);
             geffarr.push_back(newgeff);
         }
+        FML::assert_mpi(aarr.size() >= 2, "GeffG file: needs at least 2 rows");
         geffofa_spline.create(aarr, geffarr, "Geff/G(a)");
 
         GravityModel<NDIM>::init();

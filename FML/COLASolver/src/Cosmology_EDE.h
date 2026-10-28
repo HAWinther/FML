@@ -41,8 +41,10 @@ class CosmologyEDE final : public CosmologyScalarField {
             throw std::runtime_error("EDE: need 10 < cosmology_ede_zc < 1e7");
         if (not(theta_ini > 0.0 and theta_ini < M_PI))
             throw std::runtime_error("EDE: need 0 < cosmology_ede_theta_ini < pi");
-        if (not(n >= 1.0))
-            throw std::runtime_error("EDE: need cosmology_ede_n >= 1");
+        // n = 1: the field oscillating around the minimum has w = 0 and its energy fraction keeps growing in the
+        // radiation era, so there is no peak at zc and the shooting fails in the ODE solver
+        if (not(n > 1.0))
+            throw std::runtime_error("EDE: need cosmology_ede_n > 1");
     }
 
     void init() override {

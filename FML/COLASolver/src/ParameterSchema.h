@@ -183,7 +183,7 @@ namespace COLASOLVER {
                            "Do not compute the PM force, just let particles follow the LPT trajectories");
                 b.optional("simulation_cola_LPT_order",
                            2,
-                           "The LPT order of COLA (1, 2 or 3). Has to be <= ic_LPT_order. If < 1 COLA is turned off");
+                           "The LPT order of COLA (1 or 2). Has to be <= ic_LPT_order. If < 1 COLA is turned off");
             });
 
             b.section("Cosmology");
@@ -451,7 +451,7 @@ namespace COLASOLVER {
                        std::vector<int>{0},
                        "Number of steps between the outputs (one per output redshift). If only one number it is the "
                        "total number of steps");
-            b.optional("timestep_algorithm", "KDK", "The time-stepping algorithm");
+            b.optional("timestep_algorithm", "KDK", "The time-stepping algorithm (only KDK is implemented)", {"KDK"});
             b.optional("timestep_method",
                        "Quinn",
                        "The time-stepping method. Quinn: standard leapfrog. Tassev: modified leapfrog for COLA. "
@@ -504,8 +504,10 @@ namespace COLASOLVER {
                        {"gaussian", "nongaussian", "read_particles", "read_phases"});
             b.optional("ic_LPT_order", 2, "The LPT order used to make the IC");
             b.optional("ic_sigma8_normalization", false, "Normalize P(k) to a given sigma8 (otherwise use the input)");
-            b.optional("ic_sigma8_redshift", 0.0, "The redshift of the sigma8 value");
-            b.optional("ic_sigma8", 0.8, "The sigma8 value to normalize to");
+            if_true("ic_sigma8_normalization", [&]() {
+                b.optional("ic_sigma8_redshift", 0.0, "The redshift of the sigma8 value");
+                b.optional("ic_sigma8", 0.8, "The sigma8 value to normalize to");
+            });
             b.optional("ic_use_gravity_model_GR",
                        false,
                        "For modified gravity: the input P(k) is for LCDM, use GR growth factors to scale it to the "
@@ -753,10 +755,14 @@ namespace COLASOLVER {
                               "Write P(k) of the density field used for the force at every step (cheap; same grid "
                               "and assignment as the force, the window is deconvolved): pofk_<name>_cb_z<z>.txt in "
                               "output_folder");
+            b.when([](const ParameterMap & p) { return p.get<bool>("pofk") or p.get<bool>("pofk_every_step"); },
+                   "pofk = true or pofk_every_step = true",
+                   [&]() {
+                       b.optional("pofk_subtract_shotnoise", false, "Subtract shot-noise (pofk and pofk_every_step)");
+                   });
             if_true("pofk", [&]() {
                 b.required("pofk_nmesh", 0, "Grid size");
                 b.optional("pofk_interlacing", false, "Use interlaced grids to reduce aliasing");
-                b.optional("pofk_subtract_shotnoise", false, "Subtract shot-noise");
                 b.optional("pofk_density_assignment_method", "CIC", "Density assignment method", assignment_methods);
             });
 

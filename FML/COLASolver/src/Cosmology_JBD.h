@@ -4,10 +4,10 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/LPT/DisplacementFields.h>
+#include <FML/Math/Math.h>
 #include <FML/ODESolver/ODESolver.h>
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
-#include <FML/Math/Math.h>
 
 #include "Cosmology.h"
 
@@ -83,6 +83,16 @@ class CosmologyJBD final : public Cosmology {
     // that gives desired Geff/G today and satisfies closure condition E0 == 1
     //========================================================================
     void init() override {
+        // The progress output below sets std::fixed and the precision: restore the format of std::cout on every
+        // return (it used to print all later small numbers as 0.00000000, e.g. As)
+        struct RestoreCoutFormat {
+            std::ios_base::fmtflags flags{std::cout.flags()};
+            std::streamsize precision{std::cout.precision()};
+            ~RestoreCoutFormat() {
+                std::cout.flags(flags);
+                std::cout.precision(precision);
+            }
+        } restore_cout_format;
 
         // Parent class initialization (makes splines for neutrinos etc.)
         Cosmology::init();
@@ -132,9 +142,8 @@ class CosmologyJBD final : public Cosmology {
                         "JBD::init Not a valid value for wBD. If you want to try other values remove this test");
 
         if (FML::ThisTask == 0) {
-            std::cout << "JBD::init Trying to find phi_ini and OmegaLambda that gives "
-                      << "phi_today = " << std::fixed << std::setprecision(8) << phi_today << ", "
-                      << "E_today = " << 1.0 << ":\n";
+            std::cout << "JBD::init Trying to find phi_ini and OmegaLambda that gives " << "phi_today = " << std::fixed
+                      << std::setprecision(8) << phi_today << ", " << "E_today = " << 1.0 << ":\n";
         }
 
         // Shoot-match to figure out correct phi_ini and OmegaLambda
@@ -272,7 +281,6 @@ class CosmologyJBD final : public Cosmology {
                           E_func(loga, logphi, dlogphi_dloga);
             return GSL_SUCCESS;
         };
-
 
         // Integrate scalar field phi
         // Fiducial choice is to assume dlogphi_dloga == 0 at early times in radiation era

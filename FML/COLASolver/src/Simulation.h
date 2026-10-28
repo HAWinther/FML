@@ -27,9 +27,9 @@
 #include "GravityModel_GR.h"
 #include "InitialConditions.h"
 #include "InitialPowerSpectrum.h"
+#include "KickDrift.h"
 #include "Lightcone/Lightcone.h"
 #include "NBodyGauge.h"
-#include "KickDrift.h"
 #include "NeutrinoParticles.h"
 #include "Particles.h"
 #include "SimulationParameters.h"
@@ -1043,8 +1043,15 @@ void NBodySimulation<NDIM, T>::run() {
 
     // If we only give the total number of steps then compute how many steps between outputs
     std::vector<int> nsteps = params.timestep.nsteps;
-    if (nsteps.size() == 1)
+    if (nsteps.size() == 1) {
         nsteps = stepper.steps_between_outputs(zini, output_redshifts, nsteps[0]);
+        // An output with no steps would write the particles of the previous output at another redshift
+        for (size_t i = 0; i < nsteps.size(); i++)
+            if (not(nsteps[i] > 0 or (i == 0 and output_redshifts[0] == zini)))
+                throw std::runtime_error("Splitting timestep_nsteps over the outputs gives 0 steps before output z = " +
+                                         std::to_string(output_redshifts[i]) +
+                                         ": use more steps or give the number of steps for every output");
+    }
     stepper.print_steps(zini, output_redshifts, nsteps);
 
     if (FML::ThisTask == 0) {
@@ -1474,7 +1481,6 @@ void NBodySimulation<NDIM, T>::free() {
 
 // The density field the force is computed from (member functions of NBodySimulation)
 #include "SimulationDensity.h"
-
 
 /// Phi/c^2 in real space from the density contrast delta(k) of the step: Phi/c^2(k) = -1.5 Omega_M (H0/c)^2 delta(k)
 /// / (a k^2) (the GR Poisson equation, k in h/Mpc), with the same window deconvolution as the force. Stored in

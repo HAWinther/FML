@@ -19,7 +19,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `simulation_use_cola` | bool | `false` | always | Use the COLA method |
 | `simulation_use_scaledependent_cola` | bool | `true` | always | If the gravity model has scale-dependent growth: use scale-dependent COLA. If false we use the k = 0 limit of the growth factors when doing COLA |
 | `simulation_enforce_LPT_trajectories` | bool | `false` | simulation_use_cola = true | Do not compute the PM force, just let particles follow the LPT trajectories |
-| `simulation_cola_LPT_order` | int | `2` | simulation_use_cola = true | The LPT order of COLA (1, 2 or 3). Has to be <= ic_LPT_order. If < 1 COLA is turned off |
+| `simulation_cola_LPT_order` | int | `2` | simulation_use_cola = true | The LPT order of COLA (1 or 2). Has to be <= ic_LPT_order. If < 1 COLA is turned off |
 
 ## Cosmology
 
@@ -112,7 +112,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | Parameter | Type | Default | Used when | Description |
 |---|---|---|---|---|
 | `timestep_nsteps` | int list | *required* | always | Number of steps between the outputs (one per output redshift). If only one number it is the total number of steps |
-| `timestep_algorithm` | string | `"KDK"` | always | The time-stepping algorithm |
+| `timestep_algorithm` | string | `"KDK"` | always | The time-stepping algorithm (only KDK is implemented). Options: `KDK` |
 | `timestep_method` | string | `"Quinn"` | always | The time-stepping method. Quinn: standard leapfrog. Tassev: modified leapfrog for COLA. FastPM: leapfrog that follows linear growth exactly (Feng et al. 2016). BullFrog: follows 2LPT growth after every step (Rampf, List & Hahn 2024), not for COLA. Options: `Quinn`, `Tassev`, `FastPM`, `BullFrog` |
 | `timestep_cola_nLPT` | double | `-2.5` | always | The nLPT parameter of the Tassev time-stepping |
 | `timestep_scalefactor_spacing` | string | `"linear"` | always | Spacing of the steps in the scale factor (powerlaw: uniform in a^timestep_spacing_power, growthfactor: uniform in the linear growth factor D(a), as in Rampf, List & Hahn 2024). Options: `linear`, `logarithmic`, `powerlaw`, `growthfactor` |
@@ -136,8 +136,8 @@ Parameters marked *optional* take the default value if they are not in the param
 | `ic_random_field_type` | string | `"gaussian"` | always | Type of IC: gaussian, nongaussian, read_particles (read a GADGET file and use that, reconstructing the LPT fields if COLA) or read_phases (take the phases from a GADGET file). Options: `gaussian`, `nongaussian`, `read_particles`, `read_phases` |
 | `ic_LPT_order` | int | `2` | always | The LPT order used to make the IC |
 | `ic_sigma8_normalization` | bool | `false` | always | Normalize P(k) to a given sigma8 (otherwise use the input) |
-| `ic_sigma8_redshift` | double | `0` | always | The redshift of the sigma8 value |
-| `ic_sigma8` | double | `0.8` | always | The sigma8 value to normalize to |
+| `ic_sigma8_redshift` | double | `0` | ic_sigma8_normalization = true | The redshift of the sigma8 value |
+| `ic_sigma8` | double | `0.8` | ic_sigma8_normalization = true | The sigma8 value to normalize to |
 | `ic_use_gravity_model_GR` | bool | `false` | always | For modified gravity: the input P(k) is for LCDM, use GR growth factors to scale it to the initial redshift (same IC as the LCDM simulation) |
 | `ic_fnl_type` | string | *required* | ic_random_field_type = nongaussian | Type of non-gaussianity. Options: `local`, `equilateral`, `orthogonal` |
 | `ic_fnl` | double | *required* | ic_random_field_type = nongaussian | The value of fNL |
@@ -259,9 +259,9 @@ Parameters marked *optional* take the default value if they are not in the param
 |---|---|---|---|---|
 | `pofk` | bool | `false` | always | Compute the power-spectrum at every output |
 | `pofk_every_step` | bool | `true` | always | Write P(k) of the density field used for the force at every step (cheap; same grid and assignment as the force, the window is deconvolved): pofk_<name>_cb_z<z>.txt in output_folder |
+| `pofk_subtract_shotnoise` | bool | `false` | pofk = true or pofk_every_step = true | Subtract shot-noise (pofk and pofk_every_step) |
 | `pofk_nmesh` | int | *required* | pofk = true | Grid size |
 | `pofk_interlacing` | bool | `false` | pofk = true | Use interlaced grids to reduce aliasing |
-| `pofk_subtract_shotnoise` | bool | `false` | pofk = true | Subtract shot-noise |
 | `pofk_density_assignment_method` | string | `"CIC"` | pofk = true | Density assignment method. Options: `NGP`, `CIC`, `TSC`, `PCS`, `PQS` |
 
 ## Power-spectrum multipoles

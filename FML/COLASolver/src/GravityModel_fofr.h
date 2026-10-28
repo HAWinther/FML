@@ -18,7 +18,6 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
     double fofr0{0.0};
     double nfofr{1.0};
 
-
     std::string multigrid_method{"sqrt"}; // The field the multigrid solver solves for (sqrt or log)
 
   public:
@@ -131,6 +130,8 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
         GravityModelScreened<NDIM>::read_parameters(param);
         fofr0 = param.get<double>("gravity_model_fofr_fofr0");
         nfofr = param.get<double>("gravity_model_fofr_nfofr");
+        // |f_R0| (a negative value gives m^2 < 0 and a singular Geff)
+        FML::assert_mpi(fofr0 > 0.0, "gravity_model_fofr_fofr0 must be > 0 (it is |f_R0|, e.g. 1e-5)");
         this->read_screening_parameters(param);
         this->read_multigrid_parameters(param, "gravity_model_fofr_exact_solution");
         if (this->solve_exact_equation)

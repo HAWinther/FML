@@ -237,6 +237,10 @@ class CosmologyTabulated final : public Cosmology {
         double H0 = 1.0;
         if (format == "CLASS") {
             H0 = Hspline(0.0);
+        } else if (zmin_table > 0.0) {
+            // H(a = 1) would come from holding the dark energy constant beyond the table: not H0 in general
+            throw std::runtime_error("Tabulated cosmology: the H/H0 table in " + filename +
+                                     " must reach z = 0 (it starts at z = " + std::to_string(zmin_table) + ")");
         } else if (zmin_table <= 0.0 and zmax_table >= 0.0 and std::fabs(Hspline(0.0) - 1.0) > 1e-4) {
             throw std::runtime_error("Tabulated cosmology: H/H0 at z = 0 is " + std::to_string(Hspline(0.0)) + " in " +
                                      filename + " (should be 1)");

@@ -19,7 +19,6 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
     double beta{1.0};
     double L_mpch{1.0};
 
-
   public:
     template <int N>
     using FFTWGrid = FML::GRID::FFTWGrid<N>;
@@ -94,6 +93,9 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
         const double PhiCrit =
             a < assb ? 0.0 : 3.0 * OmegaM * (this->H0_hmpc * L_mpch) * (this->H0_hmpc * L_mpch) / (assb * assb * assb);
         auto screening_function_symmetron = [=, eff = this->screening_efficiency](double PhiNewton) {
+            // Before symmetry breaking there is no fifth force (and PhiCrit / PhiNewton could be 0 / 0)
+            if (PhiCrit == 0.0)
+                return 0.0;
             double screenfac = std::abs(PhiCrit / PhiNewton) * eff;
             return screenfac > 1.0 ? 1.0 : screenfac;
         };

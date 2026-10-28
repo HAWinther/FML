@@ -1,11 +1,11 @@
 #ifndef SIMULATIONPARAMETERS_HEADER
 #define SIMULATIONPARAMETERS_HEADER
 
+#include "BaryonificationParameters.h"
+#include "ParameterDefaults.h"
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/ParameterMap/ParameterMap.h>
-#include "BaryonificationParameters.h"
-#include "ParameterDefaults.h"
 
 #include <cmath>
 #include <functional>
@@ -361,7 +361,7 @@ namespace COLASOLVER {
             r.get_optional("force_interpolation_method", force.interpolation_method);
             if (force.interpolation_method == "fiducial")
                 force.interpolation_method = force.density_method == "nufft" ? "nufft" : "assignment";
-            if (force.interpolation_method == "nufft")
+            if (force.interpolation_method == "nufft" or force.early_method == "nufft")
                 r.get_optional("force_nufft_epsilon", force.nufft_epsilon);
 
             // Initial conditions
@@ -464,10 +464,11 @@ namespace COLASOLVER {
             // Power-spectrum
             r.get("pofk", pofk.enabled);
             r.get("pofk_every_step", pofk.every_step);
+            if (pofk.enabled or pofk.every_step)
+                r.get("pofk_subtract_shotnoise", pofk.subtract_shotnoise);
             if (pofk.enabled) {
                 r.get("pofk_nmesh", pofk.nmesh);
                 r.get("pofk_interlacing", pofk.interlacing);
-                r.get("pofk_subtract_shotnoise", pofk.subtract_shotnoise);
                 r.get("pofk_density_assignment_method", pofk.density_assignment_method);
             }
 
@@ -543,7 +544,14 @@ namespace COLASOLVER {
             if (simulation.use_cola and simulation.cola_LPT_order > ic.LPT_order)
                 fail("The highest COLA LPT order is ic_LPT_order (i.e. simulation_cola_LPT_order must be <= "
                      "ic_LPT_order)");
+            // The COLA particle types only store the 1LPT and 2LPT displacements
+            if (simulation.use_cola and simulation.cola_LPT_order > 2)
+                fail("simulation_cola_LPT_order = 3 is not implemented (the COLA particles store the 1LPT and 2LPT "
+                     "displacements only): use 1 or 2");
             if (simulation.use_cola and simulation.cola_LPT_order < 1) {
+                // Without COLA nothing would move the particles (no PM force and no LPT trajectories)
+                if (simulation.enforce_LPT_trajectories)
+                    fail("simulation_enforce_LPT_trajectories = true needs COLA (simulation_cola_LPT_order >= 1)");
                 simulation.use_cola = simulation.use_scaledependent_cola = false;
                 if (FML::ThisTask == 0)
                     std::cout << "NB: simulation_cola_LPT_order < 1 so turning off COLA\n";
@@ -671,6 +679,17 @@ namespace COLASOLVER {
             for (auto steps : n)
                 if (steps < 0)
                     fail("timestep_nsteps cannot be negative");
+            // An output with no steps would write the particles of the previous output (or the IC) at another z
+            if (n.size() == z.size())
+                for (size_t i = 0; i < n.size(); i++)
+                    if (n[i] == 0 and (i > 0 or z[0] != ic.initial_redshift))
+                        fail("timestep_nsteps: output " + std::to_string(i) + " (z = " + std::to_string(z[i]) +
+                             ") has 0 steps (only an output at ic_initial_redshift can have 0 steps)");
+            if (n.size() == 1 and n[0] == 0 and (z.size() > 1 or z[0] != ic.initial_redshift))
+                fail("timestep_nsteps = 0 but there are outputs after ic_initial_redshift");
+            // Tassev: (a_h^n - a_l^n) / n is 0/0 for n = 0
+            if (timestep.method == TimestepMethod::Tassev and timestep.cola_nLPT == 0.0)
+                fail("timestep_cola_nLPT cannot be 0 with timestep_method = Tassev");
             if (timestep.spacing == ScaleFactorSpacing::Powerlaw and timestep.spacing_power == 0.0)
                 fail("timestep_spacing_power cannot be 0 (use logarithmic spacing)");
 
@@ -692,7 +711,6 @@ namespace COLASOLVER {
             }
         }
     };
-
 
     inline std::vector<SpeciesRequirement> species_requirements() {
         using P = const SimulationParameters &;

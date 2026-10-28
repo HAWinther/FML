@@ -35,7 +35,7 @@ simulation_use_scaledependent_cola = false
 if simulation_use_cola then
   simulation_enforce_LPT_trajectories = false
 
-  -- The LPT order of COLA: 1 = 1LPT, 2 = 2LPT, 3 = 3LPT. Has to be <= ic_LPT_order
+  -- The LPT order of COLA: 1 = 1LPT, 2 = 2LPT. Has to be <= ic_LPT_order
   -- If < 1 then we turn off COLA
   simulation_cola_LPT_order = 2
 end

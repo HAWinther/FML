@@ -16,7 +16,6 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     // Take in parameters used to define m(a), beta(a)
     std::vector<double> mbeta_params;
 
-
     // Spline for phi(a)/Mpl needed for screening method
     FML::INTERPOLATION::SPLINE::Spline phi_over_Mpl_of_a_spline;
 
@@ -151,6 +150,8 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     void read_parameters(ParameterMap & param) override {
         GravityModelScreened<NDIM>::read_parameters(param);
         mbeta_params = param.get<std::vector<double>>("gravity_model_mbeta_params");
+        FML::assert_mpi(mbeta_params.size() == 4,
+                        "gravity_model_mbeta_params must have 4 numbers (beta0, beta power, m0, m power)");
         this->read_screening_parameters(param);
         this->scaledependent_growth = true;
     }

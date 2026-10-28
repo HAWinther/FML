@@ -30,7 +30,11 @@ class CosmologyDGP final : public Cosmology {
 
         // Set OmegaK from closure-condition
         double tmp = std::sqrt(OmegaRC) + std::sqrt(OmegaRC + OmegaCDM + Omegab + OmegaR + this->get_rhoNu_exact(1.0));
+        const double OmegaK_input = this->OmegaK;
         this->OmegaK = 1.0 - tmp * tmp;
+        if (FML::ThisTask == 0 and std::fabs(OmegaK_input - this->OmegaK) > 1e-6)
+            std::cout << "NB: DGP cosmology: cosmology_OmegaK = " << OmegaK_input << " is replaced by " << this->OmegaK
+                      << " from the closure condition (H(a=1) = H0)\n";
         this->OmegaLambda = 0.0;
     }
 
