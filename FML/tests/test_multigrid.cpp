@@ -23,6 +23,7 @@
 #include <cmath>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -77,7 +78,92 @@ void make_source(MPIMultiGrid<NDIM, double> & rho, int N, double amp) {
     rho.restrict_down_all();
 }
 
+// Termination tests use an intentionally unsolved constant operator and no sweeps,
+// making residuals/counts exact and independent of decomposition.
+void test_termination_status() {
+    Solver s(16, 1, false, true, 1, 1);
+    s.set_initial_guess(0.0);
+    s.set_ngs_sweeps(0, 0, 0);
+    check(s.get_solve_result().status == SolveStatus::NotStarted && !s.is_converged() && std::isnan(s.get_residual()),
+          "status before the first solve is NotStarted");
+    MultiGridFunction<NDIM, double> constant = [](Solver *, int, IndexInt) {
+        return std::pair<double, double>{1., 1.};
+    };
+    int calls = 0;
+    MultiGridConvCrit never = [&](double, double, int) {
+        ++calls;
+        return false;
+    };
+    s.set_maxsteps(2);
+    auto result = s.solve(constant, never);
+    check(result.status == SolveStatus::MaxIterations && !s.is_converged() && result.iterations == 2 &&
+              result.residual == 1. && result.initial_residual == 1. && calls == 3,
+          "exhaustion returns MaxIterations, exact V-cycle count and residuals");
+    s.is_converged();
+    s.get_solve_result();
+    check(calls == 3, "status queries do not invoke the convergence callback");
+    MultiGridConvCrit at_limit = [](double, double, int step) { return step >= 1; };
+    s.set_maxsteps(1);
+    result = s.solve(constant, at_limit);
+    check(result.converged() && s.is_converged() && result.iterations == 1,
+          "convergence at the iteration limit takes precedence and resets the previous failure");
+    s.set_maxsteps(0);
+    result = s.solve(constant, never);
+    check(result.status == SolveStatus::MaxIterations && result.iterations == 0,
+          "zero V-cycle budget stops after the initial fine-grid sweeps");
+    MultiGridFunction<NDIM, double> zero = [](Solver *, int, IndexInt) { return std::pair<double, double>{0., 1.}; };
+    result = s.solve(zero, s.ConvergenceCriterionResidual);
+    check(result.converged() && result.iterations == 0 && result.residual == 0.,
+          "initial convergence is reported before a zero iteration limit");
+    result = s.solve(zero, s.ConvergenceCriterionError);
+    check(result.converged() && result.iterations == 0, "relative criterion accepts an exactly zero initial residual");
+    for (double invalid : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
+        MultiGridFunction<NDIM, double> broken = [=](Solver *, int, IndexInt) {
+            return std::pair<double, double>{FML::ThisTask == 0 ? invalid : 1., 1.};
+        };
+        calls = 0;
+        MultiGridConvCrit permissive = [&](double, double, int) {
+            ++calls;
+            return true;
+        };
+        s.set_maxsteps(4);
+        result = s.solve(broken, permissive);
+        check(result.status == SolveStatus::NonFinite && !s.is_converged() && result.iterations == 0 &&
+                  !std::isfinite(result.residual) && calls == 0,
+              "one-rank nonfinite initial residual stops collectively before the callback");
+    }
+    MultiGridFunction<NDIM, double> late_failure = [](Solver *sol, int, IndexInt) {
+        return std::pair<double, double>{
+            FML::ThisTask == 0 && sol->get_number_of_vcycles() > 0 ? std::numeric_limits<double>::infinity() : 1., 1.};
+    };
+    s.set_maxsteps(1);
+    result = s.solve(late_failure, at_limit);
+    check(result.status == SolveStatus::NonFinite && result.iterations == 1 && result.initial_residual == 1.,
+          "nonfinite failure during a V-cycle takes precedence over callback and iteration limit");
+    s.set_maxsteps(2);
+    MultiGridConvCrit rank_dependent = [](double, double, int) { return FML::ThisTask != 0; };
+    result = s.solve(constant, rank_dependent);
+    check(result.status == SolveStatus::MaxIterations && result.iterations == 2,
+          "rank-dependent criteria stop only when every rank agrees");
+    s.set_maxsteps(FML::ThisTask == 0 ? 1 : 3);
+    result = s.solve(constant, rank_dependent);
+    check(result.status == SolveStatus::MaxIterations && result.iterations == 1,
+          "different rank budgets collectively honor the smallest V-cycle limit");
+    Solver coarse(16, 2, false, true, 1, 1);
+    coarse.set_initial_guess(0.0);
+    coarse.set_ngs_sweeps(0, 0, 0);
+    coarse.set_maxsteps(1);
+    MultiGridFunction<NDIM, double> coarse_failure = [](Solver *, int level, IndexInt) {
+        return std::pair<double, double>{
+            FML::ThisTask == 0 && level > 0 ? std::numeric_limits<double>::quiet_NaN() : 1., 1.};
+    };
+    result = coarse.solve(coarse_failure, never);
+    check(result.status == SolveStatus::NonFinite && result.iterations == 1 && result.residual == 1.,
+          "coarse-grid nonfinite residual remains a failure even if final fine-grid residual is finite");
+}
+
 int main() {
+    test_termination_status();
     const int N = 32;
 
     // 1. Derivatives
@@ -129,7 +215,10 @@ int main() {
             return std::pair<double, double>{sol->get_Laplacian(level, il) - rho.get_y(level, index),
                                              sol->get_derivLaplacian(level, il)};
         };
-        s.solve(eq, crit);
+        const auto result = s.solve(eq, crit);
+        check(result.converged() && result.iterations == 8 && result.residual == hist.back() &&
+                  result.initial_residual == hist.front(),
+              "Poisson solve returns its actual final residual and V-cycle count");
         const double factor = std::pow(hist.back() / hist[1], 1.0 / (hist.size() - 2));
         check(factor < 0.2, "Poisson: residual reduced by a factor " + num(factor) + " per V-cycle (2+2 sweeps)");
     }

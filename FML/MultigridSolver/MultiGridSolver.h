@@ -4,10 +4,12 @@
 #include <bitset>
 #include <cassert>
 #include <climits>
+#include <cmath>
 #include <complex>
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <vector>
 
 #include <FML/Global/Global.h>
@@ -33,6 +35,17 @@ namespace FML {
             template <int NDIM, class T>
             using MultiGridFunction = std::function<std::pair<T, T>(MultiGridSolver<NDIM, T> *, int, IndexInt)>;
             using MultiGridConvCrit = std::function<bool(double, double, int)>;
+
+            /// Outcome of the last completed solve. Convergence takes precedence over the iteration limit.
+            enum class SolveStatus { NotStarted, Converged, MaxIterations, NonFinite };
+            struct SolveResult {
+                SolveStatus status = SolveStatus::NotStarted;
+                double residual = std::numeric_limits<double>::quiet_NaN();
+                double initial_residual = std::numeric_limits<double>::quiet_NaN();
+                int iterations = 0; // Completed V-cycles; excludes initial fine-grid sweeps.
+                bool converged() const { return status == SolveStatus::Converged; }
+            };
+
             /// Optional pointwise solver for the Gauss-Seidel sweeps: given (solver, level, index, source) it returns
             /// the new value of the field in the cell, the (approximate) solution of L(f) = source there with the
             /// neighbors held fixed. If set it replaces the Newton update f -> f - (L - source) / (dL/df). Useful when
@@ -131,6 +144,7 @@ namespace FML {
                 int _ngs_first_step =
                     10;               // Number of NGS sweeps the very first time (in case the guess is not very good)
                 int _maxsteps = 1000; // Maximum number of V-cycles
+                int _solve_maxsteps = 1000; // Collective minimum budget for the current solve.
                 // On the coarsest level we sweep until the residual is reduced by this factor (or we have done
                 // _max_coarsest_sweep_factor * _ngs_coarse sweeps). With MPI the coarsest level has one slice per
                 // task (N = NTasks) so with many tasks it is far from solved by _ngs_coarse sweeps alone
@@ -149,9 +163,11 @@ namespace FML {
                 std::vector<T> _mean_L; // The mean of L - source on each level (when _subtract_mean_residual)
 
                 // Residual information
-                double _rms_res;     // The residual on domain grid
-                double _rms_res_i;   // The initial residual
-                double _rms_res_old; // The residual at the old step
+                double _rms_res = std::numeric_limits<double>::quiet_NaN();
+                double _rms_res_i = std::numeric_limits<double>::quiet_NaN();
+                double _rms_res_old = std::numeric_limits<double>::quiet_NaN();
+                SolveResult _last_result{};
+                bool _nonfinite_residual = false; // Sticky over all levels of the current solve.
 
                 // Book-keeping variables
                 int _istep_vcycle = 0; // The number of V-cycles we are currently at
@@ -166,6 +182,7 @@ namespace FML {
                 void recursive_go_down(int from_level);
                 void make_new_source(int level);
                 void run_solver();
+                bool check_termination();
 
                 // The functions defining the equations to be solved
                 MultiGridFunction<NDIM, T> _Equation;
@@ -208,6 +225,7 @@ namespace FML {
                 int get_number_of_vcycles() const { return _istep_vcycle; }
                 // The rms residual on the main grid after the last solve
                 double get_residual() const { return _rms_res; }
+                SolveResult get_solve_result() const { return _last_result; }
 
                 // Fetch info about the grids
                 int get_N(int level = 0);
@@ -223,14 +241,15 @@ namespace FML {
 #endif
 
                 // The method that does all the work. Solve the PDE
-                void solve(MultiGridFunction<NDIM, T> & Equation, MultiGridConvCrit & ConvergenceCriterion) {
+                SolveResult solve(MultiGridFunction<NDIM, T> &Equation, MultiGridConvCrit &ConvergenceCriterion) {
                     _Equation = Equation;
                     _ConvergenceCriterion = ConvergenceCriterion;
                     run_solver();
+                    return _last_result;
                 }
 
-                // Determine if we are converged and print some info
-                bool is_converged();
+                // Pure query: iteration exhaustion and nonfinite failure are not convergence.
+                bool is_converged() const { return _last_result.converged(); }
 
                 // Free up all memory
                 void free();
@@ -277,13 +296,15 @@ namespace FML {
                     return false;
                 };
                 // Error on domain grid < epsillon (residual relative to residuals after presweeps)
-                MultiGridConvCrit ConvergenceCriterionError =
-                    [=](double rms_residual, double rms_residual_ini, [[maybe_unused]] int step_number) {
-                        double err = rms_residual_ini != 0.0 ? rms_residual / rms_residual_ini : 1.0;
-                        if (err < _eps_converge)
-                            return true;
-                        return false;
-                    };
+                MultiGridConvCrit ConvergenceCriterionError = [=](double rms_residual, double rms_residual_ini,
+                                                                  [[maybe_unused]] int step_number) {
+                    double err = rms_residual_ini != 0.0
+                                     ? rms_residual / rms_residual_ini
+                                     : (rms_residual == 0.0 ? 0.0 : std::numeric_limits<double>::infinity());
+                    if (err < _eps_converge)
+                        return true;
+                    return false;
+                };
 
                 // Example implementation of a PDE
                 // Poisson equation with source s.t. the solution is f(x_1,x_2,...) = Sum_i sin(2 pi x_i)
@@ -440,6 +461,10 @@ namespace FML {
             void MultiGridSolver<NDIM, T>::run_solver() {
                 // Init some variables
                 _istep_vcycle = 0;
+                _last_result = {};
+                _nonfinite_residual = false;
+                _solve_maxsteps = _maxsteps;
+                FML::MinOverTasks(&_solve_maxsteps);
                 _mean_L = std::vector<T>(_Nlevel, T(0.0));
                 _rms_res = 0.0;
                 _rms_res_i = 0.0;
@@ -470,7 +495,7 @@ namespace FML {
                 _rms_res_i = _rms_res;
 
                 // Check if we already have convergence
-                if (is_converged())
+                if (check_termination())
                     return;
 
                 // The V-cycle
@@ -500,7 +525,7 @@ namespace FML {
                     }
 
                     // Check for convergence
-                    if (is_converged())
+                    if (check_termination())
                         break;
                 }
             }
@@ -859,6 +884,8 @@ namespace FML {
 
                 // This sums over all CPUs
                 double residual = res.norm();
+                // norm() reduces over all tasks, so this flag agrees on every rank.
+                _nonfinite_residual |= !std::isfinite(residual);
                 return residual;
             }
 
@@ -868,49 +895,37 @@ namespace FML {
             //================================================
 
             template <int NDIM, class T>
-            bool MultiGridSolver<NDIM, T>::is_converged() {
-                // Compute ratio of residual to initial residual
-                double err = _rms_res_i != 0.0 ? _rms_res / _rms_res_i : 1.0;
-
-                // Compute based on convergence criterion
-                // This is either the fiducial one or one provided by the user
-                bool converged = _ConvergenceCriterion(_rms_res, _rms_res_i, _istep_vcycle);
-
-                // Print out some information
+            bool MultiGridSolver<NDIM, T>::check_termination() {
+                _last_result.residual = _rms_res;
+                _last_result.initial_residual = _rms_res_i;
+                _last_result.iterations = _istep_vcycle;
+                // Reject nonfinite residuals before invoking even a permissive callback.
+                if (_nonfinite_residual || !std::isfinite(_rms_res) || !std::isfinite(_rms_res_i)) {
+                    _last_result.status = SolveStatus::NonFinite;
+                } else {
+                    int converged = _ConvergenceCriterion(_rms_res, _rms_res_i, _istep_vcycle);
+                    // Rank-dependent custom criteria must not split the collective V-cycle path.
+                    FML::MinOverTasks(&converged);
+                    if (converged)
+                        _last_result.status = SolveStatus::Converged;
+                    else if (_istep_vcycle >= _solve_maxsteps)
+                        _last_result.status = SolveStatus::MaxIterations;
+                    else
+                        return false;
+                }
                 if (_verbose) {
-                    std::cout << "    Checking for convergence at step = " << _istep_vcycle << std::endl;
-                    std::cout << "        Residual = " << _rms_res << "  Residual_old = " << _rms_res_old << std::endl;
-                    std::cout << "        Residual_i = " << _rms_res_i << "  Err = " << err << std::endl;
+                    std::cout << "    Multigrid stopped at V-cycle " << _istep_vcycle << " with residual " << _rms_res
+                              << " (initial " << _rms_res_i << ")\n";
+                    if (_last_result.converged())
+                        std::cout << "    The solution has converged\n";
                 }
-
-                // Convergence criterion
-                if (_verbose and converged) {
-                    std::cout << std::endl;
-                    std::cout << "    The solution has converged res = " << _rms_res << " err = " << err
-                              << " istep = " << _istep_vcycle << "\n"
-                              << std::endl;
-                }
-                if (_verbose and not converged) {
-                    std::cout << "    The solution has not yet converged res = " << _rms_res << " err = " << err
-                              << " istep = " << _istep_vcycle << "\n";
-                }
-
-                if (_verbose and (_rms_res > _rms_res_old and _istep_vcycle > 1)) {
-                    std::cout << "    Warning: Residual_old > Residual" << std::endl;
-                }
-
-                // Define converged if istep exceeds maxsteps to avoid infinite loop...
-                if (_istep_vcycle >= _maxsteps) {
-                    if (FML::ThisTask == 0) {
-                        std::cout << "    WARNING: MultigridSolver failed to converge! Reached istep = maxsteps = "
-                                  << _maxsteps << std::endl;
-                        std::cout << "    res = " << _rms_res << " res_old = " << _rms_res_old
-                                  << " res_i = " << _rms_res_i << std::endl;
-                    }
-                    converged = true;
-                }
-
-                return converged;
+                if (FML::ThisTask == 0 && _last_result.status == SolveStatus::MaxIterations)
+                    std::cout << "    WARNING: MultigridSolver failed to converge: maximum V-cycles reached ("
+                              << _istep_vcycle << "), residual = " << _rms_res << "\n";
+                if (FML::ThisTask == 0 && _last_result.status == SolveStatus::NonFinite)
+                    std::cout << "    WARNING: MultigridSolver stopped: nonfinite residual at V-cycle " << _istep_vcycle
+                              << "\n";
+                return true;
             }
 
             //================================================
