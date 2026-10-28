@@ -808,7 +808,8 @@ void Lightcone<NDIM, T, U>::compute_comoving_distance() {
 
     DVector loga_arr(npts_loga);
     for (int i = 0; i < npts_loga; i++) {
-        loga_arr[i] = std::log(ahigh) + std::log(alow / ahigh) * i / double(npts_loga);
+        // From ahigh to alow (the grid used to stop at 1.047 alow)
+        loga_arr[i] = std::log(ahigh) + std::log(alow / ahigh) * i / double(npts_loga - 1);
     }
 
     // integrate dz/H0/E(z) from 0 to z

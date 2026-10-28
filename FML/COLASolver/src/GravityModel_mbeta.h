@@ -132,13 +132,15 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
 
             // The integral from 0 to amin is integrand(amin) / p (exact for the power laws; it was left out, which
             // is 3-25% of phi(a = 1) for p = 0.5-0.2), the rest numerically in log(a)
+            // The spline covers the same range as the growth factors (up to ahigh = 10; it used to stop at a = 1 so
+            // phi(a > 1) was phi(1)). The step is the same as before (9999 steps from amin to 1)
             const double amin = 0.001;
-            const double amax = 1.0;
-            const int npts = 10000;
+            const double dloga = std::log(1.0 / amin) / 9999.0;
+            const size_t npts = size_t(std::lround(std::log(this->ahigh / amin) / dloga)) + 1;
             std::vector<double> a_array(npts, amin), loga_array(npts, std::log(amin)), phi_array(npts, 0.0);
             phi_array[0] = integrand(amin) / p;
             for (size_t i = 1; i < npts; i++) {
-                loga_array[i] = std::log(amin) + std::log(amax / amin) * i / double(npts - 1);
+                loga_array[i] = std::log(amin) + std::log(1.0 / amin) * i / 9999.0;
                 a_array[i] = std::exp(loga_array[i]);
                 phi_array[i] = phi_array[i - 1] + integrand(a_array[i]) * (loga_array[i] - loga_array[i - 1]);
             }

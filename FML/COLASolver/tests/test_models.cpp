@@ -10,12 +10,15 @@
 //     y = m/T > 1000, where the splines used to be held constant, and the sound speed with the mass of one neutrino
 //  4. Tabulated H(z) (LCDM): dlogH/dloga and w_DE at the end of the table (a = 1)
 //  5. JBD beyond the end of its splines (a > 10): H(a) consistent with dlogH/dloga
+//  6. The growth factors reach a = 10 (the end of the spline range; they used to stop at a = 9.886). Test 1 also
+//     checks phi(a = 5) of the m(a),beta(a) model (the phi spline used to end at a = 1)
 //
 // Build and run: make test_models && ./test_models (in this folder)
 //==========================================================================
 #include "../src/Cosmology_JBD.h"
 #include "../src/Cosmology_LCDM.h"
 #include "../src/Cosmology_Tabulated.h"
+#include "../src/GravityModel_GR.h"
 #include "../src/GravityModel_mbeta.h"
 
 #include <array>
@@ -85,7 +88,7 @@ int main() {
         });
         const double p = pars[1] - 3.0 - 2.0 * pars[3];
         const double OmegaM = cosmo->get_OmegaM();
-        for (double a : {0.1, 1.0}) {
+        for (double a : {0.1, 1.0, 5.0}) {
             const double expected = 9.0 * OmegaM * pars[0] / (pars[2] * pars[2]) * std::pow(a, p) / p;
             const double err = grav->phi_over_mpl_of_a(a) / expected - 1.0;
             check(std::fabs(err) < 2e-3,
@@ -217,6 +220,27 @@ int main() {
                   "JBD at a = " + std::to_string(a) + ": dlogH/dloga = " + std::to_string(jbd->dlogHdloga_of_a(a)) +
                       ", finite difference of H = " + std::to_string(fd));
         }
+    }
+
+    // 6. The growth factors are splined up to a = 10 (the grid used to stop at a = 9.886, so D(a) was constant
+    //    beyond): D(10) / D(9.9) = exp(int f dloga)
+    {
+        auto param = cosmology_parameters(0.25);
+        param["force_use_finite_difference_force"] = false;
+        param["force_finite_difference_stencil_order"] = 4;
+        auto cosmo = std::make_shared<CosmologyLCDM>();
+        auto grav = std::make_shared<GravityModelGR<NDIM>>(cosmo);
+        quietly([&]() {
+            cosmo->read_parameters(param);
+            cosmo->init();
+            grav->read_parameters(param);
+            grav->init();
+        });
+        const double dlogD = std::log(grav->get_D_1LPT(10.0) / grav->get_D_1LPT(9.9));
+        const double expected = grav->get_f_1LPT(9.95) * std::log(10.0 / 9.9);
+        check(std::fabs(dlogD / expected - 1.0) < 1e-3,
+              "GR growth: log(D(10)/D(9.9)) = " + std::to_string(dlogD) + " (f dloga = " + std::to_string(expected) +
+                  ")");
     }
 
     std::cout << (fails == 0 ? "All model tests passed\n" : std::to_string(fails) + " model test(s) FAILED\n");

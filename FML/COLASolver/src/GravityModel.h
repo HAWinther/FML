@@ -449,14 +449,16 @@ class GravityModel {
         }
         const double y_low = a_over_aeq(alow);
 
+        // The grids include the end points (they used to stop at a ~ 9.89 and k ~ 93 h/Mpc, so the splines were
+        // held constant beyond that)
         DVector loga_arr(npts_loga);
         for (int i = 0; i < npts_loga; i++) {
-            loga_arr[i] = std::log(alow) + std::log(ahigh / alow) * i / double(npts_loga);
+            loga_arr[i] = std::log(alow) + std::log(ahigh / alow) * i / double(npts_loga - 1);
         }
 
         DVector logkoverH0_arr(npts_logk);
         for (int i = 0; i < npts_logk; i++)
-            logkoverH0_arr[i] = std::log(koverH0low) + std::log(koverH0high / koverH0low) * i / double(npts_logk);
+            logkoverH0_arr[i] = std::log(koverH0low) + std::log(koverH0high / koverH0low) * i / double(npts_logk - 1);
 
         // With the transfer functions the neutrino source in the 1LPT equation is exact: fnu T_nu(k,a) / T_cb(k,a)
         // (source_factor_1LPT), and the initial growth rate is the CDM+baryon growth rate from the transfer functions.

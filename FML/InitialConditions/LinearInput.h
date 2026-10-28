@@ -123,9 +123,8 @@ namespace FML::INITIALCONDITIONS {
                 const double kmax = provider->range().kmax_hmpc;
                 table.resize(nk);
                 for (size_t i = 0; i < table.k.size(); i++) {
-                    const double k_hmpc = std::exp(
-                        std::log(kmin) + std::log(kmax / kmin) * i /
-                                             double(provider->range_policy() == RangePolicy::Reject ? nk - 1 : nk));
+                    // From kmin to kmax for every provider (with i / nk the table stopped 1.6% short of kmax)
+                    const double k_hmpc = std::exp(std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1));
                     table.k[i] = k_hmpc;
                     table.transfer[i] = provider->density_over_k_mpc2(Species::CDMBaryon, table.k[i], input.a_input);
                     table.power[i] = provider->power(Species::CDMBaryon, table.k[i], input.a_input);
