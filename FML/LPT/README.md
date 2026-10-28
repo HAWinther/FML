@@ -35,6 +35,13 @@ self-conjugate Nyquist mode when taking mixed derivatives. There is no radial
 cutoff, no smoothing of strictly sub-Nyquist input modes, and no volume factor
 on the copied coefficients (`FFTWGrid` uses normalized forward transforms).
 
+Without padding (`Dealiasing::None`) the even-mesh Nyquist modes are kept, but
+their ambiguous derivatives are zero: a first derivative `i k_i` (displacements,
+curl) or a mixed derivative `k_i k_j` (`i != j`, the Hessians in the 2LPT and
+3LPT sources) is set to zero when `k_i` (or `k_j`) is at the Nyquist frequency,
+while `k_i^2` is kept. The results are then covariant under reflections
+`x_i -> -x_i`, as in `TidalTensor/Hessian.h`.
+
 This is an accuracy option with substantial cost. In 3D, each work grid is
 approximately 3.375 times larger for 2LPT and 8 times larger for 3LPT; the
 original input and cropped outputs add to this. Runtime also increases with

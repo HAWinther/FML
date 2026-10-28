@@ -1,7 +1,9 @@
 #ifndef DISPLACEMENTFIELDS_HEADER
 #define DISPLACEMENTFIELDS_HEADER
+#include <array>
 #include <cassert>
 #include <climits>
+#include <cmath>
 #include <complex>
 #include <cstdio>
 #include <functional>
@@ -32,6 +34,23 @@ namespace FML {
             using FFTWGrid = FML::GRID::FFTWGrid<N>;
             template <class T>
             using MPIParticles = FML::PARTICLE::MPIParticles<T>;
+
+            namespace detail {
+                /// The wavevector to use for odd (i k_i) and mixed (k_i k_j, i != j) derivatives: kvec with the
+                /// Nyquist components set to zero. For an even mesh the Nyquist mode n_i = Nmesh/2 is its own mirror
+                /// image n_i = -Nmesh/2, so these derivatives of it depend on the sign we pick for k_i (and break
+                /// reflection symmetry); the derivative of the band-limited field there is zero. k_i^2 is unambiguous
+                /// and uses kvec itself. Never true for odd meshes (|n_i| < Nmesh/2). See also TidalTensor/Hessian.h.
+                template <int N>
+                std::array<double, N> odd_derivative_wavevector(std::array<double, N> kvec, int Nmesh) {
+                    // The Nyquist frequency 2pi * Nmesh/2 (with a margin for rounding)
+                    const double knyquist = M_PI * Nmesh * (1.0 - 1e-10);
+                    for (auto & k : kvec)
+                        if (std::fabs(k) >= knyquist)
+                            k = 0.0;
+                    return kvec;
+                }
+            } // namespace detail
 
             template <int N>
             void from_LPT_potential_to_displacement_vector(const FFTWGrid<N> & phi_fourier,
@@ -159,13 +178,14 @@ namespace FML {
 
                         // Get wavevector and magnitude
                         phi.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                        const auto kodd = detail::odd_derivative_wavevector<N>(kvec, Nmesh);
 
-                        // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi]
+                        // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi] (zero for Nyquist components of k_vec)
                         auto value = phi.get_fourier_from_index(fourier_index) * I *
                                      FML::GRID::FloatType(DoverDini_of_k_spline(kmag));
 
                         for (int idim = 0; idim < N; idim++) {
-                            psi[idim].set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(kvec[idim]));
+                            psi[idim].set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(kodd[idim]));
                         }
                     }
                 }
@@ -239,12 +259,13 @@ namespace FML {
 
                         // Get wavevector and magnitude
                         phi.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                        const auto kodd = detail::odd_derivative_wavevector<N>(kvec, Nmesh);
 
-                        // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi]
+                        // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi] (zero for Nyquist components of k_vec)
                         auto value = phi.get_fourier_from_index(fourier_index) * FML::GRID::FloatType(DoverDini);
                         for (int idim = 0; idim < N; idim++) {
                             psi[idim].set_fourier_from_index(fourier_index,
-                                                             I * value * FML::GRID::FloatType(kvec[idim]));
+                                                             I * value * FML::GRID::FloatType(kodd[idim]));
                         }
                     }
                 }
@@ -482,6 +503,8 @@ namespace FML {
 
                         // Get wavevector and magnitude
                         delta.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                        // The mixed derivatives of the Nyquist modes are zero
+                        const auto kodd = detail::odd_derivative_wavevector<N>(kvec, Nmesh);
 
                         auto value = delta.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
 
@@ -490,7 +513,7 @@ namespace FML {
                             for (int idim2 = idim1 + 1; idim2 < N; idim2++) {
                                 phi_1LPT_ij[pair++].set_fourier_from_index(
                                     fourier_index,
-                                    FML::GRID::FloatType(kvec[idim1] * kvec[idim2]) * value);
+                                    FML::GRID::FloatType(kodd[idim1] * kodd[idim2]) * value);
                             }
                         }
                     }
@@ -661,9 +684,11 @@ namespace FML {
 
                         // Get wavevector and magnitude
                         phi_1LPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                        // Only first derivatives here: zero for the Nyquist components of k_vec
+                        const auto kodd = detail::odd_derivative_wavevector<N>(kvec, Nmesh);
                         std::array<FML::GRID::FloatType, N> k;
                         for (int idim = 0; idim < N; idim++)
-                            k[idim] = FML::GRID::FloatType(kvec[idim]);
+                            k[idim] = FML::GRID::FloatType(kodd[idim]);
 
                         const ComplexType value_1 = phi_1LPT_fourier.get_fourier_from_index(fourier_index);
                         const ComplexType value_2 = phi_2LPT_fourier.get_fourier_from_index(fourier_index);
@@ -820,6 +845,8 @@ namespace FML {
 
                         // Get wavevector and magnitude
                         phi_1LPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                        // The mixed derivatives of the Nyquist modes are zero
+                        const auto kodd = detail::odd_derivative_wavevector<N>(kvec, Nmesh);
 
                         // phi_1LPT_fourier is delta so transform to LPT potential D^2 phi_1LPT = -delta
                         auto value =
@@ -828,9 +855,10 @@ namespace FML {
                         int pair = 0;
                         for (int idim1 = 0; idim1 < N; idim1++) {
                             for (int idim2 = idim1; idim2 < N; idim2++) {
-                                phi_1LPT_ij[pair++].set_fourier_from_index(
-                                    fourier_index,
-                                    -value * FML::GRID::FloatType(kvec[idim1] * kvec[idim2]));
+                                const double kk =
+                                    idim1 == idim2 ? kvec[idim1] * kvec[idim1] : kodd[idim1] * kodd[idim2];
+                                phi_1LPT_ij[pair++].set_fourier_from_index(fourier_index,
+                                                                           -value * FML::GRID::FloatType(kk));
                             }
                         }
                     }
@@ -954,12 +982,14 @@ namespace FML {
                                         index,
                                         -value * FML::GRID::FloatType(kvec[row] * kvec[row]));
                             } else {
+                                // The mixed derivatives of the Nyquist modes are zero
+                                const auto kodd = detail::odd_derivative_wavevector<N>(kvec, Nmesh);
                                 int component = 0;
                                 for (int row = 0; row < N; row++)
                                     for (int col = row + 1; col < N; col++)
                                         hessian2[component++].set_fourier_from_index(
                                             index,
-                                            -value * FML::GRID::FloatType(kvec[row] * kvec[col]));
+                                            -value * FML::GRID::FloatType(kodd[row] * kodd[col]));
                             }
                         }
                     }

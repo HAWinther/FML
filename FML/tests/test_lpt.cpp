@@ -6,6 +6,8 @@
 //     mode by mode), so it is independent of the FFTs and of the library code. As the 3LPT sources have at most
 //     3x the bandwidth of delta (< Nmesh/2) there is no aliasing and the agreement is to round-off.
 //   - compute_3LPT_displacement_field (3D against the reference, 2D against the 3LPT potentials)
+//   - the LPT fields of an even-mesh white-noise field are covariant under reflections x_a -> -x_a (the
+//     ambiguous odd and mixed derivatives of the Nyquist modes are zero)
 //   - the spherical collapse potential (phi_SC = -source/k^2) and ALPT (finite, R=0 limit = 1LPT+2LPT,
 //     R=inf limit = phi_SC)
 //   - a non-gaussian field where P(k)/P_primordial(k) is 0/0 at k=0 is finite
@@ -785,12 +787,122 @@ void test_random() {
           "white noise: the slices do not start with the same value (" + std::to_string(ndup) + " equal pairs)");
 }
 
+//==========================================================
+// Nyquist modes: on an even mesh the Nyquist component n_i = Nmesh/2 is its own mirror image n_i = -Nmesh/2, so
+// an odd derivative (i k_i) or a mixed derivative (k_i k_j, i != j) of it depends on which sign the code picks.
+// LPT is covariant under a reflection x_a -> -x_a (scalars are even, the a-component of a vector is odd and the
+// other components of the curl potential A are odd), which holds on the grid only if these terms are zero.
+// The input is a white-noise-like field with full power at the Nyquist frequency.
+//==========================================================
+std::vector<double> gather_real(const FML::GRID::FFTWGrid<3> & g) {
+    const int n = g.get_nmesh();
+    std::vector<double> out(size_t(n) * n * n, 0.0);
+    for (int islice = 0; islice < g.get_local_nx(); islice++)
+        for (auto && ri : g.get_real_range(islice, islice + 1)) {
+            auto c = g.get_coord_from_index(ri);
+            out[(size_t(c[0] + g.get_local_x_start()) * n + c[1]) * n + c[2]] = g.get_real_from_index(ri);
+        }
+    FML::SumArrayOverTasks(out.data(), int(out.size()));
+    return out;
+}
+std::vector<double> gather_fourier(const FML::GRID::FFTWGrid<3> & g) {
+    auto r = g;
+    r.fftw_c2r();
+    return gather_real(r);
+}
+
+void test_nyquist_reflection() {
+    using Grid = FML::GRID::FFTWGrid<3>;
+    using namespace FML::COSMOLOGY::LPT;
+    auto noise = [](std::array<int, 3> c) {
+        unsigned int h = (unsigned(c[0]) * 73856093u) ^ (unsigned(c[1]) * 19349663u) ^ (unsigned(c[2]) * 83492791u);
+        h = h * 2654435761u;
+        h ^= h >> 15;
+        h *= 2246822519u;
+        return double(h >> 8) / double(1u << 24) - 0.5;
+    };
+    // All the fields of the LPT code that involve derivatives, each with its parity under x_a -> -x_a
+    struct Field {
+        std::string name;
+        std::vector<double> values;
+        int parity_axis; // -1: scalar, d: the d-component of a vector, 10 + d: the d-component of a pseudovector
+    };
+    auto compute = [&](int reflect_axis) {
+        Grid delta(Nmesh, 1, 1);
+        for (int islice = 0; islice < delta.get_local_nx(); islice++)
+            for (auto && ri : delta.get_real_range(islice, islice + 1)) {
+                auto c = delta.get_coord_from_index(ri);
+                c[0] += delta.get_local_x_start();
+                if (reflect_axis >= 0)
+                    c[reflect_axis] = (Nmesh - c[reflect_axis]) % Nmesh;
+                delta.set_real_from_index(ri, noise(c));
+            }
+        delta.fftw_r2c();
+        std::vector<Field> f;
+        Grid phi1, phi2, phi3a, phi3b;
+        std::array<Grid, 3> A, psi, Psi, dPsidt;
+        compute_1LPT_potential_fourier(delta, phi1);
+        from_LPT_potential_to_displacement_vector<3>(phi1, psi);
+        for (int d = 0; d < 3; d++)
+            f.push_back({"Psi_1LPT_" + std::to_string(d), gather_real(psi[d]), d});
+        std::array<Grid, 3> psi_sd;
+        from_LPT_potential_to_displacement_vector_scaledependent<3>(phi1, psi_sd, [](double k) {
+            return 1.0 + 0.01 * k;
+        });
+        for (int d = 0; d < 3; d++)
+            f.push_back({"Psi_scaledependent_" + std::to_string(d), gather_real(psi_sd[d]), d});
+        compute_2LPT_potential_fourier(delta, phi2);
+        f.push_back({"phi_2LPT", gather_fourier(phi2), -1});
+        compute_3LPT_potential_fourier<3>(delta, phi1, phi2, phi3a, phi3b, A, false);
+        f.push_back({"3LPT phi_2LPT", gather_fourier(phi2), -1});
+        f.push_back({"phi_3LPT_a", gather_fourier(phi3a), -1});
+        f.push_back({"phi_3LPT_b", gather_fourier(phi3b), -1});
+        for (int d = 0; d < 3; d++)
+            f.push_back({"A_3LPT_" + std::to_string(d), gather_fourier(A[d]), 10 + d});
+        compute_3LPT_displacement_field<3>(delta, Psi, dPsidt, 0.7, false);
+        for (int d = 0; d < 3; d++)
+            f.push_back({"Psi_3LPT_" + std::to_string(d), gather_real(Psi[d]), d});
+        return f;
+    };
+    const auto original = compute(-1);
+    for (int axis = 0; axis < 3; axis++) {
+        const auto reflected = compute(axis);
+        double worst = 0.0;
+        std::string worst_name, failing;
+        for (size_t i = 0; i < original.size(); i++) {
+            const int p = original[i].parity_axis;
+            const double sign = p < 0 ? 1.0 : (p < 10 ? (p == axis ? -1.0 : 1.0) : (p - 10 == axis ? 1.0 : -1.0));
+            double maxval = 0.0, err = 0.0;
+            for (int ix = 0; ix < Nmesh; ix++)
+                for (int iy = 0; iy < Nmesh; iy++)
+                    for (int iz = 0; iz < Nmesh; iz++) {
+                        std::array<int, 3> c{ix, iy, iz}, rc = c;
+                        rc[axis] = (Nmesh - c[axis]) % Nmesh;
+                        auto at = [&](std::array<int, 3> x) { return (size_t(x[0]) * Nmesh + x[1]) * Nmesh + x[2]; };
+                        maxval = std::max(maxval, std::fabs(original[i].values[at(c)]));
+                        err = std::max(err, std::fabs(reflected[i].values[at(c)] - sign * original[i].values[at(rc)]));
+                    }
+            if (not(err <= 1e-10 * maxval))
+                failing += " " + original[i].name;
+            if (err / maxval > worst or not(err == err)) {
+                worst = err == err ? err / maxval : 1e100;
+                worst_name = original[i].name;
+            }
+        }
+        check(worst < 1e-10,
+              "LPT fields are covariant under the reflection x_" + std::to_string(axis) +
+                  " -> -x (Nyquist odd/mixed derivatives are zero; worst rel err " + num(worst) + " in " + worst_name +
+                  (failing.empty() ? "" : "; not covariant:" + failing) + ")");
+    }
+}
+
 int main() {
     test_3LPT();
     test_3LPT(true); // Different tensor cross terms and signs for streamed Hessian accumulation
     test_3LPT(false, FML::COSMOLOGY::LPT::Dealiasing::Padding);
     test_dealiased_LPT();
     test_3LPT_2D();
+    test_nyquist_reflection();
     test_ALPT();
     test_nongaussian_dc_mode();
     test_growth_factors();
