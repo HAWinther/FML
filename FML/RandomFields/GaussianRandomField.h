@@ -311,9 +311,9 @@ namespace FML {
             //
             template <>
             inline void generate_gaussian_random_field_fourier(FFTWGrid<3> & grid,
-                                                        RandomGenerator * rng,
-                                                        std::function<double(double)> Pofk_of_kBox_over_volume,
-                                                        bool fix_amplitude) {
+                                                               RandomGenerator * rng,
+                                                               std::function<double(double)> Pofk_of_kBox_over_volume,
+                                                               bool fix_amplitude) {
 
                 // We require an allocated grid, a random number generator and a power-spectrum to run
                 assert_mpi(grid.get_nmesh() > 0,
@@ -367,7 +367,7 @@ namespace FML {
 #ifdef USE_MPI
                 MPI_Allreduce(MPI_IN_PLACE, seedtable.data(), Nmesh * Nmesh, MPI_UNSIGNED, MPI_SUM, FML::communicator);
 #endif
-                
+
                 // If we use GSL make a spline (std::function can be slow) otherwise this is just a copy
                 // of the function itself
                 auto Pofk_of_kBox_over_volume_spline = grid.make_fourier_spline(Pofk_of_kBox_over_volume, "P(k)/V");
@@ -458,6 +458,6 @@ namespace FML {
             }
 
         } // namespace GAUSSIAN
-    }     // namespace RANDOM
+    } // namespace RANDOM
 } // namespace FML
 #endif

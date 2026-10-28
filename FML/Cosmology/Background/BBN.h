@@ -13,10 +13,10 @@
 
 namespace FML::COSMOLOGY {
 
-namespace BBN {
-  double helium_fraction(double omega_b, double N_eff);   // throws outside the table
-  void set_table_file(const std::string& file);           // before the first call
-}
+    namespace BBN {
+        double helium_fraction(double omega_b, double N_eff); // throws outside the table
+        void set_table_file(const std::string & file);        // before the first call
+    } // namespace BBN
 
 } // namespace FML::COSMOLOGY
 

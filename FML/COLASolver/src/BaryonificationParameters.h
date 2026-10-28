@@ -15,17 +15,26 @@ namespace COLASOLVER {
         double gas_mass_exponent, gas_core_radius_over_r200, gas_ejection_radius_over_r200;
         double truncation_radius_over_r200, stellar_radius_over_r200, stellar_amplitude;
         double stellar_total_exponent, stellar_central_exponent, relaxation_amplitude, relaxation_exponent;
-        double concentration_norm, concentration_pivot_mass_msunh, concentration_mass_slope, concentration_redshift_power;
+        double concentration_norm, concentration_pivot_mass_msunh, concentration_mass_slope,
+            concentration_redshift_power;
         double fof_linking_length, fof_buffer_mpch, min_radius_over_r200, max_radius_over_r200;
         int fof_min_particles, fof_nmesh_max, profile_radial_bins;
 
         BaryonificationSettings() {
-            parameters([](const char *, auto & value, const auto & default_value, const char *) { value = default_value; });
+            parameters(
+                [](const char *, auto & value, const auto & default_value, const char *) { value = default_value; });
         }
 
-        template <class F> void parameters(F && f) {
-            f("model", model, std::string("schneider2019"), "Finite-support Schneider2019 profile family; illustrative, uncalibrated defaults");
-            f("output_particles", output_particles, false, "Write a separate corrected snapshot; velocities are unchanged");
+        template <class F>
+        void parameters(F && f) {
+            f("model",
+              model,
+              std::string("schneider2019"),
+              "Finite-support Schneider2019 profile family; illustrative, uncalibrated defaults");
+            f("output_particles",
+              output_particles,
+              false,
+              "Write a separate corrected snapshot; velocities are unchanged");
             f("min_halo_mass_msunh", min_halo_mass_msunh, 1e12, "Minimum host M200c (Msun/h)");
             f("gas_mass_scale_msunh", gas_mass_scale_msunh, 1e14, "Gas-slope mass scale M_c (Msun/h)");
             f("stellar_mass_scale_msunh", stellar_mass_scale_msunh, 2.5e11, "Stellar-fraction pivot M1 (Msun/h)");
@@ -41,19 +50,35 @@ namespace COLASOLVER {
             f("relaxation_amplitude", relaxation_amplitude, 0.3, "Dimensionless collisionless relaxation amplitude");
             f("relaxation_exponent", relaxation_exponent, 2.0, "Dimensionless collisionless relaxation exponent");
             f("concentration_norm", concentration_norm, 5.0, "Illustrative c200c normalization; not a fitted relation");
-            f("concentration_pivot_mass_msunh", concentration_pivot_mass_msunh, 1e14, "Concentration pivot mass (Msun/h)");
-            f("concentration_mass_slope", concentration_mass_slope, -0.1, "c=c0*(M200c/Mpivot)^slope*(1+z)^redshift_power");
-            f("concentration_redshift_power", concentration_redshift_power, -1.0, "Power of (1+z) in the concentration relation");
+            f("concentration_pivot_mass_msunh",
+              concentration_pivot_mass_msunh,
+              1e14,
+              "Concentration pivot mass (Msun/h)");
+            f("concentration_mass_slope",
+              concentration_mass_slope,
+              -0.1,
+              "c=c0*(M200c/Mpivot)^slope*(1+z)^redshift_power");
+            f("concentration_redshift_power",
+              concentration_redshift_power,
+              -1.0,
+              "Power of (1+z) in the concentration relation");
             f("fof_linking_length", fof_linking_length, 0.2, "FoF seed linking length / mean particle separation");
             f("fof_min_particles", fof_min_particles, 20, "Minimum particles in a FoF seed halo");
             f("fof_nmesh_max", fof_nmesh_max, 0, "Maximum FoF search mesh (0: automatic)");
-            f("fof_buffer_mpch", fof_buffer_mpch, 3.0, "Halo/SO search buffer (comoving Mpc/h); larger than halo radii");
+            f("fof_buffer_mpch",
+              fof_buffer_mpch,
+              3.0,
+              "Halo/SO search buffer (comoving Mpc/h); larger than halo radii");
             f("profile_radial_bins", profile_radial_bins, 2048, "Number of positive profile-table radii");
             f("min_radius_over_r200", min_radius_over_r200, 1e-6, "First positive profile radius / R200c");
-            f("max_radius_over_r200", max_radius_over_r200, 30.0, "Finite profile support / R200c; must be smaller than half the box");
+            f("max_radius_over_r200",
+              max_radius_over_r200,
+              30.0,
+              "Finite profile support / R200c; must be smaller than half the box");
         }
 
-        template <class Reader> void read(Reader & r) {
+        template <class Reader>
+        void read(Reader & r) {
             r.get("baryonification", enabled, false);
             if (enabled)
                 parameters([&](const char * name, auto & value, const auto & default_value, const char *) {
@@ -83,11 +108,13 @@ namespace COLASOLVER {
         void validate() const {
             using namespace FML::BARYONIFICATION::detail;
             require(model == "schneider2019", "baryonification_model must be schneider2019");
-            require(positive(min_halo_mass_msunh) && positive(concentration_pivot_mass_msunh) && positive(concentration_norm),
+            require(positive(min_halo_mass_msunh) && positive(concentration_pivot_mass_msunh) &&
+                        positive(concentration_norm),
                     "Baryonification masses (_msunh) and concentration must be finite and positive");
             require(std::isfinite(concentration_mass_slope) && std::isfinite(concentration_redshift_power),
                     "Baryonification concentration exponents must be finite");
-            require(positive(fof_linking_length) && fof_min_particles >= 2 && fof_nmesh_max >= 0 && positive(fof_buffer_mpch),
+            require(positive(fof_linking_length) && fof_min_particles >= 2 && fof_nmesh_max >= 0 &&
+                        positive(fof_buffer_mpch),
                     "Baryonification: invalid FoF linking length, particle count, mesh or buffer_mpch");
             require(profile_radial_bins >= 32 && positive(min_radius_over_r200) && min_radius_over_r200 < 1.0 &&
                         positive(max_radius_over_r200) && max_radius_over_r200 > 1.0,
@@ -102,5 +129,5 @@ namespace COLASOLVER {
             });
         }
     };
-}
+} // namespace COLASOLVER
 #endif

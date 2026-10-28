@@ -198,10 +198,8 @@ namespace FML {
             }
         }
 
-        inline int KDTree::build_node(size_t begin,
-                                      size_t end,
-                                      std::vector<size_t> & order,
-                                      const std::vector<double> & points) {
+        inline int
+        KDTree::build_node(size_t begin, size_t end, std::vector<size_t> & order, const std::vector<double> & points) {
             const int inode = int(nodes.size());
             nodes.push_back(Node{begin, end, -1, -1});
             // Bounding box of the points of the node

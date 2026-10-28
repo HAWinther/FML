@@ -36,63 +36,66 @@
 
 namespace FML::MCMC {
 
-struct MinimizerOptions {
-  int starts = 4;               // independent minimizations
-  int threads = 0;              // OpenMP threads over the starts (0: one per start, bounded by OpenMP)
-  int max_evals = 3000;         // slow evaluations per minimization
-  int max_restarts = 6;
-  double tol = 0.01;            // convergence in -2 ln P
-  double start_scatter = 1.0;   // starts 2..: start + start_scatter * N(0, covariance)
-  std::uint64_t seed = 1;
-  std::vector<std::vector<double>> covmat;   // d x d (empty: diagonal proposal^2)
-  bool verbose = true;
-  int progress_every = 0;       // > 0: print the best -2 ln P every this many slow evaluations (process 0)
-};
+    struct MinimizerOptions {
+        int starts = 4;       // independent minimizations
+        int threads = 0;      // OpenMP threads over the starts (0: one per start, bounded by OpenMP)
+        int max_evals = 3000; // slow evaluations per minimization
+        int max_restarts = 6;
+        double tol = 0.01;          // convergence in -2 ln P
+        double start_scatter = 1.0; // starts 2..: start + start_scatter * N(0, covariance)
+        std::uint64_t seed = 1;
+        std::vector<std::vector<double>> covmat; // d x d (empty: diagonal proposal^2)
+        bool verbose = true;
+        int progress_every = 0; // > 0: print the best -2 ln P every this many slow evaluations (process 0)
+    };
 
-struct MinimizerResult {
-  std::vector<double> x, derived;
-  double logpost = -1e300, loglike = -1e300;
-  long evals = 0;                // slow evaluations (theory computations)
-  bool converged = false;        // the last restart improved -2 ln P by < tol
-  double chi2() const { return -2.0 * loglike; }
-};
+    struct MinimizerResult {
+        std::vector<double> x, derived;
+        double logpost = -1e300, loglike = -1e300;
+        long evals = 0;         // slow evaluations (theory computations)
+        bool converged = false; // the last restart improved -2 ln P by < tol
+        double chi2() const { return -2.0 * loglike; }
+    };
 
-class Minimizer {
-  public:
-    Minimizer(const Posterior& posterior, MinimizerOptions options = MinimizerOptions());
+    class Minimizer {
+      public:
+        Minimizer(const Posterior & posterior, MinimizerOptions options = MinimizerOptions());
 
-    // All starts; returns the best and keeps every start's result
-    MinimizerResult run();
-    const std::vector<MinimizerResult>& start_results() const { return all; }
+        // All starts; returns the best and keeps every start's result
+        MinimizerResult run();
+        const std::vector<MinimizerResult> & start_results() const { return all; }
 
-    // One minimization from x0 with the parameters marked in fixed kept at their values in x0
-    MinimizerResult minimize(const std::vector<double>& x0, const std::vector<bool>& fixed = {}) const;
+        // One minimization from x0 with the parameters marked in fixed kept at their values in x0
+        MinimizerResult minimize(const std::vector<double> & x0, const std::vector<bool> & fixed = {}) const;
 
-    // Profile in parameter i: minimum over the others at each value, starting from the point from
-    std::vector<MinimizerResult> profile(size_t i, const std::vector<double>& values, const std::vector<double>& from) const;
+        // Profile in parameter i: minimum over the others at each value, starting from the point from
+        std::vector<MinimizerResult>
+        profile(size_t i, const std::vector<double> & values, const std::vector<double> & from) const;
 
-    // Hessian of -ln P at x with steps h (all parameters; MPI-parallel)
-    std::vector<std::vector<double>> hessian(const std::vector<double>& x, std::vector<double>& h,
-                                             bool adapt_steps = true) const;
-    // Its inverse; false (and the diagonal 1/H_ii, or h^2 where H_ii <= 0) if not positive definite
-    static bool covariance(const std::vector<std::vector<double>>& H, const std::vector<double>& h,
-                           std::vector<std::vector<double>>& C);
+        // Hessian of -ln P at x with steps h (all parameters; MPI-parallel)
+        std::vector<std::vector<double>>
+        hessian(const std::vector<double> & x, std::vector<double> & h, bool adapt_steps = true) const;
+        // Its inverse; false (and the diagonal 1/H_ii, or h^2 where H_ii <= 0) if not positive definite
+        static bool covariance(const std::vector<std::vector<double>> & H,
+                               const std::vector<double> & h,
+                               std::vector<std::vector<double>> & C);
 
-    // <root>.minimum.txt: -2 ln L, -2 ln P and the parameters of r (and the other starts, if any);
-    // <root>.paramnames and .ranges
-    void write(const std::string& root, const MinimizerResult& r) const;
-    void write_profile(const std::string& file, size_t i, const std::vector<MinimizerResult>& prof) const;
+        // <root>.minimum.txt: -2 ln L, -2 ln P and the parameters of r (and the other starts, if any);
+        // <root>.paramnames and .ranges
+        void write(const std::string & root, const MinimizerResult & r) const;
+        void write_profile(const std::string & file, size_t i, const std::vector<MinimizerResult> & prof) const;
 
-  private:
-    const Posterior& post;
-    MinimizerOptions opt;
-    std::vector<std::vector<double>> cov;
-    std::vector<MinimizerResult> all;
+      private:
+        const Posterior & post;
+        MinimizerOptions opt;
+        std::vector<std::vector<double>> cov;
+        std::vector<MinimizerResult> all;
 
-    // results of n independent tasks, spread over the MPI processes and OpenMP threads, gathered on all processes
-    template <class F> std::vector<MinimizerResult> parallel_tasks(int n, F task) const;
-    std::vector<double> minus_logpost(const std::vector<std::vector<double>>& pts) const;   // over MPI processes
-};
+        // results of n independent tasks, spread over the MPI processes and OpenMP threads, gathered on all processes
+        template <class F>
+        std::vector<MinimizerResult> parallel_tasks(int n, F task) const;
+        std::vector<double> minus_logpost(const std::vector<std::vector<double>> & pts) const; // over MPI processes
+    };
 
 } // namespace FML::MCMC
 

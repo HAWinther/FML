@@ -124,7 +124,7 @@ namespace FML {
                            const DVector & yinitial,
                            const gsl_odeiv2_step_type * stepper = ODESOLVER_FIDUCIAL_STEPPER,
                            ODEFunctionPointerJacobian jacobian = nullptr);
-                
+
                 /// Solve the ODE defined by the ode_equation. We solve it from the first to the last point in the xarr
                 /// and store the value of the solution in all points in xarr. The initial value is in yinitial and
                 /// we have the option to choose a stepper and provide the jacobian if the stepper requires that
@@ -168,6 +168,6 @@ namespace FML {
                 DVector get_derivative_data_by_component(int icomponent) const;
             };
         } // namespace ODESOLVER
-    }     // namespace SOLVERS
+    } // namespace SOLVERS
 } // namespace FML
 #endif

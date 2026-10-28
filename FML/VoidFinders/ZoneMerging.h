@@ -98,10 +98,11 @@ namespace FML {
         /// @param[in] threshold_quantity The threshold for ZoneMerging::Threshold
         ///
         //========================================================================================
-        inline std::vector<MergedVoid> merge_zones(const std::vector<Zone> & zones,
-                                                   std::vector<ZoneLink> links,
-                                                   ZoneMerging merging,
-                                                   double threshold_quantity = std::numeric_limits<double>::infinity()) {
+        inline std::vector<MergedVoid>
+        merge_zones(const std::vector<Zone> & zones,
+                    std::vector<ZoneLink> links,
+                    ZoneMerging merging,
+                    double threshold_quantity = std::numeric_limits<double>::infinity()) {
             const long long int nzones = (long long int)(zones.size());
             reduce_zone_links(links);
 

@@ -107,9 +107,9 @@ void SymmetronSolver() {
         //======================================================================
         const auto laplacian = sol->get_Laplacian(level, index_list);
         const double dlaplacian = -2.0 * Ndim / (h * h);
-        const double source = 0.5 * aexp * aexp * (box / L) *
-                              (box / L) * ((assb / aexp) * (assb / aexp) * (assb / aexp) * (1 + delta) * phi -
-                                                phi + phi * phi * phi);
+        const double source =
+            0.5 * aexp * aexp * (box / L) * (box / L) *
+            ((assb / aexp) * (assb / aexp) * (assb / aexp) * (1 + delta) * phi - phi + phi * phi * phi);
         const double dsource = 0.5 * aexp * aexp * (box / L) * (box / L) *
                                ((assb / aexp) * (assb / aexp) * (assb / aexp) * (1 + delta) - 1.0 + 3.0 * phi * phi);
 

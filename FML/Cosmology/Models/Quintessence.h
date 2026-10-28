@@ -13,25 +13,27 @@
 
 namespace FML::COSMOLOGY {
 
-class QuintessenceSpecies : public ScalarFieldSpecies {
-  public:
-    // others: all other species of the model; Omega_phi: the density today it must have
-    QuintessenceSpecies(double lambda, const std::vector<std::shared_ptr<const Species>>& others, double OmegaK,
-                        double Omega_phi);
-    std::string name() const override { return "quintessence"; }
-    std::string info() const override;
+    class QuintessenceSpecies : public ScalarFieldSpecies {
+      public:
+        // others: all other species of the model; Omega_phi: the density today it must have
+        QuintessenceSpecies(double lambda,
+                            const std::vector<std::shared_ptr<const Species>> & others,
+                            double OmegaK,
+                            double Omega_phi);
+        std::string name() const override { return "quintessence"; }
+        std::string info() const override;
 
-    double v(double phi) const override { return V0 * std::exp(-lambda * phi); }
-    double v_phi(double phi) const override { return -lambda * v(phi); }
-    double v_phiphi(double phi) const override { return lambda * lambda * v(phi); }
-    double V0_value() const { return V0; }
-    using ScalarFieldSpecies::E2;
+        double v(double phi) const override { return V0 * std::exp(-lambda * phi); }
+        double v_phi(double phi) const override { return -lambda * v(phi); }
+        double v_phiphi(double phi) const override { return lambda * lambda * v(phi); }
+        double V0_value() const { return V0; }
+        using ScalarFieldSpecies::E2;
 
-  private:
-    double lambda, V0 = 0.0;
-    // Integrate with amplitude V0 and return rho_phi(0)
-    double solve_V0(double V0);
-};
+      private:
+        double lambda, V0 = 0.0;
+        // Integrate with amplitude V0 and return rho_phi(0)
+        double solve_V0(double V0);
+    };
 
 } // namespace FML::COSMOLOGY
 

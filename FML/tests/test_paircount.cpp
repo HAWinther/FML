@@ -105,13 +105,41 @@ void compare_counts(std::string label,
     observer[N - 1] = -effective_infinity;
     DVector2D pc, xi;
     if (b)
-        AngularCorrelationFunctionBox<Particle<N>, Particle<N>>(a.data(), a.size(), b->data(), b->size(), 0.0, rmax, nr,
-                                                                -1.0, 1.0, nmu_folded > 1 ? nmu : 1, r_array, mu_array,
-                                                                pc, false, xi, observer, periodic, false);
+        AngularCorrelationFunctionBox<Particle<N>, Particle<N>>(a.data(),
+                                                                a.size(),
+                                                                b->data(),
+                                                                b->size(),
+                                                                0.0,
+                                                                rmax,
+                                                                nr,
+                                                                -1.0,
+                                                                1.0,
+                                                                nmu_folded > 1 ? nmu : 1,
+                                                                r_array,
+                                                                mu_array,
+                                                                pc,
+                                                                false,
+                                                                xi,
+                                                                observer,
+                                                                periodic,
+                                                                false);
     else
-        AngularCorrelationFunctionBox<Particle<N>>(a.data(), a.size(), 0.0, rmax, nr, -1.0, 1.0,
-                                                   nmu_folded > 1 ? nmu : 1, r_array, mu_array, pc, false, xi,
-                                                   observer, periodic, false);
+        AngularCorrelationFunctionBox<Particle<N>>(a.data(),
+                                                   a.size(),
+                                                   0.0,
+                                                   rmax,
+                                                   nr,
+                                                   -1.0,
+                                                   1.0,
+                                                   nmu_folded > 1 ? nmu : 1,
+                                                   r_array,
+                                                   mu_array,
+                                                   pc,
+                                                   false,
+                                                   xi,
+                                                   observer,
+                                                   periodic,
+                                                   false);
     const auto bf = brute<N>(a, b ? *b : a, b == nullptr, periodic, rmax, nr, nmu_folded);
     double maxdiff = 0.0, total = 0.0;
     for (int m = 0; m < nmu_folded; m++)
@@ -155,15 +183,16 @@ int main() {
         auto a = make<3>(3000, false);
         DVector r_array, mu_array, observer{0.5, 0.5, -effective_infinity};
         DVector2D pc, xi;
-        AngularCorrelationFunctionBox<Particle<3>>(a.data(), a.size(), 0.0, 0.1, 4, -1.0, 1.0, 6, r_array, mu_array,
-                                                   pc, false, xi, observer, true, false);
+        AngularCorrelationFunctionBox<Particle<
+            3>>(a.data(), a.size(), 0.0, 0.1, 4, -1.0, 1.0, 6, r_array, mu_array, pc, false, xi, observer, true, false);
         double asym = 0.0, total = 0.0;
         for (int m = 0; m < 3; m++)
             for (int i = 0; i < 4; i++) {
                 asym = std::max(asym, std::fabs(pc[3 + m][i] - pc[2 - m][i]));
                 total += pc[3 + m][i] + pc[2 - m][i];
             }
-        check(asym < 1e-10, "auto pairs symmetric in mu (max |N(mu) - N(-mu)| = " + num(asym) + " of " + num(total) + ")");
+        check(asym < 1e-10,
+              "auto pairs symmetric in mu (max |N(mu) - N(-mu)| = " + num(asym) + " of " + num(total) + ")");
     }
 
     // The correlation function of uniform random points is ~ 0
@@ -172,8 +201,8 @@ int main() {
             constexpr int N = decltype(ndim_tag)::value;
             auto a = make<N>(20000, false);
             DVector r_array, pc, xi;
-            RadialCorrelationFunctionBox<Particle<N>>(a.data(), a.size(), 0.0, 0.05, 5, r_array, pc, true, xi, true,
-                                                      false);
+            RadialCorrelationFunctionBox<
+                Particle<N>>(a.data(), a.size(), 0.0, 0.05, 5, r_array, pc, true, xi, true, false);
             double mx = 0.0;
             for (auto x : xi)
                 mx = std::max(mx, std::fabs(x));
@@ -183,13 +212,28 @@ int main() {
                 DVector mu_array, observer(N, 0.5);
                 observer[N - 1] = -effective_infinity;
                 DVector2D pc2, xi2;
-                AngularCorrelationFunctionBox<Particle<N>>(a.data(), a.size(), 0.0, 0.05, 3, -1.0, 1.0, 4, r_array,
-                                                           mu_array, pc2, true, xi2, observer, true, false);
+                AngularCorrelationFunctionBox<Particle<N>>(a.data(),
+                                                           a.size(),
+                                                           0.0,
+                                                           0.05,
+                                                           3,
+                                                           -1.0,
+                                                           1.0,
+                                                           4,
+                                                           r_array,
+                                                           mu_array,
+                                                           pc2,
+                                                           true,
+                                                           xi2,
+                                                           observer,
+                                                           true,
+                                                           false);
                 double mx2 = 0.0;
                 for (auto & row : xi2)
                     for (auto x : row)
                         mx2 = std::max(mx2, std::fabs(x));
-                check(mx2 < 0.1, "xi(r, mu) of uniform random points in " + std::to_string(N) + "D: max |xi| = " + num(mx2));
+                check(mx2 < 0.1,
+                      "xi(r, mu) of uniform random points in " + std::to_string(N) + "D: max |xi| = " + num(mx2));
             }
         };
         run(std::integral_constant<int, 1>{});
@@ -207,8 +251,8 @@ int main() {
                 storage[0] += 1.0;
                 storage[1] += r;
             };
-        RadialCorrelationFunctionBox<Particle<3>>(a.data(), a.size(), 0.0, 0.1, 5, r_array, pc, false, xi, true, false,
-                                                  2, extra, f);
+        RadialCorrelationFunctionBox<
+            Particle<3>>(a.data(), a.size(), 0.0, 0.1, 5, r_array, pc, false, xi, true, false, 2, extra, f);
         bool ok = true;
         for (int i = 0; i < 5; i++) {
             const double rmean = extra[i][1] / extra[i][0];
@@ -244,18 +288,51 @@ int main() {
         auto data = make<3>(8000, true);
         auto randoms = make<3>(40000, true);
         DVector r_array, dd, dr, rd, rr, xi, observer{0.5, 0.5, 0.5};
-        RadialCorrelationFunctionSurvey<Particle<3>>(data.data(), data.size(), randoms.data(), randoms.size(),
-                                                     data.data(), data.size(), randoms.data(), randoms.size(), 0.02,
-                                                     0.1, 4, r_array, dd, dr, rd, rr, xi, observer, false, false, 0,
-                                                     empty_2D_array, empty_2D_array, empty_2D_array, empty_2D_array, {},
+        RadialCorrelationFunctionSurvey<Particle<3>>(data.data(),
+                                                     data.size(),
+                                                     randoms.data(),
+                                                     randoms.size(),
+                                                     data.data(),
+                                                     data.size(),
+                                                     randoms.data(),
+                                                     randoms.size(),
+                                                     0.02,
+                                                     0.1,
+                                                     4,
+                                                     r_array,
+                                                     dd,
+                                                     dr,
+                                                     rd,
+                                                     rr,
+                                                     xi,
+                                                     observer,
+                                                     false,
+                                                     false,
+                                                     0,
+                                                     empty_2D_array,
+                                                     empty_2D_array,
+                                                     empty_2D_array,
+                                                     empty_2D_array,
+                                                     {},
                                                      "LS");
         double mx = 0.0;
         for (auto x : xi)
             mx = std::max(mx, std::fabs(x));
         check(mx < 0.05, "survey Landy-Szalay xi of uniform points ~ 0 (max |xi| = " + num(mx) + ")");
         DVector pc, xib;
-        RadialCorrelationFunctionBox<Particle<3>, Particle<3>>(data.data(), data.size(), randoms.data(), randoms.size(),
-                                                               0.02, 0.1, 4, r_array, pc, true, xib, false, false);
+        RadialCorrelationFunctionBox<Particle<3>, Particle<3>>(data.data(),
+                                                               data.size(),
+                                                               randoms.data(),
+                                                               randoms.size(),
+                                                               0.02,
+                                                               0.1,
+                                                               4,
+                                                               r_array,
+                                                               pc,
+                                                               true,
+                                                               xib,
+                                                               false,
+                                                               false);
         double maxdiff = 0.0;
         for (size_t i = 0; i < pc.size(); i++)
             maxdiff = std::max(maxdiff, std::fabs(pc[i] - dr[i]) / pc[i]);
@@ -275,6 +352,7 @@ int main() {
 #endif
 
     if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All pair count tests passed\n" : std::to_string(fails) + " pair count test(s) FAILED\n");
+        std::cout << (fails == 0 ? "All pair count tests passed\n" :
+                                   std::to_string(fails) + " pair count test(s) FAILED\n");
     return fails == 0 ? 0 : 1;
 }

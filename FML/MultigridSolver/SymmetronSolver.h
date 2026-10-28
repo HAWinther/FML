@@ -127,7 +127,7 @@ class SymmetronSolverCosmology {
         const double H0L = L_mpch / 2997.92458;
         const double norm = 0.5 * a * a * (H0Box * H0Box) / (H0L * H0L);
         const double fac = (assb * assb * assb) / (a * a * a);
-            
+
         // The background value of the field we solve for
         const double f0 = get_phi_background(a);
 
@@ -211,7 +211,7 @@ class SymmetronSolverCosmology {
                 fmean += value;
                 fmax = std::max(fmax, value);
                 fmin = std::min(fmin, value);
-                
+
                 value = value * value * forcenorm;
                 fifth_force_potential_real.set_real_from_index(real_index, value);
             }

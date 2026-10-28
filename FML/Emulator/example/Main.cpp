@@ -1,7 +1,7 @@
 #include <iomanip>
 #include <FML/Emulator/EuclidEmulator2.h>
-        
-// The EuclidEmulator2 code was written by Mischa Knabenhans 
+
+// The EuclidEmulator2 code was written by Mischa Knabenhans
 // and was taken from https://github.com/miknab/EuclidEmulator2
 // See headerfile EuclidEmulator2.h for more info
 // For use cite the EuclidEmulator2 paper: https://arxiv.org/abs/2010.11288
@@ -13,7 +13,7 @@ int main() {
 
     // The euclidemulator needs the EuclidEmulator2.dat file, if this is not
     // in the right folder set the path to it here. This path is computed automatically
-    // at compiletime so as long as the file is in the same folder as EuclidEmulator2.h 
+    // at compiletime so as long as the file is in the same folder as EuclidEmulator2.h
     // all should be good
     // FML::EMULATOR::EUCLIDEMULATOR2::set_path_to_ee2_data("../EuclidEmulator2.dat");
 

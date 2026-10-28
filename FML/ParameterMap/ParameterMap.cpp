@@ -66,8 +66,8 @@ namespace FML {
                 std::string name = param.first;
                 ParameterTypes value = param.second;
                 std::cout << "  " << std::setw(30) << std::left << name << " : ";
-                if(value.index() != 0)
-                  std::cout << std::setw(15);
+                if (value.index() != 0)
+                    std::cout << std::setw(15);
                 std::cout << value << "\n";
             }
 #endif
@@ -81,7 +81,8 @@ namespace FML {
         T ParameterMap::get(std::string name) const {
             auto it = parameters.find(name);
             if (it == parameters.end())
-                throw_error("[ParameterMap::get] Required parameter [" + name + "] was not found in the parameter map\n");
+                throw_error("[ParameterMap::get] Required parameter [" + name +
+                            "] was not found in the parameter map\n");
             if (not std::holds_alternative<T>(it->second))
                 throw_error("[ParameterMap::get] Parameter [" + name + "] was requested as [" + type_name<T>() +
                             "] but it is a [" + type_names[it->second.index()] + "] in the parameter map\n");

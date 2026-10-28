@@ -164,8 +164,12 @@ class GravityModelScreened : public GravityModel<NDIM> {
         } else if (use_screening_method) {
 
             // Approximate screening method
-            compute_screened_fifth_force(
-                a, H0Box, norm_poisson_equation, coupling, density_fourier, density_fifth_force);
+            compute_screened_fifth_force(a,
+                                         H0Box,
+                                         norm_poisson_equation,
+                                         coupling,
+                                         density_fourier,
+                                         density_fifth_force);
 
             // Ensure that the large scales are behaving correctly
             // We set delta_fifth_force => A * (1-f) + B * f
@@ -235,8 +239,10 @@ class GravityModelScreened : public GravityModel<NDIM> {
         }
 
         // Compute total force
-        this->compute_force_from_total_density(
-            density_fifth_force, norm_poisson_equation, density_assignment_method_used, force_real);
+        this->compute_force_from_total_density(density_fifth_force,
+                                               norm_poisson_equation,
+                                               density_assignment_method_used,
+                                               force_real);
     }
 };
 

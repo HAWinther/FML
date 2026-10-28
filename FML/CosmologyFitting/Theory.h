@@ -45,93 +45,93 @@
 #include <vector>
 
 namespace FML::COSMOLOGY {
-  class Perturbations;
-  class PowerSpectrum;
-  class Tensors;
-}
+    class Perturbations;
+    class PowerSpectrum;
+    class Tensors;
+} // namespace FML::COSMOLOGY
 
 namespace FML::COSMOLOGY::FITTING {
 
 
-struct TheoryOptions {
-  enum class SoundHorizon { Recombination, Fit };
-  SoundHorizon sound_horizon = SoundHorizon::Recombination;
-  int rec_points = 4000;   // recombination grid (x from rec_x_start to 0); a normal run uses 40000
-  double rec_x_start = -11.0;
-  double rec_relerr = 1e-8;   // RECFAST ODE tolerance (1e-10 in a normal run; r_d changes by < 1e-8, 2x faster)
-  int cmb_ell_max = 2508;     // highest multipole of the lensed CMB spectra (cmb())
-};
+    struct TheoryOptions {
+        enum class SoundHorizon { Recombination, Fit };
+        SoundHorizon sound_horizon = SoundHorizon::Recombination;
+        int rec_points = 4000; // recombination grid (x from rec_x_start to 0); a normal run uses 40000
+        double rec_x_start = -11.0;
+        double rec_relerr = 1e-8; // RECFAST ODE tolerance (1e-10 in a normal run; r_d changes by < 1e-8, 2x faster)
+        int cmb_ell_max = 2508;   // highest multipole of the lensed CMB spectra (cmb())
+    };
 
-// Lensed CMB spectra D_ell = ell (ell+1) C_ell / 2 pi [muK^2], index = ell (0 and 1 unused), and
-// [ell (ell+1)]^2 C_ell^phiphi / 2 pi
-struct CMBSpectra {
-  int ell_max = 0;
-  std::vector<double> tt, ee, te, bb, pp;
-};
+    // Lensed CMB spectra D_ell = ell (ell+1) C_ell / 2 pi [muK^2], index = ell (0 and 1 unused), and
+    // [ell (ell+1)]^2 C_ell^phiphi / 2 pi
+    struct CMBSpectra {
+        int ell_max = 0;
+        std::vector<double> tt, ee, te, bb, pp;
+    };
 
-class Theory {
-  public:
-    using Options = TheoryOptions;
+    class Theory {
+      public:
+        using Options = TheoryOptions;
 
-    // Builds the model and solves the background (throws std::exception for unphysical parameters)
-    explicit Theory(const RunSettings& settings, Options options = Options());
+        // Builds the model and solves the background (throws std::exception for unphysical parameters)
+        explicit Theory(const RunSettings & settings, Options options = Options());
 
-    const BackgroundCosmology& background() const { return *bg; }
-    const RecombinationHistory& recombination() const;   // solved on first use
-    const RunSettings& settings() const { return s; }
+        const BackgroundCosmology & background() const { return *bg; }
+        const RecombinationHistory & recombination() const; // solved on first use
+        const RunSettings & settings() const { return s; }
 
-    double D_M(double z) const;
-    double D_H(double z) const;
-    double D_V(double z) const;
-    double d_L(double z) const { return (1.0 + z) * D_M(z); }
+        double D_M(double z) const;
+        double D_H(double z) const;
+        double D_V(double z) const;
+        double d_L(double z) const { return (1.0 + z) * D_M(z); }
 
-    double z_star() const;
-    double r_star() const;     // sound horizon at z_*
-    double z_drag() const;
-    double r_drag() const;     // sound horizon at the drag epoch
-    double R_shift() const;    // sqrt(Omega_m H0^2) D_M(z_*)/c   (Chen et al. convention, see above)
-    double l_A() const;        // pi D_M(z_*)/r_s(z_*)          (Chen et al. convention)
-    double omega_b() const;    // Omega_b h^2
-    double omega_m() const;    // (Omega_b + Omega_cdm + Omega_ncdm) h^2
-    double theta_MC() const;   // 100 r_s/D_M at the Hu-Sugiyama z_* (background only)
-    double theta_star() const; // 100 r_*/D_M(z_*)
+        double z_star() const;
+        double r_star() const; // sound horizon at z_*
+        double z_drag() const;
+        double r_drag() const;     // sound horizon at the drag epoch
+        double R_shift() const;    // sqrt(Omega_m H0^2) D_M(z_*)/c   (Chen et al. convention, see above)
+        double l_A() const;        // pi D_M(z_*)/r_s(z_*)          (Chen et al. convention)
+        double omega_b() const;    // Omega_b h^2
+        double omega_m() const;    // (Omega_b + Omega_cdm + Omega_ncdm) h^2
+        double theta_MC() const;   // 100 r_s/D_M at the Hu-Sugiyama z_* (background only)
+        double theta_star() const; // 100 r_*/D_M(z_*)
 
-    // CMB (computed on first use)
-    const CMBSpectra& cmb() const;
-    const RecombinationHistory& recombination_reionized() const;   // as in ./cmb (with reionization)
-    double tau_reio() const;   // optical depth to z = 50
-    double sigma8() const;     // linear sigma_8 today (accuracy limited by pert_k_max, see Theory.cpp)
+        // CMB (computed on first use)
+        const CMBSpectra & cmb() const;
+        const RecombinationHistory & recombination_reionized() const; // as in ./cmb (with reionization)
+        double tau_reio() const;                                      // optical depth to z = 50
+        double sigma8() const; // linear sigma_8 today (accuracy limited by pert_k_max, see Theory.cpp)
 
-    // Nuisance parameters
-    void set_nuisance(const std::string& name, double value) { nuis[name] = value; }
-    double nuisance(const std::string& name, double default_value) const {
-      const auto it = nuis.find(name);
-      return it == nuis.end() ? default_value : it->second;
-    }
+        // Nuisance parameters
+        void set_nuisance(const std::string & name, double value) { nuis[name] = value; }
+        double nuisance(const std::string & name, double default_value) const {
+            const auto it = nuis.find(name);
+            return it == nuis.end() ? default_value : it->second;
+        }
 
-    ~Theory();
+        ~Theory();
 
-  private:
-    RunSettings s;
-    Options opt;
-    std::unique_ptr<BackgroundCosmology> bg;
-    mutable std::unique_ptr<RecombinationHistory> rec;
-    mutable double zs = -1.0, rs = -1.0, zd = -1.0, rd = -1.0;
-    void compute_star() const;
-    void compute_drag() const;
-    double sound_horizon_bg(double z) const;   // int_z^inf c_s dz/H [Mpc], from the background only
-    double E_chen(double z) const;             // H/H0 with the radiation and neutrinos of Chen et al.
-    double D_M_chen(double z) const;
-    double r_s_chen(double z) const;
-    mutable double R_c = -1.0, lA_c = -1.0;
-    mutable std::unique_ptr<RecombinationHistory> rec_full;
-    mutable std::unique_ptr<Perturbations> pert;
-    mutable std::unique_ptr<PowerSpectrum> ps;
-    mutable std::unique_ptr<Tensors> tens;
-    mutable std::unique_ptr<CMBSpectra> spectra;
-    mutable double sigma8_ = 0.0;
-    std::map<std::string, double> nuis;
-};
+      private:
+        RunSettings s;
+        Options opt;
+        std::unique_ptr<BackgroundCosmology> bg;
+        mutable std::unique_ptr<RecombinationHistory> rec;
+        mutable double zs = -1.0, rs = -1.0, zd = -1.0, rd = -1.0;
+        void compute_star() const;
+        void compute_drag() const;
+        double sound_horizon_bg(double z) const; // int_z^inf c_s dz/H [Mpc], from the background only
+        double E_chen(double z) const;           // H/H0 with the radiation and neutrinos of Chen et al.
+        double D_M_chen(double z) const;
+        double r_s_chen(double z) const;
+        mutable double R_c = -1.0, lA_c = -1.0;
+        mutable std::unique_ptr<RecombinationHistory> rec_full;
+        mutable std::unique_ptr<Perturbations> pert;
+        mutable std::unique_ptr<PowerSpectrum> ps;
+        mutable std::unique_ptr<Tensors> tens;
+        mutable std::unique_ptr<CMBSpectra> spectra;
+        mutable double sigma8_ = 0.0;
+        std::map<std::string, double> nuis;
+    };
 
 } // namespace FML::COSMOLOGY::FITTING
 

@@ -19,7 +19,7 @@
 // If you need dynamically allocated memory inside the class then that is no
 // problem, but you will have to implement three functions that appends the data
 // to a communication buffer, assigns the data from a communication buffer and a
-// method that gives the byte-size of the particle. Otherwise communication of 
+// method that gives the byte-size of the particle. Otherwise communication of
 // the particles across tasks will not work.
 //======================================================================
 

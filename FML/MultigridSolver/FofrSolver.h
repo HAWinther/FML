@@ -157,8 +157,8 @@ class FofrSolverCosmology {
     /// steps from the current value u, keeping a bracket [lo, hi] from the signs of g: a step that leaves the bracket
     /// is replaced by bisection in log u (or by a factor of 2 while one side of the bracket is still open). Usually
     /// 2-3 iterations
-    static double solve_cell_general_n(double u, double sumnb, double h2, double rhs, double prefac, double f0,
-                                       double alpha) {
+    static double
+    solve_cell_general_n(double u, double sumnb, double h2, double rhs, double prefac, double f0, double alpha) {
         if (not(u > 0.0) or not std::isfinite(u))
             u = f0;
         double lo = 0.0, hi = std::numeric_limits<double>::infinity();
@@ -334,8 +334,8 @@ class FofrSolverCosmology {
                 const double delta = density_multigrid.get_y(level, index);
                 const double sumnb = sum_of_neighbors_squared(sol, level, index);
                 if (not n_is_one)
-                    return SolverType(solve_cell_general_n(u, sumnb, h2, poisson_norm * delta + fas_source, prefac,
-                                                           f0, exponent));
+                    return SolverType(
+                        solve_cell_general_n(u, sumnb, h2, poisson_norm * delta + fas_source, prefac, f0, exponent));
                 const double p = (-sumnb + h2 * (poisson_norm * delta + prefac + fas_source)) / (2.0 * NDIM);
                 const double q = -h2 * prefac * f0 / (2.0 * NDIM);
                 return SolverType(positive_cubic_root(p, q));
@@ -380,9 +380,9 @@ class FofrSolverCosmology {
 
         // A non-finite solution would silently ruin the simulation
         if (nbad > 0) {
-            const std::string msg = "[FofrSolverCosmology] The f(R) solution is not finite in " +
-                                    std::to_string(nbad) + " cells (a = " + std::to_string(a) + ", method = " +
-                                    method + "). With method log try method sqrt or more sweeps on the first step\n";
+            const std::string msg = "[FofrSolverCosmology] The f(R) solution is not finite in " + std::to_string(nbad) +
+                                    " cells (a = " + std::to_string(a) + ", method = " + method +
+                                    "). With method log try method sqrt or more sweeps on the first step\n";
             if (FML::ThisTask == 0)
                 std::cerr << msg << std::flush;
             FML::abort_mpi(1);

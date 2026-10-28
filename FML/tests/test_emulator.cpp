@@ -89,6 +89,7 @@ int main() {
     }
 
     if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All emulator tests passed\n" : std::to_string(fails) + " emulator test(s) FAILED\n");
+        std::cout << (fails == 0 ? "All emulator tests passed\n" :
+                                   std::to_string(fails) + " emulator test(s) FAILED\n");
     return fails == 0 ? 0 : 1;
 }

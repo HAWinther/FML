@@ -148,8 +148,11 @@ int main() {
     // we don't do this here)
     //=====================================================
     std::array<std::vector<FML::GRID::FloatType>, Ndim> displacements_1LPT;
-    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<Ndim, Particle>(
-        Psi_1LPT_vector, part.get_particles_ptr(), part.get_npart(), displacements_1LPT, interpolation_method);
+    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<Ndim, Particle>(Psi_1LPT_vector,
+                                                                                      part.get_particles_ptr(),
+                                                                                      part.get_npart(),
+                                                                                      displacements_1LPT,
+                                                                                      interpolation_method);
     for (int idim = 0; idim < Ndim; idim++) {
         Psi_1LPT_vector[idim].free();
     }
@@ -158,8 +161,11 @@ int main() {
     // Interpolate 2LPT displacement field to particle positions
     //=====================================================
     std::array<std::vector<FML::GRID::FloatType>, Ndim> displacements_2LPT;
-    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<Ndim, Particle>(
-        Psi_2LPT_vector, part.get_particles_ptr(), part.get_npart(), displacements_2LPT, interpolation_method);
+    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<Ndim, Particle>(Psi_2LPT_vector,
+                                                                                      part.get_particles_ptr(),
+                                                                                      part.get_npart(),
+                                                                                      displacements_2LPT,
+                                                                                      interpolation_method);
     for (int idim = 0; idim < Ndim; idim++) {
         Psi_2LPT_vector[idim].free();
     }

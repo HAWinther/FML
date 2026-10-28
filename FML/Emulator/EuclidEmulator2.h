@@ -58,12 +58,13 @@ namespace FML {
 
             // We assume the EE2 datafile is in the same folder as this header with a .dat ending instead of .h
             // If this does not work with your compiler simply define path_to_ee2_datafile below
-#ifdef __FILE__  
+#ifdef __FILE__
             // (inline: the header can be included in several translation units)
             inline std::string _temp_this_filepath = __FILE__;
-            inline std::string _temp_this_filepath_no_ending = _temp_this_filepath.substr(0, _temp_this_filepath.size()-1);
+            inline std::string _temp_this_filepath_no_ending =
+                _temp_this_filepath.substr(0, _temp_this_filepath.size() - 1);
             inline std::string path_to_ee2_datafile = _temp_this_filepath_no_ending + "dat";
-#else 
+#else
             inline std::string path_to_ee2_datafile = "EuclidEmulator2.dat";
 #endif
 
@@ -155,13 +156,13 @@ namespace FML {
             };
 
             inline Cosmology::Cosmology(double Omega_b,
-                                 double Omega_m,
-                                 double Sum_m_nu,
-                                 double n_s,
-                                 double h,
-                                 double w_0,
-                                 double w_a,
-                                 double A_s) {
+                                        double Omega_m,
+                                        double Sum_m_nu,
+                                        double n_s,
+                                        double h,
+                                        double w_0,
+                                        double w_a,
+                                        double A_s) {
                 gsl_wsp = gsl_integration_workspace_alloc(1000);
                 acc = gsl_interp_accel_alloc();
                 cosmo[0] = Omega_b;
@@ -231,7 +232,10 @@ namespace FML {
                     acc = gsl_interp_accel_alloc();
                 if (rhs.z2nStep_spline) {
                     z2nStep_spline = gsl_spline_alloc(gsl_interp_cspline, rhs.z2nStep_spline->size);
-                    gsl_spline_init(z2nStep_spline, rhs.z2nStep_spline->x, rhs.z2nStep_spline->y, rhs.z2nStep_spline->size);
+                    gsl_spline_init(z2nStep_spline,
+                                    rhs.z2nStep_spline->x,
+                                    rhs.z2nStep_spline->y,
+                                    rhs.z2nStep_spline->size);
                 }
                 return *this;
             }
@@ -344,8 +348,16 @@ namespace FML {
                 a2t_params.csm_instance = this;
                 F.function = &a2t_integrand;
                 F.params = &a2t_params;
-                gsl_integration_qag(
-                    &F, -15, std::log(a), 0.0, EPSCOSMO, 1000, GSL_INTEG_GAUSS61, gsl_wsp, &result, &error);
+                gsl_integration_qag(&F,
+                                    -15,
+                                    std::log(a),
+                                    0.0,
+                                    EPSCOSMO,
+                                    1000,
+                                    GSL_INTEG_GAUSS61,
+                                    gsl_wsp,
+                                    &result,
+                                    &error);
                 return result;
             }
 
@@ -424,13 +436,13 @@ namespace FML {
             }
 
             inline EuclidEmulator::EuclidEmulator(double OmegaB,
-                                           double OmegaM,
-                                           double Sum_m_nu,
-                                           double n_s,
-                                           double h,
-                                           double w_0,
-                                           double w_a,
-                                           double A_s)
+                                                  double OmegaM,
+                                                  double Sum_m_nu,
+                                                  double n_s,
+                                                  double h,
+                                                  double w_0,
+                                                  double w_a,
+                                                  double A_s)
                 : EuclidEmulator(Cosmology(OmegaB, OmegaM, Sum_m_nu, n_s, h, w_0, w_a, A_s)) {}
 
             inline EuclidEmulator::~EuclidEmulator() {
@@ -485,7 +497,8 @@ namespace FML {
                 data = (double *)mmap(0, size, PROT_READ, MAP_PRIVATE, fp, 0);
                 if (data == MAP_FAILED) {
                     close(fp);
-                    throw std::runtime_error("Error: cannot memory map the EuclidEmulator2 file " + path_to_ee2_datafile);
+                    throw std::runtime_error("Error: cannot memory map the EuclidEmulator2 file " +
+                                             path_to_ee2_datafile);
                 }
                 mapped_data = data;
                 mapped_size = size;
@@ -542,7 +555,8 @@ namespace FML {
                     // boost would be garbage) so we throw and let the caller decide what to do
                     if (redshift.at(iz) > 10.0 || redshift.at(iz) < 0.0) {
                         throw std::runtime_error("EuclidEmulator2 accepts only redshifts in the interval [0.0, 10.0]. "
-                                                 "Got z = " + std::to_string(redshift.at(iz)));
+                                                 "Got z = " +
+                                                 std::to_string(redshift.at(iz)));
                     }
                     stp_no[iz] = csm.compute_step_number(redshift.at(iz));
                 }
@@ -556,8 +570,11 @@ namespace FML {
                 }
                 for (int iz = 0; iz < n_redshift; iz++) {
                     for (int ik = 0; ik < nk; ik++) {
-                        Bvec[iz][ik] = gsl_spline2d_eval(
-                            logklogz2pc_spline[0], std::log(kvec[ik]), stp_no[iz], logk2pc_acc[0], logz2pc_acc[0]);
+                        Bvec[iz][ik] = gsl_spline2d_eval(logklogz2pc_spline[0],
+                                                         std::log(kvec[ik]),
+                                                         stp_no[iz],
+                                                         logk2pc_acc[0],
+                                                         logz2pc_acc[0]);
                     }
                 }
                 for (int ipc = 1; ipc < 15; ipc++) {
@@ -595,6 +612,6 @@ namespace FML {
             }
 #endif
         } // namespace EUCLIDEMULATOR2
-    }     // namespace EMULATOR
+    } // namespace EMULATOR
 } // namespace FML
 #endif

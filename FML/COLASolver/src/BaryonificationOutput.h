@@ -35,6 +35,7 @@ namespace COLASOLVER {
     void output_baryonified_snapshot(FML::Vector<BaryonificationParticle> particles,
                                      const SimulationParameters & settings,
                                      const std::shared_ptr<Cosmology> & cosmo,
-                                     double redshift, const std::string & snapshot_folder);
-}
+                                     double redshift,
+                                     const std::string & snapshot_folder);
+} // namespace COLASOLVER
 #endif

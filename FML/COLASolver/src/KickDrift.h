@@ -60,8 +60,11 @@ namespace COLASOLVER {
         for (int idim = 0; idim < NDIM; idim++)
             force_real[idim].communicate_boundaries();
         std::array<std::vector<FML::GRID::FloatType>, NDIM> force;
-        FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, P>(
-            force_real, p, npart, force, interpolation_method);
+        FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, P>(force_real,
+                                                                                   p,
+                                                                                   npart,
+                                                                                   force,
+                                                                                   interpolation_method);
         const double inv_ac = 1.0 / (apos * NU::c_code(boxsize));
         double max_u = 0.0;
 #ifdef USE_OMP

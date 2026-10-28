@@ -124,9 +124,9 @@ namespace FML {
 
     // Get the current and peak value of the resident set size (in bytes)
     std::pair<double, double> get_system_memory_use();
-    // Print the min/max of the current and peak value of the resident set size 
+    // Print the min/max of the current and peak value of the resident set size
     // over tasks
-    void print_system_memory_use(); 
+    void print_system_memory_use();
 
 #ifdef USE_MPI
     /// Types we can reduce directly with MPI_Allreduce (arithmetic types except bool)
@@ -275,15 +275,14 @@ namespace FML {
     //============================================
     constexpr long long int power(int base, int exponent) {
         return exponent < 0  ? 0 :
-               exponent == 0 ?
-                   1 :
-                   (exponent % 2 == 0 ?
-                        power(base, exponent / 2) * power(base, exponent / 2) :
-                        (long long int)(base)*power(base, (exponent - 1) / 2) * power(base, (exponent - 1) / 2));
+               exponent == 0 ? 1 :
+                               (exponent % 2 == 0 ? power(base, exponent / 2) * power(base, exponent / 2) :
+                                                    (long long int)(base)*power(base, (exponent - 1) / 2) *
+                                                        power(base, (exponent - 1) / 2));
     }
-    
+
     //============================================
-    // Create a folder (only Task 0 is allowed 
+    // Create a folder (only Task 0 is allowed
     // to do this)
     //============================================
     bool create_folder(std::string foldername);
@@ -357,8 +356,8 @@ namespace FML {
 
 #define FUNS(FUN)                                                                                                      \
     template <class T>                                                                                                 \
-    auto FUN(const Vector<T> & x)->Vector<T> {                                                                         \
-        auto op_##FUN = [](T x) -> T { return std::FUN(x); };                                             \
+    auto FUN(const Vector<T> & x) -> Vector<T> {                                                                       \
+        auto op_##FUN = [](T x) -> T { return std::FUN(x); };                                                          \
         Vector<T> y(x.size());                                                                                         \
         std::transform(x.begin(), x.end(), y.begin(), op_##FUN);                                                       \
         return y;                                                                                                      \

@@ -234,7 +234,8 @@ namespace FML {
                 void throw_error(std::string errormessage) const;
 
                 /// Write n IDs (id(i)) with 4 bytes, or 8 bytes if long_ids
-                void write_ids(std::ofstream & fp, size_t n, bool long_ids, const std::function<long long int(size_t)> & id);
+                void
+                write_ids(std::ofstream & fp, size_t n, bool long_ids, const std::function<long long int(size_t)> & id);
 
               public:
                 GadgetWriter() = default;
@@ -502,7 +503,8 @@ namespace FML {
                                 continue;
                             }
 #endif
-                            if (only_keep_part_in_domain and not(x[0] >= FML::xmin_domain and x[0] < FML::xmax_domain)) {
+                            if (only_keep_part_in_domain and
+                                not(x[0] >= FML::xmin_domain and x[0] < FML::xmax_domain)) {
                                 keep[i] = 0;
                                 continue;
                             }
@@ -540,9 +542,9 @@ namespace FML {
                             for (size_t i = 0; i < NumPartFileTot; i++) {
                                 if (not keep[i])
                                     continue;
-                                const long long int id = size == 4 ?
-                                                             (long long int)(reinterpret_cast<int32_t *>(buffer.data())[i]) :
-                                                             (long long int)(reinterpret_cast<int64_t *>(buffer.data())[i]);
+                                const long long int id =
+                                    size == 4 ? (long long int)(reinterpret_cast<int32_t *>(buffer.data())[i]) :
+                                                (long long int)(reinterpret_cast<int64_t *>(buffer.data())[i]);
                                 FML::PARTICLE::SetID(part[index++], id);
                             }
                         }
@@ -683,7 +685,8 @@ namespace FML {
                     ntowrite += npart_family[i];
                 }
                 if (ntowrite > size_t(UINT_MAX))
-                    throw_error("[GadgetWriter::write_gadget_single] Too many particles for one file. Use more files\n");
+                    throw_error(
+                        "[GadgetWriter::write_gadget_single] Too many particles for one file. Use more files\n");
 
                 write_header_general(fp,
                                      npart_family,
@@ -768,13 +771,15 @@ namespace FML {
                 for (size_t i = 0; i < species.size(); i++) {
                     auto & sp = species[i];
                     if (sp.type < 0 or sp.type > 5 or (i > 0 and species[i - 1].type == sp.type))
-                        throw_error("[GadgetWriter::write_gadget_species] The particle types must be different and in 0-5");
+                        throw_error(
+                            "[GadgetWriter::write_gadget_species] The particle types must be different and in 0-5");
                     npart_type[sp.type] = sp.npart;
                     npart_type_tot[sp.type] = sp.npart_total;
-                    mass_in_1e10_msunh[sp.type] =
-                        sp.npart_total == 0 ? 0.0 :
-                                              3.0 * OmegaM * sp.mass_fraction * MplMpl_over_H0Msunh *
-                                                  std::pow(Boxsize / HubbleLengthInMpch, 3) / double(sp.npart_total) / 1e10;
+                    mass_in_1e10_msunh[sp.type] = sp.npart_total == 0 ?
+                                                      0.0 :
+                                                      3.0 * OmegaM * sp.mass_fraction * MplMpl_over_H0Msunh *
+                                                          std::pow(Boxsize / HubbleLengthInMpch, 3) /
+                                                          double(sp.npart_total) / 1e10;
                 }
                 // Per-particle masses (MASS block) for the species with get_mass: their MassTable entry is 0
                 std::vector<double> mean_mass_of_type = mass_in_1e10_msunh;
@@ -786,7 +791,8 @@ namespace FML {
                 for (auto & sp : species)
                     ntowrite += sp.npart;
                 if (ntowrite > size_t(UINT_MAX))
-                    throw_error("[GadgetWriter::write_gadget_species] Too many particles for one file. Use more files\n");
+                    throw_error(
+                        "[GadgetWriter::write_gadget_species] Too many particles for one file. Use more files\n");
 
                 std::ofstream fp(filename.c_str(), std::ios::binary | std::ios::out);
                 if (not fp.is_open())
@@ -860,7 +866,7 @@ namespace FML {
             }
 
         } // namespace GADGET
-    }     // namespace FILEUTILS
+    } // namespace FILEUTILS
 } // namespace FML
 
 #endif

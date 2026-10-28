@@ -27,30 +27,25 @@ namespace FML {
         /// All the types we can have in the parameter file: string, int, boolean, double and vectors of double and ints
         /// Can be extended if needed. Only thing that is required is that the type you add have a cout-overload for
         /// printing the value
-        using ParameterTypes = std::variant<bool,
-                                            int,
-                                            double,
-                                            std::string,
-                                            std::vector<int>,
-                                            std::vector<double>,
-                                            std::vector<std::string>>;
+        using ParameterTypes = std::
+            variant<bool, int, double, std::string, std::vector<int>, std::vector<double>, std::vector<std::string>>;
 
-            //============================================================================
-            ///
-            /// For holding a map of parameters of different types with easy set and gets
-            /// allowing for fiducial values if the parameter is not in the map
-            ///
-            /// Uses std::variant which requires a C++17 compatible compiler.
-            ///
-            /// Errors handled via the throw_error function.
-            ///
-            /// Compile time defines:
-            ///
-            /// USE_MPI : Use MPI (only difference is in how errors are handled)
-            ///
-            //============================================================================
+        //============================================================================
+        ///
+        /// For holding a map of parameters of different types with easy set and gets
+        /// allowing for fiducial values if the parameter is not in the map
+        ///
+        /// Uses std::variant which requires a C++17 compatible compiler.
+        ///
+        /// Errors handled via the throw_error function.
+        ///
+        /// Compile time defines:
+        ///
+        /// USE_MPI : Use MPI (only difference is in how errors are handled)
+        ///
+        //============================================================================
 
-            class ParameterMap {
+        class ParameterMap {
           private:
             std::map<std::string, ParameterTypes> parameters{};
 

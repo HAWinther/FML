@@ -58,7 +58,9 @@ const double OmegaM = 0.3;
 double expected_mass(double fraction, size_t n) { return 27.7536627 * OmegaM * fraction * box * box * box / double(n); }
 
 // The particles are a function of the ID so we can check them after reading
-double expected_pos(long long id, int idim) { return std::fmod(0.6180339887 * double(id % 100000 + 1) * (idim + 1) + 0.1 * idim, 1.0); }
+double expected_pos(long long id, int idim) {
+    return std::fmod(0.6180339887 * double(id % 100000 + 1) * (idim + 1) + 0.1 * idim, 1.0);
+}
 double expected_vel(long long id, int idim) { return 100.0 * std::sin(0.37 * double(id % 100000) + idim); } // km/s
 int expected_family(long long id) { return id % 5 == 0 ? 0 : (id % 5 == 1 ? 3 : 1); }
 
@@ -101,7 +103,9 @@ std::vector<T> make_particles(size_t n0, size_t n1, long long id_offset = 0) {
 // The particles of this task when ntotal are split over the tasks
 template <class T>
 std::vector<T> make_task_particles(size_t ntotal, long long id_offset = 0) {
-    return make_particles<T>(ntotal * FML::ThisTask / FML::NTasks, ntotal * (FML::ThisTask + 1) / FML::NTasks, id_offset);
+    return make_particles<T>(ntotal * FML::ThisTask / FML::NTasks,
+                             ntotal * (FML::ThisTask + 1) / FML::NTasks,
+                             id_offset);
 }
 
 // Check particles read back: the number over all tasks, in the domain, positions, velocities, IDs (sum and range)
@@ -234,8 +238,18 @@ int main(int argc, char ** argv) {
         auto part = make_task_particles<Particle>(ntotal);
         GadgetWriter gw;
         const std::string fileprefix = prefix + "dm";
-        gw.write_gadget_single(fileprefix + "." + mytask, part.data(), part.size(), ntotal, FML::NTasks, aexp, box,
-                               OmegaM, 0.7, 0.7, box, vel_norm);
+        gw.write_gadget_single(fileprefix + "." + mytask,
+                               part.data(),
+                               part.size(),
+                               ntotal,
+                               FML::NTasks,
+                               aexp,
+                               box,
+                               OmegaM,
+                               0.7,
+                               0.7,
+                               box,
+                               vel_norm);
         my_files.push_back(fileprefix + "." + mytask);
         barrier();
         std::vector<Particle> read;
@@ -264,13 +278,34 @@ int main(int argc, char ** argv) {
         auto part = make_task_particles<ParticleWithFamily>(ntotal);
         const std::string fileprefix = prefix + "types";
         GadgetWriter gw;
-        gw.write_gadget_single(fileprefix + "." + mytask, part.data(), part.size(), ntotal, FML::NTasks, aexp, box,
-                               OmegaM, 0.7, 0.7, box, vel_norm, {0.2, 0.7, 0.0, 0.1, 0.0, 0.0});
+        gw.write_gadget_single(fileprefix + "." + mytask,
+                               part.data(),
+                               part.size(),
+                               ntotal,
+                               FML::NTasks,
+                               aexp,
+                               box,
+                               OmegaM,
+                               0.7,
+                               0.7,
+                               box,
+                               vel_norm,
+                               {0.2, 0.7, 0.0, 0.1, 0.0, 0.0});
         my_files.push_back(fileprefix + "." + mytask);
         // Default fractions: the totals must still be right
         const std::string fileprefix2 = prefix + "typesdefault";
-        gw.write_gadget_single(fileprefix2 + "." + mytask, part.data(), part.size(), ntotal, FML::NTasks, aexp, box,
-                               OmegaM, 0.7, 0.7, box, vel_norm);
+        gw.write_gadget_single(fileprefix2 + "." + mytask,
+                               part.data(),
+                               part.size(),
+                               ntotal,
+                               FML::NTasks,
+                               aexp,
+                               box,
+                               OmegaM,
+                               0.7,
+                               0.7,
+                               box,
+                               vel_norm);
         my_files.push_back(fileprefix2 + "." + mytask);
         barrier();
 
@@ -293,7 +328,8 @@ int main(int argc, char ** argv) {
         std::string info;
         bool ok = check_particles(read, ntotal, 0, info);
         check(ok and nbadtype == 0,
-              "types read with " + num(FML::NTasks) + " task(s): wrong type for " + num(nbadtype) + " particles, " + info);
+              "types read with " + num(FML::NTasks) + " task(s): wrong type for " + num(nbadtype) + " particles, " +
+                  info);
 
         GadgetReader g2;
         std::vector<ParticleWithFamily> read2;
@@ -314,8 +350,18 @@ int main(int argc, char ** argv) {
         auto part = make_task_particles<Particle>(ntotal, offset);
         const std::string fileprefix = prefix + "ids";
         GadgetWriter gw;
-        gw.write_gadget_single(fileprefix + "." + mytask, part.data(), part.size(), ntotal, FML::NTasks, aexp, box,
-                               OmegaM, 0.7, 0.7, box, vel_norm);
+        gw.write_gadget_single(fileprefix + "." + mytask,
+                               part.data(),
+                               part.size(),
+                               ntotal,
+                               FML::NTasks,
+                               aexp,
+                               box,
+                               OmegaM,
+                               0.7,
+                               0.7,
+                               box,
+                               vel_norm);
         my_files.push_back(fileprefix + "." + mytask);
         barrier();
         std::vector<Particle> read;
@@ -341,15 +387,35 @@ int main(int argc, char ** argv) {
         auto part = make_particles<Particle>(n0, n1);
         const std::string fileprefix = prefix + "small";
         GadgetWriter gw;
-        gw.write_gadget_single(fileprefix + "." + mytask, part.data(), part.size(), ntotal, FML::NTasks, aexp, box,
-                               OmegaM, 0.7, 0.7, box, vel_norm);
+        gw.write_gadget_single(fileprefix + "." + mytask,
+                               part.data(),
+                               part.size(),
+                               ntotal,
+                               FML::NTasks,
+                               aexp,
+                               box,
+                               OmegaM,
+                               0.7,
+                               0.7,
+                               box,
+                               vel_norm);
         my_files.push_back(fileprefix + "." + mytask);
         // And one file (written by task 0) with 5 particles
         const std::string fileprefix5 = prefix + "five";
         if (FML::ThisTask == 0) {
             auto five = make_particles<Particle>(0, 5);
-            gw.write_gadget_single(fileprefix5 + ".0", five.data(), five.size(), 5, 1, aexp, box, OmegaM, 0.7, 0.7,
-                                   box, vel_norm);
+            gw.write_gadget_single(fileprefix5 + ".0",
+                                   five.data(),
+                                   five.size(),
+                                   5,
+                                   1,
+                                   aexp,
+                                   box,
+                                   OmegaM,
+                                   0.7,
+                                   0.7,
+                                   box,
+                                   vel_norm);
             my_files.push_back(fileprefix5 + ".0");
         }
         barrier();
@@ -377,7 +443,15 @@ int main(int argc, char ** argv) {
         auto s3 = make_gadget_species(3, nu.data(), nu.size(), nnu, 0.1);
         const std::string fileprefix = prefix + "mass";
         GadgetWriter gw;
-        gw.write_gadget_species(fileprefix + "." + mytask, {s3, s1}, FML::NTasks, aexp, box, OmegaM, 0.7, 0.7, box,
+        gw.write_gadget_species(fileprefix + "." + mytask,
+                                {s3, s1},
+                                FML::NTasks,
+                                aexp,
+                                box,
+                                OmegaM,
+                                0.7,
+                                0.7,
+                                box,
                                 vel_norm);
         my_files.push_back(fileprefix + "." + mytask);
         barrier();
@@ -442,8 +516,19 @@ int main(int argc, char ** argv) {
         auto part = make_task_particles<ParticleWithFamily>(ntotal);
         const std::string fileprefix = prefix + "h5types";
         GadgetHDF5Writer hw(3);
-        hw.write_gadget_single(fileprefix + "." + mytask + ".hdf5", part.data(), part.size(), ntotal, FML::NTasks,
-                               aexp, box, OmegaM, 0.7, 0.7, box, vel_norm, {0.2, 0.7, 0.0, 0.1, 0.0, 0.0});
+        hw.write_gadget_single(fileprefix + "." + mytask + ".hdf5",
+                               part.data(),
+                               part.size(),
+                               ntotal,
+                               FML::NTasks,
+                               aexp,
+                               box,
+                               OmegaM,
+                               0.7,
+                               0.7,
+                               box,
+                               vel_norm,
+                               {0.2, 0.7, 0.0, 0.1, 0.0, 0.0});
         my_files.push_back(fileprefix + "." + mytask + ".hdf5");
         barrier();
         GadgetHDF5Reader hr(3);

@@ -15,15 +15,18 @@
 
 namespace FML::COSMOLOGY {
 
-class GeneralRelativity : public Gravity {
-  public:
-    std::string name() const override { return "GR"; }
-    double E2(double x, const BackgroundCosmology& bg) const override;
-    double dE2dx(double x, const BackgroundCosmology& bg) const override;
-    double ddE2ddx(double x, const BackgroundCosmology& bg) const override;
-    MetricAtX metric(const ModeAtX& b, const double* cache, const double* y, const Moments& total,
-                     double* dydx) const override;
-};
+    class GeneralRelativity : public Gravity {
+      public:
+        std::string name() const override { return "GR"; }
+        double E2(double x, const BackgroundCosmology & bg) const override;
+        double dE2dx(double x, const BackgroundCosmology & bg) const override;
+        double ddE2ddx(double x, const BackgroundCosmology & bg) const override;
+        MetricAtX metric(const ModeAtX & b,
+                         const double * cache,
+                         const double * y,
+                         const Moments & total,
+                         double * dydx) const override;
+    };
 
 } // namespace FML::COSMOLOGY
 

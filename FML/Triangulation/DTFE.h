@@ -20,8 +20,9 @@ namespace FML {
         /// Cautun & van de Weygaert 2011.
         ///
         /// We make a periodic Delaunay tessellation of the particles (in 3D). The density at a particle is
-        /// \f$ \rho_i = (D+1) m_i / W_i \f$ where \f$ W_i \f$ is the volume of all the tetrahedra that have the particle
-        /// as a vertex (the contiguous Voronoi cell). Any quantity known at the particles (velocity, the density,
+        /// \f$ \rho_i = (D+1) m_i / W_i \f$ where \f$ W_i \f$ is the volume of all the tetrahedra that have the
+        /// particle as a vertex (the contiguous Voronoi cell). Any quantity known at the particles (velocity, the
+        /// density,
         /// ...) is interpolated linearly inside each Delaunay tetrahedron, so its gradient is constant in each
         /// tetrahedron. The grid values are either the field at the grid point or the average over the grid cell
         /// (estimated with nsub^3 regularly spaced samples in the cell), and the averages are either volume weighted
@@ -305,13 +306,13 @@ namespace FML {
                 };
 
                 // Minimal image of x - q0
-                auto relative = [&](const double (&x)[3], double (&dx)[3]) {
+                auto relative = [&](const double(&x)[3], double(&dx)[3]) {
                     for (int j = 0; j < 3; j++) {
                         dx[j] = x[j] - q0[j];
                         dx[j] -= std::round(dx[j]);
                     }
                 };
-                auto inside_cell = [&](const double (&dx)[3]) {
+                auto inside_cell = [&](const double(&dx)[3]) {
                     double sum = 0.0;
                     for (int k = 0; k < 3; k++) {
                         const double lambda = minv[0][k] * dx[0] + minv[1][k] * dx[1] + minv[2][k] * dx[2];
@@ -391,8 +392,9 @@ namespace FML {
                               << " samples are in tetrahedra that might not be correct (they extend outside of the "
                                  "buffer) and were not used. Increase buffer_fraction\n";
                 if (FML::ThisTask == 0 and ncells_empty > 0)
-                    std::cout << "[DTFE::interpolate_to_grid] Warning: " << ncells_empty
-                              << " grid cells have no valid samples (or zero mass for mass weighting) and are set to NaN\n";
+                    std::cout
+                        << "[DTFE::interpolate_to_grid] Warning: " << ncells_empty
+                        << " grid cells have no valid samples (or zero mass for mass weighting) and are set to NaN\n";
             }
 
             /// The DTFE density field (in units of the mean density) on a grid
@@ -502,7 +504,7 @@ namespace FML {
                     for (auto & g : result.shear)
                         g = Grid(Nmesh);
 
-                const Grid * ref = compute_velocity     ? &result.velocity[0] :
+                const Grid * ref = compute_velocity   ? &result.velocity[0] :
                                    compute_divergence ? &result.divergence :
                                    compute_vorticity  ? &result.vorticity[0] :
                                    compute_shear      ? &result.shear[0] :

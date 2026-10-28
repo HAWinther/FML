@@ -17,9 +17,7 @@ const int NDIM = 3;
 struct Particle {
     double x[NDIM];
     Particle() {}
-    Particle(double * _x) {
-        std::memcpy(x, _x, NDIM * sizeof(double));
-    }
+    Particle(double * _x) { std::memcpy(x, _x, NDIM * sizeof(double)); }
     double * get_pos() { return x; }
 };
 
@@ -83,18 +81,21 @@ void ExamplesInterpolation() {
     const bool all_tasks_have_the_same_particles = true;
     const int nalloc_per_task = 2 * npos;
     part.create(positions.data(),
-             positions.size(),
-             nalloc_per_task,
-             FML::xmin_domain,
-             FML::xmax_domain,
-             all_tasks_have_the_same_particles);
+                positions.size(),
+                nalloc_per_task,
+                FML::xmin_domain,
+                FML::xmax_domain,
+                all_tasks_have_the_same_particles);
 
     //=======================================================
     // Interpolate to the particle positions
     //=======================================================
     std::vector<FML::GRID::FloatType> interpolated_values;
-    FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, Particle>(
-        grid, part.get_particles_ptr(), part.get_npart(), interpolated_values, interpolation_method);
+    FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, Particle>(grid,
+                                                                               part.get_particles_ptr(),
+                                                                               part.get_npart(),
+                                                                               interpolated_values,
+                                                                               interpolation_method);
 
     //=======================================================
     // Output interpolation together with exact result

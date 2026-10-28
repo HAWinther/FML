@@ -28,7 +28,8 @@
 ///   BZ    : mu(a,k) = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 a^s) (Bertschinger & Zukin 2008, as in Planck
 ///           2015 XIV), k in h/Mpc and lambda1 in Mpc/h
 ///   table : mu(a) or mu(a,k) from a file (e.g. computed with hi_class): rows "a mu" or "a k mu" (k in h/Mpc) on a
-///           regular grid (any order of the rows). Splined in (log a, log k); outside the table the closest value is used
+///           regular grid (any order of the rows). Splined in (log a, log k); outside the table the closest value is
+///           used
 //=============================================================================
 template <int NDIM>
 class GravityModelMu final : public GravityModel<NDIM> {
@@ -75,9 +76,7 @@ class GravityModelMu final : public GravityModel<NDIM> {
         return mu_of_loga_spline(std::log(a));
     }
 
-    double GeffOverG(double a, double koverH0 = 0) const override {
-        return mu_of_a_k(a, koverH0 * this->H0_hmpc);
-    }
+    double GeffOverG(double a, double koverH0 = 0) const override { return mu_of_a_k(a, koverH0 * this->H0_hmpc); }
 
     //========================================================================
     // The force from mu(a,k) delta(k)
@@ -89,8 +88,10 @@ class GravityModelMu final : public GravityModel<NDIM> {
                        std::array<FFTWGrid<NDIM>, NDIM> & force_real) const override {
         const double OmegaM_a = 1.5 * this->cosmo->get_OmegaM() * a;
         auto force_from = [&](FFTWGrid<NDIM> & source, double norm_poisson_equation) {
-            this->compute_force_from_total_density(
-                source, norm_poisson_equation, density_assignment_method_used, force_real);
+            this->compute_force_from_total_density(source,
+                                                   norm_poisson_equation,
+                                                   density_assignment_method_used,
+                                                   force_real);
         };
         if (not scale_dependent()) {
             force_from(density_fourier, OmegaM_a * mu_of_a_k(a, 0.0));
@@ -98,8 +99,9 @@ class GravityModelMu final : public GravityModel<NDIM> {
         }
         // mu(a,k) delta(k) (kBox = k * Box, k in h/Mpc = kBox / H0Box * H0_hmpc)
         FFTWGrid<NDIM> density_mu;
-        FML::NBODY::compute_delta_fifth_force<NDIM>(
-            density_fourier, density_mu, [&](double kBox) { return GeffOverG(a, kBox / H0Box); });
+        FML::NBODY::compute_delta_fifth_force<NDIM>(density_fourier, density_mu, [&](double kBox) {
+            return GeffOverG(a, kBox / H0Box);
+        });
         force_from(density_mu, OmegaM_a);
     }
 

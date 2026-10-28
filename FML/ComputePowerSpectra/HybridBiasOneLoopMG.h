@@ -249,8 +249,9 @@ namespace FML {
                 }
 
                 /// The source of c3 for the three legs v[0..2] (D the linear growth at the legs, c2pair[i] the
-                /// second order kernel of the pair without leg i, w2pair[i] the transverse part of the pair (v[i+1], v[i+2])
-                /// in that order). Set partitions of the legs between the e^(ik.Psi(q)) factor (Q) and delta_E (E)
+                /// second order kernel of the pair without leg i, w2pair[i] the transverse part of the pair (v[i+1],
+                /// v[i+2]) in that order). Set partitions of the legs between the e^(ik.Psi(q)) factor (Q) and delta_E
+                /// (E)
                 inline double source_c3(const MGTime & T,
                                         const Vec3 v[3],
                                         const double D[3],
@@ -286,8 +287,8 @@ namespace FML {
                             Sscr2[aidx] = 0.0;
                             continue;
                         }
-                        dE2[aidx] = c2pair[aidx] +
-                                    dot3(P[aidx], v[b]) * dot3(P[aidx], v[c]) * D[b] * D[c] / (vsq[b] * vsq[c]);
+                        dE2[aidx] =
+                            c2pair[aidx] + dot3(P[aidx], v[b]) * dot3(P[aidx], v[c]) * D[b] * D[c] / (vsq[b] * vsq[c]);
                         Sscr2[aidx] = 0.0;
                         if (T.screening)
                             Sscr2[aidx] = -T.screen_prefactor(Pn[aidx]) * T.M2of(v[b], v[c]) * T.phihat(vn[b]) *
@@ -386,12 +387,12 @@ namespace FML {
 
                 /// The settings of the MG loop integrals
                 struct MGIntegrationSettings {
-                    double aini{1e-3};      // Start of the growth ODEs
-                    double dloga{0.05};     // RK4 step in log a
-                    int order{6};           // Gauss-Legendre order of the segments
+                    double aini{1e-3};          // Start of the growth ODEs
+                    double dloga{0.05};         // RK4 step in log a
+                    int order{6};               // Gauss-Legendre order of the segments
                     double segs_per_efold{2.0}; // Segments per e-fold of the radial/angular ranges
-                    int nk_loop{80};        // Number of k (log spaced) the loop functions are computed at (3/4 below the cut)
-                    int max_segs{8};        // Maximum number of segments of the angular integrals
+                    int nk_loop{80}; // Number of k (log spaced) the loop functions are computed at (3/4 below the cut)
+                    int max_segs{8}; // Maximum number of segments of the angular integrals
                     double refine_to{1e-4}; // Refine the p-integral towards p = k down to this fraction of k
                     int refine_order{4};    // Gauss-Legendre order of the refinement levels
                 };
@@ -467,8 +468,8 @@ namespace FML {
                         {
                             const double lo = std::max(std::abs(k - p), kmin), hi = std::min(k + p, kcut);
                             if (hi > lo) {
-                                const int nseg =
-                                    std::min(set.max_segs, std::max(1, int(set.segs_per_efold * std::log(hi / lo)) + 1));
+                                const int nseg = std::min(set.max_segs,
+                                                          std::max(1, int(set.segs_per_efold * std::log(hi / lo)) + 1));
                                 composite_gl(lo, hi, nseg, set.order, true, qx, qw);
                             }
                         }
@@ -629,7 +630,8 @@ namespace FML {
                                 const double Ds = y[i + 2];
                                 const double l2 = y[i] / (Dp * Ds);
                                 const double tau = y[i + 4] * c2u / (Dp * Ds);
-                                const Vec3 p1 = scale(Qp1[j], 1.0 / c_over_H0_mpch), p2 = scale(Qp2[j], 1.0 / c_over_H0_mpch);
+                                const Vec3 p1 = scale(Qp1[j], 1.0 / c_over_H0_mpch),
+                                           p2 = scale(Qp2[j], 1.0 / c_over_H0_mpch);
                                 const Vec3 u = transverse_dir(p1, p2);
                                 Vec3 L2 = scale(kh, l2 / (k * k));
                                 for (int d = 0; d < 3; d++)
@@ -651,10 +653,12 @@ namespace FML {
                                 L.A10Qkk += w * kk;
                                 L.A10QtF += w * Fp * t;
                                 L.A10QkkF += w * Fp * kk;
-                                // W: p1_i p2_j L2_k / (p1^2 p2^2): khat khat khat and the symmetrized khat delta (times k^3)
+                                // W: p1_i p2_j L2_k / (p1^2 p2^2): khat khat khat and the symmetrized khat delta (times
+                                // k^3)
                                 const double k3 = k * k * k / (p * p * s * s);
                                 L.WQa += w * p1[2] * p2[2] * L2[2] * k3;
-                                L.WQb += w * (p1[2] * dot3(p2, L2) + p2[2] * dot3(p1, L2) + L2[2] * dot3(p1, p2)) / 3.0 * k3;
+                                L.WQb +=
+                                    w * (p1[2] * dot3(p2, L2) + p2[2] * dot3(p1, L2) + L2[2] * dot3(p1, p2)) / 3.0 * k3;
                             }
                             for (int j = 0; j < nR; j++) {
                                 const int i = iR + 8 * j;
@@ -680,7 +684,8 @@ namespace FML {
                                 // W: k_i p_j L2_k / (k^2 p^2) (times k^3)
                                 const double k3 = k / (p * p);
                                 L.WRa += w * k * pv[2] * L2[2] * k3;
-                                L.WRb += w * (k * dot3(pv, L2) + pv[2] * dot3(kh, L2) + L2[2] * dot3(kh, pv)) / 3.0 * k3;
+                                L.WRb +=
+                                    w * (k * dot3(pv, L2) + pv[2] * dot3(kh, L2) + L2[2] * dot3(kh, pv)) / 3.0 * k3;
                                 (void)zhat;
                             }
                             if (do_R) {
@@ -699,8 +704,8 @@ namespace FML {
             //=====================================================================================================
             /// @brief The linear growth factor D(k,a) of the model (normalized to D = a at early times, k in h/Mpc)
             //=====================================================================================================
-            inline double mg_linear_growth(const MGModel & model, double k, double a, double aini = 1e-3,
-                                           double dloga = 0.005) {
+            inline double
+            mg_linear_growth(const MGModel & model, double k, double a, double aini = 1e-3, double dloga = 0.005) {
                 using namespace detail;
                 const double kH = k * c_over_H0_mpch;
                 double x = std::log(aini), y[2] = {aini, aini};
@@ -733,8 +738,8 @@ namespace FML {
 
             /// The loop functions of the modified gravity prediction on a grid in k for several output times
             struct MGLoopTables {
-                std::vector<double> kgrid;                          // log spaced below and above the cut
-                int n1{0};                                          // number of grid points below the cut
+                std::vector<double> kgrid;                            // log spaced below and above the cut
+                int n1{0};                                            // number of grid points below the cut
                 std::vector<std::vector<detail::MGLoopFunctions>> lf; // [ik][output]
                 std::vector<double> aout;
             };
@@ -830,9 +835,10 @@ namespace FML {
                         wl[a] = 1.0;
                         for (int b = 0; b < 4; b++)
                             if (b != a)
-                                wl[a] *= (lk - std::log(kgrid[i0 + b])) / (std::log(kgrid[i0 + a]) - std::log(kgrid[i0 + b]));
+                                wl[a] *= (lk - std::log(kgrid[i0 + b])) /
+                                         (std::log(kgrid[i0 + a]) - std::log(kgrid[i0 + b]));
                     }
-                    auto I = [&](double MGLoopFunctions::*m) {
+                    auto I = [&](double MGLoopFunctions::* m) {
                         double v = 0.0;
                         for (int a = 0; a < 4; a++)
                             v += wl[a] * (lf[i0 + a][io].*m);
@@ -912,8 +918,14 @@ namespace FML {
                 const auto tab = mg_loop_tables(model, aout, pofk, W, options, settings);
                 std::vector<std::vector<std::vector<double>>> result(nout);
                 for (int io = 0; io < nout; io++)
-                    result[io] =
-                        oneloop_hybrid_bias_spectra_mg_from_tables(tab, io, pofk[io], W, kvalues, options, names, pairs);
+                    result[io] = oneloop_hybrid_bias_spectra_mg_from_tables(tab,
+                                                                            io,
+                                                                            pofk[io],
+                                                                            W,
+                                                                            kvalues,
+                                                                            options,
+                                                                            names,
+                                                                            pairs);
                 return result;
             }
 

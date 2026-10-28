@@ -251,8 +251,9 @@ class NBodySimulation {
     double neutrino_energy_factor(double a) const {
         if (not params.force.neutrino_energy_density)
             return 1.0;
-        return COLASOLVER::NEUTRINOS::mean_energy_factor(
-            a, cosmo->get_Mnu_eV() / cosmo->get_N_nu(), cosmo->get_neutrino_temperature_eV(1.0));
+        return COLASOLVER::NEUTRINOS::mean_energy_factor(a,
+                                                         cosmo->get_Mnu_eV() / cosmo->get_N_nu(),
+                                                         cosmo->get_neutrino_temperature_eV(1.0));
     }
     /// Use the energy density of the neutrinos (force_neutrino_energy_density)
     bool neutrino_energy_density() const { return params.force.neutrino_energy_density; }
@@ -329,7 +330,8 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
     params.read(param);
     if (params.baryonification.enabled) {
         if (NDIM != 3 || grav->get_name() != "GR" || cosmo->get_OmegaMNu() != 0.0)
-            throw std::runtime_error("baryonification currently requires NDIM=3, gravity_model=GR and cosmology_OmegaMNu=0");
+            throw std::runtime_error(
+                "baryonification currently requires NDIM=3, gravity_model=GR and cosmology_OmegaMNu=0");
         params.baryonification.profile_model(cosmo->get_Omegab() / cosmo->get_OmegaM()).validate();
     }
 
@@ -365,8 +367,7 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
         const int stencil_order = COLASOLVER::get_parameter<int>(param, "force_finite_difference_stencil_order");
         if (not FML::NBODY::is_valid_finite_difference_stencil_order(stencil_order))
             throw std::runtime_error("Parameterfile: force_finite_difference_stencil_order = " +
-                                     std::to_string(stencil_order) +
-                                     " is not implemented. Valid options are: 2 4 6");
+                                     std::to_string(stencil_order) + " is not implemented. Valid options are: 2 4 6");
         if (params.force.gradient_kernel != "fiducial" and params.force.gradient_kernel != "")
             throw std::runtime_error("Parameterfile: force_gradient_kernel = " + params.force.gradient_kernel +
                                      " is not used with force_use_finite_difference_force = true (the gradient is "
@@ -647,8 +648,9 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
     if (params.hybridbias.enabled) {
         hybridbias_linear_field_fourier = FFTWGrid<NDIM>(params.particle.Npart_1D);
         hybridbias_linear_field_fourier.add_memory_label("delta_L(k,zini) for hybrid bias");
-        FML::NUFFT::copy_fourier_modes<NDIM>(
-            delta_ini_fourier, hybridbias_linear_field_fourier, [](const std::array<int, NDIM> &) { return 1.0; });
+        FML::NUFFT::copy_fourier_modes<NDIM>(delta_ini_fourier,
+                                             hybridbias_linear_field_fourier,
+                                             [](const std::array<int, NDIM> &) { return 1.0; });
     }
 
     // Massive neutrino particles (made from the same random field)
@@ -724,8 +726,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
         velocity_norm_1LPT_of_kBox = [&, kmin, kmax, relative_to_cola_frame](double kBox) {
             const double k = std::min(std::max(kBox / boxsize, kmin), kmax);
             const double f_frame = not relative_to_cola_frame ? 0.0 :
-                                   cola.scaledependent       ? grav->get_f_1LPT(aini, kBox / boxsize / grav->H0_hmpc) :
-                                                               grav->get_f_1LPT(aini);
+                                   cola.scaledependent        ? grav->get_f_1LPT(aini, kBox / boxsize / grav->H0_hmpc) :
+                                                                grav->get_f_1LPT(aini);
             return fac * (growth_rate_of_logk(std::log(k)) - f_frame);
         };
         if (relative_to_cola_frame) {
@@ -734,8 +736,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
                 v = 0.0;
         }
         if (FML::ThisTask == 0)
-            std::cout << "# N-body gauge: growth rate at zini f(k) = " << growth_rate_of_logk(std::log(kmin)) << " (k = "
-                      << kmin << " h/Mpc), " << growth_rate_of_logk(std::log(0.1)) << " (k = 0.1 h/Mpc). "
+            std::cout << "# N-body gauge: growth rate at zini f(k) = " << growth_rate_of_logk(std::log(kmin))
+                      << " (k = " << kmin << " h/Mpc), " << growth_rate_of_logk(std::log(0.1)) << " (k = 0.1 h/Mpc). "
                       << "Scale-independent value " << grav_ic->get_f_1LPT(aini) << "\n";
     }
 
@@ -756,10 +758,11 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
                 v = 0.0;
         }
         if (FML::ThisTask == 0)
-            std::cout << "# Scale-dependent growth rate at zini f(k) = " << grav_ic->get_f_1LPT(aini, 0.01 / grav_ic->H0_hmpc)
-                      << " (k = 0.01 h/Mpc), " << grav_ic->get_f_1LPT(aini, 0.1 / grav_ic->H0_hmpc)
-                      << " (k = 0.1 h/Mpc), " << grav_ic->get_f_1LPT(aini, 1.0 / grav_ic->H0_hmpc)
-                      << " (k = 1 h/Mpc). Scale-independent value " << grav_ic->get_f_1LPT(aini) << "\n";
+            std::cout << "# Scale-dependent growth rate at zini f(k) = "
+                      << grav_ic->get_f_1LPT(aini, 0.01 / grav_ic->H0_hmpc) << " (k = 0.01 h/Mpc), "
+                      << grav_ic->get_f_1LPT(aini, 0.1 / grav_ic->H0_hmpc) << " (k = 0.1 h/Mpc), "
+                      << grav_ic->get_f_1LPT(aini, 1.0 / grav_ic->H0_hmpc) << " (k = 1 h/Mpc). Scale-independent value "
+                      << grav_ic->get_f_1LPT(aini) << "\n";
     }
 
     FML::NBODY::NBodyInitialConditions<NDIM, T>(part,
@@ -805,9 +808,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::apply_lattice_offset() {
     const auto & ic = params.ic;
-    const bool offset_lattice =
-        ic.lattice_offset == "half_force_cell" or
-        (ic.lattice_offset == "fiducial" and params.force.nmesh > params.particle.Npart_1D);
+    const bool offset_lattice = ic.lattice_offset == "half_force_cell" or
+                                (ic.lattice_offset == "fiducial" and params.force.nmesh > params.particle.Npart_1D);
     if (not offset_lattice)
         return;
     const double shift = 0.5 / double(params.force.nmesh);
@@ -854,8 +856,11 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     FML::assert_mpi(transferdata != nullptr, "particle_baryons needs the transfer functions (transferinfofile)");
     const auto & cdm = species[0];
     const auto & baryon = species[1];
-    const auto splines = COLASOLVER::two_species_ic_splines<NDIM>(
-        *transferdata, *grav_ic, ic.initial_redshift, cdm.weight_cb, baryon.weight_cb);
+    const auto splines = COLASOLVER::two_species_ic_splines<NDIM>(*transferdata,
+                                                                  *grav_ic,
+                                                                  ic.initial_redshift,
+                                                                  cdm.weight_cb,
+                                                                  baryon.weight_cb);
 
     const double fac = aini * aini * cosmo->HoverH0_of_a(aini);
     const std::vector<double> velocity_norms{fac * grav_ic->get_f_1LPT(aini),
@@ -922,21 +927,20 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
             else
                 mass_contrast = [&](double kBox) { return ratio(clamp_logk(kBox)) - 1.0; };
         }
-        COLASOLVER::generate_species_from_delta_cb<NDIM, T>(
-            particles,
-            delta_cb_fourier,
-            displacement_ratio,
-            velocity_norm_1LPT,
-            cola.enabled ? residual_velocity_norms : velocity_norms,
-            ic.LPT_order,
-            info.Npart_1D,
-            params.particle.allocation_factor,
-            boxsize,
-            ic.initial_redshift,
-            shift,
-            info.id_offset,
-            cola.enabled,
-            mass_contrast);
+        COLASOLVER::generate_species_from_delta_cb<NDIM, T>(particles,
+                                                            delta_cb_fourier,
+                                                            displacement_ratio,
+                                                            velocity_norm_1LPT,
+                                                            cola.enabled ? residual_velocity_norms : velocity_norms,
+                                                            ic.LPT_order,
+                                                            info.Npart_1D,
+                                                            params.particle.allocation_factor,
+                                                            boxsize,
+                                                            ic.initial_redshift,
+                                                            shift,
+                                                            info.id_offset,
+                                                            cola.enabled,
+                                                            mass_contrast);
     };
     make_species(part, cdm, splines.ratio_cdm, splines.f_cdm, &eps_today.first, 0.0);
     make_species(part_baryon,
@@ -969,7 +973,8 @@ void NBodySimulation<NDIM, T>::setup_nbody_gauge() {
     FML::assert_mpi(transferdata != nullptr, "force_nbody_gauge needs the transfer functions");
 
     if (FML::ThisTask == 0)
-        std::cout << "# Running in the N-body gauge. Reading the linear source [" << force.nbody_gauge_filename << "]\n";
+        std::cout << "# Running in the N-body gauge. Reading the linear source [" << force.nbody_gauge_filename
+                  << "]\n";
     nbody_gauge = std::make_shared<COLASOLVER::NBodyGaugeSource>();
     nbody_gauge->read(force.nbody_gauge_filename);
     nbody_gauge->check_cosmology(*cosmo, params.ic.initial_redshift, params.simulation.boxsize, force.nmesh);
@@ -986,7 +991,8 @@ void NBodySimulation<NDIM, T>::setup_nbody_gauge() {
     }
 
     // delta_cb(k,zini) of the particles on the force grid
-    const auto nleftright = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(force.density_assignment_method);
+    const auto nleftright =
+        FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(force.density_assignment_method);
     initial_density_field_fourier = FFTWGrid<NDIM>(force.nmesh, nleftright.first, nleftright.second);
     initial_density_field_fourier.add_memory_label("density(k,zini)");
     FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
@@ -1014,8 +1020,9 @@ void NBodySimulation<NDIM, T>::read_ic() {
                                              cola.phi_2LPT_ini_fourier);
 
     // With the LPT fields reconstructed from the density field the COLA frame velocity is only an approximation to the
-    // velocities in the file (smoothed, from the Eulerian density). Keep the velocities of the file: store them relative
-    // to the frame instead of replacing them by it. (The exact reconstruction reproduces them, so nothing to do there)
+    // velocities in the file (smoothed, from the Eulerian density). Keep the velocities of the file: store them
+    // relative to the frame instead of replacing them by it. (The exact reconstruction reproduces them, so nothing to
+    // do there)
     if (cola.enabled and not params.ic.reconstruct_exact) {
         cola.add_on_LPT_velocity(part, params.ic.a_initial(), -1.0);
         ic_velocities_relative_to_cola_frame = true;
@@ -1255,11 +1262,12 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
                 compute_lightcone_potential(density, s.apos);
             }
             std::vector<FML::GRID::FloatType> potential;
-            FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, T>(lightcone_potential,
-                                                                                part.get_particles_ptr(),
-                                                                                part.get_npart(),
-                                                                                potential,
-                                                                                current_force.density_assignment_method);
+            FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, T>(
+                lightcone_potential,
+                part.get_particles_ptr(),
+                part.get_npart(),
+                potential,
+                current_force.density_assignment_method);
             lightcone->create_lightcone(part,
                                         s.apos,
                                         s.apos_new,
@@ -1289,8 +1297,7 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
     if (s.delta_time_drift != 0.0 and not sim.enforce_LPT_trajectories) {
         timer.StartTiming("Drift");
         for_each_species([&](auto & particles, const COLASOLVER::SpeciesInfo & info) {
-            COLASOLVER::drift_particles<NDIM>(
-                particles, info, s.apos, s.apos_new, s.delta_time_drift, sim.boxsize);
+            COLASOLVER::drift_particles<NDIM>(particles, info, s.apos, s.apos_new, s.delta_time_drift, sim.boxsize);
         });
         timer.EndTiming("Drift");
     }
@@ -1345,8 +1352,11 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const StepInfo & s) {
         for (int idim = 0; idim < NDIM; idim++)
             force_real[idim].communicate_boundaries();
         std::array<std::vector<FML::GRID::FloatType>, NDIM> force_particle;
-        FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, T>(
-            force_real, p, npart, force_particle, force.density_assignment_method);
+        FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, T>(force_real,
+                                                                                   p,
+                                                                                   npart,
+                                                                                   force_particle,
+                                                                                   force.density_assignment_method);
         const double norm = 1.0 / double(shifts.size());
         for (int idim = 0; idim < NDIM; idim++)
             for (size_t i = 0; i < npart; i++)
@@ -1415,7 +1425,10 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
              if constexpr (NDIM == 3)
                  COLASOLVER::output_baryonified_snapshot(
                      COLASOLVER::copy_baryonification_particles(part.get_particles_ptr(), part.get_npart()),
-                     params, cosmo, redshift, snapshot_folder);
+                     params,
+                     cosmo,
+                     redshift,
+                     snapshot_folder);
          }},
         {"Power-spectrum",
          params.pofk.enabled,
@@ -1495,8 +1508,9 @@ void NBodySimulation<NDIM, T>::compute_lightcone_potential(const FFTWGrid<NDIM> 
                 const double W = window(kvec);
                 fac /= W * W;
             }
-            lightcone_potential.set_fourier_from_index(
-                index, lightcone_potential.get_fourier_from_index(index) * FML::GRID::FloatType(fac));
+            lightcone_potential.set_fourier_from_index(index,
+                                                       lightcone_potential.get_fourier_from_index(index) *
+                                                           FML::GRID::FloatType(fac));
         }
     }
     lightcone_potential.fftw_c2r();

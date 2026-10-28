@@ -63,7 +63,6 @@ std::vector<Particle> random_particles(int n, int seed) {
 }
 
 
-
 void test_vector_ngp() {
     const int Nm = 24;
     auto part = random_particles(20000, 1);
@@ -81,8 +80,9 @@ void test_vector_ngp() {
             bad += (out[d][i] != 1.0) + (d == 0 and sc[i] != 1.0);
     SumOverTasks(&bad);
     SumOverTasks(&n);
-    check(bad == 0, "NGP vector interpolation of a constant field = the constant for all particles (" +
-                        num(100 * bad / (3 * n)) + "% wrong; was 87.5% zero)");
+    check(bad == 0,
+          "NGP vector interpolation of a constant field = the constant for all particles (" + num(100 * bad / (3 * n)) +
+              "% wrong; was 87.5% zero)");
 }
 
 void test_interpolation_exact() {
@@ -101,8 +101,7 @@ void test_interpolation_exact() {
         std::array<FFTWGrid, 3> gv{g, g, g};
         std::array<std::vector<FloatType>, 3> out;
         std::vector<FloatType> sc;
-        INTERPOLATION::interpolate_grid_vector_to_particle_positions<3, Particle>(
-            gv, part.data(), part.size(), out, m);
+        INTERPOLATION::interpolate_grid_vector_to_particle_positions<3, Particle>(gv, part.data(), part.size(), out, m);
         INTERPOLATION::interpolate_grid_to_particle_positions<3, Particle>(g, part.data(), part.size(), sc, m);
         double maxerr = 0.0;
         for (size_t i = 0; i < part.size(); i++) {
@@ -171,8 +170,9 @@ void test_slab_boundary() {
             Nfound = Nm;
     }
     if (Nfound == 0) {
-        check(true, "slab boundary: no lattice puts a particle outside its slab with " + std::to_string(NTasks) +
-                        " task(s) (try 10 tasks)");
+        check(true,
+              "slab boundary: no lattice puts a particle outside its slab with " + std::to_string(NTasks) +
+                  " task(s) (try 10 tasks)");
         return;
     }
     const int Nm = Nfound, Np = Nfound;

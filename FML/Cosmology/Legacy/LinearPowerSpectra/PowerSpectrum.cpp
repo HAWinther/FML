@@ -354,7 +354,12 @@ namespace FML {
 #ifdef USE_MPI
             // Its not that much data so we simply send all the data from all to all tasks and add up
             for (size_t ik = 0; ik < result.size(); ik++) {
-                MPI_Allreduce(MPI_IN_PLACE, result[ik].data(), result[ik].size(), MPI_DOUBLE, MPI_SUM, FML::communicator);
+                MPI_Allreduce(MPI_IN_PLACE,
+                              result[ik].data(),
+                              result[ik].size(),
+                              MPI_DOUBLE,
+                              MPI_SUM,
+                              FML::communicator);
             }
 #endif
 
@@ -795,7 +800,7 @@ namespace FML {
             std::ofstream fp(filename.c_str());
             if (not fp.is_open())
                 return;
-            
+
             // Output in standard units of muK^2
             const int ellmax = int(ells[ells.size() - 1]);
             auto ellvalues = FML::MATH::linspace(2, ellmax, ellmax - 1);
@@ -830,7 +835,7 @@ namespace FML {
             std::ofstream fp(filename.c_str());
             if (not fp.is_open())
                 return;
-            
+
             const int npts = 100;
 
             // Output in units of k = h/Mpc and P(k) = (Mpc/h)^3

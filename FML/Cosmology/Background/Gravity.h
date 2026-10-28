@@ -30,44 +30,53 @@
 
 namespace FML::COSMOLOGY {
 
-class BackgroundCosmology;
+    class BackgroundCosmology;
 
-struct TensorCoefficients {
-  double M2 = 1.0, alpha_M = 0.0, alpha_T = 0.0;
-};
+    struct TensorCoefficients {
+        double M2 = 1.0, alpha_M = 0.0, alpha_T = 0.0;
+    };
 
-class Gravity {
-  public:
-    virtual ~Gravity() = default;
-    virtual std::string name() const = 0;
-    virtual std::string info() const { return name(); }
+    class Gravity {
+      public:
+        virtual ~Gravity() = default;
+        virtual std::string name() const = 0;
+        virtual std::string info() const { return name(); }
 
-    // Called once by the BackgroundCosmology constructor (e.g. to check the model)
-    virtual void init_background(const BackgroundCosmology& /*bg*/) {}
-    virtual double E2(double x, const BackgroundCosmology& bg) const = 0;
-    virtual double dE2dx(double x, const BackgroundCosmology& bg) const = 0;
-    virtual double ddE2ddx(double x, const BackgroundCosmology& bg) const = 0;
+        // Called once by the BackgroundCosmology constructor (e.g. to check the model)
+        virtual void init_background(const BackgroundCosmology & /*bg*/) {}
+        virtual double E2(double x, const BackgroundCosmology & bg) const = 0;
+        virtual double dE2dx(double x, const BackgroundCosmology & bg) const = 0;
+        virtual double ddE2ddx(double x, const BackgroundCosmology & bg) const = 0;
 
-    // --- Perturbations ---------------------------------------------------------
-    virtual int n_vars() const { return 1; }
-    virtual int cache_size() const { return 0; }
-    virtual void update_cache(const BackgroundCosmology& /*bg*/, const ModeAtX& /*b*/, double* /*cache*/) const {}
-    // Effective gravitational constant in the Friedmann equation at the initial time, in units of G
-    // (enters the neutrino shear of the adiabatic initial conditions)
-    virtual double G_eff_initial() const { return 1.0; }
-    // Variables at the initial time (adiabatic; default: y[0] = Phi)
-    virtual void initial_conditions(const ModeAtX& /*b*/, const InitialData& ic, double* y) const { y[0] = ic.Phi; }
-    // Phi, Psi, Phi' from the gravity variables y and the total Moments; dydx: derivatives of y
-    virtual MetricAtX metric(const ModeAtX& b, const double* cache, const double* y, const Moments& total,
-                             double* dydx) const = 0;
-    // Tensor-mode coefficients at time x (see above)
-    virtual TensorCoefficients tensor(double /*x*/, const BackgroundCosmology& /*bg*/) const { return {}; }
+        // --- Perturbations ---------------------------------------------------------
+        virtual int n_vars() const { return 1; }
+        virtual int cache_size() const { return 0; }
+        virtual void update_cache(const BackgroundCosmology & /*bg*/, const ModeAtX & /*b*/, double * /*cache*/) const {
+        }
+        // Effective gravitational constant in the Friedmann equation at the initial time, in units of G
+        // (enters the neutrino shear of the adiabatic initial conditions)
+        virtual double G_eff_initial() const { return 1.0; }
+        // Variables at the initial time (adiabatic; default: y[0] = Phi)
+        virtual void initial_conditions(const ModeAtX & /*b*/, const InitialData & ic, double * y) const {
+            y[0] = ic.Phi;
+        }
+        // Phi, Psi, Phi' from the gravity variables y and the total Moments; dydx: derivatives of y
+        virtual MetricAtX metric(const ModeAtX & b,
+                                 const double * cache,
+                                 const double * y,
+                                 const Moments & total,
+                                 double * dydx) const = 0;
+        // Tensor-mode coefficients at time x (see above)
+        virtual TensorCoefficients tensor(double /*x*/, const BackgroundCosmology & /*bg*/) const { return {}; }
 
-    // Extra quantities stored as functions of (x, k) (Perturbations::get)
-    virtual std::vector<std::string> output_names() const { return {}; }
-    virtual void outputs(const ModeAtX& /*b*/, const double* /*cache*/, const double* /*y*/, const MetricAtX& /*m*/,
-                         double* /*out*/) const {}
-};
+        // Extra quantities stored as functions of (x, k) (Perturbations::get)
+        virtual std::vector<std::string> output_names() const { return {}; }
+        virtual void outputs(const ModeAtX & /*b*/,
+                             const double * /*cache*/,
+                             const double * /*y*/,
+                             const MetricAtX & /*m*/,
+                             double * /*out*/) const {}
+    };
 
 } // namespace FML::COSMOLOGY
 

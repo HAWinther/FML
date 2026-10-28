@@ -18,15 +18,8 @@ namespace FML {
 
         /// The 9 axes on the Lagrangian lattice: x, y, z and the two 45 degree diagonals in each coordinate plane
         inline const std::array<std::array<int, 3>, 9> & origami_axes() {
-            static const std::array<std::array<int, 3>, 9> axes{{{1, 0, 0},
-                                                                 {0, 1, 0},
-                                                                 {0, 0, 1},
-                                                                 {0, 1, 1},
-                                                                 {0, 1, -1},
-                                                                 {1, 0, 1},
-                                                                 {1, 0, -1},
-                                                                 {1, 1, 0},
-                                                                 {1, -1, 0}}};
+            static const std::array<std::array<int, 3>, 9> axes{
+                {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {0, 1, 1}, {0, 1, -1}, {1, 0, 1}, {1, 0, -1}, {1, 1, 0}, {1, -1, 0}}};
             return axes;
         }
         /// The 4 sets of orthogonal axes: the Cartesian axes, and one Cartesian axis with the two diagonals in the
@@ -64,7 +57,8 @@ namespace FML {
             // Is the particle crossed along a row: u are the (unwrapped) coordinates along the row, the row is
             // periodic with u[s + n] = u[s] + period. Crossed if there is a j in (s, s+W] with u_j < u_s or
             // a j in [s-W, s) with u_j > u_s
-            inline void crossed_in_row(const std::vector<double> & u, double period, int W, std::vector<char> & crossed) {
+            inline void
+            crossed_in_row(const std::vector<double> & u, double period, int W, std::vector<char> & crossed) {
                 const int n = int(u.size());
                 auto ext = [&](int t) {
                     const int k = ((t % n) + n) % n;
@@ -156,7 +150,7 @@ namespace FML {
             assert_mpi(N > 1, "[ORIGAMI] Nlattice must be > 1");
             long long int NumPartTot = (long long int)(NumPart);
             FML::SumOverTasks(&NumPartTot);
-            assert_mpi(NumPartTot == (long long int)(N) * N * N, "[ORIGAMI] We need Nlattice^3 particles");
+            assert_mpi(NumPartTot == (long long int)(N)*N * N, "[ORIGAMI] We need Nlattice^3 particles");
             if (not lattice_coordinate) {
                 if constexpr (FML::PARTICLE::has_get_id<T>()) {
                     lattice_coordinate = [N](T & part) -> std::array<int, 3> {
@@ -194,7 +188,7 @@ namespace FML {
                 const int ia = fixed == 0 ? 1 : 0;
                 const int ib = fixed == 2 ? 1 : 2;
                 // Planes are distributed over tasks in blocks
-                auto owner = [&](int plane) { return int((long long int)(plane) * FML::NTasks / N); };
+                auto owner = [&](int plane) { return int((long long int)(plane)*FML::NTasks / N); };
                 std::vector<OrigamiRecord> mine;
 #ifdef USE_MPI
                 if (FML::NTasks > 1) {
@@ -215,8 +209,15 @@ namespace FML {
                     for (int t = 1; t < FML::NTasks; t++)
                         rdispl[t] = rdispl[t - 1] + rcount[t - 1];
                     mine.resize(size_t(rdispl.back()) + rcount.back());
-                    MPI_Alltoallv(sendbuf.data(), scount.data(), sdispl.data(), rtype, mine.data(), rcount.data(),
-                                  rdispl.data(), rtype, FML::communicator);
+                    MPI_Alltoallv(sendbuf.data(),
+                                  scount.data(),
+                                  sdispl.data(),
+                                  rtype,
+                                  mine.data(),
+                                  rcount.data(),
+                                  rdispl.data(),
+                                  rtype,
+                                  FML::communicator);
                     MPI_Type_free(&rtype);
                 } else {
                     mine = records;
@@ -295,8 +296,15 @@ namespace FML {
                     for (int t = 1; t < FML::NTasks; t++)
                         rdispl[t] = rdispl[t - 1] + rcount[t - 1];
                     std::vector<OrigamiResult> recvbuf(size_t(rdispl.back()) + rcount.back());
-                    MPI_Alltoallv(sendbuf.data(), scount.data(), sdispl.data(), otype, recvbuf.data(), rcount.data(),
-                                  rdispl.data(), otype, FML::communicator);
+                    MPI_Alltoallv(sendbuf.data(),
+                                  scount.data(),
+                                  sdispl.data(),
+                                  otype,
+                                  recvbuf.data(),
+                                  rcount.data(),
+                                  rdispl.data(),
+                                  otype,
+                                  FML::communicator);
                     MPI_Type_free(&otype);
                     for (auto & res : recvbuf)
                         crossed[res.local_index] |= res.crossed;
@@ -308,7 +316,8 @@ namespace FML {
             };
 
             // Planes of fixed x: y, z and the diagonals in the y-z plane
-            // Planes of fixed y: x and the diagonals in the x-z plane. Planes of fixed z: the diagonals in the x-y plane
+            // Planes of fixed y: x and the diagonals in the x-z plane. Planes of fixed z: the diagonals in the x-y
+            // plane
             if (options.use_diagonal_axes) {
                 process(0, {{1, 0, 1}, {0, 1, 2}, {1, 1, 3}, {1, -1, 4}});
                 process(1, {{1, 0, 0}, {1, 1, 5}, {1, -1, 6}});

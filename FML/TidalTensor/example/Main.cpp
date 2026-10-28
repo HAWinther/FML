@@ -39,8 +39,12 @@ void ReadParticlesFromFile(FML::PARTICLE::MPIParticles<Particle> & part) {
     // Create MPI particles by letting each task keep only the particles that falls in its domain
     const bool all_tasks_have_the_same_particles = true;
     const int nalloc_per_task = p.size() / FML::NTasks * 2;
-    part.create(
-        p.data(), p.size(), nalloc_per_task, FML::xmin_domain, FML::xmax_domain, all_tasks_have_the_same_particles);
+    part.create(p.data(),
+                p.size(),
+                nalloc_per_task,
+                FML::xmin_domain,
+                FML::xmax_domain,
+                all_tasks_have_the_same_particles);
 }
 
 int main() {
@@ -54,8 +58,11 @@ int main() {
     ReadParticlesFromFile(part);
 
     std::string density_assignment_method = "CIC";
-    FML::INTERPOLATION::particles_to_grid<NDIM, Particle>(
-        part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), f_real, density_assignment_method);
+    FML::INTERPOLATION::particles_to_grid<NDIM, Particle>(part.get_particles_ptr(),
+                                                          part.get_npart(),
+                                                          part.get_npart_total(),
+                                                          f_real,
+                                                          density_assignment_method);
 
     // Compute the Hessian of the potential of f, i.e. D^-2 f_(ij)
     const double norm = 1.0;
@@ -71,7 +78,8 @@ int main() {
 
     // Output the points in the grid on task 0 where all eigenvalues are positive
     if (FML::ThisTask == 0) {
-        std::cout << "#              x               y              z               eig1             eig2              eig3\n";
+        std::cout << "#              x               y              z               eig1             eig2              "
+                     "eig3\n";
         for (auto real_index : eigenvalues[0].get_real_range()) {
             bool all_positive = true;
             double e[NDIM];

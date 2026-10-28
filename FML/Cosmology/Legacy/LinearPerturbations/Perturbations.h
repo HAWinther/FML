@@ -171,7 +171,7 @@ namespace FML {
             PerturbationSystemInfo psinfo;
             PerturbationSystemInfo psinfo_tight_coupling;
 
-            Perturbations(){};
+            Perturbations() {};
             Perturbations(std::shared_ptr<BackgroundCosmology> cosmo,
                           std::shared_ptr<RecombinationHistory> rec,
                           ParameterMap & p);

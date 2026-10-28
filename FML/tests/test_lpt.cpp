@@ -130,7 +130,8 @@ double maxabs(const Modes<N> & a) {
 }
 // A sum of cosines a cos(2 pi n.x + theta)
 template <int N>
-Modes<N> plane_waves(const std::vector<std::array<int, N>> & ns, const std::vector<double> & amps,
+Modes<N> plane_waves(const std::vector<std::array<int, N>> & ns,
+                     const std::vector<double> & amps,
                      const std::vector<double> & phases) {
     Modes<N> r;
     for (size_t m = 0; m < ns.size(); m++) {
@@ -288,7 +289,8 @@ Reference3LPT reference_3LPT(const Modes<3> & delta) {
 //==========================================================
 const int Nmesh = 16;
 
-void test_3LPT(bool alternate = false, FML::COSMOLOGY::LPT::Dealiasing dealiasing = FML::COSMOLOGY::LPT::Dealiasing::None) {
+void test_3LPT(bool alternate = false,
+               FML::COSMOLOGY::LPT::Dealiasing dealiasing = FML::COSMOLOGY::LPT::Dealiasing::None) {
     using Grid = FML::GRID::FFTWGrid<3>;
     // Bandwidth 2 per axis so the 3LPT sources (bandwidth 6) are exactly representable on 16^3
     Modes<3> delta = plane_waves<3>({{1, 0, 0}, {0, 1, 1}, {1, -1, 2}, {2, 1, 0}, {0, 2, -1}},
@@ -296,7 +298,8 @@ void test_3LPT(bool alternate = false, FML::COSMOLOGY::LPT::Dealiasing dealiasin
                                     {0.1, 1.0, 2.0, -0.7, 2.5});
     if (alternate)
         delta = plane_waves<3>({{2, 0, 1}, {0, 2, -1}, {1, 1, 0}, {1, -1, 2}},
-                              {0.17, -0.23, 0.31, 0.09}, {1.2, -0.5, 2.1, 0.7});
+                               {0.17, -0.23, 0.31, 0.09},
+                               {1.2, -0.5, 2.1, 0.7});
     auto ref = reference_3LPT(delta);
 
     Grid delta_fourier = make_delta_fourier<3>(delta, Nmesh);
@@ -357,8 +360,7 @@ void test_3LPT(bool alternate = false, FML::COSMOLOGY::LPT::Dealiasing dealiasin
         edPsi = std::max(edPsi, max_diff_real<3>(dPsidt[i], dpsi) / maxabs<3>(dpsi));
     }
     check(ePsi < 1e-10, "compute_3LPT_displacement_field: Psi matches the reference (rel err " + num(ePsi) + ")");
-    check(edPsi < 1e-10,
-          "compute_3LPT_displacement_field: dPsidt matches the reference (rel err " + num(edPsi) + ")");
+    check(edPsi < 1e-10, "compute_3LPT_displacement_field: dPsidt matches the reference (rel err " + num(edPsi) + ")");
 }
 
 // High-frequency products deliberately cross the original mesh Nyquist limit.
@@ -367,15 +369,20 @@ void test_3LPT(bool alternate = false, FML::COSMOLOGY::LPT::Dealiasing dealiasin
 void test_dealiased_LPT() {
     using namespace FML::COSMOLOGY::LPT;
     using Grid = FML::GRID::FFTWGrid<3>;
-    const auto delta = plane_waves<3>({{7,1,2}, {-6,2,1}, {1,7,-5}, {3,-4,6}},
-                                      {0.17,-0.23,0.31,0.19}, {1.2,-0.5,2.1,0.7});
+    const auto delta = plane_waves<3>({{7, 1, 2}, {-6, 2, 1}, {1, 7, -5}, {3, -4, 6}},
+                                      {0.17, -0.23, 0.31, 0.19},
+                                      {1.2, -0.5, 2.1, 0.7});
     auto input = make_delta_fourier<3>(delta, Nmesh);
     auto reference = reference_3LPT(delta);
     auto crop_reference = [](Modes<3> modes) {
         for (auto it = modes.begin(); it != modes.end();) {
             bool keep = true;
-            for (auto wave : it->first) keep = keep && 2 * std::abs(wave) < Nmesh;
-            if (keep) ++it; else it = modes.erase(it);
+            for (auto wave : it->first)
+                keep = keep && 2 * std::abs(wave) < Nmesh;
+            if (keep)
+                ++it;
+            else
+                it = modes.erase(it);
         }
         return modes;
     };
@@ -398,14 +405,14 @@ void test_dealiased_LPT() {
         source_error /= std::max(1e-30, source_scale);
         // Inverse Laplacians can amplify float source round-off by O(Nmesh^2)
         // relative to these deliberately high-frequency reference potentials.
-        const double potential_tolerance = std::max(5e-12, 32 * Nmesh * Nmesh *
-                                                     double(std::numeric_limits<FML::GRID::FloatType>::epsilon()));
+        const double potential_tolerance =
+            std::max(5e-12, 32 * Nmesh * Nmesh * double(std::numeric_limits<FML::GRID::FloatType>::epsilon()));
         check(error < potential_tolerance && source_error < tolerance,
               "de-aliased " + label + " matches unwrapped convolution (potential rel err " + num(error) +
-              ", source rel err " + num(source_error) + ")");
+                  ", source rel err " + num(source_error) + ")");
     };
     Grid p1, p2, pa, pb, quadratic, legacy;
-    std::array<Grid,3> A;
+    std::array<Grid, 3> A;
     compute_2LPT_potential_fourier(input, quadratic, Dealiasing::Padding);
     compare(quadratic, reference.p2, "standalone 2LPT");
     compute_2LPT_potential_fourier(input, legacy);
@@ -418,21 +425,24 @@ void test_dealiased_LPT() {
         compare(pa, reference.p3a, "3LPT-a");
         compare(pb, reference.p3b, "3LPT-b (including unresolved intermediate 2LPT modes)");
         if (!ignore_curl)
-            for (int d = 0; d < 3; d++) compare(A[d], reference.A[d], "curl " + std::to_string(d));
+            for (int d = 0; d < 3; d++)
+                compare(A[d], reference.A[d], "curl " + std::to_string(d));
     }
     // Nyquist planes have no unambiguous signed wavevector on an even grid.
     // Explicitly adding them must not contaminate any de-aliased output.
     auto contaminated = input;
     for (auto index : contaminated.get_fourier_range()) {
         auto wave = integer_wavevector<3>(contaminated, index);
-        if (std::abs(wave[0]) == Nmesh/2 || std::abs(wave[1]) == Nmesh/2 || wave[2] == Nmesh/2)
+        if (std::abs(wave[0]) == Nmesh / 2 || std::abs(wave[1]) == Nmesh / 2 || wave[2] == Nmesh / 2)
             contaminated.set_fourier_from_index(index, 0.03);
     }
     compute_2LPT_potential_fourier(contaminated, quadratic, Dealiasing::Padding);
     compare(quadratic, reference.p2, "2LPT excludes input/output Nyquist planes");
     compute_3LPT_potential_fourier<3>(input, p1, p2, pa, pb, A, false);
-    for (const auto & entry : std::vector<std::pair<const Grid *, const Modes<3> *>>{
-             {&p2, &reference.p2}, {&pa, &reference.p3a}, {&pb, &reference.p3b}, {&A[0], &reference.A[0]}}) {
+    for (const auto & entry : std::vector<std::pair<const Grid *, const Modes<3> *>>{{&p2, &reference.p2},
+                                                                                     {&pa, &reference.p3a},
+                                                                                     {&pb, &reference.p3b},
+                                                                                     {&A[0], &reference.A[0]}}) {
         const auto cropped = crop_reference(*entry.second);
         const double error = max_diff_fourier<3>(*entry.first, cropped) / maxabs<3>(cropped);
         check(error > 1e-3, "high-frequency fixture exposes legacy nonlinear aliasing (rel err " + num(error) + ")");
@@ -447,49 +457,60 @@ void test_dealiased_LPT() {
     constexpr double rate = 0.63;
     compute_3LPT_displacement_field<3>(input, psi, velocity, rate, false, Dealiasing::Padding);
     auto total = add<3>(add<3>(add<3>(reference.p1, reference.p2), reference.p3a), reference.p3b);
-    auto derivative = add<3>(add<3>(add<3>(reference.p1, reference.p2, 1, 2), reference.p3a, 1, 3), reference.p3b, 1, 3);
+    auto derivative =
+        add<3>(add<3>(add<3>(reference.p1, reference.p2, 1, 2), reference.p3a, 1, 3), reference.p3b, 1, 3);
     for (int d = 0; d < 3; d++) {
-        int j = (d+1)%3, k = (d+2)%3;
+        int j = (d + 1) % 3, k = (d + 2) % 3;
         auto curl = add<3>(grad<3>(reference.A[k], j), grad<3>(reference.A[j], k), 1, -1);
         auto expected = crop_reference(add<3>(grad<3>(total, d), curl));
-        auto expected_velocity = crop_reference(add<3>(grad<3>(derivative, d), curl, rate, 3*rate));
+        auto expected_velocity = crop_reference(add<3>(grad<3>(derivative, d), curl, rate, 3 * rate));
         check(max_diff_real<3>(psi[d], expected) < tolerance, "de-aliased displacement component " + std::to_string(d));
-        check(max_diff_real<3>(velocity[d], expected_velocity) < tolerance, "de-aliased velocity component " + std::to_string(d));
+        check(max_diff_real<3>(velocity[d], expected_velocity) < tolerance,
+              "de-aliased velocity component " + std::to_string(d));
     }
     // Exercise 2D and odd input meshes as well as cross-rank slab remapping.
     std::vector<int> meshes{16};
-    if (FML::NTasks == 1) meshes.push_back(15);
+    if (FML::NTasks == 1)
+        meshes.push_back(15);
     for (int mesh : meshes) {
-        auto modes = plane_waves<2>({{6,1},{-5,3}}, {0.2,0.3}, {0.2,0.7});
+        auto modes = plane_waves<2>({{6, 1}, {-5, 3}}, {0.2, 0.3}, {0.2, 0.7});
         auto small = make_delta_fourier<2>(modes, mesh);
-        auto large = detail::resize_lpt_fourier(small, detail::padded_lpt_mesh(mesh,3));
-        auto back = detail::resize_lpt_fourier(large,mesh);
-        check(max_diff_fourier<2>(back,modes) < tolerance, "2D Fourier resize round trip (mesh " + std::to_string(mesh) + ")");
-        FML::GRID::FFTWGrid<2> q1,q2,qa,qb;
-        std::array<FML::GRID::FFTWGrid<2>,2> B;
-        compute_3LPT_potential_fourier<2>(small,q1,q2,qa,qb,B,false,Dealiasing::Padding);
+        auto large = detail::resize_lpt_fourier(small, detail::padded_lpt_mesh(mesh, 3));
+        auto back = detail::resize_lpt_fourier(large, mesh);
+        check(max_diff_fourier<2>(back, modes) < tolerance,
+              "2D Fourier resize round trip (mesh " + std::to_string(mesh) + ")");
+        FML::GRID::FFTWGrid<2> q1, q2, qa, qb;
+        std::array<FML::GRID::FFTWGrid<2>, 2> B;
+        compute_3LPT_potential_fourier<2>(small, q1, q2, qa, qb, B, false, Dealiasing::Padding);
         Modes<3> embedded;
-        for (auto & [wave, value] : modes) embedded[{wave[0],wave[1],0}] = value;
+        for (auto & [wave, value] : modes)
+            embedded[{wave[0], wave[1], 0}] = value;
         auto exact = reference_3LPT(embedded);
         // Preserve the library's existing 2D definitions: 3a uses a 2x2
         // determinant; 3b uses H1_xx H2_yy - H1_xy H2_xy.
-        exact.p3a = add<3>(exact.p2, {}, -7.0/9.0);
-        const auto chi = add<3>(exact.p2, {}, -7.0/3.0);
-        auto mixed = add<3>(mul<3>(hess<3>(exact.p1,0,0), hess<3>(chi,1,1)),
-                            mul<3>(hess<3>(exact.p1,0,1), hess<3>(chi,0,1)), 1, -1);
-        exact.p3b = add<3>(solve<3>(mixed), {}, 10.0/21.0);
+        exact.p3a = add<3>(exact.p2, {}, -7.0 / 9.0);
+        const auto chi = add<3>(exact.p2, {}, -7.0 / 3.0);
+        auto mixed = add<3>(mul<3>(hess<3>(exact.p1, 0, 0), hess<3>(chi, 1, 1)),
+                            mul<3>(hess<3>(exact.p1, 0, 1), hess<3>(chi, 0, 1)),
+                            1,
+                            -1);
+        exact.p3b = add<3>(solve<3>(mixed), {}, 10.0 / 21.0);
         auto project = [mesh](const Modes<3> & field) {
             Modes<2> result;
             for (auto & [wave, value] : field)
-                if (2*std::abs(wave[0]) < mesh && 2*std::abs(wave[1]) < mesh)
-                    result[{wave[0],wave[1]}] = value;
+                if (2 * std::abs(wave[0]) < mesh && 2 * std::abs(wave[1]) < mesh)
+                    result[{wave[0], wave[1]}] = value;
             return result;
         };
-        for (const auto & entry : std::vector<std::pair<const FML::GRID::FFTWGrid<2> *, Modes<2>>>{
-                 {&q2,project(exact.p2)}, {&qa,project(exact.p3a)}, {&qb,project(exact.p3b)}, {&B[0],project(exact.A[2])}}) {
+        for (const auto & entry :
+             std::vector<std::pair<const FML::GRID::FFTWGrid<2> *, Modes<2>>>{{&q2, project(exact.p2)},
+                                                                              {&qa, project(exact.p3a)},
+                                                                              {&qb, project(exact.p3b)},
+                                                                              {&B[0], project(exact.A[2])}}) {
             double error = max_diff_fourier<2>(*entry.first, entry.second);
-            check(error < tolerance, "2D padded nonlinear potential matches unwrapped convolution (mesh " +
-                  std::to_string(mesh) + ", abs err " + num(error) + ")");
+            check(error < tolerance,
+                  "2D padded nonlinear potential matches unwrapped convolution (mesh " + std::to_string(mesh) +
+                      ", abs err " + num(error) + ")");
         }
     }
 }
@@ -537,8 +558,8 @@ void test_3LPT_2D() {
     FML::MaxOverTasks(&ed);
     FML::MaxOverTasks(&scale);
     check(e / scale < 1e-12 and ed / scale < 1e-12 and scale > 0.0,
-          "compute_3LPT_displacement_field<2>: Psi and dPsidt agree with the 2D potentials (rel err " +
-              num(e / scale) + ", " + num(ed / scale) + ")");
+          "compute_3LPT_displacement_field<2>: Psi and dPsidt agree with the 2D potentials (rel err " + num(e / scale) +
+              ", " + num(ed / scale) + ")");
 }
 
 void test_ALPT() {
@@ -575,8 +596,8 @@ void test_ALPT() {
         }
     FML::MaxOverTasks(&esc);
     FML::MaxOverTasks(&scmax);
-    check(esc / scmax < 1e-12, "spherical collapse potential = -source/k^2 with k=0 mode zero (rel err " +
-                                   num(esc / scmax) + ")");
+    check(esc / scmax < 1e-12,
+          "spherical collapse potential = -source/k^2 with k=0 mode zero (rel err " + num(esc / scmax) + ")");
 
     // To linear order phi_SC = D phi_1LPT
     {
@@ -628,9 +649,18 @@ void test_nongaussian_dc_mode() {
 
     Grid delta(Nmesh, 1, 1), phi(Nmesh, 1, 1);
     FML::RANDOM::GSLRandomGenerator rng1(42), rng2(42);
-    FML::RANDOM::NONGAUSSIAN::generate_nonlocal_gaussian_random_field_fourier_cosmology<3>(
-        delta, &rng1, ratio, Pprim, false, 100.0, "local");
-    FML::RANDOM::NONGAUSSIAN::generate_nonlocal_gaussian_random_field_fourier<3>(phi, &rng2, Pprim, false, 100.0,
+    FML::RANDOM::NONGAUSSIAN::generate_nonlocal_gaussian_random_field_fourier_cosmology<3>(delta,
+                                                                                           &rng1,
+                                                                                           ratio,
+                                                                                           Pprim,
+                                                                                           false,
+                                                                                           100.0,
+                                                                                           "local");
+    FML::RANDOM::NONGAUSSIAN::generate_nonlocal_gaussian_random_field_fourier<3>(phi,
+                                                                                 &rng2,
+                                                                                 Pprim,
+                                                                                 false,
+                                                                                 100.0,
                                                                                  "local");
     check(all_finite_fourier<3>(delta), "non-gaussian field with P/P_primordial = 0/0 at k=0 is finite");
     // The other modes are sqrt(ratio) * phi and the DC mode is zero
@@ -647,8 +677,8 @@ void test_nongaussian_dc_mode() {
         }
     FML::MaxOverTasks(&e);
     FML::MaxOverTasks(&s);
-    check(e / s < 1e-12, "non-gaussian field: delta = sqrt(P/P_primordial) phi and delta(k=0) = 0 (rel err " +
-                             num(e / s) + ")");
+    check(e / s < 1e-12,
+          "non-gaussian field: delta = sqrt(P/P_primordial) phi and delta(k=0) = 0 (rel err " + num(e / s) + ")");
     delta.fftw_c2r();
     int ok = 1;
     for (int islice = 0; islice < delta.get_local_nx(); islice++)
@@ -695,8 +725,9 @@ void test_growth_factors() {
     };
     const double Dref = integrate_to(0.0) / integrate_to(std::log(1.0 / (1.0 + zini)));
     const double Dfml = D1(0.0);
-    check(std::fabs(Dfml / Dref - 1.0) < 1e-5, "growth factor D1(a=1) for w=-0.8: " + num(Dfml) + " vs ODE " +
-                                                   num(Dref) + " (rel err " + num(Dfml / Dref - 1.0) + ")");
+    check(std::fabs(Dfml / Dref - 1.0) < 1e-5,
+          "growth factor D1(a=1) for w=-0.8: " + num(Dfml) + " vs ODE " + num(Dref) + " (rel err " +
+              num(Dfml / Dref - 1.0) + ")");
 
     // EdS: D1 = a/aini and D2 = -3/7 D1^2, D3a = -1/3 D1^3, D3b = 5/21 D1^3 exactly (also at a = 1)
     auto HEdS = [](double a) { return std::pow(a, -1.5); };
@@ -706,9 +737,10 @@ void test_growth_factors() {
     e = std::max(e, std::fabs(D2(0.0) / (d1 * d1) + 3.0 / 7.0) / (3.0 / 7.0));
     e = std::max(e, std::fabs(D3a(0.0) / (d1 * d1 * d1) + 1.0 / 3.0) / (1.0 / 3.0));
     e = std::max(e, std::fabs(D3b(0.0) / (d1 * d1 * d1) - 5.0 / 21.0) / (5.0 / 21.0));
-    check(e < 1e-5, "EdS growth factors at a=1: D1 = a/aini, D2/D1^2 = -3/7, D3a/D1^3 = -1/3, D3b/D1^3 = 5/21 "
-                    "(max rel err " +
-                        num(e) + ")");
+    check(e < 1e-5,
+          "EdS growth factors at a=1: D1 = a/aini, D2/D1^2 = -3/7, D3a/D1^3 = -1/3, D3b/D1^3 = 5/21 "
+          "(max rel err " +
+              num(e) + ")");
 }
 
 void test_random() {
@@ -739,8 +771,8 @@ void test_random() {
         for (int j = i + 1; j < Nmesh; j++)
             if (first[i] == first[j])
                 ndup++;
-    check(ndup == 0, "white noise: the slices do not start with the same value (" + std::to_string(ndup) +
-                         " equal pairs)");
+    check(ndup == 0,
+          "white noise: the slices do not start with the same value (" + std::to_string(ndup) + " equal pairs)");
 }
 
 int main() {

@@ -120,21 +120,36 @@ namespace FML {
                     return;
                 }
                 switch (width) {
-                    case 2: return weights_impl<2>(delta, out);
-                    case 3: return weights_impl<3>(delta, out);
-                    case 4: return weights_impl<4>(delta, out);
-                    case 5: return weights_impl<5>(delta, out);
-                    case 6: return weights_impl<6>(delta, out);
-                    case 7: return weights_impl<7>(delta, out);
-                    case 8: return weights_impl<8>(delta, out);
-                    case 9: return weights_impl<9>(delta, out);
-                    case 10: return weights_impl<10>(delta, out);
-                    case 11: return weights_impl<11>(delta, out);
-                    case 12: return weights_impl<12>(delta, out);
-                    case 13: return weights_impl<13>(delta, out);
-                    case 14: return weights_impl<14>(delta, out);
-                    case 15: return weights_impl<15>(delta, out);
-                    default: return weights_impl<16>(delta, out);
+                    case 2:
+                        return weights_impl<2>(delta, out);
+                    case 3:
+                        return weights_impl<3>(delta, out);
+                    case 4:
+                        return weights_impl<4>(delta, out);
+                    case 5:
+                        return weights_impl<5>(delta, out);
+                    case 6:
+                        return weights_impl<6>(delta, out);
+                    case 7:
+                        return weights_impl<7>(delta, out);
+                    case 8:
+                        return weights_impl<8>(delta, out);
+                    case 9:
+                        return weights_impl<9>(delta, out);
+                    case 10:
+                        return weights_impl<10>(delta, out);
+                    case 11:
+                        return weights_impl<11>(delta, out);
+                    case 12:
+                        return weights_impl<12>(delta, out);
+                    case 13:
+                        return weights_impl<13>(delta, out);
+                    case 14:
+                        return weights_impl<14>(delta, out);
+                    case 15:
+                        return weights_impl<15>(delta, out);
+                    default:
+                        return weights_impl<16>(delta, out);
                 }
             }
 
@@ -259,9 +274,18 @@ namespace FML {
                 FloatType * extra = grid.get_real_grid_right() + nslice * i;
                 FloatType * target = grid.get_real_grid() + nslice * i;
 #ifdef USE_MPI
-                MPI_Sendrecv(extra, int(sizeof(FloatType) * nslice), MPI_CHAR, (FML::ThisTask + 1) % FML::NTasks, 0,
-                             buffer.data(), int(sizeof(FloatType) * nslice), MPI_CHAR,
-                             (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks, 0, FML::communicator, MPI_STATUS_IGNORE);
+                MPI_Sendrecv(extra,
+                             int(sizeof(FloatType) * nslice),
+                             MPI_CHAR,
+                             (FML::ThisTask + 1) % FML::NTasks,
+                             0,
+                             buffer.data(),
+                             int(sizeof(FloatType) * nslice),
+                             MPI_CHAR,
+                             (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks,
+                             0,
+                             FML::communicator,
+                             MPI_STATUS_IGNORE);
 #else
                 std::copy(extra, extra + nslice, buffer.begin());
 #endif
@@ -275,10 +299,18 @@ namespace FML {
                 FloatType * extra = grid.get_real_grid() - nslice * i;
                 FloatType * target = grid.get_real_grid() + nslice * (Local_nx - i);
 #ifdef USE_MPI
-                MPI_Sendrecv(extra, int(sizeof(FloatType) * nslice), MPI_CHAR,
-                             (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks, 0, buffer.data(),
-                             int(sizeof(FloatType) * nslice), MPI_CHAR, (FML::ThisTask + 1) % FML::NTasks, 0,
-                             FML::communicator, MPI_STATUS_IGNORE);
+                MPI_Sendrecv(extra,
+                             int(sizeof(FloatType) * nslice),
+                             MPI_CHAR,
+                             (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks,
+                             0,
+                             buffer.data(),
+                             int(sizeof(FloatType) * nslice),
+                             MPI_CHAR,
+                             (FML::ThisTask + 1) % FML::NTasks,
+                             0,
+                             FML::communicator,
+                             MPI_STATUS_IGNORE);
 #else
                 std::copy(extra, extra + nslice, buffer.begin());
 #endif
@@ -555,8 +587,15 @@ namespace FML {
                 ntot += nrecv[t];
             }
             recv.resize(ntot / sizeof(Mode));
-            MPI_Alltoallv(sendbuf.data(), nsend.data(), sdispl.data(), MPI_CHAR, recv.data(), nrecv.data(),
-                          rdispl.data(), MPI_CHAR, FML::communicator);
+            MPI_Alltoallv(sendbuf.data(),
+                          nsend.data(),
+                          sdispl.data(),
+                          MPI_CHAR,
+                          recv.data(),
+                          nrecv.data(),
+                          rdispl.data(),
+                          MPI_CHAR,
+                          FML::communicator);
 #else
             recv = send[0];
 #endif

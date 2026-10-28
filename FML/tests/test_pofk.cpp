@@ -114,63 +114,65 @@ void test_high_frequency_triangle_closure() {
     constexpr int Nmesh = 16, nbins = 6, shell = 4;
     BispectrumBinning<3> b(0.0, 2.0 * M_PI * 7.9, nbins, BispectrumBinning<3>::LINEAR_SPACING);
     auto in_shell = [&](const std::array<int, 3> & k) {
-        const double k2 = 4.0 * M_PI * M_PI * (k[0]*k[0] + k[1]*k[1] + k[2]*k[2]);
-        return k2 >= b.klow[shell]*b.klow[shell] && k2 < b.khigh[shell]*b.khigh[shell];
+        const double k2 = 4.0 * M_PI * M_PI * (k[0] * k[0] + k[1] * k[1] + k[2] * k[2]);
+        return k2 >= b.klow[shell] * b.klow[shell] && k2 < b.khigh[shell] * b.khigh[shell];
     };
     std::vector<std::array<int, 3>> modes;
     for (int x = -7; x <= 7; x++)
         for (int y = -7; y <= 7; y++)
             for (int z = -7; z <= 7; z++)
-                if (in_shell({x,y,z})) modes.push_back({x,y,z});
+                if (in_shell({x, y, z}))
+                    modes.push_back({x, y, z});
     size_t closed = 0, wrapped = 0;
     for (const auto & a : modes)
         for (const auto & c : modes) {
-            std::array<int, 3> third{-a[0]-c[0], -a[1]-c[1], -a[2]-c[2]};
+            std::array<int, 3> third{-a[0] - c[0], -a[1] - c[1], -a[2] - c[2]};
             closed += in_shell(third);
             for (auto & k : third) {
                 k = (k % Nmesh + Nmesh) % Nmesh;
-                if (k > Nmesh/2) k -= Nmesh;
+                if (k > Nmesh / 2)
+                    k -= Nmesh;
             }
             wrapped += in_shell(third);
         }
     check(closed > 0 && wrapped > closed, "high-frequency fixture distinguishes true from wrapped triangle closure");
-    compute_polyspectrum_bincount<3,3>(Nmesh,b);
-    const double measured = b.get_bincount(shell,shell,shell) * std::pow(2.0*M_PI,3);
+    compute_polyspectrum_bincount<3, 3>(Nmesh, b);
+    const double measured = b.get_bincount(shell, shell, shell) * std::pow(2.0 * M_PI, 3);
     check(std::abs(measured - double(closed)) < 1e-6,
-          "high-frequency N123 counts exactly closed triangles: measured " + num(measured) +
-          ", expected " + std::to_string(closed) + ", modulo-grid count " + std::to_string(wrapped));
+          "high-frequency N123 counts exactly closed triangles: measured " + num(measured) + ", expected " +
+              std::to_string(closed) + ", modulo-grid count " + std::to_string(wrapped));
 
     // None of the signed triples of these three wavevectors sums to zero.
     // Their all-positive sum is (16,0,0), so the original mesh spuriously
     // produces a nonzero bispectrum unless the product is de-aliased.
     Grid<3> field(Nmesh);
-    field.fill_real_grid([](const std::array<double,3> & x) {
-        return std::cos(2*M_PI*6*x[0]) + std::cos(2*M_PI*(5*x[0]+3*x[1])) +
-               std::cos(2*M_PI*(5*x[0]-3*x[1]));
+    field.fill_real_grid([](const std::array<double, 3> & x) {
+        return std::cos(2 * M_PI * 6 * x[0]) + std::cos(2 * M_PI * (5 * x[0] + 3 * x[1])) +
+               std::cos(2 * M_PI * (5 * x[0] - 3 * x[1]));
     });
     field.fftw_r2c();
-    compute_bispectrum(field,b);
-    const double bispectrum = b.get_spectrum(shell,shell,shell);
+    compute_bispectrum(field, b);
+    const double bispectrum = b.get_spectrum(shell, shell, shell);
     check(std::abs(bispectrum) < 1e-12,
           "non-closing high-frequency plane waves have zero bispectrum (measured " + num(bispectrum) + ")");
 }
 
 void test_automatic_geometry_cache() {
     constexpr int Nmesh = 16;
-    BispectrumBinning<3> geometry(0.0, 2.0*M_PI*Nmesh/4, 6, BispectrumBinning<3>::LINEAR_SPACING);
-    compute_polyspectrum_bincount<3,3>(Nmesh,geometry);
+    BispectrumBinning<3> geometry(0.0, 2.0 * M_PI * Nmesh / 4, 6, BispectrumBinning<3>::LINEAR_SPACING);
+    compute_polyspectrum_bincount<3, 3>(Nmesh, geometry);
     check(geometry.bincount_is_set, "automatically computed geometry counts are marked reusable");
 
     Grid<3> field(Nmesh);
     field.fill_fourier_grid(0.0);
     field.set_grid_status_real(false);
-    BispectrumBinning<3> result(0.0, 2.0*M_PI*Nmesh/4, 6, BispectrumBinning<3>::LINEAR_SPACING);
-    compute_bispectrum(field,result);
+    BispectrumBinning<3> result(0.0, 2.0 * M_PI * Nmesh / 4, 6, BispectrumBinning<3>::LINEAR_SPACING);
+    compute_bispectrum(field, result);
     check(result.bincount_is_set, "bispectrum estimation retains reusable geometry counts");
 }
 
 void test_fourier_multiplicities() {
-    for (int Nmesh : {16,15}) {
+    for (int Nmesh : {16, 15}) {
         // FFTWGrid requires the mesh width to be divisible by the MPI rank count.
         if (Nmesh % FML::NTasks != 0) {
             if (FML::ThisTask == 0)
@@ -179,32 +181,33 @@ void test_fourier_multiplicities() {
         }
         Grid<3> field(Nmesh);
         for (auto index : field.get_fourier_range()) {
-            const int kz = int(index % (Nmesh/2 + 1));
-            field.set_fourier_from_index(index, kz == Nmesh/2 ? 2.0 : 1.0);
+            const int kz = int(index % (Nmesh / 2 + 1));
+            field.set_fourier_from_index(index, kz == Nmesh / 2 ? 2.0 : 1.0);
         }
         field.set_grid_status_real(false);
         // Enclose the full Fourier cube. All modes except DC contribute.
-        PowerSpectrumBinning<3> power(0.0, 2.0*M_PI*Nmesh, 10, PowerSpectrumBinning<3>::LINEAR_SPACING);
-        bin_up_power_spectrum(field,power);
-        std::vector<PowerSpectrumBinning<3>> multipoles(1,power);
-        compute_power_spectrum_multipoles_fourier<3>(field,multipoles,{0.0,0.0,1.0});
-        const double expected_count = Nmesh*Nmesh*Nmesh - 1;
+        PowerSpectrumBinning<3> power(0.0, 2.0 * M_PI * Nmesh, 10, PowerSpectrumBinning<3>::LINEAR_SPACING);
+        bin_up_power_spectrum(field, power);
+        std::vector<PowerSpectrumBinning<3>> multipoles(1, power);
+        compute_power_spectrum_multipoles_fourier<3>(field, multipoles, {0.0, 0.0, 1.0});
+        const double expected_count = Nmesh * Nmesh * Nmesh - 1;
         // The enhanced final stored plane has one copy for even meshes, two
         // conjugate copies for odd meshes. Its power is four instead of one.
-        const double expected_power_sum = expected_count + 3.0*Nmesh*Nmesh*(Nmesh % 2 == 0 ? 1 : 2);
+        const double expected_power_sum = expected_count + 3.0 * Nmesh * Nmesh * (Nmesh % 2 == 0 ? 1 : 2);
         auto validate = [&](const PowerSpectrumBinning<3> & b, const std::string & estimator) {
-            const double count = std::accumulate(b.count.begin(),b.count.end(),0.0);
+            const double count = std::accumulate(b.count.begin(), b.count.end(), 0.0);
             double power_sum = 0.0;
-            for (int i = 0; i < b.n; i++) power_sum += b.pofk[i]*b.count[i];
+            for (int i = 0; i < b.n; i++)
+                power_sum += b.pofk[i] * b.count[i];
             const auto label = estimator + " on " + std::to_string(Nmesh) + "^3 mesh";
-            check(count == expected_count, label + " counts all nonzero modes: " + num(count) +
-                  " expected " + num(expected_count));
-            check(std::abs(power_sum-expected_power_sum) < 1e-9,
-                  label + " weights the final Fourier plane correctly: " + num(power_sum) +
-                  " expected " + num(expected_power_sum));
+            check(count == expected_count,
+                  label + " counts all nonzero modes: " + num(count) + " expected " + num(expected_count));
+            check(std::abs(power_sum - expected_power_sum) < 1e-9,
+                  label + " weights the final Fourier plane correctly: " + num(power_sum) + " expected " +
+                      num(expected_power_sum));
         };
-        validate(power,"P(k)");
-        validate(multipoles[0],"Monopole");
+        validate(power, "P(k)");
+        validate(multipoles[0], "Monopole");
     }
 }
 
@@ -232,8 +235,8 @@ int main() {
         const double S2 = s2 / (s1 * s1), S3 = s3 / (s1 * s1 * s1);
         auto [d1, m1] = shotnoise_test(pm, Np, S2);
         check(d1 < 1e-10 and std::fabs(m1) < 0.08,
-              "masses: shot noise sum m^2/(sum m)^2 subtracted (" + num(d1) + "), mean P(k) - shot noise = " +
-                  num(m1) + " x shot noise (" + num(1.0 - 1.0 / (Np * S2)) + " with 1/N)");
+              "masses: shot noise sum m^2/(sum m)^2 subtracted (" + num(d1) + "), mean P(k) - shot noise = " + num(m1) +
+                  " x shot noise (" + num(1.0 - 1.0 / (Np * S2)) + " with 1/N)");
 
         auto pw = make_particles<ParticleDeltaf>(Np, 3, [](ParticleDeltaf & p, double u) { p.w = 2.0 * u - 1.0; });
         double w2 = 0.0;
@@ -263,7 +266,8 @@ int main() {
             nconf++;
         }
         check(nconf > 0 and maxerr < 1e-8,
-              "bispectrum with masses: S2 (P1 + P2 + P3) + S3 subtracted (" + std::to_string(nconf) + " configurations)");
+              "bispectrum with masses: S2 (P1 + P2 + P3) + S3 subtracted (" + std::to_string(nconf) +
+                  " configurations)");
     }
 
     // NGP (and CIC) with interlacing conserves the mass: the k = 0 mode (mean delta) is 0
@@ -309,7 +313,8 @@ int main() {
         std::vector<double> count(b.N123.size(), 0.0);
         for (size_t i = 0; i < modes.size(); i++)
             for (size_t j = 0; j < modes.size(); j++) {
-                const std::array<int, 3> k3{-modes[i][0] - modes[j][0], -modes[i][1] - modes[j][1],
+                const std::array<int, 3> k3{-modes[i][0] - modes[j][0],
+                                            -modes[i][1] - modes[j][1],
                                             -modes[i][2] - modes[j][2]};
                 const int b3 = bin_of(k3);
                 if (b3 >= 0)
@@ -326,9 +331,9 @@ int main() {
             nchecked++;
             nsmall += count[i] > 0 and count[i] < 248;
         }
-        check(maxerr < 1e-6, "N123 x (2pi)^3 = brute-force number of triangles (" + std::to_string(nchecked) +
-                                  " bins, " + std::to_string(nsmall) + " with < (2pi)^3 triangles), max error " +
-                                  num(maxerr));
+        check(maxerr < 1e-6,
+              "N123 x (2pi)^3 = brute-force number of triangles (" + std::to_string(nchecked) + " bins, " +
+                  std::to_string(nsmall) + " with < (2pi)^3 triangles), max error " + num(maxerr));
     }
 
     // The bin index below the first bin

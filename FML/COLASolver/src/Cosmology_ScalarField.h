@@ -71,16 +71,22 @@ class CosmologyScalarField : public Cosmology {
 
     void output_header(std::ofstream & fp) const override {
         Cosmology::output_header(fp);
-        fp << " "; output_element(fp, "OmegaPhi");
-        fp << " "; output_element(fp, "w_phi");
-        fp << " "; output_element(fp, "phi/Mpl");
+        fp << " ";
+        output_element(fp, "OmegaPhi");
+        fp << " ";
+        output_element(fp, "w_phi");
+        fp << " ";
+        output_element(fp, "phi/Mpl");
     }
 
     void output_row(std::ofstream & fp, double a) const override {
         Cosmology::output_row(fp, a);
-        fp << " "; output_element(fp, get_OmegaPhi(a));
-        fp << " "; output_element(fp, w_phi(a));
-        fp << " "; output_element(fp, phi_of_a(a));
+        fp << " ";
+        output_element(fp, get_OmegaPhi(a));
+        fp << " ";
+        output_element(fp, w_phi(a));
+        fp << " ";
+        output_element(fp, phi_of_a(a));
     }
 
   protected:
@@ -107,8 +113,8 @@ class CosmologyScalarField : public Cosmology {
                this->get_rhoNu_exact(a) + OmegaLambda_bare;
     }
     double drho_other_dloga(double a) const {
-        return -2.0 * OmegaK / (a * a) - 3.0 * (OmegaCDM + Omegab) / (a * a * a) -
-               4.0 * OmegaR / (a * a * a * a) + this->get_drhoNudloga_exact(a);
+        return -2.0 * OmegaK / (a * a) - 3.0 * (OmegaCDM + Omegab) / (a * a * a) - 4.0 * OmegaR / (a * a * a * a) +
+               this->get_drhoNudloga_exact(a);
     }
 
     double rho_phi(double a) const { return std::exp(log_rho_phi_spline(std::log(a))); }

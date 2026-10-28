@@ -261,7 +261,7 @@ namespace FML {
         double peakSize_bytes = getPeakRSS();
         return {currentSize_bytes, peakSize_bytes};
     }
-    
+
     //============================================
     /// Print the resident set size and the peak
     /// value of it so far

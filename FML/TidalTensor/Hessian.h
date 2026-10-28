@@ -64,8 +64,8 @@ namespace FML {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : grid.get_fourier_range(islice, islice + 1)) {
-                        if(Local_x_start == 0 and fourier_index == 0)
-                          continue; // DC mode (k=0)
+                        if (Local_x_start == 0 and fourier_index == 0)
+                            continue; // DC mode (k=0)
 
                         grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
@@ -190,7 +190,7 @@ namespace FML {
 #pragma omp for
 #endif
                 for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && real_index : tensor_real[0].get_real_range(islice,islice+1)) {
+                    for (auto && real_index : tensor_real[0].get_real_range(islice, islice + 1)) {
 
                         // Set the matrix
                         int count = 0;

@@ -70,8 +70,8 @@ namespace FML {
         inline void
         symmetric_eigenvalues(double a00, double a01, double a02, double a11, double a12, double a22, double * e) {
             double a[3][3] = {{a00, a01, a02}, {a01, a11, a12}, {a02, a12, a22}};
-            const double scale = std::abs(a00) + std::abs(a11) + std::abs(a22) + std::abs(a01) + std::abs(a02) +
-                                 std::abs(a12);
+            const double scale =
+                std::abs(a00) + std::abs(a11) + std::abs(a22) + std::abs(a01) + std::abs(a02) + std::abs(a12);
             for (int sweep = 0; sweep < 50; sweep++) {
                 const double off = std::abs(a[0][1]) + std::abs(a[0][2]) + std::abs(a[1][2]);
                 if (off <= 1e-17 * scale or off == 0.0)
@@ -82,7 +82,8 @@ namespace FML {
                             continue;
                         // Rotation that zeros a[p][q]
                         const double theta = (a[q][q] - a[p][p]) / (2.0 * a[p][q]);
-                        const double t = (theta >= 0.0 ? 1.0 : -1.0) / (std::abs(theta) + std::sqrt(theta * theta + 1.0));
+                        const double t =
+                            (theta >= 0.0 ? 1.0 : -1.0) / (std::abs(theta) + std::sqrt(theta * theta + 1.0));
                         const double c = 1.0 / std::sqrt(t * t + 1.0), sn = t * c;
                         for (int k = 0; k < 3; k++) {
                             const double akp = a[k][p], akq = a[k][q];
@@ -142,8 +143,8 @@ namespace FML {
                                               tensor[4].get_real(c),
                                               tensor[5].get_real(c),
                                               e);
-                        const int type = int(e[0] > lambda_threshold) + int(e[1] > lambda_threshold) +
-                                         int(e[2] > lambda_threshold);
+                        const int type =
+                            int(e[0] > lambda_threshold) + int(e[1] > lambda_threshold) + int(e[2] > lambda_threshold);
                         result.classification.set_real(c, FML::GRID::FloatType(type));
                         if (store_eigenvalues)
                             for (int k = 0; k < 3; k++)
@@ -248,8 +249,11 @@ namespace FML {
             const auto nextra =
                 FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(options.density_assignment_method);
             FML::GRID::FFTWGrid<3> delta(Nmesh, nextra.first, nextra.second);
-            FML::INTERPOLATION::particles_to_grid(
-                p, NumPart, size_t(NumPartTot), delta, options.density_assignment_method);
+            FML::INTERPOLATION::particles_to_grid(p,
+                                                  NumPart,
+                                                  size_t(NumPartTot),
+                                                  delta,
+                                                  options.density_assignment_method);
             TWeb(delta, options, result);
         }
 

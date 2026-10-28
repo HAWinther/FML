@@ -316,8 +316,9 @@ namespace FML {
                     DVector Xe_initial{Xe_current, 0.0};
 
                     // Solve the Peebles ODE
-                    ODESolver peebles_Xe_ode(
-                        FIDUCIAL_HSTART_ODE_PEEBLES, FIDUCIAL_ABSERR_ODE_PEEBLES, FIDUCIAL_RELERR_ODE_PEEBLES);
+                    ODESolver peebles_Xe_ode(FIDUCIAL_HSTART_ODE_PEEBLES,
+                                             FIDUCIAL_ABSERR_ODE_PEEBLES,
+                                             FIDUCIAL_RELERR_ODE_PEEBLES);
                     peebles_Xe_ode.solve(deriv, x_array_peebles, Xe_initial);
 
                     // Fetch the Xe solution

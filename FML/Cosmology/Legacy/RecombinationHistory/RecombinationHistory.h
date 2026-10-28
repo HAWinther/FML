@@ -130,7 +130,7 @@ namespace FML {
             void solve_extra();
 
           public:
-            RecombinationHistory(){};
+            RecombinationHistory() {};
             RecombinationHistory(std::shared_ptr<BackgroundCosmology> cosmo, ParameterMap & p);
             RecombinationHistory & operator=(const RecombinationHistory & rhs) = default;
             RecombinationHistory & operator=(RecombinationHistory && other) = default;

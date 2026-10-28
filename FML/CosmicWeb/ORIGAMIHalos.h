@@ -82,7 +82,15 @@ namespace FML {
                     std::vector<S> all;
                     if (FML::ThisTask == 0)
                         all.resize(size_t(displs.back()) + counts.back());
-                    MPI_Gatherv(local.data(), n, type, all.data(), counts.data(), displs.data(), type, 0, FML::communicator);
+                    MPI_Gatherv(local.data(),
+                                n,
+                                type,
+                                all.data(),
+                                counts.data(),
+                                displs.data(),
+                                type,
+                                0,
+                                FML::communicator);
                     MPI_Type_free(&type);
                     return all;
                 }

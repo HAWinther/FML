@@ -12,9 +12,9 @@
 /// (m(a),beta(a)) model
 template <int NDIM>
 class GravityModelmbeta : public GravityModelScreened<NDIM> {
-  
-  // Take in parameters used to define m(a), beta(a)
-  std::vector<double> mbeta_params;
+
+    // Take in parameters used to define m(a), beta(a)
+    std::vector<double> mbeta_params;
 
 
     // Spline for phi(a)/Mpl needed for screening method
@@ -40,8 +40,8 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     void info() const override {
         GravityModelScreened<NDIM>::info();
         if (FML::ThisTask == 0) {
-            for(size_t i = 0; i < mbeta_params.size(); i++)
-              std::cout << "# Params[" << i << "]        : " << mbeta_params[i] << "\n";
+            for (size_t i = 0; i < mbeta_params.size(); i++)
+                std::cout << "# Params[" << i << "]        : " << mbeta_params[i] << "\n";
         }
         this->info_screening();
         if (FML::ThisTask == 0) {
@@ -53,27 +53,23 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     //========================================================================
     // Internal method: m(a)/H0 and beta(a) and phi(a)/Mpl
     //========================================================================
-    double phi_over_mpl_of_a(double a) const {
-        return phi_over_Mpl_of_a_spline(a);
-    }
+    double phi_over_mpl_of_a(double a) const { return phi_over_Mpl_of_a_spline(a); }
     double m_over_H0_of_a(double a) const {
-        return mbeta_params[2] * std::pow(a, mbeta_params[3]); 
-    
-        // For example f(R) would be like this: 
+        return mbeta_params[2] * std::pow(a, mbeta_params[3]);
+
+        // For example f(R) would be like this:
         // ...with mbeta_params[0] = 1.0/sqrt(6.0), mbeta_params[1] = 0 and mbeta_params[2] = fofr0
-        //double OmegaM = this->cosmo->get_OmegaM();
-        //double OmegaLambda = 1.0 - OmegaM;
-        //double a3 = a * a * a;
-        //double fac = OmegaM / a3 + 4.0 * OmegaLambda;
-        //double fac0 = OmegaM + 4.0 * OmegaLambda;
-        //double mass2 = fac * std::pow(fac / fac0, 2.0) / (2.0 * mbeta_params[2]);
-        //return std::sqrt(mass2);
+        // double OmegaM = this->cosmo->get_OmegaM();
+        // double OmegaLambda = 1.0 - OmegaM;
+        // double a3 = a * a * a;
+        // double fac = OmegaM / a3 + 4.0 * OmegaLambda;
+        // double fac0 = OmegaM + 4.0 * OmegaLambda;
+        // double mass2 = fac * std::pow(fac / fac0, 2.0) / (2.0 * mbeta_params[2]);
+        // return std::sqrt(mass2);
     }
-    double beta_of_a(double a) const {
-        return mbeta_params[0] * std::pow(a, mbeta_params[1]); 
-    }
+    double beta_of_a(double a) const { return mbeta_params[0] * std::pow(a, mbeta_params[1]); }
     double mass_over_H0_squared(double a) const {
-        double moverH0 = m_over_H0_of_a(a);  
+        double moverH0 = m_over_H0_of_a(a);
         return moverH0 * moverH0;
     }
 
@@ -81,9 +77,9 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     // Effective newtonian constant
     //========================================================================
     double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0.0) const override {
-        double mass2a2  = a * a * mass_over_H0_squared(a);
+        double mass2a2 = a * a * mass_over_H0_squared(a);
         double koverH02 = koverH0 * koverH0;
-        double beta     = beta_of_a(a);
+        double beta = beta_of_a(a);
         return 1.0 + 2.0 * beta * beta * koverH02 / (koverH02 + mass2a2);
     }
 
@@ -118,36 +114,35 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     }
 
     std::string fifth_force_label() const override { return "(m(a),beta(a)) models"; }
-    
-    virtual void init() override { 
-      // Here we need to compute and spline phi(a)/Mpl needed for the screening method
-      
-      // Integrand for computing the phi_over_Mpl_of_a_spline = 9 * OmegaM0 * Int_0^a beta(a) / [a^3(m/H0)^2] dloga
-      double OmegaM0 = this->cosmo->get_OmegaM();
-      auto integrand = [=](double a){
-        return 9.0 * OmegaM0 * beta_of_a(a) / (a*a*a * mass_over_H0_squared(a));
-      };
 
-      // Make an a-array, evaluate integral over it and make the spline
-      // This part needs to be tested (how best to evaluate this integral). Might want to do compute logphi maybe? ...
-      const double amin = 0.001;
-      const double amax = 1.0;
-      const int npts    = 10000;
-      std::vector<double> a_array(npts, amin), loga_array(npts, std::log(amin)), phi_array(npts, 0.0);
-      for(size_t i = 1; i < npts; i++){
-        loga_array[i] = std::log(amin) + std::log(amax/amin) * i / double(npts-1);
-        a_array[i]    = std::exp(loga_array[i]);
-        phi_array[i]  = phi_array[i-1] + integrand(a_array[i]) * (loga_array[i] - loga_array[i-1]);
-      }
-      phi_over_Mpl_of_a_spline = Spline(a_array, phi_array, "phi(a)/Mpl spline for m(a),beta(a) models");
+    virtual void init() override {
+        // Here we need to compute and spline phi(a)/Mpl needed for the screening method
 
-      // If we use the power-law model beta(a) = beta0 * a^n and m(a) = m0 * H0 * a^m
-      // then we should ensure that n-4-2m > -1 for the integral to not have an uncurable divergence at a=0
-      FML::assert_mpi(mbeta_params[1] - 4.0 - 2.0 * mbeta_params[3] > -1.0, 
-          "Error in m(a) = m0H0a^m beta(a) = beta0 a^n models: n-4-2m <= -1.0 => phi(a) integral diverges");
+        // Integrand for computing the phi_over_Mpl_of_a_spline = 9 * OmegaM0 * Int_0^a beta(a) / [a^3(m/H0)^2] dloga
+        double OmegaM0 = this->cosmo->get_OmegaM();
+        auto integrand = [=](double a) { return 9.0 * OmegaM0 * beta_of_a(a) / (a * a * a * mass_over_H0_squared(a)); };
 
-      // Important: call base-call initializer in the end
-      GravityModelScreened<NDIM>::init();
+        // Make an a-array, evaluate integral over it and make the spline
+        // This part needs to be tested (how best to evaluate this integral). Might want to do compute logphi maybe? ...
+        const double amin = 0.001;
+        const double amax = 1.0;
+        const int npts = 10000;
+        std::vector<double> a_array(npts, amin), loga_array(npts, std::log(amin)), phi_array(npts, 0.0);
+        for (size_t i = 1; i < npts; i++) {
+            loga_array[i] = std::log(amin) + std::log(amax / amin) * i / double(npts - 1);
+            a_array[i] = std::exp(loga_array[i]);
+            phi_array[i] = phi_array[i - 1] + integrand(a_array[i]) * (loga_array[i] - loga_array[i - 1]);
+        }
+        phi_over_Mpl_of_a_spline = Spline(a_array, phi_array, "phi(a)/Mpl spline for m(a),beta(a) models");
+
+        // If we use the power-law model beta(a) = beta0 * a^n and m(a) = m0 * H0 * a^m
+        // then we should ensure that n-4-2m > -1 for the integral to not have an uncurable divergence at a=0
+        FML::assert_mpi(
+            mbeta_params[1] - 4.0 - 2.0 * mbeta_params[3] > -1.0,
+            "Error in m(a) = m0H0a^m beta(a) = beta0 a^n models: n-4-2m <= -1.0 => phi(a) integral diverges");
+
+        // Important: call base-call initializer in the end
+        GravityModelScreened<NDIM>::init();
     }
 
     //========================================================================

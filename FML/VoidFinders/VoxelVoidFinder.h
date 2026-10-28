@@ -59,21 +59,21 @@ namespace FML {
         ///
         /// @param[in] density The density field in units of the mean density (1 + delta)
         /// @param[in] find_clusters Find maxima instead of minima
-        /// @param[in] density_cut Voids: keep the zones with minimum density below this. Clusters: maximum density above
+        /// @param[in] density_cut Voids: keep the zones with minimum density below this. Clusters: maximum density
+        /// above
         /// @param[in] merging How to merge the zones into voids (None: every zone is a void as in Revolver)
         /// @param[in] link_density_threshold For ZoneMerging::Threshold: merge zones linked below this density (above
         /// for clusters)
         ///
         //========================================================================================
-        inline std::vector<Void>
-        VoxelWatershed(const FML::GRID::FFTWGrid<3> & density,
-                       bool find_clusters = false,
-                       double density_cut = 1.0,
-                       ZoneMerging merging = ZoneMerging::None,
-                       double link_density_threshold = 0.2) {
+        inline std::vector<Void> VoxelWatershed(const FML::GRID::FFTWGrid<3> & density,
+                                                bool find_clusters = false,
+                                                double density_cut = 1.0,
+                                                ZoneMerging merging = ZoneMerging::None,
+                                                double link_density_threshold = 0.2) {
 
             const int N = density.get_nmesh();
-            const long long int N2 = (long long int)(N) * N;
+            const long long int N2 = (long long int)(N)*N;
             const int nx = int(density.get_local_nx());
             const long long int x0 = density.get_local_x_start();
             const long long int nloc = nx * N2;
@@ -142,8 +142,12 @@ namespace FML {
             std::vector<long long int> nminima_per_task(FML::NTasks, 0);
             nminima_per_task[FML::ThisTask] = (long long int)(minima.size());
 #ifdef USE_MPI
-            MPI_Allreduce(
-                MPI_IN_PLACE, nminima_per_task.data(), FML::NTasks, MPI_LONG_LONG, MPI_SUM, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE,
+                          nminima_per_task.data(),
+                          FML::NTasks,
+                          MPI_LONG_LONG,
+                          MPI_SUM,
+                          FML::communicator);
 #endif
             long long int id_start = 0, nzones = 0;
             for (int i = 0; i < FML::NTasks; i++) {
@@ -302,7 +306,14 @@ namespace FML {
                 std::vector<ZoneLink> all;
                 if (FML::ThisTask == 0)
                     all.resize(size_t(displs.back()) + counts.back());
-                MPI_Gatherv(links.data(), n, link_type, all.data(), counts.data(), displs.data(), link_type, 0,
+                MPI_Gatherv(links.data(),
+                            n,
+                            link_type,
+                            all.data(),
+                            counts.data(),
+                            displs.data(),
+                            link_type,
+                            0,
                             FML::communicator);
                 MPI_Type_free(&link_type);
                 links = std::move(all);
@@ -374,14 +385,18 @@ namespace FML {
             const double smoothing_scale =
                 options.smoothing_scale < 0.0 ? std::cbrt(1.0 / double(NumPartTot)) : options.smoothing_scale;
             if (FML::ThisTask == 0)
-                std::cout << "[void_density_field] Nmesh = " << Nmesh << " smoothing scale = " << smoothing_scale << " (box units)\n";
+                std::cout << "[void_density_field] Nmesh = " << Nmesh << " smoothing scale = " << smoothing_scale
+                          << " (box units)\n";
 
             // Density assignment gives delta
             const auto nextra =
                 FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(options.density_assignment_method);
             grid = FML::GRID::FFTWGrid<3>(Nmesh, nextra.first, nextra.second);
-            FML::INTERPOLATION::particles_to_grid(
-                p, NumPart, size_t(NumPartTot), grid, options.density_assignment_method);
+            FML::INTERPOLATION::particles_to_grid(p,
+                                                  NumPart,
+                                                  size_t(NumPartTot),
+                                                  grid,
+                                                  options.density_assignment_method);
 
             // Gaussian smoothing
             if (smoothing_scale > 0.0) {
@@ -415,7 +430,8 @@ namespace FML {
                             const int m = int(std::lround(kvec[j] / (2.0 * M_PI)));
                             factor *= what[((m % Nmesh) + Nmesh) % Nmesh];
                         }
-                        grid.set_fourier_from_index(index, grid.get_fourier_from_index(index) * FML::GRID::FloatType(factor));
+                        grid.set_fourier_from_index(index,
+                                                    grid.get_fourier_from_index(index) * FML::GRID::FloatType(factor));
                     }
                 }
                 grid.fftw_c2r();
@@ -429,7 +445,6 @@ namespace FML {
                 for (int iy = 0; iy < Nmesh; iy++)
                     for (int iz = 0; iz < Nmesh; iz++)
                         grid.set_real({ix, iy, iz}, FML::GRID::FloatType(1.0 + grid.get_real({ix, iy, iz})));
-
         }
 
         //========================================================================================

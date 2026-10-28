@@ -84,11 +84,11 @@ class Cosmology {
     // Here we solve and spline the boltzmann integrals for the neutrino
     // energy density. This should be called for derived classes!
     //========================================================================
-    virtual void init() { 
-      solve_for_neutrinos(); 
-      
-      // Correct the value of OmegaLambda now that we have made the neutrino splines
-      OmegaLambda = 1.0 - (OmegaK + OmegaR + OmegaCDM + Omegab + get_OmegaNu_exact(1.0));
+    virtual void init() {
+        solve_for_neutrinos();
+
+        // Correct the value of OmegaLambda now that we have made the neutrino splines
+        OmegaLambda = 1.0 - (OmegaK + OmegaR + OmegaCDM + Omegab + get_OmegaNu_exact(1.0));
     }
 
     //========================================================================
@@ -101,14 +101,16 @@ class Cosmology {
             FML::SOLVERS::ODESOLVER::ODEFunction deriv =
                 [&](double x, [[maybe_unused]] const double * y, double * dydx) {
                     dydx[0] = x * x * std::sqrt(x * x + val * val) / (1.0 + std::exp(x)); // Energy density
-                    dydx[1] = (x == 0.0 and val == 0.0) ? 0.0 :  x * x * (x * x / std::sqrt(x * x + val * val) / 3.0) / (1.0 + std::exp(x)); // Pressure
+                    dydx[1] = (x == 0.0 and val == 0.0) ? 0.0 :
+                                                          x * x * (x * x / std::sqrt(x * x + val * val) / 3.0) /
+                                                              (1.0 + std::exp(x)); // Pressure
                     return GSL_SUCCESS;
                 };
             FML::SOLVERS::ODESOLVER::ODESolver ode;
             std::vector<double> x_arr{0.0, 20.0};
             std::vector<double> yini{0.0, 0.0};
             ode.solve(deriv, x_arr, yini);
-            return std::pair<double,double>(ode.get_final_data_by_component(0), ode.get_final_data_by_component(1));
+            return std::pair<double, double>(ode.get_final_data_by_component(0), ode.get_final_data_by_component(1));
         };
 
         // Compute and spline F(y) / (F(0) + C y). This converges to 1 in both ends
@@ -122,9 +124,11 @@ class Cosmology {
             y_arr[i] = i == 0 ? 0.0 : std::exp(std::log(ymin) + std::log(ymax / ymin) * (i - 1) / double(npts - 2));
             auto res = solve_ode(y_arr[i]);
             E_arr[i] = res.first / (sixeta4 + twoeta3 * y_arr[i]);
-            p_arr[i] = res.second / (sixeta4/3.0);
+            p_arr[i] = res.second / (sixeta4 / 3.0);
         }
-        neutrino_boltzmann_integral_energydensity_spline.create(y_arr, E_arr, "Neutrino boltzmann integral - energydensity");
+        neutrino_boltzmann_integral_energydensity_spline.create(y_arr,
+                                                                E_arr,
+                                                                "Neutrino boltzmann integral - energydensity");
         neutrino_boltzmann_integral_pressure_spline.create(y_arr, p_arr, "Neutrino boltzmann integral - pressure");
     }
 
@@ -133,7 +137,7 @@ class Cosmology {
         return neutrino_boltzmann_integral_energydensity_spline(y) * (sixeta4 + twoeta3 * y);
     }
     double get_neutrino_boltzmann_integral_pressure(double y) const {
-        return neutrino_boltzmann_integral_pressure_spline(y) * sixeta4/3.0;
+        return neutrino_boltzmann_integral_pressure_spline(y) * sixeta4 / 3.0;
     }
     // Boltzmann integral for energy density derivative dF(y)/dlogy
     double get_dneutrino_boltzmann_integral_energydensity_dlogy(double y) const {
@@ -157,7 +161,9 @@ class Cosmology {
         static double norm = get_neutrino_boltzmann_integral_energydensity(0);
         double y = Mnu_eV / get_neutrino_temperature_eV(a) / N_nu;
         return OmegaNu / (a * a * a * a) *
-               (-4.0 * get_neutrino_boltzmann_integral_energydensity(y) + get_dneutrino_boltzmann_integral_energydensity_dlogy(y)) / norm;
+               (-4.0 * get_neutrino_boltzmann_integral_energydensity(y) +
+                get_dneutrino_boltzmann_integral_energydensity_dlogy(y)) /
+               norm;
     }
     // Sound speed over c in non-relativitic limit (1408.2995). Truncating at the free radiation sounds speed if
     // evaluated for very larger redshifts
@@ -222,56 +228,64 @@ class Cosmology {
     //========================================================================
     // Functions all models have (but expressions might differ so we make them virtual)
     //========================================================================
-    virtual double get_fMNu() const {
-        return OmegaMNu / OmegaM;
-    }
+    virtual double get_fMNu() const { return OmegaMNu / OmegaM; }
     virtual double get_OmegaMNu(double a = 1.0) const {
-        if(a == 1.0) return OmegaMNu;
+        if (a == 1.0)
+            return OmegaMNu;
         double E = HoverH0_of_a(a);
         return OmegaMNu / (a * a * a * E * E);
     }
     virtual double get_Omegab(double a = 1.0) const {
-        if(a == 1.0) return Omegab;
+        if (a == 1.0)
+            return Omegab;
         double E = HoverH0_of_a(a);
         return Omegab / (a * a * a * E * E);
     }
     virtual double get_OmegaM(double a = 1.0) const {
-        if(a == 1.0) return OmegaM;
+        if (a == 1.0)
+            return OmegaM;
         double E = HoverH0_of_a(a);
         return OmegaM / (a * a * a * E * E);
     }
     virtual double get_OmegaCDM(double a = 1.0) const {
-        if(a == 1.0) return OmegaCDM;
+        if (a == 1.0)
+            return OmegaCDM;
         double E = HoverH0_of_a(a);
         return OmegaCDM / (a * a * a * E * E);
     }
     virtual double get_OmegaR(double a = 1.0) const {
-        if(a == 1.0) return OmegaR;
+        if (a == 1.0)
+            return OmegaR;
         double E = HoverH0_of_a(a);
         return OmegaR / (a * a * a * a * E * E);
     }
     virtual double get_OmegaNu(double a = 1.0) const {
-        if(a == 1.0) return OmegaNu;
+        if (a == 1.0)
+            return OmegaNu;
         double E = HoverH0_of_a(a);
         return OmegaNu / (a * a * a * a * E * E);
     }
     virtual double get_OmegaNu_exact(double a = 1.0) const {
-        if(a == 1.0) return get_rhoNu_exact(1.0);
+        if (a == 1.0)
+            return get_rhoNu_exact(1.0);
         double E = HoverH0_of_a(a);
         return get_rhoNu_exact(a) / (E * E);
     }
     virtual double get_OmegaRtot(double a = 1.0) const {
-        if(a == 1.0) return OmegaRtot;
+        if (a == 1.0)
+            return OmegaRtot;
         double E = HoverH0_of_a(a);
         return OmegaRtot / (a * a * a * a * E * E);
     }
     virtual double get_OmegaK(double a = 1.0) const {
-        if(a == 1.0) return OmegaK;
+        if (a == 1.0)
+            return OmegaK;
         double E = HoverH0_of_a(a);
         return OmegaK / (a * a * E * E);
     }
     virtual double get_OmegaLambda(double a = 1.0) const {
-        if(a == 1.0) return OmegaLambda;
+        if (a == 1.0)
+            return OmegaLambda;
         double E = HoverH0_of_a(a);
         return OmegaLambda / (E * E);
     }
@@ -285,22 +299,32 @@ class Cosmology {
     //========================================================================
 
     // Output an element (e.g. string/double) in a header/row with a desired alignment width
-    template <typename T> void output_element(std::ofstream & fp, const T & element, int width = 15) const {
+    template <typename T>
+    void output_element(std::ofstream & fp, const T & element, int width = 15) const {
         fp << std::setw(width) << element;
     }
 
     // Output a header row of various quantities
     // Children should override and extend this to output additional quantities
     virtual void output_header(std::ofstream & fp) const {
-        fp << "#"; output_element(fp, "a"); 
-        fp << " "; output_element(fp, "H/H0");
-        fp << " "; output_element(fp, "dlogH/dloga");
-        fp << " "; output_element(fp, "OmegaM");
-        fp << " "; output_element(fp, "OmegaR");
-        fp << " "; output_element(fp, "OmegaNu");
-        fp << " "; output_element(fp, "OmegaMNu");
-        fp << " "; output_element(fp, "OmegaNu_exact");
-        fp << " "; output_element(fp, "OmegaLambda");
+        fp << "#";
+        output_element(fp, "a");
+        fp << " ";
+        output_element(fp, "H/H0");
+        fp << " ";
+        output_element(fp, "dlogH/dloga");
+        fp << " ";
+        output_element(fp, "OmegaM");
+        fp << " ";
+        output_element(fp, "OmegaR");
+        fp << " ";
+        output_element(fp, "OmegaNu");
+        fp << " ";
+        output_element(fp, "OmegaMNu");
+        fp << " ";
+        output_element(fp, "OmegaNu_exact");
+        fp << " ";
+        output_element(fp, "OmegaLambda");
         // ...end line in output() instead, so additional quantities printed by children come on the same row
     }
 
@@ -308,15 +332,24 @@ class Cosmology {
     // Children should override and extend this to output additional quantities
     virtual void output_row(std::ofstream & fp, double a) const {
         // First ' ' compensates for '#' in header
-        fp << " "; output_element(fp, a); 
-        fp << " "; output_element(fp, HoverH0_of_a(a));
-        fp << " "; output_element(fp, dlogHdloga_of_a(a));
-        fp << " "; output_element(fp, get_OmegaM(a));
-        fp << " "; output_element(fp, get_OmegaR(a));
-        fp << " "; output_element(fp, get_OmegaNu(a));
-        fp << " "; output_element(fp, get_OmegaMNu(a));
-        fp << " "; output_element(fp, get_OmegaNu_exact(a));
-        fp << " "; output_element(fp, get_OmegaLambda(a));
+        fp << " ";
+        output_element(fp, a);
+        fp << " ";
+        output_element(fp, HoverH0_of_a(a));
+        fp << " ";
+        output_element(fp, dlogHdloga_of_a(a));
+        fp << " ";
+        output_element(fp, get_OmegaM(a));
+        fp << " ";
+        output_element(fp, get_OmegaR(a));
+        fp << " ";
+        output_element(fp, get_OmegaNu(a));
+        fp << " ";
+        output_element(fp, get_OmegaMNu(a));
+        fp << " ";
+        output_element(fp, get_OmegaNu_exact(a));
+        fp << " ";
+        output_element(fp, get_OmegaLambda(a));
         // ...end line in output() instead, so additional quantities printed by children come on the same row
     }
 
@@ -324,17 +357,17 @@ class Cosmology {
     // Children should override output_header() and output_row() instead of this
     void output(std::string filename) const {
         std::ofstream fp(filename.c_str());
-        if (not fp.is_open()){
+        if (not fp.is_open()) {
             std::cout << "Cosmology:: Error opening file " << filename << " for output\n";
             return;
         }
 
-        output_header(fp); 
+        output_header(fp);
         fp << "\n";
         for (int i = 0; i < npts_loga; i++) {
             double loga = std::log(alow) + std::log(ahigh / alow) * i / double(npts_loga - 1);
             double a = std::exp(loga);
-            output_row(fp, a); 
+            output_row(fp, a);
             fp << "\n";
         }
     }
@@ -387,7 +420,7 @@ class Cosmology {
     const double N_nu{3}; // Number of neutrinos (3)
     std::string name{"Uninitialized cosmology"};
 
-    // For neutrinos in the background 
+    // For neutrinos in the background
     const double twoeta3{3.0 / 2.0 * riemann_zeta3};
     const double sixeta4{7.0 / 120.0 * M_PI * M_PI * M_PI * M_PI};
     const double sixzeta4{6.0 * riemann_zeta4};

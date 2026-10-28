@@ -66,7 +66,16 @@ Result run(const SphericalCollapseModel & model, double z, double aini = 1e-5) {
     Result r;
     Spline dprime;
     double xnl;
-    sc.run_single_redshift(z, r.delta, dprime, r.delta_lin, r.deltac, r.DeltaVir, xnl, r.xta, r.xvir, r.delta_ini,
+    sc.run_single_redshift(z,
+                           r.delta,
+                           dprime,
+                           r.delta_lin,
+                           r.deltac,
+                           r.DeltaVir,
+                           xnl,
+                           r.xta,
+                           r.xvir,
+                           r.delta_ini,
                            false);
     return r;
 }
@@ -128,8 +137,8 @@ int main() {
             const double x = -std::log(1 + z);
             maxerr = std::max({maxerr, std::fabs(deltac(x) / r.deltac - 1), std::fabs(DeltaVir(x) / r.DeltaVir - 1)});
         }
-        check(maxerr < 1e-5, "deltac(z), DeltaVir(z) splines = single redshift runs (max rel. difference " +
-                                 num(maxerr) + ")");
+        check(maxerr < 1e-5,
+              "deltac(z), DeltaVir(z) splines = single redshift runs (max rel. difference " + num(maxerr) + ")");
     }
 
     // The linear solution after the collapse follows the growth factor

@@ -108,9 +108,8 @@ namespace FML {
             std::vector<std::vector<T>> send(FML::NTasks);
             for (auto & p : part) {
                 const double x = FML::PARTICLE::GetPos(p)[0];
-                int owner = int(std::upper_bound(xmin_per_task.begin(), xmin_per_task.end(), x) -
-                                xmin_per_task.begin()) -
-                            1;
+                int owner =
+                    int(std::upper_bound(xmin_per_task.begin(), xmin_per_task.end(), x) - xmin_per_task.begin()) - 1;
                 owner = std::max(0, std::min(FML::NTasks - 1, owner));
                 send[owner].push_back(p);
             }
@@ -310,7 +309,9 @@ namespace FML {
                 FML::NUFFT::ESKernel kernel(nufft_epsilon);
                 FFTWGrid<N> density_shift(nmesh);
                 density_shift.add_memory_label("FFTWGrid::sheet_density_fourier::density_shift");
-                FFTWGrid<N> sum(nmesh, density_fourier.get_n_extra_slices_left(), density_fourier.get_n_extra_slices_right());
+                FFTWGrid<N> sum(nmesh,
+                                density_fourier.get_n_extra_slices_left(),
+                                density_fourier.get_n_extra_slices_right());
                 sum.add_memory_label("FFTWGrid::sheet_density_fourier::sum");
                 sum.fill_fourier_grid(0.0);
                 sum.set_grid_status_real(false);
@@ -322,8 +323,12 @@ namespace FML {
                         shift[idim] = ((ishift / n) % R) / double(R * Np);
                     sheet_tracers<N>(Psi_fourier, lattice_offset, shift, tracers);
                     ones.assign(tracers.size(), 1.0);
-                    FML::NUFFT::nufft_type1<N, SheetTracer<N>>(
-                        tracers.data(), tracers.size(), ones, 1.0 / double(NumTracersTot * nshifts), density_shift, kernel);
+                    FML::NUFFT::nufft_type1<N, SheetTracer<N>>(tracers.data(),
+                                                               tracers.size(),
+                                                               ones,
+                                                               1.0 / double(NumTracersTot * nshifts),
+                                                               density_shift,
+                                                               kernel);
                     const auto Local_nx = sum.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -346,7 +351,9 @@ namespace FML {
             FFTWGrid<N> density_shift(nmesh, nleftright.first, nleftright.second);
             density_shift.add_memory_label("FFTWGrid::sheet_density_fourier::density_shift");
             // Keep the extra slices of the output grid (they are needed if it is used for interpolation later)
-            FFTWGrid<N> sum(nmesh, density_fourier.get_n_extra_slices_left(), density_fourier.get_n_extra_slices_right());
+            FFTWGrid<N> sum(nmesh,
+                            density_fourier.get_n_extra_slices_left(),
+                            density_fourier.get_n_extra_slices_right());
             sum.add_memory_label("FFTWGrid::sheet_density_fourier::sum");
 
             std::vector<SheetTracer<N>> tracers;
@@ -355,8 +362,11 @@ namespace FML {
                 for (int idim = 0, n = 1; idim < N; idim++, n *= R)
                     shift[idim] = ((ishift / n) % R) / double(R * Np);
                 sheet_tracers<N>(Psi_fourier, lattice_offset, shift, tracers);
-                particles_to_grid<N, SheetTracer<N>>(
-                    tracers.data(), tracers.size(), NumTracersTot, density_shift, density_assignment_method);
+                particles_to_grid<N, SheetTracer<N>>(tracers.data(),
+                                                     tracers.size(),
+                                                     NumTracersTot,
+                                                     density_shift,
+                                                     density_assignment_method);
                 const auto Local_nx = sum.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -393,8 +403,12 @@ namespace FML {
             displacement_field_from_particles<N, T>(part, NumPart, Npart_1D, Psi, lattice_offset);
             for (int idim = 0; idim < N; idim++)
                 Psi[idim].fftw_r2c();
-            sheet_density_fourier<N>(
-                Psi, lattice_offset, refinement, density_fourier, density_assignment_method, nufft_epsilon);
+            sheet_density_fourier<N>(Psi,
+                                     lattice_offset,
+                                     refinement,
+                                     density_fourier,
+                                     density_assignment_method,
+                                     nufft_epsilon);
         }
 
     } // namespace INTERPOLATION

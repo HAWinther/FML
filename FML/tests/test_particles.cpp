@@ -122,8 +122,9 @@ void test_lattice() {
         FML::SumOverTasks(&idsum0);
         const size_t needed = size_t(std::ceil(N * (FML::xmax_domain - FML::xmin_domain) - 1e-9)) * N * N;
         check(all_tasks(mp.get_particles().size() >= needed),
-              "create_particle_grid N = " + std::to_string(N) + ": capacity >= the particles of the most lattice "
-              "slices the domain can hold");
+              "create_particle_grid N = " + std::to_string(N) +
+                  ": capacity >= the particles of the most lattice "
+                  "slices the domain can hold");
 
         // Uniform shift by half a lattice spacing in x then communicate
         for (auto & p : mp) {
@@ -142,8 +143,9 @@ void test_lattice() {
         }
         FML::SumOverTasks(&idsum);
         check(all_tasks(ok) and n == size_t(N * N * N) and idsum == idsum0,
-              "create_particle_grid N = " + std::to_string(N) + ": uniform shift + communicate_particles keeps all "
-              "particles");
+              "create_particle_grid N = " + std::to_string(N) +
+                  ": uniform shift + communicate_particles keeps all "
+                  "particles");
     }
 }
 
@@ -186,8 +188,7 @@ void test_create() {
         mp.create(part.data(), 4, 10, FML::xmin_domain, FML::xmax_domain, true);
         bool ok = true;
         for (auto & p : mp)
-            ok = ok and in_domain(p.pos[0], FML::xmin_domain, FML::xmax_domain) and p.pos[0] >= 0.0 and
-                 p.pos[0] < 1.0;
+            ok = ok and in_domain(p.pos[0], FML::xmin_domain, FML::xmax_domain) and p.pos[0] >= 0.0 and p.pos[0] < 1.0;
         check(all_tasks(ok) and mp.get_npart_total() == 4,
               "create (all tasks same particles) keeps particles at x = 1.0 and x = -1e-17 (inside [0,1))");
     }
@@ -225,8 +226,9 @@ void dump_load_roundtrip(FML::PARTICLE::MPIParticles<T> & mp, size_t buffer_byte
     f.close();
     std::remove(filename.c_str());
     check(all_tasks(ok and filesize == expected),
-          "dump_to_file/load_from_file round trip (" + label + ", more particles than fit in the buffer, file has "
-          "only the particles in use)");
+          "dump_to_file/load_from_file round trip (" + label +
+              ", more particles than fit in the buffer, file has "
+              "only the particles in use)");
 }
 
 void test_dump() {
@@ -252,8 +254,8 @@ void test_custom_serialisation() {
         char * bp = buf.data();
         FML::PARTICLE::AppendToBuffer(a, bp);
         FML::PARTICLE::AssignFromBuffer(b, bp);
-        check(FML::PARTICLE::GetSize(a) == int(3 * sizeof(double) + sizeof(int) + 2 * sizeof(double)) and
-                  b.n == 2 and b.extra[0] == 1.0 and b.extra[1] == 2.0 and b.pos[2] == 0.3,
+        check(FML::PARTICLE::GetSize(a) == int(3 * sizeof(double) + sizeof(int) + 2 * sizeof(double)) and b.n == 2 and
+                  b.extra[0] == 1.0 and b.extra[1] == 2.0 and b.pos[2] == 0.3,
               "AppendToBuffer/AssignFromBuffer use the particle's own methods");
         Particle p{{0.1, 0.2, 0.3}, 42}, q{};
         std::vector<char> buf2(sizeof(Particle));
@@ -541,7 +543,7 @@ int main(int argc, char ** argv) {
     run("chunkpix", test_chunkpix);
 #endif
     if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All particle tests passed\n"
-                                 : std::to_string(fails) + " particle test(s) FAILED\n");
+        std::cout << (fails == 0 ? "All particle tests passed\n" :
+                                   std::to_string(fails) + " particle test(s) FAILED\n");
     return fails == 0 ? 0 : 1;
 }

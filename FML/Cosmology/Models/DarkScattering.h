@@ -26,24 +26,24 @@
 
 namespace FML::COSMOLOGY {
 
-class Perturbations;
+    class Perturbations;
 
-class FluidDarkEnergy : public Species {
-  public:
-    // xi in m^2/kg; rho_c0 the critical density today [kg/m^3] (to convert xi rho_c into a rate)
-    FluidDarkEnergy(double Omega0, double w, double cs2, double xi, double rho_crit0);
-    std::string name() const override { return "dark energy fluid"; }
-    Role role() const override { return Role::DarkEnergy; }
-    std::string info() const override;
-    double rho(double x) const override { return Omega0 * std::exp(-3.0 * (1.0 + w) * x); }
-    double p(double x) const override { return w * rho(x); }
-    double drhodx(double x) const override { return -3.0 * (1.0 + w) * rho(x); }
-    double ddrhoddx(double x) const override { return 9.0 * (1.0 + w) * (1.0 + w) * rho(x); }
-    // Perturbations of dark matter and dark energy together (the dark matter species must not have its own)
-    std::unique_ptr<SpeciesPerturbations> perturbations(const Perturbations& pert) const override;
+    class FluidDarkEnergy : public Species {
+      public:
+        // xi in m^2/kg; rho_c0 the critical density today [kg/m^3] (to convert xi rho_c into a rate)
+        FluidDarkEnergy(double Omega0, double w, double cs2, double xi, double rho_crit0);
+        std::string name() const override { return "dark energy fluid"; }
+        Role role() const override { return Role::DarkEnergy; }
+        std::string info() const override;
+        double rho(double x) const override { return Omega0 * std::exp(-3.0 * (1.0 + w) * x); }
+        double p(double x) const override { return w * rho(x); }
+        double drhodx(double x) const override { return -3.0 * (1.0 + w) * rho(x); }
+        double ddrhoddx(double x) const override { return 9.0 * (1.0 + w) * (1.0 + w) * rho(x); }
+        // Perturbations of dark matter and dark energy together (the dark matter species must not have its own)
+        std::unique_ptr<SpeciesPerturbations> perturbations(const Perturbations & pert) const override;
 
-    double Omega0, w, cs2, xi, rho_crit0;
-};
+        double Omega0, w, cs2, xi, rho_crit0;
+    };
 
 } // namespace FML::COSMOLOGY
 

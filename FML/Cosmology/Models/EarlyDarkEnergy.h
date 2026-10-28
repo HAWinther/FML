@@ -19,32 +19,36 @@
 
 namespace FML::COSMOLOGY {
 
-class EarlyDarkEnergySpecies : public ScalarFieldSpecies {
-  public:
-    // others: all other species (no cosmological constant: it is kept by this species and given by OmegaL())
-    EarlyDarkEnergySpecies(double f_EDE, double log10_zc, double theta_i, double n,
-                           const std::vector<std::shared_ptr<const Species>>& others, double OmegaK);
-    std::string name() const override { return "early dark energy"; }
-    std::string info() const override;
+    class EarlyDarkEnergySpecies : public ScalarFieldSpecies {
+      public:
+        // others: all other species (no cosmological constant: it is kept by this species and given by OmegaL())
+        EarlyDarkEnergySpecies(double f_EDE,
+                               double log10_zc,
+                               double theta_i,
+                               double n,
+                               const std::vector<std::shared_ptr<const Species>> & others,
+                               double OmegaK);
+        std::string name() const override { return "early dark energy"; }
+        std::string info() const override;
 
-    double v(double phi) const override;
-    double v_phi(double phi) const override;
-    double v_phiphi(double phi) const override;
+        double v(double phi) const override;
+        double v_phi(double phi) const override;
+        double v_phiphi(double phi) const override;
 
-    double mu() const { return mu_; }
-    double f() const { return f_; }
-    // m / H0 = sqrt(3 mu) / f
-    double mass_over_H0() const { return std::sqrt(3.0 * mu_) / f_; }
-    double fraction(double x) const { return rho(x) / E2(x); }
-    // max rho_EDE/rho_tot and the x where it is reached (from the stored solution)
-    void peak(double& f_max, double& x_peak) const;
+        double mu() const { return mu_; }
+        double f() const { return f_; }
+        // m / H0 = sqrt(3 mu) / f
+        double mass_over_H0() const { return std::sqrt(3.0 * mu_) / f_; }
+        double fraction(double x) const { return rho(x) / E2(x); }
+        // max rho_EDE/rho_tot and the x where it is reached (from the stored solution)
+        void peak(double & f_max, double & x_peak) const;
 
-  private:
-    double fEDE, x_c, theta_i, n;
-    double mu_ = 0.0, f_ = 1.0;
-    double dx = 0.002;     // spacing of the stored solution
-    void solve_to(double x_end);
-};
+      private:
+        double fEDE, x_c, theta_i, n;
+        double mu_ = 0.0, f_ = 1.0;
+        double dx = 0.002; // spacing of the stored solution
+        void solve_to(double x_end);
+    };
 
 } // namespace FML::COSMOLOGY
 

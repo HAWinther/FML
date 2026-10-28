@@ -10,9 +10,9 @@
 //   P_IJ     = 0 for two isocurvature modes
 // (CosmologyParameters::iso_f, iso_n, iso_c; modes with f_I = 0 are off). The spectra are quadratic in the
 // initial conditions, so with the Cholesky factor L of the constant correlation matrix C (C_00 = 1, C_0I = c_I,
-// C_IJ = delta_IJ) the matrix P(k) = sum_j u_j(k) u_j(k)^T with u_j = (L_0j, L_Ij f_I (k/k_p)^{(n_I - n_s)/2}) sqrt(P_RR):
-// independent components j, each one Perturbations solution with the k-dependent mixture of initial conditions
-// u_j (PerturbationOptions::ic_adiabatic, iso_amplitude, iso_tilt) and the adiabatic primordial spectrum;
+// C_IJ = delta_IJ) the matrix P(k) = sum_j u_j(k) u_j(k)^T with u_j = (L_0j, L_Ij f_I (k/k_p)^{(n_I - n_s)/2})
+// sqrt(P_RR): independent components j, each one Perturbations solution with the k-dependent mixture of initial
+// conditions u_j (PerturbationOptions::ic_adiabatic, iso_amplitude, iso_tilt) and the adiabatic primordial spectrum;
 // PowerSpectrum sums the components (add_component). One component per active mode plus the adiabatic one.
 // Requires sum_I c_I^2 < 1 (C positive definite).
 // =============================================================================
@@ -25,12 +25,12 @@
 
 namespace FML::COSMOLOGY {
 
-namespace Isocurvature {
-  extern const char* const mode_names[4];   // cdi, bi, nid, niv
-  bool active(const CosmologyParameters& p);
-  // Perturbation options of the independent components (the first contains the adiabatic mode)
-  std::vector<PerturbationOptions> components(const CosmologyParameters& p, const PerturbationOptions& base);
-}
+    namespace Isocurvature {
+        extern const char * const mode_names[4]; // cdi, bi, nid, niv
+        bool active(const CosmologyParameters & p);
+        // Perturbation options of the independent components (the first contains the adiabatic mode)
+        std::vector<PerturbationOptions> components(const CosmologyParameters & p, const PerturbationOptions & base);
+    } // namespace Isocurvature
 
 } // namespace FML::COSMOLOGY
 

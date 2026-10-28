@@ -36,53 +36,60 @@
 
 namespace FML::COSMOLOGY {
 
-class BransDickeGravity : public Gravity {
-  public:
-    // species: all species except Lambda. Solves the background and sets Omega_Lambda (OmegaLambda()).
-    BransDickeGravity(double omega, const std::vector<std::shared_ptr<const Species>>& species);
-    std::string name() const override { return "Brans-Dicke"; }
-    std::string info() const override;
-    void init_background(const BackgroundCosmology& bg) override;
+    class BransDickeGravity : public Gravity {
+      public:
+        // species: all species except Lambda. Solves the background and sets Omega_Lambda (OmegaLambda()).
+        BransDickeGravity(double omega, const std::vector<std::shared_ptr<const Species>> & species);
+        std::string name() const override { return "Brans-Dicke"; }
+        std::string info() const override;
+        void init_background(const BackgroundCosmology & bg) override;
 
-    double OmegaLambda() const { return OmegaL; }
-    double phi(double x) const;
-    double dphidx(double x) const;
-    double phi_today() const { return (4.0 + 2.0 * omega) / (3.0 + 2.0 * omega); }
-    // G_eff / G for non-relativistic matter on small scales: (4 + 2 omega)/((3 + 2 omega) phi)
-    double G_eff(double x) const { return phi_today() / phi(x); }
+        double OmegaLambda() const { return OmegaL; }
+        double phi(double x) const;
+        double dphidx(double x) const;
+        double phi_today() const { return (4.0 + 2.0 * omega) / (3.0 + 2.0 * omega); }
+        // G_eff / G for non-relativistic matter on small scales: (4 + 2 omega)/((3 + 2 omega) phi)
+        double G_eff(double x) const { return phi_today() / phi(x); }
 
-    double E2(double x, const BackgroundCosmology& bg) const override;
-    double dE2dx(double x, const BackgroundCosmology& bg) const override;
-    double ddE2ddx(double x, const BackgroundCosmology& bg) const override;
+        double E2(double x, const BackgroundCosmology & bg) const override;
+        double dE2dx(double x, const BackgroundCosmology & bg) const override;
+        double ddE2ddx(double x, const BackgroundCosmology & bg) const override;
 
-    int n_vars() const override { return 3; }
-    enum { F_, FX, B_, N_CACHE };
-    int cache_size() const override { return N_CACHE; }
-    void update_cache(const BackgroundCosmology& bg, const ModeAtX& b, double* cache) const override;
-    double G_eff_initial() const override { return 1.0 / phi(x_ini); }
-    void initial_conditions(const ModeAtX& b, const InitialData& ic, double* y) const override;
-    MetricAtX metric(const ModeAtX& b, const double* cache, const double* y, const Moments& total,
-                     double* dydx) const override;
-    // delta phi / phi and (d delta phi/dx) / phi
-    std::vector<std::string> output_names() const override { return {"delta_phi_BD", "ddelta_phi_BD_dx"}; }
-    // Tensors: M*^2 = phi, alpha_M = dln phi/dx
-    TensorCoefficients tensor(double x, const BackgroundCosmology& /*bg*/) const override {
-      return {phi(x), dphidx(x) / phi(x), 0.0};
-    }
-    void outputs(const ModeAtX& b, const double* cache, const double* y, const MetricAtX& m, double* out) const override;
+        int n_vars() const override { return 3; }
+        enum { F_, FX, B_, N_CACHE };
+        int cache_size() const override { return N_CACHE; }
+        void update_cache(const BackgroundCosmology & bg, const ModeAtX & b, double * cache) const override;
+        double G_eff_initial() const override { return 1.0 / phi(x_ini); }
+        void initial_conditions(const ModeAtX & b, const InitialData & ic, double * y) const override;
+        MetricAtX metric(const ModeAtX & b,
+                         const double * cache,
+                         const double * y,
+                         const Moments & total,
+                         double * dydx) const override;
+        // delta phi / phi and (d delta phi/dx) / phi
+        std::vector<std::string> output_names() const override { return {"delta_phi_BD", "ddelta_phi_BD_dx"}; }
+        // Tensors: M*^2 = phi, alpha_M = dln phi/dx
+        TensorCoefficients tensor(double x, const BackgroundCosmology & /*bg*/) const override {
+            return {phi(x), dphidx(x) / phi(x), 0.0};
+        }
+        void outputs(const ModeAtX & b,
+                     const double * cache,
+                     const double * y,
+                     const MetricAtX & m,
+                     double * out) const override;
 
-  private:
-    double omega, OmegaL = 0.0;
-    std::vector<std::shared_ptr<const Species>> species;
-    double x_ini = -25.0, x_fin = 10.0;
-    Spline1D F_spline, dF_spline, L_spline;   // F, F_x, dlnE/dx
+      private:
+        double omega, OmegaL = 0.0;
+        std::vector<std::shared_ptr<const Species>> species;
+        double x_ini = -25.0, x_fin = 10.0;
+        Spline1D F_spline, dF_spline, L_spline; // F, F_x, dlnE/dx
 
-    // dlnE/dx from the Friedmann equation and the field equation, given rho, rho', p (with Lambda)
-    double dlnE(double F, double dF, double rho, double drho, double p) const;
-    void sums(double x, double& rho, double& drho, double& p) const;   // species + Lambda
-    // Integrate from rest at F_i; returns F(0) and sets the splines
-    double solve(double F_i);
-};
+        // dlnE/dx from the Friedmann equation and the field equation, given rho, rho', p (with Lambda)
+        double dlnE(double F, double dF, double rho, double drho, double p) const;
+        void sums(double x, double & rho, double & drho, double & p) const; // species + Lambda
+        // Integrate from rest at F_i; returns F(0) and sets the splines
+        double solve(double F_i);
+    };
 
 } // namespace FML::COSMOLOGY
 

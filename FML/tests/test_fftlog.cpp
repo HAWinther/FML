@@ -68,8 +68,9 @@ int main() {
             auto res = ComputeXiLM(ell, ell + 2, k, pk, q);
             // (with q = 0 the transform rings at the smallest r: use r >= 0.05 for ell = 0)
             const double err = error(ell, res, ell == 0 ? 0.05 : 0.01, 10.0);
-            check(err < 1e-6, "xi_" + std::to_string(ell) + " of exp(-k^2), N = 1024 (q = " + num(q) +
-                                  "): max error " + num(err) + " (the output r-grid was one log-step off; q != 0 had the wrong phase)");
+            check(err < 1e-6,
+                  "xi_" + std::to_string(ell) + " of exp(-k^2), N = 1024 (q = " + num(q) + "): max error " + num(err) +
+                      " (the output r-grid was one log-step off; q != 0 had the wrong phase)");
         }
         // xi from the default (q = 0) correlation function
         auto res0 = ComputeCorrelationFunction(k, pk);

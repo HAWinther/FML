@@ -15,7 +15,12 @@ class RamsesParticle {
 };
 
 // snapdir: a ramses snapshot directory path (e.g. path/to/ramses/stuff/output_00001/)
-void compute_power_spectrum(std::string snapdir, int level=-1, std::vector<std::string> format={}, std::string density_assignment="PCS", bool subtract_shotnoise=false, bool verbose=false) {
+void compute_power_spectrum(std::string snapdir,
+                            int level = -1,
+                            std::vector<std::string> format = {},
+                            std::string density_assignment = "PCS",
+                            bool subtract_shotnoise = false,
+                            bool verbose = false) {
     const int NDIM = 3;
 
     // Ensure path ends with trailing /
@@ -51,7 +56,13 @@ void compute_power_spectrum(std::string snapdir, int level=-1, std::vector<std::
     // Compute power spectrum
     FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> pofk(Nbins);
     pofk.subtract_shotnoise = subtract_shotnoise;
-    FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM>(Nmesh, mpiparts.get_particles_ptr(), mpiparts.get_npart(), mpiparts.get_npart_total(), pofk, density_assignment, true);
+    FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM>(Nmesh,
+                                                            mpiparts.get_particles_ptr(),
+                                                            mpiparts.get_npart(),
+                                                            mpiparts.get_npart_total(),
+                                                            pofk,
+                                                            density_assignment,
+                                                            true);
     pofk.scale(reader.get_boxsize()); // scale to box
 
     // Output to file
@@ -67,7 +78,7 @@ void compute_power_spectrum(std::string snapdir, int level=-1, std::vector<std::
     }
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char * argv[]) {
     int level = -1;
     bool subtract_shotnoise = false;
     std::string density_assignment = "PCS";
@@ -84,10 +95,12 @@ int main(int argc, char *argv[]) {
             while (formatstr != "") {
                 int i = formatstr.find(",");
                 format.push_back(formatstr.substr(0, i)); // push e.g. POS
-                formatstr = formatstr.erase(0, i).erase(0, 1); // remove e.g. POS, (erase(0, i+1) fails on last element with i==-1)
+                formatstr =
+                    formatstr.erase(0, i).erase(0,
+                                                1); // remove e.g. POS, (erase(0, i+1) fails on last element with i==-1)
             }
         } else if (arg.starts_with("--density-assignment=")) { // e.g. --density-assignment=PCS
-            density_assignment = arg.substr(21); // e.g. PCS
+            density_assignment = arg.substr(21);               // e.g. PCS
         } else if (arg == "--subtract-shotnoise") {
             subtract_shotnoise = true;
         } else if (arg == "--verbose") {

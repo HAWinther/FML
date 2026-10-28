@@ -186,11 +186,31 @@ int main(int argc, char ** argv) {
     {
         auto part = make_particles<Particle>(n_per_task, false);
         GadgetWriter gw;
-        gw.write_gadget_single(folder + "/bin." + std::to_string(FML::ThisTask), part.data(), part.size(),
-                               n_per_task * FML::NTasks, nfiles, aexp, boxsize, 0.3, 0.7, 0.7, pos_norm, vel_norm);
+        gw.write_gadget_single(folder + "/bin." + std::to_string(FML::ThisTask),
+                               part.data(),
+                               part.size(),
+                               n_per_task * FML::NTasks,
+                               nfiles,
+                               aexp,
+                               boxsize,
+                               0.3,
+                               0.7,
+                               0.7,
+                               pos_norm,
+                               vel_norm);
         GadgetHDF5Writer gw5;
-        gw5.write_gadget_single(folder + "/h5." + std::to_string(FML::ThisTask) + ".hdf5", part.data(), part.size(),
-                                n_per_task * FML::NTasks, nfiles, aexp, boxsize, 0.3, 0.7, 0.7, pos_norm, vel_norm);
+        gw5.write_gadget_single(folder + "/h5." + std::to_string(FML::ThisTask) + ".hdf5",
+                                part.data(),
+                                part.size(),
+                                n_per_task * FML::NTasks,
+                                nfiles,
+                                aexp,
+                                boxsize,
+                                0.3,
+                                0.7,
+                                0.7,
+                                pos_norm,
+                                vel_norm);
 #ifdef USE_MPI
         MPI_Barrier(MPI_COMM_WORLD);
 #endif

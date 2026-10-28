@@ -195,8 +195,9 @@ namespace FML {
             // Start the recursion at a large enough lmax such that j_ell/j_ell-1 ~ 0
             // and bring it down to lmax where we start to store the values
             // (for K > 0 we keep the old start as the square roots below become imaginary for large k)
-            int lstart = K <= 0.0 ? j_ell_recursion_lstart(lmax, chinu)
-                                  : std::max(lmax, int(lmax < 10 ? 5 * chinu : (lmax < 100 ? 1.6 * chinu : 1.2 * chinu)));
+            int lstart = K <= 0.0 ?
+                             j_ell_recursion_lstart(lmax, chinu) :
+                             std::max(lmax, int(lmax < 10 ? 5 * chinu : (lmax < 100 ? 1.6 * chinu : 1.2 * chinu)));
             double h = 0.0;
             double sqrtnu2chi2old = std::sqrt(chinu2 - chi * chi * K * (lstart + 1) * (lstart + 1));
             for (int k = lstart; k >= lmax + 1; k--) {

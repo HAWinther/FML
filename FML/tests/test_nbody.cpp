@@ -53,8 +53,8 @@ struct Particle {
     double pos[3];
     double vel[3];
     double expected[3]; // Where the particle should end up
-    double *get_pos() { return pos; }
-    double *get_vel() { return vel; }
+    double * get_pos() { return pos; }
+    double * get_vel() { return vel; }
     constexpr int get_ndim() const { return 3; }
 };
 
@@ -90,7 +90,8 @@ double rel_diff(std::array<FFTWGrid, 3> & a, std::array<FFTWGrid, 3> & b) {
     double maxdiff = 0.0, maxval = 0.0;
     for (int idim = 0; idim < 3; idim++)
         for (auto && i : b[idim].get_real_range()) {
-            maxdiff = std::max(maxdiff, double(std::fabs(a[idim].get_real_from_index(i) - b[idim].get_real_from_index(i))));
+            maxdiff =
+                std::max(maxdiff, double(std::fabs(a[idim].get_real_from_index(i) - b[idim].get_real_from_index(i))));
             maxval = std::max(maxval, double(std::fabs(b[idim].get_real_from_index(i))));
         }
     FML::MaxOverTasks(&maxdiff);
@@ -147,7 +148,12 @@ int main(int argc, char ** argv) {
     //=====================================================
     {
         double maxerr = 0.0;
-        const std::vector<std::array<int, 3>> modes{{1, 0, 0}, {3, 2, 1}, {5, -7, 2}, {8, 8, -3}, {-6, 1, 4}, {7, 0, -3}};
+        const std::vector<std::array<int, 3>> modes{{1, 0, 0},
+                                                    {3, 2, 1},
+                                                    {5, -7, 2},
+                                                    {8, 8, -3},
+                                                    {-6, 1, 4},
+                                                    {7, 0, -3}};
         for (auto & n : modes) {
             std::array<double, 3> kvec;
             double kmag2 = 0.0, sumD2 = 0.0;
@@ -157,17 +163,24 @@ int main(int argc, char ** argv) {
                 const double D = NBODY::gradient_kernel_fourier(kvec[i], Nmesh, NBODY::DISCRETE_FOUR_POINT_GRADIENT);
                 sumD2 += D * D;
             }
-            const double G = NBODY::greens_function_laplace_operator_fourier<3>(
-                kmag2, kvec, Nmesh, NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT);
+            const double G =
+                NBODY::greens_function_laplace_operator_fourier<3>(kmag2,
+                                                                   kvec,
+                                                                   Nmesh,
+                                                                   NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT);
             maxerr = std::max(maxerr, std::fabs(G * sumD2 + 1.0));
         }
-        check(maxerr < 1e-12, "discrete_4pt Green's function = -1 / (4-point gradient)^2 (max error " + num(maxerr) + ")");
+        check(maxerr < 1e-12,
+              "discrete_4pt Green's function = -1 / (4-point gradient)^2 (max error " + num(maxerr) + ")");
         // The 4-point gradient vanishes when all components are 0 or the Nyquist frequency: no (infinite) potential
         std::array<double, 3> knyq{M_PI * Nmesh, 0.0, -M_PI * Nmesh};
-        const double Gnyq = NBODY::greens_function_laplace_operator_fourier<3>(
-            2.0 * M_PI * M_PI * Nmesh * Nmesh, knyq, Nmesh, NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT);
-        check(Gnyq == 0.0, "discrete_4pt Green's function is 0 for the Nyquist modes where D4 = 0 (got " + num(Gnyq) +
-                               ")");
+        const double Gnyq =
+            NBODY::greens_function_laplace_operator_fourier<3>(2.0 * M_PI * M_PI * Nmesh * Nmesh,
+                                                               knyq,
+                                                               Nmesh,
+                                                               NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT);
+        check(Gnyq == 0.0,
+              "discrete_4pt Green's function is 0 for the Nyquist modes where D4 = 0 (got " + num(Gnyq) + ")");
     }
 
     //=====================================================
@@ -190,8 +203,9 @@ int main(int argc, char ** argv) {
             maxerr = std::max(maxerr, double(std::fabs(force[0].get_real_from_index(i))) * D4);
         }
         FML::MaxOverTasks(&maxerr);
-        check(maxerr < 1e-10, "Fourier force on a plane wave with the 4-point kernels is sin(kx)/D4(k) (rel. error " +
-                                  num(maxerr) + ")");
+        check(maxerr < 1e-10,
+              "Fourier force on a plane wave with the 4-point kernels is sin(kx)/D4(k) (rel. error " + num(maxerr) +
+                  ")");
     }
 
     //=====================================================
@@ -208,13 +222,25 @@ int main(int argc, char ** argv) {
         };
         const std::vector<Case> cases{
             {NBODY::CONTINUOUS_GREENS_FUNCTION, 2, NBODY::DISCRETE_TWO_POINT_GRADIENT, false, "continuous, stencil 2"},
-            {NBODY::DISCRETE_GREENS_FUNCTION_FROM_TWO_POINT, 2, NBODY::DISCRETE_TWO_POINT_GRADIENT, false,
+            {NBODY::DISCRETE_GREENS_FUNCTION_FROM_TWO_POINT,
+             2,
+             NBODY::DISCRETE_TWO_POINT_GRADIENT,
+             false,
              "discrete_2pt, stencil 2"},
-            {NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT, 4, NBODY::DISCRETE_FOUR_POINT_GRADIENT, false,
+            {NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT,
+             4,
+             NBODY::DISCRETE_FOUR_POINT_GRADIENT,
+             false,
              "discrete_4pt, stencil 4"},
-            {NBODY::CONTINUOUS_GREENS_FUNCTION, 4, NBODY::DISCRETE_FOUR_POINT_GRADIENT, true,
+            {NBODY::CONTINUOUS_GREENS_FUNCTION,
+             4,
+             NBODY::DISCRETE_FOUR_POINT_GRADIENT,
+             true,
              "continuous, stencil 4, deconvolved"},
-            {NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT, 4, NBODY::DISCRETE_FOUR_POINT_GRADIENT, true,
+            {NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT,
+             4,
+             NBODY::DISCRETE_FOUR_POINT_GRADIENT,
+             true,
              "discrete_4pt, stencil 4, deconvolved"},
         };
         for (auto & c : cases) {
@@ -236,8 +262,14 @@ int main(int argc, char ** argv) {
     //=====================================================
     {
         // pos, displacement
-        const std::vector<std::array<double, 2>> cases{
-            {0.0, -1e-18}, {0.3, 2.5}, {0.5, -1.7}, {0.9, 0.05}, {0.05, -0.1}, {0.25, 3.0}, {0.7, -2.7}, {0.4, 0.5}};
+        const std::vector<std::array<double, 2>> cases{{0.0, -1e-18},
+                                                       {0.3, 2.5},
+                                                       {0.5, -1.7},
+                                                       {0.9, 0.05},
+                                                       {0.05, -0.1},
+                                                       {0.25, 3.0},
+                                                       {0.7, -2.7},
+                                                       {0.4, 0.5}};
         std::vector<Particle> p(cases.size());
         for (size_t i = 0; i < cases.size(); i++)
             for (int idim = 0; idim < 3; idim++) {
@@ -321,8 +353,14 @@ int main(int argc, char ** argv) {
         }
         MPIParticles<Particle> mp;
         mp.create(part.data(), npart, 2 * npart, FML::xmin_domain, FML::xmax_domain, true);
-        PGD::potential_gradient_decent_method<3, Particle>(
-            mp.get_particles_ptr(), mp.get_npart(), 2.0, 100.0, 0.01, 1.5, Nmesh, "CIC");
+        PGD::potential_gradient_decent_method<3, Particle>(mp.get_particles_ptr(),
+                                                           mp.get_npart(),
+                                                           2.0,
+                                                           100.0,
+                                                           0.01,
+                                                           1.5,
+                                                           Nmesh,
+                                                           "CIC");
         mp.communicate_particles();
         double xsum = 0.0;
         int bad = 0;
@@ -356,8 +394,14 @@ int main(int argc, char ** argv) {
             p.expected[0] = p.pos[0];
         }
         mp.communicate_particles();
-        PGD::potential_gradient_decent_method<3, Particle>(
-            mp.get_particles_ptr(), mp.get_npart(), kl, ks, alpha, norm, Np, "CIC");
+        PGD::potential_gradient_decent_method<3, Particle>(mp.get_particles_ptr(),
+                                                           mp.get_npart(),
+                                                           kl,
+                                                           ks,
+                                                           alpha,
+                                                           norm,
+                                                           Np,
+                                                           "CIC");
         const double filter = std::exp(-std::pow(k * k / (ks * ks), 2) - kl * kl / (k * k));
         const double W = std::pow(std::sin(k / (2.0 * Np)) / (k / (2.0 * Np)), 4); // CIC assignment + interpolation
         double num_ = 0.0, den = 0.0;

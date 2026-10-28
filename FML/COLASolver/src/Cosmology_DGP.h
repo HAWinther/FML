@@ -25,8 +25,8 @@ class CosmologyDGP final : public Cosmology {
     //========================================================================
     // Initialize the cosmology
     //========================================================================
-    void init() override { 
-        Cosmology::init(); 
+    void init() override {
+        Cosmology::init();
 
         // Set OmegaK from closure-condition
         double tmp = std::sqrt(OmegaRC) + std::sqrt(OmegaRC + OmegaCDM + Omegab + OmegaR + this->get_rhoNu_exact(1.0));

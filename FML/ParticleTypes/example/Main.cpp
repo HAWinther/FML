@@ -7,11 +7,10 @@ class TestParticle {
     double pos[NDIM];
     double vel[NDIM];
     size_t id = 10;
-   
-    //double mass = 2.0;
+
+    // double mass = 2.0;
 
   public:
-    
     constexpr int get_ndim() const { return NDIM; }
     double * get_pos() { return pos; }
     double * get_vel() { return vel; }
@@ -19,8 +18,8 @@ class TestParticle {
     void set_id(size_t _id) { id = _id; }
 
     // If the mass is not set here then the fiducial value 1 is used by algorithms
-    //double get_mass() { return mass; }
-    //void set_mass(double _mass) { mass = _mass; }
+    // double get_mass() { return mass; }
+    // void set_mass(double _mass) { mass = _mass; }
 };
 
 int main() {

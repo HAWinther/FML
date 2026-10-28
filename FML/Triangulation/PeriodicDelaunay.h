@@ -92,8 +92,12 @@ namespace FML {
 #ifdef USE_MPI
             /// Send sendbytes bytes to dest and receive recvbytes bytes from source. Messages are split
             /// into chunks so that we never pass a count larger than INT_MAX to MPI
-            inline void
-            sendrecv_bytes(const void * sendbuf, size_t sendbytes, int dest, void * recvbuf, size_t recvbytes, int source) {
+            inline void sendrecv_bytes(const void * sendbuf,
+                                       size_t sendbytes,
+                                       int dest,
+                                       void * recvbuf,
+                                       size_t recvbytes,
+                                       int source) {
                 const size_t chunk = size_t(1) << 30;
                 const size_t nsend = (sendbytes + chunk - 1) / chunk;
                 const size_t nrecv = (recvbytes + chunk - 1) / chunk;
@@ -601,7 +605,9 @@ namespace FML {
                     ninserted++;
                 }
 
-                CGAL::spatial_sort(order.begin() + ninserted, order.end(), SpatialSortTraits(CGAL::make_property_map(points)));
+                CGAL::spatial_sort(order.begin() + ninserted,
+                                   order.end(),
+                                   SpatialSortTraits(CGAL::make_property_map(points)));
 
 #if CGAL_NDIM == 3
                 typename PeriodicDelaunay::Cell_handle hint;
@@ -629,7 +635,8 @@ namespace FML {
                 if (not dt.is_1_cover())
                     std::cout << "[MPIPeriodicDelaunay::create] Warning task " << FML::ThisTask
                               << ": the triangulation is not 1-sheeted (too few points / no guard points) which makes "
-                                 "it much slower and we cannot check if the buffer is large enough. Use random_fraction > 0\n";
+                                 "it much slower and we cannot check if the buffer is large enough. Use "
+                                 "random_fraction > 0\n";
                 if (dt.number_of_vertices() != npoints)
                     std::cout << "[MPIPeriodicDelaunay::create] Warning task " << FML::ThisTask
                               << " has fewer vertices: " << dt.number_of_vertices() << " than points " << npoints
@@ -783,8 +790,8 @@ namespace FML {
                 return x - radius >= FML::xmin_domain - dx_buffer and x + radius <= xhigh;
             }
 
-            /// Count the number of cells (tetrahedra in 3D, triangles in 2D) that have at least one regular particle as a
-            /// vertex and that are not reliable (see cell_is_reliable). If this is zero then the Voronoi cells of all
+            /// Count the number of cells (tetrahedra in 3D, triangles in 2D) that have at least one regular particle as
+            /// a vertex and that are not reliable (see cell_is_reliable). If this is zero then the Voronoi cells of all
             /// the regular particles are exactly the same as if we had tessellated the full box.
             /// Regular points are identified by their position.
             long long int num_bad_cells() const {
@@ -947,8 +954,12 @@ namespace FML {
             std::vector<long long int> nminima_per_task(FML::NTasks, 0);
             nminima_per_task[FML::ThisTask] = (long long int)(minima.size());
 #ifdef USE_MPI
-            MPI_Allreduce(
-                MPI_IN_PLACE, nminima_per_task.data(), FML::NTasks, MPI_LONG_LONG, MPI_SUM, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE,
+                          nminima_per_task.data(),
+                          FML::NTasks,
+                          MPI_LONG_LONG,
+                          MPI_SUM,
+                          FML::communicator);
 #endif
             long long int id_start = 0;
             for (int i = 0; i < FML::ThisTask; i++)
@@ -1058,7 +1069,14 @@ namespace FML {
                         displs[i] = displs[i - 1] + counts[i - 1];
                     if (FML::ThisTask == 0)
                         links->resize(size_t(displs.back()) + counts.back());
-                    MPI_Gatherv(local_links.data(), n, link_type, links->data(), counts.data(), displs.data(), link_type, 0,
+                    MPI_Gatherv(local_links.data(),
+                                n,
+                                link_type,
+                                links->data(),
+                                counts.data(),
+                                displs.data(),
+                                link_type,
+                                0,
                                 FML::communicator);
                     MPI_Type_free(&link_type);
                     if (FML::ThisTask == 0)
@@ -1073,7 +1091,12 @@ namespace FML {
 #ifdef USE_MPI
             for (size_t offset = 0; offset < leak_quantity.size(); offset += (size_t(1) << 28)) {
                 const int count = int(std::min(size_t(1) << 28, leak_quantity.size() - offset));
-                MPI_Allreduce(MPI_IN_PLACE, leak_quantity.data() + offset, count, MPI_DOUBLE, MPI_MIN, FML::communicator);
+                MPI_Allreduce(MPI_IN_PLACE,
+                              leak_quantity.data() + offset,
+                              count,
+                              MPI_DOUBLE,
+                              MPI_MIN,
+                              FML::communicator);
             }
 #endif
 
@@ -1109,7 +1132,8 @@ namespace FML {
             // adjacent neighbors (as in Revolver, Nadathur et al.): the first neighbor is the neighbor of the minimum
             // with the lowest quantity, the second the one with the lowest quantity among the common neighbors of
             // the minimum and the first neighbor, etc. In 3D this is the center of an empty sphere in the basin.
-            // If we can't find such neighbors (or they are degenerate) we use the minimum. Make sure all tasks have this
+            // If we can't find such neighbors (or they are degenerate) we use the minimum. Make sure all tasks have
+            // this
             std::vector<double> pos_minima(ntotal_minima * CGAL_NDIM, 0.0);
             std::vector<double> pos_circumcenter(ntotal_minima * CGAL_NDIM, 0.0);
             long long int ncircumcenter_failed = 0;
@@ -1189,8 +1213,8 @@ namespace FML {
             }
             FML::SumOverTasks(&ncircumcenter_failed);
             if (FML::ThisTask == 0 and ncircumcenter_failed > 0)
-                std::cout << "[WatershedGeneral] Warning: could not compute the circumcenter for " << ncircumcenter_failed
-                          << " basins, using the position of the minimum for these\n";
+                std::cout << "[WatershedGeneral] Warning: could not compute the circumcenter for "
+                          << ncircumcenter_failed << " basins, using the position of the minimum for these\n";
 #ifdef USE_MPI
             for (auto * vec : {&pos_minima, &pos_circumcenter}) {
                 for (size_t offset = 0; offset < vec->size(); offset += (size_t(1) << 28)) {

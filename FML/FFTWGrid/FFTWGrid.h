@@ -350,8 +350,9 @@ namespace FML {
         void FFTWGrid<N>::add_memory_label([[maybe_unused]] std::string label) {
             name = label;
 #ifdef MEMORY_LOGGING
-            FML::MemoryLog::get()->add_label(
-                fourier_grid_raw.data(), fourier_grid_raw.capacity() * sizeof(ComplexType), label);
+            FML::MemoryLog::get()->add_label(fourier_grid_raw.data(),
+                                             fourier_grid_raw.capacity() * sizeof(ComplexType),
+                                             label);
 #endif
         }
 
@@ -378,7 +379,8 @@ namespace FML {
 
           public:
             LoopIteratorReal(IndexIntType _index, int _Nmesh)
-                : real_index(_index + (_Nmesh % 2 == 1 ? 1 : 2) * (_index / _Nmesh)), index(_index), Nmesh(_Nmesh), odd(_Nmesh % 2) {}
+                : real_index(_index + (_Nmesh % 2 == 1 ? 1 : 2) * (_index / _Nmesh)), index(_index), Nmesh(_Nmesh),
+                  odd(_Nmesh % 2) {}
             bool operator!=(LoopIteratorReal const & other) const { return index != other.index; }
             const IndexIntType & operator*() const { return real_index; }
             LoopIteratorReal & operator++() {
@@ -617,8 +619,12 @@ namespace FML {
         template <int N>
         my_fftw_plan FFTWGrid<N>::get_fftw_plan(bool r2c) {
             const unsigned int flag = FML::GRID::get_fftw_planner_flag();
-            const FML::GRID::FFTWPlanKey key{
-                N, Nmesh, r2c ? 1 : -1, FML::GRID::get_fftw_nthreads(), ALIGNMENT_OF(get_real_grid()), flag};
+            const FML::GRID::FFTWPlanKey key{N,
+                                             Nmesh,
+                                             r2c ? 1 : -1,
+                                             FML::GRID::get_fftw_nthreads(),
+                                             ALIGNMENT_OF(get_real_grid()),
+                                             flag};
             if (auto * plan = FML::GRID::find_cached_fftw_plan(key))
                 return *plan;
 
@@ -700,8 +706,8 @@ namespace FML {
 #ifdef DEBUG_FFTWGRID
             if (grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
-                    std::cout << "Warning: [FFTWGrid::fill_fourier_grid] The grid status is [Realspace]. Label: " + name +
-                                     "\n";
+                    std::cout << "Warning: [FFTWGrid::fill_fourier_grid] The grid status is [Realspace]. Label: " +
+                                     name + "\n";
             }
 #endif
             std::fill(fourier_grid_raw.begin(), fourier_grid_raw.end(), val);
@@ -713,8 +719,8 @@ namespace FML {
 #ifdef DEBUG_FFTWGRID
             if (grid_is_in_real_space) {
                 if (FML::ThisTask == 0)
-                    std::cout << "Warning: [FFTWGrid::fill_fourier_grid] The grid status is [Realspace]. Label: " + name +
-                                     "\n";
+                    std::cout << "Warning: [FFTWGrid::fill_fourier_grid] The grid status is [Realspace]. Label: " +
+                                     name + "\n";
             }
 #endif
 
@@ -1319,7 +1325,7 @@ namespace FML {
             }
             return fcoord;
         }
-        
+
         template <int N>
         std::array<int, N> FFTWGrid<N>::get_fourier_integer_wavevector_from_index(const IndexIntType index) const {
             const int nover2plus1 = Nmesh / 2 + 1;

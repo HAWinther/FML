@@ -20,7 +20,6 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
     double L_mpch{1.0};
 
 
-
   public:
     template <int N>
     using FFTWGrid = FML::GRID::FFTWGrid<N>;
@@ -92,8 +91,8 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
                                       FFTWGrid<NDIM> & density_fourier,
                                       FFTWGrid<NDIM> & density_fifth_force) const override {
         const double OmegaM = this->cosmo->get_OmegaM();
-        const double PhiCrit = a < assb ? 0.0 : 3.0 * OmegaM * (this->H0_hmpc * L_mpch) * (this->H0_hmpc * L_mpch) /
-                               (assb * assb * assb);
+        const double PhiCrit =
+            a < assb ? 0.0 : 3.0 * OmegaM * (this->H0_hmpc * L_mpch) * (this->H0_hmpc * L_mpch) / (assb * assb * assb);
         auto screening_function_symmetron = [=, eff = this->screening_efficiency](double PhiNewton) {
             double screenfac = std::abs(PhiCrit / PhiNewton) * eff;
             return screenfac > 1.0 ? 1.0 : screenfac;
@@ -114,8 +113,7 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
                                  FFTWGrid<NDIM> & potential_real) const override {
         // The solution is the potential C phi^2
         const bool verbose = true;
-        SymmetronSolverCosmology<NDIM, double> mgsolver(
-            this->cosmo->get_OmegaM(), assb, beta, L_mpch, H0Box, verbose);
+        SymmetronSolverCosmology<NDIM, double> mgsolver(this->cosmo->get_OmegaM(), assb, beta, L_mpch, H0Box, verbose);
         mgsolver.set_ngs_steps(this->multigrid_nsweeps, this->multigrid_nsweeps, this->multigrid_nsweeps_first_step);
         mgsolver.set_epsilon(this->multigrid_solver_residual_convergence);
         mgsolver.solve(a, density_real, potential_real);

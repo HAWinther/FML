@@ -30,8 +30,8 @@ namespace FML::COSMOLOGY::LPT {
         /// FFT. Only modes strictly inside the smaller mesh's Nyquist cube survive.
         /// MPI exchanges only retained modes, without replicating the global grid.
         template <int N>
-        FML::GRID::FFTWGrid<N> resize_lpt_fourier(const FML::GRID::FFTWGrid<N> & input,
-                                                int nmesh, int nleft = 0, int nright = 0) {
+        FML::GRID::FFTWGrid<N>
+        resize_lpt_fourier(const FML::GRID::FFTWGrid<N> & input, int nmesh, int nleft = 0, int nright = 0) {
             assert_mpi(input.get_nmesh() > 0 && nmesh > 0, "[LPT padding] Meshes must be allocated and positive");
             using Grid = FML::GRID::FFTWGrid<N>;
             using Complex = FML::GRID::ComplexType;
@@ -52,7 +52,10 @@ namespace FML::COSMOLOGY::LPT {
 #endif
             // Indices refer to the receiver's local grid. Sending records avoids
             // assumptions about FFTW's distribution or a matching slab layout.
-            struct Mode { ptrdiff_t index; Complex value; };
+            struct Mode {
+                ptrdiff_t index;
+                Complex value;
+            };
             std::vector<std::vector<Mode>> outgoing(FML::NTasks);
             for (auto index : input.get_fourier_range()) {
                 auto coord = input.get_fourier_coord_from_index(index);
@@ -60,11 +63,14 @@ namespace FML::COSMOLOGY::LPT {
                 bool keep = true;
                 for (int d = 0; d < N; d++) {
                     int wave = coord[d];
-                    if (d < N - 1 && wave > oldmesh / 2) wave -= oldmesh;
-                    if (2LL * std::abs(wave) >= cutoff_mesh) keep = false;
+                    if (d < N - 1 && wave > oldmesh / 2)
+                        wave -= oldmesh;
+                    if (2LL * std::abs(wave) >= cutoff_mesh)
+                        keep = false;
                     coord[d] = wave < 0 ? wave + nmesh : wave;
                 }
-                if (!keep) continue;
+                if (!keep)
+                    continue;
                 int owner = int(std::upper_bound(starts.begin(), starts.end(), coord[0]) - starts.begin()) - 1;
                 assert_mpi(owner >= 0 && coord[0] < starts[owner] + widths[owner],
                            "[LPT padding] Cannot locate Fourier slab");
@@ -73,8 +79,10 @@ namespace FML::COSMOLOGY::LPT {
                 for (int d = 1; d < N; d++)
                     target = target * (d == N - 1 ? nmesh / 2 + 1 : nmesh) + coord[d];
                 auto value = input.get_fourier_from_index(index);
-                if (owner == FML::ThisTask) output.set_fourier_from_index(target, value);
-                else outgoing[owner].push_back({target, value});
+                if (owner == FML::ThisTask)
+                    output.set_fourier_from_index(target, value);
+                else
+                    outgoing[owner].push_back({target, value});
             }
 #ifdef USE_MPI
             // A ring schedule visits every source/destination pair. Chunking keeps
@@ -85,9 +93,18 @@ namespace FML::COSMOLOGY::LPT {
                 const int source = (FML::ThisTask - step + FML::NTasks) % FML::NTasks;
                 auto & send = outgoing[dest];
                 unsigned long long nsend = send.size(), nrecv = 0;
-                MPI_Sendrecv(&nsend, 1, MPI_UNSIGNED_LONG_LONG, dest, 0,
-                             &nrecv, 1, MPI_UNSIGNED_LONG_LONG, source, 0,
-                             FML::communicator, MPI_STATUS_IGNORE);
+                MPI_Sendrecv(&nsend,
+                             1,
+                             MPI_UNSIGNED_LONG_LONG,
+                             dest,
+                             0,
+                             &nrecv,
+                             1,
+                             MPI_UNSIGNED_LONG_LONG,
+                             source,
+                             0,
+                             FML::communicator,
+                             MPI_STATUS_IGNORE);
                 unsigned long long rounds = (std::max(nsend, nrecv) + chunk - 1) / chunk;
                 MPI_Allreduce(MPI_IN_PLACE, &rounds, 1, MPI_UNSIGNED_LONG_LONG, MPI_MAX, FML::communicator);
                 std::vector<Mode> receive(std::min(chunk, nrecv));
@@ -95,9 +112,18 @@ namespace FML::COSMOLOGY::LPT {
                     const auto offset = round * chunk;
                     const auto scount = offset < nsend ? std::min(chunk, nsend - offset) : 0;
                     const auto rcount = offset < nrecv ? std::min(chunk, nrecv - offset) : 0;
-                    MPI_Sendrecv(scount ? send.data() + offset : nullptr, int(scount * sizeof(Mode)), MPI_BYTE, dest, 1,
-                                 rcount ? receive.data() : nullptr, int(rcount * sizeof(Mode)), MPI_BYTE, source, 1,
-                                 FML::communicator, MPI_STATUS_IGNORE);
+                    MPI_Sendrecv(scount ? send.data() + offset : nullptr,
+                                 int(scount * sizeof(Mode)),
+                                 MPI_BYTE,
+                                 dest,
+                                 1,
+                                 rcount ? receive.data() : nullptr,
+                                 int(rcount * sizeof(Mode)),
+                                 MPI_BYTE,
+                                 source,
+                                 1,
+                                 FML::communicator,
+                                 MPI_STATUS_IGNORE);
                     for (size_t i = 0; i < rcount; i++)
                         output.set_fourier_from_index(receive[i].index, receive[i].value);
                 }
@@ -106,6 +132,6 @@ namespace FML::COSMOLOGY::LPT {
 #endif
             return output;
         }
-    }
-}
+    } // namespace detail
+} // namespace FML::COSMOLOGY::LPT
 #endif

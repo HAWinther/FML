@@ -134,8 +134,8 @@ void test(bool filament, double buffer) {
             local.push_back(p);
 
     std::vector<FML::FOF::FoFHalo<Particle, NDIM>> groups;
-    FML::FOF::FriendsOfFriends<Particle, NDIM>(
-        local.data(), local.size(), linking_length, nmin, true, buffer, groups, 0);
+    FML::FOF::FriendsOfFriends<Particle,
+                               NDIM>(local.data(), local.size(), linking_length, nmin, true, buffer, groups, 0);
     const size_t nedge = FML::FOF::FoF_number_of_groups_reaching_buffer_edge;
     const std::string label = std::string(filament ? "filament longer than the buffer" : "blobs") + ", " +
                               std::to_string(FML::NTasks) + " task(s): ";
@@ -180,7 +180,13 @@ void test(bool filament, double buffer) {
             displs[i] = displs[i - 1] + counts[i - 1];
         allgroups.resize(displs.back() + counts.back());
 #ifdef USE_MPI
-        MPI_Allgatherv(mine.data(), n, MPI_DOUBLE, allgroups.data(), counts.data(), displs.data(), MPI_DOUBLE,
+        MPI_Allgatherv(mine.data(),
+                       n,
+                       MPI_DOUBLE,
+                       allgroups.data(),
+                       counts.data(),
+                       displs.data(),
+                       MPI_DOUBLE,
                        FML::communicator);
 #else
         allgroups = mine;
@@ -190,8 +196,9 @@ void test(bool filament, double buffer) {
     for (size_t i = 0; i < allgroups.size(); i += 4)
         sizes.push_back(size_t(allgroups[i]));
     std::sort(sizes.begin(), sizes.end());
-    check(sizes == ref_sizes, label + "the same groups as the serial FoF (" + std::to_string(sizes.size()) + " vs " +
-                                  std::to_string(ref_sizes.size()) + ")");
+    check(sizes == ref_sizes,
+          label + "the same groups as the serial FoF (" + std::to_string(sizes.size()) + " vs " +
+              std::to_string(ref_sizes.size()) + ")");
 
     // Centers: compare each group with the reference group of the same size (all sizes here are distinct)
     double maxerr = 0.0;
@@ -246,7 +253,13 @@ void test(bool filament, double buffer) {
             displs[i] = displs[i - 1] + counts[i - 1];
         allpairs.resize(displs.back() + counts.back());
 #ifdef USE_MPI
-        MPI_Allgatherv(pairs.data(), n, MPI_LONG_LONG, allpairs.data(), counts.data(), displs.data(), MPI_LONG_LONG,
+        MPI_Allgatherv(pairs.data(),
+                       n,
+                       MPI_LONG_LONG,
+                       allpairs.data(),
+                       counts.data(),
+                       displs.data(),
+                       MPI_LONG_LONG,
                        FML::communicator);
 #else
         allpairs = pairs;
@@ -325,8 +338,9 @@ void test_extra() {
     FML::FOF::FriendsOfFriends<Particle2D, 2>(p2.data(), p2.size(), 0.2, 2, true, 0.05, h2);
     size_t ng = h2.size();
     FML::SumOverTasks(&ng);
-    check(ng == 0, "2D: particles 0.5 mean separations apart are not linked with b = 0.2 (" + std::to_string(ng) +
-                       " groups; the linking distance used N^(-1/3))");
+    check(ng == 0,
+          "2D: particles 0.5 mean separations apart are not linked with b = 0.2 (" + std::to_string(ng) +
+              " groups; the linking distance used N^(-1/3))");
 }
 
 int main() {

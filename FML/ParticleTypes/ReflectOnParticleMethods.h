@@ -75,7 +75,7 @@ namespace FML {
     template <typename T, typename = void>                                                                             \
     struct Has##name##_address : std::false_type {};                                                                   \
     template <typename T>                                                                                              \
-    struct Has##name##_address<T, std::void_t<decltype(&T::getmethod)>> : std::true_type {};                          \
+    struct Has##name##_address<T, std::void_t<decltype(&T::getmethod)>> : std::true_type {};                           \
     template <typename T, typename = void>                                                                             \
     struct Has##name##_call0 : std::false_type {};                                                                     \
     template <typename T>                                                                                              \
@@ -100,25 +100,19 @@ namespace FML {
     }
 
 #define SFINAE_GET(name, getmethod)                                                                                    \
-    template <typename T,                                                                                              \
-              typename B = typename std::enable_if<Has##name<T>::value>::type,                                         \
-              class... Args>                                                                                           \
+    template <typename T, typename B = typename std::enable_if<Has##name<T>::value>::type, class... Args>              \
     auto name(T & p, Args... args) {                                                                                   \
         return p.getmethod(args...);                                                                                   \
     }
 
 #define SFINAE_CONSTEXPR_GET(name, getmethod)                                                                          \
-    template <typename T,                                                                                              \
-              typename B = typename std::enable_if<Has##name<T>::value>::type,                                         \
-              class... Args>                                                                                           \
+    template <typename T, typename B = typename std::enable_if<Has##name<T>::value>::type, class... Args>              \
     constexpr auto name(const T & p, Args... args) {                                                                   \
         return p.getmethod(args...);                                                                                   \
     }
 
 #define SFINAE_SET(name, setmethod)                                                                                    \
-    template <typename T,                                                                                              \
-              typename B = typename std::enable_if<Has##name<T>::value>::type,                                         \
-              class... Args>                                                                                           \
+    template <typename T, typename B = typename std::enable_if<Has##name<T>::value>::type, class... Args>              \
     auto name(T & p, Args... args) {                                                                                   \
         return p.setmethod(args...);                                                                                   \
     }
@@ -501,7 +495,7 @@ namespace FML {
                               FML::PARTICLE::has_get_dDdloga_1LPT<T>()) {
                     std::cout << "# Particle compatible with 1LPT scaledependent COLA\n";
                 } else if constexpr (FML::PARTICLE::has_get_q<T>() and FML::PARTICLE::has_get_D_1LPT<T>() and
-                              FML::PARTICLE::has_get_D_2LPT<T>()) {
+                                     FML::PARTICLE::has_get_D_2LPT<T>()) {
                     std::cout << "# Particle compatible with 2+ LPT scaledependent COLA\n";
                 } else {
                     std::cout << "# Particle is not compatible with scaledependent COLA\n";
@@ -539,7 +533,10 @@ namespace FML {
         /// x-coordinate (so particles stay on the task they belong to; with MPI the grid then needs one extra
         /// slice on the right if the shift is less than a cell)
         template <class T, int NDIM>
-        void shift_particles(T * part, size_t NumPart, const std::array<double, NDIM> & shift, double sign = 1.0,
+        void shift_particles(T * part,
+                             size_t NumPart,
+                             const std::array<double, NDIM> & shift,
+                             double sign = 1.0,
                              int wrap_type = 1) {
 #ifdef USE_OMP
 #pragma omp parallel for

@@ -46,79 +46,69 @@ namespace FML {
             int pofk_col_k = 0;          // col number of k
             int pofk_col_pofk = 1;       // col number of P(k)
         };
-       
+
         /// The format of transferfiles from CAMB
-        inline FileFormatTransfer camb_transfer_format{
-            .n_transfer_header_lines = 1,
-            .ncol_transfer_file = 13,
-            .transfer_col_k = 0,
-            .transfer_col_cdm = 1,
-            .transfer_col_baryon = 2,
-            .transfer_col_photon = 3,
-            .transfer_col_nu = 4,
-            .transfer_col_mnu = 5,
-            .transfer_col_total = 6,
-            .transfer_col_nonu = 7,
-            .transfer_col_totde = 8,
-            .transfer_col_weyl = 9,
-            .transfer_col_vcdm = 10,
-            .transfer_col_vb = 11,
-            .transfer_col_vbvc = 12
-        };
-        
+        inline FileFormatTransfer camb_transfer_format{.n_transfer_header_lines = 1,
+                                                       .ncol_transfer_file = 13,
+                                                       .transfer_col_k = 0,
+                                                       .transfer_col_cdm = 1,
+                                                       .transfer_col_baryon = 2,
+                                                       .transfer_col_photon = 3,
+                                                       .transfer_col_nu = 4,
+                                                       .transfer_col_mnu = 5,
+                                                       .transfer_col_total = 6,
+                                                       .transfer_col_nonu = 7,
+                                                       .transfer_col_totde = 8,
+                                                       .transfer_col_weyl = 9,
+                                                       .transfer_col_vcdm = 10,
+                                                       .transfer_col_vb = 11,
+                                                       .transfer_col_vbvc = 12};
+
         /// The format of transferfiles from CAMB
-        inline FileFormatTransfer axioncamb_transfer_format{
-            .n_transfer_header_lines = 1,
-            .ncol_transfer_file = 9,
-            .transfer_col_k = 0,
-            .transfer_col_cdm = 1,
-            .transfer_col_baryon = 2,
-            .transfer_col_photon = 3,
-            .transfer_col_nu = 4,
-            .transfer_col_mnu = 5,
-            .transfer_col_total = 6,
-            .transfer_col_nonu = 7,
-            .transfer_col_totde = 8,
-            .transfer_col_weyl = -1,
-            .transfer_col_vcdm = -1,
-            .transfer_col_vb = -1,
-            .transfer_col_vbvc = -1
-        };
+        inline FileFormatTransfer axioncamb_transfer_format{.n_transfer_header_lines = 1,
+                                                            .ncol_transfer_file = 9,
+                                                            .transfer_col_k = 0,
+                                                            .transfer_col_cdm = 1,
+                                                            .transfer_col_baryon = 2,
+                                                            .transfer_col_photon = 3,
+                                                            .transfer_col_nu = 4,
+                                                            .transfer_col_mnu = 5,
+                                                            .transfer_col_total = 6,
+                                                            .transfer_col_nonu = 7,
+                                                            .transfer_col_totde = 8,
+                                                            .transfer_col_weyl = -1,
+                                                            .transfer_col_vcdm = -1,
+                                                            .transfer_col_vb = -1,
+                                                            .transfer_col_vbvc = -1};
 
         /// The format of pofkfiles from CAMB
-        inline FileFormatPower camb_power_format{
-            .n_pofk_header_lines = 1,
-            .ncol_pofk_file = 2,
-            .pofk_col_k = 0,
-            .pofk_col_pofk = 1
-        };
-        
+        inline FileFormatPower camb_power_format{.n_pofk_header_lines = 1,
+                                                 .ncol_pofk_file = 2,
+                                                 .pofk_col_k = 0,
+                                                 .pofk_col_pofk = 1};
+
         /// The format of transferfiles from CLASS (NB: assumes CLASS run with format=camb)
-        inline FileFormatTransfer class_transfer_format{
-            .n_transfer_header_lines = 8,
-            .ncol_transfer_file = 7,
-            .transfer_col_k = 0,
-            .transfer_col_cdm = 1,
-            .transfer_col_baryon = 2,
-            .transfer_col_photon = 3,
-            .transfer_col_nu = 4,
-            .transfer_col_mnu = 5,
-            .transfer_col_total = 6,
-            .transfer_col_nonu = -1,
-            .transfer_col_totde = -1,
-            .transfer_col_weyl = -1,
-            .transfer_col_vcdm = -1,
-            .transfer_col_vb = -1,
-            .transfer_col_vbvc = -1
-        };
+        inline FileFormatTransfer class_transfer_format{.n_transfer_header_lines = 8,
+                                                        .ncol_transfer_file = 7,
+                                                        .transfer_col_k = 0,
+                                                        .transfer_col_cdm = 1,
+                                                        .transfer_col_baryon = 2,
+                                                        .transfer_col_photon = 3,
+                                                        .transfer_col_nu = 4,
+                                                        .transfer_col_mnu = 5,
+                                                        .transfer_col_total = 6,
+                                                        .transfer_col_nonu = -1,
+                                                        .transfer_col_totde = -1,
+                                                        .transfer_col_weyl = -1,
+                                                        .transfer_col_vcdm = -1,
+                                                        .transfer_col_vb = -1,
+                                                        .transfer_col_vbvc = -1};
 
         /// The format of pofkfiles from CLASS (NB: assumes CLASS run with format=camb)
-        inline FileFormatPower class_power_format{
-            .n_pofk_header_lines = 4,
-            .ncol_pofk_file = 2,
-            .pofk_col_k = 0,
-            .pofk_col_pofk = 1
-        };
+        inline FileFormatPower class_power_format{.n_pofk_header_lines = 4,
+                                                  .ncol_pofk_file = 2,
+                                                  .pofk_col_k = 0,
+                                                  .pofk_col_pofk = 1};
 
         /// This class reads transfer/power-spectrum data from the output of a Einstein-Boltzmann solver.
         /// We have only implemented CAMB, but other formats should just be providing the column numbers above
@@ -194,8 +184,16 @@ namespace FML {
 
             LinearTransferData() : fileformat("CAMB") { set_fileformat(fileformat); };
             LinearTransferData(std::string fileformat) : fileformat(fileformat) { set_fileformat(fileformat); };
-            LinearTransferData(double Omegab, double OmegaCDM, double OmegaMNu, double kpivot_mpc, double As, double ns, double h, std::string fileformat = "CAMB")
-                : Omegab(Omegab), OmegaCDM(OmegaCDM), OmegaMNu(OmegaMNu), kpivot_mpc(kpivot_mpc), As(As), ns(ns), h(h), fileformat(fileformat) {
+            LinearTransferData(double Omegab,
+                               double OmegaCDM,
+                               double OmegaMNu,
+                               double kpivot_mpc,
+                               double As,
+                               double ns,
+                               double h,
+                               std::string fileformat = "CAMB")
+                : Omegab(Omegab), OmegaCDM(OmegaCDM), OmegaMNu(OmegaMNu), kpivot_mpc(kpivot_mpc), As(As), ns(ns), h(h),
+                  fileformat(fileformat) {
                 set_fileformat(fileformat);
             }
 
@@ -252,7 +250,7 @@ namespace FML {
 
             /// Set the fileformat
             void set_fileformat(std::string format);
-        
+
             /// Get the range of the splines.
             double get_zmin_splines() const;
             double get_zmax_splines() const;
@@ -268,20 +266,22 @@ namespace FML {
         //====================================================================
         inline void LinearTransferData::set_fileformat(std::string format) {
             fileformat = format;
-            
+
             struct FileFormatTransfer tmp;
             struct FileFormatPower tmp1;
             if (fileformat == "CAMB") {
-              tmp = camb_transfer_format;
-              tmp1 = camb_power_format;
+                tmp = camb_transfer_format;
+                tmp1 = camb_power_format;
             } else if (fileformat == "AXIONCAMB") {
-              tmp = axioncamb_transfer_format;
-              tmp1 = camb_power_format;
+                tmp = axioncamb_transfer_format;
+                tmp1 = camb_power_format;
             } else if (fileformat == "CLASS") {
-              tmp = class_transfer_format;
-              tmp1 = class_power_format;
+                tmp = class_transfer_format;
+                tmp1 = class_power_format;
             } else {
-                throw std::runtime_error("Fileformat [" + fileformat + "] is unknown. Only CAMB, AXIONCAMB and CLASS implemented. Easy to fix (look at the top of CAMBReader.h and add your format there + in set_fileformat)\n");
+                throw std::runtime_error("Fileformat [" + fileformat +
+                                         "] is unknown. Only CAMB, AXIONCAMB and CLASS implemented. Easy to fix (look "
+                                         "at the top of CAMBReader.h and add your format there + in set_fileformat)\n");
             }
 
             // Set transfer format
@@ -487,7 +487,7 @@ namespace FML {
                 // Read the transfer data
                 auto data = read_transfer_single(fullfilename);
 
-                // Fetch the data we want 
+                // Fetch the data we want
                 auto k_tmp = data[transfer_col_k];
                 if (i == 0) {
                     k = k_tmp;
@@ -546,14 +546,17 @@ namespace FML {
             // The redshifts must be increasing (the splines need it): sort if the infofile is not ordered
             std::vector<size_t> order(nredshift);
             std::iota(order.begin(), order.end(), 0);
-            std::stable_sort(order.begin(), order.end(), [&](size_t i, size_t j) { return redshifts[i] < redshifts[j]; });
+            std::stable_sort(order.begin(), order.end(), [&](size_t i, size_t j) {
+                return redshifts[i] < redshifts[j];
+            });
             for (int i = 1; i < nredshift; i++)
                 if (redshifts[order[i]] == redshifts[order[i - 1]])
                     throw std::runtime_error("Error in read_transfer: two files with the same redshift " +
                                              std::to_string(redshifts[order[i]]) + " in " + infofile);
             if (not std::is_sorted(redshifts.begin(), redshifts.end())) {
                 if (FML::ThisTask == 0)
-                    std::cout << "read_transfer: the files in " << infofile << " are not ordered in redshift: sorting them\n";
+                    std::cout << "read_transfer: the files in " << infofile
+                              << " are not ordered in redshift: sorting them\n";
                 auto reorder = [&](auto & v) {
                     if (v.empty())
                         return;
@@ -736,8 +739,10 @@ namespace FML {
             if (zin > zmax_splines + zmargin or zin < zmin_splines - zmargin) {
                 static std::atomic<bool> warned{false};
                 if (FML::ThisTask == 0 and not warned.exchange(true))
-                    std::cout << "Warning: growth rate requested at z = " << zin << " outside the range of the transfer "
-                              << "tables [" << zmin_splines << ", " << zmax_splines << "]: using the value at the end\n";
+                    std::cout << "Warning: growth rate requested at z = " << zin
+                              << " outside the range of the transfer "
+                              << "tables [" << zmin_splines << ", " << zmax_splines
+                              << "]: using the value at the end\n";
                 a = 1.0 / (1.0 + std::min(std::max(zin, zmin_splines), zmax_splines));
             }
             const double z = 1.0 / a - 1.0;
@@ -748,7 +753,8 @@ namespace FML {
             }
             // The four files around z (fewer on one side at the ends of the table)
             int j = int(std::upper_bound(redshifts_of_files.begin(), redshifts_of_files.end(), z) -
-                        redshifts_of_files.begin()) - 2;
+                        redshifts_of_files.begin()) -
+                    2;
             j = std::max(0, std::min(j, n - 4));
             double x[4], T[4];
             for (int i = 0; i < 4; i++) {
@@ -831,10 +837,8 @@ namespace FML {
         }
 
         inline double LinearTransferData::get_total_transfer_function_matter_weighted(double k, double a) const {
-            return (
-                  Omegab * get_baryon_transfer_function(k, a) 
-                + OmegaCDM * get_cdm_transfer_function(k, a) 
-                + OmegaMNu * get_massive_neutrino_transfer_function(k, a)) /
+            return (Omegab * get_baryon_transfer_function(k, a) + OmegaCDM * get_cdm_transfer_function(k, a) +
+                    OmegaMNu * get_massive_neutrino_transfer_function(k, a)) /
                    (Omegab + OmegaCDM + OmegaMNu);
         }
 

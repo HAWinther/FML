@@ -28,24 +28,32 @@
 
 namespace FML::COSMOLOGY {
 
-class Halofit {
-  public:
-    // P_lin(x, k): linear power spectrum [m^3] at k [1/m] (extrapolated beyond the perturbation k-range)
-    Halofit(const BackgroundCosmology& bg, const std::function<double(double, double)>& P_lin, double z_max = 10.0,
-            int n_z = 60);
+    class Halofit {
+      public:
+        // P_lin(x, k): linear power spectrum [m^3] at k [1/m] (extrapolated beyond the perturbation k-range)
+        Halofit(const BackgroundCosmology & bg,
+                const std::function<double(double, double)> & P_lin,
+                double z_max = 10.0,
+                int n_z = 60);
 
-    double ratio(double x, double k) const;   // P_NL / P_L
-    // One redshift: Delta^2_NL from Delta^2_L on the log-k grid lnk (k in 1/Mpc); returns false (and copies
-    // Delta^2_L) if there is no nonlinear scale. k_sigma [1/Mpc], n_eff and C are returned for tests.
-    static bool nonlinear(const std::vector<double>& lnk, const std::vector<double>& D2L, double Omega_m,
-                          double Omega_de, double w, std::vector<double>& D2NL, double& k_sigma, double& n_eff,
-                          double& C);
+        double ratio(double x, double k) const; // P_NL / P_L
+        // One redshift: Delta^2_NL from Delta^2_L on the log-k grid lnk (k in 1/Mpc); returns false (and copies
+        // Delta^2_L) if there is no nonlinear scale. k_sigma [1/Mpc], n_eff and C are returned for tests.
+        static bool nonlinear(const std::vector<double> & lnk,
+                              const std::vector<double> & D2L,
+                              double Omega_m,
+                              double Omega_de,
+                              double w,
+                              std::vector<double> & D2NL,
+                              double & k_sigma,
+                              double & n_eff,
+                              double & C);
 
-  private:
-    double x_min;
-    Spline2D log_ratio;   // ln(P_NL/P_L)(x, ln k[1/Mpc])
-    double lnk_min, lnk_max;
-};
+      private:
+        double x_min;
+        Spline2D log_ratio; // ln(P_NL/P_L)(x, ln k[1/Mpc])
+        double lnk_min, lnk_max;
+    };
 
 } // namespace FML::COSMOLOGY
 

@@ -23,9 +23,9 @@ namespace COLASOLVER {
     //=============================================================================
     struct SpeciesInfo {
         std::string name;
-        int gadget_type{1};        // The particle type in GADGET files
-        double mass_fraction{1.0}; // Omega_i / OmegaM (the GADGET particle masses)
-        double weight_cb{0.0};     // The weight in delta_cb (Omega_i / OmegaCB; 0 for the neutrinos)
+        int gadget_type{1};         // The particle type in GADGET files
+        double mass_fraction{1.0};  // Omega_i / OmegaM (the GADGET particle masses)
+        double weight_cb{0.0};      // The weight in delta_cb (Omega_i / OmegaCB; 0 for the neutrinos)
         long long int id_offset{0}; // Added to the IDs (the IDs of the species follow each other)
         int Npart_1D{0};
         // How the particles move (see KickDrift.h)
@@ -41,8 +41,10 @@ namespace COLASOLVER {
         const long long int N = 1LL * FML::power(size_t(particle.Npart_1D), ndim);
         std::vector<SpeciesInfo> species;
         if (particle.baryons) {
-            species.push_back({"cdm", 1, cosmo.get_OmegaCDM() / OmegaM, cosmo.get_OmegaCDM() / OmegaCB, 0, particle.Npart_1D});
-            species.push_back({"baryon", 2, cosmo.get_Omegab() / OmegaM, cosmo.get_Omegab() / OmegaCB, N, particle.Npart_1D});
+            species.push_back(
+                {"cdm", 1, cosmo.get_OmegaCDM() / OmegaM, cosmo.get_OmegaCDM() / OmegaCB, 0, particle.Npart_1D});
+            species.push_back(
+                {"baryon", 2, cosmo.get_Omegab() / OmegaM, cosmo.get_Omegab() / OmegaCB, N, particle.Npart_1D});
         } else {
             species.push_back({"cb", 1, OmegaCB / OmegaM, 1.0, 0, particle.Npart_1D});
         }

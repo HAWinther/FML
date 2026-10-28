@@ -646,7 +646,8 @@ namespace FML {
             const double nslices_domain = double(Npart_1D) * (xmax_local - xmin_local);
             const size_t max_slices = size_t(std::max(0.0, std::ceil(nslices_domain - 1e-9)));
             const size_t npart_per_slice = size_t(FML::power(Npart_1D, ndim - 1));
-            size_t NpartToAllocate = size_t(std::ceil(std::max(buffer_factor, 1.0) * double(max_slices * npart_per_slice)));
+            size_t NpartToAllocate =
+                size_t(std::ceil(std::max(buffer_factor, 1.0) * double(max_slices * npart_per_slice)));
             NpartToAllocate = std::max(NpartToAllocate, size_t(NpartLocal_in_use));
             assert_mpi(NpartToAllocate >= NpartLocal_in_use,
                        "[MPIParticles::create_particle_grid] Allocation is smaller than the number of particles\n");
@@ -731,7 +732,7 @@ namespace FML {
                           << std::flush;
             }
 #endif
-                
+
             T tmp{};
             using PosType = std::remove_reference_t<decltype(tmp.get_pos()[0])>;
 
@@ -750,14 +751,16 @@ namespace FML {
                 auto & x = FML::PARTICLE::GetPos(p[i])[0];
 
                 // To fix issues appearing when we are exactly on the boundary
-                if(x == 1.0) x = std::nextafter(x, PosType(0.0));
-                if(x == 0.0) x = std::numeric_limits<PosType>::min();
+                if (x == 1.0)
+                    x = std::nextafter(x, PosType(0.0));
+                if (x == 0.0)
+                    x = std::numeric_limits<PosType>::min();
 
                 // Particles must be wrapped inside [0,1) (this also catches NaN)
                 if (not(x >= 0.0 and x < 1.0)) {
-                    std::string errmsg = "[MPIParticles::communicate_particles] Particle with x = " +
-                                         std::to_string(double(x)) +
-                                         " is outside [0,1). Particles must be wrapped (periodic) before communication\n";
+                    std::string errmsg =
+                        "[MPIParticles::communicate_particles] Particle with x = " + std::to_string(double(x)) +
+                        " is outside [0,1). Particles must be wrapped (periodic) before communication\n";
                     assert_mpi(false, errmsg.c_str());
                 }
 
@@ -792,8 +795,13 @@ namespace FML {
 
             // Communicate to get how many particles and bytes to receive from each task
             MPI_Alltoall(n_to_send.data(), 1, MPI_INT, n_to_recv.data(), 1, MPI_INT, FML::communicator);
-            MPI_Alltoall(
-                nbytes_to_send.data(), 1, MPI_LONG_LONG, nbytes_to_recv.data(), 1, MPI_LONG_LONG, FML::communicator);
+            MPI_Alltoall(nbytes_to_send.data(),
+                         1,
+                         MPI_LONG_LONG,
+                         nbytes_to_recv.data(),
+                         1,
+                         MPI_LONG_LONG,
+                         FML::communicator);
 
 #ifdef DEBUG_MPIPARTICLES
             // Show some info
@@ -820,9 +828,12 @@ namespace FML {
             }
 
             // Sanity check
-            std::string error = "[MPIParticles::communicate_particles] Number to particles to communicate does not match\n" 
-                      + std::to_string(NpartLocal_in_use_pre_comm) + " vs " + std::to_string(NpartLocal_in_use + ntot_to_send) + "\n";
-            error += "Possible cause is particles not being wrapped inside [0,1) or not communicated after they have moved across boundaries!\n";
+            std::string error =
+                "[MPIParticles::communicate_particles] Number to particles to communicate does not match\n" +
+                std::to_string(NpartLocal_in_use_pre_comm) + " vs " + std::to_string(NpartLocal_in_use + ntot_to_send) +
+                "\n";
+            error += "Possible cause is particles not being wrapped inside [0,1) or not communicated after they have "
+                     "moved across boundaries!\n";
             assert_mpi(NpartLocal_in_use_pre_comm == NpartLocal_in_use + ntot_to_send, error.c_str());
 
             // Allocate send buffer
@@ -899,10 +910,8 @@ namespace FML {
 
                 for (long long ichunk = 0; ichunk < nchunks; ichunk++) {
                     const long long offset = ichunk * max_chunk_bytes;
-                    const int nsend =
-                        int(std::clamp(nbytes_to_send[send_request_to] - offset, 0LL, max_chunk_bytes));
-                    const int nrecv =
-                        int(std::clamp(nbytes_to_recv[get_request_from] - offset, 0LL, max_chunk_bytes));
+                    const int nsend = int(std::clamp(nbytes_to_send[send_request_to] - offset, 0LL, max_chunk_bytes));
+                    const int nrecv = int(std::clamp(nbytes_to_recv[get_request_from] - offset, 0LL, max_chunk_bytes));
                     char * send_ptr = send_buffer_by_task[send_request_to] + (nsend > 0 ? offset : 0);
                     char * recv_ptr = recv_buffer_by_task[get_request_from] + (nrecv > 0 ? offset : 0);
 

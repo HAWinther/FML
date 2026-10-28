@@ -31,8 +31,10 @@ class GravityModelGR final : public GravityModel<NDIM> {
                        std::string density_assignment_method_used,
                        std::array<FFTWGrid<NDIM>, NDIM> & force_real) const override {
         const double norm_poisson_equation = 1.5 * this->cosmo->get_OmegaM() * a;
-        this->compute_force_from_total_density(
-            density_fourier, norm_poisson_equation, density_assignment_method_used, force_real);
+        this->compute_force_from_total_density(density_fourier,
+                                               norm_poisson_equation,
+                                               density_assignment_method_used,
+                                               force_real);
     }
 
     //========================================================================
@@ -47,7 +49,7 @@ class GravityModelGR final : public GravityModel<NDIM> {
         GravityModel<NDIM>::read_parameters(param);
         this->scaledependent_growth = this->cosmo->get_OmegaMNu() > 0.0;
     }
-    
+
     //========================================================================
     // Show some info
     //========================================================================

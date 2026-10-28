@@ -30,72 +30,76 @@
 
 namespace FML::COSMOLOGY {
 
-// The background solution shared by the two species
-class CoupledDarkSector {
-  public:
-    // others: all species except CDM and dark energy
-    CoupledDarkSector(double lambda, double beta, const std::vector<std::shared_ptr<const Species>>& others,
-                      double OmegaK, double Omega_c, double Omega_phi);
+    // The background solution shared by the two species
+    class CoupledDarkSector {
+      public:
+        // others: all species except CDM and dark energy
+        CoupledDarkSector(double lambda,
+                          double beta,
+                          const std::vector<std::shared_ptr<const Species>> & others,
+                          double OmegaK,
+                          double Omega_c,
+                          double Omega_phi);
 
-    double phi(double x) const;
-    double dphi(double x) const;
-    double ddphi(double x) const;
-    double v(double f) const { return V0 * std::exp(-lambda * f); }
-    double v_phi(double f) const { return -lambda * v(f); }
-    double v_phiphi(double f) const { return lambda * lambda * v(f); }
-    double rho_c(double x) const;
-    double rho_phi(double x) const;
-    double p_phi(double x) const;
-    double E2(double x) const;
-    double dlnE(double x) const;
-    double lambda, beta;
-    double V0 = 0.0, C = 0.0;   // rho_c = C exp(-3x - beta phi)
+        double phi(double x) const;
+        double dphi(double x) const;
+        double ddphi(double x) const;
+        double v(double f) const { return V0 * std::exp(-lambda * f); }
+        double v_phi(double f) const { return -lambda * v(f); }
+        double v_phiphi(double f) const { return lambda * lambda * v(f); }
+        double rho_c(double x) const;
+        double rho_phi(double x) const;
+        double p_phi(double x) const;
+        double E2(double x) const;
+        double dlnE(double x) const;
+        double lambda, beta;
+        double V0 = 0.0, C = 0.0; // rho_c = C exp(-3x - beta phi)
 
-  private:
-    double OmegaK;
-    std::vector<std::shared_ptr<const Species>> others;
-    double x_ini = -25.0, x_fin = 10.0;
-    Spline1D phi_spline, dphi_spline;
+      private:
+        double OmegaK;
+        std::vector<std::shared_ptr<const Species>> others;
+        double x_ini = -25.0, x_fin = 10.0;
+        Spline1D phi_spline, dphi_spline;
 
-    double rho_o(double x) const;
-    double drho_o(double x) const;
-    double E2(double x, double f, double df) const;
-    double dlnE(double x, double f, double df) const;
-    double ddphi(double x, double f, double df) const;
-    void solve();
-};
+        double rho_o(double x) const;
+        double drho_o(double x) const;
+        double E2(double x, double f, double df) const;
+        double dlnE(double x, double f, double df) const;
+        double ddphi(double x, double f, double df) const;
+        void solve();
+    };
 
-class CoupledCDM : public Species {
-  public:
-    explicit CoupledCDM(std::shared_ptr<const CoupledDarkSector> d) : d(std::move(d)) {}
-    std::string name() const override { return "cdm (coupled)"; }
-    Role role() const override { return Role::CDM; }
-    double rho(double x) const override { return d->rho_c(x); }
-    double p(double) const override { return 0.0; }
-    double drhodx(double x) const override;
-    double ddrhoddx(double x) const override;
-    // The perturbations are part of the field's block (CoupledField)
+    class CoupledCDM : public Species {
+      public:
+        explicit CoupledCDM(std::shared_ptr<const CoupledDarkSector> d) : d(std::move(d)) {}
+        std::string name() const override { return "cdm (coupled)"; }
+        Role role() const override { return Role::CDM; }
+        double rho(double x) const override { return d->rho_c(x); }
+        double p(double) const override { return 0.0; }
+        double drhodx(double x) const override;
+        double ddrhoddx(double x) const override;
+        // The perturbations are part of the field's block (CoupledField)
 
-  private:
-    std::shared_ptr<const CoupledDarkSector> d;
-};
+      private:
+        std::shared_ptr<const CoupledDarkSector> d;
+    };
 
-class CoupledField : public Species {
-  public:
-    explicit CoupledField(std::shared_ptr<const CoupledDarkSector> d) : d(std::move(d)) {}
-    std::string name() const override { return "coupled quintessence"; }
-    Role role() const override { return Role::DarkEnergy; }
-    std::string info() const override;
-    double rho(double x) const override { return d->rho_phi(x); }
-    double p(double x) const override { return d->p_phi(x); }
-    double drhodx(double x) const override;
-    double ddrhoddx(double x) const override;
-    std::unique_ptr<SpeciesPerturbations> perturbations(const Perturbations& pert) const override;
-    const CoupledDarkSector& sector() const { return *d; }
+    class CoupledField : public Species {
+      public:
+        explicit CoupledField(std::shared_ptr<const CoupledDarkSector> d) : d(std::move(d)) {}
+        std::string name() const override { return "coupled quintessence"; }
+        Role role() const override { return Role::DarkEnergy; }
+        std::string info() const override;
+        double rho(double x) const override { return d->rho_phi(x); }
+        double p(double x) const override { return d->p_phi(x); }
+        double drhodx(double x) const override;
+        double ddrhoddx(double x) const override;
+        std::unique_ptr<SpeciesPerturbations> perturbations(const Perturbations & pert) const override;
+        const CoupledDarkSector & sector() const { return *d; }
 
-  private:
-    std::shared_ptr<const CoupledDarkSector> d;
-};
+      private:
+        std::shared_ptr<const CoupledDarkSector> d;
+    };
 
 } // namespace FML::COSMOLOGY
 

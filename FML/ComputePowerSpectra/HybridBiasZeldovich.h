@@ -45,9 +45,10 @@ namespace FML {
             ///   (s2,L) = 2 C^L:S + S:S D_L                 (L,L) = xi_LL + D_L^2
             ///
             /// All the correlators are tensors built from q-hat with radial functions int dk k^n P(k) j_l(kq); the
-            /// angular structure is found once by projecting the products of the kernels (1, k_i k_j / k^2 - delta_ij/3,
-            /// i k_i / k, -k^2) onto spherical harmonics, so no tensor algebra is done by hand. The part linear in the
-            /// correlators is Fourier transformed analytically (it gives exp(-k^2 sigma^2) times P_L, P_L, -k^2 P_L,
+            /// angular structure is found once by projecting the products of the kernels (1, k_i k_j / k^2 -
+            /// delta_ij/3, i k_i / k, -k^2) onto spherical harmonics, so no tensor algebra is done by hand. The part
+            /// linear in the correlators is Fourier transformed analytically (it gives exp(-k^2 sigma^2) times P_L,
+            /// P_L, -k^2 P_L,
             /// ... for (1,1), (1,d), (1,L), ...) and the rest, which falls off quickly with q, is integrated
             /// numerically over q and mu = k.q / kq.
             ///
@@ -169,9 +170,10 @@ namespace FML {
 
                 /// The harmonic decomposition of K_a(n) K_b(n)^* at n = z-hat: for l = 0..lmax the tensor
                 /// (2l+1) < P_l(n.z) K_a K_b^* >_sphere (components a-index major). The correlation is then
-                /// <a(q1) b(q2)> = sum_l i^l R_l(q) proj[l] with R_l = int dk k^2 / (2 pi^2) k^(pa+pb) P W_a W_b j_l(kq)
-                inline std::vector<std::vector<Complex>> harmonic_projection(const FieldKernel & a, const FieldKernel & b,
-                                                                             int lmax) {
+                /// <a(q1) b(q2)> = sum_l i^l R_l(q) proj[l] with R_l = int dk k^2 / (2 pi^2) k^(pa+pb) P W_a W_b
+                /// j_l(kq)
+                inline std::vector<std::vector<Complex>>
+                harmonic_projection(const FieldKernel & a, const FieldKernel & b, int lmax) {
                     const int na = int(std::pow(3, a.rank)), nb = int(std::pow(3, b.rank));
                     std::vector<std::vector<Complex>> proj(lmax + 1, std::vector<Complex>(na * nb, 0.0));
                     std::vector<double> mu, w;
@@ -281,8 +283,10 @@ namespace FML {
                 }
 
                 // The fields: 0 = delta, 1 = s, 2 = nabla^2 delta, 3 = Psi
-                const std::vector<FieldKernel> kernels{
-                    kernel_delta(), kernel_shear(), kernel_nabla2(), kernel_displacement()};
+                const std::vector<FieldKernel> kernels{kernel_delta(),
+                                                       kernel_shear(),
+                                                       kernel_nabla2(),
+                                                       kernel_displacement()};
                 const int PSI = 3;
                 auto filter = [&](int field, size_t i) { return field == PSI ? Wd[i] : Wo[i]; };
 
@@ -292,8 +296,8 @@ namespace FML {
                     std::vector<std::vector<Complex>> proj;
                     std::vector<std::vector<double>> R; // R[l][iq]
                 };
-                std::vector<std::array<int, 2>> needed{{PSI, PSI}, {0, PSI}, {1, PSI}, {2, PSI}, {0, 0}, {0, 1},
-                                                       {1, 1},     {0, 2},   {1, 2},   {2, 2}};
+                std::vector<std::array<int, 2>>
+                    needed{{PSI, PSI}, {0, PSI}, {1, PSI}, {2, PSI}, {0, 0}, {0, 1}, {1, 1}, {0, 2}, {1, 2}, {2, 2}};
                 std::vector<Correlator> corr;
                 for (auto & ab : needed) {
                     Correlator c;

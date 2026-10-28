@@ -1,7 +1,7 @@
 #ifndef MATPLOTLIBCXX_HEADER
 #define MATPLOTLIBCXX_HEADER
-//#pragma once
-// Old Python and numpy headers use the keyword register (removed in C++17): define it away while including them
+// #pragma once
+//  Old Python and numpy headers use the keyword register (removed in C++17): define it away while including them
 #if __cplusplus > 199711L
 #define FML_MATPLOTLIBCPP_UNDEF_REGISTER
 #define register
@@ -189,8 +189,10 @@ namespace FML {
                         // matplotlib.use() must be called *before* pylab, matplotlib.pyplot,
                         // or matplotlib.backends is imported for the first time
                         if (!s_backend.empty()) {
-                            PyObject_CallMethod(
-                                matplotlib, const_cast<char *>("use"), const_cast<char *>("s"), s_backend.c_str());
+                            PyObject_CallMethod(matplotlib,
+                                                const_cast<char *>("use"),
+                                                const_cast<char *>("s"),
+                                                s_backend.c_str());
                         }
 
                         PyObject * pymod = PyImport_Import(pyplotname);
@@ -2094,6 +2096,6 @@ namespace FML {
             };
 
         } // end namespace Matplotlib
-    }     // namespace UTILS
+    } // namespace UTILS
 } // namespace FML
 #endif

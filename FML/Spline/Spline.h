@@ -289,14 +289,15 @@ namespace FML {
                             int ny,
                             std::string splinename = "NoName",
                             const gsl_interp2d_type * interpoltype = SPLINE_FIDUCIAL_INTERPOL_TYPE_2D);
-                /// Create a spline from vectors to x, y and z. Size of z must be nx * ny with z[ix + nx * iy] = f(x[ix],
-                /// y[iy]).
+                /// Create a spline from vectors to x, y and z. Size of z must be nx * ny with z[ix + nx * iy] =
+                /// f(x[ix], y[iy]).
                 void create(const DVector & x,
                             const DVector & y,
                             const DVector & z,
                             std::string splinename = "NoName",
                             const gsl_interp2d_type * interpoltype = SPLINE_FIDUCIAL_INTERPOL_TYPE_2D);
-                /// Create a spline from vectors to x, y and z. Size of z must be (nx, ny) with z[ix][iy] = f(x[ix], y[iy]).
+                /// Create a spline from vectors to x, y and z. Size of z must be (nx, ny) with z[ix][iy] = f(x[ix],
+                /// y[iy]).
                 void create(const DVector & x,
                             const DVector & y,
                             const DVector2D & z,
@@ -379,6 +380,6 @@ namespace FML {
             };
 
         } // namespace SPLINE
-    }     // namespace INTERPOLATION
+    } // namespace INTERPOLATION
 } // namespace FML
 #endif

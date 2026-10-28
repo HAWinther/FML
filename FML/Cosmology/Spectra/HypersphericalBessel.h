@@ -35,37 +35,37 @@
 
 namespace FML::COSMOLOGY {
 
-class HypersphericalBessel {
-  public:
-    // lmax_hint: the recurrence coefficients sqrt(nu^2 - sign l^2) and their inverses are
-    // tabulated up to this ell (plus the Miller margin) for speed; larger ell still work.
-    HypersphericalBessel(int sign, double nu, int lmax_hint = 0);
+    class HypersphericalBessel {
+      public:
+        // lmax_hint: the recurrence coefficients sqrt(nu^2 - sign l^2) and their inverses are
+        // tabulated up to this ell (plus the Miller margin) for speed; larger ell still work.
+        HypersphericalBessel(int sign, double nu, int lmax_hint = 0);
 
-    // Phi_0 .. Phi_lmax at chi; out is resized to lmax + 1
-    void column(double chi, int lmax, std::vector<double>& out) const;
-    // The same plus the derivatives dPhi_ell/dchi, ell = 0..lmax
-    void column_with_derivative(double chi, int lmax, std::vector<double>& phi, std::vector<double>& dphi) const;
-    // Single value (computes the whole column up to ell; use column() for many ell)
-    double operator()(int ell, double chi) const;
+        // Phi_0 .. Phi_lmax at chi; out is resized to lmax + 1
+        void column(double chi, int lmax, std::vector<double> & out) const;
+        // The same plus the derivatives dPhi_ell/dchi, ell = 0..lmax
+        void column_with_derivative(double chi, int lmax, std::vector<double> & phi, std::vector<double> & dphi) const;
+        // Single value (computes the whole column up to ell; use column() for many ell)
+        double operator()(int ell, double chi) const;
 
-    // sin_K(chi), cot_K(chi) for this geometry
-    double sinK(double chi) const;
-    double cotK(double chi) const;
-    // Turning point ell_tp(chi): Phi_ell is oscillating for ell < ell_tp and decays rapidly above
-    double turning_point(double chi) const;
+        // sin_K(chi), cot_K(chi) for this geometry
+        double sinK(double chi) const;
+        double cotK(double chi) const;
+        // Turning point ell_tp(chi): Phi_ell is oscillating for ell < ell_tp and decays rapidly above
+        double turning_point(double chi) const;
 
-    int sign() const { return sgn; }
-    double nu() const { return nu_; }
+        int sign() const { return sgn; }
+        double nu() const { return nu_; }
 
-  private:
-    int sgn;
-    double nu_;
-    // sqrt(nu^2 - sign l^2), the coefficient of the recurrence (0 for l >= nu when closed)
-    double coef(int l) const;
-    std::vector<double> coef_tab, inv_coef_tab;  // tabulated coef(l) and 1/coef(l)
-    double coef_fast(int l) const { return l < int(coef_tab.size()) ? coef_tab[l] : coef(l); }
-    double inv_coef_fast(int l) const { return l < int(inv_coef_tab.size()) ? inv_coef_tab[l] : 1.0 / coef(l); }
-};
+      private:
+        int sgn;
+        double nu_;
+        // sqrt(nu^2 - sign l^2), the coefficient of the recurrence (0 for l >= nu when closed)
+        double coef(int l) const;
+        std::vector<double> coef_tab, inv_coef_tab; // tabulated coef(l) and 1/coef(l)
+        double coef_fast(int l) const { return l < int(coef_tab.size()) ? coef_tab[l] : coef(l); }
+        double inv_coef_fast(int l) const { return l < int(inv_coef_tab.size()) ? inv_coef_tab[l] : 1.0 / coef(l); }
+    };
 
 } // namespace FML::COSMOLOGY
 

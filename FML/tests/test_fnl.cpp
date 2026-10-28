@@ -102,7 +102,8 @@ Prediction binned_prediction(const Binning & b) {
                 const double ntri = sum3(S[i], S[j], S[k]);
                 double w = 0.0, r = 0.0;
                 if (ntri > 0.5 and Pbar[i] > 0.0 and Pbar[j] > 0.0 and Pbar[k] > 0.0) {
-                    const double T = (sum3(SP[i], SP[j], S[k]) + sum3(SP[j], SP[k], S[i]) + sum3(SP[k], SP[i], S[j])) / ntri;
+                    const double T =
+                        (sum3(SP[i], SP[j], S[k]) + sum3(SP[j], SP[k], S[i]) + sum3(SP[k], SP[i], S[j])) / ntri;
                     const double Sm = Pbar[i] * Pbar[j] + Pbar[j] * Pbar[k] + Pbar[k] * Pbar[i];
                     // Inverse variance of Q for a gaussian field (up to a constant)
                     w = ntri * Sm * Sm / (Pbar[i] * Pbar[j] * Pbar[k]);
@@ -162,7 +163,8 @@ int main() {
         auto b0 = measure(0.0, s);
         auto bp = measure(fNL, s);
         auto bm = measure(-fNL, s);
-        const double e0 = estimate(b0, nullptr, pred), ep = estimate(bp, nullptr, pred), em = estimate(bm, nullptr, pred);
+        const double e0 = estimate(b0, nullptr, pred), ep = estimate(bp, nullptr, pred),
+                     em = estimate(bm, nullptr, pred);
         const double ed = estimate(bp, &b0, pred);
         if (FML::ThisTask == 0)
             std::cout << "  seed " << s << ": fNL = 0: " << num(e0) << "  fNL = " << fNL << ": " << num(ep)

@@ -106,8 +106,13 @@ int main() {
     // We need a spline of the LPT growth factor(s)
     // Normalized such that D1LPT(zini) = 1
     //========================================================
-    FML::COSMOLOGY::LPT::compute_LPT_growth_factors_LCDM(
-        OmegaM, zini, HoverH0, D_1LPT_of_loga, D_2LPT_of_loga, D_3LPTa_of_loga, D_3LPTb_of_loga);
+    FML::COSMOLOGY::LPT::compute_LPT_growth_factors_LCDM(OmegaM,
+                                                         zini,
+                                                         HoverH0,
+                                                         D_1LPT_of_loga,
+                                                         D_2LPT_of_loga,
+                                                         D_3LPTa_of_loga,
+                                                         D_3LPTb_of_loga);
 
     //============================================================
     // Read k, P(k) (File has units of h/Mpc, (Mpc/h)^3 but what matters is that it has the same
@@ -186,8 +191,7 @@ int main() {
     // below uses (the same as COLASolver). NB: 100 * box * f_i H/H0 * a would give peculiar velocities in km/s
     std::vector<double> velocity_norms(4);
     for (int i = 0; i < 4; i++) {
-        velocity_norms[i] =
-            H_over_H0_of_loga(std::log(aini)) * aini * aini * growth_rate_f_of_loga[i](std::log(aini));
+        velocity_norms[i] = H_over_H0_of_loga(std::log(aini)) * aini * aini * growth_rate_f_of_loga[i](std::log(aini));
     }
 
     FML::PARTICLE::MPIParticles<Particle> part;
@@ -297,8 +301,10 @@ int main() {
 
         // Density field -> force
         std::array<FFTWGrid<NDIM>, NDIM> force_real;
-        FML::NBODY::compute_force_from_density_fourier<NDIM>(
-            density_grid_fourier, force_real, interpolation_method, norm_poisson_equation);
+        FML::NBODY::compute_force_from_density_fourier<NDIM>(density_grid_fourier,
+                                                             force_real,
+                                                             interpolation_method,
+                                                             norm_poisson_equation);
 
         // Update velocity of particles (frees force)
         FML::NBODY::KickParticles<NDIM>(force_real, part, delta_time_vel, interpolation_method);
@@ -479,8 +485,12 @@ int main() {
     const double velocity_to_displacement = 1.0 / (aend * aend * HoverH0(aend));
     const int ellmax = 4;
     std::vector<FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM>> Pells(1 + ellmax, Nmesh / 2);
-    FML::CORRELATIONFUNCTIONS::compute_power_spectrum_multipoles<NDIM>(
-        Nmesh, part, velocity_to_displacement, Pells, density_assignment, interlacing);
+    FML::CORRELATIONFUNCTIONS::compute_power_spectrum_multipoles<NDIM>(Nmesh,
+                                                                       part,
+                                                                       velocity_to_displacement,
+                                                                       Pells,
+                                                                       density_assignment,
+                                                                       interlacing);
 
     // To physical units
     for (size_t ell = 0; ell < Pells.size(); ell++) {

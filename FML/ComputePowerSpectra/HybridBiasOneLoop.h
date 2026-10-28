@@ -13,21 +13,22 @@ namespace FML {
             /// 2016; Chen, Vlah & White 2020) prediction for the hybrid bias basis spectra P_ab(k) of the operators 1,
             /// delta_L, delta_L^2, s^2 (see HybridBiasSpectra.h).
             ///
-            /// The bias operators are built from the linear field (as in the simulation measurement) and the displacement
-            /// is Psi = Psi^(1) + Psi^(2) + Psi^(3). The linear A_ij(q) is kept in the exponent (resummed) and everything
-            /// else is expanded to one loop. The q-functions and the integrands follow velocileptors (LPT/cleft_fftw.py,
-            /// Utils/qfuncfft.py) term by term, with the loop integrals Q_n(k), R_n(k) (Matsubara 2008) computed directly
-            /// in k-space so that a sharp cut of P(k) is handled exactly. The relation to the velocileptors components
-            /// (bias monomials 1, b1, b1^2, b2, b1 b2, b2^2, bs, b1 bs, b2 bs, bs^2 with delta_t = 1 + b1 delta + b2/2
-            /// delta^2 + bs s^2) is P_11 = [1], P_1d = [b1]/2, P_dd = [b1^2], P_1d2 = [b2], P_dd2 = [b1 b2], P_d2d2 = 4
-            /// [b2^2], P_1s2 = [bs]/2, P_ds2 = [b1 bs]/2, P_d2s2 = [b2 bs], P_s2s2 = [bs^2].
+            /// The bias operators are built from the linear field (as in the simulation measurement) and the
+            /// displacement is Psi = Psi^(1) + Psi^(2) + Psi^(3). The linear A_ij(q) is kept in the exponent (resummed)
+            /// and everything else is expanded to one loop. The q-functions and the integrands follow velocileptors
+            /// (LPT/cleft_fftw.py, Utils/qfuncfft.py) term by term, with the loop integrals Q_n(k), R_n(k) (Matsubara
+            /// 2008) computed directly in k-space so that a sharp cut of P(k) is handled exactly. The relation to the
+            /// velocileptors components (bias monomials 1, b1, b1^2, b2, b1 b2, b2^2, bs, b1 bs, b2 bs, bs^2 with
+            /// delta_t = 1 + b1 delta + b2/2 delta^2 + bs s^2) is P_11 = [1], P_1d = [b1]/2, P_dd = [b1^2], P_1d2 =
+            /// [b2], P_dd2 = [b1 b2], P_d2d2 = 4 [b2^2], P_1s2 = [bs]/2, P_ds2 = [b1 bs]/2, P_d2s2 = [b2 bs], P_s2s2 =
+            /// [bs^2].
             ///
-            /// The spectra with nabla^2 delta (not part of velocileptors) are computed at the same order: nabla^2 delta_L
-            /// = F(k) delta_L(k) with F = -k^2 is a linear operator like delta_L, so the one-loop terms are those of
-            /// delta_L with F on the leg of the operator. The Zel'dovich part (zeldovich_hybrid_bias_spectra) plus, for
-            /// P_1n: U3 (F(k) R1) and A10 = <delta_1 Delta_i Delta_j> (R_n with F on the external or on the internal
-            /// leg and Q5 with F on a loop leg); for P_dn and P_nn: U11 = <a_1 b_2 Delta_i>. P_d2n and P_s2n are
-            /// complete at Zel'dovich order (as P_dd2 and P_ds2). For F = 1 the expressions reduce to those of
+            /// The spectra with nabla^2 delta (not part of velocileptors) are computed at the same order: nabla^2
+            /// delta_L = F(k) delta_L(k) with F = -k^2 is a linear operator like delta_L, so the one-loop terms are
+            /// those of delta_L with F on the leg of the operator. The Zel'dovich part (zeldovich_hybrid_bias_spectra)
+            /// plus, for P_1n: U3 (F(k) R1) and A10 = <delta_1 Delta_i Delta_j> (R_n with F on the external or on the
+            /// internal leg and Q5 with F on a loop leg); for P_dn and P_nn: U11 = <a_1 b_2 Delta_i>. P_d2n and P_s2n
+            /// are complete at Zel'dovich order (as P_dd2 and P_ds2). For F = 1 the expressions reduce to those of
             /// velocileptors (checked to 1e-6), and the corrections agree with the difference between particles
             /// moved with 2LPT and with the Zel'dovich approximation (small amplitude) to a few percent, as for P_1d
             /// and P_dd. No counterterms are included (the usual alpha k^2 P counterterm is degenerate with the
@@ -207,7 +208,9 @@ namespace FML {
                         if (k > kmin) {
                             const double hi = std::min(k, kmax);
                             if (k < kmax) {
-                                add(kmin, 0.5 * k > kmin ? 0.5 * k : kmin, std::max(4, int(8 * std::log(0.5 * k / kmin))));
+                                add(kmin,
+                                    0.5 * k > kmin ? 0.5 * k : kmin,
+                                    std::max(4, int(8 * std::log(0.5 * k / kmin))));
                                 if (0.5 * k > kmin)
                                     add_refined(0.5 * k, hi, true);
                             } else {
@@ -228,12 +231,28 @@ namespace FML {
                     return res;
                 }
                 /// The spectra G(k) the q-functions are generalized correlation functions of (velocileptors
-                /// notation; GVS = 2 GV1 + GV3; G22A is the delta_ij part of A22, zero in GR). The ones ending in N are for the nabla^2 delta spectra: A10 =
-                /// <delta_1 Delta_i Delta_j> and U3 = <delta_1 Psi^(3)> with the operator F delta (P_1n), U11 = <a_1
-                /// b_2 Delta_i> for (a,b) = (delta, F delta) and (F delta, F delta)
+                /// notation; GVS = 2 GV1 + GV3; G22A is the delta_ij part of A22, zero in GR). The ones ending in N are
+                /// for the nabla^2 delta spectra: A10 = <delta_1 Delta_i Delta_j> and U3 = <delta_1 Psi^(3)> with the
+                /// operator F delta (P_1n), U11 = <a_1 b_2 Delta_i> for (a,b) = (delta, F delta) and (F delta, F delta)
                 enum LoopSpec {
-                    LIN, G13, G22, GT, GVS, G10A, G10B, GU3, GU11, GU20, GUS2, GU3N, G10AN, G10BN, GU11DN, GU11NN,
-                    G22A, NSPEC
+                    LIN,
+                    G13,
+                    G22,
+                    GT,
+                    GVS,
+                    G10A,
+                    G10B,
+                    GU3,
+                    GU11,
+                    GU20,
+                    GUS2,
+                    GU3N,
+                    G10AN,
+                    G10BN,
+                    GU11DN,
+                    GU11NN,
+                    G22A,
+                    NSPEC
                 };
                 /// Fills G[s] (s != LIN) at k and the integrand Z(k) of zerolag_10 = int dk Z(k) / (2 pi^2)
                 using LoopFill = std::function<void(double k, double * G, double & zerolag_integrand)>;
@@ -296,7 +315,8 @@ namespace FML {
                 for (int i = 0; i < nloop1; i++)
                     kloop[i] = kl_min * std::pow(kcut * (1.0 - 1e-9) / kl_min, i / double(nloop1 - 1));
                 for (int i = nloop1; i < nloop; i++)
-                    kloop[i] = kcut * (1.0 + 1e-9) * std::pow(kl_max / (kcut * (1.0 + 1e-9)), (i - nloop1) / double(nloop - nloop1 - 1));
+                    kloop[i] = kcut * (1.0 + 1e-9) *
+                               std::pow(kl_max / (kcut * (1.0 + 1e-9)), (i - nloop1) / double(nloop - nloop1 - 1));
 #ifdef USE_OMP
 #pragma omp parallel for schedule(dynamic, 4)
 #endif
@@ -306,11 +326,12 @@ namespace FML {
                     LoopSpectra res{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
                     if (k <= kl_min or k >= kl_max)
                         return res;
-                    const int i = std::min(nloop - 2, int(std::upper_bound(kloop.begin(), kloop.end(), k) - kloop.begin()) - 1);
+                    const int i =
+                        std::min(nloop - 2, int(std::upper_bound(kloop.begin(), kloop.end(), k) - kloop.begin()) - 1);
                     if (i == nloop1 - 1)
                         return res; // between the two nodes at the cut
                     const double f = std::log(k / kloop[i]) / std::log(kloop[i + 1] / kloop[i]);
-                    auto interp = [&](double LoopSpectra::*m) { return loops[i].*m * (1 - f) + loops[i + 1].*m * f; };
+                    auto interp = [&](double LoopSpectra::* m) { return loops[i].*m * (1 - f) + loops[i + 1].*m * f; };
                     for (auto m : {&LoopSpectra::Q1,
                                    &LoopSpectra::Q2,
                                    &LoopSpectra::Q5,
@@ -343,8 +364,8 @@ namespace FML {
                     // A10 = int d^3k e^(ikq) (a delta_ij + b k_i k_j / k^2) (in units of velocileptors' A10, which
                     // is half of <delta_1 Delta_i Delta_j>); for F = 1 these are G10A and G10B
                     const double k2a = 3.0 / 7.0 * Fk * L.R1;
-                    const double k2b = -3.0 / 7.0 * Fk * (L.R1 + 2.0 * L.R2) - 6.0 / 7.0 * L.Q5F -
-                                       6.0 / 7.0 * (L.R1F + L.R2F);
+                    const double k2b =
+                        -3.0 / 7.0 * Fk * (L.R1 + 2.0 * L.R2) - 6.0 / 7.0 * L.Q5F - 6.0 / 7.0 * (L.R1F + L.R2F);
                     G[G10AN] = -0.5 * (k2a + k2b / 3.0);
                     G[G10BN] = -k2b / 6.0;
                     G[GU3N] = -5.0 / 21.0 * Fk * L.R1;
@@ -454,11 +475,11 @@ namespace FML {
                     int spec, l, n;
                 };
                 const std::vector<XiSpec> xis{
-                    {LIN, 0, -2}, {LIN, 2, -2}, {LIN, 1, -1}, {LIN, 0, 0},   {LIN, 2, 0},   {LIN, 4, 0},
-                    {LIN, 3, -1}, {G13, 0, -2}, {G13, 2, -2}, {G22, 0, -2},  {G22, 2, -2},  {GT, 3, -3},
-                    {GVS, 1, -3}, {G10A, 0, -2}, {G10B, 2, -2}, {GU3, 1, -1}, {GU11, 1, -1},
-                    {GU20, 1, -1}, {GUS2, 1, -1}, {GU3N, 1, -1}, {G10AN, 0, -2}, {G10BN, 2, -2}, {GU11DN, 1, -1},
-                    {GU11NN, 1, -1}, {G22A, 0, -2}};
+                    {LIN, 0, -2},   {LIN, 2, -2},   {LIN, 1, -1},    {LIN, 0, 0},     {LIN, 2, 0},
+                    {LIN, 4, 0},    {LIN, 3, -1},   {G13, 0, -2},    {G13, 2, -2},    {G22, 0, -2},
+                    {G22, 2, -2},   {GT, 3, -3},    {GVS, 1, -3},    {G10A, 0, -2},   {G10B, 2, -2},
+                    {GU3, 1, -1},   {GU11, 1, -1},  {GU20, 1, -1},   {GUS2, 1, -1},   {GU3N, 1, -1},
+                    {G10AN, 0, -2}, {G10BN, 2, -2}, {GU11DN, 1, -1}, {GU11NN, 1, -1}, {G22A, 0, -2}};
                 const int nxi = int(xis.size());
                 // The integration weights times k^(2+n) G(k)
                 std::vector<std::vector<double>> wG(nkint, std::vector<double>(nxi, 0.0));
@@ -483,8 +504,31 @@ namespace FML {
                         xi[s][iq] = sums[s] / (2.0 * M_PI * M_PI);
                 }
                 enum XiIdx {
-                    L0M2, L2M2, L1M1, L00, L20, L40, L3M1, A13_0, A13_2, A22_0, A22_2, T3M3, VSM3, X10A, X10B,
-                    U3_, U11_, U20_, US2_, U3N_, X10AN, X10BN, U11DN_, U11NN_, A22A
+                    L0M2,
+                    L2M2,
+                    L1M1,
+                    L00,
+                    L20,
+                    L40,
+                    L3M1,
+                    A13_0,
+                    A13_2,
+                    A22_0,
+                    A22_2,
+                    T3M3,
+                    VSM3,
+                    X10A,
+                    X10B,
+                    U3_,
+                    U11_,
+                    U20_,
+                    US2_,
+                    U3N_,
+                    X10AN,
+                    X10BN,
+                    U11DN_,
+                    U11NN_,
+                    A22A
                 };
 
                 // The q-functions (velocileptors notation)
@@ -513,8 +557,8 @@ namespace FML {
                     const double Xloop13 = 2.0 / 3.0 * (xi[A13_0][0] - x(A13_0) - x(A13_2));
                     const double Yloop13 = 2.0 * x(A13_2);
                     // A22 = a delta_ij + b khat khat: G22 = k^2 b, G22A = k^2 a
-                    const double Xloop22 = 2.0 / 3.0 * (xi[A22_0][0] - x(A22_0) - x(A22_2)) +
-                                           2.0 * (xi[A22A][0] - x(A22A));
+                    const double Xloop22 =
+                        2.0 / 3.0 * (xi[A22_0][0] - x(A22_0) - x(A22_2)) + 2.0 * (xi[A22A][0] - x(A22A));
                     const double Yloop22 = 2.0 * x(A22_2);
                     f.Xloop = 2.0 * Xloop13 + Xloop22;
                     f.Yloop = 2.0 * Yloop13 + Yloop22;
@@ -586,7 +630,8 @@ namespace FML {
                             const double eps = -0.5 * k2 * (f.X - Xinf + f.Y * m2);
                             const double E = expinf * std::exp(eps);
                             const Complex I(0.0, 1.0);
-                            F[0] = 1.0 - 0.5 * k2 * (f.Xloop + m2 * f.Yloop) - I * k3 / 6.0 * (f.Vloop * m + f.Tloop * m3);
+                            F[0] =
+                                1.0 - 0.5 * k2 * (f.Xloop + m2 * f.Yloop) - I * k3 / 6.0 * (f.Vloop * m + f.Tloop * m3);
                             F[1] = 2.0 * I * k * (f.U + f.U3) * m - k2 * (f.X10 + f.Y10 * m2);
                             F[2] = f.xi - k2 * m2 * f.U * f.U + I * k * f.U11 * m;
                             F[3] = -k2 * m2 * f.U * f.U + I * k * f.U20 * m;

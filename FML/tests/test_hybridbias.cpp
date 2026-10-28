@@ -38,9 +38,9 @@ std::string num(double x) {
 // A smooth LCDM-like linear power spectrum (BBKS, sigma8 ~ 0.8 at z = 0)
 double pofk_bbks(double k) {
     const double Gamma = 0.21, q = k / Gamma;
-    const double T = std::log(1.0 + 2.34 * q) / (2.34 * q) *
-                     std::pow(1.0 + 3.89 * q + std::pow(16.1 * q, 2) + std::pow(5.46 * q, 3) + std::pow(6.71 * q, 4),
-                              -0.25);
+    const double T =
+        std::log(1.0 + 2.34 * q) / (2.34 * q) *
+        std::pow(1.0 + 3.89 * q + std::pow(16.1 * q, 2) + std::pow(5.46 * q, 3) + std::pow(6.71 * q, 4), -0.25);
     return 2.0e6 * k * T * T;
 }
 
@@ -150,7 +150,11 @@ int main() {
             {mgmodel_fofr(Om, 1e-5, 1.0, false), 0.2, 1.0, 0.9, 1.729352539561e-03, "f(R) no screening"},
             {mgmodel_dgp(Om, 1.0, true), 0.3, 0.2, -0.7, 8.149455358511e-02, "DGP screening"},
             {mgmodel_mu(Om, [](double k, double a) { return 1.0 + 0.3 * k * k / (k * k + 0.01) * a * a * a; }),
-             0.1, 0.001, 0.5, 1.306400906674e-01, "mu(k,a)"}};
+             0.1,
+             0.001,
+             0.5,
+             1.306400906674e-01,
+             "mu(k,a)"}};
         for (auto & r : refs) {
             const auto c = kernels_at_node(r.model, r.k, r.p, r.mu);
             const double dev = std::abs(c[2] / r.c3 - 1.0);

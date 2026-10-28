@@ -29,7 +29,8 @@ namespace FML::BARYONIFICATION {
             for (auto & halo : this->halos) {
                 for (double & x : halo.center) {
                     detail::require(std::isfinite(x), "Baryonifier: non-finite halo center");
-                    if (periodic) x = FML::KDTREE::periodic_wrap(x, boxsize);
+                    if (periodic)
+                        x = FML::KDTREE::periodic_wrap(x, boxsize);
                 }
                 const double support = halo.mapping.maximum_radius();
                 detail::require(!periodic || support < 0.5 * boxsize,
@@ -43,10 +44,12 @@ namespace FML::BARYONIFICATION {
         std::array<double, 3> displacement_at(std::array<double, 3> position) const {
             for (double & x : position) {
                 detail::require(std::isfinite(x), "Baryonifier: non-finite particle position");
-                if (periodic) x = FML::KDTREE::periodic_wrap(x, boxsize);
+                if (periodic)
+                    x = FML::KDTREE::periodic_wrap(x, boxsize);
             }
             std::array<double, 3> result{};
-            if (halos.empty()) return result;
+            if (halos.empty())
+                return result;
             auto neighbors = tree.neighborhood_indices({position.begin(), position.end()}, max_support);
             std::sort(neighbors.begin(), neighbors.end()); // stable summation for repeated/threaded queries
             for (size_t index : neighbors) {
@@ -55,13 +58,16 @@ namespace FML::BARYONIFICATION {
                 double r2 = 0.0;
                 for (size_t d = 0; d < 3; ++d) {
                     dx[d] = position[d] - halo.center[d];
-                    if (periodic) dx[d] -= boxsize * std::round(dx[d] / boxsize);
+                    if (periodic)
+                        dx[d] -= boxsize * std::round(dx[d] / boxsize);
                     r2 += dx[d] * dx[d];
                 }
                 const double r = std::sqrt(r2);
-                if (r == 0.0 || r >= halo.mapping.maximum_radius()) continue;
+                if (r == 0.0 || r >= halo.mapping.maximum_radius())
+                    continue;
                 const double factor = halo.mapping.displacement(r) / r;
-                for (size_t d = 0; d < 3; ++d) result[d] += factor * dx[d];
+                for (size_t d = 0; d < 3; ++d)
+                    result[d] += factor * dx[d];
             }
             return result;
         }
@@ -75,7 +81,8 @@ namespace FML::BARYONIFICATION {
             for (size_t i = 0; i < count; ++i) {
                 detail::require(particles[i].get_ndim() == 3, "Baryonifier: particles must be three-dimensional");
                 for (size_t d = 0; d < 3; ++d)
-                    detail::require(std::isfinite(particles[i].get_pos()[d]), "Baryonifier: non-finite particle position");
+                    detail::require(std::isfinite(particles[i].get_pos()[d]),
+                                    "Baryonifier: non-finite particle position");
             }
             std::vector<std::array<double, 3>> shifts(count);
 #ifdef USE_OMP
@@ -102,7 +109,8 @@ namespace FML::BARYONIFICATION {
                     const double moved = double(x[d]) + shifts[i][d];
                     x[d] = Position(periodic ? FML::KDTREE::periodic_wrap(moved, boxsize) : moved);
                     // Casting to float can round a wrapped position back to boxsize.
-                    if (periodic && double(x[d]) >= boxsize) x[d] = Position(0);
+                    if (periodic && double(x[d]) >= boxsize)
+                        x[d] = Position(0);
                 }
             }
         }

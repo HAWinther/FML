@@ -67,186 +67,212 @@
 
 namespace FML::COSMOLOGY::FITTING {
 
-class Likelihood {
-  public:
-    virtual ~Likelihood() = default;
-    virtual std::string name() const = 0;
-    virtual bool needs_recombination() const = 0;
-    virtual double loglike(const Theory& t) const = 0;
-    virtual int n_data() const = 0;
-    virtual bool needs_cmb() const { return false; }
-    virtual int cmb_ell_max() const { return 0; }
-    virtual std::vector<std::string> nuisance_parameters() const { return {}; }
-};
+    class Likelihood {
+      public:
+        virtual ~Likelihood() = default;
+        virtual std::string name() const = 0;
+        virtual bool needs_recombination() const = 0;
+        virtual double loglike(const Theory & t) const = 0;
+        virtual int n_data() const = 0;
+        virtual bool needs_cmb() const { return false; }
+        virtual int cmb_ell_max() const { return 0; }
+        virtual std::vector<std::string> nuisance_parameters() const { return {}; }
+    };
 
-// Gaussian likelihood -chi^2/2 with a fixed covariance (inverted once)
-class GaussianData {
-  public:
-    void set(const std::vector<double>& mean, const std::vector<std::vector<double>>& cov);
-    double chi2(const std::vector<double>& model) const;
-    size_t size() const { return mu.size(); }
-    const std::vector<double>& mean() const { return mu; }
+    // Gaussian likelihood -chi^2/2 with a fixed covariance (inverted once)
+    class GaussianData {
+      public:
+        void set(const std::vector<double> & mean, const std::vector<std::vector<double>> & cov);
+        double chi2(const std::vector<double> & model) const;
+        size_t size() const { return mu.size(); }
+        const std::vector<double> & mean() const { return mu; }
 
-  private:
-    std::vector<double> mu;
-    std::vector<std::vector<double>> icov;
-};
+      private:
+        std::vector<double> mu;
+        std::vector<std::vector<double>> icov;
+    };
 
-class SupernovaLikelihood : public Likelihood {
-  public:
-    explicit SupernovaLikelihood(const std::string& file = Utils::fml_file("CosmologyFitting/external/supernovadata.txt"), bool free_amplitude = false);
-    std::string name() const override { return free_amp ? "sn (free amplitude)" : "sn"; }
-    bool needs_recombination() const override { return false; }
-    double loglike(const Theory& t) const override;
-    int n_data() const override { return int(z.size()); }
+    class SupernovaLikelihood : public Likelihood {
+      public:
+        explicit SupernovaLikelihood(
+            const std::string & file = Utils::fml_file("CosmologyFitting/external/supernovadata.txt"),
+            bool free_amplitude = false);
+        std::string name() const override { return free_amp ? "sn (free amplitude)" : "sn"; }
+        bool needs_recombination() const override { return false; }
+        double loglike(const Theory & t) const override;
+        int n_data() const override { return int(z.size()); }
 
-  private:
-    std::vector<double> z, dL, sigma;   // Gpc
-    bool free_amp;
-};
+      private:
+        std::vector<double> z, dL, sigma; // Gpc
+        bool free_amp;
+    };
 
-class SNIaLikelihood : public Likelihood {
-  public:
-    // magnitudes (any constant offset) at z_cmb (for D_M) and z_hel (the 1 + z of d_L), covariance n x n (row-major)
-    SNIaLikelihood(std::string name, std::vector<double> z_cmb, std::vector<double> z_hel, std::vector<double> mag,
-                   const std::vector<double>& cov);
-    static std::unique_ptr<SNIaLikelihood> pantheonplus(const std::string& dir = Utils::fml_file("CosmologyFitting/external/sn/PantheonPlus"));
-    static std::unique_ptr<SNIaLikelihood> desy5(const std::string& dir = Utils::fml_file("CosmologyFitting/external/sn/DESY5"));
-    static std::unique_ptr<SNIaLikelihood> union3(const std::string& dir = Utils::fml_file("CosmologyFitting/external/sn/Union3"));
-    std::string name() const override { return label; }
-    bool needs_recombination() const override { return false; }
-    double loglike(const Theory& t) const override;
-    int n_data() const override { return int(zc.size()); }
-    double loglike_mu(const std::vector<double>& mu_model) const;   // for model distance moduli at the data points
-    // best-fitting offset M for given model distance moduli (b/e)
-    double offset(const std::vector<double>& mu_model) const;
-    const std::vector<double>& z_cmb() const { return zc; }
+    class SNIaLikelihood : public Likelihood {
+      public:
+        // magnitudes (any constant offset) at z_cmb (for D_M) and z_hel (the 1 + z of d_L), covariance n x n
+        // (row-major)
+        SNIaLikelihood(std::string name,
+                       std::vector<double> z_cmb,
+                       std::vector<double> z_hel,
+                       std::vector<double> mag,
+                       const std::vector<double> & cov);
+        static std::unique_ptr<SNIaLikelihood>
+        pantheonplus(const std::string & dir = Utils::fml_file("CosmologyFitting/external/sn/PantheonPlus"));
+        static std::unique_ptr<SNIaLikelihood>
+        desy5(const std::string & dir = Utils::fml_file("CosmologyFitting/external/sn/DESY5"));
+        static std::unique_ptr<SNIaLikelihood>
+        union3(const std::string & dir = Utils::fml_file("CosmologyFitting/external/sn/Union3"));
+        std::string name() const override { return label; }
+        bool needs_recombination() const override { return false; }
+        double loglike(const Theory & t) const override;
+        int n_data() const override { return int(zc.size()); }
+        double loglike_mu(const std::vector<double> & mu_model) const; // for model distance moduli at the data points
+        // best-fitting offset M for given model distance moduli (b/e)
+        double offset(const std::vector<double> & mu_model) const;
+        const std::vector<double> & z_cmb() const { return zc; }
 
-  private:
-    std::string label;
-    std::vector<double> zc, zh, m;
-    std::vector<double> icov, rowsum;   // C^-1 (row-major) and its row sums
-    double e = 0.0;                     // sum of C^-1
-};
+      private:
+        std::string label;
+        std::vector<double> zc, zh, m;
+        std::vector<double> icov, rowsum; // C^-1 (row-major) and its row sums
+        double e = 0.0;                   // sum of C^-1
+    };
 
-class BAOLikelihood : public Likelihood {
-  public:
-    enum class Quantity { DV_over_rd, DM_over_rd, DH_over_rd };
-    BAOLikelihood(const std::string& label, const std::string& mean_file, const std::string& cov_file);
-    std::string name() const override { return label; }
-    bool needs_recombination() const override { return true; }
-    double loglike(const Theory& t) const override;
-    int n_data() const override { return int(z.size()); }
-    std::vector<double> model(const Theory& t) const;
+    class BAOLikelihood : public Likelihood {
+      public:
+        enum class Quantity { DV_over_rd, DM_over_rd, DH_over_rd };
+        BAOLikelihood(const std::string & label, const std::string & mean_file, const std::string & cov_file);
+        std::string name() const override { return label; }
+        bool needs_recombination() const override { return true; }
+        double loglike(const Theory & t) const override;
+        int n_data() const override { return int(z.size()); }
+        std::vector<double> model(const Theory & t) const;
 
-  private:
-    std::string label;
-    std::vector<double> z;
-    std::vector<Quantity> q;
-    GaussianData data;
-};
+      private:
+        std::string label;
+        std::vector<double> z;
+        std::vector<Quantity> q;
+        GaussianData data;
+    };
 
-class PlanckDistancePriors : public Likelihood {
-  public:
-    PlanckDistancePriors();
-    std::string name() const override { return "planck_dp"; }
-    bool needs_recombination() const override { return true; }
-    double loglike(const Theory& t) const override;
-    int n_data() const override { return 3; }
+    class PlanckDistancePriors : public Likelihood {
+      public:
+        PlanckDistancePriors();
+        std::string name() const override { return "planck_dp"; }
+        bool needs_recombination() const override { return true; }
+        double loglike(const Theory & t) const override;
+        int n_data() const override { return 3; }
 
-  private:
-    GaussianData data;
-};
+      private:
+        GaussianData data;
+    };
 
-class BBNPrior : public Likelihood {
-  public:
-    std::string name() const override { return "bbn"; }
-    bool needs_recombination() const override { return false; }
-    double loglike(const Theory& t) const override;
-    int n_data() const override { return 1; }
-};
+    class BBNPrior : public Likelihood {
+      public:
+        std::string name() const override { return "bbn"; }
+        bool needs_recombination() const override { return false; }
+        double loglike(const Theory & t) const override;
+        int n_data() const override { return 1; }
+    };
 
-class PlanckLiteLikelihood : public Likelihood {
-  public:
-    // data_dir: external/planck2018_lite; tt_only: TT, else TTTEEE; low_ell: add the two low-ell TT bins
-    PlanckLiteLikelihood(const std::string& data_dir, bool tt_only, bool low_ell);
-    std::string name() const override;
-    bool needs_recombination() const override { return false; }
-    bool needs_cmb() const override { return true; }
-    int cmb_ell_max() const override { return 2508; }
-    std::vector<std::string> nuisance_parameters() const override { return {"A_planck"}; }
-    double loglike(const Theory& t) const override;
-    int n_data() const override { return int(data.size()); }
-    // ln L for D_ell [muK^2] indexed by ell (TT, TE, EE; at least up to 2508) and the calibration A_planck
-    double loglike(const std::vector<double>& Dtt, const std::vector<double>& Dte, const std::vector<double>& Dee,
-                   double A_planck = 1.0) const;
+    class PlanckLiteLikelihood : public Likelihood {
+      public:
+        // data_dir: external/planck2018_lite; tt_only: TT, else TTTEEE; low_ell: add the two low-ell TT bins
+        PlanckLiteLikelihood(const std::string & data_dir, bool tt_only, bool low_ell);
+        std::string name() const override;
+        bool needs_recombination() const override { return false; }
+        bool needs_cmb() const override { return true; }
+        int cmb_ell_max() const override { return 2508; }
+        std::vector<std::string> nuisance_parameters() const override { return {"A_planck"}; }
+        double loglike(const Theory & t) const override;
+        int n_data() const override { return int(data.size()); }
+        // ln L for D_ell [muK^2] indexed by ell (TT, TE, EE; at least up to 2508) and the calibration A_planck
+        double loglike(const std::vector<double> & Dtt,
+                       const std::vector<double> & Dte,
+                       const std::vector<double> & Dee,
+                       double A_planck = 1.0) const;
 
-  private:
-    bool tt_only, low_ell;
-    struct Bin { int lmin, lmax; std::vector<double> w; };   // C_ell^bin = sum_l w_l C_l
-    std::vector<Bin> bins_tt, bins_pol;                       // TT (incl. low ell), TE = EE binning
-    GaussianData data;
-};
+      private:
+        bool tt_only, low_ell;
+        struct Bin {
+            int lmin, lmax;
+            std::vector<double> w;
+        }; // C_ell^bin = sum_l w_l C_l
+        std::vector<Bin> bins_tt, bins_pol; // TT (incl. low ell), TE = EE binning
+        GaussianData data;
+    };
 
-class PlanckLensingLikelihood : public Likelihood {
-  public:
-    // data_dir: external/planck2018_lensing; cmb_marged: the CMB-marginalized variant
-    PlanckLensingLikelihood(const std::string& data_dir, bool cmb_marged);
-    std::string name() const override { return marged ? "planck_lensing_marged" : "planck_lensing"; }
-    bool needs_recombination() const override { return false; }
-    bool needs_cmb() const override { return true; }
-    int cmb_ell_max() const override { return lmax; }
-    std::vector<std::string> nuisance_parameters() const override {
-      return marged ? std::vector<std::string>{} : std::vector<std::string>{"A_planck"};
-    }
-    double loglike(const Theory& t) const override;
-    int n_data() const override { return int(data.size()); }
-    // ln L for D_ell [muK^2] (TT, TE, EE) and PP = [L(L+1)]^2 C_L^phiphi / 2pi, indexed by ell up to 2500
-    double loglike(const std::vector<double>& Dtt, const std::vector<double>& Dte, const std::vector<double>& Dee,
-                   const std::vector<double>& pp, double A_planck = 1.0) const;
-    std::vector<double> binned_theory(const std::vector<double>& Dtt, const std::vector<double>& Dte,
-                                      const std::vector<double>& Dee, const std::vector<double>& pp,
-                                      double A_planck = 1.0) const;   // incl. the linear correction
+    class PlanckLensingLikelihood : public Likelihood {
+      public:
+        // data_dir: external/planck2018_lensing; cmb_marged: the CMB-marginalized variant
+        PlanckLensingLikelihood(const std::string & data_dir, bool cmb_marged);
+        std::string name() const override { return marged ? "planck_lensing_marged" : "planck_lensing"; }
+        bool needs_recombination() const override { return false; }
+        bool needs_cmb() const override { return true; }
+        int cmb_ell_max() const override { return lmax; }
+        std::vector<std::string> nuisance_parameters() const override {
+            return marged ? std::vector<std::string>{} : std::vector<std::string>{"A_planck"};
+        }
+        double loglike(const Theory & t) const override;
+        int n_data() const override { return int(data.size()); }
+        // ln L for D_ell [muK^2] (TT, TE, EE) and PP = [L(L+1)]^2 C_L^phiphi / 2pi, indexed by ell up to 2500
+        double loglike(const std::vector<double> & Dtt,
+                       const std::vector<double> & Dte,
+                       const std::vector<double> & Dee,
+                       const std::vector<double> & pp,
+                       double A_planck = 1.0) const;
+        std::vector<double> binned_theory(const std::vector<double> & Dtt,
+                                          const std::vector<double> & Dte,
+                                          const std::vector<double> & Dee,
+                                          const std::vector<double> & pp,
+                                          double A_planck = 1.0) const; // incl. the linear correction
 
-  private:
-    bool marged;
-    static constexpr int lmin = 2, lmax = 2500;
-    std::vector<std::vector<double>> w_pp;              // [bin][L - lmin] binning of PP
-    std::vector<std::vector<double>> c_tt, c_ee, c_te, c_pp;   // [bin][L - lmin] linear correction
-    std::vector<double> fid_corr;
-    GaussianData data;
-};
+      private:
+        bool marged;
+        static constexpr int lmin = 2, lmax = 2500;
+        std::vector<std::vector<double>> w_pp;                   // [bin][L - lmin] binning of PP
+        std::vector<std::vector<double>> c_tt, c_ee, c_te, c_pp; // [bin][L - lmin] linear correction
+        std::vector<double> fid_corr;
+        GaussianData data;
+    };
 
-class CMBMockLikelihood : public Likelihood {
-  public:
-    CMBMockLikelihood(const std::string& fiducial_file, int lmax, double fsky, double noise_muK_arcmin,
-                      double beam_fwhm_arcmin, bool use_bb = false);
-    std::string name() const override { return "cmb_mock"; }
-    bool needs_recombination() const override { return false; }
-    bool needs_cmb() const override { return true; }
-    int cmb_ell_max() const override { return lmax; }
-    double loglike(const Theory& t) const override;
-    int n_data() const override { return (bb ? 4 : 3) * (lmax - 1); }
-    double loglike(const std::vector<double>& Dtt, const std::vector<double>& Dte, const std::vector<double>& Dee,
-                   const std::vector<double>& Dbb = {}) const;
+    class CMBMockLikelihood : public Likelihood {
+      public:
+        CMBMockLikelihood(const std::string & fiducial_file,
+                          int lmax,
+                          double fsky,
+                          double noise_muK_arcmin,
+                          double beam_fwhm_arcmin,
+                          bool use_bb = false);
+        std::string name() const override { return "cmb_mock"; }
+        bool needs_recombination() const override { return false; }
+        bool needs_cmb() const override { return true; }
+        int cmb_ell_max() const override { return lmax; }
+        double loglike(const Theory & t) const override;
+        int n_data() const override { return (bb ? 4 : 3) * (lmax - 1); }
+        double loglike(const std::vector<double> & Dtt,
+                       const std::vector<double> & Dte,
+                       const std::vector<double> & Dee,
+                       const std::vector<double> & Dbb = {}) const;
 
-  private:
-    int lmax;
-    double fsky;
-    bool bb;
-    std::vector<double> dTT, dEE, dTE, dBB, nT, nP;   // C_ell of the data (fiducial + noise) and noise, index ell
-};
+      private:
+        int lmax;
+        double fsky;
+        bool bb;
+        std::vector<double> dTT, dEE, dTE, dBB, nT, nP; // C_ell of the data (fiducial + noise) and noise, index ell
+    };
 
-namespace Likelihoods {
-  // By name (throws for an unknown name): sn, sn_free_amplitude, desi_dr2, desi_dr1, planck_dp, bbn,
-  // planck_lite_TTTEEE, planck_lite_TT, planck_lite_TTTEEE_lowl, planck_lite_TT_lowl, planck_lensing,
-  // planck_lensing_marged, cmb_mock.
-  // Options (cmb_mock): cmb_mock_file (default data/cmb_mock/cells_lensed.txt), cmb_mock_lmax (2500),
-  // cmb_mock_fsky (0.6), cmb_mock_noise (33 muK arcmin), cmb_mock_beam (7 arcmin), cmb_mock_bb (false)
-  std::unique_ptr<Likelihood> create(const std::string& name, const std::map<std::string, std::string>& options = {});
-  std::vector<std::string> names();
-  std::vector<std::string> option_names();
-}
+    namespace Likelihoods {
+        // By name (throws for an unknown name): sn, sn_free_amplitude, desi_dr2, desi_dr1, planck_dp, bbn,
+        // planck_lite_TTTEEE, planck_lite_TT, planck_lite_TTTEEE_lowl, planck_lite_TT_lowl, planck_lensing,
+        // planck_lensing_marged, cmb_mock.
+        // Options (cmb_mock): cmb_mock_file (default data/cmb_mock/cells_lensed.txt), cmb_mock_lmax (2500),
+        // cmb_mock_fsky (0.6), cmb_mock_noise (33 muK arcmin), cmb_mock_beam (7 arcmin), cmb_mock_bb (false)
+        std::unique_ptr<Likelihood> create(const std::string & name,
+                                           const std::map<std::string, std::string> & options = {});
+        std::vector<std::string> names();
+        std::vector<std::string> option_names();
+    } // namespace Likelihoods
 
 } // namespace FML::COSMOLOGY::FITTING
 

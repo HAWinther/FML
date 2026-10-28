@@ -64,11 +64,12 @@ class Cosmologyw0waCDM final : public Cosmology {
     }
 
     double get_OmegaLambda(double a = 1.0) const override {
-        if(a == 1.0) return OmegaLambda;
+        if (a == 1.0)
+            return OmegaLambda;
         double E = HoverH0_of_a(a);
         return OmegaLambda * std::exp(3.0 * wa * (a - 1) - 3 * (1 + w0 + wa) * std::log(a)) / (E * E);
     }
-    
+
     //========================================================================
     // This method returns an estimate for the non-linear Pnl/Plinea
     // The fiducial option is to use the EuclidEmulator2

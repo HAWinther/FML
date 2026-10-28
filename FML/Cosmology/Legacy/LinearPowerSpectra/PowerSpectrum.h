@@ -119,7 +119,7 @@ namespace FML {
             Spline2D xi_R_spline{"xi_R_spline"};
             Spline2D xi_Nu_spline{"xi_Nu_spline"};
             Spline2D xi_M_spline{"xi_M_spline"};
-            
+
             // For keeping timings
             mutable FML::UTILS::Timings timer;
 
@@ -199,7 +199,7 @@ namespace FML {
             /// B (baryons), CDM, CB (CDM+baryons), R (photons), Nu (neutrionos), Rtot (total radiation)
             /// or M (total matter). The latter is the same as get_matter_power_spectrum
             double get_power_spectrum(double x, double k, std::string type) const;
-            
+
             /// Get total matter power-spectrum of x = log(a) and k
             double get_matter_power_spectrum(double x, double k) const;
             std::pair<DVector, DVector> get_power_spectrum_array(double x, int npts, std::string type) const;
@@ -237,7 +237,8 @@ namespace FML {
                                                                        double rmax = 1e3 * Constants.Mpc,
                                                                        int ngrid = 8192);
 #endif
-        double correlation_function_single(double r, const std::function<double(double)> & Delta_P, double kmin, double kmax);
+        double
+        correlation_function_single(double r, const std::function<double(double)> & Delta_P, double kmin, double kmax);
 
     } // namespace COSMOLOGY
 } // namespace FML

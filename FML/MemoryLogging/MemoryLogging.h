@@ -313,9 +313,9 @@ namespace FML {
             if (not memory_vs_time.empty()) {
                 if (ThisTask == 0)
                     std::cout << "Total memory as function of time"
-                              << (history_full ? " (only the first " + std::to_string(max_allocations_to_log) +
-                                                     " changes)" :
-                                                 std::string(""))
+                              << (history_full ?
+                                      " (only the first " + std::to_string(max_allocations_to_log) + " changes)" :
+                                      std::string(""))
                               << ":\n";
                 for (auto && m : memory_vs_time) {
                     double time_in_sec =

@@ -76,7 +76,8 @@ class CosmologyQuintessence final : public CosmologyScalarField {
         if (std::fabs(HoverH0_of_a(1.0) - 1.0) > 1e-6)
             throw std::runtime_error(
                 "Quintessence: no potential amplitude gives the dark energy density today for these parameters "
-                "(E(a=1) = " + std::to_string(HoverH0_of_a(1.0)) +
+                "(E(a=1) = " +
+                std::to_string(HoverH0_of_a(1.0)) +
                 "). Typically the field rolls (or oscillates) too early: use a flatter potential (e.g. a larger f, mu "
                 "or smaller lambda) or start closer to the top of the potential");
 

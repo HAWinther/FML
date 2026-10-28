@@ -182,7 +182,7 @@ class DGPSolverCosmology {
                 //======================================================================
                 const int MID = FML::power(3, NDIM) / 2;
                 const int NDIM2 = NDIM * NDIM;
-                
+
                 double phi_xy = (sol->get_Field(level, cube_index_list[MID + NDIM + 1]) +
                                  sol->get_Field(level, cube_index_list[MID - NDIM - 1]) -
                                  sol->get_Field(level, cube_index_list[MID + NDIM - 1]) -

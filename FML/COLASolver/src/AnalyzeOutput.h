@@ -43,8 +43,8 @@ template <int NDIM, class T>
 void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
 
     // Only task 0 outputs
-    if(FML::ThisTask > 0) 
-      return;
+    if (FML::ThisTask > 0)
+        return;
 
     //=============================================================
     // Fetch parameters
@@ -73,7 +73,7 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
             double Dini = grav->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
             return pofk_ini * std::pow(D / Dini, 2);
         };
-    
+
         // Get non-linear boost (if this is implemented for the model)
         // Currently we only have EuclidEmulator2 predictions for LCDM and w0waCDM
         FML::INTERPOLATION::SPLINE::Spline non_linear_boost_of_k =
@@ -83,7 +83,9 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
             params.output.path("pofk_" + params.simulation.name + "_cb_z" + redshift_to_string(redshift) + ".txt");
 
         std::ofstream fp(filename.c_str());
-        fp << "# k  (h/Mpc)    Pcb(k)  (Mpc/h)^3    Pcb_linear(k) (Mpc/h)^3    Pcb_NL(k) (Mpc/h)^3   ShotnoiseSubtracted = " << std::boolalpha << pofk_subtract_shotnoise << "\n";
+        fp << "# k  (h/Mpc)    Pcb(k)  (Mpc/h)^3    Pcb_linear(k) (Mpc/h)^3    Pcb_NL(k) (Mpc/h)^3   "
+              "ShotnoiseSubtracted = "
+           << std::boolalpha << pofk_subtract_shotnoise << "\n";
         for (int i = 0; i < binning.n; i++) {
             double boost = non_linear_boost_of_k ? non_linear_boost_of_k(binning.kbin[i]) : 1.0;
             fp << std::setw(15) << binning.kbin[i] << " ";
@@ -103,8 +105,8 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
             const double redshift = p.first;
             const auto & binning = p.second;
             const double a = 1.0 / (1.0 + redshift);
-            std::string filename =
-                params.output.path("pofk_" + params.simulation.name + "_" + label + "_z" + redshift_to_string(redshift) + ".txt");
+            std::string filename = params.output.path("pofk_" + params.simulation.name + "_" + label + "_z" +
+                                                      redshift_to_string(redshift) + ".txt");
             std::ofstream fp(filename.c_str());
             fp << "# k  (h/Mpc)    P_" << label << "(k)  (Mpc/h)^3    P_" << label
                << "_linear(k) (Mpc/h)^3   ShotnoiseSubtracted = " << std::boolalpha << pofk_subtract_shotnoise << "\n";
@@ -131,15 +133,15 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
         auto redshift = p.first;
         auto binning = p.second;
         auto pofk_total = [&](double k) {
-            double fac = 1.0;  
+            double fac = 1.0;
             // If ic_use_gravity_model_GR then transferdata is that of GR so
             // we need to rescale it with growthfactors
-            if(ic_use_gravity_model_GR){ 
-              double D = grav->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
-              double Dini = grav->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
-              double D_GR = grav_ic->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
-              double Dini_GR = grav_ic->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
-              fac = std::pow((D/Dini) / (D_GR/Dini_GR), 2);
+            if (ic_use_gravity_model_GR) {
+                double D = grav->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
+                double Dini = grav->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
+                double D_GR = grav_ic->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
+                double Dini_GR = grav_ic->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
+                fac = std::pow((D / Dini) / (D_GR / Dini_GR), 2);
             }
             if (transferdata)
                 return fac * transferdata->get_total_power_spectrum(k, 1.0 / (1.0 + redshift));
@@ -156,7 +158,8 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
             cosmo->get_nonlinear_matter_power_spectrum_boost(redshift);
 
         std::ofstream fp(filename.c_str());
-        fp << "# k  (h/Mpc)    P(k)  (Mpc/h)^3    P_linear(k)  (Mpc/h)^3     P_NL(k)  ShotnoiseSubtracted = " << std::boolalpha << pofk_subtract_shotnoise << "\n";
+        fp << "# k  (h/Mpc)    P(k)  (Mpc/h)^3    P_linear(k)  (Mpc/h)^3     P_NL(k)  ShotnoiseSubtracted = "
+           << std::boolalpha << pofk_subtract_shotnoise << "\n";
         for (int i = 0; i < binning.n; i++) {
             double boost = non_linear_boost_of_k ? non_linear_boost_of_k(binning.kbin[i]) : 1.0;
             fp << std::setw(15) << binning.kbin[i] << " ";
@@ -177,8 +180,11 @@ std::vector<FML::FILEUTILS::GADGET::GadgetSpecies> gadget_species(NBodySimulatio
     sim.for_each_species([&](auto & particles, const COLASOLVER::SpeciesInfo & info) {
         using P = std::remove_reference_t<decltype(*particles.get_particles_ptr())>;
         auto * p = particles.get_particles_ptr();
-        auto sp = FML::FILEUTILS::GADGET::make_gadget_species(
-            info.gadget_type, p, particles.get_npart(), particles.get_npart_total(), info.mass_fraction);
+        auto sp = FML::FILEUTILS::GADGET::make_gadget_species(info.gadget_type,
+                                                              p,
+                                                              particles.get_npart(),
+                                                              particles.get_npart_total(),
+                                                              info.mass_fraction);
         if constexpr (FML::PARTICLE::has_get_deltaf_weight<P>())
             sp.extra_scalars.push_back({"Weights", [p](size_t i) { return double(p[i].get_deltaf_weight()); }});
         // The mass-encoded baryon-CDM relative mode: per-particle masses (MassTable 0 for these types)
@@ -435,14 +441,14 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
 
     HybridBiasSpectra<NDIM> spectra;
     FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::compute_hybrid_bias_spectra<NDIM, T>(part.get_particles_ptr(),
-                                                                              part.get_npart(),
-                                                                              part.get_npart_total(),
-                                                                              sim.get_hybridbias_linear_field(),
-                                                                              Npart_1D,
-                                                                              settings.nmesh,
-                                                                              options,
-                                                                              spectra,
-                                                                              growth_factor_of_kBox);
+                                                                                part.get_npart(),
+                                                                                part.get_npart_total(),
+                                                                                sim.get_hybridbias_linear_field(),
+                                                                                Npart_1D,
+                                                                                settings.nmesh,
+                                                                                options,
+                                                                                spectra,
+                                                                                growth_factor_of_kBox);
     spectra.scale(boxsize);
 
     // The linear P_cb(k,z) for comparison (= P_{delta,delta} on large scales)
@@ -477,7 +483,8 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
         return;
     if (not power_initial_spline) {
         if (FML::ThisTask == 0)
-            std::cout << "Warning: no linear P(k) so we cannot compute the LPT predictions of the hybrid bias spectra\n";
+            std::cout
+                << "Warning: no linear P(k) so we cannot compute the LPT predictions of the hybrid bias spectra\n";
         return;
     }
     const auto krange = power_initial_spline.get_xrange();
@@ -579,8 +586,9 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
         std::ostringstream header;
         header << "# " << description << " of the hybrid bias spectra at z = " << redshift
                << " (linear P_cb(k,z), operators cut at k = " << kcut << " h/Mpc"
-               << (smoothing_scale > 0.0 ? " and smoothed with R = " + std::to_string(smoothing_scale) + " Mpc/h " + filter
-                                         : std::string(""))
+               << (smoothing_scale > 0.0 ?
+                       " and smoothed with R = " + std::to_string(smoothing_scale) + " Mpc/h " + filter :
+                       std::string(""))
                << ", displacement cut at k = " << kcut_displacement_used << " h/Mpc). Same columns as hybridbias_z"
                << redshift_to_string(redshift)
                << ".txt (the shot noise is not included; for k < 16 k_fundamental the prediction is averaged over "
@@ -616,9 +624,8 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
                 model = mgmodel_dgp(OmegaM, dgp->get_rcH0(), dgp->get_use_screening());
             } else if (grav->get_name() != "GR") {
                 const double H0_hmpc = grav->H0_hmpc;
-                model = mgmodel_mu(OmegaM, [grav, H0_hmpc](double k, double aa) {
-                    return grav->GeffOverG(aa, k / H0_hmpc);
-                });
+                model = mgmodel_mu(OmegaM,
+                                   [grav, H0_hmpc](double k, double aa) { return grav->GeffOverG(aa, k / H0_hmpc); });
             }
             description = model.name();
             if (FML::ThisTask == 0)
@@ -650,21 +657,26 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
                     io = int(i);
             std::vector<std::vector<double>> oneloop;
             if (io >= 0)
-                oneloop = oneloop_hybrid_bias_spectra_mg_from_tables(
-                    *mg_tables, io, pofk_linear_of_k, W_operators, klocal, zoptions);
+                oneloop = oneloop_hybrid_bias_spectra_mg_from_tables(*mg_tables,
+                                                                     io,
+                                                                     pofk_linear_of_k,
+                                                                     W_operators,
+                                                                     klocal,
+                                                                     zoptions);
             else
-                oneloop = oneloop_hybrid_bias_spectra_mg(
-                    model, {1.0 / (1.0 + redshift)}, {pofk_linear_of_k}, W_operators, klocal, zoptions)[0];
+                oneloop = oneloop_hybrid_bias_spectra_mg(model,
+                                                         {1.0 / (1.0 + redshift)},
+                                                         {pofk_linear_of_k},
+                                                         W_operators,
+                                                         klocal,
+                                                         zoptions)[0];
             write_prediction(oneloop,
                              "oneloop",
                              "One-loop LPT (CLEFT, no counterterms; the LPT kernels of " + description + ") prediction",
                              kcut);
         } else {
             auto oneloop = oneloop_hybrid_bias_spectra(pofk_linear_of_k, W_operators, klocal, zoptions);
-            write_prediction(oneloop,
-                             "oneloop",
-                             "One-loop LPT (CLEFT, no counterterms; EdS kernels) prediction",
-                             kcut);
+            write_prediction(oneloop, "oneloop", "One-loop LPT (CLEFT, no counterterms; EdS kernels) prediction", kcut);
         }
     }
 }
@@ -746,7 +758,8 @@ compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double redshif
                       << "]\n";
         } else {
             fp << "#  k  (h/Mpc)          P0(k)  (Mpc/h)^3          P2(k)  (Mpc/h)^3       P4(k)  (Mpc/h)^3   ...   "
-                  "P0_kaiser    P2_kaiser    P4_kaiser  ShotnoiseSubtracted = " << std::boolalpha << pofk_multipole_subtract_shotnoise << "\n";
+                  "P0_kaiser    P2_kaiser    P4_kaiser  ShotnoiseSubtracted = "
+               << std::boolalpha << pofk_multipole_subtract_shotnoise << "\n";
             for (int i = 0; i < Pells[0].n; i++) {
                 const double k = Pells[0].kbin[i];
                 const double f = grav->get_f_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
@@ -804,13 +817,18 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     // Separate CDM and baryon particles: P(k) of each and of delta_cb = w_c delta_c + w_b delta_b
     std::vector<std::pair<std::string, FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM>>> pofk_species;
     if (sim.get_species().size() == 1) {
-        pofk_cb_binning = COLASOLVER::measure_snapshot_power_spectrum<NDIM>(
-            part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), settings, simulation_boxsize);
+        pofk_cb_binning = COLASOLVER::measure_snapshot_power_spectrum<NDIM>(part.get_particles_ptr(),
+                                                                            part.get_npart(),
+                                                                            part.get_npart_total(),
+                                                                            settings,
+                                                                            simulation_boxsize);
     } else {
         const auto nleftright =
             FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(pofk_density_assignment_method);
         auto delta_of = [&](auto & particles) {
-            FML::GRID::FFTWGrid<NDIM> grid(pofk_nmesh, nleftright.first, nleftright.second + (pofk_interlacing ? 1 : 0));
+            FML::GRID::FFTWGrid<NDIM> grid(pofk_nmesh,
+                                           nleftright.first,
+                                           nleftright.second + (pofk_interlacing ? 1 : 0));
             if (pofk_interlacing) {
                 FML::INTERPOLATION::particles_to_fourier_grid_interlacing(particles.get_particles_ptr(),
                                                                           particles.get_npart(),
@@ -849,7 +867,10 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
                 delta_cb = std::move(delta);
                 weight_first = info.weight_cb;
             } else {
-                FML::GRID::linear_combination_fourier<NDIM>(delta_cb, delta, icb == 1 ? weight_first : 1.0, info.weight_cb);
+                FML::GRID::linear_combination_fourier<NDIM>(delta_cb,
+                                                            delta,
+                                                            icb == 1 ? weight_first : 1.0,
+                                                            info.weight_cb);
             }
             icb++;
         });
@@ -861,7 +882,9 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
             // f_nu e) with e = <E/m>(a)
             const double a = 1.0 / (1.0 + redshift);
             typename std::remove_reference_t<decltype(sim.get_neutrinos())>::ScopedEnergyWeights energy_weights(
-                sim.get_neutrinos(), a, sim.neutrino_energy_density());
+                sim.get_neutrinos(),
+                a,
+                sim.neutrino_energy_density());
             auto delta_nu = delta_of(sim.get_neutrino_particles());
             if (FML::ThisTask == 0)
                 delta_nu.set_fourier_from_index(0, 0.0);
@@ -872,8 +895,8 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
                 const double e = sim.neutrino_energy_factor(a);
                 const double norm = 1.0 / (1.0 - fnu + fnu * e);
                 FML::GRID::linear_combination_fourier<NDIM>(delta_cb, delta_nu, (1.0 - fnu) * norm, fnu * e * norm);
-                const double shot = ((1.0 - fnu) * (1.0 - fnu) * sim.cb_shotnoise() + fnu * fnu * e * e * nu_shot) *
-                                    norm * norm;
+                const double shot =
+                    ((1.0 - fnu) * (1.0 - fnu) * sim.cb_shotnoise() + fnu * fnu * e * e * nu_shot) * norm * norm;
                 pofk_species.push_back({"total", bin(delta_cb, shot)});
             } else {
                 FML::GRID::linear_combination_fourier<NDIM>(delta_cb, delta_nu, 1.0 - fnu, fnu);
@@ -918,18 +941,20 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         v = pofk_cb(v);
     }
     FML::INTERPOLATION::SPLINE::Spline pofk_cb_linear_spline(kvals, pofk_cb_linear, "Pcb(k) linear spline");
-        
+
     // The shot noise of the (weighted) neutrino particles (collective, so computed on all tasks)
     double nu_shotnoise = 0.0;
     if (sim.has_neutrino_particles()) {
         typename std::remove_reference_t<decltype(sim.get_neutrinos())>::ScopedEnergyWeights energy_weights(
-            sim.get_neutrinos(), 1.0 / (1.0 + redshift), sim.neutrino_energy_density());
+            sim.get_neutrinos(),
+            1.0 / (1.0 + redshift),
+            sim.neutrino_energy_density());
         nu_shotnoise = sim.get_neutrinos().shotnoise() * std::pow(simulation_boxsize, NDIM);
     }
 
     // Output to file
     if (FML::ThisTask == 0) {
-    
+
         // Get non-linear boost (if this is implemented for the model)
         // Currently we only have EuclidEmulator2 predictions for LCDM and w0waCDM
         FML::INTERPOLATION::SPLINE::Spline non_linear_boost_of_k =

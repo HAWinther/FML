@@ -31,9 +31,9 @@ namespace FML {
 
             /// Hu-Sawicki f(R) model on a flat LCDM background
             struct HuSawickiFofR {
-                double OmegaM{0.3};   ///< Matter density parameter today
-                double fofr0{1e-5};   ///< |f_R0|
-                double nfofr{1.0};    ///< The Hu-Sawicki n
+                double OmegaM{0.3}; ///< Matter density parameter today
+                double fofr0{1e-5}; ///< |f_R0|
+                double nfofr{1.0};  ///< The Hu-Sawicki n
             };
 
             namespace detail {
@@ -123,12 +123,13 @@ namespace FML {
             ///
             /// @return P_fR(k) as a function (it keeps a copy of pofk_gr and the table)
             //=====================================================================================================
-            inline std::function<double(double)> fofr_linear_power_spectrum(const std::function<double(double)> & pofk_gr,
-                                                                            const HuSawickiFofR & model,
-                                                                            double a,
-                                                                            double kmin = 1e-5,
-                                                                            double kmax = 100.0,
-                                                                            int ntable = 400) {
+            inline std::function<double(double)>
+            fofr_linear_power_spectrum(const std::function<double(double)> & pofk_gr,
+                                       const HuSawickiFofR & model,
+                                       double a,
+                                       double kmin = 1e-5,
+                                       double kmax = 100.0,
+                                       int ntable = 400) {
                 if (not(kmin > 0.0 and kmax > kmin and ntable >= 2))
                     throw std::runtime_error("[fofr_linear_power_spectrum] Bad table range");
                 std::vector<double> ratio2(ntable);

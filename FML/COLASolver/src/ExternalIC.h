@@ -59,23 +59,26 @@ namespace COLASOLVER {
                                     const std::string & caller) {
         auto close = [](double x, double y, double rtol) { return std::fabs(x - y) <= rtol * std::fabs(y); };
         auto fail = [&](const std::string & what) {
-            const std::string error = "[" + caller + "] The header of " + fileprefix + " does not match the simulation: " + what;
+            const std::string error =
+                "[" + caller + "] The header of " + fileprefix + " does not match the simulation: " + what;
             FML::assert_mpi(false, error.c_str());
         };
         // Relative tolerance on a (the files store a in single or double precision): 1e-4 is dz = 2e-3 at z = 20
         if (not close(header.time, expected.scale_factor, 1e-4))
-            fail("a = " + std::to_string(header.time) + " in the file, the initial redshift ic_initial_redshift gives a = " +
+            fail("a = " + std::to_string(header.time) +
+                 " in the file, the initial redshift ic_initial_redshift gives a = " +
                  std::to_string(expected.scale_factor));
-        if (not(close(header.BoxSize, expected.boxsize, 1e-5) or close(header.BoxSize, 1000.0 * expected.boxsize, 1e-5)))
+        if (not(close(header.BoxSize, expected.boxsize, 1e-5) or
+                close(header.BoxSize, 1000.0 * expected.boxsize, 1e-5)))
             fail("BoxSize = " + std::to_string(header.BoxSize) + " in the file, simulation_boxsize = " +
                  std::to_string(expected.boxsize) + " Mpc/h (or x1000 for kpc/h)");
         if (header.Omega0 > 0.0 and
             not(close(header.Omega0, expected.OmegaM, 1e-3) or close(header.Omega0, expected.Omega_cb, 1e-3)))
-            fail("Omega0 = " + std::to_string(header.Omega0) + " in the file, the cosmology has OmegaM = " +
-                 std::to_string(expected.OmegaM));
+            fail("Omega0 = " + std::to_string(header.Omega0) +
+                 " in the file, the cosmology has OmegaM = " + std::to_string(expected.OmegaM));
         if (header.HubbleParam > 0.0 and not close(header.HubbleParam, expected.h, 1e-3))
-            fail("HubbleParam = " + std::to_string(header.HubbleParam) + " in the file, cosmology_h = " +
-                 std::to_string(expected.h));
+            fail("HubbleParam = " + std::to_string(header.HubbleParam) +
+                 " in the file, cosmology_h = " + std::to_string(expected.h));
     }
 
     /// Read particles from gadget files (all tasks read the same files and only keep the particles
@@ -154,9 +157,8 @@ namespace COLASOLVER {
     /// fractional part of q_vec N over all particles: lattices are often offset (COLASolver offsets its lattice by
     /// half a force cell when force_nmesh > Npart_1D, other codes put particles at cell centres)
     template <int NDIM, class T>
-    std::array<double, NDIM> estimate_lattice_offset(FML::PARTICLE::MPIParticles<T> & part,
-                                                     double disp_factor,
-                                                     int Npart_1D) {
+    std::array<double, NDIM>
+    estimate_lattice_offset(FML::PARTICLE::MPIParticles<T> & part, double disp_factor, int Npart_1D) {
         std::array<double, 2 * NDIM> sum{};
         auto * part_ptr = part.get_particles_ptr();
         for (size_t ind = 0; ind < part.get_npart(); ind++) {

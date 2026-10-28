@@ -37,8 +37,10 @@ class GravityModelJBD : public GravityModel<NDIM> {
                        std::string density_assignment_method_used,
                        std::array<FFTWGrid<NDIM>, NDIM> & force_real) const override {
         const double norm_poisson_equation = 1.5 * this->cosmo->get_OmegaM() * a * GeffOverG(a);
-        this->compute_force_from_total_density(
-            density_fourier, norm_poisson_equation, density_assignment_method_used, force_real);
+        this->compute_force_from_total_density(density_fourier,
+                                               norm_poisson_equation,
+                                               density_assignment_method_used,
+                                               force_real);
     }
 
     //========================================================================
@@ -46,11 +48,11 @@ class GravityModelJBD : public GravityModel<NDIM> {
     // parameter that sets the strength of gravity today (we need GeffG_today = 1 to have
     // the correct Newtonian limit)
     //========================================================================
-    double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0) const override { 
-      CosmologyJBD * jbd = dynamic_cast<CosmologyJBD *>(this->cosmo.get());
-      double phi_star = jbd->get_phi_star();
-      double G_over_Gdensityparams = jbd->get_G_over_Gdensityparams();
-      return G_over_Gdensityparams * phi_star / jbd->phi_of_a(a);
+    double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0) const override {
+        CosmologyJBD * jbd = dynamic_cast<CosmologyJBD *>(this->cosmo.get());
+        double phi_star = jbd->get_phi_star();
+        double G_over_Gdensityparams = jbd->get_G_over_Gdensityparams();
+        return G_over_Gdensityparams * phi_star / jbd->phi_of_a(a);
     }
 
     //========================================================================

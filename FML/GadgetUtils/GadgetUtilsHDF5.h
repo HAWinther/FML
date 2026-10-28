@@ -59,7 +59,7 @@ namespace FML {
                 return false;
             }
         } // namespace GADGET
-    }     // namespace FILEUTILS
+    } // namespace FILEUTILS
 } // namespace FML
 
 #ifdef USE_HDF5
@@ -123,8 +123,12 @@ namespace FML {
                     return H5Aread(attr, memtype, data) >= 0;
                 }
 
-                inline void
-                write_attribute(hid_t loc, const std::string & name, hid_t filetype, hid_t memtype, const void * data, size_t n) {
+                inline void write_attribute(hid_t loc,
+                                            const std::string & name,
+                                            hid_t filetype,
+                                            hid_t memtype,
+                                            const void * data,
+                                            size_t n) {
                     hsize_t dims[1] = {n};
                     Handle space(n == 1 ? H5Screate(H5S_SCALAR) : H5Screate_simple(1, dims, nullptr),
                                  H5Sclose,
@@ -164,7 +168,9 @@ namespace FML {
                                           hsize_t nrows,
                                           hsize_t ncols) {
                     hsize_t dims[2] = {nrows, ncols};
-                    Handle space(H5Screate_simple(ncols == 1 ? 1 : 2, dims, nullptr), H5Sclose, "dataspace for " + name);
+                    Handle space(H5Screate_simple(ncols == 1 ? 1 : 2, dims, nullptr),
+                                 H5Sclose,
+                                 "dataspace for " + name);
                     // No modification times in the file so the same data gives identical files
                     Handle dcpl(H5Pcreate(H5P_DATASET_CREATE), H5Pclose, "property list for " + name);
                     H5Pset_obj_track_times(dcpl, false);
@@ -382,8 +388,8 @@ namespace FML {
                             const int rank = H5Sget_simple_extent_dims(space, dims, nullptr);
                             if (dims[0] != npart or (ncols > 1 and (rank != 2 or dims[1] != ncols)))
                                 HDF5::throw_error("[GadgetHDF5Reader] " + group + "/" + name + " in " + filename +
-                                                  " does not have the expected shape (" + std::to_string(npart) +
-                                                  ", " + std::to_string(ncols) + ")");
+                                                  " does not have the expected shape (" + std::to_string(npart) + ", " +
+                                                  std::to_string(ncols) + ")");
                             return d;
                         };
                         HDF5::Handle coordinates = open_dataset("Coordinates", NDIM);
@@ -401,7 +407,13 @@ namespace FML {
 
                             // Positions (we need these first to know which particles are in the domain)
                             buffer.resize(count * NDIM);
-                            HDF5::read_rows(coordinates, group + "/Coordinates", H5T_NATIVE_DOUBLE, buffer.data(), start, count, NDIM);
+                            HDF5::read_rows(coordinates,
+                                            group + "/Coordinates",
+                                            H5T_NATIVE_DOUBLE,
+                                            buffer.data(),
+                                            start,
+                                            count,
+                                            NDIM);
                             is_in_domain.assign(count, 1);
                             const size_t index_start = part.size();
                             std::vector<double> x(NDIM);
@@ -415,8 +427,10 @@ namespace FML {
                                 }
                                 if (not(x[0] >= 0.0 and x[0] < 1.0))
                                     HDF5::throw_error("[GadgetHDF5Reader] Particle has x position outside the box "
-                                                      "even after periodic wrap in " + filename);
-                                if (only_keep_part_in_domain and not(x[0] >= FML::xmin_domain and x[0] < FML::xmax_domain)) {
+                                                      "even after periodic wrap in " +
+                                                      filename);
+                                if (only_keep_part_in_domain and
+                                    not(x[0] >= FML::xmin_domain and x[0] < FML::xmax_domain)) {
                                     is_in_domain[i] = 0;
                                     continue;
                                 }
@@ -433,7 +447,13 @@ namespace FML {
 
                             // Velocities
                             if constexpr (FML::PARTICLE::has_get_vel<T>()) {
-                                HDF5::read_rows(velocities, group + "/Velocities", H5T_NATIVE_DOUBLE, buffer.data(), start, count, NDIM);
+                                HDF5::read_rows(velocities,
+                                                group + "/Velocities",
+                                                H5T_NATIVE_DOUBLE,
+                                                buffer.data(),
+                                                start,
+                                                count,
+                                                NDIM);
                                 size_t index = index_start;
                                 for (size_t i = 0; i < count; i++) {
                                     if (not is_in_domain[i])
@@ -447,7 +467,13 @@ namespace FML {
                             // IDs
                             if constexpr (FML::PARTICLE::has_set_id<T>()) {
                                 id_buffer.resize(count);
-                                HDF5::read_rows(ids, group + "/ParticleIDs", H5T_NATIVE_ULLONG, id_buffer.data(), start, count, 1);
+                                HDF5::read_rows(ids,
+                                                group + "/ParticleIDs",
+                                                H5T_NATIVE_ULLONG,
+                                                id_buffer.data(),
+                                                start,
+                                                count,
+                                                1);
                                 size_t index = index_start;
                                 for (size_t i = 0; i < count; i++) {
                                     if (not is_in_domain[i])
@@ -542,9 +568,12 @@ namespace FML {
                         mass[i] = npart_family_tot[i] == 0 ?
                                       0.0 :
                                       3.0 * OmegaM * OmegaFamilyOverOmegaM[i] * MplMpl_over_H0Msunh *
-                                          std::pow(Boxsize / HubbleLengthInMpch, 3) / double(npart_family_tot[i]) / 1e10;
+                                          std::pow(Boxsize / HubbleLengthInMpch, 3) / double(npart_family_tot[i]) /
+                                          1e10;
 
-                    HDF5::Handle file(H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT), H5Fclose, filename);
+                    HDF5::Handle file(H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT),
+                                      H5Fclose,
+                                      filename);
 
                     // The header
                     {
@@ -567,7 +596,9 @@ namespace FML {
                         header.OmegaLambda = OmegaLambda;
                         header.HubbleParam = HubbleParam;
 
-                        HDF5::Handle h(H5Gcreate2(file, "Header", H5P_DEFAULT, group_properties(), H5P_DEFAULT), H5Gclose, "Header");
+                        HDF5::Handle h(H5Gcreate2(file, "Header", H5P_DEFAULT, group_properties(), H5P_DEFAULT),
+                                       H5Gclose,
+                                       "Header");
                         const int zero = 0;
                         const int precision = double_precision ? 1 : 0;
                         auto uint6 = [&](const char * name, const std::array<unsigned int, 6> & v) {
@@ -606,7 +637,9 @@ namespace FML {
                         if (n == 0)
                             continue;
                         const std::string group = "PartType" + std::to_string(type);
-                        HDF5::Handle g(H5Gcreate2(file, group.c_str(), H5P_DEFAULT, group_properties(), H5P_DEFAULT), H5Gclose, group);
+                        HDF5::Handle g(H5Gcreate2(file, group.c_str(), H5P_DEFAULT, group_properties(), H5P_DEFAULT),
+                                       H5Gclose,
+                                       group);
 
                         std::vector<double> buffer;
                         auto gather = [&](auto && get, double norm) {
@@ -674,10 +707,10 @@ namespace FML {
                         npart[sp.type] = (unsigned int)sp.npart;
                         npart_total[sp.type] = (unsigned int)(sp.npart_total & 0xffffffffULL);
                         highword[sp.type] = (unsigned int)(sp.npart_total >> 32);
-                        mass[sp.type] = sp.npart_total == 0 ?
-                                            0.0 :
-                                            3.0 * OmegaM * sp.mass_fraction * MplMpl_over_H0Msunh *
-                                                std::pow(Boxsize / HubbleLengthInMpch, 3) / double(sp.npart_total) / 1e10;
+                        mass[sp.type] = sp.npart_total == 0 ? 0.0 :
+                                                              3.0 * OmegaM * sp.mass_fraction * MplMpl_over_H0Msunh *
+                                                                  std::pow(Boxsize / HubbleLengthInMpch, 3) /
+                                                                  double(sp.npart_total) / 1e10;
                     }
                     // Per-particle masses (PartTypeN/Masses) for the species with get_mass: their MassTable entry is 0
                     const auto mean_mass_of_type = mass;
@@ -685,7 +718,9 @@ namespace FML {
                         if (sp.get_mass)
                             mass[sp.type] = 0.0;
 
-                    HDF5::Handle file(H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT), H5Fclose, filename);
+                    HDF5::Handle file(H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT),
+                                      H5Fclose,
+                                      filename);
                     {
                         header = GadgetHeader{};
                         for (int i = 0; i < 6; i++) {
@@ -702,7 +737,9 @@ namespace FML {
                         header.OmegaLambda = OmegaLambda;
                         header.HubbleParam = HubbleParam;
 
-                        HDF5::Handle h(H5Gcreate2(file, "Header", H5P_DEFAULT, group_properties(), H5P_DEFAULT), H5Gclose, "Header");
+                        HDF5::Handle h(H5Gcreate2(file, "Header", H5P_DEFAULT, group_properties(), H5P_DEFAULT),
+                                       H5Gclose,
+                                       "Header");
                         const int zero = 0;
                         const int precision = double_precision ? 1 : 0;
                         auto uint6 = [&](const char * name, const std::array<unsigned int, 6> & v) {
@@ -740,7 +777,9 @@ namespace FML {
                         if (n == 0)
                             continue;
                         const std::string group = "PartType" + std::to_string(sp.type);
-                        HDF5::Handle g(H5Gcreate2(file, group.c_str(), H5P_DEFAULT, group_properties(), H5P_DEFAULT), H5Gclose, group);
+                        HDF5::Handle g(H5Gcreate2(file, group.c_str(), H5P_DEFAULT, group_properties(), H5P_DEFAULT),
+                                       H5Gclose,
+                                       group);
                         std::vector<double> buffer;
                         auto gather = [&](auto && get, double norm) {
                             buffer.assign(n * NDIM, 0.0);
@@ -784,14 +823,20 @@ namespace FML {
                             std::vector<double> values(n);
                             for (size_t i = 0; i < n; i++)
                                 values[i] = extra.second(i);
-                            HDF5::write_dataset(g, extra.first.c_str(), filetype, H5T_NATIVE_DOUBLE, values.data(), n, 1);
+                            HDF5::write_dataset(g,
+                                                extra.first.c_str(),
+                                                filetype,
+                                                H5T_NATIVE_DOUBLE,
+                                                values.data(),
+                                                n,
+                                                1);
                         }
                     }
                 }
             };
 
         } // namespace GADGET
-    }     // namespace FILEUTILS
+    } // namespace FILEUTILS
 } // namespace FML
 
 #endif

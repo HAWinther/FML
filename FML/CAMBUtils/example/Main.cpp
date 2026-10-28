@@ -3,7 +3,7 @@
 using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
 int main() {
-   
+
     double Omegab = 0.049;
     double OmegaCDM = 0.2637;
     double OmegaMNu = 0.0;
@@ -22,7 +22,7 @@ int main() {
     std::string pofkfile = "camb_transfer_data/lcdm_nu0.2_matterpower_z0.000.dat";
     auto data = camb.read_power_single(pofkfile);
     Spline pofk_cb_spline(data.first, data.second);
-    
+
     // Output the power-spectrum
     const double scale_factor = 1.0;
     const double kmin = 0.001;

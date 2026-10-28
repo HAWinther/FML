@@ -38,8 +38,8 @@ namespace FML {
         ///
         ///   1, delta_L, delta_L^2 - <delta_L^2>, s^2 - <s^2>, nabla^2 delta_L
         ///
-        /// where delta_L(q) is the linear density field (scaled to the redshift of the snapshot), s_ij = (k_i k_j / k^2 -
-        /// delta_ij / N) delta_L(k) the tidal field and s^2 = s_ij s_ij. The 15 cross spectra P_ab(k) of the advected
+        /// where delta_L(q) is the linear density field (scaled to the redshift of the snapshot), s_ij = (k_i k_j / k^2
+        /// - delta_ij / N) delta_L(k) the tidal field and s^2 = s_ij s_ij. The 15 cross spectra P_ab(k) of the advected
         /// fields give the tracer power spectrum for any bias parameters: P_tt = sum_ab b_a b_b P_ab (with b_1 = 1 for
         /// the field "1"), and P_tm = sum_a b_a P_1a.
         ///
@@ -85,7 +85,8 @@ namespace FML {
                 bool interlacing{true};
                 /// Sharp spherical cut of the linear field before we form the operators: keep |k| < kcut (in units of
                 /// 1/box, 0: no cut, i.e. all modes of the lattice grid, |m_i| < Nlattice / 2). With kcut = the Nyquist
-                /// frequency of the lattice, pi Nlattice, the operators are isotropic (as assumed in the LPT predictions)
+                /// frequency of the lattice, pi Nlattice, the operators are isotropic (as assumed in the LPT
+                /// predictions)
                 double kcut{0.0};
                 /// Smoothing of the linear field before we form the operators (scale in units of the box, 0: none)
                 double smoothing_scale{0.0};
@@ -96,8 +97,8 @@ namespace FML {
                 /// Subtract the Poisson shot noise mean(w_a w_b) / Npart from P_ab. The usual choice for the basis
                 /// spectra is false (the shot noise of the simulation particles is then part of the spectra)
                 bool subtract_shotnoise{false};
-                /// Number of k-bins (0: Nmesh / 2). The bins are linearly spaced from the fundamental mode to the Nyquist
-                /// frequency
+                /// Number of k-bins (0: Nmesh / 2). The bins are linearly spaced from the fundamental mode to the
+                /// Nyquist frequency
                 int nbins{0};
             };
 
@@ -173,8 +174,8 @@ namespace FML {
                     if (header != "")
                         fp << header;
                     fp << "# Hybrid bias (Lagrangian bias basis) spectra P_ab(k) of the advected operators "
-                       << (scaled ? "(k in h/Mpc, P in (Mpc/h)^" + std::to_string(N) + ", nabla2delta in (Mpc/h)^2)"
-                                  : "(box units)")
+                       << (scaled ? "(k in h/Mpc, P in (Mpc/h)^" + std::to_string(N) + ", nabla2delta in (Mpc/h)^2)" :
+                                    "(box units)")
                        << "\n# Column 1: k, column 2: number of modes, then P_ab for (a,b) = ";
                     for (auto & p : pairs)
                         fp << "(" << names[p[0]] << "," << names[p[1]] << ") ";
@@ -203,8 +204,7 @@ namespace FML {
                     using type = U;
                 };
                 template <int N, class T>
-                using LatticeCoordinateFunction =
-                    typename identity<std::function<std::array<int, N>(const T &)>>::type;
+                using LatticeCoordinateFunction = typename identity<std::function<std::array<int, N>(const T &)>>::type;
 
                 /// The particle we use for assigning the advected fields: the weight is used without being
                 /// normalized by its mean (as for delta-f particles)
@@ -293,12 +293,14 @@ namespace FML {
                     delta.set_fourier_from_index(0, 0.0);
                 if (options.kcut > 0.0) {
                     const double kcut = options.kcut;
-                    FML::GRID::multiply_fourier_by_function_of_k<N>(delta,
-                                                                    [kcut](double kmag) { return kmag < kcut ? 1.0 : 0.0; });
+                    FML::GRID::multiply_fourier_by_function_of_k<N>(delta, [kcut](double kmag) {
+                        return kmag < kcut ? 1.0 : 0.0;
+                    });
                 }
                 if (options.smoothing_scale > 0.0)
-                    FML::GRID::smoothing_filter_fourier_space<N>(
-                        delta, options.smoothing_scale, options.smoothing_method);
+                    FML::GRID::smoothing_filter_fourier_space<N>(delta,
+                                                                 options.smoothing_scale,
+                                                                 options.smoothing_method);
 
                 const auto Local_nx = delta.get_local_nx();
 
@@ -495,8 +497,15 @@ namespace FML {
                             requests[position[i]] = index_in_owner[i];
                         }
                     }
-                    MPI_Alltoallv(requests.data(), nsend.data(), sdispl.data(), MPI_LONG_LONG, received.data(),
-                                  nrecv.data(), rdispl.data(), MPI_LONG_LONG, FML::communicator);
+                    MPI_Alltoallv(requests.data(),
+                                  nsend.data(),
+                                  sdispl.data(),
+                                  MPI_LONG_LONG,
+                                  received.data(),
+                                  nrecv.data(),
+                                  rdispl.data(),
+                                  MPI_LONG_LONG,
+                                  FML::communicator);
 
                     // Answer them
                     std::vector<double> answers(size_t(ntotrecv) * nfields);
@@ -512,8 +521,15 @@ namespace FML {
                         rdispl_f[t] = sdispl[t] * nfields;
                     }
                     std::vector<double> result(n * nfields);
-                    MPI_Alltoallv(answers.data(), nsend_f.data(), sdispl_f.data(), MPI_DOUBLE, result.data(),
-                                  nrecv_f.data(), rdispl_f.data(), MPI_DOUBLE, FML::communicator);
+                    MPI_Alltoallv(answers.data(),
+                                  nsend_f.data(),
+                                  sdispl_f.data(),
+                                  MPI_DOUBLE,
+                                  result.data(),
+                                  nrecv_f.data(),
+                                  rdispl_f.data(),
+                                  MPI_DOUBLE,
+                                  FML::communicator);
                     for (size_t i = 0; i < n; i++)
                         for (int f = 0; f < nfields; f++)
                             values[(i0 + i) * nfields + f] = result[position[i] * nfields + f];
@@ -556,8 +572,8 @@ namespace FML {
                     for (int idim = 0; idim < N; idim++)
                         wp[i].pos[idim] = pos[idim];
                 }
-                const auto nleftright =
-                    FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(options.density_assignment_method);
+                const auto nleftright = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(
+                    options.density_assignment_method);
                 advected.clear();
                 for (int f = -1; f < nfields; f++) {
 #ifdef USE_OMP
@@ -567,8 +583,12 @@ namespace FML {
                         wp[i].weight = f < 0 ? 1.0 : values[i * nfields + f];
                     FFTWGrid<N> grid(Nmesh, nleftright.first, nleftright.second + (options.interlacing ? 1 : 0));
                     grid.add_memory_label("HybridBias::advected field");
-                    FML::INTERPOLATION::particles_to_fourier_grid<N>(
-                        wp.data(), NumPart, NumPartTot, grid, options.density_assignment_method, options.interlacing);
+                    FML::INTERPOLATION::particles_to_fourier_grid<N>(wp.data(),
+                                                                     NumPart,
+                                                                     NumPartTot,
+                                                                     grid,
+                                                                     options.density_assignment_method,
+                                                                     options.interlacing);
                     FML::INTERPOLATION::deconvolve_window_function_fourier<N>(grid, options.density_assignment_method);
                     if (FML::ThisTask == 0)
                         grid.set_fourier_from_index(0, 0.0);
@@ -581,10 +601,13 @@ namespace FML {
             ///
             /// @param[in] grids The grids in Fourier space (e.g. the advected operators)
             /// @param[out] spectra The spectra (names, pairs and pofk are set; shotnoise is set to zero)
-            /// @param[in] nbins Number of bins (0: Nmesh / 2), linearly spaced from the fundamental mode to the Nyquist frequency
+            /// @param[in] nbins Number of bins (0: Nmesh / 2), linearly spaced from the fundamental mode to the Nyquist
+            /// frequency
             //=====================================================================================================
             template <int N>
-            void cross_spectra_of_grids(const std::vector<FFTWGrid<N>> & grids, HybridBiasSpectra<N> & spectra, int nbins = 0) {
+            void cross_spectra_of_grids(const std::vector<FFTWGrid<N>> & grids,
+                                        HybridBiasSpectra<N> & spectra,
+                                        int nbins = 0) {
                 const int n = int(grids.size());
                 assert_mpi(n > 0, "[cross_spectra_of_grids] No grids");
                 const int Nmesh = grids[0].get_nmesh();
@@ -596,7 +619,9 @@ namespace FML {
                     spectra.names.push_back(a < max_operators ? all_names[a] : "field" + std::to_string(a));
                 for (int a = 0; a < n; a++) {
                     for (int b = a; b < n; b++) {
-                        PowerSpectrumBinning<N> binning(2.0 * M_PI, 2.0 * M_PI * Nmesh / 2, nbins,
+                        PowerSpectrumBinning<N> binning(2.0 * M_PI,
+                                                        2.0 * M_PI * Nmesh / 2,
+                                                        nbins,
                                                         PowerSpectrumBinning<N>::LINEAR_SPACING);
                         if (a == b)
                             bin_up_power_spectrum<N>(grids[a], binning);
@@ -644,7 +669,11 @@ namespace FML {
                 int nfields = 0;
                 {
                     std::vector<FFTWGrid<N>> fields;
-                    compute_lagrangian_fields<N>(delta_linear_fourier, Nlattice, fields, options, growth_factor_of_kBox);
+                    compute_lagrangian_fields<N>(delta_linear_fourier,
+                                                 Nlattice,
+                                                 fields,
+                                                 options,
+                                                 growth_factor_of_kBox);
                     nfields = int(fields.size());
                     lagrangian_fields_at_particles<N, T>(p, NumPart, fields, values, lattice_coordinate);
                 }
@@ -747,7 +776,9 @@ namespace FML {
                 result.clear();
                 for (auto & grid : advected) {
                     assert_mpi(grid.get_nmesh() == Nmesh, "[tracer_cross_spectra] The grids must have the same size");
-                    PowerSpectrumBinning<N> binning(2.0 * M_PI, 2.0 * M_PI * Nmesh / 2, nbins,
+                    PowerSpectrumBinning<N> binning(2.0 * M_PI,
+                                                    2.0 * M_PI * Nmesh / 2,
+                                                    nbins,
                                                     PowerSpectrumBinning<N>::LINEAR_SPACING);
                     bin_up_cross_power_spectrum<N>(tracer_fourier, grid, binning);
                     result.push_back(binning);

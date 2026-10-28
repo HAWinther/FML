@@ -111,10 +111,10 @@ namespace FML {
             /// Estimates the correlation function from the paircounts. Most common estimators are included.
             /// NB: assumes normalized paircounts here, e.g. pairs / total_number_of_pairs.
             inline double CorrelationFunctionEstimator(double D1D2,
-                                                double D1R2,
-                                                double R1D2,
-                                                double R1R2,
-                                                const std::string & estimator) {
+                                                       double D1R2,
+                                                       double R1D2,
+                                                       double R1R2,
+                                                       const std::string & estimator) {
 
                 // The estimators below that were proposed for auto pair-counts have been
                 // symmetrized to also give a result for cross pair-counts
@@ -209,7 +209,8 @@ namespace FML {
                 T tmp_part1;
                 U tmp_part2;
                 constexpr int ndim = FML::PARTICLE::GetNDIM(tmp_part1);
-                static_assert(ndim == FML::PARTICLE::GetNDIM(tmp_part2), "[GeneralPairCounter] Particles must have the same NDIM");
+                static_assert(ndim == FML::PARTICLE::GetNDIM(tmp_part2),
+                              "[GeneralPairCounter] Particles must have the same NDIM");
 
                 // Fetch data from the grid
                 auto & cells = grid1.get_cells();
@@ -580,9 +581,9 @@ namespace FML {
                     size_t size() const { return index.size(); }
                 };
 
-                /// The grid size for pair counting up to rmax: cells of size ~ rmax / 2 (the neighbours of a cell are then
-                /// within 2 cells), but on average at least ~2 particles per cell of the largest catalogue (with fewer
-                /// the loop over the cells costs more than the pairs) and at most 2^27 cells
+                /// The grid size for pair counting up to rmax: cells of size ~ rmax / 2 (the neighbours of a cell are
+                /// then within 2 cells), but on average at least ~2 particles per cell of the largest catalogue (with
+                /// fewer the loop over the cells costs more than the pairs) and at most 2^27 cells
                 inline int choose_ngrid(int ndim, double rmax, size_t npart_max) {
                     const double ncells_max = std::min(std::max(0.5 * double(npart_max), 1.0), double(1 << 27));
                     double ngrid = std::min(2.0 / rmax, std::pow(ncells_max, 1.0 / ndim));
@@ -631,7 +632,8 @@ namespace FML {
                 //====================================================
                 /// Calls pair_function(thread, i, j, dist, r2) for all the pairs (i in A, j in B, positions of the cell
                 /// lists, dist = x_i - x_j, minimum image if periodic) with r2 = |dist|^2 < rmax^2. Auto pairs (A = B):
-                /// every pair once. The grid cells are distributed over the MPI tasks (by estimated cost) and the threads
+                /// every pair once. The grid cells are distributed over the MPI tasks (by estimated cost) and the
+                /// threads
                 //====================================================
                 template <int NDIM, class F>
                 void count_pairs(const CellList<NDIM> & A,
@@ -804,7 +806,8 @@ namespace FML {
 
                     const bool compute_mu = nmubins > 1 or mumax < 1.0 or mumin > -1.0;
                     // Auto pairs: the order of the two particles (the sign of mu) is arbitrary, so every pair is
-                    // counted half at mu and half at -mu (and the extra quantities for (p1,p2) at mu and (p2,p1) at -mu)
+                    // counted half at mu and half at -mu (and the extra quantities for (p1,p2) at mu and (p2,p1) at
+                    // -mu)
                     const bool symmetrize_mu = compute_mu and autopairs;
                     const double r_scale = nrbins / (rmax - rmin);
                     const double mu_scale = nmubins / (mumax - mumin);
@@ -818,8 +821,17 @@ namespace FML {
                     };
 
                     // half: half of the extra quantities (symmetrized auto pairs); swapped: for (p2, p1)
-                    auto add_pair = [&](int thread, int ir, int imu, double weight, const double * dist, double r,
-                                        double mu, size_t i, size_t j, bool half, bool swapped) {
+                    auto add_pair = [&](int thread,
+                                        int ir,
+                                        int imu,
+                                        double weight,
+                                        const double * dist,
+                                        double r,
+                                        double mu,
+                                        size_t i,
+                                        size_t j,
+                                        bool half,
+                                        bool swapped) {
                         double * bin = &count_threads[thread][size_t(nquantities) * (ir + size_t(imu) * nrbins)];
                         bin[0] += weight;
                         if (nquantities == 1)
@@ -843,58 +855,64 @@ namespace FML {
                             bin[1 + q] += 0.5 * tmp[q];
                     };
 
-                    count_pairs<NDIM>(A, B, autopairs, rmax, periodic_box, [&](int thread, size_t i, size_t j, const double * dist, double r2) {
-                        if (r2 < rmin2 or r2 == 0.0)
-                            return;
-                        const double r = std::sqrt(r2);
-                        const int ir = std::min(int((r - rmin) * r_scale), nrbins - 1);
-                        const double w = A.weight[i] * B.weight[j];
-                        if (not compute_mu) {
-                            add_pair(thread, ir, 0, w, dist, r, 0.0, i, j, false, false);
-                            return;
-                        }
-                        // The line of sight: from the observer to the midpoint of the pair
-                        const double * x1 = &A.pos[i * NDIM];
-                        const double * x2 = &B.pos[j * NDIM];
-                        double los[NDIM], norm2 = 0.0;
-                        for (int d = 0; d < NDIM; d++) {
-                            double dx = 0.5 * (x1[d] + x2[d]) - observer[d];
-                            if (periodic_box) {
-                                // The observer is "at infinity" in some direction or inside the box: a single wrap
-                                if (dx < -0.5)
-                                    dx += 1.0;
-                                if (dx > 0.5)
-                                    dx -= 1.0;
+                    count_pairs<NDIM>(
+                        A,
+                        B,
+                        autopairs,
+                        rmax,
+                        periodic_box,
+                        [&](int thread, size_t i, size_t j, const double * dist, double r2) {
+                            if (r2 < rmin2 or r2 == 0.0)
+                                return;
+                            const double r = std::sqrt(r2);
+                            const int ir = std::min(int((r - rmin) * r_scale), nrbins - 1);
+                            const double w = A.weight[i] * B.weight[j];
+                            if (not compute_mu) {
+                                add_pair(thread, ir, 0, w, dist, r, 0.0, i, j, false, false);
+                                return;
                             }
-                            los[d] = dx;
-                            norm2 += dx * dx;
-                        }
-                        double dot = 0.0;
-                        for (int d = 0; d < NDIM; d++)
-                            dot += dist[d] * los[d];
-                        const double mu = dot / (r * std::sqrt(norm2));
-                        if (symmetrize_mu) {
-                            for (int s = 0; s < 2; s++) {
-                                const double smu = s == 0 ? mu : -mu;
-                                if (not in_mu_range(smu))
-                                    continue;
-                                const int imu = std::min(int((smu - mumin) * mu_scale), nmubins - 1);
-                                if (s == 0 or nquantities == 1) {
-                                    add_pair(thread, ir, imu, 0.5 * w, dist, r, smu, i, j, true, false);
-                                } else {
-                                    double mdist[NDIM];
-                                    for (int d = 0; d < NDIM; d++)
-                                        mdist[d] = -dist[d];
-                                    add_pair(thread, ir, imu, 0.5 * w, mdist, r, smu, i, j, true, true);
+                            // The line of sight: from the observer to the midpoint of the pair
+                            const double * x1 = &A.pos[i * NDIM];
+                            const double * x2 = &B.pos[j * NDIM];
+                            double los[NDIM], norm2 = 0.0;
+                            for (int d = 0; d < NDIM; d++) {
+                                double dx = 0.5 * (x1[d] + x2[d]) - observer[d];
+                                if (periodic_box) {
+                                    // The observer is "at infinity" in some direction or inside the box: a single wrap
+                                    if (dx < -0.5)
+                                        dx += 1.0;
+                                    if (dx > 0.5)
+                                        dx -= 1.0;
                                 }
+                                los[d] = dx;
+                                norm2 += dx * dx;
                             }
-                            return;
-                        }
-                        if (not in_mu_range(mu))
-                            return;
-                        const int imu = std::min(int((mu - mumin) * mu_scale), nmubins - 1);
-                        add_pair(thread, ir, imu, w, dist, r, mu, i, j, false, false);
-                    });
+                            double dot = 0.0;
+                            for (int d = 0; d < NDIM; d++)
+                                dot += dist[d] * los[d];
+                            const double mu = dot / (r * std::sqrt(norm2));
+                            if (symmetrize_mu) {
+                                for (int s = 0; s < 2; s++) {
+                                    const double smu = s == 0 ? mu : -mu;
+                                    if (not in_mu_range(smu))
+                                        continue;
+                                    const int imu = std::min(int((smu - mumin) * mu_scale), nmubins - 1);
+                                    if (s == 0 or nquantities == 1) {
+                                        add_pair(thread, ir, imu, 0.5 * w, dist, r, smu, i, j, true, false);
+                                    } else {
+                                        double mdist[NDIM];
+                                        for (int d = 0; d < NDIM; d++)
+                                            mdist[d] = -dist[d];
+                                        add_pair(thread, ir, imu, 0.5 * w, mdist, r, smu, i, j, true, true);
+                                    }
+                                }
+                                return;
+                            }
+                            if (not in_mu_range(mu))
+                                return;
+                            const int imu = std::min(int((mu - mumin) * mu_scale), nmubins - 1);
+                            add_pair(thread, ir, imu, w, dist, r, mu, i, j, false, false);
+                        });
 
                     DVector count(nbinstotal, 0.0);
                     for (auto & c : count_threads)
@@ -914,12 +932,21 @@ namespace FML {
                         return (mu1 - mu0) / 2.0;
                     if constexpr (NDIM == 2)
                         return (std::acos(mu0) - std::acos(mu1)) / M_PI;
-                    return 0.5 * ((mu0 <= -1.0 and -1.0 < mu1) ? 1.0 : 0.0) + 0.5 * ((mu0 <= 1.0 and mu1 >= 1.0) ? 1.0 : 0.0);
+                    return 0.5 * ((mu0 <= -1.0 and -1.0 < mu1) ? 1.0 : 0.0) +
+                           0.5 * ((mu0 <= 1.0 and mu1 >= 1.0) ? 1.0 : 0.0);
                 }
 
                 /// The r and mu bins (centers) and edges
-                inline void make_bins(double rmin, double rmax, int nrbins, double mumin, double mumax, int nmubins,
-                                      DVector & r_array, DVector & r_edge, DVector & mu_array, DVector & mu_edge) {
+                inline void make_bins(double rmin,
+                                      double rmax,
+                                      int nrbins,
+                                      double mumin,
+                                      double mumax,
+                                      int nmubins,
+                                      DVector & r_array,
+                                      DVector & r_edge,
+                                      DVector & mu_array,
+                                      DVector & mu_edge) {
                     r_array = DVector(nrbins);
                     r_edge = DVector(nrbins + 1, rmax);
                     for (int i = 0; i < nrbins; i++) {
@@ -935,8 +962,13 @@ namespace FML {
                 }
 
                 /// Pair counts (count from angular_pair_counts) in arrays [imu][ir] (and the extra quantities)
-                inline void extract_counts(const DVector & count, int nrbins, int nmubins, int nextratobin, double norm,
-                                           DVector2D & paircounts, DVector3D & extra) {
+                inline void extract_counts(const DVector & count,
+                                           int nrbins,
+                                           int nmubins,
+                                           int nextratobin,
+                                           double norm,
+                                           DVector2D & paircounts,
+                                           DVector3D & extra) {
                     const int nquantities = 1 + nextratobin;
                     paircounts = DVector2D(nmubins, DVector(nrbins, 0.0));
                     if (nextratobin > 0)
@@ -1026,10 +1058,21 @@ namespace FML {
                               << npart2 << " particles) on a grid of " << ngrid << "^" << NDIM << " cells with "
                               << FML::NTasks << " task(s) and " << FML::NThreads << " thread(s)\n";
 
-                const auto count = detail::angular_pair_counts<NDIM, T1, T2>(A, part1, B, part2, autopairs, rmin, rmax,
-                                                                             nrbins, mumin, mumax, nmubins,
-                                                                             observer_position, periodic_box,
-                                                                             nextratobin, extra_quantities_to_bin);
+                const auto count = detail::angular_pair_counts<NDIM, T1, T2>(A,
+                                                                             part1,
+                                                                             B,
+                                                                             part2,
+                                                                             autopairs,
+                                                                             rmin,
+                                                                             rmax,
+                                                                             nrbins,
+                                                                             mumin,
+                                                                             mumax,
+                                                                             nmubins,
+                                                                             observer_position,
+                                                                             periodic_box,
+                                                                             nextratobin,
+                                                                             extra_quantities_to_bin);
 
                 // The total (weighted) number of pairs
                 const double numpairs = autopairs ? (A.sum_weights * A.sum_weights - A.sum_weights_squared) / 2.0 :
@@ -1261,11 +1304,14 @@ namespace FML {
                     rand2 = reinterpret_cast<const R2 *>(rand1);
                     nrand2 = nrand1;
                 }
-                const bool cross_correlation = reinterpret_cast<const void *>(part1) != reinterpret_cast<const void *>(part2);
-                const bool same_randoms = reinterpret_cast<const void *>(rand1) == reinterpret_cast<const void *>(rand2);
+                const bool cross_correlation =
+                    reinterpret_cast<const void *>(part1) != reinterpret_cast<const void *>(part2);
+                const bool same_randoms =
+                    reinterpret_cast<const void *>(rand1) == reinterpret_cast<const void *>(rand2);
 
                 // The extra quantities need the same types for all the pair types
-                constexpr bool same_types = std::is_same_v<T1, T2> and std::is_same_v<T1, R1> and std::is_same_v<T1, R2>;
+                constexpr bool same_types =
+                    std::is_same_v<T1, T2> and std::is_same_v<T1, R1> and std::is_same_v<T1, R2>;
                 assert_mpi(nextratobin == 0 or (same_types and extra_quantities_to_bin),
                            "AngularCorrelationFunctionSurvey :: extra quantities need the same particle type for data "
                            "and randoms and extra_quantities_to_bin\n");
@@ -1301,14 +1347,37 @@ namespace FML {
                                                  a.sum_weights * b.sum_weights;
                     return n > 0.0 ? 1.0 / n : 0.0;
                 };
-                auto counts = [&](const auto & A, const auto * pA, const auto & B, const auto * pB, bool autopairs,
-                                  DVector2D & paircounts, DVector3D & extra) {
+                auto counts = [&](const auto & A,
+                                  const auto * pA,
+                                  const auto & B,
+                                  const auto * pB,
+                                  bool autopairs,
+                                  DVector2D & paircounts,
+                                  DVector3D & extra) {
                     using TA = std::remove_const_t<std::remove_pointer_t<decltype(pA)>>;
                     using TB = std::remove_const_t<std::remove_pointer_t<decltype(pB)>>;
-                    const auto count = detail::angular_pair_counts<NDIM, TA, TB>(
-                        A, pA, B, pB, autopairs, rmin, rmax, nrbins, mumin, mumax, nmubins, observer_position,
-                        periodic_box, nextratobin, extra_for(pA, pB));
-                    detail::extract_counts(count, nrbins, nmubins, nextratobin, norm(A, B, autopairs), paircounts, extra);
+                    const auto count = detail::angular_pair_counts<NDIM, TA, TB>(A,
+                                                                                 pA,
+                                                                                 B,
+                                                                                 pB,
+                                                                                 autopairs,
+                                                                                 rmin,
+                                                                                 rmax,
+                                                                                 nrbins,
+                                                                                 mumin,
+                                                                                 mumax,
+                                                                                 nmubins,
+                                                                                 observer_position,
+                                                                                 periodic_box,
+                                                                                 nextratobin,
+                                                                                 extra_for(pA, pB));
+                    detail::extract_counts(count,
+                                           nrbins,
+                                           nmubins,
+                                           nextratobin,
+                                           norm(A, B, autopairs),
+                                           paircounts,
+                                           extra);
                 };
 
                 counts(D1, part1, D2, part2, not cross_correlation, paircounts_D1D2_array, extra_quantities_D1D2_array);
@@ -1425,10 +1494,10 @@ namespace FML {
             /// Compute multipoles xi_ell(r) from a spline xi(mu,r)
             /// xiell(r) = (2ell+1) Int Pell(mu)xi(r,mu)dmu / Int dmu
             inline void FromAngularCorrelationToMultipoles(const DVector & r_array,
-                                                    const Spline2D & xi_mu_r_spline,
-                                                    std::vector<DVector> & multipoles,
-                                                    double mumin = -1.0,
-                                                    double mumax = 1.0) {
+                                                           const Spline2D & xi_mu_r_spline,
+                                                           std::vector<DVector> & multipoles,
+                                                           double mumin = -1.0,
+                                                           double mumax = 1.0) {
 
                 // Integration range and number of points
                 // We compute (2ell+1) Int Pell(mu) xi(r,mu) dmu / Int dmu
@@ -1469,6 +1538,6 @@ namespace FML {
 #endif
 
         } // namespace PAIRCOUNTS
-    }     // namespace CORRELATIONFUNCTIONS
+    } // namespace CORRELATIONFUNCTIONS
 } // namespace FML
 #endif

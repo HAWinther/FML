@@ -158,10 +158,11 @@ namespace FML {
                 }
             }
         }
-        
+
         template <int N>
-        void custom_smoothing_filter_fourier_space(FFTWGrid<N> & fourier_grid,
-                                                   const std::function<double(double)> & custom_filter_of_kBox_squared){
+        void
+        custom_smoothing_filter_fourier_space(FFTWGrid<N> & fourier_grid,
+                                              const std::function<double(double)> & custom_filter_of_kBox_squared) {
             // Do the smoothing
             auto Local_nx = fourier_grid.get_local_nx();
 #ifdef USE_OMP
@@ -195,10 +196,9 @@ namespace FML {
         inline double bessel_J1(double x) {
             if (x <= 3.0) {
                 const double y = (x / 3.0) * (x / 3.0);
-                return x * (0.5 +
-                            y * (-0.56249985 +
-                                 y * (0.21093573 +
-                                      y * (-0.03954289 + y * (0.00443319 + y * (-0.00031761 + y * 0.00001109))))));
+                return x * (0.5 + y * (-0.56249985 +
+                                       y * (0.21093573 + y * (-0.03954289 +
+                                                              y * (0.00443319 + y * (-0.00031761 + y * 0.00001109))))));
             }
             const double y = 3.0 / x;
             const double f1 =

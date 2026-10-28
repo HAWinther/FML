@@ -107,11 +107,13 @@ namespace FML {
 
             //========================================================================================
 
-            /// Read an arrays of numbers. If it does not exist use the default_value unless required for which we throw and error
+            /// Read an arrays of numbers. If it does not exist use the default_value unless required for which we throw
+            /// and error
             template <class T>
             std::vector<T> read_number_array(std::string name, std::vector<T> default_value, bool required = true);
 
-            /// Read arrays of strings. If it does not exist use the default_value unless required for which we throw and error
+            /// Read arrays of strings. If it does not exist use the default_value unless required for which we throw
+            /// and error
             std::vector<std::string>
             read_string_array(std::string name, std::vector<std::string> default_value, bool required = true);
 
@@ -262,12 +264,12 @@ namespace FML {
             for (int i = 1; i <= n; i++) {
                 lua_rawgeti(L, -1, i);
                 const bool ok = std::is_integral_v<T> ? LUAFILEPARSER_DETAIL::is_integer(L, -1) :
-                                                         LUAFILEPARSER_DETAIL::is_number(L, -1);
+                                                        LUAFILEPARSER_DETAIL::is_number(L, -1);
                 if (not ok) {
                     std::string type = luaL_typename(L, -1);
                     lua_pop(L, 2);
-                    throw_error("[LuaFileParser::read] Element " + std::to_string(i) + " of " + name + " is a " +
-                                type + ", expected " + (std::is_integral_v<T> ? "an integer" : "a number") + "\n");
+                    throw_error("[LuaFileParser::read] Element " + std::to_string(i) + " of " + name + " is a " + type +
+                                ", expected " + (std::is_integral_v<T> ? "an integer" : "a number") + "\n");
                 }
                 val.push_back(T(lua_tonumber(L, -1)));
                 lua_pop(L, 1);
@@ -287,8 +289,8 @@ namespace FML {
                 if (not lua_isstring(L, -1)) {
                     std::string type = luaL_typename(L, -1);
                     lua_pop(L, 2);
-                    throw_error("[LuaFileParser::read] Element " + std::to_string(i) + " of " + name + " is a " +
-                                type + ", expected a string\n");
+                    throw_error("[LuaFileParser::read] Element " + std::to_string(i) + " of " + name + " is a " + type +
+                                ", expected a string\n");
                 }
                 val.push_back(std::string(lua_tostring(L, -1)));
                 lua_pop(L, 1);

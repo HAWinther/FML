@@ -86,11 +86,13 @@ class CosmologyTabulated final : public Cosmology {
 
     void output_header(std::ofstream & fp) const override {
         Cosmology::output_header(fp);
-        fp << " "; output_element(fp, "w_DE");
+        fp << " ";
+        output_element(fp, "w_DE");
     }
     void output_row(std::ofstream & fp, double a) const override {
         Cosmology::output_row(fp, a);
-        fp << " "; output_element(fp, w_DE(a));
+        fp << " ";
+        output_element(fp, w_DE(a));
     }
 
   private:
@@ -107,8 +109,8 @@ class CosmologyTabulated final : public Cosmology {
                this->get_rhoNu_exact(a);
     }
     double drho_other_dloga(double a) const {
-        return -2.0 * OmegaK / (a * a) - 3.0 * (OmegaCDM + Omegab) / (a * a * a) -
-               4.0 * OmegaR / (a * a * a * a) + this->get_drhoNudloga_exact(a);
+        return -2.0 * OmegaK / (a * a) - 3.0 * (OmegaCDM + Omegab) / (a * a * a) - 4.0 * OmegaR / (a * a * a * a) +
+               this->get_drhoNudloga_exact(a);
     }
     double E2_of_a(double a) const {
         const double x = std::log(a);
@@ -191,7 +193,8 @@ class CosmologyTabulated final : public Cosmology {
                 std::size_t end = line.find(':', pos + 1);
                 std::string label = line.substr(pos + 1, (end == std::string::npos ? line.size() : end) - pos - 1);
                 // strip the next column number from the label
-                while (not label.empty() and (std::isdigit(static_cast<unsigned char>(label.back())) or label.back() == ' '))
+                while (not label.empty() and
+                       (std::isdigit(static_cast<unsigned char>(label.back())) or label.back() == ' '))
                     label.pop_back();
                 if (label == "z")
                     iz = icol;
@@ -202,7 +205,8 @@ class CosmologyTabulated final : public Cosmology {
         }
         if (iz < 0 or iH < 0)
             throw std::runtime_error("Tabulated cosmology: did not find the columns 'z' and 'H [1/Mpc]' in the "
-                                     "CLASS file " + filename);
+                                     "CLASS file " +
+                                     filename);
         return {iz, iH};
     }
 
@@ -234,8 +238,8 @@ class CosmologyTabulated final : public Cosmology {
         if (format == "CLASS") {
             H0 = Hspline(0.0);
         } else if (zmin_table <= 0.0 and zmax_table >= 0.0 and std::fabs(Hspline(0.0) - 1.0) > 1e-4) {
-            throw std::runtime_error("Tabulated cosmology: H/H0 at z = 0 is " + std::to_string(Hspline(0.0)) +
-                                     " in " + filename + " (should be 1)");
+            throw std::runtime_error("Tabulated cosmology: H/H0 at z = 0 is " + std::to_string(Hspline(0.0)) + " in " +
+                                     filename + " (should be 1)");
         }
 
         DVector logE2(x.size());
@@ -290,8 +294,8 @@ class CosmologyTabulated final : public Cosmology {
             x[i] = x0 + (x1 - x0) * i / double(n - 1);
         std::vector<double> integral(n, 0.0); // int_x0^x (1 + w) dx'
         for (int i = 1; i < n; i++)
-            integral[i] = integral[i - 1] + 0.5 * (x[i] - x[i - 1]) *
-                                                (2.0 + w_table_spline(x[i]) + w_table_spline(x[i - 1]));
+            integral[i] =
+                integral[i - 1] + 0.5 * (x[i] - x[i - 1]) * (2.0 + w_table_spline(x[i]) + w_table_spline(x[i - 1]));
         Spline integral_spline(x, DVector(integral.begin(), integral.end()), "int (1+w) dlna");
         const double I0 = integral_spline(0.0);
         for (int i = 0; i < n; i++)

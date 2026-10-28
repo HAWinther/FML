@@ -93,7 +93,7 @@ namespace FML {
             void compute_background();
 
           public:
-            BackgroundCosmology(){};
+            BackgroundCosmology() {};
             BackgroundCosmology(const ParameterMap & p);
             BackgroundCosmology & operator=(BackgroundCosmology && other) = default;
             BackgroundCosmology & operator=(const BackgroundCosmology & rhs) = default;
@@ -157,7 +157,7 @@ namespace FML {
             double get_OmegaK(double x = 0.0) const;
             /// Massive neutrino density parameter of x = log(a)
             double get_OmegaMnu(double x = 0.0) const;
-            
+
             /// Effective equation of state of x = log(a)
             double get_weff(double x) const;
             /// Derivative of effective equation of state of x = log(a)

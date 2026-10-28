@@ -33,8 +33,9 @@ namespace FML {
                     const double value = std::strtod(begin, &end);
                     // ERANGE: overflow gives +-inf (kept), underflow gives a denormal or 0 (kept)
                     if (end == begin or *end != '\0')
-                        throw std::runtime_error("[" + caller + "] Could not read [" + token + "] as a number on line " +
-                                                 std::to_string(linenumber) + " of [" + filename + "]");
+                        throw std::runtime_error("[" + caller + "] Could not read [" + token +
+                                                 "] as a number on line " + std::to_string(linenumber) + " of [" +
+                                                 filename + "]");
                     row.push_back(value);
                 }
                 return not row.empty();
@@ -53,8 +54,8 @@ namespace FML {
                     throw std::runtime_error("[" + caller + "] Need ncols > 0, nskip >= 0 and columns to keep");
                 for (auto & i : cols_to_keep)
                     if (i < 0 or i >= ncols)
-                        throw std::runtime_error("[" + caller + "] Column " + std::to_string(i) + " to keep is not in [0, " +
-                                                 std::to_string(ncols) + ")");
+                        throw std::runtime_error("[" + caller + "] Column " + std::to_string(i) +
+                                                 " to keep is not in [0, " + std::to_string(ncols) + ")");
 
                 std::ifstream fp(filename.c_str());
                 if (!fp)
@@ -112,8 +113,13 @@ namespace FML {
                                                 size_t nestimated_lines,
                                                 double fraction_to_read,
                                                 unsigned int randomSeed) {
-            return read_regular_ascii_impl(
-                filename, ncols, cols_to_keep, nskip, nestimated_lines, fraction_to_read, randomSeed);
+            return read_regular_ascii_impl(filename,
+                                           ncols,
+                                           cols_to_keep,
+                                           nskip,
+                                           nestimated_lines,
+                                           fraction_to_read,
+                                           randomSeed);
         }
 
         std::pair<DVector, DVector> read_file_and_extract_two_columns(std::string filename, int col1, int col2) {

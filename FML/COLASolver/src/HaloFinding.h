@@ -78,13 +78,13 @@ namespace COLASOLVER {
     /// Run the FoF finder and return the halos found on this task
     template <int NDIM, class P>
     std::vector<HaloRecord<NDIM>> find_fof_halos(P * part,
-                                                size_t npart,
-                                                const FoFSettings & settings,
-                                                double boxsize,
-                                                double linking_length,
-                                                int nmin_per_halo,
-                                                const std::vector<double> & so_thresholds = {},
-                                                double total_mass = 0.0) {
+                                                 size_t npart,
+                                                 const FoFSettings & settings,
+                                                 double boxsize,
+                                                 double linking_length,
+                                                 int nmin_per_halo,
+                                                 const std::vector<double> & so_thresholds = {},
+                                                 double total_mass = 0.0) {
         std::vector<FML::FOF::FoFHalo<P, NDIM>> groups;
         FML::FOF::FriendsOfFriends<P, NDIM>(part,
                                             npart,
@@ -118,8 +118,13 @@ namespace COLASOLVER {
                 centers.push_back(h.pos);
                 initial_radius.push_back(1.5 * std::cbrt(3.0 * h.mass / (4.0 * M_PI * 200.0 * total_mass)));
             }
-            auto so = FML::FOF::SphericalOverdensity<P, NDIM>(
-                part, npart, total_mass, centers, initial_radius, so_thresholds, settings.buffer_length_mpch / boxsize);
+            auto so = FML::FOF::SphericalOverdensity<P, NDIM>(part,
+                                                              npart,
+                                                              total_mass,
+                                                              centers,
+                                                              initial_radius,
+                                                              so_thresholds,
+                                                              settings.buffer_length_mpch / boxsize);
             for (size_t i = 0; i < halos.size(); i++) {
                 auto & h = halos[i];
                 h.so_pos = so[i].pos;
@@ -208,7 +213,13 @@ namespace COLASOLVER {
         for (int i = 1; i < FML::NTasks; i++)
             displs[i] = displs[i - 1] + counts[i - 1];
         all.resize(displs.back() + counts.back());
-        MPI_Allgatherv(local.data(), n, MPI_DOUBLE, all.data(), counts.data(), displs.data(), MPI_DOUBLE,
+        MPI_Allgatherv(local.data(),
+                       n,
+                       MPI_DOUBLE,
+                       all.data(),
+                       counts.data(),
+                       displs.data(),
+                       MPI_DOUBLE,
                        FML::communicator);
 #endif
         const size_t nall = all.size() / stride;
@@ -359,8 +370,9 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
                                                     double(npart_total));
     } else {
         // CDM and baryons linked together. The particle masses are Omega_i / OmegaCB in units of the mean mass of all
-        // the particles (times 1 + eps with the mass-encoded relative mode). The linking length is in units of the mean separation of one species and the minimum number
-        // of particles is that of one species (so the halos are the same as with one species)
+        // the particles (times 1 + eps with the mass-encoded relative mode). The linking length is in units of the mean
+        // separation of one species and the minimum number of particles is that of one species (so the halos are the
+        // same as with one species)
         using P = COLASOLVER::FoFParticle<NDIM>;
         std::vector<P> fofpart;
         long long int n_one_species = 0;
@@ -383,8 +395,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
                 fofpart.push_back(q);
             }
         });
-        const double linking_length =
-            settings.linking_length * std::cbrt(double(npart_total) / double(n_one_species));
+        const double linking_length = settings.linking_length * std::cbrt(double(npart_total) / double(n_one_species));
         const int nmin = int(std::lround(settings.nmin_per_halo * double(npart_total) / double(n_one_species)));
         halos = COLASOLVER::find_fof_halos<NDIM, P>(fofpart.data(),
                                                     fofpart.size(),
@@ -531,10 +542,10 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         std::vector<double> dndlogM_tinker(nbins, 0.0);
         if (have_fits)
             for (int i = 0; i < nbins; i++)
-                dndlogM_tinker[i] =
-                    fit(i, COLASOLVER::f_tinker2008_delta(sigma_of_M[i], redshift, so_thresholds[id]));
+                dndlogM_tinker[i] = fit(i, COLASOLVER::f_tinker2008_delta(sigma_of_M[i], redshift, so_thresholds[id]));
         if (FML::ThisTask == 0) {
-            std::string filename = snapshot_folder + "/massfunc_so" + so_definitions[id] + "_z" + redshiftstring + ".txt";
+            std::string filename =
+                snapshot_folder + "/massfunc_so" + so_definitions[id] + "_z" + redshiftstring + ".txt";
             std::ofstream fp(filename.c_str());
             fp << "# Spherical overdensity " << so_definitions[id] << " (Delta = " << so_thresholds[id]
                << " times the mean CDM+baryon density) around the FoF halos. The Tinker fit is only given for 200 <= "
@@ -600,7 +611,14 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
             displs[i] = displs[i - 1] + counts[i - 1];
         std::vector<double> all(FML::ThisTask == 0 ? displs.back() + counts.back() : 0);
 #ifdef USE_MPI
-        MPI_Gatherv(local.data(), n, MPI_DOUBLE, all.data(), counts.data(), displs.data(), MPI_DOUBLE, 0,
+        MPI_Gatherv(local.data(),
+                    n,
+                    MPI_DOUBLE,
+                    all.data(),
+                    counts.data(),
+                    displs.data(),
+                    MPI_DOUBLE,
+                    0,
                     FML::communicator);
 #else
         all = local;
@@ -710,7 +728,8 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
                                 fp << std::setw(15) << g.so_vel[idim] << " ";
                             for (int idim = 0; idim < NDIM; idim++)
                                 fp << std::setw(15) << g.so_vel_rms[idim] << " ";
-                            fp << std::setw(3) << int(g.so_truncated) << " " << std::setw(3) << int(g.so_overlap) << " ";
+                            fp << std::setw(3) << int(g.so_truncated) << " " << std::setw(3) << int(g.so_overlap)
+                               << " ";
                             for (int id = 0; id < nso; id++)
                                 fp << std::setw(15) << g.so_mass[id] << " " << std::setw(15) << g.so_radius[id] << " "
                                    << std::setw(10) << g.so_npart[id] << " ";

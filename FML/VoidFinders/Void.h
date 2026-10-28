@@ -69,7 +69,9 @@ namespace FML {
             /// delta_avg
             double delta_avg() const { return density_avg - 1.0; }
             /// The lambda parameter delta_avg R^1.2 (R^1.6 for clusters) with R in the units of the box size given
-            double lambda(double boxsize) const { return delta_avg() * std::pow(radius * boxsize, cluster ? 1.6 : 1.2); }
+            double lambda(double boxsize) const {
+                return delta_avg() * std::pow(radius * boxsize, cluster ? 1.6 : 1.2);
+            }
         };
 
         /// Sort a catalogue in increasing order of minimum density (decreasing for clusters) and set the ids.
@@ -160,8 +162,8 @@ namespace FML {
                    << v.radius * boxsize << " " << v.delta_min() << " " << v.delta_avg() << " " << v.lambda(boxsize)
                    << " " << v.density_ratio << " " << v.pos_min[0] * boxsize << " " << v.pos_min[1] * boxsize << " "
                    << v.pos_min[2] * boxsize << " " << v.pos_barycenter[0] * boxsize << " "
-                   << v.pos_barycenter[1] * boxsize << " " << v.pos_barycenter[2] * boxsize << " " << v.nmembers
-                   << " " << v.nzones << " " << v.parent << "\n";
+                   << v.pos_barycenter[1] * boxsize << " " << v.pos_barycenter[2] * boxsize << " " << v.nmembers << " "
+                   << v.nzones << " " << v.parent << "\n";
             }
         }
 

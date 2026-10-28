@@ -119,8 +119,10 @@ namespace FML {
                 // constant value at k = 0) this spline is inaccurate at low k and can even go negative
                 // (giving NaN). The random numbers are the same so this is the same field as before
                 auto white_noise = []([[maybe_unused]] double kBox) { return 1.0; };
-                FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier(
-                    phi_fourier, rng, white_noise, fix_amplitude);
+                FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier(phi_fourier,
+                                                                              rng,
+                                                                              white_noise,
+                                                                              fix_amplitude);
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -435,6 +437,6 @@ namespace FML {
             }
 
         } // namespace NONGAUSSIAN
-    }     // namespace RANDOM
+    } // namespace RANDOM
 } // namespace FML
 #endif

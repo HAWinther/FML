@@ -134,35 +134,35 @@ namespace COLASOLVER {
     };
 
     struct ForceSettings {
-        int nmesh;                             // The gridsize to bin particles to and compute PM forces
-        std::string density_assignment_method; // Density assignment (NGP,CIC,TSC,PCS,PQS)
-        bool linear_massive_neutrinos;         // Include the effects of massive neutrinos using linear theory
-        bool neutrino_energy_density{false};   // Source the Poisson equation with the neutrino energy density
-        bool nbody_gauge{false};               // Add the linear N-body gauge source (radiation, neutrinos, GR)
-        std::string nbody_gauge_filename;      // The table T_extra(k,z) (from scripts/make_nbody_gauge_transfer.py)
-        std::string greens_function_kernel;    // Kernel used for the Greens function of the Poisson equation
-        std::string gradient_kernel;           // Kernel used for computing the gradient of the potential
+        int nmesh;                                // The gridsize to bin particles to and compute PM forces
+        std::string density_assignment_method;    // Density assignment (NGP,CIC,TSC,PCS,PQS)
+        bool linear_massive_neutrinos;            // Include the effects of massive neutrinos using linear theory
+        bool neutrino_energy_density{false};      // Source the Poisson equation with the neutrino energy density
+        bool nbody_gauge{false};                  // Add the linear N-body gauge source (radiation, neutrinos, GR)
+        std::string nbody_gauge_filename;         // The table T_extra(k,z) (from scripts/make_nbody_gauge_transfer.py)
+        std::string greens_function_kernel;       // Kernel used for the Greens function of the Poisson equation
+        std::string gradient_kernel;              // Kernel used for computing the gradient of the potential
         std::string density_method{"assignment"}; // assignment, nufft, sheet or sheet_nufft
-        double nufft_epsilon{1e-5};            // Accuracy of the NUFFT (density_method = nufft)
-        int sheet_refinement{2};               // R: R^NDIM tracers per particle (density_method = sheet)
+        double nufft_epsilon{1e-5};               // Accuracy of the NUFFT (density_method = nufft)
+        int sheet_refinement{2};                  // R: R^NDIM tracers per particle (density_method = sheet)
         std::string interpolation_method{"assignment"}; // Force to particles: assignment (kernel) or nufft
-        int interlacing_order{1};              // Average the force over this many shifted copies of the particles
-        bool deconvolve_window{false};         // Divide the force by W(k)^2 of the assignment kernel
+        int interlacing_order{1};      // Average the force over this many shifted copies of the particles
+        bool deconvolve_window{false}; // Divide the force by W(k)^2 of the assignment kernel
         // Early-time force: a more accurate (and expensive) force before force_early_until_redshift
-        std::string early_method{"none"};      // none, nufft or interlaced
-        double early_until_redshift{10.0};     // Use the early force for steps with z > this
-        int early_interlacing_order{2};        // early_method = interlaced: number of shifted grids
+        std::string early_method{"none"};                   // none, nufft or interlaced
+        double early_until_redshift{10.0};                  // Use the early force for steps with z > this
+        int early_interlacing_order{2};                     // early_method = interlaced: number of shifted grids
         std::string early_density_assignment_method{"TSC"}; // early_method = interlaced: assignment kernel
     };
 
     struct ICSettings {
-        ICRandomFieldType random_field_type;  // gaussian, nongaussian, read_particles, read_phases
-        double initial_redshift;              // The initial redshift of the sim
-        int nmesh;                            // The Nmesh used to generate the IC (use particle_Npart_1D)
+        ICRandomFieldType random_field_type;    // gaussian, nongaussian, read_particles, read_phases
+        double initial_redshift;                // The initial redshift of the sim
+        int nmesh;                              // The Nmesh used to generate the IC (use particle_Npart_1D)
         std::string lattice_offset{"fiducial"}; // Offset of the particle lattice from the force grid nodes
-        int random_seed;                      // The random seed
-        RandomGeneratorType random_generator; // The generator: GSL or MT19937
-        int LPT_order;                        // The LPT order to use to make IC (1,2,3)
+        int random_seed;                        // The random seed
+        RandomGeneratorType random_generator;   // The generator: GSL or MT19937
+        int LPT_order;                          // The LPT order to use to make IC (1,2,3)
 
         // Input file (power-spectrum / transfer functions)
         ICInputType type_of_input;            // powerspectrum, transferfunction, transferinfofile
@@ -201,13 +201,13 @@ namespace COLASOLVER {
     };
 
     struct ParticleSettings {
-        int Npart_1D;             // Number of particles per dimension (total is N^NDIM)
-        double allocation_factor; // Allocate this many more particles
-        bool baryons{false};      // CDM and baryons as two sets of particles (otherwise one set "cb")
+        int Npart_1D;                       // Number of particles per dimension (total is N^NDIM)
+        double allocation_factor;           // Allocate this many more particles
+        bool baryons{false};                // CDM and baryons as two sets of particles (otherwise one set "cb")
         std::string baryon_lattice{"same"}; // same: the baryons start from the CDM lattice, offset: half a spacing
         std::string baryon_relative_mode{"displacement"}; // displacement, mass or mass_ini (see ParameterSchema.h)
-        bool neutrinos{false};    // Massive neutrinos as particles (delta-f method)
-        int neutrino_Npart_1D{0}; // Number of neutrino particles per dimension (0: particle_Npart_1D)
+        bool neutrinos{false};                            // Massive neutrinos as particles (delta-f method)
+        int neutrino_Npart_1D{0};   // Number of neutrino particles per dimension (0: particle_Npart_1D)
         bool neutrino_deltaf{true}; // Use the delta-f weights (false: plain particles, for testing)
         int sort_every_nsteps{0};   // Reorder the particles in memory by position every this many steps (0: never)
     };
@@ -277,11 +277,11 @@ namespace COLASOLVER {
     };
 
     struct OutputSettings {
-        std::vector<double> redshifts; // List of output redshift from large to small
-        bool particles;                // Output particles?
+        std::vector<double> redshifts;                             // List of output redshift from large to small
+        bool particles;                                            // Output particles?
         ParticleFileFormat fileformat{ParticleFileFormat::GADGET}; // Fileformat for particles
-        std::string folder;            // Folder to store output ("" is the current folder)
-        bool lightcone{false};         // Make a lightcone (the settings are read by the Lightcone class)
+        std::string folder;                                        // Folder to store output ("" is the current folder)
+        bool lightcone{false}; // Make a lightcone (the settings are read by the Lightcone class)
 
         /// Path for a file in the output folder
         std::string path(const std::string & filename) const { return folder + (folder == "" ? "" : "/") + filename; }
@@ -514,8 +514,7 @@ namespace COLASOLVER {
             if (output.particles or (baryonification.enabled and baryonification.output_particles)) {
                 r.get_choice("output_fileformat",
                              output.fileformat,
-                             {{"GADGET", ParticleFileFormat::GADGET},
-                              {"HDF5", ParticleFileFormat::HDF5}});
+                             {{"GADGET", ParticleFileFormat::GADGET}, {"HDF5", ParticleFileFormat::HDF5}});
             }
             r.get("output_folder", output.folder);
             r.get_optional("lightcone", output.lightcone);
@@ -700,7 +699,8 @@ namespace COLASOLVER {
         return {
             {"`timestep_method = Quinn`", false, true, [](P p) { return p.timestep.method == TimestepMethod::Quinn; }},
             {"`simulation_use_cola = false`", false, true, [](P p) { return not p.simulation.use_cola; }},
-            {"`timestep_method` other than `Tassev` with COLA (the modified Tassev operators get the baryon-CDM relative "
+            {"`timestep_method` other than `Tassev` with COLA (the modified Tassev operators get the baryon-CDM "
+             "relative "
              "velocity wrong: +30% in P_b-c with 20 linear steps)",
              true,
              false,
@@ -729,7 +729,10 @@ namespace COLASOLVER {
              false,
              true,
              [](P p) { return not p.force.linear_massive_neutrinos; }},
-            {"`force_density_method = assignment`", true, true, [](P p) { return p.force.density_method == "assignment"; }},
+            {"`force_density_method = assignment`",
+             true,
+             true,
+             [](P p) { return p.force.density_method == "assignment"; }},
             {"`force_interpolation_method` other than `nufft`",
              true,
              true,
@@ -749,8 +752,8 @@ namespace COLASOLVER {
         os << "| Needs | `particle_baryons` | `particle_neutrinos` |\n";
         os << "|---|---|---|\n";
         for (auto & req : species_requirements())
-            os << "| " << req.requirement << " | " << (req.baryons ? "yes" : "") << " | " << (req.neutrinos ? "yes" : "")
-               << " |\n";
+            os << "| " << req.requirement << " | " << (req.baryons ? "yes" : "") << " | "
+               << (req.neutrinos ? "yes" : "") << " |\n";
     }
 
 } // namespace COLASOLVER

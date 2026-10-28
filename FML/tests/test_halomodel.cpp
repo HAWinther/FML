@@ -70,8 +70,9 @@ int main() {
                 continue;
             maxerr = std::max(maxerr, std::fabs(pnl(hm, row[0]) / row[1] - 1.0));
         }
-        check(maxerr < 0.004, "HMCode P(k, z=0) = reference HMCode output for 0.01 < k < 100 h/Mpc (max error " +
-                                  num(100 * maxerr) + "%, was 1.6%)");
+        check(maxerr < 0.004,
+              "HMCode P(k, z=0) = reference HMCode output for 0.01 < k < 100 h/Mpc (max error " + num(100 * maxerr) +
+                  "%, was 1.6%)");
 
         // A copy
         HaloModel copy = hm;
@@ -147,12 +148,14 @@ int main() {
             };
             const double nu = nu_of_lnM(std::log(M));
             const double dnudlnM = (nu_of_lnM(std::log(M) + 0.01) - nu_of_lnM(std::log(M) - 0.01)) / 0.02;
-            const double f = hm.A_ST * (1.0 + std::pow(hm.a_ST * nu * nu, -hm.p_ST)) * std::exp(-hm.a_ST * nu * nu / 2.0);
+            const double f =
+                hm.A_ST * (1.0 + std::pow(hm.a_ST * nu * nu, -hm.p_ST)) * std::exp(-hm.a_ST * nu * nu / 2.0);
             const double dndlnM = rho_mean / M * f * dnudlnM;
             maxerr = std::max(maxerr, std::fabs(hm.dndlogM_of_logM_spline(std::log(M)) / dndlnM - 1.0));
         }
-        check(maxerr < 0.01, "dn/dlnM at z = 1 = direct computation for M = 1e11-1e15 Msun/h (max error " +
-                                 num(100 * maxerr) + "%, M(R) was (1+z)^3 too large)");
+        check(maxerr < 0.01,
+              "dn/dlnM at z = 1 = direct computation for M = 1e11-1e15 Msun/h (max error " + num(100 * maxerr) +
+                  "%, M(R) was (1+z)^3 too large)");
     }
 
     // Fourier transforms: uniform sphere numerically, NFW analytically
@@ -167,8 +170,8 @@ int main() {
             const double exact = 3 * (std::sin(x) - x * std::cos(x)) / (x * x * x);
             maxerr = std::max(maxerr, std::fabs(y[i] - exact));
         }
-        check(maxerr < 1e-3, "numerical Fourier transform of a truncated profile (uniform sphere) (max error " +
-                                 num(maxerr) + ")");
+        check(maxerr < 1e-3,
+              "numerical Fourier transform of a truncated profile (uniform sphere) (max error " + num(maxerr) + ")");
 
         HaloModel hm(scm, logDelta, 0.0, true, false);
         hm.compute_at_redshift(0.0);
@@ -240,6 +243,7 @@ int main() {
     }
 
     if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All halo model tests passed\n" : std::to_string(fails) + " halo model test(s) FAILED\n");
+        std::cout << (fails == 0 ? "All halo model tests passed\n" :
+                                   std::to_string(fails) + " halo model test(s) FAILED\n");
     return fails == 0 ? 0 : 1;
 }

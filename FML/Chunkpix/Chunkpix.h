@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-#pragma GCC diagnostic push 
+#pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-copy"
 #include "healpix_map.h"
 #include "healpix_map_fitsio.h"
@@ -25,7 +25,7 @@
 namespace FML {
 
     namespace CHUNKPIX {
-        
+
         /// Type of chunk indices (there are 12 nside_chunks^2 chunks, e.g. 786432 for nside_chunks = 256, so a
         /// 16 bit integer is not enough)
         typedef std::int64_t ChunkIndex;
@@ -34,43 +34,43 @@ namespace FML {
         /// chunks of consecutive pixel indices and only the chunks that has been written to are allocated
         template <class T>
         class Chunkpix {
-            private:
-                long nside{};
-                long nside_chunks{};
-                long npix{};
-                long nchunks{};
-                long npix_per_chunk{};
+          private:
+            long nside{};
+            long nside_chunks{};
+            long npix{};
+            long nchunks{};
+            long npix_per_chunk{};
 
-                // Data
-                std::vector<T> cmap;
-                // The chunk index (in the full map) of the active chunks in the order they were activated
-                std::vector<ChunkIndex> active_chunks_values;
-                // Map from chunk index to its position (key) in active_chunks_values
-                std::unordered_map<ChunkIndex, long> active_chunks_keys;
-                long n_active_chunks{};
+            // Data
+            std::vector<T> cmap;
+            // The chunk index (in the full map) of the active chunks in the order they were activated
+            std::vector<ChunkIndex> active_chunks_values;
+            // Map from chunk index to its position (key) in active_chunks_values
+            std::unordered_map<ChunkIndex, long> active_chunks_keys;
+            long n_active_chunks{};
 
-            public:
-                Chunkpix() = default;
+          public:
+            Chunkpix() = default;
 
-                void init(long nside, long nside_chunks);
+            void init(long nside, long nside_chunks);
 
-                void initialize_cmap();
+            void initialize_cmap();
 
-                double chunk_sparsity();
+            double chunk_sparsity();
 
-                ChunkIndex ipix2chunk(long ipix_full);
+            ChunkIndex ipix2chunk(long ipix_full);
 
-                std::pair<size_t, size_t> chunk2ipix_ranges(ChunkIndex chunk);
+            std::pair<size_t, size_t> chunk2ipix_ranges(ChunkIndex chunk);
 
-                void increase_ipix_count(long ipix_full, T count_increase);
+            void increase_ipix_count(long ipix_full, T count_increase);
 
-                void reconstruct_full_map(Healpix_Map<T> & full_map);
+            void reconstruct_full_map(Healpix_Map<T> & full_map);
 
-                void clean();
+            void clean();
 
-                long get_nside() const { return nside; }
-                long get_npix() const { return npix; }
-                long get_n_active_chunks() const { return n_active_chunks; }
+            long get_nside() const { return nside; }
+            long get_npix() const { return npix; }
+            long get_n_active_chunks() const { return n_active_chunks; }
         };
 
         template <class T>

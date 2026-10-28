@@ -55,15 +55,15 @@ namespace FML {
             // We measure distances relative to the minimum point
             void add_particle(T * p, double quantity) {
                 double curmass = 1.0;
-                if constexpr(FML::PARTICLE::has_get_mass<T>()){
-                  curmass = FML::PARTICLE::GetMass(*p);
+                if constexpr (FML::PARTICLE::has_get_mass<T>()) {
+                    curmass = FML::PARTICLE::GetMass(*p);
                 }
                 double curvolume = 1.0;
-                if constexpr(FML::PARTICLE::has_get_volume<T>()){
-                  curvolume = FML::PARTICLE::GetVolume(*p);
+                if constexpr (FML::PARTICLE::has_get_volume<T>()) {
+                    curvolume = FML::PARTICLE::GetVolume(*p);
                 }
 
-                auto *pos = FML::PARTICLE::GetPos(*p);
+                auto * pos = FML::PARTICLE::GetPos(*p);
                 for (int idim = 0; idim < NDIM; idim++) {
                     double dx = pos[idim] - pos_min[idim];
                     if (dx > 0.5)

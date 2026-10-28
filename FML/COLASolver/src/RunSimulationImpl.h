@@ -22,8 +22,9 @@ void run_simulation(const FML::UTILS::ParameterMap & param,
     sim.run();
 }
 
-#define COLASOLVER_INSTANTIATE_RUN_SIMULATION(T)                                                                      \
-    template void run_simulation<T>(                                                                                  \
-        const FML::UTILS::ParameterMap &, std::shared_ptr<Cosmology>, std::shared_ptr<GravityModel<NDIM_SPACE>>);
+#define COLASOLVER_INSTANTIATE_RUN_SIMULATION(T)                                                                       \
+    template void run_simulation<T>(const FML::UTILS::ParameterMap &,                                                  \
+                                    std::shared_ptr<Cosmology>,                                                        \
+                                    std::shared_ptr<GravityModel<NDIM_SPACE>>);
 
 #endif

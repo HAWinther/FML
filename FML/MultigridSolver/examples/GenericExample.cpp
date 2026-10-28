@@ -27,7 +27,7 @@ struct MyType {
         }                                                                                                              \
         return *this;                                                                                                  \
     }
-    MyType& operator=(MyType const&) = default;
+    MyType & operator=(MyType const &) = default;
     OPS(*=);
     OPS(/=);
     OPS(+=);
@@ -111,7 +111,7 @@ void TestMultiGridSolver() {
     // Set up the solver
     //======================================================================
     MultiGridSolver<Ndim, SolverType> g(N, Nlevels, verbose, periodic, nleft, nright);
-    
+
     // Show info about the solver
     g.info();
 

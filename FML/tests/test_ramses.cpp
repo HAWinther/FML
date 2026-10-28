@@ -142,8 +142,8 @@ int main() {
 #endif
 
     for (const std::string dir : {dir_old, dir_new}) {
-        const std::string label = dir == dir_old ? " (Mpc = 3.08e24 cm, header file)" :
-                                                   " (Mpc = 3.0857e24 cm, part_file_descriptor.txt)";
+        const std::string label =
+            dir == dir_old ? " (Mpc = 3.08e24 cm, header file)" : " (Mpc = 3.0857e24 cm, part_file_descriptor.txt)";
         // All particles over all tasks, each in its domain
         bool ok = true;
         try {

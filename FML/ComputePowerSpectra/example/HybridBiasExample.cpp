@@ -43,8 +43,10 @@ int main() {
     std::function<double(double)> Pofk_of_kBox_over_volume = [](double kBox) {
         return kBox > 0.0 ? 1e-4 * std::pow(kBox / (2.0 * M_PI), -1.5) : 0.0;
     };
-    FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier<NDIM>(
-        delta_linear, &rng, Pofk_of_kBox_over_volume, false);
+    FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier<NDIM>(delta_linear,
+                                                                        &rng,
+                                                                        Pofk_of_kBox_over_volume,
+                                                                        false);
     // We cut the linear field at |k| < k_cut (the Nyquist frequency of the lattice) so the operators are isotropic.
     // The displacement field has the same modes
     const double kcut = M_PI * Npart_1D; // In units of 1/box

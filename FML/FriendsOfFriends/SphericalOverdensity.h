@@ -26,8 +26,8 @@ namespace FML {
         struct SOHalo {
             /// The center (shrinking sphere center of mass) in [0,1)
             std::array<double, NDIM> pos{};
-            /// Mass weighted mean velocity and velocity dispersion (per dimension) of the particles inside the radius of
-            /// the first overdensity
+            /// Mass weighted mean velocity and velocity dispersion (per dimension) of the particles inside the radius
+            /// of the first overdensity
             std::array<double, NDIM> vel{};
             std::array<double, NDIM> vel_rms{};
             /// For each overdensity: radius (box units), mass (units of the particle masses) and number of particles
@@ -48,7 +48,8 @@ namespace FML {
         /// computed without wrapping when we have more than one task.
         //========================================================================================
         template <class T>
-        std::vector<T> fetch_boundary_particles([[maybe_unused]] T * part, [[maybe_unused]] size_t NumPart,
+        std::vector<T> fetch_boundary_particles([[maybe_unused]] T * part,
+                                                [[maybe_unused]] size_t NumPart,
                                                 [[maybe_unused]] double dx) {
             std::vector<T> boundary;
 #ifdef USE_MPI
@@ -78,8 +79,18 @@ namespace FML {
                 const int src = to_left ? RightTask : LeftTask;
                 size_t nrecv = 0;
                 MPI_Status status;
-                MPI_Sendrecv(&nsend, sizeof(size_t), MPI_BYTE, dest, 10, &nrecv, sizeof(size_t), MPI_BYTE, src, 10,
-                             FML::communicator, &status);
+                MPI_Sendrecv(&nsend,
+                             sizeof(size_t),
+                             MPI_BYTE,
+                             dest,
+                             10,
+                             &nrecv,
+                             sizeof(size_t),
+                             MPI_BYTE,
+                             src,
+                             10,
+                             FML::communicator,
+                             &status);
                 std::vector<char> recvbuf(nrecv * bytes);
                 // In chunks below 2^31 bytes. All tasks do the same number of exchanges (the largest needed)
                 const size_t chunk = (size_t(1) << 30) / bytes * bytes;
@@ -90,8 +101,18 @@ namespace FML {
                     const size_t s0 = std::min(sbytes, size_t(ic) * chunk);
                     const size_t r0 = std::min(rbytes, size_t(ic) * chunk);
                     const size_t ns = std::min(chunk, sbytes - s0), nr = std::min(chunk, rbytes - r0);
-                    MPI_Sendrecv(sendbuf.data() + s0, int(ns), MPI_BYTE, dest, 11, recvbuf.data() + r0, int(nr),
-                                 MPI_BYTE, src, 11, FML::communicator, &status);
+                    MPI_Sendrecv(sendbuf.data() + s0,
+                                 int(ns),
+                                 MPI_BYTE,
+                                 dest,
+                                 11,
+                                 recvbuf.data() + r0,
+                                 int(nr),
+                                 MPI_BYTE,
+                                 src,
+                                 11,
+                                 FML::communicator,
+                                 &status);
                 }
                 for (size_t i = 0; i < nrecv; i++) {
                     T p{};
@@ -353,7 +374,8 @@ namespace FML {
                     for (int idim = 0; idim < NDIM; idim++) {
                         if (mtot > 0.0) {
                             h.vel[idim] /= mtot;
-                            h.vel_rms[idim] = std::sqrt(std::max(0.0, h.vel_rms[idim] / mtot - h.vel[idim] * h.vel[idim]));
+                            h.vel_rms[idim] =
+                                std::sqrt(std::max(0.0, h.vel_rms[idim] / mtot - h.vel[idim] * h.vel[idim]));
                         }
                     }
                 }

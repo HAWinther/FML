@@ -31,12 +31,12 @@ class RamsesParticle {
     void set_mass(double m) { mass = m; };
     int get_id() { return id; };
     void set_id(int i) { id = i; };
-    //int get_level() { return 0; };
-    //void set_level(int l) { (void)l; };
-    //char get_family() { return 1; };
-    //void set_family(char f) { (void)f; };
-    //char get_tag() { return 0;; };
-    //void set_tag(char t) { (void)t; };
+    // int get_level() { return 0; };
+    // void set_level(int l) { (void)l; };
+    // char get_family() { return 1; };
+    // void set_family(char f) { (void)f; };
+    // char get_tag() { return 0;; };
+    // void set_tag(char t) { (void)t; };
 };
 
 //====================================================
@@ -51,7 +51,7 @@ int main() {
     // Set up the Ramses reader
     // keep_only_particles_in_domain means each task only keeps particles in its own domain
     // so after we are done the particles are distributed among tasks
-    // buffer_factor (1.0): If keep_only_particles_in_domain then we allocate this number times the 
+    // buffer_factor (1.0): If keep_only_particles_in_domain then we allocate this number times the
     // particles we need (only needed if we want extra capacity in the vector we store the particles in)
     std::string snapdir = "../../../TestData/ExampleRamsesSnapshot/output_00008";
     const bool keep_only_particles_in_domain = true;
@@ -69,7 +69,8 @@ int main() {
     std::vector<Particle> part;
     reader.read_ramses(part);
 
-    std::cout << FML::ThisTask << " has " << part.size() << " local particles. Capacity of local storage: " << part.capacity() << "\n";
+    std::cout << FML::ThisTask << " has " << part.size()
+              << " local particles. Capacity of local storage: " << part.capacity() << "\n";
 
     // Read a single file and store it in q
     // std::vector<Particle> q;

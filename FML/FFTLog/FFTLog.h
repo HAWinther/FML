@@ -55,8 +55,8 @@ namespace FML {
             ///   \f$ r[i] \approx 1/k[N-1-i] \f$ (times a factor close to 1 chosen to reduce ringing; the returned
             ///   r-array is the right one)
             /// q is the FFTLog bias: the transform is done for \f$ k^{-q} \times \f$ the integrand. q = 0 is fine for
-            /// \f$ \ell = 0 \f$; for higher \f$ \ell \f$ a negative q (e.g. q = -1 for \f$ \ell = 2,4 \f$, m = 2) can be
-            /// much more accurate at small r.
+            /// \f$ \ell = 0 \f$; for higher \f$ \ell \f$ a negative q (e.g. q = -1 for \f$ \ell = 2,4 \f$, m = 2) can
+            /// be much more accurate at small r.
             //==========================================================================
             std::pair<DVector, DVector>
             ComputeXiLM(int ell, int m, const DVector & k, const DVector & pk, double q = 0.0);
@@ -85,7 +85,7 @@ namespace FML {
             //==========================================================================
             CVector ComputeCoefficients(int N, double mu, double q, double L, double kcrc);
         } // namespace FFTLog
-    }     // namespace SOLVERS
+    } // namespace SOLVERS
 } // namespace FML
 
 #endif

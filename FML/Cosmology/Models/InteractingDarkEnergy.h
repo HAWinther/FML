@@ -30,40 +30,40 @@
 
 namespace FML::COSMOLOGY {
 
-class Perturbations;
+    class Perturbations;
 
-class InteractingDarkEnergy : public Species {
-  public:
-    InteractingDarkEnergy(double Omega_DE, double Omega_c, double w, double xi, double cs2);
-    std::string name() const override { return "interacting dark energy"; }
-    Role role() const override { return Role::DarkEnergy; }
-    std::string info() const override;
-    double rho(double x) const override { return Omega0 * std::exp(-L * x); }
-    double p(double x) const override { return w * rho(x); }
-    double drhodx(double x) const override { return -L * rho(x); }
-    double ddrhoddx(double x) const override { return L * L * rho(x); }
-    // Perturbations of dark matter and dark energy together (the dark matter species must not have its own)
-    std::unique_ptr<SpeciesPerturbations> perturbations(const Perturbations& pert) const override;
+    class InteractingDarkEnergy : public Species {
+      public:
+        InteractingDarkEnergy(double Omega_DE, double Omega_c, double w, double xi, double cs2);
+        std::string name() const override { return "interacting dark energy"; }
+        Role role() const override { return Role::DarkEnergy; }
+        std::string info() const override;
+        double rho(double x) const override { return Omega0 * std::exp(-L * x); }
+        double p(double x) const override { return w * rho(x); }
+        double drhodx(double x) const override { return -L * rho(x); }
+        double ddrhoddx(double x) const override { return L * L * rho(x); }
+        // Perturbations of dark matter and dark energy together (the dark matter species must not have its own)
+        std::unique_ptr<SpeciesPerturbations> perturbations(const Perturbations & pert) const override;
 
-    double doom() const { return xi / (3.0 * (1.0 + w)); }
-    double Omega0, Omega_c, w, xi, cs2;
-    double L;   // -dln rho_DE/dx = 3 (1 + w) + xi
-};
+        double doom() const { return xi / (3.0 * (1.0 + w)); }
+        double Omega0, Omega_c, w, xi, cs2;
+        double L; // -dln rho_DE/dx = 3 (1 + w) + xi
+    };
 
-// The dark matter of the model (background only; its perturbations are in InteractingDarkEnergy's block)
-class InteractingCDM : public Species {
-  public:
-    explicit InteractingCDM(std::shared_ptr<const InteractingDarkEnergy> de) : de(std::move(de)) {}
-    std::string name() const override { return "cdm (interacting)"; }
-    Role role() const override { return Role::CDM; }
-    double rho(double x) const override;
-    double p(double) const override { return 0.0; }
-    double drhodx(double x) const override { return -3.0 * rho(x) + de->xi * de->rho(x); }
-    double ddrhoddx(double x) const override { return -3.0 * drhodx(x) + de->xi * de->drhodx(x); }
+    // The dark matter of the model (background only; its perturbations are in InteractingDarkEnergy's block)
+    class InteractingCDM : public Species {
+      public:
+        explicit InteractingCDM(std::shared_ptr<const InteractingDarkEnergy> de) : de(std::move(de)) {}
+        std::string name() const override { return "cdm (interacting)"; }
+        Role role() const override { return Role::CDM; }
+        double rho(double x) const override;
+        double p(double) const override { return 0.0; }
+        double drhodx(double x) const override { return -3.0 * rho(x) + de->xi * de->rho(x); }
+        double ddrhoddx(double x) const override { return -3.0 * drhodx(x) + de->xi * de->drhodx(x); }
 
-  private:
-    std::shared_ptr<const InteractingDarkEnergy> de;
-};
+      private:
+        std::shared_ptr<const InteractingDarkEnergy> de;
+    };
 
 } // namespace FML::COSMOLOGY
 

@@ -152,8 +152,8 @@ namespace FML {
                 }
 
                 // Compute k's corresponding to input r's (or vice versa). The output k[n] corresponds to b[n] for
-                // k[0] r[N-1] = kcrc, i.e. k[0] = kcrc exp(-L + L/N) / r[0] (before exp(-L) was used: the output grid was
-                // one log-step too small, e.g. 1.6% in xi(r = 100 Mpc/h) for an LCDM P(k) with N = 4096)
+                // k[0] r[N-1] = kcrc, i.e. k[0] = kcrc exp(-L + L/N) / r[0] (before exp(-L) was used: the output grid
+                // was one log-step too small, e.g. 1.6% in xi(r = 100 Mpc/h) for an LCDM P(k) with N = 4096)
                 const double k0r0 = kcrc * std::exp(-L + L / N);
                 DVector k(N);
                 k[0] = k0r0 / r[0];
@@ -201,5 +201,5 @@ namespace FML {
                 return result;
             }
         } // namespace FFTLog
-    }     // namespace SOLVERS
+    } // namespace SOLVERS
 } // namespace FML

@@ -88,14 +88,23 @@ int main() {
 
     // For binning up the power-spectrum
     FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim> pofk_all(
-        kmin, kmax, nbin, FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim>::LINEAR_SPACING);
+        kmin,
+        kmax,
+        nbin,
+        FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim>::LINEAR_SPACING);
 
     // For binning up the monospectrum P(k1,k2) and the bispectrum B(k1,k2,k3)
     // (these are using the same algorithm)
     FML::CORRELATIONFUNCTIONS::BispectrumBinning<Ndim> bofk_all(
-        kmin, kmax, nbin, FML::CORRELATIONFUNCTIONS::BispectrumBinning<Ndim>::LINEAR_SPACING);
+        kmin,
+        kmax,
+        nbin,
+        FML::CORRELATIONFUNCTIONS::BispectrumBinning<Ndim>::LINEAR_SPACING);
     FML::CORRELATIONFUNCTIONS::MonospectrumBinning<Ndim> monoofk_all(
-        kmin, kmax, nbin, FML::CORRELATIONFUNCTIONS::MonospectrumBinning<Ndim>::LINEAR_SPACING);
+        kmin,
+        kmax,
+        nbin,
+        FML::CORRELATIONFUNCTIONS::MonospectrumBinning<Ndim>::LINEAR_SPACING);
     std::vector<double> N123; // To store bincount to help speed up bispectrum computation
 
     //=========================================================================
@@ -130,8 +139,12 @@ int main() {
         // Make a random field in fourier space
         // Test generating non-gaussian potential Phi
         //=========================================================================
-        FML::RANDOM::NONGAUSSIAN::generate_nonlocal_gaussian_random_field_fourier(
-            grid, rng.get(), Powspec, fix_amplitude, fNL, type_of_fnl);
+        FML::RANDOM::NONGAUSSIAN::generate_nonlocal_gaussian_random_field_fourier(grid,
+                                                                                  rng.get(),
+                                                                                  Powspec,
+                                                                                  fix_amplitude,
+                                                                                  fNL,
+                                                                                  type_of_fnl);
 
         //=========================================================================
         // Compute power-spectrum

@@ -148,7 +148,6 @@ int main(int argc, char ** argv) {
         check(throws_with([&]() { FML::MATH::find_root_bisection([](double x) { return x * x + 1.0; }, {0.0, 3.0}); },
                           "same sign"),
               "bisection without a root throws");
-
     }
 
     //==========================================================
@@ -187,8 +186,7 @@ int main(int argc, char ** argv) {
         check(close(a1, 1.083196894554103e-04, 1e-8) and close(a2, -1.619782821175962e-01, 1e-8) and
                   close(a3, 7.492128863997157e-07, 1e-8),
               "Airy_Ai outside the spline range: " + num(a1) + " " + num(a2) + " " + num(a3));
-        check(close(FML::MATH::Airy_Ai(0.0), 1.0 / std::pow(3., 2. / 3.) / std::tgamma(2. / 3.), 1e-6),
-              "Airy_Ai(0)");
+        check(close(FML::MATH::Airy_Ai(0.0), 1.0 / std::pow(3., 2. / 3.) / std::tgamma(2. / 3.), 1e-6), "Airy_Ai(0)");
 
         const double w = FML::MATH::HyperSphericalBesselWKB(10, 1.0, std::sqrt(110.0), 0.0);
         check(std::isfinite(w) and close(w, 7.862800300679687e-02, 1e-2), "WKB j_10 at the turning point: " + num(w));
@@ -264,8 +262,7 @@ int main(int argc, char ** argv) {
               "1D spline with 1 point throws");
         check(throws_with([&]() { f.eval_deriv(0.5, 0.5, 2, 1); }, "eval_deriv"), "2D eval_deriv(2,1) throws");
         check(throws_with([&]() { f.eval_deriv(0.5, 0.5, 4, -1); }, "eval_deriv"), "2D eval_deriv(4,-1) throws");
-        check(throws_with([]() { Spline2D t(DVector{0, 1}, DVector{0, 1}, DVector(4, 0.0)); },
-                          "needs at least"),
+        check(throws_with([]() { Spline2D t(DVector{0, 1}, DVector{0, 1}, DVector(4, 0.0)); }, "needs at least"),
               "2D bicubic spline with 2x2 points throws");
 #endif
 
@@ -308,7 +305,8 @@ int main(int argc, char ** argv) {
         double maxerr = 0.0;
         for (size_t i = 0; i < x.size(); i++)
             maxerr = std::max({maxerr, std::fabs(y[i][0] - std::sin(x[i])), std::fabs(dy[i][0] - std::cos(x[i]))});
-        check(maxerr < 1e-6 and ode.get_data_transpose()[0][2] == y[2][0], "ODESolver y'' = -y: max error " + num(maxerr));
+        check(maxerr < 1e-6 and ode.get_data_transpose()[0][2] == y[2][0],
+              "ODESolver y'' = -y: max error " + num(maxerr));
 
         // An implicit stepper with the jacobian
         ODEFunction g = [](double t, const double * yy, double * dydx) {
@@ -327,7 +325,12 @@ int main(int argc, char ** argv) {
         const double exact = A * std::cos(1.0) + B * std::sin(1.0) - A * std::exp(-a);
         check(std::fabs(ode2.get_final_data()[0] - exact) < 1e-6, "ODESolver stiff problem with bsimp + jacobian");
 #ifndef USE_MPI
-        check(throws_with([&]() { ODESolver o; o.solve(g, x2, y2, gsl_odeiv2_step_msbdf); }, "requires the jacobian"),
+        check(throws_with(
+                  [&]() {
+                      ODESolver o;
+                      o.solve(g, x2, y2, gsl_odeiv2_step_msbdf);
+                  },
+                  "requires the jacobian"),
               "ODESolver implicit stepper without jacobian throws");
 #endif
 

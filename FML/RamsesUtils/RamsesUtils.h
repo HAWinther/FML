@@ -161,9 +161,12 @@ namespace FML {
                     }
 
                     // extract e.g. "00123" from "path/to/snapshot/directory/output_00123/"
-                    std::string output_snapnum = snapdir.substr(snapdir.length()-13, 12); // should be e.g. "output_00123"
-                    assert(std::regex_match(output_snapnum, std::regex("output_[0-9]{5}"))); // verify snapdir ends with e.g. "output_00123/"
-                    snapnum = output_snapnum.substr(output_snapnum.length()-5); // e.g. "00123"
+                    std::string output_snapnum =
+                        snapdir.substr(snapdir.length() - 13, 12); // should be e.g. "output_00123"
+                    assert(std::regex_match(
+                        output_snapnum,
+                        std::regex("output_[0-9]{5}"))); // verify snapdir ends with e.g. "output_00123/"
+                    snapnum = output_snapnum.substr(output_snapnum.length() - 5); // e.g. "00123"
 
                     read_info();
                     read_header();
@@ -208,7 +211,8 @@ namespace FML {
 
                     // Allocate particles (only the ones we keep: before the whole file was allocated so with MPI the
                     // vector ended with zero particles)
-                    p.resize(keep_only_particles_in_domain ? size_t(npart_in_domain_in_file[ifile]) : size_t(header.npart));
+                    p.resize(keep_only_particles_in_domain ? size_t(npart_in_domain_in_file[ifile]) :
+                                                             size_t(header.npart));
 
                     // Check that dimensions match
                     T tmp_ndim; // (GetNDIM(T()) needs a particle that can be built at compile time)
@@ -230,8 +234,8 @@ namespace FML {
                         p.reserve(nallocate);
                         p.resize(npart_in_domain);
                     } else {
-                        // (before only reserved: the particles were written beyond the size of the vector which then had
-                        // size 0)
+                        // (before only reserved: the particles were written beyond the size of the vector which then
+                        // had size 0)
                         p.reserve(size_t(double(npart) * std::max(buffer_factor, 1.0)));
                         p.resize(npart);
                     }
@@ -274,7 +278,7 @@ namespace FML {
                 double get_omega_l() { return omega_l; }
                 double get_omega_b() { return omega_b; }
                 double get_aexp() { return aexp; }
-                double get_h() { return h0/100.; }
+                double get_h() { return h0 / 100.; }
                 size_t get_npart() { return npart; }
                 int get_levelmin() { return levelmin; }
                 int get_levelmax() { return levelmax; }
@@ -351,12 +355,14 @@ namespace FML {
                     fclose(fp);
 
                     // Calculate the boxsize in Mpc/h from the units: unit_l = L (Mpc/h) * Mpc_cm * aexp / h and
-                    // unit_t = aexp^2 * Mpc_cm / (H0 * 1e5) so L = unit_l * aexp / (unit_t * 1e7) whatever value of Mpc_cm
-                    // RAMSES used (older versions 3.08e24, newer 3.0857e24: before 3.08e24 was assumed, 0.18% off for
-                    // newer outputs)
-                    if (verbose) std::cout << "WARNING: overriding read boxlen = " << boxlen;
+                    // unit_t = aexp^2 * Mpc_cm / (H0 * 1e5) so L = unit_l * aexp / (unit_t * 1e7) whatever value of
+                    // Mpc_cm RAMSES used (older versions 3.08e24, newer 3.0857e24: before 3.08e24 was assumed, 0.18%
+                    // off for newer outputs)
+                    if (verbose)
+                        std::cout << "WARNING: overriding read boxlen = " << boxlen;
                     boxlen = unit_l * aexp / (unit_t * 1e7);
-                    if (verbose) std::cout << " with boxlen = " << boxlen << " calculated from unit_l = " << unit_l << "\n";
+                    if (verbose)
+                        std::cout << " with boxlen = " << boxlen << " calculated from unit_l = " << unit_l << "\n";
 
                     // Read how many particles there is in the files
                     count_particles_in_files();
@@ -372,15 +378,15 @@ namespace FML {
                                   << "==================================" << "\n"
                                   << "Infofile data:                    " << "\n"
                                   << "==================================" << "\n"
-                                  << "Filename     = " << infofile        << "\n"
-                                  << "Box (Mpc/h)  = " << boxlen          << "\n"
-                                  << "ncpu         = " << ncpu            << "\n"
-                                  << "npart        = " << npart           << "\n"
-                                  << "levelmin     = " << levelmin        << "\n"
-                                  << "levelmax     = " << levelmax        << "\n"
-                                  << "aexp         = " << aexp            << "\n"
-                                  << "H0           = " << h0              << "\n"
-                                  << "omega_m      = " << omega_m         << "\n"
+                                  << "Filename     = " << infofile << "\n"
+                                  << "Box (Mpc/h)  = " << boxlen << "\n"
+                                  << "ncpu         = " << ncpu << "\n"
+                                  << "npart        = " << npart << "\n"
+                                  << "levelmin     = " << levelmin << "\n"
+                                  << "levelmax     = " << levelmax << "\n"
+                                  << "aexp         = " << aexp << "\n"
+                                  << "H0           = " << h0 << "\n"
+                                  << "omega_m      = " << omega_m << "\n"
                                   << "==================================" << "\n"
                                   << "\n";
                     }
@@ -392,7 +398,7 @@ namespace FML {
 
                 void read_header() {
                     std::string headerfile = snapdir + "header_" + snapnum + ".txt";
-                    FILE *fp = fopen(headerfile.c_str(), "r");
+                    FILE * fp = fopen(headerfile.c_str(), "r");
                     if (fp == nullptr) {
                         // No header file (it is optional): try the part_file_descriptor.txt, otherwise use the default
                         // (or the format set with set_file_format)
@@ -401,11 +407,12 @@ namespace FML {
                     }
 
                     char fieldcstr[50]; // big enough to hold "pos vel mass iord level family tag"
-                    fscanf(fp, " Total number of particles %*d\n"); // TODO: use for something?
+                    fscanf(fp, " Total number of particles %*d\n");             // TODO: use for something?
                     fscanf(fp, " Total number of dark matter particles %*d\n"); // TODO: use for something?
                     fscanf(fp, " Total number of star particles %*d\n");
                     fscanf(fp, " Total number of sink particles %*d\n");
-                    fscanf(fp, " Particle fields\n"); fgets(fieldcstr, sizeof(fieldcstr), fp);
+                    fscanf(fp, " Particle fields\n");
+                    fgets(fieldcstr, sizeof(fieldcstr), fp);
 
                     // Try to detect particle format
                     std::string fieldstr(fieldcstr);
@@ -413,7 +420,7 @@ namespace FML {
                     int i1 = 0;
                     int i2 = fieldstr.find(" ");
                     while (i2 != -1) {
-                        std::string field_ramses = fieldstr.substr(i1, i2-i1); // i2-i1 is substring *length*
+                        std::string field_ramses = fieldstr.substr(i1, i2 - i1); // i2-i1 is substring *length*
                         auto ramses2fml = entries_ramses2fml.find(field_ramses);
                         if (ramses2fml == entries_ramses2fml.end()) { // not found
                             if (verbose) {
@@ -423,14 +430,14 @@ namespace FML {
                         }
                         std::string field_fml = ramses2fml->second; // translate to our naming convention
                         fields.push_back(field_fml);
-                        i1 = i2 + 1; // skip over ,
+                        i1 = i2 + 1;                 // skip over ,
                         i2 = fieldstr.find(" ", i1); // find next field after i1
                     } // the loop even handles the last field, because the line has a trailing whitespace!
                     set_file_format(fields);
 
                     if (verbose) {
                         std::cout << "Detected format ";
-                        for (std::string &field : fields) {
+                        for (std::string & field : fields) {
                             std::cout << " " << field;
                         }
                         std::cout << " from header\n";
@@ -446,11 +453,16 @@ namespace FML {
                             std::cout << "No header or part_file_descriptor.txt found: using the default file format\n";
                         return;
                     }
-                    const std::map<std::string, std::string> names{{"position_x", "POS"}, {"position_y", "POS"},
-                                                                   {"position_z", "POS"}, {"velocity_x", "VEL"},
-                                                                   {"velocity_y", "VEL"}, {"velocity_z", "VEL"},
-                                                                   {"mass", "MASS"},      {"identity", "ID"},
-                                                                   {"levelp", "LEVEL"},   {"family", "FAMILY"},
+                    const std::map<std::string, std::string> names{{"position_x", "POS"},
+                                                                   {"position_y", "POS"},
+                                                                   {"position_z", "POS"},
+                                                                   {"velocity_x", "VEL"},
+                                                                   {"velocity_y", "VEL"},
+                                                                   {"velocity_z", "VEL"},
+                                                                   {"mass", "MASS"},
+                                                                   {"identity", "ID"},
+                                                                   {"levelp", "LEVEL"},
+                                                                   {"family", "FAMILY"},
                                                                    {"tag", "TAG"}};
                     std::vector<std::string> fields;
                     std::string line;
@@ -466,11 +478,13 @@ namespace FML {
                         auto it = names.find(name);
                         if (it == names.end()) {
                             if (verbose)
-                                std::cout << "Unknown field " << name << " in " << descfile << ": using the default file format\n";
+                                std::cout << "Unknown field " << name << " in " << descfile
+                                          << ": using the default file format\n";
                             return;
                         }
                         // position_x,y,z (and velocity_x,y,z) are one entry
-                        if (fields.empty() or fields.back() != it->second or (it->second != "POS" and it->second != "VEL"))
+                        if (fields.empty() or fields.back() != it->second or
+                            (it->second != "POS" and it->second != "VEL"))
                             fields.push_back(it->second);
                     }
                     set_file_format(fields);
@@ -773,8 +787,10 @@ namespace FML {
                                         std::to_string(bytes_per_element) + " but size set to " +
                                         std::to_string(sizeof(RamsesMassType)));
                         if (store)
-                            store_mass(
-                                (RamsesMassType *)buffer.data(), is_in_domain.data(), &p[npart_read], header.npart);
+                            store_mass((RamsesMassType *)buffer.data(),
+                                       is_in_domain.data(),
+                                       &p[npart_read],
+                                       header.npart);
                     };
 
                     auto read_id = [&](bool store) {
@@ -785,8 +801,10 @@ namespace FML {
 
                         if (store) {
                             if (bytes_per_element == 4)
-                                store_id(
-                                    (RamsesIDType *)buffer.data(), is_in_domain.data(), &p[npart_read], header.npart);
+                                store_id((RamsesIDType *)buffer.data(),
+                                         is_in_domain.data(),
+                                         &p[npart_read],
+                                         header.npart);
                             else if (bytes_per_element == 8)
                                 store_longid((RamsesLongIDType *)buffer.data(),
                                              is_in_domain.data(),
@@ -808,8 +826,10 @@ namespace FML {
                                         std::to_string(bytes_per_element) + " but size set to " +
                                         std::to_string(sizeof(RamsesLevelType)));
                         if (store)
-                            store_level(
-                                (RamsesLevelType *)buffer.data(), is_in_domain.data(), &p[npart_read], header.npart);
+                            store_level((RamsesLevelType *)buffer.data(),
+                                        is_in_domain.data(),
+                                        &p[npart_read],
+                                        header.npart);
                     };
 
                     auto read_family = [&](bool store) {
@@ -821,8 +841,10 @@ namespace FML {
                                         std::to_string(bytes_per_element) + " but size set to " +
                                         std::to_string(sizeof(RamsesFamilyType)));
                         if (store)
-                            store_family(
-                                (RamsesFamilyType *)buffer.data(), is_in_domain.data(), &p[npart_read], header.npart);
+                            store_family((RamsesFamilyType *)buffer.data(),
+                                         is_in_domain.data(),
+                                         &p[npart_read],
+                                         header.npart);
                     };
 
                     auto read_tag = [&](bool store) {
@@ -834,8 +856,10 @@ namespace FML {
                                         std::to_string(bytes_per_element) + " but size set to " +
                                         std::to_string(sizeof(RamsesTagType)));
                         if (store)
-                            store_tag(
-                                (RamsesTagType *)buffer.data(), is_in_domain.data(), &p[npart_read], header.npart);
+                            store_tag((RamsesTagType *)buffer.data(),
+                                      is_in_domain.data(),
+                                      &p[npart_read],
+                                      header.npart);
                     };
 
                     // Do the actual reading
@@ -879,13 +903,13 @@ namespace FML {
             //====================================================
 
             inline void write_icdeltab(const std::string filename,
-                                const float _astart,
-                                const float _omega_m,
-                                const float _omega_l,
-                                const float _boxlen,
-                                const float _h0,
-                                const int _levelmin,
-                                const int NDIM) {
+                                       const float _astart,
+                                       const float _omega_m,
+                                       const float _omega_l,
+                                       const float _boxlen,
+                                       const float _h0,
+                                       const int _levelmin,
+                                       const int NDIM) {
                 FILE * fp;
                 int tmp, n1, n2, n3;
                 float xoff1, xoff2, xoff3, dx;
@@ -928,6 +952,6 @@ namespace FML {
                 fclose(fp);
             }
         } // namespace RAMSES
-    }     // namespace FILEUTILS
+    } // namespace FILEUTILS
 } // namespace FML
 #endif

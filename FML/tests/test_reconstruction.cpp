@@ -86,8 +86,9 @@ std::array<double, 3> reconstruction_test(int Nmesh, int niter, double beta, int
     });
     delta.fftw_r2c();
     const double kc = tp * Nmesh / 8.0;
-    FML::GRID::multiply_fourier_by_function_of_k<3>(
-        delta, [&](double k) { return k == 0 ? 0.0 : std::exp(-0.5 * k * k / (kc * kc)); });
+    FML::GRID::multiply_fourier_by_function_of_k<3>(delta, [&](double k) {
+        return k == 0 ? 0.0 : std::exp(-0.5 * k * k / (kc * kc));
+    });
     Grid<3> phi;
     FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier(delta, phi);
     std::array<Grid<3>, 3> Psi;
@@ -108,8 +109,11 @@ std::array<double, 3> reconstruction_test(int Nmesh, int niter, double beta, int
     FML::PARTICLE::MPIParticles<ReconParticle> part;
     part.create_particle_grid(Nmesh, 3.0, FML::xmin_domain, FML::xmax_domain);
     std::array<std::vector<FML::GRID::FloatType>, 3> Pq;
-    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<3, ReconParticle>(
-        Psi, part.get_particles_ptr(), part.get_npart(), Pq, "CIC");
+    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<3, ReconParticle>(Psi,
+                                                                                        part.get_particles_ptr(),
+                                                                                        part.get_npart(),
+                                                                                        Pq,
+                                                                                        "CIC");
     auto * p = part.get_particles_ptr();
     for (size_t i = 0; i < part.get_npart(); i++) {
         for (int d = 0; d < 3; d++) {
@@ -125,8 +129,14 @@ std::array<double, 3> reconstruction_test(int Nmesh, int niter, double beta, int
 
     std::vector<double> los_direction(3, 0.0);
     los_direction[los] = 1.0;
-    FML::COSMOLOGY::LPT::RSDReconstructionFourierMethod<3, ReconParticle>(
-        part, "CIC", los_direction, Nmesh, niter, beta, {"gaussian", 0.3 / Nmesh}, false);
+    FML::COSMOLOGY::LPT::RSDReconstructionFourierMethod<3, ReconParticle>(part,
+                                                                          "CIC",
+                                                                          los_direction,
+                                                                          Nmesh,
+                                                                          niter,
+                                                                          beta,
+                                                                          {"gaussian", 0.3 / Nmesh},
+                                                                          false);
 
     double S[5] = {0, 0, 0, 0, 0};
     p = part.get_particles_ptr();
@@ -264,12 +274,18 @@ int main() {
         f.fill_real_grid([](std::array<double, 2> & x) { return std::cos(tp * x[0]) * std::cos(tp * 2 * x[1]); });
         std::vector<Grid<2>> hess;
         FML::HESSIAN::ComputeHessianWithFT(f, hess, 1.0, false);
-        const double mxy = hess.size() == 3 ? maxdiff<2>(hess[1], [](std::array<double, 2> & x) {
-            return 2.0 * tp * tp * std::sin(tp * x[0]) * std::sin(tp * 2 * x[1]);
-        }) : 1.0;
-        const double myy = hess.size() == 3 ? maxdiff<2>(hess[2], [](std::array<double, 2> & x) {
-            return -4.0 * tp * tp * std::cos(tp * x[0]) * std::cos(tp * 2 * x[1]);
-        }) : 1.0;
+        const double mxy = hess.size() == 3 ?
+                               maxdiff<2>(hess[1],
+                                          [](std::array<double, 2> & x) {
+                                              return 2.0 * tp * tp * std::sin(tp * x[0]) * std::sin(tp * 2 * x[1]);
+                                          }) :
+                               1.0;
+        const double myy = hess.size() == 3 ?
+                               maxdiff<2>(hess[2],
+                                          [](std::array<double, 2> & x) {
+                                              return -4.0 * tp * tp * std::cos(tp * x[0]) * std::cos(tp * 2 * x[1]);
+                                          }) :
+                               1.0;
         check(hess.size() == 3 and mxy < 1e-9 and myy < 1e-9, "2D Hessian: 3 components = analytic");
     }
     {
@@ -285,8 +301,7 @@ int main() {
         const double kny = M_PI * Nmesh;
         const double mxz = maxdiff<3>(hess[2], [](std::array<double, 3> &) { return 0.0; });
         const double mxx = maxdiff<3>(hess[0], [&](std::array<double, 3> & x) { return -kny * kny * nyq(x); });
-        check(mxz < 1e-9 and mxx < 1e-9 * kny * kny,
-              "Nyquist mode: f_xz = 0 (" + num(mxz) + "), f_xx = -k_ny^2 f");
+        check(mxz < 1e-9 and mxx < 1e-9 * kny * kny, "Nyquist mode: f_xz = 0 (" + num(mxz) + "), f_xx = -k_ny^2 f");
     }
 
     // compute_grid_PDF
@@ -334,8 +349,7 @@ int main() {
               "RSD reconstruction, 3 iterations: removed / put in = " + num(r3[1]) + ", rms residual " + num(r3[2]) +
                   " of " + num(r3[0]) + " cells");
         check(r6[1] > 0.8 and r6[1] < 1.1 and r6[2] < 0.35 * r6[0],
-              "RSD reconstruction, 6 iterations: removed / put in = " + num(r6[1]) + ", rms residual " +
-                  num(r6[2]));
+              "RSD reconstruction, 6 iterations: removed / put in = " + num(r6[1]) + ", rms residual " + num(r6[2]));
         check(rx[1] > 0.8 and rx[1] < 1.1 and rx[2] < 0.35 * rx[0],
               "RSD reconstruction, line of sight along x (across the MPI slabs): " + num(rx[1]));
     }

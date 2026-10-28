@@ -174,8 +174,7 @@ int main() {
                 y[i] += s[i];
             // The Nyquist term becomes cos(pi n x) cos(pi n s_x) ... * shifted z-part
             return std::cos(2 * M_PI * (3 * y[0] - 2 * y[1] + y[2]) + 0.3) + 0.5 * std::sin(2 * M_PI * 7 * y[1]) +
-                   0.2 * std::cos(2 * M_PI * 8 * x[0]) * std::cos(2 * M_PI * 8 * s[0]) *
-                       std::cos(2 * M_PI * 5 * y[2]);
+                   0.2 * std::cos(2 * M_PI * 8 * x[0]) * std::cos(2 * M_PI * 8 * s[0]) * std::cos(2 * M_PI * 5 * y[2]);
         };
         FFTWGrid<3> grid(n);
         grid.fill_real_grid([&](std::array<double, 3> & x) { return f(x); });
@@ -186,8 +185,7 @@ int main() {
             maxerr = std::max(maxerr, std::abs(grid.get_real_from_index(real_index) - fshift(x)));
         }
         FML::MaxOverTasks(&maxerr);
-        check(maxerr < 1e-10, "shift_grid_fourier is exact for a band-limited field (err " +
-                                  sci(maxerr) + ")");
+        check(maxerr < 1e-10, "shift_grid_fourier is exact for a band-limited field (err " + sci(maxerr) + ")");
     }
 
     //===========================================================
@@ -220,8 +218,10 @@ int main() {
         };
         bool ok = true;
         // order: expected cancellation of (100), (110), (111)
-        std::vector<std::tuple<int, bool, bool, bool>> cases = {
-            {2, true, false, true}, {4, true, true, false}, {8, true, true, true}, {16, true, true, true}};
+        std::vector<std::tuple<int, bool, bool, bool>> cases = {{2, true, false, true},
+                                                                {4, true, true, false},
+                                                                {8, true, true, true},
+                                                                {16, true, true, true}};
         for (auto & [order, c100, c110, c111] : cases) {
             auto shifts = FML::INTERPOLATION::generate_interlacing_shifts<3>(order, 1.0);
             ok = ok and int(shifts.size()) == order;
@@ -262,8 +262,12 @@ int main() {
         std::vector<double> err;
         for (int order : {1, 2, 4, 8, 64}) {
             FFTWGrid<3> grid(n);
-            FML::INTERPOLATION::particles_to_fourier_grid_interlaced<3>(part.data(), part.size(), NumPartTot, grid,
-                                                                        "PCS", order);
+            FML::INTERPOLATION::particles_to_fourier_grid_interlaced<3>(part.data(),
+                                                                        part.size(),
+                                                                        NumPartTot,
+                                                                        grid,
+                                                                        "PCS",
+                                                                        order);
             FML::INTERPOLATION::deconvolve_window_function_fourier<3>(grid, "PCS");
             // rms relative error for k < k_Ny / 2
             double sum_err = 0.0, sum_ref = 0.0;
@@ -274,8 +278,8 @@ int main() {
                     m2 += m[idim] * m[idim];
                 if (m2 == 0.0 or m2 >= (n / 4) * (n / 4))
                     continue;
-                sum_err += std::norm(grid.get_fourier_from_index(fourier_index) -
-                                     exact.get_fourier_from_index(fourier_index));
+                sum_err +=
+                    std::norm(grid.get_fourier_from_index(fourier_index) - exact.get_fourier_from_index(fourier_index));
                 sum_ref += std::norm(exact.get_fourier_from_index(fourier_index));
             }
             FML::SumOverTasks(&sum_err);
@@ -331,8 +335,7 @@ int main() {
         }
         FML::MaxOverTasks(&maxerr);
         FML::MaxOverTasks(&maxval);
-        check(maxerr < 1e-6 * maxval, "NUFFT force matches the direct mode sum: max rel err " +
-                                          sci(maxerr / maxval));
+        check(maxerr < 1e-6 * maxval, "NUFFT force matches the direct mode sum: max rel err " + sci(maxerr / maxval));
     }
 
     //===========================================================
@@ -431,13 +434,17 @@ int main() {
                 analytic.push_back(p);
         }
         FFTWGrid<3> density_ref(nmesh, 1, 2);
-        FML::INTERPOLATION::particles_to_grid<3>(analytic.data(), analytic.size(), FML::power(R * Np, 3), density_ref,
+        FML::INTERPOLATION::particles_to_grid<3>(analytic.data(),
+                                                 analytic.size(),
+                                                 FML::power(R * Np, 3),
+                                                 density_ref,
                                                  "CIC");
         density_ref.fftw_r2c();
         double maxdiff = 0.0, maxref = 0.0;
         for (auto && fourier_index : density.get_fourier_range()) {
-            maxdiff = std::max(maxdiff, std::abs(density.get_fourier_from_index(fourier_index) -
-                                                 density_ref.get_fourier_from_index(fourier_index)));
+            maxdiff = std::max(maxdiff,
+                               std::abs(density.get_fourier_from_index(fourier_index) -
+                                        density_ref.get_fourier_from_index(fourier_index)));
             maxref = std::max(maxref, std::abs(density_ref.get_fourier_from_index(fourier_index)));
         }
         FML::MaxOverTasks(&maxdiff);
@@ -446,21 +453,32 @@ int main() {
 
         // The same with the exact Fourier modes of the tracers (NUFFT)
         FFTWGrid<3> density_nufft(nmesh);
-        FML::INTERPOLATION::particles_to_fourier_grid_sheet<3>(part.data(), part.size(), Np, R, density_nufft, "NUFFT",
+        FML::INTERPOLATION::particles_to_fourier_grid_sheet<3>(part.data(),
+                                                               part.size(),
+                                                               Np,
+                                                               R,
+                                                               density_nufft,
+                                                               "NUFFT",
                                                                1e-8);
         FFTWGrid<3> density_nufft_ref(nmesh);
-        FML::NUFFT::particles_to_fourier_grid_nufft<3>(analytic.data(), analytic.size(), FML::power(R * Np, 3),
-                                                       density_nufft_ref, 1e-8);
+        FML::NUFFT::particles_to_fourier_grid_nufft<3>(analytic.data(),
+                                                       analytic.size(),
+                                                       FML::power(R * Np, 3),
+                                                       density_nufft_ref,
+                                                       1e-8);
         maxdiff = maxref = 0.0;
         for (auto && fourier_index : density_nufft.get_fourier_range()) {
-            maxdiff = std::max(maxdiff, std::abs(density_nufft.get_fourier_from_index(fourier_index) -
-                                                 density_nufft_ref.get_fourier_from_index(fourier_index)));
+            maxdiff = std::max(maxdiff,
+                               std::abs(density_nufft.get_fourier_from_index(fourier_index) -
+                                        density_nufft_ref.get_fourier_from_index(fourier_index)));
             maxref = std::max(maxref, std::abs(density_nufft_ref.get_fourier_from_index(fourier_index)));
         }
         FML::MaxOverTasks(&maxdiff);
         FML::MaxOverTasks(&maxref);
-        check(maxdiff < 1e-6 * maxref, "particles_to_fourier_grid_sheet with NUFFT equals the NUFFT of the analytic "
-                                       "sheet tracers (rel err " + sci(maxdiff / maxref) + ")");
+        check(maxdiff < 1e-6 * maxref,
+              "particles_to_fourier_grid_sheet with NUFFT equals the NUFFT of the analytic "
+              "sheet tracers (rel err " +
+                  sci(maxdiff / maxref) + ")");
     }
 
     // sort_particles_by_position: the same order as a stable sort by block (x-major), particles moved whole, and the
@@ -477,8 +495,9 @@ int main() {
             return k;
         };
         auto expected = part;
-        std::stable_sort(expected.begin(), expected.end(),
-                         [&](const Particle<3> & a, const Particle<3> & b) { return key(a) < key(b); });
+        std::stable_sort(expected.begin(), expected.end(), [&](const Particle<3> & a, const Particle<3> & b) {
+            return key(a) < key(b);
+        });
         auto sorted = part;
         FML::PARTICLE::sort_particles_by_position(sorted.data(), sorted.size(), nb);
         bool ok = sorted.size() == expected.size();
@@ -493,11 +512,11 @@ int main() {
         FML::INTERPOLATION::particles_to_grid<3, Particle<3>>(sorted.data(), sorted.size(), 100000, g2, "CIC");
         double maxdiff = 0.0;
         for (auto && index : g1.get_real_range())
-            maxdiff = std::max(maxdiff,
-                               std::fabs(double(g1.get_real_from_index(index)) - g2.get_real_from_index(index)));
+            maxdiff =
+                std::max(maxdiff, std::fabs(double(g1.get_real_from_index(index)) - g2.get_real_from_index(index)));
         FML::MaxOverTasks(&maxdiff);
-        check(nok == 1 and maxdiff < 1e-12, "sort_particles_by_position = stable sort by block, density unchanged (" +
-                                                 sci(maxdiff) + ")");
+        check(nok == 1 and maxdiff < 1e-12,
+              "sort_particles_by_position = stable sort by block, density unchanged (" + sci(maxdiff) + ")");
     }
 
 #ifdef USE_OMP
@@ -516,8 +535,7 @@ int main() {
             for (int nthreads : {1, 2, 3}) {
                 omp_set_num_threads(nthreads);
                 FFTWGrid<3> g(nmesh, nlr.first, nlr.second);
-                FML::INTERPOLATION::particles_to_grid<3, Particle<3>>(
-                    part.data(), part.size(), 200000, g, method);
+                FML::INTERPOLATION::particles_to_grid<3, Particle<3>>(part.data(), part.size(), 200000, g, method);
                 grids.push_back(g);
             }
             omp_set_num_threads(nthreads_max);
@@ -527,10 +545,12 @@ int main() {
             const bool chunked = nchunks >= 4;
             double maxdiff = 0.0, maxdiff23 = 0.0;
             for (auto && index : grids[0].get_real_range()) {
-                maxdiff = std::max(maxdiff, std::fabs(double(grids[1].get_real_from_index(index)) -
-                                                      grids[0].get_real_from_index(index)));
-                maxdiff23 = std::max(maxdiff23, std::fabs(double(grids[1].get_real_from_index(index)) -
-                                                          grids[2].get_real_from_index(index)));
+                maxdiff = std::max(
+                    maxdiff,
+                    std::fabs(double(grids[1].get_real_from_index(index)) - grids[0].get_real_from_index(index)));
+                maxdiff23 = std::max(
+                    maxdiff23,
+                    std::fabs(double(grids[1].get_real_from_index(index)) - grids[2].get_real_from_index(index)));
             }
             FML::MaxOverTasks(&maxdiff);
             FML::MaxOverTasks(&maxdiff23);

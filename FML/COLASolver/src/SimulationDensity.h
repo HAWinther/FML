@@ -34,8 +34,11 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
     const bool deconvolve = not(force.density_method == "nufft" or force.density_method == "sheet_nufft");
     if (every_step) {
         timer.StartTiming("PofkEveryStep");
-        bin_up_power_spectrum_every_step(
-            density_grid_fourier, deconvolve, subtract_shotnoise ? cb_shotnoise() : 0.0, a, pofk_cb_every_step);
+        bin_up_power_spectrum_every_step(density_grid_fourier,
+                                         deconvolve,
+                                         subtract_shotnoise ? cb_shotnoise() : 0.0,
+                                         a,
+                                         pofk_cb_every_step);
         timer.EndTiming("PofkEveryStep");
     }
 
@@ -58,8 +61,11 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
     // delta_extra so the deconvolution of the window W is not fully correct for the last part at large k. One way
     // to improve this is to bin up <(W delta_cb)^2>, <delta_extra^2> and the cross term and deconvolve them separately
     if (has_total and every_step)
-        bin_up_power_spectrum_every_step(
-            density_grid_fourier, deconvolve, total_shotnoise_value, a, pofk_total_every_step);
+        bin_up_power_spectrum_every_step(density_grid_fourier,
+                                         deconvolve,
+                                         total_shotnoise_value,
+                                         a,
+                                         pofk_total_every_step);
 
     initial_density_field_shifted.free();
 }
@@ -125,8 +131,10 @@ void NBodySimulation<NDIM, T>::assign_cb_particles_to_grid(FFTWGrid<NDIM> & dens
                                 density_grid_fourier.get_n_extra_slices_left(),
                                 density_grid_fourier.get_n_extra_slices_right());
             assign(grid);
-            FML::GRID::linear_combination_fourier<NDIM>(
-                density_grid_fourier, grid, icb == 1 ? weight_first : 1.0, info.weight_cb);
+            FML::GRID::linear_combination_fourier<NDIM>(density_grid_fourier,
+                                                        grid,
+                                                        icb == 1 ? weight_first : 1.0,
+                                                        info.weight_cb);
         }
         icb++;
     });
@@ -168,7 +176,9 @@ void NBodySimulation<NDIM, T>::add_neutrino_particles(FFTWGrid<NDIM> & density_g
     {
         // With force_neutrino_energy_density the field is the energy-density contrast (weights w E / (m <E/m>))
         typename COLASOLVER::NeutrinoParticles<NDIM>::ScopedEnergyWeights energy_weights(
-            neutrinos, a, params.force.neutrino_energy_density);
+            neutrinos,
+            a,
+            params.force.neutrino_energy_density);
         neutrinos.density_fourier(density_nu, current_force.density_assignment_method);
         if (params.pofk.every_step and not particles_shifted())
             bin_up_power_spectrum_every_step(density_nu,
@@ -180,8 +190,10 @@ void NBodySimulation<NDIM, T>::add_neutrino_particles(FFTWGrid<NDIM> & density_g
     // The source of the Poisson equation (normalized to the non-relativistic matter density Omega_M a^-3):
     // (1 - f_nu) delta_cb + f_nu <E/m>(a) delta_nu
     const double fMNu = cosmo->get_fMNu();
-    FML::GRID::linear_combination_fourier<NDIM>(
-        density_grid_fourier, density_nu, 1.0 - fMNu, fMNu * neutrino_energy_factor(a));
+    FML::GRID::linear_combination_fourier<NDIM>(density_grid_fourier,
+                                                density_nu,
+                                                1.0 - fMNu,
+                                                fMNu * neutrino_energy_factor(a));
 }
 
 /// Linear massive neutrinos: delta_m = (1 - f_nu) delta_cb + f_nu delta_cb(k,zini) T_nu(k,z) / T_cb(k,zini)
@@ -249,7 +261,9 @@ void NBodySimulation<NDIM, T>::bin_up_power_spectrum_every_step(
     PowerSpectrumBinning pofk(grid.get_nmesh() / 2);
     pofk.subtract_shotnoise = params.pofk.subtract_shotnoise;
     if (deconvolve)
-        FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(grid, pofk, current_force.density_assignment_method);
+        FML::CORRELATIONFUNCTIONS::bin_up_deconvolved_power_spectrum(grid,
+                                                                     pofk,
+                                                                     current_force.density_assignment_method);
     else
         FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(grid, pofk);
     if (params.pofk.subtract_shotnoise and shotnoise != 0.0)

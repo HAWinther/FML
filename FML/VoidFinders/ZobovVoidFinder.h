@@ -182,15 +182,16 @@ namespace FML {
                 for (size_t k = 0; k < links.size(); k++)
                     zlinks[k] = {links[k].a, links[k].b, links[k].quantity};
                 links = std::vector<FML::TRIANGULATION::WatershedLink>();
-                const double threshold_quantity = options.find_clusters
-                                                      ? 1.0 / (options.link_density_threshold * mean_density)
-                                                      : options.link_density_threshold * mean_density;
+                const double threshold_quantity = options.find_clusters ?
+                                                      1.0 / (options.link_density_threshold * mean_density) :
+                                                      options.link_density_threshold * mean_density;
                 const auto merged = merge_zones(zz, zlinks, options.merging, threshold_quantity);
-                voids = catalogue_from_merged_zones(merged, options.find_clusters, mean_density, true, [&](const Void & v) {
-                    const bool pass_density = options.find_clusters ? v.density_min > options.max_dens_cut
-                                                                    : v.density_min < options.min_dens_cut;
-                    return pass_density and v.nmembers >= options.min_num_particles and v.density_ratio >= 1.0;
-                });
+                voids =
+                    catalogue_from_merged_zones(merged, options.find_clusters, mean_density, true, [&](const Void & v) {
+                        const bool pass_density = options.find_clusters ? v.density_min > options.max_dens_cut :
+                                                                          v.density_min < options.min_dens_cut;
+                        return pass_density and v.nmembers >= options.min_num_particles and v.density_ratio >= 1.0;
+                    });
                 long long int ntop = 0;
                 for (auto & v : voids)
                     ntop += v.parent < 0;

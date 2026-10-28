@@ -43,7 +43,8 @@ namespace FML {
             /// Optional Padding uses a >=3N/2 work mesh for the quadratic source.
             /// See LPT/README.md for Nyquist conventions, memory cost and examples.
             template <int N>
-            void compute_2LPT_potential_fourier(const FFTWGrid<N> & delta_fourier, FFTWGrid<N> & phi_2LPT_fourier,
+            void compute_2LPT_potential_fourier(const FFTWGrid<N> & delta_fourier,
+                                                FFTWGrid<N> & phi_2LPT_fourier,
                                                 Dealiasing dealiasing = Dealiasing::None);
 
             /// Optional Padding uses a >=2N work mesh for all nonlinear sources,
@@ -88,7 +89,7 @@ namespace FML {
                                                  std::array<FFTWGrid<N>, N> & dPsidt,
                                                  double dlogDdt,
                                                  bool ignore_curl_term,
-                                                Dealiasing dealiasing = Dealiasing::None);
+                                                 Dealiasing dealiasing = Dealiasing::None);
 
             template <int N, class T>
             void assign_displacement_fields_scaledependent(MPIParticles<T> & part,
@@ -159,7 +160,8 @@ namespace FML {
                         phi.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
                         // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi]
-                        auto value = phi.get_fourier_from_index(fourier_index) * I * FML::GRID::FloatType(DoverDini_of_k_spline(kmag));
+                        auto value = phi.get_fourier_from_index(fourier_index) * I *
+                                     FML::GRID::FloatType(DoverDini_of_k_spline(kmag));
 
                         for (int idim = 0; idim < N; idim++) {
                             psi[idim].set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(kvec[idim]));
@@ -240,7 +242,8 @@ namespace FML {
                         // Psi_vec = D Phi => F[Psi_vec] = ik_vec F[Phi]
                         auto value = phi.get_fourier_from_index(fourier_index) * FML::GRID::FloatType(DoverDini);
                         for (int idim = 0; idim < N; idim++) {
-                            psi[idim].set_fourier_from_index(fourier_index, I * value * FML::GRID::FloatType(kvec[idim]));
+                            psi[idim].set_fourier_from_index(fourier_index,
+                                                             I * value * FML::GRID::FloatType(kvec[idim]));
                         }
                     }
                 }
@@ -333,14 +336,16 @@ namespace FML {
             ///
             //=================================================================================
             template <int N>
-            void compute_2LPT_potential_fourier(const FFTWGrid<N> & delta, FFTWGrid<N> & phi_2LPT,
-                                                Dealiasing dealiasing) {
+            void
+            compute_2LPT_potential_fourier(const FFTWGrid<N> & delta, FFTWGrid<N> & phi_2LPT, Dealiasing dealiasing) {
                 if (dealiasing == Dealiasing::Padding) {
                     auto padded = detail::resize_lpt_fourier(delta, detail::padded_lpt_mesh(delta.get_nmesh(), 2));
                     FFTWGrid<N> potential;
                     compute_2LPT_potential_fourier(padded, potential);
-                    phi_2LPT = detail::resize_lpt_fourier(potential, delta.get_nmesh(),
-                                                        delta.get_n_extra_slices_left(), delta.get_n_extra_slices_right());
+                    phi_2LPT = detail::resize_lpt_fourier(potential,
+                                                          delta.get_nmesh(),
+                                                          delta.get_n_extra_slices_left(),
+                                                          delta.get_n_extra_slices_right());
                     return;
                 }
 
@@ -394,7 +399,9 @@ namespace FML {
                         auto value = delta.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
 
                         for (int idim = 0; idim < N; idim++) {
-                            phi_1LPT_ii[idim].set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(kvec[idim] * kvec[idim]));
+                            phi_1LPT_ii[idim].set_fourier_from_index(fourier_index,
+                                                                     value *
+                                                                         FML::GRID::FloatType(kvec[idim] * kvec[idim]));
                         }
                     }
                 }
@@ -480,8 +487,9 @@ namespace FML {
                         int pair = 0;
                         for (int idim1 = 0; idim1 < N; idim1++) {
                             for (int idim2 = idim1 + 1; idim2 < N; idim2++) {
-                                phi_1LPT_ij[pair++].set_fourier_from_index(fourier_index,
-                                                                           FML::GRID::FloatType(kvec[idim1] * kvec[idim2]) * value);
+                                phi_1LPT_ij[pair++].set_fourier_from_index(
+                                    fourier_index,
+                                    FML::GRID::FloatType(kvec[idim1] * kvec[idim2]) * value);
                             }
                         }
                     }
@@ -571,14 +579,14 @@ namespace FML {
             //===========================================================================================
             /// The potential construction retains the first-order Hessian and streams the second-order
             /// Hessian in two batches through N work grids. With all 3D potentials and curl requested,
-            /// its peak is about 17 full grids including the input, before caller-owned outputs and FFT workspace overhead.
-            /// The units of the dlogDdt term is what sets the units of dPsidt
-            /// In this methods the displacement field is assumed to be on the EdS/LCDM form
-            /// Psi = D Psi1LPT + D^2 Psi2LPT + D^3 Psi3LPT i.e. each term multiplied with powers of D
-            /// so we only have a single growth-factor D_nLPT = const * (D_1LPT)^n
-            /// with the constants being 1, -3/7, 1/3, -10/21, ... (these are already included in the potentials
-            /// returned by compute_3LPT_potential_fourier). The fields are returned at the time of delta_fourier:
-            /// Psi = Psi1LPT + Psi2LPT + Psi3LPT and dPsidt = dlogDdt * (Psi1LPT + 2 Psi2LPT + 3 Psi3LPT).
+            /// its peak is about 17 full grids including the input, before caller-owned outputs and FFT workspace
+            /// overhead. The units of the dlogDdt term is what sets the units of dPsidt In this methods the
+            /// displacement field is assumed to be on the EdS/LCDM form Psi = D Psi1LPT + D^2 Psi2LPT + D^3 Psi3LPT
+            /// i.e. each term multiplied with powers of D so we only have a single growth-factor D_nLPT = const *
+            /// (D_1LPT)^n with the constants being 1, -3/7, 1/3, -10/21, ... (these are already included in the
+            /// potentials returned by compute_3LPT_potential_fourier). The fields are returned at the time of
+            /// delta_fourier: Psi = Psi1LPT + Psi2LPT + Psi3LPT and dPsidt = dlogDdt * (Psi1LPT + 2 Psi2LPT + 3
+            /// Psi3LPT).
             ///
             /// @tparam N Dimensions we are working in (only 2 or 3)
             ///
@@ -596,7 +604,7 @@ namespace FML {
                                                  std::array<FFTWGrid<N>, N> & dPsidt,
                                                  double dlogDdt,
                                                  bool ignore_curl_term,
-                                                Dealiasing dealiasing) {
+                                                 Dealiasing dealiasing) {
 
                 // We require delta to exist
                 assert_mpi(delta_fourier.get_nmesh() > 0,
@@ -614,12 +622,13 @@ namespace FML {
                 FFTWGrid<N> phi_3LPT_a_fourier;
                 FFTWGrid<N> phi_3LPT_b_fourier;
                 compute_3LPT_potential_fourier<N>(delta_fourier,
-                                               phi_1LPT_fourier,
-                                               phi_2LPT_fourier,
-                                               phi_3LPT_a_fourier,
-                                               phi_3LPT_b_fourier,
-                                               phi_3LPT_Avec_fourier,
-                                               ignore_curl_term, dealiasing);
+                                                  phi_1LPT_fourier,
+                                                  phi_2LPT_fourier,
+                                                  phi_3LPT_a_fourier,
+                                                  phi_3LPT_b_fourier,
+                                                  phi_3LPT_Avec_fourier,
+                                                  ignore_curl_term,
+                                                  dealiasing);
 
                 // Make the displacement field
                 for (int idim = 0; idim < N; idim++) {
@@ -713,9 +722,9 @@ namespace FML {
             //===========================================================================================
             /// The potential construction retains the first-order Hessian and streams the second-order
             /// Hessian in two batches through N work grids. With all 3D potentials and curl requested,
-            /// its peak is about 17 full grids including the input, before caller-owned outputs and FFT workspace overhead.
-            /// The potentials we output are normalized such that we can get the displacement field as
-            /// Psi = D phi_1LPT + D phi_2LPT + D phi_3LPT_a + D phi_3PT_b + D x A_3LPT
+            /// its peak is about 17 full grids including the input, before caller-owned outputs and FFT workspace
+            /// overhead. The potentials we output are normalized such that we can get the displacement field as Psi = D
+            /// phi_1LPT + D phi_2LPT + D phi_3LPT_a + D phi_3PT_b + D x A_3LPT
             ///
             /// @tparam N Dimensions we are working in (only 2 or 3)
             ///
@@ -744,14 +753,15 @@ namespace FML {
                     // Keep the full second-order bandwidth until the third-order
                     // products are complete. Cropping phi2 early loses real UV couplings.
                     auto padded = detail::resize_lpt_fourier(delta_fourier,
-                                                            detail::padded_lpt_mesh(delta_fourier.get_nmesh(), 3));
+                                                             detail::padded_lpt_mesh(delta_fourier.get_nmesh(), 3));
                     FFTWGrid<N> p1, p2, pa, pb;
                     std::array<FFTWGrid<N>, N> avec;
                     compute_3LPT_potential_fourier<N>(padded, p1, p2, pa, pb, avec, ignore_curl_term);
                     auto crop = [&](FFTWGrid<N> & field) {
-                        auto result = detail::resize_lpt_fourier(field, delta_fourier.get_nmesh(),
-                                                               delta_fourier.get_n_extra_slices_left(),
-                                                               delta_fourier.get_n_extra_slices_right());
+                        auto result = detail::resize_lpt_fourier(field,
+                                                                 delta_fourier.get_nmesh(),
+                                                                 delta_fourier.get_n_extra_slices_left(),
+                                                                 delta_fourier.get_n_extra_slices_right());
                         field.free();
                         return result;
                     };
@@ -811,13 +821,15 @@ namespace FML {
                         phi_1LPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
 
                         // phi_1LPT_fourier is delta so transform to LPT potential D^2 phi_1LPT = -delta
-                        auto value = -phi_1LPT_fourier.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
+                        auto value =
+                            -phi_1LPT_fourier.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
 
                         int pair = 0;
                         for (int idim1 = 0; idim1 < N; idim1++) {
                             for (int idim2 = idim1; idim2 < N; idim2++) {
-                                phi_1LPT_ij[pair++].set_fourier_from_index(fourier_index,
-                                                                           -value * FML::GRID::FloatType(kvec[idim1] * kvec[idim2]));
+                                phi_1LPT_ij[pair++].set_fourier_from_index(
+                                    fourier_index,
+                                    -value * FML::GRID::FloatType(kvec[idim1] * kvec[idim2]));
                             }
                         }
                     }
@@ -901,7 +913,8 @@ namespace FML {
                     for (int dimension = 0; dimension < num_Avec; dimension++) {
                         phi_3LPT_Avec_fourier[dimension] = FFTWGrid<N>(Nmesh, nleft, nright);
                         phi_3LPT_Avec_fourier[dimension].add_memory_label(
-                            "FFTWGrid::compute_3LPT_potential_fourier::phi_3LPT_Avec_fourier" + std::to_string(dimension));
+                            "FFTWGrid::compute_3LPT_potential_fourier::phi_3LPT_Avec_fourier" +
+                            std::to_string(dimension));
                     }
                 }
 
@@ -911,8 +924,8 @@ namespace FML {
                 std::array<FFTWGrid<N>, N> hessian2;
                 for (int component = 0; component < N; component++) {
                     hessian2[component] = FFTWGrid<N>(Nmesh, nleft, nright);
-                    hessian2[component].add_memory_label(
-                        "FFTWGrid::compute_3LPT_potential_fourier::work_phi_2LPT_ij_" + std::to_string(component));
+                    hessian2[component].add_memory_label("FFTWGrid::compute_3LPT_potential_fourier::work_phi_2LPT_ij_" +
+                                                         std::to_string(component));
                 }
                 auto make_hessian_batch = [&](auto diagonal_tag) {
                     constexpr bool diagonal = decltype(diagonal_tag)::value;
@@ -932,20 +945,25 @@ namespace FML {
                                 continue;
                             }
                             phi_2LPT_fourier.get_fourier_wavevector_and_norm2_by_index(index, kvec, kmag2);
-                            const auto value = -phi_2LPT_fourier.get_fourier_from_index(index) / FML::GRID::FloatType(kmag2);
+                            const auto value =
+                                -phi_2LPT_fourier.get_fourier_from_index(index) / FML::GRID::FloatType(kmag2);
                             if constexpr (diagonal) {
                                 for (int row = 0; row < N; row++)
-                                    hessian2[row].set_fourier_from_index(index, -value * FML::GRID::FloatType(kvec[row] * kvec[row]));
+                                    hessian2[row].set_fourier_from_index(
+                                        index,
+                                        -value * FML::GRID::FloatType(kvec[row] * kvec[row]));
                             } else {
                                 int component = 0;
                                 for (int row = 0; row < N; row++)
                                     for (int col = row + 1; col < N; col++)
                                         hessian2[component++].set_fourier_from_index(
-                                            index, -value * FML::GRID::FloatType(kvec[row] * kvec[col]));
+                                            index,
+                                            -value * FML::GRID::FloatType(kvec[row] * kvec[col]));
                             }
                         }
                     }
-                    for (int component = 0; component < count; component++) hessian2[component].fftw_c2r();
+                    for (int component = 0; component < count; component++)
+                        hessian2[component].fftw_c2r();
                 };
                 make_hessian_batch(std::true_type{});
 #ifdef USE_OMP
@@ -989,13 +1007,14 @@ namespace FML {
                         const auto h1xx = phi_1LPT_ij[0].get_real_from_index(index);
                         const auto h1xy = phi_1LPT_ij[1].get_real_from_index(index);
                         if constexpr (N == 2) {
-                            phi_3LPT_b_fourier.set_real_from_index(
-                                index, phi_3LPT_b_fourier.get_real_from_index(index) - h1xy * h2xy);
+                            phi_3LPT_b_fourier.set_real_from_index(index,
+                                                                   phi_3LPT_b_fourier.get_real_from_index(index) -
+                                                                       h1xy * h2xy);
                             if (not ignore_curl_term) {
                                 const auto h1yy = phi_1LPT_ij[2].get_real_from_index(index);
                                 const auto difference = phi_3LPT_Avec_fourier[0].get_real_from_index(index);
-                                phi_3LPT_Avec_fourier[0].set_real_from_index(
-                                    index, h2xy * (h1yy - h1xx) - h1xy * difference);
+                                phi_3LPT_Avec_fourier[0].set_real_from_index(index,
+                                                                             h2xy * (h1yy - h1xx) - h1xy * difference);
                             }
                         } else {
                             const auto h1xz = phi_1LPT_ij[2].get_real_from_index(index);
@@ -1023,8 +1042,10 @@ namespace FML {
                         }
                     }
                 }
-                for (auto & grid : hessian2) grid.free();
-                for (auto & grid : phi_1LPT_ij) grid.free();
+                for (auto & grid : hessian2)
+                    grid.free();
+                for (auto & grid : phi_1LPT_ij)
+                    grid.free();
 
                 // Fourier transform and voila we have -k^2phi_3LPT_a stored in phi_3LPT_a
                 phi_3LPT_a_fourier.fftw_r2c();
@@ -1095,8 +1116,8 @@ namespace FML {
             /// factors D(z)/D(zini) produces the approximate spherical collapse potential defined via
             /// \f$ \nabla^2 \phi_{\rm SC} = 3(\sqrt{\max(1 - \frac{2}{3}\delta(x,z), 0)} - 1) \f$ at the redshift z
             /// with \f$ \delta(x,z) = \frac{D(z)}{D(z_{\rm ini})}\delta_{\rm ini}(x) \f$. The displacement field is
-            /// \f$ \Psi_{\rm SC} = \nabla\phi_{\rm SC} \f$, i.e. we return \f$ \phi_{\rm SC}(k) = -{\rm source}(k)/k^2 \f$
-            /// (with the k=0 mode set to zero). To linear order \f$ \phi_{\rm SC} = \phi_{\rm 1LPT} \f$.
+            /// \f$ \Psi_{\rm SC} = \nabla\phi_{\rm SC} \f$, i.e. we return \f$ \phi_{\rm SC}(k) = -{\rm source}(k)/k^2
+            /// \f$ (with the k=0 mode set to zero). To linear order \f$ \phi_{\rm SC} = \phi_{\rm 1LPT} \f$.
             ///
             /// @tparam N The dimension of the grid
             ///
@@ -1147,8 +1168,7 @@ namespace FML {
                             continue; // DC mode (k=0)
                         phi_sc_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
                         auto value = phi_sc_fourier.get_fourier_from_index(fourier_index);
-                        phi_sc_fourier.set_fourier_from_index(fourier_index,
-                                                              -value / FML::GRID::FloatType(kmag2));
+                        phi_sc_fourier.set_fourier_from_index(fourier_index, -value / FML::GRID::FloatType(kmag2));
                     }
                 }
 
@@ -1267,13 +1287,13 @@ namespace FML {
             ///
             //=================================================================================
             inline void compute_LPT_growth_factors_GeffGLCDM(double OmegaM,
-                                                      double zini,
-                                                      std::function<double(double)> HoverH0_of_a,
-                                                      std::function<double(double)> GeffOverG_of_a,
-                                                      FML::INTERPOLATION::SPLINE::Spline & D_1LPT_of_loga,
-                                                      FML::INTERPOLATION::SPLINE::Spline & D_2LPT_of_loga,
-                                                      FML::INTERPOLATION::SPLINE::Spline & D_3LPTa_of_loga,
-                                                      FML::INTERPOLATION::SPLINE::Spline & D_3LPTb_of_loga) {
+                                                             double zini,
+                                                             std::function<double(double)> HoverH0_of_a,
+                                                             std::function<double(double)> GeffOverG_of_a,
+                                                             FML::INTERPOLATION::SPLINE::Spline & D_1LPT_of_loga,
+                                                             FML::INTERPOLATION::SPLINE::Spline & D_2LPT_of_loga,
+                                                             FML::INTERPOLATION::SPLINE::Spline & D_3LPTa_of_loga,
+                                                             FML::INTERPOLATION::SPLINE::Spline & D_3LPTb_of_loga) {
 
                 using DVector = std::vector<double>;
 
@@ -1389,12 +1409,12 @@ namespace FML {
             ///
             //=================================================================================
             inline void compute_LPT_growth_factors_LCDM(double OmegaM,
-                                                 double zini,
-                                                 std::function<double(double)> HoverH0_of_a,
-                                                 FML::INTERPOLATION::SPLINE::Spline & D_1LPT_of_loga,
-                                                 FML::INTERPOLATION::SPLINE::Spline & D_2LPT_of_loga,
-                                                 FML::INTERPOLATION::SPLINE::Spline & D_3LPTa_of_loga,
-                                                 FML::INTERPOLATION::SPLINE::Spline & D_3LPTb_of_loga) {
+                                                        double zini,
+                                                        std::function<double(double)> HoverH0_of_a,
+                                                        FML::INTERPOLATION::SPLINE::Spline & D_1LPT_of_loga,
+                                                        FML::INTERPOLATION::SPLINE::Spline & D_2LPT_of_loga,
+                                                        FML::INTERPOLATION::SPLINE::Spline & D_3LPTa_of_loga,
+                                                        FML::INTERPOLATION::SPLINE::Spline & D_3LPTb_of_loga) {
 
                 auto GeffOverG_of_a = []([[maybe_unused]] double a) { return 1.0; };
                 compute_LPT_growth_factors_GeffGLCDM(OmegaM,
@@ -1474,15 +1494,19 @@ namespace FML {
 
                 // Use initial LPT potential + growth factor to compute displacement field at present time
                 std::array<FFTWGrid<N>, N> psi_LPT_vector;
-                FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector_scaledependent(
-                    LPT_potential_fourier, psi_LPT_vector, DoverDini_of_k);
+                FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector_scaledependent(LPT_potential_fourier,
+                                                                                              psi_LPT_vector,
+                                                                                              DoverDini_of_k);
                 for (int idim = 0; idim < N; idim++) {
                     psi_LPT_vector[idim].communicate_boundaries();
                 }
                 // Interpolate to particle positions after which we have Psi(q,t) in displacements
                 std::array<std::vector<FML::GRID::FloatType>, N> displacements;
-                FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions(
-                    psi_LPT_vector, part.get_particles_ptr(), part.get_npart(), displacements, interpolation_method);
+                FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions(psi_LPT_vector,
+                                                                                  part.get_particles_ptr(),
+                                                                                  part.get_npart(),
+                                                                                  displacements,
+                                                                                  interpolation_method);
                 for (int idim = 0; idim < N; idim++) {
                     psi_LPT_vector[idim].free();
                 }
@@ -1520,6 +1544,6 @@ namespace FML {
             }
 
         } // namespace LPT
-    }     // namespace COSMOLOGY
+    } // namespace COSMOLOGY
 } // namespace FML
 #endif

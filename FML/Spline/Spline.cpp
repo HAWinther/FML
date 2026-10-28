@@ -90,8 +90,9 @@ namespace FML {
                                  std::string splinename,
                                  const gsl_interp_type * interpoltype) {
                 // Check that dimensions match
-                if(x.size() != y.size())
-                  throw std::runtime_error("GSLSpline::create The input vectors x, y don't have incompatible lengths!");
+                if (x.size() != y.size())
+                    throw std::runtime_error(
+                        "GSLSpline::create The input vectors x, y don't have incompatible lengths!");
                 create(x, y, splinename, interpoltype);
             }
 
@@ -151,7 +152,7 @@ namespace FML {
                 }
                 return *this;
             }
-            
+
             //====================================================
             // Create a GSL spline
             //====================================================
@@ -213,7 +214,7 @@ namespace FML {
                 gsl_spline_init(spline, x, y, nx);
 
                 // Make accelerators (one per thread if OpenMP)
-                // If nthreads = 1 we are likely trying to create a spline 
+                // If nthreads = 1 we are likely trying to create a spline
                 // inside a OMP region. In that case allocate as many as we have
                 // threads available on the system
 #ifdef USE_OMP
@@ -224,8 +225,8 @@ namespace FML {
                     if (id == 0)
                         nthreads = omp_get_num_threads();
                 }
-                if(nthreads == 1)
-                  nthreads = nmax_threads;
+                if (nthreads == 1)
+                    nthreads = nmax_threads;
 
                 // If we make a spline inside a nested openmp then
                 // the stuff above does not work
@@ -408,12 +409,13 @@ namespace FML {
                                      const DVector2D & z,
                                      std::string splinename,
                                      const gsl_interp2d_type * interpoltype) {
-              
+
                 // Check that dimensions match
                 bool ok = (x.size() == z.size());
                 ok = ok and (z.size() > 0 ? z[0].size() == y.size() : true);
-                if(not ok)
-                  throw std::runtime_error("GSLSpline2D::create The input vectors x, y, z don't have incompatible lengths!");
+                if (not ok)
+                    throw std::runtime_error(
+                        "GSLSpline2D::create The input vectors x, y, z don't have incompatible lengths!");
                 create(x, y, z, splinename, interpoltype);
             }
 
@@ -515,10 +517,10 @@ namespace FML {
                 // Check that we have enough points (GSL would otherwise abort the program)
                 const int nmin = std::max(2, int(gsl_interp2d_type_min_size(interpoltype)));
                 if (nx < nmin || ny < nmin) {
-                    std::string errormessage = "[GSLSpline2D::create] spline " + name + " needs at least " +
-                                               std::to_string(nmin) + " points in each direction for interpolation type " +
-                                               std::string(interpoltype->name) + ", got (" + std::to_string(nx) + "," +
-                                               std::to_string(ny) + ")\n";
+                    std::string errormessage =
+                        "[GSLSpline2D::create] spline " + name + " needs at least " + std::to_string(nmin) +
+                        " points in each direction for interpolation type " + std::string(interpoltype->name) +
+                        ", got (" + std::to_string(nx) + "," + std::to_string(ny) + ")\n";
                     throw_error(errormessage);
                 }
 
@@ -574,7 +576,7 @@ namespace FML {
                 gsl_spline2d_init(spline, x, y, z, nx, ny);
 
                 // Make accelerators (one per thread if OpenMP)
-                // If nthreads = 1 we are likely trying to create a spline 
+                // If nthreads = 1 we are likely trying to create a spline
                 // inside a OMP region. In that case allocate as many as we have
                 // threads available on the system
 #ifdef USE_OMP
@@ -585,8 +587,8 @@ namespace FML {
                     if (id == 0)
                         nthreads = omp_get_num_threads();
                 }
-                if(nthreads == 1)
-                  nthreads = nmax_threads;
+                if (nthreads == 1)
+                    nthreads = nmax_threads;
 
                 xaccs = std::vector<gsl_interp_accel *>(nthreads);
                 yaccs = std::vector<gsl_interp_accel *>(nthreads);
@@ -812,5 +814,5 @@ namespace FML {
             }
 
         } // namespace SPLINE
-    }     // namespace INTERPOLATION
+    } // namespace INTERPOLATION
 } // namespace FML

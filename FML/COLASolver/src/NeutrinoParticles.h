@@ -190,8 +190,11 @@ namespace COLASOLVER {
         delta_nu.fftw_c2r();
         delta_nu.communicate_boundaries();
         std::vector<FML::GRID::FloatType> delta_at_particles;
-        FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, Particle>(
-            delta_nu, part.get_particles_ptr(), part.get_npart(), delta_at_particles, "CIC");
+        FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, Particle>(delta_nu,
+                                                                                   part.get_particles_ptr(),
+                                                                                   part.get_npart(),
+                                                                                   delta_at_particles,
+                                                                                   "CIC");
         delta_nu.free();
 
         // The thermal momenta
@@ -221,8 +224,8 @@ namespace COLASOLVER {
         update_weights();
         if (FML::ThisTask == 0)
             std::cout << "# Neutrino thermal velocity scale (T_nu0 / m_nu) c = " << vth_norm << " (code units), "
-                      << vth_norm * 100.0 * boxsize << " km/s today. Min delta_nu(zini) at the particles = "
-                      << min_delta << "\n";
+                      << vth_norm * 100.0 * boxsize
+                      << " km/s today. Min delta_nu(zini) at the particles = " << min_delta << "\n";
     }
 
     template <int NDIM>
@@ -274,8 +277,11 @@ namespace COLASOLVER {
     template <int NDIM>
     void NeutrinoParticles<NDIM>::density_fourier(FML::GRID::FFTWGrid<NDIM> & density,
                                                   const std::string & density_assignment_method) {
-        FML::INTERPOLATION::particles_to_grid(
-            part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), density, density_assignment_method);
+        FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
+                                              part.get_npart(),
+                                              part.get_npart_total(),
+                                              density,
+                                              density_assignment_method);
         density.fftw_r2c();
         // Without the delta-f weights the density is 1 + delta
         if (FML::ThisTask == 0)

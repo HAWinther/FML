@@ -449,7 +449,7 @@ namespace FML {
             for (size_t ell = 0; ell < Pell.size(); ell++)
                 Pell[ell].reset();
 
-                // Bin up mu^k |delta|^2
+            // Bin up mu^k |delta|^2
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -522,10 +522,11 @@ namespace FML {
             }
         }
 
-        /// @brief Loop over the local Fourier modes of a 3D grid (except k = 0) in the order of the Fourier index, calling
-        /// f(fourier_index, kvec, |k|, weight) with weight = 2 for the modes with 0 < k_z < k_ny (they also represent -k)
-        /// and 1 otherwise. kvec and |k| are computed exactly as in FFTWGrid::get_fourier_wavevector_and_norm_by_index,
-        /// but without decoding the index (no integer divisions per mode). OpenMP over the slices (f must be thread safe)
+        /// @brief Loop over the local Fourier modes of a 3D grid (except k = 0) in the order of the Fourier index,
+        /// calling f(fourier_index, kvec, |k|, weight) with weight = 2 for the modes with 0 < k_z < k_ny (they also
+        /// represent -k) and 1 otherwise. kvec and |k| are computed exactly as in
+        /// FFTWGrid::get_fourier_wavevector_and_norm_by_index, but without decoding the index (no integer divisions per
+        /// mode). OpenMP over the slices (f must be thread safe)
         template <class F>
         void bin_up_fourier_modes_3d(const FFTWGrid<3> & grid, F && f) {
             const int Nmesh = grid.get_nmesh();
@@ -577,14 +578,15 @@ namespace FML {
             if constexpr (N == 3) {
                 // The same as the general loop below (same values and summation order, so identical results)
                 // without decoding every Fourier index into (ix, iy, iz)
-                bin_up_fourier_modes_3d(fourier_grid, [&](size_t fourier_index, const std::array<double, N> & kvec,
-                                                          double kmag, double weight) {
-                    auto delta = fourier_grid.get_fourier_from_index(fourier_index);
-                    auto delta_norm = std::norm(delta);
-                    auto window = window_function(kvec);
-                    delta_norm /= (window * window);
-                    pofk.add_to_bin(kmag, delta_norm, weight);
-                });
+                bin_up_fourier_modes_3d(
+                    fourier_grid,
+                    [&](size_t fourier_index, const std::array<double, N> & kvec, double kmag, double weight) {
+                        auto delta = fourier_grid.get_fourier_from_index(fourier_index);
+                        auto delta_norm = std::norm(delta);
+                        auto window = window_function(kvec);
+                        delta_norm /= (window * window);
+                        pofk.add_to_bin(kmag, delta_norm, weight);
+                    });
                 pofk.normalize();
                 return;
             }
@@ -638,12 +640,13 @@ namespace FML {
             // Bin up P(k)
             if constexpr (N == 3) {
                 // The same as the general loop below (identical results) without decoding the Fourier indices
-                bin_up_fourier_modes_3d(fourier_grid, [&](size_t fourier_index, const std::array<double, N> &,
-                                                          double kmag, double weight) {
-                    auto delta = fourier_grid.get_fourier_from_index(fourier_index);
-                    auto delta_norm = std::norm(delta);
-                    pofk.add_to_bin(kmag, delta_norm, weight);
-                });
+                bin_up_fourier_modes_3d(
+                    fourier_grid,
+                    [&](size_t fourier_index, const std::array<double, N> &, double kmag, double weight) {
+                        auto delta = fourier_grid.get_fourier_from_index(fourier_index);
+                        auto delta_norm = std::norm(delta);
+                        pofk.add_to_bin(kmag, delta_norm, weight);
+                    });
                 pofk.normalize();
                 return;
             }
@@ -785,8 +788,10 @@ namespace FML {
 
         // This gives alias free P(k), but scales as O(Npart)*O(Nmesh^N)
         template <int N, class T>
-        void
-        compute_power_spectrum_direct_summation(int Ngrid, const T * part, size_t NumPart, PowerSpectrumBinning<N> & pofk) {
+        void compute_power_spectrum_direct_summation(int Ngrid,
+                                                     const T * part,
+                                                     size_t NumPart,
+                                                     PowerSpectrumBinning<N> & pofk) {
 
             static_assert(
                 FML::PARTICLE::has_get_pos<T>(),
@@ -996,8 +1001,11 @@ namespace FML {
             if (interlacing) {
 
                 // Bin to grid using interlaced grids to produce a fourier space density field
-                FML::INTERPOLATION::particles_to_fourier_grid_interlacing(
-                    part, NumPart, NumPartTotal, density_k, density_assignment_method);
+                FML::INTERPOLATION::particles_to_fourier_grid_interlacing(part,
+                                                                          NumPart,
+                                                                          NumPartTotal,
+                                                                          density_k,
+                                                                          density_assignment_method);
                 deconvolve_window_function_fourier<N>(density_k, density_assignment_method);
 
             } else {
@@ -1125,8 +1133,13 @@ namespace FML {
                                   bool interlacing) {
 
             // This will subtract shot-noise if pofk.subtract_shotnoise = true
-            compute_polyspectrum<N, T, 2>(
-                Ngrid, part, NumPart, NumPartTotal, pofk, density_assignment_method, interlacing);
+            compute_polyspectrum<N, T, 2>(Ngrid,
+                                          part,
+                                          NumPart,
+                                          NumPartTotal,
+                                          pofk,
+                                          density_assignment_method,
+                                          interlacing);
         }
 
         template <int N, class T>
@@ -1139,8 +1152,13 @@ namespace FML {
                                 bool interlacing) {
 
             // This will subtract shot-noise if bofk.subtract_shotnoise = true
-            compute_polyspectrum<N, T, 3>(
-                Ngrid, part, NumPart, NumPartTotal, bofk, density_assignment_method, interlacing);
+            compute_polyspectrum<N, T, 3>(Ngrid,
+                                          part,
+                                          NumPart,
+                                          NumPartTotal,
+                                          bofk,
+                                          density_assignment_method,
+                                          interlacing);
         }
 
         template <int N, class T>
@@ -1151,8 +1169,13 @@ namespace FML {
                                  TrispectrumBinning<N> & tofk,
                                  std::string density_assignment_method,
                                  bool interlacing) {
-            compute_polyspectrum<N, T, 4>(
-                Ngrid, part, NumPart, NumPartTotal, tofk, density_assignment_method, interlacing);
+            compute_polyspectrum<N, T, 4>(Ngrid,
+                                          part,
+                                          NumPart,
+                                          NumPartTotal,
+                                          tofk,
+                                          density_assignment_method,
+                                          interlacing);
         }
 
         // Computes the polyspectrum P(k1,k2,k3,...)
@@ -1176,8 +1199,11 @@ namespace FML {
             if (interlacing) {
 
                 // Bin particles to grid (use interlaced to reduce alias) and deconvolve window
-                FML::INTERPOLATION::particles_to_fourier_grid_interlacing(
-                    part, NumPart, NumPartTotal, density_k, density_assignment_method);
+                FML::INTERPOLATION::particles_to_fourier_grid_interlacing(part,
+                                                                          NumPart,
+                                                                          NumPartTotal,
+                                                                          density_k,
+                                                                          density_assignment_method);
                 deconvolve_window_function_fourier<N>(density_k, density_assignment_method);
 
             } else {
@@ -1218,8 +1244,7 @@ namespace FML {
                         if (polyofk.N123[i] <= 0.0)
                             continue;
                         auto ik = polyofk.get_coord_from_index(i);
-                        polyofk.P123[i] -=
-                            S2 * (polyofk.pofk[ik[0]] + polyofk.pofk[ik[1]] + polyofk.pofk[ik[2]]) + S3;
+                        polyofk.P123[i] -= S2 * (polyofk.pofk[ik[0]] + polyofk.pofk[ik[1]] + polyofk.pofk[ik[2]]) + S3;
                     }
                 }
             }

@@ -29,31 +29,31 @@
 
 namespace FML::COSMOLOGY {
 
-class DGPGravity : public MuSigmaGravity {
-  public:
-    DGPGravity(double Omega_rc, int branch, bool lcdm_background = false);
-    std::string name() const override { return branch > 0 ? "sDGP" : "nDGP"; }
-    std::string info() const override;
-    void init_background(const BackgroundCosmology& bg) override;
+    class DGPGravity : public MuSigmaGravity {
+      public:
+        DGPGravity(double Omega_rc, int branch, bool lcdm_background = false);
+        std::string name() const override { return branch > 0 ? "sDGP" : "nDGP"; }
+        std::string info() const override;
+        void init_background(const BackgroundCosmology & bg) override;
 
-    double E2(double x, const BackgroundCosmology& bg) const override;
-    double dE2dx(double x, const BackgroundCosmology& bg) const override;
-    double ddE2ddx(double x, const BackgroundCosmology& bg) const override;
-    MuSigma mu_sigma(double x, double k, const BackgroundCosmology& bg) const override;
-    double beta(double x, const BackgroundCosmology& bg) const;
+        double E2(double x, const BackgroundCosmology & bg) const override;
+        double dE2dx(double x, const BackgroundCosmology & bg) const override;
+        double ddE2ddx(double x, const BackgroundCosmology & bg) const override;
+        MuSigma mu_sigma(double x, double k, const BackgroundCosmology & bg) const override;
+        double beta(double x, const BackgroundCosmology & bg) const;
 
-    // Omega_Lambda from E(0) = 1, given the other densities today
-    static double OmegaLambda(double Omega_rc, int branch, double rho_other0) {
-      return 1.0 - 2.0 * branch * std::sqrt(Omega_rc) - rho_other0;
-    }
+        // Omega_Lambda from E(0) = 1, given the other densities today
+        static double OmegaLambda(double Omega_rc, int branch, double rho_other0) {
+            return 1.0 - 2.0 * branch * std::sqrt(Omega_rc) - rho_other0;
+        }
 
-  private:
-    double Omega_rc, sq;   // sq = sqrt(Omega_rc)
-    int branch;
-    bool lcdm_bg;
-    // E and its first two derivatives
-    void E_derivs(double x, const BackgroundCosmology& bg, double& E, double& dE, double& ddE) const;
-};
+      private:
+        double Omega_rc, sq; // sq = sqrt(Omega_rc)
+        int branch;
+        bool lcdm_bg;
+        // E and its first two derivatives
+        void E_derivs(double x, const BackgroundCosmology & bg, double & E, double & dE, double & ddE) const;
+    };
 
 } // namespace FML::COSMOLOGY
 

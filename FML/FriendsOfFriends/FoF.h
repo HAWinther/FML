@@ -597,7 +597,7 @@ namespace FML {
                             if (icoord[idim] >= Ngrid)
                                 icoord[idim] -= Ngrid;
                         } else {
-                            if (icoord[idim] < 0 or icoord[idim] >= Ngrid){
+                            if (icoord[idim] < 0 or icoord[idim] >= Ngrid) {
                                 skip = true;
                                 break;
                             }
@@ -705,8 +705,13 @@ namespace FML {
                     friend_type_list.clear();
 
                     // Do linking
-                    FindAllFriends(
-                        curpart, type, localindex, globalindex, FoFID, friend_local_index_list, friend_type_list);
+                    FindAllFriends(curpart,
+                                   type,
+                                   localindex,
+                                   globalindex,
+                                   FoFID,
+                                   friend_local_index_list,
+                                   friend_type_list);
 
                     if (friend_local_index_list.size() == 0)
                         continue;
@@ -734,8 +739,13 @@ namespace FML {
                         friend_type_list.pop_back();
 
                         // Do linking
-                        FindAllFriends(
-                            curpart, type, localindex, globalindex, FoFID, friend_local_index_list, friend_type_list);
+                        FindAllFriends(curpart,
+                                       type,
+                                       localindex,
+                                       globalindex,
+                                       FoFID,
+                                       friend_local_index_list,
+                                       friend_type_list);
                     }
 
                     // Save halo if it lies in the local domain and has more than nmin particles
@@ -798,7 +808,7 @@ namespace FML {
 #ifdef USE_MPI
             MPI_Allreduce(MPI_IN_PLACE, addfofid.data(), NTasks, MPI_LONG_LONG, MPI_SUM, FML::communicator);
 #endif
-     
+
             // Finalize computation of halos
             const size_t add = size_t(addfofid[FML::ThisTask]);
             for (auto & h : LocalFoFGroups) {

@@ -39,14 +39,15 @@ namespace FML {
                 std::cout << "OmegaLambda   " << header.OmegaLambda << "\n";
                 std::cout << "HubbleParam   " << header.HubbleParam << "\n";
                 std::cout << "numFiles      " << header.num_files << "\n";
-                for(int i = 0; i < 6; i++){
-                  std::cout << "npart[" << i << "]      " << header.npart[i] << "\n";
+                for (int i = 0; i < 6; i++) {
+                    std::cout << "npart[" << i << "]      " << header.npart[i] << "\n";
                 }
-                for(int i = 0; i < 6; i++){
-                  std::cout << "mass[" << i << "]       " << header.mass[i] << "\n";
+                for (int i = 0; i < 6; i++) {
+                    std::cout << "mass[" << i << "]       " << header.mass[i] << "\n";
                 }
-                for(int i = 0; i < 6; i++){
-                  std::cout << "npartTotal[" << i << "] " << (size_t(header.npartTotalHighWord[i]) << 32) + header.npartTotal[i] << "\n";
+                for (int i = 0; i < 6; i++) {
+                    std::cout << "npartTotal[" << i << "] "
+                              << (size_t(header.npartTotalHighWord[i]) << 32) + header.npartTotal[i] << "\n";
                 }
                 std::cout << "\n";
             }
@@ -144,11 +145,12 @@ namespace FML {
                 fp.read((char *)&bytes_end, sizeof(bytes_end));
                 if (not fp)
                     throw_error("[GadgetReader::read_header] The file ended inside the header\n");
-                if(endian_swap)
+                if (endian_swap)
                     bytes_end = swap_endian(bytes_end);
 
                 if (bytes_start != bytes_end) {
-                    std::string errormessage = "[GadgetReader::read_header] Error: we find that BytesStart != ByteEnd!\n";
+                    std::string errormessage =
+                        "[GadgetReader::read_header] Error: we find that BytesStart != ByteEnd!\n";
                     throw_error(errormessage);
                 }
 
@@ -271,17 +273,17 @@ namespace FML {
                 fp.write((char *)&header, bytes);
                 fp.write((char *)&bytes, sizeof(bytes));
             }
-            
+
             void GadgetWriter::write_header_general(std::ofstream & fp,
-                                            std::vector<size_t> npart_family,
-                                            std::vector<size_t> npart_family_tot,
-                                            std::vector<double> mass_in_1e10_msunh,
-                                            int NumberOfFilesToWrite,
-                                            double aexp,
-                                            double Boxsize,
-                                            double OmegaM,
-                                            double OmegaLambda,
-                                            double HubbleParam) {
+                                                    std::vector<size_t> npart_family,
+                                                    std::vector<size_t> npart_family_tot,
+                                                    std::vector<double> mass_in_1e10_msunh,
+                                                    int NumberOfFilesToWrite,
+                                                    double aexp,
+                                                    double Boxsize,
+                                                    double OmegaM,
+                                                    double OmegaLambda,
+                                                    double HubbleParam) {
                 if (not fp.is_open()) {
                     std::string errormessage = "[GadgetWriter::write_header] File is not open\n";
                     throw_error(errormessage);
@@ -290,7 +292,7 @@ namespace FML {
                 // Mass in 10^10 Msun/h. Assumptions: Boxsize in Mpc/h
                 for (int i = 0; i < 6; i++) {
                     header.npart[i] = npart_family[i];
-                    header.npartTotal[i] = (unsigned int) npart_family_tot[i];
+                    header.npartTotal[i] = (unsigned int)npart_family_tot[i];
                     header.npartTotalHighWord[i] = (unsigned int)(npart_family_tot[i] >> 32);
                     header.mass[i] = mass_in_1e10_msunh[i];
                 }
@@ -329,5 +331,5 @@ namespace FML {
                 return header.num_files;
             }
         } // namespace GADGET
-    }     // namespace FILEUTILS
+    } // namespace FILEUTILS
 } // namespace FML

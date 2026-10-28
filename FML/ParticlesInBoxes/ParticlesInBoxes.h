@@ -158,7 +158,7 @@ namespace FML {
                 ntot += cell.np;
             }
             double fraction_empty = cells.size() > 0 ? nempty / double(cells.size()) : 0.0;
-            
+
             if (FML::ThisTask == 0) {
                 T tmp_ndim; // (GetNDIM(T()) needs a particle that can be built at compile time)
                 constexpr int Ndim = FML::PARTICLE::GetNDIM(tmp_ndim);
@@ -186,8 +186,8 @@ namespace FML {
             const double ix = std::trunc(double(x) * ngrid);
             // (also catches NaN)
             if (not(ix >= 0.0 and ix < double(ngrid)))
-                throw std::runtime_error("ParticlesInBoxes positions has to be in [0,1). pos = " +
-                                         std::to_string(double(x)) + "\n");
+                throw std::runtime_error(
+                    "ParticlesInBoxes positions has to be in [0,1). pos = " + std::to_string(double(x)) + "\n");
             return int(ix);
         }
 

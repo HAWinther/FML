@@ -100,8 +100,9 @@ int main() {
     // Beyond the largest k of the tables
     const double kmax = td.get_kmax_hmpc_splines();
     const double p1 = td.get_cdm_baryon_power_spectrum(kmax, 1.0), p2 = td.get_cdm_baryon_power_spectrum(5 * kmax, 1.0);
-    check(p2 < p1 and p2 > 0.0, "P(k) above kmax = " + num(kmax) + " h/Mpc falls (P(5 kmax)/P(kmax) = " + num(p2 / p1) +
-                                    ", was 4.7: T was constant)");
+    check(p2 < p1 and p2 > 0.0,
+          "P(k) above kmax = " + num(kmax) + " h/Mpc falls (P(5 kmax)/P(kmax) = " + num(p2 / p1) +
+              ", was 4.7: T was constant)");
 
     // Redshift range
     check(td.get_zmin_splines() == 0.0 and std::fabs(td.get_zmax_splines() - 200.0) < 1e-10,
@@ -130,6 +131,7 @@ int main() {
     std::remove(info_rev.c_str());
 
     if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All CAMB reader tests passed\n" : std::to_string(fails) + " CAMB reader test(s) FAILED\n");
+        std::cout << (fails == 0 ? "All CAMB reader tests passed\n" :
+                                   std::to_string(fails) + " CAMB reader test(s) FAILED\n");
     return fails == 0 ? 0 : 1;
 }

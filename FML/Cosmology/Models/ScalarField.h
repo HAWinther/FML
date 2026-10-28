@@ -32,43 +32,45 @@
 
 namespace FML::COSMOLOGY {
 
-class ScalarFieldSpecies : public Species {
-  public:
-    ScalarFieldSpecies(const std::vector<std::shared_ptr<const Species>>& others, double OmegaK, double OmegaL = 0.0);
-    Role role() const override { return Role::DarkEnergy; }
+    class ScalarFieldSpecies : public Species {
+      public:
+        ScalarFieldSpecies(const std::vector<std::shared_ptr<const Species>> & others,
+                           double OmegaK,
+                           double OmegaL = 0.0);
+        Role role() const override { return Role::DarkEnergy; }
 
-    double rho(double x) const override;
-    double p(double x) const override;
-    double drhodx(double x) const override;
-    double ddrhoddx(double x) const override;
-    std::unique_ptr<SpeciesPerturbations> perturbations(const Perturbations& pert) const override;
+        double rho(double x) const override;
+        double p(double x) const override;
+        double drhodx(double x) const override;
+        double ddrhoddx(double x) const override;
+        std::unique_ptr<SpeciesPerturbations> perturbations(const Perturbations & pert) const override;
 
-    // Potential (units of 3 H0^2 M_pl^2) and its derivatives
-    virtual double v(double phi) const = 0;
-    virtual double v_phi(double phi) const = 0;
-    virtual double v_phiphi(double phi) const = 0;
+        // Potential (units of 3 H0^2 M_pl^2) and its derivatives
+        virtual double v(double phi) const = 0;
+        virtual double v_phi(double phi) const = 0;
+        virtual double v_phiphi(double phi) const = 0;
 
-    double phi(double x) const;
-    double dphidx(double x) const;
-    double ddphidx(double x) const { return ddphi(x, phi(x), dphidx(x)); }
-    double E2(double x) const;   // (H/H0)^2 of the model (as summed by GR)
-    double OmegaL() const { return OmegaL_; }
+        double phi(double x) const;
+        double dphidx(double x) const;
+        double ddphidx(double x) const { return ddphi(x, phi(x), dphidx(x)); }
+        double E2(double x) const; // (H/H0)^2 of the model (as summed by GR)
+        double OmegaL() const { return OmegaL_; }
 
-  protected:
-    std::vector<std::shared_ptr<const Species>> others;
-    double OmegaK, OmegaL_;
-    double x_ini = -25.0, x_fin = 10.0, phi_ini_ = 0.0;
-    Spline1D phi_spline, dphi_spline;
-    bool perturbed = true;   // false: no perturbations (a cosmological constant)
+      protected:
+        std::vector<std::shared_ptr<const Species>> others;
+        double OmegaK, OmegaL_;
+        double x_ini = -25.0, x_fin = 10.0, phi_ini_ = 0.0;
+        Spline1D phi_spline, dphi_spline;
+        bool perturbed = true; // false: no perturbations (a cosmological constant)
 
-    double rho_others(double x) const;
-    double drho_others(double x) const;
-    double ddrho_others(double x) const;
-    double E2(double x, double phi, double dphi) const;
-    double ddphi(double x, double phi, double dphi) const;   // phi_xx from the Klein-Gordon equation
-    // Integrate from rest at phi_ini on n points in [x_ini, x_end] and store the splines (x_fin = x_end)
-    void solve(double phi_ini, int n, double x_end, double abserr = 1e-14, double relerr = 1e-12);
-};
+        double rho_others(double x) const;
+        double drho_others(double x) const;
+        double ddrho_others(double x) const;
+        double E2(double x, double phi, double dphi) const;
+        double ddphi(double x, double phi, double dphi) const; // phi_xx from the Klein-Gordon equation
+        // Integrate from rest at phi_ini on n points in [x_ini, x_end] and store the splines (x_fin = x_end)
+        void solve(double phi_ini, int n, double x_end, double abserr = 1e-14, double relerr = 1e-12);
+    };
 
 } // namespace FML::COSMOLOGY
 

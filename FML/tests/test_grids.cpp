@@ -10,7 +10,8 @@
 //   ./test_grids truncated      : load_from_file of a truncated file
 //                                 "[FFTWGrid::load_from_file] File is truncated or unreadable"
 //   ./test_grids decomposition  : load_from_file of a file written with another domain decomposition
-//                                 "[FFTWGrid::load_from_file] The grid in the file does not match the current domain decomposition"
+//                                 "[FFTWGrid::load_from_file] The grid in the file does not match the current domain
+//                                 decomposition"
 //   ./test_grids dumpfail       : dump_to_file to a directory that does not exist
 //                                 "[FFTWGrid::dump_to_file] Failed to open file for writing"
 //==========================================================
@@ -318,8 +319,9 @@ void test_mpigrid_ghosts() {
             for (int iy = 0; iy < N; iy++)
                 ok = ok and g[s * nperslice + iy] == 100 * gx + iy;
         }
-        check(all_tasks(ok), "MPIGrid periodic ghosts are the periodic neighbors (" + std::to_string(nextra) +
-                                 " extra slices, NLocal = " + std::to_string(g.get_NLocal()) + ")");
+        check(all_tasks(ok),
+              "MPIGrid periodic ghosts are the periodic neighbors (" + std::to_string(nextra) +
+                  " extra slices, NLocal = " + std::to_string(g.get_NLocal()) + ")");
     }
 
     // Non-periodic: ghosts outside the box are not touched, the others are the neighbors
@@ -395,8 +397,9 @@ void test_fftwgrid_thin_slabs() {
                 for (int iz = 0; iz < Nmesh; iz++)
                     ok = ok and g.get_real({s, iy, iz}) == FloatType(100 * gx + iy);
         }
-        check(all_tasks(ok), "FFTWGrid ghosts are the periodic neighbors (" + std::to_string(nextra) +
-                                 " extra slices, Local_nx = " + std::to_string(g.get_local_nx()) + ")");
+        check(all_tasks(ok),
+              "FFTWGrid ghosts are the periodic neighbors (" + std::to_string(nextra) +
+                  " extra slices, Local_nx = " + std::to_string(g.get_local_nx()) + ")");
     }
 }
 

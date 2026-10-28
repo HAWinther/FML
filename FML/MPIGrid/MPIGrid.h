@@ -218,7 +218,7 @@ namespace FML {
 #define OPS(OP)                                                                                                        \
     template <int NDIM, class T>                                                                                       \
     auto MPIGrid<NDIM, T>::operator OP(const MPIGrid<NDIM, T> & rhs)->MPIGrid<NDIM, T> & {                             \
-        assert_mpi(_NtotLocal == rhs._NtotLocal, "[MPIGrid::operator" #OP "] Grids have different sizes\n");         \
+        assert_mpi(_NtotLocal == rhs._NtotLocal, "[MPIGrid::operator" #OP "] Grids have different sizes\n");           \
         for (IndexInt i = 0; i < _NtotLocal; i++) {                                                                    \
             this->_y[_NtotLocalLeft + i] OP rhs._y[rhs._NtotLocalLeft + i];                                            \
         }                                                                                                              \

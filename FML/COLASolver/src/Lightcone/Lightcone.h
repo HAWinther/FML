@@ -46,8 +46,8 @@ class LightConeParticle {
     void assign_from_particle(U & p) {
         auto * _pos = FML::PARTICLE::GetPos(p);
         auto * _vel = FML::PARTICLE::GetVel(p);
-        if constexpr(FML::PARTICLE::has_get_mass<U>()) {
-          mass = FML::PARTICLE::GetMass(p);
+        if constexpr (FML::PARTICLE::has_get_mass<U>()) {
+            mass = FML::PARTICLE::GetMass(p);
         }
         for (int idim = 0; idim < NDIM; idim++) {
             pos[idim] = _pos[idim];
@@ -66,8 +66,8 @@ class Lightcone {
     using DVector = FML::INTERPOLATION::SPLINE::DVector;
     using Point = std::array<double, NDIM>;
     using MapRealType = double;
-    template<class T1>
-      using MPIParticles = FML::PARTICLE::MPIParticles<T1>;
+    template <class T1>
+    using MPIParticles = FML::PARTICLE::MPIParticles<T1>;
 
     // The cosmology needed to compute comoving distance r(a)
     std::shared_ptr<Cosmology> cosmo;
@@ -109,7 +109,7 @@ class Lightcone {
     double fsky;
     // Number of calls to the light cone (starts counting at 0)
     int plc_step;
-    
+
     // Mean density of the tracers in units where the boxsize is unity
     // so basically just n_part
     std::map<std::string, double> mean_density;
@@ -145,7 +145,7 @@ class Lightcone {
     double local_fraction_of_shell(double rlow, double rhigh);
 
   public:
-    Lightcone(std::shared_ptr<Cosmology> cosmo) : cosmo(cosmo){};
+    Lightcone(std::shared_ptr<Cosmology> cosmo) : cosmo(cosmo) {};
     Lightcone() = default;
     ~Lightcone() = default;
 
@@ -212,7 +212,8 @@ class Lightcone {
     }
 
     /// Maps of Phi/c^2 sampled at the pixel centers at the mid-radius of the onion shells of the current step
-    void make_potential_maps(const FML::GRID::FFTWGrid<NDIM> & potential_grid, const std::string & interpolation_method);
+    void make_potential_maps(const FML::GRID::FFTWGrid<NDIM> & potential_grid,
+                             const std::string & interpolation_method);
 
     void create_weak_lensing_maps(std::string particle_type = "cb");
 
@@ -243,14 +244,16 @@ void Lightcone<NDIM, T, U>::read_parameters(ParameterMap & param) {
         output_hdf5file = COLASOLVER::get_parameter<bool>(param, "plc_output_hdf5file");
 #ifndef USE_HDF5
         if (output_hdf5file)
-            throw std::runtime_error("Invalid parameters: plc_output_hdf5file = true needs HDF5: compile with USE_HDF5=true (make USE_HDF5=true)");
+            throw std::runtime_error("Invalid parameters: plc_output_hdf5file = true needs HDF5: compile with "
+                                     "USE_HDF5=true (make USE_HDF5=true)");
 #endif
         make_onion_density_maps = param.get<bool>("plc_make_onion_density_maps");
 #ifndef USE_HEALPIX
         // Check this here and not at the first lightcone step
         if (make_onion_density_maps and NDIM == 3)
-            throw std::runtime_error("Invalid parameters: plc_make_onion_density_maps = true needs Healpix: compile with "
-                                     "USE_HEALPIX=true (make USE_HEALPIX=true)");
+            throw std::runtime_error(
+                "Invalid parameters: plc_make_onion_density_maps = true needs Healpix: compile with "
+                "USE_HEALPIX=true (make USE_HEALPIX=true)");
 #endif
         relativistic_effects = COLASOLVER::get_parameter<bool>(param, "plc_relativistic_effects");
         if (FML::ThisTask == 0) {
@@ -401,9 +404,9 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
 
     // Flag the replicates that don't need looping over
     replicas.flag(r_lc_old, r_lc_new);
-    
+
     // If we output in batches, set the maximum number to store
-    // We just use the number of particles we have on the task for simplicity 
+    // We just use the number of particles we have on the task for simplicity
     // Can be changed to a user-provided number in case memory is really tight
     const size_t npart_per_batch = std::max(part.get_npart(), size_t(1));
     int ibatch = 0;
@@ -430,8 +433,8 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
         if (store_particles) {
             std::cout << "# We will allocate storage for " << num_particles_to_allocate / double(part.get_npart())
                       << " times the number of particles we have (task 0)\n";
-            if(batches_this_step)
-              std::cout << "# We output in batches of " << npart_per_batch << " (task 0)\n";
+            if (batches_this_step)
+                std::cout << "# We output in batches of " << npart_per_batch << " (task 0)\n";
             std::cout << "# Memory consumption for particles: "
                       << num_particles_to_allocate * sizeof(U) / double(1024. * 1024.)
                       << " MB on task 0. The particle-size is " << sizeof(U) << " bytes\n";
@@ -439,8 +442,8 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
             std::cout << "# We expect roughly ~ " << size_t(num_particles_expected) << " particles in the slice\n";
             std::cout << "# NB: No output picked so we will not store and output any particles\n";
         }
-        if(make_onion_density_maps)
-          std::cout << "# We will make and output onion slices for the density-contrast\n";
+        if (make_onion_density_maps)
+            std::cout << "# We will make and output onion slices for the density-contrast\n";
     }
 
     // Allocate and initialize the maps we need for the current time-step
@@ -450,7 +453,7 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
     // Allocate lightcone particles
     FML::Vector<U> part_lc;
     if (store_particles)
-        part_lc.reserve(num_particles_to_allocate+1);
+        part_lc.reserve(num_particles_to_allocate + 1);
 
     // Loop over all particles
     double mean_error = 0.0;
@@ -460,7 +463,8 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
     double vel_norm = 100 * boxsize / avel;
     int nproblem = 0;
 #ifdef USE_OMP
-#pragma omp parallel for reduction(+ : mean_error) reduction(+ : mean_error_count) reduction(max : max_error) reduction(max : max_disp) reduction(+ : nproblem)
+#pragma omp parallel for reduction(+ : mean_error) reduction(+ : mean_error_count) reduction(max : max_error)          \
+    reduction(max : max_disp) reduction(+ : nproblem)
 #endif
     for (size_t ipart = 0; ipart < part.get_npart(); ipart++) {
 
@@ -526,7 +530,7 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
                 if (r_new_squared <= r_lc_new_squared)
                     continue;
 
-                // Determine the crossing time and the fraction of 
+                // Determine the crossing time and the fraction of
                 // a step to take to the crossing
                 double a_cross{};
                 double fraction_of_step_to_take{};
@@ -535,7 +539,8 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
                 // (r_lc(a) is approximated by the chord over the step [apos, apos_new])
                 const double r_old = std::sqrt(r_old_squared);
                 const double r_new = std::sqrt(r_new_squared);
-                a_cross = apos + (apos_new - apos) * (r_lc_apos - r_old) / ((r_new - r_old) - (r_lc_apos_new - r_lc_apos));
+                a_cross =
+                    apos + (apos_new - apos) * (r_lc_apos - r_old) / ((r_new - r_old) - (r_lc_apos_new - r_lc_apos));
                 fraction_of_step_to_take = (a_cross - apos) / (apos_new - apos);
 
                 // If the lightcone starts or ends inside the step we know from the tests above that the particle
@@ -565,19 +570,20 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
                 // Take a fraction of a step and get the crossing distance
                 double r_crossing_squared = 0.0;
                 for (int idim = 0; idim < NDIM; idim++) {
-                  pos[idim] += delta_pos[idim] * fraction_of_step_to_take;
-                  r_crossing_squared += pos[idim] * pos[idim];
+                    pos[idim] += delta_pos[idim] * fraction_of_step_to_take;
+                    r_crossing_squared += pos[idim] * pos[idim];
                 }
-                
-                // If the particle starts off very close to the boundary it might 
+
+                // If the particle starts off very close to the boundary it might
                 // slightly overshoot so cap r_crossing to boundary
                 // Only for a very small fraction of particles, but lets record how many
-                if(r_crossing_squared > r_lc_old_squared and (r_crossing_squared / r_lc_old_squared - 1) < 1e-2) {
-                  r_crossing_squared = r_lc_old_squared;
-                  nproblem++;
-                } else if(r_crossing_squared < r_lc_new_squared and (r_lc_new_squared / r_crossing_squared - 1) < 1e-2) {
-                  r_crossing_squared = r_lc_new_squared;
-                  nproblem++;
+                if (r_crossing_squared > r_lc_old_squared and (r_crossing_squared / r_lc_old_squared - 1) < 1e-2) {
+                    r_crossing_squared = r_lc_old_squared;
+                    nproblem++;
+                } else if (r_crossing_squared < r_lc_new_squared and
+                           (r_lc_new_squared / r_crossing_squared - 1) < 1e-2) {
+                    r_crossing_squared = r_lc_new_squared;
+                    nproblem++;
                 }
 
                 // Compute the error we do with the approximation above
@@ -591,10 +597,10 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
                 // Add in units to the velocities (to get peculiar in km/s)
                 // as this is not possible to know just from pos and vel data
                 if (store_particles) {
-                  for (int idim = 0; idim < NDIM; idim++) {
-                    pos[idim] *= boxsize;
-                    vel[idim] *= vel_norm;
-                  }
+                    for (int idim = 0; idim < NDIM; idim++) {
+                        pos[idim] *= boxsize;
+                        vel[idim] *= vel_norm;
+                    }
                 }
 
                 // Add particle to container
@@ -602,7 +608,7 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
 #pragma omp critical
 #endif
                 {
-                    if (store_particles) 
+                    if (store_particles)
                         part_lc.push_back(p_current);
 
                     // Check if we should output
@@ -610,10 +616,10 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
                     // Can be improved, but requires a lot of work
                     // (only with batches: then the output does no MPI communication)
                     if (batches_this_step and part_lc.size() >= npart_per_batch) {
-                      output_particles(part_lc, a_old, a_new, particle_type, ibatch);
-                      npart_in_written_batches += part_lc.size();
-                      part_lc.resize(0);
-                      ibatch++;
+                        output_particles(part_lc, a_old, a_new, particle_type, ibatch);
+                        npart_in_written_batches += part_lc.size();
+                        part_lc.resize(0);
+                        ibatch++;
                     }
                 }
 
@@ -626,8 +632,6 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
 #endif
                     map.add_particle_to_map(ipix);
                 }
-                
-
             }
         }
     } // End loop over particles
@@ -642,7 +646,8 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
         std::cout << "# Error in |r_cross/r_lc-1|:  " << max_error * 100 << " % (max) "
                   << mean_error / mean_error_count * 100.0 << " % (mean)\n";
         std::cout << "# Maximum displacement in a step: " << max_disp * boxsize << " Mpc/h\n";
-        std::cout << "# Number of particles that we had to snap to the boundary: " << nproblem << " = " << nproblem / double(mean_error_count) * 100 << " %\n";
+        std::cout << "# Number of particles that we had to snap to the boundary: " << nproblem << " = "
+                  << nproblem / double(mean_error_count) * 100 << " %\n";
     }
 
     // Get number of particles and err_rmse across all procs
@@ -677,29 +682,36 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
     } else if (npart_remaining_to_be_output > 0) {
         output_particles(part_lc, a_old, a_new, particle_type, ibatch++);
     }
-    if(FML::ThisTask == 0)
-      std::cout << "# Done outputting particles" << std::endl;
+    if (FML::ThisTask == 0)
+        std::cout << "# Done outputting particles" << std::endl;
 
     // Gather map data from across tasks and write files
     if (make_onion_density_maps) {
 
         // Reduce over tasks so that task 0 have a complete map
         onionslices_curtype.reduce_over_tasks();
-        
+
         // Normalize map so that it becomes a density contrast (over the observed part of the sky, zero outside)
-        onionslices_curtype.normalize_maps(mean_density[particle_type],
-                                           [this](const std::array<double, NDIM> & n, double r) { return is_observed(n, r); });
+        onionslices_curtype.normalize_maps(
+            mean_density[particle_type],
+            [this](const std::array<double, NDIM> & n, double r) { return is_observed(n, r); });
 
         if (FML::ThisTask == 0) {
 
             // Output the map(s)
             const bool output_only_new_maps = true;
             const bool only_one_task_outputs = true;
-            onionslices_curtype.output(plc_folder, "delta_" + particle_type, not output_only_new_maps, only_one_task_outputs);
+            onionslices_curtype.output(plc_folder,
+                                       "delta_" + particle_type,
+                                       not output_only_new_maps,
+                                       only_one_task_outputs);
 
             // Compute angular power-spectra (divided by the observed fsky) and output it with and without shot-noise
             const bool subtract_shotnoise = true;
-            onionslices_curtype.compute_and_output_angular_powerspectrum(plc_folder, "delta_" + particle_type, not output_only_new_maps, subtract_shotnoise);
+            onionslices_curtype.compute_and_output_angular_powerspectrum(plc_folder,
+                                                                         "delta_" + particle_type,
+                                                                         not output_only_new_maps,
+                                                                         subtract_shotnoise);
         }
 
         // Maps of the potential at the same shells
@@ -734,7 +746,8 @@ void Lightcone<NDIM, T, U>::make_potential_maps([[maybe_unused]] const FML::GRID
         for (int imap = range.first; imap < range.second; imap++) {
             const auto & dmap = maps[imap];
             OnionSlice<MapRealType, NDIM> phimap;
-            phimap.init(dmap.get_rmin(), dmap.get_rmax(), dmap.get_amin(), dmap.get_amax(), slices.get_nside(), false, 0);
+            phimap
+                .init(dmap.get_rmin(), dmap.get_rmax(), dmap.get_amin(), dmap.get_amax(), slices.get_nside(), false, 0);
             const double rmid = 0.5 * (dmap.get_rmin() + dmap.get_rmax());
             const long npix = phimap.get_npix();
 
@@ -757,16 +770,21 @@ void Lightcone<NDIM, T, U>::make_potential_maps([[maybe_unused]] const FML::GRID
                 }
             }
             std::vector<FML::GRID::FloatType> values;
-            FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, Point>(
-                potential_grid, points.data(), points.size(), values, interpolation_method);
+            FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, Point>(potential_grid,
+                                                                                    points.data(),
+                                                                                    points.size(),
+                                                                                    values,
+                                                                                    interpolation_method);
             for (size_t i = 0; i < points.size(); i++)
                 phimap.set_pixel(ipixs[i], values[i]);
             phimap.sum_field_over_tasks(0);
             if (FML::ThisTask == 0) {
                 const std::string label = "phi_cb";
                 phimap.output(plc_folder + "/OnionMap_" + label + "_imap" + std::to_string(imap));
-                phimap.compute_and_output_angular_powerspectrum(
-                    plc_folder + "/Cell_" + label + "_imap" + std::to_string(imap) + ".txt", label, false);
+                phimap.compute_and_output_angular_powerspectrum(plc_folder + "/Cell_" + label + "_imap" +
+                                                                    std::to_string(imap) + ".txt",
+                                                                label,
+                                                                false);
             }
             phimap.free();
         }
@@ -843,19 +861,22 @@ double Lightcone<NDIM, T, U>::get_distance_inv(double dist) {
 // NB: the velocities are not normalized as in "standard" gadget snapshot format (i.e. the sqrt(a))
 // NB: as currently written this only work seamlessly for CDM as with multiple species we currently need MPI-calls
 // in write_gadget_single and not all tasks might output.
-// With output-in-batches the NumPartTotal in the gadget files will just be NumPart as we cannot easily get this information
-// on the fly
+// With output-in-batches the NumPartTotal in the gadget files will just be NumPart as we cannot easily get this
+// information on the fly
 template <int NDIM, class T, class U>
-void Lightcone<NDIM, T, U>::output_gadget(FML::Vector<U> & part_lc, double astart, double aend, std::string label, int ibatch) {
+void Lightcone<NDIM, T, U>::output_gadget(FML::Vector<U> & part_lc,
+                                          double astart,
+                                          double aend,
+                                          std::string label,
+                                          int ibatch) {
 
     const int nfiles = FML::NTasks;
     std::string fileprefix;
-    if(batches_this_step)
-      fileprefix =
-        plc_folder + "/" + "lightcone_" + label + "_gadget_step" + std::to_string(plc_step) + "_batch" + std::to_string(ibatch) + ".";
+    if (batches_this_step)
+        fileprefix = plc_folder + "/" + "lightcone_" + label + "_gadget_step" + std::to_string(plc_step) + "_batch" +
+                     std::to_string(ibatch) + ".";
     else
-      fileprefix =
-        plc_folder + "/" + "lightcone_" + label + "_gadget_step" + std::to_string(plc_step) + ".";
+        fileprefix = plc_folder + "/" + "lightcone_" + label + "_gadget_step" + std::to_string(plc_step) + ".";
     double pos_norm = 1.0;
     double vel_norm = 1.0;
     double scale_factor = (astart + aend) / 2.0;
@@ -865,14 +886,14 @@ void Lightcone<NDIM, T, U>::output_gadget(FML::Vector<U> & part_lc, double astar
 
     size_t npart_lc = part_lc.size();
     size_t npart_lc_global = npart_lc;
-   
+
     // If we output all files at the same time then its fine to do MPI calls
-    if(not batches_this_step) {
-      FML::SumOverTasks(&npart_lc_global);
+    if (not batches_this_step) {
+        FML::SumOverTasks(&npart_lc_global);
     } else {
-      // In this case we don't have a good way of getting the total number of particles in all files
-      // so we just set NumPartTot = NumPart
-      npart_lc_global = npart_lc;
+        // In this case we don't have a good way of getting the total number of particles in all files
+        // so we just set NumPartTot = NumPart
+        npart_lc_global = npart_lc;
     }
 
     FML::FILEUTILS::GADGET::GadgetWriter gw;
@@ -922,10 +943,12 @@ void Lightcone<NDIM, T, U>::output_hdf5([[maybe_unused]] FML::Vector<U> & part_l
         auto * p = part_lc.data();
         auto sp = FML::FILEUTILS::GADGET::make_gadget_species(1, p, npart_lc, npart_lc_global, 1.0);
         sp.extra_scalars.push_back({"Potential", [p](size_t i) { return double(p[i].get_potential()); }});
-        sp.extra_scalars.push_back({"RadialVelocity", [this, p](size_t i) { return relativistic_quantities(p[i])[0]; }});
+        sp.extra_scalars.push_back(
+            {"RadialVelocity", [this, p](size_t i) { return relativistic_quantities(p[i])[0]; }});
         sp.extra_scalars.push_back(
             {"CosmologicalRedshift", [this, p](size_t i) { return relativistic_quantities(p[i])[1]; }});
-        sp.extra_scalars.push_back({"ObservedRedshift", [this, p](size_t i) { return relativistic_quantities(p[i])[2]; }});
+        sp.extra_scalars.push_back(
+            {"ObservedRedshift", [this, p](size_t i) { return relativistic_quantities(p[i])[2]; }});
         gw.write_gadget_species(fileprefix + "." + std::to_string(FML::ThisTask) + ".hdf5",
                                 {sp},
                                 FML::NTasks,
@@ -956,18 +979,26 @@ void Lightcone<NDIM, T, U>::output_hdf5([[maybe_unused]] FML::Vector<U> & part_l
 }
 
 template <int NDIM, class T, class U>
-void Lightcone<NDIM, T, U>::output_particles(FML::Vector<U> & part_lc, double astart, double aend, std::string label, int ibatch) {
-  if (output_gadgetfile)
-    output_gadget(part_lc, astart, aend, label, ibatch);
-  if (output_asciifile)
-    output_ascii(part_lc, astart, aend, label, ibatch);
-  if (output_hdf5file)
-    output_hdf5(part_lc, astart, aend, label, ibatch);
+void Lightcone<NDIM, T, U>::output_particles(FML::Vector<U> & part_lc,
+                                             double astart,
+                                             double aend,
+                                             std::string label,
+                                             int ibatch) {
+    if (output_gadgetfile)
+        output_gadget(part_lc, astart, aend, label, ibatch);
+    if (output_asciifile)
+        output_ascii(part_lc, astart, aend, label, ibatch);
+    if (output_hdf5file)
+        output_hdf5(part_lc, astart, aend, label, ibatch);
 }
 
 // Output the lightcone-particles as an ascii file
 template <int NDIM, class T, class U>
-void Lightcone<NDIM, T, U>::output_ascii(FML::Vector<U> & part_lc, double astart, double aend, std::string label, int ibatch) {
+void Lightcone<NDIM, T, U>::output_ascii(FML::Vector<U> & part_lc,
+                                         double astart,
+                                         double aend,
+                                         std::string label,
+                                         int ibatch) {
     std::string filename = plc_folder + "/" + "lightcone_" + label + "_ascii_step" + std::to_string(plc_step) + ".";
     if (FML::ThisTask == 0)
         std::cout << "# Writing lightcone to ascii file(s): " << filename << "X\n";
@@ -975,88 +1006,93 @@ void Lightcone<NDIM, T, U>::output_ascii(FML::Vector<U> & part_lc, double astart
 
     size_t npart = part_lc.size();
     size_t npart_total = npart;
-    if(not batches_this_step) 
-      FML::SumOverTasks(&npart_total);
-    
+    if (not batches_this_step)
+        FML::SumOverTasks(&npart_total);
+
     std::ofstream fp;
-    if(ibatch == 0)
-      fp.open(filename);
+    if (ibatch == 0)
+        fp.open(filename);
     else
-      fp.open(filename, std::ios_base::app);
-    
+        fp.open(filename, std::ios_base::app);
+
     // What to output
     const bool output_mass = false and FML::PARTICLE::has_get_mass<T>();
     const bool output_pos = true;
     const bool output_vel = false;
     const bool output_vr = false;
     std::string what_we_output = "# The column below are ";
-    if(output_mass) what_we_output += " mass (in number of particles) ";
-    if(output_pos) what_we_output += " pos_vec (Mpc/h) ";
-    if(output_vel) what_we_output += " vel_vec (km/s) ";
-    if(output_vr) what_we_output += " LOS_velocity (km/s) ";
-    if(relativistic_effects) what_we_output += " Phi/c^2 v_r (km/s) z_cos z_obs ";
+    if (output_mass)
+        what_we_output += " mass (in number of particles) ";
+    if (output_pos)
+        what_we_output += " pos_vec (Mpc/h) ";
+    if (output_vel)
+        what_we_output += " vel_vec (km/s) ";
+    if (output_vr)
+        what_we_output += " LOS_velocity (km/s) ";
+    if (relativistic_effects)
+        what_we_output += " Phi/c^2 v_r (km/s) z_cos z_obs ";
 
     // Output header only the first time
-    if(ibatch == 0) {
-      fp << "# Lightcone " << label << "-particles from Task " << FML::ThisTask + 1 << " / " << FML::NTasks << "\n";
-      fp << "# The lightcone crossing scale-factors for this sample is in [" << std::to_string(astart) << " -> "
-        << std::to_string(aend) << "]\n";
-      fp << "# The corresponding comoving distances is in [" << get_distance(aend) * boxsize << " -> "
-        << get_distance(astart) * boxsize << "] Mpc/h\n";
-      if(batches_this_step)
-        fp << "# This file is written in batches so no particle number information can be written here\n";
-      else {
-        fp << "# This file has " << npart << " / " << npart_total << " particles\n";
-      }
-      fp << what_we_output << "\n";
+    if (ibatch == 0) {
+        fp << "# Lightcone " << label << "-particles from Task " << FML::ThisTask + 1 << " / " << FML::NTasks << "\n";
+        fp << "# The lightcone crossing scale-factors for this sample is in [" << std::to_string(astart) << " -> "
+           << std::to_string(aend) << "]\n";
+        fp << "# The corresponding comoving distances is in [" << get_distance(aend) * boxsize << " -> "
+           << get_distance(astart) * boxsize << "] Mpc/h\n";
+        if (batches_this_step)
+            fp << "# This file is written in batches so no particle number information can be written here\n";
+        else {
+            fp << "# This file has " << npart << " / " << npart_total << " particles\n";
+        }
+        fp << what_we_output << "\n";
     }
 
     for (auto & p : part_lc) {
-      auto * pos = FML::PARTICLE::GetPos(p);
-      auto * vel = FML::PARTICLE::GetVel(p);
+        auto * pos = FML::PARTICLE::GetPos(p);
+        auto * vel = FML::PARTICLE::GetVel(p);
 
-      // Output the mass
-      if(output_mass) {
-        if constexpr(FML::PARTICLE::has_get_mass<T>()) {
-          fp << std::setw(10) << FML::PARTICLE::GetMass(p) << " ";
+        // Output the mass
+        if (output_mass) {
+            if constexpr (FML::PARTICLE::has_get_mass<T>()) {
+                fp << std::setw(10) << FML::PARTICLE::GetMass(p) << " ";
+            }
         }
-      }
 
-      // Output the position
-      if(output_pos) {
-        for (int idim = 0; idim < NDIM; idim++)
-          fp << std::setw(10) << pos[idim] << " ";
-      }
-
-      // Output the velocity
-      if(output_vel) {
-        for (int idim = 0; idim < NDIM; idim++)
-          fp << std::setw(10) << vel[idim] << " ";
-      }
-
-      // Output the radial velocity
-      if(output_vr) {
-        double vr = 0.0, r_squared = 0.0; 
-        for (int idim = 0; idim < NDIM; idim++) {
-          vr += vel[idim]*pos[idim]; 
-          r_squared += pos[idim]*pos[idim];
+        // Output the position
+        if (output_pos) {
+            for (int idim = 0; idim < NDIM; idim++)
+                fp << std::setw(10) << pos[idim] << " ";
         }
-        vr /= std::sqrt(r_squared);
-        fp << std::setw(10) << vr << " ";
-      }
 
-      // The potential, radial velocity and the cosmological and observed redshift
-      if(relativistic_effects) {
-        const auto q = relativistic_quantities(p);
-        fp << std::setw(14) << std::setprecision(7) << p.get_potential() << " " << std::setw(12) << q[0] << " "
-           << std::setw(14) << std::setprecision(9) << q[1] << " " << std::setw(14) << q[2] << " ";
-        fp << std::setprecision(6);
-      }
-      fp << "\n";
+        // Output the velocity
+        if (output_vel) {
+            for (int idim = 0; idim < NDIM; idim++)
+                fp << std::setw(10) << vel[idim] << " ";
+        }
+
+        // Output the radial velocity
+        if (output_vr) {
+            double vr = 0.0, r_squared = 0.0;
+            for (int idim = 0; idim < NDIM; idim++) {
+                vr += vel[idim] * pos[idim];
+                r_squared += pos[idim] * pos[idim];
+            }
+            vr /= std::sqrt(r_squared);
+            fp << std::setw(10) << vr << " ";
+        }
+
+        // The potential, radial velocity and the cosmological and observed redshift
+        if (relativistic_effects) {
+            const auto q = relativistic_quantities(p);
+            fp << std::setw(14) << std::setprecision(7) << p.get_potential() << " " << std::setw(12) << q[0] << " "
+               << std::setw(14) << std::setprecision(9) << q[1] << " " << std::setw(14) << q[2] << " ";
+            fp << std::setprecision(6);
+        }
+        fp << "\n";
     }
 
     // An option here is to save memory is to just output the radial velocity (needed for RSD)
-    // E.g. double vr = 0.0, r_squared = 0.0; 
+    // E.g. double vr = 0.0, r_squared = 0.0;
     // for (int idim = 0; idim < NDIM; idim++) {
     // vr += vel[idim]*pos[idim]; r_squared += pos[idim]*pos[idim];
     // }
@@ -1066,11 +1102,11 @@ void Lightcone<NDIM, T, U>::output_ascii(FML::Vector<U> & part_lc, double astart
 // Volume of a spherical shell bounded by rlow and rhigh in NDIM dimension
 template <int NDIM, class T, class U>
 double Lightcone<NDIM, T, U>::volume_shell(double rlow, double rhigh) {
-  if constexpr (NDIM == 3)
-    return 4.0 / 3.0 * M_PI * (rhigh * rhigh * rhigh - rlow * rlow * rlow);
-  else if (NDIM == 2)
-    return M_PI * (rhigh * rhigh - rlow * rlow);
-  else if (NDIM == 1)
+    if constexpr (NDIM == 3)
+        return 4.0 / 3.0 * M_PI * (rhigh * rhigh * rhigh - rlow * rlow * rlow);
+    else if (NDIM == 2)
+        return M_PI * (rhigh * rhigh - rlow * rlow);
+    else if (NDIM == 1)
         return 2.0 * (rhigh - rlow);
     else
         throw std::runtime_error("Volume-shell only implemented for ndim = 1,2,3");
@@ -1089,7 +1125,9 @@ double Lightcone<NDIM, T, U>::local_fraction_of_shell(double rlow, double rhigh)
     const double xmax = 1.0 - pos_observer[0] + nrep.second;
     const int npts = 1000 * (nrep.first + nrep.second + 1);
     const double dx = (xmax - xmin) / npts;
-    auto cross_section = [&](double r, double x) { return r * r > x * x ? std::pow(r * r - x * x, 0.5 * (NDIM - 1)) : 0.0; };
+    auto cross_section = [&](double r, double x) {
+        return r * r > x * x ? std::pow(r * r - x * x, 0.5 * (NDIM - 1)) : 0.0;
+    };
     double local = 0.0, total = 0.0;
     for (int i = 0; i < npts; i++) {
         const double x = xmin + (i + 0.5) * dx;
@@ -1118,10 +1156,11 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
         return;
     if (not make_onion_density_maps)
         return;
-    
+
     // Get a vector of all the delta-maps
     auto & maps = onionslices_of_type[particle_type].get_maps();
-    if(maps.size() == 0) return;
+    if (maps.size() == 0)
+        return;
 
     // Normalization factor for distances (which are in units of box)
     const double H0_hmpc = cosmo->get_H0_hmpc();
@@ -1129,17 +1168,17 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
     const double prefactor_kappa = 1.5 * cosmo->get_OmegaM();
 
     // Define what we mean by the "r" of a delta-map over the range [rmin,rmax]
-    // We put this to be the middle of the map 
+    // We put this to be the middle of the map
     auto get_r_of_delta_map = [&](OnionSlice<double, NDIM> & map) -> double {
-      return (map.get_rmin() + map.get_rmax()) / 2.0;
+        return (map.get_rmin() + map.get_rmax()) / 2.0;
     };
 
     // Allocate kappa-map container
     std::vector<OnionSlice<double, NDIM>> kappa_maps(maps.size());
 
     // Loop over the delta-maps (start with the map closest to the observer)
-    for (int i = int(maps.size())-1; i >= 0; i--) {
-       
+    for (int i = int(maps.size()) - 1; i >= 0; i--) {
+
         // The delta map
         auto & delta_map = maps[i];
         // Read the map we have saved from file
@@ -1159,22 +1198,23 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
         // The r of the delta-map
         const double r_delta_map = get_r_of_delta_map(delta_map);
         [[maybe_unused]] double a_delta_map = (amin + amax) / 2.0;
- 
+
         // Allocate all the kappa-maps
-        if(i == int(maps.size())-1) {
-          std::cout << "# Allocating kappa-maps\n";
-          for (size_t j = 0; j < maps.size(); j++) {
-            const auto & curmap = maps[j];
-            const double amap = curmap.get_amin();
-            const double rmap = curmap.get_rmax();
-            kappa_maps[j].init(rmap, rmap, amap, amap, nside, false, 0);
-          }
-          std::cout << "# Memory used: " << maps.size() * npix * sizeof(maps[0].get_map_data()[0]) / double(1024.*1024.) << " MB\n";
+        if (i == int(maps.size()) - 1) {
+            std::cout << "# Allocating kappa-maps\n";
+            for (size_t j = 0; j < maps.size(); j++) {
+                const auto & curmap = maps[j];
+                const double amap = curmap.get_amin();
+                const double rmap = curmap.get_rmax();
+                kappa_maps[j].init(rmap, rmap, amap, amap, nside, false, 0);
+            }
+            std::cout << "# Memory used: "
+                      << maps.size() * npix * sizeof(maps[0].get_map_data()[0]) / double(1024. * 1024.) << " MB\n";
         }
 
         std::cout << "# Processing delta-map i = " << i << " ";
         std::cout << "r_map = " << r_delta_map * boxsize << " Mpc/h ";
-        std::cout << "[rmin = " << rmin * boxsize << " -> rmax = " << rmax * boxsize << " Mpc/h]\n";  
+        std::cout << "[rmin = " << rmin * boxsize << " -> rmax = " << rmax * boxsize << " Mpc/h]\n";
 
         // Lopp over all kappa-maps and with j <= i and add the contribution to the
         // integral from the current slice
@@ -1187,26 +1227,27 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
             const int npts = 100;
             const double xmin = std::log(amin);
             const double xmax = std::log(amax);
-            const double dx = (xmax-xmin) / double(npts);
+            const double dx = (xmax - xmin) / double(npts);
             double integral = 0.0;
-            for(int k = 0; k < npts; k++) {
-              const double x = xmin + k * dx;
-              const double a = std::exp(x);
-              const double r = get_distance(a);
-              const double g = (r_kappa_map - r) / r_kappa_map;
-              integral += g * (r * (H0Box)) / a * (dx / (a * cosmo->HoverH0_of_a(a)));
+            for (int k = 0; k < npts; k++) {
+                const double x = xmin + k * dx;
+                const double a = std::exp(x);
+                const double r = get_distance(a);
+                const double g = (r_kappa_map - r) / r_kappa_map;
+                integral += g * (r * (H0Box)) / a * (dx / (a * cosmo->HoverH0_of_a(a)));
             }
 
             integral *= prefactor_kappa;
-            
+
             // An alternative way of doing this (approximate the full integral Int delta g dchi as a discrete sum):
             // Mostly gives the same result up to a few percent
-            // integral = prefactor / a_delta_map * ((r_kappa_map - r_delta_map) / r_kappa_map) * r_delta_map * (rmax - rmin) * std::pow(H0Box, 2);
+            // integral = prefactor / a_delta_map * ((r_kappa_map - r_delta_map) / r_kappa_map) * r_delta_map * (rmax -
+            // rmin) * std::pow(H0Box, 2);
 
             std::cout << "# Adding delta i = " << i << " ";
             std::cout << "[" << rmin * boxsize << " -> " << rmax * boxsize << " Mpc/h] ";
             std::cout << "to kappa-map j = " << j << " rmap = " << r_kappa_map * boxsize << " Mpc/h\n";
-            for (int k = 0; k < npix; k++) { 
+            for (int k = 0; k < npix; k++) {
                 kappa_map_data[k] += delta_map_data[k] * integral;
             }
         }
@@ -1224,19 +1265,20 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
         std::string filename = plc_folder + "/OnionMap_kappa_" + particle_type + "_imap" + std::to_string(i);
         kappa_maps[i].output(filename);
 
-        // Compute min/max of kappa 
+        // Compute min/max of kappa
         double kappa_min = std::numeric_limits<double>::max();
         double kappa_max = -std::numeric_limits<double>::max();
         double kappa_mean = 0.0;
         const auto * kappa_data = kappa_maps[i].get_map_data();
-        for(int k = 0; k < npix; k++) {
-          const double kappa = kappa_data[k];
-          kappa_min = std::min(kappa_min, kappa);
-          kappa_max = std::max(kappa_max, kappa);
-          kappa_mean += kappa;
+        for (int k = 0; k < npix; k++) {
+            const double kappa = kappa_data[k];
+            kappa_min = std::min(kappa_min, kappa);
+            kappa_max = std::max(kappa_max, kappa);
+            kappa_mean += kappa;
         }
         kappa_mean /= double(npix);
-        std::cout << "# Summary kappa: (min,mean,max) = (" << kappa_min << " , " << kappa_mean << " , " << kappa_max << ")\n"; 
+        std::cout << "# Summary kappa: (min,mean,max) = (" << kappa_min << " , " << kappa_mean << " , " << kappa_max
+                  << ")\n";
 
         // Compute and output C_kappakappa(ell)
         std::string filename_cell = plc_folder + "/Cell_kappa_" + particle_type + "_imap" + std::to_string(i) + ".txt";
@@ -1252,8 +1294,9 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
     std::ofstream fp(filename_kappa_info);
     fp << "# Info about the maps we output\n";
     fp << "# imap     amap           rmap (Mpc/h)\n";
-    for(size_t i = 0; i < kappa_maps.size(); i++) {
-      fp << std::setw(3) << i << " " << std::setw(12) << kappa_maps[i].get_amin() << " " << std::setw(12) << kappa_maps[i].get_rmax() * boxsize << "\n";
+    for (size_t i = 0; i < kappa_maps.size(); i++) {
+        fp << std::setw(3) << i << " " << std::setw(12) << kappa_maps[i].get_amin() << " " << std::setw(12)
+           << kappa_maps[i].get_rmax() * boxsize << "\n";
     }
 }
 

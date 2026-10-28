@@ -68,7 +68,8 @@ namespace FML {
                 if (ThisTask > 0)
                     return;
 #endif
-                std::lock_guard<std::mutex> guard(timings_mutex);                std::cout << "\n";
+                std::lock_guard<std::mutex> guard(timings_mutex);
+                std::cout << "\n";
                 std::cout << "============================================\n";
                 std::cout << "All the recorded timings for task 0:\n";
                 std::cout << "============================================\n";

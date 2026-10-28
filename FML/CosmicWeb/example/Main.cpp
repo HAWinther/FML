@@ -68,7 +68,7 @@ int main() {
                     if (p.Pos[d] >= 1.0)
                         p.Pos[d] = 0.0;
                 }
-                p.id = ((long long int)(ix) * Nlattice + iy) * Nlattice + iz;
+                p.id = ((long long int)(ix)*Nlattice + iy) * Nlattice + iz;
                 partvec.push_back(p);
             }
     FML::PARTICLE::MPIParticles<Particle> part;
@@ -91,8 +91,13 @@ int main() {
     std::vector<FML::COSMICWEB::OrigamiHalo> halos;
     FML::COSMICWEB::OrigamiHaloOptions halo_options;
     halo_options.core_density_threshold = 20.0;
-    FML::COSMICWEB::ORIGAMIHalos(
-        part.get_particles_ptr(), part.get_npart(), Nlattice, morphology, halo_id, halos, halo_options);
+    FML::COSMICWEB::ORIGAMIHalos(part.get_particles_ptr(),
+                                 part.get_npart(),
+                                 Nlattice,
+                                 morphology,
+                                 halo_id,
+                                 halos,
+                                 halo_options);
     if (FML::ThisTask == 0) {
         std::cout << "The 5 largest ORIGAMI halos:\n";
         for (size_t h = 0; h < std::min(size_t(5), halos.size()); h++)

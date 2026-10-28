@@ -10,41 +10,42 @@
 #include <FML/Units/Units.h>
 
 namespace FML::COSMOLOGY {
-using Spline1D = FML::INTERPOLATION::SPLINE::GSLSpline;
-using Spline2D = FML::INTERPOLATION::SPLINE::GSLSpline2D;
-using UniformSpline1D = FML::INTERPOLATION::SPLINE::UniformSpline;
-using ODESolver = FML::SOLVERS::ODESOLVER::ODESolver;
-using ODEFunction = FML::SOLVERS::ODESOLVER::ODEFunction;
-using ODEStepper = const gsl_odeiv2_step_type *;
-using FML::INTERPOLATION::SPLINE::spline2d_type;
-namespace Constants = FML::UTILS::SI;
+    using Spline1D = FML::INTERPOLATION::SPLINE::GSLSpline;
+    using Spline2D = FML::INTERPOLATION::SPLINE::GSLSpline2D;
+    using UniformSpline1D = FML::INTERPOLATION::SPLINE::UniformSpline;
+    using ODESolver = FML::SOLVERS::ODESOLVER::ODESolver;
+    using ODEFunction = FML::SOLVERS::ODESOLVER::ODEFunction;
+    using ODEStepper = const gsl_odeiv2_step_type *;
+    using FML::INTERPOLATION::SPLINE::spline2d_type;
+    namespace Constants = FML::UTILS::SI;
 
-namespace Utils {
-    using FML::FILEUTILS::fml_file;
-    using FML::MATH::integrate;
-    using FML::MATH::trapz;
-    using FML::MATH::find_root;
+    namespace Utils {
+        using FML::FILEUTILS::fml_file;
+        using FML::MATH::find_root;
+        using FML::MATH::integrate;
+        using FML::MATH::trapz;
 
-    // Preserve cosmology's strict point count and physical-endpoint logspace convention.
-    inline std::vector<double> linspace(double xmin, double xmax, int n) {
-        if (n < 2) throw std::invalid_argument("linspace: need n >= 2");
-        return FML::MATH::linspace(xmin, xmax, n);
-    }
-    inline std::vector<double> logspace(double xmin, double xmax, int n) {
-        return FML::MATH::geomspace(xmin, xmax, n);
-    }
-    inline double j_ell(int ell, double x) { return FML::MATH::spherical_bessel_j(ell, x); }
-    inline void j_ell_array(int lmax, double x, double * values) {
-        FML::MATH::spherical_bessel_j_array(lmax, x, values);
-    }
+        // Preserve cosmology's strict point count and physical-endpoint logspace convention.
+        inline std::vector<double> linspace(double xmin, double xmax, int n) {
+            if (n < 2)
+                throw std::invalid_argument("linspace: need n >= 2");
+            return FML::MATH::linspace(xmin, xmax, n);
+        }
+        inline std::vector<double> logspace(double xmin, double xmax, int n) {
+            return FML::MATH::geomspace(xmin, xmax, n);
+        }
+        inline double j_ell(int ell, double x) { return FML::MATH::spherical_bessel_j(ell, x); }
+        inline void j_ell_array(int lmax, double x, double * values) {
+            FML::MATH::spherical_bessel_j_array(lmax, x, values);
+        }
 
-    // Solver output policy remains local to cosmology.
-    inline bool verbose = true;
-    class Timer : public FML::UTILS::Timer {
-      public:
-        using FML::UTILS::Timer::Timer;
-        void print() const { FML::UTILS::Timer::print(verbose); }
-    };
-}
-}
+        // Solver output policy remains local to cosmology.
+        inline bool verbose = true;
+        class Timer : public FML::UTILS::Timer {
+          public:
+            using FML::UTILS::Timer::Timer;
+            void print() const { FML::UTILS::Timer::print(verbose); }
+        };
+    } // namespace Utils
+} // namespace FML::COSMOLOGY
 #endif

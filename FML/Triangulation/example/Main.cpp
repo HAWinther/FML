@@ -22,22 +22,22 @@ int main() {
     // Read particles from file
     //=======================================================================================
     FML::PARTICLE::MPIParticles<Particle> part;
-    
+
     const double boxsize = 1024.0;
     std::string filename = "../../../TestData/particles_B1024.txt";
     auto data = FML::FILEUTILS::loadtxt(filename);
     std::vector<Particle> partvec;
     partvec.reserve(data.size());
-    for(auto & row : data){
-      Particle p;
-      auto * pos = p.get_pos();
-      pos[0] = row[0] / boxsize;
-      pos[1] = row[1] / boxsize;
-      pos[2] = row[2] / boxsize;
-      assert(pos[0] < 1.0 and pos[0] >= 0.0);
-      assert(pos[1] < 1.0 and pos[1] >= 0.0);
-      assert(pos[2] < 1.0 and pos[2] >= 0.0);
-      partvec.push_back(p);
+    for (auto & row : data) {
+        Particle p;
+        auto * pos = p.get_pos();
+        pos[0] = row[0] / boxsize;
+        pos[1] = row[1] / boxsize;
+        pos[2] = row[2] / boxsize;
+        assert(pos[0] < 1.0 and pos[0] >= 0.0);
+        assert(pos[1] < 1.0 and pos[1] >= 0.0);
+        assert(pos[2] < 1.0 and pos[2] >= 0.0);
+        partvec.push_back(p);
     }
 
     part.create(partvec.data(), partvec.size(), partvec.size(), FML::xmin_domain, FML::xmax_domain, true);
@@ -58,8 +58,11 @@ int main() {
     const double buffer_fraction = 0.33;
     using WatershedBasin = FML::TRIANGULATION::WatershedBasin<Particle, NDIM>;
     std::vector<WatershedBasin> watershed_groups;
-    FML::TRIANGULATION::WatershedDensity(
-        part.get_particles_ptr(), part.get_npart(), watershed_groups, buffer_fraction, random_fraction);
+    FML::TRIANGULATION::WatershedDensity(part.get_particles_ptr(),
+                                         part.get_npart(),
+                                         watershed_groups,
+                                         buffer_fraction,
+                                         random_fraction);
 
     // Output the resulting (what is here basically a zobov void) catalogue
     if (FML::ThisTask == 0) {
@@ -74,7 +77,7 @@ int main() {
             double delta_avg = density_avg / mean_density - 1.0;
             double delta_min = density_min / mean_density - 1.0;
             double radius = std::pow(3.0 * volume / (4.0 * M_PI), 1.0 / 3.0) * boxsize;
-            fp << std::setw(6)  << i << " ";
+            fp << std::setw(6) << i << " ";
             fp << std::setw(10) << boxsize * watershed_groups[i].pos_barycenter[0] << " ";
             fp << std::setw(10) << boxsize * watershed_groups[i].pos_barycenter[1] << " ";
             fp << std::setw(10) << boxsize * watershed_groups[i].pos_barycenter[2] << " ";

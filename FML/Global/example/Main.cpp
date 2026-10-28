@@ -7,8 +7,8 @@ using Vector = FML::Vector<T>;
 
 int main() {
 
-    // If we don't want automatic initialization/finalization of FML/MPI/FFTW (NO_AUTO_FML_SETUP) then we can do it like this
-    // (or the way you are used to; just remember to set MPIThreadsOK and FFTWThreadsOK and call init_fml last)
+    // If we don't want automatic initialization/finalization of FML/MPI/FFTW (NO_AUTO_FML_SETUP) then we can do it like
+    // this (or the way you are used to; just remember to set MPIThreadsOK and FFTWThreadsOK and call init_fml last)
     // FML::init_mpi();
     // FML::GRID::init_fftw();
     // FML::init_fml();
@@ -17,12 +17,12 @@ int main() {
     // The stuff we store in global
     std::cout << "Task " << FML::ThisTask << " Total Tasks: " << FML::NTasks << " xmin: " << FML::xmin_domain
               << " xmax: " << FML::xmax_domain << std::endl;
-    
+
 #ifdef MEMORY_LOGGING
     // Print the FML memory log
     FML::MemoryLog::get()->print();
     FML::print_system_memory_use();
-   
+
     // Allocate some memory with standard container
     Vector<double> a(1000000);
     Vector<double> b(1000000);
@@ -42,12 +42,11 @@ int main() {
     a.shrink_to_fit();
     b.shrink_to_fit();
 
-    // Print the FML memory log 
+    // Print the FML memory log
     FML::MemoryLog::get()->print();
     FML::print_system_memory_use();
 #endif
 
-    // If we don't want automatic initialization/finalization of FML/MPI/FFTW (NO_AUTO_FML_SETUP) then we can do it like this
-    // FML::GRID::finalize_fftw();
-    // FML::finalize_mpi();
+    // If we don't want automatic initialization/finalization of FML/MPI/FFTW (NO_AUTO_FML_SETUP) then we can do it like
+    // this FML::GRID::finalize_fftw(); FML::finalize_mpi();
 }

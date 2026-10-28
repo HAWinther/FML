@@ -116,8 +116,8 @@ namespace FML {
 
             if (FML::ThisTask == 0)
                 std::cout << "[SphericalVoidFinder] Delta = " << options.delta_threshold
-                          << " candidate density cut = " << options.candidate_density_cut << " radius range ["
-                          << rmin << " , " << rmax << "] (box units)\n";
+                          << " candidate density cut = " << options.candidate_density_cut << " radius range [" << rmin
+                          << " , " << rmax << "] (box units)\n";
 
             // Candidate centers from the density grid
             FML::GRID::FFTWGrid<3> grid;
@@ -170,8 +170,14 @@ namespace FML {
                     for (int i = 1; i < FML::NTasks; i++)
                         displs[i] = displs[i - 1] + counts[i - 1];
                     std::vector<PosMass> all(size_t(displs.back()) + counts.back());
-                    MPI_Allgatherv(
-                        parts.data(), n, type, all.data(), counts.data(), displs.data(), type, FML::communicator);
+                    MPI_Allgatherv(parts.data(),
+                                   n,
+                                   type,
+                                   all.data(),
+                                   counts.data(),
+                                   displs.data(),
+                                   type,
+                                   FML::communicator);
                     parts = std::move(all);
                 } else {
                     const int LeftTask = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
@@ -184,14 +190,56 @@ namespace FML {
                             to_right.push_back(q);
                     }
                     int nl = int(to_left.size()), nr = int(to_right.size()), rl = 0, rr = 0;
-                    MPI_Sendrecv(&nl, 1, MPI_INT, LeftTask, 0, &rr, 1, MPI_INT, RightTask, 0, FML::communicator, MPI_STATUS_IGNORE);
-                    MPI_Sendrecv(&nr, 1, MPI_INT, RightTask, 1, &rl, 1, MPI_INT, LeftTask, 1, FML::communicator, MPI_STATUS_IGNORE);
+                    MPI_Sendrecv(&nl,
+                                 1,
+                                 MPI_INT,
+                                 LeftTask,
+                                 0,
+                                 &rr,
+                                 1,
+                                 MPI_INT,
+                                 RightTask,
+                                 0,
+                                 FML::communicator,
+                                 MPI_STATUS_IGNORE);
+                    MPI_Sendrecv(&nr,
+                                 1,
+                                 MPI_INT,
+                                 RightTask,
+                                 1,
+                                 &rl,
+                                 1,
+                                 MPI_INT,
+                                 LeftTask,
+                                 1,
+                                 FML::communicator,
+                                 MPI_STATUS_IGNORE);
                     const size_t n0 = parts.size();
                     parts.resize(n0 + rl + rr);
-                    MPI_Sendrecv(to_left.data(), nl, type, LeftTask, 2, parts.data() + n0 + rl, rr, type, RightTask, 2,
-                                 FML::communicator, MPI_STATUS_IGNORE);
-                    MPI_Sendrecv(to_right.data(), nr, type, RightTask, 3, parts.data() + n0, rl, type, LeftTask, 3,
-                                 FML::communicator, MPI_STATUS_IGNORE);
+                    MPI_Sendrecv(to_left.data(),
+                                 nl,
+                                 type,
+                                 LeftTask,
+                                 2,
+                                 parts.data() + n0 + rl,
+                                 rr,
+                                 type,
+                                 RightTask,
+                                 2,
+                                 FML::communicator,
+                                 MPI_STATUS_IGNORE);
+                    MPI_Sendrecv(to_right.data(),
+                                 nr,
+                                 type,
+                                 RightTask,
+                                 3,
+                                 parts.data() + n0,
+                                 rl,
+                                 type,
+                                 LeftTask,
+                                 3,
+                                 FML::communicator,
+                                 MPI_STATUS_IGNORE);
                 }
                 MPI_Type_free(&type);
             }
@@ -364,7 +412,15 @@ namespace FML {
                 std::vector<SphereCandidate> all;
                 if (FML::ThisTask == 0)
                     all.resize(size_t(displs.back()) + counts.back());
-                MPI_Gatherv(spheres.data(), n, type, all.data(), counts.data(), displs.data(), type, 0, FML::communicator);
+                MPI_Gatherv(spheres.data(),
+                            n,
+                            type,
+                            all.data(),
+                            counts.data(),
+                            displs.data(),
+                            type,
+                            0,
+                            FML::communicator);
                 MPI_Type_free(&type);
                 spheres = std::move(all);
             }

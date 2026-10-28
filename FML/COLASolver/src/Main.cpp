@@ -88,15 +88,16 @@ int main(int argc, char ** argv) {
     // what we need (see Particles.h). COLA with LPT order < 1 is
     // turned off (see SimulationParameters.h)
     //=============================================================
-    const bool use_cola =
-        param.get<bool>("simulation_use_cola") and COLASOLVER::get_parameter<int>(param, "simulation_cola_LPT_order") >= 1;
+    const bool use_cola = param.get<bool>("simulation_use_cola") and
+                          COLASOLVER::get_parameter<int>(param, "simulation_cola_LPT_order") >= 1;
     const bool scaledependent_cola = use_cola and param.get<bool>("simulation_use_scaledependent_cola");
     // Sheet interpolation needs the Lagrangian position q
     const std::string density_method = COLASOLVER::get_parameter<std::string>(param, "force_density_method");
     const bool need_q = density_method == "sheet" or density_method == "sheet_nufft";
     // The mass-encoded baryon-CDM relative mode needs a mass in the particles (density assignment only, so no q)
-    const bool need_mass = COLASOLVER::get_parameter<bool>(param, "particle_baryons") and
-                           COLASOLVER::get_parameter<std::string>(param, "particle_baryon_relative_mode") != "displacement";
+    const bool need_mass =
+        COLASOLVER::get_parameter<bool>(param, "particle_baryons") and
+        COLASOLVER::get_parameter<std::string>(param, "particle_baryon_relative_mode") != "displacement";
     if (need_mass) {
         if (scaledependent_cola)
             run_simulation<ParticleWithMass<ParticleCOLAScaleDep<NDIM>>>(param, cosmo, grav);

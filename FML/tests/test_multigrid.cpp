@@ -92,7 +92,8 @@ int main() {
             auto x = s.get_Coordinate(0, i);
             auto g = s.get_Gradient(0, i, order);
             auto g2 = s.get_Gradient2(0, i, order);
-            const double d1[3] = {2 * M_PI * std::cos(2 * M_PI * x[0]), 4 * M_PI * std::cos(4 * M_PI * x[1]),
+            const double d1[3] = {2 * M_PI * std::cos(2 * M_PI * x[0]),
+                                  4 * M_PI * std::cos(4 * M_PI * x[1]),
                                   -2 * M_PI * std::sin(2 * M_PI * x[2])};
             const double d2[3] = {-4 * M_PI * M_PI * std::sin(2 * M_PI * x[0]),
                                   -16 * M_PI * M_PI * std::sin(4 * M_PI * x[1]),
@@ -107,8 +108,8 @@ int main() {
         // Truncation error ~ (k h)^(2 order) with k h = 4 pi / 32
         const double expected = std::pow(4 * M_PI / N, 2 * order);
         check(e1 < expected and e2 < expected,
-              "get_Gradient / get_Gradient2 of order " + std::to_string(order) + ": relative errors " + num(e1) +
-                  ", " + num(e2) + " (truncation error ~" + num(expected) + ")");
+              "get_Gradient / get_Gradient2 of order " + std::to_string(order) + ": relative errors " + num(e1) + ", " +
+                  num(e2) + " (truncation error ~" + num(expected) + ")");
     }
 
     // 2. Poisson
@@ -147,7 +148,9 @@ int main() {
         s.set_epsilon(1e-8);
         s.set_maxsteps(30);
         s.set_initial_guess(0.0);
-        MultiGridConvCrit crit = [&](double r, double r0, int step) { return s.ConvergenceCriterionResidual(r, r0, step); };
+        MultiGridConvCrit crit = [&](double r, double r0, int step) {
+            return s.ConvergenceCriterionResidual(r, r0, step);
+        };
         const double alpha = 3.0;
         MultiGridFunction<NDIM, double> eq = [&](Solver * sol, int level, IndexInt index) {
             const double h = sol->get_Gridspacing(level);
@@ -213,8 +216,14 @@ int main() {
 
         // Solve and return the fifth force (finite difference gradient) and the number of V-cycles
         // (the density contrast is multiplied by a * boost: for boost > 1 the halo is denser, but delta >= -1 still)
-        auto solve = [&](std::string method, double fofr0, double n, double a, FML::GRID::FFTWGrid<NDIM> & phi,
-                         double eps = 1e-8, double boost = 1.0, int nsweeps = 10) {
+        auto solve = [&](std::string method,
+                         double fofr0,
+                         double n,
+                         double a,
+                         FML::GRID::FFTWGrid<NDIM> & phi,
+                         double eps = 1e-8,
+                         double boost = 1.0,
+                         int nsweeps = 10) {
             FML::GRID::FFTWGrid<NDIM> d = delta;
             for (int islice = 0; islice < d.get_local_nx(); islice++)
                 for (auto && ri : d.get_real_range(islice, islice + 1)) {
@@ -265,8 +274,10 @@ int main() {
             solve("sqrt", 1e-6, n, 0.5, phi2, 1e-7, 10.0, 1);
             const double dd = force_difference(phi1, phi2);
             check(nv1 > 0 and dd < 1e-4,
-                  "f(R) |f_R0| = 1e-6, n = " + num(n) + ", a = 0.5 with the sqrt method: the solution with residual < "
-                  "1e-7 is within " + num(dd) + " of one with < 1e-13 (" + std::to_string(nv1) + " V-cycles)");
+                  "f(R) |f_R0| = 1e-6, n = " + num(n) +
+                      ", a = 0.5 with the sqrt method: the solution with residual < "
+                      "1e-7 is within " +
+                      num(dd) + " of one with < 1e-13 (" + std::to_string(nv1) + " V-cycles)");
         }
 
         // 5. Symmetron (assb = 0.5, range 8 Mpc/h today, box 256 Mpc/h). The solver returns forcenorm (phi/phi0)^2

@@ -26,18 +26,19 @@ void run_simulation(const FML::UTILS::ParameterMap & param,
                     std::shared_ptr<GravityModel<NDIM_SPACE>> grav);
 
 /// The particle types the simulation is compiled for (see Particles.h and the choice in Main.cpp)
-#define COLASOLVER_PARTICLE_TYPES(X) \
-    X(ParticleWithMass<ParticleCOLAScaleDep<NDIM_SPACE>>) \
-    X(ParticleWithMass<ParticleCOLA<NDIM_SPACE>>) \
-    X(ParticleWithMass<ParticleBasic<NDIM_SPACE>>) \
-    X(ParticleCOLAScaleDep<NDIM_SPACE>) \
-    X(ParticleCOLA<NDIM_SPACE>) \
-    X(ParticleBasicQ<NDIM_SPACE>) \
+#define COLASOLVER_PARTICLE_TYPES(X)                                                                                   \
+    X(ParticleWithMass<ParticleCOLAScaleDep<NDIM_SPACE>>)                                                              \
+    X(ParticleWithMass<ParticleCOLA<NDIM_SPACE>>)                                                                      \
+    X(ParticleWithMass<ParticleBasic<NDIM_SPACE>>)                                                                     \
+    X(ParticleCOLAScaleDep<NDIM_SPACE>)                                                                                \
+    X(ParticleCOLA<NDIM_SPACE>)                                                                                        \
+    X(ParticleBasicQ<NDIM_SPACE>)                                                                                      \
     X(ParticleBasic<NDIM_SPACE>)
 
-#define COLASOLVER_DECLARE_RUN_SIMULATION(T)                                                                          \
-    extern template void run_simulation<T>(                                                                           \
-        const FML::UTILS::ParameterMap &, std::shared_ptr<Cosmology>, std::shared_ptr<GravityModel<NDIM_SPACE>>);
+#define COLASOLVER_DECLARE_RUN_SIMULATION(T)                                                                           \
+    extern template void run_simulation<T>(const FML::UTILS::ParameterMap &,                                           \
+                                           std::shared_ptr<Cosmology>,                                                 \
+                                           std::shared_ptr<GravityModel<NDIM_SPACE>>);
 COLASOLVER_PARTICLE_TYPES(COLASOLVER_DECLARE_RUN_SIMULATION)
 #undef COLASOLVER_DECLARE_RUN_SIMULATION
 

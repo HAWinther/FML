@@ -34,13 +34,13 @@ int main() {
     std::vector<Galaxy> galaxies;
     auto data = FML::FILEUTILS::loadtxt(filename);
     for (auto & row : data) {
-      Galaxy g;
-      g.DEC = row[0];
-      g.RA = row[1];
-      g.z = row[2];
-      if(row.size() > 3)
-        g.weight = row[3];
-      galaxies.push_back(g);
+        Galaxy g;
+        g.DEC = row[0];
+        g.RA = row[1];
+        g.z = row[2];
+        if (row.size() > 3)
+            g.weight = row[3];
+        galaxies.push_back(g);
     }
     std::cout << "Read: " << galaxies.size() << " galaxies\n";
 

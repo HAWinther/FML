@@ -21,28 +21,28 @@
 
 namespace FML::COSMOLOGY {
 
-class HuSawickyGravity : public MuSigmaGravity {
-  public:
-    HuSawickyGravity(double fR0, double n);
-    std::string name() const override { return "Hu-Sawicky f(R)"; }
-    std::string info() const override;
-    void init_background(const BackgroundCosmology& bg) override;
+    class HuSawickyGravity : public MuSigmaGravity {
+      public:
+        HuSawickyGravity(double fR0, double n);
+        std::string name() const override { return "Hu-Sawicky f(R)"; }
+        std::string info() const override;
+        void init_background(const BackgroundCosmology & bg) override;
 
-    MuSigma mu_sigma(double x, double k, const BackgroundCosmology& bg) const override;
-    // Ricci scalar [1/m^2], f_R, f_RR [m^2] and the Compton wavelength [m] of the background
-    double R(double x, const BackgroundCosmology& bg) const;
-    double fR(double x, const BackgroundCosmology& bg) const;
-    double fRR(double x, const BackgroundCosmology& bg) const;
-    double compton_wavelength(double x, const BackgroundCosmology& bg) const;
-    // Tensors: M*^2 = 1 + f_R, alpha_M = f_RR dR/dx / (1 + f_R)
-    TensorCoefficients tensor(double x, const BackgroundCosmology& bg) const override;
+        MuSigma mu_sigma(double x, double k, const BackgroundCosmology & bg) const override;
+        // Ricci scalar [1/m^2], f_R, f_RR [m^2] and the Compton wavelength [m] of the background
+        double R(double x, const BackgroundCosmology & bg) const;
+        double fR(double x, const BackgroundCosmology & bg) const;
+        double fRR(double x, const BackgroundCosmology & bg) const;
+        double compton_wavelength(double x, const BackgroundCosmology & bg) const;
+        // Tensors: M*^2 = 1 + f_R, alpha_M = f_RR dR/dx / (1 + f_R)
+        TensorCoefficients tensor(double x, const BackgroundCosmology & bg) const override;
 
-  private:
-    double fR0, n;
-    double lambdaC0_Mpc = 0.0;   // Compton wavelength today (for info)
-    // mu and Sigma at (x, k)
-    void values(double x, double k, const BackgroundCosmology& bg, double& mu, double& Sigma) const;
-};
+      private:
+        double fR0, n;
+        double lambdaC0_Mpc = 0.0; // Compton wavelength today (for info)
+        // mu and Sigma at (x, k)
+        void values(double x, double k, const BackgroundCosmology & bg, double & mu, double & Sigma) const;
+    };
 
 } // namespace FML::COSMOLOGY
 

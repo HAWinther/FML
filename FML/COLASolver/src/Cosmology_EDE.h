@@ -64,7 +64,10 @@ class CosmologyEDE final : public CosmologyScalarField {
                 solve_field(f * theta_ini, 0.0, a_stop);
                 return std::log(1.0 / last_solution.a_peak) - std::log(1.0 / ac);
             };
-            m = std::exp(find_root_increasing(log_zpeak_minus_target, std::log(m) - 1.0, std::log(m) + 1.0, 1e-6,
+            m = std::exp(find_root_increasing(log_zpeak_minus_target,
+                                              std::log(m) - 1.0,
+                                              std::log(m) + 1.0,
+                                              1e-6,
                                               name + " (zc)"));
             solve_field(f * theta_ini, 0.0, a_stop);
             const double ratio = last_solution.peak_fraction / fEDE;

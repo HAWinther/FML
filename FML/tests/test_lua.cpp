@@ -51,7 +51,8 @@ int main(int argc, char ** argv) {
     if (not mode.empty())
         return 0;
 
-    check(lua_odr_check() == 1, "LuaFileParser.h can be included in several translation units (13 multiple definitions before)");
+    check(lua_odr_check() == 1,
+          "LuaFileParser.h can be included in several translation units (13 multiple definitions before)");
 
     // Many missing optional parameters, then the real ones
     bool defaults_ok = true;
@@ -83,6 +84,7 @@ int main(int argc, char ** argv) {
     std::remove(fn.c_str());
     std::remove(fn2.c_str());
     if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All Lua parser tests passed\n" : std::to_string(fails) + " Lua parser test(s) FAILED\n");
+        std::cout << (fails == 0 ? "All Lua parser tests passed\n" :
+                                   std::to_string(fails) + " Lua parser test(s) FAILED\n");
     return fails == 0 ? 0 : 1;
 }

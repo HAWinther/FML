@@ -26,18 +26,19 @@
 
 namespace FML::COSMOLOGY::FITTING {
 
-class SampledParameterMap {
-  public:
-    SampledParameterMap(std::vector<std::string> fixed, std::vector<std::string> sampled,
-                 std::set<std::string> nuisance = {});
-    RunSettings settings(const std::vector<double>& x) const;   // throws for invalid points
-    static const std::set<std::string>& aliases();
+    class SampledParameterMap {
+      public:
+        SampledParameterMap(std::vector<std::string> fixed,
+                            std::vector<std::string> sampled,
+                            std::set<std::string> nuisance = {});
+        RunSettings settings(const std::vector<double> & x) const; // throws for invalid points
+        static const std::set<std::string> & aliases();
 
-  private:
-    std::vector<std::string> fixed, names;
-    std::set<std::string> nuis;
-    bool theta = false;
-};
+      private:
+        std::vector<std::string> fixed, names;
+        std::set<std::string> nuis;
+        bool theta = false;
+    };
 
 } // namespace FML::COSMOLOGY::FITTING
 

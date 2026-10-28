@@ -17,11 +17,11 @@ template <int NDIM>
 class GravityModelDGP final : public GravityModelScreened<NDIM> {
   protected:
     double rcH0_DGP;
-    
+
     // For screening method
     std::string smoothing_filter{"tophat"};
     double smoothing_scale_over_boxsize{0.0};
-    
+
 
   public:
     template <int N>
@@ -121,8 +121,7 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
                                  FFTWGrid<NDIM> & density_real,
                                  FFTWGrid<NDIM> & potential_real) const override {
         const bool verbose = true;
-        DGPSolverCosmology<NDIM, double> mgsolver(
-            this->cosmo->get_OmegaM(), rcH0_DGP, get_beta_dgp(a), H0Box, verbose);
+        DGPSolverCosmology<NDIM, double> mgsolver(this->cosmo->get_OmegaM(), rcH0_DGP, get_beta_dgp(a), H0Box, verbose);
         mgsolver.set_ngs_steps(this->multigrid_nsweeps, this->multigrid_nsweeps, this->multigrid_nsweeps_first_step);
         mgsolver.set_epsilon(this->multigrid_solver_residual_convergence);
         mgsolver.solve(a, density_real, potential_real);

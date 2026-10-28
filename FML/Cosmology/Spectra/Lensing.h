@@ -32,28 +32,32 @@
 
 namespace FML::COSMOLOGY {
 
-namespace Lensing {
+    namespace Lensing {
 
-  struct Options {
-    int c2_order = 2;     // order in C_gl,2 (0, 1 or 2)
-    int c0_order = 0;     // 1: include the first order in C_gl (more accurate, slower)
-    // Gauss-Legendre points: L + n_mu_extra. N = L (as in CLASS) treats the input as band-limited at L;
-    // more points resolve the sharp truncation of the input C_l at L, which changes the lensed
-    // spectra near lmax_out unless L - lmax_out is large.
-    int n_mu_extra = 0;
-  };
+        struct Options {
+            int c2_order = 2; // order in C_gl,2 (0, 1 or 2)
+            int c0_order = 0; // 1: include the first order in C_gl (more accurate, slower)
+            // Gauss-Legendre points: L + n_mu_extra. N = L (as in CLASS) treats the input as band-limited at L;
+            // more points resolve the sharp truncation of the input C_l at L, which changes the lensed
+            // spectra near lmax_out unless L - lmax_out is large.
+            int n_mu_extra = 0;
+        };
 
-  struct Result {
-    std::vector<double> tt, ee, te, bb;  // lensed C_l for l = 0..lmax_out (0 and 1 set to 0)
-  };
+        struct Result {
+            std::vector<double> tt, ee, te, bb; // lensed C_l for l = 0..lmax_out (0 and 1 set to 0)
+        };
 
-  Result lens(const std::vector<double>& cl_tt, const std::vector<double>& cl_ee,
-              const std::vector<double>& cl_te, const std::vector<double>& cl_bb,
-              const std::vector<double>& cl_pp, int lmax_out, const Options& opt = Options());
+        Result lens(const std::vector<double> & cl_tt,
+                    const std::vector<double> & cl_ee,
+                    const std::vector<double> & cl_te,
+                    const std::vector<double> & cl_bb,
+                    const std::vector<double> & cl_pp,
+                    int lmax_out,
+                    const Options & opt = Options());
 
-  // d^l_{m m'}(beta) for l = 0..lmax at mu = cos(beta), by recurrence in l (zero for l < max(|m|,|m'|))
-  void wigner_d(int m, int mp, double mu, int lmax, std::vector<double>& d);
-}
+        // d^l_{m m'}(beta) for l = 0..lmax at mu = cos(beta), by recurrence in l (zero for l < max(|m|,|m'|))
+        void wigner_d(int m, int mp, double mu, int lmax, std::vector<double> & d);
+    } // namespace Lensing
 
 } // namespace FML::COSMOLOGY
 

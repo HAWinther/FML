@@ -43,7 +43,7 @@ int main() {
     // Read gadget files and fill the data in part
     // only_keep_part_in_domain is for MPI -> only store particles
     // that belong to the current task
-    // buffer_factor : If only_keep_part_in_domain then how much more space 
+    // buffer_factor : If only_keep_part_in_domain then how much more space
     // to allocate compared to the average among tasks
     // NB: if we go over we will reallocate automatically!
     //=========================================================
@@ -58,7 +58,7 @@ int main() {
     auto header = g.get_header();
     size_t NumPartTotal = part.size();
     FML::SumOverTasks(&NumPartTotal);
-   
+
     //=========================================================
     // Print header
     //=========================================================
@@ -94,7 +94,7 @@ int main() {
     //=========================================================
     // Write gadget files
     // pos_norm: convert from user position to position in [0,box)
-    // vel_norm: convert from user velocity to sqrt(a)*dxdt in km/s 
+    // vel_norm: convert from user velocity to sqrt(a)*dxdt in km/s
     //=========================================================
     GadgetWriter gw;
     const double scale_factor = header.time;

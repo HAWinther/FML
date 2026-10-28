@@ -103,8 +103,10 @@ int main() {
                          std::fabs(pdist2(pts[knn[j]], pt, boxsize) - all[j].first) <= 1e-14 * L * L;
                 bad_knn += not ok;
             }
-            const std::string label = "box " + std::to_string(boxsize).substr(0, 3) + ", " + std::to_string(ndim) + "D: ";
-            check(bad_knn == 0, label + "k nearest neighbours and distances (" + std::to_string(bad_knn) + " of 100 wrong)");
+            const std::string label =
+                "box " + std::to_string(boxsize).substr(0, 3) + ", " + std::to_string(ndim) + "D: ";
+            check(bad_knn == 0,
+                  label + "k nearest neighbours and distances (" + std::to_string(bad_knn) + " of 100 wrong)");
             check(bad_nearest == 0, label + "nearest neighbour (" + std::to_string(bad_nearest) + " of 300 wrong)");
             check(bad_radius == 0, label + "points within r (" + std::to_string(bad_radius) + " of 300 wrong)");
         }
@@ -126,8 +128,8 @@ int main() {
             auto found = tree.neighborhood_indices(pt, r);
             std::set<size_t> unique(found.begin(), found.end());
             check(found.size() == truth and unique.size() == truth,
-                  "periodic r = " + std::to_string(r).substr(0, 3) + " (>= boxsize/2): " + std::to_string(found.size()) +
-                      " of " + std::to_string(truth) + ", each once");
+                  "periodic r = " + std::to_string(r).substr(0, 3) + " (>= boxsize/2): " +
+                      std::to_string(found.size()) + " of " + std::to_string(truth) + ", each once");
         }
         point_t outside{1.02, -0.03, 0.5}, wrapped{0.02, 0.97, 0.5};
         auto a = tree.neighborhood_indices(outside, 0.1), b = tree.neighborhood_indices(wrapped, 0.1);
@@ -151,7 +153,8 @@ int main() {
             for (int d = 0; d < 3; d++)
                 particles[i].pos[d] = pts[i][d];
         KDTree tree_part(particles.data(), particles.size(), boxsize);
-        auto c = tree_part.neighborhood_indices(point_t{0.1, 0.9, 0.5}, 0.15), d = tree.neighborhood_indices(point_t{0.1, 0.9, 0.5}, 0.15);
+        auto c = tree_part.neighborhood_indices(point_t{0.1, 0.9, 0.5}, 0.15),
+             d = tree.neighborhood_indices(point_t{0.1, 0.9, 0.5}, 0.15);
         check(std::set<size_t>(c.begin(), c.end()) == std::set<size_t>(d.begin(), d.end()), "tree from particles");
     }
 

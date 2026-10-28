@@ -95,8 +95,8 @@ class BoxReplicas {
             const double R_complete = 1.0 - *std::max_element(observer.begin(), observer.end());
             FML::assert_mpi(R_init <= R_complete,
                             ("We do not use replicas, but the lightcone at plc_z_init has radius R_init = " +
-                             std::to_string(R_init) + " boxsize > 1 - max(plc_pos_observer) = " +
-                             std::to_string(R_complete) +
+                             std::to_string(R_init) +
+                             " boxsize > 1 - max(plc_pos_observer) = " + std::to_string(R_complete) +
                              " boxsize, so the lightcone octant will not be complete. Reduce plc_z_init, "
                              "increase the boxsize, move the observer (towards the origin) or use replicas")
                                 .c_str());

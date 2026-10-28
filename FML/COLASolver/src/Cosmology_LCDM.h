@@ -36,7 +36,7 @@ class CosmologyLCDM final : public Cosmology {
             std::cout << "\n";
         }
     }
-    
+
     //========================================================================
     // This method returns an estimate for the non-linear Pnl/Plinea
     // The fiducial option is to use the EuclidEmulator2

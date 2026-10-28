@@ -47,8 +47,12 @@ int main() {
     const int nhalo = 4000;
     const double Rmax = 0.02;
     const double vel_halo = 0.3;
-    const std::vector<std::array<double, 3>> centers{
-        {0.5, 0.3, 0.7}, {0.25, 0.6, 0.2}, {0.75, 0.1, 0.9}, {0.0, 0.5, 0.5}, {0.62, 0.8, 0.4}, {0.999, 0.2, 0.3}};
+    const std::vector<std::array<double, 3>> centers{{0.5, 0.3, 0.7},
+                                                     {0.25, 0.6, 0.2},
+                                                     {0.75, 0.1, 0.9},
+                                                     {0.0, 0.5, 0.5},
+                                                     {0.62, 0.8, 0.4},
+                                                     {0.999, 0.2, 0.3}};
 
     // The same particles on all tasks; keep the ones in the local domain
     std::mt19937 gen(42);
@@ -61,7 +65,8 @@ int main() {
             const double r = Rmax * uni(gen);
             const double mu = 2.0 * uni(gen) - 1.0, phi = 2.0 * M_PI * uni(gen);
             const double s = std::sqrt(1.0 - mu * mu);
-            all.push_back({{wrap(centers[h][0] + r * s * std::cos(phi)), wrap(centers[h][1] + r * s * std::sin(phi)),
+            all.push_back({{wrap(centers[h][0] + r * s * std::cos(phi)),
+                            wrap(centers[h][1] + r * s * std::sin(phi)),
                             wrap(centers[h][2] + r * mu)},
                            {vel_halo * (h + 1), 0.0, 0.0}});
         }
@@ -90,8 +95,13 @@ int main() {
         thresholds.push_back((3.0 * nhalo / (4.0 * M_PI * Rmax * R * R) + nbackground) / total_mass);
     std::vector<double> initial_radius(guess.size(), Rmax);
     const double search_radius = 0.05;
-    auto so = FML::FOF::SphericalOverdensity<Particle, NDIM>(
-        local.data(), local.size(), total_mass, guess, initial_radius, thresholds, search_radius);
+    auto so = FML::FOF::SphericalOverdensity<Particle, NDIM>(local.data(),
+                                                             local.size(),
+                                                             total_mass,
+                                                             guess,
+                                                             initial_radius,
+                                                             thresholds,
+                                                             search_radius);
 
     double maxerr_R = 0.0, maxerr_M = 0.0, maxerr_pos = 0.0, maxerr_vel = 0.0;
     for (size_t i = 0; i < so.size(); i++) {
@@ -128,9 +138,15 @@ int main() {
     // A threshold whose radius is larger than the search radius: truncated
     const double Rbig = 0.08;
     std::vector<double> low{(3.0 * nhalo / (4.0 * M_PI * Rmax * Rbig * Rbig) + nbackground) / total_mass};
-    FML::FOF::SphericalOverdensity<Particle, NDIM>(
-        local.data(), local.size(), total_mass, guess, initial_radius, low, search_radius);
-    check(FML::FOF::SO_number_of_truncated_halos == centers.size(), label + "spheres larger than the search radius reported");
+    FML::FOF::SphericalOverdensity<Particle, NDIM>(local.data(),
+                                                   local.size(),
+                                                   total_mass,
+                                                   guess,
+                                                   initial_radius,
+                                                   low,
+                                                   search_radius);
+    check(FML::FOF::SO_number_of_truncated_halos == centers.size(),
+          label + "spheres larger than the search radius reported");
 
     // Resolution test: NFW-like halos with a core as large as the halo (as halos in a PM/COLA simulation where R200
     // is about the force resolution), rho ~ 1 / ((r + r_c) (r + r_s)^2) with r_s = r_c = 2 R200, truncated at 2 R200,
@@ -170,11 +186,13 @@ int main() {
                 const double u = uni(gen2);
                 const size_t k = std::upper_bound(mtab.begin(), mtab.end(), u) - mtab.begin();
                 const size_t k1 = std::min(std::max(k, size_t(1)), size_t(ntab));
-                const double r = rtab[k1 - 1] + (rtab[k1] - rtab[k1 - 1]) * (u - mtab[k1 - 1]) / (mtab[k1] - mtab[k1 - 1]);
+                const double r =
+                    rtab[k1 - 1] + (rtab[k1] - rtab[k1 - 1]) * (u - mtab[k1 - 1]) / (mtab[k1] - mtab[k1 - 1]);
                 const double mu = 2.0 * uni(gen2) - 1.0, phi = 2.0 * M_PI * uni(gen2);
                 const double sn = std::sqrt(1.0 - mu * mu);
-                allnfw.push_back({{wrap(c[0] + r * sn * std::cos(phi)), wrap(c[1] + r * sn * std::sin(phi)), wrap(c[2] + r * mu)},
-                                  {0.0, 0.0, 0.0}});
+                allnfw.push_back(
+                    {{wrap(c[0] + r * sn * std::cos(phi)), wrap(c[1] + r * sn * std::sin(phi)), wrap(c[2] + r * mu)},
+                     {0.0, 0.0, 0.0}});
             }
         const double total = double(allnfw.size());
         const double M200 = Delta * total * V200;
@@ -187,8 +205,13 @@ int main() {
             if (c[0] >= FML::xmin_domain and c[0] < FML::xmax_domain)
                 gnfw.push_back({wrap(c[0] + 0.002), wrap(c[1] - 0.002), c[2]});
         std::vector<double> rinit(gnfw.size(), R200);
-        auto sonfw = FML::FOF::SphericalOverdensity<Particle, NDIM>(
-            localnfw.data(), localnfw.size(), total, gnfw, rinit, {Delta}, 0.1);
+        auto sonfw = FML::FOF::SphericalOverdensity<Particle, NDIM>(localnfw.data(),
+                                                                    localnfw.size(),
+                                                                    total,
+                                                                    gnfw,
+                                                                    rinit,
+                                                                    {Delta},
+                                                                    0.1);
         double sumerr = 0.0, minfrac = 1e30;
         for (auto & h : sonfw) {
             const double err = h.mass[0] / M200 - 1.0;
@@ -200,8 +223,11 @@ int main() {
         FML::SumOverTasks(&nnfw);
         FML::MinOverTasks(&minfrac);
         check(nnfw == cnfw.size(), label + "all cored NFW halos measured");
-        check(minfrac > 0.25, label + "cored NFW halos with N200 = " + num(M200) + ": no halo collapses to a few particles (min N/N200 = " + num(minfrac) + ")");
-        check(std::fabs(sumerr / double(cnfw.size())) < 0.1, label + "mean M200 of the cored NFW halos (mean rel. error " + num(sumerr / double(cnfw.size())) + ")");
+        check(minfrac > 0.25,
+              label + "cored NFW halos with N200 = " + num(M200) +
+                  ": no halo collapses to a few particles (min N/N200 = " + num(minfrac) + ")");
+        check(std::fabs(sumerr / double(cnfw.size())) < 0.1,
+              label + "mean M200 of the cored NFW halos (mean rel. error " + num(sumerr / double(cnfw.size())) + ")");
     }
 
     if (FML::ThisTask == 0)

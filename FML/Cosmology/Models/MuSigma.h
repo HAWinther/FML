@@ -37,26 +37,31 @@
 
 namespace FML::COSMOLOGY {
 
-class MuSigmaGravity : public GeneralRelativity {
-  public:
-    MuSigmaGravity(double mu0 = 0.0, double Sigma0 = 0.0) : mu0(mu0), Sigma0(Sigma0) {}
-    std::string name() const override { return "mu-Sigma"; }
-    std::string info() const override;
-    void init_background(const BackgroundCosmology& bg) override;
+    class MuSigmaGravity : public GeneralRelativity {
+      public:
+        MuSigmaGravity(double mu0 = 0.0, double Sigma0 = 0.0) : mu0(mu0), Sigma0(Sigma0) {}
+        std::string name() const override { return "mu-Sigma"; }
+        std::string info() const override;
+        void init_background(const BackgroundCosmology & bg) override;
 
-    // mu, Sigma and d(2 Sigma - mu)/dx (at fixed k) at x for the mode k [1/m] (k = 0: scale-independent value)
-    struct MuSigma { double mu = 1.0, Sigma = 1.0, dg = 0.0; };
-    virtual MuSigma mu_sigma(double x, double k, const BackgroundCosmology& bg) const;
+        // mu, Sigma and d(2 Sigma - mu)/dx (at fixed k) at x for the mode k [1/m] (k = 0: scale-independent value)
+        struct MuSigma {
+            double mu = 1.0, Sigma = 1.0, dg = 0.0;
+        };
+        virtual MuSigma mu_sigma(double x, double k, const BackgroundCosmology & bg) const;
 
-    enum { MU, SIGMA, DG, RPP, DHPH, N_CACHE };
-    int cache_size() const override { return N_CACHE; }
-    void update_cache(const BackgroundCosmology& bg, const ModeAtX& b, double* cache) const override;
-    MetricAtX metric(const ModeAtX& b, const double* cache, const double* y, const Moments& total,
-                     double* dydx) const override;
+        enum { MU, SIGMA, DG, RPP, DHPH, N_CACHE };
+        int cache_size() const override { return N_CACHE; }
+        void update_cache(const BackgroundCosmology & bg, const ModeAtX & b, double * cache) const override;
+        MetricAtX metric(const ModeAtX & b,
+                         const double * cache,
+                         const double * y,
+                         const Moments & total,
+                         double * dydx) const override;
 
-  protected:
-    double mu0, Sigma0;
-};
+      protected:
+        double mu0, Sigma0;
+    };
 
 } // namespace FML::COSMOLOGY
 

@@ -203,7 +203,8 @@ namespace FML {
                         ode_driver_ptr.reset();
                         std::string errormessage =
                             "[ODESolver::solve] GSL gsl_odeiv2_driver_apply returned non-successful at x = " +
-                            std::to_string(x) + " (target " + std::to_string(xnew) + "): " + gsl_strerror(status) + "\n";
+                            std::to_string(x) + " (target " + std::to_string(xnew) + "): " + gsl_strerror(status) +
+                            "\n";
                         throw_error(errormessage);
                     }
 
@@ -282,5 +283,5 @@ namespace FML {
                 relerr = r;
             }
         } // namespace ODESOLVER
-    }     // namespace SOLVERS
+    } // namespace SOLVERS
 } // namespace FML

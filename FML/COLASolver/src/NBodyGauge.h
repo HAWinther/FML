@@ -124,9 +124,9 @@ namespace COLASOLVER {
                                              std::to_string(value) + ". Make it again with the same cosmology");
             }
             if (zini > z.back() or 0.0 < z.front() - 1e-6)
-                throw std::runtime_error("[NBodyGaugeSource] The file [" + filename_read + "] covers z = " +
-                                         std::to_string(z.front()) + " - " + std::to_string(z.back()) +
-                                         " but the simulation runs from z = " + std::to_string(zini));
+                throw std::runtime_error(
+                    "[NBodyGaugeSource] The file [" + filename_read + "] covers z = " + std::to_string(z.front()) +
+                    " - " + std::to_string(z.back()) + " but the simulation runs from z = " + std::to_string(zini));
 
             // The expansion history (CLASS vs ours). A large difference means the background is not the same
             double maxdiff = 0.0;

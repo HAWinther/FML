@@ -101,11 +101,11 @@ namespace FML {
             template <int NDIM, class T>
             class MultiGridSolver {
               private:
-                int _N;               // The number of cells per dim in the main grid
-                int _Nlevel;          // Number of levels
-                IndexInt _NtotLocal;  // Total number of cells in the main grid
-                bool _periodic{true}; // Periodic grid?
-                bool _verbose;        // Turn on verbose while solving (only true on task 0)
+                int _N;                         // The number of cells per dim in the main grid
+                int _Nlevel;                    // Number of levels
+                IndexInt _NtotLocal;            // Total number of cells in the main grid
+                bool _periodic{true};           // Periodic grid?
+                bool _verbose;                  // Turn on verbose while solving (only true on task 0)
                 bool _verbose_all_tasks{false}; // Verbose on any task (all tasks must compute what task 0 prints)
 
                 MPIMultiGrid<NDIM, T> _f;      // The solution
@@ -126,8 +126,8 @@ namespace FML {
                 // are being updated at the same time)
                 bool _cube_ordering{false};
                 int _ngridcolours = 2;
-                int _ngs_coarse = 10;        // Number of NGS sweeps on coarse grid
-                int _ngs_fine = 10;          // Number of NGS sweeps on the main grid
+                int _ngs_coarse = 10; // Number of NGS sweeps on coarse grid
+                int _ngs_fine = 10;   // Number of NGS sweeps on the main grid
                 int _ngs_first_step =
                     10;               // Number of NGS sweeps the very first time (in case the guess is not very good)
                 int _maxsteps = 1000; // Maximum number of V-cycles
@@ -201,7 +201,8 @@ namespace FML {
                 // Subtract the mean of the residual (for equations that only determine f up to a constant, see
                 // _subtract_mean_residual)
                 void set_subtract_mean_residual(bool subtract) { _subtract_mean_residual = subtract; }
-                // Replace the Newton update in the Gauss-Seidel sweeps by a pointwise solve (see MultiGridUpdateFunction)
+                // Replace the Newton update in the Gauss-Seidel sweeps by a pointwise solve (see
+                // MultiGridUpdateFunction)
                 void set_custom_update(const MultiGridUpdateFunction<NDIM, T> & update) { _CustomUpdate = update; }
                 // The number of V-cycles of the last solve
                 int get_number_of_vcycles() const { return _istep_vcycle; }
@@ -584,7 +585,8 @@ namespace FML {
             }
 
             template <int NDIM, class T>
-            void MultiGridSolver<NDIM, T>::set_initial_guess(const std::function<T(std::array<double, NDIM> &)> & func) {
+            void
+            MultiGridSolver<NDIM, T>::set_initial_guess(const std::function<T(std::array<double, NDIM> &)> & func) {
                 _f.get_grid(0).set_y(func);
             }
 
@@ -596,8 +598,8 @@ namespace FML {
                 static const double Coeff_1[] = {-1 / 2., 0, 1 / 2.};
                 static const double Coeff_2[] = {1 / 12., -2 / 3., 0, 2 / 3., -1 / 12.};
                 static const double Coeff_3[] = {-1 / 60., 3 / 20., -3 / 4., 0, 3 / 4., -3. / 20., 1 / 60.};
-                static const double Coeff_4[] = {
-                    1 / 280., -4 / 105., 1 / 5., -4 / 5., 0, 4 / 5., -1 / 5., 4 / 105., -1 / 280.};
+                static const double Coeff_4[] =
+                    {1 / 280., -4 / 105., 1 / 5., -4 / 5., 0, 4 / 5., -1 / 5., 4 / 105., -1 / 280.};
                 static const double * Coeff[] = {Coeff_1, Coeff_2, Coeff_3, Coeff_4};
                 return Coeff[order - 1];
             }
@@ -610,8 +612,8 @@ namespace FML {
                 static const double Coeff_1[] = {1, -2, 1};
                 static const double Coeff_2[] = {-1 / 12., 4 / 3., -5 / 2., 4 / 3., -1 / 12.};
                 static const double Coeff_3[] = {1 / 90., -3 / 20., 3 / 2., -49 / 18., 3 / 2., -3 / 20., 1 / 90.};
-                static const double Coeff_4[] = {
-                    -1 / 560., 8 / 315., -1 / 5., 8 / 5., -205 / 72., 8 / 5., -1 / 5., 8 / 315., -1 / 560.};
+                static const double Coeff_4[] =
+                    {-1 / 560., 8 / 315., -1 / 5., 8 / 5., -205 / 72., 8 / 5., -1 / 5., 8 / 315., -1 / 560.};
                 static const double * Coeff[] = {Coeff_1, Coeff_2, Coeff_3, Coeff_4};
                 return Coeff[order - 1];
             }
@@ -1070,9 +1072,9 @@ namespace FML {
                             break;
                     }
                     if (_verbose)
-                        std::cout << "        level = " << std::setw(5) << level << " (coarsest) NGS Sweeps = "
-                                  << std::setw(5) << nsweeps_done << " Residual = " << std::setw(10) << residual
-                                  << " (from " << res_start << ")\n\n";
+                        std::cout << "        level = " << std::setw(5) << level
+                                  << " (coarsest) NGS Sweeps = " << std::setw(5) << nsweeps_done
+                                  << " Residual = " << std::setw(10) << residual << " (from " << res_start << ")\n\n";
                     return;
                 }
 
@@ -1351,9 +1353,9 @@ namespace FML {
             // d/df_i of the gradient. This is zero as f_i is not part of the formula
             // Assumed: index_list is the same as produced by get_neighbor_gridindex
             template <int NDIM, class T>
-            inline std::array<T, NDIM>
-            MultiGridSolver<NDIM, T>::get_derivGradient([[maybe_unused]] int level,
-                                                        [[maybe_unused]] const std::array<IndexInt, 2 * NDIM + 1> & index_list) {
+            inline std::array<T, NDIM> MultiGridSolver<NDIM, T>::get_derivGradient(
+                [[maybe_unused]] int level,
+                [[maybe_unused]] const std::array<IndexInt, 2 * NDIM + 1> & index_list) {
                 std::array<T, NDIM> res;
                 res.fill(0.0);
                 return res;
@@ -1377,7 +1379,7 @@ namespace FML {
                 return _f.get_grid(level).get_pos(index);
             }
         } // namespace MULTIGRIDSOLVER
-    }     // namespace SOLVERS
+    } // namespace SOLVERS
 } // namespace FML
 
 #endif

@@ -27,53 +27,60 @@
 
 namespace FML::COSMOLOGY {
 
-class CubicGalileonSpecies : public Species {
-  public:
-    // others: all other species (flat universe); Omega_phi from closure
-    CubicGalileonSpecies(const std::vector<std::shared_ptr<const Species>>& others, double Omega_phi);
-    std::string name() const override { return "cubic galileon"; }
-    Role role() const override { return Role::DarkEnergy; }
-    std::string info() const override;
-    double rho(double x) const override;
-    double p(double x) const override { return -rho(x) - drhodx(x) / 3.0; }
-    double drhodx(double x) const override;
-    double ddrhoddx(double x) const override;
-    double E2(double x) const;          // (H/H0)^2 on the tracker
-    double dE2dx(double x) const;
-    double Omega_phi() const { return Om; }
+    class CubicGalileonSpecies : public Species {
+      public:
+        // others: all other species (flat universe); Omega_phi from closure
+        CubicGalileonSpecies(const std::vector<std::shared_ptr<const Species>> & others, double Omega_phi);
+        std::string name() const override { return "cubic galileon"; }
+        Role role() const override { return Role::DarkEnergy; }
+        std::string info() const override;
+        double rho(double x) const override;
+        double p(double x) const override { return -rho(x) - drhodx(x) / 3.0; }
+        double drhodx(double x) const override;
+        double ddrhoddx(double x) const override;
+        double E2(double x) const; // (H/H0)^2 on the tracker
+        double dE2dx(double x) const;
+        double Omega_phi() const { return Om; }
 
-  private:
-    std::vector<std::shared_ptr<const Species>> others;
-    double Om;
-    void sums(double x, double& r, double& dr, double& ddr) const;
-};
+      private:
+        std::vector<std::shared_ptr<const Species>> others;
+        double Om;
+        void sums(double x, double & r, double & dr, double & ddr) const;
+    };
 
-class CubicGalileonGravity : public GeneralRelativity {
-  public:
-    explicit CubicGalileonGravity(double Omega_phi);
-    std::string name() const override { return "cubic Galileon"; }
-    std::string info() const override;
-    void init_background(const BackgroundCosmology& bg) override;
+    class CubicGalileonGravity : public GeneralRelativity {
+      public:
+        explicit CubicGalileonGravity(double Omega_phi);
+        std::string name() const override { return "cubic Galileon"; }
+        std::string info() const override;
+        void init_background(const BackgroundCosmology & bg) override;
 
-    int n_vars() const override { return 3; }
-    enum { PHIX, PHIXX, RPP, N_CACHE };   // phi_x, phi_xx, H0^2 a^2 (rho + p) of the matter
-    int cache_size() const override { return N_CACHE; }
-    void update_cache(const BackgroundCosmology& bg, const ModeAtX& b, double* cache) const override;
-    void initial_conditions(const ModeAtX& b, const InitialData& ic, double* y) const override;
-    MetricAtX metric(const ModeAtX& b, const double* cache, const double* y, const Moments& total,
-                     double* dydx) const override;
-    std::vector<std::string> output_names() const override { return {"delta_phi_gal", "u_gal"}; }
-    void outputs(const ModeAtX& b, const double* cache, const double* y, const MetricAtX& m, double* out) const override;
+        int n_vars() const override { return 3; }
+        enum { PHIX, PHIXX, RPP, N_CACHE }; // phi_x, phi_xx, H0^2 a^2 (rho + p) of the matter
+        int cache_size() const override { return N_CACHE; }
+        void update_cache(const BackgroundCosmology & bg, const ModeAtX & b, double * cache) const override;
+        void initial_conditions(const ModeAtX & b, const InitialData & ic, double * y) const override;
+        MetricAtX metric(const ModeAtX & b,
+                         const double * cache,
+                         const double * y,
+                         const Moments & total,
+                         double * dydx) const override;
+        std::vector<std::string> output_names() const override { return {"delta_phi_gal", "u_gal"}; }
+        void outputs(const ModeAtX & b,
+                     const double * cache,
+                     const double * y,
+                     const MetricAtX & m,
+                     double * out) const override;
 
-    double xi() const { return xi_; }   // H dphi/dt on the tracker [H0^2, field in reduced Planck masses]
-    double g3() const { return g3_; }
-    double c2() const { return -1.0; }
-    // phi_x = dphi/dx = xi / E^2
-    double phi_x(double E2) const { return xi_ / E2; }
+        double xi() const { return xi_; } // H dphi/dt on the tracker [H0^2, field in reduced Planck masses]
+        double g3() const { return g3_; }
+        double c2() const { return -1.0; }
+        // phi_x = dphi/dx = xi / E^2
+        double phi_x(double E2) const { return xi_ / E2; }
 
-  private:
-    double xi_, g3_;
-};
+      private:
+        double xi_, g3_;
+    };
 
 } // namespace FML::COSMOLOGY
 

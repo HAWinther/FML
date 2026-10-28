@@ -84,8 +84,13 @@ void ExamplesPower() {
         // Naive power-spectrum evaluation
         const bool interlacing = false;
         FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> pofk(Nmesh / 2);
-        FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM>(
-            Nmesh, p.get_particles_ptr(), p.get_npart(), p.get_npart_total(), pofk, density_assignment_method, interlacing);
+        FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM>(Nmesh,
+                                                                p.get_particles_ptr(),
+                                                                p.get_npart(),
+                                                                p.get_npart_total(),
+                                                                pofk,
+                                                                density_assignment_method,
+                                                                interlacing);
 
         // To physical units and output
         pofk.scale(box);
@@ -111,8 +116,13 @@ void ExamplesPower() {
         // Power-spectrum evaluation using interlacing
         const bool interlacing = true;
         FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> pofk(Nmesh / 2);
-        FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM>(
-            Nmesh, p.get_particles_ptr(), p.get_npart(), p.get_npart_total(), pofk, density_assignment_method, interlacing);
+        FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM>(Nmesh,
+                                                                p.get_particles_ptr(),
+                                                                p.get_npart(),
+                                                                p.get_npart_total(),
+                                                                pofk,
+                                                                density_assignment_method,
+                                                                interlacing);
 
         // To physical units and output
         pofk.scale(box);
@@ -168,8 +178,12 @@ void ExamplesPower() {
         const double velocity_to_displacement = 1.0 / (100.0 * box * aH);
         const bool interlacing = true;
         std::vector<FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM>> Pells(ell_max + 1, Nmesh / 2);
-        FML::CORRELATIONFUNCTIONS::compute_power_spectrum_multipoles<NDIM>(
-            Nmesh, p, velocity_to_displacement, Pells, density_assignment_method, interlacing);
+        FML::CORRELATIONFUNCTIONS::compute_power_spectrum_multipoles<NDIM>(Nmesh,
+                                                                           p,
+                                                                           velocity_to_displacement,
+                                                                           Pells,
+                                                                           density_assignment_method,
+                                                                           interlacing);
 
         // To physical units
         for (size_t ell = 0; ell < Pells.size(); ell++) {
@@ -205,20 +219,23 @@ void ExamplesPower() {
         FFTWGrid<NDIM> density_k(Nmesh, nleftright.first, nleftright.second);
 
         // Interpolate particles to grid
-        FML::INTERPOLATION::particles_to_grid<NDIM, Particle>(
-            p.get_particles_ptr(), p.get_npart(), p.get_npart_total(), density_k, density_assignment_method);
+        FML::INTERPOLATION::particles_to_grid<NDIM, Particle>(p.get_particles_ptr(),
+                                                              p.get_npart(),
+                                                              p.get_npart_total(),
+                                                              density_k,
+                                                              density_assignment_method);
 
         // Fourier transform it
         density_k.fftw_r2c();
 
         // Deconvolve window function
         FML::INTERPOLATION::deconvolve_window_function_fourier(density_k, density_assignment_method);
-        
+
         // Compute P_ell(k) when the LOS direction is the
         const std::vector<double> los_direction{1.0, 0.0, 0.0};
         std::vector<FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM>> Pell(ell_max + 1, Nmesh / 2);
         FML::CORRELATIONFUNCTIONS::compute_power_spectrum_multipoles_fourier(density_k, Pell, los_direction);
-        
+
         FML::CORRELATIONFUNCTIONS::bin_up_cross_power_spectrum(density_k, density_k, Pell[0]);
 
         // Subtract shotnoise for P0

@@ -52,8 +52,8 @@ namespace FML {
         /// Find roots \f$ f(x) = 0 \f$ using bisection. f must have different signs at the end-points (throws
         /// if not, or if f is NaN there). The accuracy epsilon is relative to the size of the range:
         /// we stop when the bracket is smaller than epsilon * |xrange.second - xrange.first| (or cannot be split
-        /// further in floating point) and return the lower end of the bracket. Points with f = 0 are treated as being on the side of
-        /// xlow (so a root exactly at xlow returns xlow)
+        /// further in floating point) and return the lower end of the bracket. Points with f = 0 are treated as being
+        /// on the side of xlow (so a root exactly at xlow returns xlow)
         double find_root_bisection(const std::function<double(double)> & function,
                                    std::pair<double, double> xrange,
                                    double epsilon = 1e-7);

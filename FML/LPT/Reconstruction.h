@@ -140,8 +140,11 @@ namespace FML {
                     density.add_memory_label("FFTWGrid::RSDReconstructionFourierMethod::density");
                     density.set_grid_status_real(true);
                     if (i == 0) {
-                        FML::INTERPOLATION::particles_to_grid(
-                            p, NumPart, part.get_npart_total(), density, density_assignment_method);
+                        FML::INTERPOLATION::particles_to_grid(p,
+                                                              NumPart,
+                                                              part.get_npart_total(),
+                                                              density,
+                                                              density_assignment_method);
                     } else {
                         // Copies at the shifted positions (they can be on another task)
                         using Helper = detail::ReconstructionParticle<N>;
@@ -174,8 +177,9 @@ namespace FML {
                     density.fftw_r2c();
 
                     // Perform a smoothing
-                    FML::GRID::smoothing_filter_fourier_space(
-                        density, smoothing_options.second, smoothing_options.first);
+                    FML::GRID::smoothing_filter_fourier_space(density,
+                                                              smoothing_options.second,
+                                                              smoothing_options.first);
 
                     // The 1LPT potential
                     FFTWGrid<N> phi_1LPT;
@@ -196,8 +200,11 @@ namespace FML {
 
                     // Interpolate Psi to the observed particle positions
                     std::array<std::vector<FloatType>, N> Psi_particle_positions;
-                    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N, T>(
-                        Psi, p, NumPart, Psi_particle_positions, interpolation_method);
+                    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N, T>(Psi,
+                                                                                            p,
+                                                                                            NumPart,
+                                                                                            Psi_particle_positions,
+                                                                                            interpolation_method);
                     for (int idim = 0; idim < N; idim++) {
                         Psi[idim].free();
                     }

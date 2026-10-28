@@ -51,7 +51,7 @@ void ReconSolver() {
     // (This file has positions in real-space so no recon is needed, but fuck it its just to test it)
     //=================================================================================
     const std::string filename = "../../../TestData/galaxies_redshiftspace.txt";
-    const double box = 1024.0; 
+    const double box = 1024.0;
     auto data = FML::FILEUTILS::loadtxt(filename);
 
     //======================================================================
@@ -105,8 +105,11 @@ void ReconSolver() {
     // Set up density grid
     FML::GRID::FFTWGrid<NDIM> density(N, 0, 1);
     // Bin particles to the grid
-    FML::INTERPOLATION::particles_to_grid<NDIM, Particle>(
-        p.get_particles_ptr(), p.get_npart(), p.get_npart_total(), density, density_assignment_method);
+    FML::INTERPOLATION::particles_to_grid<NDIM, Particle>(p.get_particles_ptr(),
+                                                          p.get_npart(),
+                                                          p.get_npart_total(),
+                                                          density,
+                                                          density_assignment_method);
 
     //=================================================================================
     // Smoothing in Fourier space
@@ -219,8 +222,11 @@ void ReconSolver() {
     //======================================================================
     std::vector<double> interpolated_values;
     rsd_shift_fftw.communicate_boundaries();
-    FML::INTERPOLATION::interpolate_grid_to_particle_positions(
-        rsd_shift_fftw, p.get_particles_ptr(), p.get_npart(), interpolated_values, "CIC");
+    FML::INTERPOLATION::interpolate_grid_to_particle_positions(rsd_shift_fftw,
+                                                               p.get_particles_ptr(),
+                                                               p.get_npart(),
+                                                               interpolated_values,
+                                                               "CIC");
 
     // Density reconstruction:
     // std::vector<double> interpolated_shiftx;
@@ -240,8 +246,14 @@ void ReconSolver() {
     // We could alternatively have done this with a FFT method (its not exact, but makes up for it by
     // doing it iteratively):
     FML::PARTICLE::MPIParticles<Particle> p2 = p; // Take a copy
-    FML::COSMOLOGY::LPT::RSDReconstructionFourierMethod<NDIM, Particle>(
-        p2, "CIC", std::vector<double>{0.0, 0.0, 1.0}, N, 5, beta, {"gaussian", smoothing_scale}, false);
+    FML::COSMOLOGY::LPT::RSDReconstructionFourierMethod<NDIM, Particle>(p2,
+                                                                        "CIC",
+                                                                        std::vector<double>{0.0, 0.0, 1.0},
+                                                                        N,
+                                                                        5,
+                                                                        beta,
+                                                                        {"gaussian", smoothing_scale},
+                                                                        false);
 
     double max_shift = 0.0;
     double avg_shift = 0.0;

@@ -203,8 +203,9 @@ int main(int argc, char ** argv) {
             FML::GRID::set_fftw_planner_flag(FFTW_ESTIMATE);
             double maxdiff = 0.0;
             for (auto && fourier_index : d.get_fourier_range())
-                maxdiff = std::max(maxdiff,
-                                   std::abs(d.get_fourier_from_index(fourier_index) - e.get_fourier_from_index(fourier_index)));
+                maxdiff = std::max(
+                    maxdiff,
+                    std::abs(d.get_fourier_from_index(fourier_index) - e.get_fourier_from_index(fourier_index)));
             FML::MaxOverTasks(&maxdiff);
             check(maxdiff < 1e-14, "FFTW_MEASURE planning preserves grid data and agrees with FFTW_ESTIMATE");
         }

@@ -72,7 +72,18 @@ int main() {
     const double h = 0.7;
     const double pos_norm = box;
     const double vel_norm = std::sqrt(aexp); // From our velocities to GADGET sqrt(a) dxdt in km/s
-    gw.write_gadget_single("test.0", part.data(), part.size(), NumPartTotal, NumFiles, aexp, Boxsize, OmegaM, OmegaLambda, h, pos_norm, vel_norm);
+    gw.write_gadget_single("test.0",
+                           part.data(),
+                           part.size(),
+                           NumPartTotal,
+                           NumFiles,
+                           aexp,
+                           Boxsize,
+                           OmegaM,
+                           OmegaLambda,
+                           h,
+                           pos_norm,
+                           vel_norm);
 
     //=========================================================
     // The number of dimensions

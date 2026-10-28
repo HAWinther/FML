@@ -48,8 +48,10 @@ const std::function<double(double)> hubble_over_c = [](double z) {
 };
 
 // r(z) in Mpc/h from scipy.integrate.quad
-const std::vector<std::pair<double, double>> r_of_z_reference{
-    {0.1, 292.59081038}, {0.5, 1315.23482867}, {1.0, 2292.45120629}, {2.0, 3580.33881452}};
+const std::vector<std::pair<double, double>> r_of_z_reference{{0.1, 292.59081038},
+                                                              {0.5, 1315.23482867},
+                                                              {1.0, 2292.45120629},
+                                                              {2.0, 3580.33881452}};
 double r_reference(double z) {
     for (auto & p : r_of_z_reference)
         if (p.first == z)
@@ -92,7 +94,9 @@ int main() {
         auto [maxerr, inside] = check_box(gal, xyz, observer, boxsize);
         int ok = maxerr < 1e-6 and inside ? 0 : 1;
         FML::SumOverTasks(&ok);
-        check(ok == 0, "GalaxiesToBox, " + std::to_string(n) + " galaxies: in [0,1), |x - observer| = r(z) (" + num(maxerr) + ")");
+        check(ok == 0,
+              "GalaxiesToBox, " + std::to_string(n) + " galaxies: in [0,1), |x - observer| = r(z) (" + num(maxerr) +
+                  ")");
     }
 
     // Galaxies and randoms in the southern sky around RA = 200 (not the first octant)
@@ -107,14 +111,25 @@ int main() {
         std::vector<Particle> gxyz, rxyz;
         std::vector<double> observer;
         double boxsize;
-        FML::SURVEY::GalaxiesRandomsToBox(gal.data(), gal.size(), ran.data(), ran.size(), gxyz, rxyz, hubble_over_c,
-                                          boxsize, true, true, observer, false);
+        FML::SURVEY::GalaxiesRandomsToBox(gal.data(),
+                                          gal.size(),
+                                          ran.data(),
+                                          ran.size(),
+                                          gxyz,
+                                          rxyz,
+                                          hubble_over_c,
+                                          boxsize,
+                                          true,
+                                          true,
+                                          observer,
+                                          false);
         auto [eg, ig] = check_box(gal, gxyz, observer, boxsize);
         auto [er, ir] = check_box(ran, rxyz, observer, boxsize);
         int ok = eg < 1e-6 and er < 1e-6 and ig and ir ? 0 : 1;
         FML::SumOverTasks(&ok);
-        check(ok == 0, "GalaxiesRandomsToBox, southern survey: all in [0,1), |x - observer| = r(z) (" +
-                           num(std::max(eg, er)) + ")");
+        check(ok == 0,
+              "GalaxiesRandomsToBox, southern survey: all in [0,1), |x - observer| = r(z) (" + num(std::max(eg, er)) +
+                  ")");
 
         // All the tasks have the same box (each task has different galaxies)
         double bmin = boxsize, bmax = boxsize, omin = observer[0], omax = observer[0];
@@ -133,7 +148,8 @@ int main() {
         std::vector<double> observer;
         double boxsize;
         FML::SURVEY::GalaxiesToBox(gal.data(), gal.size(), xyz, hubble_over_c, boxsize, observer, false, false, false);
-        const double r = std::sqrt(std::pow(xyz[17].pos[0], 2) + std::pow(xyz[17].pos[1], 2) + std::pow(xyz[17].pos[2], 2));
+        const double r =
+            std::sqrt(std::pow(xyz[17].pos[0], 2) + std::pow(xyz[17].pos[1], 2) + std::pow(xyz[17].pos[2], 2));
         check(std::fabs(r / r_reference(2.0) - 1.0) < 1e-6, "r(z = 2) with many galaxies and threads: " + num(r));
     }
 

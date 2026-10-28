@@ -211,8 +211,9 @@ namespace FML {
                                std::exp(2.0 * x_array[0]) / 2.0 / std::sqrt(OmegaRtot)};
 
             // Solve the ODE
-            ODESolver eta_ode(
-                FIDUCIAL_COSMO_HSTART_ODE_ETA, FIDUCIAL_COSMO_HSTART_ODE_ETA, FIDUCIAL_COSMO_RELERR_ODE_ETA);
+            ODESolver eta_ode(FIDUCIAL_COSMO_HSTART_ODE_ETA,
+                              FIDUCIAL_COSMO_HSTART_ODE_ETA,
+                              FIDUCIAL_COSMO_RELERR_ODE_ETA);
             eta_ode.solve(deriv, x_array, eta_initial);
 
             // Fetch the result and get eta and t. Divide by H0 as we solved in units of
@@ -319,7 +320,8 @@ namespace FML {
             const int npts = 100;
             DVector x_array = FML::MATH::linspace(x_min_background, x_max_background, npts);
 
-            fp << "# x = log(a) Cosmology Quantities [ aH  (aH)'  (aH)'' eta/Mpc  Omega(B,CDM,Lambda,R,Nu,Rtot,K)  LPT growthfactors+derivs ]\n";
+            fp << "# x = log(a) Cosmology Quantities [ aH  (aH)'  (aH)'' eta/Mpc  Omega(B,CDM,Lambda,R,Nu,Rtot,K)  LPT "
+                  "growthfactors+derivs ]\n";
             auto print_data = [&](const double x) {
                 // 1
                 fp << x << " ";

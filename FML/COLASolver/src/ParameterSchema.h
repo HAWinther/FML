@@ -233,12 +233,13 @@ namespace COLASOLVER {
                 b.when(is_one_of("cosmology_quintessence_potential", {"pngb"}),
                        "cosmology_quintessence_potential = pngb",
                        [&]() { b.required("cosmology_quintessence_f", 1.0, "The scale f (units of Mpl)"); });
-                b.when(is_one_of("cosmology_quintessence_potential", {"hilltop"}),
-                       "cosmology_quintessence_potential = hilltop",
-                       [&]() {
-                           b.required("cosmology_quintessence_mu", 1.0, "The position of the minimum mu (units of Mpl)");
-                           b.required("cosmology_quintessence_p", 2.0, "The power p");
-                       });
+                b.when(
+                    is_one_of("cosmology_quintessence_potential", {"hilltop"}),
+                    "cosmology_quintessence_potential = hilltop",
+                    [&]() {
+                        b.required("cosmology_quintessence_mu", 1.0, "The position of the minimum mu (units of Mpl)");
+                        b.required("cosmology_quintessence_p", 2.0, "The power p");
+                    });
             });
             b.when(is_one_of("cosmology_model", {"EDE"}), "cosmology_model = EDE", [&]() {
                 b.required("cosmology_ede_fEDE", 0.1, "Early dark energy: the maximum of rho_EDE / rho_total");
@@ -277,7 +278,9 @@ namespace COLASOLVER {
                            {"DE", "BZ", "table"});
                 b.when(is_one_of("gravity_model_mu_parametrization", {"DE"}),
                        "gravity_model_mu_parametrization = DE",
-                       [&]() { b.required("gravity_model_mu_mu0", 0.0, "mu0 in mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1)"); });
+                       [&]() {
+                           b.required("gravity_model_mu_mu0", 0.0, "mu0 in mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1)");
+                       });
                 b.when(is_one_of("gravity_model_mu_parametrization", {"BZ"}),
                        "gravity_model_mu_parametrization = BZ",
                        [&]() {
@@ -326,7 +329,8 @@ namespace COLASOLVER {
                                    smoothing_filters);
                         b.optional("gravity_model_dgp_smoothing_scale_over_boxsize",
                                    1.0,
-                                   "Screening approximation: the smoothing scale R/boxsize (the default 1 smooths over the whole "
+                                   "Screening approximation: the smoothing scale R/boxsize (the default 1 smooths over "
+                                   "the whole "
                                    "box, which makes the screening very weak; see GravityModel_DGP.h)");
                     });
                     b.optional("gravity_model_screening_enforce_largescale_linear",
@@ -409,25 +413,27 @@ namespace COLASOLVER {
                               true,
                               "particle_neutrinos: use the delta-f weights (false: plain particles, much noisier; for "
                               "testing)");
-            b.always_optional("particle_baryon_lattice",
-                              "same",
-                              "particle_baryons: start the baryons from the same lattice as the CDM (same, recommended: "
-                              "the baryon-CDM difference then follows linear theory on all scales) or from a lattice "
-                              "offset by half a particle spacing (offset: gives a spurious baryon-CDM difference on "
-                              "small scales)",
-                              {"same", "offset"});
-            b.always_optional("particle_baryon_relative_mode",
-                              "displacement",
-                              "particle_baryons: how the baryon-CDM relative density is set up. displacement: each "
-                              "species is displaced by its own linear field (T_i/T_cb) and has its own velocity. mass: "
-                              "both species follow the total CDM+baryon flow (same displacements and velocities) and the "
-                              "relative density is carried by the particle masses m_i = 1 + eps_i(q) with eps_i = "
-                              "delta_cb(zini) (T_i - T_cb)(z=0) / T_cb(zini), the linear relative mode today "
-                              "(Hahn, Rampf & Uhlemann 2021; exact at z = 0 in linear theory, the relative mode is then "
-                              "constant in time). mass_ini: common displacements, masses with eps_i = T_i / T_cb - 1 at "
-                              "zini and each species keeps its own velocity (the relative mode then grows from zini). "
-                              "The mass modes need particle_baryon_lattice = same",
-                              {"displacement", "mass", "mass_ini"});
+            b.always_optional(
+                "particle_baryon_lattice",
+                "same",
+                "particle_baryons: start the baryons from the same lattice as the CDM (same, recommended: "
+                "the baryon-CDM difference then follows linear theory on all scales) or from a lattice "
+                "offset by half a particle spacing (offset: gives a spurious baryon-CDM difference on "
+                "small scales)",
+                {"same", "offset"});
+            b.always_optional(
+                "particle_baryon_relative_mode",
+                "displacement",
+                "particle_baryons: how the baryon-CDM relative density is set up. displacement: each "
+                "species is displaced by its own linear field (T_i/T_cb) and has its own velocity. mass: "
+                "both species follow the total CDM+baryon flow (same displacements and velocities) and the "
+                "relative density is carried by the particle masses m_i = 1 + eps_i(q) with eps_i = "
+                "delta_cb(zini) (T_i - T_cb)(z=0) / T_cb(zini), the linear relative mode today "
+                "(Hahn, Rampf & Uhlemann 2021; exact at z = 0 in linear theory, the relative mode is then "
+                "constant in time). mass_ini: common displacements, masses with eps_i = T_i / T_cb - 1 at "
+                "zini and each species keeps its own velocity (the relative mode then grows from zini). "
+                "The mass modes need particle_baryon_lattice = same",
+                {"displacement", "mass", "mass_ini"});
             b.optional("particle_allocation_factor",
                        1.5,
                        "Allocate this factor more particles than the average per task (particles move between "
@@ -470,13 +476,14 @@ namespace COLASOLVER {
                        "The random number generator (GSL is gsl_rng_ranlxd1 as used in 2LPTic, for comparisons)",
                        {"GSL", "MT19937"});
             b.required("ic_nmesh", 0, "The grid size used to generate the IC");
-            b.always_optional("ic_lattice_offset",
-                              "fiducial",
-                              "Offset of the initial particle lattice from the nodes of the force grid. fiducial: half a "
-                              "force grid cell if force_nmesh > particle_Npart_1D, otherwise none. With particles "
-                              "exactly on the nodes of a finer grid, CIC responds to the size of the displacement and gives large "
-                              "spurious forces (see the force grid section of README.md)",
-                              {"fiducial", "none", "half_force_cell"});
+            b.always_optional(
+                "ic_lattice_offset",
+                "fiducial",
+                "Offset of the initial particle lattice from the nodes of the force grid. fiducial: half a "
+                "force grid cell if force_nmesh > particle_Npart_1D, otherwise none. With particles "
+                "exactly on the nodes of a finer grid, CIC responds to the size of the displacement and gives large "
+                "spurious forces (see the force grid section of README.md)",
+                {"fiducial", "none", "half_force_cell"});
             b.required("ic_type_of_input",
                        "powerspectrum",
                        "The input: powerspectrum (file with [k (h/Mpc), P(k) (Mpc/h)^3]), transferfunction (file "
@@ -542,13 +549,14 @@ namespace COLASOLVER {
                        "fiducial",
                        "Kernel for D^2 when solving the Poisson equation (fiducial = continuous)",
                        kernels);
-            b.optional("force_gradient_kernel",
-                       "fiducial",
-                       "Kernel for D when computing the forces. fiducial = continuous if force_nmesh = "
-                       "particle_Npart_1D, discrete_4pt if force_nmesh is up to 3x larger and discrete_2pt if it is even "
-                       "larger (the continuous kernel gives "
-                       "spurious forces from the particle lattice when the force grid is finer than it)",
-                       kernels);
+            b.optional(
+                "force_gradient_kernel",
+                "fiducial",
+                "Kernel for D when computing the forces. fiducial = continuous if force_nmesh = "
+                "particle_Npart_1D, discrete_4pt if force_nmesh is up to 3x larger and discrete_2pt if it is even "
+                "larger (the continuous kernel gives "
+                "spurious forces from the particle lattice when the force grid is finer than it)",
+                kernels);
             b.always_optional("force_density_method",
                               "assignment",
                               "How the density field for the force is computed. assignment: particles to grid with "
@@ -580,10 +588,10 @@ namespace COLASOLVER {
                               "and window deconvolution) for steps at z > force_early_until_redshift, then the "
                               "normal force settings. none: off",
                               {"none", "nufft", "interlaced"});
-            b.when(is_one_of("force_early_method", {"nufft", "interlaced"}),
-                   one_of_text("force_early_method", {"nufft", "interlaced"}), [&]() {
-                       b.always_optional("force_early_until_redshift", 10.0, "Use the early force for z > this");
-                   });
+            b.when(
+                is_one_of("force_early_method", {"nufft", "interlaced"}),
+                one_of_text("force_early_method", {"nufft", "interlaced"}),
+                [&]() { b.always_optional("force_early_until_redshift", 10.0, "Use the early force for z > this"); });
             b.when(is_one_of("force_early_method", {"interlaced"}), "force_early_method = interlaced", [&]() {
                 b.always_optional("force_early_interlacing_order", 2, "Number of shifted grids at early times");
                 b.always_optional("force_early_density_assignment_method",
@@ -604,24 +612,26 @@ namespace COLASOLVER {
                               "Relative accuracy of the NUFFT (force_density_method = nufft or sheet_nufft, or "
                               "force_interpolation_method = nufft)");
             b.when(is_one_of("force_density_method", {"sheet", "sheet_nufft"}),
-                   one_of_text("force_density_method", {"sheet", "sheet_nufft"}), [&]() {
-                b.always_optional("force_sheet_refinement",
-                                  2,
-                                  "R: the number of tracers per particle per dimension for sheet interpolation");
-            });
+                   one_of_text("force_density_method", {"sheet", "sheet_nufft"}),
+                   [&]() {
+                       b.always_optional("force_sheet_refinement",
+                                         2,
+                                         "R: the number of tracers per particle per dimension for sheet interpolation");
+                   });
             b.optional("force_linear_massive_neutrinos",
                        false,
                        "Include massive neutrinos in the density field using linear theory (requires "
                        "ic_type_of_input = transferinfofile)");
-            b.always_optional("force_neutrino_energy_density",
-                              false,
-                              "Source the Poisson equation with the energy density of the massive neutrinos instead of "
-                              "their mass density: f_nu <E/m>(a) delta_nu with <E/m> = <sqrt(1 + (q/am)^2)> over the "
-                              "Fermi-Dirac distribution (both for force_linear_massive_neutrinos, where delta_nu from "
-                              "CAMB/CLASS is already the energy-density contrast, and for particle_neutrinos, where each "
-                              "particle is weighted by its E/m and the neutrino P(k) is then the energy-density "
-                              "contrast). Matters at high redshift for light neutrinos (<E/m> = 1.33 at z = 50 for "
-                              "0.033 eV)");
+            b.always_optional(
+                "force_neutrino_energy_density",
+                false,
+                "Source the Poisson equation with the energy density of the massive neutrinos instead of "
+                "their mass density: f_nu <E/m>(a) delta_nu with <E/m> = <sqrt(1 + (q/am)^2)> over the "
+                "Fermi-Dirac distribution (both for force_linear_massive_neutrinos, where delta_nu from "
+                "CAMB/CLASS is already the energy-density contrast, and for particle_neutrinos, where each "
+                "particle is weighted by its E/m and the neutrino P(k) is then the energy-density "
+                "contrast). Matters at high redshift for light neutrinos (<E/m> = 1.33 at z = 50 for "
+                "0.033 eV)");
             b.always_optional("force_nbody_gauge",
                               false,
                               "Run in the N-body gauge: add the linear source from radiation, neutrinos and GR "
@@ -660,15 +670,16 @@ namespace COLASOLVER {
                                   "Output the lightcone particles as GADGET HDF5 files (needs USE_HDF5; positions in "
                                   "Mpc/h, peculiar velocities in km/s)");
                 b.optional("plc_output_in_batches", false, "Output in batches to save memory");
-                b.always_optional("plc_relativistic_effects",
-                                  false,
-                                  "Store the potential Phi/c^2 at the lightcone particles and write it with the radial "
-                                  "velocity, the cosmological redshift and the observed redshift 1 + z_obs = (1 + z)(1 + "
-                                  "v_r/c - Phi/c^2) (Doppler + gravitational redshift; observer at rest with Phi = 0) to "
-                                  "the HDF5 and ascii lightcone files. With plc_make_onion_density_maps also Healpix maps "
-                                  "of Phi/c^2 at the shells. Phi from the Poisson equation with the density used for the "
-                                  "force (the GR potential also for modified gravity models). Costs one extra FFT per "
-                                  "step while recording the lightcone");
+                b.always_optional(
+                    "plc_relativistic_effects",
+                    false,
+                    "Store the potential Phi/c^2 at the lightcone particles and write it with the radial "
+                    "velocity, the cosmological redshift and the observed redshift 1 + z_obs = (1 + z)(1 + "
+                    "v_r/c - Phi/c^2) (Doppler + gravitational redshift; observer at rest with Phi = 0) to "
+                    "the HDF5 and ascii lightcone files. With plc_make_onion_density_maps also Healpix maps "
+                    "of Phi/c^2 at the shells. Phi from the Poisson equation with the density used for the "
+                    "force (the GR potential also for modified gravity models). Costs one extra FFT per "
+                    "step while recording the lightcone");
                 b.optional("plc_make_onion_density_maps", false, "Make (Healpix) density maps delta(z, theta)");
                 if_true("plc_make_onion_density_maps", [&]() {
                     b.optional("plc_nside", 256, "Healpix nside of the maps (npix = 12 nside^2)");
@@ -690,7 +701,10 @@ namespace COLASOLVER {
                        {"GADGET", "HDF5"});
 
             b.section("Baryonification (snapshot post-processing)");
-            b.always_optional("baryonification", false, "Correct a temporary snapshot copy; 3D GR, no massive neutrinos, single CDM+baryon species; needs pofk=true");
+            b.always_optional("baryonification",
+                              false,
+                              "Correct a temporary snapshot copy; 3D GR, no massive neutrinos, single CDM+baryon "
+                              "species; needs pofk=true");
             if_true("baryonification", [&]() {
                 BaryonificationSettings defaults;
                 defaults.parameters([&](const char * name, auto &, const auto & value, const char * description) {
@@ -701,7 +715,9 @@ namespace COLASOLVER {
             b.section("Halo finding");
             b.optional("fof", false, "Locate friends-of-friends halos at every output");
             if_true("fof", [&]() {
-                b.optional("fof_nmin_per_halo", 20, "Minimum number of particles per halo (of one species with particle_baryons)");
+                b.optional("fof_nmin_per_halo",
+                           20,
+                           "Minimum number of particles per halo (of one species with particle_baryons)");
                 b.optional("fof_linking_length",
                            0.2,
                            "The linking length in units of the mean particle separation (of one species with "
@@ -709,10 +725,11 @@ namespace COLASOLVER {
                 b.optional("fof_nmesh_max",
                            0,
                            "Maximum grid size used to bin particles to speed up the linking (0: the code chooses)");
-                b.optional("fof_buffer_length_mpch",
-                           3.0,
-                           "Buffer region (larger than the largest halo) from neighbor tasks (Mpc/h). The code warns if "
-                           "halos reach its edge (they might then be cut off and found twice)");
+                b.optional(
+                    "fof_buffer_length_mpch",
+                    3.0,
+                    "Buffer region (larger than the largest halo) from neighbor tasks (Mpc/h). The code warns if "
+                    "halos reach its edge (they might then be cut off and found twice)");
             });
             b.always_optional("fof_output_fileformat",
                               "ascii",
@@ -795,11 +812,12 @@ namespace COLASOLVER {
                            0.0,
                            "Smooth the linear field with this scale (Mpc/h) before forming the operators (0: none)");
                 b.optional("hybridbias_smoothing_filter", "gaussian", "The smoothing filter", smoothing_filters);
-                b.optional("hybridbias_kcut_over_nyquist",
-                           1.0,
-                           "Keep only the modes with k < this times the Nyquist frequency of the particle lattice in the "
-                           "linear field (a spherical cut, so the operators are isotropic as assumed in the LPT "
-                           "prediction). 0: keep all the modes of the lattice grid (a cube)");
+                b.optional(
+                    "hybridbias_kcut_over_nyquist",
+                    1.0,
+                    "Keep only the modes with k < this times the Nyquist frequency of the particle lattice in the "
+                    "linear field (a spherical cut, so the operators are isotropic as assumed in the LPT "
+                    "prediction). 0: keep all the modes of the lattice grid (a cube)");
                 b.optional("hybridbias_zeldovich",
                            false,
                            "Also write the Zel'dovich (resummed 1LPT) prediction of the spectra with the same cut and "
@@ -808,13 +826,14 @@ namespace COLASOLVER {
                            false,
                            "Also write the one-loop LPT (CLEFT) prediction of the spectra (no counterterms): "
                            "hybridbias_oneloop_z<z>.txt");
-                b.always_optional("hybridbias_oneloop_kernels",
-                                  "EdS",
-                                  "The kernels of the one-loop prediction. EdS: the Einstein-de Sitter kernels with the "
-                                  "linear P(k) of the gravity model. model: the scale- and time-dependent LPT kernels "
-                                  "of the gravity model (f(R) and DGP with their screening if gravity_model_screening, "
-                                  "the other models from G_eff(k,a) without screening, LCDM for GR)",
-                                  {"EdS", "model"});
+                b.always_optional(
+                    "hybridbias_oneloop_kernels",
+                    "EdS",
+                    "The kernels of the one-loop prediction. EdS: the Einstein-de Sitter kernels with the "
+                    "linear P(k) of the gravity model. model: the scale- and time-dependent LPT kernels "
+                    "of the gravity model (f(R) and DGP with their screening if gravity_model_screening, "
+                    "the other models from G_eff(k,a) without screening, LCDM for GR)",
+                    {"EdS", "model"});
             });
             return b.specs;
         }();

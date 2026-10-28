@@ -78,7 +78,7 @@ class GravityModel {
         return not scaledependent_growth ? D_3LPTb_of_loga(std::log(a)) :
                                            D_3LPTb_of_logkoverH0_loga(std::log(koverH0), std::log(a));
     }
-   
+
     //========================================================================
     // Is growth scaledpendent?
     //========================================================================
@@ -111,9 +111,10 @@ class GravityModel {
                                            D_3LPTb_of_logkoverH0_loga.deriv_y(std::log(koverH0), std::log(a)) /
                                                D_3LPTb_of_logkoverH0_loga(std::log(koverH0), std::log(a));
     }
-    
+
     // Output an element (e.g. string/double) in a header/row with a desired alignment width
-    template <typename T> void output_element(std::ofstream & fp, const T & element, int width = 15) const {
+    template <typename T>
+    void output_element(std::ofstream & fp, const T & element, int width = 15) const {
         fp << std::setw(width) << element;
     }
 
@@ -121,54 +122,82 @@ class GravityModel {
     // Output the stuff we compute
     //========================================================================
     virtual void output_header(std::ofstream & fp) {
-        fp << "#"; output_element(fp, "a"); 
-        fp << " "; output_element(fp, "GeffG(a,k)"); 
-        fp << " "; output_element(fp, "D1(a,k)"); 
-        fp << " "; output_element(fp, "D1mnu(a,k)"); 
+        fp << "#";
+        output_element(fp, "a");
+        fp << " ";
+        output_element(fp, "GeffG(a,k)");
+        fp << " ";
+        output_element(fp, "D1(a,k)");
+        fp << " ";
+        output_element(fp, "D1mnu(a,k)");
         if (transferdata) {
-          fp << " "; output_element(fp, "D1_Tk(a,k)"); 
-          fp << " "; output_element(fp, "D1mnu_Tk(a,k)"); 
+            fp << " ";
+            output_element(fp, "D1_Tk(a,k)");
+            fp << " ";
+            output_element(fp, "D1mnu_Tk(a,k)");
         }
-        fp << " "; output_element(fp, "D2(a,k)"); 
-        fp << " "; output_element(fp, "D3a(a,k)"); 
-        fp << " "; output_element(fp, "D3b(a,k)"); 
-        fp << " "; output_element(fp, "source_1LPT"); 
-        fp << " "; output_element(fp, "source_2LPT"); 
-        fp << " "; output_element(fp, "source_3LPTa"); 
-        fp << " "; output_element(fp, "source_3LPTb"); 
+        fp << " ";
+        output_element(fp, "D2(a,k)");
+        fp << " ";
+        output_element(fp, "D3a(a,k)");
+        fp << " ";
+        output_element(fp, "D3b(a,k)");
+        fp << " ";
+        output_element(fp, "source_1LPT");
+        fp << " ";
+        output_element(fp, "source_2LPT");
+        fp << " ";
+        output_element(fp, "source_3LPTa");
+        fp << " ";
+        output_element(fp, "source_3LPTb");
     }
-    
+
     virtual void output_row(std::ofstream & fp, double a, double koverH0) const {
-        fp << " "; output_element(fp, a); 
-        fp << " "; output_element(fp, GeffOverG(a, koverH0)); 
-        fp << " "; output_element(fp, get_D_1LPT(a, koverH0)); 
-        fp << " "; output_element(fp, get_Dmnu_1LPT(a, koverH0)); 
+        fp << " ";
+        output_element(fp, a);
+        fp << " ";
+        output_element(fp, GeffOverG(a, koverH0));
+        fp << " ";
+        output_element(fp, get_D_1LPT(a, koverH0));
+        fp << " ";
+        output_element(fp, get_Dmnu_1LPT(a, koverH0));
         if (transferdata) {
-          fp << " "; output_element(fp,  transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, a) /
-                      transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, aini)); 
-          fp << " "; output_element(fp, transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, a) /
-                      transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, aini)); 
+            fp << " ";
+            output_element(fp,
+                           transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, a) /
+                               transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, aini));
+            fp << " ";
+            output_element(fp,
+                           transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, a) /
+                               transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, aini));
         }
-        fp << " "; output_element(fp, get_D_2LPT(a, koverH0)); 
-        fp << " "; output_element(fp, get_D_3LPTa(a, koverH0)); 
-        fp << " "; output_element(fp, get_D_3LPTb(a, koverH0)); 
-        fp << " "; output_element(fp, source_factor_1LPT(a, koverH0)); 
-        fp << " "; output_element(fp, source_factor_2LPT(a, koverH0)); 
-        fp << " "; output_element(fp, source_factor_3LPTa(a, koverH0)); 
-        fp << " "; output_element(fp, source_factor_3LPTb(a, koverH0)); 
+        fp << " ";
+        output_element(fp, get_D_2LPT(a, koverH0));
+        fp << " ";
+        output_element(fp, get_D_3LPTa(a, koverH0));
+        fp << " ";
+        output_element(fp, get_D_3LPTb(a, koverH0));
+        fp << " ";
+        output_element(fp, source_factor_1LPT(a, koverH0));
+        fp << " ";
+        output_element(fp, source_factor_2LPT(a, koverH0));
+        fp << " ";
+        output_element(fp, source_factor_3LPTa(a, koverH0));
+        fp << " ";
+        output_element(fp, source_factor_3LPTb(a, koverH0));
     }
 
     virtual void output(std::string filename, double koverH0) {
         std::ofstream fp(filename.c_str());
         if (not fp.is_open())
             return;
-        
-        output_header(fp); 
+
+        output_header(fp);
         fp << "\n";
         for (int i = 0; i < npts_loga; i++) {
             double loga = std::log(alow) + std::log(ahigh / alow) * i / double(npts_loga - 1);
             double a = std::exp(loga);
-            output_row(fp, a, koverH0); 
+            output_row(fp, a, koverH0);
             fp << "\n";
         }
     }
@@ -186,7 +215,8 @@ class GravityModel {
     virtual void info() const {
         if (FML::ThisTask == 0) {
             std::cout << "#=====================================================\n";
-            std::cout << "# GravityModel is [" << name << "] and has the cosmology: [" << this->cosmo->get_name() << "]\n";
+            std::cout << "# GravityModel is [" << name << "] and has the cosmology: [" << this->cosmo->get_name()
+                      << "]\n";
             std::cout << "# Growth factors unity at zini = " << 1.0 / aini - 1.0 << "\n";
             std::cout << "# Starting integrating growth factors from z = " << 1.0 / alow - 1.0 << "\n";
             std::cout << "# scaledependent_growth : " << scaledependent_growth << "\n";
@@ -220,7 +250,8 @@ class GravityModel {
         // The growth factor splines must start before the simulation (e.g. when starting at very high redshift)
         alow = std::min(alow, aini / 10.0);
         if (param.get<std::string>("ic_type_of_input") == "transferinfofile") {
-            init_transferdata(param.get<std::string>("ic_input_filename"), COLASOLVER::get_parameter<std::string>(param, "ic_type_of_input_fileformat"));
+            init_transferdata(param.get<std::string>("ic_input_filename"),
+                              COLASOLVER::get_parameter<std::string>(param, "ic_type_of_input_fileformat"));
         }
         this->scaledependent_growth = this->cosmo->get_fMNu() > 0.0;
         // The growth factors with massive neutrinos are computed from the transfer functions (and start at their
@@ -228,10 +259,11 @@ class GravityModel {
         FML::assert_mpi(not(this->cosmo->get_OmegaMNu() > 0.0 and not transferdata),
                         "cosmology_OmegaMNu > 0 needs ic_type_of_input = transferinfofile (the growth factors with "
                         "massive neutrinos are computed from the transfer functions)");
-    
+
         // Experimental option with finite-difference forces (instead of fourier)
         force_use_finite_difference_force = COLASOLVER::get_parameter<bool>(param, "force_use_finite_difference_force");
-        force_finite_difference_stencil_order = COLASOLVER::get_parameter<int>(param, "force_finite_difference_stencil_order");
+        force_finite_difference_stencil_order =
+            COLASOLVER::get_parameter<int>(param, "force_finite_difference_stencil_order");
     }
 
     //========================================================================
@@ -284,13 +316,19 @@ class GravityModel {
             const int stencil_order = force_finite_difference_stencil_order;
             const int nboundary_cells = stencil_order / 2;
             FFTWGrid<NDIM> potential_real;
-            FML::NBODY::compute_potential_real_from_density_fourier<NDIM>(
-                density_fourier, potential_real, norm_poisson_equation, nboundary_cells);
-            FML::NBODY::compute_force_from_potential_real<NDIM>(
-                potential_real, force_real, density_assignment_method_used, stencil_order);
+            FML::NBODY::compute_potential_real_from_density_fourier<NDIM>(density_fourier,
+                                                                          potential_real,
+                                                                          norm_poisson_equation,
+                                                                          nboundary_cells);
+            FML::NBODY::compute_force_from_potential_real<NDIM>(potential_real,
+                                                                force_real,
+                                                                density_assignment_method_used,
+                                                                stencil_order);
         } else {
-            FML::NBODY::compute_force_from_density_fourier<NDIM>(
-                density_fourier, force_real, density_assignment_method_used, norm_poisson_equation);
+            FML::NBODY::compute_force_from_density_fourier<NDIM>(density_fourier,
+                                                                 force_real,
+                                                                 density_assignment_method_used,
+                                                                 norm_poisson_equation);
         }
     }
 
@@ -506,8 +544,16 @@ class GravityModel {
                 dD1mnu_ini = D1mnu_ini * transferdata->get_massive_neutrino_growth_rate(koverH0 * H0_hmpc, alow);
             }
 
-            std::vector<double> yini{
-                D1_ini, dD1dx_ini, D2_ini, dD2dx_ini, D3a_ini, dD3adx_ini, D3b_ini, dD3bdx_ini, D1mnu_ini, dD1mnu_ini};
+            std::vector<double> yini{D1_ini,
+                                     dD1dx_ini,
+                                     D2_ini,
+                                     dD2dx_ini,
+                                     D3a_ini,
+                                     dD3adx_ini,
+                                     D3b_ini,
+                                     dD3bdx_ini,
+                                     D1mnu_ini,
+                                     dD1mnu_ini};
 
             // Solve the ODE
             FML::SOLVERS::ODESOLVER::ODESolver ode;
@@ -580,12 +626,11 @@ class GravityModel {
     }
 
     virtual ~GravityModel() = default;
-   
+
   protected:
-    
     // For massive neutrinos we need transfer functions
     std::shared_ptr<LinearTransferData> transferdata;
-    
+
     // The background cosmology
     std::shared_ptr<Cosmology> cosmo;
 
@@ -617,7 +662,7 @@ class GravityModel {
 
     Spline Dmnu_1LPT_of_loga{"[Dmnu1LPT(log(a)) not yet created]"};
     Spline2D Dmnu_1LPT_of_logkoverH0_loga{"[Dmnu1LPT(log(k/H0),log(a)) not yet created]"};
-    
+
     // Does it have scaledependent growth?
     bool scaledependent_growth{false};
 

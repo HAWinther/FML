@@ -582,8 +582,9 @@ namespace FML {
                 };
 
                 // Integrate to the end of tight coupling
-                ODESolver tight_coupling_ode(
-                    FIDUCIAL_HSTART_ODE_TIGHT, FIDUCIAL_ABSERR_ODE_TIGHT, FIDUCIAL_RELERR_ODE_TIGHT);
+                ODESolver tight_coupling_ode(FIDUCIAL_HSTART_ODE_TIGHT,
+                                             FIDUCIAL_ABSERR_ODE_TIGHT,
+                                             FIDUCIAL_RELERR_ODE_TIGHT);
 
                 timer.StartTiming("PERT::integrate_tight (all threads)");
                 tight_coupling_ode.solve(deriv_tight_coupling, x_array_tight, y_pert_tight_coupling);
@@ -667,8 +668,12 @@ namespace FML {
                 std::cout << "All tasks done!\n";
             // Its not that much data so we simply send all the data from all to  all tasks and add up
             for (size_t iq = 0; iq < results.size(); iq++) {
-                MPI_Allreduce(
-                    MPI_IN_PLACE, results[iq].data(), results[iq].size(), MPI_DOUBLE, MPI_SUM, FML::communicator);
+                MPI_Allreduce(MPI_IN_PLACE,
+                              results[iq].data(),
+                              results[iq].size(),
+                              MPI_DOUBLE,
+                              MPI_SUM,
+                              FML::communicator);
             }
 #endif
 
@@ -916,7 +921,8 @@ namespace FML {
 
             const int npts = 2000;
             auto x_array = FML::MATH::linspace(x_start, 0.0, npts);
-            fp << "# x = log(a)    Perturbation quantities [Theta+Psi, Theta0,1,2, ThetaP0,1,2  Nu0,1,2  ... (see file) ...]\n";
+            fp << "# x = log(a)    Perturbation quantities [Theta+Psi, Theta0,1,2, ThetaP0,1,2  Nu0,1,2  ... (see "
+                  "file) ...]\n";
             auto print_data = [&](const double x) {
                 double arg = k * cosmo->chi_of_x(x);
 

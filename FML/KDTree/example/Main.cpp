@@ -5,7 +5,7 @@
 #include <vector>
 
 //================================================================
-// 
+//
 // Examples of how to use the generic binner that uses the kdtree
 // We have voids and galaxies from a simulation (periodic box)
 // We compute the average profile of the galaxies around the voids

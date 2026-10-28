@@ -15,6 +15,6 @@ namespace FML {
             }
             constexpr int max_operators = 5;
         } // namespace HYBRIDBIAS
-    }     // namespace CORRELATIONFUNCTIONS
+    } // namespace CORRELATIONFUNCTIONS
 } // namespace FML
 #endif
