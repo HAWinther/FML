@@ -5,6 +5,18 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Scale-dependent 2LPT initial velocities
+- NBody: `NBodyInitialConditions` takes an optional scale-dependent 2LPT velocity norm,
+  `velocity_norm_2LPT_of_kBox`. The default is unchanged.
+- COLASolver: with scale-dependent growth (massive neutrinos, k-dependent gravity), the initial 2LPT velocity now
+  uses the scale-dependent growth rate f2(k, z_ini) instead of f2(k = 0). This matches the scale-dependent COLA
+  frame.
+  - COLA and no-COLA initial velocities used to differ by 4.3e-4 rms; they now differ by 7e-7.
+  - P(k) at z = 0 changes by at most 0.07% for k <= 0.8 h/Mpc with 0.4 eV neutrinos.
+  - Scale-dependent COLA runs are unchanged.
+- COLASolver: the README numbers for two-species COLA are re-measured after the time-stepping fix.
+  `PARAMETERS.md` is regenerated with `./nbody --parameters`.
+
 ### Explicit force discretization options
 
 - Replace mutable NBody force globals/setters with typed per-call `ForceOptions` for Laplacian,
