@@ -131,8 +131,19 @@ namespace FML::NBODY {
                 double avel_old = (i == 0) ? amin : scale_factor_of_step(amin, amax, nsteps, i - 0.5);
                 double avel_new = (i == 0) ? scale_factor_of_step(amin, amax, nsteps, 0.5) :
                                              (i == nsteps ? amax : scale_factor_of_step(amin, amax, nsteps, i + 0.5));
-                delta_time_drift.push_back(drift_timestep(apos_old, apos_new));
-                delta_time_kick.push_back(kick_timestep(avel_old, avel_new, i, nsteps));
+                // The force of the kick is computed at apos_old (with poisson_factor(apos_old)) and the Tassev drift
+                // weights the drift with the time of the velocities avel_new. With linear spacing these are the
+                // midpoints of [avel_old, avel_new] and [apos_old, apos_new] (the first and last kick: their ends),
+                // and we use that expression (which differs from apos_old and avel_new by round-off) so that the
+                // results are unchanged. With other spacings the midpoints are not these times, which gave the linear
+                // growth wrong by -0.76% (Quinn, 20 logarithmic steps from a = 0.05) instead of -0.38%
+                double akick = apos_old, adrift = avel_new;
+                if (settings.spacing == ScaleFactorSpacing::Linear) {
+                    akick = (i == 0) ? avel_old : (i == nsteps ? avel_new : (avel_old + avel_new) / 2.);
+                    adrift = (apos_old + apos_new) / 2.;
+                }
+                delta_time_drift.push_back(drift_timestep(apos_old, apos_new, adrift));
+                delta_time_kick.push_back(kick_timestep(avel_old, avel_new, akick));
             }
             return {delta_time_drift, delta_time_kick};
         }
@@ -206,10 +217,11 @@ namespace FML::NBODY {
             return value;
         }
 
-        double drift_timestep(double alow, double ahigh) const {
+        // The drift from alow to ahigh with the velocities at avel (only used by Tassev)
+        double drift_timestep(double alow, double ahigh, double avel) const {
             if (settings.method == TimestepMethod::Tassev) {
                 // Tassev et al.
-                double amid = (ahigh + alow) / 2.;
+                const double amid = avel;
                 ODEFunction deriv = [&](double a, [[maybe_unused]] const double * t, double * dtda) {
                     dtda[0] = 1.0 / (a * a * a * expansion(a));
                     dtda[0] *= std::pow(a / amid, settings.cola_nLPT);
@@ -225,12 +237,9 @@ namespace FML::NBODY {
             return integrate(deriv, alow, ahigh);
         }
 
-        double kick_timestep(double alow, double ahigh, int istep, int nsteps) const {
-            double amid = (ahigh + alow) / 2.;
-            if (istep == 0)
-                amid = alow;
-            else if (istep == nsteps)
-                amid = ahigh;
+        // The kick from alow to ahigh with the force computed at apos
+        double kick_timestep(double alow, double ahigh, double apos) const {
+            const double amid = apos;
 
             if (settings.method == TimestepMethod::Tassev) {
                 // Tassev et al.
