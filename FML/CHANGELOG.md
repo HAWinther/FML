@@ -5,6 +5,18 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### PM force: Nyquist component of the continuous gradient
+- NBody / COLASolver: the PM force with the default continuous gradient kernel now sets the Nyquist component of
+  the gradient to zero on even meshes. The LPT code already does this, and the discrete gradients are effectively
+  zero there too.
+  - Why: that mode is its own mirror image. With +k_Ny, the force of a reflected density field differed from the
+    reflected force.
+  - Affected: every PM force path that uses the continuous gradient, including all gravity models, the interlaced
+    and early-time forces, and PGD.
+  - Unchanged: the finite-difference, NUFFT and discrete-kernel forces, and odd meshes.
+  - Effect on P(k, z = 0): below 2e-4 up to the particle Nyquist frequency in a 128^3 run; about 0.8% for
+    kNy/2 < k < kNy in the 32^3 regression cases.
+
 ### LPT Nyquist derivatives; Healpix nside limit
 - LPT: on even meshes, the ambiguous derivatives of the Nyquist modes are now zero in the default (non-padded)
   path, as in `TidalTensor/Hessian.h`. Before, they used +k_Ny and the results were not symmetric under
