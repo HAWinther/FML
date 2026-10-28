@@ -67,15 +67,18 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
     }
 
     //========================================================================
-    // For the LPT equations there is a modified >= 2LPT factor
+    // For the 2LPT equation: the nonlinear (brane-bending) term of the field equation adds a source -eps D1^2 with
+    //   eps = 2 rc^2 OmegaM / (9 a^3 beta^3 GeffOverG)
+    // relative to the GeffOverG (D2 - D1^2) of the linear force, i.e. D2 - (1 - eps) D1^2. It multiplied D2 as well
+    // (D2/D1^2 at z = 0 was 0.6% too small for rcH0 = 1). It is the Vainshtein screening, so it is only there when
+    // the force has it (gravity_model_screening or the exact solution), as in the hybrid bias LPT kernels
     //========================================================================
-    double source_factor_2LPT(double a, [[maybe_unused]] double koverH0 = 0.0) const override {
-        double betadgp = get_beta_dgp(a);
-        // The base-class contains how to deal with massive neutrinos so we multiply this in
-        // to avoid having to also implement it here
-        return GravityModel<NDIM>::source_factor_2LPT(a, koverH0) *
-               (1.0 - (2.0 * rcH0_DGP * rcH0_DGP * this->cosmo->get_OmegaM()) /
-                          (9.0 * a * a * a * (betadgp * betadgp * betadgp) * (1 + 1.0 / (3.0 * betadgp))));
+    double nonlinear_source_factor_2LPT(double a, [[maybe_unused]] double koverH0 = 0.0) const override {
+        if (not this->get_use_screening())
+            return 1.0;
+        const double betadgp = get_beta_dgp(a);
+        return 1.0 - (2.0 * rcH0_DGP * rcH0_DGP * this->cosmo->get_OmegaM()) /
+                         (9.0 * a * a * a * (betadgp * betadgp * betadgp) * (1 + 1.0 / (3.0 * betadgp)));
     }
 
     //========================================================================

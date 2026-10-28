@@ -224,11 +224,20 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
     auto cosmo = grav->get_cosmo();
     const double norm_poisson = 1.5 * cosmo->get_OmegaM() * aold * grav->GeffOverG(aold);
 
+    // The LPT force of each order as in the growth equations (GravityModel::compute_growth_factors), with the
+    // source factors at k = 0 (e.g. 1 - f_nu for >= 2LPT with massive neutrinos and the nonlinear DGP source).
+    // Without them the frame kick did not follow the LPT growth factors used for the drift
+    const double source_1LPT = grav->source_factor_1LPT(aold);
+    const double source_2LPT = grav->source_factor_2LPT(aold);
+    const double nonlinear_2LPT = grav->nonlinear_source_factor_2LPT(aold);
+    const double source_3LPTa = grav->source_factor_3LPTa(aold);
+    const double source_3LPTb = grav->source_factor_3LPTb(aold);
+
     const double D1 = grav->get_D_1LPT(a);
     const double D1old = grav->get_D_1LPT(aold);
     const double D1ini = grav->get_D_1LPT(aini);
     double fac1_pos = (D1 - D1old) / D1ini;
-    double fac1_vel = -norm_poisson * D1old / D1ini * delta_time_kick;
+    double fac1_vel = -norm_poisson * source_1LPT * D1old / D1ini * delta_time_kick;
     if (LPT_order < 1)
         fac1_pos = fac1_vel = 0.0;
 
@@ -236,7 +245,8 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
     [[maybe_unused]] const double D2old = grav->get_D_2LPT(aold);
     [[maybe_unused]] const double D2ini = grav->get_D_2LPT(aini);
     [[maybe_unused]] double fac2_pos = (D2 - D2old) / D2ini;
-    [[maybe_unused]] double fac2_vel = -norm_poisson * (D2old - D1old * D1old) / D2ini * delta_time_kick;
+    [[maybe_unused]] double fac2_vel =
+        -norm_poisson * source_2LPT * (D2old - nonlinear_2LPT * D1old * D1old) / D2ini * delta_time_kick;
     if (LPT_order < 2)
         fac2_pos = fac2_vel = 0.0;
 
@@ -245,7 +255,7 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
     [[maybe_unused]] const double D3aini = grav->get_D_3LPTa(aini);
     [[maybe_unused]] double fac3a_pos = (D3a - D3aold) / D3aini;
     [[maybe_unused]] double fac3a_vel =
-        -norm_poisson * (D3aold - 2.0 * D1old * D1old * D1old) / D3aini * delta_time_kick;
+        -norm_poisson * source_3LPTa * (D3aold - 2.0 * D1old * D1old * D1old) / D3aini * delta_time_kick;
     if (LPT_order < 3)
         fac3a_pos = fac3a_vel = 0.0;
 
@@ -254,7 +264,7 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
     [[maybe_unused]] const double D3bini = grav->get_D_3LPTb(aini);
     [[maybe_unused]] double fac3b_pos = (D3b - D3bold) / D3bini;
     [[maybe_unused]] double fac3b_vel =
-        -norm_poisson * (D3bold + D1old * D1old * D1old - D1old * D2old) / D3bini * delta_time_kick;
+        -norm_poisson * source_3LPTb * (D3bold + D1old * D1old * D1old - D1old * D2old) / D3bini * delta_time_kick;
     if (LPT_order < 3)
         fac3b_pos = fac3b_vel = 0.0;
 
@@ -560,14 +570,15 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
         return (grav->get_D_1LPT(a, koverH0) - grav->get_D_1LPT(aold, koverH0)) / grav->get_D_1LPT(aini, koverH0);
     };
 
-    // For 2LPT kick step: -1.5 * OmegaM * a * GeffG(k,a) * (D2 - D1 * D1) / D2ini * delta_time_kick
+    // For 2LPT kick step: -1.5 * OmegaM * a * GeffG(k,a) * (D2 - nonlinear * D1 * D1) / D2ini * delta_time_kick
     [[maybe_unused]] auto function_vel_2LPT = [&](double kBox) {
         double koverH0 = kBox / H0Box;
         double factor = -1.5 * OmegaM * aold * grav->GeffOverG(aold, koverH0) * delta_time_kick;
         double D_1LPT = grav->get_D_1LPT(aold, koverH0);
         double D_2LPT = grav->get_D_2LPT(aold, koverH0);
         double D_2LPT_ini = grav->get_D_2LPT(aini, koverH0);
-        return factor * grav->source_factor_2LPT(aold, koverH0) * (D_2LPT - D_1LPT * D_1LPT) / D_2LPT_ini;
+        const double nonlinear = grav->nonlinear_source_factor_2LPT(aold, koverH0);
+        return factor * grav->source_factor_2LPT(aold, koverH0) * (D_2LPT - nonlinear * D_1LPT * D_1LPT) / D_2LPT_ini;
     };
 
     // For 2LPT drift step: (D2 - D2old) / D2ini

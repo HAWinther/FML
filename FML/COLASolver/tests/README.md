@@ -125,6 +125,25 @@ reconstruction from the density field (PCS) with COLA is within 2.5%, and that a
 exact reconstruction with scale-dependent growth and COLA, is an error; and the warning for an input P(k) that does
 not reach the largest k of the IC grid.
 
+## COLA and the LPT growth factors (`check_cola.py`, `test_cola_frame.cpp`)
+
+```bash
+python3 tests/check_cola.py ./nbody /tmp/cola   # about 10 s, needs numpy and scipy
+cd tests && make test_cola_frame && ./test_cola_frame
+```
+
+`check_cola.py`: `simulation_use_scaledependent_cola = true` gives standard COLA in GR (with a message, the same
+result as false) and scale-dependent COLA with massive neutrinos, and exact LPT reconstruction of read particles works
+without COLA; with `simulation_enforce_LPT_trajectories = true` the velocities at z = 20, 1 and 0 are the 2LPT
+velocities of the displacements (to 4e-5; they stayed close to the initial velocities); and D2/D1^2 of DGP (H0 rc =
+0.5, 1, 2 with screening and 1 without) agrees with an independent solution of the growth equations to 3e-6 (it was
+0.5-2% off). `test_cola_frame` (no MPI): a linear mode integrated with the Quinn and Tassev steps (20 steps from a =
+0.05, linear, logarithmic and a^0.5 spacing) has the growth and velocity within the expected time-stepping error
+(with logarithmic spacing -0.38% / -0.31% for Quinn, -0.76% / -0.84% when the kick was normalized at the midpoint of
+the velocity times instead of the time of the force), and the COLA frame kicks of the LPT force add up to minus the
+change of the LPT velocity of the growth factors to 1e-7 (GR, DGP with and without screening; 1% off for 2LPT in DGP
+before the source factors were included).
+
 ## Regression tests (`regression/`)
 
 Small simulations covering all the main code paths, for checking that a change does not change the

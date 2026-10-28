@@ -6,6 +6,10 @@
 //     the kick has to be normalized there (and the Tassev drift weighted with the time of the velocities). With
 //     logarithmic or power-law spacing the midpoints were used: the growth was 0.76% too small with 20 logarithmic
 //     Quinn steps instead of 0.38% (linear spacing is unchanged)
+//  2. The COLA frame kick (scale-independent COLA): the kicks of the LPT force over many small steps must add up to
+//     minus the change of the LPT velocity of the growth factors, i.e. the frame kick must be the force of the
+//     growth equations (with the source factors: the nonlinear DGP 2LPT source, 1 - f_nu for >= 2LPT). GR, DGP with
+//     and without screening
 //
 // Build and run: make test_cola_frame && ./test_cola_frame (in this folder)
 //==========================================================================
@@ -84,8 +88,12 @@ int main() {
         std::cout << (ok ? "[PASS] " : "[FAIL] ") << message << '\n';
     };
 
-    std::shared_ptr<GravityModel<NDIM>> gr;
-    quietly([&]() { gr = make_model("GR", false); });
+    std::shared_ptr<GravityModel<NDIM>> gr, dgp, dgp_noscreening;
+    quietly([&]() {
+        gr = make_model("GR", false);
+        dgp = make_model("DGP", true);
+        dgp_noscreening = make_model("DGP", false);
+    });
 
     //======================================================================
     // 1. Time-stepping of a linear mode
@@ -132,6 +140,52 @@ int main() {
             msg << "time-stepping, " << c.name << " (20 steps, a = 0.05 -> 1): linear growth error " << errD * 100
                 << "%, velocity " << errv * 100 << "%";
             check(std::abs(errD) < c.max_err_D and std::abs(errv) < c.max_err_v, msg.str());
+        }
+    }
+
+    //======================================================================
+    // 2. The COLA frame kick adds up to minus the change of the LPT velocity
+    //======================================================================
+    for (auto & [name, grav] : {std::make_pair(std::string("GR"), gr),
+                                std::make_pair(std::string("DGP rcH0 = 1, screening"), dgp),
+                                std::make_pair(std::string("DGP rcH0 = 1, no screening"), dgp_noscreening)}) {
+        auto cosmo = grav->get_cosmo();
+        const double aini = 1.0 / 20.0, aend = 1.0;
+        // One particle with Psi_1LPT = (1, 0, 0) and Psi_2LPT = (0, 1, 0)
+        using Particle = ParticleCOLA<NDIM>;
+        std::vector<Particle> p(1);
+        for (int idim = 0; idim < NDIM; idim++) {
+            p[0].pos[idim] = 0.5;
+            p[0].vel[idim] = 0.0;
+            p[0].Psi_1LPT[idim] = idim == 0 ? 1.0 : 0.0;
+            p[0].Psi_2LPT[idim] = idim == 1 ? 1.0 : 0.0;
+        }
+        FML::PARTICLE::MPIParticles<Particle> part;
+        part.create(p.data(), 1, 1, 0.0, 1.0, false);
+
+        COLASOLVER::TimestepSettings settings;
+        settings.method = COLASOLVER::TimestepMethod::Quinn;
+        settings.spacing = COLASOLVER::ScaleFactorSpacing::Linear;
+        COLASOLVER::TimeStepping<NDIM> ts(settings, cosmo, grav);
+        std::shared_ptr<GravityModel<NDIM>> g = grav;
+        quietly([&]() {
+            for (auto & s : ts.steps(aini, aend, 2000))
+                cola_kick_drift<NDIM,
+                                Particle>(part, g, 2, aini, s.apos, s.apos_new, s.delta_time_kick, 0.0, true, false);
+        });
+        // The LPT velocity (per unit Psi) of order n: a^2 E f_n D_n / D_n(aini)
+        auto vLPT = [&](double a, int order) {
+            const double fac = a * a * cosmo->HoverH0_of_a(a);
+            return order == 1 ? fac * grav->get_f_1LPT(a) * grav->get_D_1LPT(a) / grav->get_D_1LPT(aini) :
+                                fac * grav->get_f_2LPT(a) * grav->get_D_2LPT(a) / grav->get_D_2LPT(aini);
+        };
+        for (int order : {1, 2}) {
+            const double expected = -(vLPT(aend, order) - vLPT(aini, order));
+            const double err = part[0].vel[order - 1] / expected - 1.0;
+            std::ostringstream msg;
+            msg << name << ": " << order << "LPT COLA frame kick = -(change of the LPT velocity) (rel. diff " << err
+                << ")";
+            check(std::abs(err) < 1e-4, msg.str());
         }
     }
 

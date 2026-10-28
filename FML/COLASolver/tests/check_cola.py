@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #==========================================================================
-# Checks of COLA and the LPT growth factors (about 10 seconds, needs numpy)
+# Checks of COLA and the LPT growth factors (about 10 seconds, needs numpy and scipy)
 #
 #  1. simulation_use_scaledependent_cola = true only gives scale-dependent COLA when the growth is scale-dependent:
 #     in GR it is turned off (with a message, same result as false) and with massive neutrinos it is used. Reading
@@ -9,6 +9,13 @@
 #     2LPT displacements of each particle are solved for from its positions at z = 20, 1 and 0, and its velocities at
 #     z = 20, 1 and 0 must be the 2LPT velocities a^2 H (dD1/dlna Psi1 + dD2/dlna Psi2) of the growth factors (the COLA
 #     kick of the LPT force was done without the PM kick: the velocities stayed close to the initial ones)
+#  3. DGP 2LPT growth factor: D2/D1^2 at z = 0 (H0 rc = 0.5, 1, 2, with screening; and H0 rc = 1 without) against an
+#     independent solution of the growth equations
+#        D1'' + (2 + dlogH/dloga) D1' = 1.5 OmegaM(a) GeffOverG D1
+#        D2'' + (2 + dlogH/dloga) D2' = 1.5 OmegaM(a) GeffOverG (D2 - (1 - eps) D1^2)
+#     with eps = 2 (rc H0)^2 OmegaM / (9 a^3 beta^3 GeffOverG) the nonlinear (Vainshtein) source, only with screening
+#     (the code multiplied D2 by 1 - eps as well, and also without screening: D2 was 0.5-0.7% too small with
+#     screening, 2% without)
 #
 # Usage: python3 check_cola.py <path/to/nbody> <outdir>
 #   MPIRUN : how to launch (default "mpirun -np 2"; MPIRUN="" for a serial build)
@@ -20,6 +27,8 @@ import subprocess
 import sys
 
 import numpy as np
+from scipy.integrate import solve_ivp
+from scipy.interpolate import CubicSpline
 
 here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(here, "regression"))
@@ -173,6 +182,42 @@ for z in [ZINI, 1.0, 0.0]:
     err = np.sqrt(np.mean((v - v_lpt)**2) / np.mean(v_lpt**2))
     check(err < 1e-4, f"simulation_enforce_LPT_trajectories: the velocities at z = {z:g} are the 2LPT velocities (rms "
           f"rel. diff {err:.1e}, rms v = {np.sqrt(np.mean(v**2)):.1f} km/s)")
+
+#==========================================================================
+# 3. DGP: D2 against an independent solution of the growth equations
+#==========================================================================
+dgp = {k: v for k, v in cases.CASES["lightcone_dgp"].items() if not k.startswith("plc_") and k != "lightcone"}
+dgp.update(output_redshifts=[ZINI], timestep_nsteps=[0], pofk=False, output_particles=False)
+for rc, screening in [(0.5, True), (1.0, True), (2.0, True), (1.0, False)]:
+    d, _ = run(f"dgp_rc{rc}_screening{int(screening)}",
+               dict(dgp, gravity_model_dgp_rcH0overc=rc, gravity_model_screening=screening))
+    growth = table(d, "gravitymodel_Reg_k0.0001.txt")
+    cosmo = table(d, "cosmology_Reg.txt")
+    lna_c = np.log(cosmo[:, 0])
+    E, dlogH, OmegaM_of_a = (CubicSpline(lna_c, cosmo[:, i]) for i in [1, 2, 3])
+    OmegaM = cases.BASE["cosmology_OmegaCDM"] + cases.BASE["cosmology_Omegab"]
+
+    def rhs(lna, y):
+        a = np.exp(lna)
+        beta = 1.0 + 2.0 * rc * E(lna) * (1.0 + dlogH(lna) / 3.0)
+        geff = 1.0 + 1.0 / (3.0 * beta)
+        eps = 2.0 * rc**2 * OmegaM / (9.0 * a**3 * beta**3 * geff) if screening else 0.0
+        s = 1.5 * OmegaM_of_a(lna) * geff
+        d1, dd1, d2, dd2 = y
+        return [dd1, s * d1 - (2.0 + dlogH(lna)) * dd1, dd2, s * (d2 - (1.0 - eps) * d1 * d1) - (2.0 + dlogH(lna)) * dd2]
+
+    # Start from the growth factors of the code at a = 0.02 (the DGP terms are negligible before)
+    loga = np.log(growth[:, 0])
+    lna0 = np.log(0.02)
+    y0 = [*local_fit(loga, growth[:, 2], lna0), *local_fit(loga, growth[:, 4], lna0)]
+    sol = solve_ivp(rhs, [lna0, 0.0], y0, rtol=1e-10, atol=1e-14)
+    d1, d2 = sol.y[0, -1], sol.y[2, -1]
+    D1c, D2c = local_fit(loga, growth[:, 2], 0.0)[0], local_fit(loga, growth[:, 4], 0.0)[0]
+    err1 = D1c / d1 - 1
+    err2 = (D2c / D1c**2) / (d2 / d1**2) - 1
+    check(abs(err1) < 1e-4 and abs(err2) < 2e-4,
+          f"DGP H0 rc = {rc}, screening = {screening}: D2/D1^2 at z = 0 = {D2c / D1c**2:.5f} (independent solution "
+          f"{d2 / d1**2:.5f}, rel. diff {err2:.1e}; D1 {err1:.1e})")
 
 if failures:
     print(f"{len(failures)} check(s) failed")

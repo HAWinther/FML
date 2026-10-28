@@ -288,6 +288,13 @@ class GravityModel {
     virtual double source_factor_2LPT([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
         return 1.0 - this->cosmo->get_fMNu();
     };
+    // The D1^2 source of the 2LPT equation relative to the D2 term (1 in GR):
+    //   D2'' + (2 + dlogH/dloga) D2' = rhs source_factor_2LPT (D2 - nonlinear_source_factor_2LPT D1^2)
+    // with rhs = 1.5 OmegaM(a) GeffOverG. In DGP the nonlinear (brane-bending) term only adds to the source, it does
+    // not multiply D2
+    virtual double nonlinear_source_factor_2LPT([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
+        return 1.0;
+    };
     virtual double source_factor_3LPTa([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
         return 1.0 - this->cosmo->get_fMNu();
     };
@@ -472,6 +479,7 @@ class GravityModel {
                 const double rhs_2LPT = rhs * source_factor_2LPT(a, koverH0);
                 const double rhs_3LPTa = rhs * source_factor_3LPTa(a, koverH0);
                 const double rhs_3LPTb = rhs * source_factor_3LPTb(a, koverH0);
+                const double nonlinear_2LPT = nonlinear_source_factor_2LPT(a, koverH0);
 
                 const double D1 = y[0];
                 const double dD1dx = y[1];
@@ -486,7 +494,7 @@ class GravityModel {
                 dydx[0] = dD1dx;
                 dydx[1] = rhs_1LPT * D1 - (2.0 + dlogHdx) * dD1dx;
                 dydx[2] = dD2dx;
-                dydx[3] = rhs_2LPT * (D2 - D1 * D1) - (2.0 + dlogHdx) * dD2dx;
+                dydx[3] = rhs_2LPT * (D2 - nonlinear_2LPT * D1 * D1) - (2.0 + dlogHdx) * dD2dx;
                 dydx[4] = dD3adx;
                 dydx[5] = rhs_3LPTa * (D3a - 2.0 * D1 * D1 * D1) - (2.0 + dlogHdx) * dD3adx;
                 dydx[6] = dD3bdx;
