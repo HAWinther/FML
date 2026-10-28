@@ -10,6 +10,7 @@
 
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
+#include <FML/Global/PeriodicSlabExchange.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/VoidFinders/Void.h>
 #include <FML/VoidFinders/VoxelVoidFinder.h>
@@ -156,94 +157,11 @@ namespace FML {
             // Get the particles within rmax (+ drift) of our domain from the other tasks
             const double width = FML::xmax_domain - FML::xmin_domain;
             const double buffer = rmax + max_drift + 1.0 / Nmesh;
-            const bool everything = FML::NTasks == 1 or width + 2.0 * buffer >= 1.0 or buffer > width;
-#ifdef USE_MPI
-            if (FML::NTasks > 1) {
-                MPI_Datatype type;
-                MPI_Type_contiguous(int(sizeof(PosMass)), MPI_BYTE, &type);
-                MPI_Type_commit(&type);
-                if (everything) {
-                    // Everyone gets all the particles
-                    std::vector<int> counts(FML::NTasks), displs(FML::NTasks, 0);
-                    int n = int(NumPart);
-                    MPI_Allgather(&n, 1, MPI_INT, counts.data(), 1, MPI_INT, FML::communicator);
-                    for (int i = 1; i < FML::NTasks; i++)
-                        displs[i] = displs[i - 1] + counts[i - 1];
-                    std::vector<PosMass> all(size_t(displs.back()) + counts.back());
-                    MPI_Allgatherv(parts.data(),
-                                   n,
-                                   type,
-                                   all.data(),
-                                   counts.data(),
-                                   displs.data(),
-                                   type,
-                                   FML::communicator);
-                    parts = std::move(all);
-                } else {
-                    const int LeftTask = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
-                    const int RightTask = (FML::ThisTask + 1) % FML::NTasks;
-                    std::vector<PosMass> to_left, to_right;
-                    for (auto & q : parts) {
-                        if (q.x[0] < FML::xmin_domain + buffer)
-                            to_left.push_back(q);
-                        if (q.x[0] > FML::xmax_domain - buffer)
-                            to_right.push_back(q);
-                    }
-                    int nl = int(to_left.size()), nr = int(to_right.size()), rl = 0, rr = 0;
-                    MPI_Sendrecv(&nl,
-                                 1,
-                                 MPI_INT,
-                                 LeftTask,
-                                 0,
-                                 &rr,
-                                 1,
-                                 MPI_INT,
-                                 RightTask,
-                                 0,
-                                 FML::communicator,
-                                 MPI_STATUS_IGNORE);
-                    MPI_Sendrecv(&nr,
-                                 1,
-                                 MPI_INT,
-                                 RightTask,
-                                 1,
-                                 &rl,
-                                 1,
-                                 MPI_INT,
-                                 LeftTask,
-                                 1,
-                                 FML::communicator,
-                                 MPI_STATUS_IGNORE);
-                    const size_t n0 = parts.size();
-                    parts.resize(n0 + rl + rr);
-                    MPI_Sendrecv(to_left.data(),
-                                 nl,
-                                 type,
-                                 LeftTask,
-                                 2,
-                                 parts.data() + n0 + rl,
-                                 rr,
-                                 type,
-                                 RightTask,
-                                 2,
-                                 FML::communicator,
-                                 MPI_STATUS_IGNORE);
-                    MPI_Sendrecv(to_right.data(),
-                                 nr,
-                                 type,
-                                 RightTask,
-                                 3,
-                                 parts.data() + n0,
-                                 rl,
-                                 type,
-                                 LeftTask,
-                                 3,
-                                 FML::communicator,
-                                 MPI_STATUS_IGNORE);
-                }
-                MPI_Type_free(&type);
-            }
-#endif
+            // Crossing a thin slab does not require replicating the whole box.
+            // Route to every slab whose periodic buffer overlaps each owned particle.
+            const bool everything = FML::NTasks == 1 or width + 2.0 * buffer >= 1.0;
+            FML::COMMUNICATION::append_periodic_slab_ghosts(parts, buffer,
+                                                           [](const PosMass & q) { return q.x[0]; });
 
             // Cell list for the particles we have. Cells of size >= 2 mean separations. In x we only store
             // the cells covering our domain plus the buffer
