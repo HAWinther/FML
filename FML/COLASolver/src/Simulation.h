@@ -118,6 +118,8 @@ class NBodySimulation {
     /// The initial density field delta_cb(zini,k) computed with the same Nmesh
     /// as the forces (used for linear massive neutrinos and the N-body gauge - not allocated otherwise)
     FFTWGrid<NDIM> initial_density_field_fourier;
+    // ...with the density assignment of the early-time force (force_early_method; only while it is used)
+    FFTWGrid<NDIM> initial_density_field_early;
     // ...and in the frame of the particles when they are shifted (only during compute_density_field_fourier)
     FFTWGrid<NDIM> initial_density_field_shifted;
     /// The linear density field delta_cb(zini,k) the particles were displaced with, on a grid of the size of the
@@ -127,6 +129,7 @@ class NBodySimulation {
     std::array<double, NDIM> density_shift{};
     // The force settings used in the current step (params.force or the early-time settings)
     COLASOLVER::ForceSettings current_force;
+    bool early_force{false}; // current_force are the early-time settings
     FML::NBODY::ForceOptions force_options;
     void set_force_settings_for_step(double a);
 
@@ -309,7 +312,8 @@ class NBodySimulation {
     void kick_with_interlaced_force(const StepInfo & s);
     // The density field (SimulationDensity.h)
     void compute_density_field_fourier(FFTWGrid<NDIM> & density_grid_fourier, double a);
-    void assign_cb_particles_to_grid(FFTWGrid<NDIM> & density_grid_fourier, double a);
+    void assign_cb_particles_to_grid(FFTWGrid<NDIM> & density_grid_fourier, double a, bool bin_pofk = true);
+    void store_initial_density_field(const FFTWGrid<NDIM> & density_grid_fourier, double a);
     void add_nbody_gauge_source(FFTWGrid<NDIM> & density_grid_fourier, double a);
     void add_neutrino_particles(FFTWGrid<NDIM> & density_grid_fourier, double a);
     void add_linear_neutrinos(FFTWGrid<NDIM> & density_grid_fourier, double a);
@@ -1254,6 +1258,9 @@ void NBodySimulation<NDIM, T>::set_force_settings_for_step(double a) {
         current_force.deconvolve_window = true;
     }
     force_options.deconvolve = current_force.deconvolve_window;
+    early_force = early;
+    if (not early)
+        initial_density_field_early.free();
     if (early and FML::ThisTask == 0)
         std::cout << "Using the early-time force (" << f.early_method << ") at z = " << 1.0 / a - 1.0 << "\n";
 }
@@ -1593,6 +1600,7 @@ void NBodySimulation<NDIM, T>::free() {
     part_baryon.free();
     neutrinos.free();
     initial_density_field_fourier.free();
+    initial_density_field_early.free();
     hybridbias_linear_field_fourier.free();
     cola.free();
 }

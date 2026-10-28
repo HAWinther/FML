@@ -73,7 +73,9 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
 /// The CDM+baryon density delta_cb(k): particles to grid and Fourier transform (or NUFFT / sheet interpolation).
 /// With CDM and baryons as separate particles delta_cb = w_c delta_c + w_b delta_b (and P(k) of each species)
 template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::assign_cb_particles_to_grid(FFTWGrid<NDIM> & density_grid_fourier, double a) {
+void NBodySimulation<NDIM, T>::assign_cb_particles_to_grid(FFTWGrid<NDIM> & density_grid_fourier,
+                                                           double a,
+                                                           bool bin_pofk) {
     const auto & force = current_force;
     if (force.density_method == "nufft") {
         // The exact Fourier modes (no window function, no aliasing) for |m_i| < Nmesh/2
@@ -105,7 +107,7 @@ void NBodySimulation<NDIM, T>::assign_cb_particles_to_grid(FFTWGrid<NDIM> & dens
     int ncb = 0;
     for (auto & info : species)
         ncb += info.in_cb() ? 1 : 0;
-    const bool bin_species = ncb > 1 and params.pofk.every_step;
+    const bool bin_species = ncb > 1 and params.pofk.every_step and bin_pofk;
     int icb = 0;
     double weight_first = 1.0;
     for_each_cb_species([&](MPIParticles & particles, const COLASOLVER::SpeciesInfo & info) {
@@ -154,6 +156,8 @@ void NBodySimulation<NDIM, T>::add_nbody_gauge_source(FFTWGrid<NDIM> & density_g
 
     // The force is normalized to OmegaM = OmegaCB + OmegaMNu so the source is (1-fMNu)(delta_cb + delta_extra)
     const double fMNu = cosmo->get_fMNu();
+    if (early_force and not initial_density_field_early)
+        store_initial_density_field(density_grid_fourier, a);
     const auto & delta_ini_grid = initial_density_in_particle_frame();
     FML::GRID::for_each_fourier_mode<NDIM>(density_grid_fourier, [&](size_t fourier_index, double kmag) {
         const double logk = std::min(std::max(std::log(kmag / boxsize), logkmin), logkmax);
@@ -200,13 +204,9 @@ void NBodySimulation<NDIM, T>::add_neutrino_particles(FFTWGrid<NDIM> & density_g
 /// (needs the transfer functions, i.e. transferinfofile). The first time we store delta_cb(k,zini)
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::add_linear_neutrinos(FFTWGrid<NDIM> & density_grid_fourier, double a) {
-    const double redshift = 1.0 / a - 1.0;
     const double ic_initial_redshift = params.ic.initial_redshift;
-    if (not initial_density_field_fourier) {
-        initial_density_field_fourier = density_grid_fourier;
-        initial_density_field_fourier.add_memory_label("density(k,zini)");
-        FML::assert_mpi(std::fabs(redshift - ic_initial_redshift) < 1e-3, "This should not happen");
-    }
+    if (not initial_density_field_fourier)
+        store_initial_density_field(density_grid_fourier, a);
 
     if (FML::ThisTask == 0) {
         std::cout << "Adding on the massive neutrinos to the densityfield using linear theory\n";
@@ -236,14 +236,48 @@ void NBodySimulation<NDIM, T>::add_linear_neutrinos(FFTWGrid<NDIM> & density_gri
     });
 }
 
+/// Store delta_cb(k,zini) from the density field of the first force evaluation (at zini). The linear sources are
+/// delta_cb(k,zini) times a transfer function ratio and are added to the density field of each step, so
+/// delta_cb(k,zini) must have the same window (and aliasing) as that field. With the early-time force
+/// (force_early_method: NUFFT, no window, or interlaced with another assignment) the first field is kept for the early
+/// steps only, and the field for the later steps is computed again from the particles with the late-time settings (it
+/// used to be the early-time one for all steps)
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::store_initial_density_field(const FFTWGrid<NDIM> & density_grid_fourier, double a) {
+    FML::assert_mpi(std::fabs(1.0 / a - 1.0 - params.ic.initial_redshift) < 1e-3,
+                    "The initial density field must be stored at the initial redshift");
+    if (not early_force) {
+        if (not initial_density_field_fourier) {
+            initial_density_field_fourier = density_grid_fourier;
+            initial_density_field_fourier.add_memory_label("density(k,zini)");
+        }
+        return;
+    }
+    initial_density_field_early = density_grid_fourier;
+    initial_density_field_early.add_memory_label("density(k,zini) early-time force");
+    if (not initial_density_field_fourier) {
+        const auto saved_force = current_force;
+        current_force = params.force;
+        const auto nleftright =
+            FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(current_force.density_assignment_method);
+        initial_density_field_fourier = FFTWGrid<NDIM>(current_force.nmesh, nleftright.first, nleftright.second);
+        initial_density_field_fourier.add_memory_label("density(k,zini)");
+        assign_cb_particles_to_grid(initial_density_field_fourier, a, false);
+        current_force = saved_force;
+    }
+}
+
 /// The initial density field in the frame of the particles (with force interlacing the particles are shifted by
-/// density_shift relative to the grid: delta_s(k) = exp(-ik.s) delta(k))
+/// density_shift relative to the grid: delta_s(k) = exp(-ik.s) delta(k)). During the early-time force: the one with
+/// its density assignment
 template <int NDIM, class T>
 const FML::GRID::FFTWGrid<NDIM> & NBodySimulation<NDIM, T>::initial_density_in_particle_frame() {
+    const auto & delta_ini =
+        early_force and initial_density_field_early ? initial_density_field_early : initial_density_field_fourier;
     if (not particles_shifted())
-        return initial_density_field_fourier;
+        return delta_ini;
     if (not initial_density_field_shifted) {
-        initial_density_field_shifted = initial_density_field_fourier;
+        initial_density_field_shifted = delta_ini;
         FML::GRID::shift_grid_fourier<NDIM>(initial_density_field_shifted, density_shift, -1.0);
     }
     return initial_density_field_shifted;

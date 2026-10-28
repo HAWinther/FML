@@ -82,6 +82,17 @@ Checks that the source changes P(k) on the largest scales as linear theory predi
 reproduced to 0.01%) and that the run then follows the CLASS growth as well as the standard run follows its
 own linear theory (the PM force resolution slows the growth by about 0.5% at this k in both).
 
+## Linear sources with the early-time force (`check_early_force.py`)
+
+```bash
+python3 tests/check_early_force.py ./nbody /tmp/earlyforce   # about 1 minute, needs numpy
+```
+
+Linear massive neutrinos and the N-body gauge source with `force_early_method = nufft / interlaced` until z = 5 and
+the particles on their LPT trajectories: after the switch P_total(k) of every step must equal the run without the
+early-time force (delta_cb(k,zini) of the linear source must have the window of the late-time density assignment;
+with the early-time one P_total was up to 1.7e-3 off).
+
 ## Force grid finer than the particle grid (`check_force_grid.py`)
 
 ```bash
