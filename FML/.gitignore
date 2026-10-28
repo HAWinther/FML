@@ -152,3 +152,8 @@ Morphology/example/example
 tests/test_control
 tests/test_spectra
 tests/test_morphology
+
+# Environment statistics executables
+Environment/tests/test_environment
+Environment/example/example
+tests/test_environment

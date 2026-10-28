@@ -13,7 +13,7 @@ USE_LUA             ?= true
 
 TARGETS := test_core test_grid_tools test_fof test_so test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_lpt test_nbody
 TARGETS += test_baryonification test_numericalmethods test_interlacing_offset test_streamed_kick test_lightcone test_random_fields test_timestepping test_transfers
-TARGETS += test_cosmicweb test_short_range test_control test_morphology
+TARGETS += test_cosmicweb test_short_range test_control test_morphology test_environment
 
 include ../Makefile.config
 
@@ -53,6 +53,14 @@ test_grid_tools: test_grid_tools.o Global.o
 	$(LINK_EXE)
 
 test_control: test_control.o Global.o
+	$(LINK_EXE)
+
+# Compile this source explicitly so VPATH cannot reuse standalone test objects
+# built with a different serial/MPI configuration.
+test_environment.o: $(FML_ROOT)/Environment/tests/test_environment.cpp
+	$(CC) $(DEPFLAGS) -c -o $@ $< $(OPTIONS) $(INC)
+
+test_environment: test_environment.o Global.o
 	$(LINK_EXE)
 
 test_morphology: test_morphology.o Global.o
@@ -217,6 +225,7 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_short_range; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_control; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_morphology; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_environment; \
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 $(RUN) ./test_spectra,:); \
 	  echo "== Running test_cosmicweb with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_cosmicweb; \
