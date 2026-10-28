@@ -5,6 +5,17 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLA initial velocities with GR initial conditions and modified gravity
+- COLASolver: with `ic_use_gravity_model_GR = true` and a modified-gravity model, COLA now starts from the GR
+  initial velocities of the IC. Before, COLA started with the growth rate of the gravity model instead.
+  - For the 1LPT and 2LPT orders the COLA frame carries, the particles get the difference between the GR growth
+    rate and the growth rate of the frame. The frame uses the gravity model's growth rate: at k = 0, or f(k) for
+    scale-dependent COLA.
+  - At z = 20 the initial velocities used to differ from the run without COLA by 11.5% rms for mu(a) = 1.2, and by
+    6% for a BZ mu(a,k) with scale-dependent COLA. f(R) was essentially unaffected.
+  - With two species, the scale-dependent frame is now also the gravity model's.
+  - Only COLA runs with `ic_use_gravity_model_GR` and a non-GR gravity model change. No regression case changes.
+
 ### COLA keeps the initial velocity of the LPT orders its frame does not have
 - COLASolver: with COLA and `simulation_cola_LPT_order` < `ic_LPT_order`, the IC velocity of the LPT orders the
   COLA frame does not carry is now kept: 2LPT and 3LPT with COLA order 1, and 3LPT with COLA order 2.
