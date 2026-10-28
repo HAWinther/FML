@@ -160,3 +160,13 @@ tests/test_environment
 
 ShortRangeGravity/tests/test_yukawa
 tests/test_yukawa
+
+# Perturbation theory and halo-history executables
+PerturbationTheory/tests/test_direct
+PerturbationTheory/tests/test_perturbation
+PerturbationTheory/example/example
+HaloHistory/tests/test_history
+HaloHistory/example/example
+tests/test_pt_direct
+tests/test_perturbation
+tests/test_halo_history
