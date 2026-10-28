@@ -285,6 +285,9 @@ namespace COLASOLVER {
         ParticleFileFormat fileformat{ParticleFileFormat::GADGET}; // Fileformat for particles
         std::string folder;                                        // Folder to store output ("" is the current folder)
         bool lightcone{false}; // Make a lightcone (the settings are read by the Lightcone class)
+        // plc_nside and plc_nside_chunks of the lightcone maps (read here only to validate them; 0: not used)
+        int lightcone_maps_nside{0};
+        int lightcone_maps_nside_chunks{0};
 
         /// Path for a file in the output folder
         std::string path(const std::string & filename) const { return folder + (folder == "" ? "" : "/") + filename; }
@@ -526,6 +529,11 @@ namespace COLASOLVER {
             }
             r.get("output_folder", output.folder);
             r.get_optional("lightcone", output.lightcone);
+            if (output.lightcone and get_parameter<bool>(param, "plc_make_onion_density_maps")) {
+                r.get_optional("plc_nside", output.lightcone_maps_nside);
+                if (get_parameter<bool>(param, "plc_use_chunkpix"))
+                    r.get_optional("plc_nside_chunks", output.lightcone_maps_nside_chunks);
+            }
 
             validate();
             r.print("NBodySimulation::read_parameters");
@@ -662,6 +670,19 @@ namespace COLASOLVER {
             if (simulation.use_cola and timestep.method == TimestepMethod::BullFrog)
                 fail("timestep_method = BullFrog already follows 2LPT and cannot be combined with COLA "
                      "(simulation_use_cola = false)");
+
+#if !defined(NDIM_SPACE) || NDIM_SPACE == 3
+            // Healpix_Map uses the int Healpix_Base (nside <= 2^13; npix = 12 nside^2 overflowed when the first map
+            // was allocated at the first lightcone step). Checked here, before the check for Healpix (in 2D the maps
+            // are not Healpix maps and nside is the number of angular bins)
+            const int nside_max = 8192;
+            for (auto [name, nside] :
+                 {std::pair<std::string, int>{"plc_nside", output.lightcone_maps_nside},
+                  std::pair<std::string, int>{"plc_nside_chunks", output.lightcone_maps_nside_chunks}})
+                if (nside > nside_max)
+                    fail(name + " = " + std::to_string(nside) + " must be <= " + std::to_string(nside_max) +
+                         " (the Healpix maps use int pixel indices: npix = 12 nside^2)");
+#endif
 
             // Output redshifts: decreasing and not before the start of the simulation
             // (a first output within 1e-3 of the initial redshift is taken to be at the initial redshift)

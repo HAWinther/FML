@@ -13,6 +13,8 @@
 #    bounds), cosmology_ede_n = 1 (ODE failure), a Tabulated H/H0 table that does not reach z = 0 (H(a=1) != H0)
 #  - exact LPT reconstruction with 2LPT from GADGET files with a number of particles that is not N^3 (went on as if
 #    the particles were on the lattice of round(cbrt(N)))
+#  - lightcone Healpix maps with plc_nside or plc_nside_chunks > 8192 (int Healpix_Base; npix overflowed when
+#    the first map was allocated)
 #  - command line: no parameterfile, an unknown option and --parameters to a file that cannot be written give
 #    a non-zero exit code
 # and that these now work:
@@ -154,6 +156,21 @@ rejected("read_exact_not_a_cube", dict(ic_random_field_type="read_particles", ic
                                        ic_reconstruct_smoothing_filter="sharpk",
                                        ic_reconstruct_dimless_smoothing_scale=0.01),
          "is not Npart_1D^3", before_ic=False)
+
+# Lightcone Healpix maps: Healpix_Map uses int pixel indices, so nside <= 8192 (npix = 12 nside^2 overflowed when the
+# first map was allocated). Checked before the check for Healpix, so this also works without USE_HEALPIX
+plc = dict(lightcone=True, plc_pos_observer=[0.0, 0.0, 0.0], plc_boundary_mpch=20.0, plc_z_init=0.05,
+           plc_z_finish=0.0, plc_use_replicas=False, plc_ndim_rep=3, plc_output_gadgetfile=False,
+           plc_output_asciifile=False, plc_output_in_batches=False, plc_make_onion_density_maps=True, plc_nside=16,
+           plc_da_maps=0.03, plc_use_chunkpix=False)
+rejected("plc_nside_too_large", dict(plc, plc_nside=16384), "plc_nside = 16384 must be <= 8192")
+rejected("plc_nside_chunks_too_large", dict(plc, plc_use_chunkpix=True, plc_nside_chunks=16384),
+         "plc_nside_chunks = 16384 must be <= 8192")
+features = subprocess.run(mpirun + [exe, "--features"], capture_output=True, text=True, env=env).stdout
+if "healpix" not in features:
+    # nside = 8192 is allowed: the run goes on to the Healpix check (made when the lightcone is set up)
+    rejected("plc_nside_max_without_healpix", dict(plc, plc_nside=8192),
+             "plc_make_onion_density_maps = true needs Healpix", before_ic=False)
 
 # Now working
 geff = os.path.join(outdir, "geff_with_header.txt")

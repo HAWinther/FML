@@ -695,11 +695,11 @@ namespace COLASOLVER {
                     "step while recording the lightcone");
                 b.optional("plc_make_onion_density_maps", false, "Make (Healpix) density maps delta(z, theta)");
                 if_true("plc_make_onion_density_maps", [&]() {
-                    b.optional("plc_nside", 256, "Healpix nside of the maps (npix = 12 nside^2)");
+                    b.optional("plc_nside", 256, "Healpix nside of the maps (npix = 12 nside^2; at most 8192)");
                     b.optional("plc_da_maps", 0.02, "Roughly the size of the bins in a for the maps");
                     b.optional("plc_use_chunkpix", false, "Store the maps with chunkpix (useful for sparse maps)");
                     if_true("plc_use_chunkpix",
-                            [&]() { b.optional("plc_nside_chunks", 8, "Healpix nside of the chunks"); });
+                            [&]() { b.optional("plc_nside_chunks", 8, "Healpix nside of the chunks (at most 8192)"); });
                 });
             });
 
