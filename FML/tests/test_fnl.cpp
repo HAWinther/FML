@@ -146,7 +146,163 @@ double estimate(Binning & b, Binning * b0, const Prediction & pred) {
     return swq / sw;
 }
 
-int main() {
+// Full four-term reference: always build every inverse-power field and transform
+// every product, independently of which coefficients are zero.
+template <int N>
+FML::GRID::FFTWGrid<N> full_kernel_reference(
+    FML::RANDOM::RandomGenerator & rng, const FML::RANDOM::GAUSSIAN::RandomFieldOptions & options,
+    bool fixed, double fnl, std::array<double, 4> coefficients) {
+    using G = FML::GRID::FFTWGrid<N>;
+    using F = FML::GRID::FloatType;
+    G gaussian(16, 1, 2);
+    auto power = [](double k) { return k == 0 ? 0.0 : 1e-5 / (1 + k * k * k); };
+    FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier<N>(
+        gaussian, &rng, [](double) { return 1.0; }, fixed, options);
+    for (auto index : gaussian.get_fourier_range()) {
+        std::array<double, N> wave;
+        double k;
+        gaussian.get_fourier_wavevector_and_norm_by_index(index, wave, k);
+        if (k > 0)
+            gaussian.set_fourier_from_index(index, gaussian.get_fourier_from_index(index) * F(std::sqrt(power(k))));
+    }
+    if (FML::ThisTask == 0)
+        gaussian.set_fourier_from_index(0, 0);
+    if (fnl == 0)
+        return gaussian;
+    for (auto & c : coefficients)
+        c *= fnl;
+    G real = gaussian, source(16, 1, 2);
+    real.fftw_c2r();
+    double mean = 0, mean2 = 0;
+    long long cells = 0;
+    for (auto index : real.get_real_range()) {
+        const F value = real.get_real_from_index(index), square = value * value;
+        mean += value;
+        mean2 += square;
+        ++cells;
+        source.set_real_from_index(index, square);
+    }
+    FML::SumOverTasks(&mean);
+    FML::SumOverTasks(&mean2);
+    FML::SumOverTasks(&cells);
+    mean /= cells;
+    mean2 /= cells;
+    for (auto index : real.get_real_range())
+        source.set_real_from_index(index, (real.get_real_from_index(index) - mean) +
+                                  F(coefficients[0]) * (source.get_real_from_index(index) - mean2));
+    source.fftw_r2c();
+    if (FML::ThisTask == 0)
+        source.set_fourier_from_index(0, 0);
+    std::array<G, 3> filtered;
+    for (auto & grid : filtered)
+        grid = G(16);
+    for (auto index : gaussian.get_fourier_range()) {
+        std::array<double, N> wave;
+        double k;
+        gaussian.get_fourier_wavevector_and_norm_by_index(index, wave, k);
+        const F p13 = k ? F(std::pow(power(k), -1.0 / 3.0)) : F(0);
+        const F p23 = p13 * p13, p33 = p23 * p13;
+        const auto phi = gaussian.get_fourier_from_index(index);
+        filtered[0].set_fourier_from_index(index, phi * p13);
+        filtered[1].set_fourier_from_index(index, phi * p23);
+        filtered[2].set_fourier_from_index(index, phi * p33);
+    }
+    for (auto & grid : filtered)
+        grid.fftw_c2r();
+    for (auto index : real.get_real_range()) {
+        const F phi = real.get_real_from_index(index);
+        // real has halos, but physical real indices have the same padding/stride.
+        const F a = filtered[0].get_real_from_index(index), b = filtered[1].get_real_from_index(index),
+                c = filtered[2].get_real_from_index(index);
+        filtered[0].set_real_from_index(index, phi * a);
+        filtered[1].set_real_from_index(index, phi * b - a * a);
+        filtered[2].set_real_from_index(index, phi * c - a * b);
+    }
+    for (auto & grid : filtered) {
+        grid.fftw_r2c();
+        if (FML::ThisTask == 0)
+            grid.set_fourier_from_index(0, 0);
+    }
+    for (auto index : source.get_fourier_range()) {
+        std::array<double, N> wave;
+        double k;
+        source.get_fourier_wavevector_and_norm_by_index(index, wave, k);
+        const F p13 = F(std::pow(power(k), 1.0 / 3.0)), p23 = p13 * p13, p33 = p23 * p13;
+        const auto a = filtered[0].get_fourier_from_index(index) * p13;
+        const auto b = filtered[1].get_fourier_from_index(index) * p23;
+        const auto c = filtered[2].get_fourier_from_index(index) * p33;
+        source.set_fourier_from_index(index, source.get_fourier_from_index(index) +
+                                     (a * F(coefficients[1]) + b * F(coefficients[2]) + c * F(coefficients[3])));
+    }
+    if (FML::ThisTask == 0)
+        source.set_fourier_from_index(0, 0);
+    return source;
+}
+
+template <int N>
+void test_active_kernels() {
+    using namespace FML::RANDOM;
+    struct Case {
+        std::string type;
+        double u, fnl;
+        std::array<double, 4> coefficients;
+    };
+    std::vector<Case> cases{{"gaussian", 0, 0, {}}, {"local", 0, 10, {1, 0, 0, 0}},
+                             {"generic", 0, 10, {}}, {"generic", 0, 0, {1, 2, 3, 4}}};
+    for (double u : {0.0, 0.25, 1.0, 4.0 / 3.0}) {
+        cases.push_back({"equilateral", u, 10, {-3 * (1 - u), 4 - 3 * u, 2, -3 * u}});
+        cases.push_back({"orthogonal", u, -10, {-9 * (1 - u), 10 - 9 * u, 8, -9 * u}});
+    }
+    for (int mask = 1; mask < 8; ++mask)
+        cases.push_back({"generic", 0, -10, {0.7, mask & 1 ? 0.5 : 0, mask & 2 ? -0.25 : 0, mask & 4 ? 0.125 : 0}});
+    for (auto backend : {GAUSSIAN::RandomFieldBackend::NGenIC, GAUSSIAN::RandomFieldBackend::Philox})
+        for (bool fixed : {false, true}) {
+            bool valid = true, layout = true, rng_state = true;
+            double worst = 0;
+            GAUSSIAN::RandomFieldOptions options;
+            options.backend = backend;
+            options.seed = 845;
+            options.stream = 7;
+            for (const auto & test : cases) {
+                RandomGenerator reference_rng(845), actual_rng(845);
+                const auto reference = full_kernel_reference<N>(reference_rng, options, fixed, test.fnl, test.coefficients);
+                FML::GRID::FFTWGrid<N> actual(16, 1, 2);
+                NONGAUSSIAN::generate_nonlocal_gaussian_random_field_fourier<N>(
+                    actual, &actual_rng, [](double k) { return k == 0 ? 0.0 : 1e-5 / (1 + k * k * k); },
+                    fixed, test.fnl, test.type, test.u,
+                    std::vector<double>(test.coefficients.begin(), test.coefficients.end()), options);
+                double error = 0, scale = 0;
+                for (auto index : actual.get_fourier_range()) {
+                    auto a = actual.get_fourier_from_index(index), b = reference.get_fourier_from_index(index);
+                    valid = valid && std::isfinite(a.real()) && std::isfinite(a.imag());
+                    error = std::max(error, double(std::abs(a - b)));
+                    scale = std::max(scale, double(std::abs(b)));
+                }
+                FML::MaxOverTasks(&error);
+                FML::MaxOverTasks(&scale);
+                const double relative = error / std::max(scale, 1e-30);
+                worst = std::max(worst, relative);
+                layout = layout && actual.get_nmesh() == 16 && actual.get_n_extra_slices_left() == 1 &&
+                         actual.get_n_extra_slices_right() == 2 && !actual.get_grid_status_real();
+                if (FML::ThisTask == 0)
+                    layout = layout && actual.get_fourier_from_index(0) == FML::GRID::ComplexType(0);
+                rng_state = rng_state && reference_rng.generate_uniform() == actual_rng.generate_uniform();
+            }
+            int bad[] = {int(!valid), int(!layout), int(!rng_state)};
+            for (auto & value : bad)
+                FML::MaxOverTasks(&value);
+            const std::string label = std::to_string(N) + "D backend=" + std::to_string(int(backend)) + " fixed=" + std::to_string(fixed);
+            check(!bad[0] && worst < (sizeof(FML::GRID::FloatType) == sizeof(float) ? 3e-5 : 3e-12),
+                  label + ": all named/generic kernels match the full reference (rel err " + num(worst) + ")");
+            check(!bad[1] && !bad[2], label + ": DC, halos, Fourier state and RNG continuation are preserved");
+        }
+}
+
+int main(int argc, char ** argv) {
+    test_active_kernels<2>();
+    test_active_kernels<3>();
+    if (argc > 1 && std::string(argv[1]) == "kernels")
+        return fails ? 1 : 0;
     const std::string label = std::to_string(FML::NTasks) + " task(s): ";
 
     // Binned prediction (needs the bin edges only)

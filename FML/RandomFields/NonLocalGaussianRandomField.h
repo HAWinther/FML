@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <functional>
 #include <numeric>
+#include <utility>
 #include <vector>
 
 #include <FML/FFTWGrid/FFTWGrid.h>
@@ -41,8 +42,8 @@ namespace FML {
             /// gaussian},\phi_{\rm gaussian}) \f$ where the kernel is some quadratic form which in its simples form
             /// (local) is just \f$ \phi_{\rm gaussian}^2 \f$.
             ///
-            /// This requires in general 6 grids to be allocated at the same time
-            /// and up to 8 fourier transforms
+            /// Uses up to 6 simultaneous grids and 8 Fourier transforms. Inactive
+            /// nonlocal outputs are skipped, retaining their shared input dependencies.
             ///
             /// NB: for generating IC for cosmological simulations see the related method
             /// and see 1108.5512 for more info about the algorithm.
@@ -212,7 +213,7 @@ namespace FML {
 
                 // If we only want standard local phi + fNL[phi^2 - <phi^2>] then we can return now
                 if (kernel_values[1] == 0.0 and kernel_values[2] == 0.0 and kernel_values[3] == 0.0) {
-                    phi_fourier = source;
+                    phi_fourier = std::move(source);
                     return;
                 }
 
@@ -220,13 +221,23 @@ namespace FML {
                 // such a spline of the steep primordial power-spectrum is inaccurate (see above)
                 const auto & Pofk_of_kBox_over_volume_spline = Pofk_of_kBox_over_volume;
 
-                // Compute the kernel terms
+                // Output terms and their filtered-field dependencies are different:
+                // term 2 needs P^-1/3, and term 3 needs both P^-1/3 and P^-2/3.
+                const bool term1_active = kernel_values[1] != 0.0;
+                const bool term2_active = kernel_values[2] != 0.0;
+                const bool term3_active = kernel_values[3] != 0.0;
+                const bool need_m23 = term2_active || term3_active;
                 FFTWGrid<N> phi_m13(Nmesh);
-                FFTWGrid<N> phi_m23(Nmesh);
-                FFTWGrid<N> phi_m33(Nmesh); // XXX Not needed when u=0
+                FFTWGrid<N> phi_m23, phi_m33;
+                if (need_m23)
+                    phi_m23 = FFTWGrid<N>(Nmesh);
+                if (term3_active)
+                    phi_m33 = FFTWGrid<N>(Nmesh);
                 phi_m13.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::phi_m13");
-                phi_m23.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::phi_m23");
-                phi_m33.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::phi_m33");
+                if (need_m23)
+                    phi_m23.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::phi_m23");
+                if (term3_active)
+                    phi_m33.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::phi_m33");
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -237,29 +248,31 @@ namespace FML {
                         phi_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
                         FML::GRID::FloatType pofk_m13 = std::pow(Pofk_of_kBox_over_volume_spline(kmag), -1.0 / 3.0);
-                        FML::GRID::FloatType pofk_m23 = pofk_m13 * pofk_m13;
-                        FML::GRID::FloatType pofk_m33 = pofk_m23 * pofk_m13; // XXX Not needed when u=0
+                        FML::GRID::FloatType pofk_m23 = need_m23 ? pofk_m13 * pofk_m13 : 0;
+                        FML::GRID::FloatType pofk_m33 = term3_active ? pofk_m23 * pofk_m13 : 0;
 
                         auto phi = phi_fourier.get_fourier_from_index(fourier_index);
-                        auto value1 = phi * pofk_m13;
-                        auto value2 = phi * pofk_m23;
-                        auto value3 = phi * pofk_m33; // XXX Not needed when u=0
-
-                        phi_m13.set_fourier_from_index(fourier_index, value1);
-                        phi_m23.set_fourier_from_index(fourier_index, value2);
-                        phi_m33.set_fourier_from_index(fourier_index, value3); // XXX Not needed when u=0
+                        phi_m13.set_fourier_from_index(fourier_index, phi * pofk_m13);
+                        if (need_m23)
+                            phi_m23.set_fourier_from_index(fourier_index, phi * pofk_m23);
+                        if (term3_active)
+                            phi_m33.set_fourier_from_index(fourier_index, phi * pofk_m33);
                     }
                 }
 
                 // Set DC mode to 0
                 if (FML::ThisTask == 0) {
                     phi_m13.set_fourier_from_index(0, 0.0);
-                    phi_m23.set_fourier_from_index(0, 0.0);
-                    phi_m33.set_fourier_from_index(0, 0.0); // XXX Not needed when u=0
+                    if (need_m23)
+                        phi_m23.set_fourier_from_index(0, 0.0);
+                    if (term3_active)
+                        phi_m33.set_fourier_from_index(0, 0.0);
                 }
                 phi_m13.fftw_c2r();
-                phi_m23.fftw_c2r();
-                phi_m33.fftw_c2r(); // XXX Not needed when u=0
+                if (need_m23)
+                    phi_m23.fftw_c2r();
+                if (term3_active)
+                    phi_m33.fftw_c2r();
 
                 // We use the grids already allocated as temporary grids
                 // We must make sure we do things in the right order below
@@ -274,27 +287,33 @@ namespace FML {
                 for (int islice = 0; islice < Local_nx; islice++) {
                     for (auto && real_index : temp1.get_real_range(islice, islice + 1)) {
                         auto pm13 = phi_m13.get_real_from_index(real_index);
-                        auto pm23 = phi_m23.get_real_from_index(real_index);
-                        auto pm33 = phi_m33.get_real_from_index(real_index); // XXX Not needed when u=0
+                        auto pm23 = need_m23 ? phi_m23.get_real_from_index(real_index) : FML::GRID::FloatType(0);
+                        auto pm33 = term3_active ? phi_m33.get_real_from_index(real_index) : FML::GRID::FloatType(0);
                         auto phi = phi_real.get_real_from_index(real_index);
 
-                        auto value1 = phi * pm13;
-                        auto value2 = phi * pm23 - pm13 * pm13;
-                        auto value3 = phi * pm33 - pm13 * pm23; // XXX Not needed when u=0
-                        temp1.set_real_from_index(real_index, value1);
-                        temp2.set_real_from_index(real_index, value2);
-                        temp3.set_real_from_index(real_index, value3); // XXX Not needed when u=0
+                        if (term1_active)
+                            temp1.set_real_from_index(real_index, phi * pm13);
+                        if (term2_active)
+                            temp2.set_real_from_index(real_index, phi * pm23 - pm13 * pm13);
+                        if (term3_active)
+                            temp3.set_real_from_index(real_index, phi * pm33 - pm13 * pm23);
                     }
                 }
 
                 // Transform these back to fourier space
-                temp1.fftw_r2c();
-                temp2.fftw_r2c();
-                temp3.fftw_r2c(); // XXX Not needed when u=0
+                if (term1_active)
+                    temp1.fftw_r2c();
+                if (term2_active)
+                    temp2.fftw_r2c();
+                if (term3_active)
+                    temp3.fftw_r2c();
                 if (FML::ThisTask == 0) {
-                    temp1.set_fourier_from_index(0, 0.0);
-                    temp2.set_fourier_from_index(0, 0.0);
-                    temp3.set_fourier_from_index(0, 0.0); // XXX Not needed when u=0
+                    if (term1_active)
+                        temp1.set_fourier_from_index(0, 0.0);
+                    if (term2_active)
+                        temp2.set_fourier_from_index(0, 0.0);
+                    if (term3_active)
+                        temp3.set_fourier_from_index(0, 0.0);
                 }
 
                 // Add up to get phi + fNL K(phi,phi) in fourier space
@@ -308,12 +327,12 @@ namespace FML {
                         source.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
                         FML::GRID::FloatType pofk_p13 = std::pow(Pofk_of_kBox_over_volume_spline(kmag), 1.0 / 3.0);
-                        FML::GRID::FloatType pofk_p23 = pofk_p13 * pofk_p13;
-                        FML::GRID::FloatType pofk_p33 = pofk_p23 * pofk_p13;
+                        FML::GRID::FloatType pofk_p23 = need_m23 ? pofk_p13 * pofk_p13 : 0;
+                        FML::GRID::FloatType pofk_p33 = term3_active ? pofk_p23 * pofk_p13 : 0;
 
-                        auto term1 = temp1.get_fourier_from_index(fourier_index) * pofk_p13;
-                        auto term2 = temp2.get_fourier_from_index(fourier_index) * pofk_p23;
-                        auto term3 = temp3.get_fourier_from_index(fourier_index) * pofk_p33; // XXX Not needed when u=0
+                        auto term1 = term1_active ? temp1.get_fourier_from_index(fourier_index) * pofk_p13 : FML::GRID::ComplexType(0);
+                        auto term2 = term2_active ? temp2.get_fourier_from_index(fourier_index) * pofk_p23 : FML::GRID::ComplexType(0);
+                        auto term3 = term3_active ? temp3.get_fourier_from_index(fourier_index) * pofk_p33 : FML::GRID::ComplexType(0);
 
                         auto s = source.get_fourier_from_index(fourier_index);
                         s += term1 * FML::GRID::FloatType(kernel_values[1]) +
@@ -327,8 +346,8 @@ namespace FML {
                 if (FML::ThisTask == 0)
                     source.set_fourier_from_index(0, 0.0);
 
-                // Copy over result
-                phi_fourier = source;
+                // Transfer ownership instead of copying the full Fourier payload.
+                phi_fourier = std::move(source);
 
                 // Ensure that <phi> = 0
                 if (subtract_mean) {

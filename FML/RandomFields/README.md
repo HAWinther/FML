@@ -66,3 +66,33 @@ also supports full 64-bit seeds and separate streams. Gaussian and non-Gaussian
 COLASolver IC paths honor the choice. Fixed amplitudes and phase reversal remain
 available. Selecting Philox changes phases relative to N-GenIC; it does not claim
 to reproduce another backend's realization.
+
+## Active non-Gaussian kernels
+
+The nonlocal generator only allocates inverse-power fields needed by the scaled
+kernel coefficients, and only Fourier-transforms products that contribute to the
+output. The dependencies are preserved: term 2 still needs the inverse-third-power
+field when term 1 is zero; term 3 needs both inverse-third and inverse-two-thirds
+fields even when their own output terms are inactive.
+
+For the usual equilateral and orthogonal shapes with `u = 0`, this removes the
+inverse-first-power grid and its two transforms: five simultaneous grids and six
+transforms instead of six grids and eight transforms. These counts include the
+output and local-source work, and exclude Gaussian generation (which directly
+samples Fourier modes).
+
+For generic kernels, excluding the local term from the table below:
+
+| Active nonlocal outputs | Filtered input grids | Transforms, including local-source work |
+|---|---:|---:|
+| term 1 only | 1 | 4 |
+| term 2 only | 2 | 5 |
+| term 3 only | 3 | 6 |
+| terms 1 and 2 | 2 | 6 |
+| all three | 3 | 8 |
+
+The local-source construction, mean/DC handling, aliasing convention and RNG
+sampling are unchanged. Local-only and zero-fNL paths retain their existing
+behavior. Finished source buffers are moved into the output instead of copied,
+preserving the output grid's halo layout and Fourier status. Kernel parameters
+must agree on every MPI rank because the transforms are collective.
