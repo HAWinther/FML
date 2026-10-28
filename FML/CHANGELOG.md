@@ -5,6 +5,19 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### LPT Nyquist derivatives; Healpix nside limit
+- LPT: on even meshes, the ambiguous derivatives of the Nyquist modes are now zero in the default (non-padded)
+  path, as in `TidalTensor/Hessian.h`. Before, they used +k_Ny and the results were not symmetric under
+  reflections.
+  - Zeroed: first derivatives (`i k_i`) and mixed second derivatives (`k_i k_j`, i != j). The `k_i^2` terms are
+    kept.
+  - This covers the displacement from a potential (initial conditions, scale-dependent COLA, external initial
+    conditions, reconstruction), the 2LPT and 3LPT sources, the curl term and `compute_3LPT_displacement_field`.
+  - Effect at 32^3: the initial displacements change by about 1e-3 of their rms; P(k, z = 0) changes by less
+    than 1e-4 for k < kNy/2 and by up to 1e-3 near the particle Nyquist frequency.
+- COLASolver: `plc_nside` and `plc_nside_chunks` larger than 8192 are now rejected when the parameters are read.
+  8192 is the limit of the int-based Healpix maps; before, the run failed when the first map was allocated.
+
 ### Hybrid bias spectra: accuracy notes
 - COLASolver README: the hybrid bias spectra need the correct large-scale growth, and a force grid finer than the
   particle lattice.
