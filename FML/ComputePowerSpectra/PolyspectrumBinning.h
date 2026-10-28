@@ -26,10 +26,11 @@ namespace FML {
             size_t geometry_reduction_batches{0}, field_reduction_batches{0}, metadata_reduction_batches{0};
         };
 
-        /// Class for storing the results from general polyspectrum
-        template <int N, int ORDER>
+        /// Dense results by default; COMPACT stores one slot per canonical tuple.
+        template <int N, int ORDER, bool COMPACT = false>
         class PolyspectrumBinning {
           public:
+            static constexpr bool compact_storage = COMPACT;
             enum BinningType { LINEAR_SPACING, LOG_SPACING };
 
             /// Number of bins
@@ -83,6 +84,12 @@ namespace FML {
                     return;
                 selected = std::move(configurations);
                 bincount_is_set = false;
+                if constexpr (COMPACT) {
+                    std::vector<Configuration>().swap(compact_configs);
+                    std::vector<Configuration>().swap(cached_selected);
+                    std::vector<double>().swap(P123);
+                    std::vector<double>().swap(N123);
+                }
             }
             std::vector<Configuration> configurations() {
                 std::vector<Configuration> result;
@@ -108,6 +115,39 @@ namespace FML {
                 return result;
             }
 
+            /// Allocate compact results only when needed. No dense tensor is constructed.
+            void prepare_storage() {
+                if constexpr (COMPACT) {
+                    auto configs = configurations();
+                    if (configs != compact_configs || P123.size() != configs.size() || N123.size() != configs.size()) {
+                        std::vector<double> powers(configs.size(), 0.0), counts(configs.size(), 0.0);
+                        compact_configs = std::move(configs);
+                        P123 = std::move(powers);
+                        N123 = std::move(counts);
+                        bincount_is_set = false;
+                    }
+                }
+            }
+            const std::vector<Configuration> & stored_configurations() const { return compact_configs; }
+            static size_t dense_entries(int nbins) {
+                if (nbins < 2)
+                    throw std::invalid_argument("[PolyspectrumBinning] At least two bins are required");
+                size_t entries = 1;
+                const size_t limit = std::vector<double>().max_size();
+                for (int d = 0; d < ORDER; ++d) {
+                    if (entries > limit / size_t(nbins))
+                        throw std::length_error("[PolyspectrumBinning] Dense result exceeds addressable storage");
+                    entries *= size_t(nbins);
+                }
+                return entries;
+            }
+            bool valid_storage() const {
+                const size_t entries = COMPACT ? compact_configs.size() : dense_entries(n);
+                return P123.size() == entries && N123.size() == entries;
+            }
+            /// Explicit dense allocation and symmetry expansion; never used by estimators.
+            PolyspectrumBinning<N, ORDER, false> to_dense();
+
             bool has_bincount(int nmesh) {
                 if (!bincount_is_set || cached_low != klow || cached_high != khigh || cached_dealias != dealias ||
                     cached_selected != selected)
@@ -126,6 +166,16 @@ namespace FML {
             }
 
           private:
+            template <int, int, bool> friend class PolyspectrumBinning;
+            std::vector<Configuration> compact_configs;
+            size_t compact_index(Configuration cfg) const {
+                for (auto bin : cfg)
+                    if (bin < 0 || bin >= n)
+                        throw std::out_of_range("[PolyspectrumBinning] Bin is out of range");
+                std::sort(cfg.begin(), cfg.end());
+                auto found = std::lower_bound(compact_configs.begin(), compact_configs.end(), cfg);
+                return found != compact_configs.end() && *found == cfg ? size_t(found - compact_configs.begin()) : compact_configs.size();
+            }
             std::vector<Configuration> selected, cached_selected;
             int cached_mesh{-1};
             std::vector<double> cached_low, cached_high;
@@ -142,7 +192,7 @@ namespace FML {
             /// Clears the arrays
             void reset();
 
-            /// Free up all the memory
+            /// Release result arrays/canonical slots, retaining shell metadata and selection.
             void free();
 
             /// Get the polyspectra at (k[ik1], k[ik2], ...)
@@ -200,20 +250,22 @@ namespace FML {
             bool compute_this_configuration(const std::array<int, ORDER> & ik);
         };
 
-        template <int N, int ORDER>
-        PolyspectrumBinning<N, ORDER>::PolyspectrumBinning(int nbins, int Nmesh, int bin_type)
+        template <int N, int ORDER, bool COMPACT>
+        PolyspectrumBinning<N, ORDER, COMPACT>::PolyspectrumBinning(int nbins, int Nmesh, int bin_type)
             : PolyspectrumBinning(0.0, 2.0 * M_PI * Nmesh / 2.0, nbins, bin_type){};
 
-        template <int N, int ORDER>
-        PolyspectrumBinning<N, ORDER>::PolyspectrumBinning(double _kmin, double _kmax, int nbins, int bin_type) {
+        template <int N, int ORDER, bool COMPACT>
+        PolyspectrumBinning<N, ORDER, COMPACT>::PolyspectrumBinning(double _kmin, double _kmax, int nbins, int bin_type) {
             assert_mpi(nbins >= 2, "[PolyspectrumBinning] We need at least 2 bins");
             this->bin_type = bin_type;
             n = nbins;
             kmin = _kmin;
             kmax = _kmax;
-            size_t ntot = size_t(FML::power(n, ORDER));
-            P123.resize(ntot, 0.0);
-            N123.resize(ntot, 0.0);
+            if constexpr (!COMPACT) {
+                const size_t ntot = dense_entries(n);
+                P123.resize(ntot, 0.0);
+                N123.resize(ntot, 0.0);
+            }
             pofk.resize(n, 0.0);
             kbin.resize(n, 0.0);
             klow.resize(n, 0.0);
@@ -255,17 +307,26 @@ namespace FML {
             }
         }
 
-        template <int N, int ORDER>
-        std::array<int, ORDER> PolyspectrumBinning<N, ORDER>::get_coord_from_index(size_t index) {
+        template <int N, int ORDER, bool COMPACT>
+        std::array<int, ORDER> PolyspectrumBinning<N, ORDER, COMPACT>::get_coord_from_index(size_t index) {
+            if constexpr (COMPACT)
+                return compact_configs.at(index);
             std::array<int, ORDER> ik;
-            for (int ii = ORDER - 1, npow = 1; ii >= 0; ii--, npow *= n) {
-                ik[ii] = int(index / npow % n);
+            for (int ii = ORDER - 1; ii >= 0; ii--) {
+                ik[ii] = int(index % n);
+                index /= size_t(n);
             }
             return ik;
         }
 
-        template <int N, int ORDER>
-        size_t PolyspectrumBinning<N, ORDER>::get_index_from_coord(const std::array<int, ORDER> & ik) {
+        template <int N, int ORDER, bool COMPACT>
+        size_t PolyspectrumBinning<N, ORDER, COMPACT>::get_index_from_coord(const std::array<int, ORDER> & ik) {
+            if constexpr (COMPACT) {
+                const size_t index = compact_index(ik);
+                if (index == compact_configs.size())
+                    throw std::out_of_range("[PolyspectrumBinning] Configuration has no stored slot");
+                return index;
+            }
             size_t index = 0;
             for (int i = 0; i < ORDER; i++)
                 index = index * n + ik[i];
@@ -273,8 +334,8 @@ namespace FML {
         }
 
         // Symmetry: we only need to compute ik1 <= ik2 <= ...
-        template <int N, int ORDER>
-        bool PolyspectrumBinning<N, ORDER>::compute_this_configuration(const std::array<int, ORDER> & ik) {
+        template <int N, int ORDER, bool COMPACT>
+        bool PolyspectrumBinning<N, ORDER, COMPACT>::compute_this_configuration(const std::array<int, ORDER> & ik) {
             if (!selected.empty() && !std::binary_search(selected.begin(), selected.end(), ik))
                 return false;
             double ksum = 0.0;
@@ -293,8 +354,8 @@ namespace FML {
             return true;
         }
 
-        template <int N, int ORDER>
-        void PolyspectrumBinning<N, ORDER>::scale(const double boxsize) {
+        template <int N, int ORDER, bool COMPACT>
+        void PolyspectrumBinning<N, ORDER, COMPACT>::scale(const double boxsize) {
             for (int i = 0; i < n; i++) {
                 kbin[i] *= 1.0 / boxsize;
                 klow[i] *= 1.0 / boxsize;
@@ -317,8 +378,8 @@ namespace FML {
             // dimensionless units so we omit this here
         }
 
-        template <int N, int ORDER>
-        void PolyspectrumBinning<N, ORDER>::reset() {
+        template <int N, int ORDER, bool COMPACT>
+        void PolyspectrumBinning<N, ORDER, COMPACT>::reset() {
             std::fill(P123.begin(), P123.end(), 0.0);
             std::fill(N123.begin(), N123.end(), 0.0);
             std::fill(pofk.begin(), pofk.end(), 0.0);
@@ -328,96 +389,101 @@ namespace FML {
             bincount_is_set = false;
         }
 
-        template <int N, int ORDER>
-        void PolyspectrumBinning<N, ORDER>::free() {
+        template <int N, int ORDER, bool COMPACT>
+        void PolyspectrumBinning<N, ORDER, COMPACT>::free() {
             // We only bother to free the things that take up memory
             bincount_is_set = false;
             P123.clear();
             P123.shrink_to_fit();
             N123.clear();
             N123.shrink_to_fit();
+            if constexpr (COMPACT) {
+                std::vector<Configuration>().swap(compact_configs);
+                std::vector<Configuration>().swap(cached_selected);
+            }
         }
 
         /* Simpler way of doing the methods below
-        template <int N, int ORDER>
+        template <int N, int ORDER, bool COMPACT>
         template<typename... Ints>
-        double PolyspectrumBinning<N, ORDER>::get_spectrum(Ints... is) {
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_spectrum(Ints... is) {
             static_assert(sizeof...(is) == ORDER,
                   "Calling get_spectrum(i1, i2, ..., in) requires n == ORDER (e.g. get_spetrum(i,j,k) can only be called
         when ORDER=3"); std::array<int, ORDER> ik{is...}; return get_spectrum(ik);
         }
-        template <int N, int ORDER>
+        template <int N, int ORDER, bool COMPACT>
         template<typename... Ints>
-        double PolyspectrumBinning<N, ORDER>::get_reduced_spectrum(Ints... is) {
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_reduced_spectrum(Ints... is) {
             static_assert(sizeof...(is) == ORDER,
                   "Calling get_reduced_spectrum(i1, i2, ..., in) requires n == ORDER (e.g. get_reduced_spetrum(i,j,k)
         can only be called when ORDER=3"); std::array<int, ORDER> ik{is...}; return get_reduced_spectrum(ik);
         }
-        template <int N, int ORDER>
+        template <int N, int ORDER, bool COMPACT>
         template<typename... Ints>
-        double PolyspectrumBinning<N, ORDER>::get_bincount(Ints... is) {
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_bincount(Ints... is) {
             static_assert(sizeof...(is) == ORDER,
                   "Calling get_bincount(i1, i2, ..., in) requires n == ORDER (e.g. get_bincount(i,j,k) can only be
         called when ORDER=3"); std::array<int, ORDER> ik{is...}; return get_bincount(ik);
         }
         */
 
-        template <int N, int ORDER>
-        double PolyspectrumBinning<N, ORDER>::get_spectrum(int i, int j) {
+        template <int N, int ORDER, bool COMPACT>
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_spectrum(int i, int j) {
             assert_mpi(ORDER == 2, "[PolyspectrumBinning::get_spectrum] This method can only be called for ORDER=2\n");
             std::array<int, 2> ik{i, j};
-            size_t index = ik[0] * n + ik[1];
-            return P123[index];
+            return get_spectrum(ik);
         }
 
-        template <int N, int ORDER>
-        double PolyspectrumBinning<N, ORDER>::get_spectrum(int i, int j, int k) {
+        template <int N, int ORDER, bool COMPACT>
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_spectrum(int i, int j, int k) {
             assert_mpi(ORDER == 3, "[PolyspectrumBinning::get_spectrum] This method can only be called for ORDER=3\n");
             std::array<int, 3> ik{i, j, k};
-            size_t index = (ik[0] * n + ik[1]) * n + ik[2];
-            return P123[index];
+            return get_spectrum(ik);
         }
 
-        template <int N, int ORDER>
-        double PolyspectrumBinning<N, ORDER>::get_spectrum(int i, int j, int k, int l) {
+        template <int N, int ORDER, bool COMPACT>
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_spectrum(int i, int j, int k, int l) {
             assert_mpi(ORDER == 4, "[PolyspectrumBinning::get_spectrum] This method can only be called for ORDER=4\n");
             std::array<int, 4> ik{i, j, k, l};
-            size_t index = ((ik[0] * n + ik[1]) * n + ik[2]) * n + ik[3];
-            return P123[index];
+            return get_spectrum(ik);
         }
 
-        template <int N, int ORDER>
-        double PolyspectrumBinning<N, ORDER>::get_spectrum(const std::array<int, ORDER> & ik) {
+        template <int N, int ORDER, bool COMPACT>
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_spectrum(const std::array<int, ORDER> & ik) {
+            if constexpr (COMPACT) {
+                const size_t index = compact_index(ik);
+                return index < P123.size() ? P123[index] : 0.0;
+            }
             assert_mpi(ik.size() == ORDER, "[PolyspectrumBinning::get_spectrum] ik != ORDER has the wrong size\n");
             return P123[get_index_from_coord(ik)];
         }
 
-        template <int N, int ORDER>
-        double PolyspectrumBinning<N, ORDER>::get_reduced_spectrum(int i, int j) {
+        template <int N, int ORDER, bool COMPACT>
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_reduced_spectrum(int i, int j) {
             assert_mpi(ORDER == 2,
                        "[PolyspectrumBinning::get_reduced_spectrum] This method can only be called for ORDER=2\n");
             std::array<int, 2> ik{i, j};
             return get_reduced_spectrum(ik);
         }
 
-        template <int N, int ORDER>
-        double PolyspectrumBinning<N, ORDER>::get_reduced_spectrum(int i, int j, int k) {
+        template <int N, int ORDER, bool COMPACT>
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_reduced_spectrum(int i, int j, int k) {
             assert_mpi(ORDER == 3,
                        "[PolyspectrumBinning::get_reduced_spectrum] This method can only be called for ORDER=3\n");
             std::array<int, 3> ik{i, j, k};
             return get_reduced_spectrum(ik);
         }
 
-        template <int N, int ORDER>
-        double PolyspectrumBinning<N, ORDER>::get_reduced_spectrum(int i, int j, int k, int l) {
+        template <int N, int ORDER, bool COMPACT>
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_reduced_spectrum(int i, int j, int k, int l) {
             assert_mpi(ORDER == 4,
                        "[PolyspectrumBinning::get_reduced_spectrum] This method can only be called for ORDER=4\n");
             std::array<int, 4> ik{i, j, k, l};
             return get_reduced_spectrum(ik);
         }
 
-        template <int N, int ORDER>
-        double PolyspectrumBinning<N, ORDER>::get_reduced_spectrum(const std::array<int, ORDER> & ik) {
+        template <int N, int ORDER, bool COMPACT>
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_reduced_spectrum(const std::array<int, ORDER> & ik) {
             const double P = get_spectrum(ik);
             // An empty bin (or a configuration that is not a triangle) has P = 0 and maybe zero power below
             if (P == 0.0)
@@ -447,37 +513,43 @@ namespace FML {
             return 0.0;
         }
 
-        template <int N, int ORDER>
-        double PolyspectrumBinning<N, ORDER>::get_bincount(const std::array<int, ORDER> & ik) {
+        template <int N, int ORDER, bool COMPACT>
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_bincount(const std::array<int, ORDER> & ik) {
+            if constexpr (COMPACT) {
+                const size_t index = compact_index(ik);
+                return index < N123.size() ? N123[index] : 0.0;
+            }
             assert_mpi(ik.size() == ORDER, "[PolyspectrumBinning::get_bincount] ik != ORDER has the wrong size\n");
             return N123[get_index_from_coord(ik)];
         }
 
-        template <int N, int ORDER>
-        double PolyspectrumBinning<N, ORDER>::get_bincount(int i, int j) {
+        template <int N, int ORDER, bool COMPACT>
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_bincount(int i, int j) {
             assert_mpi(ORDER == 2, "[PolyspectrumBinning::get_bincount] This method can only be called for ORDER=2\n");
             std::array<int, 2> ik{i, j};
             return get_bincount(ik);
         }
 
-        template <int N, int ORDER>
-        double PolyspectrumBinning<N, ORDER>::get_bincount(int i, int j, int k) {
+        template <int N, int ORDER, bool COMPACT>
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_bincount(int i, int j, int k) {
             assert_mpi(ORDER == 3, "[PolyspectrumBinning::get_bincount] This method can only be called for ORDER=3\n");
             std::array<int, 3> ik{i, j, k};
             return get_bincount(ik);
         }
 
-        template <int N, int ORDER>
-        double PolyspectrumBinning<N, ORDER>::get_bincount(int i, int j, int k, int l) {
+        template <int N, int ORDER, bool COMPACT>
+        double PolyspectrumBinning<N, ORDER, COMPACT>::get_bincount(int i, int j, int k, int l) {
             assert_mpi(ORDER == 4, "[PolyspectrumBinning::get_bincount] This method can only be called for ORDER=4\n");
             std::array<int, 4> ik{i, j, k, l};
             return get_bincount(ik);
         }
 
-        template <int N, int ORDER>
-        void PolyspectrumBinning<N, ORDER>::combine(PolyspectrumBinning<N, ORDER> & rhs) {
+        template <int N, int ORDER, bool COMPACT>
+        void PolyspectrumBinning<N, ORDER, COMPACT>::combine(PolyspectrumBinning<N, ORDER, COMPACT> & rhs) {
+            prepare_storage();
+            rhs.prepare_storage();
             assert_mpi(n == rhs.n and bin_type == rhs.bin_type && klow == rhs.klow && khigh == rhs.khigh &&
-                           dealias == rhs.dealias && selected == rhs.selected,
+                           dealias == rhs.dealias && selected == rhs.selected && compact_configs == rhs.compact_configs,
                        "[PolyspectrumBinning::combine] Incompatible binnings\n");
             if (nbinnings == 0) {
                 P123 = rhs.P123;
@@ -496,11 +568,12 @@ namespace FML {
             bincount_is_set = false;
         }
 
-        template <int N, int ORDER>
-        void PolyspectrumBinning<N, ORDER>::set_bincount(const std::vector<double> & N123_external) {
+        template <int N, int ORDER, bool COMPACT>
+        void PolyspectrumBinning<N, ORDER, COMPACT>::set_bincount(const std::vector<double> & N123_external) {
+            prepare_storage();
             assert_mpi(N123_external.size() == N123.size(), "[set_bincount] Incompatible size of N123 array");
             N123 = N123_external;
-            if (!selected.empty()) {
+            if (!selected.empty() && !COMPACT) {
                 const auto requested = configurations();
                 std::vector<double> values;
                 for (const auto & cfg : requested)
@@ -515,6 +588,46 @@ namespace FML {
             }
             mark_bincount_computed(0);
         }
+
+        template <int N, int ORDER, bool COMPACT>
+        PolyspectrumBinning<N, ORDER, false> PolyspectrumBinning<N, ORDER, COMPACT>::to_dense() {
+            if constexpr (!COMPACT) {
+                return *this;
+            } else {
+                if (P123.size() != compact_configs.size() || N123.size() != compact_configs.size())
+                    throw std::invalid_argument("[PolyspectrumBinning] Inconsistent compact result storage");
+                PolyspectrumBinning<N, ORDER, false> dense(kmin, kmax, n, bin_type);
+                dense.subtract_shotnoise = subtract_shotnoise;
+                dense.dealias = dealias;
+                dense.options = options;
+                dense.statistics = statistics;
+                dense.pofk = pofk;
+                dense.kbin = kbin;
+                dense.klow = klow;
+                dense.khigh = khigh;
+                dense.kmean = kmean;
+                dense.nbinnings = nbinnings;
+                dense.selected = selected;
+                for (size_t i = 0; i < compact_configs.size(); ++i) {
+                    auto cfg = compact_configs[i];
+                    do {
+                        const auto index = dense.get_index_from_coord(cfg);
+                        dense.P123[index] = P123[i];
+                        dense.N123[index] = N123[i];
+                    } while (std::next_permutation(cfg.begin(), cfg.end()));
+                }
+                dense.bincount_is_set = bincount_is_set;
+                dense.cached_mesh = cached_mesh;
+                dense.cached_low = cached_low;
+                dense.cached_high = cached_high;
+                dense.cached_dealias = cached_dealias;
+                dense.cached_selected = cached_selected;
+                return dense;
+            }
+        }
+
+        template <int N, int ORDER>
+        using SparsePolyspectrumBinning = PolyspectrumBinning<N, ORDER, true>;
     } // namespace CORRELATIONFUNCTIONS
 } // namespace FML
 

@@ -339,6 +339,217 @@ void test_shell_workspace() {
     check(rejected, "byte budget below a complete configuration is rejected");
 }
 
+template <int N, int ORDER>
+void test_sparse_results() {
+    constexpr int mesh = 8, nbins = 5;
+    using Dense = PolyspectrumBinning<N, ORDER>;
+    using Sparse = SparsePolyspectrumBinning<N, ORDER>;
+    using Config = typename Sparse::Configuration;
+    Grid<N> input(mesh);
+    input.fill_real_grid([](const std::array<double, N> & x) {
+        double value = 0;
+        for (int d = 0; d < N; ++d)
+            value += std::sin(2 * M_PI * (d + 1) * x[d] + 0.37);
+        return FML::GRID::FloatType(value + 0.4 * value * value);
+    });
+    input.fftw_r2c();
+    const double tolerance = sizeof(FML::GRID::FloatType) == sizeof(float) ? 3e-5 : 3e-11;
+    auto compare = [&](Sparse & sparse, Dense & dense, const std::string & label) {
+        bool ok = sparse.P123.size() == sparse.stored_configurations().size() && sparse.N123.size() == sparse.P123.size();
+        for (size_t i = 0; i < dense.P123.size(); ++i) {
+            const auto cfg = dense.get_coord_from_index(i);
+            const double p = dense.P123[i], count = dense.N123[i];
+            ok = ok && std::abs(sparse.get_spectrum(cfg) - p) <= tolerance * std::max(1.0, std::abs(p)) &&
+                 std::abs(sparse.get_bincount(cfg) - count) <= tolerance * std::max(1.0, std::abs(count));
+        }
+        for (int i = 0; i < nbins; ++i)
+            ok = ok && std::abs(sparse.pofk[i] - dense.pofk[i]) <= tolerance * std::max(1.0, std::abs(dense.pofk[i])) &&
+                 std::abs(sparse.kmean[i] - dense.kmean[i]) <= tolerance * std::max(1.0, std::abs(dense.kmean[i]));
+        int bad = !ok;
+        FML::MaxOverTasks(&bad);
+        check(!bad, label + " (" + std::to_string(N) + "D order " + std::to_string(ORDER) + ")");
+    };
+    for (bool dealias : {false, true}) {
+        Dense dense(nbins, mesh);
+        Sparse sparse(nbins, mesh);
+        check(sparse.P123.empty() && sparse.N123.empty() && sparse.stored_configurations().empty(),
+              "sparse construction allocates only shell metadata");
+        dense.dealias = sparse.dealias = dealias;
+        sparse.options.max_cached_shells = ORDER;
+        sparse.options.reduction_batch_size = 3;
+        compute_polyspectrum<N, ORDER>(input, dense);
+        compute_polyspectrum<N, ORDER>(input, sparse);
+        compare(sparse, dense, "all canonical results and permutations match dense estimation");
+        check(sparse.P123.size() == dense.configurations().size() && sparse.P123.size() < dense.P123.size(),
+              "sparse arrays contain only valid canonical configurations");
+        auto expanded = sparse.to_dense();
+        compare(sparse, expanded, "explicit dense materialization preserves values and metadata");
+        check(expanded.has_bincount(mesh), "dense materialization retains reusable geometry identity");
+        const auto all_counts = sparse.N123;
+        sparse.reset();
+        sparse.set_bincount(all_counts, mesh);
+        compute_polyspectrum<N, ORDER>(input, sparse);
+        compare(sparse, dense, "compact geometry imports preserve estimates");
+        check(sparse.statistics.geometry_shell_builds == 0, "imported compact counts skip geometry FFTs");
+
+        Config mixed{}, diagonal{};
+        for (int d = 0; d < ORDER; ++d)
+            mixed[d] = d + 1;
+        diagonal.fill(1);
+        auto reversed = mixed;
+        std::reverse(reversed.begin(), reversed.end());
+        sparse.set_configurations({mixed, reversed, diagonal});
+        dense.set_configurations({mixed, diagonal});
+        check(sparse.P123.empty() && sparse.N123.empty(), "changing sparse selection discards stale result arrays");
+        compute_polyspectrum<N, ORDER>(input, dense);
+        compute_polyspectrum<N, ORDER>(input, sparse);
+        compare(sparse, dense, "selected configurations use permutation-aware compact lookups");
+        sparse.set_configurations({reversed, diagonal, mixed});
+        compute_polyspectrum<N, ORDER>(input, sparse);
+        check(sparse.statistics.geometry_shell_builds == 0, "equivalent sparse selections retain geometry reuse");
+        compare(sparse, dense, "repeated sparse estimates preserve selected results");
+        bool indices = sparse.P123.size() == 2 && sparse.get_spectrum(reversed) == sparse.get_spectrum(mixed);
+        for (size_t i = 0; i < sparse.P123.size(); ++i)
+            indices = indices && sparse.get_index_from_coord(sparse.get_coord_from_index(i)) == i;
+        if constexpr (ORDER == 2)
+            indices = indices && sparse.get_spectrum(1, 1) == sparse.get_spectrum(diagonal) &&
+                      sparse.get_reduced_spectrum(1, 1) == dense.get_reduced_spectrum(diagonal);
+        if constexpr (ORDER == 3)
+            indices = indices && sparse.get_spectrum(1, 1, 1) == sparse.get_spectrum(diagonal) &&
+                      sparse.get_reduced_spectrum(1, 1, 1) == dense.get_reduced_spectrum(diagonal);
+        if constexpr (ORDER == 4)
+            indices = indices && sparse.get_spectrum(1, 1, 1, 1) == sparse.get_spectrum(diagonal) &&
+                      sparse.get_reduced_spectrum(1, 1, 1, 1) == dense.get_reduced_spectrum(diagonal);
+        Config missing{};
+        missing.fill(nbins - 1);
+        indices = indices && sparse.get_spectrum(missing) == 0 && sparse.get_bincount(missing) == 0;
+        bool range_error = false;
+        try {
+            missing[0] = -1;
+            (void)sparse.get_spectrum(missing);
+        } catch (const std::out_of_range &) { range_error = true; }
+        check(indices && range_error, "sparse indices round-trip, unrequested tuples return zero, invalid bins reject");
+
+        auto scaled_dense = sparse.to_dense();
+        auto scaled_sparse = sparse;
+        scaled_sparse.scale(2.0);
+        scaled_dense.scale(2.0);
+        compare(scaled_sparse, scaled_dense, "sparse physical-unit scaling matches dense scaling");
+        auto combined = sparse;
+        auto combined_dense = sparse.to_dense();
+        auto other_dense = sparse.to_dense();
+        combined.combine(sparse);
+        combined.combine(sparse);
+        combined_dense.combine(other_dense);
+        combined_dense.combine(other_dense);
+        compare(combined, combined_dense, "combining compact estimates matches dense accumulation");
+
+        sparse.dealias = !dealias;
+        compute_polyspectrum<N, ORDER>(input, sparse);
+        check(sparse.statistics.geometry_shell_builds > 0, "closure changes invalidate sparse geometry");
+        sparse.reset();
+        check(!sparse.bincount_is_set && std::all_of(sparse.N123.begin(), sparse.N123.end(), [](double n) { return n == 0; }),
+              "sparse reset clears counts and invalidates geometry");
+        sparse.free();
+        check(sparse.P123.capacity() == 0 && sparse.N123.capacity() == 0 && sparse.stored_configurations().empty(),
+              "sparse free releases result storage");
+        compute_polyspectrum<N, ORDER>(input, sparse);
+        check(sparse.P123.size() == 2 && sparse.statistics.geometry_shell_builds > 0,
+              "freed sparse storage rebuilds lazily for the retained selection");
+        if constexpr (ORDER > 2) {
+            sparse.klow[mixed[ORDER - 1]] = 1000;
+            sparse.khigh[mixed[ORDER - 1]] = 1001;
+            compute_polyspectrum<N, ORDER>(input, sparse);
+            check(sparse.statistics.geometry_shell_builds > 0 && sparse.P123.size() == 1 && sparse.get_spectrum(mixed) == 0,
+                  "changed shell edges invalidate geometry and remove newly impossible compact slots");
+            Config impossible{};
+            impossible[ORDER - 1] = nbins - 1;
+            sparse.set_configurations({impossible});
+            compute_polyspectrum<N, ORDER>(input, sparse);
+            check(sparse.P123.empty() && sparse.N123.empty() && sparse.statistics.field_shell_builds == 0,
+                  "an impossible selection needs no canonical slots or shell FFTs");
+        }
+    }
+}
+
+void test_sparse_allocation_limits() {
+    SparseTrispectrumBinning<3> sparse(1000, 16);
+    sparse.set_configurations({{1, 1, 1, 1}, {1, 1, 1, 1}});
+    sparse.prepare_storage();
+    check(sparse.P123.size() == 1 && sparse.N123.size() == 1 && sparse.stored_configurations().size() == 1,
+          "1000-bin sparse fourth moments allocate one selected slot instead of a trillion dense slots");
+    bool overflow = false;
+    try {
+        TrispectrumBinning<3> dense(100000, 16);
+    } catch (const std::length_error &) { overflow = true; }
+    check(overflow, "dense result dimensions reject overflow before allocating memory");
+    SparseBispectrumBinning<3> uncomputed(4, 8);
+    auto zeros = uncomputed.to_dense();
+    check(uncomputed.stored_configurations().empty() && zeros.P123.size() == 64 &&
+              std::all_of(zeros.P123.begin(), zeros.P123.end(), [](double p) { return p == 0; }),
+          "materializing an uncomputed sparse result does not populate canonical storage");
+}
+
+template <int ORDER>
+void test_sparse_particle_estimates() {
+    constexpr int mesh = 8, nbins = 4;
+    constexpr size_t total = 256;
+#ifdef USE_OMP
+    const int previous_threads = omp_get_max_threads();
+    omp_set_num_threads(1); // Match fields exactly despite the atomic deposition fallback.
+#endif
+    auto part = make_particles<ParticleMass>(total, 351, [](auto & p, double u) { p.mass = 1.0 + u; });
+    using Config = std::array<int, ORDER>;
+    Config diagonal{}, mixed{};
+    diagonal.fill(1);
+    mixed.fill(2);
+    mixed[0] = 1;
+    const double tolerance = sizeof(FML::GRID::FloatType) == sizeof(float) ? 3e-5 : 3e-11;
+    for (bool subtract : {false, true}) {
+        if (ORDER == 4 && subtract)
+            continue; // The fourth moment has no shot-noise subtraction in the existing API.
+        PolyspectrumBinning<3, ORDER> dense(nbins, mesh);
+        SparsePolyspectrumBinning<3, ORDER> sparse(nbins, mesh);
+        dense.set_configurations({diagonal, mixed});
+        sparse.set_configurations({diagonal, mixed});
+        dense.subtract_shotnoise = sparse.subtract_shotnoise = subtract;
+        auto compute = [&](auto & bins) {
+            if constexpr (ORDER == 2)
+                compute_monospectrum(mesh, part.data(), part.size(), total, bins, "CIC", false);
+            if constexpr (ORDER == 3)
+                compute_bispectrum(mesh, part.data(), part.size(), total, bins, "CIC", false);
+            if constexpr (ORDER == 4)
+                compute_trispectrum(mesh, part.data(), part.size(), total, bins, "CIC", false);
+        };
+        compute(dense);
+        compute(sparse);
+        auto expanded = sparse.to_dense();
+        bool ok = true;
+        for (size_t i = 0; i < dense.P123.size(); ++i)
+            ok = ok && std::abs(expanded.P123[i] - dense.P123[i]) <= tolerance * std::max(1.0, std::abs(dense.P123[i]));
+        for (int i = 0; i < nbins; ++i)
+            ok = ok && std::abs(sparse.pofk[i] - dense.pofk[i]) <= tolerance * std::max(1.0, std::abs(dense.pofk[i]));
+        int bad = !ok;
+        FML::MaxOverTasks(&bad);
+        check(!bad, "sparse particle wrapper matches dense output, order=" + std::to_string(ORDER) +
+                        ", subtract_shotnoise=" + std::to_string(subtract));
+    }
+#ifdef USE_OMP
+    omp_set_num_threads(previous_threads);
+#endif
+}
+
+void test_sparse_suite() {
+    test_sparse_allocation_limits();
+    test_sparse_results<3, 2>();
+    test_sparse_results<3, 3>();
+    test_sparse_results<3, 4>();
+    test_sparse_results<2, 3>();
+    test_sparse_particle_estimates<2>();
+    test_sparse_particle_estimates<3>();
+    test_sparse_particle_estimates<4>();
+}
+
 void test_fourier_multiplicities() {
     for (int Nmesh : {16, 15}) {
         // FFTWGrid requires the mesh width to be divisible by the MPI rank count.
@@ -379,7 +590,11 @@ void test_fourier_multiplicities() {
     }
 }
 
-int main() {
+int main(int argc, char ** argv) {
+    if (argc > 1 && std::string(argv[1]) == "sparse") {
+        test_sparse_suite();
+        return fails == 0 ? 0 : 1;
+    }
     check(pofk_odr_check() == 1, "ComputePowerSpectrum.h can be included in several translation units");
 
     // Shot noise: equal masses, masses and delta-f weights
@@ -557,6 +772,7 @@ int main() {
     test_shell_workspace<3, 3>();
     test_shell_workspace<3, 4>();
     test_shell_workspace<2, 3>();
+    test_sparse_suite();
 
     if (FML::ThisTask == 0)
         std::cout << (fails == 0 ? "All P(k) tests passed\n" : std::to_string(fails) + " P(k) test(s) FAILED\n");

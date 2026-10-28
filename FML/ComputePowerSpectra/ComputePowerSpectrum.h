@@ -54,18 +54,25 @@ namespace FML {
         class PowerSpectrumBinning;
 
         // General polyspectrum result, see PolyspectrumBinning.h
-        template <int N, int ORDER>
+        template <int N, int ORDER, bool COMPACT>
         class PolyspectrumBinning;
 
         // Type aliases for mono-,bi- and tri-spectrum. See PolyspectrumBinning.h for more info
-        template <int N>
-        using MonospectrumBinning = PolyspectrumBinning<N, 2>;
+        template <int N, bool COMPACT = false>
+        using MonospectrumBinning = PolyspectrumBinning<N, 2, COMPACT>;
+
+        template <int N, bool COMPACT = false>
+        using BispectrumBinning = PolyspectrumBinning<N, 3, COMPACT>;
+
+        template <int N, bool COMPACT = false>
+        using TrispectrumBinning = PolyspectrumBinning<N, 4, COMPACT>;
 
         template <int N>
-        using BispectrumBinning = PolyspectrumBinning<N, 3>;
-
+        using SparseMonospectrumBinning = SparsePolyspectrumBinning<N, 2>;
         template <int N>
-        using TrispectrumBinning = PolyspectrumBinning<N, 4>;
+        using SparseBispectrumBinning = SparsePolyspectrumBinning<N, 3>;
+        template <int N>
+        using SparseTrispectrumBinning = SparsePolyspectrumBinning<N, 4>;
 
         //================================================================================
         /// @brief Assign particles to grid using density_assignment_method = NGP,CIC,TSC,PCS,...
@@ -249,12 +256,12 @@ namespace FML {
         /// @param[in] interlacing Use interlaced grids when computing density field for alias reduction
         ///
         //================================================================================
-        template <int N, class T, int ORDER>
+        template <int N, class T, int ORDER, bool COMPACT>
         void compute_polyspectrum(int Ngrid,
                                   T * part,
                                   size_t NumPart,
                                   size_t NumPartTotal,
-                                  PolyspectrumBinning<N, ORDER> & polyofk,
+                                  PolyspectrumBinning<N, ORDER, COMPACT> & polyofk,
                                   std::string density_assignment_method,
                                   bool interlacing);
 
@@ -273,8 +280,8 @@ namespace FML {
         /// @param[out] polyofk The binned polyspectrum.
         ///
         //================================================================================
-        template <int N, int ORDER>
-        void compute_polyspectrum(const FFTWGrid<N> & fourier_grid, PolyspectrumBinning<N, ORDER> & polyofk);
+        template <int N, int ORDER, bool COMPACT>
+        void compute_polyspectrum(const FFTWGrid<N> & fourier_grid, PolyspectrumBinning<N, ORDER, COMPACT> & polyofk);
 
         //================================================================================
         /// @brief Computes the monospectrum \f$ P(k_1,k_2) = \left<\delta(k_1)\delta(k_2)\right> \f$ from a fourier
@@ -289,8 +296,8 @@ namespace FML {
         /// kmax.
         ///
         //================================================================================
-        template <int N>
-        void compute_monospectrum(const FFTWGrid<N> & fourier_grid, MonospectrumBinning<N> & pofk);
+        template <int N, bool COMPACT>
+        void compute_monospectrum(const FFTWGrid<N> & fourier_grid, MonospectrumBinning<N, COMPACT> & pofk);
 
         //================================================================================
         /// @brief Computes the monospectrum \f$ P(k_1,k_2) = \left<\delta(k_1)\delta(k_2)\right> \f$ from particles.
@@ -312,12 +319,12 @@ namespace FML {
         /// @param[in] interlacing Use interlaced grids when computing density field for alias reduction
         ///
         //================================================================================
-        template <int N, class T>
+        template <int N, class T, bool COMPACT>
         void compute_monospectrum(int Ngrid,
                                   T * part,
                                   size_t NumPart,
                                   size_t NumPartTotal,
-                                  MonospectrumBinning<N> & pofk,
+                                  MonospectrumBinning<N, COMPACT> & pofk,
                                   std::string density_assignment_method,
                                   bool interlacing);
 
@@ -341,12 +348,12 @@ namespace FML {
         /// @param[in] interlacing Use interlaced grids when computing density field for alias reduction
         ///
         //================================================================================
-        template <int N, class T>
+        template <int N, class T, bool COMPACT>
         void compute_bispectrum(int Ngrid,
                                 T * part,
                                 size_t NumPart,
                                 size_t NumPartTotal,
-                                BispectrumBinning<N> & bofk,
+                                BispectrumBinning<N, COMPACT> & bofk,
                                 std::string density_assignment_method,
                                 bool interlacing);
 
@@ -364,8 +371,8 @@ namespace FML {
         /// kmax.
         ///
         //================================================================================
-        template <int N>
-        void compute_bispectrum(const FFTWGrid<N> & fourier_grid, BispectrumBinning<N> & bofk);
+        template <int N, bool COMPACT>
+        void compute_bispectrum(const FFTWGrid<N> & fourier_grid, BispectrumBinning<N, COMPACT> & bofk);
 
         //================================================================================
         /// @brief Computes the trispectrum \f$ T(k_1,k_2,k_3,k_4) =
@@ -381,8 +388,8 @@ namespace FML {
         /// kmax.
         ///
         //================================================================================
-        template <int N>
-        void compute_trispectrum(const FFTWGrid<N> & fourier_grid, TrispectrumBinning<N> & tofk);
+        template <int N, bool COMPACT>
+        void compute_trispectrum(const FFTWGrid<N> & fourier_grid, TrispectrumBinning<N, COMPACT> & tofk);
 
         //================================================================================
         /// @brief Computes the truspectrum \f$ T(k_1,k_2,k_3,k_4) =
@@ -406,12 +413,12 @@ namespace FML {
         /// @param[in] interlacing Use interlaced grids when computing density field for alias reduction
         ///
         //================================================================================
-        template <int N, class T>
+        template <int N, class T, bool COMPACT>
         void compute_trispectrum(int Ngrid,
                                  T * part,
                                  size_t NumPart,
                                  size_t NumPartTotal,
-                                 TrispectrumBinning<N> & tofk,
+                                 TrispectrumBinning<N, COMPACT> & tofk,
                                  std::string density_assignment_method,
                                  bool interlacing);
 
@@ -1127,12 +1134,12 @@ namespace FML {
         //    }
         //  }
 
-        template <int N, class T>
+        template <int N, class T, bool COMPACT>
         void compute_monospectrum(int Ngrid,
                                   T * part,
                                   size_t NumPart,
                                   size_t NumPartTotal,
-                                  MonospectrumBinning<N> & pofk,
+                                  MonospectrumBinning<N, COMPACT> & pofk,
                                   std::string density_assignment_method,
                                   bool interlacing) {
 
@@ -1146,12 +1153,12 @@ namespace FML {
                                           interlacing);
         }
 
-        template <int N, class T>
+        template <int N, class T, bool COMPACT>
         void compute_bispectrum(int Ngrid,
                                 T * part,
                                 size_t NumPart,
                                 size_t NumPartTotal,
-                                BispectrumBinning<N> & bofk,
+                                BispectrumBinning<N, COMPACT> & bofk,
                                 std::string density_assignment_method,
                                 bool interlacing) {
 
@@ -1165,12 +1172,12 @@ namespace FML {
                                           interlacing);
         }
 
-        template <int N, class T>
+        template <int N, class T, bool COMPACT>
         void compute_trispectrum(int Ngrid,
                                  T * part,
                                  size_t NumPart,
                                  size_t NumPartTotal,
-                                 TrispectrumBinning<N> & tofk,
+                                 TrispectrumBinning<N, COMPACT> & tofk,
                                  std::string density_assignment_method,
                                  bool interlacing) {
             compute_polyspectrum<N, T, 4>(Ngrid,
@@ -1183,12 +1190,12 @@ namespace FML {
         }
 
         // Computes the polyspectrum P(k1,k2,k3,...)
-        template <int N, class T, int ORDER>
+        template <int N, class T, int ORDER, bool COMPACT>
         void compute_polyspectrum(int Ngrid,
                                   T * part,
                                   size_t NumPart,
                                   size_t NumPartTotal,
-                                  PolyspectrumBinning<N, ORDER> & polyofk,
+                                  PolyspectrumBinning<N, ORDER, COMPACT> & polyofk,
                                   std::string density_assignment_method,
                                   bool interlacing) {
 
@@ -1229,9 +1236,8 @@ namespace FML {
                     for (int i = 0; i < polyofk.n; i++) {
                         polyofk.pofk[i] -= shotnoise;
                         std::array<int, 2> ik{i, i};
-                        auto index = polyofk.get_index_from_coord(ik);
-                        if (polyofk.N123[index] > 0.0)
-                            polyofk.P123[index] -= shotnoise;
+                        if (polyofk.get_bincount(ik) > 0.0)
+                            polyofk.P123[polyofk.get_index_from_coord(ik)] -= shotnoise;
                     }
                 }
             } else if constexpr (ORDER == 3) {
@@ -1300,11 +1306,13 @@ namespace FML {
         /// @param[out] polyofk The binning (we compute and store the volumes of each bin, N123, in this binning).
         ///
         //================================================================================
-        template <int N, int ORDER>
-        void compute_polyspectrum_bincount(int Nmesh, PolyspectrumBinning<N, ORDER> & bins) {
+        template <int N, int ORDER, bool COMPACT>
+        void compute_polyspectrum_bincount(int Nmesh, PolyspectrumBinning<N, ORDER, COMPACT> & bins) {
             assert_mpi(Nmesh > 0 && bins.n > 0 && bins.klow.size() == size_t(bins.n) &&
                            bins.khigh.size() == size_t(bins.n),
                        "[compute_polyspectrum_bincount] Mesh and shell binning must be initialized");
+            bins.prepare_storage();
+            assert_mpi(bins.valid_storage(), "[compute_polyspectrum_bincount] Invalid result storage");
             bins.statistics = {};
             const auto configs = bins.configurations();
             double requested_kmax = 0;
@@ -1359,28 +1367,31 @@ namespace FML {
             bins.mark_bincount_computed(Nmesh);
         }
 
-        template <int N>
-        void compute_monospectrum(const FFTWGrid<N> & fourier_grid, PolyspectrumBinning<N, 2> & pofk) {
+        template <int N, bool COMPACT>
+        void compute_monospectrum(const FFTWGrid<N> & fourier_grid, PolyspectrumBinning<N, 2, COMPACT> & pofk) {
             compute_polyspectrum<N, 2>(fourier_grid, pofk);
         }
 
-        template <int N>
-        void compute_bispectrum(const FFTWGrid<N> & fourier_grid, PolyspectrumBinning<N, 3> & bofk) {
+        template <int N, bool COMPACT>
+        void compute_bispectrum(const FFTWGrid<N> & fourier_grid, PolyspectrumBinning<N, 3, COMPACT> & bofk) {
             compute_polyspectrum<N, 3>(fourier_grid, bofk);
         }
 
-        template <int N>
-        void compute_trispectrum(const FFTWGrid<N> & fourier_grid, PolyspectrumBinning<N, 4> & tofk) {
+        template <int N, bool COMPACT>
+        void compute_trispectrum(const FFTWGrid<N> & fourier_grid, PolyspectrumBinning<N, 4, COMPACT> & tofk) {
             compute_polyspectrum<N, 4>(fourier_grid, tofk);
         }
 
-        template <int N, int ORDER>
-        void compute_polyspectrum(const FFTWGrid<N> & input, PolyspectrumBinning<N, ORDER> & bins) {
+        template <int N, int ORDER, bool COMPACT>
+        void compute_polyspectrum(const FFTWGrid<N> & input, PolyspectrumBinning<N, ORDER, COMPACT> & bins) {
             static_assert(ORDER > 1);
             const int Nmesh = input.get_nmesh();
-            assert_mpi(Nmesh > 0 && bins.n > 0 && bins.P123.size() == bins.N123.size() &&
-                           bins.N123.size() == size_t(FML::power(bins.n, ORDER)),
+            assert_mpi(Nmesh > 0 && bins.n > 0 && bins.klow.size() == size_t(bins.n) &&
+                           bins.khigh.size() == size_t(bins.n) && bins.pofk.size() == size_t(bins.n) &&
+                           bins.kmean.size() == size_t(bins.n),
                        "[compute_polyspectrum] Invalid grid or binning");
+            bins.prepare_storage();
+            assert_mpi(bins.valid_storage(), "[compute_polyspectrum] Invalid result storage");
             bins.statistics = {};
             if (!bins.has_bincount(Nmesh))
                 compute_polyspectrum_bincount<N, ORDER>(Nmesh, bins);
@@ -1392,7 +1403,9 @@ namespace FML {
             const int mesh = detail::polyspectrum_work_mesh<ORDER>(Nmesh, {requested_kmax}, bins.dealias);
             // Auxiliary P(k) and mean k cover every shell, including unrequested configurations.
             // Their statistics require no shell meshes and one array reduction.
-            std::vector<double> metadata(3 * bins.n, 0.0);
+            const size_t metadata_count = 3 * size_t(bins.n);
+            assert_mpi(metadata_count <= size_t(INT_MAX), "[polyspectrum] Too many shell statistics for MPI");
+            std::vector<double> metadata(metadata_count, 0.0);
             for (auto index : input.get_fourier_range()) {
                 std::array<double, N> wave;
                 double k2;
@@ -1411,7 +1424,6 @@ namespace FML {
                     metadata[3 * bin + 2] += weight;
                 }
             }
-            assert_mpi(metadata.size() <= size_t(INT_MAX), "[polyspectrum] Too many shell statistics for MPI");
             FML::SumArrayOverTasks(metadata.data(), int(metadata.size()));
             bins.statistics.metadata_reduction_batches = 1;
             for (int bin = 0; bin < bins.n; bin++) {

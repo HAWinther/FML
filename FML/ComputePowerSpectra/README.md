@@ -79,6 +79,66 @@ requested range, so unused high-frequency shells do not force a larger FFT.
 Selections must match on every MPI rank. Changing the selection invalidates
 geometry; reordering or repeating an equivalent selection does not.
 
-The existing dense result vectors and accessors are retained for compatibility.
-Selected configurations save integration work and shell grids, but do not yet
-make the n^ORDER output tensors sparse.
+The default dense result vectors and accessors are retained for compatibility.
+For compact output, use the sparse types below.
+
+## Sparse canonical results
+
+```cpp
+SparseBispectrumBinning<3> bins(100, nmesh);
+bins.set_configurations({{1, 2, 3}, {4, 4, 4}});
+bins.options.max_cached_shells = 3;
+compute_bispectrum(delta_fourier, bins);
+
+double value = bins.get_spectrum(3, 1, 2); // permutation-aware lookup
+for (size_t i = 0; i < bins.P123.size(); ++i) {
+    auto tuple = bins.get_coord_from_index(i); // sorted canonical bin indices
+    double spectrum = bins.P123[i], geometry = bins.N123[i];
+}
+```
+
+`SparsePolyspectrumBinning<N, ORDER>` and the aliases
+`SparseMonospectrumBinning`, `SparseBispectrumBinning`, and
+`SparseTrispectrumBinning` use the same estimators, normalization, shot-noise
+rules, padding and shell caches as dense results. The particle overloads also
+accept these types. Fourth-order results remain raw fourth moments.
+
+Construction allocates shell metadata, not `nbins^ORDER` results. On estimation
+(or an explicit `prepare_storage()` call), `P123` and `N123` get one element per
+valid canonical configuration. `stored_configurations()` gives their tuple
+ordering. Selected tuples are sorted and deduplicated; empty selection restores
+all canonical configurations. An impossible selection has no stored slots.
+Large bin counts therefore need explicit selections if all canonical tuples
+would themselves be too numerous.
+
+Lookup sorts tuple indices and uses binary search, without expanding permutations
+or building a dense index table. Valid unrequested tuples return zero from
+`get_spectrum`/`get_bincount`; out-of-range bins throw `std::out_of_range`.
+`get_index_from_coord` throws when a tuple has no stored slot. Raw indices are
+compact offsets, not the dense base-`nbins` encoding. Reduced spectra retain the
+existing denominator convention, including its tuple ordering at fourth order.
+
+Changing selection releases old compact results; equivalent selections retain
+geometry reuse. Cache identity still includes mesh, exact edges, selection and
+closure policy. To import geometry use `set_bincount(compact_counts, source_mesh)`
+with the same canonical ordering, edges and selection. `reset()` clears values
+and invalidates geometry; `free()` releases results and the stored canonical
+tuple list, retaining shell metadata and the selection for lazy rebuilding.
+Scaling and combining estimates work
+as for dense bins; combining requires the same storage type and selection.
+
+Dense allocation is explicit:
+
+```cpp
+auto dense = bins.to_dense(); // allocates nbins^ORDER values AND counts
+```
+
+This expands every stored permutation and carries auxiliary powers, mean k,
+settings and geometry identity. Unrequested values remain zero. Dense size
+products use checked `size_t` arithmetic; addressable arrays can still be much
+larger than available RAM. No estimator calls `to_dense()` internally.
+
+For example, 100 fourth-order bins formerly require two arrays of 100 million
+doubles (1.49 GiB per rank). With one selected tuple, the sparse result has one
+power and one count (16 bytes), one canonical tuple, and O(nbins) metadata.
+Workspace options bound shell grids separately; they are not total-RSS limits.

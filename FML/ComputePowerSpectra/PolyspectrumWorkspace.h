@@ -113,11 +113,15 @@ namespace FML::CORRELATIONFUNCTIONS::detail {
                 store(configs[start + i], sums[i]);
         }
     }
-    template <int N, int ORDER>
-    void store_permutations(PolyspectrumBinning<N, ORDER> & bins,
+    template <int N, int ORDER, bool COMPACT>
+    void store_permutations(PolyspectrumBinning<N, ORDER, COMPACT> & bins,
                             std::vector<double> & output,
                             std::array<int, ORDER> cfg,
                             double value) {
+        if constexpr (COMPACT) {
+            output[bins.get_index_from_coord(cfg)] = value;
+            return;
+        }
         do {
             output[bins.get_index_from_coord(cfg)] = value;
         } while (std::next_permutation(cfg.begin(), cfg.end()));
