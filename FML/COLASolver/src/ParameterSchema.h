@@ -330,10 +330,9 @@ namespace COLASOLVER {
                                    "Screening approximation: the filter used to smooth the density field",
                                    smoothing_filters);
                         b.optional("gravity_model_dgp_smoothing_scale_over_boxsize",
-                                   1.0,
-                                   "Screening approximation: the smoothing scale R/boxsize (the default 1 smooths over "
-                                   "the whole "
-                                   "box, which makes the screening very weak; see GravityModel_DGP.h)");
+                                   0.0,
+                                   "Screening approximation: the smoothing scale R/boxsize (0: no smoothing; 1 smooths "
+                                   "over the whole box, which makes the screening very weak)");
                     });
                     b.optional("gravity_model_screening_enforce_largescale_linear",
                                false,
@@ -522,7 +521,11 @@ namespace COLASOLVER {
             b.when(is_one_of("ic_random_field_type", {"nongaussian"}), "ic_random_field_type = nongaussian", [&]() {
                 b.required("ic_fnl_type", "local", "Type of non-gaussianity", {"local", "equilateral", "orthogonal"});
                 b.required("ic_fnl", 100.0, "The value of fNL");
-                b.required("ic_fnl_redshift", 0.0, "The redshift at which the non-gaussian potential is applied");
+                b.required(
+                    "ic_fnl_redshift",
+                    0.0,
+                    "The redshift of the potential Phi = (3/5) g(z) zeta (g = D/a) that fNL multiplies: 0 is the "
+                    "usual large-scale-structure convention, a matter-era redshift (e.g. 30) the CMB convention");
             });
             b.when(is_one_of("ic_random_field_type", {"read_particles", "read_phases"}),
                    "ic_random_field_type in {read_particles, read_phases}",

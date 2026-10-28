@@ -205,7 +205,7 @@ Some useful things about COLA simulations: you want to use as big a PM grid as p
 
 The code used LPT to generate the particle positions and velocities from an initial density field. The code supports using either 1, 2 or 3LPT. The initial density field can be generated in fourier space or from a white noise field in real space and with a free choice of random number generator. We also have the same generator as used in the 2LPTic code (and in L-PICOLA, MG-PICOLA) to facilite tests with exactly the same IC.
 
-We can also generate simple non-gaussian (fNL) initial conditions:
+We can also generate simple non-gaussian (fNL) initial conditions (the non-gaussianity is added to the potential Phi = (3/5) g(z) zeta at `ic_fnl_redshift`, with g = D/a the linear growth suppression of the potential: `ic_fnl_redshift = 0` is the usual large-scale-structure convention, a redshift in the matter era such as 30 the primordial/CMB convention Phi = (3/5) zeta; fNL_LSS = fNL_CMB / g(z = 0), about 1.27 fNL_CMB for OmegaM = 0.32):
 
 * Local
 

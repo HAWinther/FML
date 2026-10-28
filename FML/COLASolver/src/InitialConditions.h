@@ -23,6 +23,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <utility>
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -33,6 +34,7 @@
 //=============================================================================
 
 namespace COLASOLVER {
+
 
     template <int N>
     using FFTWGrid = FML::GRID::FFTWGrid<N>;
@@ -85,10 +87,21 @@ namespace COLASOLVER {
 
         } else if (ic.random_field_type == ICRandomFieldType::NonGaussian) {
 
-            // The power-spectrum of the Bardeen potential (-Phi) at the given redshift
+            // The power-spectrum of the Bardeen potential (-Phi) at the given redshift. On large scales the
+            // potential is Phi = (3/5) g(a) zeta with zeta the primordial curvature perturbation (power_primordial
+            // uses As) and g(a) = D(a)/a the growth suppression of the potential (1 in the matter era). The scale
+            // dependence D(afnl, k) / D(1, k) is that of the gravity model. With ic_fnl_redshift = 0 fNL is defined
+            // with the potential extrapolated to z = 0 with linear growth (the usual large-scale-structure
+            // convention), in the matter era (e.g. ic_fnl_redshift = 30, after radiation and before Lambda)
+            // it is the primordial (CMB) convention Phi = (3/5) zeta. The factor used to be 1.5 OmegaM, which is only
+            // (3/5) g(a = 1) for OmegaM ~ 0.32 (the effective fNL was 0.84 fNL for OmegaM = 0.25 and 2.5 fNL in EdS)
             const double afnl = 1.0 / (1.0 + ic.fnl_redshift);
             const double H0Box = boxsize * grav_ic->H0_hmpc;
-            const double factor = 1.5 * cosmo->get_OmegaM() / afnl;
+            const double g_today = cosmo->get_potential_growth_suppression_today();
+            const double factor = 0.6 * g_today / afnl;
+            if (FML::ThisTask == 0)
+                std::cout << "# Non-gaussian IC: Phi = (3/5) g zeta on large scales with g(z = 0) = D(1)/D_EdS(1) = "
+                          << g_today << ", fNL defined at z = " << ic.fnl_redshift << "\n";
             auto Pofk_of_kBox_over_volume_primordial = [&](double kBox) {
                 return power_primordial_spline(kBox / boxsize) / std::pow(boxsize, NDIM) *
                        std::pow(factor * grav_ic->get_D_1LPT(afnl, kBox / H0Box) /

@@ -102,8 +102,9 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
         // density rho/rhobar, see FML::NBODY::compute_delta_fifth_force_density_screening) and no 1/a^3: it does not
         // tend to 1 (no screening) for delta -> 0 (0.990 at a = 1 for rcH0 = 1) and screens much less at z > 0
         // (0.77 instead of 0.26 for delta = 100 at a = 1/3). It is kept as it is because it gives results closer to
-        // the exact (multigrid) solution in simulations; the default smoothing of the density field over the whole
-        // box (gravity_model_dgp_smoothing_scale_over_boxsize = 1) also makes the screening very weak.
+        // the exact (multigrid) solution in simulations. Smoothing the density field on a large scale
+        // (gravity_model_dgp_smoothing_scale_over_boxsize; it used to default to 1, the whole box) makes the screening
+        // very weak: the default is now 0 (no smoothing).
         const double OmegaM = this->cosmo->get_OmegaM();
         auto screening_function_dgp = [=, eff = this->screening_efficiency](double density_contrast) {
             double fac = 8.0 * OmegaM * std::pow(rcH0_DGP * (GeffOverG(a) - 1.0), 2) * (density_contrast);

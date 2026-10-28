@@ -277,6 +277,26 @@ class Cosmology {
         double E = HoverH0_of_a(a);
         return OmegaRtot / (a * a * a * a * E * E);
     }
+    /// The growth suppression of the large-scale potential today, g = D(a = 1) / D_EdS(a = 1) with D normalized to a in
+    /// the matter era (Heath 1977: D(a) = 5/2 OmegaM E(a) int_0^a da / (a E)^3 for matter, curvature and a cosmological
+    /// constant; radiation and the equation of state of the dark energy are ignored here, sub-percent for g)
+    double get_potential_growth_suppression_today() const {
+        const double OmegaM = get_OmegaM();
+        const double OmegaK = get_OmegaK();
+        const double OmegaL = 1.0 - OmegaM - OmegaK;
+        auto E = [&](double a) { return std::sqrt(OmegaM / (a * a * a) + OmegaK / (a * a) + OmegaL); };
+        // Simpson in a: the integrand (a E)^-3 goes as a^(3/2) / OmegaM^(3/2) for a -> 0
+        const int n = 20000;
+        const double h = 1.0 / n;
+        double integral = 0.0;
+        for (int i = 0; i <= n; i++) {
+            const double a = i * h;
+            const double f = a == 0.0 ? 0.0 : std::pow(a * E(a), -3);
+            integral += f * (i == 0 or i == n ? 1.0 : (i % 2 == 1 ? 4.0 : 2.0));
+        }
+        integral *= h / 3.0;
+        return 2.5 * OmegaM * E(1.0) * integral;
+    }
     virtual double get_OmegaK(double a = 1.0) const {
         if (a == 1.0)
             return OmegaK;
