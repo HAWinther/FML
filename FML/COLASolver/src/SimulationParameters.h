@@ -1,5 +1,6 @@
 #ifndef SIMULATIONPARAMETERS_HEADER
 #define SIMULATIONPARAMETERS_HEADER
+#include <FML/NBody/TimeStepTypes.h>
 
 #include "BaryonificationParameters.h"
 #include "ParameterDefaults.h"
@@ -35,8 +36,8 @@ namespace COLASOLVER {
     enum class ICInputType { PowerSpectrum, TransferFunction, TransferInfoFile };
     enum class RandomGeneratorType { GSL, MT19937 };
     enum class RandomFieldBackend { NGenIC, Philox };
-    enum class TimestepMethod { Quinn, Tassev, FastPM, BullFrog };
-    enum class ScaleFactorSpacing { Linear, Logarithmic, Powerlaw, GrowthFactor };
+    using TimestepMethod = FML::NBODY::TimestepMethod;
+    using ScaleFactorSpacing = FML::NBODY::ScaleFactorSpacing;
     enum class ParticleFileFormat { GADGET, HDF5 };
 
     //=============================================================================

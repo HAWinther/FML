@@ -732,6 +732,12 @@ void test_growth_factors() {
     // EdS: D1 = a/aini and D2 = -3/7 D1^2, D3a = -1/3 D1^3, D3b = 5/21 D1^3 exactly (also at a = 1)
     auto HEdS = [](double a) { return std::pow(a, -1.5); };
     FML::COSMOLOGY::LPT::compute_LPT_growth_factors_LCDM(1.0, zini, HEdS, D1, D2, D3a, D3b);
+    auto growth = FML::COSMOLOGY::growth_history_from_log_a_splines(D1, D2);
+    const double expected_linear = D1(std::log(0.5));
+    const double expected_second = D2(std::log(0.5));
+    check(growth.linear(0.5) == expected_linear && growth.second_order(0.5) == expected_second &&
+              std::abs(growth.linear_rate(0.5) - 1.0) < 1e-5 && std::abs(growth.second_order_rate(0.5) - 2.0) < 1e-5,
+          "shared growth history preserves LPT normalization and signed second-order rates");
     double d1 = D1(0.0);
     double e = std::fabs(d1 / (1.0 + zini) - 1.0);
     e = std::max(e, std::fabs(D2(0.0) / (d1 * d1) + 3.0 / 7.0) / (3.0 / 7.0));
@@ -741,6 +747,10 @@ void test_growth_factors() {
           "EdS growth factors at a=1: D1 = a/aini, D2/D1^2 = -3/7, D3a/D1^3 = -1/3, D3b/D1^3 = 5/21 "
           "(max rel err " +
               num(e) + ")");
+    D1.free();
+    D2.free();
+    check(growth.linear(0.5) == expected_linear && growth.second_order(0.5) == expected_second,
+          "shared growth history owns spline data after source splines are released");
 }
 
 void test_random() {

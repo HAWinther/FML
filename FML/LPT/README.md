@@ -51,3 +51,10 @@ For the physical motivation and quadratic padding rule, see
 [Michaux et al. (2020), section 2.3](https://arxiv.org/abs/2008.09588).
 Tests use independent sparse integer-wavevector convolutions without wrapping,
 including high-frequency cubic couplings and the transverse term.
+
+## Shared growth interface
+
+`GrowthHistory.h` exposes D1, signed D2 and their growth rates independently of COLASolver.
+Use `growth_history_from_log_a_splines(D1, D2)` to adapt this module's growth-solver output
+to the shared [NBody timestep policies](../NBody/TimeStepping.md). The adapter owns copies
+of the splines and preserves their normalization and time domain.

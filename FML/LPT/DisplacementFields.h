@@ -11,6 +11,7 @@
 
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/LPT/Dealiasing.h>
+#include <FML/LPT/GrowthHistory.h>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h>

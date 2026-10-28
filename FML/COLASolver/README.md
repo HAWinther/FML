@@ -571,3 +571,8 @@ line seeding (including repeated seeds) and remains the default. Set it to
 `"philox"` for the mode-keyed, MPI/thread-independent alternative. The existing
 `ic_random_generator` choice (`GSL`/`MT19937`) applies to the legacy backend.
 See [RandomFields](../RandomFields/README.md) for reproducibility conventions.
+
+The Quinn, Tassev, FastPM and BullFrog coefficient generator is shared with the
+library through [NBody/TimeStepping.h](../NBody/TimeStepping.h); see the
+[interface and growth conventions](../NBody/TimeStepping.md). COLASolver retains
+its model adapters, output scheduling and step reporting.

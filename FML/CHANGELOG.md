@@ -5,6 +5,15 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Shared growth and cosmological timestep interfaces
+
+- Extract Quinn/Tassev/FastPM/BullFrog coefficient generation into `NBody/TimeStepping.h`,
+  independent of COLASolver and mesh dimension. COLASolver delegates to this shared implementation.
+- Add `LPT/GrowthHistory.h` for consistently normalized linear/signed second-order amplitudes and
+  rates, including an owning adapter for the existing LPT growth solver's log(a) splines.
+- Keep COLASolver's existing large-scale growth convention, force normalization and output reporting;
+  add analytic coefficient and growing-mode regressions for the shared interface.
+
 ### Polyspectrum workspaces and selectable Fourier random fields
 
 - Optional shell-count and per-rank byte limits bound the polyspectrum shell cache. A deterministic LRU
