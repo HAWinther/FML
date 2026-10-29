@@ -660,6 +660,8 @@ class GravityModel {
     const double ahigh = 1e1;
     const int npts_loga = 1000;
     const double koverH0low = 1e-4 / H0_hmpc;
+    // Scale-dependent growth on k = 1e-4..100 h/Mpc; beyond, the splines hold the end values (small boxes can have
+    // larger k on the grid, where the growth of f(R) and of massive neutrinos has saturated)
     const double koverH0high = 100.0 / H0_hmpc;
     const int npts_logk = 200;
 

@@ -162,18 +162,24 @@ class Cosmology {
     }
     // rhoNu / rhocrit0 used for exact treatment of neutrinos going from relativistic -> non-relativistic
     double get_rhoNu_exact(double a) const {
+        if (OmegaNu == 0.0) // Neff = 0: no neutrinos (the neutrino temperature is 0, y = 0/0)
+            return 0.0;
         double y = Mnu_eV / get_neutrino_temperature_eV(a) / N_nu;
         return OmegaNu / (a * a * a * a) * get_neutrino_boltzmann_integral_energydensity(y) /
                neutrino_boltzmann_integral_norm;
     }
     // pNu / rhocrit0 used for exact treatment of neutrinos going from relativistic -> non-relativistic
     double get_pNu_exact(double a) const {
+        if (OmegaNu == 0.0) // Neff = 0: no neutrinos (the neutrino temperature is 0, y = 0/0)
+            return 0.0;
         double y = Mnu_eV / get_neutrino_temperature_eV(a) / N_nu;
         return OmegaNu / (a * a * a * a) * get_neutrino_boltzmann_integral_pressure(y) /
                neutrino_boltzmann_integral_norm;
     }
     // Derivative of rhoNu
     double get_drhoNudloga_exact(double a) const {
+        if (OmegaNu == 0.0) // Neff = 0: no neutrinos (the neutrino temperature is 0, y = 0/0)
+            return 0.0;
         double y = Mnu_eV / get_neutrino_temperature_eV(a) / N_nu;
         return OmegaNu / (a * a * a * a) *
                (-4.0 * get_neutrino_boltzmann_integral_energydensity(y) +
@@ -227,8 +233,12 @@ class Cosmology {
         const double OmegaNuh2 = (7.0 / 8.0) * N_nu * std::pow(Tnu_kelvin / TCMB_kelvin, 4) * OmegaRh2;
         OmegaNu = OmegaNuh2 / (h * h);
 
-        // Set the sum of the masses of the neutrinos
-        Mnu_eV = (OmegaMNu / OmegaNu) / twoeta3 * sixeta4 * N_nu * ((Tnu_kelvin * u.K * u.k_b / u.eV));
+        // Set the sum of the masses of the neutrinos (no neutrinos: Neff = 0, which needs OmegaMNu = 0; the mass
+        // formula would be 0/0 and give a NaN background)
+        FML::assert_mpi(OmegaNu > 0.0 or OmegaMNu == 0.0,
+                        "cosmology_Neffective = 0 (no neutrinos) needs cosmology_OmegaMNu = 0");
+        Mnu_eV =
+            OmegaNu > 0.0 ? (OmegaMNu / OmegaNu) / twoeta3 * sixeta4 * N_nu * ((Tnu_kelvin * u.K * u.k_b / u.eV)) : 0.0;
         // Simpler expression: Mnu_eV = 93.14 * OmegaMNu * h * h;
 
         // Total radiation density (in the early Universe)

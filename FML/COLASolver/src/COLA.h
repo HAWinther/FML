@@ -455,9 +455,8 @@ void cola_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part, int LPT_or
     }
 }
 
-// This method kick's and drift's the particles one time-step
-// Only 1LPT, though not hard to extend
-// This method can be speed up a lot
+// This method kick's and drift's the particles one time-step (the 1LPT and 2LPT frames; the 3LPT branches are kept
+// but not reachable: simulation_cola_LPT_order > 2 is rejected because the particle types have no 3LPT fields)
 // With do_drift = false only the velocities are updated and the position displacement is stored in the particles
 // (see cola_drift_scaledependent, which completes the step)
 template <int NDIM, class T>
@@ -507,7 +506,7 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
     }
     if (LPT_order >= 3) {
         FML::assert_mpi(phi_3LPTa_ini_fourier.get_nmesh() > 0 and phi_3LPTb_ini_fourier.get_nmesh() > 0,
-                        "Error in cola_kick_drift_scaledependent. Initial 2LPT potential is not allocated\n");
+                        "Error in cola_kick_drift_scaledependent. Initial 3LPT potentials are not allocated\n");
     }
 
     if (LPT_order_particle < LPT_order) {

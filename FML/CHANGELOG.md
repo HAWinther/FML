@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLASolver: review of COLA.h and the growth factors (Oct 29); Neff = 0
+- `cosmology_Neffective = 0` gave a NaN background (0/0 in the neutrino mass and the neutrino density), and the
+  run failed later with an unrelated message. Now it runs without neutrinos; with OmegaMNu > 0 it is an error.
+- Comments: the 3LPT branches of the COLA kick/drift are not reachable (COLA order <= 2), the 3LPT assertion
+  message, the k range of the scale-dependent growth splines (1e-4..100 h/Mpc, end values beyond).
+- Review (no change): growth factors in EdS and LCDM with radiation to 5e-6, f(R)/DGP/massive-neutrino scale-
+  dependent growth, the COLA frame velocity at z_ini, linear growth with COLA, 1 vs 2 tasks. The 2LPT IC uses the
+  EdS -3/7 (D2/D1^2 is -0.436 at z = 49 with radiation); using D2(z_ini) changes P(k) at z = 0 by < 3e-4 (PM) and
+  < 1.6e-3 (COLA, 10 steps, z_ini = 200), so the IC is kept as it is.
+
 ### Cosmology (EBS): tight coupling ends at k/kappa' = 0.01 (the TT/EE damping-tail deficit)
 - TT and EE were 0.2-0.4% below CLASS at ell = 1000-2500 (up to 0.6% in the troughs). The cause was the end of
   the tight-coupling approximation: it ended when ck/(Hp |tau'|) > 0.1, but its first-order error grows with
