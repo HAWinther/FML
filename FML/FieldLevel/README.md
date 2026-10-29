@@ -75,3 +75,9 @@ The example (`example/`, `./fieldlevel [linear|1lpt] nmesh kmax n_samples beta_t
 - MPI slabs: the FFTs are already FFTWGrid; the CIC and its adjoint need the usual particle exchange.
 - Sampling the bias and noise parameters as well (slice or HMC blocks), and a realistic noise model.
 - Longer runs over several dispersed chains, using the shared rank-normalized split-Rhat and bulk/tail ESS diagnostics on beta and relevant field summaries, plus divergence checks and repeated-mock coverage.
+
+## Known issues and deferred follow-ups
+
+See [the review checklist](KNOWN_ISSUES.md) for the remaining safety, gradient-test,
+scientific-validation and workspace issues. These follow-ups are deferred at the
+user's request. The frozen-chain diagnostics finding was resolved by Engineering #17.
