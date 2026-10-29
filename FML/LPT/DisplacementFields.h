@@ -784,11 +784,12 @@ namespace FML {
                     FFTWGrid<N> p1, p2, pa, pb;
                     std::array<FFTWGrid<N>, N> avec;
                     compute_3LPT_potential_fourier<N>(padded, p1, p2, pa, pb, avec, ignore_curl_term);
+                    FML::GRID::FourierResamplingPlan<N> crop_plan(p1, delta_fourier);
                     auto crop = [&](FFTWGrid<N> & field) {
-                        auto result = FML::GRID::resize_fourier_grid(field,
-                                                                     delta_fourier.get_nmesh(),
-                                                                     delta_fourier.get_n_extra_slices_left(),
-                                                                     delta_fourier.get_n_extra_slices_right());
+                        FFTWGrid<N> result(delta_fourier.get_nmesh(),
+                                           delta_fourier.get_n_extra_slices_left(),
+                                           delta_fourier.get_n_extra_slices_right());
+                        crop_plan.apply(field, result);
                         field.free();
                         return result;
                     };

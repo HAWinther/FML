@@ -1,117 +1,214 @@
 #ifndef FML_FOURIER_RESAMPLING_HEADER
 #define FML_FOURIER_RESAMPLING_HEADER
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/Global/MPICounts.h>
 #include <algorithm>
 #include <climits>
 #include <vector>
+
 namespace FML::GRID {
-    /// Copy normalized Fourier coefficients between meshes without a real-space
-    /// interpolation. No volume factor is needed: FFTWGrid normalizes its forward
-    /// FFT. Only modes strictly inside the smaller mesh's Nyquist cube survive.
-    /// MPI exchanges only retained modes, without replicating the global grid.
-    template <int N>
-    FML::GRID::FFTWGrid<N>
-    resize_fourier_grid(const FML::GRID::FFTWGrid<N> & input, int nmesh, int nleft = 0, int nright = 0) {
-        assert_mpi(input.get_nmesh() > 0 && nmesh > 0, "[Fourier resampling] Meshes must be allocated and positive");
-        using Grid = FML::GRID::FFTWGrid<N>;
-        using Complex = FML::GRID::ComplexType;
-        Grid output(nmesh, nleft, nright);
-        output.set_grid_status_real(false);
-        for (auto index : output.get_fourier_range())
-            output.set_fourier_from_index(index, 0.0);
-        const int oldmesh = input.get_nmesh();
-        const int cutoff_mesh = std::min(oldmesh, nmesh);
-        std::vector<int> starts(FML::NTasks), widths(FML::NTasks);
-        int start = output.get_local_x_start(), width = output.get_local_nx();
-#ifdef USE_MPI
-        MPI_Allgather(&start, 1, MPI_INT, starts.data(), 1, MPI_INT, FML::communicator);
-        MPI_Allgather(&width, 1, MPI_INT, widths.data(), 1, MPI_INT, FML::communicator);
-#else
-        starts[0] = start;
-        widths[0] = width;
-#endif
-        // Indices refer to the receiver's local grid. Sending records avoids
-        // assumptions about FFTW's distribution or a matching slab layout.
-        struct Mode {
-            ptrdiff_t index;
-            Complex value;
+    /// Reusable geometry for normalized, non-transposed FFTWGrid slab layouts.
+    /// Keep only modes strictly inside the smaller mesh's Nyquist cube.
+    template <int N> class FourierResamplingPlan {
+        static_assert(N >= 2, "Fourier resampling requires the slab FFTWGrid layout (N >= 2)");
+        using Grid = FFTWGrid<N>;
+        using Count = FML::COMMUNICATION::Count;
+        struct Block {
+            ptrdiff_t source, target;
+            size_t count;
         };
-        std::vector<std::vector<Mode>> outgoing(FML::NTasks);
-        for (auto index : input.get_fourier_range()) {
-            auto coord = input.get_fourier_coord_from_index(index);
-            coord[0] += input.get_local_x_start();
-            bool keep = true;
-            for (int d = 0; d < N; d++) {
-                int wave = coord[d];
-                if (d < N - 1 && wave > oldmesh / 2)
-                    wave -= oldmesh;
-                if (2LL * std::abs(wave) >= cutoff_mesh)
-                    keep = false;
-                coord[d] = wave < 0 ? wave + nmesh : wave;
-            }
-            if (!keep)
-                continue;
-            int owner = int(std::upper_bound(starts.begin(), starts.end(), coord[0]) - starts.begin()) - 1;
-            assert_mpi(owner >= 0 && coord[0] < starts[owner] + widths[owner],
-                       "[Fourier resampling] Cannot locate Fourier slab");
-            coord[0] -= starts[owner];
-            ptrdiff_t target = coord[0];
-            for (int d = 1; d < N; d++)
-                target = target * (d == N - 1 ? nmesh / 2 + 1 : nmesh) + coord[d];
-            auto value = input.get_fourier_from_index(index);
-            if (owner == FML::ThisTask)
-                output.set_fourier_from_index(target, value);
+        int oldmesh, newmesh, tasks = FML::NTasks, rank = FML::ThisTask;
+        std::array<int, 4> local_layout;
+        std::vector<Block> local;
+        std::vector<std::vector<Block>> send, receive;
+        std::vector<Count> send_count, receive_count, max_per_step;
+        std::vector<ComplexType> send_buffer, receive_buffer;
+
+        static void append(std::vector<Block> &blocks, Block block) {
+            if (!blocks.empty() && blocks.back().source + ptrdiff_t(blocks.back().count) == block.source &&
+                blocks.back().target + ptrdiff_t(blocks.back().count) == block.target)
+                blocks.back().count += block.count;
             else
-                outgoing[owner].push_back({target, value});
+                blocks.push_back(block);
         }
-#ifdef USE_MPI
-        // A ring schedule visits every source/destination pair. Chunking keeps
-        // MPI byte counts representable even for multi-gigabyte messages.
-        constexpr unsigned long long chunk = INT_MAX / sizeof(Mode);
-        for (int step = 1; step < FML::NTasks; step++) {
-            const int dest = (FML::ThisTask + step) % FML::NTasks;
-            const int source = (FML::ThisTask - step + FML::NTasks) % FML::NTasks;
-            auto & send = outgoing[dest];
-            unsigned long long nsend = send.size(), nrecv = 0;
-            MPI_Sendrecv(&nsend,
-                         1,
-                         MPI_UNSIGNED_LONG_LONG,
-                         dest,
-                         0,
-                         &nrecv,
-                         1,
-                         MPI_UNSIGNED_LONG_LONG,
-                         source,
-                         0,
-                         FML::communicator,
-                         MPI_STATUS_IGNORE);
-            unsigned long long rounds = (std::max(nsend, nrecv) + chunk - 1) / chunk;
-            MPI_Allreduce(MPI_IN_PLACE, &rounds, 1, MPI_UNSIGNED_LONG_LONG, MPI_MAX, FML::communicator);
-            std::vector<Mode> receive(std::min(chunk, nrecv));
-            for (unsigned long long round = 0; round < rounds; round++) {
-                const auto offset = round * chunk;
-                const auto scount = offset < nsend ? std::min(chunk, nsend - offset) : 0;
-                const auto rcount = offset < nrecv ? std::min(chunk, nrecv - offset) : 0;
-                MPI_Sendrecv(scount ? send.data() + offset : nullptr,
-                             int(scount * sizeof(Mode)),
-                             MPI_BYTE,
-                             dest,
-                             1,
-                             rcount ? receive.data() : nullptr,
-                             int(rcount * sizeof(Mode)),
-                             MPI_BYTE,
-                             source,
-                             1,
-                             FML::communicator,
-                             MPI_STATUS_IGNORE);
-                for (size_t i = 0; i < rcount; i++)
-                    output.set_fourier_from_index(receive[i].index, receive[i].value);
+        static std::array<int, 4> layout(const Grid &input, const Grid &output) {
+            return {int(input.get_local_x_start()), int(input.get_local_nx()), int(output.get_local_x_start()),
+                    int(output.get_local_nx())};
+        }
+        // A cursor consumes a peer's contiguous runs without per-coefficient indices on the wire.
+        struct Cursor {
+            size_t block = 0, used = 0;
+            template <class Copy> void consume(const std::vector<Block> &blocks, size_t count, Copy copy) {
+                size_t offset = 0;
+                while (offset < count) {
+                    const auto &b = blocks[block];
+                    const size_t n = std::min(count - offset, b.count - used);
+                    copy(b, used, offset, n);
+                    offset += n;
+                    used += n;
+                    if (used == b.count) {
+                        ++block;
+                        used = 0;
+                    }
+                }
             }
-            std::vector<Mode>().swap(send);
-        }
+        };
+
+      public:
+        FourierResamplingPlan(const Grid &input, const Grid &output)
+            : oldmesh(input.get_nmesh()), newmesh(output.get_nmesh()), local_layout(layout(input, output)), send(tasks),
+              receive(tasks), send_count(tasks), receive_count(tasks), max_per_step(tasks) {
+            using namespace FML::COMMUNICATION;
+            require_count(oldmesh > 0 && newmesh > 0, "[Fourier resampling] Meshes must be allocated and positive");
+            std::vector<std::array<int, 4>> layouts(tasks);
+#ifdef USE_MPI
+            MPI_Allgather(local_layout.data(), 4, MPI_INT, layouts.data(), 4, MPI_INT, FML::communicator);
+#else
+            layouts[0] = local_layout;
 #endif
+            // Ignore empty slabs when sorting: FFTW may give them an arbitrary start.
+            auto intervals = [&](int axis, int mesh) {
+                std::vector<std::array<int, 3>> result;
+                bool valid = true;
+                for (int t = 0; t < tasks; ++t) {
+                    const int start = layouts[t][axis], width = layouts[t][axis + 1];
+                    valid &= width >= 0 && width <= mesh && (width == 0 || (start >= 0 && start <= mesh - width));
+                    if (width > 0)
+                        result.push_back({start, width, t});
+                }
+                std::sort(result.begin(), result.end());
+                int end = 0;
+                for (auto slab : result) {
+                    valid &= slab[0] == end;
+                    end = slab[0] + slab[1];
+                }
+                require_count(valid && end == mesh, "[Fourier resampling] Slabs must partition the mesh");
+                return result;
+            };
+            const auto sources = intervals(0, oldmesh), targets = intervals(2, newmesh);
+            auto owner = [](const auto &slabs, int x) {
+                auto it = std::upper_bound(slabs.begin(), slabs.end(), x,
+                                           [](int value, const auto &slab) { return value < slab[0]; });
+                return (*--it)[2];
+            };
+            // Bound flattened index arithmetic independently of MPI's smaller message-count limit.
+            bool valid = true;
+            for (int mesh : {oldmesh, newmesh}) {
+                Count size = mesh / 2 + 1;
+                for (int d = 0; d < N - 1; ++d)
+                    valid &= multiply_count(size, mesh, size, std::numeric_limits<ptrdiff_t>::max());
+            }
+            require_count(valid, "[Fourier resampling] Mesh index product overflow");
+            const int kmax = (std::min(oldmesh, newmesh) - 1) / 2;
+            // Both endpoints construct the same source-ordered runs, so target indices need not travel.
+            for (int x = 0; x < oldmesh; ++x) {
+                const int wave = x <= oldmesh / 2 ? x : x - oldmesh;
+                if (std::abs(wave) > kmax)
+                    continue;
+                const int mapped = wave < 0 ? wave + newmesh : wave;
+                const int from = owner(sources, x), to = owner(targets, mapped);
+                if (from != rank && to != rank)
+                    continue;
+                auto rows = [&](auto &&self, int d, ptrdiff_t src, ptrdiff_t dst) -> void {
+                    if (d == N - 1) {
+                        Block block{src * (oldmesh / 2 + 1), dst * (newmesh / 2 + 1), size_t(kmax + 1)};
+                        if (from == to)
+                            append(local, block);
+                        else {
+                            if (from == rank) {
+                                append(send[to], block);
+                                send_count[to] += block.count;
+                            }
+                            if (to == rank) {
+                                append(receive[from], block);
+                                receive_count[from] += block.count;
+                            }
+                        }
+                        return;
+                    }
+                    for (int j = 0; j <= 2 * kmax; ++j) {
+                        const int a = j <= kmax ? j : j + (oldmesh - (2 * kmax + 1));
+                        const int b = j <= kmax ? j : j + (newmesh - (2 * kmax + 1));
+                        self(self, d + 1, src * oldmesh + a, dst * newmesh + b);
+                    }
+                };
+                rows(rows, 1, x - layouts[from][0], mapped - layouts[to][2]);
+            }
+#ifdef USE_MPI
+            // One vector reduction for the whole plan, instead of a reduction at every peer step/call.
+            for (int step = 1; step < tasks; ++step)
+                max_per_step[step] = send_count[int((static_cast<long long>(rank) + step) % tasks)];
+            MPI_Allreduce(MPI_IN_PLACE, max_per_step.data(), tasks, MPI_UNSIGNED_LONG_LONG, MPI_MAX, FML::communicator);
+#endif
+        }
+
+        /// Collective; reuse with different fields having the same meshes and local slab geometry.
+        /// The two scratch buffers each use at most max_message_bytes (clamped to INT_MAX).
+        void apply(const Grid &input, Grid &output, size_t max_message_bytes = 64 * 1024 * 1024) {
+            using namespace FML::COMMUNICATION;
+            Count bytes = std::min(max_message_bytes, size_t(INT_MAX));
+            FML::MinOverTasks(&bytes);
+            require_count(
+                tasks == FML::NTasks && rank == FML::ThisTask && &input != &output && input.get_nmesh() == oldmesh &&
+                    output.get_nmesh() == newmesh && layout(input, output) == local_layout &&
+                    bytes >= sizeof(ComplexType),
+                "[Fourier resampling] Incompatible plan, aliased grids or message limit smaller than a value");
+            output.set_grid_status_real(false);
+            for (auto i : output.get_fourier_range())
+                output.set_fourier_from_index(i, 0.0);
+            auto *out = output.get_fourier_grid();
+            for (auto b : local)
+                for (size_t i = 0; i < b.count; ++i)
+                    out[b.target + ptrdiff_t(i)] = input.get_fourier_from_index(b.source + ptrdiff_t(i));
+#ifdef USE_MPI
+            const Count chunk = bytes / sizeof(ComplexType);
+            const Count maxsend = *std::max_element(send_count.begin(), send_count.end());
+            const Count maxrecv = *std::max_element(receive_count.begin(), receive_count.end());
+            auto prepare = [&](auto &buffer, Count count) {
+                const size_t size = size_t(std::min(chunk, count));
+                // Retain storage across equal-cap calls, but honor a smaller cap without geometric over-allocation.
+                if (buffer.capacity() > chunk || buffer.capacity() < size)
+                    std::vector<ComplexType>(size).swap(buffer);
+                else
+                    buffer.resize(size);
+            };
+            prepare(send_buffer, maxsend);
+            prepare(receive_buffer, maxrecv);
+            for (int step = 1; step < tasks; ++step) {
+                const int dest = int((static_cast<long long>(rank) + step) % tasks);
+                const int source = int((static_cast<long long>(rank) - step + tasks) % tasks);
+                const Count rounds = max_per_step[step] / chunk + (max_per_step[step] % chunk != 0);
+                Cursor pack, unpack;
+                for (Count round = 0; round < rounds; ++round) {
+                    const Count offset = round * chunk;
+                    const size_t scount =
+                        offset < send_count[dest] ? size_t(std::min(chunk, send_count[dest] - offset)) : 0;
+                    const size_t rcount =
+                        offset < receive_count[source] ? size_t(std::min(chunk, receive_count[source] - offset)) : 0;
+                    pack.consume(send[dest], scount, [&](const Block &b, size_t used, size_t at, size_t n) {
+                        for (size_t i = 0; i < n; ++i)
+                            send_buffer[at + i] = input.get_fourier_from_index(b.source + ptrdiff_t(used + i));
+                    });
+                    MPI_Sendrecv(scount ? send_buffer.data() : nullptr, int(scount * sizeof(ComplexType)), MPI_BYTE,
+                                 dest, 1, rcount ? receive_buffer.data() : nullptr, int(rcount * sizeof(ComplexType)),
+                                 MPI_BYTE, source, 1, FML::communicator, MPI_STATUS_IGNORE);
+                    unpack.consume(receive[source], rcount, [&](const Block &b, size_t used, size_t at, size_t n) {
+                        std::copy_n(receive_buffer.data() + at, n, out + b.target + ptrdiff_t(used));
+                    });
+                }
+            }
+#endif
+        }
+    };
+
+    /// Copy normalized Fourier coefficients; excluded modes are zero, with no volume factor.
+    template <int N>
+    FFTWGrid<N> resize_fourier_grid(const FFTWGrid<N> &input, int nmesh, int nleft = 0, int nright = 0) {
+        assert_mpi(input.get_nmesh() > 0 && nmesh > 0, "[Fourier resampling] Meshes must be allocated and positive");
+        FFTWGrid<N> output(nmesh, nleft, nright);
+        FourierResamplingPlan<N> plan(input, output);
+        plan.apply(input, output);
         return output;
     }
-
 } // namespace FML::GRID
 #endif

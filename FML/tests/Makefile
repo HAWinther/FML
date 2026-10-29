@@ -13,6 +13,7 @@ USE_LUA             ?= true
 
 TARGETS := test_core test_mpi_counts test_grid_tools test_fof test_so test_so_multislab test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_lpt test_nbody
 TARGETS += test_baryonification test_numericalmethods test_interlacing_offset test_streamed_kick test_lightcone test_random_fields test_timestepping test_transfers
+TARGETS += test_fourier_resampling
 TARGETS += test_cosmicweb test_short_range test_yukawa test_phase_space_halos test_control test_morphology test_environment test_pt_direct test_halo_history
 
 include ../Makefile.config
@@ -38,6 +39,9 @@ test_transfers: test_transfers.o Global.o Spline.o FileUtils.o
 	$(LINK_EXE)
 
 test_timestepping: test_timestepping.o Global.o Spline.o ODESolver.o ParameterMap.o
+	$(LINK_EXE)
+
+test_fourier_resampling: test_fourier_resampling.o Global.o
 	$(LINK_EXE)
 
 test_random_fields: test_random_fields.o Global.o Spline.o ODESolver.o ParameterMap.o
@@ -321,6 +325,7 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_timestepping; \
 	  echo "== Running test_random_fields with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_random_fields; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_fourier_resampling; \
 	  echo "== Running test_lightcone with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_lightcone; \
 	  echo "== Running test_nbody with $$np task(s)"; \
