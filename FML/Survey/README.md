@@ -236,6 +236,42 @@ Nonfinite arithmetic and invalid source/geometry fail explicitly. The lower-leve
 `solve_displacement` and `sample_displacement` APIs support independent checks and
 reuse of an already prepared displacement field.
 
+## Survey mocks (`SurveyMocks.h`)
+
+Mock catalogues from a periodic box (as make_survey): a snapshot projection around an observer (one snapshot
+tiled around the observer; the redshift of an object comes from its distance, its dynamics from the snapshot;
+this is not an evolving lightcone), RA/Dec and redshifts, an angular footprint, a radial selection and randoms.
+
+```cpp
+using namespace FML::SURVEY::MOCKS;
+std::vector<MockObject> objects = objects_from_hod(hod_mock.galaxies); // or objects_from_particles(...)
+MockOptions o;
+o.boxsize = 1000; o.observer = {500, 500, 500};          // Mpc/h
+o.z_min = 0.05; o.z_max = 0.2;
+o.hubble_over_c = [](double z) { return std::sqrt(0.3 * std::pow(1 + z, 3) + 0.7) / 2997.92458; }; // h/Mpc
+o.footprint = ra_dec_box(120, 240, 0, 60);                 // or any (ra, dec) -> completeness callback
+o.target_nbar = [](double z) { return 3e-4; };             // (h/Mpc)^3; empty: keep everything
+auto data = make_survey(objects, o);                       // collective (parent density summed over tasks)
+auto randoms = make_randoms(o, data.parent_nbar);          // random_factor randoms per expected object
+auto points = to_catalog_points<FML::SURVEY::CatalogPoint>(data.galaxies); // for SurveyPower etc.
+```
+
+Conventions: comoving Mpc/h, peculiar velocities in km/s, H(z)/c supplied by the user (no cosmology dependency),
+RA/Dec in degrees in the survey frame x_s = R (x - observer) (`rotation`, or `rotation_from_pole`).
+z_obs = z_cos + (1 + z_cos) v_r/c (receding objects are redder); `redshift_space = false` gives z_obs = z_cos;
+positions are r(z_obs) r_hat (and `position_real` = r(z_cos) r_hat). Per object the catalogue stores the
+`selection_probability` that was applied (target n(z)/parent density x completeness; an error if it exceeds 1),
+the `completeness` of the footprint (also when `apply_completeness = false`) and `nbar`, the expected density of
+the final catalogue (for FKP weights and I2); FKP weights are made by the analysis, not here, so nothing is applied
+twice. Random decisions use Philox streams keyed by (seed, object id and subid, replica), so the catalogue is the
+same for any number of MPI tasks or threads; randoms are keyed by their index and split over the tasks. Tiling
+repeats structures when r(z_max) > L/2 (`MockCatalog::repeated`; each object keeps its source id and replica).
+Velocities above 0.03 c are not reached by the search shell. `mock_example/` makes a mock and randoms from a
+uniform box; `tests/test_mocks.cpp` checks r(z) against EdS (4e-9), the coordinate round trip back to the box
+(1e-6 Mpc/h), the redshift-velocity relation, the footprint area and n(z) of data and randoms (Poisson), the
+feasibility error and 1 vs 2 MPI tasks. Box remapping, Healpix and MANGLE footprints, lightcone input and a
+`make_survey` executable follow (backlog item 53).
+
 ## Build, example and validation
 
 `workflow_example/` generates a small synthetic Cartesian survey and writes

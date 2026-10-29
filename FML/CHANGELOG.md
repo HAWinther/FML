@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Survey: mock catalogues from periodic boxes (`SurveyMocks.h`, backlog item 53 phase 1)
+- Snapshot projection around an observer with tiling, observer rotation, RA/Dec and redshifts from a user H(z)/c
+  (r(z) inverted), redshift-space distortions (z_obs = z_cos + (1 + z_cos) v_r/c), angular footprints (callback,
+  full sky, RA-Dec box), a target n(z) with a feasibility check, and matching randoms. The applied selection
+  probability, the footprint completeness and nbar (for FKP) are kept separate. ID-keyed Philox randomness: the
+  catalogue is the same for any number of MPI tasks. Adapters from FML particles and HOD galaxies; conversion to
+  SurveyMesh's CatalogPoint; an ascii writer.
+- `tests/test_mocks.cpp` (r(z), round trips, velocities, footprint area, n(z) of data and randoms, feasibility,
+  1 vs 2 tasks) and `mock_example/`.
+
 ### COLASolver: review of COLA.h and the growth factors (Oct 29); Neff = 0
 - `cosmology_Neffective = 0` gave a NaN background (0/0 in the neutrino mass and the neutrino density), and the
   run failed later with an unrelated message. Now it runs without neutrinos; with OmegaMNu > 0 it is an error.
