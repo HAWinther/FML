@@ -141,8 +141,9 @@ n_t = −r/8 (2 − r/8 − n_s) (CLASS's `scc`) unless `n_t_consistency = false
 are added to the scalar spectra, BB is the tensor one, and all are lensed together. `cells_tensor.txt` holds the
 tensor contributions alone (ℓ ≤ `tensor_ell_max`, default 600). The equations are those of CLASS (Pitrou et al.
 hierarchy, flat), with the friction (2 + α_M)ℋh′ and the stress divided by M*² from the theory of gravity
-(Horndeski α_M, Brans–Dicke φ, f(R) 1 + f_R; GR otherwise). Massive neutrinos enter the anisotropic stress as
-massless (CLASS's default). About 10 s on 2 cores (`[Tensors]` timing); settings `tensor_*` in
+(Horndeski α_M, Brans–Dicke φ, f(R) 1 + f_R; GR otherwise). Massive neutrinos are evolved with the massless
+hierarchy and weighted by 3 p_ncdm in the anisotropic stress (equal to ρ_ncdm while they are relativistic; CLASS's
+`tensor_method = massless` approximation). About 10 s on 2 cores (`[Tensors]` timing); settings `tensor_*` in
 `params/default.ini`. Flat universes only.
 
 | Check (tests/test_tensors, python/compare_class_tensors.py) | Result |
