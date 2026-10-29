@@ -278,8 +278,21 @@ around the observer leaves it; the footprint must then stay inside). Healpix foo
 uniform box; `tests/test_mocks.cpp` checks r(z) against EdS (4e-9), the coordinate round trip back to the box
 (1e-6 Mpc/h), the redshift-velocity relation, the footprint area and n(z) of data and randoms (Poisson), the
 feasibility error, 1 vs 2 MPI tasks, the remapping (one to one, uniform, volume 1; a pencil to 3x the box depth
-without repeated objects) and the Healpix pixels against healpy. MANGLE footprints, lightcone input and a
-`make_survey` executable follow (backlog item 53).
+without repeated objects), the Healpix pixels against healpy and lightcone input.
+
+Lightcone input (an evolving lightcone, e.g. COLASolver's): `make_survey_lightcone(objects, o)` with
+`periodic = false`, no extent and `o.parent_nbar` given (a lightcone has no volume); positions are relative to the
+same origin as `observer`, and an object's own `z_obs` (>= 0, e.g. ObservedRedshift) is used as is.
+
+`make_survey/` is the executable (Lua parameter file, see `parameterfile.lua`): ascii, GADGET or COLASolver
+lightcone HDF5 input (USE_HDF5), H(z) from (Omega_m, Omega_lambda, w0, wa), observer/pole/remap, full, RA/Dec box
+or Healpix (ascii, or FITS with USE_HEALPIX) footprints, n(z) as a constant, an nbar(z) table or a dN/dz per deg^2
+table, ascii output of data and randoms (one file per task with MPI).
+`mock_clustering_example/` is the end-to-end check: a Zel'dovich box -> half-sky mock (0.05 < z < 0.12) with
+randoms -> P0/P2 with SurveyPower against the linear Kaiser model convolved with the SurveyWindow matrix. P0 agrees
+to a few percent for 0.015 < k < 0.1 h/Mpc (mean of 3 realisations; one realisation scatters by ~20%), P2 within
+its noise. The particles start on a lattice, so the mock's shot noise is 1/nbar - 1/n_parent (the example adds
+1/n_parent back). MANGLE footprints follow (backlog item 53, phase 3).
 
 ## Build, example and validation
 

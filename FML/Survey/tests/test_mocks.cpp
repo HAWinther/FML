@@ -214,6 +214,43 @@ int main() {
               "the catalogue does not depend on the number of MPI tasks");
     }
 
+    // Lightcone input: positions anywhere (Mpc/h, observer frame), the given observed redshift is used
+    {
+        MockOptions o;
+        o.boxsize = 500;
+        o.observer = {250, 250, 250};
+        o.z_max = 0.2;
+        o.hubble_over_c = hubble_lcdm;
+        o.parent_nbar = 1e-3;
+        std::vector<MockObject> objs(2);
+        objs[0].position = {250 + 450, 250, 250 - 30}; // outside the box
+        objs[0].velocity = {300, 0, 0};
+        objs[1] = objs[0];
+        objs[1].id = 1;
+        objs[1].z_obs = 0.15;
+        if (FML::ThisTask != 0)
+            objs.clear();
+        const auto cat = make_survey_lightcone(objs, o);
+        detail::DistanceRedshift dr(hubble_lcdm, 0.3);
+        bool ok = true;
+        for (const auto & g : cat.galaxies) {
+            ok &= std::fabs(g.z_cos - dr.z_of_r(std::sqrt(450.0 * 450.0 + 30.0 * 30.0))) < 1e-12;
+            ok &= g.id == 0 ? g.z_obs > g.z_cos : g.z_obs == 0.15;
+        }
+        int n = int(cat.galaxies.size());
+        FML::SumOverTasks(&n);
+        bool threw = false;
+        try {
+            MockOptions bad = o;
+            bad.parent_nbar = 0;
+            make_survey_lightcone(objs, bad);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        check(ok && n == 2 && threw,
+              "lightcone input: positions outside the box, the given z_obs; parent_nbar required");
+    }
+
     // 8. Remapping: one to one onto the cuboid, volume preserving, uniform
     {
         bool ok = true;

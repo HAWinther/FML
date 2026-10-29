@@ -64,6 +64,7 @@ namespace FML::SURVEY::MOCKS {
         std::uint64_t id = 0;
         std::uint32_t subid = 0;
         double weight = 1.0;
+        double z_obs = -1; // >= 0: the observed redshift is given (lightcone output with relativistic effects)
     };
 
     struct MockGalaxy {
@@ -172,8 +173,11 @@ namespace FML::SURVEY::MOCKS {
         }
 
         inline void check_options(const MockOptions & o) {
-            if (!o.periodic && !(o.extent[0] > 0 && o.extent[1] > 0 && o.extent[2] > 0))
+            const bool unbounded = !o.periodic && o.extent[0] == 0 && o.extent[1] == 0 && o.extent[2] == 0;
+            if (!o.periodic && !unbounded && !(o.extent[0] > 0 && o.extent[1] > 0 && o.extent[2] > 0))
                 throw std::invalid_argument("make_survey: a non-periodic volume needs its extent");
+            if (unbounded && !(o.parent_nbar > 0))
+                throw std::invalid_argument("make_survey: lightcone input (no volume) needs parent_nbar");
             if (!(o.boxsize > 0) || !(o.z_max > o.z_min) || !(o.z_min >= 0) || !o.hubble_over_c || !o.footprint ||
                 !(o.random_factor >= 0))
                 throw std::invalid_argument("make_survey: need boxsize > 0, 0 <= z_min < z_max, H(z)/c, a footprint");
@@ -214,10 +218,11 @@ namespace FML::SURVEY::MOCKS {
 
         MockCatalog cat;
         const Vec3 extent = o.periodic ? Vec3{L, L, L} : o.extent;
+        const bool unbounded = !o.periodic && extent[0] == 0 && extent[1] == 0 && extent[2] == 0;
         cat.repeated = o.periodic && r_max > 0.5 * L;
         for (int d = 0; d < 3; d++)
-            cat.truncated =
-                cat.truncated || (!o.periodic && (o.observer[d] - r_max < 0 || o.observer[d] + r_max > extent[d]));
+            cat.truncated = cat.truncated || (!o.periodic && !unbounded &&
+                                              (o.observer[d] - r_max < 0 || o.observer[d] + r_max > extent[d]));
         if (o.parent_nbar > 0) {
             cat.parent_nbar = o.parent_nbar;
         } else {
@@ -229,7 +234,9 @@ namespace FML::SURVEY::MOCKS {
 
         for (const auto & obj : objects) {
             for (int d = 0; d < 3; d++)
-                if (!(obj.position[d] >= 0 && obj.position[d] < extent[d]) || !std::isfinite(obj.velocity[d]))
+                if (!((obj.position[d] >= 0 && obj.position[d] < extent[d]) ||
+                      (unbounded && std::isfinite(obj.position[d]))) ||
+                    !std::isfinite(obj.velocity[d]))
                     throw std::invalid_argument("make_survey: positions must be in [0, boxsize) (periodic) or [0, "
                                                 "extent) (not periodic), velocities finite");
             for (int ix = -nrep; ix <= nrep; ix++)
@@ -251,8 +258,9 @@ namespace FML::SURVEY::MOCKS {
                         MockGalaxy g;
                         g.z_cos = dr.z_of_r(r);
                         g.v_radial = detail::dot(vs, n);
-                        g.z_obs =
-                            o.redshift_space ? g.z_cos + (1 + g.z_cos) * g.v_radial / speed_of_light_kms : g.z_cos;
+                        g.z_obs = !o.redshift_space ? g.z_cos :
+                                  obj.z_obs >= 0    ? obj.z_obs :
+                                                      g.z_cos + (1 + g.z_cos) * g.v_radial / speed_of_light_kms;
                         if (!(g.z_obs >= o.z_min && g.z_obs <= o.z_max))
                             continue;
                         detail::ra_dec(n, g.ra, g.dec);
@@ -291,6 +299,16 @@ namespace FML::SURVEY::MOCKS {
                                         "probability " +
                                         std::to_string(pmax) + " > 1): the target is not feasible");
         return cat;
+    }
+
+    /// A survey from lightcone output: positions in Mpc/h in the frame of MockOptions::observer (not periodic, no
+    /// tiling; each object has its own crossing time, so this is an evolving lightcone), velocities in km/s and,
+    /// if known, the observed redshift (MockObject::z_obs, e.g. with the gravitational redshift). parent_nbar (the
+    /// density of the simulation) must be given
+    inline MockCatalog make_survey_lightcone(const std::vector<MockObject> & objects, MockOptions o) {
+        o.periodic = false;
+        o.extent = {0, 0, 0};
+        return make_survey(objects, o);
     }
 
     /// Randoms with the footprint and radial selection of make_survey (no velocities: z_obs = z_cos). Each task

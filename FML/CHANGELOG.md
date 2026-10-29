@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Survey mocks: lightcone input, `make_survey` executable, end-to-end clustering check (item 53 phase 2)
+- `make_survey_lightcone` for evolving-lightcone input (no tiling; a given parent density; an object's own observed
+  redshift is used when present). Test added.
+- `Survey/make_survey/`: Lua-driven executable (ascii, GADGET, COLASolver lightcone HDF5 input; H(z) from Omega_m,
+  Omega_lambda, w0, wa; observer/pole/remap; full, RA-Dec or Healpix footprints; constant, nbar(z) or dN/dz n(z);
+  data and randoms as ascii).
+- `Survey/mock_clustering_example/`: Zel'dovich box -> mock and randoms -> SurveyPower P0/P2 against the
+  window-convolved Kaiser model. P0 agrees to a few percent for 0.015 < k < 0.1 h/Mpc (mean of 3 realisations);
+  the lattice start makes the shot noise 1/nbar - 1/n_parent, which the example accounts for.
+
 ### Survey mocks: cuboid remapping and Healpix footprints (backlog item 53 phase 2)
 - `make_remapping` / `remap_objects`: the volume-preserving cuboid remapping of Carlson & White (2010) (one to
   one, checked by mapping back to the box, uniform occupation and a pencil survey 3x deeper than the box without
