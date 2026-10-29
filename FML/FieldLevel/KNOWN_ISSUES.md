@@ -62,6 +62,12 @@ The relevant code is [FieldLevelBAO.h](FieldLevelBAO.h),
   nuisance inference. Monitor relevant field summaries as well as beta.
   The two-chain diagnostic checks added in #17 are regression checks, not
   certification of the full field posterior or scientific coverage.
+  Progress: repeated-mock coverage is now measured by simulation-based
+  calibration (`example/Calibration.cpp`, README "Simulation-based
+  calibration"): 24 1LPT and 30 linear mocks with beta drawn from the prior give
+  z-scores consistent with N(0,1) and uniform posterior quantiles. This covers
+  same-model coverage only; the negative control, information checks,
+  dispersed chains and model-mismatch tests above remain open.
 
 - [ ] **FL-6: Measure and reduce force-call workspace churn.**
   `potential_and_gradient` recreates its workspace, displacement/adjoint fields
