@@ -266,10 +266,19 @@ the final catalogue (for FKP weights and I2); FKP weights are made by the analys
 twice. Random decisions use Philox streams keyed by (seed, object id and subid, replica), so the catalogue is the
 same for any number of MPI tasks or threads; randoms are keyed by their index and split over the tasks. Tiling
 repeats structures when r(z_max) > L/2 (`MockCatalog::repeated`; each object keeps its source id and replica).
-Velocities above 0.03 c are not reached by the search shell. `mock_example/` makes a mock and randoms from a
+Velocities above 0.03 c are not reached by the search shell.
+
+Deep or wide surveys without repetition: `make_remapping(M)` with an integer matrix of determinant 1 gives the
+volume-preserving cuboid of Carlson & White (2010) (edges L1 x L2 x L3 = 1 in box units, e.g. {{5,2,1},{2,1,0},
+{0,0,1}} gives 5.48 x 0.447 x 0.408); `remap_objects` moves the objects into it (one to one) and the survey is
+made with `periodic = false`, `extent` = the cuboid in Mpc/h (`MockCatalog::truncated` when the sphere r(z_max)
+around the observer leaves it; the footprint must then stay inside). Healpix footprints:
+`healpix_footprint(map)` with a RING-ordered completeness map (`read_healpix_ascii`, or with USE_HEALPIX
+`read_healpix_fits` in any ordering); the pixelization is built in (checked against healpy). `mock_example/` makes a mock and randoms from a
 uniform box; `tests/test_mocks.cpp` checks r(z) against EdS (4e-9), the coordinate round trip back to the box
 (1e-6 Mpc/h), the redshift-velocity relation, the footprint area and n(z) of data and randoms (Poisson), the
-feasibility error and 1 vs 2 MPI tasks. Box remapping, Healpix and MANGLE footprints, lightcone input and a
+feasibility error, 1 vs 2 MPI tasks, the remapping (one to one, uniform, volume 1; a pencil to 3x the box depth
+without repeated objects) and the Healpix pixels against healpy. MANGLE footprints, lightcone input and a
 `make_survey` executable follow (backlog item 53).
 
 ## Build, example and validation

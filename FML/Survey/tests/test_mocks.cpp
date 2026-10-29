@@ -3,6 +3,7 @@
 #include <FML/Global/Global.h>
 #include <FML/Survey/SurveyMocks.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <iomanip>
@@ -211,6 +212,173 @@ int main() {
         const double reference = checksum(ref.galaxies);
         check(std::fabs(distributed - reference) < 1e-9 * std::fabs(reference) && double(ref.galaxies.size()) == nd,
               "the catalogue does not depend on the number of MPI tasks");
+    }
+
+    // 8. Remapping: one to one onto the cuboid, volume preserving, uniform
+    {
+        bool ok = true;
+        std::mt19937_64 g(11);
+        std::uniform_real_distribution<double> u(0.0, 1.0);
+        for (auto M : {std::array<std::array<int, 3>, 3>{{{1, 1, 0}, {0, 1, 0}, {0, 0, 1}}},
+                       std::array<std::array<int, 3>, 3>{{{1, 1, 0}, {1, 0, 1}, {1, 0, 0}}},
+                       std::array<std::array<int, 3>, 3>{{{5, 2, 1}, {2, 1, 0}, {0, 0, 1}}}}) {
+            const auto R = make_remapping(M);
+            const double vol = R.lengths[0] * R.lengths[1] * R.lengths[2];
+            ok &= std::fabs(vol - 1) < 1e-12;
+            std::vector<double> counts(8, 0.0);
+            double back = 0;
+            const int n = 100000;
+            for (int i = 0; i < n; i++) {
+                const Vec3 x{u(g), u(g), u(g)};
+                const Vec3 y = remap_position(R, x);
+                int oct = 0;
+                for (int a = 0; a < 3; a++) {
+                    ok &= y[a] >= 0 && y[a] < R.lengths[a];
+                    oct += (y[a] > 0.5 * R.lengths[a]) << a;
+                }
+                counts[oct] += 1;
+                // back to the box: sum_a y_a e_a = x mod 1
+                for (int d = 0; d < 3; d++) {
+                    double xb = 0;
+                    for (int a = 0; a < 3; a++)
+                        xb += y[a] * R.axes[a][d];
+                    xb -= std::floor(xb);
+                    back = std::max(back, std::min(std::fabs(xb - x[d]), 1 - std::fabs(xb - x[d])));
+                }
+            }
+            for (double c : counts)
+                ok &= std::fabs(c - n / 8.0) < 5 * std::sqrt(n / 8.0);
+            ok &= back < 1e-12;
+            if (FML::ThisTask == 0)
+                std::cout << "  remapping L = " << R.lengths[0] << " x " << R.lengths[1] << " x " << R.lengths[2]
+                          << " (" << R.offsets.size() << " candidate cells), max |x_back - x| = " << back << "\n";
+        }
+        bool threw = false;
+        try {
+            make_remapping({{{2, 0, 0}, {0, 1, 0}, {0, 0, 1}}});
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        check(ok && threw, "remapping: inside the cuboid, back to the box, uniform, volume 1; det != 1 rejected");
+
+        // a deep pencil survey in a remapped cuboid (not periodic): no repetition, the right density
+        const double L = 500;
+        auto objs = uniform_box(200000, L, 0, 5);
+        if (FML::ThisTask != 0)
+            objs.clear();
+        const auto R = make_remapping({{{5, 2, 1}, {2, 1, 0}, {0, 0, 1}}});
+        const auto rem = remap_objects(objs, R, L);
+        MockOptions o;
+        o.boxsize = L;
+        o.periodic = false;
+        o.extent = {R.lengths[0] * L, R.lengths[1] * L, R.lengths[2] * L};
+        o.observer = {0.0, 0.5 * o.extent[1], 0.5 * o.extent[2]};
+        o.rotation = rotation_from_pole({1, 0, 0}, {0, 1, 0});
+        o.z_min = 0;
+        o.z_max = 0.6;
+        o.hubble_over_c = hubble_lcdm;
+        o.redshift_space = false;
+        const double half = std::atan(0.5 * std::min(o.extent[1], o.extent[2]) /
+                                      detail::DistanceRedshift(hubble_lcdm, 1.0).r_of_z(0.6)) /
+                            deg;
+        o.footprint = [half](double, double dec) { return dec > 90 - half ? 1.0 : 0.0; };
+        const auto cat = make_survey(rem, o);
+        int n = int(cat.galaxies.size());
+        FML::SumOverTasks(&n);
+        const double rmax = detail::DistanceRedshift(hubble_lcdm, 1.0).r_of_z(0.6);
+        const double expected = cat.parent_nbar * 2 * M_PI * (1 - std::cos(half * deg)) * rmax * rmax * rmax / 3;
+        bool unique = true;
+        std::vector<std::uint64_t> ids;
+        for (const auto & gal : cat.galaxies)
+            ids.push_back(gal.id);
+        std::sort(ids.begin(), ids.end());
+        unique = std::adjacent_find(ids.begin(), ids.end()) == ids.end();
+        if (FML::ThisTask == 0)
+            std::cout << "  pencil to z = 0.6 (" << rmax << " Mpc/h, box " << L << "): " << n << " objects, expected "
+                      << expected << ", cuboid " << o.extent[0] << " x " << o.extent[1] << " x " << o.extent[2] << "\n";
+        check(unique && std::fabs(n - expected) < 5 * std::sqrt(expected) && !cat.repeated && cat.truncated,
+              "remapped cuboid: a survey deeper than the box without repeated objects, the right density");
+    }
+
+    // 9. Healpix RING pixels (healpy 1.20 reference values) and a Healpix footprint
+    {
+        const double th[] = {2.5475802757199624,
+                             2.125132487475809,
+                             0.9241052335784122,
+                             1.4057235974378848,
+                             2.5179263078117513,
+                             1.7049444329502041,
+                             1.612705997937011,
+                             2.3192713655718764,
+                             1.0824634210636321,
+                             2.4538106597779192,
+                             1.7900934350922484,
+                             1.5373097035102328,
+                             0.0,
+                             3.141592653589793,
+                             0.8410686705679303,
+                             2.300523984021863,
+                             1.0};
+        const double ph[] = {2.705715650726193,
+                             3.6869641623340965,
+                             4.635971544195998,
+                             6.008404365323131,
+                             1.785688576349746,
+                             4.0749422825363135,
+                             4.374454120901312,
+                             1.8392187093018624,
+                             0.009362470809190032,
+                             6.116431295535327,
+                             1.8749101801040522,
+                             1.9728322346422047,
+                             0.0,
+                             6.0,
+                             1.0,
+                             2.0,
+                             6.283185307178586};
+        const std::int64_t ref4[] = {173, 145, 35, 87, 171, 114, 99, 156, 40, 179, 109, 77, 0, 191, 26, 157, 40};
+        const std::int64_t ref1024[] = {11505196,
+                                        9601379,
+                                        2503630,
+                                        5257037,
+                                        11396447,
+                                        7135840,
+                                        6554403,
+                                        10570062,
+                                        3336198,
+                                        11156462,
+                                        7658694,
+                                        6081798,
+                                        0,
+                                        12582911,
+                                        2095755,
+                                        10485015,
+                                        2893824};
+        bool ok = true;
+        for (int i = 0; i < 17; i++)
+            ok &= healpix_ang2pix_ring(4, th[i], ph[i]) == ref4[i] &&
+                  healpix_ang2pix_ring(1024, th[i], ph[i]) == ref1024[i];
+        check(ok, "Healpix ang2pix (RING) = healpy for nside = 4 and 1024");
+        // the first half of the pixels of an nside = 8 map (half the sky)
+        std::vector<double> map(12 * 64, 0.0);
+        for (std::size_t p = 0; p < map.size() / 2; p++)
+            map[p] = 1.0;
+        MockOptions o;
+        o.boxsize = 1000;
+        o.z_max = 0.1;
+        o.hubble_over_c = hubble_lcdm;
+        o.footprint = healpix_footprint(map);
+        o.random_factor = 1;
+        const auto ran = make_randoms(o, 1e-3);
+        double north = 0, all_r = double(ran.size());
+        for (const auto & g : ran)
+            north += map[std::size_t(healpix_ang2pix_ring(8, (90 - g.dec) * deg, g.ra * deg))] == 1.0;
+        FML::SumOverTasks(&north);
+        FML::SumOverTasks(&all_r);
+        detail::DistanceRedshift dr(hubble_lcdm, 0.2);
+        const double expected = 1e-3 * 4 * M_PI / 3 * std::pow(dr.r_of_z(0.1), 3) / 2;
+        check(north == all_r && std::fabs(all_r - expected) < 5 * std::sqrt(expected),
+              "Healpix footprint: randoms only in the map pixels, half the sky");
     }
 
     if (FML::ThisTask == 0)

@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Survey mocks: cuboid remapping and Healpix footprints (backlog item 53 phase 2)
+- `make_remapping` / `remap_objects`: the volume-preserving cuboid remapping of Carlson & White (2010) (one to
+  one, checked by mapping back to the box, uniform occupation and a pencil survey 3x deeper than the box without
+  repeated objects); `MockOptions::periodic = false` with `extent` for the cuboid (no tiling;
+  `MockCatalog::truncated` when the survey sphere leaves it).
+- `healpix_footprint` with a built-in RING ang2pix (equal to healpy for nside 4 and 1024), ascii maps, and with
+  USE_HEALPIX FITS maps in any ordering.
+
 ### Survey: mock catalogues from periodic boxes (`SurveyMocks.h`, backlog item 53 phase 1)
 - Snapshot projection around an observer with tiling, observer rotation, RA/Dec and redshifts from a user H(z)/c
   (r(z) inverted), redshift-space distortions (z_obs = z_cos + (1 + z_cos) v_r/c), angular footprints (callback,

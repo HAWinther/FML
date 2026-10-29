@@ -3,7 +3,8 @@
 
 // =============================================================================
 // Survey mocks from periodic simulation output (as make_survey): snapshot projection of a periodic box around an
-// observer, RA/Dec and redshifts with RSD, an angular footprint, a radial selection and matching randoms.
+// observer, RA/Dec and redshifts with RSD, an angular footprint (callback, RA-Dec box, Healpix map), a radial
+// selection and matching randoms; optionally a volume-preserving cuboid remapping of the box.
 //
 //   * Snapshot projection: one snapshot is tiled (replicas) around the observer; every object keeps the dynamics of
 //     the snapshot while its redshift comes from its distance. This is not an evolving lightcone.
@@ -34,6 +35,10 @@
 #include <FML/Global/Global.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/RandomGenerator/CounterBasedRandom.h>
+#ifdef USE_HEALPIX
+#include <healpix_map.h>
+#include <healpix_map_fitsio.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -76,7 +81,8 @@ namespace FML::SURVEY::MOCKS {
         std::vector<MockGalaxy> galaxies;
         double parent_nbar = 0;
         double max_selection_probability = 0;
-        bool repeated = false; // r_max > L/2: the same structures appear more than once
+        bool repeated = false;  // periodic and r_max > L/2: the same structures appear more than once
+        bool truncated = false; // not periodic and the sphere r_max around the observer leaves the volume
     };
 
     /// The angular footprint: completeness in [0, 1] as a function of (RA, Dec) in degrees
@@ -93,8 +99,10 @@ namespace FML::SURVEY::MOCKS {
     }
 
     struct MockOptions {
-        double boxsize = 0;                                              // Mpc/h
-        Vec3 observer{};                                                 // observer in the box (Mpc/h)
+        double boxsize = 0;   // Mpc/h
+        bool periodic = true; // false: positions in [0, extent) (e.g. a remapped cuboid, remap_objects), no tiling
+        Vec3 extent{};        // the non-periodic volume (Mpc/h)
+        Vec3 observer{};      // observer in the box or volume (Mpc/h)
         std::array<Vec3, 3> rotation{{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}}; // rows: the survey axes (orthonormal)
         double z_min = 0, z_max = 0;                                     // redshift range (of z_obs)
         std::function<double(double)> hubble_over_c;                     // H(z)/c in h/Mpc
@@ -164,6 +172,8 @@ namespace FML::SURVEY::MOCKS {
         }
 
         inline void check_options(const MockOptions & o) {
+            if (!o.periodic && !(o.extent[0] > 0 && o.extent[1] > 0 && o.extent[2] > 0))
+                throw std::invalid_argument("make_survey: a non-periodic volume needs its extent");
             if (!(o.boxsize > 0) || !(o.z_max > o.z_min) || !(o.z_min >= 0) || !o.hubble_over_c || !o.footprint ||
                 !(o.random_factor >= 0))
                 throw std::invalid_argument("make_survey: need boxsize > 0, 0 <= z_min < z_max, H(z)/c, a footprint");
@@ -203,20 +213,25 @@ namespace FML::SURVEY::MOCKS {
         const double r_hi = o.redshift_space ? dr.r_of_z((1 + o.z_max) * (1 + vmax_over_c) - 1) : r_max;
 
         MockCatalog cat;
-        cat.repeated = r_max > 0.5 * L;
+        const Vec3 extent = o.periodic ? Vec3{L, L, L} : o.extent;
+        cat.repeated = o.periodic && r_max > 0.5 * L;
+        for (int d = 0; d < 3; d++)
+            cat.truncated =
+                cat.truncated || (!o.periodic && (o.observer[d] - r_max < 0 || o.observer[d] + r_max > extent[d]));
         if (o.parent_nbar > 0) {
             cat.parent_nbar = o.parent_nbar;
         } else {
             double ntot = double(objects.size());
             FML::SumOverTasks(&ntot);
-            cat.parent_nbar = ntot / (L * L * L);
+            cat.parent_nbar = ntot / (extent[0] * extent[1] * extent[2]);
         }
-        const int nrep = int(std::ceil(r_hi / L)) + 1;
+        const int nrep = o.periodic ? int(std::ceil(r_hi / L)) + 1 : 0;
 
         for (const auto & obj : objects) {
             for (int d = 0; d < 3; d++)
-                if (!(obj.position[d] >= 0 && obj.position[d] < L) || !std::isfinite(obj.velocity[d]))
-                    throw std::invalid_argument("make_survey: positions must be in [0, boxsize), velocities finite");
+                if (!(obj.position[d] >= 0 && obj.position[d] < extent[d]) || !std::isfinite(obj.velocity[d]))
+                    throw std::invalid_argument("make_survey: positions must be in [0, boxsize) (periodic) or [0, "
+                                                "extent) (not periodic), velocities finite");
             for (int ix = -nrep; ix <= nrep; ix++)
                 for (int iy = -nrep; iy <= nrep; iy++)
                     for (int iz = -nrep; iz <= nrep; iz++) {
@@ -325,6 +340,172 @@ namespace FML::SURVEY::MOCKS {
         }
         return out;
     }
+
+    //=========================================================================
+    // Volume-preserving cuboid remapping (Carlson & White 2010, BoxRemap). An integer matrix M with det = 1 maps
+    // the periodic unit box one to one onto a cuboid with edges L1 = |u1|, L2 = |u2 - (u2.e1) e1|, L3 = 1/(L1 L2)
+    // along the Gram-Schmidt axes e1, e2, e3 of its rows u1, u2, u3 (box units), so a deep or wide survey needs
+    // no repetition. remap_objects returns the objects in the cuboid (Mpc/h, velocities in its axes); use them with
+    // MockOptions::periodic = false and extent = Remapping::lengths x boxsize.
+    //=========================================================================
+    struct Remapping {
+        std::array<Vec3, 3> axes{};              // e1, e2, e3
+        Vec3 lengths{};                          // L1, L2, L3 (box units; L1 L2 L3 = 1)
+        std::vector<std::array<int, 3>> offsets; // unit cells that intersect the cuboid
+    };
+
+    inline Remapping make_remapping(const std::array<std::array<int, 3>, 3> & M) {
+        const long long det = (long long)M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) -
+                              (long long)M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) +
+                              (long long)M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+        if (det != 1 && det != -1)
+            throw std::invalid_argument("make_remapping: the matrix must be integer with determinant +-1");
+        Remapping R;
+        const Vec3 u1{double(M[0][0]), double(M[0][1]), double(M[0][2])};
+        const Vec3 u2{double(M[1][0]), double(M[1][1]), double(M[1][2])};
+        const double l1 = std::sqrt(detail::dot(u1, u1));
+        const Vec3 e1{u1[0] / l1, u1[1] / l1, u1[2] / l1};
+        const double p = detail::dot(u2, e1);
+        const Vec3 w{u2[0] - p * e1[0], u2[1] - p * e1[1], u2[2] - p * e1[2]};
+        const double l2 = std::sqrt(detail::dot(w, w));
+        const Vec3 e2{w[0] / l2, w[1] / l2, w[2] / l2};
+        const Vec3 e3{e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]};
+        R.axes = {e1, e2, e3};
+        R.lengths = {l1, l2, 1.0 / (l1 * l2)};
+        // unit cells n + [0,1)^3 whose projections overlap the cuboid on all three axes (a superset of the cells
+        // that intersect it; the point test below decides)
+        Vec3 lo{1e30, 1e30, 1e30}, hi{-1e30, -1e30, -1e30};
+        for (int c = 0; c < 8; c++) {
+            Vec3 x{};
+            for (int k = 0; k < 3; k++)
+                for (int d = 0; d < 3; d++)
+                    x[d] += ((c >> k) & 1) * R.lengths[k] * R.axes[k][d];
+            for (int d = 0; d < 3; d++) {
+                lo[d] = std::min(lo[d], x[d]);
+                hi[d] = std::max(hi[d], x[d]);
+            }
+        }
+        for (int i = int(std::floor(lo[0])) - 1; i <= int(std::floor(hi[0])); i++)
+            for (int j = int(std::floor(lo[1])) - 1; j <= int(std::floor(hi[1])); j++)
+                for (int k = int(std::floor(lo[2])) - 1; k <= int(std::floor(hi[2])); k++) {
+                    bool overlap = true;
+                    for (int a = 0; a < 3 && overlap; a++) {
+                        double pmin = 1e30, pmax = -1e30;
+                        for (int c = 0; c < 8; c++) {
+                            const Vec3 x{i + double(c & 1), j + double((c >> 1) & 1), k + double((c >> 2) & 1)};
+                            const double q = detail::dot(x, R.axes[a]);
+                            pmin = std::min(pmin, q);
+                            pmax = std::max(pmax, q);
+                        }
+                        overlap = pmax > 0 && pmin < R.lengths[a];
+                    }
+                    if (overlap)
+                        R.offsets.push_back({i, j, k});
+                }
+        return R;
+    }
+
+    /// The cuboid coordinates (box units, in [0, L1) x [0, L2) x [0, L3)) of a point x in [0, 1)^3
+    inline Vec3 remap_position(const Remapping & R, const Vec3 & x) {
+        for (double tol : {0.0, 1e-12, 1e-9}) {
+            for (const auto & n : R.offsets) {
+                const Vec3 xn{x[0] + n[0], x[1] + n[1], x[2] + n[2]};
+                Vec3 y{};
+                bool in = true;
+                for (int a = 0; a < 3 && in; a++) {
+                    y[a] = detail::dot(xn, R.axes[a]);
+                    in = y[a] >= -tol && y[a] < R.lengths[a] + tol;
+                }
+                if (in) {
+                    for (int a = 0; a < 3; a++)
+                        y[a] = std::min(std::max(y[a], 0.0), std::nextafter(R.lengths[a], 0.0));
+                    return y;
+                }
+            }
+        }
+        throw std::runtime_error("remap_position: no cell found (not a point of the unit box?)");
+    }
+
+    /// The objects in the remapped cuboid (positions in Mpc/h, velocities along the cuboid axes)
+    inline std::vector<MockObject>
+    remap_objects(const std::vector<MockObject> & objects, const Remapping & R, double boxsize) {
+        std::vector<MockObject> out(objects);
+        for (auto & o : out) {
+            const Vec3 y =
+                remap_position(R, {o.position[0] / boxsize, o.position[1] / boxsize, o.position[2] / boxsize});
+            const Vec3 v = o.velocity;
+            for (int a = 0; a < 3; a++) {
+                o.position[a] = y[a] * boxsize;
+                o.velocity[a] = detail::dot(v, R.axes[a]);
+            }
+        }
+        return out;
+    }
+
+    //=========================================================================
+    // Healpix footprints (RING ordering, no Healpix library needed; maps from an ascii file with one value per
+    // line, or with USE_HEALPIX from FITS). Values are the completeness of the pixel.
+    //=========================================================================
+    inline std::int64_t healpix_ang2pix_ring(std::int64_t nside, double theta, double phi) {
+        const double z = std::cos(theta), za = std::fabs(z);
+        double tt = std::fmod(phi, 2 * M_PI);
+        if (tt < 0)
+            tt += 2 * M_PI;
+        tt /= 0.5 * M_PI; // in [0, 4)
+        const std::int64_t ncap = 2 * nside * (nside - 1), npix = 12 * nside * nside;
+        auto imod = [](std::int64_t a, std::int64_t b) { return ((a % b) + b) % b; };
+        if (za <= 2.0 / 3.0) {
+            const double t1 = nside * (0.5 + tt), t2 = nside * z * 0.75;
+            const std::int64_t jp = std::int64_t(t1 - t2), jm = std::int64_t(t1 + t2);
+            const std::int64_t ir = nside + 1 + jp - jm, kshift = 1 - (ir & 1);
+            const std::int64_t ip = imod((jp + jm - nside + kshift + 1) / 2, 4 * nside);
+            return ncap + (ir - 1) * 4 * nside + ip;
+        }
+        const double tp = tt - std::floor(tt), tmp = nside * std::sqrt(3 * (1 - za));
+        const std::int64_t jp = std::int64_t(tp * tmp), jm = std::int64_t((1.0 - tp) * tmp);
+        const std::int64_t ir = jp + jm + 1, ip = imod(std::int64_t(tt * ir), 4 * ir);
+        return z > 0 ? 2 * ir * (ir - 1) + ip : npix - 2 * ir * (ir + 1) + ip;
+    }
+
+    /// Footprint from a RING-ordered Healpix map of completeness values (npix = 12 nside^2)
+    inline Footprint healpix_footprint(std::vector<double> map) {
+        const std::int64_t nside = std::int64_t(std::llround(std::sqrt(map.size() / 12.0)));
+        if (nside < 1 || std::size_t(12 * nside * nside) != map.size())
+            throw std::invalid_argument("healpix_footprint: the map size is not 12 nside^2");
+        for (double v : map)
+            if (!(v >= 0 && v <= 1))
+                throw std::invalid_argument("healpix_footprint: the values must be in [0, 1]");
+        return [map = std::move(map), nside](double ra, double dec) {
+            return map[std::size_t(healpix_ang2pix_ring(nside, (90.0 - dec) * deg, ra * deg))];
+        };
+    }
+
+    /// A RING-ordered Healpix map from an ascii file (one value per line; '#' lines are skipped)
+    inline std::vector<double> read_healpix_ascii(const std::string & filename) {
+        std::ifstream fp(filename);
+        if (!fp)
+            throw std::runtime_error("read_healpix_ascii: cannot open " + filename);
+        std::vector<double> map;
+        std::string line;
+        while (std::getline(fp, line))
+            if (!line.empty() && line[0] != '#')
+                map.push_back(std::stod(line));
+        return map;
+    }
+
+#ifdef USE_HEALPIX
+    /// A Healpix map from a FITS file (any ordering), returned in RING ordering
+    inline std::vector<double> read_healpix_fits(const std::string & filename) {
+        Healpix_Map<double> m;
+        read_Healpix_map_from_fits(filename, m);
+        if (m.Scheme() == NEST)
+            m.swap_scheme();
+        std::vector<double> map(std::size_t(m.Npix()));
+        for (std::size_t i = 0; i < map.size(); i++)
+            map[i] = m[int(i)];
+        return map;
+    }
+#endif
 
     /// Convert to the catalogue points of SurveyMesh.h (or any type with position, weight and nbar)
     template <class Point>
