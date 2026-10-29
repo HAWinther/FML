@@ -123,10 +123,6 @@ cloud extent and node LOS. This is not merely a subtraction at zero separation.
 The optional `subtract_self=false` instead retains all mesh autocorrelation
 pairs. `Q0(0)` is estimated with the supplied I2, not renormalized by fiat.
 The reported `nvectors` identifies separation bins with no lattice samples.
-The angular average is a plain mean over the lattice separation vectors in each bin, so at separations of a few
-cells (few vectors) Q_L for L >= 4 is dominated by the lattice (a uniform cube: Q4 = 4.35 at s = 7 cells against
-0.005 analytically, a few % only beyond ~20 cells). Use a finer mesh or a larger survey-to-cell ratio when the
-small-s part of Q4, Q6, Q8 matters (it enters the P2 and P4 couplings).
 
 The separations are the mesh lattice vectors, and the lattice vectors of a shell
 are not isotropically distributed (cubic symmetry, only a few vectors at small s).

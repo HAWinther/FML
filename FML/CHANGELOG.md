@@ -27,8 +27,8 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 - The README and workflow example built the window mixing matrix with input k edges equal to the output edges, so
   the theory P(k) above the last measured bin was dropped: the convolved P0 was 22% low in the last bin (500 Mpc/h
   cube). They now use finer input edges extending well beyond the output range, and the README says why.
-- README: Q_L for L >= 4 is dominated by the lattice at separations of a few cells (documented), and the
-  reconstruction test checks the solver against the same discrete operator (reworded).
+- README: the reconstruction test checks the solver against the same discrete operator (reworded). (The review's
+  Q_L lattice finding is fixed by the lattice-shell correction below.)
 - Review: FKP multipoles (fixed and local LOS) identical to independent numpy estimators, window Q0 analytic to
   0.1-1%, Wilson et al. coupling factors, reconstruction displacement vs exact spectral solution (slope 0.995,
   corr 0.99995), 1 vs 2 tasks to 1e-9.
