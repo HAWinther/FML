@@ -5,6 +5,22 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Review of Environment, EnsembleStatistics, Morphology and the streaming/storage changes (no defects found)
+- Environment: for Poisson tracers the density-split cross-correlations equal the exact expectation
+  E[N|q]/(nbar V) - 1 inside the smoothing sphere and ~0 outside, for all 5 quantiles (20 realizations).
+- EnsembleStatistics: Monte Carlo of the full train / independent-mean / held-out pipeline (2000 experiments,
+  full and diagonal fits): the controlled mean is unbiased, its empirical variance equals the predicted
+  `covariance_of_mean` to 1-4% and the 95% intervals cover 94.4-96.1%.
+- Morphology: Crofton densities of smoothed Gaussian random fields (128^3, smoothing 4 cells) agree with the
+  continuum Minkowski-functional predictions to ~1% (V0, V1), 1-4% (V2), 2-7% (V3); recorded in the README.
+- Polyspectra: the bispectrum of a local quadratic field equals the tree-level 2 f (P1 P2 + cyc.) (mean ratio
+  1.008 +- 0.065 over 71 triangles, 2 MPI tasks). Chunked NUFFT exchange, streamed PGD and baryonification
+  updates (each particle's displacement is complete before it is moved) and CosmicWeb byte storage read correct.
+- Note: `RandomGenerator/CounterBasedRandom.h` `Stream` keys are (seed_lo ^ purpose, seed_hi ^ stream), so streams
+  of different (seed, purpose, stream) can coincide, e.g. seed s with purpose P1 and seed s ^ (P1 ^ P2) with
+  purpose P2, or seed 2^32 with stream 0 and seed 0 with stream 1. Harmless for small seeds and streams; not changed
+  because a fix changes every Philox stream (HOD, uniform queries).
+
 ### kNN-CDF review (CountsInCells/SpatialStatistics.h): no defects; exact ensemble test
 - kNN distances and sphere counts agree exactly with brute force for 3000 queries on 20000 tracers, periodic and
   nonperiodic, with coincident tracers, tracers on the box edge and self-excluded tracer-centred queries.
