@@ -15,6 +15,19 @@ GCC 12 `-O2 -Wall -Wextra`, OpenMP; MPICH with 2 threads per rank for MPI. Seria
 - MPI tests cover periodic and multi-slab FoF links, chains wider than a slab, empty particle ranks, tiny message chunks, complete-parent routing, local assignment return, SO-seed spatial routing and global ID uniqueness. Option mismatch, parent-size and iteration/work limits fail explicitly.
 - The text-input example smoke test writes two halo rows and 400 particle assignments. FML particle import, explicit HOD mass/radius and exclusive halo-history adapters are exercised.
 
+## Planted subhaloes (29 October 2026)
+
+Host Plummer sphere (8000 particles, scale radius .02), two field haloes, a subhalo (400 or 800 particles, scale
+radius .004) on a circular orbit at .03-.08 from the host centre and 20000 background particles (G = 1, box 1,
+softening .002), 48 realizations. With the symmetric union of Poisson-consistent seeds the subhalo was found in
+34; with one-way merging into the most consistent larger seed in 40 (no case lost; one more spurious extra object
+over the 48 runs). The test suite contains one of the recovered cases. The remaining misses are subhaloes at
+1.5-2.5 host scale radii: there a lower-level 6D group that contains the subhalo and many host particles assigns
+all of them to the subhalo seed, whose inflated phase-space scales then win the host particles at the next level,
+and the host-dominated membership is self-bound. Recovery of subhaloes deep inside host cores is therefore not
+reliable yet. The finder took 0.9, 2.1, 10 and 32 s (2 threads) for 3.2e4, 6.3e4, 1.3e5 and 2.5e5 particles of
+these configurations, roughly N^1.6, so very large parents (the 1e6 default `max_parent_particles`) are slow.
+
 ## Optional external ROCKSTAR comparison
 
 Reference: [yt-project/rockstar at 10869df8e16ca4da2f4a929bccd00c4bcae937fd](https://github.com/yt-project/rockstar/tree/10869df8e16ca4da2f4a929bccd00c4bcae937fd), reporting version 0.99.9-RC3. It was built outside FML with GCC 12, C99 `-O2 -fcommon`, without source modifications. No external source is bundled. The reproduction harness is `compare_rockstar.py` plus the optional `rockstar_fixture` target.

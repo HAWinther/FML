@@ -109,18 +109,36 @@ namespace FML::PHASE_SPACE_HALOS {
                              const Summary & mean,
                              double xs,
                              double vs) {
+                // Poisson-consistent seeds: each seed merges into at most one LARGER seed (the most consistent one),
+                // measured with its own core uncertainties. A symmetric union of all consistent pairs was transitive:
+                // a small, poorly measured host fragment between a host and a subhalo is consistent with both and
+                // merged a 800-particle subhalo (55 sigma from the host centre) into its host.
                 DisjointSet set(seeds.size());
-                for (std::size_t i = 0; i < seeds.size(); ++i)
-                    for (std::size_t j = i + 1; j < seeds.size(); ++j) {
-                        const auto & small = seeds[i].core.size() < seeds[j].core.size() ? seeds[i] : seeds[j];
-                        const double n = small.centre.effective_count,
-                                     xvar = std::pow(std::max(o_.softening_support, small.centre.sx), 2) / n,
-                                     vvar = std::pow(std::max(o_.velocity_floor, small.centre.sv), 2) / n;
+                const auto larger = [&](std::size_t a, std::size_t b) {
+                    return seeds[a].core.size() != seeds[b].core.size() ? seeds[a].core.size() > seeds[b].core.size() :
+                                                                          seeds[a].id < seeds[b].id;
+                };
+                for (std::size_t i = 0; i < seeds.size(); ++i) {
+                    const auto & small = seeds[i];
+                    const double n = small.centre.effective_count,
+                                 xvar = std::pow(std::max(o_.softening_support, small.centre.sx), 2) / n,
+                                 vvar = std::pow(std::max(o_.velocity_floor, small.centre.sv), 2) / n;
+                    std::size_t target = seeds.size();
+                    double best = 2 * o_.seed_significance * o_.seed_significance;
+                    for (std::size_t j = 0; j < seeds.size(); ++j) {
+                        if (j == i || !larger(j, i))
+                            continue;
                         const auto dx = difference(seeds[i].centre.x, seeds[j].centre.x),
                                    dv = difference(seeds[i].centre.v, seeds[j].centre.v);
-                        if (dot(dx, dx) / xvar + dot(dv, dv) / vvar < 2 * o_.seed_significance * o_.seed_significance)
-                            set.join(i, j);
+                        const double chi2 = dot(dx, dx) / xvar + dot(dv, dv) / vvar;
+                        if (chi2 < best) {
+                            best = chi2;
+                            target = j;
+                        }
                     }
+                    if (target < seeds.size())
+                        set.join(i, target);
+                }
                 // Attach each weak peak to at most one denser peak, reducing transitive merging through
                 // a low-density bridge between two genuine peaks. A 6D kNN density is proportional to radius^-6.
                 if (o_.minimum_peak_contrast > 1 && seeds.size() > 1) {

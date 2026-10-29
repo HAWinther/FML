@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### PhaseSpaceHaloFinder: one-way seed merging (subhaloes no longer merged through host fragments)
+- Seeds whose centres agree within their Poisson uncertainties were joined with a symmetric, transitive union. A
+  small host fragment between a host and a subhalo (consistent with both through its large uncertainties) merged
+  planted 400-800 particle subhaloes, 50 sigma from the host centre, into their hosts. Each seed now merges into
+  at most one larger seed (the most consistent one). Planted-subhalo recovery over 48 realizations: 34 -> 40, none
+  lost. New test with a portable random generator. Remaining limitation (documented): subhaloes at 1.5-2.5 host
+  scale radii can still absorb the host particles of their lower-level group and be lost; finder time grows as
+  ~N^1.6 (32 s for 2.5e5 particles).
+- Reviewed otherwise without changes: binding potential tree, unbinding, centring, Vmax and host assignment.
+
 ### PerturbationTheory: tapered FastEdS P22 for realistic spectra, checked against FAST-PT; HaloHistory speed
 - Checked against FAST-PT 4.1.1 (`one_loop_dd`): the direct quadrature (`direct_one_loop`) agrees to < 4e-4 for a
   CLASS LCDM spectrum at k = 1e-3-1 h/Mpc, and the custom-kernel path with the EdS F3 from the standard recursion

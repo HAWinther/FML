@@ -1,6 +1,7 @@
 #include <FML/PhaseSpaceHaloFinder/Distributed.h>
 #include <FML/PhaseSpaceHaloFinder/Adapters.h>
 #include "Plummer.h"
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <random>
@@ -430,6 +431,88 @@ void plummer_recovery() {
               "Plummer distributed particle memberships agree with the complete serial catalogue");
     }
 }
+// Planted Plummer haloes (G = 1) with a portable generator (std:: distributions differ between libraries)
+struct PortableRandom {
+    std::uint64_t state;
+    std::uint64_t next() {
+        std::uint64_t z = (state += 0x9E3779B97F4A7C15ULL);
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+        return z ^ (z >> 31);
+    }
+    double uniform() { return (next() >> 11) * (1.0 / 9007199254740992.0); }
+    double normal() {
+        const double a = std::max(1e-300, uniform()), b = uniform();
+        return std::sqrt(-2 * std::log(a)) * std::cos(2 * std::acos(-1.0) * b);
+    }
+};
+void planted_plummer(std::vector<Particle> & p, PortableRandom & rng, std::size_t n, double particle_mass,
+                     double scale, Vector centre, Vector bulk) {
+    const double total = n * particle_mass, cut = 10 * scale,
+                 umax = std::pow(cut / std::sqrt(cut * cut + scale * scale), 3);
+    for (std::size_t i = 0; i < n; ++i) {
+        Particle q;
+        q.id = p.size();
+        q.mass = particle_mass;
+        const double u = std::max(1e-15, rng.uniform()) * umax, r = scale / std::sqrt(std::pow(u, -2. / 3) - 1);
+        Vector d{rng.normal(), rng.normal(), rng.normal()};
+        double norm = std::sqrt(detail::dot(d, d));
+        for (int k = 0; k < 3; ++k)
+            q.position[k] = centre[k] + r * d[k] / norm;
+        double x;
+        do {
+            x = rng.uniform();
+        } while (.1 * rng.uniform() > x * x * std::pow(1 - x * x, 3.5));
+        const double v = x * std::sqrt(2 * total / std::sqrt(r * r + scale * scale));
+        d = {rng.normal(), rng.normal(), rng.normal()};
+        norm = std::sqrt(detail::dot(d, d));
+        for (int k = 0; k < 3; ++k)
+            q.velocity[k] = bulk[k] + v * d[k] / norm;
+        p.push_back(q);
+    }
+}
+void planted_subhalo() {
+    // Host (8000 particles), two field haloes, a 800-particle subhalo on a circular orbit at 2.5 host scale radii
+    // and 20000 background particles. Seeds were merged with a symmetric, transitive union of all Poisson-consistent
+    // pairs: a small host fragment between host and subhalo was consistent with both and merged the subhalo into
+    // the host. Over 48 such realizations (subhalo radius .03-.08, 400 or 800 particles) the subhalo was found in
+    // 34 before and 40 after making each seed merge into at most one larger seed.
+    PortableRandom rng{4};
+    std::vector<Particle> p;
+    const double mp = 1e-4, r0 = .05, a0 = .02, host = 8000 * mp;
+    const double vc = std::sqrt(host * std::pow(r0, 2) / std::pow(r0 * r0 + a0 * a0, 1.5));
+    planted_plummer(p, rng, 8000, mp, a0, {.3, .3, .3}, {0, 0, 0});
+    planted_plummer(p, rng, 2400, mp, .012, {.7, .3, .5}, {0, 0, 0});
+    planted_plummer(p, rng, 800, mp, .008, {.5, .7, .7}, {0, 0, 0});
+    const ID sub_first = p.size();
+    planted_plummer(p, rng, 800, mp, .004, {.3 + r0, .3, .3}, {0, vc, 0});
+    const ID sub_end = p.size();
+    for (int i = 0; i < 20000; ++i) {
+        Particle q;
+        q.id = p.size();
+        q.mass = mp;
+        q.position = {rng.uniform(), rng.uniform(), rng.uniform()};
+        q.velocity = {.05 * rng.normal(), .05 * rng.normal(), .05 * rng.normal()};
+        p.push_back(q);
+    }
+    Options o;
+    o.softening_support = .002;
+    const auto catalogue = find(p, o);
+    bool found = false;
+    for (const auto & h : catalogue.halos) {
+        std::size_t sub = 0;
+        for (auto id : h.particle_ids)
+            sub += id >= sub_first && id < sub_end;
+        if (sub < .9 * (sub_end - sub_first))
+            continue;
+        const auto host_halo = std::find_if(catalogue.halos.begin(), catalogue.halos.end(),
+                                            [&](const auto & x) { return x.id == h.host; });
+        found = host_halo != catalogue.halos.end() && host_halo->particle_ids.size() > 6000 &&
+                std::abs(h.position[0] - (.3 + r0)) < .005;
+    }
+    check(catalogue.halos.size() == 4 && found,
+          "planted subhalo is not merged into its host through a small host fragment (one-way seed merging)");
+}
 void benchmark() {
     for (std::size_t n : {1000, 4000, 16000}) {
         auto all = phase_test::plummer(n);
@@ -470,6 +553,7 @@ int main(int argc, char ** argv) {
     plummer_recovery();
     recovery();
     substructure();
+    planted_subhalo();
     unbinding();
     invariants();
     distributed();
