@@ -57,7 +57,7 @@ Every gradient is checked against central finite differences (tests, agreement t
 - Mock data: sum |d|^2 / C over 20 mocks equals the number of modes (C = (b^2 P + P_eps) / V).
 - Linear model: for the linear model the marginal posterior of beta is known exactly,
   ln L(beta) = -1/2 sum_full (|d_k|^2 / C_k + ln C_k). HMC agrees with it in the mean and the width
-  (24^3, kmax = 0.07: exact 1.0469 +- 0.0669, HMC 1.0490 +- 0.0654, ESS 230).
+  (24^3, kmax = 0.07: exact 1.0469 +- 0.0669, HMC 1.0521 +- 0.0664, ESS ~190).
 - 1LPT: beta is recovered from mock data made with the same model.
 
 The example (`example/`, `./fieldlevel [linear|1lpt] nmesh kmax n_samples beta_true out`) at larger kmax
@@ -65,8 +65,8 @@ The example (`example/`, `./fieldlevel [linear|1lpt] nmesh kmax n_samples beta_t
 
 | Model | Grid | kmax [h/Mpc] | beta_true | Exact marginal | HMC |
 | --- | --- | --- | --- | --- | --- |
-| Linear | 32^3, L = 1000 Mpc/h | 0.095 | 1.02 | 1.0232 +- 0.0333 | 1.0250 +- 0.0348 (1000 samples, ESS ~130) |
-| 1LPT | 48^3 (CIC 96^3) | 0.14 | 1.02 | - | 1.042 +- 0.016 (300 samples, ESS ~50) |
+| Linear | 32^3, L = 1000 Mpc/h | 0.095 | 1.02 | 1.0232 +- 0.0333 | 1.0221 +- 0.0330 (1000 samples, ESS ~430) |
+| 1LPT | 48^3 (CIC 96^3) | 0.14 | 1.02 | - | 1.049 +- 0.018 (300 samples, ESS ~40) |
 
 ## What a production version needs
 
