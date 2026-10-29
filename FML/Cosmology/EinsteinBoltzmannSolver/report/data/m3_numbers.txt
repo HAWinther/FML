@@ -3,6 +3,6 @@ k0.001_tc_end_x -7.438971592
 k0.01_horizon_entry_x -8.082215612
 k0.01_tc_end_x -7.438971592
 k0.1_horizon_entry_x -10.70727051
-k0.1_tc_end_x -7.438971592
+k0.1_tc_end_x -8.49
 k0.3_horizon_entry_x -11.83033657
-k0.3_tc_end_x -7.89
+k0.3_tc_end_x -9.003

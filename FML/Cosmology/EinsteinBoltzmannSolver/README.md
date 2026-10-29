@@ -53,7 +53,7 @@ Conventions: SI units internally, time variable `x = ln a`, Newtonian gauge (Dod
 | `fr` | `fR0`, `fR_n` | Hu–Sawicky f(R): ΛCDM background (to O(f_R0)), quasi-static μ(k,a) = (1+4Q)/((1+3Q)(1+f_R)), Σ = 1/(1+f_R), Q = (k/a)² f_RR/(1+f_R) = (k/a)²λ_C²/3; flat |
 
 Agreement with CLASS (same physics, CLASS with RECFAST): background 1e-7, X_e 3e-4, z_* and r_s 1e-6, TT 5e-4
-rms for ℓ = 30–1000 (3e-3 for 1000–2000), EE 3e-3 rms, P(k) 0.1%, lensed/unlensed TT ratio 1e-3, effect of the
+rms for ℓ = 30–1000 (3e-4 for 1000–2000), EE 2e-3 rms, P(k) 0.1%, lensed/unlensed TT ratio 1e-3, effect of the
 neutrino mass 5e-4, σ₈ 4e-5. (The Peebles model of the course gives TT 0.6–0.8% and EE 1.4% rms.) Details
 and the physics are in `report/paper.pdf`.
 

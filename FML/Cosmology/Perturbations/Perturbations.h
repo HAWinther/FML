@@ -72,9 +72,11 @@ namespace FML::COSMOLOGY {
         int lmax = 8; // Highest photon multipole in the full hierarchy
 
         // Tight coupling criteria
-        double tc_tau_min = 10.0;   // end TC when |tau'| < this
-        double tc_k_over_tau = 0.1; // or when |ck / (Hp tau')| > this
-        double tc_z_max = 1700.0;   // or at the latest when z < this (start of recombination)
+        double tc_tau_min = 10.0; // end TC when |tau'| < this
+        // or when |ck / (Hp tau')| > this (CLASS's tau_c/tau_k = 0.01; the first-order tight-coupling error grows
+        // with k/kappa': 0.1 left TT and EE 0.2-0.4% low at l = 1000-2500 against CLASS)
+        double tc_k_over_tau = 0.01;
+        double tc_z_max = 1700.0; // or at the latest when z < this (start of recombination)
 
         // ODE accuracy and methods. After tight coupling the system is stiff (|tau'| ~ 1e3 while
         // ck/Hp is large), so the full hierarchy uses an implicit BDF method by default (~30x faster

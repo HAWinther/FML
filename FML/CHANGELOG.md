@@ -5,6 +5,17 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): tight coupling ends at k/kappa' = 0.01 (the TT/EE damping-tail deficit)
+- TT and EE were 0.2-0.4% below CLASS at ell = 1000-2500 (up to 0.6% in the troughs). The cause was the end of
+  the tight-coupling approximation: it ended when ck/(Hp |tau'|) > 0.1, but its first-order error grows with
+  k/kappa'. CLASS ends it at tau_c/tau_k = 0.01. With `tc_k_over_tau = 0.01` (new default) TT against a
+  high-precision CLASS run (Planck 2018) is +0.02%, +0.02%, -0.05% on average for ell = 1000-1500, 1500-2000,
+  2000-2500 (was -0.19%, -0.32%, -0.39%); maximum 0.18% (was 0.64%). 0.003 changes it by 3e-5 more. No extra cost.
+  Fiducial model: TT rms 3e-4 for ell = 1000-2000 (was 2.9e-3), EE rms 2e-3 (was 4e-3).
+- Photon/neutrino lmax, k/x/LOS/ell sampling, ODE tolerances and tc_tau_min had no effect.
+- Regression reference updated (C_ell up to 0.3%); report data, figures and text regenerated; README numbers;
+  test_modified_gravity's mu-Sigma GR-limit source check is now at the ODE tolerance (2.6e-6).
+
 ### CosmologyFitting: review (Oct 29); theta_MC is CosmoMC's
 - `theta_MC` (the `theta_MC_100` alias and derived value) used the exact baryon loading R = 3 rho_b/(4 rho_gamma);
   CosmoMC/CAMB's cosmomc_theta uses R = 3e4 a omega_b. It was 0.00107 (3.4 sigma_Planck) below CAMB, so sampling
