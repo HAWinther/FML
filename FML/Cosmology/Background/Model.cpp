@@ -210,6 +210,12 @@ namespace FML::COSMOLOGY {
             m.species = standard_species(p);
             m.species.push_back(
                 std::make_shared<CPLDarkEnergy>(p.OmegaLambda(), parameter(p, "w0"), parameter(p, "wa")));
+            static std::atomic<bool> warned{false}; // once per process (parameter fits build many models)
+            if ((parameter(p, "w0") != -1.0 || parameter(p, "wa") != 0.0) && !warned.exchange(true))
+                std::cerr
+                    << "Warning: w0wa: the dark energy has no perturbations (gauge-inconsistent for w != -1, "
+                       "~2e-3 in P(k) on large scales); for a constant-w fluid with perturbations use dark_scattering "
+                       "with ds_xi = 0\n";
             m.gravity = std::make_shared<GeneralRelativity>();
             return m;
         }

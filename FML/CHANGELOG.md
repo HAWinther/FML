@@ -5,6 +5,12 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): w0wa in the README, warning for its smooth dark energy
+- The README model table had no `w0wa` (and named a nonexistent `wcdm` for isocurvature). w0wa's dark energy has
+  no perturbations, which is gauge-inconsistent for w != -1 (2e-3 in P(k) at k = 0.001/Mpc): it is now in the table
+  with that note, and a run with w0 != -1 or wa != 0 warns (once per process) and points to dark_scattering with
+  ds_xi = 0 for a constant-w fluid with perturbations.
+
 ### Cosmology (EBS): parameter values nan, inf and integer overflow are errors
 - ParameterFile accepted `nan` and `inf` as numbers, gave the bare std::stod message for 1e400, and cast integers
   outside the int range (undefined behaviour). These are now errors with the parameter name. Checks in

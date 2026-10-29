@@ -39,6 +39,7 @@ Conventions: SI units internally, time variable `x = ln a`, Newtonian gauge (Dod
 | Model (`model =`) | Parameters | Physics |
 |---|---|---|
 | `lcdm` | – | ΛCDM in GR (with curvature, massive neutrinos) |
+| `w0wa` | `w0`, `wa` | Dark energy with w(a) = w₀ + w_a(1 − a), smooth (no perturbations, so gauge-inconsistent for w ≠ −1: 2e-3 in P(k) at k = 0.001/Mpc); for background data. A wCDM fluid with perturbations: `dark_scattering` with `ds_xi = 0` |
 | `musigma` | `mu0`, `Sigma0` | Planck/DES μ(a) = 1 + μ₀ Ω_DE(a)/Ω_DE,0 (growth) and Σ(a) (lensing); ΛCDM background; flat |
 | `dgp` | `Omega_rc`, `dgp_branch`, `dgp_lcdm_background` | DGP braneworld: modified Friedmann equation (normal branch + Λ, or self-accelerating), quasi-static μ = 1 + 1/(3β), Σ = 1; optionally ΛCDM expansion; flat |
 | `quintessence` | `quint_lambda` | Scalar field with V ∝ e^(−λφ), thawing from rest, with its perturbations; λ = 0 is ΛCDM |
