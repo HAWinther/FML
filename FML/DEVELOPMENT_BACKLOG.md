@@ -1,6 +1,6 @@
 # FML remaining-work backlog
 
-Updated 29 October 2026, including completed Engineering items 1–5 and tested initial implementations of items 25–32, 35–36 and 38. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
+Updated 29 October 2026, including completed Engineering items 1–6 and tested initial implementations of items 25–32, 35–36 and 38. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
 
 ## Completed in this sequence
 
@@ -18,6 +18,7 @@ Updated 29 October 2026, including completed Engineering items 1–5 and tested 
 - Deterministic min-heap pair-count rank assignment, preserving rank ties and each rank's cell order.
 - Neighbor-aware pair-count candidate-work estimates, including asymmetric cross-catalogues and auto-pair ownership.
 - MPI count audit: widened migration counters, checked collective layouts/catalogues and serialization products, bounded reductions and forced-chunk regressions.
+- Faster particle migration with direct neighbor/binary slab lookup, collective no-traffic/neighbor routing and a preserved general fallback.
 - Survey Fourier multipoles (0, 2, 4), weighted noise, physical geometry and MPI catalogue routing.
 - Survey window multipoles (0–8), model mixing matrices, output-band averaging and global IC modeling.
 - Local/fixed-LOS survey displacement solving and RecIso/RecSym data/random reconstruction.
@@ -37,7 +38,7 @@ Items 28–30 have initial implementations in `HOD/HOD.h` and `CountsInCells/Spa
 
 ## Engineering work, suggested order
 
-Items 1–5 are complete. Continue with item 6; the remaining Engineering items are pending. See `FriendsOfFriends/SphericalOverdensity.md` for the multi-slab exchange contract and regression coverage, and `MultigridSolver/TerminationStatus.md` for solve-result semantics. See `PairCounting/RankAssignment.md` for deterministic scheduling and neighbor-aware workload estimates, and `Global/MPICounts.md` for the count-audit scope and limits.
+Items 1–6 are complete. Continue with item 7; the remaining Engineering items are pending. See `FriendsOfFriends/SphericalOverdensity.md` for the multi-slab exchange contract and regression coverage, and `MultigridSolver/TerminationStatus.md` for solve-result semantics. See `PairCounting/RankAssignment.md` for deterministic scheduling and neighbor-aware workload estimates, and `Global/MPICounts.md` for the count-audit scope and limits. See `MPIParticles/Migration.md` for automatic migration routing and its general fallback.
 
 | # | Task | Concrete scope | Effort |
 |---|---|---|---|
@@ -46,7 +47,7 @@ Items 1–5 are complete. Continue with item 6; the remaining Engineering items 
 | 3 | ~~Faster pair-count rank assignment~~ (completed) | Replaced repeated rank-load scans with a deterministic min-heap, retaining tie-breaking behavior. | Small |
 | 4 | ~~Better pair-count workload estimates~~ (completed) | Used neighboring candidate occupancy rather than only same-cell occupancy, including cross-catalogues and auto-pair ownership. | Medium |
 | 5 | ~~Finish the MPI count audit~~ (completed) | Widened/checked migration counters; validated sheet and catalogue layouts before narrowing; checked serialization products and bounded array reductions. | Medium |
-| 6 | Faster particle migration | Binary-search slab boundaries; collectively select a nearest-neighbor path for short drifts and retain general routing for long jumps. | Medium–large |
+| 6 | ~~Faster particle migration~~ (completed) | Added neighbor/binary owner lookup and collective no-traffic/neighbor routes, retaining general routing for long jumps. | Medium–large |
 | 7 | Reduce Fourier-resampling communication overhead | Reuse routing, exploit contiguous mode blocks, reduce temporary packing and per-step global round reductions; retain Nyquist and layout correctness. | Medium–large |
 | 8 | Distributed pair-count catalogue backend | Owned particles plus ghosts, explicit auto/cross-pair ownership, and no double counting; retain replicated APIs for small catalogues. | Large |
 | 9 | Stream binary Gadget field blocks | Bound the keep mask and field-block storage; preserve endian, mixed-species, format-1/2 and MASS-block behavior. | Medium–large |

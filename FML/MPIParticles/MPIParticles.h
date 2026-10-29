@@ -28,6 +28,8 @@ namespace FML {
     /// across tasks and algorithms for doing stuff with particles.
     namespace PARTICLE {
 
+        enum class MigrationRoute { Serial, NoTraffic, Neighbors, General };
+
         //===========================================================
         ///
         /// A container class for holding particles that are distributed
@@ -80,6 +82,7 @@ namespace FML {
 
             // Info about the particle distribution
             size_t NpartTotal{0};        // Total number of particles across all tasks
+            MigrationRoute last_migration_route{MigrationRoute::Serial};
             size_t NpartLocal_in_use{0}; // Number of particles in use (total allocated given by p.size())
 
             // The range of x-values in [0,1] that belongs to each task
@@ -188,7 +191,10 @@ namespace FML {
             size_t get_npart() const;
 
             /// Communicate particles across CPU boundaries
-            void communicate_particles(size_t max_message_bytes = std::numeric_limits<int>::max());
+            void communicate_particles(size_t max_message_bytes = std::numeric_limits<int>::max(),
+                                       bool force_general = false);
+            /// Last route selected by communicate_particles (same on every rank).
+            MigrationRoute get_last_migration_route() const { return last_migration_route; }
 
             /// Get a vector of xmin of the domain for each task
             std::vector<double> get_x_min_per_task();
@@ -718,15 +724,42 @@ namespace FML {
             NpartLocal_in_use += Npart_recv;
         }
 
-        template <class T> void MPIParticles<T>::communicate_particles([[maybe_unused]] size_t max_message_bytes) {
-            if (FML::NTasks == 1)
+        template <class T>
+        void MPIParticles<T>::communicate_particles([[maybe_unused]] size_t max_message_bytes,
+                                                    [[maybe_unused]] bool force_general) {
+            if (FML::NTasks == 1) {
+                last_migration_route = MigrationRoute::Serial;
                 return;
+            }
 #ifdef USE_MPI
 
             FML::COMMUNICATION::Count max_chunk_bytes =
                 std::min(max_message_bytes, size_t(std::numeric_limits<int>::max()));
             FML::MinOverTasks(&max_chunk_bytes);
             FML::COMMUNICATION::require_count(max_chunk_bytes > 0, "[MPIParticles] Message limit must be positive");
+
+            // Binary lookup requires a finite, contiguous rank-ordered partition. Empty slabs are allowed.
+            bool valid_partition = x_min_per_task.size() == size_t(NTasks) && x_max_per_task.size() == size_t(NTasks);
+            if (valid_partition) {
+                valid_partition = x_min_per_task.front() == 0.0 && x_max_per_task.back() == 1.0;
+                for (int task = 0; task < NTasks; ++task)
+                    valid_partition &= std::isfinite(x_min_per_task[task]) && std::isfinite(x_max_per_task[task]) &&
+                                       x_min_per_task[task] <= x_max_per_task[task] &&
+                                       (!task || x_min_per_task[task] == x_max_per_task[task - 1]);
+            }
+            FML::COMMUNICATION::require_count(valid_partition,
+                                              "[MPIParticles] Slabs must partition [0,1] in rank order");
+            const int left = int((static_cast<long long>(ThisTask) + NTasks - 1) % NTasks);
+            const int right = int((static_cast<long long>(ThisTask) + 1) % NTasks);
+            auto owner_of = [&](const auto &x) {
+                // Most departures end on a neighbor; avoid even a logarithmic search in that case.
+                if (x >= x_min_per_task[right] && x < x_max_per_task[right])
+                    return right;
+                if (x >= x_min_per_task[left] && x < x_max_per_task[left])
+                    return left;
+                return int(std::upper_bound(x_max_per_task.begin(), x_max_per_task.end(), x) - x_max_per_task.begin());
+            };
+            int route = force_general ? 2 : 0; // 0: no traffic, 1: neighbors, 2: general (including forced).
 
             // The number of particles we start with
             size_t NpartLocal_in_use_pre_comm = NpartLocal_in_use;
@@ -752,6 +785,7 @@ namespace FML {
             std::vector<Count> nbytes_to_send(NTasks, 0), nbytes_to_recv(NTasks, 0);
             bool valid_counts = true;
             auto count_outgoing = [&](int task, T &particle) {
+                route = std::max(route, task == left || task == right ? 1 : 2);
                 auto bytes = FML::PARTICLE::GetSize(particle);
                 valid_counts = valid_counts && bytes > 0;
                 if (bytes > 0) {
@@ -777,25 +811,8 @@ namespace FML {
                     assert_mpi(false, errmsg.c_str());
                 }
 
-                if (x >= x_max_per_task[ThisTask]) {
-                    int taskid = ThisTask;
-                    while (taskid < NTasks - 1) {
-                        ++taskid;
-                        if (x < x_max_per_task[taskid])
-                            break;
-                    }
-
-                    count_outgoing(taskid, p[i]);
-                    swap_particles(p[i], p[--NpartLocal_in_use]);
-
-                } else if (x < x_min_per_task[ThisTask] or x == 0.0) {
-                    int taskid = ThisTask;
-                    while (taskid > 0) {
-                        --taskid;
-                        if (x >= x_min_per_task[taskid])
-                            break;
-                    }
-
+                if (x < x_min_per_task[ThisTask] || x >= x_max_per_task[ThisTask]) {
+                    const int taskid = owner_of(x);
                     count_outgoing(taskid, p[i]);
                     swap_particles(p[i], p[--NpartLocal_in_use]);
 
@@ -806,10 +823,35 @@ namespace FML {
 
             // Communicate to get how many particles and bytes to receive from each task
             FML::COMMUNICATION::require_count(valid_counts, "[MPIParticles] Outgoing particle/byte count overflow");
-            MPI_Alltoall(n_to_send.data(), 1, MPI_UNSIGNED_LONG_LONG, n_to_recv.data(), 1, MPI_UNSIGNED_LONG_LONG,
-                         FML::communicator);
-            MPI_Alltoall(nbytes_to_send.data(), 1, MPI_UNSIGNED_LONG_LONG, nbytes_to_recv.data(), 1,
-                         MPI_UNSIGNED_LONG_LONG, FML::communicator);
+            FML::MaxOverTasks(&route);
+            if (route == 0) {
+                last_migration_route = MigrationRoute::NoTraffic;
+                return;
+            }
+            last_migration_route = route == 1 ? MigrationRoute::Neighbors : MigrationRoute::General;
+            std::vector<int> peer_steps;
+            if (route == 1) {
+                peer_steps.push_back(1);
+                if (NTasks > 2)
+                    peer_steps.push_back(NTasks - 1);
+                for (int step : peer_steps) {
+                    const int dest = int((static_cast<long long>(ThisTask) + step) % NTasks);
+                    const int source = int((static_cast<long long>(ThisTask) - step + NTasks) % NTasks);
+                    const Count outgoing[2] = {n_to_send[dest], nbytes_to_send[dest]};
+                    Count incoming[2]{};
+                    MPI_Sendrecv(outgoing, 2, MPI_UNSIGNED_LONG_LONG, dest, 0, incoming, 2, MPI_UNSIGNED_LONG_LONG,
+                                 source, 0, FML::communicator, MPI_STATUS_IGNORE);
+                    n_to_recv[source] = incoming[0];
+                    nbytes_to_recv[source] = incoming[1];
+                }
+            } else {
+                for (int step = 1; step < NTasks; ++step)
+                    peer_steps.push_back(step);
+                MPI_Alltoall(n_to_send.data(), 1, MPI_UNSIGNED_LONG_LONG, n_to_recv.data(), 1, MPI_UNSIGNED_LONG_LONG,
+                             FML::communicator);
+                MPI_Alltoall(nbytes_to_send.data(), 1, MPI_UNSIGNED_LONG_LONG, nbytes_to_recv.data(), 1,
+                             MPI_UNSIGNED_LONG_LONG, FML::communicator);
+            }
 
 #ifdef DEBUG_MPIPARTICLES
             // Show some info
@@ -883,33 +925,9 @@ namespace FML {
                 size_t index = NpartLocal_in_use + i;
                 auto x = FML::PARTICLE::GetPos(p[index])[0];
 
-                if (x >= x_max_per_task[ThisTask]) {
-                    int taskid = ThisTask;
-                    while (taskid < NTasks - 1) {
-                        ++taskid;
-                        if (x < x_max_per_task[taskid])
-                            break;
-                    }
-
-                    append_particle(index, taskid);
-
-                } else if (x < x_min_per_task[ThisTask]) {
-                    int taskid = ThisTask;
-                    while (taskid > 0) {
-                        --taskid;
-                        if (x >= x_min_per_task[taskid])
-                            break;
-                    }
-
-                    append_particle(index, taskid);
-
-                } else {
-
-                    // We should not be here as particles are moved
-                    assert_mpi(false,
-                               "[MPIParticles::communicate_particles] Error in communicate_particles. After moving "
-                               "particles we still have particles out of range\n");
-                }
+                const int taskid = owner_of(x);
+                assert_mpi(taskid != ThisTask, "[MPIParticles] Outgoing particle is still locally owned");
+                append_particle(index, taskid);
             }
 
             for (int task = 0; task < NTasks; ++task)
@@ -934,9 +952,9 @@ namespace FML {
             FML::MaxOverTasks(&max_bytes);
             const Count nchunks = max_bytes / max_chunk_bytes + (max_bytes % max_chunk_bytes != 0);
 
-            for (int i = 1; i < NTasks; i++) {
-                int send_request_to = (ThisTask + i) % NTasks;
-                int get_request_from = (ThisTask - i + NTasks) % NTasks;
+            for (int step : peer_steps) {
+                int send_request_to = int((static_cast<long long>(ThisTask) + step) % NTasks);
+                int get_request_from = int((static_cast<long long>(ThisTask) - step + NTasks) % NTasks);
 
                 for (Count ichunk = 0; ichunk < nchunks; ichunk++) {
                     const Count offset = ichunk * max_chunk_bytes;

@@ -589,13 +589,177 @@ void test_chunkpix() {
 #endif
 
 // Optional argument: run only the test group with this name (lattice, create, dump, custom, boxes, reflection,
-// shift, chunkpix)
+// shift, chunkpix, migration)
+template <class T> long long migration_id(const T &p) {
+    if constexpr (std::is_same_v<T, VarParticle>)
+        return std::llround(p.extra[0]);
+    else
+        return p.id;
+}
+
+template <class T>
+void migration_case(std::vector<double> edges, int mode, bool empty_source, const std::string &label) {
+    constexpr int per_rank = 12;
+    const int ranks = FML::NTasks, rank = FML::ThisTask;
+    auto count = [&](int source) {
+        return edges[source] < edges[source + 1] && !(empty_source && source == 0) ? per_rank : 0;
+    };
+    auto position = [&](int source, int i) {
+        if (mode == 4) {
+            double edge = edges[(source + 1) % ranks];
+            return i % 4 == 0 ? 0. : i % 4 == 1 ? 1. : i % 4 == 2 ? edge : std::nextafter(edge, 0.);
+        }
+        int dest = source;
+        if (mode == 1)
+            dest = i % 3 == 0 ? source : (source + (i % 3 == 1 ? ranks - 1 : 1)) % ranks;
+        if (mode == 2 && source == 0 && i == 0)
+            dest = (source + 2) % ranks;
+        if (mode == 3)
+            dest = (source * 5 + i * 3) % ranks;
+        while (edges[dest] == edges[dest + 1])
+            dest = (dest + 1) % ranks;
+        return .5 * (edges[dest] + edges[dest + 1]);
+    };
+    auto normalized = [&](double x) {
+        if (ranks > 1 && x == 1.)
+            return std::nextafter(1., 0.);
+        if (ranks > 1 && x == 0.)
+            return std::numeric_limits<double>::min();
+        return x;
+    };
+    // Independent linear interval scan for the truth catalogue.
+    auto owner = [&](double x) {
+        if (ranks == 1)
+            return 0;
+        for (int t = 0; t < ranks; ++t)
+            if (x >= edges[t] && x < edges[t + 1])
+                return t;
+        return -1;
+    };
+    std::vector<T> initial(size_t(count(rank)));
+    for (int i = 0; i < count(rank); ++i) {
+        auto &p = initial[i];
+        long long id = per_rank * rank + i;
+        p.pos[0] = .5 * (edges[rank] + edges[rank + 1]);
+        p.pos[1] = .125 * (i % 7);
+        p.pos[2] = .25 * (i % 3);
+        if constexpr (std::is_same_v<T, VarParticle>) {
+            p.n = 1 + i % 4;
+            for (int k = 0; k < p.n; ++k)
+                p.extra[k] = k ? 1.25 * id + k : double(id);
+        } else
+            p.id = id;
+    }
+    using Container = FML::PARTICLE::MPIParticles<T>;
+    using Route = FML::PARTICLE::MigrationRoute;
+    Container automatic, general;
+    automatic.create(initial.data(), initial.size(), size_t(per_rank * ranks), edges[rank], edges[rank + 1], false);
+    general.create(initial.data(), initial.size(), size_t(per_rank * ranks), edges[rank], edges[rank + 1], false);
+    for (auto &p : automatic)
+        p.pos[0] = position(int(migration_id(p) / per_rank), int(migration_id(p) % per_rank));
+    for (auto &p : general)
+        p.pos[0] = position(int(migration_id(p) / per_rank), int(migration_id(p) % per_rank));
+    automatic.communicate_particles(37 + rank);
+    general.communicate_particles(37 + rank, rank == 0);
+    std::vector<long long> actual, reference, expected;
+    bool good = true, moved = false, distant = false;
+    for (int source = 0; source < ranks; ++source)
+        for (int i = 0; i < count(source); ++i) {
+            int dest = owner(normalized(position(source, i)));
+            good &= dest >= 0;
+            moved |= dest != source;
+            distant |= dest != source && dest != (source + 1) % ranks && dest != (source + ranks - 1) % ranks;
+            if (dest == rank)
+                expected.push_back(per_rank * source + i);
+        }
+    auto inspect = [&](Container &container, std::vector<long long> &ids) {
+        for (auto &p : container) {
+            long long id = migration_id(p);
+            ids.push_back(id);
+            if (id < 0 || id >= per_rank * ranks) {
+                good = false;
+                continue;
+            }
+            int source = int(id / per_rank), i = int(id % per_rank);
+            good &=
+                p.pos[0] == normalized(position(source, i)) && p.pos[1] == .125 * (i % 7) && p.pos[2] == .25 * (i % 3);
+            if constexpr (std::is_same_v<T, VarParticle>) {
+                good &= p.n == 1 + i % 4;
+                for (int k = 0; k < p.n; ++k)
+                    good &= p.extra[k] == (k ? 1.25 * id + k : double(id));
+            }
+        }
+    };
+    inspect(automatic, actual);
+    inspect(general, reference);
+    good &= actual == reference;
+    std::sort(actual.begin(), actual.end());
+    std::sort(expected.begin(), expected.end());
+    good &= actual == expected;
+    const Route route = ranks == 1 ? Route::Serial
+                        : !moved   ? Route::NoTraffic
+                        : distant  ? Route::General
+                                   : Route::Neighbors;
+    good &= automatic.get_last_migration_route() == route &&
+            general.get_last_migration_route() == (ranks == 1 ? Route::Serial : Route::General);
+    check(all_tasks(good), label + ": exact IDs, fields, receive order and collective route match the reference");
+}
+
+struct ExtendedPositionParticle {
+    long double pos[3]{};
+    long long id = 0;
+    long double *get_pos() { return pos; }
+    constexpr int get_ndim() const { return 3; }
+};
+void test_extended_boundary_migration() {
+    if (FML::NTasks == 1)
+        return;
+    ExtendedPositionParticle p{{.5L * (FML::xmin_domain + FML::xmax_domain), .25L, .75L}, FML::ThisTask};
+    FML::PARTICLE::MPIParticles<ExtendedPositionParticle> particles;
+    particles.create(&p, 1, size_t(FML::NTasks), FML::xmin_domain, FML::xmax_domain, false);
+    const long double just_below = std::nextafter(static_cast<long double>(1. / FML::NTasks), 0.L);
+    if (FML::ThisTask == 1)
+        particles[0].pos[0] = just_below;
+    particles.communicate_particles(13);
+    bool good = particles.get_npart() == size_t(FML::ThisTask == 0 ? 2 : FML::ThisTask == 1 ? 0 : 1);
+    for (auto &q : particles) {
+        good &= q.pos[0] >= static_cast<long double>(FML::xmin_domain) &&
+                q.pos[0] < static_cast<long double>(FML::xmax_domain);
+        if (q.id == 1)
+            good &= q.pos[0] == just_below;
+    }
+    check(all_tasks(good), "extended-precision boundary positions are not narrowed during ownership lookup");
+}
+
+void test_migration_routing() {
+    test_extended_boundary_migration();
+    std::vector<double> edges(FML::NTasks + 1);
+    for (int t = 0; t <= FML::NTasks; ++t)
+        edges[t] = double(t) / FML::NTasks;
+    migration_case<Particle>(edges, 0, false, "no-traffic migration");
+    migration_case<Particle>(edges, 1, false, "two-sided neighbor and periodic seam migration");
+    migration_case<Particle>(edges, 2, false, "single-rank move and collective fallback decision");
+    migration_case<VarParticle>(edges, 1, false, "variable-size neighbor records with split messages");
+    migration_case<VarParticle>(edges, 3, false, "arbitrary variable-size destinations");
+    migration_case<Particle>(edges, 4, false, "exact and adjacent slab/box boundaries");
+    if (FML::NTasks > 1)
+        migration_case<Particle>(edges, 1, true, "initially empty rank participates in neighbor exchange");
+    for (double &x : edges)
+        x *= x;
+    migration_case<Particle>(edges, 1, false, "nonuniform slabs");
+    if (FML::NTasks >= 3) {
+        edges[1] = 0.;
+        migration_case<VarParticle>(edges, 3, false, "empty slab is skipped by binary ownership lookup");
+    }
+}
+
 int main(int argc, char ** argv) {
     const std::string only = argc > 1 ? argv[1] : "";
     auto run = [&](std::string name, void (*f)()) {
         if (only.empty() or only == name)
             f();
     };
+    run("migration", test_migration_routing);
     run("lattice", test_lattice);
     run("create", test_create);
     run("dump", test_dump);
