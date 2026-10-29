@@ -82,8 +82,10 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   them (Jing 2005; `PowerOptions::aliased_shotnoise`, default true): the Poisson test gives 0.001 +- 0.009.
 - Reconstruction: the random-density threshold was relative to the mean over the whole padded mesh, so it
   depended on the padding. Now relative to the mean smoothed random density of the survey (sum R^2 / sum R).
-- Checked with mocks (not part of the tests): Gaussian Kaiser mocks in a 500 Mpc/h cube (30 realizations) agree
-  with the window-convolved multipoles with the global integral constraint; Zel'dovich catalogues are
+- Checked with mocks (not part of the tests): the mean of 100 Gaussian Kaiser mocks in a 500 Mpc/h cube agrees
+  with the window-convolved multipoles (global integral constraint): for k = 0.03-0.2 h/Mpc chi^2 = 22 for 18 P0
+  bins (mean deviation +0.7 sigma, ~1%), P2 and P4 within errors; only the first bin (k < 0.01, a few discrete
+  mode lengths against a continuous shell average) is 3.5 sigma low; Zel'dovich catalogues are
   reconstructed with the right displacement (correlation 0.99, with and without RSD, footprint mask). New tests:
   window of a uniform cube against the exact Q4, window matrix converged for coarse separation bins.
 
