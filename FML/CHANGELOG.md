@@ -5,6 +5,11 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): README on los_k_max
+- The LOS k-range follows `pert_k_max` unless `los_k_max` is set, so raising pert_k_max for P(k) also makes the
+  C_ell slower. The README now says so, and that k_max r_* > ell is only a minimum (ell <= 500: 0.045/Mpc gives 47%
+  in TT, 0.1/Mpc 2%), so an automatic smaller LOS range was not added.
+
 ### Cosmology (EBS): z_reion and z_He_reion are validated; BBN table range
 - With reionization on, z_reion and z_He_reion must be in (0, 50) (tau is integrated from z = 50); a negative or
   too large value was accepted. Checks in tests/test_parameterfile.cpp.

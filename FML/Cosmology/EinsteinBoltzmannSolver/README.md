@@ -119,6 +119,11 @@ for m in "lcdm" "musigma model=musigma mu0=0.3 Sigma0=0.1" "ndgp model=dgp dgp_l
 python3 python/plot_models.py                # data/models/models.png
 ```
 
+The line-of-sight integration runs over the perturbation k-range unless `los_k_max` is set. When `pert_k_max` is
+raised only for P(k) (f(R) above: 1/Mpc), `los_k_max = 0.3` keeps the C_ℓ cost of the default run (as in
+`params/fr.ini`). Do not set it much lower than the default for the C_ℓ: the check k_max r_* > ℓ is only a minimum
+(ℓ ≤ 500 needs 0.1/Mpc for 2% in TT, and 0.045/Mpc gives 47%).
+
 Outputs (in `output_dir`): `background.txt`, `recombination.txt`, `perturbations_k<k>.txt`, `cells.txt`
 (D_ℓ^TT, EE, TE in μK²), `cells_lensed.txt`, `matter_power.txt` (k [h/Mpc], P_m, P_cb), `transfer.txt`, and
 optionally `cmb_correlation_*.txt`, `matter_correlation.txt`, `angular_cl_z<z>.txt`, `angular_w_z<z>.txt`.
