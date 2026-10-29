@@ -20,6 +20,9 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 - Tests: gradients against finite differences (both models, three parametrisations); mock normalisation; the linear
   model's beta posterior against its exact marginal; recovery of beta with 1LPT. Prototype scope: serial, linear
   bias, constant noise power, toy wiggle template (see `FieldLevel/README.md`).
+- Simulation-based calibration (`FieldLevel/example/Calibration.cpp`): over 24 1LPT and 30 linear mocks with
+  beta drawn from the prior, z = (mean - truth) / sigma has mean -0.07 +- 0.20 and std 1.00 (1LPT) and the
+  posterior quantiles of the truth are uniform (KS p = 0.85); linear HMC agrees with the exact posterior mock by mock.
 
 ### Review of Environment, EnsembleStatistics, Morphology and the streaming/storage changes (no defects found)
 - Environment: for Poisson tracers the density-split cross-correlations equal the exact expectation

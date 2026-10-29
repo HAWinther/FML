@@ -68,6 +68,28 @@ The example (`example/`, `./fieldlevel [linear|1lpt] nmesh kmax n_samples beta_t
 | Linear | 32^3, L = 1000 Mpc/h | 0.095 | 1.02 | 1.0232 +- 0.0333 | 1.0221 +- 0.0330 (1000 samples, ESS ~430) |
 | 1LPT | 48^3 (CIC 96^3) | 0.14 | 1.02 | - | 1.049 +- 0.018 (300 samples, ESS ~40) |
 
+### Simulation-based calibration
+
+`example/calibration` (`./calibration [linear|1lpt] nmesh kmax n_mocks first_seed n_samples out`) tests the whole
+chain (forward model, gradients, sampler) statistically (Talts et al. 2018): for each mock, beta_true is drawn from
+the prior (uniform on [0.85, 1.15]), the initial field from its prior and the data from the forward model plus noise;
+then the posterior is sampled (150 warmup + 400 samples). If everything is correct,
+z = (posterior mean - beta_true) / posterior std is ~N(0, 1) and the posterior quantile of beta_true is uniform.
+Results at 32^3, kmax = 0.095 h/Mpc, b = 1.5, P_eps = 1000 (Mpc/h)^3:
+
+| Model | Mocks | mean z | std z | KS p (quantile uniform) | posterior sigma | autocorrelation time |
+| --- | --- | --- | --- | --- | --- | --- |
+| Linear (HMC) | 30 | -0.11 +- 0.19 | 1.04 | 0.76 | 0.033 | 5.4 |
+| Linear (exact marginal) | 30 | -0.08 | 1.03 | 0.88 | 0.033 | - |
+| 1LPT (HMC) | 24 | -0.07 +- 0.20 | 1.00 | 0.85 | 0.037 | 10.8 |
+
+For the linear mocks, HMC and the exact posterior agree mock by mock: (HMC mean - exact mean) / sigma has mean -0.03
+and rms 0.14 (the Monte Carlo error expected for ~70 effective samples), and the posterior widths agree to 1% on
+average. The 1LPT sampler is therefore calibrated at this precision (a bias larger than ~0.4 sigma or a width error
+above ~30% would have shown up), and the 1.6 sigma offset of the single larger run above is consistent with a
+fluctuation. The linear and 1LPT mocks use the same seeds, so their beta_true and initial fields coincide; the two
+rows are not independent of each other. 24 mocks took about 40 minutes on two cores.
+
 ## What a production version needs
 
 - A better forward model (2LPT or a short PM run, EFT bias expansion with b_1, b_2, b_G2, ..., redshift-space
