@@ -35,7 +35,10 @@ namespace FML::COSMOLOGY {
 
     double PowerSpectrum::primordial_power_spectrum(double k) const {
         const auto & p = cosmo.get_params();
-        return p.A_s * std::pow(k * Mpc / p.k_pivot, p.n_s - 1.0);
+        if (p.alpha_s == 0.0)
+            return p.A_s * std::pow(k * Mpc / p.k_pivot, p.n_s - 1.0);
+        const double l = std::log(k * Mpc / p.k_pivot);
+        return p.A_s * std::exp((p.n_s - 1.0 + 0.5 * p.alpha_s * l) * l);
     }
 
     // =============================================================================

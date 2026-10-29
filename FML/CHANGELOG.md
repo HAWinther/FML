@@ -5,6 +5,12 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): optional running of the spectral index
+- New parameter `alpha_s` (default 0, bit-identical): P_R(k) = A_s (k/k_pivot)^{n_s - 1 + alpha_s/2 ln(k/k_pivot)}, as
+  CLASS's alpha_s. Adiabatic mode only (an error with isocurvature modes). Passed to CLASS by python/params.py.
+- Tests: the P_R ratio, and the TT/EE ratios for alpha_s = -0.02 against CLASS (5e-4 at ell = 10, < 4e-5 above) in
+  tests/test_power_spectrum.cpp; the isocurvature check in tests/test_parameterfile.cpp.
+
 ### Cosmology (EBS): README on los_k_max
 - The LOS k-range follows `pert_k_max` unless `los_k_max` is set, so raising pert_k_max for P(k) also makes the
   C_ell slower. The README now says so, and that k_max r_* > ell is only a minimum (ell <= 500: 0.045/Mpc gives 47%

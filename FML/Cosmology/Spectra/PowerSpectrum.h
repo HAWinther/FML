@@ -27,7 +27,7 @@
 // get_Delta_M, transfer.txt) are those of the first component.
 // Tensor modes (Tensors.h, set_tensors before solve): their C_ell are added to the unlensed TT, EE, TE, give the
 // unlensed BB, and are lensed together with the scalar spectra.
-//   P_R(k)       = A_s (k / k_pivot)^{n_s - 1}         (primordial curvature power)
+//   P_R(k)       = A_s (k / k_pivot)^{n_s - 1 + alpha_s/2 ln(k/k_pivot)}   (primordial curvature power)
 //
 // The transfer functions from Perturbations are normalised per unit curvature
 // perturbation (Phi = 2/3 initially without neutrinos, matching CLASS's R = 1).

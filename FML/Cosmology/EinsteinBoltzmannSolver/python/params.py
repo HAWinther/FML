@@ -23,7 +23,7 @@ def class_params(p, reionization=None, recombination="HyRec"):
     h = p["h"]
     d = {"h": h, "omega_b": p["OmegaB"] * h**2, "omega_cdm": p["OmegaCDM"] * h**2,
          "Omega_k": p["OmegaK"], "T_cmb": p["TCMB"], "N_ur": p["Neff"], "N_ncdm": 0,
-         "YHe": p["Yp"], "A_s": p["A_s"], "n_s": p["n_s"], "k_pivot": p["k_pivot"],
+         "YHe": p["Yp"], "A_s": p["A_s"], "n_s": p["n_s"], "alpha_s": p.get("alpha_s", 0.0), "k_pivot": p["k_pivot"],
          "recombination": recombination}
     m_nu = p.get("m_nu", 0.0)
     if m_nu > 0:

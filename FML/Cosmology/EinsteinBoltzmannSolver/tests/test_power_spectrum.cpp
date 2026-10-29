@@ -4,6 +4,7 @@
 // =============================================================================
 
 #include <algorithm>
+#include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
 #include "TestHelpers.h"
 #include <FML/Cosmology/Common.h>
@@ -319,6 +320,49 @@ int main() {
             threw = std::string(e.what()).find("k-range") != std::string::npos;
         }
         check("ell_max beyond the k-range gives an error (not NaN spectra)", threw);
+    }
+
+    // Running alpha_s: P_R ratio exact, and the C_ell ratio alpha_s = -0.02 / 0 against CLASS v3.4 (Planck 2018,
+    // RECFAST, reio_camb, unlensed). The perturbations do not depend on alpha_s, so one solve serves both.
+    {
+        RunSettings s = ParameterFile::read("", {"preset=planck2018", "precision=fast", "ell_max=1200"});
+        BackgroundCosmology bg(s.cosmo);
+        bg.solve(s.bg_x_start, s.bg_x_end, s.bg_n_points);
+        RecombinationHistory rc(bg, s.rec);
+        rc.solve();
+        Perturbations pt(bg, rc, s.pert);
+        pt.solve();
+        PowerSpectrum P0(bg, rc, pt, s.ps);
+        P0.solve();
+        CosmologyParameters pr = s.cosmo;
+        pr.alpha_s = -0.02;
+        BackgroundCosmology bgr(pr);
+        bgr.solve(s.bg_x_start, s.bg_x_end, s.bg_n_points);
+        PowerSpectrum Pr(bgr, rc, pt, s.ps);
+        Pr.solve();
+        const double k = 0.5 / Mpc, l = std::log(0.5 / s.cosmo.k_pivot);
+        check_rel("alpha_s: P_R(k) ratio = exp(alpha_s/2 ln^2(k/k_pivot))",
+                  Pr.primordial_power_spectrum(k) / P0.primordial_power_spectrum(k),
+                  std::exp(-0.01 * l * l),
+                  1e-12);
+        struct Ref {
+            int ell;
+            double tt, ee;
+        };
+        for (const Ref & r : {Ref{10, 0.8741502512161531, 0.8671909730828137},
+                              Ref{100, 0.976811416655452, 0.9673063503372383},
+                              Ref{500, 0.9992934686462546, 0.9993642198702183},
+                              Ref{1000, 0.9962567905971743, 0.9982434564165134}}) {
+            const std::string e = std::to_string(r.ell);
+            check_rel("alpha_s = -0.02: TT ratio at ell = " + e + " = CLASS",
+                      Pr.get_Dell_TT(r.ell) / P0.get_Dell_TT(r.ell),
+                      r.tt,
+                      1e-3);
+            check_rel("alpha_s = -0.02: EE ratio at ell = " + e + " = CLASS",
+                      Pr.get_Dell_EE(r.ell) / P0.get_Dell_EE(r.ell),
+                      r.ee,
+                      1e-3);
+        }
     }
 
     return Test::summary();

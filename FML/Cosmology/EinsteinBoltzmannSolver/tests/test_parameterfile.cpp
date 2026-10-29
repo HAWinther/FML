@@ -113,6 +113,8 @@ int main() {
         check("z_He_reion > 50 is an error", throws([&] { ParameterFile::read("", {"z_He_reion=60"}); }));
         check("... but not without reionization",
               !throws([&] { ParameterFile::read("", {"z_reion=-1", "reionization=false"}); }));
+        check("alpha_s with an isocurvature mode is an error",
+              throws([&] { ParameterFile::read("", {"alpha_s=-0.01", "f_cdi=0.1"}); }));
         check("nan is an error", throws([&] { ParameterFile::read("", {"h=nan"}); }));
         check("inf is an error", throws([&] { ParameterFile::read("", {"A_s=inf"}); }));
         check("1e400 is an error", throws([&] { ParameterFile::read("", {"h=1e400"}); }));

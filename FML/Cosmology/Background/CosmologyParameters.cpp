@@ -67,6 +67,8 @@ namespace FML::COSMOLOGY {
         require(A_s > 0.0, "A_s must be > 0");
         require(k_pivot > 0.0, "k_pivot must be > 0");
         require(r >= 0.0, "r must be >= 0");
+        require(alpha_s == 0.0 || (iso_f[0] == 0.0 && iso_f[1] == 0.0 && iso_f[2] == 0.0 && iso_f[3] == 0.0),
+                "alpha_s (running) is only implemented for the adiabatic mode, not with isocurvature modes");
         {
             double c2 = 0.0;
             for (int m = 0; m < 4; m++) {
@@ -123,8 +125,10 @@ namespace FML::COSMOLOGY {
                << ", dz = " << delta_z_He_reion << ")";
         os << "\n"
            << "  A_s          = " << A_s << "\n"
-           << "  n_s          = " << n_s << "\n"
-           << "  k_pivot      = " << k_pivot << " /Mpc\n";
+           << "  n_s          = " << n_s << "\n";
+        if (alpha_s != 0.0)
+            os << "  alpha_s      = " << alpha_s << "\n";
+        os << "  k_pivot      = " << k_pivot << " /Mpc\n";
         for (int m = 0; m < 4; m++)
             if (iso_f[m] != 0.0)
                 os << "  isocurvature "
@@ -151,12 +155,12 @@ namespace FML::COSMOLOGY {
            << "\nTCMB = " << TCMB << "\nYp = " << helium_fraction() << "\nreionization = " << (reionization ? 1 : 0)
            << "\nz_reion = " << z_reion << "\ndelta_z_reion = " << delta_z_reion << "\nz_He_reion = " << z_He_reion
            << "\ndelta_z_He_reion = " << delta_z_He_reion << "\nA_s = " << A_s << "\nn_s = " << n_s
-           << "\nk_pivot = " << k_pivot << "\nf_cdi = " << iso_f[0] << "\nn_cdi = " << iso_n[0]
-           << "\nc_ad_cdi = " << iso_c[0] << "\nf_bi = " << iso_f[1] << "\nn_bi = " << iso_n[1]
-           << "\nc_ad_bi = " << iso_c[1] << "\nf_nid = " << iso_f[2] << "\nn_nid = " << iso_n[2]
-           << "\nc_ad_nid = " << iso_c[2] << "\nf_niv = " << iso_f[3] << "\nn_niv = " << iso_n[3]
-           << "\nc_ad_niv = " << iso_c[3] << "\nr = " << r << "\nn_t = " << tensor_tilt() << "\nmodel = " << model
-           << "\n";
+           << "\nalpha_s = " << alpha_s << "\nk_pivot = " << k_pivot << "\nf_cdi = " << iso_f[0]
+           << "\nn_cdi = " << iso_n[0] << "\nc_ad_cdi = " << iso_c[0] << "\nf_bi = " << iso_f[1]
+           << "\nn_bi = " << iso_n[1] << "\nc_ad_bi = " << iso_c[1] << "\nf_nid = " << iso_f[2]
+           << "\nn_nid = " << iso_n[2] << "\nc_ad_nid = " << iso_c[2] << "\nf_niv = " << iso_f[3]
+           << "\nn_niv = " << iso_n[3] << "\nc_ad_niv = " << iso_c[3] << "\nr = " << r << "\nn_t = " << tensor_tilt()
+           << "\nmodel = " << model << "\n";
         for (const auto & p : Models::find(model).parameters)
             fp << p.name << " = " << model_param(p.name) << "\n";
     }

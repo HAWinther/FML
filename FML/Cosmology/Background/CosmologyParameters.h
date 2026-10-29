@@ -54,6 +54,9 @@ namespace FML::COSMOLOGY {
         double A_s = 2.1e-9;   // Amplitude at k_pivot
         double n_s = 0.965;    // Spectral index
         double k_pivot = 0.05; // Pivot scale [1/Mpc]
+        // Running dn_s/dln k (CLASS's alpha_s): P_R(k) = A_s (k/k_pivot)^{n_s - 1 + alpha_s/2 ln(k/k_pivot)}.
+        // Adiabatic mode only (an error with isocurvature modes).
+        double alpha_s = 0.0;
         // Tensor modes: P_t(k) = r A_s (k/k_pivot)^n_t (computed when r > 0; flat universes only). With
         // n_t_consistency the tilt follows the slow-roll consistency relation n_t = -r/8 (2 - r/8 - n_s) (as CLASS'
         // n_t = scc), otherwise n_t.
