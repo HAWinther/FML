@@ -17,7 +17,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends g++ make openmpi-bin libopenmpi-dev \
-            libfftw3-dev libfftw3-mpi-dev libgsl-dev liblua5.4-dev libhdf5-dev python3-numpy
+            libfftw3-dev libfftw3-mpi-dev libgsl-dev liblua5.4-dev libhdf5-dev python3-numpy python3-venv
 
       - name: Machine settings (Makefile.local)
         run: cp .github/ci/Makefile.local FML/Makefile.local
@@ -42,3 +42,10 @@ jobs:
           cd FML/COLASolver
           mpirun --oversubscribe -np 1 ./nbody --parameters /tmp/PARAMETERS.md
           diff -u PARAMETERS.md /tmp/PARAMETERS.md
+
+      - name: Python analysis installed-wheel regressions
+        run: |
+          python3 -m venv "$RUNNER_TEMP/fml-analysis-env"
+          "$RUNNER_TEMP/fml-analysis-env/bin/python" -m pip install ./FML/PythonAnalysis
+          "$RUNNER_TEMP/fml-analysis-env/bin/python" -m unittest discover -s FML/PythonAnalysis/tests -v
+          "$RUNNER_TEMP/fml-analysis-env/bin/python" FML/PythonAnalysis/examples/catalogue_statistics.py

@@ -3,6 +3,8 @@
 #
 #   make examples   Build every example (keeps going, lists failures)
 #   make test       Build and run the regression tests in tests/
+#   make python-analysis   Install the small analysis package into $(PYTHON)
+#   make test-python-analysis  Test the installed analysis package
 #   make clean      Clean all examples and tests
 #
 # Build options and library paths are in Makefile.config. Put your
@@ -23,7 +25,7 @@ PYTHON_DIRS  := MakePythonWrapper/ HaloModel/PythonWrapper/
 
 EXAMPLE_DIRS := $(filter-out $(EXTRA_DIRS),$(EXAMPLE_DIRS))
 
-.PHONY: help examples examples-extra python test clean
+.PHONY: help examples examples-extra python python-analysis test-python-analysis test clean
 
 help:
 	@sed -n '2,12p' Makefile
@@ -43,6 +45,13 @@ examples-extra:
 
 python:
 	$(call build_dirs,$(PYTHON_DIRS))
+
+PYTHON ?= python3
+python-analysis:
+	$(PYTHON) -m pip install ./PythonAnalysis
+
+test-python-analysis:
+	$(PYTHON) -m unittest discover -s PythonAnalysis/tests -v
 
 test:
 	@$(MAKE) --no-print-directory -C tests run

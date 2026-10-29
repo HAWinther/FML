@@ -1,6 +1,6 @@
 # FML remaining-work backlog
 
-Updated 29 October 2026, including completed Engineering items 1–7 and tested initial implementations of items 25–32, 35–36 and 38. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
+Updated 29 October 2026, including completed Engineering items 1–7 and 20–21, and tested initial implementations of items 25–32, 35–36 and 38. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
 
 ## Completed in this sequence
 
@@ -20,6 +20,8 @@ Updated 29 October 2026, including completed Engineering items 1–7 and tested 
 - MPI count audit: widened migration counters, checked collective layouts/catalogues and serialization products, bounded reductions and forced-chunk regressions.
 - Faster particle migration with direct neighbor/binary slab lookup, collective no-traffic/neighbor routing and a preserved general fallback.
 - Reusable Fourier-resampling runs with values-only bounded messages, precomputed peer rounds and shared 3LPT crop routing.
+- One capability matrix and a shared C++17 build/API guide with linked regression examples.
+- A serial Python analysis package with owned 3D catalogues, kNN/CDF and spherical-count summaries, NumPy-owned results and explicit exception behavior.
 - Survey Fourier multipoles (0, 2, 4), weighted noise, physical geometry and MPI catalogue routing.
 - Survey window multipoles (0–8), model mixing matrices, output-band averaging and global IC modeling.
 - Local/fixed-LOS survey displacement solving and RecIso/RecSym data/random reconstruction.
@@ -39,7 +41,7 @@ Items 28–30 have initial implementations in `HOD/HOD.h` and `CountsInCells/Spa
 
 ## Engineering work, suggested order
 
-Items 1–7 are complete. Continue with item 8; the remaining Engineering items are pending. See `FriendsOfFriends/SphericalOverdensity.md` for the multi-slab exchange contract and regression coverage, and `MultigridSolver/TerminationStatus.md` for solve-result semantics. See `PairCounting/RankAssignment.md` for deterministic scheduling and neighbor-aware workload estimates, and `Global/MPICounts.md` for the count-audit scope and limits. See `MPIParticles/Migration.md` for automatic migration routing and its general fallback. See `FFTWGrid/FourierResampling.md` for reusable Fourier-routing geometry and bounded payload buffers.
+Items 1–7 and 20–21 are complete. Continue with item 8; Engineering items 8–19 remain pending. See `FriendsOfFriends/SphericalOverdensity.md` for the multi-slab exchange contract and regression coverage, and `MultigridSolver/TerminationStatus.md` for solve-result semantics. See `PairCounting/RankAssignment.md` for deterministic scheduling and neighbor-aware workload estimates, and `Global/MPICounts.md` for the count-audit scope and limits. See `MPIParticles/Migration.md` for automatic migration routing and its general fallback. See `FFTWGrid/FourierResampling.md` for reusable Fourier-routing geometry and bounded payload buffers. See `CAPABILITIES.md`, `BUILDING.md` and `PythonAnalysis/README.md` for current capabilities and the selected Python analysis API.
 
 | # | Task | Concrete scope | Effort |
 |---|---|---|---|
@@ -62,8 +64,8 @@ Items 1–7 are complete. Continue with item 8; the remaining Engineering items 
 | 17 | Improve MCMC convergence diagnostics | Add rank-normalized split-Rhat and bulk/tail ESS separately from online moments. | Medium |
 | 18 | Consolidate MPI transport contracts | Reuse checked chunking/routing across modules; standardize collective failures, instrument bytes, and reduce per-peer send staging where measurements justify it. | Incremental |
 | 19 | Add reproducible performance cases | Track FFT counts, allocations/copies, exchanged bytes, peak RSS, maximum rank time, precision and thread/rank configuration. | Incremental |
-| 20 | Update capability documentation | Maintain one capability matrix and consistent C++17/build/API documentation, with links to tested examples. | Small–medium |
-| 21 | Stabilize a small Python analysis interface | Expose selected catalogue/statistics workflows with clear ownership and error behavior rather than wrapping every template. | Medium–large |
+| 20 | ~~Update capability documentation~~ (completed) | Added the capability matrix, shared C++17 build/API guide and updated root entry points with regression/example links. | Small–medium |
+| 21 | ~~Stabilize a small Python analysis interface~~ (completed) | Added serial owned Catalogue/kNN/CDF/count-PDF workflows with explicit array/exception contracts, wheel/source packaging and installed-package tests. | Medium–large |
 
 ## Deferred at the user's request
 
