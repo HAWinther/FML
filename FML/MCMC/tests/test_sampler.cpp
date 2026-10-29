@@ -136,6 +136,64 @@ int main() {
         const double sab = std::sqrt(C[0][0] + C[1][1] + 2 * C[0][1]);
         check_rel("derived a + b: standard deviation", s[3], sab, 0.05);
         check("R-1 < 0.01", mc.Rminus1() < 0.01);
+        check("converged() after a stop on R-1", mc.converged());
+        {
+            // R-1 recomputed from the chains: largest eigenvalue of W^-1 B by power iteration (CosmoMC/Cobaya)
+            const int nc = 4, dd = 3;
+            std::vector<std::vector<double>> means(nc, std::vector<double>(dd, 0.0));
+            std::vector<std::vector<double>> W(dd, std::vector<double>(dd, 0.0)), B(dd, std::vector<double>(dd, 0.0));
+            std::vector<double> gm(dd, 0.0);
+            for (int c = 0; c < nc; c++) {
+                const auto & r = mc.samples(c);
+                const double n = double(r.size());
+                for (const auto & x : r)
+                    for (int i = 0; i < dd; i++)
+                        means[c][i] += x[i] / n;
+                for (const auto & x : r)
+                    for (int i = 0; i < dd; i++)
+                        for (int j = 0; j < dd; j++)
+                            W[i][j] += (x[i] - means[c][i]) * (x[j] - means[c][j]) / (n - 1.0) / nc;
+                for (int i = 0; i < dd; i++)
+                    gm[i] += means[c][i] / nc;
+            }
+            for (int c = 0; c < nc; c++)
+                for (int i = 0; i < dd; i++)
+                    for (int j = 0; j < dd; j++)
+                        B[i][j] += (means[c][i] - gm[i]) * (means[c][j] - gm[j]) / (nc - 1.0);
+            auto solveW = [&](std::vector<double> v) { // Gauss elimination on a copy of W
+                auto A = W;
+                for (int k = 0; k < dd; k++)
+                    for (int i = k + 1; i < dd; i++) {
+                        const double f = A[i][k] / A[k][k];
+                        for (int j = k; j < dd; j++)
+                            A[i][j] -= f * A[k][j];
+                        v[i] -= f * v[k];
+                    }
+                for (int i = dd - 1; i >= 0; i--) {
+                    for (int j = i + 1; j < dd; j++)
+                        v[i] -= A[i][j] * v[j];
+                    v[i] /= A[i][i];
+                }
+                return v;
+            };
+            std::vector<double> v{1.0, 0.7, 0.3};
+            double lambda = 0.0;
+            for (int it = 0; it < 500; it++) {
+                std::vector<double> Bv(dd, 0.0);
+                for (int i = 0; i < dd; i++)
+                    for (int j = 0; j < dd; j++)
+                        Bv[i] += B[i][j] * v[j];
+                auto w = solveW(Bv);
+                double norm = 0.0;
+                for (double x : w)
+                    norm += x * x;
+                norm = std::sqrt(norm);
+                lambda = norm / std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+                for (int i = 0; i < dd; i++)
+                    v[i] = w[i] / norm;
+            }
+            check_rel("R-1 = largest eigenvalue of W^-1 B from the chains", mc.Rminus1(), lambda, 1e-6);
+        }
         check("acceptance near 0.25-0.35 (adapted)", mc.acceptance() > 0.15 && mc.acceptance() < 0.45);
         check_close("best fit near the peak", std::fabs(mc.best_fit()[0] - mu[0]) / sig[0], 0.0, 0.3);
     }

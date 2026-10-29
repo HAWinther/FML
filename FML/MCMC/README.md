@@ -53,8 +53,10 @@ the processes and every process gets all results.
 
 - During the burn-in the proposal covariance and scale adapt (Haario et al. 2001) towards 25% acceptance; at the
   end of the burn-in the covariance pooled from all chains is frozen, so the sampling phase is an exact Markov chain.
-- The run stops once every chain has `min_samples` samples and R−1 < `Rminus1_stop` (Gelman–Rubin), or after
-  `max_steps`.
+- The run stops once every chain has `min_samples` samples and R−1 < `Rminus1_stop`, or after `max_steps` (then
+  with a warning, and `converged()` is false). R−1 is the Gelman–Rubin statistic as computed by CosmoMC and
+  Cobaya: the largest eigenvalue of W⁻¹B (W the mean of the chain covariances, B the covariance of the chain means),
+  which also catches unconverged combinations of parameters. One chain has no R−1 and always runs to `max_steps`.
 - A point where the likelihood throws or is not finite, or that is outside the prior, is rejected.
 - Fast/slow (Lewis 2013, as CosmoMC): fast parameters (cheap to vary, e.g. likelihood nuisance parameters when the
   likelihood caches the rest) come last. Each step is followed by `oversample_fast` updates that move only the fast
@@ -148,8 +150,8 @@ criteria, not guarantees of posterior accuracy. Inspect trace behavior and HMC
 divergences as well. The two-chain FieldLevel unit check uses looser bounds as a
 regression smoke check; it does not certify joint-field convergence or coverage.
 
-`Sampler::Rminus1()` and its automatic stopping threshold remain the existing
-legacy statistic. Modern diagnostics are explicit post-run calculations over
+`Sampler::Rminus1()` and its automatic stopping threshold are the CosmoMC/Cobaya
+multivariate Gelman–Rubin statistic (largest eigenvalue of W⁻¹B, see above). Modern diagnostics are explicit post-run calculations over
 retained samples; they do not change transitions, adaptation, checkpoints or the
 stopping statistic. The legacy stopping code now fails closed on zero/nonfinite
 within-chain variance. The legacy HMC helpers also fail closed: short, frozen or

@@ -39,6 +39,8 @@ namespace FML::MCMC {
         : post(std::move(posterior)), par(post.params()), opt(options) {
         if (opt.chains < 1 || opt.burn_in < 0 || opt.check_every < 1 || opt.adapt_every < 1)
             throw std::invalid_argument("Sampler: invalid options");
+        if (opt.max_steps <= opt.burn_in)
+            throw std::invalid_argument("Sampler: max_steps must be larger than burn_in (no samples otherwise)");
         if (opt.chains < Parallel::size())
             throw std::invalid_argument("Sampler: fewer chains than MPI processes");
         n_slow = post.n_slow();
@@ -187,50 +189,116 @@ namespace FML::MCMC {
         }
     }
 
-    // Per chain n, means and variances of the sampled parameters, gathered over the MPI processes
+    // R-1 as CosmoMC/Cobaya: the largest eigenvalue of W^-1 B, with W the mean of the chains' covariance matrices
+    // and B the covariance of the chain means (over the parameter directions, not only the parameters themselves).
+    // Per chain: n, means and covariance of the sampled parameters, gathered over the MPI processes
     double Sampler::gelman_rubin() const {
         const size_t d = par.size();
         std::vector<double> local;
         for (const auto & c : chains) {
             const size_t n = c.rows.size();
             local.push_back(double(n));
-            std::vector<double> mean(d, 0.0), var(d, 0.0);
+            std::vector<double> mean(d, 0.0), cov(d * d, 0.0);
             for (size_t k = 0; k < n; k++)
                 for (size_t p = 0; p < d; p++)
                     mean[p] += c.rows[k][p] / n;
             for (size_t k = 0; k < n; k++)
                 for (size_t p = 0; p < d; p++)
-                    var[p] += std::pow(c.rows[k][p] - mean[p], 2) / (n - 1.0);
+                    for (size_t q = 0; q < d; q++)
+                        cov[p * d + q] += (c.rows[k][p] - mean[p]) * (c.rows[k][q] - mean[q]) / (n - 1.0);
             for (size_t p = 0; p < d && n > 0; ++p)
-                if (std::all_of(c.rows.begin(), c.rows.end(), [&](const auto & row) { return row[p] == c.rows.front()[p]; }))
-                    var[p] = 0; // exact frozen-chain detection, independent of mean rounding
+                if (std::all_of(c.rows.begin(), c.rows.end(), [&](const auto & row) {
+                        return row[p] == c.rows.front()[p];
+                    }))
+                    cov[p * d + p] = 0; // exact frozen-chain detection, independent of mean rounding
             local.insert(local.end(), mean.begin(), mean.end());
-            local.insert(local.end(), var.begin(), var.end());
+            local.insert(local.end(), cov.begin(), cov.end());
         }
         const auto all = Parallel::allgather(local);
-        const size_t stride = 1 + 2 * d, m = all.size() / stride;
+        const size_t stride = 1 + d + d * d, m = all.size() / stride;
         if (m < 2)
             return std::numeric_limits<double>::infinity();
         const double n = all[0];
         if (n < 10)
             return std::numeric_limits<double>::infinity();
-        double worst = 0.0;
-        for (size_t p = 0; p < d; p++) {
-            double W = 0.0, gm = 0.0, B = 0.0;
-            for (size_t c = 0; c < m; c++) {
-                const double variance = all[c * stride + 1 + d + p];
+        // A chain frozen in a parameter (zero or non-finite variance) has not converged
+        for (size_t c = 0; c < m; c++)
+            for (size_t p = 0; p < d; p++) {
+                const double variance = all[c * stride + 1 + d + p * d + p];
                 if (!(variance > 0) || !std::isfinite(variance))
                     return std::numeric_limits<double>::infinity();
-                W += variance / m;
-                gm += all[c * stride + 1 + p] / m;
             }
-            for (size_t c = 0; c < m; c++)
-                B += std::pow(all[c * stride + 1 + p] - gm, 2) / (m - 1); // B/n of Gelman-Rubin
-            const double vplus = (n - 1.0) / n * W + B;
-            if (!(W > 0) || !std::isfinite(W) || !std::isfinite(vplus))
-                return std::numeric_limits<double>::infinity();
-            worst = std::max(worst, vplus / W - 1.0);
+        std::vector<std::vector<double>> W(d, std::vector<double>(d, 0.0)), B(d, std::vector<double>(d, 0.0));
+        std::vector<double> gm(d, 0.0);
+        for (size_t c = 0; c < m; c++)
+            for (size_t p = 0; p < d; p++) {
+                gm[p] += all[c * stride + 1 + p] / m;
+                for (size_t q = 0; q < d; q++)
+                    W[p][q] += all[c * stride + 1 + d + p * d + q] / m;
+            }
+        for (size_t c = 0; c < m; c++)
+            for (size_t p = 0; p < d; p++)
+                for (size_t q = 0; q < d; q++)
+                    B[p][q] += (all[c * stride + 1 + p] - gm[p]) * (all[c * stride + 1 + q] - gm[q]) / (m - 1.0);
+        // M = L^-1 B L^-T with W = L L^T; its eigenvalues are those of W^-1 B
+        std::vector<std::vector<double>> L;
+        if (!cholesky(W, L))
+            return std::numeric_limits<double>::infinity();
+        auto solve_lower = [&](std::vector<double> v) { // L^-1 v
+            for (size_t i = 0; i < d; i++) {
+                for (size_t k = 0; k < i; k++)
+                    v[i] -= L[i][k] * v[k];
+                v[i] /= L[i][i];
+            }
+            return v;
+        };
+        std::vector<std::vector<double>> X(d, std::vector<double>(d)), M(d, std::vector<double>(d));
+        for (size_t q = 0; q < d; q++) { // columns of L^-1 B
+            std::vector<double> col(d);
+            for (size_t p = 0; p < d; p++)
+                col[p] = B[p][q];
+            col = solve_lower(col);
+            for (size_t p = 0; p < d; p++)
+                X[p][q] = col[p];
         }
+        for (size_t p = 0; p < d; p++) { // M = (L^-1 (L^-1 B)^T)^T, symmetric
+            const auto row = solve_lower(X[p]);
+            for (size_t q = 0; q < d; q++)
+                M[q][p] = row[q];
+        }
+        // Largest eigenvalue of the symmetric M (cyclic Jacobi)
+        for (size_t p = 0; p < d; p++)
+            for (size_t q = 0; q < p; q++)
+                M[p][q] = M[q][p] = 0.5 * (M[p][q] + M[q][p]);
+        for (int sweep = 0; sweep < 100; sweep++) {
+            double off = 0.0;
+            for (size_t p = 0; p < d; p++)
+                for (size_t q = p + 1; q < d; q++)
+                    off += M[p][q] * M[p][q];
+            if (off < 1e-30)
+                break;
+            for (size_t p = 0; p < d; p++)
+                for (size_t q = p + 1; q < d; q++) {
+                    if (M[p][q] == 0.0)
+                        continue;
+                    const double theta = 0.5 * (M[q][q] - M[p][p]) / M[p][q];
+                    const double t = (theta >= 0 ? 1.0 : -1.0) / (std::fabs(theta) + std::sqrt(theta * theta + 1.0));
+                    const double cs = 1.0 / std::sqrt(t * t + 1.0), sn = t * cs;
+                    for (size_t k = 0; k < d; k++) { // columns p, q
+                        const double a = M[k][p], b = M[k][q];
+                        M[k][p] = cs * a - sn * b;
+                        M[k][q] = sn * a + cs * b;
+                    }
+                    for (size_t k = 0; k < d; k++) { // rows p, q
+                        const double a = M[p][k], b = M[q][k];
+                        M[p][k] = cs * a - sn * b;
+                        M[q][k] = sn * a + cs * b;
+                    }
+                }
+        }
+        double worst = 0.0;
+        for (size_t p = 0; p < d; p++)
+            worst = std::max(worst, std::fabs(M[p][p]));
         return worst;
     }
 
@@ -262,19 +330,40 @@ namespace FML::MCMC {
         // Start, or resume from the checkpoints (all chains or none)
         bool resumed = false;
         if (opt.resume) {
-            std::vector<double> got(1, 0.0);
-            for (int i = 0; i < nc; i++)
-                got[0] += load_checkpoint(chains[i], mine[i]) ? 1.0 : 0.0;
+            std::vector<double> got(2, 0.0); // [chains loaded, processes with an error]
+            std::string error;
+            try {
+                for (int i = 0; i < nc; i++)
+                    got[0] += load_checkpoint(chains[i], mine[i]) ? 1.0 : 0.0;
+            } catch (const std::exception & e) {
+                error = e.what();
+                got[1] = 1.0;
+            }
             Parallel::allreduce_sum(got);
+            if (got[1] > 0.0)
+                throw std::runtime_error(error.empty() ? "Sampler: a checkpoint could not be read on another process" :
+                                                         error);
             if (int(got[0]) == opt.chains)
                 resumed = true;
             else if (got[0] > 0.0)
                 throw std::runtime_error("Sampler: checkpoints found for only some of the chains");
         }
         if (!resumed) {
+            // An exception must not leave the OpenMP region (std::terminate), and every process must throw
+            std::string error;
 #pragma omp parallel for schedule(dynamic, 1) num_threads(nt)
-            for (int i = 0; i < nc; i++)
-                init_chain(chains[i], mine[i]);
+            for (int i = 0; i < nc; i++) {
+                try {
+                    init_chain(chains[i], mine[i]);
+                } catch (const std::exception & e) {
+#pragma omp critical(sampler_init_error)
+                    error = e.what();
+                }
+            }
+            std::vector<double> failed(1, error.empty() ? 0.0 : 1.0);
+            Parallel::allreduce_sum(failed);
+            if (failed[0] > 0.0)
+                throw std::runtime_error(error.empty() ? "Sampler: no valid starting point on another process" : error);
         }
         // all chains advance in lockstep: the progress is the (common) step count
         std::vector<double> st(1, nc > 0 ? double(chains[0].steps) : 0.0);
@@ -389,6 +478,12 @@ namespace FML::MCMC {
             if (steps - opt.burn_in >= opt.min_samples && R1 < opt.Rminus1_stop)
                 break;
         }
+        converged_flag = steps - opt.burn_in >= opt.min_samples && R1 < opt.Rminus1_stop;
+        if (!converged_flag && talk)
+            std::cout << "  WARNING: stopped at max_steps = " << opt.max_steps << " without convergence (R-1 = " << R1
+                      << " >= " << opt.Rminus1_stop
+                      << "): the results may be biased; run longer, or start from a better covariance\n"
+                      << std::flush;
         gather_chains();
         // Best fit over all chains
         for (const auto & c : chains)
@@ -470,12 +565,14 @@ namespace FML::MCMC {
     }
 
     ChainDiagnostics Sampler::diagnostics(std::size_t column) const {
-        if (column >= post.names().size()) throw std::out_of_range("Sampler diagnostic column");
+        if (column >= post.names().size())
+            throw std::out_of_range("Sampler diagnostic column");
         std::vector<std::vector<double>> values;
         for (const auto & chain : chains) {
             values.emplace_back();
             values.back().reserve(chain.rows.size());
-            for (const auto & row : chain.rows) values.back().push_back(row.at(column));
+            for (const auto & row : chain.rows)
+                values.back().push_back(row.at(column));
         }
         return diagnose_chains(values);
     }

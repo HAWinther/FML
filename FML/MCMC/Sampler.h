@@ -15,9 +15,10 @@
 //     i mod N, N <= chains); the burn-in covariance, R-1 and the results are combined over all processes,
 //     and after run() every process holds all chains. Only process 0 writes files and prints.
 //   * The chains of a process advance in rounds of check_every steps, in parallel (OpenMP). After each round of the
-//     sampling phase the Gelman-Rubin statistic R-1 (largest over the parameters) is computed from the
-//     post-burn-in samples; the run stops when R-1 < Rminus1_stop and every chain has min_samples samples,
-//     or after max_steps steps per chain.
+//     sampling phase the Gelman-Rubin statistic R-1 is computed from the post-burn-in samples as CosmoMC and
+//     Cobaya do (the largest eigenvalue of W^-1 B, W the mean of the chain covariances, B the covariance of the
+//     chain means; 1 chain: infinite); the run stops when R-1 < Rminus1_stop and every chain has min_samples
+//     samples (converged() is then true), or after max_steps steps per chain (with a warning).
 //   * Fast/slow parameters (Lewis 2013, as CosmoMC): parameters marked fast (likelihood nuisance parameters, cheap
 //     to vary because the theory is cached) come last. Each step is one update of all parameters followed by
 //     oversample_fast updates of the fast ones only, with the proposal L z restricted to z_slow = 0 (L is the
@@ -29,7 +30,7 @@
 //     generator); with resume = true a run continues from these (any number of MPI processes).
 //   * A point where the posterior cannot be evaluated (exception, NaN, outside the prior) is rejected.
 //   * Output (GetDist format): <root>_<i>.txt with "weight -ln(posterior) params derived" per distinct sample
-//     of chain i after the burn-in, <root>.paramnames, <root>.ranges, <root>.covmat (frozen proposal) and a
+//     of chain i after the burn-in, <root>.paramnames, <root>.ranges, <root>.covmat (covariance of the samples) and a
 //     summary <root>.summary.txt (means, standard deviations, 68% limits, best fit, acceptance, R-1).
 // =============================================================================
 
@@ -84,6 +85,7 @@ namespace FML::MCMC {
         double Rminus1() const { return R1; }
         // Explicit post-run rank-normalized diagnostics; sampled and derived columns.
         ChainDiagnostics diagnostics(std::size_t column) const;
+        bool converged() const { return converged_flag; } // R-1 < Rminus1_stop with min_samples (not max_steps)
         double acceptance() const;
         std::vector<double> best_fit() const { return best; } // sampled then derived
         double best_loglike() const { return best_ll; }
@@ -118,6 +120,7 @@ namespace FML::MCMC {
         SamplerOptions opt;
         std::vector<Chain> chains;
         double R1 = std::numeric_limits<double>::infinity();
+        bool converged_flag = false;
         std::vector<double> best;
         double best_ll = -std::numeric_limits<double>::infinity(), best_lp = -std::numeric_limits<double>::infinity();
 

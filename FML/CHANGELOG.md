@@ -5,6 +5,22 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### MCMC: review (Oct 29); R-1 as CosmoMC/Cobaya, error handling
+- R-1 was max over parameters of B/W - 1/n (no (1+1/m) factor, single parameters only), 1.25-2.4x below the
+  CosmoMC/Cobaya value, so `Rminus1_stop = 0.01` stopped runs that Cobaya would continue (3 of 6 test runs). It is
+  now the largest eigenvalue of W^-1 B (W mean chain covariance, B covariance of the chain means), as CosmoMC and
+  Cobaya; the 4D Gaussian test runs then need 16000-20000 samples instead of 16000. New check against an
+  independent power-iteration value from the chains.
+- A run that stops at max_steps without convergence now warns, and Sampler::converged() reports it.
+- No valid starting point: the exception escaped an OpenMP region (std::terminate, not catchable); now caught and
+  rethrown on every MPI process. An error on only some MPI processes (a failed Hessian point, a task of
+  parallel_tasks, an unreadable checkpoint) left the others in a collective: all processes now throw together.
+- max_steps <= burn_in is an error (it gave no samples); Nelder-Mead in 1D no longer collapses the simplex on a
+  shrink; the .covmat comment in Sampler.h (samples, not the frozen proposal).
+- Review: MH core, priors, NaN/inf handling, fast/slow updates, adaptation frozen after burn-in, checkpoint/resume
+  across MPI counts, minimizer (Rosenbrock, correlated Gaussian, bounds, profiles, Hessian) all correct against
+  exact targets over 60 seeds.
+
 ### HOD: review (Oct 29); particle satellites without replacement
 - `SatelliteProfile::Particles` drew member particles with replacement, so two satellites of a halo could sit on
   the same particle (30 satellites from 50 members: duplicates in almost every halo), which adds zero-separation

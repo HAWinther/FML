@@ -42,7 +42,8 @@ namespace FML::MCMC {
                 return res;
             }
             const double dn = double(n);
-            const double alpha = 1.0, beta = 1.0 + 2.0 / dn, gamma = 0.75 - 0.5 / dn, delta = 1.0 - 1.0 / dn;
+            const double alpha = 1.0, beta = 1.0 + 2.0 / dn, gamma = 0.75 - 0.5 / dn,
+                         delta = n > 1 ? 1.0 - 1.0 / dn : 0.5; // (1 - 1/n = 0 would collapse a 1D simplex)
             std::vector<Vec> s(n + 1, u0);
             Vec fs(n + 1);
             long ev = 0;
@@ -299,9 +300,15 @@ namespace FML::MCMC {
                 err[m] = e.what();
             }
         }
+        // Every process must throw (a throw on some processes only would leave the others in the allgather)
+        std::string error;
         for (const auto & e : err)
             if (!e.empty())
-                throw std::runtime_error(e);
+                error = e;
+        Vec failed(1, error.empty() ? 0.0 : 1.0);
+        Parallel::allreduce_sum(failed);
+        if (failed[0] > 0.0)
+            throw std::runtime_error(error.empty() ? "Minimizer: a task failed on another process" : error);
         // gather: [k, logpost, loglike, evals, converged, x (d), derived (nd)] per task
         const size_t d = post.dim(), nd = post.derived_names().size();
         Vec local;
@@ -407,17 +414,22 @@ namespace FML::MCMC {
 
     std::vector<double> Minimizer::minus_logpost(const std::vector<Vec> & pts) const {
         const bool talk = opt.verbose && Parallel::rank() == 0 && Parallel::size() == 1 && pts.size() > 20;
-        Vec f(pts.size(), 0.0);
+        Vec f(pts.size() + 1, 0.0); // the last entry counts the failed points (all processes throw together)
         for (size_t k = size_t(Parallel::rank()); k < pts.size(); k += size_t(Parallel::size())) {
             const auto p = post.evaluate(pts[k]);
-            if (!p.valid())
-                throw std::runtime_error(
-                    "Hessian: a step leaves the prior range or the likelihood fails; reduce the steps");
+            if (!p.valid()) {
+                f.back() += 1.0;
+                continue;
+            }
             f[k] = -p.logpost;
             if (talk && k % 20 == 0 && k > 0)
                 std::cout << "  " << k << "/" << pts.size() << "\n" << std::flush;
         }
         Parallel::allreduce_sum(f);
+        if (f.back() > 0.0)
+            throw std::runtime_error(
+                "Hessian: a step leaves the prior range or the likelihood fails; reduce the steps");
+        f.pop_back();
         return f;
     }
 
