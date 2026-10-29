@@ -443,8 +443,12 @@ static void test_presets() {
         const double x = -std::log1p(r.z_rec);
         const double theta = 100.0 * rec.sound_horizon_of_x(x) / bg.comoving_distance_of_x(x);
         check_rel(std::string(r.preset) + ": 100 theta_s = CLASS", theta, r.theta, 1e-5);
-        if (std::string(r.preset) == "planck2018") // CLASS tau_reio (to z_reion + 8 delta_z, with the residual X_e)
+        if (std::string(r.preset) == "planck2018") { // CLASS tau_reio (to z_reion + 8 delta_z, with the residual X_e)
             check_rel("planck2018: tau_reio = CLASS", rec.tau_reionization(), 0.054525721886338085, 1e-3);
+            // T_b after reionization: Compton heating with the reionized X_e (CLASS Tb, linear in z between its rows)
+            check_rel("planck2018: T_b(z = 6) = CLASS", rec.Tb_of_x(-std::log(7.0)), 6.877609027972515, 3e-3);
+            check_rel("planck2018: T_b(z = 1) = CLASS", rec.Tb_of_x(-std::log(2.0)), 1.3411749544482057, 3e-3);
+        }
     }
 }
 

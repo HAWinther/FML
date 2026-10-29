@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): Compton heating of the baryons after reionization
+- T_b was evolved with the X_e of recombination only, so it kept cooling adiabatically through reionization
+  (planck2018: 1.06 K at z = 6). From the start of reionization (z_reion + 8 delta_z) it is now integrated with the
+  reionized X_e, as CLASS: T_b(z = 6) = 6.88 K and T_b(z = 1) = 1.34 K, both within 4e-5 of CLASS (new checks in
+  tests/test_recombination.cpp). The baryon sound speed changes only at late times: C_ell and P(k) unchanged at the
+  regression tolerance.
+
 ### Cosmology (EBS): tau_reio as CLASS (to z_reion + 8 delta_z)
 - The reionization optical depth was integrated from z = 0 to 50, CLASS's tau_reio to the start of reionization,
   z_reion + 8 delta_z_reion (reio_camb). It is now the same: planck2018 tau_reio = CLASS to 3e-5 (was +0.27%).

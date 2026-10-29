@@ -544,12 +544,6 @@ namespace FML::COSMOLOGY {
                                          const std::vector<double> & Tb,
                                          size_t i_switch) {
         const size_t n = x_array.size();
-        if (options.evolve_Tb) {
-            std::vector<double> log_Tb(n);
-            for (size_t i = 0; i < n; i++)
-                log_Tb[i] = std::log(Tb[i]);
-            log_Tb_spline.create(x_array, log_Tb, "log_Tb");
-        }
 
         // d X_e / dx in the Saha regime (i < i_switch) from a spline of ln X_e (smooth there)
         {
@@ -578,6 +572,30 @@ namespace FML::COSMOLOGY {
             dlogXedx[i] = dXt / Xt;
         }
         log_Xe_spline.create(x_array, log_Xe, "log_Xe");
+
+        // Baryon temperature. After the start of reionization (z_reion + 8 delta_z) it is integrated again with the
+        // reionized X_e: Compton heating by the CMB raises T_b (as CLASS; T_b(z = 6) = 6.9 K instead of 1.1 K)
+        if (options.evolve_Tb) {
+            std::vector<double> T(Tb);
+            const double x_re = -std::log1p(z_reionization_start());
+            const size_t i0 = size_t(std::lower_bound(x_array.begin(), x_array.end(), x_re) - x_array.begin());
+            if (reion && i0 > 0 && i0 + 1 < n) {
+                ODEFunction rhs = [&](double x, const double * y, double * dydx) {
+                    dydx[0] = dTbdx(x, std::exp(log_Xe_spline(x)), y[0]);
+                    return GSL_SUCCESS;
+                };
+                const std::vector<double> xs(x_array.begin() + long(i0), x_array.end());
+                ODESolver ode(1e-6, 1e-14, 1e-10);
+                ode.solve(rhs, xs, {T[i0]}, gsl_odeiv2_step_rk8pd);
+                const auto Tr = ode.get_data_by_component(0);
+                for (size_t j = 0; j < xs.size(); j++)
+                    T[i0 + j] = Tr[j];
+            }
+            std::vector<double> log_Tb(n);
+            for (size_t i = 0; i < n; i++)
+                log_Tb[i] = std::log(T[i]);
+            log_Tb_spline.create(x_array, log_Tb, "log_Tb");
+        }
     }
 
     void RecombinationHistory::solve_tau(const std::vector<double> & x_array) {
