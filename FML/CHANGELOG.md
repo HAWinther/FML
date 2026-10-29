@@ -5,6 +5,20 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### FieldLevel: 2LPT, Lagrangian bias, redshift space and smooth mass assignment
+- New `Model::LPT`: 1LPT or 2LPT particles (Crocce et al. 2006 convention) with Lagrangian bias weights
+  1 + b1L delta + b2 (delta^2 - <delta^2>) + bG2 G2 and redshift-space displacements along z (growth rate f), with
+  adjoint gradients through the 2LPT source, the bias operators and the RSD mapping. The HMC mass and the centring
+  use the Kaiser amplitude b + f mu^2.
+- New `Assignment::Smooth` (default): a compact smooth kernel with deconvolution, so the predicted modes are the
+  Fourier transform of the particles (3e-5 at width 6 against a direct sum) with a continuous gradient.
+- Fixed: the 1LPT CIC model put every particle on a density-grid node, where CIC responds through |Psi|. A plane
+  wave of amplitude 1e-4 had a second harmonic at 38% of the fundamental (linear in the amplitude), and the linear
+  response differed mode by mode by ~24%. CIC particles now start mid-cell (the shift is undone by a phase).
+- Tests: gradients for 1LPT/2LPT with b2, bG2 and RSD; LPT without bias equals LPT1; analytic 2LPT displacement of
+  two plane waves (also in redshift space); smooth assignment against the direct Fourier sum; the large-scale limit
+  (b + f mu^2) delta_lin to 0.3%; no linear-order harmonics with CIC.
+
 ### Hamiltonian Monte Carlo (MCMC/HMC.h)
 - Header-only HMC for gradient-based posteriors of any dimension: a state of [operator-mass block | parameters],
   dual-averaging step size, Stan-like windowed diagonal mass adaptation, reflection at parameter bounds, divergence

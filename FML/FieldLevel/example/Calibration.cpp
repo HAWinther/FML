@@ -3,7 +3,8 @@
 // posterior is then sampled. If the model, gradients and sampler are correct, the posterior quantile of beta_true is
 // uniform on [0, 1] and z = (posterior mean - beta_true) / posterior std has mean ~0 and std ~1.
 // For the linear model the exact quantile is also computed from the analytic marginal posterior.
-// Usage: ./calibration [linear|1lpt] nmesh kmax n_mocks first_seed n_samples output
+// Usage: ./calibration [linear|1lpt|2lpt] nmesh kmax n_mocks first_seed n_samples output
+// 2lpt: Model::LPT, second order, Lagrangian bias b = 1.5, b2 = 0.3, bG2 = -0.2, redshift space with f = 0.7.
 #include <FML/FieldLevel/FieldLevelBAO.h>
 #include <fstream>
 #include <iostream>
@@ -13,7 +14,14 @@ using namespace FML::FIELDLEVEL;
 int main(int argc, char ** argv) {
     FML::init_mpi(&argc, &argv);
     Settings st;
-    st.model = (argc > 1 && std::string(argv[1]) == "linear") ? Model::Linear : Model::LPT1;
+    const std::string model = argc > 1 ? argv[1] : "1lpt";
+    st.model = model == "linear" ? Model::Linear : model == "2lpt" ? Model::LPT : Model::LPT1;
+    if (st.model == Model::LPT) {
+        st.lpt_order = 2;
+        st.b2 = .3;
+        st.bG2 = -.2;
+        st.growth_rate = .7;
+    }
     st.nmesh = argc > 2 ? std::atoi(argv[2]) : 32;
     st.kmax = argc > 3 ? std::atof(argv[3]) : .095;
     const int n_mocks = argc > 4 ? std::atoi(argv[4]) : 10;
