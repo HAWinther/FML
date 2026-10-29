@@ -1,0 +1,9 @@
+# Hessian and eigensystem output allocation
+
+`ComputeHessianWithFT` retains one real-input copy for its forward FFT. Every Hessian component is allocated with matching layout/status/label and filled directly from that retained Fourier source, instead of first copying the entire Fourier payload. `SymmetricTensorEigensystem` similarly allocates eigenvalue/eigenvector outputs without copying the first tensor field into every output.
+
+The shared `FFTWGrid::clone_empty()` helper zeros owned field values while preserving the grid label, real/Fourier status, halo sizes/contents, FFTW excess storage contents and real-row padding. Those non-field bytes were inherited by the former full-copy path and remain inherited. The helper requires an allocated grid and returns independent storage; it does not alias the input. Real-to-Fourier conversion itself still needs its input payload and is not replaced by an empty clone.
+
+For a 3D Hessian followed by all eigenvectors, this removes six Hessian-output payload copies plus twelve eigensystem-output copies. It does not reduce the number of retained output grids, change GSL's solve, redefine the tensor component/eigenvector ordering, or promise a fixed runtime/peak-RSS improvement. Fresh output allocation still initializes storage, and allocation reuse/temporary lifetimes depend on the caller's existing outputs.
+
+Existing normalization, DC removal, even-mesh mixed-Nyquist rules, input preservation and analytic derivatives remain unchanged. Tests in `tests/test_reconstruction.cpp` check 2D/3D derivatives, potential Hessians, GSL eigenvalue ordering and Mv=lambda v, as well as empty-clone input/halo/padding preservation and both real/Fourier states. Related LPT and CosmicWeb regressions cover downstream use. Rebuild dependent objects after changing this header/API.

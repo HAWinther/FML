@@ -334,6 +334,28 @@ namespace FML {
             /// cannot be read, is truncated or does not match the current domain decomposition
             void load_from_file(std::string fileprefix);
 
+            /// Allocate matching storage with zero owned field values, preserving label/status,
+            /// halos, FFTW excess allocation contents and real-row padding (not the owned field).
+            FFTWGrid clone_empty() const {
+                assert_mpi(Nmesh > 0, "[FFTWGrid::clone_empty] Source must be allocated");
+                FFTWGrid result(Nmesh, n_extra_x_slices_left, n_extra_x_slices_right);
+                result.grid_is_in_real_space = grid_is_in_real_space;
+                result.add_memory_label(name);
+                const ptrdiff_t begin = n_extra_x_slices_left * NmeshTotComplexSlice;
+                const ptrdiff_t end = begin + Local_nx * NmeshTotComplexSlice;
+                std::copy(fourier_grid_raw.begin(), fourier_grid_raw.begin() + begin, result.fourier_grid_raw.begin());
+                std::copy(fourier_grid_raw.begin() + end, fourier_grid_raw.end(),
+                          result.fourier_grid_raw.begin() + end);
+                if (grid_is_in_real_space) {
+                    const auto *source = reinterpret_cast<const FloatType *>(fourier_grid_raw.data()) + 2 * begin;
+                    auto *target = result.get_real_grid();
+                    const ptrdiff_t stride = 2 * (Nmesh / 2 + 1);
+                    for (ptrdiff_t row = 0; row < 2 * (end - begin); row += stride)
+                        std::copy(source + row + Nmesh, source + row + stride, target + row + Nmesh);
+                }
+                return result;
+            }
+
             void reallocate(int Nmesh, int nleft, int nright) { *this = FFTWGrid(Nmesh, nleft, nright); }
 
 #ifdef USE_GSL

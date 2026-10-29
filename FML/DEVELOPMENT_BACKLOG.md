@@ -1,6 +1,6 @@
 # FML remaining-work backlog
 
-Updated 29 October 2026, including completed Engineering items 1–7 and 20–21, and tested initial implementations of items 25–32, 35–36 and 38. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
+Updated 29 October 2026, including completed Engineering items 1–7, 10 and 20–21, and tested initial implementations of items 25–32, 35–36 and 38. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
 
 ## Completed in this sequence
 
@@ -20,6 +20,7 @@ Updated 29 October 2026, including completed Engineering items 1–7 and 20–21
 - MPI count audit: widened migration counters, checked collective layouts/catalogues and serialization products, bounded reductions and forced-chunk regressions.
 - Faster particle migration with direct neighbor/binary slab lookup, collective no-traffic/neighbor routing and a preserved general fallback.
 - Reusable Fourier-resampling runs with values-only bounded messages, precomputed peer rounds and shared 3LPT crop routing.
+- Hessian and eigensystem output allocation without redundant owned-field copies, preserving halo/padding contents.
 - One capability matrix and a shared C++17 build/API guide with linked regression examples.
 - A serial Python analysis package with owned 3D catalogues, kNN/CDF and spherical-count summaries, NumPy-owned results and explicit exception behavior.
 - Survey Fourier multipoles (0, 2, 4), weighted noise, physical geometry and MPI catalogue routing.
@@ -41,7 +42,7 @@ Items 28–30 have initial implementations in `HOD/HOD.h` and `CountsInCells/Spa
 
 ## Engineering work, suggested order
 
-Items 1–7 and 20–21 are complete. Continue with item 8; Engineering items 8–19 remain pending. See `FriendsOfFriends/SphericalOverdensity.md` for the multi-slab exchange contract and regression coverage, and `MultigridSolver/TerminationStatus.md` for solve-result semantics. See `PairCounting/RankAssignment.md` for deterministic scheduling and neighbor-aware workload estimates, and `Global/MPICounts.md` for the count-audit scope and limits. See `MPIParticles/Migration.md` for automatic migration routing and its general fallback. See `FFTWGrid/FourierResampling.md` for reusable Fourier-routing geometry and bounded payload buffers. See `CAPABILITIES.md`, `BUILDING.md` and `PythonAnalysis/README.md` for current capabilities and the selected Python analysis API.
+Items 1–7, 10 and 20–21 are complete. Item 8 is waiting at the user's request; item 12 is also waiting. Continue with item 14. Engineering items 9, 11–19 remain pending. See `FriendsOfFriends/SphericalOverdensity.md` for the multi-slab exchange contract and regression coverage, and `MultigridSolver/TerminationStatus.md` for solve-result semantics. See `PairCounting/RankAssignment.md` for deterministic scheduling and neighbor-aware workload estimates, and `Global/MPICounts.md` for the count-audit scope and limits. See `MPIParticles/Migration.md` for automatic migration routing and its general fallback. See `FFTWGrid/FourierResampling.md` for reusable Fourier-routing geometry and bounded payload buffers. See `CAPABILITIES.md`, `BUILDING.md` and `PythonAnalysis/README.md` for current capabilities and the selected Python analysis API.
 
 | # | Task | Concrete scope | Effort |
 |---|---|---|---|
@@ -54,7 +55,7 @@ Items 1–7 and 20–21 are complete. Continue with item 8; Engineering items 8�
 | 7 | ~~Reduce Fourier-resampling communication overhead~~ (completed) | Added reusable contiguous runs, values-only bounded buffers and precomputed peer rounds; reuse the crop plan across 3LPT fields. | Medium–large |
 | 8 | Distributed pair-count catalogue backend | Owned particles plus ghosts, explicit auto/cross-pair ownership, and no double counting; retain replicated APIs for small catalogues. | Large |
 | 9 | Stream binary Gadget field blocks | Bound the keep mask and field-block storage; preserve endian, mixed-species, format-1/2 and MASS-block behavior. | Medium–large |
-| 10 | Remove redundant Hessian/tensor copies | Allocate outputs without copying payloads that will be overwritten; share tested symmetric-tensor kernels where practical. | Medium |
+| 10 | ~~Remove redundant Hessian/tensor copies~~ (completed) | Shared empty-layout allocation preserves halos/padding while Hessian/eigensystem outputs avoid full overwritten-field copies. | Medium |
 | 11 | Flat generic cell storage | Offset/index-based replacement or alternate API for vector-per-cell ParticlesInBoxes; preserve compatibility through views. | Medium–large |
 | 12 | Improve polyspectrum shell reuse | Deterministic, cache-aware configuration ordering to reduce shell rebuilds under a bounded cache. | Medium |
 | 13 | Tile polyspectrum integration | Accumulate small compatible groups of configurations over spatial tiles; validate changed floating-point summation. | Medium–large |

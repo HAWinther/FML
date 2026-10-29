@@ -47,8 +47,8 @@ namespace FML {
             assert_mpi(f_real.get_nmesh() > 0, "[ComputeHessianWithFT] f_real grid is not allocated\n");
 
             // Helper function to go from f(k) -> DiDj f
-            // Assuing we have f(k) in grid
-            auto ComputeSecondDerivative = [&](FFTWGrid<N> & grid, int i1, int i2) {
+            // Read the retained Fourier source while filling each output directly.
+            auto ComputeSecondDerivative = [&](const FFTWGrid<N> &source, FFTWGrid<N> &grid, int i1, int i2) {
                 if (FML::ThisTask == 0)
                     std::cout << "[ComputeHessianWithFT::ComputeSecondDerivative] Computing phi_" << i1 << "," << i2
                               << "\n";
@@ -76,7 +76,7 @@ namespace FML {
                         }
 
                         // From f(k) -> -ika ikb f(k) / k^2 = (ka kb / k^2) f(k)
-                        auto value = grid.get_fourier_from_index(fourier_index);
+                        auto value = source.get_fourier_from_index(fourier_index);
                         double factor = -norm * kvec[i1] * kvec[i2];
                         if (hessian_of_potential_of_f)
                             factor *= -1.0 / kmag2;
@@ -105,8 +105,8 @@ namespace FML {
             int count = 0;
             for (int idim = 0; idim < N; idim++) {
                 for (int idim2 = idim; idim2 < N; idim2++) {
-                    hessian_real[count] = f_fourier;
-                    ComputeSecondDerivative(hessian_real[count], idim, idim2);
+                    hessian_real[count] = f_fourier.clone_empty();
+                    ComputeSecondDerivative(f_fourier, hessian_real[count], idim, idim2);
                     count++;
                 }
             }
@@ -145,14 +145,14 @@ namespace FML {
             // N eigenvalues
             eigenvalues.resize(N);
             for (int idim = 0; idim < N; idim++)
-                eigenvalues[idim] = tensor_real[0];
+                eigenvalues[idim] = tensor_real[0].clone_empty();
 
             // N eigenvectors with N components
             // We store the components in the same (row major) order as GSL uses
             if (compute_eigenvectors) {
                 eigenvectors.resize(N * N);
                 for (int i = 0; i < N * N; i++)
-                    eigenvectors[i] = tensor_real[0];
+                    eigenvectors[i] = tensor_real[0].clone_empty();
             }
 
             // Solves the full eigensystem
