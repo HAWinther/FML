@@ -153,7 +153,46 @@ void compare_counts(std::string label,
     check(maxdiff < 1e-10, label + ": " + num(total) + " (weighted) pairs, max relative difference " + num(maxdiff));
 }
 
+// The old linear scan is an independent reference for the exact assignment/order contract.
+void test_rank_assignment() {
+    using Costs = std::vector<std::pair<double, size_t>>;
+    const Costs tied{{8., 0}, {8., 1}, {4., 2}, {4., 3}, {4., 4}, {4., 5}, {0., 6}};
+    check(detail::assign_cells_to_rank(tied, 2, 0) == std::vector<size_t>({0, 2, 4, 6}) &&
+              detail::assign_cells_to_rank(tied, 2, 1) == std::vector<size_t>({1, 3, 5}),
+          "rank assignment breaks equal-load ties by the lowest rank");
+    Costs generated;
+    std::mt19937_64 schedule_rng(92847);
+    for (size_t i = 0; i < 1024; ++i)
+        generated.emplace_back(double(schedule_rng() % 97) * .1, i);
+    std::sort(generated.begin(), generated.end(), [](const auto &a, const auto &b) {
+        return a.first > b.first || (a.first == b.first && a.second < b.second);
+    });
+    // Includes empty schedules, idle ranks, repeated ties, zero increments, skewed loads and rounding.
+    for (const auto &cost : {Costs{}, tied, Costs{{1., 7}}, Costs{{0., 0}, {0., 1}, {0., 2}},
+                             Costs{{0x1p100, 0}, {1., 1}, {1., 2}, {.5, 3}, {.5, 4}},
+                             Costs{{0x1p100, 0}, {0x1p100, 1}, {1., 2}, {1., 3}, {.5, 4}}, generated}) {
+        for (int nranks : {1, 2, 3, 4, 7, 16, 65}) {
+            std::vector<double> load(nranks, 0.);
+            std::vector<std::vector<size_t>> expected(nranks);
+            for (const auto &cell : cost) {
+                int rank = int(std::min_element(load.begin(), load.end()) - load.begin());
+                expected[rank].push_back(cell.second);
+                load[rank] += cell.first;
+            }
+            bool same = true;
+            for (int rank = 0; rank < nranks; ++rank)
+                same &= detail::assign_cells_to_rank(cost, nranks, rank) == expected[rank];
+            if (!same) {
+                check(false, "heap assignment matches the legacy scan, including each rank's cell order");
+                return;
+            }
+        }
+    }
+    check(true, "heap assignment matches the legacy scan, including each rank's cell order");
+}
+
 int main() {
+    test_rank_assignment();
     check(paircount_odr_check() == 1, "PairCount.h can be included in several translation units");
 
     // Pair counts against brute force

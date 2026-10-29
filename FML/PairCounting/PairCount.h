@@ -4,11 +4,12 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
-#include <string>
-#include <type_traits>
 #include <cmath>
 #include <functional>
 #include <iomanip>
+#include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #ifdef USE_OMP
@@ -629,6 +630,40 @@ namespace FML {
                     return cl;
                 }
 
+                /// Assign sorted nonnegative finite costs to the least-loaded rank, breaking equal-load ties
+                /// by rank index, exactly as the previous linear min_element scan did.
+                inline std::vector<size_t> assign_cells_to_rank(const std::vector<std::pair<double, size_t>> &cost,
+                                                                int ntasks, int rank) {
+                    assert(ntasks > 0 && rank >= 0 && rank < ntasks);
+                    using RankLoad = std::pair<double, int>;
+                    // Zero loads in ascending rank order already form a min-heap.
+                    std::vector<RankLoad> loads;
+                    loads.reserve(size_t(ntasks));
+                    for (int task = 0; task < ntasks; ++task)
+                        loads.emplace_back(0.0, task);
+                    std::vector<size_t> mycells;
+                    for (const auto &cell : cost) {
+                        auto updated = loads.front();
+                        if (updated.second == rank)
+                            mycells.push_back(cell.second);
+                        updated.first += cell.first;
+                        // Costs are nonnegative: only the root can need to move down.
+                        // Move children up into the hole, then store the updated root once.
+                        size_t node = 0;
+                        while (node < loads.size() / 2) {
+                            size_t child = 2 * node + 1;
+                            if (child + 1 < loads.size() && loads[child + 1] < loads[child])
+                                ++child;
+                            if (!(loads[child] < updated))
+                                break;
+                            loads[node] = loads[child];
+                            node = child;
+                        }
+                        loads[node] = updated;
+                    }
+                    return mycells;
+                }
+
                 //====================================================
                 /// Calls pair_function(thread, i, j, dist, r2) for all the pairs (i in A, j in B, positions of the cell
                 /// lists, dist = x_i - x_j, minimum image if periodic) with r2 = |dist|^2 < rmax^2. Auto pairs (A = B):
@@ -696,13 +731,7 @@ namespace FML {
                             if (A.start[c + 1] > A.start[c])
                                 mycells.push_back(c);
                     } else {
-                        std::vector<double> load(FML::NTasks, 0.0);
-                        for (auto & c : cost) {
-                            const int task = int(std::min_element(load.begin(), load.end()) - load.begin());
-                            load[task] += c.first;
-                            if (task == FML::ThisTask)
-                                mycells.push_back(c.second);
-                        }
+                        mycells = assign_cells_to_rank(cost, FML::NTasks, FML::ThisTask);
                     }
 
 #ifdef USE_OMP
