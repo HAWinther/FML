@@ -55,7 +55,7 @@ Every gradient is checked against central finite differences (tests, agreement t
 
 - Adjoint gradients in x and beta against finite differences for both models and the three parametrisations.
 - Mock data: sum |d|^2 / C over 20 mocks equals the number of modes (C = (b^2 P + P_eps) / V).
-- Linear model: for the linear model the marginal posterior of beta is known exactly,
+- Linear model: two independent HMC runs check rank-normalized split-Rhat and bulk/tail ESS through `MCMC/Diagnostics.h`. These are regression checks on beta, not production convergence certification. For the linear model the marginal posterior of beta is known exactly,
   ln L(beta) = -1/2 sum_full (|d_k|^2 / C_k + ln C_k). HMC agrees with it in the mean and the width
   (24^3, kmax = 0.07: exact 1.0469 +- 0.0669, HMC 1.0521 +- 0.0664, ESS ~190).
 - 1LPT: beta is recovered from mock data made with the same model.
@@ -74,4 +74,4 @@ The example (`example/`, `./fieldlevel [linear|1lpt] nmesh kmax n_samples beta_t
   distortions) and its adjoint; the structure here (forward model, Gbar, adjoint chain to Q) carries over directly.
 - MPI slabs: the FFTs are already FFTWGrid; the CIC and its adjoint need the usual particle exchange.
 - Sampling the bias and noise parameters as well (slice or HMC blocks), and a realistic noise model.
-- Convergence diagnostics over several chains (the Gelman-Rubin statistic) and longer chains.
+- Longer runs over several dispersed chains, using the shared rank-normalized split-Rhat and bulk/tail ESS diagnostics on beta and relevant field summaries, plus divergence checks and repeated-mock coverage.

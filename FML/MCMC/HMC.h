@@ -10,7 +10,8 @@
 //                   reflection) and are recorded every step by default.
 // The sampler is leapfrog HMC with a jittered number of steps, dual-averaging step-size adaptation (Hoffman & Gelman
 // 2014) and Stan-like windowed adaptation of the diagonal mass. Use several chains (different seeds) and
-// gelman_rubin / integrated_autocorrelation_time on the recorded quantities to judge convergence.
+// diagnose_hmc_chains on recorded quantities; legacy helpers remain available.
+#include "Diagnostics.h"
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -281,11 +282,15 @@ namespace FML::MCMC {
         return result;
     }
 
-    /// Integrated autocorrelation time of a scalar series (Sokal's automatic window, c = 5)
+    /// Legacy scalar Sokal-window IAT; insufficient, constant or nonfinite draws return infinity (ESS=0).
     inline double integrated_autocorrelation_time(const std::vector<double> & x) {
         const std::size_t n = x.size();
         if (n < 4)
-            return 1;
+            return std::numeric_limits<double>::infinity();
+        for (double value : x)
+            if (!std::isfinite(value)) return std::numeric_limits<double>::infinity();
+        if (std::all_of(x.begin(), x.end(), [&](double value) { return value == x.front(); }))
+            return std::numeric_limits<double>::infinity();
         double mean = 0, var = 0;
         for (double v : x)
             mean += v;
@@ -293,8 +298,8 @@ namespace FML::MCMC {
         for (double v : x)
             var += (v - mean) * (v - mean);
         var /= double(n);
-        if (!(var > 0))
-            return 1;
+        if (!(var > 0) || !std::isfinite(var))
+            return std::numeric_limits<double>::infinity();
         double tau = 1;
         for (std::size_t lag = 1; lag < n / 2; ++lag) {
             double c = 0;
@@ -316,15 +321,28 @@ namespace FML::MCMC {
         return c;
     }
 
+    /// Post-warmup recorded scalar across independent HMC runs (not successive chunks of one run).
+    inline ChainDiagnostics diagnose_hmc_chains(const std::vector<HMCResult> & runs, std::size_t column = 0) {
+        std::vector<std::vector<double>> chains;
+        for (const auto & run : runs) chains.push_back(recorded_column(run, column));
+        return diagnose_chains(chains);
+    }
+
     /// Gelman-Rubin R - 1 of a scalar from several chains of equal length
     inline double gelman_rubin(const std::vector<std::vector<double>> & chains) {
         const std::size_t m = chains.size();
         if (m < 2)
             throw std::invalid_argument("[gelman_rubin] Needs at least two chains");
         const std::size_t n = chains[0].size();
-        for (const auto & c : chains)
+        for (const auto & c : chains) {
             if (c.size() != n || n < 2)
                 throw std::invalid_argument("[gelman_rubin] Chains must have equal length >= 2");
+        }
+        for (const auto & c : chains) {
+            if (std::any_of(c.begin(), c.end(), [](double v) { return !std::isfinite(v); }) ||
+                std::all_of(c.begin(), c.end(), [&](double v) { return v == c.front(); }))
+                return std::numeric_limits<double>::infinity();
+        }
         std::vector<double> means(m);
         double grand = 0, W = 0;
         for (std::size_t j = 0; j < m; ++j) {
@@ -342,6 +360,8 @@ namespace FML::MCMC {
             B += (mj - grand) * (mj - grand);
         B *= double(n) / double(m - 1);
         const double var_plus = (double(n - 1) / double(n)) * W + B / double(n);
+        if (!(W > 0) || !std::isfinite(W) || !std::isfinite(var_plus))
+            return std::numeric_limits<double>::infinity();
         return std::sqrt(var_plus / W) - 1;
     }
 } // namespace FML::MCMC

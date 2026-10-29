@@ -201,6 +201,9 @@ namespace FML::MCMC {
             for (size_t k = 0; k < n; k++)
                 for (size_t p = 0; p < d; p++)
                     var[p] += std::pow(c.rows[k][p] - mean[p], 2) / (n - 1.0);
+            for (size_t p = 0; p < d && n > 0; ++p)
+                if (std::all_of(c.rows.begin(), c.rows.end(), [&](const auto & row) { return row[p] == c.rows.front()[p]; }))
+                    var[p] = 0; // exact frozen-chain detection, independent of mean rounding
             local.insert(local.end(), mean.begin(), mean.end());
             local.insert(local.end(), var.begin(), var.end());
         }
@@ -215,12 +218,17 @@ namespace FML::MCMC {
         for (size_t p = 0; p < d; p++) {
             double W = 0.0, gm = 0.0, B = 0.0;
             for (size_t c = 0; c < m; c++) {
-                W += all[c * stride + 1 + d + p] / m;
+                const double variance = all[c * stride + 1 + d + p];
+                if (!(variance > 0) || !std::isfinite(variance))
+                    return std::numeric_limits<double>::infinity();
+                W += variance / m;
                 gm += all[c * stride + 1 + p] / m;
             }
             for (size_t c = 0; c < m; c++)
                 B += std::pow(all[c * stride + 1 + p] - gm, 2) / (m - 1); // B/n of Gelman-Rubin
             const double vplus = (n - 1.0) / n * W + B;
+            if (!(W > 0) || !std::isfinite(W) || !std::isfinite(vplus))
+                return std::numeric_limits<double>::infinity();
             worst = std::max(worst, vplus / W - 1.0);
         }
         return worst;
@@ -459,6 +467,17 @@ namespace FML::MCMC {
             n += c.steps_sampling;
         }
         return n > 0 ? double(a) / n : 0.0;
+    }
+
+    ChainDiagnostics Sampler::diagnostics(std::size_t column) const {
+        if (column >= post.names().size()) throw std::out_of_range("Sampler diagnostic column");
+        std::vector<std::vector<double>> values;
+        for (const auto & chain : chains) {
+            values.emplace_back();
+            values.back().reserve(chain.rows.size());
+            for (const auto & row : chain.rows) values.back().push_back(row.at(column));
+        }
+        return diagnose_chains(values);
     }
 
     long Sampler::n_samples() const {

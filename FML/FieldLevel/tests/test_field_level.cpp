@@ -114,12 +114,23 @@ static void test_linear_posterior() {
     opt.n_leapfrog = 12;
     opt.target_acceptance = .65;
     opt.seed = 3;
-    const auto chain = sample(fl, fl.white_noise(rng), 1.0, opt);
+    std::vector<FML::MCMC::HMCResult> runs;
+    runs.push_back(sample(fl, fl.white_noise(rng), 1.0, opt));
+    ++opt.seed;
+    runs.push_back(sample(fl, fl.white_noise(rng), 1.04, opt));
+    const auto diagnostic = FML::MCMC::diagnose_hmc_chains(runs);
+    check(diagnostic.valid(), "linear HMC diagnostics valid");
+    check(diagnostic.rhat < 1.05, "linear HMC rank-normalized split Rhat");
+    check(diagnostic.ess_bulk > 50 && diagnostic.ess_tail > 30, "linear HMC bulk/tail ESS");
+    std::cout << "linear diagnostics: Rhat " << diagnostic.rhat << " bulk ESS " << diagnostic.ess_bulk
+              << " tail ESS " << diagnostic.ess_tail << "\n";
+    const auto & chain = runs.front();
     const auto beta = FML::MCMC::recorded_column(chain, 0);
     double mean, sd;
     moments(beta, mean, sd);
     const double tau = FML::MCMC::integrated_autocorrelation_time(beta);
     const double ess = double(beta.size()) / tau;
+    check(std::isfinite(tau) && ess > 0, "linear HMC nondegenerate legacy ESS");
     std::cout << "linear: exact beta = " << mean_exact << " +- " << sd_exact << "; HMC " << mean << " +- " << sd
               << " (acceptance " << chain.acceptance << ", tau " << tau << ", ESS " << ess << ")\n";
     check(std::abs(mean - mean_exact) < 4 * sd_exact / std::sqrt(ess), "linear HMC mean of beta matches exact marginal");

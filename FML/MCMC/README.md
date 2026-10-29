@@ -94,7 +94,79 @@ double tau = integrated_autocorrelation_time(x0);
   (Hoffman & Gelman 2014) towards `target_acceptance` and restarted after each mass window. Bounds are handled by
   reflection, which is exact for the diagonal-mass parameters. A non-finite potential rejects the trajectory;
   `divergences` counts trajectories with H1 − H0 > `divergence_threshold` in the sampling phase.
-- One chain per call: run several with different seeds (and starts) and use `gelman_rubin` on recorded columns.
+- One chain per call: run several with different seeds and starts, then use `diagnose_hmc_chains` on recorded columns. Each concurrent chain needs its own model/workspace when the potential uses mutable scratch.
+
+## Convergence diagnostics
+
+`Diagnostics.h` is a standalone C++17 header, with no FFTW, MPI or Python dependency.
+It implements rank-normalized split-Rhat, folded rank-normalized split-Rhat, their
+maximum `rhat`, and bulk/tail effective sample sizes. ESS uses multi-chain variance,
+FFT autocovariances and Geyer's initial positive/monotone sequence; anticorrelation
+can give ESS above the draw count (bounded by S log10(S)). Tail ESS is the minimum
+of the 5% and 95% quantile-indicator ESS values, also returned separately.
+Definitions follow [Stan's posterior analysis guide](https://mc-stan.org/docs/reference-manual/analysis.html)
+and [Vehtari et al.](https://doi.org/10.1214/20-BA1221).
+
+```cpp
+#include <FML/MCMC/Diagnostics.h>
+// chains[chain][draw]: one scalar, equal-weight post-warmup draws
+const auto d = FML::MCMC::diagnose_chains(chains);
+if (!d.valid()) {
+    std::cerr << FML::MCMC::diagnostic_status_name(d.status) << "\n";
+} else {
+    std::cout << d.rhat << " " << d.ess_bulk << " " << d.ess_tail << "\n";
+}
+// Existing Metropolis sampler, after run(): includes sampled/derived column j.
+const auto parameter = mc.diagnostics(j);
+// Independent HMCResult objects; j selects a recorded column (beta is column 0 in FieldLevel).
+const auto hmc_parameter = FML::MCMC::diagnose_hmc_chains(runs, j);
+```
+
+The API requires at least two independent chains with eight draws each. Warmup
+must already be removed. Keep every rejected-step repeat; compressed GetDist
+weights must be expanded into chronological repetitions, not treated as draws or
+arbitrary importance weights. Do not concatenate independent chains or label
+successive chunks of one chain as independent runs. Ragged lengths throw rather
+than silently truncate. Odd-length chains drop their middle draw when split;
+tail quantiles use the original pooled draws, matching the reference convention.
+Ranks use average ties and Blom scores `(rank - 3/8)/(S + 1/4)`.
+
+`status` distinguishes insufficient chains/draws, nonfinite input, an original
+chain frozen at one value, and undefined numerical estimates. Initial invalid
+results have NaN metrics; a numerical-failure result may retain defined component
+metrics but `valid()` is false. `valid()` means estimates are defined, **not**
+that chains converged. `draws_used` counts retained split draws. A constant
+folded trace carries no scale information and contributes folded Rhat=1; an
+original constant chain is instead invalid. If a tail indicator has no pooled
+variation its ESS is undefined, not the sample count. These explicit degeneracy
+policies are intentionally more conservative than ArviZ's constant-ESS shortcut.
+
+Run several dispersed chains (four is a useful default) and examine scientifically
+relevant parameters and field summaries, not just one nuisance parameter. Rhat
+below 1.01 and bulk/tail ESS above roughly 100 per chain are useful screening
+criteria, not guarantees of posterior accuracy. Inspect trace behavior and HMC
+divergences as well. The two-chain FieldLevel unit check uses looser bounds as a
+regression smoke check; it does not certify joint-field convergence or coverage.
+
+`Sampler::Rminus1()` and its automatic stopping threshold remain the existing
+legacy statistic. Modern diagnostics are explicit post-run calculations over
+retained samples; they do not change transitions, adaptation, checkpoints or the
+stopping statistic. The legacy stopping code now fails closed on zero/nonfinite
+within-chain variance. The legacy HMC helpers also fail closed: short, frozen or
+nonfinite scalar series have infinite IAT (implied ESS=0); degenerate legacy
+Gelman-Rubin returns infinity. New code should use the modern multi-chain API.
+This work does not implement sample streaming or online moments (backlog #16).
+
+Native tests include checked-in numerical fixtures generated with ArviZ 0.21.0,
+so normal builds/CI need no Python packages. Optional reference regeneration and
+broader checks:
+
+```sh
+c++ -std=c++17 -O2 -I/path/to/FML tests/diagnostics_driver.cpp -o /tmp/diagnostics_driver
+# In a separate Python environment with arviz==0.21.0 and numpy:
+python tests/check_diagnostics_reference.py --driver /tmp/diagnostics_driver
+# Add --write-header tests/DiagnosticsReference.h only to deliberately regenerate fixtures.
+```
 
 ## Minimizer
 

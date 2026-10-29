@@ -112,6 +112,16 @@ int main() {
                    like,
                    quiet(4, 4000, 30000));
         mc.run();
+        const auto diagnostic = mc.diagnostics(3); // includes derived a+b and rejected-step repeats
+        check("modern sampler diagnostics valid", diagnostic.valid());
+        check("modern sampler rank Rhat", diagnostic.rhat < 1.02);
+        check("modern sampler bulk/tail ESS", diagnostic.ess_bulk > 400 && diagnostic.ess_tail > 400);
+        std::vector<std::vector<double>> traces(4);
+        for (int i = 0; i < 4; ++i) for (const auto & row : mc.samples(i)) traces[i].push_back(row[3]);
+        check_close("sampler adapter preserves full traces", diagnostic.ess_bulk, diagnose_chains(traces).ess_bulk, 1e-12);
+        bool invalid_column = false;
+        try { mc.diagnostics(4); } catch (const std::out_of_range &) { invalid_column = true; }
+        check("sampler diagnostic invalid column", invalid_column);
         const auto m = mc.mean(), s = mc.stddev();
         const auto cv = mc.covariance();
         double em = 0.0, ec = 0.0;
@@ -283,5 +293,15 @@ int main() {
         std::filesystem::remove_all(dir);
     }
 
+    {
+        LikelihoodFunction flat = [](const std::vector<double> &) { LikelihoodResult r; r.loglike = 0; return r; };
+        auto options = quiet(2, 0, 16);
+        options.max_steps = 32;
+        Sampler frozen({P("frozen", .1, 0., 2., 1e-100)}, {}, {}, flat, options);
+        frozen.run();
+        check("legacy stopping rejects zero within-chain variance", std::isinf(frozen.Rminus1()));
+        check("frozen sampler reaches step cap", frozen.n_samples() == 64);
+        check("modern frozen sampler status", frozen.diagnostics(0).status == DiagnosticStatus::ConstantChain);
+    }
     return Test::summary();
 }

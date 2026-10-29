@@ -34,6 +34,7 @@
 // =============================================================================
 
 #include <FML/MCMC/Posterior.h>
+#include <FML/MCMC/Diagnostics.h>
 
 #include <cstdint>
 #include <limits>
@@ -81,6 +82,8 @@ namespace FML::MCMC {
         std::vector<double> stddev() const;
         std::vector<std::vector<double>> covariance() const; // sampled parameters only
         double Rminus1() const { return R1; }
+        // Explicit post-run rank-normalized diagnostics; sampled and derived columns.
+        ChainDiagnostics diagnostics(std::size_t column) const;
         double acceptance() const;
         std::vector<double> best_fit() const { return best; } // sampled then derived
         double best_loglike() const { return best_ll; }

@@ -1,6 +1,6 @@
 # FML remaining-work backlog
 
-Updated 29 October 2026, including completed Engineering items 1–7, 10, 14 and 19–21, and tested initial implementations of items 25–32, 35–36 and 38. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
+Updated 29 October 2026, including completed Engineering items 1–7, 10, 14, 17 and 19–21, and tested initial implementations of items 25–32, 35–36 and 38. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
 
 ## Completed in this sequence
 
@@ -23,6 +23,7 @@ Updated 29 October 2026, including completed Engineering items 1–7, 10, 14 and
 - Hessian and eigensystem output allocation without redundant owned-field copies, preserving halo/padding contents.
 - Polyspectrum evaluation-storage component reports, checked cross-rank totals and an explicit opaque-FFT workspace allowance.
 - Reproducible FFT/copy/clone/resampling/migration/polyspectrum performance cases with scoped counters, OS peak RSS and machine-readable provenance.
+- Rank-normalized split/folded Rhat and bulk/tail ESS with standalone diagnostics, explicit invalid-chain handling and shared Metropolis/HMC adapters.
 - One capability matrix and a shared C++17 build/API guide with linked regression examples.
 - A serial Python analysis package with owned 3D catalogues, kNN/CDF and spherical-count summaries, NumPy-owned results and explicit exception behavior.
 - Survey Fourier multipoles (0, 2, 4), weighted noise, physical geometry and MPI catalogue routing.
@@ -44,7 +45,7 @@ Items 28–30 have initial implementations in `HOD/HOD.h` and `CountsInCells/Spa
 
 ## Engineering work, suggested order
 
-Items 1–7, 10, 14 and 19–21 are complete. Items 8 and 12 are waiting at the user's request. Other pending Engineering items are 9, 11, 13 and 15–18. See `FriendsOfFriends/SphericalOverdensity.md` for the multi-slab exchange contract and regression coverage, and `MultigridSolver/TerminationStatus.md` for solve-result semantics. See `PairCounting/RankAssignment.md` for deterministic scheduling and neighbor-aware workload estimates, and `Global/MPICounts.md` for the count-audit scope and limits. See `MPIParticles/Migration.md` for automatic migration routing and its general fallback. See `FFTWGrid/FourierResampling.md` for reusable Fourier-routing geometry and bounded payload buffers. See `CAPABILITIES.md`, `BUILDING.md` and `PythonAnalysis/README.md` for current capabilities and the selected Python analysis API.
+Items 1–7, 10, 14, 17 and 19–21 are complete. Items 8 and 12 are waiting at the user's request. Other pending Engineering items are 9, 11, 13, 15–16 and 18. See `FriendsOfFriends/SphericalOverdensity.md` for the multi-slab exchange contract and regression coverage, and `MultigridSolver/TerminationStatus.md` for solve-result semantics. See `PairCounting/RankAssignment.md` for deterministic scheduling and neighbor-aware workload estimates, and `Global/MPICounts.md` for the count-audit scope and limits. See `MPIParticles/Migration.md` for automatic migration routing and its general fallback. See `FFTWGrid/FourierResampling.md` for reusable Fourier-routing geometry and bounded payload buffers. See `CAPABILITIES.md`, `BUILDING.md` and `PythonAnalysis/README.md` for current capabilities and the selected Python analysis API.
 
 | # | Task | Concrete scope | Effort |
 |---|---|---|---|
@@ -64,7 +65,7 @@ Items 1–7, 10, 14 and 19–21 are complete. Items 8 and 12 are waiting at the 
 | 14 | ~~Report total workspace memory~~ (completed) | Reported input/results/metadata, shells, padding and remapping capacities plus explicit FFT allowance; kept cache budgets distinct from evaluation estimates and RSS. | Medium |
 | 15 | Extend explicit workspace reuse | Apply consistent reuse/release conventions to LPT, PGD, NUFFT, Hessians and polyspectra, building on FFTLog. | Incremental |
 | 16 | Stream MCMC samples and moments | Batched output, online means/variances/covariances, optional sample retention, checkpoint/resume and rejected-step multiplicities. Preserve exact-quantile requirements. | Medium–large |
-| 17 | Improve MCMC convergence diagnostics | Add rank-normalized split-Rhat and bulk/tail ESS separately from online moments. | Medium |
+| 17 | ~~Improve MCMC convergence diagnostics~~ (completed) | Added standalone rank-normalized split/folded Rhat and bulk/tail ESS, sampler/HMC adapters, explicit degeneracy statuses and independent ArviZ reference tests; legacy stopping remains distinct from modern post-run diagnostics. | Medium |
 | 18 | Consolidate MPI transport contracts | Reuse checked chunking/routing across modules; standardize collective failures, instrument bytes, and reduce per-peer send staging where measurements justify it. | Incremental |
 | 19 | ~~Add reproducible performance cases~~ (completed) | Added six validated cases with opt-in FFT/grid/transport counters, fresh-process RSS/rank timing reports and source/build/binary/configuration provenance. Extend workloads as production needs arise. | Incremental |
 | 20 | ~~Update capability documentation~~ (completed) | Added the capability matrix, shared C++17 build/API guide and updated root entry points with regression/example links. | Small–medium |
