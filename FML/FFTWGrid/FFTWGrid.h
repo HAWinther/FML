@@ -297,6 +297,9 @@ namespace FML {
             /// Check if we have NaN or Inf anywhere in the allocated grid (including the extra slices)
             bool nan_in_grids() const;
 
+            /// Actual retained payload capacity, including halos/padding; excludes object/allocator overhead.
+            size_t allocated_storage_bytes() const { return fourier_grid_raw.capacity() * sizeof(ComplexType); }
+
             /// Local allocation for a zero-halo grid, without allocating a mesh.
             static size_t storage_bytes(int nmesh) {
                 assert_mpi(nmesh > 0 && nmesh % FML::NTasks == 0, "[FFTWGrid::storage_bytes] Invalid mesh size");

@@ -1,11 +1,12 @@
 #ifndef POLYSPECTRUMBINNING_HEADER
 #define POLYSPECTRUMBINNING_HEADER
 #include <FML/Global/Global.h>
-#include <array>
 #include <algorithm>
-#include <functional>
-#include <stdexcept>
+#include <array>
 #include <cmath>
+#include <functional>
+#include <optional>
+#include <stdexcept>
 #include <vector>
 
 namespace FML {
@@ -19,11 +20,23 @@ namespace FML {
             size_t shell_memory_budget_bytes{0};
             /// Canonical configurations per collective; zero requests one batch (up to INT_MAX).
             size_t reduction_batch_size{4096};
+            /// Optional caller estimate for opaque FFT plans/workspace, in bytes per rank.
+            std::optional<size_t> fft_workspace_allowance_bytes;
+        };
+        struct PolyspectrumMemory {
+            // Component maxima over the latest geometry/field evaluation phases and all ranks.
+            size_t input_bytes = 0, result_bytes = 0, bin_metadata_bytes = 0, configuration_bytes = 0;
+            size_t cache_metadata_bytes = 0, shell_bytes = 0, padding_source_bytes = 0, remapping_bytes = 0;
+            size_t metadata_work_bytes = 0, reduction_bytes = 0, fft_workspace_allowance_bytes = 0;
+            size_t accounted_peak_bytes = 0;
+            // Absent unless every rank supplies an FFT allowance. Neither number is measured process RSS.
+            std::optional<size_t> estimated_peak_bytes;
         };
         struct PolyspectrumStatistics {
             size_t shell_grid_bytes{0}, peak_cached_shells{0};
             size_t geometry_shell_builds{0}, field_shell_builds{0};
             size_t geometry_reduction_batches{0}, field_reduction_batches{0}, metadata_reduction_batches{0};
+            PolyspectrumMemory memory;
         };
 
         /// Dense results by default; COMPACT stores one slot per canonical tuple.
@@ -129,6 +142,16 @@ namespace FML {
                 }
             }
             const std::vector<Configuration> & stored_configurations() const { return compact_configs; }
+            size_t result_storage_bytes() const { return (P123.capacity() + N123.capacity()) * sizeof(double); }
+            size_t metadata_storage_bytes() const {
+                return sizeof(*this) +
+                       (pofk.capacity() + kbin.capacity() + klow.capacity() + khigh.capacity() + kmean.capacity() +
+                        cached_low.capacity() + cached_high.capacity()) *
+                           sizeof(double) +
+                       (compact_configs.capacity() + selected.capacity() + cached_selected.capacity()) *
+                           sizeof(Configuration);
+            }
+
             static size_t dense_entries(int nbins) {
                 if (nbins < 2)
                     throw std::invalid_argument("[PolyspectrumBinning] At least two bins are required");

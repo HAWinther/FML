@@ -142,3 +142,68 @@ For example, 100 fourth-order bins formerly require two arrays of 100 million
 doubles (1.49 GiB per rank). With one selected tuple, the sparse result has one
 power and one count (16 bytes), one canonical tuple, and O(nbins) metadata.
 Workspace options bound shell grids separately; they are not total-RSS limits.
+
+## Total evaluation-storage report
+
+The shell-cache budget above remains a budget for resident shell payloads only.
+`bins.statistics.memory` now reports the larger evaluation footprint separately:
+
+```cpp
+// Optional caller estimate of FFT plans/opaque transform workspace per rank.
+// This is an estimate you supply, not a measured FFTW allocation or a limit.
+bins.options.fft_workspace_allowance_bytes = 64ULL * 1024 * 1024;
+compute_bispectrum(delta_fourier, bins);
+const auto &memory = bins.statistics.memory;
+std::cout << "Accounted evaluation storage: " << memory.accounted_peak_bytes << " bytes\n";
+if (memory.estimated_peak_bytes)
+    std::cout << "Including supplied FFT allowance: " << *memory.estimated_peak_bytes << " bytes\n";
+```
+
+The report includes these byte components:
+
+| Component | Included storage |
+| --- | --- |
+| `input_bytes` | Caller's retained grid capacity, including halos, real/r2c padding and FFTW excess allocation; zero for a standalone geometry-only call |
+| `result_bytes` | Both dense or compact P123/N123 vector capacities |
+| `bin_metadata_bytes` | Binning object and shell/selection/geometry-cache/canonical-tuple vector capacities |
+| `configuration_bytes` | Evaluation's canonical configuration list, separate from compact result indexing |
+| `cache_metadata_bytes` | Cache object and entry/control storage, separate from shell payloads |
+| `shell_bytes` | Maximum simultaneously resident shell payload capacities during the latest call |
+| `padding_source_bytes` | Largest source-resolution shell retained while constructing a padded shell |
+| `remapping_bytes` | Routing geometry plus the larger of construction scratch or retained communication buffers for Fourier remapping |
+| `metadata_work_bytes` | Auxiliary shell-power/mean-k/count reduction vector |
+| `reduction_bytes` | Largest configuration-sum batch vector |
+| `fft_workspace_allowance_bytes` | Largest caller-supplied FFT allowance over ranks |
+
+Component maxima are taken over the latest geometry/field evaluation phases and
+all MPI ranks. `accounted_peak_bytes` sums the first ten components; this is a
+conservative sum of tracked component maxima, which can occur at different times
+or on different ranks. `estimated_peak_bytes` adds the supplied FFT allowance.
+It is **unset unless every rank supplies an allowance**. Explicit zero is an
+asserted zero allowance, distinct from leaving it unspecified. Totals use checked
+wide arithmetic and fail collectively if they cannot fit size_t.
+
+These are evaluation-storage estimates after result preparation, not measured
+process peak RSS or hard upper bounds on every allocation. They exclude allocator
+and container-growth transients, output construction/reconfiguration transients,
+small temporary stack/callback/label bookkeeping, opaque MPI/runtime storage and
+other application objects (including particle catalogues). FFTW plan caches and
+internal workspaces are opaque; the caller allowance must cover the relevant
+retained plans and transforms for the application. Supplying an allowance does
+not enforce it or establish a rigorous memory bound.
+
+The report resets with the existing per-call statistics. Reused geometry has no
+new geometry-shell builds, but its retained result/metadata storage still counts.
+Unpadded execution reports zero padding/remapping bytes; standalone geometry
+counts report no external input grid. `to_dense()`, `free()` or later manual
+vector changes do not rewrite a historical estimator report: run the estimator
+again for a new snapshot. Cross-rank memory maxima add bounded end-of-phase
+reporting collectives, excluded from the configuration-reduction batch counters.
+
+`FFTWGrid::allocated_storage_bytes()` exposes retained payload capacity rather
+than just logical mesh size; copy assignment may retain a larger buffer.
+`FourierResamplingPlan::workspace_storage_bytes()` includes routing, construction
+scratch and retained payload buffers, without counting input/output grids again.
+The report does not change cache limits, configuration order, FFT counts,
+normalization or result storage. Cache-aware scheduling in backlog item 12 is
+still waiting.

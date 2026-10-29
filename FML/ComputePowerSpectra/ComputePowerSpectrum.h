@@ -1315,6 +1315,7 @@ namespace FML {
             assert_mpi(bins.valid_storage(), "[compute_polyspectrum_bincount] Invalid result storage");
             bins.statistics = {};
             const auto configs = bins.configurations();
+            bins.statistics.memory.configuration_bytes = configs.capacity() * sizeof(configs[0]);
             double requested_kmax = 0;
             for (const auto & cfg : configs)
                 for (auto bin : cfg)
@@ -1338,8 +1339,16 @@ namespace FML {
                             1.0 :
                             0.0);
                 }
-                if (mesh != Nmesh)
-                    field = FML::GRID::resize_fourier_grid(field, mesh);
+                if (mesh != Nmesh) {
+                    auto &memory = bins.statistics.memory;
+                    memory.padding_source_bytes =
+                        std::max(memory.padding_source_bytes, field.allocated_storage_bytes());
+                    FFTWGrid<N> padded(mesh);
+                    FML::GRID::FourierResamplingPlan<N> plan(field, padded);
+                    plan.apply(field, padded);
+                    memory.remapping_bytes = std::max(memory.remapping_bytes, plan.workspace_storage_bytes());
+                    field = std::move(padded);
+                }
                 field.fftw_c2r();
                 return field;
             };
@@ -1365,6 +1374,7 @@ namespace FML {
                     detail::store_permutations<N, ORDER>(bins, bins.N123, cfg, value);
                 });
             bins.mark_bincount_computed(Nmesh);
+            detail::finish_memory_report(bins);
         }
 
         template <int N, bool COMPACT>
@@ -1396,6 +1406,7 @@ namespace FML {
             if (!bins.has_bincount(Nmesh))
                 compute_polyspectrum_bincount<N, ORDER>(Nmesh, bins);
             const auto configs = bins.configurations();
+            bins.statistics.memory.configuration_bytes = configs.capacity() * sizeof(configs[0]);
             double requested_kmax = 0;
             for (const auto & cfg : configs)
                 for (auto bin : cfg)
@@ -1426,6 +1437,8 @@ namespace FML {
             }
             FML::SumArrayOverTasks(metadata.data(), metadata.size());
             bins.statistics.metadata_reduction_batches = 1;
+            bins.statistics.memory.metadata_work_bytes = metadata.capacity() * sizeof(double);
+            bins.statistics.memory.input_bytes = input.allocated_storage_bytes();
             for (int bin = 0; bin < bins.n; bin++) {
                 const double count = metadata[3 * bin + 2];
                 bins.kmean[bin] = count ? metadata[3 * bin] / count : bins.kbin[bin];
@@ -1446,8 +1459,16 @@ namespace FML {
                                                                               bins.dealias);
                     field.set_fourier_from_index(index, use ? input.get_fourier_from_index(index) : 0.0);
                 }
-                if (mesh != Nmesh)
-                    field = FML::GRID::resize_fourier_grid(field, mesh);
+                if (mesh != Nmesh) {
+                    auto &memory = bins.statistics.memory;
+                    memory.padding_source_bytes =
+                        std::max(memory.padding_source_bytes, field.allocated_storage_bytes());
+                    FFTWGrid<N> padded(mesh);
+                    FML::GRID::FourierResamplingPlan<N> plan(field, padded);
+                    plan.apply(field, padded);
+                    memory.remapping_bytes = std::max(memory.remapping_bytes, plan.workspace_storage_bytes());
+                    field = std::move(padded);
+                }
                 field.fftw_c2r();
                 return field;
             };
@@ -1464,6 +1485,7 @@ namespace FML {
                     const double count = bins.N123[bins.get_index_from_coord(cfg)];
                     detail::store_permutations<N, ORDER>(bins, bins.P123, cfg, count > 0 ? sum * norm / count : 0.0);
                 });
+            detail::finish_memory_report(bins);
         }
     } // namespace CORRELATIONFUNCTIONS
 } // namespace FML

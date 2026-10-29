@@ -590,11 +590,79 @@ void test_fourier_multiplicities() {
     }
 }
 
+template <int N> void test_memory_report() {
+    const int mesh = FML::NTasks == 3 ? 12 : 8;
+    Grid<N> input(2 * mesh), small(mesh, 1, 2);
+    small.set_grid_status_real(false);
+    small.fill_fourier_grid({1, 0});
+    input = small;
+    size_t input_bytes = input.allocated_storage_bytes();
+    FML::MaxOverTasks(&input_bytes);
+    PolyspectrumBinning<N, 3> dense(3, mesh);
+    dense.set_configurations({{2, 2, 2}});
+    dense.options.max_cached_shells = 1;
+    compute_bispectrum(input, dense);
+    auto m = dense.statistics.memory;
+    check(m.input_bytes == input_bytes &&
+              m.input_bytes >= size_t(small.get_ntot_fourier_alloc()) * sizeof(FML::GRID::ComplexType) &&
+              m.result_bytes >= 2 * 27 * sizeof(double) && m.shell_bytes > 0 && m.padding_source_bytes > 0 &&
+              m.remapping_bytes > 0 && m.configuration_bytes >= sizeof(std::array<int, 3>) &&
+              m.reduction_bytes >= sizeof(double) && m.accounted_peak_bytes > m.shell_bytes && !m.estimated_peak_bytes,
+          "memory report includes input capacity/halos, dense results, padded source and remapping storage");
+    SparsePolyspectrumBinning<N, 3> sparse(3, mesh);
+    sparse.set_configurations({{2, 2, 2}});
+    sparse.options.max_cached_shells = 1;
+    sparse.options.fft_workspace_allowance_bytes = size_t(100 + FML::ThisTask);
+    compute_bispectrum(input, sparse);
+    auto sm = sparse.statistics.memory;
+    check(sm.result_bytes < m.result_bytes && sm.estimated_peak_bytes &&
+              *sm.estimated_peak_bytes == sm.accounted_peak_bytes + size_t(100 + FML::NTasks - 1),
+          "compact result memory is smaller and FFT allowance uses the maximum rank estimate");
+    const auto powers = sparse.P123;
+    sparse.options.fft_workspace_allowance_bytes = 0;
+    compute_bispectrum(input, sparse);
+    check(sparse.statistics.geometry_shell_builds == 0 && sparse.P123 == powers &&
+              sparse.statistics.memory.estimated_peak_bytes == sparse.statistics.memory.accounted_peak_bytes,
+          "report resets on geometry reuse; explicit zero FFT allowance differs from an unspecified allowance");
+    if (FML::ThisTask == 0)
+        sparse.options.fft_workspace_allowance_bytes.reset();
+    compute_bispectrum(input, sparse);
+    check(!sparse.statistics.memory.estimated_peak_bytes,
+          "one rank without an FFT allowance leaves total workspace estimate unspecified everywhere");
+    sparse.dealias = false;
+    compute_bispectrum(input, sparse);
+    check(sparse.statistics.memory.padding_source_bytes == 0 && sparse.statistics.memory.remapping_bytes == 0,
+          "unpadded execution does not inherit stale padding/remapping memory");
+    compute_polyspectrum_bincount(mesh, sparse);
+    check(sparse.statistics.memory.input_bytes == 0, "standalone geometry report does not invent a caller input grid");
+    sparse.options.fft_workspace_allowance_bytes = std::numeric_limits<size_t>::max();
+    bool rejected = false;
+    try {
+        compute_bispectrum(input, sparse);
+    } catch (const std::overflow_error &) {
+        rejected = true;
+    }
+    int bad = !rejected;
+    FML::MaxOverTasks(&bad);
+    check(!bad, "memory-estimate total overflow fails collectively instead of wrapping");
+    sparse.options.fft_workspace_allowance_bytes = 0;
+    compute_bispectrum(input, sparse);
+    check(sparse.statistics.memory.estimated_peak_bytes.has_value(),
+          "memory report remains usable after an overflow rejection");
+}
+
 int main(int argc, char ** argv) {
+    if (argc > 1 && std::string(argv[1]) == "memory") {
+        test_memory_report<2>();
+        test_memory_report<3>();
+        return fails == 0 ? 0 : 1;
+    }
     if (argc > 1 && std::string(argv[1]) == "sparse") {
         test_sparse_suite();
         return fails == 0 ? 0 : 1;
     }
+    test_memory_report<2>();
+    test_memory_report<3>();
     check(pofk_odr_check() == 1, "ComputePowerSpectrum.h can be included in several translation units");
 
     // Shot noise: equal masses, masses and delta-f weights

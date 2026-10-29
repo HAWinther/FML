@@ -23,6 +23,7 @@ namespace FML::GRID {
         std::vector<std::vector<Block>> send, receive;
         std::vector<Count> send_count, receive_count, max_per_step;
         std::vector<ComplexType> send_buffer, receive_buffer;
+        size_t planning_bytes = 0;
 
         static void append(std::vector<Block> &blocks, Block block) {
             if (!blocks.empty() && blocks.back().source + ptrdiff_t(blocks.back().count) == block.source &&
@@ -86,6 +87,8 @@ namespace FML::GRID {
                 return result;
             };
             const auto sources = intervals(0, oldmesh), targets = intervals(2, newmesh);
+            planning_bytes = layouts.capacity() * sizeof(layouts[0]) + sources.capacity() * sizeof(sources[0]) +
+                             targets.capacity() * sizeof(targets[0]);
             auto owner = [](const auto &slabs, int x) {
                 auto it = std::upper_bound(slabs.begin(), slabs.end(), x,
                                            [](int value, const auto &slab) { return value < slab[0]; });
@@ -140,6 +143,20 @@ namespace FML::GRID {
                 max_per_step[step] = send_count[int((static_cast<long long>(rank) + step) % tasks)];
             MPI_Allreduce(MPI_IN_PLACE, max_per_step.data(), tasks, MPI_UNSIGNED_LONG_LONG, MPI_MAX, FML::communicator);
 #endif
+        }
+
+        /// Geometry plus the larger of construction scratch or retained payload buffers.
+        /// Excludes grids, allocator/reallocation transients and opaque MPI workspace.
+        size_t workspace_storage_bytes() const {
+            size_t bytes = sizeof(*this) + local.capacity() * sizeof(Block) +
+                           (send.capacity() + receive.capacity()) * sizeof(std::vector<Block>) +
+                           (send_count.capacity() + receive_count.capacity() + max_per_step.capacity()) * sizeof(Count);
+            for (const auto &blocks : send)
+                bytes += blocks.capacity() * sizeof(Block);
+            for (const auto &blocks : receive)
+                bytes += blocks.capacity() * sizeof(Block);
+            return bytes +
+                   std::max(planning_bytes, (send_buffer.capacity() + receive_buffer.capacity()) * sizeof(ComplexType));
         }
 
         /// Collective; reuse with different fields having the same meshes and local slab geometry.
