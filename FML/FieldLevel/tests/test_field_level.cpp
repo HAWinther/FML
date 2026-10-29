@@ -84,23 +84,6 @@ static void moments(const std::vector<double> & x, double & mean, double & sd) {
     sd = std::sqrt(var / double(x.size() - 1));
 }
 
-// Integrated autocorrelation time with Sokal's window
-static double autocorrelation_time(const std::vector<double> & x) {
-    double mean, sd;
-    moments(x, mean, sd);
-    double tau = 1;
-    for (std::size_t lag = 1; lag < x.size() / 2; ++lag) {
-        double c = 0;
-        for (std::size_t i = 0; i + lag < x.size(); ++i)
-            c += (x[i] - mean) * (x[i + lag] - mean);
-        c /= double(x.size() - lag) * sd * sd;
-        tau += 2 * c;
-        if (double(lag) >= 5 * tau)
-            break;
-    }
-    return std::max(tau, 1.);
-}
-
 static void test_linear_posterior() {
     auto st = small_settings(Model::Linear);
     st.beta_min = .85;
@@ -125,16 +108,18 @@ static void test_linear_posterior() {
         m2 += p * b * b;
     }
     const double mean_exact = m1 / w, sd_exact = std::sqrt(m2 / w - mean_exact * mean_exact);
-    HMCSettings hs;
-    hs.n_warmup = 150;
-    hs.n_samples = 600;
-    hs.n_leapfrog = 12;
-    hs.seed = 3;
-    const auto chain = run_hmc(fl, fl.white_noise(rng), 1.0, hs);
+    FML::MCMC::HMCOptions opt;
+    opt.warmup = 150;
+    opt.samples = 600;
+    opt.n_leapfrog = 12;
+    opt.target_acceptance = .65;
+    opt.seed = 3;
+    const auto chain = sample(fl, fl.white_noise(rng), 1.0, opt);
+    const auto beta = FML::MCMC::recorded_column(chain, 0);
     double mean, sd;
-    moments(chain.beta, mean, sd);
-    const double tau = autocorrelation_time(chain.beta);
-    const double ess = double(chain.beta.size()) / tau;
+    moments(beta, mean, sd);
+    const double tau = FML::MCMC::integrated_autocorrelation_time(beta);
+    const double ess = double(beta.size()) / tau;
     std::cout << "linear: exact beta = " << mean_exact << " +- " << sd_exact << "; HMC " << mean << " +- " << sd
               << " (acceptance " << chain.acceptance << ", tau " << tau << ", ESS " << ess << ")\n";
     check(std::abs(mean - mean_exact) < 4 * sd_exact / std::sqrt(ess), "linear HMC mean of beta matches exact marginal");
@@ -148,16 +133,18 @@ static void test_lpt_recovery() {
     std::mt19937_64 rng(7);
     const double beta_true = .97;
     fl.set_data(fl.make_mock(fl.white_noise(rng), beta_true, rng));
-    HMCSettings hs;
-    hs.n_warmup = 150;
-    hs.n_samples = 300;
-    hs.n_leapfrog = 12;
-    hs.seed = 9;
-    const auto chain = run_hmc(fl, fl.white_noise(rng), 1.0, hs);
+    FML::MCMC::HMCOptions opt;
+    opt.warmup = 150;
+    opt.samples = 300;
+    opt.n_leapfrog = 12;
+    opt.target_acceptance = .65;
+    opt.seed = 9;
+    const auto chain = sample(fl, fl.white_noise(rng), 1.0, opt);
+    const auto beta = FML::MCMC::recorded_column(chain, 0);
     double mean, sd;
-    moments(chain.beta, mean, sd);
+    moments(beta, mean, sd);
     std::cout << "1LPT: beta_true " << beta_true << "; HMC " << mean << " +- " << sd << " (acceptance "
-              << chain.acceptance << ", tau " << autocorrelation_time(chain.beta) << ")\n";
+              << chain.acceptance << ", tau " << FML::MCMC::integrated_autocorrelation_time(beta) << ")\n";
     check(std::abs(mean - beta_true) < 3.5 * sd, "1LPT HMC recovers beta");
     check(chain.acceptance > .4, "1LPT HMC acceptance");
 }

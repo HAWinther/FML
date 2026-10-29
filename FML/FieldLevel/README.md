@@ -37,16 +37,17 @@ Every gradient is checked against central finite differences (tests, agreement t
 
 ## Sampler
 
-`run_hmc` samples (x, beta) jointly with leapfrog HMC:
+`sample(model, x0, beta0, options)` samples (x, beta) jointly with the generic HMC of
+[`MCMC/HMC.h`](../MCMC/README.md#hmc) (dual-averaging step size, jittered leapfrog, windowed mass adaptation):
 
-- Mass: Fourier-diagonal for the field, M_k = 1 + b^2 P / P_eps (the exact Hessian of the linear model), and a
-  scalar mass 1 / sigma_beta^2 for beta, re-estimated during warmup. Beta reflects at the prior edges.
-- Step size adapted during warmup to an acceptance of 0.7; the number of leapfrog steps is jittered.
+- Mass: Fourier-diagonal for the field, M_k = 1 + b^2 P / P_eps (the exact Hessian of the linear model), applied
+  with FFTs as the operator block of `HMCMass`, and a diagonal mass for beta, adapted during warmup. Beta reflects at
+  the prior edges. A target acceptance of ~0.65 mixes better here than the default 0.8.
 - Parametrisation: with s sampled directly, beta and s are strongly correlated where the data dominate (changing beta
   at fixed s changes the predicted field). The sampled field is therefore partially centred,
   s_k = (T(beta_ref) / T(beta))^c x_k with c = S / (S + N) = b^2 P / (b^2 P + P_eps) per mode (`Settings::centering`;
   0 = white, 1 = fully centred). The prior and the Jacobian are included exactly. In the linear test this lowers the
-  autocorrelation time of beta from ~13 to ~2.6 iterations.
+  autocorrelation time of beta from ~13 to ~3 iterations.
 
 ## Validation
 

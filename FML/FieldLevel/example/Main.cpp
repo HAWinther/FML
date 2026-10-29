@@ -16,11 +16,12 @@ int main(int argc, char ** argv) {
     st.boxsize = 1000;
     st.bias = 1.5;
     st.noise_power = 1000;
-    HMCSettings hs;
-    hs.n_warmup = 100;
-    hs.n_samples = argc > 4 ? std::atoi(argv[4]) : 300;
-    hs.n_leapfrog = 12;
-    hs.verbose = true;
+    FML::MCMC::HMCOptions opt;
+    opt.warmup = 100;
+    opt.samples = argc > 4 ? std::atoi(argv[4]) : 300;
+    opt.n_leapfrog = 12;
+    opt.target_acceptance = .65;
+    opt.verbose_every = 20;
     const double beta_true = argc > 5 ? std::atof(argv[5]) : 1.02;
     const std::string output = argc > 6 ? argv[6] : "chain.txt";
 
@@ -49,18 +50,19 @@ int main(int argc, char ** argv) {
                   << "\n";
     }
 
-    const auto chain = run_hmc(fl, fl.white_noise(rng), 1.0, hs);
+    const auto chain = sample(fl, fl.white_noise(rng), 1.0, opt);
+    const auto beta = FML::MCMC::recorded_column(chain, 0);
     double mean = 0, var = 0;
-    for (double b : chain.beta)
+    for (double b : beta)
         mean += b;
-    mean /= double(chain.beta.size());
-    for (double b : chain.beta)
+    mean /= double(beta.size());
+    for (double b : beta)
         var += (b - mean) * (b - mean);
-    std::cout << "HMC: beta = " << mean << " +- " << std::sqrt(var / double(chain.beta.size() - 1))
-              << " (acceptance " << chain.acceptance << ", step " << chain.step_size << ")\n";
-    // Residual of the final sample against the true initial field on the constrained modes
+    std::cout << "HMC: beta = " << mean << " +- " << std::sqrt(var / double(beta.size() - 1)) << " (acceptance "
+              << chain.acceptance << ", step " << chain.step_size << ", autocorrelation time "
+              << FML::MCMC::integrated_autocorrelation_time(beta) << ")\n";
     std::ofstream out(output);
     out << "# sample beta potential\n";
-    for (std::size_t i = 0; i < chain.beta.size(); ++i)
-        out << i << " " << chain.beta[i] << " " << chain.potential[i] << "\n";
+    for (std::size_t i = 0; i < beta.size(); ++i)
+        out << i << " " << beta[i] << " " << chain.potential[i] << "\n";
 }

@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Hamiltonian Monte Carlo (MCMC/HMC.h)
+- Header-only HMC for gradient-based posteriors of any dimension: a state of [operator-mass block | parameters],
+  dual-averaging step size, Stan-like windowed diagonal mass adaptation, reflection at parameter bounds, divergence
+  count, plus `integrated_autocorrelation_time` and `gelman_rubin`. Used by `FieldLevel`.
+- Tests (`MCMC/tests/test_hmc.cpp`): moments and adapted masses of a Gaussian with variances over 6 decades, an
+  operator-mass correlated block coupled to two parameters, half-normal and uniform targets by reflection,
+  Gelman–Rubin.
+
 ### Field-level BAO inference prototype (new module FieldLevel)
 - `FieldLevel/FieldLevelBAO.h`: joint HMC sampling of the initial field and the BAO scale beta from a density field,
   with linear and 1LPT (Zel'dovich + CIC) forward models, a Gaussian per-mode likelihood below kmax, hand-written

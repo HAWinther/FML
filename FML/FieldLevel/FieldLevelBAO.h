@@ -4,10 +4,12 @@
 // white-noise initial field s (one unit Gaussian per cell) and the BAO scale beta = r_BAO / r_fid. The forward model is
 // either linear (pred = b delta_lin) or 1LPT (Zel'dovich particles assigned with CIC, pred = b delta_1LPT), compared to
 // the data mode by mode below a sharp cutoff kmax with a Gaussian likelihood of constant noise power P_eps. The posterior
-// is sampled jointly in (s, beta) with HMC using hand-written adjoint gradients and a Fourier-diagonal mass matrix.
+// is sampled jointly in (s, beta) with HMC (FML/MCMC/HMC.h) using hand-written adjoint gradients and a
+// Fourier-diagonal mass matrix.
 //
 // Serial (FFTWGrid without MPI; OpenMP over cells where it is free of races). See README.md for the conventions.
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/MCMC/HMC.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -478,122 +480,41 @@ namespace FML::FIELDLEVEL {
         }
     };
 
-    /// HMC over (s, beta) with a Fourier-diagonal mass for s, a scalar mass for beta and reflection at the prior edges.
-    struct HMCSettings {
-        int n_warmup{100};
-        int n_samples{300};
-        int n_leapfrog{10};         // jittered uniformly in [n_leapfrog / 2, n_leapfrog]
-        double step_size{.5};       // initial; adapted during warmup towards target_acceptance
-        double target_acceptance{.7};
-        double beta_scale{.02};     // initial guess of the posterior std of beta (sets its mass); adapted in warmup
-        std::uint64_t seed{1};
-        bool verbose{false};
-    };
-
-    struct Chain {
-        std::vector<double> beta, potential;
-        double acceptance{0}, step_size{0}, beta_scale{0};
-        Field last_s;
-    };
-
-    inline Chain run_hmc(const FieldLevelBAO & model, Field s, double beta, const HMCSettings & hs) {
-        std::mt19937_64 rng(hs.seed);
-        std::normal_distribution<double> gauss;
-        std::uniform_real_distribution<double> uniform;
+    /// Sample (x, beta) jointly with FML::MCMC::run_hmc. The field block has the Fourier-diagonal mass
+    /// mass_spectrum(beta0) applied with FFTs; beta has a diagonal mass 1 / beta_scale^2 (adapted during warmup) and
+    /// reflects at the prior edges. The recorded rows are {beta}; result.last holds the final x followed by beta.
+    inline FML::MCMC::HMCResult
+    sample(const FieldLevelBAO & model, Field x, double beta, FML::MCMC::HMCOptions options, double beta_scale = .02) {
         const auto & st = model.settings();
         if (!(beta > st.beta_min && beta < st.beta_max))
-            throw std::invalid_argument("[run_hmc] Initial beta outside the prior");
-        // The mass is fixed at the starting beta (it only preconditions, it need not be exact)
+            throw std::invalid_argument("[FieldLevel::sample] Initial beta outside the prior");
+        const std::size_t n = model.ncells();
+        if (x.size() != n)
+            throw std::invalid_argument("[FieldLevel::sample] Field has the wrong size");
         const auto mass = model.mass_spectrum(beta);
         std::vector<double> sqrt_mass(mass.size()), inv_mass(mass.size());
         for (std::size_t i = 0; i < mass.size(); ++i) {
             sqrt_mass[i] = std::sqrt(mass[i]);
             inv_mass[i] = 1 / mass[i];
         }
-        double eps = hs.step_size, beta_scale = hs.beta_scale;
-        Field grad(s.size());
-        double grad_beta = 0;
-        double U = model.potential_and_gradient(s, beta, grad, grad_beta);
-        Chain chain;
-        std::vector<double> warm_beta;
-        int accepted = 0;
-        for (int it = 0; it < hs.n_warmup + hs.n_samples; ++it) {
-            const bool warm = it < hs.n_warmup;
-            const double m_beta = 1 / (beta_scale * beta_scale);
-            Field xi(s.size());
-            for (auto & x : xi)
-                x = gauss(rng);
-            Field p = model.filter(xi, sqrt_mass);
-            double p_beta = std::sqrt(m_beta) * gauss(rng);
-            const auto kinetic = [&](const Field & mom, double mom_beta) {
-                const auto v = model.filter(mom, inv_mass);
-                double K = 0;
-                for (std::size_t c = 0; c < v.size(); ++c)
-                    K += mom[c] * v[c];
-                return .5 * K + .5 * mom_beta * mom_beta / m_beta;
-            };
-            const double H0 = U + kinetic(p, p_beta);
-            Field s_new = s, grad_new = grad;
-            double beta_new = beta, grad_beta_new = grad_beta, U_new = U;
-            const int nlf = hs.n_leapfrog / 2 + int(uniform(rng) * (hs.n_leapfrog - hs.n_leapfrog / 2 + 1));
-            for (int l = 0; l < std::max(1, nlf); ++l) {
-                for (std::size_t c = 0; c < p.size(); ++c)
-                    p[c] -= .5 * eps * grad_new[c];
-                p_beta -= .5 * eps * grad_beta_new;
-                const auto v = model.filter(p, inv_mass);
-                for (std::size_t c = 0; c < p.size(); ++c)
-                    s_new[c] += eps * v[c];
-                beta_new += eps * p_beta / m_beta;
-                // Reflect at the prior boundaries (volume preserving and reversible)
-                for (int r = 0; r < 100 && (beta_new < st.beta_min || beta_new > st.beta_max); ++r) {
-                    beta_new = beta_new < st.beta_min ? 2 * st.beta_min - beta_new : 2 * st.beta_max - beta_new;
-                    p_beta = -p_beta;
-                }
-                U_new = model.potential_and_gradient(s_new, beta_new, grad_new, grad_beta_new);
-                for (std::size_t c = 0; c < p.size(); ++c)
-                    p[c] -= .5 * eps * grad_new[c];
-                p_beta -= .5 * eps * grad_beta_new;
-            }
-            const double H1 = U_new + kinetic(p, p_beta);
-            const double accept_prob = std::isfinite(H1) ? std::min(1., std::exp(H0 - H1)) : 0.;
-            if (uniform(rng) < accept_prob) {
-                s.swap(s_new);
-                grad.swap(grad_new);
-                beta = beta_new;
-                grad_beta = grad_beta_new;
-                U = U_new;
-                if (!warm)
-                    ++accepted;
-            }
-            if (warm) {
-                eps *= std::exp(.1 * (accept_prob - hs.target_acceptance));
-                warm_beta.push_back(beta);
-                // Re-estimate the beta scale from the second half of the warmup so far
-                if (it >= 20 && it % 10 == 0) {
-                    const std::size_t start = warm_beta.size() / 2;
-                    double mean = 0, var = 0;
-                    for (auto i = start; i < warm_beta.size(); ++i)
-                        mean += warm_beta[i];
-                    mean /= double(warm_beta.size() - start);
-                    for (auto i = start; i < warm_beta.size(); ++i)
-                        var += (warm_beta[i] - mean) * (warm_beta[i] - mean);
-                    var /= double(warm_beta.size() - start - 1);
-                    if (var > 0)
-                        beta_scale = std::clamp(std::sqrt(var), .3 * beta_scale, 3 * beta_scale);
-                }
-            } else {
-                chain.beta.push_back(beta);
-                chain.potential.push_back(U);
-            }
-            if (hs.verbose && (it % 20 == 0))
-                std::cout << "[run_hmc] it " << it << " beta " << beta << " U " << U << " eps " << eps
-                          << " beta_scale " << beta_scale << " acc " << accept_prob << "\n";
-        }
-        chain.acceptance = hs.n_samples ? double(accepted) / hs.n_samples : 0;
-        chain.step_size = eps;
-        chain.beta_scale = beta_scale;
-        chain.last_s = std::move(s);
-        return chain;
+        FML::MCMC::HMCMass hmc_mass;
+        hmc_mass.n_custom = n;
+        hmc_mass.apply_sqrt = [&](std::vector<double> & p) { p = model.filter(p, sqrt_mass); };
+        hmc_mass.apply_inverse = [&](std::vector<double> & p) { p = model.filter(p, inv_mass); };
+        hmc_mass.diagonal = {1 / (beta_scale * beta_scale)};
+        options.lower = {st.beta_min};
+        options.upper = {st.beta_max};
+        Field field(n), grad_field;
+        const auto potential = [&](const std::vector<double> & state, std::vector<double> & grad) {
+            std::copy(state.begin(), state.begin() + std::ptrdiff_t(n), field.begin());
+            double grad_beta = 0;
+            const double U = model.potential_and_gradient(field, state[n], grad_field, grad_beta);
+            std::copy(grad_field.begin(), grad_field.end(), grad.begin());
+            grad[n] = grad_beta;
+            return U;
+        };
+        x.push_back(beta);
+        return FML::MCMC::run_hmc(potential, std::move(x), std::move(hmc_mass), options);
     }
 } // namespace FML::FIELDLEVEL
 #endif
