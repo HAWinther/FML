@@ -14,10 +14,10 @@ catalogue of `Void` (Void.h) that is the same on every rank:
   `parent` gives the void a void merges into). With `find_clusters` the same is done on 1/density; clusters with
   `Threshold` need `link_density_threshold > 1` (merge through links above it).
 
-The spherical and voxel catalogues depend on the grid. The default grid size (`Nmesh = 0`, as in Revolver) is
-rounded down to a multiple of the number of MPI tasks, so with the default the catalogue changes with the number of
-tasks (a warning is printed): set `Nmesh` (a multiple of the number of tasks) for results that do not. With a given
-grid the catalogues are identical for any number of tasks; ZOBOV's does not depend on a grid.
+The spherical and voxel catalogues depend on the grid. The default grid size (`Nmesh = 0`) is Revolver's,
+floor(2 (4 pi N/3)^(1/3)), rounded to the nearest multiple of 8 (of 32 from 256), so it does not depend on the
+number of MPI tasks (set `Nmesh`, a multiple of the task count, when the task count does not divide it). For a given grid the
+catalogues are identical for any number of tasks; ZOBOV's does not depend on a grid.
 
 ## Spherical-void particle exchange
 

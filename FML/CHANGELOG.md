@@ -5,14 +5,20 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### VoidFinders: default grid size independent of the number of tasks
+- The default voxel grid (also the spherical finder's candidate grid) was Revolver's floor(2 (4 pi N/3)^(1/3))
+  rounded down to a multiple of the task count, so the spherical and voxel catalogues changed with the number of
+  tasks. It is now rounded to the nearest multiple of 8 (32 from 256; cell size within 6% of Revolver's), which
+  does not depend on the task count; a task count that does not divide it is an error asking to set Nmesh.
+- The example (40k particles): Nmesh 149 -> 152 on 1 task; spherical voids 270 -> 267, voxel voids 1676 -> 1722;
+  1 and 2 tasks now give identical catalogues (before: 1676 vs 1714 voxel voids). Replaces the warning added in the
+  review fixes.
+
 ### VoidFinders: review fixes (Oct 29)
 - SphericalVoidFinder: `max_overlap` must be in [0, 1) (a negative value let overlapping voids through: the overlap
   hash only compares neighbouring cells), and min radius > max radius is an error (was an empty catalogue).
 - Clusters (`find_clusters`) with `ZoneMerging::Threshold` need `link_density_threshold > 1`: the void default 0.2
   merged every link, i.e. silently gave `Full`.
-- The default voxel grid size is rounded down to a multiple of the task count, so the spherical and voxel
-  catalogues changed with the number of tasks (example: 1676 vs 1714 voxel voids for 1 and 2 tasks). Now a warning
-  and documented; set Nmesh for task-independent results.
 - ZOBOV: removed a `density_ratio >= 1` cut that never removed anything. README documents all four finders.
 - Review (independent watershed/merging implementation, Poisson mocks with known holes, 1 vs 2 tasks): radii exact,
   voxel/ZOBOV catalogues and merging identical to the reference.

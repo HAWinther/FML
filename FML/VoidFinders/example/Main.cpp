@@ -65,8 +65,7 @@ int main() {
 
     //=======================================================================================
     // Voxel voids. Grid size and smoothing as in Revolver unless set in the options
-    // (the default grid size is rounded down to a multiple of the number of tasks, set
-    // Nmesh to get the same result for any number of tasks)
+    // (the default grid size is Revolver's rounded to a multiple of 8, the same for any number of tasks)
     //=======================================================================================
     FML::VOIDFINDER::VoxelOptions voxel_options;
     auto voxel_voids = FML::VOIDFINDER::VoxelVoidFinder(part.get_particles_ptr(), part.get_npart(), voxel_options);

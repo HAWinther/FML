@@ -20,7 +20,8 @@ namespace FML {
         /// Options for VoxelVoidFinder (defaults as in Revolver)
         struct VoxelOptions {
             /// Grid size. 0: as in Revolver, the cell size is half the radius of the sphere with one particle
-            /// on average, i.e. Nmesh = floor(2 (4 pi N / 3)^(1/3)), rounded down to a multiple of the number of tasks
+            /// on average, i.e. Nmesh = floor(2 (4 pi N / 3)^(1/3)), rounded to the nearest multiple of 8 (32 from 256;
+            /// the same for any number of tasks; set Nmesh if the task count does not divide it)
             int Nmesh{0};
             /// Gaussian smoothing scale in units of the box. Negative: as in Revolver, the mean particle
             /// separation N^(-1/3). 0: no smoothing
@@ -367,15 +368,15 @@ namespace FML {
 
             int Nmesh = options.Nmesh;
             if (Nmesh <= 0) {
-                Nmesh = int(std::floor(2.0 * std::cbrt(4.0 * M_PI * double(NumPartTot) / 3.0)));
-                const int Nmesh_one_task = Nmesh;
-                Nmesh -= Nmesh % FML::NTasks;
-                // The voxel and spherical catalogues depend on the grid: set Nmesh for results that do not depend
-                // on the number of tasks
-                if (FML::ThisTask == 0 and Nmesh != Nmesh_one_task)
-                    std::cout << "[VoxelVoidFinder] Warning: default Nmesh = " << Nmesh_one_task << " rounded down to "
-                              << Nmesh << " for " << FML::NTasks
-                              << " tasks: the catalogue differs from a 1-task run (set Nmesh to avoid this)\n";
+                // Revolver's size rounded to the nearest multiple of 8 (32 from 256, a cell size within 6% of
+                // Revolver's). It only depends on the number of particles, so the catalogue does not depend on the
+                // number of tasks (it used to be rounded down to a multiple of the task count)
+                const double n_revolver = std::floor(2.0 * std::cbrt(4.0 * M_PI * double(NumPartTot) / 3.0));
+                const int multiple = n_revolver >= 256 ? 32 : 8;
+                Nmesh = std::max(multiple, multiple * int(std::lround(n_revolver / multiple)));
+                assert_mpi(Nmesh % FML::NTasks == 0,
+                           "[VoxelVoidFinder] The default Nmesh (Revolver's size rounded to a multiple of 8 or 32) is "
+                           "not a multiple of the number of tasks: set Nmesh");
             }
             assert_mpi(Nmesh >= FML::NTasks and Nmesh % FML::NTasks == 0,
                        "[VoxelVoidFinder] Nmesh must be a multiple of the number of tasks");
