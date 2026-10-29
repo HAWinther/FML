@@ -182,14 +182,15 @@ int main() {
         SampledParameterMap pm(fixed,
                                {"omega_b", "omega_cdm", "theta_MC_100", "logA", "tau_reio", "A_planck"},
                                {"A_planck"});
-        const RunSettings s = pm.settings({0.02237, 0.1200, 1.03985, 3.044, 0.0544, 1.001});
+        const RunSettings s = pm.settings({0.02237, 0.1200, 1.04092, 3.044, 0.0544, 1.001});
         const double h2 = s.cosmo.h * s.cosmo.h;
         Theory t(s);
-        check_close("theta_MC_100 -> h: theta_MC reproduced", t.theta_MC(), 1.03985, 1e-7);
+        check_close("theta_MC_100 -> h: theta_MC reproduced", t.theta_MC(), 1.04092, 1e-7);
         check_close("... at fixed omega_b", s.cosmo.OmegaB * h2, 0.02237, 1e-12);
         check_close("... at fixed omega_cdm", s.cosmo.OmegaCDM * h2, 0.1200, 1e-12);
         std::cout << std::setprecision(6) << "  h = " << s.cosmo.h << ", z_reion = " << s.cosmo.z_reion << "\n";
-        check_close("h near the Planck value 0.6736", s.cosmo.h, 0.6736, 0.002);
+        // CosmoMC theta_MC: Planck 2018 TT,TE,EE+lowE+lensing 100 theta_MC = 1.04092 with H0 = 67.36
+        check_close("h near the Planck value 0.6736", s.cosmo.h, 0.6736, 0.0005);
         check_rel("logA -> A_s", s.cosmo.A_s, 1e-10 * std::exp(3.044), 1e-14);
         BackgroundCosmology bg(s.cosmo);
         bg.solve(s.bg_x_start, s.bg_x_end, s.bg_n_points);

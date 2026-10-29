@@ -60,6 +60,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <set>
 #include <sstream>
@@ -164,6 +165,21 @@ int main(int argc, char ** argv) {
     std::string covmat_file, hessian_file;
     bool threads_set = false;
     const auto labels = default_labels();
+    // Strict parsers: the whole value must be used ("2.7" is not an int), booleans only true/false/1/0
+    auto to_int = [](const std::string & k, const std::string & v) {
+        size_t pos = 0;
+        const long r = std::stol(v, &pos);
+        if (pos != v.size() || r < std::numeric_limits<int>::min() || r > std::numeric_limits<int>::max())
+            throw std::invalid_argument(k + ": not an integer: '" + v + "'");
+        return int(r);
+    };
+    auto to_bool = [](const std::string & k, const std::string & v) {
+        if (v == "true" || v == "1")
+            return true;
+        if (v == "false" || v == "0")
+            return false;
+        throw std::invalid_argument(k + ": not a boolean (true/false/1/0): '" + v + "'");
+    };
     try {
         std::set<std::string> lopt;
         for (const auto & n : Likelihoods::option_names())
@@ -172,30 +188,30 @@ int main(int argc, char ** argv) {
             if (k == "likelihoods")
                 like_names = split(v);
             else if (k == "mcmc_chains")
-                opt.chains = std::stoi(v);
+                opt.chains = to_int(k, v);
             else if (k == "mcmc_threads") {
-                opt.threads = std::stoi(v);
+                opt.threads = to_int(k, v);
                 threads_set = true;
             } else if (k == "mcmc_burn_in")
-                opt.burn_in = std::stoi(v);
+                opt.burn_in = to_int(k, v);
             else if (k == "mcmc_adapt_every")
-                opt.adapt_every = std::stoi(v);
+                opt.adapt_every = to_int(k, v);
             else if (k == "mcmc_min_samples")
-                opt.min_samples = std::stoi(v);
+                opt.min_samples = to_int(k, v);
             else if (k == "mcmc_max_steps")
-                opt.max_steps = std::stoi(v);
+                opt.max_steps = to_int(k, v);
             else if (k == "mcmc_check_every")
-                opt.check_every = std::stoi(v);
+                opt.check_every = to_int(k, v);
             else if (k == "mcmc_Rminus1")
                 opt.Rminus1_stop = std::stod(v);
             else if (k == "mcmc_seed")
                 opt.seed = std::stoull(v);
             else if (k == "mcmc_resume")
-                opt.resume = (v == "true" || v == "1");
+                opt.resume = to_bool(k, v);
             else if (k == "mcmc_checkpoint")
-                opt.checkpoint = (v == "true" || v == "1");
+                opt.checkpoint = to_bool(k, v);
             else if (k == "mcmc_oversample_fast")
-                opt.oversample_fast = std::stoi(v);
+                opt.oversample_fast = to_int(k, v);
             else if (k == "mcmc_output")
                 opt.output_root = v;
             else if (k == "mcmc_covmat")
@@ -205,9 +221,9 @@ int main(int argc, char ** argv) {
             else if (k == "sampler")
                 sampler = v;
             else if (k == "minimize_starts")
-                mopt.starts = std::stoi(v);
+                mopt.starts = to_int(k, v);
             else if (k == "minimize_max_evals")
-                mopt.max_evals = std::stoi(v);
+                mopt.max_evals = to_int(k, v);
             else if (k == "minimize_tol")
                 mopt.tol = std::stod(v);
             else if (k == "minimize_scatter")
@@ -215,9 +231,9 @@ int main(int argc, char ** argv) {
             else if (k == "minimize_profile")
                 profile_spec = v;
             else if (k == "minimize_hessian")
-                min_hessian = (v == "true" || v == "1");
+                min_hessian = to_bool(k, v);
             else if (k == "hessian_adapt_steps")
-                hessian_adapt = (v == "true" || v == "1");
+                hessian_adapt = to_bool(k, v);
             else if (k == "mcmc_sound_horizon") {
                 if (v == "fit")
                     topt.sound_horizon = TheoryOptions::SoundHorizon::Fit;
@@ -562,7 +578,7 @@ int main(int argc, char ** argv) {
                     throw std::invalid_argument("minimize_profile: " + t[0] + " is not sampled");
                 const size_t i = size_t(pidx.at(t[0]));
                 const double lo = std::stod(t[1]), hi = std::stod(t[2]);
-                const int n = std::stoi(t[3]);
+                const int n = to_int("minimize_profile", t[3]);
                 if (n < 1)
                     throw std::invalid_argument("minimize_profile: n must be >= 1");
                 std::vector<double> vals;

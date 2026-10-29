@@ -5,6 +5,22 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### CosmologyFitting: review (Oct 29); theta_MC is CosmoMC's
+- `theta_MC` (the `theta_MC_100` alias and derived value) used the exact baryon loading R = 3 rho_b/(4 rho_gamma);
+  CosmoMC/CAMB's cosmomc_theta uses R = 3e4 a omega_b. It was 0.00107 (3.4 sigma_Planck) below CAMB, so sampling
+  Planck's 1.04092 gave h = 0.6772 instead of 0.6736. Now CosmoMC's: 1.04090 at the Planck TT,TE,EE+lowE mean
+  (Planck 1.04090), and the test recovers h = 0.67361 from 1.04092. Start values in params/ and the README updated.
+- The derived chi2 of the free-amplitude SN likelihood was named `chi2_sn (free amplitude)`, which breaks GetDist's
+  .paramnames: now `chi2_sn_free_amplitude`.
+- ./mcmc options: booleans accept only true/false/1/0 (`mcmc_resume = yes` silently meant false) and integers must
+  be integers (`mcmc_chains = 2.7` gave 2).
+- README: the `precision = fast` Delta chi^2 at the Planck best fit is 1.2 (TTTEEE), 1.1 (TT), 0.01 (lensing), not 0.2.
+- Review: DESI DR1/DR2 BAO, Pantheon+/DES-SN5YR/Union3 with analytic M marginalization, Chen et al. distance
+  priors, plik_lite (4 variants) and Planck lensing (vs Cobaya's CMBlikes) all identical to independent
+  implementations to 1e-10 for the same theory; aliases, derived parameters, the slow-parameter cache and MPI
+  correct. Open: plik_lite TT-only chi2 is ~3 below CLASS's (our D_ell^TT 0.3-0.7% low at ell >~ 1500; the
+  damping-tail item of the solver review).
+
 ### MCMC: review (Oct 29); R-1 as CosmoMC/Cobaya, error handling
 - R-1 was max over parameters of B/W - 1/n (no (1+1/m) factor, single parameters only), 1.25-2.4x below the
   CosmoMC/Cobaya value, so `Rminus1_stop = 0.01` stopped runs that Cobaya would continue (3 of 6 test runs). It is

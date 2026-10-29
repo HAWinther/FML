@@ -134,13 +134,14 @@ make clean && make USE_MPI=true && mpirun -np 4 ./mcmc params/mcmc_planck_lite_l
   `cmb_mock_bb = true` adds the lensed BB (e.g. `sample_r` with mock data made with `r > 0`). With `r > 0` (fixed or
   sampled) the theory includes the tensor modes (~10 s more per point).
 - **Theory.** The full `./cmb` pipeline with the precision of the parameter file; use `precision = fast`
-  (~15 s per point on 2 cores, Δχ² ≈ 0.2 for Planck). With CMB likelihoods the chains of one process are advanced
+  (~15 s per point on 2 cores; at the Planck best fit Δχ² = 1.2 for plik_lite TTTEEE and 1.1 for TT
+  relative to the default precision, 0.01 for lensing). With CMB likelihoods the chains of one process are advanced
   one after the other, and each evaluation uses all OpenMP threads.
 - **Parameters.** Sample `omega_b, omega_cdm, theta_MC_100, tau_reio, logA, n_s` (+ `A_planck`) as Planck does:
   θ_MC (a cheap proxy of the acoustic angle, Hu–Sugiyama z_* and r_s from the background) removes the
-  H0–ω_m degeneracy from the proposal. Our θ_MC is 0.1% below CAMB's for the same model (1.03985 for the Planck
-  best fit), because of the exact radiation content; 100θ_* (τ = 1) is derived and agrees with Planck (1.04103 vs
-  1.04110 ± 0.00031).
+  H0–ω_m degeneracy from the proposal. θ_MC is CosmoMC's (CAMB `cosmomc_theta`: Hu–Sugiyama z_*, baryon loading
+  R = 3·10⁴ a ω_b), so the Planck values apply: 1.04090 at the Planck 2018 TT,TE,EE+lowE mean (Planck: 1.04090);
+  100θ_* (τ = 1) is derived and agrees with Planck (1.04103 vs 1.04110 ± 0.00031).
 - **Proposal.** `params/mcmc_planck_lite_lcdm.covmat` comes from `mcmc_hessian` at the Planck best fit (99
   evaluations, 25 min on 2 cores), so the burn-in can be short (600 steps). Its errors are already Planck's:
   σ(ω_b) = 0.000145, σ(ω_c) = 0.0013, σ(100θ_MC) = 0.00031, σ(τ) = 0.0085, σ(ln 10¹⁰A_s) = 0.017,

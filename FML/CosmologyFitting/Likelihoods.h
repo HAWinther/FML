@@ -97,7 +97,8 @@ namespace FML::COSMOLOGY::FITTING {
         explicit SupernovaLikelihood(
             const std::string & file = Utils::fml_file("CosmologyFitting/external/supernovadata.txt"),
             bool free_amplitude = false);
-        std::string name() const override { return free_amp ? "sn (free amplitude)" : "sn"; }
+        // (GetDist parameter names: no spaces)
+        std::string name() const override { return free_amp ? "sn_free_amplitude" : "sn"; }
         bool needs_recombination() const override { return false; }
         double loglike(const Theory & t) const override;
         int n_data() const override { return int(z.size()); }

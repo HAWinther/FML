@@ -45,11 +45,12 @@ namespace FML::COSMOLOGY::FITTING {
         return (s.cosmo.OmegaB + s.cosmo.OmegaCDM + s.cosmo.OmegaNcdm()) * s.cosmo.h * s.cosmo.h;
     }
 
-    // r_s(z) = int c_s deta, c_s = c / sqrt(3 (1 + 3 rho_b / (4 rho_gamma))); below x = -20 c_s = c/sqrt(3)
-    double Theory::sound_horizon_bg(double z) const {
-        const double x1 = -std::log1p(z), x0 = s.bg_x_start;
+    // r_s(z) = int c_s deta, c_s = c / sqrt(3 (1 + R)), R = 3 rho_b / (4 rho_gamma) (cosmomc: R = 3e4 a omega_b, the
+    // approximation of CAMB's CosmomcTheta); below x = bg_x_start c_s = c/sqrt(3)
+    double Theory::sound_horizon_bg(double z, bool cosmomc) const {
+        const double x1 = -std::log1p(z), x0 = s.bg_x_start, wb = omega_b();
         auto f = [&](double x) {
-            const double Rb = 3.0 * bg->rhoB(x) / (4.0 * bg->rhoGamma(x));
+            const double Rb = cosmomc ? 3.0e4 * std::exp(x) * wb : 3.0 * bg->rhoB(x) / (4.0 * bg->rhoGamma(x));
             return c / std::sqrt(3.0 * (1.0 + Rb)) / bg->Hp_of_x(x);
         };
         return (bg->eta_of_x(x0) / std::sqrt(3.0) + Utils::integrate(f, x0, x1, 0.0, 1e-10)) / Mpc;
@@ -166,7 +167,7 @@ namespace FML::COSMOLOGY::FITTING {
         const double g1 = 0.0783 * std::pow(wb, -0.238) / (1.0 + 39.5 * std::pow(wb, 0.763));
         const double g2 = 0.560 / (1.0 + 21.1 * std::pow(wb, 1.81));
         const double z = 1048.0 * (1.0 + 0.00124 * std::pow(wb, -0.738)) * (1.0 + g1 * std::pow(wm, g2));
-        return 100.0 * sound_horizon_bg(z) / D_M(z);
+        return 100.0 * sound_horizon_bg(z, true) / D_M(z);
     }
     double Theory::theta_star() const { return 100.0 * r_star() / D_M(z_star()); }
 

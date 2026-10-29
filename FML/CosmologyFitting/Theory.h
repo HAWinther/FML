@@ -27,10 +27,10 @@
 // Options::cmb_ell_max. Lensing is always on. With r > 0 the tensor modes are added (Tensors.h; lensed
 // together with the scalars, and BB includes the primordial B modes).
 //
-// theta_MC() = 100 r_s(z_*)/D_M(z_*) with the Hu-Sugiyama z_* and r_s from the background (like CosmoMC's
-// theta_MC, a cheap proxy of the acoustic angle used as a sampling coordinate; ~1e-4 different from CAMB's
-// value because of the exact radiation content), theta_star() the same with the tau = 1 redshift and the
-// recombination sound horizon (100 theta_* of CAMB/CLASS).
+// theta_MC() = 100 r_s(z_*)/D_M(z_*) with the Hu-Sugiyama z_* and r_s from the background with CosmoMC's baryon
+// loading R = 3e4 a omega_b (CAMB's CosmomcTheta, a cheap proxy of the acoustic angle used as a sampling
+// coordinate; equal to CAMB's cosmomc_theta to ~2e-6 for the same H(z)), theta_star() the same with the tau = 1
+// redshift and the recombination sound horizon (100 theta_* of CAMB/CLASS).
 //
 // Nuisance parameters of the likelihoods (e.g. the Planck calibration A_planck) are passed with the theory.
 // =============================================================================
@@ -119,8 +119,9 @@ namespace FML::COSMOLOGY::FITTING {
         mutable double zs = -1.0, rs = -1.0, zd = -1.0, rd = -1.0;
         void compute_star() const;
         void compute_drag() const;
-        double sound_horizon_bg(double z) const; // int_z^inf c_s dz/H [Mpc], from the background only
-        double E_chen(double z) const;           // H/H0 with the radiation and neutrinos of Chen et al.
+        // int_z^inf c_s dz/H [Mpc], from the background only (cosmomc: CAMB's R = 3e4 a omega_b)
+        double sound_horizon_bg(double z, bool cosmomc = false) const;
+        double E_chen(double z) const; // H/H0 with the radiation and neutrinos of Chen et al.
         double D_M_chen(double z) const;
         double r_s_chen(double z) const;
         mutable double R_c = -1.0, lA_c = -1.0;
