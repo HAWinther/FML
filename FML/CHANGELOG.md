@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Field-level BAO inference prototype (new module FieldLevel)
+- `FieldLevel/FieldLevelBAO.h`: joint HMC sampling of the initial field and the BAO scale beta from a density field,
+  with linear and 1LPT (Zel'dovich + CIC) forward models, a Gaussian per-mode likelihood below kmax, hand-written
+  adjoint gradients, a Fourier-diagonal mass matrix and an S/(S+N) partially centred parametrisation of the field.
+- Tests: gradients against finite differences (both models, three parametrisations); mock normalisation; the linear
+  model's beta posterior against its exact marginal; recovery of beta with 1LPT. Prototype scope: serial, linear
+  bias, constant noise power, toy wiggle template (see `FieldLevel/README.md`).
+
 ### Review of Environment, EnsembleStatistics, Morphology and the streaming/storage changes (no defects found)
 - Environment: for Poisson tracers the density-split cross-correlations equal the exact expectation
   E[N|q]/(nbar V) - 1 inside the smoothing sphere and ~0 outside, for all 5 quantiles (20 realizations).
