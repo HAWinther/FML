@@ -107,10 +107,12 @@ namespace FML::COSMOLOGY {
             return Yp / ((options.model == RecombinationOptions::Model::Recfast ? 3.9715 : 4.0) * (1.0 - Yp));
         }
         bool has_reionization() const { return reion; }
-        double tau_reionization() const; // optical depth from z = 0 to z = 50
+        // Optical depth from z = 0 to the start of reionization, z_reion + 8 delta_z_reion (CLASS's tau_reio)
+        double tau_reionization() const;
+        double z_reionization_start() const; // z_reion + 8 delta_z_reion
         // Optical depth of the reionization model alone (X_e from the tanh steps, without the residual
-        // ionization of recombination) for a given z_reion, from z = 0 to 50. Needs no solve(); differs from
-        // tau_reionization() by ~1e-4. Used to sample tau instead of z_reion.
+        // ionization of recombination) for a given z_reion, over the same range. Needs no solve(); slightly below
+        // tau_reionization() (the residual ionization). Used to sample tau instead of z_reion.
         double tau_reionization_model(double z_reion) const;
 
         const BackgroundCosmology & get_cosmo() const { return cosmo; }

@@ -197,7 +197,7 @@ int main() {
                     RecombinationHistory(bg, s.rec).tau_reionization_model(s.cosmo.z_reion),
                     0.0544,
                     1e-7);
-        check_close("... full tau of the run (with residual ionization) within 3e-4", t.tau_reio(), 0.0544, 3e-4);
+        check_close("... full tau of the run (with residual ionization) within 3e-5", t.tau_reio(), 0.0544, 3e-5);
         check_close("100 theta_* (tau = 1) = Planck 1.04110 +- 0.00031", t.theta_star(), 1.04110, 0.00031);
         check("theta_MC_100 together with H0 is an error",
               throws([&] { SampledParameterMap(fixed, {"theta_MC_100", "H0"}); }));

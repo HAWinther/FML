@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): tau_reio as CLASS (to z_reion + 8 delta_z)
+- The reionization optical depth was integrated from z = 0 to 50, CLASS's tau_reio to the start of reionization,
+  z_reion + 8 delta_z_reion (reio_camb). It is now the same: planck2018 tau_reio = CLASS to 3e-5 (was +0.27%).
+  RecombinationHistory::tau_reionization_model (tau_reio -> z_reion in CosmologyFitting) uses the same range, so the
+  full tau of a fit now differs from the sampled tau_reio by 8e-6 (was ~1.5e-4).
+- New check in tests/test_recombination.cpp; test_fitting tolerance tightened to 3e-5; report numbers updated.
+
 ### Cosmology (EBS): reduced-mass ionization energies in Saha and Peebles
 - Saha and the Peebles equation used the infinite-mass Rydberg (epsilon_0 = 13.6057 eV, He II 4 epsilon_0); they
   now use the reduced-mass values of RECFAST and CLASS (13.5984 eV, 54.4178 eV).

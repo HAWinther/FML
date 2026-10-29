@@ -13,8 +13,8 @@
 //   theta_MC_100  sets h such that Theory::theta_MC() = theta_MC_100 at fixed omega_b, omega_cdm (Brent root in
 //                 h in [0.4, 1]; ~10 background solutions)
 //   tau_reio      sets z_reion such that the optical depth of the reionization model
-//                 (RecombinationHistory::tau_reionization_model) is tau_reio (the full tau of the run, with
-//                 the residual ionization after recombination, is ~1.5e-4 higher)
+//                 (RecombinationHistory::tau_reionization_model, to z_reion + 8 delta_z_reion) is tau_reio
+//                 (the full tau of the run, with the residual ionization after recombination, is slightly higher)
 // The fixed parameters are "name=value" strings for ParameterFile::read (cosmology, model, precision).
 // =============================================================================
 

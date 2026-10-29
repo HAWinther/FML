@@ -704,7 +704,13 @@ namespace FML::COSMOLOGY {
         return Utils::find_root([&](double x) { return Xe_of_x(x) - 0.5; }, -10.0, -3.0);
     }
 
-    double RecombinationHistory::tau_reionization() const { return tau_of_x(-std::log(51.0)); }
+    // As CLASS's tau_reio (reio_camb): from z = 0 to the start of reionization, z_reion + 8 delta_z_reion
+    double RecombinationHistory::z_reionization_start() const {
+        const auto & p = cosmo.get_params();
+        return p.z_reion + 8.0 * p.delta_z_reion;
+    }
+
+    double RecombinationHistory::tau_reionization() const { return tau_of_x(-std::log1p(z_reionization_start())); }
 
     double RecombinationHistory::tau_reionization_model(double z_reion) const {
         const auto & p = cosmo.get_params();
@@ -718,7 +724,8 @@ namespace FML::COSMOLOGY {
             return c * Xe * nH_of_x(x) * sigma_T / cosmo.H_of_x(x);
         };
         // split at the reionization redshifts so the adaptive integrator sees both steps
-        const double x_re = -std::log1p(z_reion), x_He = -std::log1p(p.z_He_reion), x0 = -std::log(51.0);
+        const double x_re = -std::log1p(z_reion), x_He = -std::log1p(p.z_He_reion),
+                     x0 = -std::log1p(z_reion + 8.0 * p.delta_z_reion);
         std::vector<double> b = {x0, 0.0};
         for (double xb : {x_re, x_He})
             if (xb > x0 && xb < 0.0)
@@ -764,7 +771,8 @@ namespace FML::COSMOLOGY {
                   << "\n";
         std::cout << "  X_e at z = 30 (freeze-out)  = " << Xe_of_x(-std::log(31.0)) << "\n";
         if (reion)
-            std::cout << "  Optical depth tau(z = 50)   = " << tau_reionization() << "\n";
+            std::cout << "  Optical depth tau_reio      = " << tau_reionization()
+                      << " (to z = " << z_reionization_start() << ")\n";
         std::cout << "  Sound horizon at tau = 1    = " << sound_horizon_of_x(x_ls) / Mpc << " Mpc\n";
         std::cout << "  Integral of g over x        = " << g_spline.integral(options.x_start, options.x_end) << "\n\n";
         std::cout.flags(f);

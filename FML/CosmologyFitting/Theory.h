@@ -99,8 +99,8 @@ namespace FML::COSMOLOGY::FITTING {
         // CMB (computed on first use)
         const CMBSpectra & cmb() const;
         const RecombinationHistory & recombination_reionized() const; // as in ./cmb (with reionization)
-        double tau_reio() const;                                      // optical depth to z = 50
-        double sigma8() const; // linear sigma_8 today (accuracy limited by pert_k_max, see Theory.cpp)
+        double tau_reio() const; // optical depth to z_reion + 8 delta_z_reion (CLASS tau_reio)
+        double sigma8() const;   // linear sigma_8 today (accuracy limited by pert_k_max, see Theory.cpp)
 
         // Nuisance parameters
         void set_nuisance(const std::string & name, double value) { nuis[name] = value; }

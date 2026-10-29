@@ -1,4 +1,4 @@
-fiducial_tau_reion 0.05795598432
+fiducial_tau_reion 0.05779028038
 fiducial_Xe_today 1.162251588
 f_He 0.08112582781
 peebles_decoupling_tau1_x -6.994285065
