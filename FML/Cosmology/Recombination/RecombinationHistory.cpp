@@ -18,7 +18,9 @@ namespace FML::COSMOLOGY {
         if (options.x_end != 0.0)
             throw std::invalid_argument("RecombinationHistory: x_end must be 0 (tau is integrated back from today)");
         if (cosmo.get_x_start() > options.x_start || cosmo.get_x_end() < options.x_end)
-            std::cerr << "RecombinationHistory: warning: x-range extends outside the background solution\n";
+            throw std::invalid_argument("RecombinationHistory: x-range [" + std::to_string(options.x_start) + ", " +
+                                        std::to_string(options.x_end) +
+                                        "] extends outside the background solution (bg_x_start, bg_x_end)");
     }
 
     // =============================================================================

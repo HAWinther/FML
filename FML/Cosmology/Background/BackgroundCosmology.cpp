@@ -189,8 +189,18 @@ namespace FML::COSMOLOGY {
             throw std::runtime_error(std::string("BackgroundCosmology::") + func + ": call solve() first");
     }
 
+    // eta and t are integrals from x_start: outside the solved range the spline would return the end value
+    void BackgroundCosmology::require_in_range(const char * func, double x) const {
+        const double tol = 1e-10 * (1.0 + std::fabs(x));
+        if (x < x_start - tol || x > x_end + tol)
+            throw std::out_of_range(std::string("BackgroundCosmology::") + func + ": x = " + std::to_string(x) +
+                                    " outside the solved range [" + std::to_string(x_start) + ", " +
+                                    std::to_string(x_end) + "] (bg_x_start, bg_x_end)");
+    }
+
     double BackgroundCosmology::eta_of_x(double x) const {
         require_solved("eta_of_x");
+        require_in_range("eta_of_x", x);
         return eta_spline(x);
     }
 
@@ -198,6 +208,7 @@ namespace FML::COSMOLOGY {
 
     double BackgroundCosmology::t_of_x(double x) const {
         require_solved("t_of_x");
+        require_in_range("t_of_x", x);
         return t_spline(x);
     }
 

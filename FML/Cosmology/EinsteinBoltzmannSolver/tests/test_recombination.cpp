@@ -12,6 +12,8 @@
 #include <FML/Cosmology/Common.h>
 
 #include <cmath>
+#include <iostream>
+#include <functional>
 #include <stdexcept>
 
 using namespace FML::COSMOLOGY;
@@ -395,11 +397,37 @@ void test_bbn() {
     check("omega_b outside the table is an error", threw);
 }
 
+// eta(x) and t(x) are integrals from bg_x_start: outside the solved range they are an error (the spline returned the
+// end value: with bg_x_start = -15 r_s was off by 6e-4), and so are recombination and perturbation ranges outside it
+static void test_ranges() {
+    auto throws = [](const std::function<void()> & f) {
+        try {
+            f();
+        } catch (const std::exception & e) {
+            std::cout << "  " << e.what() << "\n";
+            return true;
+        }
+        return false;
+    };
+    CosmologyParameters p;
+    BackgroundCosmology bg(p);
+    bg.solve(-15.0, 1.0, 2000);
+    check("eta_of_x below bg_x_start throws", throws([&] { bg.eta_of_x(-16.0); }));
+    check("t_of_x above bg_x_end throws", throws([&] { bg.t_of_x(2.0); }));
+    check("eta_of_x at the ends is fine", !throws([&] { bg.eta_of_x(-15.0) + bg.eta_of_x(1.0); }));
+    check("recombination from x = -20 with bg_x_start = -15 throws",
+          throws([&] { RecombinationHistory rec(bg, RecombinationOptions()); }));
+    RecombinationOptions o;
+    o.x_start = -15.0;
+    check("recombination inside the background range is fine", !throws([&] { RecombinationHistory rec(bg, o); }));
+}
+
 int main() {
     test_recfast();
     test_fiducial();
     test_options();
     test_helium_reionization();
     test_bbn();
+    test_ranges();
     return Test::summary();
 }

@@ -182,6 +182,7 @@ namespace FML::COSMOLOGY {
 
       private:
         double x_start = 0.0, x_end = 0.0;
+        void require_in_range(const char * func, double x) const; // throws outside [x_start, x_end]
         bool solved = false;
         Spline1D eta_spline;
         Spline1D t_spline;

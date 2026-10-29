@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): eta(x), t(x) and the recombination range outside the background solution are errors
+- `eta_of_x` and `t_of_x` returned the end value of the spline outside [bg_x_start, bg_x_end]; with
+  bg_x_start = -15 the sound horizon was off by 6e-4 (0.06% in theta_s) and the run only printed a warning. They now
+  throw, RecombinationHistory throws (instead of the warning) when its range is outside the background solution,
+  and Perturbations checks its x-range against it too. The defaults (-20, -20, -18) are unaffected.
+- New checks in tests/test_recombination.cpp.
+
 ### Cosmology (EBS): CDM isocurvature in dark_scattering, ide and coupled_quintessence
 - These models have their own CDM block, and it ignored the isocurvature initial conditions: the CDI mode was
   silently replaced by the adiabatic form with the (tiny) Psi of the mode, i.e. lost (delta_cdm 3e-5 of the right

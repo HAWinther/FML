@@ -23,6 +23,10 @@ namespace FML::COSMOLOGY {
             throw std::invalid_argument("Perturbations: need lmax >= 3");
         if (!(options.x_start < -8.0 && options.x_end > -6.0))
             throw std::invalid_argument("Perturbations: need x_start < -8 and x_end > -6");
+        if (options.x_start < cosmo.get_x_start() || options.x_end > cosmo.get_x_end())
+            throw std::invalid_argument("Perturbations: x-range [" + std::to_string(options.x_start) + ", " +
+                                        std::to_string(options.x_end) +
+                                        "] extends outside the background solution (bg_x_start, bg_x_end)");
         for (double a : options.iso_amplitude)
             if (a != 0.0 && cosmo.gravity().name() != "GR")
                 throw std::invalid_argument("Perturbations: isocurvature modes need GR (model " +
