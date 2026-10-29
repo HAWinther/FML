@@ -3,6 +3,7 @@
 //
 //   * Power law Delta^2_L = (k/k0)^{n+3}: n_eff = n, C = 0 and sigma(1/k_sigma) = 1 analytically
 //   * Linear regime: P_NL = P_L on large scales
+//   * solve_matter(): the matter outputs (with Halofit) without the C_ell
 //   * P_NL/P_L against CLASS v3.4 (non_linear = halofit) for Planck 2018 at z = 0 and 1 (here with precision = fast;
 //     with the default precision and pert_k_max = 1/Mpc P_NL agrees to < 1e-3, python/compare_class_halofit.py)
 // =============================================================================
@@ -17,8 +18,12 @@
 #include <FML/Cosmology/Common.h>
 
 #include <cmath>
+#include <cstdio>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
+#include <string>
 
 using namespace FML::COSMOLOGY;
 
@@ -81,6 +86,36 @@ int main() {
                       r.r,
                       5e-3);
         }
+
+        // P(k) outputs without the C_ell (compute_cells = false): solve_matter() sets up Halofit only
+        PowerSpectrumOptions o = s.ps;
+        o.nonlinear = PowerSpectrumOptions::Nonlinear::Halofit;
+        PowerSpectrum pm(bg, rec, pert, o);
+        const std::string file = "data/test_nonlinear_matter_power.txt";
+        bool threw = false;
+        try {
+            pm.output_matter_power(file, 0.0);
+        } catch (const std::exception &) {
+            threw = true;
+        }
+        check("output_matter_power before solve_matter() is an error", threw);
+        pm.solve_matter();
+        pm.output_matter_power(file, 0.0);
+        std::ifstream in(file);
+        std::string line;
+        std::getline(in, line);
+        std::getline(in, line);
+        std::istringstream ls(line);
+        double v, n = 0;
+        while (ls >> v)
+            n++;
+        check("solve_matter(): matter_power with the Halofit column", n == 4);
+        const double k = 0.3 * h / Mpc;
+        check_rel("solve_matter(): P_NL/P_L = Halofit",
+                  pm.get_matter_power_spectrum_nonlinear(0.0, k) / pm.get_matter_power_spectrum_extrapolated(0.0, k),
+                  hf.ratio(0.0, k),
+                  1e-12);
+        std::remove(file.c_str());
     }
 
     return Test::summary();

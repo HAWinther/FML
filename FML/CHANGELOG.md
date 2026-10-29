@@ -5,6 +5,12 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): compute_cells = false writes P(k)
+- With `compute_cells = false` the run stopped at the end with "output_matter_power: call solve() first" (the
+  default `write_matter_power = true`), so no P(k) was written. New PowerSpectrum::solve_matter() sets up what the
+  matter outputs need (the Halofit table) without the C_ell; solve() calls it, so runs with C_ell are bit-identical.
+- New checks in tests/test_nonlinear.cpp.
+
 ### Cosmology (EBS): the planck2018 preset is labelled correctly; new planck2018_baseline preset
 - `preset = planck2018` was described as the TT,TE,EE+lowE+lensing best fit, but its numbers are the means of the
   TT,TE,EE+lowE+lensing+BAO column (z_reion from the other column) with massless neutrinos. Its values are kept

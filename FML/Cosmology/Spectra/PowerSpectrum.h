@@ -163,6 +163,8 @@ namespace FML::COSMOLOGY {
         const Tensors * get_tensors() const { return tensors; }
 
         void solve();
+        // Only what the matter outputs need (the Halofit table): for runs without C_ell. solve() calls it.
+        void solve_matter();
 
         double primordial_power_spectrum(double k) const; // P_R(k), dimensionless, k in 1/m
 
@@ -279,6 +281,7 @@ namespace FML::COSMOLOGY {
         Spline1D log_Dell_spline, log_Dell_EE_spline, Dell_TE_spline; // splines in ell (D_ell/T^2)
         bool pol = false;
         bool solved = false;
+        bool matter_solved = false;
 
         double interp_k(const std::vector<double> & f, double k) const;
         size_t ell_index(int ell) const;

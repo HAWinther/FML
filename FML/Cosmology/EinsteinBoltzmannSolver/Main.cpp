@@ -165,8 +165,7 @@ int run(int argc, char ** argv) {
                 if (std::find(computed.begin(), computed.end(), l) != computed.end())
                     tl.push_back(l);
                 else
-                    std::cerr << "Warning: transfer_ells: ell = " << l
-                              << " is not in the computed ell list, skipped\n";
+                    std::cerr << "Warning: transfer_ells: ell = " << l << " is not in the computed ell list, skipped\n";
             }
             if (!tl.empty())
                 power.output_transfer(out + "transfer.txt", tl);
@@ -185,6 +184,8 @@ int run(int argc, char ** argv) {
             }
         }
     }
+    if (!s.compute_cells)
+        power.solve_matter(); // P(k) (and Halofit) without the C_ell
     if (s.write_matter_power)
         for (double z : s.matter_power_z)
             power.output_matter_power(

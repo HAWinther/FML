@@ -648,10 +648,7 @@ namespace FML::COSMOLOGY {
         ThetaE = ThetaE_c.front();
         ThetaPhi.clear();
         const double t_los = tl.elapsed();
-        if (options.nonlinear == PowerSpectrumOptions::Nonlinear::Halofit)
-            halofit = std::make_unique<Halofit>(cosmo, [this](double x, double k) {
-                return get_matter_power_spectrum_extrapolated(x, k);
-            });
+        solve_matter();
         compute_cells();
         Utils::Timer tlens;
         if (options.lensing)
@@ -662,6 +659,16 @@ namespace FML::COSMOLOGY {
             std::cout << "[PowerSpectrum] Bessel tables " << t_bessel << " s, LOS integration " << t_los << " s"
                       << (options.lensing ? ", lensing " + std::to_string(t_lens) + " s" : "") << "\n";
         timer.print();
+    }
+
+    void PowerSpectrum::solve_matter() {
+        if (matter_solved)
+            return;
+        if (options.nonlinear == PowerSpectrumOptions::Nonlinear::Halofit)
+            halofit = std::make_unique<Halofit>(cosmo, [this](double x, double k) {
+                return get_matter_power_spectrum_extrapolated(x, k);
+            });
+        matter_solved = true;
     }
 
     // =============================================================================
@@ -939,7 +946,8 @@ namespace FML::COSMOLOGY {
     }
 
     void PowerSpectrum::output_matter_power(const std::string & filename, double x) const {
-        require_solved("output_matter_power");
+        if (!matter_solved)
+            throw std::runtime_error("PowerSpectrum::output_matter_power: call solve() or solve_matter() first");
         std::ofstream fp(filename);
         if (!fp)
             throw std::runtime_error("PowerSpectrum::output_matter_power: cannot open " + filename);
