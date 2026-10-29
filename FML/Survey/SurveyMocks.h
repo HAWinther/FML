@@ -4,7 +4,8 @@
 // =============================================================================
 // Survey mocks from periodic simulation output (as make_survey): snapshot projection of a periodic box around an
 // observer, RA/Dec and redshifts with RSD, an angular footprint (callback, RA-Dec box, Healpix map), a radial
-// selection and matching randoms; optionally a volume-preserving cuboid remapping of the box.
+// selection and matching randoms; optionally a volume-preserving cuboid remapping of the box. MANGLE polygon
+// footprints; ascii or (USE_HDF5) HDF5 output.
 //
 //   * Snapshot projection: one snapshot is tiled (replicas) around the observer; every object keeps the dynamics of
 //     the snapshot while its redshift comes from its distance. This is not an evolving lightcone.
@@ -39,6 +40,9 @@
 #include <healpix_map.h>
 #include <healpix_map_fitsio.h>
 #endif
+#ifdef USE_HDF5
+#include <hdf5.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -47,6 +51,8 @@
 #include <fstream>
 #include <functional>
 #include <iomanip>
+#include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -525,6 +531,156 @@ namespace FML::SURVEY::MOCKS {
     }
 #endif
 
+    /// A MANGLE polygon (Swanson et al. 2008): the intersection of caps (x, y, z, cm), with (x, y, z) the unit
+    /// axis and cm = 1 - cos(theta). A point r is in a cap if 1 - r.c < cm (cm >= 0) or 1 - r.c > -cm (cm < 0, the
+    /// complement of the cap), and in the polygon if it is in all of its caps
+    struct ManglePolygon {
+        std::vector<std::array<double, 4>> caps;
+        double weight = 1, area_str = 0;
+        long long id = 0;
+        bool contains(const Vec3 & r) const {
+            for (const auto & c : caps) {
+                const double d = 1 - (r[0] * c[0] + r[1] * c[1] + r[2] * c[2]);
+                if (c[3] >= 0 ? !(d < c[3]) : !(d > -c[3]))
+                    return false;
+            }
+            return true;
+        }
+    };
+
+    /// A MANGLE mask. The completeness at (RA, Dec) is the weight of the first polygon that contains the point
+    /// (balkanized masks have no overlaps), 0 outside all polygons. Polygons are looked up through an RA/Dec grid
+    /// (cell_deg) filled from a bounding cap of every polygon (its smallest cap with cm > 0); the mangle pixel
+    /// numbers are not used
+    class MangleMask {
+      public:
+        std::vector<ManglePolygon> polygons;
+
+        MangleMask() = default;
+        explicit MangleMask(std::vector<ManglePolygon> polys, double cell_deg = 1.0) : polygons(std::move(polys)) {
+            if (!(cell_deg > 0 && cell_deg <= 90))
+                throw std::invalid_argument("MangleMask: cell_deg must be in (0, 90]");
+            nra = std::max(1, int(std::lround(360.0 / cell_deg)));
+            ndec = std::max(1, int(std::lround(180.0 / cell_deg)));
+            grid.assign(std::size_t(nra) * ndec, {});
+            for (int i = 0; i < int(polygons.size()); i++) {
+                const auto & p = polygons[i];
+                double cm = 2;
+                std::array<double, 4> b{0, 0, 1, 2};
+                for (const auto & c : p.caps)
+                    if (c[3] > 0 && c[3] < cm) {
+                        cm = c[3];
+                        b = c;
+                    }
+                const double theta = std::acos(std::max(-1.0, 1 - cm)) / deg;
+                const double dec0 = std::asin(std::max(-1.0, std::min(1.0, b[2]))) / deg;
+                const double ra0 = std::atan2(b[1], b[0]) / deg;
+                const double dlo = dec0 - theta, dhi = dec0 + theta;
+                const int j0 = dec_cell(std::max(-90.0, dlo)) - 1, j1 = dec_cell(std::min(90.0, dhi)) + 1;
+                const bool all_ra = dlo <= -90 || dhi >= 90;
+                const double dra =
+                    all_ra ? 180 : std::asin(std::min(1.0, std::sin(theta * deg) / std::cos(dec0 * deg))) / deg;
+                const int ni = all_ra ? nra : std::min(nra, int(std::ceil(2 * dra / 360.0 * nra)) + 3);
+                const int i0 = all_ra ? 0 : ra_cell(ra0 - dra) - 1;
+                for (int j = std::max(0, j0); j <= std::min(ndec - 1, j1); j++)
+                    for (int k = 0; k < ni; k++)
+                        grid[std::size_t(j) * nra + std::size_t(((i0 + k) % nra + nra) % nra)].push_back(i);
+            }
+        }
+
+        /// Index of the polygon that contains (RA, Dec) [deg], -1 if none
+        int find(double ra, double dec) const {
+            const Vec3 r{std::cos(dec * deg) * std::cos(ra * deg),
+                         std::cos(dec * deg) * std::sin(ra * deg),
+                         std::sin(dec * deg)};
+            for (int i : grid[std::size_t(dec_cell(dec)) * nra + std::size_t(ra_cell(ra))])
+                if (polygons[i].contains(r))
+                    return i;
+            return -1;
+        }
+        double operator()(double ra, double dec) const {
+            const int i = find(ra, dec);
+            return i < 0 ? 0.0 : polygons[i].weight;
+        }
+
+      private:
+        int nra = 0, ndec = 0;
+        std::vector<std::vector<int>> grid;
+        int dec_cell(double dec) const { return std::min(ndec - 1, std::max(0, int((dec + 90) / 180 * ndec))); }
+        int ra_cell(double ra) const {
+            const double x = ra / 360 - std::floor(ra / 360);
+            return std::min(nra - 1, int(x * nra));
+        }
+    };
+
+    /// Read a MANGLE mask in the ascii polygon format (mangle's default output):
+    ///   polygon <id> ( <n> caps, <w> weight, <p> pixel, <a> str):
+    ///    <x> <y> <z> <cm>       (n lines)
+    /// Header lines (N polygons, real, pixelization, snapped, balkanized) are skipped. Other formats (circle,
+    /// vertices, edges, rectangle) can be converted with mangle's poly2poly. Weights must be in [0, 1]
+    inline MangleMask read_mangle_polygons(const std::string & filename, double cell_deg = 1.0) {
+        std::ifstream fp(filename);
+        if (!fp)
+            throw std::runtime_error("read_mangle_polygons: cannot open " + filename);
+        std::vector<ManglePolygon> polys;
+        std::string line;
+        while (std::getline(fp, line)) {
+            std::istringstream ss(line);
+            std::string word;
+            ss >> word;
+            if (word == "circle" || word == "vertices" || word == "edges" || word == "rectangle")
+                throw std::runtime_error("read_mangle_polygons: only the polygon format is read (convert " + filename +
+                                         " with poly2poly)");
+            if (word != "polygon")
+                continue;
+            ManglePolygon p;
+            ss >> p.id;
+            const auto open = line.find('(');
+            if (open == std::string::npos)
+                throw std::runtime_error("read_mangle_polygons: bad polygon line: " + line);
+            std::string rest = line.substr(open + 1);
+            for (char & ch : rest)
+                if (ch == ',' || ch == ')' || ch == ':')
+                    ch = ' ';
+            std::istringstream rs(rest);
+            double value;
+            std::string key;
+            long long ncaps = -1;
+            while (rs >> value >> key) {
+                if (key.rfind("cap", 0) == 0)
+                    ncaps = (long long)(value);
+                else if (key == "weight")
+                    p.weight = value;
+                else if (key == "str")
+                    p.area_str = value;
+            }
+            if (ncaps < 0)
+                throw std::runtime_error("read_mangle_polygons: no number of caps in: " + line);
+            if (!(p.weight >= 0 && p.weight <= 1))
+                throw std::runtime_error("read_mangle_polygons: weights must be in [0, 1] (polygon " +
+                                         std::to_string(p.id) + ")");
+            p.caps.resize(std::size_t(ncaps));
+            for (auto & c : p.caps) {
+                if (!std::getline(fp, line))
+                    throw std::runtime_error("read_mangle_polygons: the file ends inside polygon " +
+                                             std::to_string(p.id));
+                std::istringstream cs(line);
+                if (!(cs >> c[0] >> c[1] >> c[2] >> c[3]))
+                    throw std::runtime_error("read_mangle_polygons: bad cap line: " + line);
+            }
+            polys.push_back(std::move(p));
+        }
+        if (polys.empty())
+            throw std::runtime_error("read_mangle_polygons: no polygons in " + filename);
+        return MangleMask(std::move(polys), cell_deg);
+    }
+
+    /// Footprint from a MANGLE mask (completeness = polygon weight, 0 outside)
+    inline Footprint mangle_footprint(MangleMask mask) {
+        auto m = std::make_shared<const MangleMask>(std::move(mask));
+        return [m](double ra, double dec) { return (*m)(ra, dec); };
+    }
+
     /// Convert to the catalogue points of SurveyMesh.h (or any type with position, weight and nbar)
     template <class Point>
     std::vector<Point> to_catalog_points(const std::vector<MockGalaxy> & galaxies, bool redshift_space = true) {
@@ -592,6 +748,65 @@ namespace FML::SURVEY::MOCKS {
                << g.selection_probability << " " << g.nbar << " " << g.weight << " " << g.id << " " << g.subid << " "
                << g.replica[0] << " " << g.replica[1] << " " << g.replica[2] << "\n";
     }
+
+#ifdef USE_HDF5
+    /// HDF5 catalogue with the columns of write_catalogue as datasets: ra, dec, z_obs, z_cos, position (n x 3,
+    /// Mpc/h, redshift space), v_radial, completeness, selection_probability, nbar, weight, id, subid, replica
+    /// (n x 3). With MPI every task writes <filename>.<task>
+    inline void write_catalogue_hdf5(const std::string & filename, const std::vector<MockGalaxy> & galaxies) {
+        const std::string file = FML::NTasks > 1 ? filename + "." + std::to_string(FML::ThisTask) : filename;
+        const hid_t f = H5Fcreate(file.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+        if (f < 0)
+            throw std::runtime_error("write_catalogue_hdf5: cannot create " + file);
+        const hsize_t n = galaxies.size();
+        bool ok = true;
+        auto write = [&](const char * name, hid_t filetype, hid_t memtype, const void * data, hsize_t ncols) {
+            const hsize_t dims[2] = {n, ncols};
+            const hid_t space = H5Screate_simple(ncols == 1 ? 1 : 2, dims, nullptr);
+            const hid_t d = H5Dcreate2(f, name, filetype, space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+            ok = ok && space >= 0 && d >= 0 &&
+                 (n == 0 || H5Dwrite(d, memtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) >= 0);
+            if (d >= 0)
+                H5Dclose(d);
+            if (space >= 0)
+                H5Sclose(space);
+        };
+        auto column = [&](const char * name, double MockGalaxy::* field) {
+            std::vector<double> v(n);
+            for (hsize_t i = 0; i < n; i++)
+                v[i] = galaxies[i].*field;
+            write(name, H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, v.data(), 1);
+        };
+        column("ra", &MockGalaxy::ra);
+        column("dec", &MockGalaxy::dec);
+        column("z_obs", &MockGalaxy::z_obs);
+        column("z_cos", &MockGalaxy::z_cos);
+        column("v_radial", &MockGalaxy::v_radial);
+        column("completeness", &MockGalaxy::completeness);
+        column("selection_probability", &MockGalaxy::selection_probability);
+        column("nbar", &MockGalaxy::nbar);
+        column("weight", &MockGalaxy::weight);
+        std::vector<double> pos(3 * n);
+        std::vector<std::uint64_t> id(n);
+        std::vector<std::uint32_t> subid(n);
+        std::vector<int> rep(3 * n);
+        for (hsize_t i = 0; i < n; i++) {
+            for (int d = 0; d < 3; d++) {
+                pos[3 * i + d] = galaxies[i].position[d];
+                rep[3 * i + d] = galaxies[i].replica[d];
+            }
+            id[i] = galaxies[i].id;
+            subid[i] = galaxies[i].subid;
+        }
+        write("position", H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, pos.data(), 3);
+        write("id", H5T_STD_U64LE, H5T_NATIVE_UINT64, id.data(), 1);
+        write("subid", H5T_STD_U32LE, H5T_NATIVE_UINT32, subid.data(), 1);
+        write("replica", H5T_STD_I32LE, H5T_NATIVE_INT, rep.data(), 3);
+        H5Fclose(f);
+        if (!ok)
+            throw std::runtime_error("write_catalogue_hdf5: failed to write " + file);
+    }
+#endif
 
 } // namespace FML::SURVEY::MOCKS
 

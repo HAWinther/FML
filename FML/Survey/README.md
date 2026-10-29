@@ -292,7 +292,14 @@ table, ascii output of data and randoms (one file per task with MPI).
 randoms -> P0/P2 with SurveyPower against the linear Kaiser model convolved with the SurveyWindow matrix. P0 agrees
 to a few percent for 0.015 < k < 0.1 h/Mpc (mean of 3 realisations; one realisation scatters by ~20%), P2 within
 its noise. The particles start on a lattice, so the mock's shot noise is 1/nbar - 1/n_parent (the example adds
-1/n_parent back). MANGLE footprints follow (backlog item 53, phase 3).
+1/n_parent back).
+
+MANGLE masks: `mangle_footprint(read_mangle_polygons("mask.ply"))` reads the ascii polygon format (other mangle
+formats: convert with poly2poly); the completeness is the weight of the polygon that contains the point (weights in
+[0, 1]; balkanized masks have no overlaps), 0 outside. Polygons are found through an RA/Dec grid (1 degree cells by
+default) built from a bounding cap of each polygon; the mangle pixel numbers are not used. Tested against the
+analytic membership of a box, a circle and a ring for three grid sizes. With USE_HDF5, `write_catalogue_hdf5` writes
+the catalogue columns as datasets (`output_format = "hdf5"` in make_survey).
 
 ## Build, example and validation
 

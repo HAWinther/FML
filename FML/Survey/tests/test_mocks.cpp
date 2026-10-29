@@ -6,9 +6,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <random>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -416,6 +418,71 @@ int main() {
         const double expected = 1e-3 * 4 * M_PI / 3 * std::pow(dr.r_of_z(0.1), 3) / 2;
         check(north == all_r && std::fabs(all_r - expected) < 5 * std::sqrt(expected),
               "Healpix footprint: randoms only in the map pixels, half the sky");
+    }
+
+    // MANGLE: an RA/Dec box (weight 0.8), a circle and a ring (a circle minus a smaller one, weight 0.5) against
+    // the analytic membership of random points, for several lookup-grid cell sizes
+    {
+        auto vec = [](double ra, double dec) {
+            return std::array<double, 3>{std::cos(dec * deg) * std::cos(ra * deg),
+                                         std::cos(dec * deg) * std::sin(ra * deg),
+                                         std::sin(dec * deg)};
+        };
+        auto cap = [&](double ra, double dec, double cm) {
+            const auto v = vec(ra, dec);
+            std::ostringstream ss;
+            ss << std::setprecision(17) << " " << v[0] << " " << v[1] << " " << v[2] << " " << cm << "\n";
+            return ss.str();
+        };
+        const std::string file = "test_mangle_" + std::to_string(FML::ThisTask) + ".ply";
+        {
+            std::ofstream fp(file);
+            fp << "3 polygons\npixelization 0s\nsnapped\nbalkanized\n";
+            fp << "polygon 0 ( 4 caps, 0.8 weight, 0 pixel, 0.2 str):\n"
+               << cap(0, 90, 1 - std::sin(10 * deg)) << cap(0, 90, -(1 - std::sin(40 * deg))) << cap(210, 0, 1)
+               << cap(110, 0, 1);
+            fp << "polygon 1 ( 1 caps, 1 weight, 0.095 str):\n" << cap(300, -30, 1 - std::cos(10 * deg));
+            fp << "polygon 2 ( 2 caps, 0.5 weight, 0 pixel, 0.19 str):\n"
+               << cap(60, 0, 1 - std::cos(15 * deg)) << cap(60, 0, -(1 - std::cos(5 * deg)));
+        }
+        auto angle = [&](double ra1, double dec1, double ra2, double dec2) {
+            const auto a = vec(ra1, dec1), b = vec(ra2, dec2);
+            return std::acos(std::min(1.0, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])) / deg;
+        };
+        auto exact = [&](double ra, double dec) {
+            if (ra > 120 && ra < 200 && dec > 10 && dec < 40)
+                return 0.8;
+            if (angle(ra, dec, 300, -30) < 10)
+                return 1.0;
+            const double t = angle(ra, dec, 60, 0);
+            return t < 15 && t > 5 ? 0.5 : 0.0;
+        };
+        bool ok = true;
+        for (double cell : {1.0, 7.0, 90.0}) {
+            const auto mask = read_mangle_polygons(file, cell);
+            const auto fp = mangle_footprint(mask);
+            std::mt19937 gen(5);
+            std::uniform_real_distribution<double> u(0, 1);
+            int inside = 0;
+            for (int i = 0; i < 200000; i++) {
+                const double ra = 360 * u(gen), dec = std::asin(2 * u(gen) - 1) / deg;
+                ok &= fp(ra, dec) == exact(ra, dec);
+                inside += exact(ra, dec) > 0;
+            }
+            ok &= inside > 1000 && mask.polygons.size() == 3 && mask.polygons[2].area_str == 0.19;
+        }
+        bool threw = false;
+        {
+            std::ofstream fp(file);
+            fp << "polygon 0 ( 1 caps, 2 weight, 0 pixel, 0.1 str):\n" << cap(0, 0, 0.1);
+        }
+        try {
+            read_mangle_polygons(file);
+        } catch (const std::exception &) {
+            threw = true;
+        }
+        std::remove(file.c_str());
+        check(ok && threw, "MANGLE polygons = analytic box/circle/ring membership (3 grid sizes); weight > 1 rejected");
     }
 
     if (FML::ThisTask == 0)

@@ -218,6 +218,8 @@ int main(int argc, char ** argv) {
 #else
             throw std::invalid_argument("make_survey: healpix_fits needs USE_HEALPIX");
 #endif
+        } else if (fp == "mangle") {
+            o.footprint = mangle_footprint(read_mangle_polygons(p.read_string("footprint_file")));
         } else if (fp != "full") {
             throw std::invalid_argument("make_survey: unknown footprint " + fp);
         }
@@ -291,8 +293,20 @@ int main(int argc, char ** argv) {
             if (data.truncated)
                 std::cout << "Note: the survey sphere leaves the remapped cuboid (the footprint must stay inside)\n";
         }
-        write_catalogue(p.read_string("output_data", "mock_data.txt"), data.galaxies);
-        write_catalogue(p.read_string("output_randoms", "mock_randoms.txt"), randoms);
+        const auto out = p.read_string("output_format", "ascii");
+        if (out == "hdf5") {
+#ifdef USE_HDF5
+            write_catalogue_hdf5(p.read_string("output_data", "mock_data.h5"), data.galaxies);
+            write_catalogue_hdf5(p.read_string("output_randoms", "mock_randoms.h5"), randoms);
+#else
+            throw std::invalid_argument("make_survey: output_format = hdf5 needs USE_HDF5");
+#endif
+        } else if (out == "ascii") {
+            write_catalogue(p.read_string("output_data", "mock_data.txt"), data.galaxies);
+            write_catalogue(p.read_string("output_randoms", "mock_randoms.txt"), randoms);
+        } else {
+            throw std::invalid_argument("make_survey: unknown output_format " + out);
+        }
     } catch (const std::exception & e) {
         std::cerr << "make_survey (task " << FML::ThisTask << "): " << e.what() << "\n";
 #ifdef USE_MPI

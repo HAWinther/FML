@@ -1,7 +1,7 @@
 #===================================================================
 # make_survey: survey mocks from simulation output (SurveyMocks.h)
 #   make                      ascii and GADGET input
-#   make USE_HDF5=true        also COLASolver HDF5 lightcones
+#   make USE_HDF5=true        also COLASolver HDF5 lightcones and HDF5 output
 #   make USE_HEALPIX=true     also Healpix FITS footprints
 #===================================================================
 USE_MPI ?= true

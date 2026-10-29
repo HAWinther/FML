@@ -5,6 +5,11 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Survey mocks: MANGLE masks and HDF5 output (backlog item 53 phase 3)
+- `read_mangle_polygons` / `mangle_footprint`: ascii MANGLE polygon masks (caps and weights) with an RA/Dec lookup
+  grid; tested against analytic box, circle and ring membership. `footprint = "mangle"` in make_survey.
+- `write_catalogue_hdf5` (USE_HDF5) and `output_format = "hdf5"` in make_survey (same columns as the ascii writer).
+
 ### Survey mocks: lightcone input, `make_survey` executable, end-to-end clustering check (item 53 phase 2)
 - `make_survey_lightcone` for evolving-lightcone input (no tiling; a given parent density; an object's own observed
   redshift is used when present). Test added.
