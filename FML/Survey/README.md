@@ -83,9 +83,12 @@ shells rather than forced to zero. `subtract_shotnoise=false` returns raw power
 while still reporting the contact terms.
 
 CIC compensation is enabled by default. It divides the FFT amplitudes by the CIC
-window, and is distinct from the survey window below. No interlacing or exact
-aliased mesh-shot-noise correction is included in this first implementation.
-The returned shot terms target the continuum weighted estimator. Use scales
+window, and is distinct from the survey window below. The shot terms include the
+aliased images of the CIC-painted Poisson noise (Jing 2005): the continuum value
+times prod_i [1 - 2/3 sin^2(k_i h/2)], divided by the squared CIC window when
+compensating (`aliased_shotnoise = false` gives the continuum value; for Poisson
+points that leaves +5% of the shot noise at k h = 1.6-2.6). There is no interlacing,
+and the aliased images of the clustering signal are not corrected. Use scales
 well below the mesh Nyquist frequency, resolve LOS variation with the mesh, and
 check mesh-resolution convergence; compensation alone does not remove aliasing.
 Only even auto-spectrum multipoles 0, 2, 4 are supported currently.

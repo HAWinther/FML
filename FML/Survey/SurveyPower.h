@@ -8,6 +8,11 @@ namespace FML::SURVEY {
         double i2 = 0; // <=0: derive from random nbar.
         bool compensate_cic = true;
         bool subtract_shotnoise = true;
+        // Shot noise of the CIC-painted mesh including its aliased images (Jing 2005): the continuum value times
+        // prod_i [1 - 2/3 sin^2(k_i h/2)], divided by the CIC window^2 when compensating. false: the continuum
+        // value, which after compensation is too small by 0.7% at k h = 1.5 along an axis (growing as (k h)^4),
+        // and without compensation too large by 1 - prod_i [1 - 2/3 sin^2(k_i h/2)]
+        bool aliased_shotnoise = true;
     };
     struct PowerSpectrum {
         std::vector<int> ells;
@@ -139,6 +144,12 @@ namespace FML::SURVEY {
             const auto ik = transforms[0].get_fourier_integer_wavevector_from_index(i);
             const double count = FML::GRID::fourier_mode_multiplicity(ik[2], g.nmesh);
             const double window = options.compensate_cic ? detail::cic_window(k, g) : 1;
+            double alias = 1;
+            if (options.aliased_shotnoise)
+                for (auto v : k)
+                    alias *= 1 - 2. / 3. * std::pow(std::sin(.5 * v * g.cellsize()), 2);
+            // the continuum shot noise is not affected by the compensation; the aliased one is in the raw power
+            const double noise_factor = options.aliased_shotnoise ? alias / (window * window) : 1;
             Vector khat = k;
             for (auto& x : khat)
                 x /= kmag;
@@ -159,7 +170,7 @@ namespace FML::SURVEY {
                     transforms[monopole].get_fourier_from_index(i) * std::conj(transforms[l].get_fourier_from_index(i));
                 result.raw[l][b] +=
                     count * (2 * ell + 1) * product.real() * fftnorm * fftnorm / (window * window * result.i2);
-                result.shotnoise[l][b] += count * (2 * ell + 1) * noise / result.i2;
+                result.shotnoise[l][b] += count * (2 * ell + 1) * noise_factor * noise / result.i2;
             }
         }
         detail::sum(result.k);

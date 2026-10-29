@@ -138,12 +138,14 @@ PowerSpectrum direct_power(const std::vector<CatalogPoint>& data, const std::vec
                     for (size_t l = 0; l < a.size(); ++l)
                         a[l] += wave * pol(options.ells[l], dot(khat, n));
                 }
-                double window = 1;
-                if (options.compensate_cic)
-                    for (auto kd : k) {
-                        double x = .5 * kd * g.cellsize();
+                double window = 1, alias = 1;
+                for (auto kd : k) {
+                    double x = .5 * kd * g.cellsize();
+                    if (options.compensate_cic)
                         window *= x ? std::pow(std::sin(x) / x, 2) : 1;
-                    }
+                    if (options.aliased_shotnoise)
+                        alias *= 1 - 2. / 3. * std::sin(x) * std::sin(x);
+                }
                 for (size_t l = 0; l < a.size(); ++l) {
                     const int ell = options.ells[l];
                     double noise = 0;
@@ -153,7 +155,8 @@ PowerSpectrum direct_power(const std::vector<CatalogPoint>& data, const std::vec
                         noise += out.alpha * out.alpha * p.weight * p.weight *
                                  pol(ell, dot(khat, line_of_sight(g, p.position)));
                     out.raw[l][b] += (2 * ell + 1) * (a0 * std::conj(a[l])).real() / (out.i2 * window * window);
-                    out.shotnoise[l][b] += (2 * ell + 1) * noise / out.i2;
+                    out.shotnoise[l][b] += (2 * ell + 1) * noise *
+                                                 (options.aliased_shotnoise ? alias / (window * window) : 1) / out.i2;
                 }
             }
     for (size_t b = 0; b < nb; ++b)
@@ -223,6 +226,52 @@ void test_power() {
                 odd &= near(got.raw[l][b], ref.raw[l][b]);
         check(odd, "odd mesh Hermitian multiplicities match full direct DFT");
     }
+}
+void test_poisson_shotnoise() {
+    // Poisson points (no clustering) in a cube: the power after subtracting the shot noise must be zero at all k.
+    // With the continuum shot noise the compensated CIC estimate is biased high near the Nyquist frequency
+    Geometry g;
+    g.nmesh = 32;
+    g.boxsize = 32;
+    g.local_los = false;
+    unsigned long long state = 777;
+    auto next = [&] {
+        state = state * 6364136223846793005ULL + 1442695040888963407ULL;
+        return double(state >> 11) / 9007199254740992.0;
+    };
+    const double nbar = 10;
+    std::vector<CatalogPoint> randoms;
+    for (int i = 0; i < int(10 * nbar * 13824); ++i) {
+        Vector x{4 + 24 * next(), 4 + 24 * next(), 4 + 24 * next()};
+        if (i % FML::NTasks == FML::ThisTask)
+            randoms.push_back({x, 1, nbar});
+    }
+    PowerOptions options;
+    options.edges = {1.6, 2.6};
+    options.ells = {0};
+    double sum[2] = {0, 0}, sum2[2] = {0, 0};
+    const int nreal = 6;
+    for (int r = 0; r < nreal; ++r) {
+        std::vector<CatalogPoint> data;
+        for (int i = 0; i < int(nbar * 13824); ++i) {
+            Vector x{4 + 24 * next(), 4 + 24 * next(), 4 + 24 * next()};
+            if (i % FML::NTasks == FML::ThisTask)
+                data.push_back({x, 1, nbar});
+        }
+        for (int aliased = 0; aliased < 2; ++aliased) {
+            options.aliased_shotnoise = aliased;
+            const auto p = estimate_power(data, randoms, g, options);
+            const double relative = p.power[0][0] / p.shotnoise[0][0];
+            sum[aliased] += relative / nreal;
+            sum2[aliased] += relative * relative / nreal;
+        }
+    }
+    const double error = std::sqrt((sum2[1] - sum[1] * sum[1]) / (nreal - 1));
+    if (FML::ThisTask == 0)
+        std::cout << "  Poisson P0/shot at k h = 1.6-2.6: aliased " << sum[1] << " +- " << error << ", continuum "
+                  << sum[0] << "\n";
+    check(std::abs(sum[1]) < 3 * error + 1e-3 && sum[0] > sum[1] + 3 * error,
+          "Poisson catalogue: zero power after subtracting the aliased CIC shot noise (continuum shot noise biased)");
 }
 void test_window() {
     Geometry g;
@@ -671,7 +720,8 @@ int main(int argc, char** argv) {
     if (mode == "all" || mode == "power")
         test_power();
     if (mode == "all" || mode == "window")
-        test_window();
+        test_poisson_shotnoise();
+    test_window();
     if (mode == "all" || mode == "reconstruction")
         test_reconstruction();
     if (mode == "all")

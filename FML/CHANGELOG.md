@@ -76,6 +76,10 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   The ell > 0 averages exclude the s = 0 vector (they divided by the count including it). The self-pair terms
   of all LOS tensors are computed in one threaded pass over the randoms (they were recomputed per tensor: 95
   passes for a local LOS and maxell = 8).
+- Power spectrum shot noise: the subtracted shot terms were the continuum values, but the compensated CIC mesh
+  power contains the aliased images of the Poisson noise: for Poisson points P0 was +5% of the shot noise at
+  k h = 1.6-2.6 (in the Kaiser mocks +3.5 (Mpc/h)^3 = 7% of P0 at k = 0.195 h/Mpc). The shot terms now include
+  them (Jing 2005; `PowerOptions::aliased_shotnoise`, default true): the Poisson test gives 0.001 +- 0.009.
 - Reconstruction: the random-density threshold was relative to the mean over the whole padded mesh, so it
   depended on the padding. Now relative to the mean smoothed random density of the survey (sum R^2 / sum R).
 - Checked with mocks (not part of the tests): Gaussian Kaiser mocks in a 500 Mpc/h cube (30 realizations) agree
