@@ -238,7 +238,18 @@ namespace FML::SURVEY {
         auto density = paint_catalog(data, g), selection = paint_catalog(randoms, g);
         detail::smooth(density, g, options.smoothing_radius);
         detail::smooth(selection, g, options.smoothing_radius);
-        const double minimum = options.minimum_random_fraction * wr / (double(g.nmesh) * g.nmesh * g.nmesh);
+        // Threshold relative to the mean smoothed random density seen by the randoms, sum R^2 / sum R (the
+        // mean over the whole padded mesh, used before, depended on the padding: more padding moved the
+        // threshold down and extended the source further into the smoothed edges of the survey)
+        double rr = 0, r1 = 0;
+        for (auto i : selection.get_real_range()) {
+            const double r = selection.get_real_from_index(i);
+            rr += r * r;
+            r1 += r;
+        }
+        FML::SumOverTasks(&rr);
+        FML::SumOverTasks(&r1);
+        const double minimum = options.minimum_random_fraction * (r1 > 0 ? rr / r1 : 0);
         for (auto i : density.get_real_range()) {
             const double r = selection.get_real_from_index(i);
             const bool active = r > minimum && (!options.mask || options.mask(g.position(density, i)));

@@ -118,6 +118,21 @@ The optional `subtract_self=false` instead retains all mesh autocorrelation
 pairs. `Q0(0)` is estimated with the supplied I2, not renormalized by fiat.
 The reported `nvectors` identifies separation bins with no lattice samples.
 
+The separations are the mesh lattice vectors, and the lattice vectors of a shell
+are not isotropically distributed (cubic symmetry, only a few vectors at small s).
+A plain average over them does not average L_ell to zero for ell >= 4, so the large
+isotropic part of the pair function leaks into Q4, Q6 and Q8: for a 500 Mpc/h cube
+on a 7.8 Mpc/h mesh the plain average gave Q4 = +4.4, -0.24, -0.25 in the first
+10 Mpc/h bins (exact: 0.005, 0.010, 0.016) and errors of +-0.05 out to 100 Mpc/h.
+Each shell therefore uses `mean(G F) - mean(G) [mean(F) - <F>_sphere]` for the pair
+function G and angular factor F of every LOS tensor, which is exact for a pair
+function that is isotropic on the shell; the errors become ~0.005-0.01 (also checked
+for a local LOS against a Monte Carlo pair integral). Within about two cells the
+shells contain only a few lattice directions and the anisotropy of the pair function
+itself is not resolved there; use separation bins at least one cell wide. The ell > 0
+averages exclude the s = 0 vector. For a local LOS the window costs one FFT per LOS
+tensor (95 for maxell = 8).
+
 Window estimation requires each catalogue's extent plus CIC support to be below
 half the box along every axis, preventing periodic images from masquerading as
 survey pairs. Choose a separation range covering the window's relevant support;
@@ -136,8 +151,11 @@ The matrix multiplies correlation-function multipoles by Q, using the exact
 Legendre triple-product coefficients, and transforms them back with spherical
 Bessel kernels. Input P is piecewise constant in each k bin; output is at the
 specified k nodes, not a shell average. It uses 16-point quadrature within each
-input k bin and shell-volume radial quadrature. Refine k/separation bins and the
-mesh to check convergence. For measured bandpowers, use the binned helper or explicitly average fine
+input k bin and within each separation bin, with xi of the input bandpower evaluated
+at the nodes and Q interpolated linearly between the bin separations `s` (one point
+per separation bin is not converged unless k ds << 1: 10-25% errors at
+k = 0.1-0.2 h/Mpc for ds = 10 Mpc/h). The table needs `edges` (filled by
+`estimate_window`). Refine k/separation bins and the mesh to check convergence. For measured bandpowers, use the binned helper or explicitly average fine
 output k sampling over the measured bins/modes.
 Window multipoles through `max(input_ell)+max(output_ell)` are required.
 
@@ -166,8 +184,12 @@ auto reconstructed_power = estimate_power(shifted.data, randoms, geometry,
 
 Data and random CIC meshes are smoothed separately with a Gaussian. Their ratio
 forms `delta_tracer = D_smoothed/(alpha R_smoothed)-1`. Cells below
-`minimum_random_fraction * mean(random_mesh)` and cells excluded by an additional
-mask have source zero. Bias/growth are constant scalars in this implementation.
+`minimum_random_fraction * Rbar`, with `Rbar = sum R_smoothed^2 / sum R_smoothed` the
+mean smoothed random density of the survey (independent of the padding), and cells
+excluded by an additional mask have source zero. With the default 0.01 the source
+extends about 2.3 smoothing radii beyond the survey edges, where the ratio of the
+smoothed tails extrapolates the density near the edge; a stricter threshold or a
+`mask` of the true footprint confines it. Bias/growth are constant scalars in this implementation.
 Use weights appropriate for the reconstruction selection function; these need
 not be the same FKP weights chosen later for power estimation.
 

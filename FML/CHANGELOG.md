@@ -5,6 +5,30 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Survey: window matrix quadrature, lattice-shell bias of the window multipoles, reconstruction threshold
+- `make_window_matrix` took xi of each input bandpower and the Bessel kernel at one separation per window bin
+  (the mean lattice separation). That is not converged unless k ds << 1: for a 500 Mpc/h cube with ds = 10 Mpc/h
+  the convolved P0 was 20-25% too low at k = 0.07-0.2 h/Mpc compared with the mean of mock measurements. The s
+  integrals now use 16-point Gauss-Legendre nodes in every separation bin, xi evaluated at the nodes and Q
+  interpolated linearly between the bin separations. The result agrees with the convolution with the exact
+  (analytic) cube window to < 0.5% and is the same for 5 and 10 Mpc/h bins. The table needs `edges` (filled by
+  `estimate_window`).
+- `estimate_window` averaged over the mesh lattice vectors of each separation shell. These are not isotropic
+  (cubic symmetry, few vectors at small s), so L_ell does not average to zero for ell >= 4 and the isotropic part
+  of the pair function leaked into Q4, Q6, Q8: Q4 = +4.4, -0.24, -0.25 in the first 10 Mpc/h bins of the cube
+  (exact 0.005-0.016), +-0.05 out to 100 Mpc/h. Each shell now subtracts mean(G) [mean(F) - <F>_sphere] for the
+  pair function G and angular factor F of every LOS tensor (exact for a pair function isotropic on the shell);
+  errors ~0.005-0.01 for the cube with a fixed LOS and against a Monte Carlo pair integral with a local LOS.
+  The ell > 0 averages exclude the s = 0 vector (they divided by the count including it). The self-pair terms
+  of all LOS tensors are computed in one threaded pass over the randoms (they were recomputed per tensor: 95
+  passes for a local LOS and maxell = 8).
+- Reconstruction: the random-density threshold was relative to the mean over the whole padded mesh, so it
+  depended on the padding. Now relative to the mean smoothed random density of the survey (sum R^2 / sum R).
+- Checked with mocks (not part of the tests): Gaussian Kaiser mocks in a 500 Mpc/h cube (30 realizations) agree
+  with the window-convolved multipoles with the global integral constraint; Zel'dovich catalogues are
+  reconstructed with the right displacement (correlation 0.99, with and without RSD, footprint mask). New tests:
+  window of a uniform cube against the exact Q4, window matrix converged for coarse separation bins.
+
 ### Cosmology (EBS): optional running of the spectral index
 - New parameter `alpha_s` (default 0, bit-identical): P_R(k) = A_s (k/k_pivot)^{n_s - 1 + alpha_s/2 ln(k/k_pivot)}, as
   CLASS's alpha_s. Adiabatic mode only (an error with isocurvature modes). Passed to CLASS by python/params.py.

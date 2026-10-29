@@ -237,7 +237,46 @@ void test_window() {
         g.local_los = local;
         g.fixed_los = {1, 2, 3};
         auto got = estimate_window(randoms, g, edges, alpha, i2, 8, true);
-        std::vector<std::vector<double>> expected(5, std::vector<double>(edges.size() - 1));
+        const size_t nb = edges.size() - 1;
+        std::vector<std::vector<double>> expected(5, std::vector<double>(nb));
+        // Shell correction (see estimate_window): with mu^p = sum_{|a|=p} mult(a) shat^a n^a, every tensor a
+        // gets -(2l+1) c_{l,p} mult(a) Gbar_a(S) [<shat^a>_S - <shat^a>_sphere] / I2, Gbar_a the mean over the
+        // s > 0 lattice vectors of the bin of the pair weight times n^a of the first point.
+        std::vector<std::array<int, 3>> exps;
+        for (int p = 0; p <= 8; p += 2)
+            for (int x = 0; x <= p; ++x)
+                for (int y = 0; y <= p - x; ++y)
+                    exps.push_back({x, y, p - x - y});
+        auto power = [](const Vector& v, const std::array<int, 3>& e) {
+            return std::pow(v[0], e[0]) * std::pow(v[1], e[1]) * std::pow(v[2], e[2]);
+        };
+        auto fact = [](int n) { return std::tgamma(n + 1.0); };
+        auto dfact = [](int n) {
+            double r = 1;
+            for (int j = n; j > 1; j -= 2)
+                r *= j;
+            return r;
+        };
+        std::vector<double> nonzero(nb, 0);
+        std::vector<std::vector<double>> lattice(exps.size(), std::vector<double>(nb, 0)), gbar = lattice;
+        for (int ix = 0; ix < g.nmesh; ++ix)
+            for (int iy = 0; iy < g.nmesh; ++iy)
+                for (int iz = 0; iz < g.nmesh; ++iz) {
+                    Vector v;
+                    const int c[3] = {ix, iy, iz};
+                    for (int d = 0; d < 3; ++d)
+                        v[d] = (c[d] > g.nmesh / 2 ? c[d] - g.nmesh : c[d]) * g.cellsize();
+                    const double radius = std::sqrt(dot(v, v));
+                    int bin = -1;
+                    for (size_t j = 0; j + 1 < edges.size(); ++j)
+                        if (radius >= edges[j] && radius < edges[j + 1])
+                            bin = int(j);
+                    if (bin < 0 || radius == 0)
+                        continue;
+                    ++nonzero[bin];
+                    for (size_t e = 0; e < exps.size(); ++e)
+                        lattice[e][bin] += power(unit(v), exps[e]);
+                }
         for (size_t a = 0; a < all.size(); ++a)
             for (size_t b = 0; b < all.size(); ++b)
                 if (a != b)
@@ -255,6 +294,10 @@ void test_window() {
                                 continue;
                             const auto n = line_of_sight(g, physical(ca.first, g));
                             const double mu = radius ? dot(s, n) / radius : 0;
+                            if (radius > 0)
+                                for (size_t e = 0; e < exps.size(); ++e)
+                                    gbar[e][bin] += power(n, exps[e]) * alpha * alpha * all[a].weight *
+                                                    all[b].weight * ca.second * cb.second / std::pow(g.cellsize(), 3);
                             for (int l = 0; l <= 4; ++l)
                                 if (radius > 0 || l == 0)
                                     expected[l][bin] += (4 * l + 1) * pol(2 * l, mu) * alpha * alpha * all[a].weight *
@@ -262,12 +305,78 @@ void test_window() {
                                                         (std::pow(g.cellsize(), 3) * i2);
                         }
         bool same = true;
-        for (size_t l = 0; l < 5; ++l)
-            for (size_t b = 0; b < got.s.size(); ++b)
-                same &= near(got.q[l][b], got.nvectors[b] ? expected[l][b] / got.nvectors[b] : 0,
-                             sizeof(Real) == 4 ? 1e-3 : 1e-8);
+        for (size_t l = 0; l < 5; ++l) {
+            const auto c = survey_detail::legendre_coefficients(2 * int(l));
+            for (size_t b = 0; b < got.s.size(); ++b) {
+                const double n = l == 0 ? got.nvectors[b] : nonzero[b];
+                double value = n ? expected[l][b] / n : 0;
+                if (l > 0 && nonzero[b] > 0)
+                    for (size_t e = 0; e < exps.size(); ++e) {
+                        const auto& x = exps[e];
+                        const int p = x[0] + x[1] + x[2];
+                        if (p > 2 * int(l))
+                            continue;
+                        const double sphere = x[0] % 2 || x[1] % 2 || x[2] % 2
+                                                  ? 0
+                                                  : dfact(x[0] - 1) * dfact(x[1] - 1) * dfact(x[2] - 1) / dfact(p + 1);
+                        value -= (4 * l + 1) * c[p] * fact(p) / (fact(x[0]) * fact(x[1]) * fact(x[2])) *
+                                 gbar[e][b] / nonzero[b] * (lattice[e][b] / nonzero[b] - sphere) / i2;
+                    }
+                same &= near(got.q[l][b], value, sizeof(Real) == 4 ? 1e-3 : 1e-8);
+            }
+        }
         check(same, std::string("FFT window ell=0..8 and exact CIC self-pair subtraction match direct random pairs: ") +
                         (local ? "local LOS" : "fixed LOS"));
+    }
+    {
+        // Uniform cube of randoms, fixed LOS: Q4 agrees with the exact angular average of the cube's pair
+        // function; a plain average over the lattice vectors of a shell is off by O(0.2-5)
+        Geometry cube;
+        cube.nmesh = 32;
+        cube.boxsize = 64;
+        cube.local_los = false;
+        cube.fixed_los = {0, 0, 1};
+        std::vector<CatalogPoint> uniform;
+        unsigned long long state = 12345;
+        auto next = [&] {
+            state = state * 6364136223846793005ULL + 1442695040888963407ULL;
+            return double(state >> 11) / 9007199254740992.0;
+        };
+        const int nrand = 40000;
+        for (int i = 0; i < nrand; ++i) {
+            Vector x{24 + 16 * next(), 24 + 16 * next(), 24 + 16 * next()};
+            if (i % FML::NTasks == FML::ThisTask)
+                uniform.push_back({x, 1, nrand / 4096.});
+        }
+        std::vector<double> sedges;
+        for (int j = 0; j <= 5; ++j)
+            sedges.push_back(j * cube.cellsize());
+        const double a = 1;
+        auto table = estimate_window(uniform, cube, sedges, a, normalization(uniform, a), 8);
+        bool small = true;
+        // Exact Q4 of the cube (pair function prod_i (1 - |s_i|/16)), angular average by midpoint sums
+        auto exact_q4 = [](double r) {
+            double sum = 0;
+            const int nmu = 200, nphi = 200;
+            for (int i = 0; i < nmu; ++i) {
+                const double mu = -1 + (i + .5) * 2. / nmu, st = std::sqrt(1 - mu * mu);
+                for (int j = 0; j < nphi; ++j) {
+                    const double phi = (j + .5) * 2 * M_PI / nphi;
+                    const double v[3] = {r * st * std::cos(phi), r * st * std::sin(phi), r * mu};
+                    double c = 1;
+                    for (double x : v)
+                        c *= std::max(0.0, 1 - std::abs(x) / 16);
+                    sum += c * pol(4, mu);
+                }
+            }
+            return 9 * sum / (nmu * nphi);
+        };
+        // from two cells on (the first shells have a few lattice vectors along special directions only, where
+        // the anisotropy of the pair function itself is not resolved)
+        for (size_t b = 2; b < table.s.size(); ++b)
+            if (table.nvectors[b] > 0)
+                small &= std::abs(table.q[2][b] - exact_q4(table.s[b])) < .03;
+        check(small, "window multipoles of a uniform cube: no lattice-shell leakage into Q4 (shell correction)");
     }
     check(near(survey_detail::coupling(0, 2, 2), .2) && near(survey_detail::coupling(2, 0, 2), 1) &&
               near(survey_detail::coupling(4, 0, 2), 0),
@@ -276,8 +385,10 @@ void test_window() {
     w.ells = {0, 2, 4, 6, 8};
     const int ns = 400;
     w.q.assign(5, std::vector<double>(ns));
+    w.edges.push_back(0);
     for (int s = 0; s < ns; ++s) {
         const double lo = s * .1, hi = (s + 1) * .1;
+        w.edges.push_back(hi);
         w.s.push_back(.5 * (lo + hi));
         w.shell_volume.push_back(4 * M_PI / 3 * (hi * hi * hi - lo * lo * lo));
         w.q[0][s] = std::exp(-w.s[s] * w.s[s] / 36);
@@ -296,6 +407,36 @@ void test_window() {
     for (size_t i = 0; i < kout.size(); ++i)
         gaussian &= near(convolved[i], std::pow(effective / 2, 1.5) * std::exp(-effective * kout[i] * kout[i]), 8e-4);
     check(gaussian, "window matrix reproduces analytic Gaussian-times-Gaussian convolution");
+    {
+        // The same with separation bins 8 times wider (k ds up to 1.2): the s integral must not use one point
+        // per bin (that gave errors of several per cent here)
+        WindowMultipoles coarse;
+        coarse.ells = w.ells;
+        coarse.q.assign(5, {});
+        coarse.edges.push_back(0);
+        for (int s = 0; s < ns / 8; ++s) {
+            const double lo = s * .8, hi = (s + 1) * .8;
+            coarse.edges.push_back(hi);
+            // bin average of exp(-s^2/36) with s^2 weight, and the corresponding mean separation
+            double q = 0, sm = 0, norm = 0;
+            for (int j = 0; j < 64; ++j) {
+                const double x = lo + (j + .5) / 64 * (hi - lo);
+                q += x * x * std::exp(-x * x / 36);
+                sm += x * x * x;
+                norm += x * x;
+            }
+            coarse.s.push_back(sm / norm);
+            coarse.shell_volume.push_back(4 * M_PI / 3 * (hi * hi * hi - lo * lo * lo));
+            coarse.q[0].push_back(q / norm);
+            for (int l = 1; l < 5; ++l)
+                coarse.q[l].push_back(0);
+        }
+        auto coarse_convolved = make_window_matrix(coarse, kin, kout, {0}, {0}, false).apply(model);
+        bool good = true;
+        for (size_t i = 0; i < kout.size(); ++i)
+            good &= near(coarse_convolved[i], convolved[i], 3e-3);
+        check(good, "window matrix is converged for separation bins with k ds ~ 1");
+    }
     std::vector<double> quadrupole_model;
     for (size_t i = 0; i + 1 < kin.size(); ++i) {
         const double k = .5 * (kin[i] + kin[i + 1]);
@@ -511,8 +652,10 @@ void test_validation() {
     w.ells = {0};
     w.q = {{1, 1}};
     w.s = {1, 2};
+    w.edges = {.5, 1.5, 2.5};
     w.shell_volume = {1, 2};
     check(rejects([&] { make_window_matrix(w, {0, 1}, {.1}); }), "window matrix rejects missing angular multipoles");
+    check(!rejects([&] { make_window_matrix(w, {0, 1}, {.1}, {0}, {0}); }), "the same table is valid for ell = 0");
     w.shell_volume.clear();
     check(rejects([&] {
               make_window_matrix(w, {0, 1}, {.1}, {0}, {0});

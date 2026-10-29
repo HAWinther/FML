@@ -61,6 +61,8 @@ namespace FML::SURVEY {
                 s[d] = (c[d] > g.nmesh / 2 ? c[d] - g.nmesh : c[d]) * g.cellsize();
             return s;
         };
+        // Lattice vectors per bin: all, and with s > 0 (the shell average of ell > 0 has no s = 0 term)
+        std::vector<double> nonzero(nb, 0);
         for (auto i : selection.get_real_range()) {
             auto s = separation(selection, i);
             const double r = std::sqrt(dot(s, s));
@@ -68,28 +70,83 @@ namespace FML::SURVEY {
             if (b < 0)
                 continue;
             ++result.nvectors[b];
+            nonzero[b] += r > 0;
             result.s[b] += r;
         }
         detail::sum(result.s);
         detail::sum(result.nvectors);
+        detail::sum(nonzero);
+        // The shell average over the lattice vectors of a bin is not the angular average: the vectors of a
+        // shell are not isotropic (cubic symmetry, few vectors at small s), so the average of L_ell(shat.n)
+        // over them is not zero for ell >= 4, and the large isotropic part of the pair function leaks into
+        // Q_4, Q_6, Q_8 (errors O(0.1-1) at s of a few cells, O(0.03) at 10 cells). With G(v) the pair
+        // function of a tensor and F(v) its angular factor, each shell gets
+        //   mean(G F) - mean(G) [mean(F) - <F>_sphere]
+        // which is exact for G isotropic on the shell (the anisotropic part times the lattice anisotropy
+        // remains, a second-order error).
+        std::vector<std::vector<double>> correction(result.ells.size(), std::vector<double>(nb, 0));
+        auto sphere_moment = [](const std::array<int, 3>& e) {
+            // <x^a y^b z^c> over the unit sphere: (a-1)!!(b-1)!!(c-1)!!/(a+b+c+1)!! for a, b, c even, else 0
+            auto odd_factorial = [](int n) {
+                double f = 1;
+                for (int j = n; j > 1; j -= 2)
+                    f *= j;
+                return f;
+            };
+            if (e[0] % 2 || e[1] % 2 || e[2] % 2)
+                return 0.0;
+            return odd_factorial(e[0] - 1) * odd_factorial(e[1] - 1) * odd_factorial(e[2] - 1) /
+                   odd_factorial(e[0] + e[1] + e[2] + 1);
+        };
         const auto tensors = detail::moments(g.local_los ? maxell : 0);
-        for (const auto& tensor : tensors) {
-            // Exact mesh self-pair subtraction, including CIC clouds and node LOS.
-            std::vector<double> self(27);
-            if (subtract_self)
-                for (const auto& p : randoms) {
+        // Exact mesh self-pair subtraction, including CIC clouds and node LOS: for every tensor the 27 offsets
+        // b - a of the CIC cells a, b of the same random, in one pass over the randoms
+        const size_t nt = tensors.size();
+        std::vector<std::vector<double>> self_pairs(nt, std::vector<double>(27, 0));
+        if (subtract_self) {
+            std::vector<double> total(nt * 27, 0);
+#ifdef USE_OMP
+#pragma omp parallel
+#endif
+            {
+                std::vector<double> local(nt * 27, 0), angular(nt);
+#ifdef USE_OMP
+#pragma omp for schedule(static)
+#endif
+                for (size_t i = 0; i < randoms.size(); ++i) {
+                    const auto& p = randoms[i];
+                    if (p.weight == 0)
+                        continue;
+                    const double factor = alpha * alpha * p.weight * p.weight / cellvolume;
                     detail::cic(p.position, g, [&](auto a, double wa) {
                         Vector x;
                         for (int d = 0; d < 3; ++d)
                             x[d] = g.minimum[d] + a[d] * g.cellsize();
-                        const double angular = detail::monomial(g.los(x), tensor);
+                        const auto n = g.los(x);
+                        for (size_t t = 0; t < nt; ++t)
+                            angular[t] = factor * wa * detail::monomial(n, tensors[t]);
                         detail::cic(p.position, g, [&](auto b, double wb) {
                             const int index = ((b[0] - a[0] + 1) * 3 + b[1] - a[1] + 1) * 3 + b[2] - a[2] + 1;
-                            self[index] += alpha * alpha * p.weight * p.weight * wa * wb * angular / cellvolume;
+                            for (size_t t = 0; t < nt; ++t)
+                                local[t * 27 + index] += angular[t] * wb;
                         });
                     });
                 }
-            detail::sum(self);
+#ifdef USE_OMP
+#pragma omp critical
+#endif
+                for (size_t j = 0; j < total.size(); ++j)
+                    total[j] += local[j];
+            }
+            detail::sum(total);
+            for (size_t t = 0; t < nt; ++t)
+                for (int j = 0; j < 27; ++j)
+                    self_pairs[t][j] = total[t * 27 + j];
+        }
+        for (const auto& tensor : tensors) {
+            std::vector<double> gsum(nb, 0);
+            std::vector<std::vector<double>> fsum(result.ells.size(), std::vector<double>(nb, 0));
+            const auto& self = self_pairs[&tensor - tensors.data()];
             auto correlation = detail::empty_mesh(g);
             for (auto i : selection.get_real_range())
                 correlation.set_real_from_index(i, Real(selection.get_real_from_index(i) *
@@ -115,6 +172,8 @@ namespace FML::SURVEY {
                 if (near)
                     value -= self[((delta[0] + 1) * 3 + delta[1] + 1) * 3 + delta[2] + 1];
                 const auto shat = unit(s);
+                if (r > 0)
+                    gsum[b] += value;
                 for (size_t l = 0; l < result.ells.size(); ++l) {
                     const int ell = result.ells[l];
                     if (r == 0 && ell > 0)
@@ -127,7 +186,27 @@ namespace FML::SURVEY {
                                                             detail::monomial(shat, tensor)
                                                       : 0;
                     result.q[l][b] += (2 * ell + 1) * factor * value / i2;
+                    if (r > 0)
+                        fsum[l][b] += factor;
                 }
+            }
+            detail::sum(gsum);
+            for (size_t l = 0; l < result.ells.size(); ++l) {
+                const int ell = result.ells[l];
+                if (ell == 0)
+                    continue; // the angular factor of the monopole is 1 on any shell
+                detail::sum(fsum[l]);
+                double sphere;
+                if (!g.local_los)
+                    sphere = 0; // <L_ell(shat.n)> over the sphere, ell > 0
+                else
+                    sphere = tensor.degree <= ell ? coefficients[l][tensor.degree] * tensor.multiplicity *
+                                                        sphere_moment(tensor.exponent)
+                                                  : 0;
+                for (size_t b = 0; b < nb; ++b)
+                    if (nonzero[b] > 0)
+                        correction[l][b] -= (2 * ell + 1) * (gsum[b] / nonzero[b]) *
+                                            (fsum[l][b] / nonzero[b] - sphere) / i2;
             }
         }
         for (auto& q : result.q)
@@ -136,8 +215,11 @@ namespace FML::SURVEY {
             const double count = result.nvectors[b];
             result.s[b] = count ? result.s[b] / count : .5 * (edges[b] + edges[b + 1]);
             result.shell_volume[b] = 4 * M_PI / 3 * (std::pow(edges[b + 1], 3) - std::pow(edges[b], 3));
-            for (auto& q : result.q)
-                q[b] = count ? q[b] / count : 0;
+            for (size_t l = 0; l < result.ells.size(); ++l) {
+                // ell > 0: average over the s > 0 vectors (a bin with only s = 0 has no direction: 0)
+                const double n = result.ells[l] == 0 ? count : nonzero[b];
+                result.q[l][b] = n ? result.q[l][b] / n + correction[l][b] : 0;
+            }
         }
         return result;
     }
@@ -221,8 +303,10 @@ namespace FML::SURVEY {
         detail::validate_ells(input_ells, 4, false);
         detail::validate_ells(output_ells, 4, false);
         const size_t ns = w.s.size(), nin = input_edges.size() - 1;
-        bool valid = !output_k.empty() && w.q.size() == w.ells.size() && w.shell_volume.size() == ns && ns > 0;
-        validate(valid, "Invalid window table array dimensions");
+        bool valid = !output_k.empty() && w.q.size() == w.ells.size() && w.shell_volume.size() == ns && ns > 0 &&
+                     w.edges.size() == ns + 1 && (w.nvectors.empty() || w.nvectors.size() == ns);
+        validate(valid, "Invalid window table array dimensions (s, edges, shell_volume, q, nvectors)");
+        detail::validate_edges(w.edges, false);
         for (double k : output_k)
             valid &= std::isfinite(k) && k >= 0;
         for (const auto& q : w.q) {
@@ -238,10 +322,48 @@ namespace FML::SURVEY {
         for (int ell = 0; ell <= required; ell += 2)
             valid &= std::find(w.ells.begin(), w.ells.end(), ell) != w.ells.end();
         validate(valid, "Invalid/incomplete window table (need window multipoles through input ell + output ell)");
-        auto q = [&](int ell, size_t s) {
-            auto it = std::find(w.ells.begin(), w.ells.end(), ell);
-            return it == w.ells.end() ? 0 : w.q[it - w.ells.begin()][s];
-        };
+        // The s integrals use 16-point Gauss-Legendre nodes in every separation bin, with xi of the input
+        // bandpower evaluated exactly at the nodes and Q linearly interpolated between the bin separations w.s
+        // (constant before the first and after the last bin with lattice vectors, zero beyond the last edge).
+        // A single point per bin (xi and the Bessel kernel at w.s only) is not converged unless k ds << 1: for
+        // ds = 10 Mpc/h it gave errors of 10-25% at k = 0.1-0.2 h/Mpc.
+        std::vector<size_t> used; // bins with lattice vectors (all bins for a table without nvectors)
+        for (size_t s = 0; s < ns; ++s)
+            if (w.nvectors.empty() || w.nvectors[s] > 0)
+                used.push_back(s);
+        validate(!used.empty(), "Window table has no separation bin with lattice vectors");
+        std::vector<double> nodes, node_weights;
+        for (size_t s = 0; s < ns; ++s) {
+            const double lo = w.edges[s], hi = w.edges[s + 1];
+            for (size_t j = 0; j < detail::gx.size(); ++j)
+                for (double sign : {-1.0, 1.0}) {
+                    const double x = .5 * (lo + hi) + sign * .5 * (hi - lo) * detail::gx[j];
+                    nodes.push_back(x);
+                    node_weights.push_back(4 * M_PI * x * x * .5 * (hi - lo) * detail::gw[j]);
+                }
+        }
+        const size_t nn = nodes.size();
+        // Q_j at the nodes
+        std::vector<std::vector<double>> qnode(w.ells.size(), std::vector<double>(nn));
+        for (size_t node = 0; node < nn; ++node) {
+            const double x = nodes[node];
+            size_t hi = 0;
+            while (hi < used.size() && w.s[used[hi]] < x)
+                ++hi;
+            for (size_t j = 0; j < w.ells.size(); ++j) {
+                const auto& qj = w.q[j];
+                if (hi == 0)
+                    qnode[j][node] = qj[used.front()];
+                else if (hi == used.size())
+                    qnode[j][node] = qj[used.back()];
+                else {
+                    const size_t a = used[hi - 1], b = used[hi];
+                    const double t = (x - w.s[a]) / (w.s[b] - w.s[a]);
+                    qnode[j][node] = (1 - t) * qj[a] + t * qj[b];
+                }
+            }
+        }
+        auto qindex = [&](int ell) { return size_t(std::find(w.ells.begin(), w.ells.end(), ell) - w.ells.begin()); };
         WindowMatrix matrix;
         matrix.input_ells = input_ells;
         matrix.output_ells = output_ells;
@@ -250,45 +372,54 @@ namespace FML::SURVEY {
         matrix.global_integral_constraint = global_ic;
         matrix.values.assign(output_ells.size() * output_k.size(), std::vector<double>(input_ells.size() * nin));
         double volume = 0;
-        for (size_t s = 0; s < ns; ++s)
-            volume += w.shell_volume[s] * q(0, s);
+        for (size_t node = 0; node < nn; ++node)
+            volume += node_weights[node] * qnode[qindex(0)][node];
         validate(!global_ic || (volume > 0 && std::isfinite(volume)),
                  "Global integral constraint needs positive integrated Q0");
-        for (size_t l = 0; l < input_ells.size(); ++l)
+        // Bessel kernels of the outputs at the nodes
+        std::vector<std::vector<std::vector<double>>> kernel(
+            output_ells.size(), std::vector<std::vector<double>>(output_k.size(), std::vector<double>(nn)));
+        for (size_t out = 0; out < output_ells.size(); ++out)
+            for (size_t k = 0; k < output_k.size(); ++k)
+                for (size_t node = 0; node < nn; ++node)
+                    kernel[out][k][node] = node_weights[node] * detail::bessel(output_ells[out], output_k[k] * nodes[node]);
+        for (size_t l = 0; l < input_ells.size(); ++l) {
+            const int in = input_ells[l];
+            // Window factor of each output multipole: sum_j coupling(out, in, ell_j) Q_j
+            std::vector<std::vector<double>> factor(5, std::vector<double>(nn, 0));
+            for (int ell = 0; ell <= 4; ell += 2)
+                for (size_t j = 0; j < w.ells.size(); ++j) {
+                    const double c = detail::coupling(ell, in, w.ells[j]);
+                    if (c != 0)
+                        for (size_t node = 0; node < nn; ++node)
+                            factor[ell][node] += c * qnode[j][node];
+                }
             for (size_t b = 0; b < nin; ++b) {
-                const int in = input_ells[l];
-                std::vector<double> xi(ns);
-                for (size_t s = 0; s < ns; ++s)
-                    xi[s] = (in % 4 ? -1 : 1) / (2 * M_PI * M_PI) *
-                            detail::quadrature(input_edges[b], input_edges[b + 1],
-                                               [&](double k) { return k * k * detail::bessel(in, k * w.s[s]); });
-                std::vector<std::vector<double>> coupling_table(5, std::vector<double>(w.ells.size()));
-                for (int ell = 0; ell <= 4; ell += 2)
-                    for (size_t j = 0; j < w.ells.size(); ++j)
-                        coupling_table[ell][j] = detail::coupling(ell, in, w.ells[j]);
-                auto convolved_xi = [&](int ell, size_t s) {
-                    double value = 0;
-                    for (size_t j = 0; j < w.ells.size(); ++j)
-                        value += coupling_table[ell][j] * w.q[j][s];
-                    return xi[s] * value;
-                };
+                std::vector<double> xi(nn);
+                for (size_t node = 0; node < nn; ++node)
+                    xi[node] = (in % 4 ? -1 : 1) / (2 * M_PI * M_PI) *
+                               detail::quadrature(input_edges[b], input_edges[b + 1], [&](double k) {
+                                   return k * k * detail::bessel(in, k * nodes[node]);
+                               });
                 double ic = 0;
                 if (global_ic)
-                    for (size_t s = 0; s < ns; ++s)
-                        ic += w.shell_volume[s] * convolved_xi(0, s) / volume;
+                    for (size_t node = 0; node < nn; ++node)
+                        ic += node_weights[node] * factor[0][node] * xi[node] / volume;
                 for (size_t out = 0; out < output_ells.size(); ++out) {
                     const int ell = output_ells[out];
-                    std::vector<double> xi_out(ns);
-                    for (size_t s = 0; s < ns; ++s)
-                        xi_out[s] = convolved_xi(ell, s) - ic * q(ell, s);
+                    const size_t jq = qindex(ell);
+                    std::vector<double> xi_out(nn);
+                    for (size_t node = 0; node < nn; ++node)
+                        xi_out[node] = factor[ell][node] * xi[node] - ic * qnode[jq][node];
                     for (size_t k = 0; k < output_k.size(); ++k) {
                         double value = 0;
-                        for (size_t s = 0; s < ns; ++s)
-                            value += w.shell_volume[s] * detail::bessel(ell, output_k[k] * w.s[s]) * xi_out[s];
+                        for (size_t node = 0; node < nn; ++node)
+                            value += kernel[out][k][node] * xi_out[node];
                         matrix.values[out * output_k.size() + k][l * nin + b] = (ell % 4 ? -1 : 1) * value;
                     }
                 }
             }
+        }
         return matrix;
     }
     /// Continuous k^2-weighted output-shell averages, useful for measured bandpowers.
