@@ -5,6 +5,28 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### VoidFinders: review fixes (Oct 29)
+- SphericalVoidFinder: `max_overlap` must be in [0, 1) (a negative value let overlapping voids through: the overlap
+  hash only compares neighbouring cells), and min radius > max radius is an error (was an empty catalogue).
+- Clusters (`find_clusters`) with `ZoneMerging::Threshold` need `link_density_threshold > 1`: the void default 0.2
+  merged every link, i.e. silently gave `Full`.
+- The default voxel grid size is rounded down to a multiple of the task count, so the spherical and voxel
+  catalogues changed with the number of tasks (example: 1676 vs 1714 voxel voids for 1 and 2 tasks). Now a warning
+  and documented; set Nmesh for task-independent results.
+- ZOBOV: removed a `density_ratio >= 1` cut that never removed anything. README documents all four finders.
+- Review (independent watershed/merging implementation, Poisson mocks with known holes, 1 vs 2 tasks): radii exact,
+  voxel/ZOBOV catalogues and merging identical to the reference.
+
+### Survey: review (Oct 29); mixing-matrix input range in the README and example
+- The README and workflow example built the window mixing matrix with input k edges equal to the output edges, so
+  the theory P(k) above the last measured bin was dropped: the convolved P0 was 22% low in the last bin (500 Mpc/h
+  cube). They now use finer input edges extending well beyond the output range, and the README says why.
+- README: Q_L for L >= 4 is dominated by the lattice at separations of a few cells (documented), and the
+  reconstruction test checks the solver against the same discrete operator (reworded).
+- Review: FKP multipoles (fixed and local LOS) identical to independent numpy estimators, window Q0 analytic to
+  0.1-1%, Wilson et al. coupling factors, reconstruction displacement vs exact spectral solution (slope 0.995,
+  corr 0.99995), 1 vs 2 tasks to 1e-9.
+
 ### InitialConditions: the internal transfer provider rejects a running alpha_s
 - `alpha_s` (new in the Einstein-Boltzmann solver) is not in InternalTransferProvider::primordial_power or in
   COLASolver's primordial spectrum, so a solver.ini with alpha_s != 0 would have been used without it. It is now

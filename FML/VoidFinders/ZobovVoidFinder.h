@@ -33,7 +33,8 @@ namespace FML {
             /// catalogue has all the voids in the hierarchy; parent is the id of the void a void is part of
             /// (-1 for the top-level voids)
             ZoneMerging merging{ZoneMerging::None};
-            /// Link density (in units of the mean) below which zones are merged (above for clusters)
+            /// Link density (in units of the mean) below which zones are merged (above for clusters, which need a
+            /// value > 1)
             double link_density_threshold{0.2};
         };
 
@@ -127,6 +128,11 @@ namespace FML {
         std::vector<Void> ZobovVoidFinder(T * p, size_t NumPart, const ZobovOptions & options = ZobovOptions()) {
             static_assert(CGAL_NDIM == 3, "ZobovVoidFinder is only implemented in 3D");
             assert_mpi(FML::PARTICLE::GetNDIM(T()) == 3, "[ZobovVoidFinder] Only implemented in 3D");
+            // Clusters merge across links above the threshold: the void default (0.2) would merge everything
+            assert_mpi(not(options.find_clusters and options.merging == ZoneMerging::Threshold and
+                           options.link_density_threshold <= 1.0),
+                       "[ZobovVoidFinder] Clusters with ZoneMerging::Threshold need link_density_threshold > 1 (in "
+                       "units of the mean; the default 0.2 is for voids)");
 
             // Copy what we need
             std::vector<detail::ZobovParticle> parts(NumPart);
@@ -190,7 +196,7 @@ namespace FML {
                     catalogue_from_merged_zones(merged, options.find_clusters, mean_density, true, [&](const Void & v) {
                         const bool pass_density = options.find_clusters ? v.density_min > options.max_dens_cut :
                                                                           v.density_min < options.min_dens_cut;
-                        return pass_density and v.nmembers >= options.min_num_particles and v.density_ratio >= 1.0;
+                        return pass_density and v.nmembers >= options.min_num_particles;
                     });
                 long long int ntop = 0;
                 for (auto & v : voids)

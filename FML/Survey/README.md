@@ -97,11 +97,17 @@ std::vector<double> separation_edges; // physical separations, increasing
 // Fill edges, with the last <= boxsize/2.
 auto window = estimate_window(randoms, geometry, separation_edges,
                               power.alpha, power.i2, 8);
-auto matrix = make_binned_window_matrix(window, options.edges, options.edges,
+// Theory input bins: finer than the measured bins and extending well beyond the last one
+// (the window mixes power from higher k into the measured bins; with the input cut at the
+// last measured edge the convolved P0 of a 500 Mpc/h cube was 22% low in the last bin)
+std::vector<double> input_edges;
+for (int i = 0; i <= 200; ++i)
+    input_edges.push_back(0.005 * i); // 0 to 1 h/Mpc
+auto matrix = make_binned_window_matrix(window, input_edges, options.edges,
                                 {0,2,4}, {0,2,4}, true);
-// Input vector: all P0 bandpowers, then P2 bandpowers, then P4 bandpowers.
+// Input vector: all P0 bandpowers, then P2 bandpowers, then P4 bandpowers (on input_edges).
 std::vector<double> theory_bandpowers;
-// Fill theory_bandpowers with 3 * (options.edges.size()-1) values.
+// Fill theory_bandpowers with 3 * (input_edges.size()-1) values.
 auto predicted = matrix.apply(theory_bandpowers);
 ```
 
@@ -117,6 +123,10 @@ cloud extent and node LOS. This is not merely a subtraction at zero separation.
 The optional `subtract_self=false` instead retains all mesh autocorrelation
 pairs. `Q0(0)` is estimated with the supplied I2, not renormalized by fiat.
 The reported `nvectors` identifies separation bins with no lattice samples.
+The angular average is a plain mean over the lattice separation vectors in each bin, so at separations of a few
+cells (few vectors) Q_L for L >= 4 is dominated by the lattice (a uniform cube: Q4 = 4.35 at s = 7 cells against
+0.005 analytically, a few % only beyond ~20 cells). Use a finer mesh or a larger survey-to-cell ratio when the
+small-s part of Q4, Q6, Q8 matters (it enters the P2 and P4 couplings).
 
 The separations are the mesh lattice vectors, and the lattice vectors of a shell
 are not isotropically distributed (cubic symmetry, only a few vectors at small s).
@@ -242,7 +252,8 @@ make -C FML/Survey/tests run
 Normal FML Makefile configuration applies. Tests compare FFT multipoles against
 a direct DFT, window multipoles against explicit weighted random pairs, Gaussian
 window convolution against an analytic result, and fixed/local-LOS displacement
-solves against independently constructed manufactured equations. They also
+solves against manufactured right-hand sides built with the same discrete operator (a check of the solver; an
+independent spectral solution agreed to slope 0.995 and correlation 0.99995 in the Oct 2026 review). They also
 check IC nulling, MPI ownership/order, masks, normalization, RecIso/RecSym,
 shifted-random spectra and collective invalid-input behavior. These establish
 numerical/convention checks; no production-survey mock recovery or external

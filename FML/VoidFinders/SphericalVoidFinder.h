@@ -113,6 +113,10 @@ namespace FML {
             const double rmin = options.min_radius_in_mean_separation * mean_separation;
             if (FML::ThisTask == 0 and rmax < options.max_radius_in_mean_separation * mean_separation)
                 std::cout << "[SphericalVoidFinder] The max radius is limited to 0.2 times the box size\n";
+            // max_overlap < 0 would need overlap checks beyond the neighbouring cells of the overlap hash
+            assert_mpi(options.max_overlap >= 0.0 and options.max_overlap < 1.0,
+                       "[SphericalVoidFinder] max_overlap must be in [0, 1)");
+            assert_mpi(rmin <= rmax, "[SphericalVoidFinder] The min radius is larger than the max radius");
             const double max_drift = options.recentering_steps > 0 ? 0.5 * rmax : 0.0;
             const double threshold = (1.0 + options.delta_threshold) * mean_density * 4.0 * M_PI / 3.0;
 
@@ -161,8 +165,7 @@ namespace FML {
             // Crossing a thin slab does not require replicating the whole box.
             // Route to every slab whose periodic buffer overlaps each owned particle.
             const bool everything = FML::NTasks == 1 or width + 2.0 * buffer >= 1.0;
-            FML::COMMUNICATION::append_periodic_slab_ghosts(parts, buffer,
-                                                           [](const PosMass & q) { return q.x[0]; });
+            FML::COMMUNICATION::append_periodic_slab_ghosts(parts, buffer, [](const PosMass & q) { return q.x[0]; });
 
             // Cell list for the particles we have. Cells of size >= 2 mean separations. In x we only store
             // the cells covering our domain plus the buffer

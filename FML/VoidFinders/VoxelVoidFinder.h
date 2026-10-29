@@ -38,7 +38,8 @@ namespace FML {
             double max_dens_cut{1.0};
             /// How to merge the zones into voids (None: every zone is a void as in Revolver), see ZoneMerging
             ZoneMerging merging{ZoneMerging::None};
-            /// Link density (in units of the mean) below which zones are merged (above for clusters)
+            /// Link density (in units of the mean) below which zones are merged (above for clusters, which need a
+            /// value > 1)
             double link_density_threshold{0.2};
         };
 
@@ -73,6 +74,10 @@ namespace FML {
                                                 ZoneMerging merging = ZoneMerging::None,
                                                 double link_density_threshold = 0.2) {
 
+            // Clusters merge across links above the threshold: the void default (0.2) would merge everything
+            assert_mpi(not(find_clusters and merging == ZoneMerging::Threshold and link_density_threshold <= 1.0),
+                       "[VoxelWatershed] Clusters with ZoneMerging::Threshold need link_density_threshold > 1 (in "
+                       "units of the mean; the default 0.2 is for voids)");
             const int N = density.get_nmesh();
             const long long int N2 = (long long int)(N)*N;
             const int nx = int(density.get_local_nx());
@@ -363,7 +368,14 @@ namespace FML {
             int Nmesh = options.Nmesh;
             if (Nmesh <= 0) {
                 Nmesh = int(std::floor(2.0 * std::cbrt(4.0 * M_PI * double(NumPartTot) / 3.0)));
+                const int Nmesh_one_task = Nmesh;
                 Nmesh -= Nmesh % FML::NTasks;
+                // The voxel and spherical catalogues depend on the grid: set Nmesh for results that do not depend
+                // on the number of tasks
+                if (FML::ThisTask == 0 and Nmesh != Nmesh_one_task)
+                    std::cout << "[VoxelVoidFinder] Warning: default Nmesh = " << Nmesh_one_task << " rounded down to "
+                              << Nmesh << " for " << FML::NTasks
+                              << " tasks: the catalogue differs from a 1-task run (set Nmesh to avoid this)\n";
             }
             assert_mpi(Nmesh >= FML::NTasks and Nmesh % FML::NTasks == 0,
                        "[VoxelVoidFinder] Nmesh must be a multiple of the number of tasks");

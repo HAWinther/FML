@@ -5,7 +5,7 @@
 #include <random>
 using namespace FML::SURVEY;
 
-void write_power(const std::string& path, const PowerSpectrum& power) {
+void write_power(const std::string & path, const PowerSpectrum & power) {
     if (FML::ThisTask)
         return;
     std::ofstream file(path);
@@ -14,7 +14,7 @@ void write_power(const std::string& path, const PowerSpectrum& power) {
     file << std::setprecision(15) << "# k nmodes P0 P2 P4; alpha=" << power.alpha << " I2=" << power.i2 << '\n';
     for (size_t b = 0; b < power.k.size(); ++b) {
         file << power.k[b] << ' ' << power.nmodes[b];
-        for (const auto& pole : power.power)
+        for (const auto & pole : power.power)
             file << ' ' << pole[b];
         file << '\n';
     }
@@ -47,7 +47,12 @@ int main() {
     for (int i = 0; i <= 12; ++i)
         separations.push_back(i * 25.0);
     const auto window = estimate_window(randoms, geometry, separations, before.alpha, before.i2);
-    const auto matrix = make_binned_window_matrix(window, power_options.edges, power_options.edges);
+    // Theory input bins finer than the measured ones and well beyond the last one (the window mixes higher-k power
+    // into the measured bins)
+    std::vector<double> input_edges;
+    for (int i = 0; i <= 200; ++i)
+        input_edges.push_back(0.0025 * i);
+    const auto matrix = make_binned_window_matrix(window, input_edges, power_options.edges);
     ReconstructionOptions reconstruction;
     reconstruction.smoothing_radius = 30;
     reconstruction.bias = 2;
@@ -61,13 +66,13 @@ int main() {
         window_file << std::setprecision(15) << "# s Q0 Q2 Q4 Q6 Q8 (CIC self pairs removed)\n";
         for (size_t b = 0; b < window.s.size(); ++b) {
             window_file << window.s[b];
-            for (const auto& q : window.q)
+            for (const auto & q : window.q)
                 window_file << ' ' << q[b];
             window_file << '\n';
         }
         matrix_file << std::setprecision(15)
                     << "# ell-major rows and columns; input bandpowers, k-squared weighted output bands; global IC\n";
-        for (const auto& row : matrix.values) {
+        for (const auto & row : matrix.values) {
             for (double x : row)
                 matrix_file << x << ' ';
             matrix_file << '\n';
