@@ -5,6 +5,11 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): parameter values nan, inf and integer overflow are errors
+- ParameterFile accepted `nan` and `inf` as numbers, gave the bare std::stod message for 1e400, and cast integers
+  outside the int range (undefined behaviour). These are now errors with the parameter name. Checks in
+  tests/test_parameterfile.cpp.
+
 ### Cosmology (EBS): warning for a negative Omega_Lambda in DGP
 - DGP with its own expansion sets Omega_Lambda from the closure; on the self-accelerating branch a too large
   Omega_rc gives Omega_Lambda < 0 (Omega_rc = 0.3: -0.41) without any message. It now warns (once per process).

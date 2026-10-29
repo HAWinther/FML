@@ -109,6 +109,10 @@ int main() {
         check("non-numeric value is an error", throws([&] { ParameterFile::read(dir + "/e2.ini"); }));
         std::ofstream(dir + "/e3.ini") << "pert_n_k = 10.5\n";
         check("non-integer for an integer is an error", throws([&] { ParameterFile::read(dir + "/e3.ini"); }));
+        check("nan is an error", throws([&] { ParameterFile::read("", {"h=nan"}); }));
+        check("inf is an error", throws([&] { ParameterFile::read("", {"A_s=inf"}); }));
+        check("1e400 is an error", throws([&] { ParameterFile::read("", {"h=1e400"}); }));
+        check("integer beyond the int range is an error", throws([&] { ParameterFile::read("", {"ell_max=1e10"}); }));
         std::ofstream(dir + "/e4.ini") << "lensing = maybe\n";
         check("bad boolean is an error", throws([&] { ParameterFile::read(dir + "/e4.ini"); }));
         std::ofstream(dir + "/e5.ini") << "method_tc = euler\n";

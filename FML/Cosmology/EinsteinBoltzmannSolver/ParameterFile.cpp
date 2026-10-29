@@ -4,9 +4,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <fstream>
 #include <functional>
 #include <iomanip>
+#include <limits>
 #include <map>
 #include <set>
 #include <sstream>
@@ -30,16 +32,25 @@ namespace FML::COSMOLOGY {
                 ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
             return s;
         }
+        // A finite number (stod also accepts nan and inf, and throws out_of_range for 1e400)
         double to_double(const std::string & v) {
             size_t pos = 0;
-            const double d = std::stod(v, &pos);
+            double d;
+            try {
+                d = std::stod(v, &pos);
+            } catch (const std::out_of_range &) {
+                throw std::invalid_argument("number out of range: '" + v + "'");
+            }
             if (trim(v.substr(pos)) != "")
                 throw std::invalid_argument("not a number: '" + v + "'");
+            if (!std::isfinite(d))
+                throw std::invalid_argument("not a finite number: '" + v + "'");
             return d;
         }
         int to_int(const std::string & v) {
             const double d = to_double(v);
-            if (d != static_cast<int>(d))
+            // range check first: the cast of a double outside the int range is undefined
+            if (!(std::fabs(d) <= double(std::numeric_limits<int>::max())) || d != std::floor(d))
                 throw std::invalid_argument("not an integer: '" + v + "'");
             return static_cast<int>(d);
         }
