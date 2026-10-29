@@ -11,6 +11,8 @@
 
 #include <cmath>
 #include <functional>
+#include <utility>
+#include <string>
 
 using namespace FML::COSMOLOGY;
 
@@ -305,8 +307,29 @@ static void test_wcdm() {
     check_rel("CPL: eta0 vs quadrature", cpl.eta0(), eta0_ref, 1e-8);
 }
 
+// Matter-radiation equality with massive neutrinos (3 p_ncdm radiation, rho_ncdm - 3 p_ncdm matter) against CLASS
+// v3.4's z_eq (Planck 2018 baseline omegas, T_CMB = 2.7255 K, N_eff = 3.046)
+static void test_equality_massive_nu() {
+    for (auto [m, zeq] : {std::pair<double, double>{0.06, 3403.0545905649415}, {0.6, 3486.753194978688}}) {
+        CosmologyParameters p;
+        p.h = 0.6736;
+        p.OmegaB = 0.02237 / (p.h * p.h);
+        p.OmegaCDM = 0.1200 / (p.h * p.h);
+        p.TCMB = 2.7255;
+        p.Neff = 3.046;
+        p.m_nu = m;
+        BackgroundCosmology bg(p);
+        bg.solve();
+        check_rel("z_eq with m_nu = " + std::to_string(m).substr(0, 4) + " eV = CLASS",
+                  std::exp(-bg.x_matter_radiation_equality()) - 1.0,
+                  zeq,
+                  1e-4);
+    }
+}
+
 int main() {
     test_fiducial();
+    test_equality_massive_nu();
     test_einstein_de_sitter();
     test_curvature();
     test_geometry();

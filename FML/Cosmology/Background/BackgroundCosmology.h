@@ -150,7 +150,7 @@ namespace FML::COSMOLOGY {
         double luminosity_distance_of_x(double x) const; // d_L = r / a          [m]
 
         // Characteristic epochs (x-values), found by root finding on [x_start, x_end]
-        double x_matter_radiation_equality() const;
+        double x_matter_radiation_equality() const; // massive neutrinos: 3 p radiation, rho - 3 p matter
         double x_matter_DE_equality() const;
         double x_acceleration_onset() const; // where d^2a/dt^2 = 0, i.e. dHp/dx = 0
 

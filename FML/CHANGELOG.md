@@ -5,6 +5,11 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): matter-radiation equality with massive neutrinos
+- `x_matter_radiation_equality` left the massive neutrinos out of both sides; it now counts 3 p_ncdm as radiation
+  and rho_ncdm - 3 p_ncdm as matter, as CLASS. z_eq now agrees with CLASS to 3e-6 for m_nu = 0.06 and 0.6 eV
+  (new check in tests/test_background.cpp). Unchanged without massive neutrinos.
+
 ### Cosmology (EBS): warning for Halofit with massive neutrinos
 - Halofit has no massive-neutrino correction (Bird et al. 2012; CLASS's halofit has it), so with m_nu > 0 the
   nonlinear P(k) is up to ~2% below CLASS. A run now warns (once per process); README updated.

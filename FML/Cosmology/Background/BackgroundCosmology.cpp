@@ -264,9 +264,14 @@ namespace FML::COSMOLOGY {
     } // namespace
 
     double BackgroundCosmology::x_matter_radiation_equality() const {
-        return root_or_nan([&](double x) { return std::log((rhoB(x) + rhoCDM(x)) / (rhoGamma(x) + rhoNu(x))); },
-                           x_start,
-                           x_end);
+        // Massive neutrinos split as in CLASS: 3 p_ncdm is radiation, rho_ncdm - 3 p_ncdm matter (they were left out)
+        return root_or_nan(
+            [&](double x) {
+                const double r3p = 3.0 * pNcdm(x);
+                return std::log((rhoB(x) + rhoCDM(x) + (rhoNcdm(x) - r3p)) / (rhoGamma(x) + rhoNu(x) + r3p));
+            },
+            x_start,
+            x_end);
     }
 
     double BackgroundCosmology::x_matter_DE_equality() const {
