@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): CDM isocurvature in dark_scattering, ide and coupled_quintessence
+- These models have their own CDM block, and it ignored the isocurvature initial conditions: the CDI mode was
+  silently replaced by the adiabatic form with the (tiny) Psi of the mode, i.e. lost (delta_cdm 3e-5 of the right
+  value). The CDM block now takes delta_c and v_c of the mode; the dark energy starts from its adiabatic form, like
+  the other species without isocurvature values.
+- New test in tests/test_isocurvature.cpp: CDI in dark_scattering = ide at zero coupling, and coupled_quintessence
+  with beta = 0 = LCDM (2e-6); both failed before.
+
 ### Cosmology (EBS): Horndeski rejects a non-dynamical or too stiff scalar
 - alpha_K = alpha_B = 0 with alpha_M != 0 gave D = alpha_K + 3 alpha_B^2/2 = 0, and the perturbation equations then
   dropped the scalar silently: P(0.1)/LCDM = 0.980 with c_K = 0, against 1.015 for any small c_K. Now an error

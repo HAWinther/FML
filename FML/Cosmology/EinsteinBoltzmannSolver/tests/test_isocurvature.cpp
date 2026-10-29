@@ -12,6 +12,7 @@
 //     within ~100 of l_max_scalars are cut by its k_max). Pure modes (ic_adiabatic = 0):
 //     CDI and NID agree to < 5e-4 for 10 <= ell <= 600, NIV to ~1e-3
 //   * Isocurvature modes are refused for modified gravity and inconsistent correlations
+//   * The CDI mode in the models with their own dark-matter block (dark_scattering, ide, coupled_quintessence)
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
@@ -27,6 +28,8 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <string>
+#include <vector>
 
 using namespace FML::COSMOLOGY;
 
@@ -86,6 +89,48 @@ int main() {
                   RecombinationHistory rec(bg);
                   Perturbations p(bg, rec, Isocurvature::components(m.cosmo, m.pert)[1]);
               }));
+    }
+
+    std::cout << "CDM isocurvature in the models with their own dark-matter block\n";
+    {
+        // dark_scattering and ide with zero coupling are the same wCDM (w = -0.95, c_s^2 = 1), and
+        // coupled_quintessence with beta = 0 and a flat potential is close to LCDM: the CDI mode must be there and
+        // agree (it was silently replaced by the adiabatic form, i.e. lost)
+        auto cdi = [](const std::vector<std::string> & args) {
+            std::vector<std::string> a = {"precision=fast"};
+            a.insert(a.end(), args.begin(), args.end());
+            RunSettings s = ParameterFile::read("", a);
+            auto bg = std::make_unique<BackgroundCosmology>(s.cosmo);
+            bg->solve(s.bg_x_start, s.bg_x_end, s.bg_n_points);
+            auto rec = std::make_unique<RecombinationHistory>(*bg, s.rec);
+            rec->solve();
+            PerturbationOptions o = s.pert;
+            o.ic_adiabatic = 0.0;
+            o.iso_amplitude[0] = 1.0;
+            o.k_max = 0.1 / Mpc;
+            o.n_k = 20;
+            o.dk_max = 0.0;
+            Perturbations p(*bg, *rec, o);
+            p.solve();
+            std::vector<double> d;
+            for (double k : {0.001 / Mpc, 0.01 / Mpc, 0.05 / Mpc})
+                for (double x : {-7.0, 0.0})
+                    d.push_back(p.get_delta_cdm(x, k));
+            return d;
+        };
+        const auto lcdm = cdi({});
+        const auto ds = cdi({"model=dark_scattering", "ds_xi=0", "ds_w=-0.95"});
+        const auto ide = cdi({"model=ide", "ide_xi=0", "ide_w=-0.95"});
+        const auto cq = cdi({"model=coupled_quintessence", "cq_beta=0", "cq_lambda=1e-3"});
+        double e_ds_ide = 0.0, e_ds_lcdm = 0.0, e_cq_lcdm = 0.0;
+        for (size_t i = 0; i < lcdm.size(); i++) {
+            e_ds_ide = std::max(e_ds_ide, std::fabs(ds[i] / ide[i] - 1.0));
+            e_ds_lcdm = std::max(e_ds_lcdm, std::fabs(ds[i] / lcdm[i] - 1.0));
+            e_cq_lcdm = std::max(e_cq_lcdm, std::fabs(cq[i] / lcdm[i] - 1.0));
+        }
+        check_close("CDI: dark_scattering (xi = 0) = ide (xi = 0)", e_ds_ide, 0.0, 1e-4);
+        check_close("CDI: dark_scattering (xi = 0, w = -0.95) ~ LCDM", e_ds_lcdm, 0.0, 0.1);
+        check_close("CDI: coupled_quintessence (beta = 0, lambda = 1e-3) = LCDM", e_cq_lcdm, 0.0, 1e-4);
     }
 
     std::cout << "Initial conditions and attractor\n";

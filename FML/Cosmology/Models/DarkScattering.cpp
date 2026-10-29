@@ -73,8 +73,10 @@ namespace FML::COSMOLOGY {
                 cc[GC] = (1.0 + de.w) * rde / rc * cc[GDE];
             }
             void initial_conditions(const ModeAtX & b, const InitialData & ic, double * y) const override {
-                y[0] = -1.5 * ic.Psi;
-                y[1] = -0.5 * b.ckH * ic.Psi;
+                // CDM: the isocurvature values if set (the dark energy has no isocurvature mode of its own and starts
+                // from the adiabatic form with the Psi of the mode, as the other species not in IsoValues)
+                y[0] = ic.iso ? ic.iso->delta_c : -1.5 * ic.Psi;
+                y[1] = ic.iso ? ic.iso->v_c : -0.5 * b.ckH * ic.Psi;
                 y[2] = -1.5 * (1.0 + de.w) * ic.Psi; // adiabatic: delta_DE/(1 + w) = delta_c
                 if (!locked(0))
                     y[3] = 0.5 * b.ckH * ic.Psi; // u = theta/(ck) = -v of the dark matter

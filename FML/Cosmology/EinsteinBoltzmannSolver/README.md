@@ -155,7 +155,8 @@ P_RI = c √(P_RR P_II) (`c_ad_cdi`, ...; CLASS's parameters and sign convention
 uncorrelated with each other). The correlation matrix is Cholesky-factored into independent components, each a
 perturbation solve with a mix of adiabatic and isocurvature initial conditions (CLASS's superhorizon series,
 Bucher, Moodley & Turok 2000), and the C_ℓ, C_ℓ^φφ and P(k) are summed over components; each active mode adds one
-perturbation solve and line-of-sight pass. GR only (`model = lcdm`, `wcdm`, ...); `python/params.py` passes the
+perturbation solve and line-of-sight pass. GR only (`model = lcdm`, `w0wa`, the dark-energy models; in
+`dark_scattering`, `ide` and `coupled_quintessence` the dark energy starts adiabatic in the isocurvature modes); `python/params.py` passes the
 modes to CLASS (`ic = ad,cdi,...`) so `python/compare_class_spectra.py` compares them directly (`--precise` for NIV).
 Example: `params/isocurvature.ini`.
 
@@ -164,6 +165,7 @@ Example: `params/isocurvature.ini`.
 | Pure modes against CLASS (fine sampling, `l_max_scalars` = 1500), 10 ≤ ℓ ≤ 600 | CDI, NID < 5e-4 in TT and EE; NIV ~1e-3 (CLASS's NIV at ℓ = 2 is not converged) |
 | f = 1, n = 1.1, c_ad = 0.3 with the adiabatic mode, `precision = fast` | TT, EE, TE < 3e-3 (CDI, NIV); NID with massive neutrinos at the adiabatic level |
 | Decomposition, initial entropy, independence of x_start | exact; S_c = −1; < 1e-6 (CDI), < 1e-3 (NID, NIV) |
+| CDI in `dark_scattering`/`ide` (zero coupling) and `coupled_quintessence` (β = 0) | ds = ide (identical); cq = ΛCDM to 2e-6 |
 
 **Fast precision preset for parameter fits.** `precision = fast` (in a file or on the command line) sets the
 precision parameters to values tuned for CMB likelihoods: lensed TT, EE, TE to ℓ = 2500 in ~13–16 s instead of

@@ -169,8 +169,10 @@ namespace FML::COSMOLOGY {
                 cc[RPHI] = b.H0a2 * d.rho_phi(b.x);
             }
             void initial_conditions(const ModeAtX & b, const InitialData & ic, double * y) const override {
-                y[0] = -1.5 * ic.Psi;
-                y[1] = -0.5 * b.ckH * ic.Psi;
+                // CDM: the isocurvature values if set (the dark energy has no isocurvature mode of its own and starts
+                // from the adiabatic form with the Psi of the mode, as the other species not in IsoValues)
+                y[0] = ic.iso ? ic.iso->delta_c : -1.5 * ic.Psi;
+                y[1] = ic.iso ? ic.iso->v_c : -0.5 * b.ckH * ic.Psi;
                 y[2] = y[3] = 0.0;
             }
             Moments moments(const ModeAtX & b, const double * cc, int, const double * y) const override {
