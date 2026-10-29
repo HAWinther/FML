@@ -58,6 +58,26 @@ make -C FML/COLASolver -j4 USE_HDF5=true
 
 The [CI workflow](../.github/workflows/ci.yml) records the Linux regression configuration. Linked tests describe coverage; listing a target here does not assert every example was rerun during the current documentation change. External test data and optional libraries are required only by the targets that use them. Production convergence/accuracy checks remain separate from build/unit tests.
 
+### Example data (`TestData` submodule)
+
+Some examples read input files from the `TestData` git submodule ([HAWinther/TestData](https://github.com/HAWinther/TestData)),
+by the relative path `../../../TestData/...` from their example directory. The library, the module tests, `FML/tests` and
+CI do not use it, so a plain clone leaves it empty. Fetch it before running these examples:
+
+```bash
+git submodule update --init TestData   # from the repository root
+```
+
+| Example | Files used |
+| --- | --- |
+| ComputePowerSpectra, FriendsOfFriends, TidalTensor, Triangulation, GadgetUtils (`Test.cpp`) | `particles_B1024.txt` |
+| GadgetUtils (`Main.cpp`) | `ExampleGadgetSnapshot/` |
+| RamsesUtils | `ExampleRamsesSnapshot/` |
+| PairCounting, Survey | `ExampleSurveyData/` (galaxies and randoms) |
+| PairCounting, KDTree, MultigridSolver (`Reconstruction.cpp`) | `galaxies_redshiftspace.txt`, `voids_realspace.txt` |
+
+New examples should generate their own input (e.g. a mock or a Gaussian random field) instead of adding to this list.
+
 ## Include paths and linked sources
 
 Include the directory **containing** `FML`, not `FML/` itself:
