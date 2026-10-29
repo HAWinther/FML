@@ -109,6 +109,10 @@ int main() {
         check("non-numeric value is an error", throws([&] { ParameterFile::read(dir + "/e2.ini"); }));
         std::ofstream(dir + "/e3.ini") << "pert_n_k = 10.5\n";
         check("non-integer for an integer is an error", throws([&] { ParameterFile::read(dir + "/e3.ini"); }));
+        check("z_reion < 0 is an error", throws([&] { ParameterFile::read("", {"z_reion=-1"}); }));
+        check("z_He_reion > 50 is an error", throws([&] { ParameterFile::read("", {"z_He_reion=60"}); }));
+        check("... but not without reionization",
+              !throws([&] { ParameterFile::read("", {"z_reion=-1", "reionization=false"}); }));
         check("nan is an error", throws([&] { ParameterFile::read("", {"h=nan"}); }));
         check("inf is an error", throws([&] { ParameterFile::read("", {"A_s=inf"}); }));
         check("1e400 is an error", throws([&] { ParameterFile::read("", {"h=1e400"}); }));

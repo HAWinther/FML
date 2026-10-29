@@ -6,7 +6,7 @@
 // the PArthENoPE table external/bbn/sBBN_2025.dat (the CLASS default), with Delta N = N_eff - 3.044 as defined in
 // the table (CLASS's code uses N_eff - 3.046; the difference is 3e-5 in Y_He). Y_He is the mass fraction used by
 // RecombinationHistory. The table is read once (relative to the working directory, i.e. the project root, or
-// BBN::set_table_file) and covers 0.005 <= omega_b <= 0.04 (approximately) and -3 <= Delta N <= 3.
+// BBN::set_table_file) and covers 0.0073 <= omega_b <= 0.0329 and -3 <= Delta N <= 3.
 // =============================================================================
 
 #include <string>

@@ -5,6 +5,11 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): z_reion and z_He_reion are validated; BBN table range
+- With reionization on, z_reion and z_He_reion must be in (0, 50) (tau is integrated from z = 50); a negative or
+  too large value was accepted. Checks in tests/test_parameterfile.cpp.
+- BBN.h stated the range of the helium table as 0.005-0.04 in omega_b; it is 0.0073-0.0329.
+
 ### Cosmology (EBS): matter-radiation equality with massive neutrinos
 - `x_matter_radiation_equality` left the massive neutrinos out of both sides; it now counts 3 p_ncdm as radiation
   and rho_ncdm - 3 p_ncdm as matter, as CLASS. z_eq now agrees with CLASS to 3e-6 for m_nu = 0.06 and 0.6 eV

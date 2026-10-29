@@ -80,6 +80,9 @@ namespace FML::COSMOLOGY {
         }
         require(r == 0.0 || OmegaK == 0.0, "tensor modes (r > 0) are only implemented for a flat universe");
         require(delta_z_reion > 0.0 && delta_z_He_reion > 0.0, "reionization widths must be > 0");
+        // tau_reion is integrated from z = 50 (RecombinationHistory), and the tanh steps need z > 0
+        require(!reionization || (z_reion > 0.0 && z_reion < 50.0), "z_reion must be in (0, 50)");
+        require(!reionization || (z_He_reion > 0.0 && z_He_reion < 50.0), "z_He_reion must be in (0, 50)");
         try {
             Models::validate(*this);
         } catch (const std::invalid_argument & e) {
