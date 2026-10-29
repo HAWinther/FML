@@ -3,6 +3,8 @@
 #
 #   make examples   Build every example (keeps going, lists failures)
 #   make test       Build and run the regression tests in tests/
+#   make benchmark  Build opt-in instrumented performance cases
+#   make benchmark-check  Check counters and benchmark reports
 #   make python-analysis   Install the small analysis package into $(PYTHON)
 #   make test-python-analysis  Test the installed analysis package
 #   make clean      Clean all examples and tests
@@ -25,7 +27,7 @@ PYTHON_DIRS  := MakePythonWrapper/ HaloModel/PythonWrapper/
 
 EXAMPLE_DIRS := $(filter-out $(EXTRA_DIRS),$(EXAMPLE_DIRS))
 
-.PHONY: help examples examples-extra python python-analysis test-python-analysis test clean
+.PHONY: help examples examples-extra python python-analysis test-python-analysis benchmark benchmark-check test clean
 
 help:
 	@sed -n '2,12p' Makefile
@@ -53,8 +55,14 @@ python-analysis:
 test-python-analysis:
 	$(PYTHON) -m unittest discover -s PythonAnalysis/tests -v
 
+benchmark:
+	@$(MAKE) --no-print-directory -C Performance all
+
+benchmark-check:
+	@$(MAKE) --no-print-directory -C Performance check
+
 test:
 	@$(MAKE) --no-print-directory -C tests run
 
 clean:
-	@for d in $(EXAMPLE_DIRS) $(EXTRA_DIRS) $(PYTHON_DIRS) tests/; do $(MAKE) --no-print-directory -C $$d clean > /dev/null; done
+	@for d in $(EXAMPLE_DIRS) $(EXTRA_DIRS) $(PYTHON_DIRS) Performance/ tests/; do $(MAKE) --no-print-directory -C $$d clean > /dev/null; done

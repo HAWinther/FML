@@ -184,9 +184,10 @@ namespace FML::GRID {
             auto prepare = [&](auto &buffer, Count count) {
                 const size_t size = size_t(std::min(chunk, count));
                 // Retain storage across equal-cap calls, but honor a smaller cap without geometric over-allocation.
-                if (buffer.capacity() > chunk || buffer.capacity() < size)
+                if (buffer.capacity() > chunk || buffer.capacity() < size) {
                     std::vector<ComplexType>(size).swap(buffer);
-                else
+                    FML::PERFORMANCE::transport_allocation(buffer.capacity() * sizeof(ComplexType));
+                } else
                     buffer.resize(size);
             };
             prepare(send_buffer, maxsend);
@@ -209,6 +210,11 @@ namespace FML::GRID {
                     MPI_Sendrecv(scount ? send_buffer.data() : nullptr, int(scount * sizeof(ComplexType)), MPI_BYTE,
                                  dest, 1, rcount ? receive_buffer.data() : nullptr, int(rcount * sizeof(ComplexType)),
                                  MPI_BYTE, source, 1, FML::communicator, MPI_STATUS_IGNORE);
+                    FML::PERFORMANCE::payload(scount * sizeof(ComplexType), rcount * sizeof(ComplexType));
+                    FML::PERFORMANCE::record(FML::PERFORMANCE::Counter::TransportPackedBytes,
+                                             scount * sizeof(ComplexType));
+                    FML::PERFORMANCE::record(FML::PERFORMANCE::Counter::TransportUnpackedBytes,
+                                             rcount * sizeof(ComplexType));
                     unpack.consume(receive[source], rcount, [&](const Block &b, size_t used, size_t at, size_t n) {
                         std::copy_n(receive_buffer.data() + at, n, out + b.target + ptrdiff_t(used));
                     });

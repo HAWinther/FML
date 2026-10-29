@@ -23,6 +23,10 @@
 #endif
 
 #include <FML/Global/Global.h>
+#include <FML/Performance/Counters.h>
+#ifdef FML_ENABLE_PERFORMANCE_COUNTERS
+#include <FML/Performance/Storage.h>
+#endif
 
 namespace FML {
 
@@ -101,7 +105,12 @@ namespace FML {
 
             // The raw data vectors. These have the format [extra slices left][main grid][extra slices right]
             // Vector = std::vector<ComplexType> with possible custom allocator
-            Vector<ComplexType> fourier_grid_raw{};
+#ifdef FML_ENABLE_PERFORMANCE_COUNTERS
+            using PayloadStorage = FML::PERFORMANCE::Storage<ComplexType>;
+#else
+            using PayloadStorage = Vector<ComplexType>;
+#endif
+            PayloadStorage fourier_grid_raw{};
 
             // Mesh size and the dimension of the grid
             int Nmesh{0};
@@ -355,6 +364,13 @@ namespace FML {
                     const ptrdiff_t stride = 2 * (Nmesh / 2 + 1);
                     for (ptrdiff_t row = 0; row < 2 * (end - begin); row += stride)
                         std::copy(source + row + Nmesh, source + row + stride, target + row + Nmesh);
+                }
+                if constexpr (FML::PERFORMANCE::enabled) {
+                    size_t copied = (fourier_grid_raw.size() - size_t(end - begin)) * sizeof(ComplexType);
+                    if (grid_is_in_real_space)
+                        copied += size_t(2 * (end - begin) / (2 * (Nmesh / 2 + 1))) *
+                                  size_t(2 * (Nmesh / 2 + 1) - Nmesh) * sizeof(FloatType);
+                    FML::PERFORMANCE::grid_copy(copied);
                 }
                 return result;
             }
@@ -666,7 +682,7 @@ namespace FML {
                 return *plan;
 
             // Planning with anything but FFTW_ESTIMATE overwrites the arrays so keep a copy
-            Vector<ComplexType> backup;
+            PayloadStorage backup;
             if (flag != FFTW_ESTIMATE)
                 backup = fourier_grid_raw;
 
@@ -681,11 +697,14 @@ namespace FML {
                                       MAKE_PLAN_C2R(N, NmeshPerDim.data(), get_fftw_grid(), get_real_grid(), flag);
 #endif
             assert_mpi(plan != nullptr, "[FFTWGrid::get_fftw_plan] FFTW failed to create a plan\n");
+            FML::PERFORMANCE::record(FML::PERFORMANCE::Counter::FFTPlans);
 
             // Restore the data in place: the buffer must keep its address (callers may hold pointers into it)
             // and its alignment (the plan is cached for this alignment)
-            if (flag != FFTW_ESTIMATE)
+            if (flag != FFTW_ESTIMATE) {
                 std::copy(backup.begin(), backup.end(), fourier_grid_raw.begin());
+                FML::PERFORMANCE::grid_copy(backup.size() * sizeof(ComplexType));
+            }
 
             FML::GRID::store_fftw_plan(key, plan);
             return plan;
@@ -1079,8 +1098,11 @@ namespace FML {
             FloatType * real_grid_right = get_real_grid_right();
             const ptrdiff_t nright_copy = get_nreal_right_to_backup();
             std::vector<FloatType> right_copy(real_grid_right, real_grid_right + nright_copy);
+            FML::PERFORMANCE::grid_allocation(right_copy.capacity() * sizeof(FloatType));
+            FML::PERFORMANCE::grid_copy(size_t(nright_copy) * sizeof(FloatType));
 
             EXECUTE_R2C_NEW_ARRAY(plan_r2c, get_real_grid(), get_fftw_grid());
+            FML::PERFORMANCE::record(FML::PERFORMANCE::Counter::ForwardFFTs);
             grid_is_in_real_space = false;
 
             // Normalize
@@ -1098,6 +1120,7 @@ namespace FML {
             // Copy back data we copied
             //=================================================================================
             std::copy(right_copy.begin(), right_copy.end(), real_grid_right);
+            FML::PERFORMANCE::grid_copy(size_t(nright_copy) * sizeof(FloatType));
 
 #else
             assert_mpi(false, "[FFTWGrid::fftw_r2c] Compiled without FFTW support so cannot take Fourier transforms\n");
@@ -1130,14 +1153,18 @@ namespace FML {
             FloatType * real_grid_right = get_real_grid_right();
             const ptrdiff_t nright_copy = get_nreal_right_to_backup();
             std::vector<FloatType> right_copy(real_grid_right, real_grid_right + nright_copy);
+            FML::PERFORMANCE::grid_allocation(right_copy.capacity() * sizeof(FloatType));
+            FML::PERFORMANCE::grid_copy(size_t(nright_copy) * sizeof(FloatType));
 
             EXECUTE_C2R_NEW_ARRAY(plan_c2r, get_fftw_grid(), get_real_grid());
+            FML::PERFORMANCE::record(FML::PERFORMANCE::Counter::InverseFFTs);
             grid_is_in_real_space = true;
 
             //=================================================================================
             // Copy back data we copied
             //=================================================================================
             std::copy(right_copy.begin(), right_copy.end(), real_grid_right);
+            FML::PERFORMANCE::grid_copy(size_t(nright_copy) * sizeof(FloatType));
 
 #else
             assert_mpi(false, "[FFTWGrid::fftw_c2r] Compiled without FFTW support so cannot take Fourier transforms\n");
@@ -1569,7 +1596,7 @@ namespace FML {
             }
 
             // Allocate and read main grid
-            Vector<ComplexType> data(_NmeshTotComplexAlloc);
+            PayloadStorage data(_NmeshTotComplexAlloc);
             size_t bytes = sizeof(ComplexType) * _NmeshTotComplexAlloc;
             myfile.read((char *)data.data(), bytes);
             check_read("the grid data");

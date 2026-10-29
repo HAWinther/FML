@@ -1,0 +1,7 @@
+BuildInfo.h
+*.o
+*.d
+fml_benchmark
+test_counters
+test_counters_disabled
+__pycache__/

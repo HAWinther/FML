@@ -1,6 +1,7 @@
 #ifndef MPIPARTICLES_HEADER
 #define MPIPARTICLES_HEADER
 
+#include <FML/Performance/Counters.h>
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -893,6 +894,8 @@ namespace FML {
             // Allocate send buffer
             std::vector<char> send_buffer(ntot_bytes_to_send);
             std::vector<char> recv_buffer(ntot_bytes_to_recv);
+            FML::PERFORMANCE::transport_allocation(send_buffer.capacity());
+            FML::PERFORMANCE::transport_allocation(recv_buffer.capacity());
 
             // Pointers to each send-recv place in the send-recv buffer
             std::vector<size_t> offset_in_send_buffer(NTasks, 0);
@@ -934,6 +937,7 @@ namespace FML {
                 valid_counts &= packed[task] == size_t(nbytes_to_send[task]);
             FML::COMMUNICATION::require_count(valid_counts,
                                               "[MPIParticles] Serialized particle sizes changed while packing");
+            FML::PERFORMANCE::record(FML::PERFORMANCE::Counter::TransportPackedBytes, ntot_bytes_to_send);
 
             // We changed the send-recv pointers above so reset them
             for (int i = 0; i < NTasks; i++) {
@@ -981,11 +985,13 @@ namespace FML {
                                  0,
                                  FML::communicator,
                                  &status);
+                    FML::PERFORMANCE::payload(size_t(nsend), size_t(nrecv));
                 }
             }
 
             // Copy over the particle data (this also updates the total number of particles)
             copy_over_received_data(recv_buffer, ntot_to_recv);
+            FML::PERFORMANCE::record(FML::PERFORMANCE::Counter::TransportUnpackedBytes, ntot_bytes_to_recv);
 #endif
         }
 

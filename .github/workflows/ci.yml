@@ -53,3 +53,10 @@ jobs:
           "$RUNNER_TEMP/fml-analysis-env/bin/python" -m pip install ./FML/PythonAnalysis
           "$RUNNER_TEMP/fml-analysis-env/bin/python" -m unittest discover -s FML/PythonAnalysis/tests -v
           "$RUNNER_TEMP/fml-analysis-env/bin/python" FML/PythonAnalysis/examples/catalogue_statistics.py
+
+      - name: Performance counter and report checks (no timing thresholds)
+        run: |
+          make -C FML/Performance -j4 USE_GSL=false USE_LUA=false
+          OMP_NUM_THREADS=2 mpirun --oversubscribe -np 2 FML/Performance/test_counters
+          OMP_NUM_THREADS=2 mpirun --oversubscribe -np 2 FML/Performance/test_counters_disabled
+          python3 FML/Performance/test_reports.py --exe FML/Performance/fml_benchmark -v
