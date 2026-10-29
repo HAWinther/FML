@@ -107,7 +107,7 @@ namespace FML::CORRELATIONFUNCTIONS::detail {
                     }
                 sums[i] = sum;
             }
-            FML::SumArrayOverTasks(sums.data(), int(sums.size()));
+            FML::SumArrayOverTasks(sums.data(), sums.size());
             ++reductions;
             for (size_t i = 0; i < sums.size(); i++)
                 store(configs[start + i], sums[i]);

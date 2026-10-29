@@ -21,11 +21,13 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <cstddef>
 #include <cstring>
-#include <tuple>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -171,6 +173,8 @@ namespace FML {
         static_assert(std::is_trivially_copyable_v<T>,
                       "GatherFromTasks (and the Min/Max/SumOverTasks fallback) sends the bytes of T: T must be "
                       "trivially copyable");
+        static_assert(sizeof(T) <= size_t(std::numeric_limits<int>::max()),
+                      "GatherFromTasks record exceeds MPI int count");
         std::vector<T> values(FML::NTasks);
 #ifdef USE_MPI
         MPI_Allgather(value, sizeof(T), MPI_BYTE, values.data(), sizeof(T), MPI_BYTE, FML::communicator);
@@ -240,17 +244,23 @@ namespace FML {
     }
 
     /// Inplace sum over tasks of a contiguous array of values
-    template <class T>
-    void SumArrayOverTasks(T * value, int n) {
+    template <class T> void SumArrayOverTasks(T *value, size_t n) {
         if (FML::NTasks == 1)
             return;
 #ifdef USE_MPI
         if constexpr (is_mpi_reducible_v<T>) {
-            MPI_Allreduce(MPI_IN_PLACE, value, n, get_mpi_type<T>(), MPI_SUM, FML::communicator);
+            // The caller supplies the same valid array length on every task.
+            if (n > size_t(std::numeric_limits<std::ptrdiff_t>::max()) / sizeof(T) || (n && !value))
+                abort_mpi(1);
+            for (size_t offset = 0; offset < n;) {
+                const int count = int(std::min(size_t(1) << 28, n - offset));
+                MPI_Allreduce(MPI_IN_PLACE, value + offset, count, get_mpi_type<T>(), MPI_SUM, FML::communicator);
+                offset += size_t(count);
+            }
             return;
         }
 #endif
-        for (int i = 0; i < n; i++)
+        for (size_t i = 0; i < n; i++)
             SumOverTasks(&value[i]);
     }
 

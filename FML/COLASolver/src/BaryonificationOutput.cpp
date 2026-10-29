@@ -1,11 +1,12 @@
-#include "Cosmology.h"
 #include "BaryonificationOutput.h"
-#include "OutputUtils.h"
+#include "Cosmology.h"
 #include "HaloFinding.h"
+#include "OutputUtils.h"
 #include "SnapshotPowerSpectrum.h"
 #include <FML/Baryonification/Baryonification.h>
 #include <FML/GadgetUtils/GadgetUtils.h>
 #include <FML/GadgetUtils/GadgetUtilsHDF5.h>
+#include <FML/Global/MPICounts.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <climits>
 #include <fstream>
@@ -30,30 +31,7 @@ namespace COLASOLVER {
                 packed.push_back(h.radius_box);
             }
 #ifdef USE_MPI
-            int too_large = packed.size() > size_t(INT_MAX);
-            FML::SumOverTasks(&too_large);
-            if (too_large)
-                throw std::runtime_error("Baryonification halo catalogue exceeds MPI count limit");
-            const int count = int(packed.size());
-            std::vector<int> counts(FML::NTasks), offsets(FML::NTasks);
-            MPI_Allgather(&count, 1, MPI_INT, counts.data(), 1, MPI_INT, FML::communicator);
-            long long total = 0;
-            for (int i = 0; i < FML::NTasks; ++i) {
-                if (total + counts[i] > INT_MAX)
-                    throw std::runtime_error("Baryonification replicated catalogue exceeds MPI count limit");
-                offsets[i] = int(total);
-                total += counts[i];
-            }
-            std::vector<double> gathered(size_t(total), 0.0);
-            MPI_Allgatherv(packed.data(),
-                           count,
-                           MPI_DOUBLE,
-                           gathered.data(),
-                           counts.data(),
-                           offsets.data(),
-                           MPI_DOUBLE,
-                           FML::communicator);
-            packed = std::move(gathered);
+            packed = FML::COMMUNICATION::gather_records_checked(packed, true);
 #endif
             std::vector<HostHalo> hosts;
             for (size_t i = 0; i < packed.size(); i += 5)

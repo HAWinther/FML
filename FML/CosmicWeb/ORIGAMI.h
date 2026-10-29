@@ -1,6 +1,7 @@
 #ifndef FML_COSMICWEB_ORIGAMI_HEADER
 #define FML_COSMICWEB_ORIGAMI_HEADER
 
+#include <FML/Global/MPICounts.h>
 #include <array>
 #include <cmath>
 #include <deque>
@@ -148,9 +149,15 @@ namespace FML {
             using detail::OrigamiResult;
             const int N = Nlattice;
             assert_mpi(N > 1, "[ORIGAMI] Nlattice must be > 1");
-            long long int NumPartTot = (long long int)(NumPart);
-            FML::SumOverTasks(&NumPartTot);
-            assert_mpi(NumPartTot == (long long int)(N)*N * N, "[ORIGAMI] We need Nlattice^3 particles");
+            FML::COMMUNICATION::Count nlocal = NumPart;
+            const auto local_counts = FML::GatherFromTasks(&nlocal);
+            const auto total = FML::COMMUNICATION::checked_size_layout(local_counts, size_t(LLONG_MAX));
+            FML::COMMUNICATION::Count square = 0, cube = 0;
+            bool valid_lattice = FML::COMMUNICATION::multiply_count(N, N, square, LLONG_MAX);
+            valid_lattice = valid_lattice && FML::COMMUNICATION::multiply_count(square, N, cube, LLONG_MAX);
+            FML::COMMUNICATION::require_count(valid_lattice && cube == total.total,
+                                              "[ORIGAMI] Lattice count mismatch or overflow");
+            const size_t NumPartTot = total.total;
             if (not lattice_coordinate) {
                 if constexpr (FML::PARTICLE::has_get_id<T>()) {
                     lattice_coordinate = [N](T & part) -> std::array<int, 3> {
@@ -192,6 +199,8 @@ namespace FML {
                 std::vector<OrigamiRecord> mine;
 #ifdef USE_MPI
                 if (FML::NTasks > 1) {
+                    FML::COMMUNICATION::require_count(records.size() <= size_t(INT_MAX),
+                                                      "[ORIGAMI] Outgoing record count exceeds MPI int");
                     MPI_Datatype rtype;
                     MPI_Type_contiguous(int(sizeof(OrigamiRecord)), MPI_BYTE, &rtype);
                     MPI_Type_commit(&rtype);
@@ -206,9 +215,9 @@ namespace FML {
                     for (auto & r : records)
                         sendbuf[fill[owner(r.q[fixed])]++] = r;
                     MPI_Alltoall(scount.data(), 1, MPI_INT, rcount.data(), 1, MPI_INT, FML::communicator);
-                    for (int t = 1; t < FML::NTasks; t++)
-                        rdispl[t] = rdispl[t - 1] + rcount[t - 1];
-                    mine.resize(size_t(rdispl.back()) + rcount.back());
+                    const auto receive_layout = FML::COMMUNICATION::checked_int_layout(rcount);
+                    rdispl = receive_layout.offsets;
+                    mine.resize(receive_layout.total);
                     MPI_Alltoallv(sendbuf.data(),
                                   scount.data(),
                                   sdispl.data(),
@@ -279,6 +288,8 @@ namespace FML {
                 // Send the results back
 #ifdef USE_MPI
                 if (FML::NTasks > 1) {
+                    FML::COMMUNICATION::require_count(mine.size() <= size_t(INT_MAX),
+                                                      "[ORIGAMI] Outgoing record count exceeds MPI int");
                     MPI_Datatype otype;
                     MPI_Type_contiguous(int(sizeof(OrigamiResult)), MPI_BYTE, &otype);
                     MPI_Type_commit(&otype);
@@ -293,9 +304,9 @@ namespace FML {
                     for (size_t k = 0; k < mine.size(); k++)
                         sendbuf[fill[mine[k].task]++] = {mine[k].local_index, mine_crossed[k]};
                     MPI_Alltoall(scount.data(), 1, MPI_INT, rcount.data(), 1, MPI_INT, FML::communicator);
-                    for (int t = 1; t < FML::NTasks; t++)
-                        rdispl[t] = rdispl[t - 1] + rcount[t - 1];
-                    std::vector<OrigamiResult> recvbuf(size_t(rdispl.back()) + rcount.back());
+                    const auto receive_layout = FML::COMMUNICATION::checked_int_layout(rcount);
+                    rdispl = receive_layout.offsets;
+                    std::vector<OrigamiResult> recvbuf(receive_layout.total);
                     MPI_Alltoallv(sendbuf.data(),
                                   scount.data(),
                                   sdispl.data(),

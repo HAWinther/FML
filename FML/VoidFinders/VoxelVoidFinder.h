@@ -1,6 +1,7 @@
 #ifndef FML_VOIDFINDERS_VOXEL_HEADER
 #define FML_VOIDFINDERS_VOXEL_HEADER
 
+#include <FML/Global/MPICounts.h>
 #include <array>
 #include <cmath>
 #include <limits>
@@ -149,6 +150,9 @@ namespace FML {
                           MPI_SUM,
                           FML::communicator);
 #endif
+            FML::COMMUNICATION::checked_size_layout(
+                std::vector<FML::COMMUNICATION::Count>(nminima_per_task.begin(), nminima_per_task.end()),
+                size_t(LLONG_MAX));
             long long int id_start = 0, nzones = 0;
             for (int i = 0; i < FML::NTasks; i++) {
                 if (i < FML::ThisTask)
@@ -232,7 +236,8 @@ namespace FML {
             }
 
             // The position and density of the minima (all tasks need this)
-            std::vector<double> core(4 * nzones, 0.0);
+            std::vector<double> core(FML::COMMUNICATION::checked_bytes(nzones, 4, std::vector<double>().max_size()),
+                                     0.0);
             for (size_t k = 0; k < minima.size(); k++) {
                 const long long int i = minima[k];
                 const long long int ix = i / N2, iy = (i / N) % N, iz = i % N;
@@ -254,7 +259,8 @@ namespace FML {
 #endif
 
             // Bin up: number of voxels, sum of density, barycenter, leak quantity
-            std::vector<double> sums(6 * nzones, 0.0);
+            std::vector<double> sums(FML::COMMUNICATION::checked_bytes(nzones, 6, std::vector<double>().max_size()),
+                                     0.0);
             std::vector<ZoneLink> links;
             long long int nunassigned = 0;
             for (int ix = 0; ix < nx; ix++)
@@ -295,28 +301,7 @@ namespace FML {
             allreduce(sums, MPI_SUM);
             // Gather the links on task 0
             if (not serial) {
-                MPI_Datatype link_type;
-                MPI_Type_contiguous(int(sizeof(ZoneLink)), MPI_BYTE, &link_type);
-                MPI_Type_commit(&link_type);
-                std::vector<int> counts(FML::NTasks), displs(FML::NTasks, 0);
-                int n = int(links.size());
-                MPI_Gather(&n, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, FML::communicator);
-                for (int i = 1; i < FML::NTasks; i++)
-                    displs[i] = displs[i - 1] + counts[i - 1];
-                std::vector<ZoneLink> all;
-                if (FML::ThisTask == 0)
-                    all.resize(size_t(displs.back()) + counts.back());
-                MPI_Gatherv(links.data(),
-                            n,
-                            link_type,
-                            all.data(),
-                            counts.data(),
-                            displs.data(),
-                            link_type,
-                            0,
-                            FML::communicator);
-                MPI_Type_free(&link_type);
-                links = std::move(all);
+                links = FML::COMMUNICATION::gather_records_checked(links);
             }
 #endif
 

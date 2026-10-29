@@ -19,6 +19,7 @@
 #endif
 
 #include <FML/Global/Global.h>
+#include <FML/Global/MPICounts.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 
 namespace FML {
@@ -187,7 +188,7 @@ namespace FML {
             size_t get_npart() const;
 
             /// Communicate particles across CPU boundaries
-            void communicate_particles();
+            void communicate_particles(size_t max_message_bytes = std::numeric_limits<int>::max());
 
             /// Get a vector of xmin of the domain for each task
             std::vector<double> get_x_min_per_task();
@@ -699,7 +700,7 @@ namespace FML {
 
         template <class T>
         void MPIParticles<T>::copy_over_received_data(std::vector<char> & recv_buffer, size_t Npart_recv) {
-            assert_mpi(NpartLocal_in_use + Npart_recv <= p.size(),
+            assert_mpi(NpartLocal_in_use <= p.size() && Npart_recv <= p.size() - NpartLocal_in_use,
                        "[MPIParticles::copy_over_received_data] Too many particles received! Increase buffer\n");
 
             char * buffer = recv_buffer.data();
@@ -707,20 +708,25 @@ namespace FML {
             for (size_t i = 0; i < Npart_recv; i++) {
                 FML::PARTICLE::AssignFromBuffer(p[NpartLocal_in_use + i], buffer);
                 auto size = FML::PARTICLE::GetSize(p[NpartLocal_in_use + i]);
+                assert_mpi(size > 0 && size_t(size) <= recv_buffer.size() - bytes_processed,
+                           "[MPIParticles] Invalid deserialized particle byte size");
                 buffer += size;
-                bytes_processed += size;
-                assert(bytes_processed <= recv_buffer.size());
+                bytes_processed += size_t(size);
             }
 
             // Update the total number of particles in use
             NpartLocal_in_use += Npart_recv;
         }
 
-        template <class T>
-        void MPIParticles<T>::communicate_particles() {
+        template <class T> void MPIParticles<T>::communicate_particles([[maybe_unused]] size_t max_message_bytes) {
             if (FML::NTasks == 1)
                 return;
 #ifdef USE_MPI
+
+            FML::COMMUNICATION::Count max_chunk_bytes =
+                std::min(max_message_bytes, size_t(std::numeric_limits<int>::max()));
+            FML::MinOverTasks(&max_chunk_bytes);
+            FML::COMMUNICATION::require_count(max_chunk_bytes > 0, "[MPIParticles] Message limit must be positive");
 
             // The number of particles we start with
             size_t NpartLocal_in_use_pre_comm = NpartLocal_in_use;
@@ -741,11 +747,18 @@ namespace FML {
             // and reduce the NumPartLocal_in_use if a partice is to be sent
             // After this is done we have all the particles to be send in
             // location [NpartLocal_in_use, NpartLocal_in_use_pre_comm)
-            std::vector<int> n_to_send(NTasks, 0);
-            std::vector<int> n_to_recv(NTasks, 0);
-            // Byte counts can exceed 2^31 so use long long (MPI calls below are chunked)
-            std::vector<long long> nbytes_to_send(NTasks, 0);
-            std::vector<long long> nbytes_to_recv(NTasks, 0);
+            using Count = FML::COMMUNICATION::Count;
+            std::vector<Count> n_to_send(NTasks, 0), n_to_recv(NTasks, 0);
+            std::vector<Count> nbytes_to_send(NTasks, 0), nbytes_to_recv(NTasks, 0);
+            bool valid_counts = true;
+            auto count_outgoing = [&](int task, T &particle) {
+                auto bytes = FML::PARTICLE::GetSize(particle);
+                valid_counts = valid_counts && bytes > 0;
+                if (bytes > 0) {
+                    valid_counts &= FML::COMMUNICATION::add_count(n_to_send[task], 1);
+                    valid_counts &= FML::COMMUNICATION::add_count(nbytes_to_send[task], Count(bytes));
+                }
+            };
             size_t i = 0;
             while (i < NpartLocal_in_use) {
                 auto & x = FML::PARTICLE::GetPos(p[i])[0];
@@ -772,8 +785,7 @@ namespace FML {
                             break;
                     }
 
-                    n_to_send[taskid]++;
-                    nbytes_to_send[taskid] += FML::PARTICLE::GetSize(p[i]);
+                    count_outgoing(taskid, p[i]);
                     swap_particles(p[i], p[--NpartLocal_in_use]);
 
                 } else if (x < x_min_per_task[ThisTask] or x == 0.0) {
@@ -784,8 +796,7 @@ namespace FML {
                             break;
                     }
 
-                    n_to_send[taskid]++;
-                    nbytes_to_send[taskid] += FML::PARTICLE::GetSize(p[i]);
+                    count_outgoing(taskid, p[i]);
                     swap_particles(p[i], p[--NpartLocal_in_use]);
 
                 } else {
@@ -794,14 +805,11 @@ namespace FML {
             }
 
             // Communicate to get how many particles and bytes to receive from each task
-            MPI_Alltoall(n_to_send.data(), 1, MPI_INT, n_to_recv.data(), 1, MPI_INT, FML::communicator);
-            MPI_Alltoall(nbytes_to_send.data(),
-                         1,
-                         MPI_LONG_LONG,
-                         nbytes_to_recv.data(),
-                         1,
-                         MPI_LONG_LONG,
+            FML::COMMUNICATION::require_count(valid_counts, "[MPIParticles] Outgoing particle/byte count overflow");
+            MPI_Alltoall(n_to_send.data(), 1, MPI_UNSIGNED_LONG_LONG, n_to_recv.data(), 1, MPI_UNSIGNED_LONG_LONG,
                          FML::communicator);
+            MPI_Alltoall(nbytes_to_send.data(), 1, MPI_UNSIGNED_LONG_LONG, nbytes_to_recv.data(), 1,
+                         MPI_UNSIGNED_LONG_LONG, FML::communicator);
 
 #ifdef DEBUG_MPIPARTICLES
             // Show some info
@@ -816,16 +824,14 @@ namespace FML {
 #endif
 
             // Total number to send and recv
-            size_t ntot_to_send = 0;
-            size_t ntot_to_recv = 0;
-            size_t ntot_bytes_to_send = 0;
-            size_t ntot_bytes_to_recv = 0;
-            for (int i = 0; i < NTasks; i++) {
-                ntot_to_send += n_to_send[i];
-                ntot_to_recv += n_to_recv[i];
-                ntot_bytes_to_send += nbytes_to_send[i];
-                ntot_bytes_to_recv += nbytes_to_recv[i];
-            }
+            const auto send_particles = FML::COMMUNICATION::checked_size_layout(n_to_send, p.max_size());
+            const auto recv_particles = FML::COMMUNICATION::checked_size_layout(n_to_recv, p.max_size());
+            const auto send_bytes =
+                FML::COMMUNICATION::checked_size_layout(nbytes_to_send, std::vector<char>().max_size());
+            const auto recv_bytes =
+                FML::COMMUNICATION::checked_size_layout(nbytes_to_recv, std::vector<char>().max_size());
+            const size_t ntot_to_send = send_particles.total, ntot_to_recv = recv_particles.total;
+            const size_t ntot_bytes_to_send = send_bytes.total, ntot_bytes_to_recv = recv_bytes.total;
 
             // Sanity check
             std::string error =
@@ -834,7 +840,13 @@ namespace FML {
                 "\n";
             error += "Possible cause is particles not being wrapped inside [0,1) or not communicated after they have "
                      "moved across boundaries!\n";
-            assert_mpi(NpartLocal_in_use_pre_comm == NpartLocal_in_use + ntot_to_send, error.c_str());
+            assert_mpi(NpartLocal_in_use <= NpartLocal_in_use_pre_comm &&
+                           ntot_to_send == NpartLocal_in_use_pre_comm - NpartLocal_in_use,
+                       error.c_str());
+
+            FML::COMMUNICATION::require_count(NpartLocal_in_use <= p.size() &&
+                                                  ntot_to_recv <= p.size() - NpartLocal_in_use,
+                                              "[MPIParticles] Receive count exceeds allocated particle capacity");
 
             // Allocate send buffer
             std::vector<char> send_buffer(ntot_bytes_to_send);
@@ -848,9 +860,23 @@ namespace FML {
             for (int i = 1; i < NTasks; i++) {
                 offset_in_send_buffer[i] = offset_in_send_buffer[i - 1] + nbytes_to_send[i - 1];
                 offset_in_recv_buffer[i] = offset_in_recv_buffer[i - 1] + nbytes_to_recv[i - 1];
-                send_buffer_by_task[i] = &send_buffer.data()[offset_in_send_buffer[i]];
-                recv_buffer_by_task[i] = &recv_buffer.data()[offset_in_recv_buffer[i]];
+                send_buffer_by_task[i] =
+                    (send_buffer.empty() ? nullptr : send_buffer.data() + offset_in_send_buffer[i]);
+                recv_buffer_by_task[i] =
+                    (recv_buffer.empty() ? nullptr : recv_buffer.data() + offset_in_recv_buffer[i]);
             }
+
+            std::vector<size_t> packed(NTasks, 0);
+            auto append_particle = [&](size_t index, int task) {
+                auto bytes = FML::PARTICLE::GetSize(p[index]);
+                if (bytes <= 0 || size_t(bytes) > size_t(nbytes_to_send[task]) - packed[task]) {
+                    valid_counts = false;
+                    return;
+                }
+                FML::PARTICLE::AppendToBuffer(p[index], send_buffer_by_task[task]);
+                send_buffer_by_task[task] += size_t(bytes);
+                packed[task] += size_t(bytes);
+            };
 
             // Gather particle data
             for (size_t i = 0; i < ntot_to_send; i++) {
@@ -865,8 +891,7 @@ namespace FML {
                             break;
                     }
 
-                    FML::PARTICLE::AppendToBuffer(p[index], send_buffer_by_task[taskid]);
-                    send_buffer_by_task[taskid] += FML::PARTICLE::GetSize(p[index]);
+                    append_particle(index, taskid);
 
                 } else if (x < x_min_per_task[ThisTask]) {
                     int taskid = ThisTask;
@@ -876,8 +901,7 @@ namespace FML {
                             break;
                     }
 
-                    FML::PARTICLE::AppendToBuffer(p[index], send_buffer_by_task[taskid]);
-                    send_buffer_by_task[taskid] += FML::PARTICLE::GetSize(p[index]);
+                    append_particle(index, taskid);
 
                 } else {
 
@@ -888,32 +912,42 @@ namespace FML {
                 }
             }
 
+            for (int task = 0; task < NTasks; ++task)
+                valid_counts &= packed[task] == size_t(nbytes_to_send[task]);
+            FML::COMMUNICATION::require_count(valid_counts,
+                                              "[MPIParticles] Serialized particle sizes changed while packing");
+
             // We changed the send-recv pointers above so reset them
             for (int i = 0; i < NTasks; i++) {
-                send_buffer_by_task[i] = &send_buffer.data()[offset_in_send_buffer[i]];
-                recv_buffer_by_task[i] = &recv_buffer.data()[offset_in_recv_buffer[i]];
+                send_buffer_by_task[i] =
+                    (send_buffer.empty() ? nullptr : send_buffer.data() + offset_in_send_buffer[i]);
+                recv_buffer_by_task[i] =
+                    (recv_buffer.empty() ? nullptr : recv_buffer.data() + offset_in_recv_buffer[i]);
             }
 
             // Communicate the particle data. MPI counts are int so we send in chunks of
             // at most INT_MAX bytes. All tasks do the same number of chunks so that the
             // send/recv pairs always match up (most of the time this is just 1 chunk)
-            const long long max_chunk_bytes = std::numeric_limits<int>::max();
-            long long max_bytes = 0;
+            Count max_bytes = 0;
             for (int i = 0; i < NTasks; i++)
                 max_bytes = std::max(max_bytes, std::max(nbytes_to_send[i], nbytes_to_recv[i]));
             FML::MaxOverTasks(&max_bytes);
-            const long long nchunks = (max_bytes + max_chunk_bytes - 1) / max_chunk_bytes;
+            const Count nchunks = max_bytes / max_chunk_bytes + (max_bytes % max_chunk_bytes != 0);
 
             for (int i = 1; i < NTasks; i++) {
                 int send_request_to = (ThisTask + i) % NTasks;
                 int get_request_from = (ThisTask - i + NTasks) % NTasks;
 
-                for (long long ichunk = 0; ichunk < nchunks; ichunk++) {
-                    const long long offset = ichunk * max_chunk_bytes;
-                    const int nsend = int(std::clamp(nbytes_to_send[send_request_to] - offset, 0LL, max_chunk_bytes));
-                    const int nrecv = int(std::clamp(nbytes_to_recv[get_request_from] - offset, 0LL, max_chunk_bytes));
-                    char * send_ptr = send_buffer_by_task[send_request_to] + (nsend > 0 ? offset : 0);
-                    char * recv_ptr = recv_buffer_by_task[get_request_from] + (nrecv > 0 ? offset : 0);
+                for (Count ichunk = 0; ichunk < nchunks; ichunk++) {
+                    const Count offset = ichunk * max_chunk_bytes;
+                    const int nsend = int(offset < nbytes_to_send[send_request_to]
+                                              ? std::min(nbytes_to_send[send_request_to] - offset, max_chunk_bytes)
+                                              : 0);
+                    const int nrecv = int(offset < nbytes_to_recv[get_request_from]
+                                              ? std::min(nbytes_to_recv[get_request_from] - offset, max_chunk_bytes)
+                                              : 0);
+                    char *send_ptr = nsend ? send_buffer_by_task[send_request_to] + size_t(offset) : nullptr;
+                    char *recv_ptr = nrecv ? recv_buffer_by_task[get_request_from] + size_t(offset) : nullptr;
 
                     // Send to the right, receive from left
                     MPI_Status status;
@@ -968,7 +1002,8 @@ namespace FML {
 
             // Allocate a write buffer
             std::vector<char> buffer_data(max_bytesize_buffer);
-            assert_mpi(max_bytesize_buffer > size_t(100 * FML::PARTICLE::GetSize(p[0])),
+            assert_mpi(max_bytesize_buffer > 0 && FML::PARTICLE::GetSize(p[0]) > 0 &&
+                           size_t(FML::PARTICLE::GetSize(p[0])) <= (max_bytesize_buffer - 1) / 100,
                        "[MPIParticles::dump_to_file] Buffer size is likely too small, can't even fit 100 particles\n");
 
             if (FML::ThisTask == 0)
@@ -984,7 +1019,7 @@ namespace FML {
                 char * buffer = buffer_data.data();
                 for (size_t i = 0; i < n_to_write; i++) {
                     auto bytes = FML::PARTICLE::GetSize(p[nwritten + i]);
-                    if (nbytes_to_write + bytes > max_bytesize_buffer) {
+                    if (bytes <= 0 || size_t(bytes) > max_bytesize_buffer - nbytes_to_write) {
                         n_to_write = i;
                         break;
                     }
@@ -1061,8 +1096,11 @@ namespace FML {
                 assert_mpi(myfile.good() and n_to_read > 0 and n_to_read <= NpartLocal_in_use - nread,
                            "[MPIParticles::load_from_file] Corrupt file: the chunks do not add up to the number of "
                            "particles in the header\n");
+                assert_mpi(nbytes_to_read <= buffer_data.max_size() &&
+                               nbytes_to_read <= size_t(std::numeric_limits<std::streamsize>::max()),
+                           "[MPIParticles::load_from_file] Chunk byte count exceeds supported storage");
                 if (buffer_data.size() < nbytes_to_read)
-                    buffer_data.resize(1.25 * nbytes_to_read);
+                    buffer_data.resize(nbytes_to_read);
                 char * buffer = buffer_data.data();
                 myfile.read(buffer, nbytes_to_read);
                 assert_mpi(myfile.good(), "[MPIParticles::load_from_file] Error reading particle data\n");
@@ -1070,10 +1108,10 @@ namespace FML {
                 for (size_t i = 0; i < n_to_read; i++) {
                     FML::PARTICLE::AssignFromBuffer(p[nread + i], buffer);
                     auto bytes = FML::PARTICLE::GetSize(p[nread + i]);
-                    buffer += bytes;
-                    bytes_processed += bytes;
-                    assert_mpi(bytes_processed <= nbytes_to_read,
+                    assert_mpi(bytes > 0 && size_t(bytes) <= nbytes_to_read - bytes_processed,
                                "[MPIParticles::load_from_file] Corrupt file: particle data larger than the chunk\n");
+                    buffer += size_t(bytes);
+                    bytes_processed += size_t(bytes);
                 }
 
                 nread += n_to_read;

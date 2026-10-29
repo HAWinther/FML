@@ -1,6 +1,7 @@
 #ifndef FML_COSMICWEB_ORIGAMIHALOS_HEADER
 #define FML_COSMICWEB_ORIGAMIHALOS_HEADER
 
+#include <FML/Global/MPICounts.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -71,28 +72,7 @@ namespace FML {
             std::vector<S> gather_on_task0(const std::vector<S> & local) {
 #ifdef USE_MPI
                 if (FML::NTasks > 1) {
-                    MPI_Datatype type;
-                    MPI_Type_contiguous(int(sizeof(S)), MPI_BYTE, &type);
-                    MPI_Type_commit(&type);
-                    std::vector<int> counts(FML::NTasks), displs(FML::NTasks, 0);
-                    int n = int(local.size());
-                    MPI_Gather(&n, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, FML::communicator);
-                    for (int i = 1; i < FML::NTasks; i++)
-                        displs[i] = displs[i - 1] + counts[i - 1];
-                    std::vector<S> all;
-                    if (FML::ThisTask == 0)
-                        all.resize(size_t(displs.back()) + counts.back());
-                    MPI_Gatherv(local.data(),
-                                n,
-                                type,
-                                all.data(),
-                                counts.data(),
-                                displs.data(),
-                                type,
-                                0,
-                                FML::communicator);
-                    MPI_Type_free(&type);
-                    return all;
+                    return FML::COMMUNICATION::gather_records_checked(local);
                 }
 #endif
                 return local;
@@ -100,13 +80,18 @@ namespace FML {
             template <class S>
             void broadcast_from_task0([[maybe_unused]] std::vector<S> & v) {
 #ifdef USE_MPI
-                long long int n = (long long int)(v.size());
-                MPI_Bcast(&n, 1, MPI_LONG_LONG, 0, FML::communicator);
+                static_assert(std::is_trivially_copyable_v<S>);
+                FML::COMMUNICATION::Count n = v.size();
+                MPI_Bcast(&n, 1, MPI_UNSIGNED_LONG_LONG, 0, FML::communicator);
+                FML::COMMUNICATION::require_count(n <= v.max_size(), "[ORIGAMI] Broadcast exceeds vector capacity");
+                const size_t bytes =
+                    FML::COMMUNICATION::checked_bytes(n, sizeof(S), std::numeric_limits<std::ptrdiff_t>::max());
                 v.resize(size_t(n));
-                const size_t chunk = (size_t(1) << 28) / sizeof(S) + 1;
-                for (size_t offset = 0; offset < v.size(); offset += chunk) {
-                    const size_t count = std::min(chunk, v.size() - offset);
-                    MPI_Bcast(v.data() + offset, int(count * sizeof(S)), MPI_BYTE, 0, FML::communicator);
+                auto *data = reinterpret_cast<char *>(v.data());
+                for (size_t offset = 0; offset < bytes;) {
+                    const int count = int(std::min(size_t(1) << 28, bytes - offset));
+                    MPI_Bcast(data + offset, count, MPI_BYTE, 0, FML::communicator);
+                    offset += size_t(count);
                 }
 #endif
             }
@@ -410,7 +395,7 @@ namespace FML {
                 }
             }
             if (not sums.empty())
-                FML::SumArrayOverTasks(sums.data(), int(sums.size()));
+                FML::SumArrayOverTasks(sums.data(), sums.size());
             halos.resize(kept.size());
             for (size_t h = 0; h < kept.size(); h++) {
                 auto & H = halos[h];

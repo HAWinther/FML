@@ -1,5 +1,6 @@
 #ifndef GAUSSIANRANDOMFIELD_HEADER
 #define GAUSSIANRANDOMFIELD_HEADER
+#include <FML/Global/MPICounts.h>
 #include <cassert>
 #include <climits>
 #include <complex>
@@ -178,7 +179,18 @@ namespace FML {
                 auto Local_x_start = grid.get_local_x_start();
                 auto * cdelta = grid.get_fourier_grid();
 
-                const IndexIntType NmeshTotTotal = FML::power(Nmesh, N - 1) * (Nmesh / 2 + 1);
+                FML::COMMUNICATION::Count seed_count = 1;
+                bool valid_seed_count = true;
+                const auto seed_limit = std::min(FML::COMMUNICATION::Count(INT_MAX),
+                                                 FML::COMMUNICATION::Count(std::vector<unsigned int>().max_size()));
+                for (int d = 0; d < N - 1; ++d) {
+                    FML::COMMUNICATION::Count next = 0;
+                    valid_seed_count &= FML::COMMUNICATION::multiply_count(seed_count, Nmesh, next, seed_limit);
+                    seed_count = next;
+                }
+                FML::COMMUNICATION::require_count(valid_seed_count,
+                                                  "[random field] Seed-table count exceeds supported range");
+                const IndexIntType NmeshTotTotal = IndexIntType(seed_count) * (Nmesh / 2 + 1);
                 const IndexIntType factor = NmeshTotTotal / Nmesh;
 
                 // Set up seeds for the random number generator
@@ -186,7 +198,7 @@ namespace FML {
                 // NB: Known issue: INT_MAX * uniform only gives ~2^31 different seeds so with Nmesh^(N-1) lines some
                 // lines get the same seed by the birthday problem (~Nmesh^(2N-2)/2^32 of them) and these lines then
                 // have perfectly correlated random numbers. Kept for now for compatibility with N-GenIC / 2LPTic.
-                IndexIntType num_seeds = FML::power(Nmesh, N - 1);
+                IndexIntType num_seeds = IndexIntType(seed_count);
                 std::vector<unsigned int> seedtable(num_seeds, 0);
                 if (FML::ThisTask == 0) {
                     for (IndexIntType i = 0; i < num_seeds; i++) {
@@ -350,7 +362,9 @@ namespace FML {
                 // duplicated lines for Nmesh = 512, 1024, 2048 with mt19937 and seed 1234) and these lines have
                 // perfectly correlated random numbers. This is inherited from N-GenIC / 2LPTic and kept for now for
                 // compatibility (same seed => same IC as these codes).
-                std::vector<unsigned int> seedtable(Nmesh * Nmesh, 0);
+                const size_t seed_count = FML::COMMUNICATION::checked_bytes(
+                    Nmesh, Nmesh, std::min(size_t(INT_MAX), std::vector<unsigned int>().max_size()));
+                std::vector<unsigned int> seedtable(seed_count, 0);
                 if (FML::ThisTask == 0)
                     for (int i = 0; i < Nmesh / 2; i++) {
                         for (int j = 0; j < i; j++)
@@ -374,7 +388,8 @@ namespace FML {
                     }
 
 #ifdef USE_MPI
-                MPI_Allreduce(MPI_IN_PLACE, seedtable.data(), Nmesh * Nmesh, MPI_UNSIGNED, MPI_SUM, FML::communicator);
+                MPI_Allreduce(MPI_IN_PLACE, seedtable.data(), int(seed_count), MPI_UNSIGNED, MPI_SUM,
+                              FML::communicator);
 #endif
 
                 // If we use GSL make a spline (std::function can be slow) otherwise this is just a copy

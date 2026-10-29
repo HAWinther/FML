@@ -295,7 +295,7 @@ namespace FML {
     template void MinOverTasks<TYPE>(TYPE *);                                                                          \
     template void MaxOverTasks<TYPE>(TYPE *);                                                                          \
     template void SumOverTasks<TYPE>(TYPE *);                                                                          \
-    template void SumArrayOverTasks<TYPE>(TYPE *, int);
+    template void SumArrayOverTasks<TYPE>(TYPE *, size_t);
     TYPES(char);
     TYPES(int);
     TYPES(unsigned int);

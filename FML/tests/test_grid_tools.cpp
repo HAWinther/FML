@@ -263,6 +263,31 @@ void test_redistribution_suite() {
 }
 
 int main(int argc, char ** argv) {
+#ifdef USE_MPI
+    std::vector<std::vector<int>> outgoing(FML::NTasks);
+    for (int t = 0; t < FML::NTasks; ++t)
+        if ((FML::ThisTask + t) % 2)
+            outgoing[t].push_back(100 * FML::ThisTask + t);
+    outgoing[FML::ThisTask].push_back(-1);
+    std::vector<int> expected;
+    for (int t = 0; t < FML::NTasks; ++t) {
+        if ((t + FML::ThisTask) % 2)
+            expected.push_back(100 * t + FML::ThisTask);
+        if (t == FML::ThisTask)
+            expected.push_back(-1);
+    }
+    check(FML::INTERPOLATION::detail::alltoallv_elements(outgoing) == expected,
+          "checked sheet exchange preserves peer order and handles empty edges");
+    bool rejected_layout = false;
+    std::vector<std::vector<int>> invalid(FML::ThisTask == 0 ? 0 : FML::NTasks);
+    try {
+        FML::INTERPOLATION::detail::alltoallv_elements(invalid);
+    } catch (const std::overflow_error &) {
+        rejected_layout = true;
+    }
+    check(rejected_layout, "one-rank invalid sheet layout fails collectively before indexing");
+#endif
+
     if (argc > 1 && std::string(argv[1]) == "chunk_limit") {
         std::vector<std::vector<int>> send(FML::NTasks);
         FML::COMMUNICATION::exchange_records_chunked(send, [](const int *, size_t) {},

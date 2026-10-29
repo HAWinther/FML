@@ -1,12 +1,13 @@
 #ifndef FML_HYBRIDBIASSPECTRA_HEADER
 #define FML_HYBRIDBIASSPECTRA_HEADER
 
+#include <FML/Global/MPICounts.h>
 #include <array>
+#include <cmath>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <map>
-#include <cmath>
-#include <functional>
 #include <string>
 #include <vector>
 
@@ -411,8 +412,15 @@ namespace FML {
                                                 const std::vector<FFTWGrid<N>> & fields,
                                                 std::vector<double> & values,
                                                 detail::LatticeCoordinateFunction<N, T> lattice_coordinate = nullptr) {
+                FML::COMMUNICATION::require_count(fields.size() <= size_t(INT_MAX), "[hybrid fields] Too many fields");
+                FML::COMMUNICATION::Count field_count = fields.size();
+                const auto field_counts = FML::GatherFromTasks(&field_count);
+                FML::COMMUNICATION::require_count(
+                    std::all_of(field_counts.begin(), field_counts.end(), [&](auto n) { return n == field_count; }),
+                    "[hybrid fields] Field counts differ between ranks");
                 const int nfields = int(fields.size());
-                values.assign(NumPart * size_t(nfields), 0.0);
+                const size_t nvalues = FML::COMMUNICATION::checked_bytes(NumPart, size_t(nfields), values.max_size());
+                values.assign(nvalues, 0.0);
                 if (nfields == 0)
                     return;
                 const int Nlattice = fields[0].get_nmesh();
@@ -459,13 +467,13 @@ namespace FML {
 
                 // We do it in chunks of particles to keep the MPI buffers below 2 GB
                 const size_t chunk = size_t(1) << 24;
-                long long int nchunks = (long long int)((NumPart + chunk - 1) / chunk);
+                long long int nchunks = (long long int)(NumPart / chunk + (NumPart % chunk != 0));
                 FML::MaxOverTasks(&nchunks);
                 std::vector<int> owner;
                 std::vector<long long int> index_in_owner;
                 for (long long int c = 0; c < nchunks; c++) {
                     const size_t i0 = std::min(NumPart, size_t(c) * chunk);
-                    const size_t i1 = std::min(NumPart, i0 + chunk);
+                    const size_t i1 = i0 + std::min(chunk, NumPart - i0);
                     const size_t n = i1 - i0;
 
                     // Who has the fields of the particles?
@@ -481,11 +489,13 @@ namespace FML {
                     }
                     MPI_Alltoall(nsend.data(), 1, MPI_INT, nrecv.data(), 1, MPI_INT, FML::communicator);
                     std::vector<int> sdispl(FML::NTasks, 0), rdispl(FML::NTasks, 0);
-                    for (int t = 1; t < FML::NTasks; t++) {
-                        sdispl[t] = sdispl[t - 1] + nsend[t - 1];
-                        rdispl[t] = rdispl[t - 1] + nrecv[t - 1];
-                    }
-                    const int ntotrecv = rdispl[FML::NTasks - 1] + nrecv[FML::NTasks - 1];
+                    const auto outgoing = FML::COMMUNICATION::checked_int_layout(nsend);
+                    const auto incoming = FML::COMMUNICATION::checked_int_layout(nrecv);
+                    sdispl = outgoing.offsets;
+                    rdispl = incoming.offsets;
+                    const size_t ntotrecv = incoming.total;
+                    const auto answer_layout = FML::COMMUNICATION::checked_int_layout(nrecv, size_t(nfields));
+                    const auto result_layout = FML::COMMUNICATION::checked_int_layout(nsend, size_t(nfields));
 
                     // Send the requests (sorted by owner)
                     std::vector<long long int> requests(n), received(ntotrecv);
@@ -509,17 +519,15 @@ namespace FML {
 
                     // Answer them
                     std::vector<double> answers(size_t(ntotrecv) * nfields);
-                    for (int r = 0; r < ntotrecv; r++)
+                    for (size_t r = 0; r < ntotrecv; r++)
                         for (int f = 0; f < nfields; f++)
                             answers[size_t(r) * nfields + f] = fields[f].get_real_from_index(received[r]);
                     std::vector<int> nsend_f(FML::NTasks), nrecv_f(FML::NTasks), sdispl_f(FML::NTasks),
                         rdispl_f(FML::NTasks);
-                    for (int t = 0; t < FML::NTasks; t++) {
-                        nsend_f[t] = nrecv[t] * nfields;
-                        sdispl_f[t] = rdispl[t] * nfields;
-                        nrecv_f[t] = nsend[t] * nfields;
-                        rdispl_f[t] = sdispl[t] * nfields;
-                    }
+                    nsend_f = answer_layout.counts;
+                    sdispl_f = answer_layout.offsets;
+                    nrecv_f = result_layout.counts;
+                    rdispl_f = result_layout.offsets;
                     std::vector<double> result(n * nfields);
                     MPI_Alltoallv(answers.data(),
                                   nsend_f.data(),

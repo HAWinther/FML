@@ -1,6 +1,7 @@
 #ifndef FML_VOIDFINDERS_VOID_HEADER
 #define FML_VOIDFINDERS_VOID_HEADER
 
+#include <FML/Global/MPICounts.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -170,13 +171,18 @@ namespace FML {
         /// Send the catalogue on task 0 to all tasks
         inline void broadcast_catalogue([[maybe_unused]] std::vector<Void> & voids) {
 #ifdef USE_MPI
-            long long int n = (long long int)(voids.size());
-            MPI_Bcast(&n, 1, MPI_LONG_LONG, 0, FML::communicator);
+            FML::COMMUNICATION::Count n = voids.size();
+            MPI_Bcast(&n, 1, MPI_UNSIGNED_LONG_LONG, 0, FML::communicator);
+            FML::COMMUNICATION::require_count(n <= voids.max_size(),
+                                              "[void catalogue] Broadcast exceeds vector capacity");
+            const size_t bytes =
+                FML::COMMUNICATION::checked_bytes(n, sizeof(Void), std::numeric_limits<std::ptrdiff_t>::max());
             voids.resize(size_t(n));
-            const size_t chunk = size_t(1) << 20;
-            for (size_t offset = 0; offset < voids.size(); offset += chunk) {
-                const size_t count = std::min(chunk, voids.size() - offset);
-                MPI_Bcast(voids.data() + offset, int(count * sizeof(Void)), MPI_BYTE, 0, FML::communicator);
+            auto *data = reinterpret_cast<char *>(voids.data());
+            for (size_t offset = 0; offset < bytes;) {
+                const int count = int(std::min(size_t(1) << 28, bytes - offset));
+                MPI_Bcast(data + offset, count, MPI_BYTE, 0, FML::communicator);
+                offset += size_t(count);
             }
 #endif
         }

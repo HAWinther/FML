@@ -1,6 +1,7 @@
 #ifndef MPIPERIODICDELAUNAY_HEADER
 #define MPIPERIODICDELAUNAY_HEADER
 
+#include <FML/Global/MPICounts.h>
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -99,9 +100,17 @@ namespace FML {
                                        size_t recvbytes,
                                        int source) {
                 const size_t chunk = size_t(1) << 30;
-                const size_t nsend = (sendbytes + chunk - 1) / chunk;
-                const size_t nrecv = (recvbytes + chunk - 1) / chunk;
-                std::vector<MPI_Request> requests(nsend + nrecv);
+                const size_t nsend = sendbytes / chunk + (sendbytes % chunk != 0);
+                const size_t nrecv = recvbytes / chunk + (recvbytes % chunk != 0);
+                int *tag_limit = nullptr, present = 0;
+                MPI_Comm_get_attr(FML::communicator, MPI_TAG_UB, &tag_limit, &present);
+                FML::COMMUNICATION::require_count(present && tag_limit &&
+                                                      std::max(nsend, nrecv) <= size_t(*tag_limit) + 1,
+                                                  "[Delaunay] Chunk tags exceed MPI tag range");
+                const auto layout = FML::COMMUNICATION::checked_size_layout(
+                    {FML::COMMUNICATION::Count(nsend), FML::COMMUNICATION::Count(nrecv)},
+                    std::min(size_t(INT_MAX), std::vector<MPI_Request>().max_size()));
+                std::vector<MPI_Request> requests(layout.total);
                 for (size_t k = 0; k < nrecv; k++) {
                     const size_t bytes = std::min(chunk, recvbytes - k * chunk);
                     MPI_Irecv(static_cast<char *>(recvbuf) + k * chunk,
@@ -329,11 +338,18 @@ namespace FML {
                 const int RightTask = (FML::ThisTask + 1) % FML::NTasks;
 
                 // Pack particles to send
-                auto pack = [&](const std::vector<size_t> & index, std::vector<char> & buffer) {
-                    size_t bytes = 0;
-                    for (auto i : index)
-                        bytes += FML::PARTICLE::GetSize(p[i]);
-                    buffer.resize(bytes);
+                auto pack = [&](const std::vector<size_t> &index, std::vector<char> &buffer) {
+                    FML::COMMUNICATION::Count bytes = 0;
+                    bool valid = true;
+                    for (auto i : index) {
+                        const auto size = FML::PARTICLE::GetSize(p[i]);
+                        valid &= size > 0;
+                        if (size > 0)
+                            valid &= FML::COMMUNICATION::add_count(bytes, FML::COMMUNICATION::Count(size),
+                                                                   buffer.max_size());
+                    }
+                    FML::COMMUNICATION::require_count(valid, "[Delaunay] Serialized byte count overflow");
+                    buffer.resize(size_t(bytes));
                     char * b = buffer.data();
                     for (auto i : index) {
                         FML::PARTICLE::AppendToBuffer(p[i], b);
@@ -381,14 +397,22 @@ namespace FML {
                 buffer_send_right = std::vector<char>();
 
                 // Unpack
-                p_to_recv.resize(recv_left + recv_right);
+                const auto received = FML::COMMUNICATION::checked_size_layout(
+                    {FML::COMMUNICATION::Count(recv_left), FML::COMMUNICATION::Count(recv_right)},
+                    p_to_recv.max_size());
+                p_to_recv.resize(received.total);
                 auto unpack = [&](const std::vector<char> & buffer, size_t offset, size_t count) {
                     const char * b = buffer.data();
+                    size_t processed = 0;
                     for (size_t i = 0; i < count; i++) {
                         FML::PARTICLE::AssignFromBuffer(p_to_recv[offset + i], const_cast<char *>(b));
-                        b += FML::PARTICLE::GetSize(p_to_recv[offset + i]);
+                        const auto bytes = FML::PARTICLE::GetSize(p_to_recv[offset + i]);
+                        assert_mpi(bytes > 0 && size_t(bytes) <= buffer.size() - processed,
+                                   "[Delaunay] Invalid deserialized particle byte count");
+                        b += size_t(bytes);
+                        processed += size_t(bytes);
                     }
-                    assert(size_t(b - buffer.data()) == buffer.size());
+                    assert(processed == buffer.size());
                 };
                 unpack(buffer_recv_left, 0, recv_left);
                 unpack(buffer_recv_right, recv_left, recv_right);
@@ -403,7 +427,10 @@ namespace FML {
             std::vector<Q> communicate_boundary_values(const std::vector<Q> & values) const {
                 static_assert(std::is_trivially_copyable_v<Q>, "Can only communicate trivially copyable types");
                 assert(values.size() == vs.size());
-                std::vector<Q> result(recv_left + recv_right);
+                const auto received = FML::COMMUNICATION::checked_size_layout(
+                    {FML::COMMUNICATION::Count(recv_left), FML::COMMUNICATION::Count(recv_right)},
+                    std::vector<Q>().max_size());
+                std::vector<Q> result(received.total);
 #ifdef USE_MPI
                 if (FML::NTasks == 1)
                     return result;
@@ -415,17 +442,13 @@ namespace FML {
                     to_left[k] = values[send_left[k]];
                 for (size_t k = 0; k < send_right.size(); k++)
                     to_right[k] = values[send_right[k]];
-                detail::sendrecv_bytes(to_left.data(),
-                                       sizeof(Q) * to_left.size(),
-                                       LeftTask,
-                                       result.data() + recv_left,
-                                       sizeof(Q) * recv_right,
-                                       RightTask);
-                detail::sendrecv_bytes(to_right.data(),
-                                       sizeof(Q) * to_right.size(),
-                                       RightTask,
-                                       result.data(),
-                                       sizeof(Q) * recv_left,
+                const size_t sl = FML::COMMUNICATION::checked_bytes(to_left.size(), sizeof(Q));
+                const size_t sr = FML::COMMUNICATION::checked_bytes(to_right.size(), sizeof(Q));
+                const size_t rl = FML::COMMUNICATION::checked_bytes(recv_left, sizeof(Q));
+                const size_t rr = FML::COMMUNICATION::checked_bytes(recv_right, sizeof(Q));
+                detail::sendrecv_bytes(to_left.data(), sl, LeftTask, recv_right ? result.data() + recv_left : nullptr,
+                                       rr, RightTask);
+                detail::sendrecv_bytes(to_right.data(), sr, RightTask, recv_left ? result.data() : nullptr, rl,
                                        LeftTask);
 #endif
                 return result;
@@ -961,6 +984,9 @@ namespace FML {
                           MPI_SUM,
                           FML::communicator);
 #endif
+            FML::COMMUNICATION::checked_size_layout(
+                std::vector<FML::COMMUNICATION::Count>(nminima_per_task.begin(), nminima_per_task.end()),
+                size_t(LLONG_MAX));
             long long int id_start = 0;
             for (int i = 0; i < FML::ThisTask; i++)
                 id_start += nminima_per_task[i];
@@ -1059,26 +1085,8 @@ namespace FML {
                 links->clear();
 #ifdef USE_MPI
                 if (FML::NTasks > 1) {
-                    MPI_Datatype link_type;
-                    MPI_Type_contiguous(int(sizeof(WatershedLink)), MPI_BYTE, &link_type);
-                    MPI_Type_commit(&link_type);
-                    std::vector<int> counts(FML::NTasks), displs(FML::NTasks, 0);
-                    int n = int(local_links.size());
-                    MPI_Gather(&n, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, FML::communicator);
-                    for (int i = 1; i < FML::NTasks; i++)
-                        displs[i] = displs[i - 1] + counts[i - 1];
-                    if (FML::ThisTask == 0)
-                        links->resize(size_t(displs.back()) + counts.back());
-                    MPI_Gatherv(local_links.data(),
-                                n,
-                                link_type,
-                                links->data(),
-                                counts.data(),
-                                displs.data(),
-                                link_type,
-                                0,
-                                FML::communicator);
-                    MPI_Type_free(&link_type);
+                    *links = FML::COMMUNICATION::gather_records_checked(local_links);
+
                     if (FML::ThisTask == 0)
                         detail::reduce_links(*links);
                 } else {
@@ -1244,6 +1252,7 @@ namespace FML {
 #ifdef USE_MPI
             if (FML::NTasks > 1) {
                 static_assert(std::is_trivially_copyable_v<U>, "The watershed group class must be trivially copyable");
+                static_assert(sizeof(U) <= size_t(INT_MAX), "Watershed MPI record extent exceeds int");
                 MPI_Datatype group_type;
                 MPI_Type_contiguous(int(sizeof(U)), MPI_BYTE, &group_type);
                 MPI_Type_commit(&group_type);

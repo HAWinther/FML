@@ -15,6 +15,7 @@
 
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
+#include <FML/Global/MPICounts.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/NUFFT/NUFFT.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
@@ -29,40 +30,32 @@ namespace FML {
             /// elements of type T (as a contiguous MPI type), so byte counts above 2^31 are fine
             template <class T>
             std::vector<T> alltoallv_elements(std::vector<std::vector<T>> & send) {
-                std::vector<int> nsend(FML::NTasks), nrecv(FML::NTasks), sdispl(FML::NTasks), rdispl(FML::NTasks);
+                static_assert(std::is_trivially_copyable_v<T>, "Sheet MPI records must be trivially copyable");
+                FML::COMMUNICATION::require_count(send.size() == size_t(FML::NTasks) && sizeof(T) <= size_t(INT_MAX),
+                                                  "[sheet exchange] Invalid peers or record extent");
+                std::vector<FML::COMMUNICATION::Count> sizes(FML::NTasks);
+                for (int t = 0; t < FML::NTasks; ++t)
+                    sizes[t] = send[t].size();
+                const auto outgoing = FML::COMMUNICATION::checked_int_layout(sizes);
+                std::vector<int> nrecv(FML::NTasks);
+                MPI_Alltoall(outgoing.counts.data(), 1, MPI_INT, nrecv.data(), 1, MPI_INT, FML::communicator);
+                const auto incoming = FML::COMMUNICATION::checked_int_layout(nrecv);
+                FML::COMMUNICATION::require_count(outgoing.total <= std::vector<T>().max_size() &&
+                                                      incoming.total <= std::vector<T>().max_size(),
+                                                  "[sheet exchange] Element storage exceeds vector capacity");
                 std::vector<T> sendbuf;
-                size_t nsendtot = 0;
-                for (auto & v : send)
-                    nsendtot += v.size();
-                sendbuf.reserve(nsendtot);
-                for (int t = 0; t < FML::NTasks; t++) {
-                    nsend[t] = int(send[t].size());
-                    sdispl[t] = int(sendbuf.size());
+                sendbuf.reserve(outgoing.total);
+                for (int t = 0; t < FML::NTasks; ++t) {
                     sendbuf.insert(sendbuf.end(), send[t].begin(), send[t].end());
                     std::vector<T>().swap(send[t]);
                 }
-                MPI_Alltoall(nsend.data(), 1, MPI_INT, nrecv.data(), 1, MPI_INT, FML::communicator);
-                size_t ntot = 0;
-                for (int t = 0; t < FML::NTasks; t++) {
-                    rdispl[t] = int(ntot);
-                    ntot += nrecv[t];
-                }
-                assert_mpi(nsendtot < size_t(std::numeric_limits<int>::max()) and
-                               ntot < size_t(std::numeric_limits<int>::max()),
-                           "[alltoallv_elements] Too many elements on a task\n");
+                const size_t ntot = incoming.total;
                 std::vector<T> recv(ntot);
                 MPI_Datatype type;
                 MPI_Type_contiguous(int(sizeof(T)), MPI_BYTE, &type);
                 MPI_Type_commit(&type);
-                MPI_Alltoallv(sendbuf.data(),
-                              nsend.data(),
-                              sdispl.data(),
-                              type,
-                              recv.data(),
-                              nrecv.data(),
-                              rdispl.data(),
-                              type,
-                              FML::communicator);
+                MPI_Alltoallv(sendbuf.data(), outgoing.counts.data(), outgoing.offsets.data(), type, recv.data(),
+                              nrecv.data(), incoming.offsets.data(), type, FML::communicator);
                 MPI_Type_free(&type);
                 return recv;
             }

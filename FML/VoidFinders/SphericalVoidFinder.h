@@ -1,6 +1,7 @@
 #ifndef FML_VOIDFINDERS_SPHERICAL_HEADER
 #define FML_VOIDFINDERS_SPHERICAL_HEADER
 
+#include <FML/Global/MPICounts.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -319,28 +320,7 @@ namespace FML {
             // Gather the spheres on task 0
 #ifdef USE_MPI
             if (FML::NTasks > 1) {
-                MPI_Datatype type;
-                MPI_Type_contiguous(int(sizeof(SphereCandidate)), MPI_BYTE, &type);
-                MPI_Type_commit(&type);
-                std::vector<int> counts(FML::NTasks), displs(FML::NTasks, 0);
-                int n = int(spheres.size());
-                MPI_Gather(&n, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, FML::communicator);
-                for (int i = 1; i < FML::NTasks; i++)
-                    displs[i] = displs[i - 1] + counts[i - 1];
-                std::vector<SphereCandidate> all;
-                if (FML::ThisTask == 0)
-                    all.resize(size_t(displs.back()) + counts.back());
-                MPI_Gatherv(spheres.data(),
-                            n,
-                            type,
-                            all.data(),
-                            counts.data(),
-                            displs.data(),
-                            type,
-                            0,
-                            FML::communicator);
-                MPI_Type_free(&type);
-                spheres = std::move(all);
+                spheres = FML::COMMUNICATION::gather_records_checked(spheres);
             }
 #endif
 

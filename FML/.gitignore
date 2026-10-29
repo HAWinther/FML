@@ -179,3 +179,5 @@ PhaseSpaceHaloFinder/tests/rockstar_fixture
 
 # Multi-slab spherical-overdensity regression executable
 tests/test_so_multislab
+
+tests/test_mpi_counts

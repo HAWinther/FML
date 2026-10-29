@@ -5,9 +5,11 @@
 #include <FML/FriendsOfFriends/SphericalOverdensity.h>
 #include <FML/GadgetUtils/GadgetUtilsHDF5.h>
 #include <FML/Global/Global.h>
+#include <FML/Global/MPICounts.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Spline/Spline.h>
 
+#include "OutputUtils.h"
 #include "Species.h"
 
 #include <array>
@@ -202,25 +204,7 @@ namespace COLASOLVER {
         const int stride = NDIM + 3;
         std::vector<double> all = local;
 #ifdef USE_MPI
-        // MPI counts and displacements are int: fail clearly instead of overflowing (~ INT_MAX / 6 halos in all)
-        long long int ntotal = (long long int)local.size();
-        FML::SumOverTasks(&ntotal);
-        if (ntotal > (long long int)INT_MAX)
-            throw std::runtime_error("[flag_overlapping_so_halos] Too many halos for the MPI gather (int counts)");
-        int n = int(local.size());
-        std::vector<int> counts(FML::NTasks), displs(FML::NTasks, 0);
-        MPI_Allgather(&n, 1, MPI_INT, counts.data(), 1, MPI_INT, FML::communicator);
-        for (int i = 1; i < FML::NTasks; i++)
-            displs[i] = displs[i - 1] + counts[i - 1];
-        all.resize(displs.back() + counts.back());
-        MPI_Allgatherv(local.data(),
-                       n,
-                       MPI_DOUBLE,
-                       all.data(),
-                       counts.data(),
-                       displs.data(),
-                       MPI_DOUBLE,
-                       FML::communicator);
+        all = FML::COMMUNICATION::gather_records_checked(local, true);
 #endif
         const size_t nall = all.size() / stride;
         double rmax = 0.0;
@@ -596,33 +580,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
             }
         }
         const int stride = 3 + 3 * NDIM + (do_so ? 3 * NDIM + 2 + 3 * nso : 0);
-        // MPI counts and displacements are int: fail clearly instead of overflowing
-        long long int ntotal = (long long int)local.size();
-        FML::SumOverTasks(&ntotal);
-        if (ntotal > (long long int)INT_MAX)
-            throw std::runtime_error("The HDF5 halo catalogue is too large for the MPI gather to task 0 (int counts): "
-                                     "use fof_output_fileformat = ascii");
-        int n = int(local.size());
-        std::vector<int> counts(FML::NTasks, n), displs(FML::NTasks, 0);
-#ifdef USE_MPI
-        MPI_Gather(&n, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, FML::communicator);
-#endif
-        for (int i = 1; i < FML::NTasks; i++)
-            displs[i] = displs[i - 1] + counts[i - 1];
-        std::vector<double> all(FML::ThisTask == 0 ? displs.back() + counts.back() : 0);
-#ifdef USE_MPI
-        MPI_Gatherv(local.data(),
-                    n,
-                    MPI_DOUBLE,
-                    all.data(),
-                    counts.data(),
-                    displs.data(),
-                    MPI_DOUBLE,
-                    0,
-                    FML::communicator);
-#else
-        all = local;
-#endif
+        std::vector<double> all = FML::COMMUNICATION::gather_records_checked(local);
         if (FML::ThisTask == 0) {
             namespace H5 = FML::FILEUTILS::GADGET::HDF5;
             const size_t nhalos = all.size() / stride;

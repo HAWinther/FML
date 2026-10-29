@@ -344,6 +344,22 @@ void test_extra() {
 }
 
 int main() {
+    {
+        std::vector<FML::FOF::FoFHalo<Particle, NDIM>> empty;
+        FML::FOF::FriendsOfFriends<Particle, NDIM>(nullptr, 0, .2, 1, true, .001, empty, 8);
+        check(empty.empty(), "all-empty FoF input returns an empty catalogue collectively");
+        if (FML::NTasks > 1) {
+            Particle p{{.5 * (FML::xmin_domain + FML::xmax_domain), .5, .5}, 0, 0};
+            bool rejected = false;
+            try {
+                FML::FOF::FriendsOfFriends<Particle, NDIM>(&p, FML::ThisTask == 0 ? 0 : 1, .2, 1, true, .001, empty, 8);
+            } catch (const std::overflow_error &) {
+                rejected = true;
+            }
+            check(rejected, "partially empty FoF ranks fail collectively instead of splitting the MPI path");
+        }
+    }
+
     test(false, 0.05);
     test(true, 0.05);
     test_extra();

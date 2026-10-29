@@ -1,4 +1,5 @@
 #include <FML/Global/Global.h>
+#include <FML/Global/MPICounts.h>
 #include <FML/MCMC/Parallel.h>
 
 #include <cstdlib>
@@ -16,25 +17,16 @@ namespace FML::MCMC {
         bool enabled() { return true; }
         void barrier() { MPI_Barrier(FML::communicator); }
         void allreduce_sum(std::vector<double> & v) {
+            FML::COMMUNICATION::require_count(v.size() <= size_t(INT_MAX), "[MCMC] Reduction count exceeds MPI int");
+            auto count = FML::COMMUNICATION::Count(v.size());
+            const auto counts = FML::GatherFromTasks(&count);
+            FML::COMMUNICATION::require_count(
+                std::all_of(counts.begin(), counts.end(), [&](auto n) { return n == count; }),
+                "[MCMC] Reduction lengths differ between ranks");
             MPI_Allreduce(MPI_IN_PLACE, v.data(), int(v.size()), MPI_DOUBLE, MPI_SUM, FML::communicator);
         }
         std::vector<double> allgather(const std::vector<double> & local) {
-            const int n = size();
-            int mine = int(local.size());
-            std::vector<int> counts(n), displs(n, 0);
-            MPI_Allgather(&mine, 1, MPI_INT, counts.data(), 1, MPI_INT, FML::communicator);
-            for (int i = 1; i < n; i++)
-                displs[i] = displs[i - 1] + counts[i - 1];
-            std::vector<double> all(size_t(displs[n - 1] + counts[n - 1]));
-            MPI_Allgatherv(local.data(),
-                           mine,
-                           MPI_DOUBLE,
-                           all.data(),
-                           counts.data(),
-                           displs.data(),
-                           MPI_DOUBLE,
-                           FML::communicator);
-            return all;
+            return FML::COMMUNICATION::gather_records_checked(local, true);
         }
 #else
         bool enabled() { return false; }

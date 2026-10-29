@@ -224,8 +224,7 @@ namespace FML {
         SFINAE_HAS(AppendToBuffer, append_to_buffer)
         SFINAE_STRUCT(AssignFromBuffer, assign_from_buffer)
         SFINAE_HAS(AssignFromBuffer, assign_from_buffer)
-        template <class... Args>
-        constexpr int GetSize([[maybe_unused]] Args &... args) {
+        template <class... Args> constexpr size_t GetSize([[maybe_unused]] Args &...args) {
             // Fiducial method. Assumes no dynamic allocated memory in class
             static_assert(sizeof...(args) == 1);
             using ParticleType = NthTypeOf<0, Args...>;

@@ -558,7 +558,7 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
             std::vector<double> all(kall.size(), 0.0);
             for (size_t j = 0; j < jlocal.size(); j++)
                 all[jlocal[j]] = prediction[p][j];
-            FML::SumArrayOverTasks(all.data(), int(all.size()));
+            FML::SumArrayOverTasks(all.data(), all.size());
             std::vector<double> logk_table(ntable), p_table(ntable);
             for (int j = 0; j < ntable; j++) {
                 logk_table[j] = std::log(kall[j]);

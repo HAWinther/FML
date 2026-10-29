@@ -1,15 +1,16 @@
 #ifndef PARTICLEGRIDINTERPOLATION_HEADER
 #define PARTICLEGRIDINTERPOLATION_HEADER
 
+#include <FML/Global/MPICounts.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
-#include <functional>
 #include <vector>
 
 #ifdef USE_OMP
@@ -1304,6 +1305,9 @@ namespace FML {
             int n_extra_right = density.get_n_extra_slices_right();
             ;
 
+#ifdef USE_MPI
+            const int slice_bytes = int(FML::COMMUNICATION::checked_bytes(num_cells_slice, sizeof(FloatType), INT_MAX));
+#endif
             std::vector<FloatType> buffer(num_cells_slice);
 
             // [1] Send to the right, receive from left
@@ -1318,18 +1322,8 @@ namespace FML {
                 int send_to = (ThisTask + 1) % NTasks;
                 int recv_from = (ThisTask - 1 + NTasks) % NTasks;
 
-                MPI_Sendrecv(&(extra_slice_right[0]),
-                             int(sizeof(FloatType) * num_cells_slice),
-                             MPI_CHAR,
-                             send_to,
-                             0,
-                             &(temp[0]),
-                             int(sizeof(FloatType) * num_cells_slice),
-                             MPI_CHAR,
-                             int(recv_from),
-                             0,
-                             FML::communicator,
-                             &status);
+                MPI_Sendrecv(&(extra_slice_right[0]), slice_bytes, MPI_CHAR, send_to, 0, &(temp[0]), slice_bytes,
+                             MPI_CHAR, int(recv_from), 0, FML::communicator, &status);
 #else
                 temp = extra_slice_right;
 #endif
@@ -1352,18 +1346,8 @@ namespace FML {
                 int send_to = (ThisTask - 1 + NTasks) % NTasks;
                 int recv_from = (ThisTask + 1) % NTasks;
 
-                MPI_Sendrecv(&(extra_slice_left[0]),
-                             int(sizeof(FloatType) * num_cells_slice),
-                             MPI_CHAR,
-                             send_to,
-                             0,
-                             &(temp[0]),
-                             int(sizeof(FloatType) * num_cells_slice),
-                             MPI_CHAR,
-                             recv_from,
-                             0,
-                             FML::communicator,
-                             &status);
+                MPI_Sendrecv(&(extra_slice_left[0]), slice_bytes, MPI_CHAR, send_to, 0, &(temp[0]), slice_bytes,
+                             MPI_CHAR, recv_from, 0, FML::communicator, &status);
 #else
                 temp = extra_slice_left;
 #endif

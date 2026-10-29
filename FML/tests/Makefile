@@ -11,7 +11,7 @@ USE_FFTW            ?= true
 USE_GSL             ?= true
 USE_LUA             ?= true
 
-TARGETS := test_core test_grid_tools test_fof test_so test_so_multislab test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_lpt test_nbody
+TARGETS := test_core test_mpi_counts test_grid_tools test_fof test_so test_so_multislab test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_lpt test_nbody
 TARGETS += test_baryonification test_numericalmethods test_interlacing_offset test_streamed_kick test_lightcone test_random_fields test_timestepping test_transfers
 TARGETS += test_cosmicweb test_short_range test_yukawa test_phase_space_halos test_control test_morphology test_environment test_pt_direct test_halo_history
 
@@ -47,6 +47,9 @@ test_lightcone: test_lightcone.o Global.o Spline.o ParameterMap.o
 	$(LINK_EXE)
 
 test_core: $(TEST_OBJS)
+	$(LINK_EXE)
+
+test_mpi_counts: test_mpi_counts.o Global.o
 	$(LINK_EXE)
 
 test_grid_tools: test_grid_tools.o Global.o
@@ -246,6 +249,7 @@ run: $(TARGETS)
 	@set -e; for np in $(NP_LIST); do \
 	  echo "== Running test_core with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_core; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_mpi_counts; \
 	  echo "== Running test_grid_tools with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_grid_tools; \
 	  echo "== Running test_phase_space_halos with $$np task(s)"; \

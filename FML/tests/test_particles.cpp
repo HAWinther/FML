@@ -288,7 +288,18 @@ void test_custom_serialisation() {
     for (int it = 0; it < 3; it++) {
         for (auto & q : mv)
             q.pos[0] = U(gen);
-        mv.communicate_particles();
+        // Force multiple messages and record splits, with rank-dependent caps using their collective minimum.
+        mv.communicate_particles(97 + FML::ThisTask);
+    }
+    if (FML::NTasks > 1) {
+        bool rejected_cap = false;
+        try {
+            mv.communicate_particles(FML::ThisTask == 0 ? 0 : 97);
+        } catch (const std::overflow_error &) {
+            rejected_cap = true;
+        }
+        check(rejected_cap, "one-rank zero migration message cap is rejected collectively before mutation");
+        mv.communicate_particles(97);
     }
     double sum = 0.0;
     int nextra = 0;

@@ -1424,7 +1424,7 @@ namespace FML {
                     metadata[3 * bin + 2] += weight;
                 }
             }
-            FML::SumArrayOverTasks(metadata.data(), int(metadata.size()));
+            FML::SumArrayOverTasks(metadata.data(), metadata.size());
             bins.statistics.metadata_reduction_batches = 1;
             for (int bin = 0; bin < bins.n; bin++) {
                 const double count = metadata[3 * bin + 2];

@@ -2,16 +2,17 @@
 #define FOF_HEADER
 #include <FML/FriendsOfFriends/FoFBinning.h>
 #include <FML/Global/Global.h>
+#include <FML/Global/MPICounts.h>
 #include <FML/Timing/Timings.h>
 #include <algorithm>
 #include <array>
 #include <cassert>
 #include <cmath>
-#include <limits>
-#include <vector>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <map>
+#include <vector>
 
 namespace FML {
 
@@ -206,8 +207,13 @@ namespace FML {
                               int Ngrid) {
 
             LocalFoFGroups.clear();
-            if (NumPart == 0)
+            FML::COMMUNICATION::Count local_count = NumPart;
+            const auto local_counts = FML::GatherFromTasks(&local_count);
+            if (std::all_of(local_counts.begin(), local_counts.end(), [](auto n) { return n == 0; }))
                 return;
+            FML::COMMUNICATION::require_count(
+                std::all_of(local_counts.begin(), local_counts.end(), [](auto n) { return n > 0; }),
+                "[FoF] Nonempty global catalogues require particles on every rank");
             [[maybe_unused]] const bool debug = false;
 
             // Some basic checks
@@ -265,7 +271,8 @@ namespace FML {
             // We gather particles within dx_boundary of each side
             //=========================================================================
             std::vector<T> boundary_particles{};
-            const size_t bytes_per_particle = FML::PARTICLE::GetSize(part[0]);
+            const auto record_size = FML::PARTICLE::GetSize(part[0]);
+            const size_t bytes_per_particle = record_size > 0 ? size_t(record_size) : 0;
             // How many particles we send to / receive from the left and right task (used again at the end to send
             // the FoF IDs of the boundary particles back to the task they belong to)
             size_t n_send_left = 0;
@@ -277,9 +284,18 @@ namespace FML {
 #ifdef USE_MPI
             foftimer.StartTiming("Communicate boundary");
             if (FML::NTasks > 1) {
+                FML::COMMUNICATION::Count record_bytes = bytes_per_particle;
+                const auto record_sizes = FML::GatherFromTasks(&record_bytes);
+                FML::COMMUNICATION::require_count(
+                    record_bytes > 0 && std::all_of(record_sizes.begin(), record_sizes.end(),
+                                                    [&](auto n) { return n == record_bytes; }),
+                    "[FoF] Boundary exchange requires a uniform positive serialized record size");
+                bool valid_sizes = true;
                 // Count how may particles to send left and right
                 size_t noutside = 0;
                 for (size_t i = 0; i < NumPart; i++) {
+                    const auto size = FML::PARTICLE::GetSize(part[i]);
+                    valid_sizes &= size > 0 && size_t(size) == bytes_per_particle;
                     const auto * pos = FML::PARTICLE::GetPos(part[i]);
                     if (pos[0] < xmin + dx_boundary)
                         ++n_send_left;
@@ -288,9 +304,9 @@ namespace FML {
                     if (pos[0] < xmin or pos[0] > xmax)
                         noutside++;
                 }
-                if (noutside > 0)
-                    throw std::runtime_error("FoF::Particle detected outside local domain, please ensure all particles "
-                                             "have been moved inside domain\n");
+                FML::COMMUNICATION::require_count(
+                    noutside == 0 && valid_sizes,
+                    "[FoF] Boundary particles must be in-domain and have a uniform serialized size");
 
                 MPI_Status status;
 
@@ -345,10 +361,14 @@ namespace FML {
                 }
 
                 // Compute how many bytes to send/recv
-                const size_t bytes_send_left = bytes_per_particle * n_send_left;
-                const size_t bytes_send_right = bytes_per_particle * n_send_right;
-                const size_t bytes_recv_left = bytes_per_particle * n_recv_left;
-                const size_t bytes_recv_right = bytes_per_particle * n_recv_right;
+                const size_t bytes_send_left =
+                    FML::COMMUNICATION::checked_bytes(n_send_left, bytes_per_particle, INT_MAX);
+                const size_t bytes_send_right =
+                    FML::COMMUNICATION::checked_bytes(n_send_right, bytes_per_particle, INT_MAX);
+                const size_t bytes_recv_left =
+                    FML::COMMUNICATION::checked_bytes(n_recv_left, bytes_per_particle, INT_MAX);
+                const size_t bytes_recv_right =
+                    FML::COMMUNICATION::checked_bytes(n_recv_right, bytes_per_particle, INT_MAX);
 
                 // Set up communication buffer
                 std::vector<char> CommBufferSend;
@@ -357,7 +377,10 @@ namespace FML {
                 CommBufferRecv.resize(std::max(bytes_recv_left, bytes_recv_right));
 
                 // Set up storage for boundary particles
-                boundary_particles.resize(n_recv_left + n_recv_right);
+                const auto incoming = FML::COMMUNICATION::checked_size_layout(
+                    {FML::COMMUNICATION::Count(n_recv_left), FML::COMMUNICATION::Count(n_recv_right)},
+                    boundary_particles.max_size());
+                boundary_particles.resize(incoming.total);
 
                 // Gather data to send left
                 char * buffer = CommBufferSend.data();
@@ -835,31 +858,19 @@ namespace FML {
                     for (size_t i = 0; i < n_recv_left; i++)
                         to_left[i] = global_id(particle_id_FoF[n_recv_right + i]);
                     std::vector<size_t> from_left(n_send_left), from_right(n_send_right);
+                    const int id_bytes_n_recv_right =
+                        int(FML::COMMUNICATION::checked_bytes(n_recv_right, sizeof(size_t), INT_MAX));
+                    const int id_bytes_n_send_left =
+                        int(FML::COMMUNICATION::checked_bytes(n_send_left, sizeof(size_t), INT_MAX));
+                    const int id_bytes_n_recv_left =
+                        int(FML::COMMUNICATION::checked_bytes(n_recv_left, sizeof(size_t), INT_MAX));
+                    const int id_bytes_n_send_right =
+                        int(FML::COMMUNICATION::checked_bytes(n_send_right, sizeof(size_t), INT_MAX));
                     MPI_Status status;
-                    MPI_Sendrecv(to_right.data(),
-                                 int(n_recv_right * sizeof(size_t)),
-                                 MPI_BYTE,
-                                 RightTask,
-                                 1,
-                                 from_left.data(),
-                                 int(n_send_left * sizeof(size_t)),
-                                 MPI_BYTE,
-                                 LeftTask,
-                                 1,
-                                 FML::communicator,
-                                 &status);
-                    MPI_Sendrecv(to_left.data(),
-                                 int(n_recv_left * sizeof(size_t)),
-                                 MPI_BYTE,
-                                 LeftTask,
-                                 2,
-                                 from_right.data(),
-                                 int(n_send_right * sizeof(size_t)),
-                                 MPI_BYTE,
-                                 RightTask,
-                                 2,
-                                 FML::communicator,
-                                 &status);
+                    MPI_Sendrecv(to_right.data(), id_bytes_n_recv_right, MPI_BYTE, RightTask, 1, from_left.data(),
+                                 id_bytes_n_send_left, MPI_BYTE, LeftTask, 1, FML::communicator, &status);
+                    MPI_Sendrecv(to_left.data(), id_bytes_n_recv_left, MPI_BYTE, LeftTask, 2, from_right.data(),
+                                 id_bytes_n_send_right, MPI_BYTE, RightTask, 2, FML::communicator, &status);
                     size_t il = 0, ir = 0;
                     for (size_t i = 0; i < NumPart; i++) {
                         const auto * pos = FML::PARTICLE::GetPos(part[i]);
