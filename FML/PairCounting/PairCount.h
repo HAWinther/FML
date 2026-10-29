@@ -630,6 +630,104 @@ namespace FML {
                     return cl;
                 }
 
+                template <int NDIM>
+                std::vector<std::array<int, NDIM>> pair_cell_offsets(int ngrid, double rmax, bool periodic) {
+                    const double rmax2 = rmax * rmax;
+                    const int m = int(std::ceil(rmax * ngrid));
+                    const bool cover_all = periodic and 2 * m + 1 >= ngrid;
+                    const int lo = cover_all ? -((ngrid - 1) / 2) : -m;
+                    const int hi = cover_all ? lo + ngrid - 1 : m;
+                    std::vector<std::array<int, NDIM>> offsets;
+                    {
+                        std::array<int, NDIM> o;
+                        o.fill(lo);
+                        while (true) {
+                            double d2 = 0.0;
+                            for (int d = 0; d < NDIM; d++) {
+                                const double dd = std::max(std::abs(o[d]) - 1, 0) / double(ngrid);
+                                d2 += dd * dd;
+                            }
+                            if (d2 < rmax2 or cover_all)
+                                offsets.push_back(o);
+                            int d = NDIM - 1;
+                            while (d >= 0 and o[d] == hi) {
+                                o[d] = lo;
+                                d--;
+                            }
+                            if (d < 0)
+                                break;
+                            o[d]++;
+                        }
+                    }
+                    return offsets;
+                }
+
+                /// Visit precisely the neighbor cells used by the pair kernel, in their original order.
+                template <int NDIM, class F>
+                void visit_pair_cells(size_t c1, int ngrid, const std::vector<std::array<int, NDIM>> &offsets,
+                                      bool periodic, bool autopairs, F &&visit) {
+                    std::array<int, NDIM> i1;
+                    {
+                        size_t c = c1;
+                        for (int d = NDIM - 1; d >= 0; d--) {
+                            i1[d] = int(c % size_t(ngrid));
+                            c /= size_t(ngrid);
+                        }
+                    }
+                    for (const auto &o : offsets) {
+                        size_t c2 = 0;
+                        bool inside = true;
+                        double shift[NDIM];
+                        for (int d = 0; d < NDIM; d++) {
+                            int i2 = i1[d] + o[d];
+                            shift[d] = 0.0;
+                            if (periodic) {
+                                if (i2 < 0) {
+                                    i2 += ngrid;
+                                    shift[d] = -1.0;
+                                }
+                                if (i2 >= ngrid) {
+                                    i2 -= ngrid;
+                                    shift[d] = 1.0;
+                                }
+                            } else if (i2 < 0 or i2 >= ngrid) {
+                                inside = false;
+                                break;
+                            }
+                            c2 = c2 * ngrid + size_t(i2);
+                        }
+                        if (inside && (!autopairs || c2 >= c1))
+                            visit(c2, shift);
+                    }
+                }
+
+                /// Candidate distance tests plus one unit per offset and occupied source cell.
+                /// Convert occupancies before multiplication to avoid overflowing integer counts.
+                template <int NDIM>
+                std::vector<std::pair<double, size_t>>
+                estimate_cell_costs(const CellList<NDIM> &A, const CellList<NDIM> &B,
+                                    const std::vector<std::array<int, NDIM>> &offsets, bool autopairs, bool periodic) {
+                    std::vector<std::pair<double, size_t>> cost;
+                    for (size_t c1 = 0; c1 + 1 < A.start.size(); ++c1) {
+                        const double na = double(A.start[c1 + 1] - A.start[c1]);
+                        if (na == 0.)
+                            continue;
+                        double work = 1.0 + double(offsets.size());
+                        visit_pair_cells<NDIM>(c1, A.ngrid, offsets, periodic, autopairs,
+                                               [&](size_t c2, const double *) {
+                                                   if (autopairs && c2 == c1)
+                                                       work += 0.5 * na * (na - 1.0);
+                                                   else
+                                                       work += na * double(B.start[c2 + 1] - B.start[c2]);
+                                               });
+                        cost.emplace_back(work, c1);
+                    }
+                    std::sort(cost.begin(), cost.end(), [](const auto &a, const auto &b) {
+                        return a.first > b.first || (a.first == b.first && a.second < b.second);
+                    });
+                    return cost;
+                }
+
                 /// Assign sorted nonnegative finite costs to the least-loaded rank, breaking equal-load ties
                 /// by rank index, exactly as the previous linear min_element scan did.
                 inline std::vector<size_t> assign_cells_to_rank(const std::vector<std::pair<double, size_t>> &cost,
@@ -684,46 +782,14 @@ namespace FML {
                     for (int d = 0; d < NDIM; d++)
                         ncells *= size_t(ngrid);
 
-                    // The offsets to the neighbour cells (pruned by the smallest distance between the cells). With a
-                    // periodic box that needs more than the whole grid each cell is visited once
-                    const int m = int(std::ceil(rmax * ngrid));
-                    const bool cover_all = periodic and 2 * m + 1 >= ngrid;
-                    const int lo = cover_all ? -((ngrid - 1) / 2) : -m;
-                    const int hi = cover_all ? lo + ngrid - 1 : m;
-                    std::vector<std::array<int, NDIM>> offsets;
-                    {
-                        std::array<int, NDIM> o;
-                        o.fill(lo);
-                        while (true) {
-                            double d2 = 0.0;
-                            for (int d = 0; d < NDIM; d++) {
-                                const double dd = std::max(std::abs(o[d]) - 1, 0) / double(ngrid);
-                                d2 += dd * dd;
-                            }
-                            if (d2 < rmax2 or cover_all)
-                                offsets.push_back(o);
-                            int d = NDIM - 1;
-                            while (d >= 0 and o[d] == hi) {
-                                o[d] = lo;
-                                d--;
-                            }
-                            if (d < 0)
-                                break;
-                            o[d]++;
-                        }
-                    }
+                    const bool cover_all = periodic && 2 * int(std::ceil(rmax * ngrid)) + 1 >= ngrid;
+                    const auto offsets = pair_cell_offsets<NDIM>(ngrid, rmax, periodic);
 
                     // The cells of A (with particles) of this task: largest estimated cost first, each to the task
                     // with the least work so far (the same on all tasks)
                     std::vector<std::pair<double, size_t>> cost;
-                    for (size_t c = 0; c < ncells and FML::NTasks > 1; c++) {
-                        const double na = double(A.start[c + 1] - A.start[c]);
-                        if (na > 0.0)
-                            cost.push_back({na * (double(B.start[c + 1] - B.start[c]) + 1.0), c});
-                    }
-                    std::sort(cost.begin(), cost.end(), [](auto & a, auto & b) {
-                        return a.first > b.first or (a.first == b.first and a.second < b.second);
-                    });
+                    if (FML::NTasks > 1)
+                        cost = estimate_cell_costs<NDIM>(A, B, offsets, autopairs, periodic);
                     std::vector<size_t> mycells;
                     if (FML::NTasks == 1) {
                         // In the order of the cells (better memory locality)
@@ -744,65 +810,33 @@ namespace FML {
                         const int thread = 0;
 #endif
                         const size_t c1 = mycells[k];
-                        std::array<int, NDIM> i1;
-                        {
-                            size_t c = c1;
-                            for (int d = NDIM - 1; d >= 0; d--) {
-                                i1[d] = int(c % size_t(ngrid));
-                                c /= size_t(ngrid);
-                            }
-                        }
-                        for (auto & o : offsets) {
-                            size_t c2 = 0;
-                            bool inside = true;
-                            // The periodic image of cell c2 next to c1: x_j + shift (without covering the whole grid
-                            // this is the minimum image for all the pairs within rmax)
-                            double shift[NDIM];
-                            for (int d = 0; d < NDIM; d++) {
-                                int i2 = i1[d] + o[d];
-                                shift[d] = 0.0;
-                                if (periodic) {
-                                    if (i2 < 0) {
-                                        i2 += ngrid;
-                                        shift[d] = -1.0;
-                                    }
-                                    if (i2 >= ngrid) {
-                                        i2 -= ngrid;
-                                        shift[d] = 1.0;
-                                    }
-                                } else if (i2 < 0 or i2 >= ngrid) {
-                                    inside = false;
-                                    break;
-                                }
-                                c2 = c2 * ngrid + size_t(i2);
-                            }
-                            if (not inside or (autopairs and c2 < c1))
-                                continue;
-                            const size_t jbegin = B.start[c2], jend = B.start[c2 + 1];
-                            if (jbegin == jend)
-                                continue;
-                            for (size_t i = A.start[c1]; i < A.start[c1 + 1]; i++) {
-                                const double * xi = &A.pos[i * NDIM];
-                                for (size_t j = (autopairs and c2 == c1) ? i + 1 : jbegin; j < jend; j++) {
-                                    const double * xj = &B.pos[j * NDIM];
-                                    double dist[NDIM];
-                                    double r2 = 0.0;
-                                    for (int d = 0; d < NDIM; d++) {
-                                        double dx = xi[d] - (xj[d] + shift[d]);
-                                        if (cover_all) {
-                                            if (dx > 0.5)
-                                                dx -= 1.0;
-                                            else if (dx < -0.5)
-                                                dx += 1.0;
+                        visit_pair_cells<NDIM>(
+                            c1, ngrid, offsets, periodic, autopairs, [&](size_t c2, const double *shift) {
+                                const size_t jbegin = B.start[c2], jend = B.start[c2 + 1];
+                                if (jbegin == jend)
+                                    return;
+                                for (size_t i = A.start[c1]; i < A.start[c1 + 1]; i++) {
+                                    const double *xi = &A.pos[i * NDIM];
+                                    for (size_t j = (autopairs and c2 == c1) ? i + 1 : jbegin; j < jend; j++) {
+                                        const double *xj = &B.pos[j * NDIM];
+                                        double dist[NDIM];
+                                        double r2 = 0.0;
+                                        for (int d = 0; d < NDIM; d++) {
+                                            double dx = xi[d] - (xj[d] + shift[d]);
+                                            if (cover_all) {
+                                                if (dx > 0.5)
+                                                    dx -= 1.0;
+                                                else if (dx < -0.5)
+                                                    dx += 1.0;
+                                            }
+                                            dist[d] = dx;
+                                            r2 += dx * dx;
                                         }
-                                        dist[d] = dx;
-                                        r2 += dx * dx;
+                                        if (r2 < rmax2)
+                                            pair_function(thread, i, j, dist, r2);
                                     }
-                                    if (r2 < rmax2)
-                                        pair_function(thread, i, j, dist, r2);
                                 }
-                            }
-                        }
+                            });
                     }
                 }
 

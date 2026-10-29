@@ -191,7 +191,137 @@ void test_rank_assignment() {
     check(true, "heap assignment matches the legacy scan, including each rank's cell order");
 }
 
+template <int N> detail::CellList<N> occupancy_grid(int ngrid, const std::vector<size_t> &counts) {
+    detail::CellList<N> grid;
+    grid.ngrid = ngrid;
+    grid.start.push_back(0);
+    for (size_t count : counts)
+        grid.start.push_back(grid.start.back() + count);
+    return grid;
+}
+
+// Independent exhaustive cell-box geometry, without the production offset traversal.
+template <int N> void test_neighbor_costs() {
+    bool correct = true;
+    struct Case {
+        int ngrid;
+        double radius;
+        bool periodic, full;
+    };
+    for (const auto config :
+         {Case{8, .08, false, false}, Case{8, .08, true, false}, Case{8, .26, true, false}, Case{8, .4, false, false},
+          Case{8, .4, true, true}, Case{5, .21, true, true}, Case{4, .26, true, true}, Case{1, .1, true, true}}) {
+        size_t ncells = 1;
+        for (int d = 0; d < N; ++d)
+            ncells *= config.ngrid;
+        std::vector<size_t> a(ncells), b(ncells);
+        for (size_t c = 0; c < ncells; ++c) {
+            a[c] = c % 7 < 3 ? 1 + (c * 13) % 9 : 0;
+            b[c] = c % 11 < 2 ? 5 + c % 17 : 0;
+        }
+        auto A = occupancy_grid<N>(config.ngrid, a), B = occupancy_grid<N>(config.ngrid, b);
+        auto offsets = detail::pair_cell_offsets<N>(config.ngrid, config.radius, config.periodic);
+        for (bool automatic : {false, true}) {
+            std::vector<std::pair<double, size_t>> expected;
+            for (size_t c1 = 0; c1 < ncells; ++c1)
+                if (a[c1]) {
+                    double cost = 1. + double(offsets.size());
+                    for (size_t c2 = 0; c2 < ncells; ++c2) {
+                        if (automatic && c2 < c1)
+                            continue;
+                        size_t u = c1, v = c2;
+                        double gap2 = 0.;
+                        for (int d = N - 1; d >= 0; --d) {
+                            int gap = std::abs(int(u % config.ngrid) - int(v % config.ngrid));
+                            if (config.periodic)
+                                gap = std::min(gap, config.ngrid - gap);
+                            double separation = double(std::max(0, gap - 1)) / config.ngrid;
+                            gap2 += separation * separation;
+                            u /= config.ngrid;
+                            v /= config.ngrid;
+                        }
+                        if (!config.full && gap2 >= config.radius * config.radius)
+                            continue;
+                        cost += automatic && c1 == c2 ? double(a[c1]) * (a[c1] - 1) * .5
+                                                      : double(a[c1]) * double(automatic ? a[c2] : b[c2]);
+                    }
+                    expected.emplace_back(cost, c1);
+                }
+            std::sort(expected.begin(), expected.end(),
+                      [](auto a, auto b) { return a.first > b.first || (a.first == b.first && a.second < b.second); });
+            correct &=
+                detail::estimate_cell_costs<N>(A, automatic ? A : B, offsets, automatic, config.periodic) == expected;
+        }
+        std::fill(a.begin(), a.end(), 0);
+        auto empty = occupancy_grid<N>(config.ngrid, a);
+        correct &= detail::estimate_cell_costs<N>(empty, B, offsets, false, config.periodic).empty();
+    }
+    check(correct, "neighbor candidate costs match exhaustive cell-box geometry in " + std::to_string(N) + "D");
+}
+
+void test_cross_schedule_balance() {
+    std::vector<size_t> a(24), b(24);
+    for (int c : {3, 7, 11, 15})
+        a[c] = 10;
+    b[4] = 1000;
+    b[8] = 10;
+    b[12] = 900;
+    b[16] = 10;
+    auto A = occupancy_grid<1>(24, a), B = occupancy_grid<1>(24, b);
+    auto offsets = detail::pair_cell_offsets<1>(24, .04, false);
+    const auto improved = detail::estimate_cell_costs<1>(A, B, offsets, false, false);
+    std::vector<std::pair<double, size_t>> old;
+    for (size_t c = 0; c < a.size(); ++c)
+        if (a[c])
+            old.emplace_back(double(a[c]) * (b[c] + 1.), c);
+    auto peak_candidates = [&](const auto &cost) {
+        double peak = 0.;
+        for (int rank = 0; rank < 2; ++rank) {
+            double candidates = 0.;
+            for (size_t c : detail::assign_cells_to_rank(cost, 2, rank))
+                candidates += double(a[c]) * b[c + 1];
+            peak = std::max(peak, candidates);
+        }
+        return peak;
+    };
+    check(peak_candidates(old) == 19000. && peak_candidates(improved) == 10000.,
+          "adjacent disjoint cross-catalogue peaks reduce worst-rank candidate work from 19000 to 10000");
+    // Put all particles near their shared cell face so every candidate passes the distance cut.
+    std::vector<Particle<1>> pa, pb;
+    for (size_t c = 0; c < a.size(); ++c) {
+        for (size_t i = 0; i < a[c]; ++i)
+            pa.push_back(Particle<1>{{(c + .9) / 24}, 1.});
+        for (size_t i = 0; i < b[c]; ++i)
+            pb.push_back(Particle<1>{{(c + .1) / 24}, 1.});
+    }
+    auto realA = detail::make_cell_list<1>(pa.data(), pa.size(), 24);
+    auto realB = detail::make_cell_list<1>(pb.data(), pb.size(), 24);
+    std::vector<unsigned long long> thread_counts(FML::NThreads, 0);
+    detail::count_pairs<1>(realA, realB, false, .04, false,
+                           [&](int thread, size_t, size_t, const double *, double) { ++thread_counts[thread]; });
+    unsigned long long total = 0;
+    for (auto count : thread_counts)
+        total += count;
+    auto maximum = total;
+    FML::SumOverTasks(&total);
+    FML::MaxOverTasks(&maximum);
+    check(total == 19200 && maximum == (FML::NTasks == 1 ? 19200ULL : 10000ULL),
+          "distributed cross counts and maximum-rank workload match the predicted neighbor schedule");
+    if constexpr (sizeof(size_t) >= 8) {
+        const size_t large = size_t(1ULL << 40);
+        auto huge = occupancy_grid<1>(1, {large});
+        auto one = detail::pair_cell_offsets<1>(1, .1, true);
+        auto cost = detail::estimate_cell_costs<1>(huge, huge, one, false, true);
+        check(cost[0].first == std::ldexp(1., 80),
+              "candidate cost products exceed 64-bit counts without integer overflow");
+    }
+}
+
 int main() {
+    test_neighbor_costs<1>();
+    test_neighbor_costs<2>();
+    test_neighbor_costs<3>();
+    test_cross_schedule_balance();
     test_rank_assignment();
     check(paircount_odr_check() == 1, "PairCount.h can be included in several translation units");
 
