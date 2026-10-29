@@ -4,7 +4,7 @@
 #include <map>
 using namespace FML::HOD;
 int failures = 0;
-void check(bool good, const std::string& label) {
+void check(bool good, const std::string & label) {
     int bad = !good;
     FML::MaxOverTasks(&bad);
     failures += bad;
@@ -14,7 +14,7 @@ void check(bool good, const std::string& label) {
 bool close(double a, double b, double tolerance = 1e-12) {
     return std::abs(a - b) <= tolerance * std::max({1.0, std::abs(a), std::abs(b)});
 }
-bool same(const Galaxy& a, const Galaxy& b) {
+bool same(const Galaxy & a, const Galaxy & b) {
     return a.halo_id == b.halo_id && a.ordinal == b.ordinal && a.central == b.central && a.position == b.position &&
            a.velocity == b.velocity;
 }
@@ -115,25 +115,25 @@ void test_population() {
     options.seed = 44;
     options.boxsize = 10;
     options.central_velocity_bias = .2;
-    auto occupation = [](const Halo&) { return OccupationMeans{.7, 3}; };
+    auto occupation = [](const Halo &) { return OccupationMeans{.7, 3}; };
     auto full = populate(prepared, occupation, options);
     std::map<std::pair<std::uint64_t, std::uint64_t>, Galaxy> reference;
-    for (const auto& g : full.galaxies)
+    for (const auto & g : full.galaxies)
         reference[{g.halo_id, g.ordinal}] = g;
     std::reverse(halos.begin(), halos.end());
     auto reversed = populate(PreparedCatalog(halos), occupation, options);
     bool replay = full.galaxies.size() == reversed.galaxies.size();
-    for (const auto& g : reversed.galaxies)
+    for (const auto & g : reversed.galaxies)
         replay &= same(g, reference.at({g.halo_id, g.ordinal}));
     check(replay && reference.size() == full.galaxies.size(),
           "halo reordering preserves phase space and collision-free identity pairs");
     std::vector<Halo> local;
-    for (const auto& h : halos)
+    for (const auto & h : halos)
         if (h.id % FML::NTasks == std::uint64_t(FML::ThisTask))
             local.push_back(h);
     auto partial = populate(PreparedCatalog(local), occupation, options);
     bool matched = true;
-    for (const auto& g : partial.galaxies)
+    for (const auto & g : partial.galaxies)
         matched &= same(g, reference.at({g.halo_id, g.ordinal}));
     unsigned long long count = partial.galaxies.size();
     FML::SumOverTasks(&count);
@@ -189,16 +189,11 @@ void test_profiles() {
     Options options;
     options.boxsize = 1;
     options.satellite_velocity_bias = .8;
-    const auto mock = populate(
-        PreparedCatalog({h}),
-        [](const Halo&) {
-            return OccupationMeans{1, 6000};
-        },
-        options);
+    const auto mock = populate(PreparedCatalog({h}), [](const Halo &) { return OccupationMeans{1, 6000}; }, options);
     std::vector<double> uniforms;
     double velocity_mean = 0, velocity_square = 0, cos2 = 0;
     bool support = true;
-    for (const auto& g : mock.galaxies)
+    for (const auto & g : mock.galaxies)
         if (!g.central) {
             double r2 = 0;
             Vector offset;
@@ -220,8 +215,9 @@ void test_profiles() {
     std::sort(uniforms.begin(), uniforms.end());
     double ks = 0;
     for (size_t i = 0; i < uniforms.size(); ++i)
-        ks = std::max(ks, std::max(std::abs(uniforms[i] - double(i) / uniforms.size()),
-                                   std::abs(uniforms[i] - double(i + 1) / uniforms.size())));
+        ks = std::max(ks,
+                      std::max(std::abs(uniforms[i] - double(i) / uniforms.size()),
+                               std::abs(uniforms[i] - double(i + 1) / uniforms.size())));
     const double n = uniforms.size(), sigma = options.satellite_velocity_bias * h.velocity_dispersion;
     check(support && ks < 6 / std::sqrt(n) && std::abs(cos2 / n - 1.0 / 3) < .03,
           "NFW radial CDF, isotropy and periodic boundary wrapping");
@@ -230,12 +226,8 @@ void test_profiles() {
           "satellite Gaussian velocities have the supplied biased 1D dispersion");
     auto concentrated_options = options;
     concentrated_options.satellite_concentration_factor = 2;
-    const auto concentrated = populate(
-        PreparedCatalog({h}),
-        [](const Halo&) {
-            return OccupationMeans{1, 6000};
-        },
-        concentrated_options);
+    const auto concentrated =
+        populate(PreparedCatalog({h}), [](const Halo &) { return OccupationMeans{1, 6000}; }, concentrated_options);
     bool concentration = concentrated.galaxies.size() == mock.galaxies.size();
     for (size_t i = 0; concentration && i < mock.galaxies.size(); ++i)
         if (!mock.galaxies[i].central) {
@@ -258,27 +250,17 @@ void test_profiles() {
     check(concentration, "concentration bias changes radial mapping while preserving ranks and velocity streams");
     h.members = {{90, {.9, .1, .3}, {10, 20, 30}}, {3, {.1, .2, .3}, {50, 60, 70}}, {72, {.3, .4, .5}, {90, 100, 110}}};
     options.profile = SatelliteProfile::Particles;
-    auto members = populate(
-        PreparedCatalog({h}),
-        [](const Halo&) {
-            return OccupationMeans{1, 30};
-        },
-        options);
+    auto members = populate(PreparedCatalog({h}), [](const Halo &) { return OccupationMeans{1, 30}; }, options);
     std::reverse(h.members.begin(), h.members.end());
-    auto reordered = populate(
-        PreparedCatalog({h}),
-        [](const Halo&) {
-            return OccupationMeans{1, 30};
-        },
-        options);
+    auto reordered = populate(PreparedCatalog({h}), [](const Halo &) { return OccupationMeans{1, 30}; }, options);
     bool selected = members.galaxies.size() == reordered.galaxies.size();
     for (size_t i = 0; i < members.galaxies.size(); ++i) {
-        const auto& g = members.galaxies[i];
+        const auto & g = members.galaxies[i];
         selected &= same(g, reordered.galaxies[i]);
         if (g.central)
             continue;
         bool found = false;
-        for (const auto& p : h.members)
+        for (const auto & p : h.members)
             if (g.position == p.position) {
                 found = true;
                 for (int d = 0; d < 3; ++d)
@@ -287,47 +269,53 @@ void test_profiles() {
         selected &= found;
     }
     check(selected, "particle satellites use member phase space and replay after member reordering");
+    // Without replacement: with at least as many members as satellites no member is used twice
+    h.members.clear();
+    for (std::uint64_t m = 0; m < 50; ++m)
+        h.members.push_back({1000 + m, {.2 + .001 * m, .3, .4}, {0, 0, 0}});
+    bool distinct = true, enough = true;
+    for (std::uint64_t seed = 1; seed <= 20; ++seed) {
+        options.seed = seed;
+        Halo hs = h;
+        hs.id = seed;
+        auto draw = populate(PreparedCatalog({hs}), [](const Halo &) { return OccupationMeans{1, 30}; }, options);
+        std::vector<double> xs;
+        for (const auto & g : draw.galaxies)
+            if (!g.central)
+                xs.push_back(g.position[0]);
+        enough &= draw.occupations[0].satellites <= 50 && xs.size() == draw.occupations[0].satellites;
+        std::sort(xs.begin(), xs.end());
+        distinct &= std::adjacent_find(xs.begin(), xs.end()) == xs.end();
+    }
+    check(enough && distinct, "particle satellites are drawn without replacement when there are enough members");
 }
 void test_invalid() {
     auto rejects = [](auto operation) {
         try {
             operation();
-        } catch (const std::exception&) {
+        } catch (const std::exception &) {
             return true;
         }
         return false;
     };
     Halo h;
     check(rejects([&] { PreparedCatalog p({h, h}); }), "duplicate halo IDs are rejected");
-    check(rejects([&] {
-              sample_occupation(0, {-1, 2});
-          }) &&
-              rejects([&] {
-                  sample_occupation(0, {1, INFINITY});
-              }),
+    check(rejects([&] { sample_occupation(0, {-1, 2}); }) && rejects([&] { sample_occupation(0, {1, INFINITY}); }),
           "invalid occupation probabilities/means are rejected");
     Options cap;
     cap.max_satellites_per_halo = 1;
-    check(rejects([&] {
-              sample_occupation(0, {1, 2}, cap);
-          }),
+    check(rejects([&] { sample_occupation(0, {1, 2}, cap); }),
           "resource limit fails instead of truncating an occupation");
     Options particle;
     particle.profile = SatelliteProfile::Particles;
-    check(rejects([&] {
-              populate(
-                  PreparedCatalog({h}),
-                  [](const Halo&) {
-                      return OccupationMeans{1, 100};
-                  },
-                  particle);
-          }),
+    check(rejects(
+              [&] { populate(PreparedCatalog({h}), [](const Halo &) { return OccupationMeans{1, 100}; }, particle); }),
           "particle profile rejects missing member data");
     bool draw_failed = false;
     for (std::uint64_t id = 0; id < 100 && !draw_failed; ++id) {
         try {
             (void)sample_occupation(id, {1, 1}, cap);
-        } catch (const std::length_error&) {
+        } catch (const std::length_error &) {
             draw_failed = true;
         }
     }

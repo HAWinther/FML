@@ -5,6 +5,15 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### HOD: review (Oct 29); particle satellites without replacement
+- `SatelliteProfile::Particles` drew member particles with replacement, so two satellites of a halo could sit on
+  the same particle (30 satellites from 50 members: duplicates in almost every halo), which adds zero-separation
+  pairs to small-scale statistics. Members are now drawn without replacement (partial Fisher-Yates on the
+  ID-sorted members, same replay guarantees), with replacement only when there are more satellites than members.
+  New check in tests/test_hod.cpp. README: the satellite-mean convention vs Halotools' default.
+- Review: Poisson sampler (product method and PTRS) against scipy for means 3 to 1e6 (chi^2 p = 0.25-0.51, mean
+  and variance to 1e-3), NFW inverse CDF against the analytic truncated profile (KS p = 0.63-0.65 for c = 5e-4 to
+  300), Zheng et al. (2007) occupation, isotropy/velocities by reading; tests pass on 1 and 2 tasks.
 ### FieldLevel: 2LPT, Lagrangian bias, redshift space and smooth mass assignment
 - New `Model::LPT`: 1LPT or 2LPT particles (Crocce et al. 2006 convention) with Lagrangian bias weights
   1 + b1L delta + b2 (delta^2 - <delta^2>) + bG2 G2 and redshift-space displacements along z (growth rate f), with

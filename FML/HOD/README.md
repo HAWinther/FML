@@ -44,7 +44,10 @@ is `p_c*lambda`, with the central/satellite covariance implied by this condition
 model. With `require_central=false`, the satellite count is independently drawn
 from `Poisson(p_c*lambda)`. The unconditional mean is preserved but its variance
 and central correlation change. These conventions are explicit, not inferred
-from the provided mean's name.
+from the provided mean's name. Note that Halotools' `Zheng07Sats` defaults to `modulate_with_cenocc=False`, i.e. an
+unconditional satellite mean lambda(M) that is not multiplied by p_c: to match that, return
+`satellites_if_central = lambda/p_c` from a custom callable with `require_central=false`, or compare with
+`modulate_with_cenocc=True` (this API's default). The two differ where p_c < 1 (low masses).
 
 A custom callable can replace `Zheng07` and return
 `OccupationMeans{central_probability, satellites_if_central}` from a `const Halo&`.
@@ -69,8 +72,9 @@ sizes are checked before the output vector is built.
   `satellite_velocity_bias * halo.velocity_dispersion` (factor one by default).
   This is an explicit Gaussian phase-space prescription, not a radius-dependent
   Jeans or equilibrium distribution-function solver.
-- `SatelliteProfile::Particles` samples supplied member particles uniformly with
-  replacement. It uses their positions and
+- `SatelliteProfile::Particles` samples supplied member particles uniformly without
+  replacement (no two satellites on the same particle), with replacement only when a halo has more satellites
+  than members. It uses their positions and
   `halo.velocity + satellite_velocity_bias*(member.velocity-halo.velocity)`.
   Member-ID sorting preserves the realization under member reordering. Members
   must be provided on the owning halo's rank; membership discovery/exchange is

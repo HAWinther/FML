@@ -27,8 +27,8 @@ namespace FML::HOD {
         Vector position{}, velocity{};
         std::uint64_t halo_id = 0, ordinal = 0; // Collision-free identity pair; central=0, satellites=1,2,...
         bool central = false;
-        double* get_pos() { return position.data(); }
-        double* get_vel() { return velocity.data(); }
+        double * get_pos() { return position.data(); }
+        double * get_vel() { return velocity.data(); }
         constexpr int get_ndim() const { return 3; }
     };
     struct OccupationMeans {
@@ -36,7 +36,7 @@ namespace FML::HOD {
     };
     struct Zheng07 {
         double log10_mmin = 13, sigma_log_mass = .4, m0 = 1e12, m1 = 1e14, alpha = 1;
-        OccupationMeans operator()(const Halo& halo) const {
+        OccupationMeans operator()(const Halo & halo) const {
             if (!std::isfinite(log10_mmin) || !(sigma_log_mass > 0) || !std::isfinite(sigma_log_mass) || !(m0 >= 0) ||
                 !std::isfinite(m0) || !(m1 > 0) || !std::isfinite(m1) || !(alpha > 0) || !std::isfinite(alpha) ||
                 !(halo.mass > 0) || !std::isfinite(halo.mass))
@@ -65,16 +65,16 @@ namespace FML::HOD {
         std::vector<OccupationDraw> occupations;
     };
     namespace detail {
-        inline void require(bool ok, const char* message) {
+        inline void require(bool ok, const char * message) {
             if (!ok)
                 throw std::invalid_argument(message);
         }
-        inline bool finite(const Vector& x) {
+        inline bool finite(const Vector & x) {
             return std::all_of(x.begin(), x.end(), [](double v) { return std::isfinite(v); });
         }
         /// Hörmann's transformed-rejection (PTRS) method for large means; product method below 10.
         /// Same mathematical algorithm used by NumPy; independent Philox-driven implementation.
-        inline std::uint64_t poisson(double mean, Stream& rng) {
+        inline std::uint64_t poisson(double mean, Stream & rng) {
             require(std::isfinite(mean) && mean >= 0 && mean <= 1e8, "Poisson mean must be finite and in [0,1e8]");
             if (mean == 0)
                 return 0;
@@ -135,8 +135,8 @@ namespace FML::HOD {
         }
     } // namespace detail
     /// Occupations without allocating any galaxy phase space.
-    inline OccupationDraw sample_occupation(std::uint64_t halo_id, const OccupationMeans& mean,
-                                            const Options& options = {}) {
+    inline OccupationDraw
+    sample_occupation(std::uint64_t halo_id, const OccupationMeans & mean, const Options & options = {}) {
         detail::require(mean.central_probability >= 0 && mean.central_probability <= 1 &&
                             std::isfinite(mean.central_probability) && mean.satellites_if_central >= 0 &&
                             std::isfinite(mean.satellites_if_central),
@@ -146,8 +146,8 @@ namespace FML::HOD {
         OccupationDraw result;
         result.halo_id = halo_id;
         result.central = central.uniform() < mean.central_probability;
-        const double lambda = options.require_central ? (result.central ? mean.satellites_if_central : 0)
-                                                      : mean.central_probability * mean.satellites_if_central;
+        const double lambda = options.require_central ? (result.central ? mean.satellites_if_central : 0) :
+                                                        mean.central_probability * mean.satellites_if_central;
         detail::require(lambda <= options.max_satellites_per_halo, "HOD mean exceeds per-halo resource limit");
         result.satellites = detail::poisson(lambda, satellite);
         if (result.satellites > options.max_satellites_per_halo)
@@ -198,33 +198,34 @@ namespace FML::HOD {
         explicit PreparedCatalog(std::vector<Halo> halos) : data(std::move(halos)), member_order(data.size()) {
             std::unordered_set<std::uint64_t> ids;
             for (size_t i = 0; i < data.size(); ++i) {
-                const auto& h = data[i];
+                const auto & h = data[i];
                 detail::require(ids.insert(h.id).second, "Halo IDs must be unique within a prepared catalogue");
                 detail::require(h.mass > 0 && std::isfinite(h.mass) && h.radius > 0 && std::isfinite(h.radius) &&
                                     h.concentration > 0 && std::isfinite(h.concentration) &&
                                     h.velocity_dispersion >= 0 && std::isfinite(h.velocity_dispersion) &&
                                     detail::finite(h.position) && detail::finite(h.velocity),
                                 "Invalid halo mass, radius, concentration or phase space");
-                auto& order = member_order[i];
+                auto & order = member_order[i];
                 order.resize(h.members.size());
                 std::iota(order.begin(), order.end(), 0);
-                std::sort(order.begin(), order.end(),
-                          [&](size_t a, size_t b) { return h.members[a].id < h.members[b].id; });
+                std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+                    return h.members[a].id < h.members[b].id;
+                });
                 for (size_t j = 0; j < order.size(); ++j) {
-                    const auto& p = h.members[order[j]];
+                    const auto & p = h.members[order[j]];
                     detail::require(detail::finite(p.position) && detail::finite(p.velocity) &&
                                         (!j || p.id != h.members[order[j - 1]].id),
                                     "Invalid/duplicate halo member phase-space ID");
                 }
             }
         }
-        const std::vector<Halo>& halos() const { return data; }
-        const std::vector<size_t>& ordered_members(size_t index) const { return member_order.at(index); }
+        const std::vector<Halo> & halos() const { return data; }
+        const std::vector<size_t> & ordered_members(size_t index) const { return member_order.at(index); }
     };
     /// Local operation: no hidden gathers/reductions. Global halo IDs must be unique across MPI ranks.
     /// A custom occupation callable returns central probability and the conditional satellite mean.
     template <class Occupation>
-    Mock populate(const PreparedCatalog& prepared, const Occupation& occupation, const Options& options = {}) {
+    Mock populate(const PreparedCatalog & prepared, const Occupation & occupation, const Options & options = {}) {
         detail::require(
             std::isfinite(options.boxsize) && options.boxsize >= 0 && options.satellite_concentration_factor > 0 &&
                 std::isfinite(options.satellite_concentration_factor) && options.central_velocity_bias >= 0 &&
@@ -232,16 +233,16 @@ namespace FML::HOD {
                 std::isfinite(options.satellite_velocity_bias) &&
                 (options.profile == SatelliteProfile::NFW || options.profile == SatelliteProfile::Particles),
             "Invalid HOD options");
-        const auto& halos = prepared.halos();
+        const auto & halos = prepared.halos();
         Mock result;
         result.occupations.resize(halos.size());
         std::vector<size_t> offsets(halos.size() + 1);
         // Call user models and perform all allocations/resource checks outside the parallel phase.
         for (size_t i = 0; i < halos.size(); ++i) {
-            const auto& h = halos[i];
+            const auto & h = halos[i];
             const auto mean = occupation(h);
             result.occupations[i] = sample_occupation(h.id, mean, options);
-            const auto& counts = result.occupations[i];
+            const auto & counts = result.occupations[i];
             const double c = h.concentration * options.satellite_concentration_factor;
             if (options.profile == SatelliteProfile::NFW && counts.satellites)
                 detail::require(std::isfinite(c) && c > 0 && (options.boxsize == 0 || h.radius < .5 * options.boxsize),
@@ -257,7 +258,7 @@ namespace FML::HOD {
                     "HOD phase space exceeds finite arithmetic range");
             }
             if (options.profile == SatelliteProfile::Particles && counts.satellites)
-                for (const auto& member : h.members)
+                for (const auto & member : h.members)
                     for (int d = 0; d < 3; ++d)
                         detail::require(std::isfinite(h.velocity[d] + options.satellite_velocity_bias *
                                                                           (member.velocity[d] - h.velocity[d])),
@@ -272,7 +273,7 @@ namespace FML::HOD {
 #pragma omp parallel for schedule(static)
 #endif
         for (size_t i = 0; i < halos.size(); ++i) {
-            const auto& h = halos[i];
+            const auto & h = halos[i];
             const auto counts = result.occupations[i];
             size_t out = offsets[i];
             Stream position_rng(options.seed, h.id, 0x504F534E, options.stream),
@@ -291,6 +292,13 @@ namespace FML::HOD {
                 }
                 result.galaxies[out++] = g;
             }
+            // Particle profile: members drawn without replacement while there are enough (a partial Fisher-Yates
+            // shuffle of the ID-sorted members), so two satellites never sit on the same particle; with replacement
+            // only when there are more satellites than members
+            std::vector<size_t> pool;
+            if (options.profile == SatelliteProfile::Particles && counts.satellites)
+                pool = prepared.ordered_members(i);
+            const bool without_replacement = counts.satellites <= pool.size();
             for (std::uint64_t j = 0; j < counts.satellites; ++j) {
                 Galaxy g;
                 g.halo_id = h.id;
@@ -309,14 +317,21 @@ namespace FML::HOD {
                                         options.satellite_velocity_bias * h.velocity_dispersion * velocity_rng.normal();
                     }
                 } else {
-                    const auto& order = prepared.ordered_members(i);
-                    const auto& member = h.members[order[size_t(particle_rng.bounded(order.size()))]];
+                    size_t pick;
+                    if (without_replacement) {
+                        const size_t k = size_t(j) + size_t(particle_rng.bounded(pool.size() - size_t(j)));
+                        std::swap(pool[size_t(j)], pool[k]);
+                        pick = pool[size_t(j)];
+                    } else {
+                        pick = pool[size_t(particle_rng.bounded(pool.size()))];
+                    }
+                    const auto & member = h.members[pick];
                     g.position = member.position;
                     for (int d = 0; d < 3; ++d)
                         g.velocity[d] =
                             h.velocity[d] + options.satellite_velocity_bias * (member.velocity[d] - h.velocity[d]);
                 }
-                for (auto& x : g.position)
+                for (auto & x : g.position)
                     x = detail::wrap(x, options.boxsize);
                 result.galaxies[out++] = g;
             }
