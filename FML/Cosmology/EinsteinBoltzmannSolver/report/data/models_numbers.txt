@@ -62,12 +62,12 @@ jbd_TT_ratio_l10 1.0039
 jbd_TT_maxdev_l100_2000 0.27002
 jbd_phiphi_ratio_l100 1.04
 jbd_H_maxdev 0.037201
-fr_sigma8_ratio 1.1086
-fr_Pk_ratio_k0.1 1.1325
+fr_sigma8_ratio 1.0733
+fr_Pk_ratio_k0.1 1.0661
 fr_Pk_ratio_k0.001 1
-fr_TT_ratio_l10 0.9993
-fr_TT_maxdev_l100_2000 0.00018577
-fr_phiphi_ratio_l100 1.0133
+fr_TT_ratio_l10 0.9997
+fr_TT_maxdev_l100_2000 0.00018576
+fr_phiphi_ratio_l100 1.0064
 fr_H_maxdev 0
 cubic_galileon_sigma8_ratio 1.0968
 cubic_galileon_Pk_ratio_k0.1 1.2029

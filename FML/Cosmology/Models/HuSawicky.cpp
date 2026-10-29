@@ -50,7 +50,7 @@ namespace FML::COSMOLOGY {
     HuSawickyGravity::values(double x, double k, const BackgroundCosmology & bg, double & mu, double & Sigma) const {
         const double Rx = R(x, bg), f_R = -fR0 * std::pow(R(0.0, bg) / Rx, n + 1.0), f_RR = -(n + 1.0) * f_R / Rx;
         const double ka = k * std::exp(-x);
-        const double Q = 3.0 * f_RR * ka * ka / (1.0 + f_R);
+        const double Q = f_RR * ka * ka / (1.0 + f_R); // = (k/a)^2 lambda_C^2 / 3
         Sigma = 1.0 / (1.0 + f_R);
         mu = (1.0 + 4.0 * Q) / (1.0 + 3.0 * Q) * Sigma;
     }

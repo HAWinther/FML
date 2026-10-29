@@ -9,8 +9,10 @@
 // analyses), so R = 8 pi G (rho - 3p) = 3 H0^2 (rho - 3p)/(rho_c0 c^2) of the LCDM species.
 //
 // Perturbations in the quasi-static approximation (e.g. Pogosian & Silvestri 2008), with the Compton
-// wavelength of the scalaron, lambda_C^2 = 3 f_RR / (1 + f_R), and Q = (k/a)^2 lambda_C^2:
+// wavelength of the scalaron, lambda_C^2 = 1/m^2 = 3 f_RR / (1 + f_R), and Q = (k/a)^2 f_RR / (1 + f_R)
+// = (k/a)^2 lambda_C^2 / 3:
 //   mu(k, a)  = (1 + 4 Q) / ((1 + 3 Q)(1 + f_R))    (4/3 below the Compton wavelength, 1 above)
+//             = [1 + (1/3) k^2 / (k^2 + a^2 m^2)] / (1 + f_R)   (the Yukawa form)
 //   Sigma(a)  = 1 / (1 + f_R)
 // evolved with the mu-Sigma equations of MuSigma.h. Since the scalaron is heavy (m >> H) the quasi-static
 // approximation is good on all scales where mu differs from 1.

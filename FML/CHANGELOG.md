@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): Hu-Sawicky f(R) mu(k, a) was a factor 3 off in Q
+- `Models/HuSawicky.cpp` used Q = (k/a)^2 3 f_RR/(1 + f_R) in mu = (1 + 4Q)/((1 + 3Q)(1 + f_R)); the correct Q is
+  (k/a)^2 f_RR/(1 + f_R) = (k/a)^2 lambda_C^2/3 (the Yukawa form [1 + k^2/(3(k^2 + a^2 m^2))]/(1 + f_R), m = 1/lambda_C).
+  The transition to 4/3 was at a 1.7x too large scale, so the growth was too strong.
+  - |f_R0| = 1e-5, z = 0: P/P_LCDM at k = 0.1 h/Mpc is 1.066 (was 1.133; an independent growth ODE gives 1.066),
+    sigma_8 ratio 1.073 (was 1.109), C_ell^phiphi ratio at ell = 100 1.006 (was 1.013).
+  - The limits (mu -> 1 and 4/3) were tested and are unchanged; new test of mu at k/a = m and 3m
+    (tests/test_modified_gravity.cpp; fails before the fix with 1.250 instead of 1.167).
+  - Header, README, report (equation, Table of models, models_mg figure, models_numbers.txt) updated.
+
 ### CosmicWeb: Nyquist mixed derivatives in the tidal tensor
 - CosmicWeb: `tidal_tensor` (T-web) now sets the mixed components k_i k_j / k^2 (i != j) of the Nyquist modes to zero
   on even meshes, as `TidalTensor/Hessian.h`, the LPT code and the PM force already do. Before, they used +k_Ny,

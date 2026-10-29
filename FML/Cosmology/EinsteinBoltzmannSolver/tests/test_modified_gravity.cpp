@@ -284,6 +284,16 @@ int main() {
                   g.mu_sigma(0.0, 1e-5 / Mpc, cs).mu,
                   1.0 / (1.0 - fR0),
                   1e-6);
+        // The transition: the Yukawa form mu = [1 + (1/3) k^2 / (k^2 + a^2 m^2)] / (1 + f_R), m = 1/lambda_C,
+        // at k/a = m and k/a = 3 m (Q = 1/3 and 3)
+        for (double x : {-1.0, 0.0})
+            for (double s : {1.0, 3.0}) {
+                const double k = s * std::exp(x) / g.compton_wavelength(x, cs);
+                check_rel("mu = Yukawa form at k/a = " + std::to_string(int(s)) + " m, x = " + std::to_string(x),
+                          g.mu_sigma(x, k, cs).mu,
+                          (1.0 + s * s / (3.0 * (s * s + 1.0))) / (1.0 + g.fR(x, cs)),
+                          1e-12);
+            }
 
         double ePhi = 0.0, ePsi = 0.0;
         for (double k : r.pert.get_k_array())
