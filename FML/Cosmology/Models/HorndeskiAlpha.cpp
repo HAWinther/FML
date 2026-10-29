@@ -162,14 +162,19 @@ namespace FML::COSMOLOGY {
             background->init_background(bg);
         alpha->init(bg);
         // Stability (as hi_class): M2 > 0, no ghost D >= 0, no gradient instability c_s^2 >= 0, from deep in the
-        // radiation era to well into the future
+        // radiation era to well into the future; and c_s^2 <= max_cs2 (stiffness)
+        constexpr double max_cs2 = 1e5;
         trivial = true;
-        double minD = 1e300, mincs2 = 1e300, minM2 = 1e300, x_cs2 = 2.0, x_D = 2.0; // x_*: first instability
+        double minD = 1e300, mincs2 = 1e300, maxcs2 = 0.0, minM2 = 1e300, x_cs2 = 2.0,
+               x_D = 2.0;  // x_*: first instability
+        double x_D0 = 2.0; // first x where D = 0 while alpha_M != 0
         for (double x = -15.0; x <= 1.0 + 1e-12; x += 0.005) {
             const auto s = state(x, bg);
             if (s.al.aK != 0.0 || s.al.aB != 0.0 || s.al.aM != 0.0)
                 trivial = false;
             const double D = s.D();
+            if (D == 0.0 && s.al.aM != 0.0)
+                x_D0 = std::min(x_D0, x);
             if (!std::isfinite(D) || !std::isfinite(s.cs2_num()) || !std::isfinite(s.al.M2) || !std::isfinite(s.Rx))
                 throw std::runtime_error(name() + ": non-finite alphas or background at x = " + std::to_string(x));
             minM2 = std::min(minM2, s.al.M2);
@@ -179,6 +184,7 @@ namespace FML::COSMOLOGY {
             if (D > 0.0) {
                 const double cs2 = s.cs2_num() / D;
                 mincs2 = std::min(mincs2, cs2);
+                maxcs2 = std::max(maxcs2, cs2);
                 if (cs2 < 0.0)
                     x_cs2 = std::min(x_cs2, x);
             }
@@ -187,7 +193,16 @@ namespace FML::COSMOLOGY {
         if (trivial) {
             os << "; all alphas vanish (GR)";
         } else {
-            os << "; min D = " << minD << ", min c_s^2 = " << mincs2;
+            // D = 0 with alpha_M != 0 (alpha_K = alpha_B = 0): the scalar has no kinetic term and the perturbation
+            // equations drop it, which is not the limit of small alpha_K (the scalar is then quasi-static with
+            // c_s^2 -> infinity). Not a stability question, so it is rejected also without the stability check.
+            if (x_D0 <= 1.0) {
+                std::ostringstream e;
+                e << name() << ": alpha_K = alpha_B = 0 with alpha_M != 0 (from a = " << std::exp(x_D0)
+                  << "): the scalar perturbation is not dynamical (D = alpha_K + 3 alpha_B^2/2 = 0); use alpha_K > 0";
+                throw std::invalid_argument(e.str());
+            }
+            os << "; min D = " << minD << ", min c_s^2 = " << mincs2 << ", max c_s^2 = " << maxcs2;
             if (check) {
                 if (!(minM2 > 0.0))
                     throw std::invalid_argument(name() + ": M*^2 <= 0");
@@ -200,6 +215,15 @@ namespace FML::COSMOLOGY {
                 if (mincs2 < 0.0) {
                     e << "gradient instability (c_s^2 < 0 from a = " << std::exp(x_cs2) << ", min c_s^2 = " << mincs2
                       << ")";
+                    throw std::invalid_argument(e.str());
+                }
+                // alpha_K << alpha_B^2 at early times (e.g. alpha_K = 0 with propto_omega): D ~ alpha_B^2 while
+                // D c_s^2 ~ alpha_B, so c_s^2 ~ 1/alpha_B diverges and the scalar equation is too stiff to integrate
+                // (c_K = 0, c_B = 0.6: max c_s^2 = 5e22 and the run does not finish; c_K = 1e-4: 2e4 and 4x the time)
+                if (maxcs2 > max_cs2) {
+                    e << "c_s^2 up to " << maxcs2 << " > " << max_cs2
+                      << ": the scalar perturbation is too stiff to evolve (alpha_K << alpha_B^2 at early times); "
+                         "use a larger alpha_K";
                     throw std::invalid_argument(e.str());
                 }
             }

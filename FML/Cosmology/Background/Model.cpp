@@ -307,7 +307,8 @@ namespace FML::COSMOLOGY {
                   {"hd_wa", 0.0, "wa of the expansion"},
                   {"hd_stability_check",
                    1.0,
-                   "1: stop for a ghost (D < 0) or gradient (c_s^2 < 0) instability, M*^2 <= 0"}},
+                   "1: stop for a ghost (D < 0) or gradient (c_s^2 < 0) instability, M*^2 <= 0, or c_s^2 > 1e5 (too "
+                   "stiff)"}},
                  horndeski},
                 {"w0wa",
                  "dark energy with w(a) = w0 + wa (1 - a), smooth (no perturbations: for background data); GR",

@@ -5,6 +5,15 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): Horndeski rejects a non-dynamical or too stiff scalar
+- alpha_K = alpha_B = 0 with alpha_M != 0 gave D = alpha_K + 3 alpha_B^2/2 = 0, and the perturbation equations then
+  dropped the scalar silently: P(0.1)/LCDM = 0.980 with c_K = 0, against 1.015 for any small c_K. Now an error
+  (also with `hd_stability_check = 0`).
+- alpha_K << alpha_B^2 at early times (e.g. c_K = 0, c_B = 0.6 with alpha propto Omega_DE) makes c_s^2 ~ 1/alpha_B
+  diverge (max 5e22) and the run never finished. The stability check now also stops for c_s^2 > 1e5 (c_K = 1e-4:
+  1.8e4 and 4x the run time; the report's model: 2.7). The info line shows max c_s^2.
+- New checks in tests/test_horndeski.cpp.
+
 ### Cosmology (EBS): Hu-Sawicky f(R) mu(k, a) was a factor 3 off in Q
 - `Models/HuSawicky.cpp` used Q = (k/a)^2 3 f_RR/(1 + f_R) in mu = (1 + 4Q)/((1 + 3Q)(1 + f_R)); the correct Q is
   (k/a)^2 f_RR/(1 + f_R) = (k/a)^2 lambda_C^2/3 (the Yukawa form [1 + k^2/(3(k^2 + a^2 m^2))]/(1 + f_R), m = 1/lambda_C).

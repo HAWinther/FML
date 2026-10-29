@@ -4,7 +4,8 @@
 //   * All alphas zero is LCDM (same solution)
 //   * The momentum constraint (0i Einstein equation), which is not used in the evolution, holds with braiding,
 //     running Planck mass and kineticity (python/derive_horndeski_alpha.py)
-//   * The stability conditions reject a ghost (alpha_K < 0) and a gradient instability
+//   * The stability conditions reject a ghost (alpha_K < 0) and a gradient instability, and a non-dynamical
+//     scalar (alpha_K = alpha_B = 0 with alpha_M != 0) and a too stiff one (c_s^2 > 1e5) are rejected
 //   * Known theories rebuilt from their alphas reproduce the dedicated implementations (different variables
 //     and equations):
 //       cubic Galileon on the tracker:  alpha_K = 6 Omega_DE(a), alpha_B = 2 Omega_DE(a)  (propto_omega)
@@ -153,6 +154,13 @@ int main() {
         check("ghost (c_K = -1) rejected", throws(horndeski(-1.0, 0.0, 0.0)));
         check("gradient instability (c_B = -1, LCDM) rejected", throws(horndeski(1.0, -1.0, 0.0)));
         check("stable model accepted", !throws(horndeski(1.0, 0.6, 0.3)));
+        // alpha_K = alpha_B = 0 with alpha_M != 0: D = 0, the scalar would be dropped (not the small-alpha_K limit)
+        check("D = 0 with alpha_M != 0 (c_K = c_B = 0, c_M = 0.3) rejected", throws(horndeski(0.0, 0.0, 0.3)));
+        auto unchecked = horndeski(0.0, 0.0, 0.3);
+        unchecked.model_params["hd_stability_check"] = 0.0;
+        check("... also without the stability check", throws(unchecked));
+        // alpha_K = 0 with braiding: c_s^2 ~ 1/alpha_B diverges at early times (too stiff to integrate)
+        check("c_K = 0, c_B = 0.6 (c_s^2 -> infinity at early times) rejected", throws(horndeski(0.0, 0.6, 0.0)));
     }
 
     std::cout << "Cubic Galileon from alpha_K = 6 Omega_DE, alpha_B = 2 Omega_DE\n";
