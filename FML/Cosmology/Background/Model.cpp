@@ -15,7 +15,9 @@
 
 #include <FML/Cosmology/Common.h>
 
+#include <atomic>
 #include <cmath>
+#include <iostream>
 #include <stdexcept>
 
 namespace FML::COSMOLOGY {
@@ -79,6 +81,14 @@ namespace FML::COSMOLOGY {
                 Omega_rc = 0.25 * (1.0 - rho0) * (1.0 - rho0);
             }
             const double OmL = DGPGravity::OmegaLambda(Omega_rc, branch, rho0);
+            // Allowed (a negative cosmological constant), but most likely not intended: warn (once per process, as
+            // parameter fits build many models)
+            static std::atomic<bool> warned{false};
+            if (OmL < -1e-12 && !warned.exchange(true))
+                std::cerr << "Warning: dgp: Omega_Lambda = " << OmL << " < 0 for Omega_rc = " << Omega_rc
+                          << (branch == 1 ?
+                                  " (self-accelerating branch; Omega_rc = 0 selects the value without dark energy)\n" :
+                                  "\n");
             m.species.push_back(std::make_shared<PowerLawSpecies>("lambda", Species::Role::DarkEnergy, OmL, 0.0));
             m.gravity = std::make_shared<DGPGravity>(Omega_rc, branch);
             return m;

@@ -5,6 +5,10 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): warning for a negative Omega_Lambda in DGP
+- DGP with its own expansion sets Omega_Lambda from the closure; on the self-accelerating branch a too large
+  Omega_rc gives Omega_Lambda < 0 (Omega_rc = 0.3: -0.41) without any message. It now warns (once per process).
+
 ### Cosmology (EBS): compute_cells = false writes P(k)
 - With `compute_cells = false` the run stopped at the end with "output_matter_power: call solve() first" (the
   default `write_matter_power = true`), so no P(k) was written. New PowerSpectrum::solve_matter() sets up what the
