@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### kNN-CDF review (CountsInCells/SpatialStatistics.h): no defects; exact ensemble test
+- kNN distances and sphere counts agree exactly with brute force for 3000 queries on 20000 tracers, periodic and
+  nonperiodic, with coincident tracers, tracers on the box edge and self-excluded tracer-centred queries.
+- The mean kNN-CDF of 400 uniform catalogues equals the exact binomial law (orders 1-16) to the statistical
+  precision (~5e-4); Philox `uniform_queries` and an independent generator give statistically equal results.
+- New test: the mean of 60 uniform catalogues against the binomial law (the existing check had a 2.5% tolerance).
+
 ### CI runs the module test directories
 - The tests in FML/*/tests (Survey, HOD, MCMC, PerturbationTheory, ShortRangeGravity, ... 15 directories) were
   never run by CI, only FML/tests and COLASolver/tests. `.github/ci/run_module_tests.sh` builds and runs each on 1, 2

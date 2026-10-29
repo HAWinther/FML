@@ -213,6 +213,56 @@ void test_binomial() {
     check(std::abs(cdf.cdf[0][0] - (1 - p0)) < .025 && std::abs(cdf.cdf[1][0] - (1 - p0 - p1)) < .025,
           "random-query kNN CDF agrees with the analytic binomial/Poisson limit");
 }
+void test_knn_ensemble() {
+    // Mean kNN-CDF of 60 uniform catalogues against the exact binomial law (sphere < half box): each catalogue has
+    // N fixed, so the number of the other tracers inside a sphere of volume V is Binomial(N, V). The errors are the
+    // scatter between catalogues; the 2.5% tolerance of test_binomial cannot see a normalization or boundary
+    // error of the order of the statistical precision (~5e-4 here).
+    const size_t n = 5000, nq = 5000;
+    const int realizations = 60;
+    const std::vector<size_t> orders{1, 2, 4, 8};
+    const double separation = std::cbrt(1.0 / n);
+    std::vector<double> radii;
+    for (int i = 1; i <= 20; ++i)
+        radii.push_back(.1 * i * separation);
+    std::vector<std::vector<double>> sum(orders.size(), std::vector<double>(radii.size())), sum2 = sum;
+    for (int realization = 0; realization < realizations; ++realization) {
+        FML::KDTREE::pointVec points;
+        for (const auto& q : uniform_queries(n, Bounds{}, 4242, std::uint64_t(realization) * n))
+            points.push_back({q.position.begin(), q.position.end()});
+        SpatialStatistics statistics(points, 1);
+        const auto cdf = statistics.knn_cdf(uniform_queries(nq, Bounds{}, 977, std::uint64_t(realization) * nq),
+                                            orders, radii, Reduction::Local);
+        for (size_t k = 0; k < orders.size(); ++k)
+            for (size_t r = 0; r < radii.size(); ++r) {
+                sum[k][r] += cdf.cdf[k][r] / realizations;
+                sum2[k][r] += cdf.cdf[k][r] * cdf.cdf[k][r] / realizations;
+            }
+    }
+    double chi2 = 0, worst = 0;
+    int points = 0;
+    for (size_t k = 0; k < orders.size(); ++k)
+        for (size_t r = 0; r < radii.size(); ++r) {
+            const double p = 4 * M_PI / 3 * std::pow(radii[r], 3);
+            double cumulative = 0, term = std::pow(1 - p, double(n));
+            for (size_t j = 0; j < orders[k]; ++j) {
+                cumulative += term;
+                term *= double(n - j) / (j + 1) * p / (1 - p);
+            }
+            const double error =
+                std::sqrt(std::max(0.0, sum2[k][r] - sum[k][r] * sum[k][r]) / (realizations - 1));
+            if (error < 1e-5)
+                continue;
+            const double pull = (sum[k][r] - (1 - cumulative)) / error;
+            chi2 += pull * pull;
+            worst = std::max(worst, std::abs(pull));
+            ++points;
+        }
+    if (FML::ThisTask == 0)
+        std::cout << "  kNN ensemble: chi2 " << chi2 << " for " << points << " points, worst pull " << worst << '\n';
+    check(points > 40 && worst < 4.5 && chi2 < 2.5 * points,
+          "mean kNN-CDF of uniform catalogues equals the exact binomial law to the statistical precision");
+}
 void test_mock_integration() {
     std::vector<FML::HOD::Halo> halos;
     for (int i = 0; i < 20; ++i) {
@@ -292,6 +342,7 @@ int main() {
     test_exact();
     test_windows_and_empty();
     test_binomial();
+    test_knn_ensemble();
     test_mock_integration();
     test_local_only();
     test_invalid();
