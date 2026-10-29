@@ -96,7 +96,8 @@ ic_input_redshift = 0.0  -- backscale from today; use zini for transfers evaluat
 ```
 
 `solver.ini` is an FML Einstein–Boltzmann parameter file. Its h, OmegaB, OmegaCDM,
-TCMB, Neff, As, ns and pivot must match COLASolver. It must cover the IC mesh's
+TCMB, Neff, As, ns and pivot must match COLASolver, and `alpha_s` must be 0 (COLASolver's primordial
+spectrum has no running). It must cover the IC mesh's
 fundamental through its conservative corner wavenumber, the input/initial epochs,
 and today. Cosmology and coverage mismatches fail before the expensive solve.
 For example, matching COLASolver's standard LCDM parameters:

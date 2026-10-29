@@ -42,12 +42,14 @@ namespace FML::INITIALCONDITIONS {
         explicit InternalTransferProvider(FML::COSMOLOGY::RunSettings settings, Gauge gauge = Gauge::SynchronousCDM)
             : gauge(gauge) {
             const auto & p = settings.cosmo;
-            if (p.model != "lcdm" || p.OmegaK != 0.0 || p.m_nu != 0.0 || settings.pert.ic_adiabatic != 1.0 ||
+            // alpha_s: primordial_power() and COLASolver's primordial spectrum have no running
+            if (p.model != "lcdm" || p.OmegaK != 0.0 || p.m_nu != 0.0 || p.alpha_s != 0.0 ||
+                settings.pert.ic_adiabatic != 1.0 ||
                 std::any_of(settings.pert.iso_amplitude.begin(), settings.pert.iso_amplitude.end(), [](double v) {
                     return v != 0;
                 }))
                 throw std::invalid_argument("[InternalTransferProvider] Initial release requires flat LCDM, no massive "
-                                            "neutrinos and a unit adiabatic mode");
+                                            "neutrinos, no running alpha_s and a unit adiabatic mode");
             if (!(p.h > 0) || !std::isfinite(p.h) || !(p.A_s > 0) || !std::isfinite(p.A_s) || !(p.k_pivot > 0) ||
                 !std::isfinite(p.k_pivot) || !std::isfinite(p.n_s) || !(p.OmegaB > 0) || !(p.OmegaCDM > 0) ||
                 (gauge != Gauge::Newtonian && gauge != Gauge::SynchronousCDM))

@@ -5,6 +5,11 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### InitialConditions: the internal transfer provider rejects a running alpha_s
+- `alpha_s` (new in the Einstein-Boltzmann solver) is not in InternalTransferProvider::primordial_power or in
+  COLASolver's primordial spectrum, so a solver.ini with alpha_s != 0 would have been used without it. It is now
+  rejected before the solve (tests/test_transfer_provider.cpp); README updated.
+
 ### Cosmology (EBS): Compton heating of the baryons after reionization
 - T_b was evolved with the X_e of recombination only, so it kept cooling adiabatically through reionization
   (planck2018: 1.06 K at z = 6). From the start of reionization (z_reion + 8 delta_z) it is now integrated with the

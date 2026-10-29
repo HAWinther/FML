@@ -122,5 +122,14 @@ int main(int argc, char ** argv) {
         rejected = true;
     }
     check(rejected, "unsupported cosmologies fail before solving");
+    settings.cosmo.m_nu = 0.0;
+    settings.cosmo.alpha_s = -0.01;
+    rejected = false;
+    try {
+        InternalTransferProvider bad(settings);
+    } catch (const std::invalid_argument &) {
+        rejected = true;
+    }
+    check(rejected, "running alpha_s (not in the primordial power) fails before solving");
     return failures ? 1 : 0;
 }
