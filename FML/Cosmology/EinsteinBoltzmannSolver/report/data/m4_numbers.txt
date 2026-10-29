@@ -1,5 +1,5 @@
 TT_first_peak_ell 221
-TT_first_peak_Dell 5680.15723
-TT_Dell_10 814.5434316
+TT_first_peak_Dell 5679.608437
+TT_Dell_10 814.5840536
 Pk_peak_k_hMpc 0.01673862472
-Pk_peak_P_Mpch3 24557.58308
+Pk_peak_P_Mpch3 24556.70058

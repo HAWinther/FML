@@ -54,7 +54,9 @@ static void test_fiducial() {
         const double x = -7.2;
         const double T = cosmo.TCMB_of_x(x), kT = k_b * T;
         const double nH = (1.0 - p.Yp) * p.OmegaB * 3.0 * p.H0() * p.H0() / (8.0 * M_PI * G) / m_H * std::exp(-3.0 * x);
-        const double rhs = std::pow(m_e * kT / (2.0 * M_PI * hbar * hbar), 1.5) * std::exp(-epsilon_0 / kT) / nH;
+        const double rhs = std::pow(m_e * kT / (2.0 * M_PI * hbar * hbar), 1.5) *
+                           std::exp(-2.0 * M_PI * hbar * c * 1.096787737e7 / kT) /
+                           nH; // reduced-mass H ionization energy
         const double Xe = rec.Xe_saha_of_x(x);
         check_rel("Saha solution satisfies Xe^2/(1-Xe) = S", Xe * Xe / (1.0 - Xe), rhs, 1e-12);
         check_rel("n_H = (1 - Yp) Omega_b rho_c0 / (m_H a^3)", rec.nH_of_x(x), nH, 1e-12);

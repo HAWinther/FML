@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): reduced-mass ionization energies in Saha and Peebles
+- Saha and the Peebles equation used the infinite-mass Rydberg (epsilon_0 = 13.6057 eV, He II 4 epsilon_0); they
+  now use the reduced-mass values of RECFAST and CLASS (13.5984 eV, 54.4178 eV).
+  - Peebles: X_e up to 0.7% (z_* 1089.9 -> 1089.4, r_s 0.03%), C_ell 4e-4.
+  - Default RECFAST (Saha phase only): X_e up to 6.5e-5 at z ~ 5900, C_ell ~1e-7; regression reference updated.
+- Report data and figures regenerated (./milestones, make_figures.py; this also brings in the lensing changes of
+  the earlier quadrature fix), Table II and the validation numbers updated.
 ### Survey: window matrix quadrature, lattice-shell bias of the window multipoles, reconstruction threshold
 - `make_window_matrix` took xi of each input bandpower and the Bessel kernel at one separation per window bin
   (the mean lattice separation). That is not converged unless k ds << 1: for a 500 Mpc/h cube with ds = 10 Mpc/h

@@ -12,6 +12,14 @@ namespace FML::COSMOLOGY {
 
     using namespace Constants;
 
+    namespace {
+        // Ionization energies with the reduced electron mass (RECFAST's and CLASS's inverse wavelengths L_H_ion and
+        // L_He2_ion): H 13.5984 eV, He II 54.4178 eV. Constants::epsilon_0 = 13.6057 eV and xhi1 = 4 epsilon_0 are
+        // for an infinitely heavy nucleus.
+        constexpr double eps_H = 2.0 * M_PI * hbar * c * 1.096787737e7;
+        constexpr double eps_HeII = 2.0 * M_PI * hbar * c * 4.389088863e7;
+    } // namespace
+
     RecombinationHistory::RecombinationHistory(const BackgroundCosmology & cosmo_in, RecombinationOptions options_in)
         : cosmo(cosmo_in), options(options_in), Yp(cosmo_in.get_params().helium_fraction()) {
         reion = options.reionization && cosmo.get_params().reionization;
@@ -43,9 +51,9 @@ namespace FML::COSMOLOGY {
 
     // =============================================================================
     // Saha equilibrium (T_b = T_gamma in this regime), with F = (m_e k T / (2 pi hbar^2))^{3/2}:
-    //   n_HII   n_e / n_HI   = F exp(-epsilon_0 / kT)          = S_H
+    //   n_HII   n_e / n_HI   = F exp(-eps_H / kT)              = S_H
     //   n_HeII  n_e / n_HeI  = 4 F exp(-chi_0 / kT)             = S_1   (statistical weights)
-    //   n_HeIII n_e / n_HeII = F exp(-chi_1 / kT)               = S_2
+    //   n_HeIII n_e / n_HeII = F exp(-eps_HeII / kT)           = S_2
     //   n_e = n_H x_H + n_He (x_HeII + 2 x_HeIII)
     // For given n_e: x_H = S_H/(S_H + n_e), x_HeII = r1/(1 + r1 + r1 r2), x_HeIII = r1 r2/(...),
     // r1 = S_1/n_e, r2 = S_2/n_e. n_e is found by root finding in ln n_e (the right-hand side
@@ -55,9 +63,9 @@ namespace FML::COSMOLOGY {
     RecombinationHistory::SahaResult RecombinationHistory::saha(double x, double xH_fixed) const {
         const double kT = k_b * cosmo.TCMB_of_x(x);
         const double F = std::pow(m_e * kT / (2.0 * M_PI * hbar * hbar), 1.5);
-        const double S_H = F * std::exp(-epsilon_0 / kT);
+        const double S_H = F * std::exp(-eps_H / kT);
         const double S_1 = 4.0 * F * std::exp(-xhi0 / kT);
-        const double S_2 = F * std::exp(-xhi1 / kT);
+        const double S_2 = F * std::exp(-eps_HeII / kT);
         const double nH = nH_of_x(x), nHe = f_He() * nH;
 
         auto fractions = [&](double ne, SahaResult & r) {
@@ -134,16 +142,16 @@ namespace FML::COSMOLOGY {
     // =============================================================================
     // Peebles:
     //   dX_e/dx = C_r/H [ beta (1 - X_e) - n_H alpha2 X_e^2 ]
-    //   alpha2  = F (64 pi / sqrt(27 pi)) (alpha hbar / (m_e c))^2 c sqrt(eps0/kT) phi2,  phi2 = 0.448 ln(eps0/kT)
-    //   beta    = alpha2 (m_e kT / (2 pi hbar^2))^{3/2} exp(-eps0/kT)
-    //   beta2   = beta exp(3 eps0 / (4 kT))   (combined exponent to avoid overflow)
+    //   alpha2  = F (64 pi / sqrt(27 pi)) (alpha hbar / (m_e c))^2 c sqrt(eps_H/kT) phi2,  phi2 = 0.448 ln(eps_H/kT)
+    //   beta    = alpha2 (m_e kT / (2 pi hbar^2))^{3/2} exp(-eps_H/kT)
+    //   beta2   = beta exp(3 eps_H / (4 kT))   (combined exponent to avoid overflow)
     //   C_r     = (L_2s1s + L_alpha) / (L_2s1s + L_alpha + beta2)
-    //   L_alpha = H (3 eps0 / (hbar c))^3 / ((8 pi)^2 n_1s),  n_1s = (1 - X_e) n_H
+    //   L_alpha = H (3 eps_H / (hbar c))^3 / ((8 pi)^2 n_1s),  n_1s = (1 - X_e) n_H
     // =============================================================================
 
     double RecombinationHistory::dXedx_peebles(double x, double Xe, double Tb) const {
         const double kT = k_b * Tb;
-        const double y = epsilon_0 / kT;
+        const double y = eps_H / kT;
         const double H = cosmo.H_of_x(x);
         const double nH = nH_of_x(x);
 
@@ -156,7 +164,7 @@ namespace FML::COSMOLOGY {
         const double beta2 = alpha2 * saha_factor * std::exp(-0.25 * y);
 
         const double n1s = std::max(1.0 - Xe, 1e-30) * nH;
-        const double k_alpha = 3.0 * epsilon_0 / (hbar * c);
+        const double k_alpha = 3.0 * eps_H / (hbar * c);
         const double Lambda_alpha = H * k_alpha * k_alpha * k_alpha / (64.0 * M_PI * M_PI * n1s);
         const double Cr = (lambda_2s1s + Lambda_alpha) / (lambda_2s1s + Lambda_alpha + beta2);
 
