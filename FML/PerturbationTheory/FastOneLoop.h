@@ -7,6 +7,12 @@
 namespace FML::PERTURBATION {
     struct FastOptions {
         size_t padding = std::numeric_limits<size_t>::max(); // automatic: half an input length on each side
+        // Fraction of the logarithmic input range at each end over which the spectrum is smoothly tapered to zero
+        // for the P22 transforms (P13 always uses the untapered spectrum). The FFTLog transforms of the
+        // k^{n+1.5} P(k) inputs (n = -2..2) of an abruptly truncated spectrum ring, and P22 is a cancellation
+        // among them: for a LCDM spectrum on 1e-5..50 h/Mpc, untapered, P22 was wrong by factors 5 at k = 0.1 and
+        // 1e3-1e9 below 0.02 h/Mpc; with 0.1 the error is < 1e-4 for k >= 0.04 and 0.1% at 0.02 h/Mpc. 0: no taper.
+        double taper = .1;
         size_t reference_points = 3;
         double relative_tolerance = .02, absolute_tolerance = 0;
         DirectOptions reference;
@@ -115,7 +121,7 @@ namespace FML::PERTURBATION {
         /// Uniform log-k input, zero outside its finite support. Padding adds zeros,
         /// not a power-law extrapolation. Trust only an interior range checked by convergence.
       private:
-        Prediction raw(const Vector& k, const Vector& pk, size_t padding) {
+        Prediction raw(const Vector& k, const Vector& pk, size_t padding, double taper) {
             const size_t n = k.size();
             detail::require(n >= 64 && n == pk.size() && n <= size_t(INT_MAX) / 4 &&
                                 padding <= (size_t(INT_MAX) - n) / 2,
@@ -136,6 +142,16 @@ namespace FML::PERTURBATION {
                 detail::require(padded_k[i] > 0 && std::isfinite(padded_k[i]), "Padded logarithmic grid overflows");
                 if (i >= padding && i < padding + n)
                     padded_p[i] = pk[i - padding];
+            }
+            // Taper both ends (window x - sin(2 pi x)/(2 pi) of FAST-PT, McEwen et al. 2016) for the P22 transforms
+            if (taper > 0) {
+                const double range = std::log(k.back() / k.front());
+                for (size_t i = padding; i < padding + n; ++i) {
+                    const double x = std::log(padded_k[i] / k.front()) / range;
+                    for (double t : {x / taper, (1 - x) / taper})
+                        if (t < 1)
+                            padded_p[i] *= t - std::sin(2 * detail::pi * t) / (2 * detail::pi);
+                }
             }
             // All multipoles use kcrc=1 without per-order no-ringing shifts, so products share exactly one r grid.
             auto a = xi(0, 0, padded_k, padded_p);
@@ -189,7 +205,8 @@ namespace FML::PERTURBATION {
                                 std::isfinite(options.absolute_tolerance),
                             "Fast EdS requires at least three finite direct-reference checks");
             size_t padding = options.padding == std::numeric_limits<size_t>::max() ? k.size() / 2 : options.padding;
-            auto full = raw(k, pk, padding);
+            detail::require(options.taper >= 0 && options.taper < .5, "Fast EdS taper must be in [0, 0.5)");
+            auto full = raw(k, pk, padding, options.taper);
             Prediction out;
             out.method = full.method;
             out.kernels = full.kernels;

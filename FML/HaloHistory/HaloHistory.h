@@ -137,7 +137,9 @@ namespace FML::HALO_HISTORY {
               s.metadata.length_convention, s.metadata.velocity_convention, s.metadata.id_namespace})
             detail::require(detail::token(token), "Halo metadata must use nonempty ASCII tokens");
         std::map<ID, size_t> ids;
-        std::set<ID> global_particles;
+        // Duplicate checks by sorting contiguous copies (std::set per particle took ~2 us and ~50 bytes per member:
+        // minutes and tens of GB for 1e8 halo particles)
+        std::vector<ID> members, all;
         for (size_t i = 0; i < s.halos.size(); ++i) {
             const auto& h = s.halos[i];
             detail::require(ids.emplace(h.id, i).second, "Duplicate halo ID in snapshot");
@@ -148,13 +150,17 @@ namespace FML::HALO_HISTORY {
                 detail::require(std::isfinite(x) && x >= 0 && x < s.boxsize, "Halo positions must lie in [0,L)");
             for (double v : h.velocity)
                 detail::require(std::isfinite(v), "Invalid halo velocity");
-            std::set<ID> members;
-            for (ID p : h.particles) {
-                detail::require(members.insert(p).second, "Duplicate particle ID within halo");
-                if (s.membership == Membership::Exclusive)
-                    detail::require(global_particles.insert(p).second,
-                                    "Exclusive catalogue assigns a particle to multiple halos");
-            }
+            members.assign(h.particles.begin(), h.particles.end());
+            std::sort(members.begin(), members.end());
+            detail::require(std::adjacent_find(members.begin(), members.end()) == members.end(),
+                            "Duplicate particle ID within halo");
+            if (s.membership == Membership::Exclusive)
+                all.insert(all.end(), h.particles.begin(), h.particles.end());
+        }
+        if (s.membership == Membership::Exclusive) {
+            std::sort(all.begin(), all.end());
+            detail::require(std::adjacent_find(all.begin(), all.end()) == all.end(),
+                            "Exclusive catalogue assigns a particle to multiple halos");
         }
         std::vector<unsigned char> state(s.halos.size());
         for (size_t i = 0; i < s.halos.size(); ++i) {
@@ -175,6 +181,11 @@ namespace FML::HALO_HISTORY {
                 state[j] = 2;
         }
     }
+    namespace detail {
+        // Matching of two snapshots that are already validated and consistent
+        inline Matching match_validated(const Snapshot& source, const Snapshot& target, const MatchOptions& options,
+                                        const std::vector<Entry>& a, const std::vector<Entry>& b);
+    } // namespace detail
     /// Sorted inverted particle-ID indices replace an all-halo-pairs scan.
     inline Matching match(const Snapshot& source, const Snapshot& target, const MatchOptions& options = {}) {
         validate(source);
@@ -184,8 +195,18 @@ namespace FML::HALO_HISTORY {
             source.id < target.id && source.scale_factor < target.scale_factor && source.boxsize == target.boxsize &&
                 source.metadata == target.metadata && source.membership == target.membership,
             "Halo matches require increasing snapshots/epochs and identical units/ID namespace/box metadata");
-        const auto a = detail::index(source), b = detail::index(target);
-        std::map<std::pair<size_t, size_t>, ID> shared;
+        return detail::match_validated(source, target, options, detail::index(source), detail::index(target));
+    }
+    inline Matching detail::match_validated(const Snapshot& source, const Snapshot& target,
+                                            const MatchOptions& options, const std::vector<Entry>& a,
+                                            const std::vector<Entry>& b) {
+        // One 64-bit key (source index * N_target + target index) per shared owner pair, then sort and count runs.
+        // A map of halo-pair counters (ordered or hashed) cost ~0.5 us per shared particle in random access.
+        const std::uint64_t ntarget = target.halos.size();
+        require(ntarget == 0 || source.halos.size() <= std::numeric_limits<std::uint64_t>::max() / ntarget,
+                "Too many halos for 64-bit halo-pair keys");
+        std::vector<std::uint64_t> keys;
+        keys.reserve(std::min(a.size(), b.size()));
         size_t work = 0, i = 0, j = 0;
         while (i < a.size() && j < b.size()) {
             if (a[i].first < b[j].first) {
@@ -201,31 +222,38 @@ namespace FML::HALO_HISTORY {
                 ++ai;
             while (bj < b.size() && b[bj].first == b[j].first)
                 ++bj;
-            detail::require(bj - j <= options.max_overlap_work / (ai - i),
-                            "Inclusive membership overlap work exceeds budget");
-            size_t more = (ai - i) * (bj - j);
-            detail::require(more <= options.max_overlap_work - work, "Membership overlap work exceeds budget");
-            work += more;
+            // The budget limits the owner cross products of inclusive memberships: a particle with one owner in each
+            // snapshot (always the case for exclusive catalogues) costs one key and is not counted, so large
+            // exclusive catalogues (> 1e8 halo particles) are not rejected by the default budget
+            require(bj - j <= options.max_overlap_work / (ai - i), "Inclusive membership overlap work exceeds budget");
+            const size_t more = (ai - i) * (bj - j);
+            if (more > 1) {
+                require(more <= options.max_overlap_work - work, "Membership overlap work exceeds budget");
+                work += more;
+            }
             for (size_t x = i; x < ai; ++x)
-                for (size_t y = j; y < bj; ++y) {
-                    auto key = std::make_pair(a[x].second, b[y].second);
-                    auto found = shared.find(key);
-                    if (found == shared.end()) {
-                        detail::require(shared.size() < options.max_candidates, "Halo candidate budget exceeded");
-                        found = shared.emplace(key, 0).first;
-                    }
-                    detail::require(found->second < std::numeric_limits<ID>::max(), "Shared particle count overflow");
-                    ++found->second;
-                }
+                for (size_t y = j; y < bj; ++y)
+                    keys.push_back(std::uint64_t(a[x].second) * ntarget + b[y].second);
             i = ai;
             j = bj;
         }
+        std::sort(keys.begin(), keys.end());
+        std::vector<std::pair<std::uint64_t, ID>> shared; // (key, shared count)
+        for (size_t k = 0; k < keys.size();) {
+            size_t end = k + 1;
+            while (end < keys.size() && keys[end] == keys[k])
+                ++end;
+            require(shared.size() < options.max_candidates, "Halo candidate budget exceeded");
+            shared.emplace_back(keys[k], ID(end - k));
+            k = end;
+        }
+        std::vector<std::uint64_t>().swap(keys);
         Matching out;
         out.source_snapshot = source.id;
         out.target_snapshot = target.id;
         for (const auto& item : shared) {
-            const auto& from = source.halos[item.first.first];
-            const auto& to = target.halos[item.first.second];
+            const auto& from = source.halos[size_t(item.first / ntarget)];
+            const auto& to = target.halos[size_t(item.first % ntarget)];
             Candidate c;
             c.source = from.id;
             c.target = to.id;
@@ -238,7 +266,7 @@ namespace FML::HALO_HISTORY {
                 continue;
             out.candidates.push_back(c);
             auto chosen = out.descendants.find(c.source);
-            if (chosen == out.descendants.end() || detail::better(c, chosen->second))
+            if (chosen == out.descendants.end() || better(c, chosen->second))
                 out.descendants[c.source] = c;
         }
         std::sort(out.candidates.begin(), out.candidates.end(), [](const Candidate& a, const Candidate& b) {
@@ -290,12 +318,22 @@ namespace FML::HALO_HISTORY {
                 out.nodes.push_back(std::move(node));
             }
         }
+        // Particle indices of the snapshots in the current lookahead window (each built once)
+        std::map<size_t, std::vector<detail::Entry>> indices;
+        auto index_of = [&](size_t s) -> const std::vector<detail::Entry>& {
+            auto found = indices.find(s);
+            if (found == indices.end())
+                found = indices.emplace(s, detail::index(snapshots[s])).first;
+            return found->second;
+        };
         for (size_t s = 0; s < snapshots.size(); ++s) {
+            indices.erase(indices.begin(), indices.lower_bound(s));
             const size_t remaining = snapshots.size() - s - 1,
                          reach = max_skipped_snapshots >= remaining ? remaining : max_skipped_snapshots + 1;
             size_t unresolved = snapshots[s].halos.size();
             for (size_t offset = 1; offset <= reach && unresolved; ++offset) {
-                auto candidates = match(snapshots[s], snapshots[s + offset], options);
+                auto candidates = detail::match_validated(snapshots[s], snapshots[s + offset], options, index_of(s),
+                                                          index_of(s + offset));
                 for (const auto& item : candidates.descendants) {
                     auto& node = out.nodes[node_index.at({snapshots[s].id, item.first})];
                     if (node.descendant)

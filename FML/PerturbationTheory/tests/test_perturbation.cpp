@@ -1,5 +1,6 @@
 #include <FML/Global/Global.h>
 #include <FML/PerturbationTheory/FastOneLoop.h>
+#include <array>
 #include <chrono>
 #include <iostream>
 using namespace FML::PERTURBATION;
@@ -13,6 +14,42 @@ void check(bool ok, const std::string& label) {
 }
 bool near(double a, double b, double relative = 1e-6, double absolute = 1e-15) {
     return std::abs(a - b) <= absolute + relative * std::max(std::abs(a), std::abs(b));
+}
+// Eisenstein & Hu (1998) no-wiggle LCDM-like spectrum [k in h/Mpc, P in (Mpc/h)^3], h = 0.67, Om = 0.31,
+// Ob = 0.049, ns = 0.965, Tcmb = 2.7255
+double eisenstein_hu(double k) {
+    const double h = .67, om = .31, ob = .049, ns = .965, theta = 2.7255 / 2.7;
+    const double wm = om * h * h, wb = ob * h * h, fb = ob / om;
+    const double s = 44.5 * std::log(9.83 / wm) / std::sqrt(1 + 10 * std::pow(wb, .75));
+    const double ag = 1 - .328 * std::log(431 * wm) * fb + .38 * std::log(22.3 * wm) * fb * fb;
+    const double gamma = om * h * (ag + (1 - ag) / (1 + std::pow(.43 * k * h * s, 4)));
+    const double q = k * theta * theta / gamma;
+    const double l0 = std::log(2 * std::exp(1.) + 1.8 * q), c0 = 14.2 + 731 / (1 + 62.5 * q);
+    const double t = l0 / (l0 + c0 * q * q);
+    return 4e6 * std::pow(k, ns) * t * t;
+}
+// Fully symmetrized EdS F3(a, b, c) from the standard recursion (independent of the analytic P13 kernel)
+using V3 = std::array<double, 3>;
+V3 add(V3 a, V3 b) { return {a[0] + b[0], a[1] + b[1], a[2] + b[2]}; }
+double dot3(V3 a, V3 b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+double alpha(V3 a, V3 b) { return dot3(add(a, b), a) / dot3(a, a); }
+double beta(V3 a, V3 b) {
+    V3 s = add(a, b);
+    return dot3(s, s) * dot3(a, b) / (2 * dot3(a, a) * dot3(b, b));
+}
+double f2s(V3 a, V3 b) { return (5 * (alpha(a, b) + alpha(b, a)) + 4 * beta(a, b)) / 14; }
+double g2s(V3 a, V3 b) { return (3 * (alpha(a, b) + alpha(b, a)) + 8 * beta(a, b)) / 14; }
+double f3u(V3 a, V3 b, V3 c) {
+    V3 bc = add(b, c), ab = add(a, b);
+    double t = 0;
+    if (dot3(bc, bc) > 1e-300)
+        t += 7 * alpha(a, bc) * f2s(b, c) + 2 * beta(a, bc) * g2s(b, c);
+    if (dot3(ab, ab) > 1e-300)
+        t += g2s(a, b) * (7 * alpha(ab, c) + 2 * beta(ab, c));
+    return t / 18;
+}
+double f3s(V3 a, V3 b, V3 c) {
+    return (f3u(a, b, c) + f3u(a, c, b) + f3u(b, a, c) + f3u(b, c, a) + f3u(c, a, b) + f3u(c, b, a)) / 6;
 }
 Vector grid(size_t n) {
     Vector k(n);
@@ -171,6 +208,69 @@ int main() {
     for (size_t i = 0; i < fast.k.size(); ++i)
         ok &= near(fast.p22[i], all_direct.p22[i], .012) && near(fast.p13[i], all_direct.p13[i], 2e-5);
     check(ok, "every requested Gaussian-spectrum mode agrees with direct quadrature, beyond the built-in spot checks");
+    {
+        // LCDM-like spectrum on 1e-5..50 h/Mpc: direct quadrature against FAST-PT 4.1.1 (one_loop_dd, n_pad = 1024,
+        // C_window = 0.75, no extrapolation) for the same tabulated spectrum, and the fast path against direct
+        Vector lk(2048), lp(2048);
+        for (size_t i = 0; i < lk.size(); ++i) {
+            lk[i] = std::exp(std::log(1e-5) + double(i) / (lk.size() - 1) * std::log(50 / 1e-5));
+            lp[i] = eisenstein_hu(lk[i]);
+        }
+        auto table = [&](double q) {
+            if (q < lk.front() || q > lk.back())
+                return 0.;
+            auto hi = std::lower_bound(lk.begin(), lk.end(), q);
+            if (hi == lk.begin())
+                return lp.front();
+            const size_t j = size_t(hi - lk.begin());
+            const double t = std::log(q / lk[j - 1]) / std::log(lk[j] / lk[j - 1]);
+            return lp[j - 1] + t * (lp[j] - lp[j - 1]);
+        };
+        const Vector kref{.02, .05, .1, .2, .5, 1.};
+        const Vector fastpt{-2.406801e+02, -3.222807e+02, 2.156807e+02, 1.064071e+03, 1.117305e+03, 6.290851e+02};
+        auto d = direct_one_loop(kref, table, lk.front(), lk.back());
+        bool agree = true;
+        for (size_t i = 0; i < kref.size(); ++i)
+            agree &= std::abs(d.loop[i] - fastpt[i]) < 1e-3 * std::abs(fastpt[i]) + 1e-5 * d.linear[i];
+        check(agree, "LCDM-like spectrum: direct P22 + P13 agree with FAST-PT to 1e-3 for k = 0.02-1 h/Mpc");
+        FastEdS lcdm;
+        bool fast_ok = true;
+        try {
+            auto f = lcdm.evaluate(lk, lp, .02, 1.);
+            auto all = direct_one_loop(f.k, table, lk.front(), lk.back());
+            for (size_t i = 0; i < f.k.size(); ++i)
+                fast_ok &= near(f.p22[i], all.p22[i], 1e-3) && near(f.p13[i], all.p13[i], 1e-4);
+        } catch (const std::exception&) {
+            fast_ok = false;
+        }
+        check(fast_ok, "LCDM-like spectrum: tapered fast P22 and P13 agree with direct for every mode in 0.02-1 h/Mpc");
+        FastOptions untapered;
+        untapered.taper = 0;
+        bool rejected = false;
+        try {
+            lcdm.evaluate(lk, lp, .02, 1., untapered);
+        } catch (const std::runtime_error&) {
+            rejected = true;
+        }
+        check(rejected, "LCDM-like spectrum without the taper: the ringing P22 is caught by the reference checks");
+        // Custom-kernel path with the EdS F3 from the recursion reproduces the analytic EdS P13 kernel
+        Kernels eds;
+        eds.name = "EdS kernels from the recursion";
+        eds.f2 = [](double q, double p, double mu) { return eds_f2(q, p, mu); };
+        eds.f3_collapsed = [](double kk, double q, double mu) {
+            V3 a{0, 0, kk}, b{q * std::sqrt(1 - mu * mu), 0, q * mu};
+            return f3s(a, b, V3{-b[0], -b[1], -b[2]});
+        };
+        DirectOptions fine;
+        fine.order = 32;
+        const Vector ks{.05, .2, 1.};
+        auto analytic = direct_one_loop(ks, table, lk.front(), lk.back(), fine);
+        auto recursion = direct_one_loop(ks, table, lk.front(), lk.back(), fine, eds);
+        bool same = true;
+        for (size_t i = 0; i < ks.size(); ++i)
+            same &= near(recursion.p13[i], analytic.p13[i], 1e-5) && near(recursion.p22[i], analytic.p22[i], 1e-12);
+        check(same, "custom kernels: EdS F3 from the recursion reproduces the analytic P13 kernel");
+    }
     if (!FML::ThisTask)
         std::cout << "Timing: " << fast.k.size() << " modes; checked fast=" << fast_time << " s; direct=" << direct_time
                   << " s; ratio=" << direct_time / fast_time << "; FFT buffers=" << workspace.fft_buffer_bytes()

@@ -5,6 +5,25 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### PerturbationTheory: tapered FastEdS P22 for realistic spectra, checked against FAST-PT; HaloHistory speed
+- Checked against FAST-PT 4.1.1 (`one_loop_dd`): the direct quadrature (`direct_one_loop`) agrees to < 4e-4 for a
+  CLASS LCDM spectrum at k = 1e-3-1 h/Mpc, and the custom-kernel path with the EdS F3 from the standard recursion
+  reproduces the analytic P13 kernel. The fast P13 agrees with direct to 5e-6.
+- The fast P22 (FFTLog products in configuration space) was unusable for realistic spectra: the transforms of
+  k^{n+1.5} P(k), n = -2..2, of the abruptly truncated spectrum ring, and P22 is a cancellation among their products.
+  For a LCDM spectrum on 1e-5..50 h/Mpc P22 was wrong by a factor ~5 at k = 0.1 h/Mpc and by 1e3-1e9 below 0.02
+  (the built-in reference checks threw, so no wrong result was returned, but the fast path could not be used).
+  `FastOptions::taper` (default 0.1) now tapers the spectrum smoothly to zero over 10% of the log range at each end
+  for the P22 transforms (FAST-PT window); every mode in 0.02-1 h/Mpc then agrees with direct to 2e-4, ~15x faster.
+- Tests: Eisenstein-Hu LCDM spectrum against stored FAST-PT values, tapered fast path vs direct for every mode,
+  the untapered path is caught by the reference checks, EdS F3 recursion through the custom-kernel path.
+- HaloHistory: `validate` used a std::set per particle (~2 us and ~50 bytes per member: 1e8 halo particles ran out
+  of memory) and the matching an ordered map of halo-pair counters. Now sorted contiguous arrays: matching two
+  snapshots with 1e7 halo particles takes 7 s instead of 107 s. `build` validates each snapshot once and reuses the
+  particle indices within the lookahead window. The overlap-work budget (default 1e8) counted every shared
+  particle, so exclusive catalogues with more than 1e8 halo particles were rejected; it now counts only the owner
+  cross products of particles with several owners (inclusive memberships), as intended.
+
 ### VoidFinders: default grid size independent of the number of tasks
 - The default voxel grid (also the spherical finder's candidate grid) was Revolver's floor(2 (4 pi N/3)^(1/3))
   rounded down to a multiple of the task count, so the spherical and voxel catalogues changed with the number of

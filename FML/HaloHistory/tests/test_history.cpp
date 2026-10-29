@@ -150,14 +150,25 @@ int main() {
     }
     check(rejected, "duplicate IDs within one halo are rejected rather than double-counted");
     MatchOptions budget;
-    budget.max_overlap_work = 1;
+    budget.max_overlap_work = 3;
+    // Inclusive host + subhalo in both snapshots: particles 1, 2 have 2 x 2 owner pairs
+    auto host_early = snapshot(10, .4, {halo(1, {1, 2, 3, 4}), halo(2, {1, 2}, 1)});
+    auto host_late = snapshot(20, .5, {halo(11, {1, 2, 3, 4}), halo(12, {1, 2}, 11)});
+    host_early.membership = host_late.membership = Membership::Inclusive;
     rejected = false;
     try {
-        match(a, b, budget);
+        match(host_early, host_late, budget);
     } catch (const std::invalid_argument&) {
         rejected = true;
     }
     check(rejected, "overlap work budget fails explicitly without truncating links");
+    bool exclusive_ok = true;
+    try {
+        exclusive_ok = match(a, b, budget).descendants.size() == 3;
+    } catch (const std::exception&) {
+        exclusive_ok = false;
+    }
+    check(exclusive_ok, "the overlap budget counts only inclusive owner cross products (exclusive catalogues pass)");
     budget = {};
     budget.max_candidates = 1;
     rejected = false;
