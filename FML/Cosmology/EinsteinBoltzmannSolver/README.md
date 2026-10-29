@@ -128,7 +128,8 @@ time of each stage for the main options (lensing +4 s, massive neutrinos +7 s, c
 functions +3 s).
 
 **Nonlinear power and helium.** `nonlinear = halofit` adds the Halofit P_NL(k) (Takahashi et al. 2012, as CLASS's
-`halofit` without the massive-neutrino correction) as a 4th column of `matter_power*.txt` and uses it for the lensing
+`halofit` without its massive-neutrino correction (Bird et al. 2012): with m_nu > 0 up to ~2% lower than
+CLASS, and the run warns) as a 4th column of `matter_power*.txt` and uses it for the lensing
 potential (the Weyl potential of the Limber part scaled by √(P_NL/P_L)), so the lensed spectra include nonlinear
 lensing. Against CLASS: P_NL to < 1e-3 at z = 0 and 1 for k ≤ 1 h/Mpc (`python/compare_class_halofit.py`, with
 `pert_k_max = 1`), C_ℓ^φφ to 0.1% up to L = 2500, lensed TT 0.3%, EE 0.6% and BB 1% for ℓ ≤ 1500 (BB near ℓ_max needs

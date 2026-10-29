@@ -5,6 +5,10 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): warning for Halofit with massive neutrinos
+- Halofit has no massive-neutrino correction (Bird et al. 2012; CLASS's halofit has it), so with m_nu > 0 the
+  nonlinear P(k) is up to ~2% below CLASS. A run now warns (once per process); README updated.
+
 ### Cosmology (EBS): w0wa in the README, warning for its smooth dark energy
 - The README model table had no `w0wa` (and named a nonexistent `wcdm` for isocurvature). w0wa's dark energy has
   no perturbations, which is gauge-inconsistent for w != -1 (2e-3 in P(k) at k = 0.001/Mpc): it is now in the table

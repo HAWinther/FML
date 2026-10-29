@@ -6,6 +6,7 @@
 #include <FML/Cosmology/Common.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -664,10 +665,15 @@ namespace FML::COSMOLOGY {
     void PowerSpectrum::solve_matter() {
         if (matter_solved)
             return;
-        if (options.nonlinear == PowerSpectrumOptions::Nonlinear::Halofit)
+        if (options.nonlinear == PowerSpectrumOptions::Nonlinear::Halofit) {
             halofit = std::make_unique<Halofit>(cosmo, [this](double x, double k) {
                 return get_matter_power_spectrum_extrapolated(x, k);
             });
+            static std::atomic<bool> warned{false}; // once per process (parameter fits make many spectra)
+            if (cosmo.get_params().has_massive_nu() && !warned.exchange(true))
+                std::cerr << "Warning: Halofit (Takahashi 2012) has no massive-neutrino correction (Bird et al. 2012): "
+                             "with m_nu > 0 the nonlinear P(k) is up to ~2% below CLASS's halofit, which includes it\n";
+        }
         matter_solved = true;
     }
 
