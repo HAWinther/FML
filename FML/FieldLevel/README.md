@@ -112,7 +112,13 @@ rows are not independent of each other. 24 mocks took about 40 minutes on two co
 These linear and 1LPT runs used the first 1LPT model (CIC with particles on the density-grid nodes, see below); as
 the mocks were made with the same model, they test the sampler and gradients, not the physics of that model.
 
-The calibration of the 2LPT + bias + redshift-space model (`./calibration 2lpt`) is in progress.
+The full model, `./calibration 2lpt` (2LPT, Lagrangian bias b = 1.5, b2 = 0.3, bG2 = -0.2, redshift space with
+f = 0.7, smooth assignment; the bias, f and P_eps are held at their true values), on 20 mocks at the same settings:
+z has mean -0.20 +- 0.24 and std 1.05, and the posterior quantiles of beta_true are uniform (KS p = 0.57);
+posterior sigma 0.035, autocorrelation time 6.8, acceptance 0.71, no divergences. The 20 mocks took about 2.5 hours
+on two cores.
+
+![Calibration of the 2LPT + bias + RSD model](calibration.png)
 
 ### Mass assignment: particles on grid nodes
 

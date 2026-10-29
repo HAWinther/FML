@@ -18,6 +18,8 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 - Tests: gradients for 1LPT/2LPT with b2, bG2 and RSD; LPT without bias equals LPT1; analytic 2LPT displacement of
   two plane waves (also in redshift space); smooth assignment against the direct Fourier sum; the large-scale limit
   (b + f mu^2) delta_lin to 0.3%; no linear-order harmonics with CIC.
+- Simulation-based calibration of the full model (2LPT, b2, bG2, RSD; 20 mocks): z mean -0.20 +- 0.24, std 1.05,
+  uniform posterior quantiles (KS p = 0.57).
 
 ### Hamiltonian Monte Carlo (MCMC/HMC.h)
 - Header-only HMC for gradient-based posteriors of any dimension: a state of [operator-mass block | parameters],

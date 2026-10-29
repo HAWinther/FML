@@ -48,6 +48,13 @@ The relevant code is [FieldLevelBAO.h](FieldLevelBAO.h),
   both Apple Clang and GCC without a blanket tolerance relaxation. GCC passed
   the full suite after #17; the Clang failure remains unresolved.
 
+  Update (29 October 2026): the first 1LPT model started every particle exactly on
+  a density-grid node, where CIC responds through |Psi| and the likelihood has a
+  kink at Psi = 0 for every particle; this is the likely cause of the fragile
+  fixed-step check. CIC particles now start mid-cell, and the default assignment
+  is a smooth deconvolved kernel with a continuous gradient (see the README). The
+  Apple Clang run has not been repeated, so this item stays open.
+
 ## Scientific and performance follow-ups
 
 - [ ] **FL-5: Strengthen inference validation beyond same-model recovery.**
