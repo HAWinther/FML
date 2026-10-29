@@ -34,6 +34,10 @@ jobs:
         if: always()
         run: make -C FML test MPIRUN="mpirun --oversubscribe" NP_LIST="1 2 4"
 
+      - name: Module tests, including the Einstein-Boltzmann solver (1, 2 and 4 MPI tasks)
+        if: always()
+        run: .github/ci/run_module_tests.sh
+
       - name: Regression cases run and are reproducible (two identical runs)
         if: always()
         run: |

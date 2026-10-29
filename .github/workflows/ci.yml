@@ -1,4 +1,4 @@
-# Build the library examples, run the library tests and build COLASolver on every push and pull request
+# Build the library examples, run the library and module tests and build COLASolver on every push and pull request
 name: CI
 
 on:
@@ -27,6 +27,10 @@ jobs:
 
       - name: Library tests (1, 2 and 4 MPI tasks)
         run: make -C FML test MPIRUN="mpirun --oversubscribe" NP_LIST="1 2 4"
+
+      # Every FML/*/tests directory (the Einstein-Boltzmann solver's tests take ~15 min: nightly only)
+      - name: Module tests (1, 2 and 4 MPI tasks)
+        run: .github/ci/run_module_tests.sh Cosmology/EinsteinBoltzmannSolver/tests
 
       # make examples already built COLASolver without HDF5 and make does not track the flags: rebuild (-B)
       - name: Build COLASolver (with HDF5)

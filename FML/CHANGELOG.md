@@ -5,6 +5,12 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### CI runs the module test directories
+- The tests in FML/*/tests (Survey, HOD, MCMC, PerturbationTheory, ShortRangeGravity, ... 15 directories) were
+  never run by CI, only FML/tests and COLASolver/tests. `.github/ci/run_module_tests.sh` builds and runs each on 1, 2
+  and 4 MPI tasks: in CI all except the Einstein-Boltzmann solver's (~1.5 min), nightly all of them (that one takes
+  ~15 min). All pass.
+
 ### PhaseSpaceHaloFinder: one-way seed merging (subhaloes no longer merged through host fragments)
 - Seeds whose centres agree within their Poisson uncertainties were joined with a symmetric, transitive union. A
   small host fragment between a host and a subhalo (consistent with both through its large uncertainties) merged
