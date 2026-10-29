@@ -87,13 +87,15 @@ multiply-adds), within all test tolerances.
 Every cosmological, precision and output parameter can be set in a parameter file (`name = value`, `#` comments)
 or as `name=value` on the command line. `params/default.ini` lists all of them with descriptions; it is generated
 from the code (`./cmb --write-defaults`), so it is always complete. Unknown names and malformed values are errors.
-Units: k in 1/Mpc, angles in degrees, x = ln a. `preset = planck2018` loads the Planck 2018 parameters first.
+Units: k in 1/Mpc, angles in degrees, x = ln a. `preset = planck2018` loads the Planck 2018 parameters first: the TT,TE,EE+lowE+lensing+BAO means with massless
+neutrinos (as in the references and tests); `preset = planck2018_baseline` is Planck's baseline (TT,TE,EE+lowE+lensing
+means, one massive neutrino of 0.06 eV; 100 θ_s = 1.04184 against 1.04033).
 Each run writes `<output_dir>/params_used.ini` (re-readable) and `params.txt` (read by the Python scripts).
 
 | Parameter file | Run |
 |---|---|
 | `params/default.ini` | All parameters at their defaults (the fiducial model) |
-| `params/planck2018.ini` | Planck 2018 best fit, lensed spectra to ℓ = 2500 |
+| `params/planck2018.ini` | Planck 2018 (preset `planck2018`, massless neutrinos), lensed spectra to ℓ = 2500 |
 | `params/curvature.ini` | Curved universe (`OmegaK=...`), as in the report |
 | `params/neutrinos.ini` | One massive neutrino with lensing (`m_nu=...`), as in the report |
 | `params/twopoint.ini` | All two-point functions (perturbations to k = 1/Mpc), as in the report |
@@ -186,7 +188,7 @@ computes Δχ² of any run against a reference (see its header for the reference
 | File (in `FML/Cosmology/`) | Contents |
 |---|---|
 | `Common.h` | Solver aliases and compatibility names for constants, numerical methods, splines, ODE solvers and timing. Implementations live in shared `FML/Units`, `Math`, `FileUtils`, `Timing` and `Spline` modules. |
-| `Background/CosmologyParameters.h/.cpp` | Parameters with derived Ω's; `fiducial()`, `Planck2018()` |
+| `Background/CosmologyParameters.h/.cpp` | Parameters with derived Ω's; `fiducial()`, `Planck2018()`, `Planck2018Baseline()` |
 | `EinsteinBoltzmannSolver/ParameterFile.h/.cpp` | Parameter files: one table of all parameters (name, description, unit), reading with overrides and checks, writing |
 | `Background/Species.h` | Interface of a species: background (ρ, p) and perturbations (variables, equations, moments, outputs) |
 | `Background/Gravity.h` | Interface of a theory of gravity: E²(x) from the species, Ψ and Φ' from their moments |

@@ -605,8 +605,11 @@ namespace FML::COSMOLOGY {
                 s.cosmo = CosmologyParameters::fiducial();
             else if (l == "planck2018")
                 s.cosmo = CosmologyParameters::Planck2018();
+            else if (l == "planck2018_baseline")
+                s.cosmo = CosmologyParameters::Planck2018Baseline();
             else
-                throw std::invalid_argument(where + ": preset must be fiducial or planck2018, not '" + v + "'");
+                throw std::invalid_argument(
+                    where + ": preset must be fiducial, planck2018 or planck2018_baseline, not '" + v + "'");
         }
     } // namespace
 
@@ -711,8 +714,8 @@ namespace FML::COSMOLOGY {
                   "the\n"
                   "# command line. Units: k in 1/Mpc, angles in degrees, x = ln a. Booleans: true/false.\n"
                   "#\n"
-                  "# preset = fiducial      # or planck2018: loads that parameter set before the cosmological "
-                  "parameters below\n"
+                  "# preset = fiducial      # or planck2018, planck2018_baseline: loads that parameter set before the "
+                  "cosmological parameters below\n"
                   "# precision = default    # or fast: precision parameters for parameter fits (lensed TT/EE/TE to ell "
                   "= 2500\n"
                   "#                        # with dchi2 < 1 for Planck, ~5x faster); explicit precision parameters "

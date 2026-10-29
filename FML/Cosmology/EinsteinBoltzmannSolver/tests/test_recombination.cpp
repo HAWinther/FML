@@ -15,6 +15,7 @@
 #include <iostream>
 #include <functional>
 #include <stdexcept>
+#include <string>
 
 using namespace FML::COSMOLOGY;
 
@@ -422,6 +423,27 @@ static void test_ranges() {
     check("recombination inside the background range is fine", !throws([&] { RecombinationHistory rec(bg, o); }));
 }
 
+// The presets against CLASS v3.4 (RECFAST, reio_camb, same N_eff and neutrinos): 100 theta_s = 100 r_s / chi at
+// CLASS's z_rec (its visibility peak in conformal time). planck2018 (massless neutrinos) and planck2018_baseline
+// (m_nu = 0.06 eV); the two differ by 1.5e-3
+static void test_presets() {
+    struct Ref {
+        const char * preset;
+        double z_rec, theta;
+    };
+    for (const Ref & r : {Ref{"planck2018", 1088.7056059980398, 1.0403343588735672},
+                          Ref{"planck2018_baseline", 1088.8064871308648, 1.0418350187137981}}) {
+        const RunSettings s = ParameterFile::read("", {std::string("preset=") + r.preset});
+        BackgroundCosmology bg(s.cosmo);
+        bg.solve(s.bg_x_start, s.bg_x_end, s.bg_n_points);
+        RecombinationHistory rec(bg, s.rec);
+        rec.solve();
+        const double x = -std::log1p(r.z_rec);
+        const double theta = 100.0 * rec.sound_horizon_of_x(x) / bg.comoving_distance_of_x(x);
+        check_rel(std::string(r.preset) + ": 100 theta_s = CLASS", theta, r.theta, 1e-5);
+    }
+}
+
 int main() {
     test_recfast();
     test_fiducial();
@@ -429,5 +451,6 @@ int main() {
     test_helium_reionization();
     test_bbn();
     test_ranges();
+    test_presets();
     return Test::summary();
 }

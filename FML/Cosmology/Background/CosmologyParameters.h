@@ -94,7 +94,13 @@ namespace FML::COSMOLOGY {
 
         // Named parameter sets
         static CosmologyParameters fiducial() { return CosmologyParameters{}; }
-        static CosmologyParameters Planck2018(); // Planck 2018 TT,TE,EE+lowE+lensing best fit
+        // Planck 2018 (paper VI, Table 2) means of TT,TE,EE+lowE+lensing+BAO with z_reion of TT,TE,EE+lowE+lensing,
+        // and massless neutrinos (Planck's baseline has m_nu = 0.06 eV): 100 theta_s is 1.04033 instead of
+        // 1.04186. Kept for the existing references; for Planck's baseline use Planck2018Baseline().
+        static CosmologyParameters Planck2018();
+        // Planck 2018 baseline: means of TT,TE,EE+lowE+lensing (Table 2) with one massive neutrino of 0.06 eV
+        // (N_eff = 3.046). With CLASS (RECFAST, reio_camb): 100 theta_s = 1.04184, tau = 0.0542, sigma8 = 0.8106.
+        static CosmologyParameters Planck2018Baseline();
     };
 
 } // namespace FML::COSMOLOGY

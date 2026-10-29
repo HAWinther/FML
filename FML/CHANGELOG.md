@@ -5,6 +5,15 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology (EBS): the planck2018 preset is labelled correctly; new planck2018_baseline preset
+- `preset = planck2018` was described as the TT,TE,EE+lowE+lensing best fit, but its numbers are the means of the
+  TT,TE,EE+lowE+lensing+BAO column (z_reion from the other column) with massless neutrinos. Its values are kept
+  (the references, tests and report use it) and the documentation now says what it is.
+- New `preset = planck2018_baseline` (CosmologyParameters::Planck2018Baseline()): Planck's baseline, the
+  TT,TE,EE+lowE+lensing means with one massive neutrino of 0.06 eV. 100 theta_s = 1.04184 (planck2018: 1.04033,
+  0.15% or about 5 sigma lower); tau = 0.0544, sigma8 = 0.811.
+- New test of 100 theta_s against CLASS for both presets (1e-5) in tests/test_recombination.cpp.
+
 ### Cosmology (EBS): eta(x), t(x) and the recombination range outside the background solution are errors
 - `eta_of_x` and `t_of_x` returned the end value of the spline outside [bg_x_start, bg_x_end]; with
   bg_x_start = -15 the sound horizon was off by 6e-4 (0.06% in theta_s) and the run only printed a warning. They now

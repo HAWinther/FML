@@ -174,4 +174,21 @@ namespace FML::COSMOLOGY {
         return p;
     }
 
+    CosmologyParameters CosmologyParameters::Planck2018Baseline() {
+        CosmologyParameters p;
+        p.h = 0.6736;
+        p.OmegaB = 0.02237 / (p.h * p.h);
+        p.OmegaCDM = 0.1200 / (p.h * p.h);
+        p.OmegaK = 0.0;
+        p.Neff = 3.046;
+        p.m_nu = 0.06;
+        p.TCMB = 2.7255;
+        p.Yp = 0.2454;
+        p.z_reion = 7.67;
+        p.A_s = std::exp(3.044) * 1e-10;
+        p.n_s = 0.9649;
+        p.k_pivot = 0.05;
+        return p;
+    }
+
 } // namespace FML::COSMOLOGY

@@ -88,6 +88,8 @@ int main() {
         const RunSettings s = ParameterFile::read(dir + "/d.ini");
         check_rel("preset planck2018 (applied first)", s.cosmo.h, CosmologyParameters::Planck2018().h, 0.0);
         check_rel("... other parameters still applied", s.cosmo.OmegaK, 0.01, 0.0);
+        const RunSettings b = ParameterFile::read("", {"preset=planck2018_baseline"});
+        check_rel("preset planck2018_baseline: m_nu = 0.06 eV", b.cosmo.m_nu, 0.06, 0.0);
         std::ofstream(dir + "/f.ini") << "lmax_nu = 20\nprecision = fast\n";
         const RunSettings f = ParameterFile::read(dir + "/f.ini", {"ell_step=20"});
         check("precision = fast sets its parameters",
