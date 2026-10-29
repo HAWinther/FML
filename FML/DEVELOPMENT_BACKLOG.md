@@ -1,6 +1,6 @@
 # FML remaining-work backlog
 
-Updated 29 October 2026, including completed Engineering items 1–7, 10, 14, 17 and 19–21, and tested initial implementations of items 25–32, 35–36 and 38. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
+Updated 29 October 2026, including completed Engineering items 1–7, 10, 14, 17 and 19–21, and tested initial implementations of items 25–32 and 35–38. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
 
 ## Completed in this sequence
 
@@ -32,6 +32,7 @@ Updated 29 October 2026, including completed Engineering items 1–7, 10, 14, 17
 - HOD central/satellite mocks with halo-ID-keyed Philox streams, NFW/particle satellites and velocity/concentration controls.
 - Batched kNN distances and streamed CDFs with explicit self-exclusion and distributed query samples.
 - Counts/density PDFs, factorial moments and explicit Poisson self-counting summaries for unit-weight tracers.
+- Initial flat-GR Born source-bin convergence, periodic flat-sky shear, Limber spectra and projected galaxy–matter profiles with explicit units and domain checks.
 
 These completions do not cover all the follow-ups below. Other ongoing COLASolver/transfer-function edits are outside this backlog update.
 
@@ -97,7 +98,7 @@ Items 22–23 were explicitly deferred. Item 24 is grouped here as related KD-tr
 | 34 | Connected four-point statistics | Explicit connected subtraction and supported configurations; start with covariance/collapsed configurations rather than claiming a general trispectrum. |
 | 35 | Faster perturbative predictions (initial implementation) | FFTLog/FAST-PT-style supported one-loop terms, preserving direct quadrature for unsupported scale-dependent kernels; later IR-resummed biased-tracer RSD templates. |
 | 36 | Morphology statistics (initial implementation) | Excursion-set volume, surface area, curvature and Euler characteristic, with explicit voxel/boundary conventions. |
-| 37 | Integrated lensing observables | Tomographic convergence/shear and projected galaxy–matter correlations, with source distributions and units; begin with Born projections. |
+| 37 | Integrated lensing observables (initial implementation) | Added normalized source-bin kernels, streamed finite-shell Born convergence, MPI-capable periodic flat-sky shear, strict-domain Limber Ckk/Cgk and finite-Pi galaxy–matter/DeltaSigma profiles. Full-sky, mask and production/reference-code calibration remain follow-ups. |
 | 38 | Halo histories and external substructure interfaces (initial implementation) | Stable particle-ID overlap merger trees and external subhalo catalogue integration. |
 
 The scientific implementations should be checked against independent analytic or established reference results, as well as serial/MPI consistency. Existing periodic spectra, reconstruction building blocks, raw shell fourth moments, halo models and lensing/lightcone utilities should remain the starting point.
@@ -116,11 +117,15 @@ The scientific implementations should be checked against independent analytic or
 
 Items 25–30 now have tested initial implementations. Next options are production validation of these workflows, resuming the engineering queue with item 1, or new science item 33 (3PCF and anisotropic higher-order estimators). Items 2–5 are good subsequent bounded changes. The larger observational workflow is 25–27; new mock/statistics work can follow with 28–32.
 
-Items 32 and 36 now also have tested initial implementations. `EnsembleStatistics/` provides streaming covariance, independently trained full/diagonal control variates, independent surrogate-mean uncertainty, phase provenance and a matched Fourier auto/cross-spectrum adapter. `Morphology/` provides distributed closed-voxel excursion volume, surface area, integrated mean curvature and Euler characteristic, with open/periodic boundaries and separate Crofton normalization. Both include runnable examples and analytic/independent-reference serial/MPI tests. Production follow-ups are matched ZA/2LPT/COLA versus N-body calibration and continuum Gaussian-field morphology/resolution validation; see each module's README. Items 33–34 and 37 remain pending.
+Items 32 and 36 now also have tested initial implementations. `EnsembleStatistics/` provides streaming covariance, independently trained full/diagonal control variates, independent surrogate-mean uncertainty, phase provenance and a matched Fourier auto/cross-spectrum adapter. `Morphology/` provides distributed closed-voxel excursion volume, surface area, integrated mean curvature and Euler characteristic, with open/periodic boundaries and separate Crofton normalization. Both include runnable examples and analytic/independent-reference serial/MPI tests. Production follow-ups are matched ZA/2LPT/COLA versus N-body calibration and continuum Gaussian-field morphology/resolution validation; see each module's README. Items 33–34 remain pending. Item 37 now has the initial implementation described below.
 
 Item 31 now has an initial periodic-box implementation in `Environment/`: top-hat counts/overdensities, deterministic equal-count density quantiles and query–tracer radial cross-correlations, plus one-pass normalized marked correlations with explicit sample-mean and finite-population pair conventions. It reuses the existing KD-tree/counts-in-cells and pair-counting engines and includes direct-enumeration, analytic, serial/MPI tests and a runnable example. Density noise and finite query sampling are retained explicitly; survey masks/weights, angular estimators and production noise/resolution validation remain follow-ups. See `Environment/README.md`.
 
 Items 35 and 38 now have tested initial implementations. `PerturbationTheory/` provides EdS matter P22/P13 using FFTLog/FFT convolution with mandatory direct-reference spot checks over an explicit output range, plus independent direct quadrature for custom scale-dependent kernels. `HaloHistory/` provides sparse particle-ID overlap candidates, deterministic merger forests, optional bounded snapshot gaps, host/subhalo relationships, a versioned neutral catalogue format and explicit HOD adaptation. Both include examples, reference tests and documented limits. Expanded/IR-resummed bias/RSD templates, broader cosmological validation, native finder-specific readers, distributed halo matching and advanced core/trajectory-based tree repairs remain follow-ups.
+
+## Weak-lensing workflow status
+
+Item 37 has an initial implementation in `WeakLensing/`: normalized source planes or sampled n(z)/n(chi), precomputed finite-shell Born weights and streamed local convergence maps; an optional `FFTWGrid<2>` periodic flat-sky shear adapter; extended-Limber auto/cross projections using explicitly bounded Pmm/Pgm providers; and finite-Pi projected galaxy–matter profiles, comoving excess surface density and thin-lens critical-density conversions. See [WeakLensing/README.md](WeakLensing/README.md) for units, input ownership, Nyquist/mass-sheet treatment and numerical tests. This does not change the existing COLASolver onion-map or CMB-remapping pipelines. Full-sky/curved geometry, masks, non-Limber and observational corrections, realistic background/power/reference-code comparisons and application-specific radial/source/power convergence remain follow-up work. The runnable example is a labeled analytic toy, not a calibrated cosmological forecast.
 
 ## Short-range gravity extension
 

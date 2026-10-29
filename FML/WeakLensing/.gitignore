@@ -1,0 +1,5 @@
+*.o
+*.d
+__pycache__/
+/tests/test_weak_lensing
+/example/weak_lensing_example
