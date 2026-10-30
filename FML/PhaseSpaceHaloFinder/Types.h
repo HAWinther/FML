@@ -33,6 +33,10 @@ namespace FML::PHASE_SPACE_HALOS {
         int max_refinement_depth{32}, max_unbinding_iterations{50}, max_label_iterations{10000}, saddle_samples{8};
         std::size_t max_message_bytes{8 * 1024 * 1024};
         bool unbind{true};
+        // Vmax/Rmax as ROCKSTAR: the bound members of the object and all its descendants, radii below
+        // softening_support set to softening_support, only inside the radius where the mean enclosed density is above
+        // the assignment density. false: the exclusive members, radii below softening_support omitted.
+        bool vmax_inclusive{true};
         void validate() const {
             auto positive = [](double x) { return std::isfinite(x) && x > 0; };
             if (!positive(boxsize) || !positive(linking_length) || !positive(softening_support) ||

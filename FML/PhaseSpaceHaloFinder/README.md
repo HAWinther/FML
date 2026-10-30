@@ -35,7 +35,7 @@ Output fields:
 - `bound_mass`: mass of that exclusive membership. `inclusive_bound_mass`: own bound mass plus all host descendants, counted once.
 - `position`: shrinking-core centre chosen to minimize the estimated Poisson position error, wrapped into the box; `velocity`: corresponding core peculiar velocity. `bulk_velocity` and per-axis `velocity_dispersion` use all surviving members.
 - `bound_radius`: farthest exclusive member from the final core centre. **It is not R200, a virial radius or an SO radius.**
-- `vmax`, `rmax`: maximum of sqrt[G M(<r)/(position_to_physical*r)] and its coordinate radius, from the exclusive radial profile. Equal-radius shells are accumulated together. Radii below the softening support are omitted; zero Vmax/Rmax means no resolved radial estimate.
+- `vmax`, `rmax`: maximum of sqrt[G M(<r)/(position_to_physical*r)] and its coordinate radius. Default (`vmax_inclusive = true`, as ROCKSTAR): the bound members of the object and all its descendants, radii below the softening support set to the softening support, and only radii inside which the mean enclosed density exceeds the assignment density. `vmax_inclusive = false`: the exclusive members, radii below the softening support omitted. Equal-radius shells are accumulated together; zero Vmax/Rmax means no resolved radial estimate. On a cosmological snapshot the exclusive estimate was 6% below ROCKSTAR for hosts above 1000 particles, the default 2.4% (tests/RESULTS.md).
 - `host`: the nearest normalized-distance, more-massive candidate in the same FoF parent whose **bound extent** contains this centre. Equal masses use the smaller ID. This deterministic containment convention is not an SO/virial subhalo definition and is ambiguous in major mergers. Strict mass/ID ordering prevents cycles.
 - `bound_fraction`: surviving mass divided by initially assigned mass. `binding_performed` distinguishes the default bound catalogue from a run with `unbind=false`, whose mass fields are assigned masses without a binding guarantee.
 
@@ -108,7 +108,7 @@ The text-input example reads `input_prefix.rank.txt` rows `id x y z vx vy vz mas
 
 ```
 make -C FML/PhaseSpaceHaloFinder/example USE_MPI=false
-FML/PhaseSpaceHaloFinder/example/phase_halos input_prefix output_prefix boxsize softening_support G position_to_physical
+FML/PhaseSpaceHaloFinder/example/phase_halos input_prefix output_prefix boxsize softening_support G position_to_physical [hubble_velocity_gradient]
 ```
 
 For MPI, compile with `USE_MPI=true` and launch the same command with mpirun. Every rank needs its own input file, even if empty. Output headers describe bound rather than SO masses/radii; the no-halo sentinel is the largest uint64 value.

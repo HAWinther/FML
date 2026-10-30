@@ -49,7 +49,8 @@ namespace FML::PHASE_SPACE_HALOS {
         inline std::pair<double, double> circular_velocity(const std::vector<Particle> & p,
                                                            const std::vector<std::size_t> & members,
                                                            const Vector & centre,
-                                                           const Options & o) {
+                                                           const Options & o,
+                                                           double density = 0) {
             std::vector<std::pair<double, double>> radial;
             radial.reserve(members.size());
             for (auto i : members) {
@@ -63,11 +64,15 @@ namespace FML::PHASE_SPACE_HALOS {
                 do {
                     mass += radial[i++].second;
                 } while (i < radial.size() && radial[i].first == r);
-                if (r >= o.softening_support) {
-                    const double v2 = o.gravitational_constant / o.position_to_physical * mass / r;
+                // density > 0: as ROCKSTAR (radii floored at the softening, inside the density threshold)
+                const double re = density > 0 ? std::max(r, o.softening_support) : r;
+                const bool use =
+                    density > 0 ? mass > density * (4 * std::acos(-1.0) / 3) * re * re * re : r >= o.softening_support;
+                if (use) {
+                    const double v2 = o.gravitational_constant / o.position_to_physical * mass / re;
                     if (v2 > vmax2) {
                         vmax2 = v2;
-                        rmax = r;
+                        rmax = re;
                     }
                 }
             }
@@ -401,9 +406,11 @@ namespace FML::PHASE_SPACE_HALOS {
                     halo.position[d] = wrap(halo.position[d], o_.boxsize);
                     halo.velocity_dispersion[d] = std::sqrt(halo.velocity_dispersion[d] / bulk.mass);
                 }
-                const auto circular = circular_velocity(p_, seed.members, center.x, o_);
-                halo.vmax = circular.first;
-                halo.rmax = circular.second;
+                if (!o_.vmax_inclusive) {
+                    const auto circular = circular_velocity(p_, seed.members, center.x, o_);
+                    halo.vmax = circular.first;
+                    halo.rmax = circular.second;
+                }
                 std::sort(halo.particle_ids.begin(), halo.particle_ids.end());
                 return halo;
             }
@@ -469,6 +476,27 @@ namespace FML::PHASE_SPACE_HALOS {
                         auto & parent = halos[lookup.at(host)];
                         parent.inclusive_bound_mass += h.bound_mass;
                         host = parent.host;
+                    }
+                }
+                if (o_.vmax_inclusive) {
+                    // Members of every object and all its descendants (p_ is sorted by ID)
+                    std::vector<std::vector<std::size_t>> members(halos.size());
+                    for (std::size_t k = 0; k < halos.size(); ++k)
+                        for (auto id : halos[k].particle_ids) {
+                            const auto it = std::lower_bound(p_.begin(), p_.end(), id, [](const auto & a, ID b) {
+                                return a.id < b;
+                            });
+                            for (std::size_t j = k;; j = lookup.at(halos[j].host)) {
+                                members[j].push_back(std::size_t(it - p_.begin()));
+                                if (halos[j].host == no_halo)
+                                    break;
+                            }
+                        }
+                    for (std::size_t k = 0; k < halos.size(); ++k) {
+                        const auto centre = periodic_difference(halos[k].position, anchor_, o_.boxsize);
+                        const auto circular = circular_velocity(p_, members[k], centre, o_, density_);
+                        halos[k].vmax = circular.first;
+                        halos[k].rmax = circular.second;
                     }
                 }
                 return halos;

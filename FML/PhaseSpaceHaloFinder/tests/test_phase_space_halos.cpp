@@ -446,8 +446,13 @@ struct PortableRandom {
         return std::sqrt(-2 * std::log(a)) * std::cos(2 * std::acos(-1.0) * b);
     }
 };
-void planted_plummer(std::vector<Particle> & p, PortableRandom & rng, std::size_t n, double particle_mass,
-                     double scale, Vector centre, Vector bulk) {
+void planted_plummer(std::vector<Particle> & p,
+                     PortableRandom & rng,
+                     std::size_t n,
+                     double particle_mass,
+                     double scale,
+                     Vector centre,
+                     Vector bulk) {
     const double total = n * particle_mass, cut = 10 * scale,
                  umax = std::pow(cut / std::sqrt(cut * cut + scale * scale), 3);
     for (std::size_t i = 0; i < n; ++i) {
@@ -505,13 +510,41 @@ void planted_subhalo() {
             sub += id >= sub_first && id < sub_end;
         if (sub < .9 * (sub_end - sub_first))
             continue;
-        const auto host_halo = std::find_if(catalogue.halos.begin(), catalogue.halos.end(),
-                                            [&](const auto & x) { return x.id == h.host; });
+        const auto host_halo = std::find_if(catalogue.halos.begin(), catalogue.halos.end(), [&](const auto & x) {
+            return x.id == h.host;
+        });
         found = host_halo != catalogue.halos.end() && host_halo->particle_ids.size() > 6000 &&
                 std::abs(h.position[0] - (.3 + r0)) < .005;
     }
     check(catalogue.halos.size() == 4 && found,
           "planted subhalo is not merged into its host through a small host fragment (one-way seed merging)");
+    // Default Vmax as ROCKSTAR: the host's members plus its subhalo's, radii floored at the softening, inside the
+    // radius where the mean enclosed density exceeds the assignment density. Against a direct evaluation, and above
+    // the exclusive estimate (vmax_inclusive = false), which leaves the memberships unchanged.
+    const auto largest = std::max_element(catalogue.halos.begin(), catalogue.halos.end(), [](auto & a, auto & b) {
+        return a.bound_mass < b.bound_mass;
+    });
+    std::vector<double> r;
+    for (const auto & h : catalogue.halos)
+        if (h.id == largest->id || h.host == largest->id)
+            for (auto id : h.particle_ids) {
+                const auto dx = detail::periodic_difference(p[id].position, largest->position, 1);
+                r.push_back(std::max(std::sqrt(detail::dot(dx, dx)), o.softening_support));
+            }
+    std::sort(r.begin(), r.end());
+    double v2 = 0;
+    for (std::size_t i = 0; i < r.size(); ++i)
+        if ((i + 1) * mp > catalogue.resolved_assignment_density * 4 * std::acos(-1.0) / 3 * std::pow(r[i], 3) &&
+            (i + 1 == r.size() || r[i + 1] != r[i]))
+            v2 = std::max(v2, o.gravitational_constant * (i + 1) * mp / r[i]);
+    o.vmax_inclusive = false;
+    const auto exclusive = find(p, o);
+    const auto host_exclusive = std::find_if(exclusive.halos.begin(), exclusive.halos.end(), [&](const auto & x) {
+        return x.id == largest->id;
+    });
+    check(std::abs(largest->vmax / std::sqrt(v2) - 1) < 1e-12 && host_exclusive != exclusive.halos.end() &&
+              host_exclusive->vmax < largest->vmax && same_membership(catalogue, exclusive),
+          "default Vmax as ROCKSTAR (host and subhaloes, softening floor, density limit) = direct evaluation");
 }
 void benchmark() {
     for (std::size_t n : {1000, 4000, 16000}) {

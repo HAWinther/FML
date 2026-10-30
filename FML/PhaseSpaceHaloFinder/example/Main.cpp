@@ -5,10 +5,11 @@
 #include <sstream>
 int main(int argc, char ** argv) {
     using namespace FML::PHASE_SPACE_HALOS;
-    if (argc != 7) {
+    if (argc != 7 && argc != 8) {
         if (FML::ThisTask == 0)
             std::cerr
-                << "Usage: phase_halos input_prefix output_prefix boxsize softening_support G position_to_physical\n"
+                << "Usage: phase_halos input_prefix output_prefix boxsize softening_support G position_to_physical "
+                   "[hubble_velocity_gradient]\n"
                 << "Read input_prefix.rank.txt: id x y z vx vy vz mass; peculiar velocities and already migrated x "
                    "slabs.\n";
         return 1;
@@ -21,6 +22,8 @@ int main(int argc, char ** argv) {
         o.softening_support = std::stod(argv[4]);
         o.gravitational_constant = std::stod(argv[5]);
         o.position_to_physical = std::stod(argv[6]);
+        if (argc == 8)
+            o.hubble_velocity_gradient = std::stod(argv[7]);
         o.validate();
         std::ifstream in(std::string(argv[1]) + "." + std::to_string(FML::ThisTask) + ".txt");
         if (!in)

@@ -42,6 +42,43 @@ The same isolated 4000-particle Plummer realization has scale radius .015 Mpc/h 
 
 Vmax differs by 0.0451%; reported masses differ by -0.2873% despite their distinct definitions. Centre separation is 0.00046179 Mpc/h. This catches gross errors in a controlled case; it does not validate cosmological halo statistics or subhalo purity.
 
+## Cosmological comparison with ROCKSTAR (30 October 2026)
+
+COLASolver snapshot: 128^3 particles in 64 Mpc/h, force grid 384^3 (cell 0.167 Mpc/h), 40 steps from z = 30,
+z = 0, m_p = 1.10e10 Msun/h. ROCKSTAR as above (header Omega_Lambda set to 1 - Omega_m; ROCKSTAR rejects the
+radiation term) with FILE_FORMAT = "GADGET2", FORCE_RES = .1667, MASS_DEFINITION = "200b", b = .28,
+MIN_HALO_OUTPUT_SIZE = 20, FULL_PARTICLE_CHUNKS = 1. FML: `example/phase_halos parts out 64 .1667 4.30091e-9 1 100`
+(Mpc/h, km/s, Msun/h, Hubble flow in the binding). `tests/compare_rockstar_cosmo.py` converts the snapshot and
+compares (mutual best particle overlap; N = bound particles: FML inclusive bound, ROCKSTAR mbound_200b; ROCKSTAR
+hosts are not inside R200b of a more massive halo). This is a PM-resolution snapshot: haloes are softened at the
+cell size and subhaloes are not reliable, so it tests host detection and Vmax, not subhalo completeness.
+
+| | FML | ROCKSTAR |
+|---|---|---|
+| Objects (hosts) | 5685 (4666) | 2915 (2268) |
+| Time | 71 s (2 threads) | 7 s (1 process) |
+
+| Hosts, N bound | ROCKSTAR hosts matched | median Vmax FML/ROCKSTAR (default; exclusive) | FML hosts matched |
+|---|---|---|---|
+| 50-100 | 95.0% | 1.010 | 64.6% |
+| 100-1000 | 96.3% | 1.004; 1.001 | 97.6% |
+| > 1000 | 96.8% | 0.976; 0.936 | 98.6% |
+
+Vmax functions N(>V) above 150, 200, 300, 500 km/s: hosts 724/797, 362/395, 125/142, 22/29 (exclusive Vmax:
+707, 336, 111, 14); all objects 952/1010, 471/489, 162/167, 32/33.
+
+- Hosts with more than 100 particles are found by both (96-99% matched both ways).
+- The exclusive Vmax was 6% low for massive hosts because subhalo members are excluded; the default now follows
+  ROCKSTAR (object plus descendants, softening floor, density limit). The remaining 2.4% for hosts above 1000
+  particles: ROCKSTAR checks binding once against the combined host + substructure potential, our members are
+  unbound object by object (Vmax from all particles around our centres is 1.005 of ROCKSTAR's).
+- 2400 extra FML hosts with 20-50 particles have no particles in a printed ROCKSTAR halo; ROCKSTAR finds the
+  same groups (2499 internal haloes, median 30 particles) but does not print them (fewer than 20 bound particles
+  inside R200b; the COLA haloes are diffuse at the force resolution). Output definition, not detection.
+- Subhaloes: about a third of ROCKSTAR's 20-100 particle subhaloes are matched; not interpretable at this
+  resolution. A real N-body snapshot is needed for the core-subhalo question.
+- ROCKSTAR's Vmax is 0 for small haloes (no radius above the density threshold); so is the default FML Vmax.
+
 ## Small local performance cases
 
 Median of three separate process runs, without our own concurrent builds/tests. Full `find_distributed` pipeline, including validation, label convergence, routing, hierarchy, unbinding and properties. The input is one Plummer parent; resolving many parents and the largest-parent load imbalance is a separate scaling problem. Peak RSS includes runtime/startup, outputs and the synthetic fixture; it is process peak across the increasing-size sequence, not isolated workspace. Every rank generates the same fixture before selecting its owned particles for this benchmark; the library does not all-gather those particles. Timings on a shared machine are approximate.

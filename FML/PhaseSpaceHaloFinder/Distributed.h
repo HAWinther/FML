@@ -70,7 +70,7 @@ namespace FML::PHASE_SPACE_HALOS {
                                                 o.potential_opening_angle,
                                                 o.minimum_bound_fraction,
                                                 o.minimum_peak_contrast};
-            const std::array<std::uint64_t, 12> sizes{std::uint64_t(o.minimum_particles),
+            const std::array<std::uint64_t, 13> sizes{std::uint64_t(o.minimum_particles),
                                                       std::uint64_t(o.minimum_seed_particles),
                                                       std::uint64_t(o.max_parent_particles),
                                                       std::uint64_t(o.max_local_particles),
@@ -81,7 +81,8 @@ namespace FML::PHASE_SPACE_HALOS {
                                                       std::uint64_t(o.max_label_iterations),
                                                       std::uint64_t(o.max_message_bytes),
                                                       std::uint64_t(o.unbind),
-                                                      std::uint64_t(o.saddle_samples)};
+                                                      std::uint64_t(o.saddle_samples),
+                                                      std::uint64_t(o.vmax_inclusive)};
             auto copy = values;
             auto copies = FML::GatherFromTasks(&copy);
             auto integers = sizes;

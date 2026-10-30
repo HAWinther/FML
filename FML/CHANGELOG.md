@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### PhaseSpaceHaloFinder: Vmax as ROCKSTAR by default; cosmological ROCKSTAR comparison
+- `Options::vmax_inclusive` (default true): Vmax/Rmax from the bound members of the object and all its
+  descendants, radii floored at the softening, inside the assignment-density radius, as ROCKSTAR. `false` gives the
+  previous exclusive estimate. Massive hosts on a COLA snapshot: median Vmax 0.976 of ROCKSTAR (was 0.936).
+- `tests/compare_rockstar_cosmo.py` and a RESULTS.md section: 96-99% of hosts above 100 particles matched both
+  ways; the extra small FML objects are groups ROCKSTAR finds but does not print. The example takes an optional
+  Hubble velocity gradient.
+
 ### Survey mocks: MANGLE masks and HDF5 output (backlog item 53 phase 3)
 - `read_mangle_polygons` / `mangle_footprint`: ascii MANGLE polygon masks (caps and weights) with an RA/Dec lookup
   grid; tested against analytic box, circle and ring membership. `footprint = "mangle"` in make_survey.
