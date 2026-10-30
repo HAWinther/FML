@@ -121,6 +121,8 @@ namespace FML {
             double epsilon_0{0.0};
             /// Hubble factor today without the h
             double H0_over_h{0.0};
+            /// The dimensionless factor Mpl^2 / (Msun H0 / h) 
+            double Mpl2_over_Msun_H0_over_h{0.0};
             /// Binding energy of helium
             double xhi0{0.0};
             /// Binding energy of ionized helium
@@ -266,6 +268,7 @@ namespace FML {
                 xhi1 = SI::xhi1 * J;                   // Ionization energy for singly ionized Helium
                 yr = SI::yr * s;                       // One year
                 Gyr = 1e9 * yr;                        // Gigayear
+                Mpl2_over_Msun_H0_over_h = (c * c * c) / (8.0 * M_PI * G * Msun * H0_over_h);
             }
 
             /// Convert a length in your unit to SI unit
