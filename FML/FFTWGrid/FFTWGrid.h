@@ -1003,10 +1003,9 @@ namespace FML {
                 NmeshTotComplex + NmeshTotComplexSlice * (n_extra_x_slices_left + n_extra_x_slices_right);
             NmeshTotRealAlloc = 2 * NmeshTotComplexAlloc;
 
-            // Allocate memory and initialize to 0
+            // Allocate memory and initialize to 0 (resize value-initializes the elements, so no extra fill is needed)
             fourier_grid_raw.resize(NmeshTotComplexAlloc);
             add_memory_label("FFTWGrid");
-            std::fill(fourier_grid_raw.begin(), fourier_grid_raw.end(), 0.0);
 
             // Check alignment (relevant for SIMD instructions) since we don't use fftw_malloc
             // If you have SIMD and the alignment is off then changing to an alignment allocator

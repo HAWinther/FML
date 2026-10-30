@@ -294,6 +294,14 @@ class NBodySimulation {
     std::string fftw_wisdom_output_filename() const;
     size_t fftw_plans_in_saved_wisdom{0};
 
+    // The density and force grids of the PM step, kept from step to step: allocating new ones every step makes
+    // the operating system zero and map the memory of all of them again (page faults on ~4 full grids per step).
+    // Released before the analysis at the outputs, which needs the memory for other grids
+    FFTWGrid<NDIM> pm_density_grid;
+    std::array<FFTWGrid<NDIM>, NDIM> pm_force_grids;
+    FFTWGrid<NDIM> & pm_density_workspace(int nmesh, int nleft, int nright);
+    void release_pm_workspace();
+
     // The parts of init()
     void output_background_and_growth_functions();
     void setup_initial_power_spectrum();
@@ -1326,6 +1334,28 @@ void NBodySimulation<NDIM, T>::set_force_settings_for_step(double a) {
         std::cout << "Using the early-time force (" << f.early_method << ") at z = " << 1.0 / a - 1.0 << "\n";
 }
 
+/// The density grid of the PM step (the grid of the previous step if it has the same size and extra slices,
+/// otherwise a new one). Its content is left over from the previous step: the density assignment overwrites it
+template <int NDIM, class T>
+auto NBodySimulation<NDIM, T>::pm_density_workspace(int nmesh, int nleft, int nright) -> FFTWGrid<NDIM> & {
+    auto & grid = pm_density_grid;
+    if (grid.get_nmesh() != nmesh or grid.get_n_extra_slices_left() != nleft or
+        grid.get_n_extra_slices_right() != nright) {
+        grid = FFTWGrid<NDIM>(nmesh, nleft, nright);
+        grid.add_memory_label("NBodySimulation::pm_density_grid");
+    }
+    grid.set_grid_status_real(true);
+    return grid;
+}
+
+/// Free the PM density and force grids (they are allocated again at the next step)
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::release_pm_workspace() {
+    pm_density_grid.free();
+    for (auto & grid : pm_force_grids)
+        grid.free();
+}
+
 /// One kick-drift step: density -> force -> kick -> COLA kick -> lightcone -> COLA drift -> drift
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
@@ -1342,7 +1372,7 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
     }
 
     // Compute total density field
-    FFTWGrid<NDIM> density_grid_fourier(force.nmesh, nleftright.first, nleftright.second);
+    FFTWGrid<NDIM> & density_grid_fourier = pm_density_workspace(force.nmesh, nleftright.first, nleftright.second);
     if (s.delta_time_kick != 0.0) {
         timer.StartTiming("ComputeDensityField");
         compute_density_field_fourier(density_grid_fourier, s.apos);
@@ -1353,7 +1383,7 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
     }
 
     // Compute forces and kick particles (updates velocity)
-    std::array<FFTWGrid<NDIM>, NDIM> force_real;
+    std::array<FFTWGrid<NDIM>, NDIM> & force_real = pm_force_grids;
     if (s.delta_time_kick != 0.0 and not sim.enforce_LPT_trajectories) {
         timer.StartTiming("ComputeForce");
         grav->compute_force(s.apos,
@@ -1525,13 +1555,14 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const StepInfo & s) {
         FML::PARTICLE::shift_particles<T, NDIM>(p, npart, shift, +1.0, wrap_type);
         density_shift = shift;
 
-        FFTWGrid<NDIM> density_grid_fourier(force.nmesh, nleftright.first, nleftright.second + 1);
+        FFTWGrid<NDIM> & density_grid_fourier =
+            pm_density_workspace(force.nmesh, nleftright.first, nleftright.second + 1);
         timer.StartTiming("ComputeDensityField");
         compute_density_field_fourier(density_grid_fourier, s.apos);
         timer.EndTiming("ComputeDensityField");
 
         timer.StartTiming("ComputeForce");
-        std::array<FFTWGrid<NDIM>, NDIM> force_real;
+        std::array<FFTWGrid<NDIM>, NDIM> & force_real = pm_force_grids;
         grav->compute_force(s.apos,
                             grav->H0_hmpc * sim.boxsize,
                             density_grid_fourier,
@@ -1573,6 +1604,9 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const StepInfo & s) {
 /// Do all the on the fly analysis that is turned on and write the output
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) {
+
+    // The analysis allocates its own grids
+    release_pm_workspace();
 
     // Create snapshot folder
     const std::string snapshot_folder =

@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: the PM density and force grids are kept from step to step
+- The density grid and the force grids of a step (also with force interlacing) are members of the simulation and
+  reused at the next step instead of being allocated again (each new grid makes the operating system map and zero
+  its memory again: page faults on about four full grids per step). They are freed before the analysis at each
+  output. 128^3 particles, 256^3 force mesh, 20 COLA steps, 2 threads: time stepping 35.7 s -> 28.7 s (force 19.1 s
+  -> 15.1 s). P(k) identical for the standard, interlaced, finite-difference and f(R) forces.
+- FFTWGrid's constructor no longer fills the grid with zeros a second time (resize already zeroes it).
+
 ### OpenMP over grid rows instead of slices
 - `FFTWGrid::get_local_nrows()`, `get_real_range_of_rows(begin, end)` and `get_fourier_range_of_rows(begin, end)`:
   rows are the lines of cells along the last dimension (Local_nx Nmesh^(N-2) per task, stored one after the other).
