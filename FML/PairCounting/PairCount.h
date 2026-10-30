@@ -91,16 +91,27 @@ namespace FML {
             /// direction (z-axis is this example).
             inline double effective_infinity = 1e10;
 
-            /// For binning particles to cells. The minimum number of cells to reach the maximum distance
+            /// For binning particles to cells. The minimum number of cells to reach the maximum distance.
+            /// DEPRECATED: only used by the deprecated GeneralPairCounter (not by the detail::CellList engine).
             inline int ncells_to_rmax = 8;
             /// For binning particles to cells. The minimum grid-size.
+            /// DEPRECATED: only used by the deprecated GeneralPairCounter (not by the detail::CellList engine).
             inline int ngrid_min_size = 10;
 
             /// This is the general algorithm for computing pair counts.
             /// It finds all pairs within a separation rmax and calls the binning_function
             /// for all pairs from which you can take care of everything.
             /// NB: the binning_function is called
+            ///
+            /// DEPRECATED: legacy pair counter built on ParticlesInBoxes. It is no longer used anywhere in FML;
+            /// the correlation-function routines below (RadialCorrelationFunctionBox/Survey,
+            /// AngularCorrelationFunctionBox/Survey) use the detail::CellList / detail::count_pairs engine,
+            /// which is faster and MPI/OpenMP parallel. Kept for backward compatibility only and may be
+            /// removed in a future version (together with the knobs ncells_to_rmax and ngrid_min_size).
             template <class T, class U>
+            [[deprecated(
+                "FML::CORRELATIONFUNCTIONS::PAIRCOUNTS::GeneralPairCounter is deprecated: use the detail::CellList / "
+                "detail::count_pairs engine (as in RadialCorrelationFunctionBox)")]]
             void GeneralPairCounter(FML::PARTICLE::ParticlesInBoxes<T> & grid,
                                     FML::PARTICLE::ParticlesInBoxes<U> & grid2,
                                     const std::function<void(int, double *, T &, U &)> & binning_function,
@@ -182,6 +193,7 @@ namespace FML {
             /// Cross pair counts using grid to speed it up
             /// Cross seems to be faster if we loop over the coarsest
             /// grid first
+            /// DEPRECATED: see the declaration above.
             //====================================================
             template <class T, class U>
             void GeneralPairCounter(FML::PARTICLE::ParticlesInBoxes<T> & grid1,
