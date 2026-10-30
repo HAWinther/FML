@@ -133,6 +133,8 @@ namespace SIMCODE {
         bool use_scaledependent_cola;         // If cola, use cola with scaledependent growth?
         bool enforce_LPT_trajectories{false}; // No PM force, particles follow LPT trajectories (requires COLA)
         int cola_LPT_order{2};                // The LPT order for COLA
+        std::string fftw_planner{"estimate"}; // FFTW planner flag: estimate, measure, patient or exhaustive
+        std::string fftw_wisdom_file;         // FFTW wisdom (plans) to read at the start ("" = none)
     };
 
     struct ForceSettings {
@@ -334,6 +336,8 @@ namespace SIMCODE {
             r.get("simulation_boxsize", simulation.boxsize);
             r.get("simulation_use_cola", simulation.use_cola);
             r.get("simulation_use_scaledependent_cola", simulation.use_scaledependent_cola);
+            r.get("simulation_fftw_planner", simulation.fftw_planner);
+            r.get("simulation_fftw_wisdom_file", simulation.fftw_wisdom_file);
             if (simulation.use_cola) {
                 r.get_optional("simulation_enforce_LPT_trajectories", simulation.enforce_LPT_trajectories);
                 r.get_optional("simulation_cola_LPT_order", simulation.cola_LPT_order);

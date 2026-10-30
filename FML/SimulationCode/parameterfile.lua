@@ -29,6 +29,13 @@ simulation_use_cola = true
 -- If gravity model has scaledependent growth. If this is false
 -- then we use the k=0 limit of the growth factors when doing COLA
 simulation_use_scaledependent_cola = false
+-- How FFTW plans the transforms: estimate (no planning), measure, patient
+-- or exhaustive (time the candidate algorithms: faster transforms, slower start).
+-- The plans made are written to fftw_wisdom_[simulation_name].txt in the
+-- output folder: give that file below to skip the planning in later runs
+simulation_fftw_planner = "estimate"
+-- FFTW wisdom (plans) to read at the start ("" = none)
+simulation_fftw_wisdom_file = ""
 -- Let the particles follow the LPT trajectories during the simulation
 -- i.e. we do not compute any forces
 -- NB: for normal simulations make sure this is set to false

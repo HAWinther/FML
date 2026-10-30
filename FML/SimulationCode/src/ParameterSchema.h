@@ -188,6 +188,23 @@ namespace SIMCODE {
                            "The LPT order of COLA (1 or 2). Has to be <= ic_LPT_order. If < 1 COLA is turned off");
             });
 
+            b.always_optional("simulation_fftw_planner",
+                       "estimate",
+                       "How FFTW makes its plans. estimate: no measuring (fast to start, slower transforms). "
+                       "measure, patient, exhaustive: time candidate algorithms the first time each grid size is "
+                       "transformed (faster transforms, often 1.5-2x for large grids, but planning can take "
+                       "seconds to minutes). The plans made are written to fftw_wisdom_[simulation_name].txt in "
+                       "the output folder (not for estimate): give that file as simulation_fftw_wisdom_file to "
+                       "skip the planning in later runs",
+                       {"estimate", "measure", "patient", "exhaustive"});
+            b.always_optional("simulation_fftw_wisdom_file",
+                       "",
+                       "FFTW wisdom (plans) to read at the start, e.g. the fftw_wisdom_[simulation_name].txt "
+                       "written by an earlier run (\"\": none). Plans in it are used for the transforms they "
+                       "match (same FFTW version, precision, grid size and number of threads; a different machine "
+                       "or thread count gives plans that are valid but possibly slow). Other transforms are "
+                       "planned with simulation_fftw_planner");
+
             b.section("Cosmology");
             b.optional("cosmology_model",
                        "LCDM",

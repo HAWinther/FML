@@ -1,4 +1,6 @@
 #include <cerrno>
+#include <cstdio>
+#include <stdexcept>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
@@ -332,7 +334,12 @@ namespace FML {
             auto it = cache.find(key);
             return it == cache.end() ? nullptr : &it->second;
         }
-        void store_fftw_plan(const FFTWPlanKey & key, my_fftw_plan plan) { get_fftw_plan_cache()[key] = plan; }
+        static size_t fftw_plans_made = 0;
+        void store_fftw_plan(const FFTWPlanKey & key, my_fftw_plan plan) {
+            get_fftw_plan_cache()[key] = plan;
+            fftw_plans_made++;
+        }
+        size_t get_number_of_fftw_plans_made() { return fftw_plans_made; }
         void clear_fftw_plan_cache() {
             auto & cache = get_fftw_plan_cache();
             for (auto & entry : cache)
@@ -341,6 +348,62 @@ namespace FML {
         }
         void set_fftw_planner_flag(unsigned int flag) { fftw_planner_flag = flag; }
         unsigned int get_fftw_planner_flag() { return fftw_planner_flag; }
+
+        static const std::vector<std::pair<std::string, unsigned int>> & fftw_planner_flag_names() {
+            static const std::vector<std::pair<std::string, unsigned int>> names{{"estimate", FFTW_ESTIMATE},
+                                                                                 {"measure", FFTW_MEASURE},
+                                                                                 {"patient", FFTW_PATIENT},
+                                                                                 {"exhaustive", FFTW_EXHAUSTIVE}};
+            return names;
+        }
+        unsigned int fftw_planner_flag_from_name(const std::string & name) {
+            for (const auto & entry : fftw_planner_flag_names())
+                if (entry.first == name)
+                    return entry.second;
+            throw std::invalid_argument("Unknown FFTW planner flag [" + name +
+                                        "]: choose between estimate, measure, patient and exhaustive");
+        }
+        std::string fftw_planner_flag_name(unsigned int flag) {
+            for (const auto & entry : fftw_planner_flag_names())
+                if (entry.second == flag)
+                    return entry.first;
+            return "unknown (" + std::to_string(flag) + ")";
+        }
+
+        // The result of task 0 on all tasks
+        static bool fftw_wisdom_result_on_all_tasks(bool ok) {
+#ifdef USE_MPI
+            int value = ok ? 1 : 0;
+            MPI_Bcast(&value, 1, MPI_INT, 0, FML::communicator);
+            ok = value == 1;
+#endif
+            return ok;
+        }
+        bool load_fftw_wisdom(const std::string & filename) {
+            bool ok = false;
+            if (FML::ThisTask == 0)
+                ok = IMPORT_WISDOM_FROM_FILENAME(filename.c_str()) != 0;
+            ok = fftw_wisdom_result_on_all_tasks(ok);
+#ifdef USE_MPI
+            if (ok)
+                MPI_BROADCAST_WISDOM(FML::communicator);
+#endif
+            return ok;
+        }
+        bool save_fftw_wisdom(const std::string & filename) {
+#ifdef USE_MPI
+            MPI_GATHER_WISDOM(FML::communicator);
+#endif
+            bool ok = false;
+            if (FML::ThisTask == 0) {
+                const std::string tmpfile = filename + ".tmp";
+                ok = EXPORT_WISDOM_TO_FILENAME(tmpfile.c_str()) != 0;
+                ok = ok and std::rename(tmpfile.c_str(), filename.c_str()) == 0;
+                if (not ok)
+                    std::remove(tmpfile.c_str());
+            }
+            return fftw_wisdom_result_on_all_tasks(ok);
+        }
 #endif
 
         void init_fftw([[maybe_unused]] int * argc, [[maybe_unused]] char *** argv) {

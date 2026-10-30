@@ -288,6 +288,12 @@ class NBodySimulation {
     }
 
   protected:
+    // FFTW planner flag and wisdom (plans): read at the start, written to the output folder when new plans are made
+    void setup_fftw();
+    void save_fftw_wisdom_if_new_plans();
+    std::string fftw_wisdom_output_filename() const;
+    size_t fftw_plans_in_saved_wisdom{0};
+
     // The parts of init()
     void output_background_and_growth_functions();
     void setup_initial_power_spectrum();
@@ -438,6 +444,8 @@ void NBodySimulation<NDIM, T>::init() {
             throw std::runtime_error("Cannot create output directory [" + params.output.folder + "]");
         }
     }
+
+    setup_fftw();
 
     output_background_and_growth_functions();
 
@@ -1141,6 +1149,58 @@ void NBodySimulation<NDIM, T>::read_ic() {
 }
 
 //=============================================================================
+// FFTW plans. With simulation_fftw_planner = measure (or slower) FFTW times
+// candidate algorithms the first time each grid size is transformed. The plans
+// (wisdom) are written to the output folder so that later runs can read them
+// with simulation_fftw_wisdom_file and skip the planning
+//=============================================================================
+
+template <int NDIM, class T>
+std::string NBodySimulation<NDIM, T>::fftw_wisdom_output_filename() const {
+    return params.output.path("fftw_wisdom_" + params.simulation.name + ".txt");
+}
+
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::setup_fftw() {
+    const auto & planner = params.simulation.fftw_planner;
+    const auto & wisdom_file = params.simulation.fftw_wisdom_file;
+    FML::GRID::set_fftw_planner_flag(FML::GRID::fftw_planner_flag_from_name(planner));
+    if (wisdom_file != "") {
+        if (not FML::GRID::load_fftw_wisdom(wisdom_file))
+            throw std::runtime_error("Cannot read FFTW wisdom from simulation_fftw_wisdom_file = [" + wisdom_file +
+                                     "] (missing file, or wisdom from another FFTW version or precision)");
+    }
+    if (FML::ThisTask == 0) {
+        std::cout << "# FFTW planner: " << planner << " with " << FML::GRID::get_fftw_nthreads() << " thread(s)";
+        if (wisdom_file != "")
+            std::cout << ", wisdom read from " << wisdom_file;
+        if (planner != "estimate")
+            std::cout << ". Plans made are written to " << fftw_wisdom_output_filename();
+        std::cout << "\n";
+    }
+}
+
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::save_fftw_wisdom_if_new_plans() {
+    // Plans made with FFTW_ESTIMATE are not worth keeping (no measuring was done)
+    if (params.simulation.fftw_planner == "estimate")
+        return;
+    // Collective: all tasks must agree on whether to save (they make the same plans, but be safe)
+    size_t nplans = FML::GRID::get_number_of_fftw_plans_made();
+    FML::MaxOverTasks(&nplans);
+    if (nplans == fftw_plans_in_saved_wisdom)
+        return;
+    const auto filename = fftw_wisdom_output_filename();
+    if (FML::GRID::save_fftw_wisdom(filename)) {
+        fftw_plans_in_saved_wisdom = nplans;
+        if (FML::ThisTask == 0)
+            std::cout << "# Wrote FFTW wisdom (" << nplans << " plans made in this run) to " << filename << "\n";
+    } else if (FML::ThisTask == 0) {
+        std::cout << "# Warning: could not write FFTW wisdom to " << filename << "\n";
+    }
+}
+
+//=============================================================================
 // Running the simulation
 //=============================================================================
 
@@ -1208,10 +1268,16 @@ void NBodySimulation<NDIM, T>::run() {
 
                 const auto & s = steps[istep];
                 step({s.apos, s.apos_new, s.avel_new, s.delta_time_drift, s.delta_time_kick, s.velocity_scale});
+
+                // Most plans are made by now (initial conditions and the first step): save them already so that
+                // they are kept also if the run does not finish
+                if (istep_total == 1 and istep == 0)
+                    save_fftw_wisdom_if_new_plans();
             }
         }
 
         analyze_and_output(ioutput, output_redshifts[ioutput]);
+        save_fftw_wisdom_if_new_plans();
     }
     timer.EndTiming("Timestepping");
 
@@ -1219,6 +1285,7 @@ void NBodySimulation<NDIM, T>::run() {
     if (lightcone->lightcone_active()) {
         lightcone->create_weak_lensing_maps();
     }
+    save_fftw_wisdom_if_new_plans();
 
     timer.EndTiming("The whole simulation");
     if (FML::ThisTask == 0) {

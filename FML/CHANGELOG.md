@@ -5,6 +5,20 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### FFTW planner flag and wisdom (plans) in SimulationCode and the library
+- SimulationCode parameters `simulation_fftw_planner` (estimate, measure, patient, exhaustive; default estimate as
+  before) and `simulation_fftw_wisdom_file` (plans to read at the start; default none). With a planner other than
+  estimate the plans made are written to `fftw_wisdom_[simulation_name].txt` in the output folder after the first
+  step, after each output and at the end (only when new plans were made), so a later run can read them and skip the
+  planning. Both parameters are optional also with `all_parameters_must_be_in_file = true`.
+- 128^3 particles, 256^3 force mesh, 20 COLA steps, 2 threads: estimate 38.6 s; measure 59.1 s (planning); measure
+  or estimate with the wisdom from that run 30.5 / 29.9 s (FFTW uses wisdom for estimate too). P(k) identical. With
+  2 MPI tasks and patient: 30.1 s planning -> 1.4 s with the wisdom.
+- Library (Global): `FML::GRID::fftw_planner_flag_from_name` / `fftw_planner_flag_name`,
+  `load_fftw_wisdom` / `save_fftw_wisdom` (collective, return success on all tasks, written via a temporary file)
+  and `get_number_of_fftw_plans_made`. `FFTWGrid::load_wisdom` / `save_wisdom` use them and now warn when the file
+  cannot be read or written (before: silently ignored). Tests in `tests/test_grids.cpp` (mode `wisdom`).
+
 ### Cleanup: deprecated legacy pair counter, removed `HybridBiasModifiedGravity.h`
 - `PAIRCOUNTS::GeneralPairCounter` (and its knobs `ncells_to_rmax`, `ngrid_min_size`) is marked `[[deprecated]]`: it is
   no longer used in FML (the correlation-function routines use the `detail::CellList` engine). Kept for now.

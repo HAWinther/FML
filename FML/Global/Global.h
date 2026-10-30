@@ -439,6 +439,29 @@ namespace FML {
         void clear_fftw_plan_cache();
         void set_fftw_planner_flag(unsigned int flag);
         unsigned int get_fftw_planner_flag();
+        /// The FFTW planner flag from its name: estimate, measure, patient or exhaustive (throws
+        /// std::invalid_argument for anything else)
+        unsigned int fftw_planner_flag_from_name(const std::string & name);
+        /// The name of a planner flag (estimate, measure, patient or exhaustive)
+        std::string fftw_planner_flag_name(unsigned int flag);
+        /// The number of FFTW plans made so far (plans for new grid sizes, thread counts, alignments or flags)
+        size_t get_number_of_fftw_plans_made();
+
+        //=============================================================
+        // FFTW wisdom: the plans FFTW has made, saved to a file so that
+        // a later run can make the same plans without measuring again
+        // (with FFTW_MEASURE or slower planner flags most of the time of
+        // the first transform of each grid size is spent measuring).
+        // Wisdom is only valid for the same FFTW version, precision,
+        // machine and number of threads: plans that do not match are
+        // simply measured again. Both functions are collective with MPI
+        // (task 0 reads/writes the file) and return the same on all tasks.
+        //=============================================================
+        /// Read wisdom from a file. Returns false if it cannot be read (nothing is changed then)
+        bool load_fftw_wisdom(const std::string & filename);
+        /// Write the wisdom of all tasks to a file (via a temporary file, so an existing file is
+        /// only replaced by a complete one). Returns false if it cannot be written
+        bool save_fftw_wisdom(const std::string & filename);
     } // namespace GRID
 
     //=============================================================

@@ -640,32 +640,18 @@ namespace FML {
         template <int N>
         void FFTWGrid<N>::load_wisdom([[maybe_unused]] std::string filename) const {
 #ifdef USE_FFTW
-#ifdef DEBUG_FFTWGRID
-            if (FML::ThisTask == 0) {
-                std::cout << "[FFTWGrid::load_wisdom] Filename " << filename << ". Label: " + name + "\n";
-            }
-#endif
-            if (FML::ThisTask == 0)
-                IMPORT_WISDOM_FROM_FILENAME(filename.c_str());
-#ifdef USE_MPI
-            MPI_BROADCAST_WISDOM(FML::communicator);
-#endif
+            const bool ok = FML::GRID::load_fftw_wisdom(filename);
+            if (FML::ThisTask == 0 and not ok)
+                std::cout << "Warning: [FFTWGrid::load_wisdom] Could not read FFTW wisdom from " << filename << "\n";
 #endif
         }
 
         template <int N>
         void FFTWGrid<N>::save_wisdom([[maybe_unused]] std::string filename) const {
 #ifdef USE_FFTW
-#ifdef USE_MPI
-            MPI_GATHER_WISDOM(FML::communicator);
-#endif
-            if (FML::ThisTask == 0)
-                EXPORT_WISDOM_TO_FILENAME(filename.c_str());
-#ifdef DEBUG_FFTWGRID
-            if (FML::ThisTask == 0) {
-                std::cout << "[FFTWGrid::save_wisdom] Filename " << filename << ". Label: " + name + "\n";
-            }
-#endif
+            const bool ok = FML::GRID::save_fftw_wisdom(filename);
+            if (FML::ThisTask == 0 and not ok)
+                std::cout << "Warning: [FFTWGrid::save_wisdom] Could not write FFTW wisdom to " << filename << "\n";
 #endif
         }
 

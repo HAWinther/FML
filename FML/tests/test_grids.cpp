@@ -123,6 +123,48 @@ void test_measure() {
     FML::GRID::set_fftw_planner_flag(FFTW_ESTIMATE);
 }
 
+void test_wisdom() {
+    // Planner flag names
+    bool names_ok = true;
+    for (std::string name : {"estimate", "measure", "patient", "exhaustive"})
+        names_ok = names_ok and FML::GRID::fftw_planner_flag_name(FML::GRID::fftw_planner_flag_from_name(name)) == name;
+    check(names_ok, "FFTW planner flag names round-trip (estimate, measure, patient, exhaustive)");
+    bool threw = false;
+    try {
+        FML::GRID::fftw_planner_flag_from_name("Measure");
+    } catch (std::invalid_argument &) {
+        threw = true;
+    }
+    check(threw, "Unknown FFTW planner flag name throws std::invalid_argument");
+
+    // A plan for a new size is counted, saved as wisdom and can be read back
+    const size_t nplans_before = FML::GRID::get_number_of_fftw_plans_made();
+    FML::GRID::set_fftw_planner_flag(FFTW_MEASURE);
+    fft_roundtrip_with_extra_slices<3>(4 * 5, 0, 1, "3D FFTW_MEASURE planner (Nmesh 20) before saving wisdom");
+    FML::GRID::set_fftw_planner_flag(FFTW_ESTIMATE);
+    check(all_tasks(FML::GRID::get_number_of_fftw_plans_made() == nplans_before + 2),
+          "FFTW plans made are counted (r2c + c2r for a new size)");
+
+    const std::string filename = "test_grids_fftw_wisdom.txt";
+    const bool saved = FML::GRID::save_fftw_wisdom(filename);
+    bool file_ok = true;
+    if (FML::ThisTask == 0) {
+        std::ifstream file(filename);
+        std::string first_word;
+        file >> first_word;
+        file_ok = first_word.rfind("(fftw", 0) == 0 and not std::filesystem::exists(filename + ".tmp");
+    }
+    check(all_tasks(saved), "save_fftw_wisdom succeeds on all tasks");
+    check(all_tasks(file_ok), "the wisdom file is written (no temporary file left)");
+    check(all_tasks(FML::GRID::load_fftw_wisdom(filename)), "load_fftw_wisdom reads it back on all tasks");
+    check(all_tasks(not FML::GRID::load_fftw_wisdom("test_grids_no_such_wisdom_file.txt")),
+          "load_fftw_wisdom of a missing file returns false on all tasks");
+    check(all_tasks(not FML::GRID::save_fftw_wisdom("no_such_folder_for_fml_tests/wisdom.txt")),
+          "save_fftw_wisdom to a folder that does not exist returns false on all tasks");
+    if (FML::ThisTask == 0)
+        std::remove(filename.c_str());
+}
+
 void test_2d_extra() {
     // In 2D the transposed dimension Nmesh/2+1 = 9 is not divisible by 2 or 4 tasks so FFTW
     // needs (and uses) more memory than our local slices: the excess overlaps the right extra slices
@@ -412,6 +454,7 @@ int main(int argc, char ** argv) {
 
     const std::vector<std::pair<std::string, void (*)()>> tests = {
         {"measure", test_measure},
+        {"wisdom", test_wisdom},
         {"extra2d", test_2d_extra},
         {"index", test_index},
         {"ops", test_mpigrid_ops},
