@@ -344,9 +344,8 @@ namespace FML::PHASE_SPACE_HALOS {
                 halo.fof_id = fof;
                 const double original_mass = summarize(p_, seed.members).mass;
                 bool converged = !o_.unbind;
-                // Direct removal corrections are valid only for exact potentials. Subtracting exact particle
-                // contributions from approximate monopoles leaves the removed sources' approximation error behind,
-                // which can dominate the surviving potential. Rebuild approximate potentials after every removal.
+                // The tree potential is evaluated once; later passes subtract the removed particles directly while
+                // that is cheaper than a new tree evaluation (removed x kept pairs below the last tree's visits).
                 const double coupling = o_.gravitational_constant / o_.position_to_physical;
                 std::vector<double> phi;
                 std::uint64_t tree_visits = 0;
@@ -387,8 +386,7 @@ namespace FML::PHASE_SPACE_HALOS {
                         converged = true;
                         break;
                     }
-                    if (o_.potential_opening_angle == 0 &&
-                        double(removed.size()) * double(kept.size()) < double(tree_visits)) {
+                    if (double(removed.size()) * double(kept.size()) < double(tree_visits)) {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif

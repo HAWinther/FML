@@ -20,19 +20,19 @@ The normalization, adaptive nearest-neighbour linking and hierarchical seed-assi
 
 Unbinding uses the **full isolated Newtonian potential**, not a truncated PM/TreePM correction. `BindingPotentialTree` uses a monopole binary tree, excludes self potentials and opens nodes intersecting the softening support. The default opening angle is .7 (`potential_opening_angle`; .3 changed 26 of 5686 objects of a cosmological snapshot by at most 1.7% of their particles at 1.15x the cost, tests/RESULTS.md); opening angle zero gives exact leaf sums. The compact spline Green function is shared with `ShortRangeGravity/Softening.h`; the input length is its support h, not Plummer-equivalent epsilon. The tree can be tested independently against direct sums.
 
-At each iteration the bulk velocity is recomputed. Approximate tree potentials are rebuilt after every removal;
-exact-opening potentials may instead subtract the removed particles directly when that costs fewer interactions.
-Exact subtraction from an approximate monopole is unsafe: the removed sources' approximation error would remain
-in the surviving potential. A particle remains if
+At each iteration the bulk velocity is recomputed. Potentials are initially evaluated with the tree;
+subsequent passes subtract the removed particles directly when that costs fewer interactions than the last tree
+walk, and otherwise rebuild the tree. A particle remains if
 
 ```
 0.5 * |v_pec - v_bulk + hubble_velocity_gradient * (x-x_bulk)|^2 + Phi_self < 0.
 Phi_self = - (G/position_to_physical) * sum_other mass * spline_green(distance,softening_support).
 ```
 
-The historical cosmological timings and opening-angle comparisons in `tests/RESULTS.md` predate this cache
-correction. Rebuilding approximate potentials can increase runtime for objects requiring several unbinding passes
-and can change their surviving memberships; the correction's focused regression and timing checks are recorded there.
+Direct removal corrections applied to approximate monopoles retain the original approximation error.
+For extreme unequal-mass remnants this can affect binding classification; use `potential_opening_angle=0`
+when exact potentials are required. Rebuilding approximate potentials after every removal was rolled back after
+simulation testing found unchanged ROCKSTAR comparison results but about 60% greater runtime (see `tests/RESULTS.md`).
 
 The Hubble term is optional and enters binding only, not the phase-space clustering metric. The potential is that of the assigned halo, with zero at infinity. Host tidal fields, a tidal-radius solver, combined-system major-merger unbinding and modified-gravity binding are not implemented. This is an isolated self-bound convention. Objects below the minimum particle count or minimum retained **mass fraction** are discarded. Failure to reach a stable membership by `max_unbinding_iterations` throws, rather than returning a falsely converged bound object.
 

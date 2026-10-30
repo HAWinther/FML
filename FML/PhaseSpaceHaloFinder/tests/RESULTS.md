@@ -2,32 +2,23 @@
 
 This records a first independent single-snapshot implementation. It is not a production completeness/purity calibration or a claim of ROCKSTAR equivalence.
 
-## Review corrections (30 October 2026)
+## Review corrections and unbinding rollback (30 October 2026)
 
-Approximate potentials are now rebuilt after particle removals. The previous optimization subtracted exact
-particle potentials from approximate monopoles and could leave the removed sources' approximation error in the
-surviving potential. A 64-particle unequal-mass regression loses its cold bound remnant with the previous code;
-the corrected finder retains all 62 cold survivors after removing the two massive interlopers, at opening angles
-0, .3 and .7. Exact-opening runs retain the direct-subtraction shortcut.
+The change that rebuilt approximate potentials after every particle removal has been rolled back. The user's
+simulation test found unchanged ROCKSTAR comparison results, about 60% greater finder runtime, and slower
+execution at the default opening angle .7 than with exact potentials. Incremental direct corrections are again
+used at any opening angle when cheaper than the last tree walk. The regression requiring fresh approximate
+potentials was removed along with that change.
 
-The serial/OpenMP executable passes 33 checks (including this regression) with GCC 12, `-O3 -Wall -Wextra` and
-two threads. Three end-to-end Python harness tests pass with NumPy 2.4.6 and SciPy 1.17.1: uint64 conversion
-round trips, unsorted sparse membership joins and missing/unassigned IDs. The fixtures cover adjacent IDs above
-2^53, IDs above 2^63, and large reference halo IDs. The new `run-python` Makefile target passes. These tests require
-no external ROCKSTAR binary. The new regressions fail with the previous implementation. Multi-rank and external
-ROCKSTAR runs were not repeated for this correction.
+The underlying limitation remains: subtracting exact particle contributions from approximate monopoles retains
+the original approximation error. In a controlled 64-particle unequal-mass case, this loses a cold 62-particle
+remnant after removing two massive interlopers. Exact-opening potentials avoid this monopole-error issue.
+A future performance-preserving correction needs a different potential update.
 
-The historical timing and cosmological comparison sections below predate this correction. In focused local
-before/after runs on the same 16000-particle Plummer fixture (default opening angle .7, two threads), the
-unmodified velocities require no removals: 1.55 s before and 1.54 s after, with 15341 retained members. Scaling
-velocities by 1.3 requires 802 removals: 1.74 s before and 4.35 s after, with the same 14539 retained members.
-Potential interaction counts in the latter case rise from 102905764 to 584763075. These are single-run timings,
-not a portable slowdown estimate; the extra work depends on the number of unbinding passes. The existing
-1000/4000/16000-particle benchmark (opening angle .3) has unchanged interaction counts in these no-removal cases.
-
-The comparison harness now preserves integer IDs during conversion and reference parsing, and joins sorted
-uint64 particle IDs rather than allocating through the maximum ID. Membership-join workspace therefore scales
-with catalogue record counts, including for sparse IDs near the uint64 limit.
+The independent comparison-harness fixes remain: integer IDs are preserved during conversion and reference
+parsing, and sorted uint64 particle IDs are joined without allocating through the maximum ID. Three end-to-end
+Python checks cover uint64 round trips, unsorted sparse memberships and missing/unassigned IDs, including IDs
+above 2^53 and 2^63. The optional `run-python` target requires NumPy and SciPy, not an external ROCKSTAR binary.
 
 ## Regression and manufactured-truth checks
 
