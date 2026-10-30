@@ -1,6 +1,6 @@
 # Single-snapshot phase-space halo finder
 
-An independent C++17 implementation in `FML::PHASE_SPACE_HALOS`. It finds spatial FoF parents, resolves phase-space peaks, assigns particles hierarchically, removes unbound particles and returns host/subhalo candidates with stable particle-ID memberships. It supports serial/OpenMP and periodic slab MPI without an all-gather of particle payloads. It does not modify the input particles or integrate into COLASolver automatically.
+An independent C++17 implementation in `FML::PHASE_SPACE_HALOS`. It finds spatial FoF parents, resolves phase-space peaks, assigns particles hierarchically, removes unbound particles and returns host/subhalo candidates with stable particle-ID memberships. It supports serial/OpenMP and periodic slab MPI without an all-gather of particle payloads. It does not modify the input particles or integrate into SimulationCode automatically.
 
 This is a **first implementation, not a drop-in ROCKSTAR replacement or a calibrated production mass function**. A controlled external Plummer comparison is available; cosmological catalogue comparisons and simulation completeness/purity calibration remain necessary. See [tests/RESULTS.md](tests/RESULTS.md) for the actual validation and performance measurements.
 

@@ -1,8 +1,8 @@
 # Cosmological timestep coefficients
 
 `FML/NBody/TimeStepping.h` provides Quinn, Tassev, FastPM and BullFrog coefficients
-without depending on COLASolver, a particle type, a mesh or a gravity-model class.
-It extracts the existing COLASolver policies; it does not introduce another force
+without depending on SimulationCode, a particle type, a mesh or a gravity-model class.
+It extracts the existing SimulationCode policies; it does not introduce another force
 solver. GSL/ODESolver is needed for the Quinn/Tassev quadratures.
 
 ```cpp
@@ -43,7 +43,7 @@ returns an empty sequence.
 Coordinates are comoving (usually in box units). The velocity convention is
 `v = a^3 E(a) dx/da = a^2 dx/dt / H0`. The force callback supplies the time amplitude
 of the force actually returned by the caller, e.g. `3/2 OmegaM mu(a) a` for the
-COLASolver convention. The force and growth normalizations must be consistent;
+SimulationCode convention. The force and growth normalizations must be consistent;
 passing a physical acceleration with different units is not interchangeable.
 This object generates coefficients; it does not move particles, handle COLA
 residual forces, or cache endpoint force grids.
@@ -73,12 +73,12 @@ With GSL, use `growth_history_from_log_a_splines(D1, D2)` on the splines returne
 The adapter owns copies of the spline data and obtains rates from their log(a)
 derivatives. It does not extend their valid time range or change their initial
 conditions. This also lets a model-independent LPT calculation supply timestep
-coefficients without constructing COLASolver cosmology/gravity objects.
+coefficients without constructing SimulationCode cosmology/gravity objects.
 
 These are scale-independent time amplitudes. They do not supply scale-dependent
 nonlinear LPT kernels, species transfer functions or gauge transformations.
 BullFrog retains the existing single-fluid 2LPT policy and its model assumptions;
 this extraction is not a validation for arbitrary modified gravity or multi-fluid
-models. COLASolver's explicitly named `large_scale_growth_history` adapter keeps
+models. SimulationCode's explicitly named `large_scale_growth_history` adapter keeps
 its existing k=0 growth convention for scale-dependent models. Model callbacks
 capture shared ownership so they remain alive for the coefficient generator.

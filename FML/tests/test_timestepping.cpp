@@ -1,4 +1,4 @@
-#include <FML/COLASolver/src/TimeStepping.h>
+#include <FML/SimulationCode/src/TimeStepping.h>
 #include <FML/LPT/GrowthHistory.h>
 #include <FML/NBody/TimeStepping.h>
 #include <algorithm>
@@ -185,7 +185,7 @@ void test_cola_force_options() {
             for (auto i : actual[d].get_real_range())
                 matches = matches && near(actual[d].get_real_from_index(i), expected[d].get_real_from_index(i), 1e-12);
     }
-    check(matches, "COLASolver forwards explicit options through Fourier and finite-difference gravity paths");
+    check(matches, "SimulationCode forwards explicit options through Fourier and finite-difference gravity paths");
 }
 void test_cola_adapter() {
     auto cosmo = std::make_shared<TestCosmology>();
@@ -193,16 +193,16 @@ void test_cola_adapter() {
     bool same = true, ownership = true;
     for (auto method :
          {TimestepMethod::Quinn, TimestepMethod::Tassev, TimestepMethod::FastPM, TimestepMethod::BullFrog}) {
-        COLASOLVER::TimestepSettings settings{};
+        SIMCODE::TimestepSettings settings{};
         settings.method = method;
         settings.spacing = ScaleFactorSpacing::GrowthFactor;
         settings.cola_nLPT = -2.5;
-        COLASOLVER::TimeStepping<3> adapter(settings, cosmo, grav);
+        SIMCODE::TimeStepping<3> adapter(settings, cosmo, grav);
         TimeStepping shared(
             {method, settings.spacing, settings.cola_nLPT, settings.spacing_power},
             [cosmo](double a) { return cosmo->HoverH0_of_a(a); },
             [cosmo, grav](double a) { return 1.5 * cosmo->get_OmegaM() * grav->GeffOverG(a) * a; },
-            COLASOLVER::large_scale_growth_history<3>(grav));
+            SIMCODE::large_scale_growth_history<3>(grav));
         const auto a = adapter.steps(0.05, 1.0, 5), b = shared.steps(0.05, 1.0, 5);
         same = same && a.size() == b.size();
         for (size_t i = 0; i < a.size(); i++)
@@ -211,13 +211,13 @@ void test_cola_adapter() {
                    a[i].delta_time_kick == b[i].delta_time_kick && a[i].velocity_scale == b[i].velocity_scale;
         ownership = ownership && !adapter.steps(0.05, 1.0, 1).empty();
     }
-    check(same, "COLASolver adapts every policy to the shared coefficient generator exactly");
-    auto owned = COLASOLVER::large_scale_growth_history<3>(grav);
+    check(same, "SimulationCode adapts every policy to the shared coefficient generator exactly");
+    auto owned = SIMCODE::large_scale_growth_history<3>(grav);
     const double expected = grav->get_D_1LPT(0.5);
     grav.reset();
     cosmo.reset();
     ownership = ownership && owned.linear(0.5) == expected;
-    check(ownership, "COLASolver growth adapter retains its model ownership");
+    check(ownership, "SimulationCode growth adapter retains its model ownership");
 }
 template <class Function>
 void expect_error(Function fn, const std::string & label) {

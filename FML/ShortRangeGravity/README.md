@@ -1,6 +1,6 @@
 # Short-range gravity: P3M and monopole TreePM building blocks
 
-Header-only C++17 module in `FML::SHORT_RANGE_GRAVITY`. Support is three-dimensional Newtonian or Newtonian-plus-Yukawa gravity in a cubic periodic box, positive or zero source masses, one common softening support, and a cutoff smaller than half the box. Newtonian gravity remains the default. This module provides force calculations; it does not change COLASolver or its integration scheme (backlog item 47).
+Header-only C++17 module in `FML::SHORT_RANGE_GRAVITY`. Support is three-dimensional Newtonian or Newtonian-plus-Yukawa gravity in a cubic periodic box, positive or zero source masses, one common softening support, and a cutoff smaller than half the box. Newtonian gravity remains the default. This module provides force calculations; it does not change SimulationCode or its integration scheme (backlog item 47).
 
 See [tests/RESULTS.md](tests/RESULTS.md) for measured validation, timings and current limitations.
 
@@ -89,7 +89,7 @@ Phi_pair = - C/(4 pi) (m/M) L/|r-rj|
 -grad_x Phi_pair = C L^2/(4 pi M) m (rj-r)/|rj-r|^3.
 ```
 
-Use `fml_acceleration_coupling(C,M,L)` as `coupling`. Here M is the **global total source mass** corresponding to the density field, not local or ghost mass. With unit-box source positions use L=1. In COLASolver GR, `C=1.5 OmegaM a`; this produces the acceleration that is added with the existing kick integral. FML's mesh API instead returns `+grad_x Phi`, which its kick subtracts. Avoid applying the source normalization, scale factor or kick twice. The helper returns an instantaneous force prefactor; time integration and species conventions remain the caller's responsibility. Screened gravity and relativistic/neutrino sources require separate prescriptions.
+Use `fml_acceleration_coupling(C,M,L)` as `coupling`. Here M is the **global total source mass** corresponding to the density field, not local or ghost mass. With unit-box source positions use L=1. In SimulationCode GR, `C=1.5 OmegaM a`; this produces the acceleration that is added with the existing kick integral. FML's mesh API instead returns `+grad_x Phi`, which its kick subtracts. Avoid applying the source normalization, scale factor or kick twice. The helper returns an instantaneous force prefactor; time integration and species conventions remain the caller's responsibility. Screened gravity and relativistic/neutrino sources require separate prescriptions.
 
 ## Slab MPI ghosts
 
@@ -118,4 +118,4 @@ Both `test_short_range` and `test_yukawa` are registered in the main `FML/tests`
 
 Tests include independent spline enclosed-mass quadrature; split and zero-separation limits; tolerance cutoffs; direct/cell/tree agreement for uniform/clustered/coincident/periodic particles; cell aliases and empty catalogues; thread determinism; monopole acceptance and tighter opening; periodic Ewald validation at multiple split/softening scales; FML force sign and normalization; length/mass-unit invariance; ghost completeness, empty/nonadjacent slabs and multi-batch messages; and collective input errors. The benchmark reports maximum-rank build-plus-force and ghost-exchange times, global candidate counts, maximum-rank relative RMS force error and maximum ghost payload bytes for 8000 uniform/clustered particles. It deliberately holds a replicated catalogue for the direct reference in the test harness; the force/ghost implementation does not gather that catalogue. Ghost payload bytes exclude vector capacity, owned particles, tree/cell metadata, communication buffers and allocator overhead; they are not RSS. Timings are machine dependent and are not production scaling claims.
 
-Remaining work under item 47 is COLASolver force assembly, interlacing/lightcone handling, standard N-body/COLA simulation validation and short-range subcycling. Further production validation should include mesh/interpolation convergence, large clustered MPI workloads, tree force-error percentiles and memory/load-balance measurements.
+Remaining work under item 47 is SimulationCode force assembly, interlacing/lightcone handling, standard N-body/COLA simulation validation and short-range subcycling. Further production validation should include mesh/interpolation convergence, large clustered MPI workloads, tree force-error percentiles and memory/load-balance measurements.

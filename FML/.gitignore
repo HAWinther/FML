@@ -9,7 +9,7 @@ __pycache__/
 
 # Example executables (named in each example Makefile)
 CAMBUtils/example/cambreader
-COLASolver/nbody
+SimulationCode/nbody
 ComputePowerSpectra/example/powspec
 Cosmology/Legacy/BackgroundCosmology/example/cosmo
 Cosmology/Legacy/EinsteinBoltzmannSolver/CMFB
@@ -73,7 +73,7 @@ Triangulation/example/voronoi
 Units/example/units
 tests/test_core
 tests/test_grid_tools
-COLASolver/nbody_nohdf5
+SimulationCode/nbody_nohdf5
 GadgetUtils/example/testhdf5
 */example/test
 */examples/test

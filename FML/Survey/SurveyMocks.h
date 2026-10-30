@@ -696,7 +696,7 @@ namespace FML::SURVEY::MOCKS {
     }
 
     /// Objects from FML particles (get_pos in units of the box, i.e. [0, 1), get_vel, get_id). velocity_to_kms
-    /// converts the particle velocities to peculiar km/s (e.g. for COLASolver code units)
+    /// converts the particle velocities to peculiar km/s (e.g. for SimulationCode code units)
     template <class T>
     std::vector<MockObject> objects_from_particles(const T * p,
                                                    size_t n,

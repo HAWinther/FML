@@ -280,11 +280,11 @@ uniform box; `tests/test_mocks.cpp` checks r(z) against EdS (4e-9), the coordina
 feasibility error, 1 vs 2 MPI tasks, the remapping (one to one, uniform, volume 1; a pencil to 3x the box depth
 without repeated objects), the Healpix pixels against healpy and lightcone input.
 
-Lightcone input (an evolving lightcone, e.g. COLASolver's): `make_survey_lightcone(objects, o)` with
+Lightcone input (an evolving lightcone, e.g. SimulationCode's): `make_survey_lightcone(objects, o)` with
 `periodic = false`, no extent and `o.parent_nbar` given (a lightcone has no volume); positions are relative to the
 same origin as `observer`, and an object's own `z_obs` (>= 0, e.g. ObservedRedshift) is used as is.
 
-`make_survey/` is the executable (Lua parameter file, see `parameterfile.lua`): ascii, GADGET or COLASolver
+`make_survey/` is the executable (Lua parameter file, see `parameterfile.lua`): ascii, GADGET or SimulationCode
 lightcone HDF5 input (USE_HDF5), H(z) from (Omega_m, Omega_lambda, w0, wa), observer/pole/remap, full, RA/Dec box
 or Healpix (ascii, or FITS with USE_HEALPIX) footprints, n(z) as a constant, an nbar(z) table or a dN/dz per deg^2
 table, ascii output of data and randoms (one file per task with MPI).

@@ -62,7 +62,7 @@ Vmax differs by 0.0451%; reported masses differ by -0.2873% despite their distin
 
 ## Cosmological comparison with ROCKSTAR (30 October 2026)
 
-COLASolver snapshot: 128^3 particles in 64 Mpc/h, force grid 384^3 (cell 0.167 Mpc/h), 40 steps from z = 30,
+SimulationCode snapshot: 128^3 particles in 64 Mpc/h, force grid 384^3 (cell 0.167 Mpc/h), 40 steps from z = 30,
 z = 0, m_p = 1.10e10 Msun/h. ROCKSTAR as above (header Omega_Lambda set to 1 - Omega_m; ROCKSTAR rejects the
 radiation term) with FILE_FORMAT = "GADGET2", FORCE_RES = .1667, MASS_DEFINITION = "200b", b = .28,
 MIN_HALO_OUTPUT_SIZE = 20, FULL_PARTICLE_CHUNKS = 1. FML: `example/phase_halos parts out 64 .1667 4.30091e-9 1 100`

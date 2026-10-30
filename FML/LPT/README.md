@@ -50,7 +50,7 @@ the larger FFTs. MPI spectral remapping exchanges retained coefficients using
 it never replicates the global grid on every rank. The existing streamed
 Hessian memory optimization is also used on the padded mesh.
 
-This option currently covers the library LPT entry points above. COLASolver,
+This option currently covers the library LPT entry points above. SimulationCode,
 ALPT, primordial non-Gaussian field generation, and scale-dependent higher-order
 kernels do not automatically enable it.
 
@@ -61,7 +61,7 @@ including high-frequency cubic couplings and the transverse term.
 
 ## Shared growth interface
 
-`GrowthHistory.h` exposes D1, signed D2 and their growth rates independently of COLASolver.
+`GrowthHistory.h` exposes D1, signed D2 and their growth rates independently of SimulationCode.
 Use `growth_history_from_log_a_splines(D1, D2)` to adapt this module's growth-solver output
 to the shared [NBody timestep policies](../NBody/TimeStepping.md). The adapter owns copies
 of the splines and preserves their normalization and time domain.

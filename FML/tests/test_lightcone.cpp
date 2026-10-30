@@ -1,5 +1,5 @@
 // Serial and MPI map reductions, without a Healpix dependency (2D angular maps).
-#include <FML/COLASolver/src/Lightcone/Lightcone_Healpix.h>
+#include <FML/SimulationCode/src/Lightcone/Lightcone_Healpix.h>
 #include <FML/Global/Global.h>
 #include <cmath>
 #include <iostream>

@@ -177,7 +177,7 @@ test_gadget: test_gadget.o Global.o GadgetUtils.o
 test_ramses: test_ramses.o test_ramses_odr.o Global.o
 	$(LINK_EXE)
 
-# CAMBUtils (reads the tables in ../COLASolver/input)
+# CAMBUtils (reads the tables in ../SimulationCode/input)
 test_camb: test_camb.o test_camb_odr.o Global.o Spline.o
 	$(LINK_EXE)
 
@@ -207,7 +207,7 @@ test_interlacing_offset: test_interlacing_offset.o Global.o
 test_interpolation: test_interpolation.o Global.o
 	$(LINK_EXE)
 
-# LuaFileParser (needs Lua: USE_LUA=true, the default here as for COLASolver)
+# LuaFileParser (needs Lua: USE_LUA=true, the default here as for SimulationCode)
 test_lua: test_lua.o test_lua_odr.o Global.o
 	$(LINK_EXE)
 

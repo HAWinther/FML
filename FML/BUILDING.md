@@ -51,7 +51,7 @@ mpirun -np 4 FML/tests/test_fourier_resampling
 # Examples and solver:
 make -C FML examples -j4
 make -C FML examples-extra -j4
-make -C FML/COLASolver -j4 USE_HDF5=true
+make -C FML/SimulationCode -j4 USE_HDF5=true
 ```
 
 `examples-extra` selects dependency-heavy examples such as CGAL/Python-related workflows. The SWIG wrappers are built by `make -C FML python`; import with the interpreter matching their build headers and NumPy installation. The new [analysis package](PythonAnalysis/README.md) instead uses `python -m pip install ./FML/PythonAnalysis` from the repository root, or `make -C FML python-analysis PYTHON=/path/to/venv/bin/python`. `make -C FML test-python-analysis PYTHON=...` tests an already installed package.

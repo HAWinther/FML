@@ -12,7 +12,7 @@ namespace FML::INITIALCONDITIONS {
             !matches(p.TCMB, request.TCMB) || !matches(p.Neff, request.Neff) || !matches(p.A_s, request.As) ||
             !matches(p.n_s, request.ns) || !matches(p.k_pivot, request.kpivot_mpc))
             throw std::invalid_argument(
-                "[internal_transfer] Solver and COLASolver cosmological/primordial parameters differ");
+                "[internal_transfer] Solver and SimulationCode cosmological/primordial parameters differ");
         const double kmin = settings.pert.k_min * FML::COSMOLOGY::Constants::Mpc / p.h;
         const double kmax = settings.pert.k_max * FML::COSMOLOGY::Constants::Mpc / p.h;
         if (request.require_sigma8_coverage && (kmin > 1e-5 || kmax < 100.0))

@@ -1,4 +1,4 @@
-# Build the library examples, run the library and module tests and build COLASolver on every push and pull request
+# Build the library examples, run the library and module tests and build SimulationCode on every push and pull request
 name: CI
 
 on:
@@ -32,18 +32,18 @@ jobs:
       - name: Module tests (1, 2 and 4 MPI tasks)
         run: .github/ci/run_module_tests.sh Cosmology/EinsteinBoltzmannSolver/tests
 
-      # make examples already built COLASolver without HDF5 and make does not track the flags: rebuild (-B)
-      - name: Build COLASolver (with HDF5)
-        run: make -C FML/COLASolver -B -j4 USE_HDF5=true && ldd FML/COLASolver/nbody | grep -q hdf5
+      # make examples already built SimulationCode without HDF5 and make does not track the flags: rebuild (-B)
+      - name: Build SimulationCode (with HDF5)
+        run: make -C FML/SimulationCode -B -j4 USE_HDF5=true && ldd FML/SimulationCode/nbody | grep -q hdf5
 
-      - name: COLASolver baryonification parameter and snapshot-copy tests
-        run: make -C FML/COLASolver/tests run USE_MPI=false USE_OMP=false
-      - name: Every parameter read by COLASolver is in the parameter schema
-        run: python3 FML/COLASolver/tests/check_parameter_names.py
+      - name: SimulationCode baryonification parameter and snapshot-copy tests
+        run: make -C FML/SimulationCode/tests run USE_MPI=false USE_OMP=false
+      - name: Every parameter read by SimulationCode is in the parameter schema
+        run: python3 FML/SimulationCode/tests/check_parameter_names.py
 
       - name: PARAMETERS.md is up to date with the parameter schema
         run: |
-          cd FML/COLASolver
+          cd FML/SimulationCode
           mpirun --oversubscribe -np 1 ./nbody --parameters /tmp/PARAMETERS.md
           diff -u PARAMETERS.md /tmp/PARAMETERS.md
 

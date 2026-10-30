@@ -1,7 +1,7 @@
 -- make_survey parameter file (Lua). Lengths in Mpc/h, velocities in km/s, angles in degrees.
 
 -- Input: "ascii" (x y z vx vy vz [id] per line, a periodic box), "gadget" (a GADGET snapshot, e.g. from
--- COLASolver; file prefix without the .N) or "lightcone_hdf5" (COLASolver HDF5 lightcone files; needs USE_HDF5)
+-- SimulationCode; file prefix without the .N) or "lightcone_hdf5" (SimulationCode HDF5 lightcone files; needs USE_HDF5)
 input_format = "ascii"
 input_files = {"galaxies.txt"}
 boxsize = 1000.0

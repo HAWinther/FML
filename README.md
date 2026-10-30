@@ -37,6 +37,6 @@ The [SWIG tutorial](FML/MakePythonWrapper) and specialized [halo-model wrapper](
 
 ## Documentation and validation
 
-Local module guides and tests linked from the capability matrix describe conventions and numerical limits. [COLASolver](FML/COLASolver/README.md) has its own [parameter reference](FML/COLASolver/PARAMETERS.md) and [test guide](FML/COLASolver/tests/README.md). The [changelog](FML/CHANGELOG.md) records other changes. The [website](https://fml.wintherscoming.no/) and [Doxygen reference](https://fml.wintherscoming.no/doxygen/) provide additional material; local documentation tracks this checkout and may be newer.
+Local module guides and tests linked from the capability matrix describe conventions and numerical limits. [SimulationCode](FML/SimulationCode/README.md) has its own [parameter reference](FML/SimulationCode/PARAMETERS.md) and [test guide](FML/SimulationCode/tests/README.md). The [changelog](FML/CHANGELOG.md) records other changes. The [website](https://fml.wintherscoming.no/) and [Doxygen reference](https://fml.wintherscoming.no/doxygen/) provide additional material; local documentation tracks this checkout and may be newer.
 
 Regression coverage establishes specific numerical contracts, not universal production accuracy. Survey estimators, initial-condition providers, nonlinear force models and halo/void algorithms have module-specific validation and supported regimes. Consult those contracts before combining workflows or interpreting physical units and shot-noise corrections.

@@ -80,7 +80,7 @@ namespace {
     }
 
 #ifdef USE_HDF5
-    // COLASolver HDF5 lightcone files: PartType1/Coordinates (Mpc/h), Velocities (km/s), ParticleIDs and, with
+    // SimulationCode HDF5 lightcone files: PartType1/Coordinates (Mpc/h), Velocities (km/s), ParticleIDs and, with
     // plc_relativistic_effects, ObservedRedshift. Every task reads every NTasks-th file
     std::vector<MockObject> read_lightcone_hdf5(const std::vector<std::string> & files, double vfac) {
         std::vector<MockObject> out;

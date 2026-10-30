@@ -5,6 +5,11 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### COLASolver renamed to SimulationCode
+- The folder `COLASolver/` is now `SimulationCode/` and the namespace `COLASOLVER` is `SIMCODE` (macros and
+  include guards `COLASOLVER_*` -> `SIMCODE_*`). Makefiles, CI workflows, scripts and documentation follow; the
+  executable is still `nbody` and parameter files are unchanged. Entries below keep the old name.
+
 ### MultigridSolver: faster f(R) and DGP solves (review Oct 30)
 - Gauss-Seidel colour sweeps visit only the cells of the colour (was every cell per colour: 8 passes for the DGP cube
   ordering) and `get_cube_gridindex` builds the 27 indices from strides: identical solutions; DGP 7.4 s -> 3.6 s

@@ -1,8 +1,8 @@
 #include <FML/RandomFields/GaussianRandomField.h>
 #include <FML/FFTWGrid/FourierResampling.h>
 #include <FML/RandomFields/NonLocalGaussianRandomField.h>
-#include <FML/COLASolver/src/ParameterSchema.h>
-#include <FML/COLASolver/src/InitialConditions.h>
+#include <FML/SimulationCode/src/ParameterSchema.h>
+#include <FML/SimulationCode/src/InitialConditions.h>
 #include <algorithm>
 #include <cstring>
 #include <iostream>
@@ -174,31 +174,31 @@ int main() {
     generate_gaussian_random_field_fourier<3>(g, nullptr, power, true, philox);
     check(difference(ng, g) < 1e-13, "fNL=0 uses the selected Philox Gaussian backend");
     {
-        COLASOLVER::ICSettings ic{};
-        check(ic.random_field_backend == COLASOLVER::RandomFieldBackend::NGenIC,
+        SIMCODE::ICSettings ic{};
+        check(ic.random_field_backend == SIMCODE::RandomFieldBackend::NGenIC,
               "direct ICSettings construction retains the legacy backend");
-        ic.random_field_type = COLASOLVER::ICRandomFieldType::Gaussian;
-        ic.random_field_backend = COLASOLVER::RandomFieldBackend::Philox;
+        ic.random_field_type = SIMCODE::ICRandomFieldType::Gaussian;
+        ic.random_field_backend = SIMCODE::RandomFieldBackend::Philox;
         ic.random_seed = 897;
         ic.fix_amplitude = true;
         FML::INTERPOLATION::SPLINE::Spline flat(std::vector<double>{0, 100, 1000},
                                                 std::vector<double>{1, 1, 1},
                                                 "flat power");
-        COLASOLVER::generate_initial_density_field<3>(ng, ic, 1.0, flat, flat, {}, {}, nullptr);
-        check(difference(ng, g) < 1e-14, "COLASolver Gaussian IC path dispatches to Philox");
-        ic.random_field_backend = COLASOLVER::RandomFieldBackend::NGenIC;
+        SIMCODE::generate_initial_density_field<3>(ng, ic, 1.0, flat, flat, {}, {}, nullptr);
+        check(difference(ng, g) < 1e-14, "SimulationCode Gaussian IC path dispatches to Philox");
+        ic.random_field_backend = SIMCODE::RandomFieldBackend::NGenIC;
         RandomGenerator legacy_one(897), legacy_two(897);
-        COLASOLVER::generate_initial_density_field<3>(ng, ic, 1.0, flat, flat, {}, {}, &legacy_one);
+        SIMCODE::generate_initial_density_field<3>(ng, ic, 1.0, flat, flat, {}, {}, &legacy_one);
         generate_gaussian_random_field_fourier<3>(g, &legacy_two, power, true);
-        check(difference(ng, g) == 0, "COLASolver explicit legacy IC path retains the original realization");
+        check(difference(ng, g) == 0, "SimulationCode explicit legacy IC path retains the original realization");
     }
-    const auto & schema = COLASOLVER::parameter_schema<3>();
+    const auto & schema = SIMCODE::parameter_schema<3>();
     auto option =
         std::find_if(schema.begin(), schema.end(), [](const auto & s) { return s.name == "ic_random_field_backend"; });
-    check(option != schema.end() && option->need == COLASOLVER::Need::AlwaysOptional &&
+    check(option != schema.end() && option->need == SIMCODE::Need::AlwaysOptional &&
               std::get<std::string>(option->default_value) == "ngenic" &&
               option->choices == std::vector<std::string>{"ngenic", "philox"},
-          "COLASolver exposes both backends and defaults to N-GenIC compatibility");
+          "SimulationCode exposes both backends and defaults to N-GenIC compatibility");
     FML::SumOverTasks(&failures);
     return failures ? 1 : 0;
 }

@@ -1,6 +1,6 @@
 //==========================================================
 // Tests for FML::FILEUTILS::LinearTransferData (CAMBUtils/CAMBReader.h) with the CAMB tables in
-// ../COLASolver/input/camb_data_lcdm_nu0.4_zmax200 (0.4 eV, 60 redshifts up to z = 200) against CAMB itself
+// ../SimulationCode/input/camb_data_lcdm_nu0.4_zmax200 (0.4 eV, 60 redshifts up to z = 200) against CAMB itself
 // (P_cb and P_total / P_cb computed with camb 2.0.5 for the same cosmology):
 //   - P_cb(k, z) and the total-matter P(k, z) (the neutrino weight was wrong at high z)
 //   - P(k) above the largest k of the tables falls (it grew as k^ns)
@@ -38,8 +38,8 @@ std::string num(double x) {
     return os.str();
 }
 
-const std::string tables = "../COLASolver/input/camb_data_lcdm_nu0.4_zmax200";
-const std::string infofile_repo = "../COLASolver/input/transfer_infofile_lcdm_nu0.4_zmax200.txt";
+const std::string tables = "../SimulationCode/input/camb_data_lcdm_nu0.4_zmax200";
+const std::string infofile_repo = "../SimulationCode/input/transfer_infofile_lcdm_nu0.4_zmax200.txt";
 
 // Write an infofile pointing to the tables (in the original order or with neighbouring entries swapped)
 void write_infofile(const std::string & filename, bool shuffled) {

@@ -1,7 +1,8 @@
 //==========================================================
-// Tests for FML::FILEUTILS::LuaFileParser (LuaFileParser/LuaFileParser.h), the reader of COLASolver's parameter files:
+// Tests for FML::FILEUTILS::LuaFileParser (LuaFileParser/LuaFileParser.h), the reader of SimulationCode's parameter
+// files:
 //   - reading many optional parameters that are not in the file (each left a value on the Lua stack: memory
-//     corruption / segfault after about 50, e.g. COLASolver with only the required parameters in the file)
+//     corruption / segfault after about 50, e.g. SimulationCode with only the required parameters in the file)
 //   - values, defaults, arrays; opening a second file with the same object
 //   - the header can be included in two translation units (test_lua_odr.cpp)
 // Bad input that must stop with a clear message (run by make run):

@@ -188,7 +188,7 @@ int main() {
 
     // The factors to multiply the nLPT displacement fields by to get the velocities in code units
     // v_code = a^2 dx/dt / (H0 Box) = f_i H/H0 a^2 Psi_i (Psi in units of the boxsize), the units the time-stepping
-    // below uses (the same as COLASolver). NB: 100 * box * f_i H/H0 * a would give peculiar velocities in km/s
+    // below uses (the same as SimulationCode). NB: 100 * box * f_i H/H0 * a would give peculiar velocities in km/s
     std::vector<double> velocity_norms(4);
     for (int i = 0; i < 4; i++) {
         velocity_norms[i] = H_over_H0_of_loga(std::log(aini)) * aini * aini * growth_rate_f_of_loga[i](std::log(aini));
@@ -236,7 +236,7 @@ int main() {
         // computed at the time of the positions (apos_old below) with poisson_factor(apos_old) so we normalize to
         // that time: the midpoint of the kick, except in the first step (kick from aini, the force time, to
         // aini + da/2) and in the last step (synchronization kick ending at aend, the force time). This is the same
-        // as kick_timestep in COLASolver/src/TimeStepping.h
+        // as kick_timestep in SimulationCode/src/TimeStepping.h
         double aforce = (ahigh + alow) / 2.;
         if (istep == 0)
             aforce = alow;

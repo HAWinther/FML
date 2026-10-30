@@ -1,0 +1,4 @@
+// The simulation compiled for particles of type ParticleBasicQ<NDIM_SPACE> (see RunSimulation.h)
+#include "RunSimulationImpl.h"
+
+SIMCODE_INSTANTIATE_RUN_SIMULATION(ParticleBasicQ<NDIM_SPACE>)

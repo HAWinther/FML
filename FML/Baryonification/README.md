@@ -3,7 +3,7 @@
 Position-only post-processing of a three-dimensional gravity-only snapshot. The module builds radial mass
 profiles around halos, matches enclosed masses to obtain a displacement, and applies the sum of halo
 displacements at each particle's **original** position. It does not alter velocities, masses, IDs or the
-simulation dynamics. COLASolver is not coupled to this module.
+simulation dynamics. SimulationCode is not coupled to this module.
 
 Everything is in `FML::BARYONIFICATION`. The implementation is header-only, requires C++17, and uses the existing
 FML KD-tree for periodic halo searches. It needs no GSL, FFTW, or Lua. Optional OpenMP parallelizes particle

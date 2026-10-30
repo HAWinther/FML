@@ -39,10 +39,10 @@ The old `FIDUCIAL_LAPLACE_KERNEL`, `FIDUCIAL_GRADIENT_KERNEL`,
 `FIDUCIAL_DECONVOLVE_FORCE` globals and `set_fiducial_*` setters are removed.
 Construct a local `ForceOptions` and pass it at each force/potential call instead.
 Calls that previously relied on unchanged defaults require no new argument.
-Custom COLASolver gravity classes must add the final options argument to their
+Custom SimulationCode gravity classes must add the final options argument to their
 `compute_force` override and forward it to `compute_force_from_total_density`.
 
-COLASolver owns its resolved options per simulation and passes them explicitly
+SimulationCode owns its resolved options per simulation and passes them explicitly
 through every gravity model. Its parameter names, automatic gradient choice and
 early-time deconvolution switching are unchanged. In particular, `fiducial` no
 longer inherits a kernel that another simulation happened to select earlier.

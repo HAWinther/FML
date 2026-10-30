@@ -1,7 +1,7 @@
 //==========================================================
 // Tests for the particle containers and particle reflection (MPIParticles/MPIParticles.h,
 // ParticleTypes/ReflectOnParticleMethods.h, ParticleTypes/SimpleGalaxy.h, ParticlesInBoxes/ParticlesInBoxes.h
-// and with USE_HEALPIX Chunkpix/Chunkpix.h and the chunkpix maps of the COLASolver lightcone):
+// and with USE_HEALPIX Chunkpix/Chunkpix.h and the chunkpix maps of the SimulationCode lightcone):
 //  - create_particle_grid with Npart_1D not divisible by NTasks (or < NTasks) has room for a uniform shift
 //  - create with only one task having particles (batched read) and with x = 1.0 / -1e-17
 //  - dump_to_file / load_from_file with more particles than fit in the buffer
@@ -20,7 +20,7 @@
 #include <FML/ParticlesInBoxes/ParticlesInBoxes.h>
 #ifdef USE_HEALPIX
 #include <FML/Chunkpix/Chunkpix.h>
-#include <FML/COLASolver/src/Lightcone/Lightcone_Healpix.h>
+#include <FML/SimulationCode/src/Lightcone/Lightcone_Healpix.h>
 #endif
 
 #include <cmath>
@@ -517,7 +517,7 @@ void test_chunkpix() {
         direct.fill(0.0);
         std::mt19937 gen(3);
         std::uniform_real_distribution<double> U(0.0, 1.0);
-        const double cos_max = 1.0 - 2.0 * 0.05;   // cap around the x-axis with fsky = 0.05
+        const double cos_max = 1.0 - 2.0 * 0.05; // cap around the x-axis with fsky = 0.05
         for (int i = 0; i < 200000; i++) {
             const double mu = cos_max + (1.0 - cos_max) * U(gen), ph = 2.0 * M_PI * U(gen), s = std::sqrt(1 - mu * mu);
             const vec3 v(mu, s * std::cos(ph), s * std::sin(ph));
@@ -531,7 +531,8 @@ void test_chunkpix() {
         for (long i = 0; same and i < 12 * nside * nside; i++)
             same = full[i] == direct[i];
         check(same, "Chunkpix map = the map filled directly (RING)");
-        check(sparsity < 0.12, "Chunkpix: a 5% sky cap allocates < 12% of the chunks (" + std::to_string(sparsity) + ")");
+        check(sparsity < 0.12,
+              "Chunkpix: a 5% sky cap allocates < 12% of the chunks (" + std::to_string(sparsity) + ")");
     }
     {
         // nside not a power of two: RING chunks (NEST is not defined), same map
@@ -590,7 +591,8 @@ void test_chunkpix() {
 
 // Optional argument: run only the test group with this name (lattice, create, dump, custom, boxes, reflection,
 // shift, chunkpix, migration)
-template <class T> long long migration_id(const T &p) {
+template <class T>
+long long migration_id(const T & p) {
     if constexpr (std::is_same_v<T, VarParticle>)
         return std::llround(p.extra[0]);
     else
@@ -598,7 +600,7 @@ template <class T> long long migration_id(const T &p) {
 }
 
 template <class T>
-void migration_case(std::vector<double> edges, int mode, bool empty_source, const std::string &label) {
+void migration_case(std::vector<double> edges, int mode, bool empty_source, const std::string & label) {
     constexpr int per_rank = 12;
     const int ranks = FML::NTasks, rank = FML::ThisTask;
     auto count = [&](int source) {
@@ -638,7 +640,7 @@ void migration_case(std::vector<double> edges, int mode, bool empty_source, cons
     };
     std::vector<T> initial(size_t(count(rank)));
     for (int i = 0; i < count(rank); ++i) {
-        auto &p = initial[i];
+        auto & p = initial[i];
         long long id = per_rank * rank + i;
         p.pos[0] = .5 * (edges[rank] + edges[rank + 1]);
         p.pos[1] = .125 * (i % 7);
@@ -655,9 +657,9 @@ void migration_case(std::vector<double> edges, int mode, bool empty_source, cons
     Container automatic, general;
     automatic.create(initial.data(), initial.size(), size_t(per_rank * ranks), edges[rank], edges[rank + 1], false);
     general.create(initial.data(), initial.size(), size_t(per_rank * ranks), edges[rank], edges[rank + 1], false);
-    for (auto &p : automatic)
+    for (auto & p : automatic)
         p.pos[0] = position(int(migration_id(p) / per_rank), int(migration_id(p) % per_rank));
-    for (auto &p : general)
+    for (auto & p : general)
         p.pos[0] = position(int(migration_id(p) / per_rank), int(migration_id(p) % per_rank));
     automatic.communicate_particles(37 + rank);
     general.communicate_particles(37 + rank, rank == 0);
@@ -672,8 +674,8 @@ void migration_case(std::vector<double> edges, int mode, bool empty_source, cons
             if (dest == rank)
                 expected.push_back(per_rank * source + i);
         }
-    auto inspect = [&](Container &container, std::vector<long long> &ids) {
-        for (auto &p : container) {
+    auto inspect = [&](Container & container, std::vector<long long> & ids) {
+        for (auto & p : container) {
             long long id = migration_id(p);
             ids.push_back(id);
             if (id < 0 || id >= per_rank * ranks) {
@@ -696,10 +698,10 @@ void migration_case(std::vector<double> edges, int mode, bool empty_source, cons
     std::sort(actual.begin(), actual.end());
     std::sort(expected.begin(), expected.end());
     good &= actual == expected;
-    const Route route = ranks == 1 ? Route::Serial
-                        : !moved   ? Route::NoTraffic
-                        : distant  ? Route::General
-                                   : Route::Neighbors;
+    const Route route = ranks == 1 ? Route::Serial :
+                        !moved     ? Route::NoTraffic :
+                        distant    ? Route::General :
+                                     Route::Neighbors;
     good &= automatic.get_last_migration_route() == route &&
             general.get_last_migration_route() == (ranks == 1 ? Route::Serial : Route::General);
     check(all_tasks(good), label + ": exact IDs, fields, receive order and collective route match the reference");
@@ -708,7 +710,7 @@ void migration_case(std::vector<double> edges, int mode, bool empty_source, cons
 struct ExtendedPositionParticle {
     long double pos[3]{};
     long long id = 0;
-    long double *get_pos() { return pos; }
+    long double * get_pos() { return pos; }
     constexpr int get_ndim() const { return 3; }
 };
 void test_extended_boundary_migration() {
@@ -722,7 +724,7 @@ void test_extended_boundary_migration() {
         particles[0].pos[0] = just_below;
     particles.communicate_particles(13);
     bool good = particles.get_npart() == size_t(FML::ThisTask == 0 ? 2 : FML::ThisTask == 1 ? 0 : 1);
-    for (auto &q : particles) {
+    for (auto & q : particles) {
         good &= q.pos[0] >= static_cast<long double>(FML::xmin_domain) &&
                 q.pos[0] < static_cast<long double>(FML::xmax_domain);
         if (q.id == 1)
@@ -744,7 +746,7 @@ void test_migration_routing() {
     migration_case<Particle>(edges, 4, false, "exact and adjacent slab/box boundaries");
     if (FML::NTasks > 1)
         migration_case<Particle>(edges, 1, true, "initially empty rank participates in neighbor exchange");
-    for (double &x : edges)
+    for (double & x : edges)
         x *= x;
     migration_case<Particle>(edges, 1, false, "nonuniform slabs");
     if (FML::NTasks >= 3) {

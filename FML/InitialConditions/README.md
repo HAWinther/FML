@@ -1,6 +1,6 @@
 # Linear transfers and IC preparation
 
-This module prepares linear inputs independently of COLASolver. The existing
+This module prepares linear inputs independently of SimulationCode. The existing
 particle/LPT assignment routines remain in their owning modules.
 
 - `TransferProvider.h`: species, density/velocity gauges, units, capabilities and k/a coverage.
@@ -48,7 +48,7 @@ required CDM-synchronous convention.
 
 This is the standard density/backscaling IC prescription used by the existing
 CAMB-table path. It is **not** a new fully relativistic N-body-gauge evolution
-scheme. COLASolver continues to assign velocities using its growth/LPT prescription,
+scheme. SimulationCode continues to assign velocities using its growth/LPT prescription,
 including relative transfer-ratio derivatives for two species. Direct Newtonian
 velocities are exposed for inspection/future consumers, not inserted into a
 particle coordinate system with a different velocity convention.
@@ -71,10 +71,10 @@ adiabatic realization and species-specific ratios.
 
 Primordial amplitude is distinct from unit-curvature transfer evolution. The
 internal provider supports explicit primordial-power rescaling (used by
-COLASolver's sigma8 normalization); this changes P, not unit-curvature transfers.
+SimulationCode's sigma8 normalization); this changes P, not unit-curvature transfers.
 The legacy IC table retains its historical normalization behavior for compatibility.
 
-## COLASolver
+## SimulationCode
 
 All existing `powerspectrum`, `transferfunction` and `transferinfofile` choices
 remain supported. A simple P(k,z=0) input requires neither species transfers nor a
@@ -96,11 +96,11 @@ ic_input_redshift = 0.0  -- backscale from today; use zini for transfers evaluat
 ```
 
 `solver.ini` is an FML Einstein–Boltzmann parameter file. Its h, OmegaB, OmegaCDM,
-TCMB, Neff, As, ns and pivot must match COLASolver, and `alpha_s` must be 0 (COLASolver's primordial
+TCMB, Neff, As, ns and pivot must match SimulationCode, and `alpha_s` must be 0 (SimulationCode's primordial
 spectrum has no running). It must cover the IC mesh's
 fundamental through its conservative corner wavenumber, the input/initial epochs,
 and today. Cosmology and coverage mismatches fail before the expensive solve.
-For example, matching COLASolver's standard LCDM parameters:
+For example, matching SimulationCode's standard LCDM parameters:
 
 ```ini
 model = lcdm
@@ -134,5 +134,5 @@ Existing P(k)/table normalization behavior is unchanged.
 Tests: `FML/tests/test_transfers.cpp` covers the lightweight/table paths;
 `Cosmology/EinsteinBoltzmannSolver/tests/test_transfer_provider.cpp` checks the
 converted densities/velocities against stored CAMB 1.5.4 values and tests the
-internal adapter. `COLASolver/tests/check_internal_transfers.py` exercises the
+internal adapter. `SimulationCode/tests/check_internal_transfers.py` exercises the
 optional executable, two-species ICs, backscaling, normalization coverage and simple P(k).

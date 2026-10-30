@@ -42,7 +42,7 @@ namespace FML::INITIALCONDITIONS {
         explicit InternalTransferProvider(FML::COSMOLOGY::RunSettings settings, Gauge gauge = Gauge::SynchronousCDM)
             : gauge(gauge) {
             const auto & p = settings.cosmo;
-            // alpha_s: primordial_power() and COLASolver's primordial spectrum have no running
+            // alpha_s: primordial_power() and SimulationCode's primordial spectrum have no running
             if (p.model != "lcdm" || p.OmegaK != 0.0 || p.m_nu != 0.0 || p.alpha_s != 0.0 ||
                 settings.pert.ic_adiabatic != 1.0 ||
                 std::any_of(settings.pert.iso_amplitude.begin(), settings.pert.iso_amplitude.end(), [](double v) {

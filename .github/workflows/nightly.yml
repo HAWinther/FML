@@ -1,4 +1,4 @@
-# Longer accuracy checks of COLASolver, every night and on demand
+# Longer accuracy checks of SimulationCode, every night and on demand
 name: Nightly accuracy checks
 
 on:
@@ -25,10 +25,10 @@ jobs:
           # CLASS (python wrapper) for the N-body gauge check
           pip3 install --break-system-packages classy
 
-      - name: Build COLASolver
+      - name: Build SimulationCode
         run: |
           cp .github/ci/Makefile.local FML/Makefile.local
-          make -C FML/COLASolver -j4 USE_HDF5=true
+          make -C FML/SimulationCode -j4 USE_HDF5=true
 
       - name: Library tests
         if: always()
@@ -41,36 +41,36 @@ jobs:
       - name: Regression cases run and are reproducible (two identical runs)
         if: always()
         run: |
-          cd FML/COLASolver/tests/regression
+          cd FML/SimulationCode/tests/regression
           ./run.sh ../../nbody "$OUT/regression1"
           ./run.sh ../../nbody "$OUT/regression2"
           python3 compare.py "$OUT/regression1" "$OUT/regression2"
 
       - name: Accuracy vs MG-PICOLA
         if: always()
-        run: FML/COLASolver/tests/run_accuracy_tests.sh FML/COLASolver/nbody "$OUT/accuracy"
+        run: FML/SimulationCode/tests/run_accuracy_tests.sh FML/SimulationCode/nbody "$OUT/accuracy"
 
       - name: Non-gaussian initial conditions
         if: always()
-        run: python3 FML/COLASolver/tests/check_nongaussian.py FML/COLASolver/nbody "$OUT/nongaussian"
+        run: python3 FML/SimulationCode/tests/check_nongaussian.py FML/SimulationCode/nbody "$OUT/nongaussian"
 
       - name: Force grid 2x and 3x the particle grid
         if: always()
         run: |
-          GRID_FACTOR=2 python3 FML/COLASolver/tests/check_force_grid.py FML/COLASolver/nbody "$OUT/forcegrid2"
-          GRID_FACTOR=3 python3 FML/COLASolver/tests/check_force_grid.py FML/COLASolver/nbody "$OUT/forcegrid3"
+          GRID_FACTOR=2 python3 FML/SimulationCode/tests/check_force_grid.py FML/SimulationCode/nbody "$OUT/forcegrid2"
+          GRID_FACTOR=3 python3 FML/SimulationCode/tests/check_force_grid.py FML/SimulationCode/nbody "$OUT/forcegrid3"
 
       - name: Time-stepping
         if: always()
-        run: python3 FML/COLASolver/tests/check_timestepping.py FML/COLASolver/nbody "$OUT/timestepping"
+        run: python3 FML/SimulationCode/tests/check_timestepping.py FML/SimulationCode/nbody "$OUT/timestepping"
 
       - name: N-body gauge
         if: always()
-        run: python3 FML/COLASolver/tests/check_nbody_gauge.py FML/COLASolver/nbody "$OUT/nbgauge"
+        run: python3 FML/SimulationCode/tests/check_nbody_gauge.py FML/SimulationCode/nbody "$OUT/nbgauge"
 
       - name: Snapshot baryonification and unchanged subsequent evolution
         if: always()
-        run: python3 FML/COLASolver/tests/check_baryonification.py FML/COLASolver/nbody "$OUT/baryonification"
+        run: python3 FML/SimulationCode/tests/check_baryonification.py FML/SimulationCode/nbody "$OUT/baryonification"
 
       - name: Keep the logs
         if: always()

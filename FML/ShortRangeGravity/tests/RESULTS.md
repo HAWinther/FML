@@ -40,7 +40,7 @@ Same 8000-particle cases; 2 OpenMP threads per rank, so total CPU resources incr
 
 Uniform cell-force work scales usefully in this small run, with exchange overhead becoming more visible. The clustered case does not scale well because the compact halo stays in one spatial slab. A gravity tree alone does not solve domain load imbalance. Maximum-rank tree RMS error remains below 5e-5 for these cases. Ghost payload measures received particle count times `sizeof(Particle)`, excluding capacity and all other workspace; it is not RSS.
 
-Further validation should cover mesh assignment/interpolation convergence for off-grid sources, force-error percentiles including weak forces, larger clustered MPI workloads and total peak workspace/RSS. COLASolver force assembly and time integration remain backlog item 47.
+Further validation should cover mesh assignment/interpolation convergence for off-grid sources, force-error percentiles including weak forces, larger clustered MPI workloads and total peak workspace/RSS. SimulationCode force assembly and time integration remain backlog item 47.
 
 ## Newtonian-plus-Yukawa extension
 

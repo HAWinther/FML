@@ -10,7 +10,7 @@
 // approximation and compute the 15 cross spectra P_ab(k) of the operators
 // 1, delta_L, delta_L^2, s^2, nabla^2 delta_L advected with the particles. With an N-body
 // simulation you would use the snapshot particles and the linear field of the initial
-// conditions (scaled to the redshift of the snapshot), see the COLASolver (hybridbias = true).
+// conditions (scaled to the redshift of the snapshot), see the SimulationCode (hybridbias = true).
 // Since the particles here follow the Zel'dovich approximation exactly we can compare the
 // result with the Zel'dovich prediction of the spectra (HybridBiasZeldovich.h).
 //=======================================================================================

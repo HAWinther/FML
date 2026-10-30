@@ -47,7 +47,7 @@ on the tested compiler/math library. Transcendental functions may differ in thei
 last bits across platforms or compiler math modes; no cross-platform bitwise
 promise is made for log, sin, cos or user power functions.
 
-## COLASolver
+## SimulationCode
 
 ```lua
 ic_random_field_backend = "ngenic" -- default; old configurations retain their IC
@@ -63,7 +63,7 @@ is ignored by Philox. The new backend selector is always optional, including
 with `all_parameters_must_be_in_file = true`. The existing integer seed setting
 is interpreted as the same unsigned 32-bit seed value; the library Philox API
 also supports full 64-bit seeds and separate streams. Gaussian and non-Gaussian
-COLASolver IC paths honor the choice. Fixed amplitudes and phase reversal remain
+SimulationCode IC paths honor the choice. Fixed amplitudes and phase reversal remain
 available. Selecting Philox changes phases relative to N-GenIC; it does not claim
 to reproduce another backend's realization.
 

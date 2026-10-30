@@ -55,7 +55,7 @@ namespace FML::NBODY {
         };
 
         /// force_prefactor(a) is the amplitude used by the caller's force grid,
-        /// e.g. 3/2 OmegaM mu(a) a for the COLASolver force convention.
+        /// e.g. 3/2 OmegaM mu(a) a for the SimulationCode force convention.
         TimeStepping(TimestepOptions options,
                      std::function<double(double)> HoverH0,
                      std::function<double(double)> force_prefactor,

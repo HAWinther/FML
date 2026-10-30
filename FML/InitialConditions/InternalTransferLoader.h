@@ -13,7 +13,7 @@ namespace FML::INITIALCONDITIONS {
     std::shared_ptr<TransferProvider> load_internal_transfers(const InternalTransferRequest & request);
 #else
     inline std::shared_ptr<TransferProvider> load_internal_transfers(const InternalTransferRequest &) {
-        throw std::runtime_error("internal_transfer needs a COLASolver build with USE_INTERNAL_COSMOLOGY=true");
+        throw std::runtime_error("internal_transfer needs a SimulationCode build with USE_INTERNAL_COSMOLOGY=true");
     }
 #endif
 } // namespace FML::INITIALCONDITIONS

@@ -1,4 +1,0 @@
-// The simulation compiled for particles of type ParticleCOLA<NDIM_SPACE> (see RunSimulation.h)
-#include "RunSimulationImpl.h"
-
-COLASOLVER_INSTANTIATE_RUN_SIMULATION(ParticleCOLA<NDIM_SPACE>)
