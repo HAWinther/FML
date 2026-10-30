@@ -26,7 +26,7 @@ namespace FML::PHASE_SPACE_HALOS {
         double position_to_physical{1};     // a for comoving lengths, 1 for physical lengths.
         double hubble_velocity_gradient{0}; // Velocity / coordinate length; binding energies only.
         double assignment_density{0};       // Mass / coordinate length^3; 0 -> 200 times global mean mass density.
-        double potential_opening_angle{.3}, minimum_bound_fraction{.5};
+        double potential_opening_angle{.7}, minimum_bound_fraction{.5};
         std::size_t minimum_particles{20}, minimum_seed_particles{10};
         std::size_t max_parent_particles{1000000}, max_local_particles{10000000}, max_seeds{4096};
         std::uint64_t max_neighbor_visits{100000000};

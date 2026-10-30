@@ -10,6 +10,8 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   new tree evaluation) instead of recomputing the tree potential; `newtonian_spline_green` (shared with
   ShortRangeGravity) without std::pow. COLA snapshot (2.1e6 particles): 71.5 s -> 24.7 s on 1 thread; 2 of 5686
   objects change membership by at most .05%.
+- Default `potential_opening_angle` .7 (was .3): 24.7 s -> 21.6 s; 26 of 5686 objects change by at most 1.7% of
+  their particles and .7% in Vmax; the ROCKSTAR comparison is unchanged.
 
 ### PhaseSpaceHaloFinder: Vmax as ROCKSTAR by default; cosmological ROCKSTAR comparison
 - `Options::vmax_inclusive` (default true): Vmax/Rmax from the bound members of the object and all its

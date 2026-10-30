@@ -56,7 +56,7 @@ cell size and subhaloes are not reliable, so it tests host detection and Vmax, n
 | | FML | ROCKSTAR |
 |---|---|---|
 | Objects (hosts) | 5685 (4666) | 2915 (2268) |
-| Time (example program, including text input) | 30 s (2 threads), 34 s (1 thread); was 71 s | 7 s (1 process) |
+| Time (example program, including text input) | 27 s (2 threads; opening angle .7); was 71 s | 7 s (1 process) |
 
 | Hosts, N bound | ROCKSTAR hosts matched | median Vmax FML/ROCKSTAR (default; exclusive) | FML hosts matched |
 |---|---|---|---|
@@ -85,8 +85,9 @@ Vmax functions N(>V) above 150, 200, 300, 500 km/s: hosts 724/797, 362/395, 125/
   that is cheaper than a new tree, and the Green function uses multiplications: 24.7 s (20.0 s on 2 threads),
   2.1e9 instead of 9.4e9 interactions; 2 of 5686 objects change membership (at most .05% of their particles).
   ROCKSTAR's looser monopole criterion (dmin = bmax + sqrt(bmax^2 + <x^2>), tested, not adopted) gave 18.7 s but
-  changed 245 objects by up to 11% of their particles; opening angle .7 gave 21.6 s and changed 26 objects by up to
-  1.7%. The remaining time outside the potential (about 14 s, FoF and 6D refinement) runs on one thread.
+  changed 245 objects by up to 11% of their particles; opening angle .7 (now the default, was .3) gave 21.6 s and
+  changed 26 objects by up to 1.7% of their particles and .7% in Vmax; the ROCKSTAR comparison numbers above are
+  unchanged with it. The remaining time outside the potential (about 14 s, FoF and 6D refinement) runs on one thread.
 
 ## Small local performance cases
 

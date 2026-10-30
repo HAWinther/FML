@@ -18,7 +18,7 @@ The normalization, adaptive nearest-neighbour linking and hierarchical seed-assi
 
 ## Gravitational binding and properties
 
-Unbinding uses the **full isolated Newtonian potential**, not a truncated PM/TreePM correction. `BindingPotentialTree` uses a monopole binary tree, excludes self potentials and opens nodes intersecting the softening support. Opening angle zero gives exact leaf sums. The compact spline Green function is shared with `ShortRangeGravity/Softening.h`; the input length is its support h, not Plummer-equivalent epsilon. The tree can be tested independently against direct sums.
+Unbinding uses the **full isolated Newtonian potential**, not a truncated PM/TreePM correction. `BindingPotentialTree` uses a monopole binary tree, excludes self potentials and opens nodes intersecting the softening support. The default opening angle is .7 (`potential_opening_angle`; .3 changed 26 of 5686 objects of a cosmological snapshot by at most 1.7% of their particles at 1.15x the cost, tests/RESULTS.md); opening angle zero gives exact leaf sums. The compact spline Green function is shared with `ShortRangeGravity/Softening.h`; the input length is its support h, not Plummer-equivalent epsilon. The tree can be tested independently against direct sums.
 
 At each iteration the bulk velocity and potential are recomputed. A particle remains if
 
