@@ -152,7 +152,7 @@ if gravity_model == "f(R)" then
   -- Options for the multigrid solver in case we solve exact equation:
   multigrid_solver_residual_convergence = 1e-7
   -- How many Newton-Gauss-Seidel sweeps to do every level
-  multigrid_nsweeps = 5
+  multigrid_nsweeps = 3
   -- In some cases the multigrid solver fails if we are not close to the
   -- solution before starting multigrid. Increase this if so
   multigrid_nsweeps_first_step = 5
@@ -184,7 +184,7 @@ if gravity_model == "Symmetron" then
   -- Options for the multigrid solver in case we solve exact equation:
   multigrid_solver_residual_convergence = 1e-7
   -- How many Newton-Gauss-Seidel sweeps to do every level
-  multigrid_nsweeps = 5
+  multigrid_nsweeps = 3
   -- In some cases the multigrid solver fails if we are not close to the
   -- solution before starting multigrid. Increase this if so
   multigrid_nsweeps_first_step = 5

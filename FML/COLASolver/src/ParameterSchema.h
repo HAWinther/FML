@@ -381,7 +381,7 @@ namespace COLASOLVER {
                        (model == "DGP" and p.get<bool>("gravity_model_dgp_exact_solution"));
             };
             b.when(exact_solution, "solving the exact equation of the gravity model", [&]() {
-                b.optional("multigrid_nsweeps", 10, "Multigrid solver: Newton-Gauss-Seidel sweeps on every level");
+                b.optional("multigrid_nsweeps", 3, "Multigrid solver: Newton-Gauss-Seidel sweeps on every level");
                 b.optional("multigrid_nsweeps_first_step",
                            20,
                            "Multigrid solver: sweeps on the first step (increase if the solver fails to converge)");

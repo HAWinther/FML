@@ -16,6 +16,10 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 - COLASolver runs the f(R), DGP and symmetron solvers quietly (verbose computed an extra residual per sweep, +18-35%)
   and prints the number of V-cycles per solve. In a 64^3, 10-step COLA run the force time went from 3.9 to 2.2 s
   (f(R)) and 5.4 to 2.1 s (DGP); P(k) at z = 0 unchanged to 4e-5.
+- Default `multigrid_nsweeps` 3 (was 10; the example parameter files 3 instead of 5 for f(R) and symmetron). 64^3,
+  10-step COLA run, force time with 10 / 5 / 3 / 2 sweeps: f(R) 3.2 / 2.1 / 2.0 / 1.8 s, DGP 3.4 / 2.7 / 2.2 / 2.1 s,
+  symmetron 2.0 / 1.5 / 1.6 / 1.5 s; P(k) at z = 0 unchanged at 6 digits for f(R) and symmetron (DGP differences of
+  1e-3 come from its 1e-4 tolerance in the example file). More V-cycles are needed (f(R) 32 -> 42).
 - DGPSolverCosmology stops with an error for NDIM != 3 (the operator splitting is written for 3D); `set_ngs_steps`
   takes ints.
 

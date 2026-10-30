@@ -37,7 +37,7 @@ class GravityModelScreened : public GravityModel<NDIM> {
     // For solving the exact equation
     bool solve_exact_equation{false};
     int multigrid_nsweeps_first_step{10};
-    int multigrid_nsweeps{10};
+    int multigrid_nsweeps{3};
     double multigrid_solver_residual_convergence{1e-7};
     // The last exact (multigrid) solution in real space and its scale factor: the starting point of the next solve
     mutable FML::GRID::FFTWGrid<NDIM> multigrid_previous_solution;

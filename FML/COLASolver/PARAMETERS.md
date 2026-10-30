@@ -81,7 +81,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `gravity_model_fofr_multigrid_method` | string | `"sqrt"` | gravity_model = f(R) and gravity_model_fofr_exact_solution = true | The field the multigrid solver solves for. sqrt: u = sqrt(|f_R|) with the equation in a cell solved exactly (a cubic for n = 1), robust for any f_R0, n and redshift. log: ln|f_R| with Newton steps (the original method; can give NaN for small f_R0 or at high redshift). Options: `sqrt`, `log` |
 | `gravity_model_symmetron_exact_solution` | bool | `false` | gravity_model = Symmetron | Solve the exact symmetron equation with the multigrid solver (slow, mainly for testing) |
 | `gravity_model_dgp_exact_solution` | bool | `false` | gravity_model = DGP | Solve the exact DGP equation with the multigrid solver (slow, mainly for testing; can be hard to get to converge) |
-| `multigrid_nsweeps` | int | `10` | solving the exact equation of the gravity model | Multigrid solver: Newton-Gauss-Seidel sweeps on every level |
+| `multigrid_nsweeps` | int | `3` | solving the exact equation of the gravity model | Multigrid solver: Newton-Gauss-Seidel sweeps on every level |
 | `multigrid_nsweeps_first_step` | int | `20` | solving the exact equation of the gravity model | Multigrid solver: sweeps on the first step (increase if the solver fails to converge) |
 | `multigrid_solver_residual_convergence` | double | `1e-06` | solving the exact equation of the gravity model | Multigrid solver: converged when the residual is below this |
 
