@@ -104,7 +104,6 @@ class DGPSolverCosmology {
             throw std::runtime_error("[DGPSolverCosmology] The DGP equation is only implemented for NDIM = 3");
 
         Nmesh = overdensity_real.get_nmesh();
-        auto Local_nx = overdensity_real.get_local_nx();
 
         if (FML::ThisTask == 0 and verbose) {
             std::cout << "\n";
@@ -129,8 +128,8 @@ class DGPSolverCosmology {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-        for (int islice = 0; islice < Local_nx; islice++) {
-            for (auto && real_index : overdensity_real.get_real_range(islice, islice + 1)) {
+        for (FML::IndexIntType irow = 0; irow < overdensity_real.get_local_nrows(); irow++) {
+            for (auto && real_index : overdensity_real.get_real_range_of_rows(irow, irow + 1)) {
                 // Fetch the value in the cell
                 auto density_in_cell = overdensity_real.get_real_from_index(real_index);
                 // Fetch the coordinates of the cell (ix,iy,iz) and index
@@ -314,8 +313,8 @@ class DGPSolverCosmology {
 #ifdef USE_OMP
 #pragma omp parallel for reduction(max : fmax) reduction(min : fmin) reduction(+ : fmean)
 #endif
-        for (int islice = 0; islice < Local_nx; islice++) {
-            for (auto && real_index : fifth_force_potential_real.get_real_range(islice, islice + 1)) {
+        for (FML::IndexIntType irow = 0; irow < fifth_force_potential_real.get_local_nrows(); irow++) {
+            for (auto && real_index : fifth_force_potential_real.get_real_range_of_rows(irow, irow + 1)) {
                 auto value = fifth_force_potential_real.get_real_from_index(real_index);
                 value *= forcenorm;
                 fifth_force_potential_real.set_real_from_index(real_index, value);

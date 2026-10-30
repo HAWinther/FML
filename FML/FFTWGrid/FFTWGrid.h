@@ -300,6 +300,18 @@ namespace FML {
             /// For the Fourier range islice denotes the ikx value
             FourierRange get_fourier_range(int islice_begin = 0, int islice_end = 0) const;
 
+            /// The number of local rows: lines of cells along the last dimension, Local_nx * Nmesh^(N-2). Rows are
+            /// stored one after the other, so looping over rows visits the grid in memory order. Parallelize grid
+            /// loops over rows rather than slices: a task can have fewer slices than threads, but not fewer rows
+            /// [ #pragma omp parallel for
+            ///   for (IndexIntType irow = 0; irow < grid.get_local_nrows(); irow++)
+            ///       for (auto && fourier_index : grid.get_fourier_range_of_rows(irow, irow + 1)) ... ]
+            IndexIntType get_local_nrows() const;
+            /// Range iterator over the real grid cells of the rows [row_begin, row_end)
+            RealRange get_real_range_of_rows(IndexIntType row_begin, IndexIntType row_end) const;
+            /// Range iterator over the Fourier grid cells of the rows [row_begin, row_end)
+            FourierRange get_fourier_range_of_rows(IndexIntType row_begin, IndexIntType row_end) const;
+
             /// The number of cells per slice that we alloc. Useful to jump from slice to slice
             ptrdiff_t get_ntot_real_slice_alloc() const;
 
@@ -429,19 +441,22 @@ namespace FML {
         class LoopIteratorReal {
           private:
             IndexIntType real_index, index;
-            int Nmesh, odd;
+            int Nmesh, skip, column;
 
           public:
             LoopIteratorReal(IndexIntType _index, int _Nmesh)
                 : real_index(_index + (_Nmesh % 2 == 1 ? 1 : 2) * (_index / _Nmesh)), index(_index), Nmesh(_Nmesh),
-                  odd(_Nmesh % 2) {}
+                  skip(_Nmesh % 2 == 1 ? 1 : 2), column(int(_index % _Nmesh)) {}
             bool operator!=(LoopIteratorReal const & other) const { return index != other.index; }
             const IndexIntType & operator*() const { return real_index; }
             LoopIteratorReal & operator++() {
+                // Skip the padding at the end of each row (a counter: no division per cell)
                 ++index;
-                if (index % Nmesh == 0)
-                    real_index += odd ? 1 : 2;
                 ++real_index;
+                if (++column == Nmesh) {
+                    column = 0;
+                    real_index += skip;
+                }
                 return *this;
             }
         };
@@ -501,6 +516,38 @@ namespace FML {
             // Here NmeshTotReal = LocalNx * Nmesh^N-1
             IndexIntType cellsperslice = NmeshTotReal / Local_nx;
             return RealRange(cellsperslice * islice_begin, cellsperslice * islice_end, Nmesh);
+        }
+
+        template <int N>
+        IndexIntType FFTWGrid<N>::get_local_nrows() const {
+            return IndexIntType(Local_nx) * FML::power(Nmesh, N - 2);
+        }
+
+        template <int N>
+        RealRange FFTWGrid<N>::get_real_range_of_rows(IndexIntType row_begin, IndexIntType row_end) const {
+#ifdef DEBUG_FFTWGRID
+            if (not grid_is_in_real_space) {
+                if (FML::ThisTask == 0)
+                    std::cout << "Warning: [FFTWGrid::get_real_range_of_rows] The grid status is [Fourierspace]. "
+                                 "Label: " +
+                                     name + "\n";
+            }
+#endif
+            return RealRange(IndexIntType(Nmesh) * row_begin, IndexIntType(Nmesh) * row_end, Nmesh);
+        }
+
+        template <int N>
+        FourierRange FFTWGrid<N>::get_fourier_range_of_rows(IndexIntType row_begin, IndexIntType row_end) const {
+#ifdef DEBUG_FFTWGRID
+            if (grid_is_in_real_space) {
+                if (FML::ThisTask == 0)
+                    std::cout << "Warning: [FFTWGrid::get_fourier_range_of_rows] The grid status is [Realspace]. "
+                                 "Label: " +
+                                     name + "\n";
+            }
+#endif
+            const IndexIntType cellsperrow = Nmesh / 2 + 1;
+            return FourierRange(cellsperrow * row_begin, cellsperrow * row_end);
         }
 
         template <int N>
@@ -731,8 +778,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
-                for (auto && real_index : get_real_range(islice, islice + 1)) {
+            for (FML::IndexIntType irow = 0; irow < get_local_nrows(); irow++) {
+                for (auto && real_index : get_real_range_of_rows(irow, irow + 1)) {
                     auto coord = get_coord_from_index(real_index);
                     auto pos = get_real_position(coord);
                     auto value = func(pos);
@@ -770,8 +817,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
-                for (auto && fourier_index : get_fourier_range(islice, islice + 1)) {
+            for (FML::IndexIntType irow = 0; irow < get_local_nrows(); irow++) {
+                for (auto && fourier_index : get_fourier_range_of_rows(irow, irow + 1)) {
                     auto kvec = get_fourier_wavevector_from_index(fourier_index);
                     auto value = func(kvec);
                     set_fourier_from_index(fourier_index, value);
@@ -1097,8 +1144,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
-                for (auto && fourier_index : get_fourier_range(islice, islice + 1)) {
+            for (FML::IndexIntType irow = 0; irow < get_local_nrows(); irow++) {
+                for (auto && fourier_index : get_fourier_range_of_rows(irow, irow + 1)) {
                     set_fourier_from_index(fourier_index, norm * get_fourier_from_index(fourier_index));
                 }
             }

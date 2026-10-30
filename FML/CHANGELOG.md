@@ -5,6 +5,20 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### OpenMP over grid rows instead of slices
+- `FFTWGrid::get_local_nrows()`, `get_real_range_of_rows(begin, end)` and `get_fourier_range_of_rows(begin, end)`:
+  rows are the lines of cells along the last dimension (Local_nx Nmesh^(N-2) per task, stored one after the other).
+- The OpenMP grid loops (87, in FFTWGrid, LPT, NBody, Smoothing, ComputePowerSpectra, HybridBias, Interpolation,
+  SheetInterpolation, RandomFields, TidalTensor, NUFFT, MPIGrid conversion, the multigrid f(R)/DGP/symmetron
+  solvers and SimulationCode) are parallelized over rows instead of x-slices: a task with fewer slices than threads
+  (many MPI tasks, e.g. Nmesh 1024 on 32 tasks = 32 slices with 48 threads) no longer leaves threads idle or
+  unevenly loaded. Each thread still gets one contiguous block of memory (static schedule), so cache use is
+  unchanged: 256^3, 256 slices: same speed; 3 slices of 1024^2 on 2 threads 1.40x and 1 slice 1.94x faster.
+  The N = 3 fast paths of the force and the P(k) binning use `collapse(2)` over (slice, row). Same results (each
+  cell is computed as before; reductions only change in summation order).
+- `LoopIteratorReal` counts the column instead of a division per cell (5.7x faster on a loop that only reads the
+  grid; small in real loops).
+
 ### FFTW planner flag and wisdom (plans) in SimulationCode and the library
 - SimulationCode parameters `simulation_fftw_planner` (estimate, measure, patient, exhaustive; default estimate as
   before) and `simulation_fftw_wisdom_file` (plans to read at the start; default none). With a planner other than

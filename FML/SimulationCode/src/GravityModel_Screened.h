@@ -146,15 +146,14 @@ class GravityModelScreened : public GravityModel<NDIM> {
 
             // Multiply by -k^2 / (1.5 OmegaM a) to go from the potential to "force density"
             // (defined such that the total force is 1.5 OmegaM a * D( 1/D^2 delta_FF + 1/D^2 delta) )
-            const auto Local_nx = density_fifth_force.get_local_nx();
             const auto Local_x_start = density_fifth_force.get_local_x_start();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
+            for (FML::IndexIntType irow = 0; irow < density_fifth_force.get_local_nrows(); irow++) {
                 [[maybe_unused]] std::array<double, NDIM> kvec;
                 double kmag2;
-                for (auto && fourier_index : density_fifth_force.get_fourier_range(islice, islice + 1)) {
+                for (auto && fourier_index : density_fifth_force.get_fourier_range_of_rows(irow, irow + 1)) {
                     if (Local_x_start == 0 and fourier_index == 0)
                         continue; // DC mode (k=0)
                     density_fifth_force.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
@@ -202,14 +201,13 @@ class GravityModelScreened : public GravityModel<NDIM> {
                 Spline f_spline(kBox, f, "Low-pass filter");
 
                 // Combine the screened and the linear solution together
-                auto Local_nx = density_fourier.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < density_fourier.get_local_nrows(); irow++) {
                     [[maybe_unused]] std::array<double, NDIM> kvec;
                     double kmag;
-                    for (auto && fourier_index : density_fourier.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : density_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                         density_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
                         auto delta = density_fourier.get_fourier_from_index(fourier_index);
                         auto delta_fifth_force = density_fifth_force.get_fourier_from_index(fourier_index);
@@ -232,12 +230,11 @@ class GravityModelScreened : public GravityModel<NDIM> {
         }
 
         // Add on density corresponding to the gravitational force to get total force
-        auto Local_nx = density_fourier.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-        for (int islice = 0; islice < Local_nx; islice++) {
-            for (auto && fourier_index : density_fourier.get_fourier_range(islice, islice + 1)) {
+        for (FML::IndexIntType irow = 0; irow < density_fourier.get_local_nrows(); irow++) {
+            for (auto && fourier_index : density_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                 auto delta = density_fourier.get_fourier_from_index(fourier_index);
                 auto delta_fifth_force = density_fifth_force.get_fourier_from_index(fourier_index);
                 density_fifth_force.set_fourier_from_index(fourier_index, delta + delta_fifth_force);

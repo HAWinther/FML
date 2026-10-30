@@ -159,14 +159,13 @@ namespace SIMCODE {
     FFTWGrid<NDIM> compute_phi_1LPT_from_delta(const FFTWGrid<NDIM> & delta_fourier) {
         FFTWGrid<NDIM> phi_1LPT_fourier = delta_fourier;
         auto Local_x_start = phi_1LPT_fourier.get_local_x_start();
-        auto Local_nx = phi_1LPT_fourier.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-        for (int islice = 0; islice < Local_nx; islice++) {
+        for (FML::IndexIntType irow = 0; irow < phi_1LPT_fourier.get_local_nrows(); irow++) {
             double kmag2;
             std::array<double, NDIM> kvec;
-            for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range(islice, islice + 1)) {
+            for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                 if (Local_x_start == 0 and fourier_index == 0)
                     continue; // DC mode k = 0
                 phi_1LPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);

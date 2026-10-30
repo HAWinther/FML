@@ -53,17 +53,16 @@ namespace FML {
                     std::cout << "[ComputeHessianWithFT::ComputeSecondDerivative] Computing phi_" << i1 << "," << i2
                               << "\n";
 
-                auto Local_nx = grid.get_local_nx();
                 auto Local_x_start = grid.get_local_x_start();
                 // The Nyquist frequency 2pi * Nmesh/2 (with a margin for rounding)
                 const double knyquist = M_PI * grid.get_nmesh() * (1.0 - 1e-10);
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < grid.get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    for (auto && fourier_index : grid.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : grid.get_fourier_range_of_rows(irow, irow + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
 
@@ -176,7 +175,6 @@ namespace FML {
                 };
 
             // Loop over all cells. Each thread has its own GSL matrices and workspaces
-            auto Local_nx = tensor_real[0].get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel
 #endif
@@ -189,8 +187,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && real_index : tensor_real[0].get_real_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < tensor_real[0].get_local_nrows(); irow++) {
+                    for (auto && real_index : tensor_real[0].get_real_range_of_rows(irow, irow + 1)) {
 
                         // Set the matrix
                         int count = 0;

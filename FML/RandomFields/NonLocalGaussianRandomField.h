@@ -110,7 +110,6 @@ namespace FML {
                     val *= fNL;
 
                 const auto Nmesh = phi_fourier.get_nmesh();
-                const auto Local_nx = phi_fourier.get_local_nx();
                 const auto nleft = phi_fourier.get_n_extra_slices_left();
                 const auto nright = phi_fourier.get_n_extra_slices_right();
                 assert_mpi(Nmesh > 0,
@@ -130,10 +129,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < phi_fourier.get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    for (auto && fourier_index : phi_fourier.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : phi_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                         phi_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
                         if (kmag == 0.0)
                             continue;
@@ -166,8 +165,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for reduction(+ : phi_squared_mean, phi_mean, ncells)
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && real_index : phi_real.get_real_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < phi_real.get_local_nrows(); irow++) {
+                    for (auto && real_index : phi_real.get_real_range_of_rows(irow, irow + 1)) {
                         auto phi = phi_real.get_real_from_index(real_index);
                         auto value = phi * phi;
                         source.set_real_from_index(real_index, value);
@@ -194,8 +193,8 @@ namespace FML {
 #pragma omp parallel for
 #endif
                 // Subtract <phi^2>
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && real_index : source.get_real_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < source.get_local_nrows(); irow++) {
+                    for (auto && real_index : source.get_real_range_of_rows(irow, irow + 1)) {
                         auto phi2 = source.get_real_from_index(real_index);
                         auto phi = phi_real.get_real_from_index(real_index);
                         auto value =
@@ -241,10 +240,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < phi_fourier.get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    for (auto && fourier_index : phi_fourier.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : phi_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                         phi_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
                         FML::GRID::FloatType pofk_m13 = std::pow(Pofk_of_kBox_over_volume_spline(kmag), -1.0 / 3.0);
@@ -284,8 +283,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && real_index : temp1.get_real_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < temp1.get_local_nrows(); irow++) {
+                    for (auto && real_index : temp1.get_real_range_of_rows(irow, irow + 1)) {
                         auto pm13 = phi_m13.get_real_from_index(real_index);
                         auto pm23 = need_m23 ? phi_m23.get_real_from_index(real_index) : FML::GRID::FloatType(0);
                         auto pm33 = term3_active ? phi_m33.get_real_from_index(real_index) : FML::GRID::FloatType(0);
@@ -320,10 +319,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < source.get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    for (auto && fourier_index : source.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : source.get_fourier_range_of_rows(irow, irow + 1)) {
                         source.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
 
                         FML::GRID::FloatType pofk_p13 = std::pow(Pofk_of_kBox_over_volume_spline(kmag), 1.0 / 3.0);
@@ -360,8 +359,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for reduction(+ : phi_mean)
 #endif
-                    for (int islice = 0; islice < Local_nx; islice++) {
-                        for (auto && real_index : phi_fourier.get_real_range(islice, islice + 1)) {
+                    for (FML::IndexIntType irow = 0; irow < phi_fourier.get_local_nrows(); irow++) {
+                        for (auto && real_index : phi_fourier.get_real_range_of_rows(irow, irow + 1)) {
                             auto value = phi_fourier.get_real_from_index(real_index);
                             phi_mean += value;
                         }
@@ -375,8 +374,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                    for (int islice = 0; islice < Local_nx; islice++) {
-                        for (auto && real_index : phi_fourier.get_real_range(islice, islice + 1)) {
+                    for (FML::IndexIntType irow = 0; irow < phi_fourier.get_local_nrows(); irow++) {
+                        for (auto && real_index : phi_fourier.get_real_range_of_rows(irow, irow + 1)) {
                             auto phi = phi_fourier.get_real_from_index(real_index);
                             phi_fourier.set_real_from_index(real_index, phi - phi_mean);
                         }

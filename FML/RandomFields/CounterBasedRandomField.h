@@ -24,8 +24,8 @@ namespace FML::RANDOM::COUNTER_BASED {
 #ifdef USE_OMP
 #pragma omp parallel for reduction(| : invalid)
 #endif
-        for (int slice = 0; slice < grid.get_local_nx(); slice++) {
-            for (auto index : grid.get_fourier_range(slice, slice + 1)) {
+        for (FML::IndexIntType irow = 0; irow < grid.get_local_nrows(); irow++) {
+            for (auto index : grid.get_fourier_range_of_rows(irow, irow + 1)) {
                 auto wave = grid.get_fourier_coord_from_index(index);
                 wave[0] += grid.get_local_x_start();
                 bool zero = true, nyquist = false;

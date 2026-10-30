@@ -222,12 +222,11 @@ namespace FML {
                 template <int N>
                 double mean_of_real_grid(const FFTWGrid<N> & grid) {
                     double sum = 0.0;
-                    const auto Local_nx = grid.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for reduction(+ : sum)
 #endif
-                    for (int islice = 0; islice < Local_nx; islice++)
-                        for (auto && real_index : grid.get_real_range(islice, islice + 1))
+                    for (FML::IndexIntType irow = 0; irow < grid.get_local_nrows(); irow++)
+                        for (auto && real_index : grid.get_real_range_of_rows(irow, irow + 1))
                             sum += grid.get_real_from_index(real_index);
                     FML::SumOverTasks(&sum);
                     return sum / std::pow(double(grid.get_nmesh()), N);
@@ -303,7 +302,6 @@ namespace FML {
                                                                  options.smoothing_scale,
                                                                  options.smoothing_method);
 
-                const auto Local_nx = delta.get_local_nx();
 
                 // nabla^2 delta (k in units of 1/box)
                 FFTWGrid<N> nabla2;
@@ -326,10 +324,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                            for (int islice = 0; islice < Local_nx; islice++) {
+                            for (FML::IndexIntType irow = 0; irow < delta.get_local_nrows(); irow++) {
                                 [[maybe_unused]] double kmag2;
                                 [[maybe_unused]] std::array<double, N> kvec;
-                                for (auto && fourier_index : delta.get_fourier_range(islice, islice + 1)) {
+                                for (auto && fourier_index : delta.get_fourier_range_of_rows(irow, irow + 1)) {
                                     delta.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
                                     double fac = 0.0;
                                     if (kmag2 > 0.0)
@@ -344,8 +342,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                            for (int islice = 0; islice < Local_nx; islice++) {
-                                for (auto && real_index : sij.get_real_range(islice, islice + 1)) {
+                            for (FML::IndexIntType irow = 0; irow < sij.get_local_nrows(); irow++) {
+                                for (auto && real_index : sij.get_real_range_of_rows(irow, irow + 1)) {
                                     const double v = sij.get_real_from_index(real_index);
                                     s2.set_real_from_index(real_index, s2.get_real_from_index(real_index) + w * v * v);
                                 }
@@ -362,8 +360,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                    for (int islice = 0; islice < Local_nx; islice++) {
-                        for (auto && real_index : delta2.get_real_range(islice, islice + 1)) {
+                    for (FML::IndexIntType irow = 0; irow < delta2.get_local_nrows(); irow++) {
+                        for (auto && real_index : delta2.get_real_range_of_rows(irow, irow + 1)) {
                             const double v = delta2.get_real_from_index(real_index);
                             delta2.set_real_from_index(real_index, v * v);
                         }
@@ -376,8 +374,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                    for (int islice = 0; islice < Local_nx; islice++)
-                        for (auto && real_index : grid.get_real_range(islice, islice + 1))
+                    for (FML::IndexIntType irow = 0; irow < grid.get_local_nrows(); irow++)
+                        for (auto && real_index : grid.get_real_range_of_rows(irow, irow + 1))
                             grid.set_real_from_index(real_index, grid.get_real_from_index(real_index) - mean);
                 };
                 if (options.subtract_lagrangian_means) {

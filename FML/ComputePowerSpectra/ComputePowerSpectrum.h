@@ -445,7 +445,6 @@ namespace FML {
                        "[compute_power_spectrum_multipoles_fourier] grid must have Nmesh > 0\n");
 
             int Nmesh = fourier_grid.get_nmesh();
-            auto Local_nx = fourier_grid.get_local_nx();
             auto Local_x_start = fourier_grid.get_local_x_start();
 
             // Norm of LOS vector
@@ -464,10 +463,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows(); irow++) {
                 [[maybe_unused]] double kmag;
                 [[maybe_unused]] std::array<double, N> kvec;
-                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                for (auto && fourier_index : fourier_grid.get_fourier_range_of_rows(irow, irow + 1)) {
                     if (Local_x_start == 0 and fourier_index == 0)
                         continue; // DC mode( k=0)
 
@@ -537,7 +536,7 @@ namespace FML {
         /// calling f(fourier_index, kvec, |k|, weight) with weight = 2 for the modes with 0 < k_z < k_ny (they also
         /// represent -k) and 1 otherwise. kvec and |k| are computed exactly as in
         /// FFTWGrid::get_fourier_wavevector_and_norm_by_index, but without decoding the index (no integer divisions per
-        /// mode). OpenMP over the slices (f must be thread safe)
+        /// mode). OpenMP over the rows (f must be thread safe)
         template <class F>
         void bin_up_fourier_modes_3d(const FFTWGrid<3> & grid, F && f) {
             const int Nmesh = grid.get_nmesh();
@@ -546,14 +545,15 @@ namespace FML {
             const int nover2 = Nmesh / 2;
             const int nover2plus1 = Nmesh / 2 + 1;
             const double twopi = 2.0 * M_PI;
+            // OpenMP over the rows (islice, iy): a task can have fewer slices than threads
 #ifdef USE_OMP
-#pragma omp parallel for
+#pragma omp parallel for collapse(2)
 #endif
             for (int islice = 0; islice < Local_nx; islice++) {
-                std::array<double, 3> kvec;
-                const int ix = islice + Local_x_start;
-                kvec[0] = twopi * double(ix <= nover2 ? ix : ix - Nmesh);
                 for (int iy = 0; iy < Nmesh; iy++) {
+                    std::array<double, 3> kvec;
+                    const int ix = islice + Local_x_start;
+                    kvec[0] = twopi * double(ix <= nover2 ? ix : ix - Nmesh);
                     kvec[1] = twopi * double(iy <= nover2 ? iy : iy - Nmesh);
                     size_t fourier_index = (size_t(islice) * Nmesh + iy) * nover2plus1;
                     for (int iz = 0; iz < nover2plus1; iz++, fourier_index++) {
@@ -578,7 +578,6 @@ namespace FML {
                        "[bin_up_deconvolved_power_spectrum] Binning has inconsistent parameters\n");
 
             const auto Nmesh = fourier_grid.get_nmesh();
-            const auto Local_nx = fourier_grid.get_local_nx();
             const auto Local_x_start = fourier_grid.get_local_x_start();
             const FML::INTERPOLATION::WindowFunctionTable<N> window_function(density_assignment_method, Nmesh);
 
@@ -604,10 +603,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows(); irow++) {
                 [[maybe_unused]] double kmag;
                 [[maybe_unused]] std::array<double, N> kvec;
-                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                for (auto && fourier_index : fourier_grid.get_fourier_range_of_rows(irow, irow + 1)) {
                     if (Local_x_start == 0 and fourier_index == 0)
                         continue; // DC mode( k=0)
 
@@ -642,7 +641,6 @@ namespace FML {
                        "[bin_up_power_spectrum] Binning has inconsistent parameters\n");
 
             const auto Nmesh = fourier_grid.get_nmesh();
-            const auto Local_nx = fourier_grid.get_local_nx();
             const auto Local_x_start = fourier_grid.get_local_x_start();
 
             // Initialize binning just in case
@@ -664,10 +662,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows(); irow++) {
                 [[maybe_unused]] double kmag;
                 [[maybe_unused]] std::array<double, N> kvec;
-                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                for (auto && fourier_index : fourier_grid.get_fourier_range_of_rows(irow, irow + 1)) {
                     if (Local_x_start == 0 and fourier_index == 0)
                         continue; // DC mode( k=0)
 
@@ -703,7 +701,6 @@ namespace FML {
                        "[bin_up_cross_power_spectrum] Binning has inconsistent parameters\n");
 
             const auto Nmesh = fourier_grid_1.get_nmesh();
-            const auto Local_nx = fourier_grid_1.get_local_nx();
             const auto Local_x_start = fourier_grid_1.get_local_x_start();
 
             // Initialize binning just in case
@@ -717,10 +714,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid_1.get_local_nrows(); irow++) {
                 [[maybe_unused]] double kmag;
                 [[maybe_unused]] std::array<double, N> kvec;
-                for (auto && fourier_index : fourier_grid_1.get_fourier_range(islice, islice + 1)) {
+                for (auto && fourier_index : fourier_grid_1.get_fourier_range_of_rows(irow, irow + 1)) {
                     if (Local_x_start == 0 and fourier_index == 0)
                         continue; // DC mode( k=0)
 

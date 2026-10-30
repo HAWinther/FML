@@ -563,7 +563,6 @@ namespace FML {
         void deconvolve_window_function_fourier(FFTWGrid<N> & fourier_grid, std::string density_assignment_method) {
 
             const auto Ngrid = fourier_grid.get_nmesh();
-            const auto Local_nx = fourier_grid.get_local_nx();
 
             assert_mpi(Ngrid > 0, "[deconvolve_window_function_fourier] Ngrid must be positive\n");
 
@@ -572,8 +571,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
-                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows(); irow++) {
+                for (auto && fourier_index : fourier_grid.get_fourier_range_of_rows(irow, irow + 1)) {
                     auto kvec = fourier_grid.get_fourier_wavevector_from_index(fourier_index);
                     auto w = window_function(kvec);
                     auto value = fourier_grid.get_fourier_from_index(fourier_index);
@@ -1424,9 +1423,9 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
+            for (FML::IndexIntType irow = 0; irow < grid_in.get_local_nrows(); irow++) {
                 std::array<double, N> dx;
-                for (auto && real_index : grid_in.get_real_range(islice, islice + 1)) {
+                for (auto && real_index : grid_in.get_real_range_of_rows(irow, irow + 1)) {
 
                     // Coordinate of cell
                     auto ix = grid_in.coord_from_index(real_index);
@@ -1521,14 +1520,13 @@ namespace FML {
             density_grid_fourier2.fftw_r2c();
 
             // The mean of the two grids (alias cancellation)
-            auto Local_nx = density_grid_fourier.get_local_nx();
 
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
+            for (FML::IndexIntType irow = 0; irow < density_grid_fourier.get_local_nrows(); irow++) {
                 const std::complex<FML::GRID::FloatType> I(0, 1);
-                for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
+                for (auto && fourier_index : density_grid_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                     // NB: on the Nyquist planes this is not the shift of the (real) grid (that is cos(k_d s), as in
                     // shift_grid_fourier), so the result is not Hermitian symmetric there. It is used for P(k), where
                     // only |delta(k)|^2 enters, so it is kept as it is (cos(k_N s) = 0 for the half-cell shift would
@@ -1736,12 +1734,11 @@ namespace FML {
                 // Virtual positions are offset by +s, giving delta(x - s): undo the Fourier phase
                 FML::GRID::shift_grid_fourier<N>(grid_shifted, shift, +1.0);
 
-                const auto Local_nx = density_grid_fourier.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && fourier_index : density_grid_fourier.get_fourier_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < density_grid_fourier.get_local_nrows(); irow++) {
+                    for (auto && fourier_index : density_grid_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                         auto value = density_grid_fourier.get_fourier_from_index(fourier_index);
                         value += grid_shifted.get_fourier_from_index(fourier_index) * norm;
                         density_grid_fourier.set_fourier_from_index(fourier_index, value);

@@ -1682,14 +1682,13 @@ void NBodySimulation<NDIM, T>::compute_lightcone_potential(const FFTWGrid<NDIM> 
     const bool deconvolve = current_force.deconvolve_window;
     const FML::INTERPOLATION::WindowFunctionTable<NDIM> window(current_force.density_assignment_method,
                                                                lightcone_potential.get_nmesh());
-    const auto Local_nx = lightcone_potential.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-    for (int islice = 0; islice < Local_nx; islice++) {
+    for (FML::IndexIntType irow = 0; irow < lightcone_potential.get_local_nrows(); irow++) {
         std::array<double, NDIM> kvec;
         double kmag2;
-        for (auto && index : lightcone_potential.get_fourier_range(islice, islice + 1)) {
+        for (auto && index : lightcone_potential.get_fourier_range_of_rows(irow, irow + 1)) {
             lightcone_potential.get_fourier_wavevector_and_norm2_by_index(index, kvec, kmag2);
             if (kmag2 == 0.0) {
                 lightcone_potential.set_fourier_from_index(index, 0.0);

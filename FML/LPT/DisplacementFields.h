@@ -149,7 +149,6 @@ namespace FML {
                 auto nleft = phi.get_n_extra_slices_left();
                 auto nright = phi.get_n_extra_slices_right();
                 auto Nmesh = phi.get_nmesh();
-                auto Local_nx = phi.get_local_nx();
                 auto Local_x_start = phi.get_local_x_start();
 
                 // Create the output grids if they don't exist already
@@ -169,11 +168,11 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < phi.get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
                     std::complex<FML::GRID::FloatType> I(0, 1);
-                    for (auto && fourier_index : phi.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : phi.get_fourier_range_of_rows(irow, irow + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
 
@@ -234,7 +233,6 @@ namespace FML {
                 auto nleft = phi.get_n_extra_slices_left();
                 auto nright = phi.get_n_extra_slices_right();
                 auto Nmesh = phi.get_nmesh();
-                auto Local_nx = phi.get_local_nx();
                 auto Local_x_start = phi.get_local_x_start();
 
                 // Create the output grids if they don't exist already
@@ -250,11 +248,11 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < psi[0].get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
                     std::complex<FML::GRID::FloatType> I(0, 1);
-                    for (auto && fourier_index : psi[0].get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : psi[0].get_fourier_range_of_rows(irow, irow + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
 
@@ -313,7 +311,6 @@ namespace FML {
                 auto nleft = delta_fourier.get_n_extra_slices_left();
                 auto nright = delta_fourier.get_n_extra_slices_right();
                 auto Nmesh = delta_fourier.get_nmesh();
-                auto Local_nx = delta_fourier.get_local_nx();
                 auto Local_x_start = delta_fourier.get_local_x_start();
 
                 // Create 1LPT grid
@@ -327,10 +324,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < phi_1LPT_fourier.get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
 
@@ -387,7 +384,6 @@ namespace FML {
                 auto nleft = delta.get_n_extra_slices_left();
                 auto nright = delta.get_n_extra_slices_right();
                 auto Nmesh = delta.get_nmesh();
-                auto Local_nx = delta.get_local_nx();
                 auto Local_x_start = delta.get_local_x_start();
 
                 // Create grids
@@ -408,10 +404,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < phi_1LPT_ii[0].get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    for (auto && fourier_index : phi_1LPT_ii[0].get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : phi_1LPT_ii[0].get_fourier_range_of_rows(irow, irow + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
 
@@ -459,8 +455,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && real_index : phi_2LPT.get_real_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < phi_2LPT.get_local_nrows(); irow++) {
+                    for (auto && real_index : phi_2LPT.get_real_range_of_rows(irow, irow + 1)) {
                         auto laplacian = 0.0, sum_squared = 0.0;
                         for (int idim = 0; idim < N; idim++) {
                             auto curpsi = phi_1LPT_ii[idim].get_real_from_index(real_index);
@@ -495,10 +491,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < phi_1LPT_ij[0].get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    for (auto && fourier_index : phi_1LPT_ij[0].get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : phi_1LPT_ij[0].get_fourier_range_of_rows(irow, irow + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
 
@@ -544,8 +540,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && real_index : phi_2LPT.get_real_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < phi_2LPT.get_local_nrows(); irow++) {
+                    for (auto && real_index : phi_2LPT.get_real_range_of_rows(irow, irow + 1)) {
                         auto sum_squared = 0.0;
                         for (int pair = 0; pair < num_pairs; pair++) {
                             auto curpsi = phi_1LPT_ij[pair].get_real_from_index(real_index);
@@ -578,10 +574,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < phi_2LPT.get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    for (auto && fourier_index : phi_2LPT.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : phi_2LPT.get_fourier_range_of_rows(irow, irow + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
 
@@ -638,7 +634,6 @@ namespace FML {
                 auto nleft = delta_fourier.get_n_extra_slices_left();
                 auto nright = delta_fourier.get_n_extra_slices_right();
                 auto Nmesh = delta_fourier.get_nmesh();
-                auto Local_nx = delta_fourier.get_local_nx();
                 auto Local_x_start = delta_fourier.get_local_x_start();
 
                 std::array<FFTWGrid<N>, N> phi_3LPT_Avec_fourier;
@@ -675,11 +670,11 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < phi_1LPT_fourier.get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
                     const ComplexType I(0, 1);
-                    for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
 
@@ -817,7 +812,6 @@ namespace FML {
                 auto nleft = delta_fourier.get_n_extra_slices_left();
                 auto nright = delta_fourier.get_n_extra_slices_right();
                 auto Nmesh = delta_fourier.get_nmesh();
-                auto Local_nx = delta_fourier.get_local_nx();
                 auto Local_x_start = delta_fourier.get_local_x_start();
 
                 // Store -k^2phi_1LPT
@@ -838,10 +832,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < phi_1LPT_fourier.get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
 
@@ -884,8 +878,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && real_index : phi_2LPT_fourier.get_real_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < phi_2LPT_fourier.get_local_nrows(); irow++) {
+                    for (auto && real_index : phi_2LPT_fourier.get_real_range_of_rows(irow, irow + 1)) {
                         // Compute laplacian and sum of squares to get Sum_i,j Phi_iiPhi_jj Phi_ij^2
                         double laplacian = 0.0;
                         double sum_squared = 0.0;
@@ -913,8 +907,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && index : phi_3LPT_a_fourier.get_real_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < phi_3LPT_a_fourier.get_local_nrows(); irow++) {
+                    for (auto && index : phi_3LPT_a_fourier.get_real_range_of_rows(irow, irow + 1)) {
                         if constexpr (N == 2) {
                             const auto xx = phi_1LPT_ij[0].get_real_from_index(index);
                             const auto xy = phi_1LPT_ij[1].get_real_from_index(index);
@@ -966,10 +960,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                    for (int islice = 0; islice < Local_nx; islice++) {
+                    for (FML::IndexIntType irow = 0; irow < phi_2LPT_fourier.get_local_nrows(); irow++) {
                         double kmag2;
                         std::array<double, N> kvec;
-                        for (auto && index : phi_2LPT_fourier.get_fourier_range(islice, islice + 1)) {
+                        for (auto && index : phi_2LPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                             if (Local_x_start == 0 and index == 0) {
                                 for (int component = 0; component < count; component++)
                                     hessian2[component].set_fourier_from_index(index, 0.0);
@@ -1002,8 +996,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && index : phi_3LPT_b_fourier.get_real_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < phi_3LPT_b_fourier.get_local_nrows(); irow++) {
+                    for (auto && index : phi_3LPT_b_fourier.get_real_range_of_rows(irow, irow + 1)) {
                         const auto h2xx = hessian2[0].get_real_from_index(index);
                         const auto h2yy = hessian2[1].get_real_from_index(index);
                         if constexpr (N == 2) {
@@ -1034,8 +1028,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && index : phi_3LPT_b_fourier.get_real_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < phi_3LPT_b_fourier.get_local_nrows(); irow++) {
+                    for (auto && index : phi_3LPT_b_fourier.get_real_range_of_rows(irow, irow + 1)) {
                         const auto h2xy = hessian2[0].get_real_from_index(index);
                         const auto h1xx = phi_1LPT_ij[0].get_real_from_index(index);
                         const auto h1xy = phi_1LPT_ij[1].get_real_from_index(index);
@@ -1099,10 +1093,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < phi_1LPT_fourier.get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
 
@@ -1169,7 +1163,6 @@ namespace FML {
                            "[compute_spherical_collapse_potential] delta_fourier grid has to be already allocated");
 
                 [[maybe_unused]] auto Nmesh = delta_fourier.get_nmesh();
-                auto Local_nx = delta_fourier.get_local_nx();
                 auto Local_x_start = delta_fourier.get_local_x_start();
 
                 phi_sc_fourier = delta_fourier;
@@ -1179,8 +1172,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && real_index : phi_sc_fourier.get_real_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < phi_sc_fourier.get_local_nrows(); irow++) {
+                    for (auto && real_index : phi_sc_fourier.get_real_range_of_rows(irow, irow + 1)) {
                         auto delta_ini = phi_sc_fourier.get_real_from_index(real_index);
                         double value = 1.0 - 2.0 / 3.0 * delta_ini * DoverDini_1LPT;
                         value = std::max(value, 0.0);
@@ -1193,10 +1186,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < phi_sc_fourier.get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    for (auto && fourier_index : phi_sc_fourier.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : phi_sc_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
                         phi_sc_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
@@ -1246,7 +1239,6 @@ namespace FML {
                            "same size");
 
                 [[maybe_unused]] auto Nmesh = delta_fourier.get_nmesh();
-                auto Local_nx = delta_fourier.get_local_nx();
                 auto Local_x_start = delta_fourier.get_local_x_start();
 
                 // Compute the short range spherical collapse approximation
@@ -1263,10 +1255,10 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < phi_ALPT_fourier.get_local_nrows(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    for (auto && fourier_index : phi_ALPT_fourier.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : phi_ALPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                         if (Local_x_start == 0 and fourier_index == 0)
                             continue; // DC mode (k=0)
                         // Get wavevector and magnitude
@@ -1288,8 +1280,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && fourier_index : phi_ALPT_fourier.get_fourier_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < phi_ALPT_fourier.get_local_nrows(); irow++) {
+                    for (auto && fourier_index : phi_ALPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                         auto short_range = phi_sc_fourier.get_fourier_from_index(fourier_index);
                         auto smoothed = phi_ALPT_fourier.get_fourier_from_index(fourier_index);
                         phi_ALPT_fourier.set_fourier_from_index(fourier_index, short_range + smoothed);

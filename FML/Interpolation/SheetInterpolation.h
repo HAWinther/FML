@@ -257,8 +257,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && real_index : psi.get_real_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < psi.get_local_nrows(); irow++) {
+                    for (auto && real_index : psi.get_real_range_of_rows(irow, irow + 1)) {
                         auto coord = psi.get_coord_from_index(real_index);
                         size_t ilocal = 0;
                         for (int jdim = 0; jdim < N; jdim++)
@@ -329,12 +329,11 @@ namespace FML {
                                                                1.0 / double(NumTracersTot * nshifts),
                                                                density_shift,
                                                                kernel);
-                    const auto Local_nx = sum.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                    for (int islice = 0; islice < Local_nx; islice++) {
-                        for (auto && fourier_index : sum.get_fourier_range(islice, islice + 1)) {
+                    for (FML::IndexIntType irow = 0; irow < sum.get_local_nrows(); irow++) {
+                        for (auto && fourier_index : sum.get_fourier_range_of_rows(irow, irow + 1)) {
                             sum.set_fourier_from_index(fourier_index,
                                                        sum.get_fourier_from_index(fourier_index) +
                                                            density_shift.get_fourier_from_index(fourier_index));
@@ -367,12 +366,11 @@ namespace FML {
                                                      NumTracersTot,
                                                      density_shift,
                                                      density_assignment_method);
-                const auto Local_nx = sum.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
-                    for (auto && real_index : sum.get_real_range(islice, islice + 1)) {
+                for (FML::IndexIntType irow = 0; irow < sum.get_local_nrows(); irow++) {
+                    for (auto && real_index : sum.get_real_range_of_rows(irow, irow + 1)) {
                         auto value = sum.get_real_from_index(real_index);
                         value += density_shift.get_real_from_index(real_index) / FloatType(nshifts);
                         sum.set_real_from_index(real_index, value);

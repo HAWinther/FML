@@ -755,12 +755,11 @@ namespace FML {
             // phi_hat(k) once more for the interpolation back to the particles
             const auto inv = inverse_kernel_fourier_table(kernel, nf);
             const double prefactor = std::pow(double(nf), N) / double(NumPartTot) * norm_poisson_equation;
-            const auto Local_nx = potential.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
-                for (auto && fourier_index : potential.get_fourier_range(islice, islice + 1)) {
+            for (FML::IndexIntType irow = 0; irow < potential.get_local_nrows(); irow++) {
+                for (auto && fourier_index : potential.get_fourier_range_of_rows(irow, irow + 1)) {
                     auto m = potential.get_fourier_integer_wavevector_from_index(fourier_index);
                     double kmag2 = 0.0, f = prefactor;
                     bool keep = true;
@@ -788,9 +787,9 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < grad.get_local_nrows(); irow++) {
                     const ComplexType I(0, 1);
-                    for (auto && fourier_index : grad.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : grad.get_fourier_range_of_rows(irow, irow + 1)) {
                         auto m = grad.get_fourier_integer_wavevector_from_index(fourier_index);
                         auto value = grad.get_fourier_from_index(fourier_index);
                         grad.set_fourier_from_index(fourier_index, value * I * FloatType(2.0 * M_PI * m[idim]));

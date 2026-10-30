@@ -34,7 +34,6 @@ template <int N, class T>
 void ConvertToMPIGrid(FML::GRID::FFTWGrid<N> & from_grid, FML::GRID::MPIGrid<N, T> & to_grid) {
 
     auto Nmesh = from_grid.get_nmesh();
-    auto Local_nx = from_grid.get_local_nx();
     auto nleft = from_grid.get_n_extra_slices_left();
     auto nright = from_grid.get_n_extra_slices_right();
 
@@ -43,8 +42,8 @@ void ConvertToMPIGrid(FML::GRID::FFTWGrid<N> & from_grid, FML::GRID::MPIGrid<N, 
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-    for (int islice = 0; islice < Local_nx; islice++) {
-        for (auto && real_index : from_grid.get_real_range(islice, islice + 1)) {
+    for (FML::IndexIntType irow = 0; irow < from_grid.get_local_nrows(); irow++) {
+        for (auto && real_index : from_grid.get_real_range_of_rows(irow, irow + 1)) {
             auto coord = from_grid.get_coord_from_index(real_index);
             auto value = from_grid.get_real_from_index(real_index);
             to_grid.set_y(coord, value);

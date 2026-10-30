@@ -35,7 +35,6 @@ namespace FML {
         template <int N>
         void shift_grid_fourier(FFTWGrid<N> & fourier_grid, const std::array<double, N> & shift, double sign = +1.0) {
             const int Nmesh = fourier_grid.get_nmesh();
-            const auto Local_nx = fourier_grid.get_local_nx();
             assert_mpi(Nmesh > 0, "[shift_grid_fourier] Grid is not allocated\n");
 
             // The 1D phase factors for integer wavenumbers m = -Nmesh/2, ..., Nmesh/2
@@ -53,8 +52,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
-                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows(); irow++) {
+                for (auto && fourier_index : fourier_grid.get_fourier_range_of_rows(irow, irow + 1)) {
                     auto kint = fourier_grid.get_fourier_integer_wavevector_from_index(fourier_index);
                     std::complex<double> f = factor[0][kint[0] + Nmesh / 2];
                     for (int idim = 1; idim < N; idim++)
@@ -75,14 +74,13 @@ namespace FML {
         //===================================================================================
         template <int N, class F>
         void for_each_fourier_mode(const FFTWGrid<N> & fourier_grid, F && f) {
-            const auto Local_nx = fourier_grid.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows(); irow++) {
                 double kmag;
                 std::array<double, N> kvec;
-                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                for (auto && fourier_index : fourier_grid.get_fourier_range_of_rows(irow, irow + 1)) {
                     fourier_grid.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
                     f(fourier_index, kmag);
                 }
@@ -111,12 +109,11 @@ namespace FML {
             assert_mpi(a.get_nmesh() == b.get_nmesh(), "[linear_combination_fourier] The grids have different sizes\n");
             const auto fa = FloatType(wa);
             const auto fb = FloatType(wb);
-            const auto Local_nx = a.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
-                for (auto && fourier_index : a.get_fourier_range(islice, islice + 1)) {
+            for (FML::IndexIntType irow = 0; irow < a.get_local_nrows(); irow++) {
+                for (auto && fourier_index : a.get_fourier_range_of_rows(irow, irow + 1)) {
                     a.set_fourier_from_index(fourier_index,
                                              a.get_fourier_from_index(fourier_index) * fa +
                                                  b.get_fourier_from_index(fourier_index) * fb);
@@ -143,14 +140,13 @@ namespace FML {
         //===================================================================================
         template <int N>
         void whitening_fourier_space(FFTWGrid<N> & fourier_grid) {
-            auto Local_nx = fourier_grid.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows(); irow++) {
                 [[maybe_unused]] double kmag2;
                 [[maybe_unused]] std::array<double, N> kvec;
-                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                for (auto && fourier_index : fourier_grid.get_fourier_range_of_rows(irow, irow + 1)) {
                     auto value = fourier_grid.get_fourier_from_index(fourier_index);
                     double norm = std::sqrt(std::norm(value));
                     norm = norm == 0.0 ? 0.0 : 1.0 / norm;
@@ -164,14 +160,13 @@ namespace FML {
         custom_smoothing_filter_fourier_space(FFTWGrid<N> & fourier_grid,
                                               const std::function<double(double)> & custom_filter_of_kBox_squared) {
             // Do the smoothing
-            auto Local_nx = fourier_grid.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows(); irow++) {
                 [[maybe_unused]] double kmag2;
                 [[maybe_unused]] std::array<double, N> kvec;
-                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                for (auto && fourier_index : fourier_grid.get_fourier_range_of_rows(irow, irow + 1)) {
                     fourier_grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
                     auto value = fourier_grid.get_fourier_from_index(fourier_index);
                     value *= custom_filter_of_kBox_squared(kmag2);
@@ -264,14 +259,13 @@ namespace FML {
             }
 
             // Do the smoothing
-            auto Local_nx = fourier_grid.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows(); irow++) {
                 [[maybe_unused]] double kmag2;
                 [[maybe_unused]] std::array<double, N> kvec;
-                for (auto && fourier_index : fourier_grid.get_fourier_range(islice, islice + 1)) {
+                for (auto && fourier_index : fourier_grid.get_fourier_range_of_rows(irow, irow + 1)) {
                     fourier_grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
                     auto value = fourier_grid.get_fourier_from_index(fourier_index);
                     value *= filter(kmag2);
@@ -319,8 +313,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
-                for (auto && real_index : fourier_grid_result.get_real_range(islice, islice + 1)) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid_result.get_local_nrows(); irow++) {
+                for (auto && real_index : fourier_grid_result.get_real_range_of_rows(irow, irow + 1)) {
                     auto g_real = fourier_grid_result.get_real_from_index(real_index);
                     auto f_real = g_real;
                     if (not f_and_g_are_the_same_grid)
@@ -371,12 +365,11 @@ namespace FML {
             }
 
             // Multiply the two grids in fourier space
-            auto Local_nx = real_grid_result.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
-                for (auto && fourier_index : real_grid_result.get_fourier_range(islice, islice + 1)) {
+            for (FML::IndexIntType irow = 0; irow < real_grid_result.get_local_nrows(); irow++) {
+                for (auto && fourier_index : real_grid_result.get_fourier_range_of_rows(irow, irow + 1)) {
                     auto g_fourier = real_grid_result.get_fourier_from_index(fourier_index);
                     auto f_fourier = g_fourier;
                     if (not f_and_g_are_the_same_grid)
@@ -407,7 +400,6 @@ namespace FML {
         compute_grid_PDF(const FFTWGrid<N> & real_grid, int nbins, std::vector<double> & x, std::vector<double> & pdf) {
 
             // Multiply the two grids in real space
-            auto Local_nx = real_grid.get_local_nx();
 
             // Find minimum and maximum value in the grid
             double grid_min = std::numeric_limits<double>::max();
@@ -415,8 +407,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for reduction(max : grid_max) reduction(min : grid_min)
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
-                for (auto && real_index : real_grid.get_real_range(islice, islice + 1)) {
+            for (FML::IndexIntType irow = 0; irow < real_grid.get_local_nrows(); irow++) {
+                for (auto && real_index : real_grid.get_real_range_of_rows(irow, irow + 1)) {
                     auto value = real_grid.get_real_from_index(real_index);
                     grid_min = std::min(grid_min, value);
                     grid_max = std::max(grid_max, value);
@@ -449,12 +441,12 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int islice = 0; islice < Local_nx; islice++) {
+            for (FML::IndexIntType irow = 0; irow < real_grid.get_local_nrows(); irow++) {
                 int id = 0;
 #ifdef USE_OMP
                 id = omp_get_thread_num();
 #endif
-                for (auto && real_index : real_grid.get_real_range(islice, islice + 1)) {
+                for (auto && real_index : real_grid.get_real_range_of_rows(irow, irow + 1)) {
                     auto value = real_grid.get_real_from_index(real_index);
                     int ibin = int((value - grid_min) / (grid_max - grid_min) * nbins);
                     // The largest value is in the last bin
