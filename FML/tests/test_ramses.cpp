@@ -141,7 +141,7 @@ int main() {
     MPI_Barrier(FML::communicator);
 #endif
 
-    for (const std::string dir : {dir_old, dir_new}) {
+    for (const std::string & dir : {dir_old, dir_new}) {
         const std::string label =
             dir == dir_old ? " (Mpc = 3.08e24 cm, header file)" : " (Mpc = 3.0857e24 cm, part_file_descriptor.txt)";
         // All particles over all tasks, each in its domain
@@ -205,7 +205,7 @@ int main() {
     MPI_Barrier(FML::communicator);
 #endif
     if (FML::ThisTask == 0) {
-        for (const std::string dir : {dir_old, dir_new}) {
+        for (const std::string & dir : {dir_old, dir_new}) {
             for (int icpu = 0; icpu < ncpu; icpu++) {
                 char name[256];
                 snprintf(name, sizeof(name), "%s/part_00001.out%05d", dir.c_str(), icpu + 1);

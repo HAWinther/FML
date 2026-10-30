@@ -306,9 +306,10 @@ namespace FML {
 
                 int read_section(FILE * fp, char * buffer, int n) {
                     int skip1, skip2;
-                    fread(&skip1, sizeof(int), 1, fp);
-                    fread(buffer, sizeof(char), skip1, fp);
-                    fread(&skip2, sizeof(int), 1, fp);
+                    if (fread(&skip1, sizeof(int), 1, fp) != 1 || skip1 < 0 ||
+                        fread(buffer, sizeof(char), skip1, fp) != std::size_t(skip1) ||
+                        fread(&skip2, sizeof(int), 1, fp) != 1)
+                        throw_error("[RamsesReader::read_section] Truncated or corrupt Fortran record");
                     assert(skip1 == skip2);
                     // An empty record (e.g. a CPU file without particles)
                     if (n == 0)
@@ -334,25 +335,27 @@ namespace FML {
                     }
 
                     // Read the info-file
-                    fscanf(fp, "ncpu        =  %d\n", &ncpu);
-                    fscanf(fp, "ndim        =  %d\n", &ndim_loc);
-                    fscanf(fp, "levelmin    =  %d\n", &levelmin);
-                    fscanf(fp, "levelmax    =  %d\n", &levelmax);
-                    fscanf(fp, "ngridmax    =  %d\n", &ngridmax);
-                    fscanf(fp, "nstep_coarse=  %d\n", &nstep_coarse);
-                    fscanf(fp, "\n");
-                    fscanf(fp, "boxlen      =  %lf\n", &boxlen);
-                    fscanf(fp, "time        =  %lf\n", &time);
-                    fscanf(fp, "aexp        =  %lf\n", &aexp);
-                    fscanf(fp, "H0          =  %lf\n", &h0);
-                    fscanf(fp, "omega_m     =  %lf\n", &omega_m);
-                    fscanf(fp, "omega_l     =  %lf\n", &omega_l);
-                    fscanf(fp, "omega_k     =  %lf\n", &omega_k);
-                    fscanf(fp, "omega_b     =  %lf\n", &omega_b);
-                    fscanf(fp, "unit_l      =  %lf\n", &unit_l);
-                    fscanf(fp, "unit_d      =  %lf\n", &unit_d);
-                    fscanf(fp, "unit_t      =  %lf\n", &unit_t);
+                    int nread = 0;
+                    nread += fscanf(fp, "ncpu        =  %d\n", &ncpu);
+                    nread += fscanf(fp, "ndim        =  %d\n", &ndim_loc);
+                    nread += fscanf(fp, "levelmin    =  %d\n", &levelmin);
+                    nread += fscanf(fp, "levelmax    =  %d\n", &levelmax);
+                    nread += fscanf(fp, "ngridmax    =  %d\n", &ngridmax);
+                    nread += fscanf(fp, "nstep_coarse=  %d\n", &nstep_coarse);
+                    nread += fscanf(fp, "boxlen      =  %lf\n", &boxlen);
+                    nread += fscanf(fp, "time        =  %lf\n", &time);
+                    nread += fscanf(fp, "aexp        =  %lf\n", &aexp);
+                    nread += fscanf(fp, "H0          =  %lf\n", &h0);
+                    nread += fscanf(fp, "omega_m     =  %lf\n", &omega_m);
+                    nread += fscanf(fp, "omega_l     =  %lf\n", &omega_l);
+                    nread += fscanf(fp, "omega_k     =  %lf\n", &omega_k);
+                    nread += fscanf(fp, "omega_b     =  %lf\n", &omega_b);
+                    nread += fscanf(fp, "unit_l      =  %lf\n", &unit_l);
+                    nread += fscanf(fp, "unit_d      =  %lf\n", &unit_d);
+                    nread += fscanf(fp, "unit_t      =  %lf\n", &unit_t);
                     fclose(fp);
+                    if (nread != 17)
+                        throw_error("[RamsesReader::read_info] Could not read all fields of the info file " + infofile);
 
                     // Calculate the boxsize in Mpc/h from the units: unit_l = L (Mpc/h) * Mpc_cm * aexp / h and
                     // unit_t = aexp^2 * Mpc_cm / (H0 * 1e5) so L = unit_l * aexp / (unit_t * 1e7) whatever value of
@@ -407,12 +410,17 @@ namespace FML {
                     }
 
                     char fieldcstr[50]; // big enough to hold "pos vel mass iord level family tag"
-                    fscanf(fp, " Total number of particles %*d\n");             // TODO: use for something?
-                    fscanf(fp, " Total number of dark matter particles %*d\n"); // TODO: use for something?
-                    fscanf(fp, " Total number of star particles %*d\n");
-                    fscanf(fp, " Total number of sink particles %*d\n");
-                    fscanf(fp, " Particle fields\n");
-                    fgets(fieldcstr, sizeof(fieldcstr), fp);
+                    // The particle totals are not used
+                    const bool header_ok = fscanf(fp, " Total number of particles %*d\n") != EOF &&
+                                           fscanf(fp, " Total number of dark matter particles %*d\n") != EOF &&
+                                           fscanf(fp, " Total number of star particles %*d\n") != EOF &&
+                                           fscanf(fp, " Total number of sink particles %*d\n") != EOF &&
+                                           fscanf(fp, " Particle fields\n") != EOF &&
+                                           fgets(fieldcstr, sizeof(fieldcstr), fp) != nullptr;
+                    if (!header_ok) {
+                        fclose(fp);
+                        throw_error("[RamsesReader::read_header] Truncated header file " + headerfile);
+                    }
 
                     // Try to detect particle format
                     std::string fieldstr(fieldcstr);
