@@ -5,6 +5,12 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### PhaseSpaceHaloFinder: 2.9x faster unbinding
+- Unbinding passes after the first update the potential by subtracting the removed particles (while cheaper than a
+  new tree evaluation) instead of recomputing the tree potential; `newtonian_spline_green` (shared with
+  ShortRangeGravity) without std::pow. COLA snapshot (2.1e6 particles): 71.5 s -> 24.7 s on 1 thread; 2 of 5686
+  objects change membership by at most .05%.
+
 ### PhaseSpaceHaloFinder: Vmax as ROCKSTAR by default; cosmological ROCKSTAR comparison
 - `Options::vmax_inclusive` (default true): Vmax/Rmax from the bound members of the object and all its
   descendants, radii floored at the softening, inside the assignment-density radius, as ROCKSTAR. `false` gives the

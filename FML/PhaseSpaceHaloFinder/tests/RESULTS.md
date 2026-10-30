@@ -56,7 +56,7 @@ cell size and subhaloes are not reliable, so it tests host detection and Vmax, n
 | | FML | ROCKSTAR |
 |---|---|---|
 | Objects (hosts) | 5685 (4666) | 2915 (2268) |
-| Time | 71 s (2 threads) | 7 s (1 process) |
+| Time (example program, including text input) | 30 s (2 threads), 34 s (1 thread); was 71 s | 7 s (1 process) |
 
 | Hosts, N bound | ROCKSTAR hosts matched | median Vmax FML/ROCKSTAR (default; exclusive) | FML hosts matched |
 |---|---|---|---|
@@ -78,6 +78,15 @@ Vmax functions N(>V) above 150, 200, 300, 500 km/s: hosts 724/797, 362/395, 125/
 - Subhaloes: about a third of ROCKSTAR's 20-100 particle subhaloes are matched; not interpretable at this
   resolution. A real N-body snapshot is needed for the core-subhalo question.
 - ROCKSTAR's Vmax is 0 for small haloes (no radius above the density threshold); so is the default FML Vmax.
+- Speed (finder only, 1 thread): 71.5 s before, of which 57.8 s binding potentials: the unbinding passes after
+  the first recomputed the full tree potential (39 of 49 s) for large objects losing a few particles per pass, and
+  the opening angle .3 makes 1e3-1e4 particle objects close to direct sums (3300 interactions per particle);
+  std::pow in the softened Green function took 13%. Now later passes subtract the removed particles directly while
+  that is cheaper than a new tree, and the Green function uses multiplications: 24.7 s (20.0 s on 2 threads),
+  2.1e9 instead of 9.4e9 interactions; 2 of 5686 objects change membership (at most .05% of their particles).
+  ROCKSTAR's looser monopole criterion (dmin = bmax + sqrt(bmax^2 + <x^2>), tested, not adopted) gave 18.7 s but
+  changed 245 objects by up to 11% of their particles; opening angle .7 gave 21.6 s and changed 26 objects by up to
+  1.7%. The remaining time outside the potential (about 14 s, FoF and 6D refinement) runs on one thread.
 
 ## Small local performance cases
 

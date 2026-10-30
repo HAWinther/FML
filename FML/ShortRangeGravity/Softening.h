@@ -12,11 +12,10 @@ namespace FML::SHORT_RANGE_GRAVITY {
         const double u = r / h;
         if (u >= 1)
             return 1 / r;
+        const double u2 = u * u, u4 = u2 * u2;
         if (u < .5)
-            return (14.0 / 5 - 16.0 / 3 * u * u + 48.0 / 5 * std::pow(u, 4) - 32.0 / 5 * std::pow(u, 5)) / h;
-        return (16.0 / 5 - 1 / (15 * u) - 32.0 / 3 * u * u + 16 * u * u * u - 48.0 / 5 * std::pow(u, 4) +
-                32.0 / 15 * std::pow(u, 5)) /
-               h;
+            return (14.0 / 5 - 16.0 / 3 * u2 + 48.0 / 5 * u4 - 32.0 / 5 * u4 * u) / h;
+        return (16.0 / 5 - 1 / (15 * u) - 32.0 / 3 * u2 + 16 * u2 * u - 48.0 / 5 * u4 + 32.0 / 15 * u4 * u) / h;
     }
 } // namespace FML::SHORT_RANGE_GRAVITY
 #endif

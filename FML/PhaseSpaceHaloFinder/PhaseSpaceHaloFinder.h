@@ -344,22 +344,27 @@ namespace FML::PHASE_SPACE_HALOS {
                 halo.fof_id = fof;
                 const double original_mass = summarize(p_, seed.members).mass;
                 bool converged = !o_.unbind;
+                // The tree potential is evaluated once; later passes subtract the removed particles directly while
+                // that is cheaper than a new tree evaluation (removed x kept pairs below the last tree's visits).
+                const double coupling = o_.gravitational_constant / o_.position_to_physical;
+                std::vector<double> phi;
+                std::uint64_t tree_visits = 0;
                 for (int iteration = 0; o_.unbind && iteration < o_.max_unbinding_iterations &&
                                         seed.members.size() >= o_.minimum_particles;
                      ++iteration) {
-                    std::vector<Particle> current;
-                    current.reserve(seed.members.size());
-                    for (auto i : seed.members)
-                        current.push_back(p_[i]);
+                    if (phi.empty()) {
+                        std::vector<Particle> current;
+                        current.reserve(seed.members.size());
+                        for (auto i : seed.members)
+                            current.push_back(p_[i]);
+                        tree_visits = 0;
+                        phi = BindingPotentialTree(current, o_.softening_support, coupling, o_.potential_opening_angle)
+                                  .evaluate(&tree_visits);
+                        stats_.potential_pair_visits += tree_visits;
+                    }
                     const auto bulk = summarize(p_, seed.members);
-                    std::uint64_t visits = 0;
-                    const auto phi = BindingPotentialTree(current,
-                                                          o_.softening_support,
-                                                          o_.gravitational_constant / o_.position_to_physical,
-                                                          o_.potential_opening_angle)
-                                         .evaluate(&visits);
-                    stats_.potential_pair_visits += visits;
-                    std::vector<std::size_t> kept;
+                    std::vector<std::size_t> kept, removed;
+                    std::vector<double> kept_phi;
                     for (std::size_t j = 0; j < seed.members.size(); ++j) {
                         const auto i = seed.members[j];
                         auto dv = difference(p_[i].velocity, bulk.v);
@@ -369,13 +374,33 @@ namespace FML::PHASE_SPACE_HALOS {
                         const double energy = .5 * dot(dv, dv) + phi[j];
                         if (!std::isfinite(energy))
                             throw std::runtime_error("[PhaseSpaceHalos] Nonfinite binding energy");
-                        if (energy < 0)
+                        if (energy < 0) {
                             kept.push_back(i);
+                            kept_phi.push_back(phi[j]);
+                        } else {
+                            removed.push_back(i);
+                        }
                     }
-                    stats_.unbound_particles += seed.members.size() - kept.size();
-                    if (kept.size() == seed.members.size()) {
+                    stats_.unbound_particles += removed.size();
+                    if (removed.empty()) {
                         converged = true;
                         break;
+                    }
+                    if (double(removed.size()) * double(kept.size()) < double(tree_visits)) {
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                        for (std::size_t k = 0; k < kept.size(); ++k)
+                            for (auto r : removed) {
+                                const auto dx = difference(p_[kept[k]].position, p_[r].position);
+                                kept_phi[k] += coupling * p_[r].mass *
+                                               FML::SHORT_RANGE_GRAVITY::newtonian_spline_green(std::sqrt(dot(dx, dx)),
+                                                                                                o_.softening_support);
+                            }
+                        stats_.potential_pair_visits += removed.size() * kept.size();
+                        phi = std::move(kept_phi);
+                    } else {
+                        phi.clear();
                     }
                     seed.members = std::move(kept);
                 }
