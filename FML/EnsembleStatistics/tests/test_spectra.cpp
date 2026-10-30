@@ -5,9 +5,9 @@ int main() {
     using namespace FML::ENSEMBLE;
     FML::GRID::FFTWGrid<3> control(8), target(8);
     control.fill_real_grid(
-        [](std::array<double, 3>& x) { return std::cos(2 * M_PI * x[0]) + 0.5 * std::sin(4 * M_PI * x[1]); });
+        [](std::array<double, 3> & x) { return std::cos(2 * M_PI * x[0]) + 0.5 * std::sin(4 * M_PI * x[1]); });
     target.fill_real_grid(
-        [](std::array<double, 3>& x) { return 2 * std::cos(2 * M_PI * x[0]) + std::sin(4 * M_PI * x[1]); });
+        [](std::array<double, 3> & x) { return 2 * std::cos(2 * M_PI * x[0]) + std::sin(4 * M_PI * x[1]); });
     auto morphology = FML::MORPHOLOGY::excursions(control, {0}, 80);
     control.fftw_r2c();
     target.fftw_r2c();
@@ -26,7 +26,7 @@ int main() {
     bool rejected = false;
     try {
         matched_spectra(target, control, 80, 0, 1, 1);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     ok &= rejected;

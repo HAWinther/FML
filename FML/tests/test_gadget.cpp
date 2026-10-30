@@ -281,8 +281,7 @@ int main(int argc, char ** argv) {
             part[i].pos[0] = (double(i) + 0.5) / nfile;
         const std::string filename = prefix + "filtered_capacity." + mytask;
         GadgetWriter gw;
-        gw.write_gadget_single(filename, part.data(), nfile, nfile, 1,
-                               aexp, box, OmegaM, 0.7, 0.7, box, vel_norm);
+        gw.write_gadget_single(filename, part.data(), nfile, nfile, 1, aexp, box, OmegaM, 0.7, 0.7, box, vel_norm);
         my_files.push_back(filename);
 
         const double saved_xmin = FML::xmin_domain, saved_xmax = FML::xmax_domain;
@@ -302,15 +301,13 @@ int main(int argc, char ** argv) {
         check(read.capacity() == capacity,
               "filtered read reuses sufficient capacity instead of reserving the whole file");
         reader.read_gadget_single(filename, read, true, false);
-        check(read.capacity() == capacity,
-              "repeated filtered append reuses sufficient capacity");
+        check(read.capacity() == capacity, "repeated filtered append reuses sufficient capacity");
 
         auto matches = [](const Particle & p, const Particle & q) {
             if (p.id != q.id)
                 return false;
             for (int d = 0; d < 3; d++)
-                if (std::fabs(p.pos[d] - q.pos[d]) > 2e-7 or
-                    std::fabs(p.vel[d] - q.vel[d]) > 2e-5)
+                if (std::fabs(p.pos[d] - q.pos[d]) > 2e-7 or std::fabs(p.vel[d] - q.vel[d]) > 2e-5)
                     return false;
             return true;
         };
@@ -325,8 +322,7 @@ int main(int argc, char ** argv) {
         FML::xmin_domain = FML::xmax_domain = 0.5;
         std::vector<Particle> empty;
         reader.read_gadget_single(filename, empty, true, false);
-        check(empty.empty() and empty.capacity() == 0,
-              "empty filtered domain allocates no particle storage");
+        check(empty.empty() and empty.capacity() == 0, "empty filtered domain allocates no particle storage");
 
         std::vector<Particle> all;
         reader.read_gadget_single(filename, all, false, false);

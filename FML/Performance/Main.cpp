@@ -18,10 +18,10 @@ namespace Perf = FML::PERFORMANCE;
 struct Particle {
     double pos[3]{};
     Count id = 0;
-    double *get_pos() { return pos; }
+    double * get_pos() { return pos; }
     constexpr int get_ndim() const { return 3; }
 };
-std::string quote(const std::string &value) {
+std::string quote(const std::string & value) {
     std::ostringstream out;
     out << '"';
     for (unsigned char c : value) {
@@ -46,14 +46,14 @@ struct Options {
     size_t message_bytes = 1024 * 1024;
     Count seed = 12345;
 };
-Count integer(const std::string &value) {
+Count integer(const std::string & value) {
     if (value.empty() || value.find_first_not_of("0123456789") != std::string::npos)
         throw std::invalid_argument("expected unsigned integer");
     size_t end;
     auto result = std::stoull(value, &end);
     return result;
 }
-Options parse(int argc, char **argv) {
+Options parse(int argc, char ** argv) {
     Options o;
     for (int i = 1; i < argc; i += 2) {
         if (i + 1 == argc)
@@ -85,8 +85,12 @@ Options parse(int argc, char **argv) {
                 throw std::invalid_argument("unknown option: " + key);
         }
     }
-    const std::array<std::string, 6> cases{"fft_roundtrip", "grid_copy", "grid_clone",
-                                           "resample",      "migration", "polyspectrum"};
+    const std::array<std::string, 6> cases{"fft_roundtrip",
+                                           "grid_copy",
+                                           "grid_clone",
+                                           "resample",
+                                           "migration",
+                                           "polyspectrum"};
     if (std::find(cases.begin(), cases.end(), o.name) == cases.end())
         throw std::invalid_argument("unknown case: " + o.name);
     if (o.mesh < 8 || o.mesh > INT_MAX / 4 || o.mesh % FML::NTasks || o.repeat < 1 || o.repeat > 10000 ||
@@ -94,7 +98,7 @@ Options parse(int argc, char **argv) {
         throw std::invalid_argument("invalid mesh/rank divisibility, repeat/warmup, cache size, output or message cap");
     return o;
 }
-std::array<int, 3> wave(const Grid &grid, ptrdiff_t index) {
+std::array<int, 3> wave(const Grid & grid, ptrdiff_t index) {
     auto k = grid.get_fourier_coord_from_index(index);
     k[0] += grid.get_local_x_start();
     for (int d = 0; d < 2; ++d)
@@ -116,11 +120,11 @@ struct Case {
     int work_mesh = 0;
 };
 // Captured shared owners keep work/validation storage alive; no timed object-setup is hidden in the harness.
-Case setup(const Options &o) {
+Case setup(const Options & o) {
     const double epsilon = std::numeric_limits<FML::GRID::FloatType>::epsilon();
     if (o.name == "fft_roundtrip") {
         auto field = std::make_shared<Grid>(o.mesh);
-        field->fill_real_grid([&](std::array<double, 3> &x) {
+        field->fill_real_grid([&](std::array<double, 3> & x) {
             return std::cos(2 * M_PI * x[0]) + .25 * std::sin(4 * M_PI * x[1]) + double(o.seed % 17) / 32;
         });
         return {[] {},
@@ -128,7 +132,7 @@ Case setup(const Options &o) {
                     field->fftw_r2c();
                     field->fftw_c2r();
                 },
-                [field, o, epsilon](const auto &s) {
+                [field, o, epsilon](const auto & s) {
                     double error = 0;
                     bool finite = true;
                     for (auto i : field->get_real_range()) {
@@ -149,8 +153,9 @@ Case setup(const Options &o) {
         for (auto i : source->get_fourier_range())
             source->set_fourier_from_index(i, coefficient(wave(*source, i), o.seed));
         bool copy = o.name == "grid_copy";
-        return {[] {}, [source, target, copy] { *target = copy ? Grid(*source) : source->clone_empty(); },
-                [source, target, o, copy](const auto &s) {
+        return {[] {},
+                [source, target, copy] { *target = copy ? Grid(*source) : source->clone_empty(); },
+                [source, target, o, copy](const auto & s) {
                     bool good = s[Counter::GridAllocations] == Count(o.repeat);
                     Count bytes = Count(source->get_ntot_fourier_alloc()) * sizeof(Complex) * o.repeat;
                     good &= s[Counter::GridCopiedBytes] == (copy ? bytes : 0);
@@ -187,8 +192,9 @@ Case setup(const Options &o) {
             if (owner != FML::ThisTask)
                 ++remote;
         }
-        return {[] {}, [source, target, plan, o] { plan->apply(*source, *target, o.message_bytes); },
-                [target, o, remote](const auto &s) {
+        return {[] {},
+                [source, target, plan, o] { plan->apply(*source, *target, o.message_bytes); },
+                [target, o, remote](const auto & s) {
                     bool good = s[Counter::PayloadSentBytes] == remote * sizeof(Complex) * o.repeat;
                     good &= s[Counter::TransportPackedBytes] == s[Counter::PayloadSentBytes] &&
                             s[Counter::TransportUnpackedBytes] == s[Counter::PayloadReceivedBytes];
@@ -210,19 +216,19 @@ Case setup(const Options &o) {
         auto particles = std::make_shared<FML::PARTICLE::MPIParticles<Particle>>();
         particles->create(initial.data(), initial.size(), size_t(local + 3), FML::xmin_domain, FML::xmax_domain, false);
         return {[particles] {
-                    for (auto &p : *particles) {
+                    for (auto & p : *particles) {
                         int step = p.id % 3 == 1 ? -1 : p.id % 3 == 2 ? 1 : 0;
                         int dest = (FML::ThisTask + step + FML::NTasks) % FML::NTasks;
                         p.pos[0] = (dest + .5) / FML::NTasks;
                     }
                 },
                 [particles, o] { particles->communicate_particles(o.message_bytes); },
-                [particles, o, local](const auto &s) {
+                [particles, o, local](const auto & s) {
                     bool good = s[Counter::TransportPackedBytes] == s[Counter::PayloadSentBytes] &&
                                 s[Counter::TransportUnpackedBytes] == s[Counter::PayloadReceivedBytes];
                     std::vector<Count> ids, expected;
                     const int steps = (o.warmup + o.repeat) % FML::NTasks;
-                    for (auto &p : *particles) {
+                    for (auto & p : *particles) {
                         ids.push_back(p.id);
                         good &= p.pos[0] == (FML::ThisTask + .5) / FML::NTasks && p.pos[1] == .25 && p.pos[2] == .75;
                     }
@@ -242,7 +248,7 @@ Case setup(const Options &o) {
     if (o.name == "polyspectrum") {
         using Bins = FML::CORRELATIONFUNCTIONS::SparseBispectrumBinning<3>;
         auto input = std::make_shared<Grid>(o.mesh);
-        input->fill_real_grid([&](std::array<double, 3> &x) {
+        input->fill_real_grid([&](std::array<double, 3> & x) {
             Count h = o.seed;
             for (double v : x)
                 h = (h ^ Count(std::llround(v * o.mesh))) * 1099511628211ULL;
@@ -259,7 +265,7 @@ Case setup(const Options &o) {
                     FML::CORRELATIONFUNCTIONS::compute_bispectrum(*input, *bins);
                     *builds += bins->statistics.geometry_shell_builds + bins->statistics.field_shell_builds;
                 },
-                [input, bins, o, epsilon](const auto &s) {
+                [input, bins, o, epsilon](const auto & s) {
                     Bins full(6, o.mesh);
                     full.set_configurations({{1, 1, 2}, {1, 2, 3}, {2, 3, 4}, {3, 4, 4}});
                     FML::CORRELATIONFUNCTIONS::compute_bispectrum(*input, full);
@@ -277,7 +283,7 @@ Case setup(const Options &o) {
     }
     throw std::invalid_argument("unknown case: " + o.name);
 }
-int main(int argc, char **argv) {
+int main(int argc, char ** argv) {
     try {
         if (!Perf::enabled)
             throw std::invalid_argument("benchmark requires FML_ENABLE_PERFORMANCE_COUNTERS");
@@ -320,7 +326,12 @@ int main(int argc, char **argv) {
         int host_length = 0;
         MPI_Get_processor_name(host.data(), &host_length);
         std::vector<std::array<char, MPI_MAX_PROCESSOR_NAME>> hosts(FML::NTasks);
-        MPI_Allgather(host.data(), MPI_MAX_PROCESSOR_NAME, MPI_CHAR, hosts.data(), MPI_MAX_PROCESSOR_NAME, MPI_CHAR,
+        MPI_Allgather(host.data(),
+                      MPI_MAX_PROCESSOR_NAME,
+                      MPI_CHAR,
+                      hosts.data(),
+                      MPI_MAX_PROCESSOR_NAME,
+                      MPI_CHAR,
                       FML::communicator);
         for (int rank = 0; rank < FML::NTasks; ++rank)
             rank_hosts[rank] = hosts[rank].data();
@@ -362,7 +373,11 @@ int main(int argc, char **argv) {
         FML::COMMUNICATION::require_count(good, "benchmark correctness/counter check failed");
         auto sums = counters.values, maxima = counters.values;
 #ifdef USE_MPI
-        MPI_Allreduce(MPI_IN_PLACE, maxima.data(), int(maxima.size()), MPI_UNSIGNED_LONG_LONG, MPI_MAX,
+        MPI_Allreduce(MPI_IN_PLACE,
+                      maxima.data(),
+                      int(maxima.size()),
+                      MPI_UNSIGNED_LONG_LONG,
+                      MPI_MAX,
                       FML::communicator);
         bool sums_fit = true;
         for (auto value : maxima)
@@ -426,7 +441,7 @@ int main(int argc, char **argv) {
                 throw std::runtime_error("benchmark report write failed");
         }
         return 0;
-    } catch (const std::exception &e) {
+    } catch (const std::exception & e) {
         std::cerr << "benchmark: " << e.what() << '\n';
         return 2;
     }

@@ -33,10 +33,10 @@ int main() {
     FML::assert_mpi(total <= galaxies.max_size(), "Example catalogue too large");
     galaxies.reserve(size_t(total));
     std::vector<std::vector<FML::HOD::Galaxy>> outgoing(FML::NTasks, mock.galaxies);
-    FML::COMMUNICATION::exchange_records_chunked(outgoing, [&](const FML::HOD::Galaxy* data, size_t n) noexcept {
+    FML::COMMUNICATION::exchange_records_chunked(outgoing, [&](const FML::HOD::Galaxy * data, size_t n) noexcept {
         galaxies.insert(galaxies.end(), data, data + n);
     });
-    std::sort(galaxies.begin(), galaxies.end(), [](const auto& a, const auto& b) {
+    std::sort(galaxies.begin(), galaxies.end(), [](const auto & a, const auto & b) {
         return std::tie(a.halo_id, a.ordinal) < std::tie(b.halo_id, b.ordinal);
     });
     using namespace FML::COUNTS_IN_CELLS;
@@ -56,7 +56,7 @@ int main() {
         galaxy_file
             << std::setprecision(17)
             << "# halo_id ordinal central x y z vx vy vz; positions in box units, velocities in supplied units\n";
-        for (const auto& g : galaxies) {
+        for (const auto & g : galaxies) {
             galaxy_file << g.halo_id << ' ' << g.ordinal << ' ' << g.central;
             for (double x : g.position)
                 galaxy_file << ' ' << x;
@@ -71,10 +71,10 @@ int main() {
         pdf_file << std::setprecision(17) << "# radius N probability; N=21 denotes the explicit N>20 overflow bin\n";
         for (size_t r = 0; r < radii.size(); ++r) {
             knn_file << radii[r];
-            for (const auto& cdf : knn.cdf)
+            for (const auto & cdf : knn.cdf)
                 knn_file << ' ' << cdf[r];
             knn_file << '\n';
-            const auto& c = counts.cells[r];
+            const auto & c = counts.cells[r];
             count_file << c.radius << ' ' << c.mean << ' ' << c.variance;
             for (size_t q = 2; q <= 4; ++q)
                 count_file << ' ' << c.factorial_moments[q];

@@ -4,7 +4,7 @@
 using namespace FML::MORPHOLOGY;
 using Cell = std::array<int, 3>;
 int failures = 0;
-void check(bool ok, const std::string& label) {
+void check(bool ok, const std::string & label) {
     int bad = !ok;
     FML::MaxOverTasks(&bad);
     failures += bad;
@@ -12,7 +12,7 @@ void check(bool ok, const std::string& label) {
         std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
 }
 bool near(double a, double b) { return std::abs(a - b) < 1e-10 * std::max({1.0, std::abs(a), std::abs(b)}); }
-BinarySlab slab(int n, const std::set<Cell>& cells) {
+BinarySlab slab(int n, const std::set<Cell> & cells) {
     BinarySlab s;
     s.nmesh = n;
     s.x_start = n * FML::ThisTask / FML::NTasks;
@@ -23,12 +23,12 @@ BinarySlab slab(int n, const std::set<Cell>& cells) {
             s.cells[((c[0] - s.x_start) * n + c[1]) * n + c[2]] = 1;
     return s;
 }
-CubicalCounts reference(int n, const std::set<Cell>& cells, Boundary b) {
+CubicalCounts reference(int n, const std::set<Cell> & cells, Boundary b) {
     std::set<Cell> vertices;
     std::set<std::array<int, 4>> edges, faces;
     auto wrap = [&](Cell c) {
         if (b == Boundary::Periodic)
-            for (int& x : c)
+            for (int & x : c)
                 x %= n;
         return c;
     };
@@ -56,15 +56,20 @@ CubicalCounts reference(int n, const std::set<Cell>& cells, Boundary b) {
     }
     return {vertices.size(), edges.size(), faces.size(), cells.size()};
 }
-void compare(int n, const std::set<Cell>& cells, Boundary b, const std::string& label) {
+void compare(int n, const std::set<Cell> & cells, Boundary b, const std::string & label) {
     auto m = measure(slab(n, cells), double(n), b);
     auto r = reference(n, cells, b);
     check(m.counts.vertices == r.vertices && m.counts.edges == r.edges && m.counts.faces == r.faces &&
               m.counts.cubes == r.cubes,
           label);
 }
-void shape(const std::set<Cell>& cells, Boundary b, double volume, double area, double h, int chi,
-           const std::string& label) {
+void shape(const std::set<Cell> & cells,
+           Boundary b,
+           double volume,
+           double area,
+           double h,
+           int chi,
+           const std::string & label) {
     auto m = measure(slab(8, cells), 8, b);
     check(near(m.volume, volume) && near(m.surface_area, area) && near(m.integrated_mean_curvature, h * M_PI) &&
               m.euler_characteristic == chi,
@@ -127,7 +132,9 @@ int main() {
                     if ((x * 71 + y * 23 + z * 11 + 5) % 17 < 6)
                         random.insert({x, y, z});
         for (auto bound : {Boundary::Open, Boundary::Periodic})
-            compare(n, random, bound,
+            compare(n,
+                    random,
+                    bound,
                     "independent set-union reference N=" + std::to_string(n) +
                         (bound == Boundary::Open ? " open" : " periodic"));
     }
@@ -151,7 +158,7 @@ int main() {
     bool failed = false;
     try {
         excursions(f, {0}, 7);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         failed = true;
     }
     check(failed, "Fourier fields rejected collectively");
@@ -161,7 +168,7 @@ int main() {
     failed = false;
     try {
         excursions(f, {0}, 7);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         failed = true;
     }
     check(failed, "nonfinite physical cells rejected collectively");
@@ -170,7 +177,7 @@ int main() {
         failed = false;
         try {
             excursions(good, {double(FML::ThisTask)}, 7);
-        } catch (const std::invalid_argument&) {
+        } catch (const std::invalid_argument &) {
             failed = true;
         }
         check(failed, "different threshold schemas rejected across MPI ranks");

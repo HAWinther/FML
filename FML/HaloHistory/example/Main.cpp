@@ -28,7 +28,7 @@ int main() {
     auto history = build({first, second});
     if (FML::ThisTask == 0) {
         std::cout << "# source_snapshot source_halo target_snapshot target_halo Nshared merit skipped\n";
-        for (const auto& link : history.links)
+        for (const auto & link : history.links)
             std::cout << link.source.snapshot << ' ' << link.source.halo << ' ' << link.target.snapshot << ' '
                       << link.target.halo << ' ' << link.shared << ' ' << link.merit << ' ' << link.skipped_snapshots
                       << '\n';
@@ -37,7 +37,7 @@ int main() {
     write_catalogue(interchange, second);
     auto imported = read_catalogue(interchange);
     // This deliberately explicit toy dispersion is not a mass-dispersion model.
-    auto hod = to_hod(imported, 5, [](const Halo&) { return 150.; });
+    auto hod = to_hod(imported, 5, [](const Halo &) { return 150.; });
     if (FML::ThisTask == 0)
         std::cout << "# imported hosts for HOD: " << hod.size() << "; snapshot-relative halo ID=" << hod[0].id << '\n';
 }

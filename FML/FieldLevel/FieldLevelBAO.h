@@ -3,8 +3,8 @@
 // Prototype of field-level inference of the BAO scale (in the spirit of arXiv:2407.01524): the parameters are the
 // white-noise initial field s (one unit Gaussian per cell) and the BAO scale beta = r_BAO / r_fid. The forward model is
 // either linear (pred = b delta_lin) or 1LPT (Zel'dovich particles assigned with CIC, pred = b delta_1LPT), compared to
-// the data mode by mode below a sharp cutoff kmax with a Gaussian likelihood of constant noise power P_eps. The posterior
-// is sampled jointly in (s, beta) with HMC (FML/MCMC/HMC.h) using hand-written adjoint gradients and a
+// the data mode by mode below a sharp cutoff kmax with a Gaussian likelihood of constant noise power P_eps. The
+// posterior is sampled jointly in (s, beta) with HMC (FML/MCMC/HMC.h) using hand-written adjoint gradients and a
 // Fourier-diagonal mass matrix.
 //
 // Serial (FFTWGrid without MPI; OpenMP over cells where it is free of races). See README.md for the conventions.
@@ -25,7 +25,8 @@ namespace FML::FIELDLEVEL {
     using Field = std::vector<double>; // compact real field, index (ix * N + iy) * N + iz
 
     /// No-wiggle transfer function of Eisenstein & Hu (1998), k in h/Mpc.
-    inline double eisenstein_hu_nowiggle_transfer(double k, double Omega_m = .31, double Omega_b = .049, double h = .68) {
+    inline double
+    eisenstein_hu_nowiggle_transfer(double k, double Omega_m = .31, double Omega_b = .049, double h = .68) {
         const double theta = 2.7255 / 2.7, omh2 = Omega_m * h * h, obh2 = Omega_b * h * h, fb = Omega_b / Omega_m;
         const double s = 44.5 * std::log(9.83 / omh2) / std::sqrt(1 + 10 * std::pow(obh2, .75)); // Mpc
         const double alpha = 1 - .328 * std::log(431 * omh2) * fb + .38 * std::log(22.3 * omh2) * fb * fb;
@@ -39,15 +40,17 @@ namespace FML::FIELDLEVEL {
     struct BAOSpectrum {
         std::function<double(double)> smooth; // P_smooth(k) [(Mpc/h)^3]
         double amplitude{.08};
-        double r_fid{105.};   // Mpc/h
-        double k_damp{.25};   // h/Mpc
+        double r_fid{105.}; // Mpc/h
+        double k_damp{.25}; // h/Mpc
         double phase{0.};
 
         /// Default smooth part: EH no-wiggle with n_s, normalised to P_smooth(0.1 h/Mpc) = p01.
         static BAOSpectrum eisenstein_hu(double p01 = 5000., double n_s = .965) {
             BAOSpectrum spectrum;
             const double norm = p01 / (std::pow(.1, n_s) * std::pow(eisenstein_hu_nowiggle_transfer(.1), 2));
-            spectrum.smooth = [=](double k) { return norm * std::pow(k, n_s) * std::pow(eisenstein_hu_nowiggle_transfer(k), 2); };
+            spectrum.smooth = [=](double k) {
+                return norm * std::pow(k, n_s) * std::pow(eisenstein_hu_nowiggle_transfer(k), 2);
+            };
             return spectrum;
         }
         double wiggle(double k, double beta) const {
@@ -64,9 +67,9 @@ namespace FML::FIELDLEVEL {
     /// Linear: pred = b delta_lin.
     /// LPT1:   pred = b delta_CIC of Zel'dovich-displaced particles (Eulerian linear bias on the matter field).
     /// LPT:    1LPT or 2LPT particles (lpt_order) carrying Lagrangian bias weights
-    ///         w = 1 + b1L delta + b2L (delta^2 - <delta^2>) + bG2L G2,  b1L = bias - 1, G2 = (d_i d_j phi)^2 - delta^2,
-    ///         optionally displaced into redshift space along z: x_z += f (Psi1_z + 2 Psi2_z); pred = delta of the
-    ///         weighted CIC density. On large scales pred -> (b + f mu^2) delta_lin.
+    ///         w = 1 + b1L delta + b2L (delta^2 - <delta^2>) + bG2L G2,  b1L = bias - 1, G2 = (d_i d_j phi)^2 -
+    ///         delta^2, optionally displaced into redshift space along z: x_z += f (Psi1_z + 2 Psi2_z); pred = delta of
+    ///         the weighted CIC density. On large scales pred -> (b + f mu^2) delta_lin.
     enum class Model { Linear, LPT1, LPT };
 
     /// Mass assignment of the LPT particles to the density grid.
@@ -79,8 +82,8 @@ namespace FML::FIELDLEVEL {
     enum class Assignment { Smooth, CIC };
 
     struct Settings {
-        int nmesh{32};             // grid of the initial field (and of the particles for 1LPT)
-        int nmesh_density{0};      // density grid of the LPT models; 0 means 2 nmesh
+        int nmesh{32};        // grid of the initial field (and of the particles for 1LPT)
+        int nmesh_density{0}; // density grid of the LPT models; 0 means 2 nmesh
         Assignment assignment{Assignment::Smooth};
         int kernel_width{6};       // Smooth assignment: support in density-grid cells (even, 4..8)
         double boxsize{1000.};     // Mpc/h
@@ -90,10 +93,10 @@ namespace FML::FIELDLEVEL {
         Model model{Model::Linear};
         double beta_min{.8}, beta_max{1.2}; // uniform prior on beta
         // Model::LPT only
-        int lpt_order{2};         // 1 or 2
-        double b2{0};             // Lagrangian b2 (weight b2 (delta^2 - <delta^2>))
-        double bG2{0};            // Lagrangian tidal bias (weight bG2 G2)
-        double growth_rate{0};    // f; 0 = real space, otherwise redshift space along the z axis
+        int lpt_order{2};      // 1 or 2
+        double b2{0};          // Lagrangian b2 (weight b2 (delta^2 - <delta^2>))
+        double bG2{0};         // Lagrangian tidal bias (weight bG2 G2)
+        double growth_rate{0}; // f; 0 = real space, otherwise redshift space along the z axis
         // Parametrisation of the sampled field x: s_k = (T(beta_ref) / T(beta))^c x_k, with s the unit white noise.
         // c = 0 samples s itself (non-centred), c = 1 samples delta / T(beta_ref) (centred). A negative value picks per
         // mode c = S / (S + N) = b^2 P / (b^2 P + P_eps), which decorrelates beta from x in both regimes.
@@ -111,9 +114,9 @@ namespace FML::FIELDLEVEL {
     class FieldLevelBAO {
       public:
         struct Mode {
-            int n[3];       // integer wavevector
-            double k;       // |k| in h/Mpc
-            double weight;  // 1 or 2: multiplicity in the half-complex layout
+            int n[3];                  // integer wavevector
+            double k;                  // |k| in h/Mpc
+            double weight;             // 1 or 2: multiplicity in the half-complex layout
             std::size_t fourier_index; // index in the half-complex array of the nmesh grid
             std::size_t density_index; // index in the half-complex array of the nmesh_density grid
             double centering;          // c of this mode
@@ -126,12 +129,14 @@ namespace FML::FIELDLEVEL {
             if (s_.nmesh_density == 0)
                 s_.nmesh_density = 2 * s_.nmesh;
             const double kf = 2 * M_PI / s_.boxsize;
-            if (s_.assignment == Assignment::Smooth && !(s_.kernel_width >= 4 && s_.kernel_width <= 8 && s_.kernel_width % 2 == 0))
+            if (s_.assignment == Assignment::Smooth &&
+                !(s_.kernel_width >= 4 && s_.kernel_width <= 8 && s_.kernel_width % 2 == 0))
                 throw std::invalid_argument("[FieldLevelBAO] kernel_width must be 4, 6 or 8");
             if (s_.model == Model::LPT && !(s_.lpt_order == 1 || s_.lpt_order == 2))
                 throw std::invalid_argument("[FieldLevelBAO] lpt_order must be 1 or 2");
-            if (!(s_.nmesh >= 4 && s_.centering <= 1 && s_.beta_ref >= s_.beta_min && s_.beta_ref <= s_.beta_max && s_.boxsize > 0 && s_.kmax > 0 && s_.noise_power > 0 && s_.bias != 0 &&
-                  s_.beta_min < s_.beta_max && s_.beta_min > 0 && spectrum_.smooth))
+            if (!(s_.nmesh >= 4 && s_.centering <= 1 && s_.beta_ref >= s_.beta_min && s_.beta_ref <= s_.beta_max &&
+                  s_.boxsize > 0 && s_.kmax > 0 && s_.noise_power > 0 && s_.bias != 0 && s_.beta_min < s_.beta_max &&
+                  s_.beta_min > 0 && spectrum_.smooth))
                 throw std::invalid_argument("[FieldLevelBAO] Invalid settings");
             if (s_.kmax >= kf * (s_.nmesh / 2) || s_.kmax >= kf * (s_.nmesh_density / 2))
                 throw std::invalid_argument("[FieldLevelBAO] kmax must lie below the Nyquist frequency of both grids");
@@ -153,8 +158,13 @@ namespace FML::FIELDLEVEL {
                         const double k = kf * std::sqrt(double(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]));
                         if (k == 0 || k >= s_.kmax)
                             continue;
-                        Mode m{{n[0], n[1], n[2]}, k, double(FML::GRID::fourier_mode_multiplicity(iz, N)),
-                               std::size_t(grid_.get_index_fourier({ix, iy, iz})), 0, 0, 0};
+                        Mode m{{n[0], n[1], n[2]},
+                               k,
+                               double(FML::GRID::fourier_mode_multiplicity(iz, N)),
+                               std::size_t(grid_.get_index_fourier({ix, iy, iz})),
+                               0,
+                               0,
+                               0};
                         const double S = std::pow(linear_amplitude(n), 2) * spectrum_(k, s_.beta_ref);
                         m.centering = s_.centering < 0 ? S / (S + s_.noise_power) : s_.centering;
                         if (s_.model != Model::Linear) {
@@ -185,9 +195,9 @@ namespace FML::FIELDLEVEL {
                 }
                 for (auto & m : modes_) {
                     const double phase = 2 * M_PI * lattice_offset() * double(m.n[0] + m.n[1] + m.n[2]);
-                    m.density_factor = Complex(std::cos(phase), std::sin(phase)) /
-                                       (kernel_ft[std::abs(m.n[0])] * kernel_ft[std::abs(m.n[1])] *
-                                        kernel_ft[std::abs(m.n[2])]);
+                    m.density_factor =
+                        Complex(std::cos(phase), std::sin(phase)) /
+                        (kernel_ft[std::abs(m.n[0])] * kernel_ft[std::abs(m.n[1])] * kernel_ft[std::abs(m.n[2])]);
                 }
             }
             // Every half-complex index of the nmesh grid with its integer wavevector (for operators on all modes)
@@ -324,7 +334,8 @@ namespace FML::FIELDLEVEL {
                 const double r = ratio(m, beta), Teff = transfer(m, beta) * r;
                 const double half_dlnP = .5 * spectrum_.dlnP_dbeta(m.k, beta);
                 f[m.fourier_index] = FML::GRID::ComplexType(Teff * Q[i] + (r * r - 1) * w.sk[i]);
-                grad_beta += m.weight * N3 * std::real(std::conj(Q[i]) * w.sk[i]) * Teff * (1 - m.centering) * half_dlnP;
+                grad_beta +=
+                    m.weight * N3 * std::real(std::conj(Q[i]) * w.sk[i]) * Teff * (1 - m.centering) * half_dlnP;
                 grad_beta -= m.weight * N3 * r * r * std::norm(w.sk[i]) * m.centering * half_dlnP;
                 grad_beta += m.weight * m.centering * half_dlnP;
             }
@@ -348,11 +359,13 @@ namespace FML::FIELDLEVEL {
         }
 
         /// Fourier-diagonal HMC mass: 1 + A^2 P(k, beta) / P_eps inside kmax (A = linear_amplitude), 1 outside (the
-        /// exact Hessian of the linear model's potential in s; a good preconditioner for the LPT models on large scales)
+        /// exact Hessian of the linear model's potential in s; a good preconditioner for the LPT models on large
+        /// scales)
         std::vector<double> mass_spectrum(double beta) const {
             std::vector<double> mass(modes_.size());
             for (std::size_t i = 0; i < modes_.size(); ++i)
-                mass[i] = 1 + std::pow(linear_amplitude(modes_[i].n), 2) * spectrum_(modes_[i].k, beta) / s_.noise_power;
+                mass[i] =
+                    1 + std::pow(linear_amplitude(modes_[i].n), 2) * spectrum_(modes_[i].k, beta) / s_.noise_power;
             return mass;
         }
 
@@ -372,12 +385,12 @@ namespace FML::FIELDLEVEL {
 
       private:
         struct Workspace {
-            std::vector<Complex> sk;      // r2c(s) on the modes
-            std::array<Field, 3> psi;     // total displacement (box units), per particle
-            Field delta;                  // Lagrangian linear density (Model::LPT)
-            std::array<Field, 6> tij;     // c2r(k_i k_j / k^2 delta_k): xx, yy, zz, xy, xz, yz (Model::LPT)
-            Field weight;                 // bias weights (Model::LPT; empty means 1)
-            double prefactor{1};          // pred = prefactor * delta_CIC
+            std::vector<Complex> sk;  // r2c(s) on the modes
+            std::array<Field, 3> psi; // total displacement (box units), per particle
+            Field delta;              // Lagrangian linear density (Model::LPT)
+            std::array<Field, 6> tij; // c2r(k_i k_j / k^2 delta_k): xx, yy, zz, xy, xz, yz (Model::LPT)
+            Field weight;             // bias weights (Model::LPT; empty means 1)
+            double prefactor{1};      // pred = prefactor * delta_CIC
         };
         struct FullMode {
             std::size_t index;
@@ -394,9 +407,7 @@ namespace FML::FIELDLEVEL {
         std::size_t ncells_{0};
         double volume_{0}, sigma2_{0};
 
-        std::size_t cell(int ix, int iy, int iz) const {
-            return (std::size_t(ix) * s_.nmesh + iy) * s_.nmesh + iz;
-        }
+        std::size_t cell(int ix, int iy, int iz) const { return (std::size_t(ix) * s_.nmesh + iy) * s_.nmesh + iz; }
         void to_grid(const Field & x, FML::GRID::FFTWGrid<3> & g) const {
             auto * r = g.get_real_grid();
             for (std::size_t c = 0; c < ncells_; ++c)
@@ -567,8 +578,9 @@ namespace FML::FIELDLEVEL {
             for (const auto & m : all_modes_) {
                 const bool zero = (m.n[0] == 0 && m.n[1] == 0 && m.n[2] == 0) || std::abs(m.n[0]) == half ||
                                   std::abs(m.n[1]) == half || m.n[2] == half;
-                f[m.index] = zero ? FML::GRID::ComplexType(0) :
-                                    f[m.index] * FML::GRID::ComplexType(0, FML::GRID::FloatType(sign * kc(m.n, c) / k2(m.n)));
+                f[m.index] =
+                    zero ? FML::GRID::ComplexType(0) :
+                           f[m.index] * FML::GRID::ComplexType(0, FML::GRID::FloatType(sign * kc(m.n, c) / k2(m.n)));
             }
             g.fftw_c2r();
             Field y;
@@ -748,9 +760,10 @@ namespace FML::FIELDLEVEL {
             add_adjoint(deltabar, [](const Mode &) { return Complex(1); }, Q);
             if (tidal)
                 for (int a = 0; a < 6; ++a)
-                    add_adjoint(tbar[a], [&](const Mode & m) {
-                        return Complex(kc(m.n, pair_[a][0]) * kc(m.n, pair_[a][1]) / k2(m.n));
-                    }, Q);
+                    add_adjoint(
+                        tbar[a],
+                        [&](const Mode & m) { return Complex(kc(m.n, pair_[a][0]) * kc(m.n, pair_[a][1]) / k2(m.n)); },
+                        Q);
         }
     };
 

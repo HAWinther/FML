@@ -27,7 +27,7 @@ namespace FML::PERTURBATION {
     };
     namespace detail {
         constexpr double pi = 3.141592653589793238462643383279502884;
-        inline void require(bool ok, const char* msg) {
+        inline void require(bool ok, const char * msg) {
             if (!ok)
                 throw std::invalid_argument(msg);
         }
@@ -63,8 +63,11 @@ namespace FML::PERTURBATION {
             return {x, w};
         }
         template <class Function>
-        double integrate_log(double low, double high, const Function& f, const DirectOptions& options,
-                             const std::pair<Vector, Vector>& gl) {
+        double integrate_log(double low,
+                             double high,
+                             const Function & f,
+                             const DirectOptions & options,
+                             const std::pair<Vector, Vector> & gl) {
             if (high <= low)
                 return 0;
             double a = std::log(low), b = std::log(high);
@@ -105,8 +108,12 @@ namespace FML::PERTURBATION {
     }
     /// Local direct quadrature. P is explicitly zero outside [qmin,qmax].
     /// Custom kernels are never routed through the EdS FFT approximation.
-    inline Prediction direct_one_loop(const Vector& output, const Spectrum& power, double qmin, double qmax,
-                                      const DirectOptions& options = {}, const Kernels& kernels = {}) {
+    inline Prediction direct_one_loop(const Vector & output,
+                                      const Spectrum & power,
+                                      double qmin,
+                                      double qmax,
+                                      const DirectOptions & options = {},
+                                      const Kernels & kernels = {}) {
         detail::require(bool(power) && qmin > 0 && qmax > qmin && std::isfinite(qmax) && std::isfinite(qmax / qmin) &&
                             options.log_step > 0 && std::isfinite(options.log_step),
                         "Invalid direct spectrum/range/options");
@@ -139,24 +146,29 @@ namespace FML::PERTURBATION {
             long double p22 = 0, p13 = 0;
             for (size_t b = 1; b < breaks.size(); ++b) {
                 p22 += detail::integrate_log(
-                    breaks[b - 1], breaks[b],
+                    breaks[b - 1],
+                    breaks[b],
                     [&](double q) {
                         double lower = std::max(qmin, std::abs(k - q)), upper = std::min(qmax, k + q);
                         if (lower >= upper)
                             return 0.;
                         return q * P(q) *
                                detail::integrate_log(
-                                   lower, upper,
+                                   lower,
+                                   upper,
                                    [&](double p) {
                                        double mu = std::clamp((k * k - q * q - p * p) / (2 * q * p), -1., 1.);
                                        double f = kernels.f2 ? kernels.f2(q, p, mu) : eds_f2(q, p, mu);
                                        return p * P(p) * f * f;
                                    },
-                                   options, gl);
+                                   options,
+                                   gl);
                     },
-                    options, gl);
+                    options,
+                    gl);
                 p13 += detail::integrate_log(
-                    breaks[b - 1], breaks[b],
+                    breaks[b - 1],
+                    breaks[b],
                     [&](double q) {
                         if (!kernels.f3_collapsed)
                             return P(q) * p13_kernel(q / k);
@@ -165,13 +177,14 @@ namespace FML::PERTURBATION {
                             angular += gl.second[j] * detail::finite(kernels.f3_collapsed(k, q, gl.first[j]));
                         return double(angular) * q * q * P(q);
                     },
-                    options, gl);
+                    options,
+                    gl);
             }
             out.linear.push_back(pk);
             out.p22.push_back(detail::finite(double(p22) / (2 * detail::pi * detail::pi * k)));
             out.p13.push_back(detail::finite(double(p13) * pk *
-                                             (kernels.f3_collapsed ? 3. / (2 * detail::pi * detail::pi)
-                                                                   : k * k / (1008 * detail::pi * detail::pi))));
+                                             (kernels.f3_collapsed ? 3. / (2 * detail::pi * detail::pi) :
+                                                                     k * k / (1008 * detail::pi * detail::pi))));
             out.loop.push_back(out.p22.back() + out.p13.back());
             out.total.push_back(detail::finite(pk + out.loop.back()));
         }

@@ -51,7 +51,10 @@ static void test_diagonal_adaptation() {
     std::cout << "  acceptance " << r.acceptance << ", step " << r.step_size << ", divergences " << r.divergences
               << "\n";
     // Dual averaging returns the averaged (smaller) step, so the realised acceptance lies somewhat above the target
-    Test::check_close("acceptance in [0.7, 0.97] (target 0.8)", (r.acceptance > .7 && r.acceptance < .97) ? 0. : 1., 0, 0);
+    Test::check_close("acceptance in [0.7, 0.97] (target 0.8)",
+                      (r.acceptance > .7 && r.acceptance < .97) ? 0. : 1.,
+                      0,
+                      0);
     for (int i : {0, d / 2, d - 1}) {
         check_moments("x" + std::to_string(i), recorded_column(r, i), mu[i], var[i]);
         Test::check_rel("adapted mass of x" + std::to_string(i) + " ~ 1/var", r.diagonal[i] * var[i], 1., .35);
@@ -126,7 +129,8 @@ static void test_custom_block() {
     opt.samples = 3000;
     opt.n_leapfrog = 8;
     opt.seed = 7;
-    const auto r = run_hmc(U, Vector(n, 0.), mass, opt, [&](const Vector & x) { return Vector{x[0], x[nf], x[nf + 1]}; });
+    const auto r =
+        run_hmc(U, Vector(n, 0.), mass, opt, [&](const Vector & x) { return Vector{x[0], x[nf], x[nf + 1]}; });
     std::cout << "  acceptance " << r.acceptance << ", step " << r.step_size << "\n";
     check_moments("field f0", recorded_column(r, 0), 0, e0[0]);
     check_moments("parameter a", recorded_column(r, 1), 0, sa * sa);

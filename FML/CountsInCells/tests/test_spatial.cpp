@@ -3,7 +3,7 @@
 #include <iostream>
 using namespace FML::COUNTS_IN_CELLS;
 int failures = 0;
-void check(bool good, const std::string& label) {
+void check(bool good, const std::string & label) {
     int bad = !good;
     FML::MaxOverTasks(&bad);
     failures += bad;
@@ -15,14 +15,14 @@ bool near(double a, double b, double tolerance = 1e-12) {
         return std::isnan(a) && std::isnan(b);
     return std::abs(a - b) <= tolerance * std::max({1.0, std::abs(a), std::abs(b)});
 }
-std::vector<Query> local_queries(const std::vector<Query>& all, bool root = false) {
+std::vector<Query> local_queries(const std::vector<Query> & all, bool root = false) {
     std::vector<Query> q;
     for (size_t i = 0; i < all.size(); ++i)
         if ((root ? 0 : int(i % FML::NTasks)) == FML::ThisTask)
             q.push_back(all[i]);
     return q;
 }
-std::vector<double> brute(const FML::KDTREE::pointVec& points, const Query& q, double box) {
+std::vector<double> brute(const FML::KDTREE::pointVec & points, const Query & q, double box) {
     std::vector<double> result;
     for (size_t i = 0; i < points.size(); ++i)
         if (i != q.exclude) {
@@ -39,10 +39,20 @@ std::vector<double> brute(const FML::KDTREE::pointVec& points, const Query& q, d
     return result;
 }
 void test_exact() {
-    const FML::KDTREE::pointVec tracers{{0, 0, 0},       {.5, 0, 0},   {.999, .1, .2}, {.25, .25, .25},
-                                        {.25, .25, .25}, {.7, .4, .9}, {.1, .7, .8},   {.3, .2, .6}};
-    const std::vector<Query> all{{{0, 0, 0}},          {{0, 0, 0}, 0}, {{1.001, .1, .2}},
-                                 {{.25, .25, .25}, 3}, {{.5, .5, .5}}, {{.25, .25, .25}}};
+    const FML::KDTREE::pointVec tracers{{0, 0, 0},
+                                        {.5, 0, 0},
+                                        {.999, .1, .2},
+                                        {.25, .25, .25},
+                                        {.25, .25, .25},
+                                        {.7, .4, .9},
+                                        {.1, .7, .8},
+                                        {.3, .2, .6}};
+    const std::vector<Query> all{{{0, 0, 0}},
+                                 {{0, 0, 0}, 0},
+                                 {{1.001, .1, .2}},
+                                 {{.25, .25, .25}, 3},
+                                 {{.5, .5, .5}},
+                                 {{.25, .25, .25}}};
     const std::vector<size_t> orders{4, 1, 2, 100};
     const std::vector<double> radii{0, .05, .1, .25, .5, .9};
     for (double box : {0.0, 1.0}) {
@@ -62,14 +72,15 @@ void test_exact() {
                 exact &= spheres[r][i] ==
                          size_t(std::upper_bound(ref.begin(), ref.end(), radii[r] * radii[r]) - ref.begin());
         }
-        check(exact, std::string("batched distances and inclusive sphere counts match brute force: ") +
-                         (box ? "periodic" : "nonperiodic"));
+        check(exact,
+              std::string("batched distances and inclusive sphere counts match brute force: ") +
+                  (box ? "periodic" : "nonperiodic"));
         auto cdf = statistics.knn_cdf(queries, orders, radii);
         bool fractions = cdf.queries == all.size() && cdf.excluded_queries == 2 && cdf.boxsize == box;
         for (size_t k = 0; k < orders.size(); ++k)
             for (size_t r = 0; r < radii.size(); ++r) {
                 Count expected = 0;
-                for (const auto& q : all) {
+                for (const auto & q : all) {
                     auto d2 = brute(tracers, q, box);
                     expected += orders[k] <= d2.size() && d2[orders[k] - 1] <= radii[r] * radii[r];
                 }
@@ -86,12 +97,12 @@ void test_exact() {
     const auto cdf = statistics.knn_cdf(local_queries(all), {1, 2, 3}, radii2);
     bool exact = summary.excluded_queries == 2 && !summary.uncorrected_clipping, relation = true;
     for (size_t r = 0; r < radii2.size(); ++r) {
-        const auto& actual = summary.cells[r];
+        const auto & actual = summary.cells[r];
         double sum = 0, square = 0;
         std::vector<double> factorial(6);
         std::vector<Count> histogram(4), density(7);
         Count under = 0, over = 0;
-        for (const auto& q : all) {
+        for (const auto & q : all) {
             auto d2 = brute(tracers, q, 1);
             const size_t count = std::upper_bound(d2.begin(), d2.end(), radii2[r] * radii2[r]) - d2.begin();
             sum += count;
@@ -178,7 +189,7 @@ void test_windows_and_empty() {
                b = uniform_queries(28, Bounds{}, 919, 113);
     bool sequence = true;
     for (size_t i = 0; i < whole.size(); ++i) {
-        const auto& part = i < a.size() ? a[i] : b[i - a.size()];
+        const auto & part = i < a.size() ? a[i] : b[i - a.size()];
         sequence &= whole[i].position == part.position;
         for (double x : whole[i].position)
             sequence &= x >= 0 && x < 1;
@@ -190,7 +201,7 @@ void test_binomial() {
     FML::KDTREE::pointVec points;
     points.reserve(n);
     auto uniform = uniform_queries(n, Bounds{}, 671);
-    for (const auto& q : uniform)
+    for (const auto & q : uniform)
         points.push_back({q.position.begin(), q.position.end()});
     SpatialStatistics statistics(points, 1);
     const size_t start = size_t(nq) * FML::ThisTask / FML::NTasks,
@@ -200,7 +211,7 @@ void test_binomial() {
     Options options;
     auto counts = statistics.counts_in_cells(q, {r}, options);
     const auto cdf = statistics.knn_cdf(q, {1, 2}, {r});
-    const auto& c = counts.cells[0];
+    const auto & c = counts.cells[0];
     bool moments = std::abs(c.mean - lambda) < .06 && std::abs(c.normalized_connected_variance + 1.0 / n) < .04;
     for (size_t order = 2; order <= 4; ++order) {
         double expected = 1;
@@ -228,11 +239,13 @@ void test_knn_ensemble() {
     std::vector<std::vector<double>> sum(orders.size(), std::vector<double>(radii.size())), sum2 = sum;
     for (int realization = 0; realization < realizations; ++realization) {
         FML::KDTREE::pointVec points;
-        for (const auto& q : uniform_queries(n, Bounds{}, 4242, std::uint64_t(realization) * n))
+        for (const auto & q : uniform_queries(n, Bounds{}, 4242, std::uint64_t(realization) * n))
             points.push_back({q.position.begin(), q.position.end()});
         SpatialStatistics statistics(points, 1);
         const auto cdf = statistics.knn_cdf(uniform_queries(nq, Bounds{}, 977, std::uint64_t(realization) * nq),
-                                            orders, radii, Reduction::Local);
+                                            orders,
+                                            radii,
+                                            Reduction::Local);
         for (size_t k = 0; k < orders.size(); ++k)
             for (size_t r = 0; r < radii.size(); ++r) {
                 sum[k][r] += cdf.cdf[k][r] / realizations;
@@ -249,8 +262,7 @@ void test_knn_ensemble() {
                 cumulative += term;
                 term *= double(n - j) / (j + 1) * p / (1 - p);
             }
-            const double error =
-                std::sqrt(std::max(0.0, sum2[k][r] - sum[k][r] * sum[k][r]) / (realizations - 1));
+            const double error = std::sqrt(std::max(0.0, sum2[k][r] - sum[k][r] * sum[k][r]) / (realizations - 1));
             if (error < 1e-5)
                 continue;
             const double pull = (sum[k][r] - (1 - cumulative)) / error;
@@ -276,9 +288,7 @@ void test_mock_integration() {
     options.boxsize = 1;
     auto mock = FML::HOD::populate(
         FML::HOD::PreparedCatalog(std::move(halos)),
-        [](const auto&) {
-            return FML::HOD::OccupationMeans{1, 2};
-        },
+        [](const auto &) { return FML::HOD::OccupationMeans{1, 2}; },
         options);
     SpatialStatistics stats(mock.galaxies.data(), mock.galaxies.size(), 1);
     const auto q = local_queries({{{.2, .4, .5}}, {{.5, .5, .5}}});
@@ -305,16 +315,14 @@ void test_invalid() {
     auto rejects = [](auto operation) {
         try {
             operation();
-        } catch (const std::invalid_argument&) {
+        } catch (const std::invalid_argument &) {
             return true;
         }
         return false;
     };
     SpatialStatistics stats(FML::KDTREE::pointVec{{.1, .2, .3}}, 1);
     auto q = local_queries({{{.2, .3, .4}}});
-    check(rejects([&] { stats.knn_cdf(q, {0}, {.1}); }) && rejects([&] {
-              stats.knn_cdf(q, {1, 1}, {.1});
-          }),
+    check(rejects([&] { stats.knn_cdf(q, {0}, {.1}); }) && rejects([&] { stats.knn_cdf(q, {1, 1}, {.1}); }),
           "zero/duplicate kNN orders are rejected collectively");
     check(rejects([&] { stats.counts_in_cells(q, {.6}); }) && rejects([&] { stats.counts_in_cells(q, {0}); }),
           "density cell radii must have positive standard spherical volume without torus overlap");

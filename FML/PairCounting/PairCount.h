@@ -664,8 +664,12 @@ namespace FML {
 
                 /// Visit precisely the neighbor cells used by the pair kernel, in their original order.
                 template <int NDIM, class F>
-                void visit_pair_cells(size_t c1, int ngrid, const std::vector<std::array<int, NDIM>> &offsets,
-                                      bool periodic, bool autopairs, F &&visit) {
+                void visit_pair_cells(size_t c1,
+                                      int ngrid,
+                                      const std::vector<std::array<int, NDIM>> & offsets,
+                                      bool periodic,
+                                      bool autopairs,
+                                      F && visit) {
                     std::array<int, NDIM> i1;
                     {
                         size_t c = c1;
@@ -674,7 +678,7 @@ namespace FML {
                             c /= size_t(ngrid);
                         }
                     }
-                    for (const auto &o : offsets) {
+                    for (const auto & o : offsets) {
                         size_t c2 = 0;
                         bool inside = true;
                         double shift[NDIM];
@@ -705,15 +709,22 @@ namespace FML {
                 /// Convert occupancies before multiplication to avoid overflowing integer counts.
                 template <int NDIM>
                 std::vector<std::pair<double, size_t>>
-                estimate_cell_costs(const CellList<NDIM> &A, const CellList<NDIM> &B,
-                                    const std::vector<std::array<int, NDIM>> &offsets, bool autopairs, bool periodic) {
+                estimate_cell_costs(const CellList<NDIM> & A,
+                                    const CellList<NDIM> & B,
+                                    const std::vector<std::array<int, NDIM>> & offsets,
+                                    bool autopairs,
+                                    bool periodic) {
                     std::vector<std::pair<double, size_t>> cost;
                     for (size_t c1 = 0; c1 + 1 < A.start.size(); ++c1) {
                         const double na = double(A.start[c1 + 1] - A.start[c1]);
                         if (na == 0.)
                             continue;
                         double work = 1.0 + double(offsets.size());
-                        visit_pair_cells<NDIM>(c1, A.ngrid, offsets, periodic, autopairs,
+                        visit_pair_cells<NDIM>(c1,
+                                               A.ngrid,
+                                               offsets,
+                                               periodic,
+                                               autopairs,
                                                [&](size_t c2, const double *) {
                                                    if (autopairs && c2 == c1)
                                                        work += 0.5 * na * (na - 1.0);
@@ -722,7 +733,7 @@ namespace FML {
                                                });
                         cost.emplace_back(work, c1);
                     }
-                    std::sort(cost.begin(), cost.end(), [](const auto &a, const auto &b) {
+                    std::sort(cost.begin(), cost.end(), [](const auto & a, const auto & b) {
                         return a.first > b.first || (a.first == b.first && a.second < b.second);
                     });
                     return cost;
@@ -730,8 +741,8 @@ namespace FML {
 
                 /// Assign sorted nonnegative finite costs to the least-loaded rank, breaking equal-load ties
                 /// by rank index, exactly as the previous linear min_element scan did.
-                inline std::vector<size_t> assign_cells_to_rank(const std::vector<std::pair<double, size_t>> &cost,
-                                                                int ntasks, int rank) {
+                inline std::vector<size_t>
+                assign_cells_to_rank(const std::vector<std::pair<double, size_t>> & cost, int ntasks, int rank) {
                     assert(ntasks > 0 && rank >= 0 && rank < ntasks);
                     using RankLoad = std::pair<double, int>;
                     // Zero loads in ascending rank order already form a min-heap.
@@ -740,7 +751,7 @@ namespace FML {
                     for (int task = 0; task < ntasks; ++task)
                         loads.emplace_back(0.0, task);
                     std::vector<size_t> mycells;
-                    for (const auto &cell : cost) {
+                    for (const auto & cell : cost) {
                         auto updated = loads.front();
                         if (updated.second == rank)
                             mycells.push_back(cell.second);
@@ -811,14 +822,19 @@ namespace FML {
 #endif
                         const size_t c1 = mycells[k];
                         visit_pair_cells<NDIM>(
-                            c1, ngrid, offsets, periodic, autopairs, [&](size_t c2, const double *shift) {
+                            c1,
+                            ngrid,
+                            offsets,
+                            periodic,
+                            autopairs,
+                            [&](size_t c2, const double * shift) {
                                 const size_t jbegin = B.start[c2], jend = B.start[c2 + 1];
                                 if (jbegin == jend)
                                     return;
                                 for (size_t i = A.start[c1]; i < A.start[c1 + 1]; i++) {
-                                    const double *xi = &A.pos[i * NDIM];
+                                    const double * xi = &A.pos[i * NDIM];
                                     for (size_t j = (autopairs and c2 == c1) ? i + 1 : jbegin; j < jend; j++) {
-                                        const double *xj = &B.pos[j * NDIM];
+                                        const double * xj = &B.pos[j * NDIM];
                                         double dist[NDIM];
                                         double r2 = 0.0;
                                         for (int d = 0; d < NDIM; d++) {

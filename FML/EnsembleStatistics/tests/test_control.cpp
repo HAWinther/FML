@@ -3,7 +3,7 @@
 #include <iostream>
 using namespace FML::ENSEMBLE;
 int failures = 0;
-void check(bool ok, const std::string& label) {
+void check(bool ok, const std::string & label) {
     int bad = !ok;
     FML::MaxOverTasks(&bad);
     failures += bad;
@@ -20,7 +20,7 @@ PhaseKey key(std::uint64_t id) {
     k.seed = 100000 + id;
     return k;
 }
-Vector target(const Vector& c) { return {10 + 2 * c[0] - 3 * c[1], -4 + .5 * c[0] + 4 * c[1]}; }
+Vector target(const Vector & c) { return {10 + 2 * c[0] - 3 * c[1], -4 + .5 * c[0] + 4 * c[1]}; }
 PairedTraining training() {
     PairedTraining t(2, 2, meta());
     for (int i = 0; i < 12; ++i)
@@ -72,7 +72,7 @@ void test_fit() {
     FitOptions options;
     options.ridge = 0;
     auto model = t.fit(MeanEstimate::exact({.25, -.5}, meta()), options);
-    const auto& b = model.coefficients();
+    const auto & b = model.coefficients();
     check(near(b[0], 2) && near(b[1], -3) && near(b[2], .5) && near(b[3], 4),
           "full standardized multivariate fit recovers exact known control coefficients");
     ControlEvaluation e(model);
@@ -99,7 +99,7 @@ void test_fit() {
     bool failed = false;
     try {
         singular.fit(MeanEstimate::exact({0, 0}, meta()), options);
-    } catch (const std::domain_error&) {
+    } catch (const std::domain_error &) {
         failed = true;
     }
     check(failed, "singular unregularized control covariance fails explicitly");
@@ -128,7 +128,7 @@ void test_mean_uncertainty() {
     opt.ridge = 0;
     auto model = training().fit(mean, opt);
     const auto s = population.summary();
-    const auto& b = model.coefficients();
+    const auto & b = model.coefficients();
     Vector expected(4);
     for (size_t i = 0; i < 2; ++i)
         for (size_t j = 0; j < 2; ++j)
@@ -184,17 +184,14 @@ void test_validation() {
     auto rejects = [](auto call) {
         try {
             call();
-        } catch (const std::exception&) {
+        } catch (const std::exception &) {
             return true;
         }
         return false;
     };
     RunningCovariance c(2);
     c.add({1, 2});
-    check(rejects([&] {
-              c.add({NAN, 2});
-          }) &&
-              c.count() == 1 && rejects([&] { c.add({1}); }),
+    check(rejects([&] { c.add({NAN, 2}); }) && c.count() == 1 && rejects([&] { c.add({1}); }),
           "invalid moment rows do not change accumulated state");
     PairedTraining t(2, 2, meta());
     auto a = key(1), b = a;
@@ -207,9 +204,7 @@ void test_validation() {
     b = a;
     b.realization = 99;
     b.phase_sign = -1;
-    check(rejects([&] {
-              t.add({1, 2}, {3, 4}, b, b);
-          }),
+    check(rejects([&] { t.add({1, 2}, {3, 4}, b, b); }),
           "antithetic members cannot be counted as independent phase blocks");
     auto trained = training();
     auto model = trained.fit(MeanEstimate::exact({0, 0}, meta()));
@@ -217,14 +212,10 @@ void test_validation() {
     RunningCovariance cheap(2);
     cheap.add({1, 2});
     cheap.add({2, 3});
-    check(rejects([&] {
-              trained.fit(MeanEstimate::independent(cheap, {key(0), key(100)}, meta()));
-          }),
+    check(rejects([&] { trained.fit(MeanEstimate::independent(cheap, {key(0), key(100)}, meta())); }),
           "estimated surrogate mean must be independent of training");
     auto estimated = trained.fit(MeanEstimate::independent(cheap, {key(100), key(101)}, meta()));
-    check(rejects([&] {
-              estimated.apply({1, 2}, {3, 4}, key(100), key(100));
-          }),
+    check(rejects([&] { estimated.apply({1, 2}, {3, 4}, key(100), key(100)); }),
           "evaluation cannot reuse surrogate-mean phases");
     ControlEvaluation eval(model);
     eval.add({1, 2}, {3, 4}, key(10000), key(10000));

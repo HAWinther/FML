@@ -36,21 +36,21 @@ namespace FML::ENVIRONMENT {
         double mean_mark = 0, finite_pair_baseline = 0;
     };
     namespace detail {
-        inline void require(bool valid, const char* message) {
+        inline void require(bool valid, const char * message) {
             int ok = valid;
             FML::MinOverTasks(&ok);
             if (!ok)
                 throw std::invalid_argument(message);
         }
-        inline void local(bool valid, const char* message) {
+        inline void local(bool valid, const char * message) {
             if (!valid)
                 throw std::invalid_argument(message);
         }
-        inline void word(Count& h, Count value) {
+        inline void word(Count & h, Count value) {
             h ^= value;
             h *= 1099511628211ULL;
         }
-        inline void real(Count& h, double value) {
+        inline void real(Count & h, double value) {
             std::uint64_t bits;
             std::memcpy(&bits, &value, sizeof(bits));
             word(h, bits);
@@ -62,9 +62,9 @@ namespace FML::ENVIRONMENT {
             require(lo == hi, "Environment catalogues/options differ across MPI ranks");
         }
         inline bool box(double L) { return L > 0 && std::isfinite(L * L * L) && L * L * L > 0; }
-        inline bool catalogue(const std::vector<Sample>& points, double L) {
+        inline bool catalogue(const std::vector<Sample> & points, double L) {
             std::set<std::uint64_t> ids;
-            for (const auto& p : points) {
+            for (const auto & p : points) {
                 if (!ids.insert(p.id).second)
                     return false;
                 for (double x : p.position)
@@ -73,21 +73,25 @@ namespace FML::ENVIRONMENT {
             }
             return true;
         }
-        inline void hash(Count& h, const std::vector<Sample>& points) {
+        inline void hash(Count & h, const std::vector<Sample> & points) {
             word(h, points.size());
-            for (const auto& p : points) {
+            for (const auto & p : points) {
                 word(h, p.id);
                 for (double x : p.position)
                     real(h, x);
             }
         }
-        inline void hash(Count& h, const std::vector<double>& values) {
+        inline void hash(Count & h, const std::vector<double> & values) {
             word(h, values.size());
             for (double x : values)
                 real(h, x);
         }
-        inline void schema(const std::vector<Sample>& a, const std::vector<Sample>& b, double L, double low,
-                           double high, int bins) {
+        inline void schema(const std::vector<Sample> & a,
+                           const std::vector<Sample> & b,
+                           double L,
+                           double low,
+                           double high,
+                           int bins) {
             require(box(L) && std::isfinite(low) && std::isfinite(high) && low > 0 && high > low && high <= L / 2 &&
                         bins > 0 && catalogue(a, L) && catalogue(b, L),
                     "Invalid periodic catalogue, unique IDs or radial bins (0 < rmin < rmax <= L/2 required)");
@@ -111,11 +115,11 @@ namespace FML::ENVIRONMENT {
             Point position{};
             double mark = 1;
             size_t quantile = 0;
-            double* get_pos() { return position.data(); }
-            const double* get_pos() const { return position.data(); }
+            double * get_pos() { return position.data(); }
+            const double * get_pos() const { return position.data(); }
             constexpr int get_ndim() const { return 3; }
         };
-        inline std::vector<Particle> particles(const std::vector<Sample>& points, double L) {
+        inline std::vector<Particle> particles(const std::vector<Sample> & points, double L) {
             std::vector<Particle> out(points.size());
             for (size_t i = 0; i < points.size(); ++i)
                 for (int d = 0; d < 3; ++d)
@@ -126,8 +130,8 @@ namespace FML::ENVIRONMENT {
     } // namespace detail
     /// Local pure ranking operation: equal-count ranks, deterministic (density, ID) ties.
     /// Equal densities may be split; IDs must be unique and density values finite.
-    inline Quantiles density_quantiles(const std::vector<double>& density, const std::vector<std::uint64_t>& ids,
-                                       size_t number) {
+    inline Quantiles
+    density_quantiles(const std::vector<double> & density, const std::vector<std::uint64_t> & ids, size_t number) {
         detail::local(density.size() == ids.size() && number > 0 && number <= density.size(),
                       "Invalid density-quantile dimensions");
         std::set<std::uint64_t> unique;
@@ -158,8 +162,11 @@ namespace FML::ENVIRONMENT {
     }
     /// Collective. Replicated catalogues in physical [0,L)^3. Queries are divided
     /// across ranks; only the counts, not neighbour lists, are reduced.
-    inline Environments top_hat_environment(const std::vector<Sample>& tracers, const std::vector<Sample>& centers,
-                                            double L, double radius, bool exclude_same_id = false) {
+    inline Environments top_hat_environment(const std::vector<Sample> & tracers,
+                                            const std::vector<Sample> & centers,
+                                            double L,
+                                            double radius,
+                                            bool exclude_same_id = false) {
         detail::require(detail::box(L) && radius > 0 && radius <= L / 2 && std::isfinite(radius) && !tracers.empty() &&
                             detail::catalogue(tracers, L) && detail::catalogue(centers, L),
                         "Invalid periodic top-hat catalogue or radius");
@@ -212,7 +219,11 @@ namespace FML::ENVIRONMENT {
 #ifdef USE_MPI
         for (size_t offset = 0; offset < out.counts.size();) {
             int n = int(std::min(size_t(INT_MAX), out.counts.size() - offset));
-            MPI_Allreduce(MPI_IN_PLACE, out.counts.data() + offset, n, MPI_UNSIGNED_LONG_LONG, MPI_SUM,
+            MPI_Allreduce(MPI_IN_PLACE,
+                          out.counts.data() + offset,
+                          n,
+                          MPI_UNSIGNED_LONG_LONG,
+                          MPI_SUM,
                           FML::communicator);
             offset += size_t(n);
         }
@@ -227,10 +238,14 @@ namespace FML::ENVIRONMENT {
     }
     /// Collective periodic monopole cross-correlations of quantiles with tracers.
     /// Centers must be uniform volume samples for a volume-weighted density split.
-    inline DensitySplit density_split_correlation(const std::vector<Sample>& centers,
-                                                  const std::vector<double>& density,
-                                                  const std::vector<Sample>& tracers, size_t number, double L,
-                                                  double rmin, double rmax, int bins) {
+    inline DensitySplit density_split_correlation(const std::vector<Sample> & centers,
+                                                  const std::vector<double> & density,
+                                                  const std::vector<Sample> & tracers,
+                                                  size_t number,
+                                                  double L,
+                                                  double rmin,
+                                                  double rmax,
+                                                  int bins) {
         detail::schema(centers, tracers, L, rmin, rmax, bins);
         bool valid = !tracers.empty() && density.size() == centers.size() && number > 0 && number <= centers.size();
         for (double x : density)
@@ -240,7 +255,7 @@ namespace FML::ENVIRONMENT {
         detail::hash(h, density);
         detail::same(h);
         std::vector<std::uint64_t> ids;
-        for (const auto& p : centers)
+        for (const auto & p : centers)
             ids.push_back(p.id);
         detail::require(number < size_t(INT_MAX) && size_t(bins) <= std::vector<double>().max_size() / (number + 1),
                         "Density-split histogram exceeds supported dimensions");
@@ -252,17 +267,33 @@ namespace FML::ENVIRONMENT {
             all[i].quantile = out.quantiles.label[i];
         FML::CORRELATIONFUNCTIONS::PAIRCOUNTS::DVector2D extra;
         FML::CORRELATIONFUNCTIONS::PAIRCOUNTS::ExtraQuantitiesToBinFunction<detail::Particle> by_quantile =
-            [](const double*, double, double, const detail::Particle& center, const detail::Particle&, double* sums) {
-                sums[center.quantile] += 1;
-            };
-        FML::CORRELATIONFUNCTIONS::PAIRCOUNTS::RadialCorrelationFunctionBox(
-            all.data(), all.size(), target.data(), target.size(), rmin / L, rmax / L, bins, out.parent.radius,
-            out.parent.pairs, false, out.parent.xi, true, false, int(number), extra, by_quantile);
-        for (double& r : out.parent.radius)
+            [](const double *,
+               double,
+               double,
+               const detail::Particle & center,
+               const detail::Particle &,
+               double * sums) { sums[center.quantile] += 1; };
+        FML::CORRELATIONFUNCTIONS::PAIRCOUNTS::RadialCorrelationFunctionBox(all.data(),
+                                                                            all.size(),
+                                                                            target.data(),
+                                                                            target.size(),
+                                                                            rmin / L,
+                                                                            rmax / L,
+                                                                            bins,
+                                                                            out.parent.radius,
+                                                                            out.parent.pairs,
+                                                                            false,
+                                                                            out.parent.xi,
+                                                                            true,
+                                                                            false,
+                                                                            int(number),
+                                                                            extra,
+                                                                            by_quantile);
+        for (double & r : out.parent.radius)
             r *= L;
         out.cross.resize(number);
         for (size_t q = 0; q < number; ++q) {
-            auto& correlation = out.cross[q];
+            auto & correlation = out.cross[q];
             correlation.radius = out.parent.radius;
             correlation.pairs.resize(bins);
             correlation.xi.resize(bins);
@@ -280,8 +311,8 @@ namespace FML::ENVIRONMENT {
         return out;
     }
     /// Local mark recipe ((1+delta_s)/(1+delta_s+delta))^p. No shot-noise correction.
-    inline std::vector<double> inverse_density_marks(const std::vector<double>& delta, double delta_s = 1,
-                                                     double power = 1) {
+    inline std::vector<double>
+    inverse_density_marks(const std::vector<double> & delta, double delta_s = 1, double power = 1) {
         detail::local(delta_s > 0 && delta_s <= 1e100 && std::isfinite(delta_s) && power >= 0 && std::isfinite(power),
                       "Invalid inverse-density mark parameters");
         std::vector<double> out;
@@ -296,8 +327,12 @@ namespace FML::ENVIRONMENT {
     }
     /// Collective marked auto-pairs in one pass. Marks are normalized by their
     /// sample mean; the optional finite-population pair normalization is separate.
-    inline MarkedCorrelation marked_correlation(const std::vector<Sample>& tracers, const std::vector<double>& marks,
-                                                double L, double rmin, double rmax, int bins) {
+    inline MarkedCorrelation marked_correlation(const std::vector<Sample> & tracers,
+                                                const std::vector<double> & marks,
+                                                double L,
+                                                double rmin,
+                                                double rmax,
+                                                int bins) {
         detail::schema(tracers, {}, L, rmin, rmax, bins);
         bool valid = tracers.size() >= 2 && marks.size() == tracers.size();
         long double total = 0;
@@ -327,12 +362,23 @@ namespace FML::ENVIRONMENT {
         out.finite_pair_baseline = double(pair_total / norm);
         FML::CORRELATIONFUNCTIONS::PAIRCOUNTS::DVector2D extra;
         FML::CORRELATIONFUNCTIONS::PAIRCOUNTS::ExtraQuantitiesToBinFunction<detail::Particle> weighted =
-            [](const double*, double, double, const detail::Particle& a, const detail::Particle& b, double* sum) {
+            [](const double *, double, double, const detail::Particle & a, const detail::Particle & b, double * sum) {
                 sum[0] += a.mark * b.mark;
             };
-        FML::CORRELATIONFUNCTIONS::PAIRCOUNTS::RadialCorrelationFunctionBox(
-            particles.data(), particles.size(), rmin / L, rmax / L, bins, out.unmarked.radius, out.unmarked.pairs,
-            false, out.unmarked.xi, true, false, 1, extra, weighted);
+        FML::CORRELATIONFUNCTIONS::PAIRCOUNTS::RadialCorrelationFunctionBox(particles.data(),
+                                                                            particles.size(),
+                                                                            rmin / L,
+                                                                            rmax / L,
+                                                                            bins,
+                                                                            out.unmarked.radius,
+                                                                            out.unmarked.pairs,
+                                                                            false,
+                                                                            out.unmarked.xi,
+                                                                            true,
+                                                                            false,
+                                                                            1,
+                                                                            extra,
+                                                                            weighted);
         out.marked_pairs.resize(bins);
         for (int b = 0; b < bins; ++b)
             out.marked_pairs[b] = extra[b][0];

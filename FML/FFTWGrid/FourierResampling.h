@@ -9,7 +9,8 @@
 namespace FML::GRID {
     /// Reusable geometry for normalized, non-transposed FFTWGrid slab layouts.
     /// Keep only modes strictly inside the smaller mesh's Nyquist cube.
-    template <int N> class FourierResamplingPlan {
+    template <int N>
+    class FourierResamplingPlan {
         static_assert(N >= 2, "Fourier resampling requires the slab FFTWGrid layout (N >= 2)");
         using Grid = FFTWGrid<N>;
         using Count = FML::COMMUNICATION::Count;
@@ -25,24 +26,27 @@ namespace FML::GRID {
         std::vector<ComplexType> send_buffer, receive_buffer;
         size_t planning_bytes = 0;
 
-        static void append(std::vector<Block> &blocks, Block block) {
+        static void append(std::vector<Block> & blocks, Block block) {
             if (!blocks.empty() && blocks.back().source + ptrdiff_t(blocks.back().count) == block.source &&
                 blocks.back().target + ptrdiff_t(blocks.back().count) == block.target)
                 blocks.back().count += block.count;
             else
                 blocks.push_back(block);
         }
-        static std::array<int, 4> layout(const Grid &input, const Grid &output) {
-            return {int(input.get_local_x_start()), int(input.get_local_nx()), int(output.get_local_x_start()),
+        static std::array<int, 4> layout(const Grid & input, const Grid & output) {
+            return {int(input.get_local_x_start()),
+                    int(input.get_local_nx()),
+                    int(output.get_local_x_start()),
                     int(output.get_local_nx())};
         }
         // A cursor consumes a peer's contiguous runs without per-coefficient indices on the wire.
         struct Cursor {
             size_t block = 0, used = 0;
-            template <class Copy> void consume(const std::vector<Block> &blocks, size_t count, Copy copy) {
+            template <class Copy>
+            void consume(const std::vector<Block> & blocks, size_t count, Copy copy) {
                 size_t offset = 0;
                 while (offset < count) {
-                    const auto &b = blocks[block];
+                    const auto & b = blocks[block];
                     const size_t n = std::min(count - offset, b.count - used);
                     copy(b, used, offset, n);
                     offset += n;
@@ -56,7 +60,7 @@ namespace FML::GRID {
         };
 
       public:
-        FourierResamplingPlan(const Grid &input, const Grid &output)
+        FourierResamplingPlan(const Grid & input, const Grid & output)
             : oldmesh(input.get_nmesh()), newmesh(output.get_nmesh()), local_layout(layout(input, output)), send(tasks),
               receive(tasks), send_count(tasks), receive_count(tasks), max_per_step(tasks) {
             using namespace FML::COMMUNICATION;
@@ -89,9 +93,10 @@ namespace FML::GRID {
             const auto sources = intervals(0, oldmesh), targets = intervals(2, newmesh);
             planning_bytes = layouts.capacity() * sizeof(layouts[0]) + sources.capacity() * sizeof(sources[0]) +
                              targets.capacity() * sizeof(targets[0]);
-            auto owner = [](const auto &slabs, int x) {
-                auto it = std::upper_bound(slabs.begin(), slabs.end(), x,
-                                           [](int value, const auto &slab) { return value < slab[0]; });
+            auto owner = [](const auto & slabs, int x) {
+                auto it = std::upper_bound(slabs.begin(), slabs.end(), x, [](int value, const auto & slab) {
+                    return value < slab[0];
+                });
                 return (*--it)[2];
             };
             // Bound flattened index arithmetic independently of MPI's smaller message-count limit.
@@ -112,7 +117,7 @@ namespace FML::GRID {
                 const int from = owner(sources, x), to = owner(targets, mapped);
                 if (from != rank && to != rank)
                     continue;
-                auto rows = [&](auto &&self, int d, ptrdiff_t src, ptrdiff_t dst) -> void {
+                auto rows = [&](auto && self, int d, ptrdiff_t src, ptrdiff_t dst) -> void {
                     if (d == N - 1) {
                         Block block{src * (oldmesh / 2 + 1), dst * (newmesh / 2 + 1), size_t(kmax + 1)};
                         if (from == to)
@@ -151,9 +156,9 @@ namespace FML::GRID {
             size_t bytes = sizeof(*this) + local.capacity() * sizeof(Block) +
                            (send.capacity() + receive.capacity()) * sizeof(std::vector<Block>) +
                            (send_count.capacity() + receive_count.capacity() + max_per_step.capacity()) * sizeof(Count);
-            for (const auto &blocks : send)
+            for (const auto & blocks : send)
                 bytes += blocks.capacity() * sizeof(Block);
-            for (const auto &blocks : receive)
+            for (const auto & blocks : receive)
                 bytes += blocks.capacity() * sizeof(Block);
             return bytes +
                    std::max(planning_bytes, (send_buffer.capacity() + receive_buffer.capacity()) * sizeof(ComplexType));
@@ -161,7 +166,7 @@ namespace FML::GRID {
 
         /// Collective; reuse with different fields having the same meshes and local slab geometry.
         /// The two scratch buffers each use at most max_message_bytes (clamped to INT_MAX).
-        void apply(const Grid &input, Grid &output, size_t max_message_bytes = 64 * 1024 * 1024) {
+        void apply(const Grid & input, Grid & output, size_t max_message_bytes = 64 * 1024 * 1024) {
             using namespace FML::COMMUNICATION;
             Count bytes = std::min(max_message_bytes, size_t(INT_MAX));
             FML::MinOverTasks(&bytes);
@@ -173,7 +178,7 @@ namespace FML::GRID {
             output.set_grid_status_real(false);
             for (auto i : output.get_fourier_range())
                 output.set_fourier_from_index(i, 0.0);
-            auto *out = output.get_fourier_grid();
+            auto * out = output.get_fourier_grid();
             for (auto b : local)
                 for (size_t i = 0; i < b.count; ++i)
                     out[b.target + ptrdiff_t(i)] = input.get_fourier_from_index(b.source + ptrdiff_t(i));
@@ -181,7 +186,7 @@ namespace FML::GRID {
             const Count chunk = bytes / sizeof(ComplexType);
             const Count maxsend = *std::max_element(send_count.begin(), send_count.end());
             const Count maxrecv = *std::max_element(receive_count.begin(), receive_count.end());
-            auto prepare = [&](auto &buffer, Count count) {
+            auto prepare = [&](auto & buffer, Count count) {
                 const size_t size = size_t(std::min(chunk, count));
                 // Retain storage across equal-cap calls, but honor a smaller cap without geometric over-allocation.
                 if (buffer.capacity() > chunk || buffer.capacity() < size) {
@@ -203,19 +208,28 @@ namespace FML::GRID {
                         offset < send_count[dest] ? size_t(std::min(chunk, send_count[dest] - offset)) : 0;
                     const size_t rcount =
                         offset < receive_count[source] ? size_t(std::min(chunk, receive_count[source] - offset)) : 0;
-                    pack.consume(send[dest], scount, [&](const Block &b, size_t used, size_t at, size_t n) {
+                    pack.consume(send[dest], scount, [&](const Block & b, size_t used, size_t at, size_t n) {
                         for (size_t i = 0; i < n; ++i)
                             send_buffer[at + i] = input.get_fourier_from_index(b.source + ptrdiff_t(used + i));
                     });
-                    MPI_Sendrecv(scount ? send_buffer.data() : nullptr, int(scount * sizeof(ComplexType)), MPI_BYTE,
-                                 dest, 1, rcount ? receive_buffer.data() : nullptr, int(rcount * sizeof(ComplexType)),
-                                 MPI_BYTE, source, 1, FML::communicator, MPI_STATUS_IGNORE);
+                    MPI_Sendrecv(scount ? send_buffer.data() : nullptr,
+                                 int(scount * sizeof(ComplexType)),
+                                 MPI_BYTE,
+                                 dest,
+                                 1,
+                                 rcount ? receive_buffer.data() : nullptr,
+                                 int(rcount * sizeof(ComplexType)),
+                                 MPI_BYTE,
+                                 source,
+                                 1,
+                                 FML::communicator,
+                                 MPI_STATUS_IGNORE);
                     FML::PERFORMANCE::payload(scount * sizeof(ComplexType), rcount * sizeof(ComplexType));
                     FML::PERFORMANCE::record(FML::PERFORMANCE::Counter::TransportPackedBytes,
                                              scount * sizeof(ComplexType));
                     FML::PERFORMANCE::record(FML::PERFORMANCE::Counter::TransportUnpackedBytes,
                                              rcount * sizeof(ComplexType));
-                    unpack.consume(receive[source], rcount, [&](const Block &b, size_t used, size_t at, size_t n) {
+                    unpack.consume(receive[source], rcount, [&](const Block & b, size_t used, size_t at, size_t n) {
                         std::copy_n(receive_buffer.data() + at, n, out + b.target + ptrdiff_t(used));
                     });
                 }
@@ -226,7 +240,7 @@ namespace FML::GRID {
 
     /// Copy normalized Fourier coefficients; excluded modes are zero, with no volume factor.
     template <int N>
-    FFTWGrid<N> resize_fourier_grid(const FFTWGrid<N> &input, int nmesh, int nleft = 0, int nright = 0) {
+    FFTWGrid<N> resize_fourier_grid(const FFTWGrid<N> & input, int nmesh, int nleft = 0, int nright = 0) {
         assert_mpi(input.get_nmesh() > 0 && nmesh > 0, "[Fourier resampling] Meshes must be allocated and positive");
         FFTWGrid<N> output(nmesh, nleft, nright);
         FourierResamplingPlan<N> plan(input, output);

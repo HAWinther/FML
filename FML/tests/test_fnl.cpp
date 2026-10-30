@@ -149,15 +149,21 @@ double estimate(Binning & b, Binning * b0, const Prediction & pred) {
 // Full four-term reference: always build every inverse-power field and transform
 // every product, independently of which coefficients are zero.
 template <int N>
-FML::GRID::FFTWGrid<N> full_kernel_reference(
-    FML::RANDOM::RandomGenerator & rng, const FML::RANDOM::GAUSSIAN::RandomFieldOptions & options,
-    bool fixed, double fnl, std::array<double, 4> coefficients) {
+FML::GRID::FFTWGrid<N> full_kernel_reference(FML::RANDOM::RandomGenerator & rng,
+                                             const FML::RANDOM::GAUSSIAN::RandomFieldOptions & options,
+                                             bool fixed,
+                                             double fnl,
+                                             std::array<double, 4> coefficients) {
     using G = FML::GRID::FFTWGrid<N>;
     using F = FML::GRID::FloatType;
     G gaussian(16, 1, 2);
     auto power = [](double k) { return k == 0 ? 0.0 : 1e-5 / (1 + k * k * k); };
     FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier<N>(
-        gaussian, &rng, [](double) { return 1.0; }, fixed, options);
+        gaussian,
+        &rng,
+        [](double) { return 1.0; },
+        fixed,
+        options);
     for (auto index : gaussian.get_fourier_range()) {
         std::array<double, N> wave;
         double k;
@@ -188,8 +194,9 @@ FML::GRID::FFTWGrid<N> full_kernel_reference(
     mean /= cells;
     mean2 /= cells;
     for (auto index : real.get_real_range())
-        source.set_real_from_index(index, (real.get_real_from_index(index) - mean) +
-                                  F(coefficients[0]) * (source.get_real_from_index(index) - mean2));
+        source.set_real_from_index(index,
+                                   (real.get_real_from_index(index) - mean) +
+                                       F(coefficients[0]) * (source.get_real_from_index(index) - mean2));
     source.fftw_r2c();
     if (FML::ThisTask == 0)
         source.set_fourier_from_index(0, 0);
@@ -231,8 +238,9 @@ FML::GRID::FFTWGrid<N> full_kernel_reference(
         const auto a = filtered[0].get_fourier_from_index(index) * p13;
         const auto b = filtered[1].get_fourier_from_index(index) * p23;
         const auto c = filtered[2].get_fourier_from_index(index) * p33;
-        source.set_fourier_from_index(index, source.get_fourier_from_index(index) +
-                                     (a * F(coefficients[1]) + b * F(coefficients[2]) + c * F(coefficients[3])));
+        source.set_fourier_from_index(index,
+                                      source.get_fourier_from_index(index) +
+                                          (a * F(coefficients[1]) + b * F(coefficients[2]) + c * F(coefficients[3])));
     }
     if (FML::ThisTask == 0)
         source.set_fourier_from_index(0, 0);
@@ -247,8 +255,10 @@ void test_active_kernels() {
         double u, fnl;
         std::array<double, 4> coefficients;
     };
-    std::vector<Case> cases{{"gaussian", 0, 0, {}}, {"local", 0, 10, {1, 0, 0, 0}},
-                             {"generic", 0, 10, {}}, {"generic", 0, 0, {1, 2, 3, 4}}};
+    std::vector<Case> cases{{"gaussian", 0, 0, {}},
+                            {"local", 0, 10, {1, 0, 0, 0}},
+                            {"generic", 0, 10, {}},
+                            {"generic", 0, 0, {1, 2, 3, 4}}};
     for (double u : {0.0, 0.25, 1.0, 4.0 / 3.0}) {
         cases.push_back({"equilateral", u, 10, {-3 * (1 - u), 4 - 3 * u, 2, -3 * u}});
         cases.push_back({"orthogonal", u, -10, {-9 * (1 - u), 10 - 9 * u, 8, -9 * u}});
@@ -265,12 +275,19 @@ void test_active_kernels() {
             options.stream = 7;
             for (const auto & test : cases) {
                 RandomGenerator reference_rng(845), actual_rng(845);
-                const auto reference = full_kernel_reference<N>(reference_rng, options, fixed, test.fnl, test.coefficients);
+                const auto reference =
+                    full_kernel_reference<N>(reference_rng, options, fixed, test.fnl, test.coefficients);
                 FML::GRID::FFTWGrid<N> actual(16, 1, 2);
                 NONGAUSSIAN::generate_nonlocal_gaussian_random_field_fourier<N>(
-                    actual, &actual_rng, [](double k) { return k == 0 ? 0.0 : 1e-5 / (1 + k * k * k); },
-                    fixed, test.fnl, test.type, test.u,
-                    std::vector<double>(test.coefficients.begin(), test.coefficients.end()), options);
+                    actual,
+                    &actual_rng,
+                    [](double k) { return k == 0 ? 0.0 : 1e-5 / (1 + k * k * k); },
+                    fixed,
+                    test.fnl,
+                    test.type,
+                    test.u,
+                    std::vector<double>(test.coefficients.begin(), test.coefficients.end()),
+                    options);
                 double error = 0, scale = 0;
                 for (auto index : actual.get_fourier_range()) {
                     auto a = actual.get_fourier_from_index(index), b = reference.get_fourier_from_index(index);
@@ -291,7 +308,8 @@ void test_active_kernels() {
             int bad[] = {int(!valid), int(!layout), int(!rng_state)};
             for (auto & value : bad)
                 FML::MaxOverTasks(&value);
-            const std::string label = std::to_string(N) + "D backend=" + std::to_string(int(backend)) + " fixed=" + std::to_string(fixed);
+            const std::string label =
+                std::to_string(N) + "D backend=" + std::to_string(int(backend)) + " fixed=" + std::to_string(fixed);
             check(!bad[0] && worst < (sizeof(FML::GRID::FloatType) == sizeof(float) ? 3e-5 : 3e-12),
                   label + ": all named/generic kernels match the full reference (rel err " + num(worst) + ")");
             check(!bad[1] && !bad[2], label + ": DC, halos, Fourier state and RNG continuation are preserved");

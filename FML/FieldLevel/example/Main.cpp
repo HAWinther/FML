@@ -37,7 +37,9 @@ int main(int argc, char ** argv) {
         const int nb = 4001;
         std::vector<double> lnl(nb);
         for (int i = 0; i < nb; ++i)
-            lmax = std::max(lmax, lnl[i] = fl.linear_marginal_log_likelihood(st.beta_min + (st.beta_max - st.beta_min) * i / (nb - 1)));
+            lmax = std::max(
+                lmax,
+                lnl[i] = fl.linear_marginal_log_likelihood(st.beta_min + (st.beta_max - st.beta_min) * i / (nb - 1)));
         for (int i = 0; i < nb; ++i) {
             const double b = st.beta_min + (st.beta_max - st.beta_min) * i / (nb - 1), p = std::exp(lnl[i] - lmax);
             w += p, m1 += p * b, m2 += p * b * b;

@@ -12,19 +12,19 @@ namespace FML::COMMUNICATION {
     using Count = unsigned long long;
     static_assert(sizeof(size_t) <= sizeof(Count));
 
-    inline bool add_count(Count &sum, Count value, Count limit = std::numeric_limits<Count>::max()) {
+    inline bool add_count(Count & sum, Count value, Count limit = std::numeric_limits<Count>::max()) {
         if (sum > limit || value > limit - sum)
             return false;
         sum += value;
         return true;
     }
-    inline bool multiply_count(Count a, Count b, Count &result, Count limit = std::numeric_limits<Count>::max()) {
+    inline bool multiply_count(Count a, Count b, Count & result, Count limit = std::numeric_limits<Count>::max()) {
         if (b && a > limit / b)
             return false;
         result = a * b;
         return true;
     }
-    inline void require_count(bool valid, const char *message) {
+    inline void require_count(bool valid, const char * message) {
         int good = valid;
         FML::MinOverTasks(&good);
         if (!good)
@@ -40,7 +40,7 @@ namespace FML::COMMUNICATION {
         std::vector<size_t> offsets;
         size_t total = 0;
     };
-    inline SizeLayout checked_size_layout(const std::vector<Count> &counts,
+    inline SizeLayout checked_size_layout(const std::vector<Count> & counts,
                                           size_t limit = std::numeric_limits<size_t>::max()) {
         SizeLayout result;
         result.offsets.resize(counts.size());
@@ -62,7 +62,7 @@ namespace FML::COMMUNICATION {
         size_t total = 0;
     };
     template <class Integer>
-    IntLayout checked_int_layout(const std::vector<Integer> &counts, Count scale = 1, Count limit = INT_MAX) {
+    IntLayout checked_int_layout(const std::vector<Integer> & counts, Count scale = 1, Count limit = INT_MAX) {
         static_assert(std::is_integral_v<Integer>);
         IntLayout result;
         result.counts.resize(counts.size());
@@ -92,8 +92,8 @@ namespace FML::COMMUNICATION {
     /// Checked legacy Gatherv/Allgatherv for homogeneous trivially copyable records.
     /// Aggregate records are conservatively limited to INT_MAX; no payload chunking.
     template <class T>
-    std::vector<T> gather_records_checked(const std::vector<T> &local, bool replicate = false, int root = 0,
-                                          Count limit = INT_MAX) {
+    std::vector<T>
+    gather_records_checked(const std::vector<T> & local, bool replicate = false, int root = 0, Count limit = INT_MAX) {
         static_assert(std::is_trivially_copyable_v<T>);
         require_count(root >= 0 && root < FML::NTasks && sizeof(T) <= size_t(INT_MAX),
                       "[MPI counts] Invalid gather root or record extent");
@@ -112,11 +112,24 @@ namespace FML::COMMUNICATION {
         MPI_Type_contiguous(int(sizeof(T)), MPI_BYTE, &type);
         MPI_Type_commit(&type);
         if (replicate)
-            MPI_Allgatherv(local.data(), layout.counts[FML::ThisTask], type, result.data(), layout.counts.data(),
-                           layout.offsets.data(), type, FML::communicator);
+            MPI_Allgatherv(local.data(),
+                           layout.counts[FML::ThisTask],
+                           type,
+                           result.data(),
+                           layout.counts.data(),
+                           layout.offsets.data(),
+                           type,
+                           FML::communicator);
         else
-            MPI_Gatherv(local.data(), layout.counts[FML::ThisTask], type, result.data(), layout.counts.data(),
-                        layout.offsets.data(), type, root, FML::communicator);
+            MPI_Gatherv(local.data(),
+                        layout.counts[FML::ThisTask],
+                        type,
+                        result.data(),
+                        layout.counts.data(),
+                        layout.offsets.data(),
+                        type,
+                        root,
+                        FML::communicator);
         MPI_Type_free(&type);
 #else
         (void)replicate;

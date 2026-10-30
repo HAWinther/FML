@@ -279,9 +279,18 @@ namespace FML {
                 FloatType * extra = grid.get_real_grid_right() + nslice * i;
                 FloatType * target = grid.get_real_grid() + nslice * i;
 #ifdef USE_MPI
-                MPI_Sendrecv(extra, slice_bytes, MPI_CHAR, (FML::ThisTask + 1) % FML::NTasks, 0, buffer.data(),
-                             slice_bytes, MPI_CHAR, (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks, 0,
-                             FML::communicator, MPI_STATUS_IGNORE);
+                MPI_Sendrecv(extra,
+                             slice_bytes,
+                             MPI_CHAR,
+                             (FML::ThisTask + 1) % FML::NTasks,
+                             0,
+                             buffer.data(),
+                             slice_bytes,
+                             MPI_CHAR,
+                             (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks,
+                             0,
+                             FML::communicator,
+                             MPI_STATUS_IGNORE);
 #else
                 std::copy(extra, extra + nslice, buffer.begin());
 #endif
@@ -295,9 +304,18 @@ namespace FML {
                 FloatType * extra = grid.get_real_grid() - nslice * i;
                 FloatType * target = grid.get_real_grid() + nslice * (Local_nx - i);
 #ifdef USE_MPI
-                MPI_Sendrecv(extra, slice_bytes, MPI_CHAR, (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks, 0,
-                             buffer.data(), slice_bytes, MPI_CHAR, (FML::ThisTask + 1) % FML::NTasks, 0,
-                             FML::communicator, MPI_STATUS_IGNORE);
+                MPI_Sendrecv(extra,
+                             slice_bytes,
+                             MPI_CHAR,
+                             (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks,
+                             0,
+                             buffer.data(),
+                             slice_bytes,
+                             MPI_CHAR,
+                             (FML::ThisTask + 1) % FML::NTasks,
+                             0,
+                             FML::communicator,
+                             MPI_STATUS_IGNORE);
 #else
                 std::copy(extra, extra + nslice, buffer.begin());
 #endif

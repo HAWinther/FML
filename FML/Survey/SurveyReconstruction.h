@@ -9,7 +9,7 @@ namespace FML::SURVEY {
         double relative_tolerance = sizeof(Real) == sizeof(float) ? 1e-5 : 1e-8;
         int max_iterations = 100;
         ReconstructionConvention convention = ReconstructionConvention::RecSym;
-        std::function<bool(const Vector&)> mask; // Additional physical-space selection mask, optional.
+        std::function<bool(const Vector &)> mask; // Additional physical-space selection mask, optional.
     };
     struct SolverReport {
         bool converged = false;
@@ -29,14 +29,14 @@ namespace FML::SURVEY {
                 c[direction] = (c[direction] + n) % n;
             return c;
         }
-        inline double mesh_dot(const Mesh& a, const Mesh& b) {
+        inline double mesh_dot(const Mesh & a, const Mesh & b) {
             double sum = 0;
             for (auto i : a.get_real_range())
                 sum += double(a.get_real_from_index(i)) * b.get_real_from_index(i);
             FML::SumOverTasks(&sum);
             return sum;
         }
-        inline double remove_mean(Mesh& a, const Geometry& g) {
+        inline double remove_mean(Mesh & a, const Geometry & g) {
             double sum = 0;
             for (auto i : a.get_real_range())
                 sum += a.get_real_from_index(i);
@@ -46,7 +46,7 @@ namespace FML::SURVEY {
                 a.set_real_from_index(i, Real(a.get_real_from_index(i) - sum));
             return sum;
         }
-        inline void smooth(Mesh& a, const Geometry& g, double radius) {
+        inline void smooth(Mesh & a, const Geometry & g, double radius) {
             if (radius == 0)
                 return;
             a.fftw_r2c();
@@ -61,7 +61,10 @@ namespace FML::SURVEY {
         }
         // SPD discrete -div[(I+beta*n*n)grad(phi)], using forward gradients and
         // their negative adjoint divergence. One-cell halos suffice, including cross terms.
-        inline void reconstruction_operator(Mesh& phi, Mesh& output, std::array<Mesh, 3>& flux, const Geometry& g,
+        inline void reconstruction_operator(Mesh & phi,
+                                            Mesh & output,
+                                            std::array<Mesh, 3> & flux,
+                                            const Geometry & g,
                                             double beta) {
             phi.communicate_boundaries();
             const double h = g.cellsize();
@@ -75,7 +78,7 @@ namespace FML::SURVEY {
                 for (int d = 0; d < 3; ++d)
                     flux[d].set_real_from_index(i, Real(grad[d] + beta * n[d] * radial));
             }
-            for (auto& f : flux)
+            for (auto & f : flux)
                 f.communicate_boundaries();
             for (auto i : phi.get_real_range()) {
                 const auto c = phi.get_coord_from_index(i);
@@ -85,7 +88,7 @@ namespace FML::SURVEY {
                 output.set_real_from_index(i, Real(value));
             }
         }
-        inline void inverse_laplacian(const Mesh& residual, Mesh& output, const Geometry& g) {
+        inline void inverse_laplacian(const Mesh & residual, Mesh & output, const Geometry & g) {
             for (auto i : residual.get_real_range())
                 output.set_real_from_index(i, residual.get_real_from_index(i));
             output.fftw_r2c();
@@ -94,8 +97,9 @@ namespace FML::SURVEY {
                 double eigenvalue = 0;
                 for (int d = 0; d < 3; ++d)
                     eigenvalue += 4 * std::pow(std::sin(M_PI * k[d] / g.nmesh), 2) / (g.cellsize() * g.cellsize());
-                output.set_fourier_from_index(i, eigenvalue > 0 ? output.get_fourier_from_index(i) / Real(eigenvalue)
-                                                                : Complex(0));
+                output.set_fourier_from_index(i,
+                                              eigenvalue > 0 ? output.get_fourier_from_index(i) / Real(eigenvalue) :
+                                                               Complex(0));
             }
             output.fftw_c2r();
         }
@@ -106,8 +110,8 @@ namespace FML::SURVEY {
     };
     /// Solve for Psi=grad(phi), -div[(I+f/b nn)grad(phi)]=delta_tracer/b.
     /// The source mesh is real and its scale is delta_tracer/b (already smoothed).
-    inline DisplacementSolution solve_displacement(const Mesh& source, const Geometry& g,
-                                                   const ReconstructionOptions& options) {
+    inline DisplacementSolution
+    solve_displacement(const Mesh & source, const Geometry & g, const ReconstructionOptions & options) {
         g.validate();
         require(source.get_nmesh() == g.nmesh && detail::is_real(source) && options.bias > 0 &&
                     std::isfinite(options.bias) && options.growth_rate >= 0 && std::isfinite(options.growth_rate) &&
@@ -152,7 +156,8 @@ namespace FML::SURVEY {
             detail::reconstruction_operator(phi, ap, flux, g, options.growth_rate / options.bias);
             for (auto i : residual.get_real_range())
                 residual.set_real_from_index(
-                    i, Real(source.get_real_from_index(i) - report.removed_mean - ap.get_real_from_index(i)));
+                    i,
+                    Real(source.get_real_from_index(i) - report.removed_mean - ap.get_real_from_index(i)));
             const double residual2 = detail::mesh_dot(residual, residual);
             if (!std::isfinite(residual2))
                 throw std::runtime_error("Nonfinite reconstruction residual");
@@ -166,27 +171,30 @@ namespace FML::SURVEY {
             rz = next;
             for (auto i : direction.get_real_range())
                 direction.set_real_from_index(
-                    i, Real(preconditioned.get_real_from_index(i) + beta * direction.get_real_from_index(i)));
+                    i,
+                    Real(preconditioned.get_real_from_index(i) + beta * direction.get_real_from_index(i)));
         }
         // Return a cell-centered displacement, with no Nyquist derivative ambiguity.
         phi.communicate_boundaries();
         for (auto i : phi.get_real_range()) {
             const auto c = phi.get_coord_from_index(i);
             for (int d = 0; d < 3; ++d)
-                flux[d].set_real_from_index(i, Real((phi.get_real(detail::neighbor(c, d, 1, g.nmesh)) -
-                                                     phi.get_real(detail::neighbor(c, d, -1, g.nmesh))) /
-                                                    (2 * g.cellsize())));
+                flux[d].set_real_from_index(i,
+                                            Real((phi.get_real(detail::neighbor(c, d, 1, g.nmesh)) -
+                                                  phi.get_real(detail::neighbor(c, d, -1, g.nmesh))) /
+                                                 (2 * g.cellsize())));
         }
-        for (auto& field : flux)
+        for (auto & field : flux)
             field.communicate_boundaries();
         return {std::move(flux), report};
     }
-    inline std::vector<Vector> sample_displacement(const std::vector<CatalogPoint>& points,
-                                                   const std::array<Mesh, 3>& fields, const Geometry& g) {
+    inline std::vector<Vector> sample_displacement(const std::vector<CatalogPoint> & points,
+                                                   const std::array<Mesh, 3> & fields,
+                                                   const Geometry & g) {
         g.validate();
         detail::validate_catalog(points, g);
         bool prepared = true;
-        for (const auto& f : fields)
+        for (const auto & f : fields)
             prepared &= f.get_nmesh() == g.nmesh && detail::is_real(f) && f.get_n_extra_slices_left() >= 1 &&
                         f.get_n_extra_slices_right() >= 1;
         require(prepared, "Displacement fields require matching real meshes with communicated one-cell halos");
@@ -207,7 +215,7 @@ namespace FML::SURVEY {
         }
         const auto queries = detail::route(outgoing);
         std::vector<std::vector<Answer>> replies(FML::NTasks);
-        for (const auto& query : queries) {
+        for (const auto & query : queries) {
             Vector value{};
             detail::cic(query.position, g, [&](auto c, double w) {
                 c[0] -= fields[0].get_local_x_start();
@@ -218,13 +226,14 @@ namespace FML::SURVEY {
         }
         const auto answers = detail::route(replies);
         std::vector<Vector> result(points.size());
-        for (const auto& answer : answers)
+        for (const auto & answer : answers)
             result[size_t(answer.index)] = answer.value;
         return result;
     }
-    inline ReconstructionResult reconstruct(const std::vector<CatalogPoint>& data,
-                                            const std::vector<CatalogPoint>& randoms, const Geometry& g,
-                                            const ReconstructionOptions& options = {}) {
+    inline ReconstructionResult reconstruct(const std::vector<CatalogPoint> & data,
+                                            const std::vector<CatalogPoint> & randoms,
+                                            const Geometry & g,
+                                            const ReconstructionOptions & options = {}) {
         g.validate();
         require(options.bias > 0 && std::isfinite(options.bias) && options.smoothing_radius >= 0 &&
                     std::isfinite(options.smoothing_radius) && options.minimum_random_fraction > 0 &&
@@ -263,7 +272,7 @@ namespace FML::SURVEY {
             throw std::runtime_error("Survey reconstruction did not converge; no shifted catalogue returned");
         result.data_displacement = sample_displacement(data, solution.field, g);
         result.random_displacement = sample_displacement(randoms, solution.field, g);
-        auto shift = [&](const auto& input, const auto& displacement, bool rsd) {
+        auto shift = [&](const auto & input, const auto & displacement, bool rsd) {
             auto output = input;
             for (size_t i = 0; i < input.size(); ++i) {
                 const auto n = g.los(input[i].position);

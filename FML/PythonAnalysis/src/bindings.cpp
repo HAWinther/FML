@@ -9,7 +9,7 @@ namespace py = pybind11;
 namespace Spatial = FML::COUNTS_IN_CELLS;
 using RealArray = py::array_t<double, py::array::c_style | py::array::forcecast>;
 
-RealArray real_array(py::handle object, int ndim, const char *name) {
+RealArray real_array(py::handle object, int ndim, const char * name) {
     auto array = py::array::ensure(object);
     if (!array || (array.dtype().kind() != 'i' && array.dtype().kind() != 'u' && array.dtype().kind() != 'f'))
         throw py::type_error(std::string(name) + " must be a real integer/float array");
@@ -20,7 +20,7 @@ RealArray real_array(py::handle object, int ndim, const char *name) {
         throw py::type_error(std::string(name) + " cannot be converted to a float64 array");
     return result;
 }
-std::vector<Spatial::Point> points(py::handle object, const char *name) {
+std::vector<Spatial::Point> points(py::handle object, const char * name) {
     auto a = real_array(object, 2, name);
     if (a.shape(1) != 3)
         throw py::value_error(std::string(name) + " must have shape (n, 3)");
@@ -31,7 +31,7 @@ std::vector<Spatial::Point> points(py::handle object, const char *name) {
             result[size_t(i)][d] = v(i, d);
     return result;
 }
-std::vector<double> reals(py::handle object, const char *name) {
+std::vector<double> reals(py::handle object, const char * name) {
     auto a = real_array(object, 1, name);
     return {a.data(), a.data() + a.size()};
 }
@@ -76,18 +76,20 @@ std::vector<Spatial::Query> queries(py::handle object, py::handle exclude) {
         result[i] = {positions[i], exclude.is_none() ? SIZE_MAX : excluded[i]};
     return result;
 }
-template <class T> py::array_t<T> array(const std::vector<T> &values) {
+template <class T>
+py::array_t<T> array(const std::vector<T> & values) {
     py::array_t<T> result(values.size());
     std::copy(values.begin(), values.end(), result.mutable_data());
     return result;
 }
-template <class T> py::array_t<T> matrix(const std::vector<std::vector<T>> &values, size_t columns) {
+template <class T>
+py::array_t<T> matrix(const std::vector<std::vector<T>> & values, size_t columns) {
     py::array_t<T> result({py::ssize_t(values.size()), py::ssize_t(columns)});
     for (size_t i = 0; i < values.size(); ++i)
         std::copy(values[i].begin(), values[i].end(), result.mutable_data() + i * columns);
     return result;
 }
-py::dict cell(const Spatial::CellStatistics &s) {
+py::dict cell(const Spatial::CellStatistics & s) {
     py::dict result;
 #define SCALAR(name) result[#name] = s.name
 #define ARRAY(name) result[#name] = array(s.name)
@@ -117,7 +119,7 @@ py::dict cell(const Spatial::CellStatistics &s) {
 struct Catalogue {
     const double boxsize;
     Spatial::SpatialStatistics statistics;
-    Catalogue(const FML::KDTREE::pointVec &positions, double box) : boxsize(box), statistics(positions, box) {}
+    Catalogue(const FML::KDTREE::pointVec & positions, double box) : boxsize(box), statistics(positions, box) {}
 };
 PYBIND11_MODULE(_native, m) {
     m.doc() = "Serial FML spatial statistics, API schema 1; owned inputs and NumPy-owned results.";
@@ -131,12 +133,14 @@ PYBIND11_MODULE(_native, m) {
                  py::gil_scoped_release release;
                  return std::make_unique<Catalogue>(owned, boxsize);
              }),
-             py::arg("positions"), py::kw_only(), py::arg("boxsize") = 0.0)
-        .def("__len__", [](const Catalogue &c) { return c.statistics.size(); })
+             py::arg("positions"),
+             py::kw_only(),
+             py::arg("boxsize") = 0.0)
+        .def("__len__", [](const Catalogue & c) { return c.statistics.size(); })
         .def_readonly("boxsize", &Catalogue::boxsize)
         .def(
             "knn_distances",
-            [](const Catalogue &c, py::object positions, py::object orders, py::object exclude) {
+            [](const Catalogue & c, py::object positions, py::object orders, py::object exclude) {
                 auto q = queries(positions, exclude);
                 auto k = integers(orders);
                 Spatial::KnnDistances result;
@@ -146,10 +150,13 @@ PYBIND11_MODULE(_native, m) {
                 }
                 return matrix(result.distances, q.size());
             },
-            py::arg("queries"), py::arg("orders"), py::kw_only(), py::arg("exclude") = py::none())
+            py::arg("queries"),
+            py::arg("orders"),
+            py::kw_only(),
+            py::arg("exclude") = py::none())
         .def(
             "sphere_counts",
-            [](const Catalogue &c, py::object positions, py::object radii, py::object exclude) {
+            [](const Catalogue & c, py::object positions, py::object radii, py::object exclude) {
                 auto q = queries(positions, exclude);
                 auto r = reals(radii, "radii");
                 std::vector<std::vector<size_t>> result;
@@ -162,10 +169,13 @@ PYBIND11_MODULE(_native, m) {
                     std::copy(result[i].begin(), result[i].end(), out.mutable_data() + i * q.size());
                 return out;
             },
-            py::arg("queries"), py::arg("radii"), py::kw_only(), py::arg("exclude") = py::none())
+            py::arg("queries"),
+            py::arg("radii"),
+            py::kw_only(),
+            py::arg("exclude") = py::none())
         .def(
             "knn_cdf",
-            [](const Catalogue &c, py::object positions, py::object orders, py::object radii, py::object exclude) {
+            [](const Catalogue & c, py::object positions, py::object orders, py::object radii, py::object exclude) {
                 auto q = queries(positions, exclude);
                 auto k = integers(orders);
                 auto r = reals(radii, "radii");
@@ -184,11 +194,22 @@ PYBIND11_MODULE(_native, m) {
                 out["boxsize"] = result.boxsize;
                 return out;
             },
-            py::arg("queries"), py::arg("orders"), py::arg("radii"), py::kw_only(), py::arg("exclude") = py::none())
+            py::arg("queries"),
+            py::arg("orders"),
+            py::arg("radii"),
+            py::kw_only(),
+            py::arg("exclude") = py::none())
         .def(
             "counts_in_cells",
-            [](const Catalogue &c, py::object positions, py::object radii, py::object exclude, size_t histogram_limit,
-               unsigned factorial_order, py::object delta_edges, py::object number_density, py::object window,
+            [](const Catalogue & c,
+               py::object positions,
+               py::object radii,
+               py::object exclude,
+               size_t histogram_limit,
+               unsigned factorial_order,
+               py::object delta_edges,
+               py::object number_density,
+               py::object window,
                bool allow_truncated_cells) {
                 auto q = queries(positions, exclude);
                 auto r = reals(radii, "radii");
@@ -213,7 +234,7 @@ PYBIND11_MODULE(_native, m) {
                     result = c.statistics.counts_in_cells(q, r, options);
                 }
                 py::list cells;
-                for (const auto &s : result.cells)
+                for (const auto & s : result.cells)
                     cells.append(cell(s));
                 py::dict out;
                 out["cells"] = cells;
@@ -224,9 +245,15 @@ PYBIND11_MODULE(_native, m) {
                 out["uncorrected_clipping"] = result.uncorrected_clipping;
                 return out;
             },
-            py::arg("queries"), py::arg("radii"), py::kw_only(), py::arg("exclude") = py::none(),
-            py::arg("histogram_limit") = 128, py::arg("factorial_order") = 4, py::arg("delta_edges") = py::none(),
-            py::arg("number_density") = py::none(), py::arg("window") = py::none(),
+            py::arg("queries"),
+            py::arg("radii"),
+            py::kw_only(),
+            py::arg("exclude") = py::none(),
+            py::arg("histogram_limit") = 128,
+            py::arg("factorial_order") = 4,
+            py::arg("delta_edges") = py::none(),
+            py::arg("number_density") = py::none(),
+            py::arg("window") = py::none(),
             py::arg("allow_truncated_cells") = false);
     m.def(
         "uniform_queries",
@@ -244,6 +271,10 @@ PYBIND11_MODULE(_native, m) {
                 std::copy(result[i].position.begin(), result[i].position.end(), out.mutable_data() + 3 * i);
             return out;
         },
-        py::arg("number"), py::arg("bounds"), py::kw_only(), py::arg("seed"), py::arg("first_id") = 0,
+        py::arg("number"),
+        py::arg("bounds"),
+        py::kw_only(),
+        py::arg("seed"),
+        py::arg("first_id") = 0,
         py::arg("stream") = 0);
 }

@@ -251,8 +251,7 @@ int main() {
           "streamed float positions exactly match buffered application, including unwrapped inputs");
     FloatParticle rounded_edge{{-1e-8f, 0, 0}};
     empty.apply(&rounded_edge, 1);
-    check(rounded_edge.pos[0] == 0,
-          "a wrapped float that rounds to the box size is restored to zero");
+    check(rounded_edge.pos[0] == 0, "a wrapped float that rounds to the box size is restored to zero");
     // Invert a genuinely nonlinear cumulative table, independently of the cubic-source transport above.
     std::vector<double> inverse_r, inverse_m;
     for (int i = 0; i <= 10000; ++i) {
@@ -287,11 +286,9 @@ int main() {
         bool untouched = true;
         for (size_t i = 0; i < bad.size(); ++i)
             for (size_t d = 0; d < 3; ++d)
-                untouched = untouched && (i == bad.size() - 1 && d == 0
-                                              ? std::isnan(bad[i].pos[d])
-                                              : bad[i].pos[d] == original[i].pos[d]);
-        check(rejected && untouched,
-              "bad input is rejected before any particles are modified");
+                untouched = untouched && (i == bad.size() - 1 && d == 0 ? std::isnan(bad[i].pos[d]) :
+                                                                          bad[i].pos[d] == original[i].pos[d]);
+        check(rejected && untouched, "bad input is rejected before any particles are modified");
     }
     check(rejects([&] { field.apply<Particle>(nullptr, 1); }) &&
               rejects([&] { field.displacements<Particle>(nullptr, 1); }),

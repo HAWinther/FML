@@ -356,11 +356,12 @@ namespace FML {
                 const ptrdiff_t begin = n_extra_x_slices_left * NmeshTotComplexSlice;
                 const ptrdiff_t end = begin + Local_nx * NmeshTotComplexSlice;
                 std::copy(fourier_grid_raw.begin(), fourier_grid_raw.begin() + begin, result.fourier_grid_raw.begin());
-                std::copy(fourier_grid_raw.begin() + end, fourier_grid_raw.end(),
+                std::copy(fourier_grid_raw.begin() + end,
+                          fourier_grid_raw.end(),
                           result.fourier_grid_raw.begin() + end);
                 if (grid_is_in_real_space) {
-                    const auto *source = reinterpret_cast<const FloatType *>(fourier_grid_raw.data()) + 2 * begin;
-                    auto *target = result.get_real_grid();
+                    const auto * source = reinterpret_cast<const FloatType *>(fourier_grid_raw.data()) + 2 * begin;
+                    auto * target = result.get_real_grid();
                     const ptrdiff_t stride = 2 * (Nmesh / 2 + 1);
                     for (ptrdiff_t row = 0; row < 2 * (end - begin); row += stride)
                         std::copy(source + row + Nmesh, source + row + stride, target + row + Nmesh);

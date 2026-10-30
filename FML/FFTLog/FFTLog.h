@@ -61,10 +61,16 @@ namespace FML {
                 std::unique_ptr<Impl> impl;
                 unsigned planner_flags;
                 DVector execute(const DVector &, double, double, double, bool, const CVector *);
-                friend std::pair<DVector, CVector> DiscreteHankelTransform(
-                    const DVector &, const CVector &, Workspace &, double, double, double, bool, CVector *);
-                friend std::pair<DVector, DVector> ComputeXiLM(
-                    int, int, const DVector &, const DVector &, Workspace &, double);
+                friend std::pair<DVector, CVector> DiscreteHankelTransform(const DVector &,
+                                                                           const CVector &,
+                                                                           Workspace &,
+                                                                           double,
+                                                                           double,
+                                                                           double,
+                                                                           bool,
+                                                                           CVector *);
+                friend std::pair<DVector, DVector>
+                ComputeXiLM(int, int, const DVector &, const DVector &, Workspace &, double);
             };
 
             std::pair<DVector, DVector>
@@ -74,13 +80,13 @@ namespace FML {
             std::pair<DVector, DVector>
             ComputeXiLM(int ell, int m, const DVector & k, const DVector & pk, Workspace & workspace, double q = 0.0);
             std::pair<DVector, CVector> DiscreteHankelTransform(const DVector & r,
-                                                             const CVector & a,
-                                                             Workspace & workspace,
-                                                             double mu,
-                                                             double q = 0,
-                                                             double kcrc = 1,
-                                                             bool noring = true,
-                                                             CVector * u = nullptr);
+                                                                const CVector & a,
+                                                                Workspace & workspace,
+                                                                double mu,
+                                                                double q = 0,
+                                                                double kcrc = 1,
+                                                                bool noring = true,
+                                                                CVector * u = nullptr);
 
             //==========================================================================
             /// @brief Compute the correlation function xi(r) from a power spectrum P(k), sampled

@@ -34,7 +34,7 @@ namespace FML::MORPHOLOGY {
         Measures measures;
     };
     namespace detail {
-        inline void require(bool ok, const char* message) {
+        inline void require(bool ok, const char * message) {
             int valid = ok;
             FML::MinOverTasks(&valid);
             if (!valid)
@@ -46,7 +46,7 @@ namespace FML::MORPHOLOGY {
             FML::MaxOverTasks(&hi);
             require(lo == hi, "Morphology schemas differ across ranks");
         }
-        inline void hash(Count& h, double x) {
+        inline void hash(Count & h, double x) {
             std::uint64_t bits;
             std::memcpy(&bits, &x, sizeof(bits));
             h ^= bits;
@@ -66,16 +66,18 @@ namespace FML::MORPHOLOGY {
             return 0;
 #endif
         }
-        template <class Grid, class = void> struct HasStatus : std::false_type {};
+        template <class Grid, class = void>
+        struct HasStatus : std::false_type {};
         template <class Grid>
-        struct HasStatus<Grid, std::void_t<decltype(std::declval<Grid&>().get_grid_status_real())>> : std::true_type {};
+        struct HasStatus<Grid, std::void_t<decltype(std::declval<Grid &>().get_grid_status_real())>> : std::true_type {
+        };
         struct alignas(64) SliceCounts {
             Count v = 0, e = 0, f = 0, c = 0;
         };
     } // namespace detail
     /// Collective on FML::communicator. Rank-ordered slabs must tile the complete box;
     /// empty slabs are allowed. No global voxel replication is performed.
-    inline Measures measure(const BinarySlab& slab, double boxsize, Boundary boundary = Boundary::Periodic) {
+    inline Measures measure(const BinarySlab & slab, double boxsize, Boundary boundary = Boundary::Periodic) {
         const int n = slab.nmesh;
         bool valid = n > 0 && boxsize > 0 && std::isfinite(boxsize * boxsize * boxsize) &&
                      boxsize * boxsize * boxsize > 0 && (boundary == Boundary::Periodic || boundary == Boundary::Open);
@@ -121,15 +123,25 @@ namespace FML::MORPHOLOGY {
             do {
                 destination = (destination + 1) % FML::NTasks;
             } while (!layouts[destination][1]);
-            const auto* send = slab.cells.data() + (slab.local_nx - 1) * plane;
+            const auto * send = slab.cells.data() + (slab.local_nx - 1) * plane;
             if (source == FML::ThisTask)
                 std::copy(send, send + plane, left.begin());
 #ifdef USE_MPI
             else
                 for (size_t offset = 0; offset < plane;) {
                     const int amount = int(std::min(plane - offset, size_t(8 * 1024 * 1024)));
-                    MPI_Sendrecv(send + offset, amount, MPI_BYTE, destination, 13736, left.data() + offset, amount,
-                                 MPI_BYTE, source, 13736, FML::communicator, MPI_STATUS_IGNORE);
+                    MPI_Sendrecv(send + offset,
+                                 amount,
+                                 MPI_BYTE,
+                                 destination,
+                                 13736,
+                                 left.data() + offset,
+                                 amount,
+                                 MPI_BYTE,
+                                 source,
+                                 13736,
+                                 FML::communicator,
+                                 MPI_STATUS_IGNORE);
                     offset += size_t(amount);
                 }
 #endif
@@ -157,7 +169,7 @@ namespace FML::MORPHOLOGY {
                     return false;
                 return slab.cells[size_t(localx) * plane + yz] != 0;
             };
-            auto& count = counters[detail::thread()];
+            auto & count = counters[detail::thread()];
             for (int y = 0; y < side; ++y)
                 for (int z = 0; z < side; ++z) {
                     unsigned pattern = 0;
@@ -173,7 +185,7 @@ namespace FML::MORPHOLOGY {
                 }
         }
         std::array<Count, 4> counts{};
-        for (const auto& c : counters) {
+        for (const auto & c : counters) {
             counts[0] += c.v;
             counts[1] += c.e;
             counts[2] += c.f;
@@ -194,10 +206,12 @@ namespace FML::MORPHOLOGY {
         result.surface_area = double(2 * f - 6 * c) * h * h;
         result.integrated_mean_curvature = M_PI * double(3 * c - 2 * f + e) * h;
         result.euler_characteristic = v - e + f - c;
-        result.minkowski_density = {result.volume / volume, result.surface_area / (6 * volume),
+        result.minkowski_density = {result.volume / volume,
+                                    result.surface_area / (6 * volume),
                                     result.integrated_mean_curvature / (3 * M_PI * volume),
                                     double(result.euler_characteristic) / volume};
-        result.crofton_density = {result.volume / volume, (2.0 / 9) * double(f - 3 * c) * h * h / volume,
+        result.crofton_density = {result.volume / volume,
+                                  (2.0 / 9) * double(f - 3 * c) * h * h / volume,
                                   (2.0 / 9) * double(e - 2 * f + 3 * c) * h / volume,
                                   double(result.euler_characteristic) / volume};
         return result;
@@ -205,14 +219,16 @@ namespace FML::MORPHOLOGY {
     /// Grid protocol: get_nmesh/get_local_nx/get_local_x_start/get_real({ix,iy,iz}).
     /// Only physical cells are read; FFT padding and existing ghosts are ignored.
     template <class Grid>
-    std::vector<Excursion> excursions(const Grid& field, const std::vector<double>& thresholds, double boxsize,
+    std::vector<Excursion> excursions(const Grid & field,
+                                      const std::vector<double> & thresholds,
+                                      double boxsize,
                                       Boundary boundary = Boundary::Periodic,
                                       ThresholdRule rule = ThresholdRule::AtLeast) {
         bool valid = !thresholds.empty() && (rule == ThresholdRule::AtLeast || rule == ThresholdRule::Greater);
         for (double t : thresholds)
             valid &= std::isfinite(t);
         if constexpr (detail::HasStatus<Grid>::value)
-            valid &= const_cast<Grid&>(field).get_grid_status_real();
+            valid &= const_cast<Grid &>(field).get_grid_status_real();
         const int n = field.get_nmesh();
         const auto nx = field.get_local_nx();
         const auto start = field.get_local_x_start();

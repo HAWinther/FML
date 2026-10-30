@@ -244,7 +244,8 @@ namespace FML {
     }
 
     /// Inplace sum over tasks of a contiguous array of values
-    template <class T> void SumArrayOverTasks(T *value, size_t n) {
+    template <class T>
+    void SumArrayOverTasks(T * value, size_t n) {
         if (FML::NTasks == 1)
             return;
 #ifdef USE_MPI

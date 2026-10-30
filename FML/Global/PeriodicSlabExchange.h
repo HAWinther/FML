@@ -16,7 +16,7 @@ namespace FML::COMMUNICATION {
             }
             return distance;
         }
-    }
+    } // namespace detail
 
     /// Append remote records within buffer of the local periodic x slab, once per
     /// source record/destination. Input must contain only owned records, with x in
@@ -27,8 +27,10 @@ namespace FML::COMMUNICATION {
     /// Outgoing records are staged per intersecting peer; receive scratch is bounded
     /// by max_message_bytes. The final owned+ghost vector is reserved before receipt.
     template <class Record, class GetX>
-    void append_periodic_slab_ghosts(std::vector<Record> & records, double buffer, GetX get_x,
-                                    size_t max_message_bytes = 8 * 1024 * 1024) {
+    void append_periodic_slab_ghosts(std::vector<Record> & records,
+                                     double buffer,
+                                     GetX get_x,
+                                     size_t max_message_bytes = 8 * 1024 * 1024) {
         static_assert(std::is_trivially_copyable_v<Record>, "Slab records must be trivially copyable");
         const double lo = FML::xmin_domain, hi = FML::xmax_domain;
         assert_mpi(std::isfinite(buffer) && buffer >= 0 && lo >= 0 && hi <= 1 && lo <= hi,
@@ -48,25 +50,33 @@ namespace FML::COMMUNICATION {
             std::vector<unsigned long long> nsend(FML::NTasks), nrecv(FML::NTasks);
             for (int peer = 0; peer < FML::NTasks; ++peer) {
                 const auto & slab = slabs[peer];
-                if (peer == FML::ThisTask || slab[0] == slab[1]) continue;
+                if (peer == FML::ThisTask || slab[0] == slab[1])
+                    continue;
                 bool intersects = false;
                 for (int image = -1; image <= 1; ++image)
-                    intersects = intersects || (hi >= slab[0] - slab[2] + image &&
-                                                 lo <= slab[1] + slab[2] + image);
-                if (!intersects) continue;
+                    intersects = intersects || (hi >= slab[0] - slab[2] + image && lo <= slab[1] + slab[2] + image);
+                if (!intersects)
+                    continue;
                 auto needed = [&](const Record & record) {
                     return detail::periodic_distance_to_slab(get_x(record), slab[0], slab[1]) <= slab[2];
                 };
                 size_t count = 0;
-                for (const auto & record : records) count += needed(record);
+                for (const auto & record : records)
+                    count += needed(record);
                 auto & send = outgoing[peer];
                 send.reserve(count);
                 for (const auto & record : records)
-                    if (needed(record)) send.push_back(record);
+                    if (needed(record))
+                        send.push_back(record);
                 nsend[peer] = count;
             }
-            MPI_Alltoall(nsend.data(), 1, MPI_UNSIGNED_LONG_LONG,
-                         nrecv.data(), 1, MPI_UNSIGNED_LONG_LONG, FML::communicator);
+            MPI_Alltoall(nsend.data(),
+                         1,
+                         MPI_UNSIGNED_LONG_LONG,
+                         nrecv.data(),
+                         1,
+                         MPI_UNSIGNED_LONG_LONG,
+                         FML::communicator);
             size_t total = records.size();
             for (auto count : nrecv) {
                 assert_mpi(count <= records.max_size() - total,
@@ -74,14 +84,17 @@ namespace FML::COMMUNICATION {
                 total += size_t(count);
             }
             records.reserve(total);
-            exchange_records_chunked(outgoing, [&](const Record * data, size_t count) noexcept {
-                // Trivial records and sufficient capacity: no allocation during receipt.
-                records.insert(records.end(), data, data + count);
-            }, max_message_bytes);
+            exchange_records_chunked(
+                outgoing,
+                [&](const Record * data, size_t count) noexcept {
+                    // Trivial records and sufficient capacity: no allocation during receipt.
+                    records.insert(records.end(), data, data + count);
+                },
+                max_message_bytes);
         }
 #else
         (void)max_message_bytes;
 #endif
     }
-}
+} // namespace FML::COMMUNICATION
 #endif

@@ -15,11 +15,11 @@ namespace FML::ENSEMBLE {
     using Vector = std::vector<double>;
     using Count = unsigned long long;
     namespace detail {
-        inline void require(bool ok, const char* text) {
+        inline void require(bool ok, const char * text) {
             if (!ok)
                 throw std::invalid_argument(text);
         }
-        inline bool finite(const Vector& x) {
+        inline bool finite(const Vector & x) {
             for (double v : x)
                 if (!std::isfinite(v) || std::abs(v) > 1e100)
                     return false;
@@ -32,16 +32,16 @@ namespace FML::ENSEMBLE {
             FML::MaxOverTasks(&hi);
             require(lo == hi, "Ensemble MPI schemas/models differ across ranks");
         }
-        inline void word(Count& h, Count x) {
+        inline void word(Count & h, Count x) {
             h ^= x;
             h *= 1099511628211ULL;
         }
-        inline void text(Count& h, const std::string& s) {
+        inline void text(Count & h, const std::string & s) {
             word(h, s.size());
             for (unsigned char c : s)
                 word(h, c);
         }
-        inline void values(Count& h, const Vector& a) {
+        inline void values(Count & h, const Vector & a) {
             word(h, a.size());
             for (double x : a) {
                 std::uint64_t bits;
@@ -49,7 +49,8 @@ namespace FML::ENSEMBLE {
                 word(h, bits);
             }
         }
-        template <class T> void sum(std::vector<T>& a) {
+        template <class T>
+        void sum(std::vector<T> & a) {
 #ifdef USE_MPI
             for (size_t offset = 0; offset < a.size();) {
                 int n = int(std::min(size_t(INT_MAX), a.size() - offset));
@@ -60,7 +61,8 @@ namespace FML::ENSEMBLE {
             (void)a;
 #endif
         }
-        template <class T> void broadcast(std::vector<T>& a, int root) {
+        template <class T>
+        void broadcast(std::vector<T> & a, int root) {
 #ifdef USE_MPI
             for (size_t offset = 0; offset < a.size();) {
                 int n = int(std::min(size_t(INT_MAX), a.size() - offset));
@@ -95,7 +97,7 @@ namespace FML::ENSEMBLE {
             std::fill(mean.begin(), mean.end(), 0);
             std::fill(m2.begin(), m2.end(), 0);
         }
-        void add(const Vector& x) {
+        void add(const Vector & x) {
             detail::require(x.size() == d && detail::finite(x),
                             "Ensemble row has wrong dimension/nonfinite or excessive values");
             if (n == std::numeric_limits<Count>::max())
@@ -113,7 +115,7 @@ namespace FML::ENSEMBLE {
             }
             ++n;
         }
-        void merge(const RunningCovariance& other) {
+        void merge(const RunningCovariance & other) {
             detail::require(d == other.d, "Cannot merge ensembles with different dimensions");
             if (other.n > std::numeric_limits<Count>::max() - n)
                 throw std::overflow_error("Ensemble merge count overflow");
@@ -201,11 +203,20 @@ namespace FML::ENSEMBLE {
             detail::word(h, Count(phase_generator));
             return h;
         }
-        bool operator==(const Metadata& other) const {
-            return std::tie(cosmology, observable_schema, target_model, surrogate_model, fixed_amplitudes,
-                            phase_pair_averaged, phase_generator) ==
-                   std::tie(other.cosmology, other.observable_schema, other.target_model, other.surrogate_model,
-                            other.fixed_amplitudes, other.phase_pair_averaged, other.phase_generator);
+        bool operator==(const Metadata & other) const {
+            return std::tie(cosmology,
+                            observable_schema,
+                            target_model,
+                            surrogate_model,
+                            fixed_amplitudes,
+                            phase_pair_averaged,
+                            phase_generator) == std::tie(other.cosmology,
+                                                         other.observable_schema,
+                                                         other.target_model,
+                                                         other.surrogate_model,
+                                                         other.fixed_amplitudes,
+                                                         other.phase_pair_averaged,
+                                                         other.phase_generator);
         }
         void validate() const {
             detail::require(
@@ -221,7 +232,7 @@ namespace FML::ENSEMBLE {
         bool fixed_amplitudes = false;
         PhaseGenerator generator = PhaseGenerator::Philox;
         int phase_sign = 1; // +/-1: one realization; 0: an already averaged antithetic pair.
-        bool operator==(const PhaseKey& k) const {
+        bool operator==(const PhaseKey & k) const {
             return std::tie(realization, seed, stream, fixed_amplitudes, generator, phase_sign) ==
                    std::tie(k.realization, k.seed, k.stream, k.fixed_amplitudes, k.generator, k.phase_sign);
         }
@@ -233,27 +244,27 @@ namespace FML::ENSEMBLE {
 
           public:
             size_t size() const { return ids.size(); }
-            const auto& keys() const { return ids; }
-            bool overlaps(const PhaseKey& k) const {
+            const auto & keys() const { return ids; }
+            bool overlaps(const PhaseKey & k) const {
                 return ids.count(k.realization) || phases.count({k.seed, k.stream});
             }
-            void validate(const PhaseKey& key, const Metadata& m) const {
+            void validate(const PhaseKey & key, const Metadata & m) const {
                 require(
                     key.fixed_amplitudes == m.fixed_amplitudes && key.generator == m.phase_generator &&
                         (m.phase_pair_averaged ? key.phase_sign == 0 : (key.phase_sign == 1 || key.phase_sign == -1)),
                     "Phase key disagrees with ensemble sampling convention");
             }
-            void add(const PhaseKey& key, const Metadata& m) {
+            void add(const PhaseKey & key, const Metadata & m) {
                 validate(key, m);
                 require(!overlaps(key), "Duplicate realization or phase block in ensemble");
                 ids.emplace(key.realization, key);
                 phases.emplace(key.seed, key.stream);
             }
-            void disjoint(const Registry& other) const {
-                for (const auto& item : other.ids)
+            void disjoint(const Registry & other) const {
+                for (const auto & item : other.ids)
                     require(!overlaps(item.second), "Training, mean and evaluation phase blocks must be independent");
             }
-            Registry global(const Metadata& metadata) const {
+            Registry global(const Metadata & metadata) const {
                 Count local = ids.size();
                 const auto counts = FML::GatherFromTasks(&local);
                 Registry result;
@@ -264,8 +275,8 @@ namespace FML::ENSEMBLE {
                     std::vector<Count> data(size_t(counts[rank]) * 4);
                     if (FML::ThisTask == rank) {
                         size_t i = 0;
-                        for (const auto& item : ids) {
-                            const auto& k = item.second;
+                        for (const auto & item : ids) {
+                            const auto & k = item.second;
                             data[i++] = k.realization;
                             data[i++] = k.seed;
                             data[i++] = k.stream;
@@ -299,7 +310,7 @@ namespace FML::ENSEMBLE {
         Count count_ = 0;
 
       public:
-        static MeanEstimate exact(Vector mean, const Metadata& metadata) {
+        static MeanEstimate exact(Vector mean, const Metadata & metadata) {
             metadata.validate();
             detail::require(!mean.empty() && mean.size() <= std::vector<double>().max_size() / mean.size() &&
                                 detail::finite(mean),
@@ -310,26 +321,26 @@ namespace FML::ENSEMBLE {
             m.covariance_.resize(m.mean_.size() * m.mean_.size());
             return m;
         }
-        static MeanEstimate independent(const RunningCovariance& controls, const std::vector<PhaseKey>& keys,
-                                        const Metadata& metadata) {
+        static MeanEstimate
+        independent(const RunningCovariance & controls, const std::vector<PhaseKey> & keys, const Metadata & metadata) {
             metadata.validate();
             const auto summary = controls.summary();
             detail::require(summary.count >= 2 && summary.count == keys.size(),
                             "Independent mean needs at least two samples and complete phase provenance");
             auto m = exact(summary.mean, metadata);
-            for (const auto& k : keys)
+            for (const auto & k : keys)
                 m.identities_.add(k, metadata);
             m.count_ = summary.count;
             m.covariance_ = summary.covariance;
-            for (auto& x : m.covariance_)
+            for (auto & x : m.covariance_)
                 x /= double(summary.count);
             return m;
         }
-        const Vector& mean() const { return mean_; }
-        const Vector& covariance_of_mean() const { return covariance_; }
+        const Vector & mean() const { return mean_; }
+        const Vector & covariance_of_mean() const { return covariance_; }
         Count samples() const { return count_; }
-        const Metadata& metadata() const { return metadata_; }
-        const detail::Registry& identities() const { return identities_; }
+        const Metadata & metadata() const { return metadata_; }
+        const detail::Registry & identities() const { return identities_; }
     };
     enum class FitMode { Full, Diagonal };
     struct FitOptions {
@@ -348,25 +359,27 @@ namespace FML::ENSEMBLE {
         ControlModel() = default;
 
       public:
-        ControlModel(const ControlModel&) = default;
-        ControlModel(ControlModel&&) = default;
-        ControlModel& operator=(const ControlModel&) = default;
-        ControlModel& operator=(ControlModel&&) = default;
+        ControlModel(const ControlModel &) = default;
+        ControlModel(ControlModel &&) = default;
+        ControlModel & operator=(const ControlModel &) = default;
+        ControlModel & operator=(ControlModel &&) = default;
         size_t target_dimension() const { return ny_; }
         size_t control_dimension() const { return nc_; }
-        const Vector& coefficients() const { return beta_; }
-        const MeanEstimate& control_mean() const { return control_mean_; }
-        const Metadata& metadata() const { return metadata_; }
+        const Vector & coefficients() const { return beta_; }
+        const MeanEstimate & control_mean() const { return control_mean_; }
+        const Metadata & metadata() const { return metadata_; }
         Count training_samples() const { return training_count_; }
         FitOptions fit_options() const { return options_; }
-        void validate_pair(const PhaseKey& target, const PhaseKey& control) const {
+        void validate_pair(const PhaseKey & target, const PhaseKey & control) const {
             detail::require(target == control, "Target and surrogate must use the same phase key");
             training_.validate(target, metadata_);
             detail::require(!training_.overlaps(target) && !control_mean_.identities().overlaps(target),
                             "Evaluation overlaps training or surrogate-mean phases");
         }
-        Vector apply(const Vector& target, const Vector& control, const PhaseKey& target_key,
-                     const PhaseKey& control_key) const {
+        Vector apply(const Vector & target,
+                     const Vector & control,
+                     const PhaseKey & target_key,
+                     const PhaseKey & control_key) const {
             detail::require(target.size() == ny_ && control.size() == nc_ && detail::finite(target) &&
                                 detail::finite(control),
                             "Invalid control-variate evaluation vectors");
@@ -385,7 +398,7 @@ namespace FML::ENSEMBLE {
         }
         Vector mean_uncertainty() const {
             Vector out(ny_ * ny_);
-            const auto& c = control_mean_.covariance_of_mean();
+            const auto & c = control_mean_.covariance_of_mean();
             // Two matrix products avoid O(ny^2 nc^2) contraction.
             std::vector<long double> intermediate(ny_ * nc_);
             for (size_t i = 0; i < ny_; ++i)
@@ -413,13 +426,13 @@ namespace FML::ENSEMBLE {
             detail::values(h, beta_);
             detail::values(h, control_mean_.mean());
             detail::values(h, control_mean_.covariance_of_mean());
-            for (const auto& x : training_.keys()) {
+            for (const auto & x : training_.keys()) {
                 detail::word(h, x.second.realization);
                 detail::word(h, x.second.seed);
                 detail::word(h, x.second.stream);
                 detail::word(h, Count(x.second.phase_sign + 1));
             }
-            for (const auto& x : control_mean_.identities().keys()) {
+            for (const auto & x : control_mean_.identities().keys()) {
                 detail::word(h, x.second.realization);
                 detail::word(h, x.second.seed);
                 detail::word(h, x.second.stream);
@@ -446,7 +459,7 @@ namespace FML::ENSEMBLE {
                             "Invalid paired ensemble dimensions");
             metadata_.validate();
         }
-        void add(const Vector& y, const Vector& c, const PhaseKey& target, const PhaseKey& control) {
+        void add(const Vector & y, const Vector & c, const PhaseKey & target, const PhaseKey & control) {
             detail::require(target == control, "Training target/control phase keys do not match");
             detail::require(y.size() == ny && c.size() == nc && detail::finite(y) && detail::finite(c),
                             "Invalid paired training vectors");
@@ -466,7 +479,7 @@ namespace FML::ENSEMBLE {
             return result;
         }
         Summary summary() const { return joint.summary(); }
-        ControlModel fit(const MeanEstimate& mean, const FitOptions& options = {}) const {
+        ControlModel fit(const MeanEstimate & mean, const FitOptions & options = {}) const {
             const auto s = joint.summary();
             detail::require(s.count >= 2 && mean.mean().size() == nc && mean.metadata() == metadata_ &&
                                 options.ridge >= 0 && std::isfinite(options.ridge) &&
@@ -553,7 +566,7 @@ namespace FML::ENSEMBLE {
       public:
         explicit ControlEvaluation(ControlModel model)
             : model_(std::move(model)), corrected(model_.target_dimension()) {}
-        void add(const Vector& y, const Vector& c, const PhaseKey& target, const PhaseKey& control) {
+        void add(const Vector & y, const Vector & c, const PhaseKey & target, const PhaseKey & control) {
             auto value = model_.apply(y, c, target, control);
             identities.add(target, model_.metadata());
             corrected.add(value);

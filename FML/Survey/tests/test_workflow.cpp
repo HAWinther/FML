@@ -6,7 +6,7 @@ using namespace FML::SURVEY;
 namespace survey_detail = FML::SURVEY::detail;
 int failures = 0;
 const double tolerance = sizeof(Real) == 4 ? 3e-4 : 2e-9;
-void check(bool good, const std::string& label) {
+void check(bool good, const std::string & label) {
     int bad = !good;
     FML::MaxOverTasks(&bad);
     failures += bad;
@@ -16,7 +16,7 @@ void check(bool good, const std::string& label) {
 bool near(double a, double b, double tol = tolerance) {
     return std::abs(a - b) <= tol * std::max({1.0, std::abs(a), std::abs(b)});
 }
-std::vector<CatalogPoint> split(const std::vector<CatalogPoint>& points, bool root_only = false) {
+std::vector<CatalogPoint> split(const std::vector<CatalogPoint> & points, bool root_only = false) {
     std::vector<CatalogPoint> result;
     for (size_t i = 0; i < points.size(); ++i)
         if ((root_only ? 0 : int(i % FML::NTasks)) == FML::ThisTask)
@@ -34,20 +34,20 @@ double pol(int ell, double mu) {
     }
     return p1;
 }
-Vector line_of_sight(const Geometry& g, const Vector& position) {
+Vector line_of_sight(const Geometry & g, const Vector & position) {
     Vector n = g.fixed_los;
     if (g.local_los)
         for (int d = 0; d < 3; ++d)
             n[d] = position[d] - g.observer[d];
     double norm = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
     if (norm)
-        for (auto& x : n)
+        for (auto & x : n)
             x /= norm;
     return n;
 }
 using Cell = std::array<int, 3>;
 using Cloud = std::vector<std::pair<Cell, double>>;
-Cloud cloud(const CatalogPoint& point, const Geometry& g) {
+Cloud cloud(const CatalogPoint & point, const Geometry & g) {
     Cloud result;
     Cell c;
     Vector t;
@@ -63,7 +63,7 @@ Cloud cloud(const CatalogPoint& point, const Geometry& g) {
                                   (x ? t[0] : 1 - t[0]) * (y ? t[1] : 1 - t[1]) * (z ? t[2] : 1 - t[2])});
     return result;
 }
-Vector physical(const Cell& c, const Geometry& g) {
+Vector physical(const Cell & c, const Geometry & g) {
     Vector x;
     for (int d = 0; d < 3; ++d)
         x[d] = g.minimum[d] + c[d] * g.cellsize();
@@ -77,15 +77,17 @@ std::vector<CatalogPoint> catalogue(bool data) {
                           .02 + .005 * (i % 3)});
     return result;
 }
-PowerSpectrum direct_power(const std::vector<CatalogPoint>& data, const std::vector<CatalogPoint>& randoms,
-                           const Geometry& g, const PowerOptions& options) {
+PowerSpectrum direct_power(const std::vector<CatalogPoint> & data,
+                           const std::vector<CatalogPoint> & randoms,
+                           const Geometry & g,
+                           const PowerOptions & options) {
     PowerSpectrum out;
     out.ells = options.ells;
     out.edges = options.edges;
     double wd = 0, wr = 0, i2 = 0;
-    for (const auto& p : data)
+    for (const auto & p : data)
         wd += p.weight;
-    for (const auto& p : randoms) {
+    for (const auto & p : randoms) {
         wr += p.weight;
         i2 += p.nbar * p.weight * p.weight;
     }
@@ -97,11 +99,11 @@ PowerSpectrum direct_power(const std::vector<CatalogPoint>& data, const std::vec
     out.raw.assign(options.ells.size(), std::vector<double>(nb));
     out.shotnoise = out.raw;
     std::map<Cell, double> field;
-    for (const auto& p : data)
-        for (const auto& cw : cloud(p, g))
+    for (const auto & p : data)
+        for (const auto & cw : cloud(p, g))
             field[cw.first] += p.weight * cw.second;
-    for (const auto& p : randoms)
-        for (const auto& cw : cloud(p, g))
+    for (const auto & p : randoms)
+        for (const auto & cw : cloud(p, g))
             field[cw.first] -= out.alpha * p.weight * cw.second;
     for (int ix = 0; ix < g.nmesh; ++ix)
         for (int iy = 0; iy < g.nmesh; ++iy)
@@ -123,13 +125,13 @@ PowerSpectrum direct_power(const std::vector<CatalogPoint>& data, const std::vec
                 if (b < 0)
                     continue;
                 Vector khat = k;
-                for (auto& x : khat)
+                for (auto & x : khat)
                     x /= kmag;
                 ++out.nmodes[b];
                 out.k[b] += kmag;
                 std::vector<std::complex<double>> a(options.ells.size());
                 std::complex<double> a0 = 0;
-                for (const auto& cv : field) {
+                for (const auto & cv : field) {
                     const auto n = line_of_sight(g, physical(cv.first, g));
                     const double phase =
                         -2 * M_PI * (m[0] * cv.first[0] + m[1] * cv.first[1] + m[2] * cv.first[2]) / g.nmesh;
@@ -149,14 +151,14 @@ PowerSpectrum direct_power(const std::vector<CatalogPoint>& data, const std::vec
                 for (size_t l = 0; l < a.size(); ++l) {
                     const int ell = options.ells[l];
                     double noise = 0;
-                    for (const auto& p : data)
+                    for (const auto & p : data)
                         noise += p.weight * p.weight * pol(ell, dot(khat, line_of_sight(g, p.position)));
-                    for (const auto& p : randoms)
+                    for (const auto & p : randoms)
                         noise += out.alpha * out.alpha * p.weight * p.weight *
                                  pol(ell, dot(khat, line_of_sight(g, p.position)));
                     out.raw[l][b] += (2 * ell + 1) * (a0 * std::conj(a[l])).real() / (out.i2 * window * window);
-                    out.shotnoise[l][b] += (2 * ell + 1) * noise *
-                                                 (options.aliased_shotnoise ? alias / (window * window) : 1) / out.i2;
+                    out.shotnoise[l][b] +=
+                        (2 * ell + 1) * noise * (options.aliased_shotnoise ? alias / (window * window) : 1) / out.i2;
                 }
             }
     for (size_t b = 0; b < nb; ++b)
@@ -199,14 +201,15 @@ void test_power() {
                             near(actual.shotnoise[l][b], expected.shotnoise[l][b]) &&
                             near(actual.power[l][b], expected.raw[l][b] - expected.shotnoise[l][b]);
             }
-            check(same, std::string("FFT monopole/quadrupole/hexadecapole and weighted shot terms match direct DFT: ") +
-                            (local ? "local LOS" : "fixed LOS") + (compensate ? ", compensated" : ""));
+            check(same,
+                  std::string("FFT monopole/quadrupole/hexadecapole and weighted shot terms match direct DFT: ") +
+                      (local ? "local LOS" : "fixed LOS") + (compensate ? ", compensated" : ""));
         }
     g.local_los = true;
     auto original = estimate_power(data, randoms, g, options);
-    for (auto& p : data)
+    for (auto & p : data)
         p.weight *= 7;
-    for (auto& p : randoms)
+    for (auto & p : randoms)
         p.weight *= 7;
     auto scaled = estimate_power(data, randoms, g, options);
     bool invariant = true;
@@ -296,7 +299,7 @@ void test_window() {
             for (int x = 0; x <= p; ++x)
                 for (int y = 0; y <= p - x; ++y)
                     exps.push_back({x, y, p - x - y});
-        auto power = [](const Vector& v, const std::array<int, 3>& e) {
+        auto power = [](const Vector & v, const std::array<int, 3> & e) {
             return std::pow(v[0], e[0]) * std::pow(v[1], e[1]) * std::pow(v[2], e[2]);
         };
         auto fact = [](int n) { return std::tgamma(n + 1.0); };
@@ -329,8 +332,8 @@ void test_window() {
         for (size_t a = 0; a < all.size(); ++a)
             for (size_t b = 0; b < all.size(); ++b)
                 if (a != b)
-                    for (const auto& ca : cloud(all[a], g))
-                        for (const auto& cb : cloud(all[b], g)) {
+                    for (const auto & ca : cloud(all[a], g))
+                        for (const auto & cb : cloud(all[b], g)) {
                             Vector s;
                             for (int d = 0; d < 3; ++d)
                                 s[d] = (cb.first[d] - ca.first[d]) * g.cellsize();
@@ -345,8 +348,8 @@ void test_window() {
                             const double mu = radius ? dot(s, n) / radius : 0;
                             if (radius > 0)
                                 for (size_t e = 0; e < exps.size(); ++e)
-                                    gbar[e][bin] += power(n, exps[e]) * alpha * alpha * all[a].weight *
-                                                    all[b].weight * ca.second * cb.second / std::pow(g.cellsize(), 3);
+                                    gbar[e][bin] += power(n, exps[e]) * alpha * alpha * all[a].weight * all[b].weight *
+                                                    ca.second * cb.second / std::pow(g.cellsize(), 3);
                             for (int l = 0; l <= 4; ++l)
                                 if (radius > 0 || l == 0)
                                     expected[l][bin] += (4 * l + 1) * pol(2 * l, mu) * alpha * alpha * all[a].weight *
@@ -361,21 +364,22 @@ void test_window() {
                 double value = n ? expected[l][b] / n : 0;
                 if (l > 0 && nonzero[b] > 0)
                     for (size_t e = 0; e < exps.size(); ++e) {
-                        const auto& x = exps[e];
+                        const auto & x = exps[e];
                         const int p = x[0] + x[1] + x[2];
                         if (p > 2 * int(l))
                             continue;
-                        const double sphere = x[0] % 2 || x[1] % 2 || x[2] % 2
-                                                  ? 0
-                                                  : dfact(x[0] - 1) * dfact(x[1] - 1) * dfact(x[2] - 1) / dfact(p + 1);
-                        value -= (4 * l + 1) * c[p] * fact(p) / (fact(x[0]) * fact(x[1]) * fact(x[2])) *
-                                 gbar[e][b] / nonzero[b] * (lattice[e][b] / nonzero[b] - sphere) / i2;
+                        const double sphere = x[0] % 2 || x[1] % 2 || x[2] % 2 ?
+                                                  0 :
+                                                  dfact(x[0] - 1) * dfact(x[1] - 1) * dfact(x[2] - 1) / dfact(p + 1);
+                        value -= (4 * l + 1) * c[p] * fact(p) / (fact(x[0]) * fact(x[1]) * fact(x[2])) * gbar[e][b] /
+                                 nonzero[b] * (lattice[e][b] / nonzero[b] - sphere) / i2;
                     }
                 same &= near(got.q[l][b], value, sizeof(Real) == 4 ? 1e-3 : 1e-8);
             }
         }
-        check(same, std::string("FFT window ell=0..8 and exact CIC self-pair subtraction match direct random pairs: ") +
-                        (local ? "local LOS" : "fixed LOS"));
+        check(same,
+              std::string("FFT window ell=0..8 and exact CIC self-pair subtraction match direct random pairs: ") +
+                  (local ? "local LOS" : "fixed LOS"));
     }
     {
         // Uniform cube of randoms, fixed LOS: Q4 agrees with the exact angular average of the cube's pair
@@ -494,9 +498,9 @@ void test_window() {
     const auto quadrupole = make_window_matrix(w, kin, kout, {2}, {2}, false).apply(quadrupole_model);
     bool phase = true;
     for (size_t i = 0; i < kout.size(); ++i)
-        phase &=
-            near(quadrupole[i],
-                 std::pow(effective / 2, 3.5) * kout[i] * kout[i] * std::exp(-effective * kout[i] * kout[i]), 8e-4);
+        phase &= near(quadrupole[i],
+                      std::pow(effective / 2, 3.5) * kout[i] * kout[i] * std::exp(-effective * kout[i] * kout[i]),
+                      8e-4);
     check(phase, "quadrupole window convolution has correct Bessel order and Fourier phase");
     const std::vector<double> output_edges{0, .2, .6, 1.2};
     const auto binned = make_binned_window_matrix(w, kin, output_edges, {0}, {0}, false).apply(model);
@@ -507,9 +511,9 @@ void test_window() {
     bool averaged = true;
     for (size_t b = 0; b < binned.size(); ++b) {
         const double a = output_edges[b], z = output_edges[b + 1];
-        averaged &=
-            near(binned[b],
-                 std::pow(effective / 2, 1.5) * (primitive(z) - primitive(a)) / ((z * z * z - a * a * a) / 3), 8e-4);
+        averaged &= near(binned[b],
+                         std::pow(effective / 2, 1.5) * (primitive(z) - primitive(a)) / ((z * z * z - a * a * a) / 3),
+                         8e-4);
     }
     check(averaged, "binned window matrix integrates the model over output shells");
     auto ic = make_window_matrix(w, kin, kout, {0}, {0}, true).apply(model);
@@ -535,7 +539,7 @@ void test_reconstruction() {
     options.relative_tolerance = sizeof(Real) == 4 ? 2e-5 : 1e-9;
     const int n = g.nmesh;
     auto index = [&](Cell c) {
-        for (auto& v : c)
+        for (auto & v : c)
             v = (v + n) % n;
         return (size_t(c[0]) * n + c[1]) * n + c[2];
     };
@@ -589,8 +593,9 @@ void test_reconstruction() {
                 same &= near(solution.field[d].get_real_from_index(i), expected, sizeof(Real) == 4 ? 2e-4 : 1e-7);
             }
         }
-        check(same, std::string("anisotropic displacement solve recovers manufactured field: ") +
-                        (local ? "local LOS" : "fixed LOS"));
+        check(same,
+              std::string("anisotropic displacement solve recovers manufactured field: ") +
+                  (local ? "local LOS" : "fixed LOS"));
         ReconstructionOptions limited = options;
         limited.max_iterations = 1;
         limited.relative_tolerance = 1e-12;
@@ -603,7 +608,8 @@ void test_reconstruction() {
     auto zero = solve_displacement(constant, g, options);
     check(zero.report.converged && zero.report.iterations == 0 && near(zero.report.removed_mean, 1),
           "constant source is projected out and zero source converges without iterations");
-    std::array<Mesh, 3> fields{survey_detail::empty_mesh(g, 1), survey_detail::empty_mesh(g, 1),
+    std::array<Mesh, 3> fields{survey_detail::empty_mesh(g, 1),
+                               survey_detail::empty_mesh(g, 1),
                                survey_detail::empty_mesh(g, 1)};
     for (int d = 0; d < 3; ++d) {
         for (auto i : fields[d].get_real_range())
@@ -616,7 +622,7 @@ void test_reconstruction() {
     auto points = split(all);
     auto values = sample_displacement(points, fields, g);
     bool samples = values.size() == points.size();
-    for (const auto& v : values)
+    for (const auto & v : values)
         for (int d = 0; d < 3; ++d)
             samples &= near(v[d], d + .5);
     check(samples, "CIC displacement queries across MPI slabs return in original local catalogue order");
@@ -655,11 +661,11 @@ void test_reconstruction() {
     p.edges = {0, .7, 1.3, 2};
     auto reconstructed = estimate_power(sym.data, randoms, g, p, &sym.randoms);
     bool finite = true;
-    for (const auto& row : reconstructed.power)
+    for (const auto & row : reconstructed.power)
         for (double value : row)
             finite &= std::isfinite(value);
     check(finite, "shifted data/randoms feed reconstructed power while original randoms define the selection");
-    options.mask = [](const Vector&) { return false; };
+    options.mask = [](const Vector &) { return false; };
     auto masked = reconstruct(data, randoms, g, options);
     bool unchanged = true;
     for (size_t i = 0; i < data.size(); ++i)
@@ -677,7 +683,7 @@ void test_validation() {
     auto rejects = [](auto operation) {
         try {
             operation();
-        } catch (const std::invalid_argument&) {
+        } catch (const std::invalid_argument &) {
             return true;
         }
         return false;
@@ -689,7 +695,7 @@ void test_validation() {
         bad.push_back({{.1, 6, 6}, 1, 1});
     check(rejects([&] { estimate_power(bad, randoms, g, p); }), "invalid padding on one rank fails collectively");
     auto no_nbar = randoms;
-    for (auto& x : no_nbar)
+    for (auto & x : no_nbar)
         x.nbar = 0;
     check(rejects([&] { estimate_power(data, no_nbar, g, p); }), "missing selection normalization is rejected");
     p.ells = {1};
@@ -706,16 +712,14 @@ void test_validation() {
     check(rejects([&] { make_window_matrix(w, {0, 1}, {.1}); }), "window matrix rejects missing angular multipoles");
     check(!rejects([&] { make_window_matrix(w, {0, 1}, {.1}, {0}, {0}); }), "the same table is valid for ell = 0");
     w.shell_volume.clear();
-    check(rejects([&] {
-              make_window_matrix(w, {0, 1}, {.1}, {0}, {0});
-          }),
+    check(rejects([&] { make_window_matrix(w, {0, 1}, {.1}, {0}, {0}); }),
           "malformed window dimensions throw before indexing arrays");
     ReconstructionOptions r;
     r.bias = 0;
     auto source = survey_detail::empty_mesh(g);
     check(rejects([&] { solve_displacement(source, g, r); }), "nonpositive reconstruction bias is rejected");
 }
-int main(int argc, char** argv) {
+int main(int argc, char ** argv) {
     const std::string mode = argc > 1 ? argv[1] : "all";
     if (mode == "all" || mode == "power")
         test_power();

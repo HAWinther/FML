@@ -44,7 +44,8 @@ int main(int argc, char ** argv) {
     for (int m = 0; m < n_mocks; ++m) {
         const int seed = first_seed + m;
         std::mt19937_64 rng(1000003ULL * seed);
-        const double beta_true = st.beta_min + (st.beta_max - st.beta_min) * std::uniform_real_distribution<double>()(rng);
+        const double beta_true =
+            st.beta_min + (st.beta_max - st.beta_min) * std::uniform_real_distribution<double>()(rng);
         fl.set_data(fl.make_mock(fl.white_noise(rng), beta_true, rng));
         opt.seed = seed;
         const auto chain = sample(fl, fl.white_noise(rng), 1.0, opt);
@@ -79,7 +80,7 @@ int main(int argc, char ** argv) {
         out << seed << " " << beta_true << " " << mean << " " << sd << " " << below / double(beta.size()) << " "
             << FML::MCMC::integrated_autocorrelation_time(beta) << " " << chain.acceptance << " " << chain.divergences
             << " " << em << " " << es << " " << eq << std::endl;
-        std::cout << "mock " << seed << ": beta_true " << beta_true << ", posterior " << mean << " +- " << sd
-                  << ", z " << (mean - beta_true) / sd << std::endl;
+        std::cout << "mock " << seed << ": beta_true " << beta_true << ", posterior " << mean << " +- " << sd << ", z "
+                  << (mean - beta_true) / sd << std::endl;
     }
 }

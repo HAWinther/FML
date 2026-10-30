@@ -13,7 +13,7 @@ int main() {
     reset();
     Grid copied(field);
     copied = field;
-    Grid &self = copied;
+    Grid & self = copied;
     copied = self;
     Grid moved(std::move(copied));
     auto empty = field.clone_empty();
@@ -33,7 +33,7 @@ int main() {
                 for (int i = 0; i < 1000; ++i)
                     record(Counter::ForwardFFTs);
             });
-        for (auto &t : workers)
+        for (auto & t : workers)
             t.join();
         good &= snapshot()[Counter::ForwardFFTs] == 4000;
         reset();

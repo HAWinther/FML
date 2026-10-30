@@ -12,7 +12,9 @@ namespace FML::RANDOM::COUNTER_BASED {
         for (int round = 0; round < 10; round++) {
             const uint64_t p0 = uint64_t(0xD2511F53u) * counter[0];
             const uint64_t p1 = uint64_t(0xCD9E8D57u) * counter[2];
-            counter = {uint32_t(p1 >> 32) ^ counter[1] ^ key[0], uint32_t(p1), uint32_t(p0 >> 32) ^ counter[3] ^ key[1],
+            counter = {uint32_t(p1 >> 32) ^ counter[1] ^ key[0],
+                       uint32_t(p1),
+                       uint32_t(p0 >> 32) ^ counter[3] ^ key[1],
                        uint32_t(p0)};
             key[0] += 0x9E3779B9u;
             key[1] += 0xBB67AE85u;
@@ -39,7 +41,9 @@ namespace FML::RANDOM::COUNTER_BASED {
             if (cursor == 4) {
                 if (block == std::numeric_limits<std::uint64_t>::max())
                     throw std::overflow_error("Philox stream exhausted");
-                words = philox4x32({std::uint32_t(object), std::uint32_t(object >> 32), std::uint32_t(block),
+                words = philox4x32({std::uint32_t(object),
+                                    std::uint32_t(object >> 32),
+                                    std::uint32_t(block),
                                     std::uint32_t(block >> 32)},
                                    key);
                 ++block;

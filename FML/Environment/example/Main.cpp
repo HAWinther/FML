@@ -27,7 +27,7 @@ int main() {
         std::cout << "\n# r xi_DS1 xi_DS2 xi_DS3 xi_DS4 xi_DS5 xi_parent M M_pair_normalized\n";
         for (size_t b = 0; b < split.parent.radius.size(); ++b) {
             std::cout << split.parent.radius[b];
-            for (const auto& q : split.cross)
+            for (const auto & q : split.cross)
                 std::cout << ' ' << q.xi[b];
             std::cout << ' ' << split.parent.xi[b] << ' ' << marked.mark_ratio[b] << ' '
                       << marked.pair_normalized_ratio[b] << '\n';

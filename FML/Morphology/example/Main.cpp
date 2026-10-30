@@ -18,7 +18,7 @@ int main() {
         std::cout << std::setprecision(10)
                   << "# periodic closed voxel union; L=100; >= threshold\n# threshold volume surface_area "
                      "integrated_mean_curvature Euler\n";
-        for (const auto& r : results)
+        for (const auto & r : results)
             std::cout << r.threshold << ' ' << r.measures.volume << ' ' << r.measures.surface_area << ' '
                       << r.measures.integrated_mean_curvature << ' ' << r.measures.euler_characteristic << '\n';
     }

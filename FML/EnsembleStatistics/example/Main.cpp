@@ -16,7 +16,9 @@ std::pair<Vector, Vector> sample(std::uint64_t id) {
     return {{5 + 1.7 * c + .1 * noise}, {c}};
 }
 int main() {
-    Metadata metadata{"toy Gaussian model; seed-v1", "one dimensionless scalar; v1", "correlated noisy target",
+    Metadata metadata{"toy Gaussian model; seed-v1",
+                      "one dimensionless scalar; v1",
+                      "correlated noisy target",
                       "Gaussian surrogate"};
     PairedTraining training(1, 1, metadata);
     for (int i = 0; i < 300; ++i)

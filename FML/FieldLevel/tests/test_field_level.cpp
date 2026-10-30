@@ -47,8 +47,8 @@ static void test_gradient(Settings st, const std::string & name) {
     const double numeric = (shifted(1) - shifted(-1)) / (2 * h);
     const double hb = 1e-6;
     const double numeric_beta = (fl.potential(s, beta + hb) - fl.potential(s, beta - hb)) / (2 * hb);
-    std::cout << name << ": dU.v analytic " << analytic << " numeric " << numeric << "; dU/dbeta analytic "
-              << grad_beta << " numeric " << numeric_beta << " (relative differences " << std::abs(analytic / numeric - 1) << ", "
+    std::cout << name << ": dU.v analytic " << analytic << " numeric " << numeric << "; dU/dbeta analytic " << grad_beta
+              << " numeric " << numeric_beta << " (relative differences " << std::abs(analytic / numeric - 1) << ", "
               << std::abs(grad_beta / numeric_beta - 1) << ")\n";
     check(std::abs(analytic - numeric) < 1e-5 * std::abs(numeric), name + " gradient in s");
     check(std::abs(grad_beta - numeric_beta) < 1e-4 * std::abs(numeric_beta) + 1e-6, name + " gradient in beta");
@@ -87,8 +87,9 @@ static void test_lpt_reduces_to_lpt1() {
 // Two orthogonal plane waves delta = A cos(k1 x) + B cos(k2 y): Psi1 = -A sin(k1 x) / k1 xhat - ..., and 2LPT
 // Psi2 = -(3/7) grad phi2 with nabla^2 phi2 = S2 = A B cos(k1 x) cos(k2 y), i.e.
 // Psi2 = -(3/7) A B / (k1^2 + k2^2) (k1 sin(k1 x) cos(k2 y), k2 cos(k1 x) sin(k2 y), 0) (Crocce et al. 2006:
-// x = q - grad phi1 + D2 grad phi2, D2 = -3/7, nabla^2 phi2 = sum_{i>j} phi1_ii phi1_jj - phi1_ij^2); in redshift space along z
-// nothing changes (no z dependence), so the test uses waves along x and z to check the 1 + f and 1 + 2 f factors.
+// x = q - grad phi1 + D2 grad phi2, D2 = -3/7, nabla^2 phi2 = sum_{i>j} phi1_ii phi1_jj - phi1_ij^2); in redshift space
+// along z nothing changes (no z dependence), so the test uses waves along x and z to check the 1 + f and 1 + 2 f
+// factors.
 static void test_two_plane_waves() {
     for (double f : {0., .6}) {
         auto st = lpt_settings(2, 0, 0, f);
@@ -99,8 +100,7 @@ static void test_two_plane_waves() {
         for (int ix = 0; ix < N; ++ix)
             for (int iy = 0; iy < N; ++iy)
                 for (int iz = 0; iz < N; ++iz)
-                    delta[(std::size_t(ix) * N + iy) * N + iz] =
-                        A * std::cos(k1 * ix / N) + B * std::cos(k2 * iz / N);
+                    delta[(std::size_t(ix) * N + iy) * N + iz] = A * std::cos(k1 * ix / N) + B * std::cos(k2 * iz / N);
         std::vector<double> inverse(fl.modes().size());
         for (std::size_t i = 0; i < inverse.size(); ++i)
             inverse[i] = 1 / fl.effective_transfer(fl.modes()[i], beta);
@@ -143,9 +143,10 @@ static void test_smooth_assignment_accuracy() {
                 for (int iy = 0; iy < N; ++iy)
                     for (int iz = 0; iz < N; ++iz) {
                         const auto p = (std::size_t(ix) * N + iy) * N + iz;
-                        const double phase = -2 * M_PI *
-                                             (m.n[0] * (double(ix) / N + psi[0][p]) + m.n[1] * (double(iy) / N + psi[1][p]) +
-                                              m.n[2] * (double(iz) / N + psi[2][p]));
+                        const double phase =
+                            -2 * M_PI *
+                            (m.n[0] * (double(ix) / N + psi[0][p]) + m.n[1] * (double(iy) / N + psi[1][p]) +
+                             m.n[2] * (double(iz) / N + psi[2][p]));
                         direct += Complex(std::cos(phase), std::sin(phase));
                     }
             direct /= double(fl.ncells());
@@ -155,10 +156,13 @@ static void test_smooth_assignment_accuracy() {
         for (const auto & c : psi)
             for (double v : c)
                 psi2 += v * v;
-        std::cout << "smooth assignment, width " << width << ": |pred - direct sum| / |direct| = "
-                  << std::sqrt(err / norm) << " (rms displacement " << std::sqrt(psi2 / fl.ncells()) * 2 * N
-                  << " density cells)\n";
-        check(std::sqrt(err / norm) < (width == 4 ? 1e-2 : width == 6 ? 1e-4 : 1e-5), "smooth assignment equals the direct Fourier sum");
+        std::cout << "smooth assignment, width " << width
+                  << ": |pred - direct sum| / |direct| = " << std::sqrt(err / norm) << " (rms displacement "
+                  << std::sqrt(psi2 / fl.ncells()) * 2 * N << " density cells)\n";
+        check(std::sqrt(err / norm) < (width == 4 ? 1e-2 :
+                                       width == 6 ? 1e-4 :
+                                                    1e-5),
+              "smooth assignment equals the direct Fourier sum");
     }
 }
 
@@ -285,8 +289,8 @@ static void test_linear_posterior() {
     check(diagnostic.valid(), "linear HMC diagnostics valid");
     check(diagnostic.rhat < 1.05, "linear HMC rank-normalized split Rhat");
     check(diagnostic.ess_bulk > 50 && diagnostic.ess_tail > 30, "linear HMC bulk/tail ESS");
-    std::cout << "linear diagnostics: Rhat " << diagnostic.rhat << " bulk ESS " << diagnostic.ess_bulk
-              << " tail ESS " << diagnostic.ess_tail << "\n";
+    std::cout << "linear diagnostics: Rhat " << diagnostic.rhat << " bulk ESS " << diagnostic.ess_bulk << " tail ESS "
+              << diagnostic.ess_tail << "\n";
     const auto & chain = runs.front();
     const auto beta = FML::MCMC::recorded_column(chain, 0);
     double mean, sd;
@@ -296,7 +300,8 @@ static void test_linear_posterior() {
     check(std::isfinite(tau) && ess > 0, "linear HMC nondegenerate legacy ESS");
     std::cout << "linear: exact beta = " << mean_exact << " +- " << sd_exact << "; HMC " << mean << " +- " << sd
               << " (acceptance " << chain.acceptance << ", tau " << tau << ", ESS " << ess << ")\n";
-    check(std::abs(mean - mean_exact) < 4 * sd_exact / std::sqrt(ess), "linear HMC mean of beta matches exact marginal");
+    check(std::abs(mean - mean_exact) < 4 * sd_exact / std::sqrt(ess),
+          "linear HMC mean of beta matches exact marginal");
     check(std::abs(sd / sd_exact - 1) < 4 / std::sqrt(2 * ess) + .05, "linear HMC std of beta matches exact marginal");
     check(chain.acceptance > .4, "linear HMC acceptance");
 }

@@ -183,23 +183,26 @@ void test_chunked_exchange() {
             std::vector<std::vector<char>> seen(FML::NTasks);
             for (int task = 0; task < FML::NTasks; ++task) {
                 for (size_t i = 0; i < count(FML::ThisTask, task); ++i)
-                    send[task].push_back({static_cast<unsigned long long>(FML::ThisTask),
-                                          static_cast<unsigned long long>(task), i});
+                    send[task].push_back(
+                        {static_cast<unsigned long long>(FML::ThisTask), static_cast<unsigned long long>(task), i});
                 seen[task].resize(count(task, FML::ThisTask), 0);
             }
             bool ok = true;
-            exchange_records_chunked(send, [&](const Record * records, size_t n) {
-                for (size_t i = 0; i < n; ++i) {
-                    const auto & r = records[i];
-                    if (r.dest != static_cast<unsigned long long>(FML::ThisTask) ||
-                        r.source >= seen.size() || r.index >= seen[r.source].size()) {
-                        ok = false;
-                        continue;
+            exchange_records_chunked(
+                send,
+                [&](const Record * records, size_t n) {
+                    for (size_t i = 0; i < n; ++i) {
+                        const auto & r = records[i];
+                        if (r.dest != static_cast<unsigned long long>(FML::ThisTask) || r.source >= seen.size() ||
+                            r.index >= seen[r.source].size()) {
+                            ok = false;
+                            continue;
+                        }
+                        if (seen[r.source][r.index]++)
+                            ok = false;
                     }
-                    if (seen[r.source][r.index]++)
-                        ok = false;
-                }
-            }, bytes + size_t(FML::ThisTask) * sizeof(Record));
+                },
+                bytes + size_t(FML::ThisTask) * sizeof(Record));
             for (const auto & source : seen)
                 for (char n : source)
                     ok = ok && n == 1;
@@ -207,8 +210,9 @@ void test_chunked_exchange() {
                 ok = ok && peer.empty() && peer.capacity() == 0;
             int bad = !ok;
             FML::MaxOverTasks(&bad);
-            check(!bad, "chunked exchange delivers every record exactly once, pattern " + std::to_string(pattern) +
-                            ", byte limit " + std::to_string(bytes));
+            check(!bad,
+                  "chunked exchange delivers every record exactly once, pattern " + std::to_string(pattern) +
+                      ", byte limit " + std::to_string(bytes));
         }
 }
 
@@ -245,10 +249,12 @@ void test_mode_redistribution(int source_mesh, int dest_mesh) {
         bad = bad || dest.get_fourier_from_index(index) != expected;
     }
     for (auto index : source.get_fourier_range())
-        bad = bad || source.get_fourier_from_index(index) != value(source.get_fourier_integer_wavevector_from_index(index));
+        bad = bad ||
+              source.get_fourier_from_index(index) != value(source.get_fourier_integer_wavevector_from_index(index));
     FML::MaxOverTasks(&bad);
-    check(!bad, "NUFFT mode redistribution preserves exact coefficients, factor and cutoff: " + std::to_string(N) +
-                    "D " + std::to_string(source_mesh) + " -> " + std::to_string(dest_mesh));
+    check(!bad,
+          "NUFFT mode redistribution preserves exact coefficients, factor and cutoff: " + std::to_string(N) + "D " +
+              std::to_string(source_mesh) + " -> " + std::to_string(dest_mesh));
 }
 
 void test_redistribution_suite() {
@@ -290,8 +296,10 @@ int main(int argc, char ** argv) {
 
     if (argc > 1 && std::string(argv[1]) == "chunk_limit") {
         std::vector<std::vector<int>> send(FML::NTasks);
-        FML::COMMUNICATION::exchange_records_chunked(send, [](const int *, size_t) {},
-                                                    FML::ThisTask == 0 ? sizeof(int) - 1 : sizeof(int));
+        FML::COMMUNICATION::exchange_records_chunked(
+            send,
+            [](const int *, size_t) {},
+            FML::ThisTask == 0 ? sizeof(int) - 1 : sizeof(int));
         return 1; // The invalid limit must terminate collectively before reaching here.
     }
     test_redistribution_suite();

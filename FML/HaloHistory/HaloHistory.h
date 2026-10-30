@@ -18,11 +18,20 @@ namespace FML::HALO_HISTORY {
     struct Metadata {
         std::string mass_definition, length_unit = "Mpc/h", mass_unit = "Msun/h", velocity_unit = "km/s",
                                      length_convention = "comoving", velocity_convention = "peculiar", id_namespace;
-        bool operator==(const Metadata& m) const {
-            return std::tie(mass_definition, length_unit, mass_unit, velocity_unit, length_convention,
+        bool operator==(const Metadata & m) const {
+            return std::tie(mass_definition,
+                            length_unit,
+                            mass_unit,
+                            velocity_unit,
+                            length_convention,
                             velocity_convention,
-                            id_namespace) == std::tie(m.mass_definition, m.length_unit, m.mass_unit, m.velocity_unit,
-                                                      m.length_convention, m.velocity_convention, m.id_namespace);
+                            id_namespace) == std::tie(m.mass_definition,
+                                                      m.length_unit,
+                                                      m.mass_unit,
+                                                      m.velocity_unit,
+                                                      m.length_convention,
+                                                      m.velocity_convention,
+                                                      m.id_namespace);
         }
     };
     struct Halo {
@@ -41,8 +50,8 @@ namespace FML::HALO_HISTORY {
     };
     struct NodeKey {
         ID snapshot = 0, halo = 0;
-        bool operator<(const NodeKey& k) const { return std::tie(snapshot, halo) < std::tie(k.snapshot, k.halo); }
-        bool operator==(const NodeKey& k) const { return snapshot == k.snapshot && halo == k.halo; }
+        bool operator<(const NodeKey & k) const { return std::tie(snapshot, halo) < std::tie(k.snapshot, k.halo); }
+        bool operator==(const NodeKey & k) const { return snapshot == k.snapshot && halo == k.halo; }
     };
     struct MatchOptions {
         ID minimum_shared = 2;
@@ -82,11 +91,11 @@ namespace FML::HALO_HISTORY {
         std::vector<NodeKey> roots;
     };
     namespace detail {
-        inline void require(bool valid, const char* text) {
+        inline void require(bool valid, const char * text) {
             if (!valid)
                 throw std::invalid_argument(text);
         }
-        inline bool token(const std::string& s) {
+        inline bool token(const std::string & s) {
             if (s.empty())
                 return false;
             for (unsigned char c : s)
@@ -94,24 +103,24 @@ namespace FML::HALO_HISTORY {
                     return false;
             return true;
         }
-        inline bool better(const Candidate& a, const Candidate& b) {
+        inline bool better(const Candidate & a, const Candidate & b) {
             if (a.merit != b.merit)
                 return a.merit > b.merit;
             if (a.shared != b.shared)
                 return a.shared > b.shared;
             return a.target < b.target;
         }
-        inline void options(const MatchOptions& o) {
+        inline void options(const MatchOptions & o) {
             require(o.minimum_shared > 0 && o.max_candidates > 0 && o.max_overlap_work > 0,
                     "Invalid halo match count/budget");
             for (double x : {o.minimum_source_fraction, o.minimum_target_fraction, o.minimum_merit})
                 require(std::isfinite(x) && x >= 0 && x <= 1, "Halo match thresholds must be in [0,1]");
         }
         using Entry = std::pair<ID, size_t>;
-        inline std::vector<Entry> index(const Snapshot& s) {
+        inline std::vector<Entry> index(const Snapshot & s) {
             std::vector<Entry> out;
             size_t count = 0;
-            for (const auto& h : s.halos) {
+            for (const auto & h : s.halos) {
                 require(h.particles.size() <= out.max_size() - count,
                         "Halo membership index exceeds addressable storage");
                 count += h.particles.size();
@@ -126,22 +135,26 @@ namespace FML::HALO_HISTORY {
     } // namespace detail
     /// Local validation. Inclusive memberships permit shared IDs between halos,
     /// never duplicate IDs within a halo. Host relationships must form a forest.
-    inline void validate(const Snapshot& s) {
+    inline void validate(const Snapshot & s) {
         detail::require(s.scale_factor > 0 && std::isfinite(s.scale_factor) && s.boxsize > 0 &&
                             std::isfinite(s.boxsize),
                         "Invalid snapshot epoch/boxsize");
         detail::require(s.membership == Membership::Exclusive || s.membership == Membership::Inclusive,
                         "Invalid halo membership policy");
-        for (const auto& token :
-             {s.metadata.mass_definition, s.metadata.length_unit, s.metadata.mass_unit, s.metadata.velocity_unit,
-              s.metadata.length_convention, s.metadata.velocity_convention, s.metadata.id_namespace})
+        for (const auto & token : {s.metadata.mass_definition,
+                                   s.metadata.length_unit,
+                                   s.metadata.mass_unit,
+                                   s.metadata.velocity_unit,
+                                   s.metadata.length_convention,
+                                   s.metadata.velocity_convention,
+                                   s.metadata.id_namespace})
             detail::require(detail::token(token), "Halo metadata must use nonempty ASCII tokens");
         std::map<ID, size_t> ids;
         // Duplicate checks by sorting contiguous copies (std::set per particle took ~2 us and ~50 bytes per member:
         // minutes and tens of GB for 1e8 halo particles)
         std::vector<ID> members, all;
         for (size_t i = 0; i < s.halos.size(); ++i) {
-            const auto& h = s.halos[i];
+            const auto & h = s.halos[i];
             detail::require(ids.emplace(h.id, i).second, "Duplicate halo ID in snapshot");
             detail::require(h.mass > 0 && h.radius > 0 && h.vmax >= 0 && std::isfinite(h.mass) &&
                                 std::isfinite(h.radius) && std::isfinite(h.vmax),
@@ -169,7 +182,7 @@ namespace FML::HALO_HISTORY {
             while (state[current] == 0) {
                 state[current] = 1;
                 path.push_back(current);
-                const auto& host = s.halos[current].host;
+                const auto & host = s.halos[current].host;
                 if (!host)
                     break;
                 auto found = ids.find(*host);
@@ -183,11 +196,14 @@ namespace FML::HALO_HISTORY {
     }
     namespace detail {
         // Matching of two snapshots that are already validated and consistent
-        inline Matching match_validated(const Snapshot& source, const Snapshot& target, const MatchOptions& options,
-                                        const std::vector<Entry>& a, const std::vector<Entry>& b);
+        inline Matching match_validated(const Snapshot & source,
+                                        const Snapshot & target,
+                                        const MatchOptions & options,
+                                        const std::vector<Entry> & a,
+                                        const std::vector<Entry> & b);
     } // namespace detail
     /// Sorted inverted particle-ID indices replace an all-halo-pairs scan.
-    inline Matching match(const Snapshot& source, const Snapshot& target, const MatchOptions& options = {}) {
+    inline Matching match(const Snapshot & source, const Snapshot & target, const MatchOptions & options = {}) {
         validate(source);
         validate(target);
         detail::options(options);
@@ -197,9 +213,11 @@ namespace FML::HALO_HISTORY {
             "Halo matches require increasing snapshots/epochs and identical units/ID namespace/box metadata");
         return detail::match_validated(source, target, options, detail::index(source), detail::index(target));
     }
-    inline Matching detail::match_validated(const Snapshot& source, const Snapshot& target,
-                                            const MatchOptions& options, const std::vector<Entry>& a,
-                                            const std::vector<Entry>& b) {
+    inline Matching detail::match_validated(const Snapshot & source,
+                                            const Snapshot & target,
+                                            const MatchOptions & options,
+                                            const std::vector<Entry> & a,
+                                            const std::vector<Entry> & b) {
         // One 64-bit key (source index * N_target + target index) per shared owner pair, then sort and count runs.
         // A map of halo-pair counters (ordered or hashed) cost ~0.5 us per shared particle in random access.
         const std::uint64_t ntarget = target.halos.size();
@@ -251,9 +269,9 @@ namespace FML::HALO_HISTORY {
         Matching out;
         out.source_snapshot = source.id;
         out.target_snapshot = target.id;
-        for (const auto& item : shared) {
-            const auto& from = source.halos[size_t(item.first / ntarget)];
-            const auto& to = target.halos[size_t(item.first % ntarget)];
+        for (const auto & item : shared) {
+            const auto & from = source.halos[size_t(item.first / ntarget)];
+            const auto & to = target.halos[size_t(item.first % ntarget)];
             Candidate c;
             c.source = from.id;
             c.target = to.id;
@@ -269,14 +287,15 @@ namespace FML::HALO_HISTORY {
             if (chosen == out.descendants.end() || better(c, chosen->second))
                 out.descendants[c.source] = c;
         }
-        std::sort(out.candidates.begin(), out.candidates.end(), [](const Candidate& a, const Candidate& b) {
+        std::sort(out.candidates.begin(), out.candidates.end(), [](const Candidate & a, const Candidate & b) {
             return std::tie(a.source, a.target) < std::tie(b.source, b.target);
         });
         return out;
     }
     /// Earliest accepted descendant, optional bounded forward snapshot skipping.
     /// No trajectories, binding-rank weighting, or mass-history repair are inferred.
-    inline History build(const std::vector<Snapshot>& snapshots, const MatchOptions& options = {},
+    inline History build(const std::vector<Snapshot> & snapshots,
+                         const MatchOptions & options = {},
                          size_t max_skipped_snapshots = 0) {
         detail::options(options);
         for (size_t s = 0; s < snapshots.size(); ++s) {
@@ -298,12 +317,12 @@ namespace FML::HALO_HISTORY {
             out.membership = snapshots.front().membership;
         }
         std::map<NodeKey, size_t> node_index;
-        for (const auto& s : snapshots) {
-            std::vector<const Halo*> ordered;
-            for (const auto& h : s.halos)
+        for (const auto & s : snapshots) {
+            std::vector<const Halo *> ordered;
+            for (const auto & h : s.halos)
                 ordered.push_back(&h);
             std::sort(ordered.begin(), ordered.end(), [](auto a, auto b) { return a->id < b->id; });
-            for (const auto* h : ordered) {
+            for (const auto * h : ordered) {
                 Node node;
                 node.key = {s.id, h->id};
                 node.scale_factor = s.scale_factor;
@@ -320,7 +339,7 @@ namespace FML::HALO_HISTORY {
         }
         // Particle indices of the snapshots in the current lookahead window (each built once)
         std::map<size_t, std::vector<detail::Entry>> indices;
-        auto index_of = [&](size_t s) -> const std::vector<detail::Entry>& {
+        auto index_of = [&](size_t s) -> const std::vector<detail::Entry> & {
             auto found = indices.find(s);
             if (found == indices.end())
                 found = indices.emplace(s, detail::index(snapshots[s])).first;
@@ -332,13 +351,16 @@ namespace FML::HALO_HISTORY {
                          reach = max_skipped_snapshots >= remaining ? remaining : max_skipped_snapshots + 1;
             size_t unresolved = snapshots[s].halos.size();
             for (size_t offset = 1; offset <= reach && unresolved; ++offset) {
-                auto candidates = detail::match_validated(snapshots[s], snapshots[s + offset], options, index_of(s),
+                auto candidates = detail::match_validated(snapshots[s],
+                                                          snapshots[s + offset],
+                                                          options,
+                                                          index_of(s),
                                                           index_of(s + offset));
-                for (const auto& item : candidates.descendants) {
-                    auto& node = out.nodes[node_index.at({snapshots[s].id, item.first})];
+                for (const auto & item : candidates.descendants) {
+                    auto & node = out.nodes[node_index.at({snapshots[s].id, item.first})];
                     if (node.descendant)
                         continue;
-                    const auto& c = item.second;
+                    const auto & c = item.second;
                     NodeKey target{snapshots[s + offset].id, c.target};
                     node.descendant = target;
                     --unresolved;
@@ -348,8 +370,8 @@ namespace FML::HALO_HISTORY {
             }
         }
         std::map<NodeKey, Link> main;
-        for (const auto& link : out.links) {
-            auto& target = out.nodes[node_index.at(link.target)];
+        for (const auto & link : out.links) {
+            auto & target = out.nodes[node_index.at(link.target)];
             target.progenitors.push_back(link.source);
             auto old = main.find(link.target);
             if (old == main.end() || link.merit > old->second.merit ||
@@ -358,7 +380,7 @@ namespace FML::HALO_HISTORY {
                   (link.shared == old->second.shared && link.source < old->second.source))))
                 main[link.target] = link;
         }
-        for (auto& node : out.nodes) {
+        for (auto & node : out.nodes) {
             std::sort(node.progenitors.begin(), node.progenitors.end());
             auto found = main.find(node.key);
             if (found != main.end())
@@ -366,7 +388,9 @@ namespace FML::HALO_HISTORY {
             if (!node.descendant)
                 out.roots.push_back(node.key);
         }
-        std::sort(out.links.begin(), out.links.end(), [](const Link& a, const Link& b) { return a.source < b.source; });
+        std::sort(out.links.begin(), out.links.end(), [](const Link & a, const Link & b) {
+            return a.source < b.source;
+        });
         return out;
     }
 } // namespace FML::HALO_HISTORY

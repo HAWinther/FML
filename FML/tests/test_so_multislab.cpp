@@ -15,18 +15,18 @@ struct Particle {
     std::vector<double> payload;
     inline static bool fail_decode = false;
     bool fail_pack = false;
-    double* get_pos() { return pos.data(); }
-    double* get_vel() { return vel.data(); }
+    double * get_pos() { return pos.data(); }
+    double * get_vel() { return vel.data(); }
     double get_mass() { return mass; }
     constexpr int get_ndim() const { return 3; }
     int get_particle_byte_size() {
         return int(2 * sizeof(Point) + sizeof(mass) + 2 * sizeof(std::uint64_t) + payload.size() * sizeof(double));
     }
-    void append_to_buffer(char* b) {
+    void append_to_buffer(char * b) {
         if (fail_pack)
             throw std::runtime_error("injected serializer failure");
         std::uint64_t n = payload.size();
-        auto put = [&](const void* data, size_t bytes) {
+        auto put = [&](const void * data, size_t bytes) {
             std::memcpy(b, data, bytes);
             b += bytes;
         };
@@ -38,11 +38,11 @@ struct Particle {
         if (n)
             put(payload.data(), n * sizeof(double));
     }
-    void assign_from_buffer(char* b) {
+    void assign_from_buffer(char * b) {
         if (fail_decode)
             throw std::runtime_error("injected decoder failure");
         std::uint64_t n = 0;
-        auto get = [&](void* data, size_t bytes) {
+        auto get = [&](void * data, size_t bytes) {
             std::memcpy(data, b, bytes);
             b += bytes;
         };
@@ -57,7 +57,7 @@ struct Particle {
     }
 };
 int failures = 0;
-void check(bool ok, const std::string& label) {
+void check(bool ok, const std::string & label) {
     int bad = !ok;
     FML::MaxOverTasks(&bad);
     failures += bad;
@@ -65,7 +65,7 @@ void check(bool ok, const std::string& label) {
         std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
 }
 double wrap(double x) { return x - std::floor(x); }
-double distance(const Point& x, const Point& y) {
+double distance(const Point & x, const Point & y) {
     double value = 0;
     for (int d = 0; d < 3; ++d) {
         double dx = x[d] - y[d];
@@ -74,9 +74,9 @@ double distance(const Point& x, const Point& y) {
     }
     return value;
 }
-std::vector<Particle> local(const std::vector<Particle>& all) {
+std::vector<Particle> local(const std::vector<Particle> & all) {
     std::vector<Particle> out;
-    for (const auto& p : all)
+    for (const auto & p : all)
         if (p.pos[0] >= FML::xmin_domain && p.pos[0] < FML::xmax_domain)
             out.push_back(p);
     return out;
@@ -107,22 +107,25 @@ bool needed(double x, double lo, double hi, double width) {
             return true;
     return false;
 }
-void test_exchange(const std::vector<Particle>& all) {
+void test_exchange(const std::vector<Particle> & all) {
     for (double width : {0., .03125, .18, .49, .8}) {
         auto owned = local(all);
         auto original = owned;
         double radius = width + .002 * FML::ThisTask;
-        auto ghosts = FML::FOF::fetch_boundary_particles(owned.data(), owned.size(), radius,
-                                                         128 + 32 * (FML::ThisTask % 3), false);
+        auto ghosts = FML::FOF::fetch_boundary_particles(owned.data(),
+                                                         owned.size(),
+                                                         radius,
+                                                         128 + 32 * (FML::ThisTask % 3),
+                                                         false);
         std::set<std::uint64_t> expected, actual;
         bool data = true;
-        for (const auto& p : all)
+        for (const auto & p : all)
             if (!(p.pos[0] >= FML::xmin_domain && p.pos[0] < FML::xmax_domain) &&
                 needed(p.pos[0], FML::xmin_domain, FML::xmax_domain, radius))
                 expected.insert(p.id);
-        for (const auto& p : ghosts) {
+        for (const auto & p : ghosts) {
             actual.insert(p.id);
-            const auto& reference = all.at(size_t(p.id));
+            const auto & reference = all.at(size_t(p.id));
             data &= p.pos == reference.pos && p.vel == reference.vel && p.mass == reference.mass &&
                     p.payload == reference.payload;
         }
@@ -136,12 +139,13 @@ void test_exchange(const std::vector<Particle>& all) {
                   "buffer wider than thin slabs still avoids full particle replication");
         auto unwrapped = FML::FOF::fetch_boundary_particles(owned.data(), owned.size(), radius, 160, true);
         data = unwrapped.size() == ghosts.size();
-        for (const auto& p : unwrapped) {
-            const auto& q = all.at(size_t(p.id));
+        for (const auto & p : unwrapped) {
+            const auto & q = all.at(size_t(p.id));
             double best = 10;
             for (int shift = -2; shift <= 2; ++shift)
-                best = std::min(
-                    best, std::max({FML::xmin_domain - q.pos[0] - shift, q.pos[0] + shift - FML::xmax_domain, 0.}));
+                best =
+                    std::min(best,
+                             std::max({FML::xmin_domain - q.pos[0] - shift, q.pos[0] + shift - FML::xmax_domain, 0.}));
             double actual_distance = std::max({FML::xmin_domain - p.pos[0], p.pos[0] - FML::xmax_domain, 0.});
             data &= std::abs(wrap(p.pos[0]) - q.pos[0]) < 2e-15 && std::abs(actual_distance - best) < 2e-15 &&
                     p.payload == q.payload;
@@ -153,11 +157,15 @@ void test_exchange(const std::vector<Particle>& all) {
     check(none.empty(), "empty global particle catalogue participates safely");
 }
 // Independent all-particle reference, intentionally replicated only for the small test fixture.
-Halo brute(std::vector<Particle>& all, Point center, double radius, const std::vector<double>& thresholds,
-           double search, int minimum) {
+Halo brute(std::vector<Particle> & all,
+           Point center,
+           double radius,
+           const std::vector<double> & thresholds,
+           double search,
+           int minimum) {
     auto within = [&](double r) {
-        std::vector<std::pair<double, Particle*>> out;
-        for (auto& p : all) {
+        std::vector<std::pair<double, Particle *>> out;
+        for (auto & p : all) {
             double r2 = distance(p.pos, center);
             if (r2 <= r * r)
                 out.emplace_back(r2, &p);
@@ -174,8 +182,8 @@ Halo brute(std::vector<Particle>& all, Point center, double radius, const std::v
             break;
         Point shift{};
         double mass = 0;
-        for (const auto& entry : inside) {
-            const auto& p = *entry.second;
+        for (const auto & entry : inside) {
+            const auto & p = *entry.second;
             mass += p.mass;
             for (int d = 0; d < 3; ++d) {
                 double dx = p.pos[d] - center[d];
@@ -193,9 +201,9 @@ Halo brute(std::vector<Particle>& all, Point center, double radius, const std::v
     out.mass.resize(thresholds.size());
     out.npart.resize(thresholds.size());
     auto inside = within(search);
-    std::sort(inside.begin(), inside.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::sort(inside.begin(), inside.end(), [](const auto & a, const auto & b) { return a.first < b.first; });
     double total = 0;
-    for (const auto& p : all)
+    for (const auto & p : all)
         total += p.mass;
     std::vector<double> cumulative;
     double enclosed = 0;
@@ -221,9 +229,9 @@ Halo brute(std::vector<Particle>& all, Point center, double radius, const std::v
     }
     if (!thresholds.empty()) {
         double mass = 0;
-        for (const auto& entry : inside)
+        for (const auto & entry : inside)
             if (entry.first <= out.radius[0] * out.radius[0]) {
-                const auto& p = *entry.second;
+                const auto & p = *entry.second;
                 mass += p.mass;
                 for (int d = 0; d < 3; ++d) {
                     out.vel[d] += p.mass * p.vel[d];
@@ -238,7 +246,7 @@ Halo brute(std::vector<Particle>& all, Point center, double radius, const std::v
     }
     return out;
 }
-bool same(const Halo& a, const Halo& b) {
+bool same(const Halo & a, const Halo & b) {
     bool ok = a.npart == b.npart && a.truncated == b.truncated;
     for (int d = 0; d < 3; ++d) {
         double dx = a.pos[d] - b.pos[d];
@@ -250,21 +258,31 @@ bool same(const Halo& a, const Halo& b) {
         ok &= std::abs(a.radius[i] - b.radius[i]) < 1e-12 && std::abs(a.mass[i] - b.mass[i]) < 1e-10;
     return ok;
 }
-void compare(std::vector<Particle> all, const std::vector<Point>& candidates, double search, bool recenter,
-             const std::string& name) {
+void compare(std::vector<Particle> all,
+             const std::vector<Point> & candidates,
+             double search,
+             bool recenter,
+             const std::string & name) {
     auto owned = local(all);
     std::vector<Point> centers;
     for (auto c : candidates)
         if (c[0] >= FML::xmin_domain && c[0] < FML::xmax_domain)
             centers.push_back(c);
     double total = 0;
-    for (const auto& p : all)
+    for (const auto & p : all)
         total += p.mass;
     std::vector<double> thresholds{2., .1, 100.};
     std::vector<double> initial(centers.size(), search * .8);
     int minimum = recenter ? 3 : 1000000;
-    auto measured = FML::FOF::SphericalOverdensity<Particle, 3>(owned.data(), owned.size(), total, centers, initial,
-                                                                thresholds, search, minimum, 160);
+    auto measured = FML::FOF::SphericalOverdensity<Particle, 3>(owned.data(),
+                                                                owned.size(),
+                                                                total,
+                                                                centers,
+                                                                initial,
+                                                                thresholds,
+                                                                search,
+                                                                minimum,
+                                                                160);
     bool correct = measured.size() == centers.size();
     size_t truncated = 0;
     for (size_t i = 0; i < centers.size(); ++i) {
@@ -288,7 +306,7 @@ void test_measurements(std::vector<Particle> all) {
     compare(sparse, centers, .32, true, "empty particle ranks");
     double boundary = 1.;
     std::array<double, 2> extent{FML::xmin_domain, FML::xmax_domain};
-    for (const auto& slab : FML::GatherFromTasks(&extent))
+    for (const auto & slab : FML::GatherFromTasks(&extent))
         if (slab[1] > 0 && slab[1] < 1)
             boundary = std::min(boundary, slab[1]);
     std::vector<Particle> drift;
@@ -311,7 +329,7 @@ void test_measurements(std::vector<Particle> all) {
 struct FloatParticle {
     float pos[3]{};
     std::uint64_t id = 0;
-    float* get_pos() { return pos; }
+    float * get_pos() { return pos; }
     constexpr int get_ndim() const { return 3; }
 };
 void test_float_particles() {
@@ -331,7 +349,7 @@ void test_float_particles() {
     const auto ghosts = FML::FOF::fetch_boundary_particles(owned.data(), owned.size(), .3, 128, false);
     std::set<std::uint64_t> actual;
     bool ok = true;
-    for (const auto& p : ghosts) {
+    for (const auto & p : ghosts) {
         actual.insert(p.id);
         ok &= p.id < reference.size();
         if (p.id < reference.size())
@@ -345,11 +363,17 @@ void test_float_particles() {
     if (wrapped[0] >= FML::xmin_domain && wrapped[0] < FML::xmax_domain)
         centers.push_back({2.125, -1.5, 3.5});
     const std::vector<double> thresholds{2., 10.};
-    auto halos = FML::FOF::SphericalOverdensity<FloatParticle, 3>(owned.data(), owned.size(), 32., centers,
-                                                                  std::vector<double>(centers.size(), .2), thresholds,
-                                                                  .3, 1000000, 128);
+    auto halos = FML::FOF::SphericalOverdensity<FloatParticle, 3>(owned.data(),
+                                                                  owned.size(),
+                                                                  32.,
+                                                                  centers,
+                                                                  std::vector<double>(centers.size(), .2),
+                                                                  thresholds,
+                                                                  .3,
+                                                                  1000000,
+                                                                  128);
     ok = halos.size() == centers.size();
-    for (const auto& h : halos)
+    for (const auto & h : halos)
         ok &= same(h, brute(reference, wrapped, .2, thresholds, .3, 1000000));
     check(ok,
           "float positions, unit-mass fallback, absent velocities and unwrapped seed centers match direct reference");
@@ -383,7 +407,7 @@ int main() {
         bool caught = false;
         try {
             FML::FOF::fetch_boundary_particles(throwing.data(), throwing.size(), .8, 160, false);
-        } catch (const std::invalid_argument&) {
+        } catch (const std::invalid_argument &) {
             caught = true;
         }
         check(caught, "one-rank serializer failure is collective");
@@ -391,7 +415,7 @@ int main() {
         caught = false;
         try {
             FML::FOF::fetch_boundary_particles(owned.data(), owned.size(), .8, 160, false);
-        } catch (const std::invalid_argument&) {
+        } catch (const std::invalid_argument &) {
             caught = true;
         }
         Particle::fail_decode = false;
@@ -400,14 +424,14 @@ int main() {
     bool rejected = false;
     try {
         FML::FOF::fetch_boundary_particles(owned.data(), owned.size(), .2, 8, false);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "undersized message budgets fail collectively");
     rejected = false;
     try {
         FML::FOF::fetch_boundary_particles<Particle>(nullptr, FML::ThisTask == 0 ? 1 : 0, .2, 160, false);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "one-rank null owned storage fails collectively before access");
@@ -415,7 +439,7 @@ int main() {
     std::vector<Point> c{{.1, .2, .3}};
     try {
         FML::FOF::SphericalOverdensity<Particle, 3>(owned.data(), owned.size(), 1, c, {}, {2.}, .2);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "invalid center/radius shapes fail collectively before indexing");

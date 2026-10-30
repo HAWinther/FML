@@ -355,7 +355,8 @@ void test_sparse_results() {
     input.fftw_r2c();
     const double tolerance = sizeof(FML::GRID::FloatType) == sizeof(float) ? 3e-5 : 3e-11;
     auto compare = [&](Sparse & sparse, Dense & dense, const std::string & label) {
-        bool ok = sparse.P123.size() == sparse.stored_configurations().size() && sparse.N123.size() == sparse.P123.size();
+        bool ok =
+            sparse.P123.size() == sparse.stored_configurations().size() && sparse.N123.size() == sparse.P123.size();
         for (size_t i = 0; i < dense.P123.size(); ++i) {
             const auto cfg = dense.get_coord_from_index(i);
             const double p = dense.P123[i], count = dense.N123[i];
@@ -427,7 +428,9 @@ void test_sparse_results() {
         try {
             missing[0] = -1;
             (void)sparse.get_spectrum(missing);
-        } catch (const std::out_of_range &) { range_error = true; }
+        } catch (const std::out_of_range &) {
+            range_error = true;
+        }
         check(indices && range_error, "sparse indices round-trip, unrequested tuples return zero, invalid bins reject");
 
         auto scaled_dense = sparse.to_dense();
@@ -448,7 +451,8 @@ void test_sparse_results() {
         compute_polyspectrum<N, ORDER>(input, sparse);
         check(sparse.statistics.geometry_shell_builds > 0, "closure changes invalidate sparse geometry");
         sparse.reset();
-        check(!sparse.bincount_is_set && std::all_of(sparse.N123.begin(), sparse.N123.end(), [](double n) { return n == 0; }),
+        check(!sparse.bincount_is_set &&
+                  std::all_of(sparse.N123.begin(), sparse.N123.end(), [](double n) { return n == 0; }),
               "sparse reset clears counts and invalidates geometry");
         sparse.free();
         check(sparse.P123.capacity() == 0 && sparse.N123.capacity() == 0 && sparse.stored_configurations().empty(),
@@ -460,7 +464,8 @@ void test_sparse_results() {
             sparse.klow[mixed[ORDER - 1]] = 1000;
             sparse.khigh[mixed[ORDER - 1]] = 1001;
             compute_polyspectrum<N, ORDER>(input, sparse);
-            check(sparse.statistics.geometry_shell_builds > 0 && sparse.P123.size() == 1 && sparse.get_spectrum(mixed) == 0,
+            check(sparse.statistics.geometry_shell_builds > 0 && sparse.P123.size() == 1 &&
+                      sparse.get_spectrum(mixed) == 0,
                   "changed shell edges invalidate geometry and remove newly impossible compact slots");
             Config impossible{};
             impossible[ORDER - 1] = nbins - 1;
@@ -481,7 +486,9 @@ void test_sparse_allocation_limits() {
     bool overflow = false;
     try {
         TrispectrumBinning<3> dense(100000, 16);
-    } catch (const std::length_error &) { overflow = true; }
+    } catch (const std::length_error &) {
+        overflow = true;
+    }
     check(overflow, "dense result dimensions reject overflow before allocating memory");
     SparseBispectrumBinning<3> uncomputed(4, 8);
     auto zeros = uncomputed.to_dense();
@@ -531,8 +538,9 @@ void test_sparse_particle_estimates() {
             ok = ok && std::abs(sparse.pofk[i] - dense.pofk[i]) <= tolerance * std::max(1.0, std::abs(dense.pofk[i]));
         int bad = !ok;
         FML::MaxOverTasks(&bad);
-        check(!bad, "sparse particle wrapper matches dense output, order=" + std::to_string(ORDER) +
-                        ", subtract_shotnoise=" + std::to_string(subtract));
+        check(!bad,
+              "sparse particle wrapper matches dense output, order=" + std::to_string(ORDER) +
+                  ", subtract_shotnoise=" + std::to_string(subtract));
     }
 #ifdef USE_OMP
     omp_set_num_threads(previous_threads);
@@ -590,7 +598,8 @@ void test_fourier_multiplicities() {
     }
 }
 
-template <int N> void test_memory_report() {
+template <int N>
+void test_memory_report() {
     const int mesh = FML::NTasks == 3 ? 12 : 8;
     Grid<N> input(2 * mesh), small(mesh, 1, 2);
     small.set_grid_status_real(false);

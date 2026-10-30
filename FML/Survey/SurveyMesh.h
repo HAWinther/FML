@@ -14,17 +14,17 @@ namespace FML::SURVEY {
     using Complex = FML::GRID::ComplexType;
     using Real = FML::GRID::FloatType;
 
-    inline void require(bool ok, const char* message) {
+    inline void require(bool ok, const char * message) {
         int valid = ok;
         FML::MinOverTasks(&valid);
         if (!valid)
             throw std::invalid_argument(message);
     }
-    inline double dot(const Vector& a, const Vector& b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+    inline double dot(const Vector & a, const Vector & b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
     inline Vector unit(Vector v) {
         const double norm = std::hypot(v[0], v[1], v[2]);
         if (norm > 0)
-            for (auto& x : v)
+            for (auto & x : v)
                 x /= norm;
         return v;
     }
@@ -47,7 +47,7 @@ namespace FML::SURVEY {
         Vector fixed_los{0, 0, 1};
         double cellsize() const { return boxsize / nmesh; }
         double volume() const { return boxsize * boxsize * boxsize; }
-        Vector position(const Mesh& mesh, FML::IndexIntType index) const {
+        Vector position(const Mesh & mesh, FML::IndexIntType index) const {
             auto c = mesh.get_coord_from_index(index);
             c[0] += mesh.get_local_x_start();
             Vector x;
@@ -55,7 +55,7 @@ namespace FML::SURVEY {
                 x[d] = minimum[d] + c[d] * cellsize();
             return x;
         }
-        Vector los(const Vector& position) const {
+        Vector los(const Vector & position) const {
             if (!local_los)
                 return unit(fixed_los);
             Vector r;
@@ -73,13 +73,19 @@ namespace FML::SURVEY {
     };
     namespace detail {
         // FFTWGrid currently exposes this read-only query through a non-const method.
-        inline bool is_real(const Mesh& mesh) { return const_cast<Mesh&>(mesh).get_grid_status_real(); }
-        template <class Record> std::vector<Record> route(std::vector<std::vector<Record>>& outgoing) {
+        inline bool is_real(const Mesh & mesh) { return const_cast<Mesh &>(mesh).get_grid_status_real(); }
+        template <class Record>
+        std::vector<Record> route(std::vector<std::vector<Record>> & outgoing) {
             std::vector<unsigned long long> counts(FML::NTasks), received(FML::NTasks);
             for (int t = 0; t < FML::NTasks; ++t)
                 counts[t] = outgoing[t].size();
 #ifdef USE_MPI
-            MPI_Alltoall(counts.data(), 1, MPI_UNSIGNED_LONG_LONG, received.data(), 1, MPI_UNSIGNED_LONG_LONG,
+            MPI_Alltoall(counts.data(),
+                         1,
+                         MPI_UNSIGNED_LONG_LONG,
+                         received.data(),
+                         1,
+                         MPI_UNSIGNED_LONG_LONG,
                          FML::communicator);
 #else
             received = counts;
@@ -96,13 +102,14 @@ namespace FML::SURVEY {
             }
             require(fits, "Survey exchange exceeds addressable vector size");
             result.reserve(total);
-            FML::COMMUNICATION::exchange_records_chunked(
-                outgoing, [&](const Record* p, size_t n) noexcept { result.insert(result.end(), p, p + n); });
+            FML::COMMUNICATION::exchange_records_chunked(outgoing, [&](const Record * p, size_t n) noexcept {
+                result.insert(result.end(), p, p + n);
+            });
             return result;
         }
-        inline void validate_catalog(const std::vector<CatalogPoint>& points, const Geometry& geometry) {
+        inline void validate_catalog(const std::vector<CatalogPoint> & points, const Geometry & geometry) {
             bool ok = true;
-            for (const auto& p : points) {
+            for (const auto & p : points) {
                 ok &= p.weight >= 0 && std::isfinite(p.weight) && p.nbar >= 0 && std::isfinite(p.nbar);
                 for (int d = 0; d < 3; ++d) {
                     const double u = (p.position[d] - geometry.minimum[d]) / geometry.cellsize();
@@ -118,7 +125,8 @@ namespace FML::SURVEY {
             }
             require(ok, "Invalid survey catalogue: weights/densities or unpadded position/observer coincidence");
         }
-        template <class Function> void cic(const Vector& x, const Geometry& g, Function function) {
+        template <class Function>
+        void cic(const Vector & x, const Geometry & g, Function function) {
             std::array<int, 3> base;
             Vector fraction;
             for (int d = 0; d < 3; ++d) {
@@ -138,7 +146,7 @@ namespace FML::SURVEY {
                     function(c, w);
             }
         }
-        inline Mesh empty_mesh(const Geometry& g, int ghosts = 0) {
+        inline Mesh empty_mesh(const Geometry & g, int ghosts = 0) {
             Mesh grid(g.nmesh, ghosts, ghosts);
             grid.set_grid_status_real(true);
             for (auto i : grid.get_real_range())
@@ -190,14 +198,14 @@ namespace FML::SURVEY {
                     }
             return result;
         }
-        inline double monomial(const Vector& x, const Moment& m) {
+        inline double monomial(const Vector & x, const Moment & m) {
             double v = 1;
             for (int d = 0; d < 3; ++d)
                 for (int j = 0; j < m.exponent[d]; ++j)
                     v *= x[d];
             return v;
         }
-        inline double cic_window(const Vector& k, const Geometry& g) {
+        inline double cic_window(const Vector & k, const Geometry & g) {
             double w = 1;
             for (auto v : k) {
                 const double x = .5 * v * g.cellsize();
@@ -206,7 +214,7 @@ namespace FML::SURVEY {
             }
             return w;
         }
-        inline void validate_edges(const std::vector<double>& edges, bool collective = true) {
+        inline void validate_edges(const std::vector<double> & edges, bool collective = true) {
             bool ok = edges.size() > 1;
             for (size_t i = 0; i < edges.size(); ++i)
                 ok &= std::isfinite(edges[i]) && edges[i] >= 0 && (i == 0 || edges[i] > edges[i - 1]);
@@ -215,12 +223,12 @@ namespace FML::SURVEY {
             else if (!ok)
                 throw std::invalid_argument("Survey bin edges must be finite, nonnegative and strictly increasing");
         }
-        inline int bin(double value, const std::vector<double>& edges) {
+        inline int bin(double value, const std::vector<double> & edges) {
             if (value < edges.front() || value >= edges.back())
                 return -1;
             return int(std::upper_bound(edges.begin(), edges.end(), value) - edges.begin() - 1);
         }
-        inline void sum(std::vector<double>& a) {
+        inline void sum(std::vector<double> & a) {
 #ifdef USE_MPI
             // Chunked even for ancillary bin/moment arrays.
             for (size_t offset = 0; offset < a.size();) {
@@ -233,14 +241,14 @@ namespace FML::SURVEY {
 #endif
         }
     } // namespace detail
-    inline double weight_sum(const std::vector<CatalogPoint>& points) {
+    inline double weight_sum(const std::vector<CatalogPoint> & points) {
         double value = 0;
-        for (const auto& p : points)
+        for (const auto & p : points)
             value += p.weight;
         FML::SumOverTasks(&value);
         return value;
     }
-    inline Mesh paint_catalog(const std::vector<CatalogPoint>& points, const Geometry& g) {
+    inline Mesh paint_catalog(const std::vector<CatalogPoint> & points, const Geometry & g) {
         g.validate();
         detail::validate_catalog(points, g);
         struct PaintPoint {
@@ -249,7 +257,7 @@ namespace FML::SURVEY {
         };
         std::vector<std::vector<PaintPoint>> outgoing(FML::NTasks);
         const int slab = g.nmesh / FML::NTasks;
-        for (const auto& p : points) {
+        for (const auto & p : points) {
             if (p.weight == 0)
                 continue;
             const double x = (p.position[0] - g.minimum[0]) / g.cellsize();
@@ -264,7 +272,7 @@ namespace FML::SURVEY {
         auto received = detail::route(outgoing);
         auto grid = detail::empty_mesh(g);
         const int start = int(grid.get_local_x_start());
-        for (const auto& p : received)
+        for (const auto & p : received)
             detail::cic(p.position, g, [&](auto c, double w) {
                 c[0] -= start;
                 if (c[0] >= 0 && c[0] < grid.get_local_nx())
@@ -273,9 +281,9 @@ namespace FML::SURVEY {
         return grid;
     }
     // Normalization is explicit: I2 = alpha sum_random nbar*w^2, unless overridden.
-    inline double normalization(const std::vector<CatalogPoint>& randoms, double alpha, double override_i2 = 0) {
+    inline double normalization(const std::vector<CatalogPoint> & randoms, double alpha, double override_i2 = 0) {
         double i2 = 0;
-        for (const auto& p : randoms)
+        for (const auto & p : randoms)
             i2 += p.nbar * p.weight * p.weight;
         FML::SumOverTasks(&i2);
         i2 = override_i2 > 0 ? override_i2 : alpha * i2;

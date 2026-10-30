@@ -363,7 +363,9 @@ namespace FML {
                 // perfectly correlated random numbers. This is inherited from N-GenIC / 2LPTic and kept for now for
                 // compatibility (same seed => same IC as these codes).
                 const size_t seed_count = FML::COMMUNICATION::checked_bytes(
-                    Nmesh, Nmesh, std::min(size_t(INT_MAX), std::vector<unsigned int>().max_size()));
+                    Nmesh,
+                    Nmesh,
+                    std::min(size_t(INT_MAX), std::vector<unsigned int>().max_size()));
                 std::vector<unsigned int> seedtable(seed_count, 0);
                 if (FML::ThisTask == 0)
                     for (int i = 0; i < Nmesh / 2; i++) {
@@ -388,7 +390,11 @@ namespace FML {
                     }
 
 #ifdef USE_MPI
-                MPI_Allreduce(MPI_IN_PLACE, seedtable.data(), int(seed_count), MPI_UNSIGNED, MPI_SUM,
+                MPI_Allreduce(MPI_IN_PLACE,
+                              seedtable.data(),
+                              int(seed_count),
+                              MPI_UNSIGNED,
+                              MPI_SUM,
                               FML::communicator);
 #endif
 

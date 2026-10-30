@@ -59,13 +59,13 @@ namespace FML::COUNTS_IN_CELLS {
     };
     namespace detail {
         inline double nan() { return std::numeric_limits<double>::quiet_NaN(); }
-        inline bool finite_point(const Point& p) {
+        inline bool finite_point(const Point & p) {
             for (double x : p)
                 if (!std::isfinite(x) || std::abs(x) > 1e150)
                     return false;
             return true;
         }
-        inline bool valid_bounds(const Bounds& b) {
+        inline bool valid_bounds(const Bounds & b) {
             if (!finite_point(b.lower) || !finite_point(b.upper) || !(b.volume() > 0) || !std::isfinite(b.volume()))
                 return false;
             for (int d = 0; d < 3; ++d)
@@ -73,18 +73,18 @@ namespace FML::COUNTS_IN_CELLS {
                     return false;
             return true;
         }
-        inline void check(bool good, Reduction reduction, const char* message) {
+        inline void check(bool good, Reduction reduction, const char * message) {
             int valid = good;
             if (reduction == Reduction::Global)
                 FML::MinOverTasks(&valid);
             if (!valid)
                 throw std::invalid_argument(message);
         }
-        inline void hash_word(std::uint64_t& hash, std::uint64_t value) {
+        inline void hash_word(std::uint64_t & hash, std::uint64_t value) {
             hash ^= value;
             hash *= 1099511628211ULL;
         }
-        inline void hash_double(std::uint64_t& hash, double value) {
+        inline void hash_double(std::uint64_t & hash, double value) {
             std::uint64_t word;
             std::memcpy(&word, &value, sizeof(word));
             hash_word(hash, word);
@@ -95,10 +95,12 @@ namespace FML::COUNTS_IN_CELLS {
             Count low = fingerprint, high = fingerprint;
             FML::MinOverTasks(&low);
             FML::MaxOverTasks(&high);
-            check(low == high, reduction,
+            check(low == high,
+                  reduction,
                   "Global spatial statistics need identical replicated tracer catalogues and summary options");
         }
-        template <class T> void sum(std::vector<T>& values, Reduction reduction) {
+        template <class T>
+        void sum(std::vector<T> & values, Reduction reduction) {
 #ifdef USE_MPI
             if (reduction == Reduction::Global)
                 for (size_t offset = 0; offset < values.size();) {
@@ -132,7 +134,7 @@ namespace FML::COUNTS_IN_CELLS {
             return 0;
 #endif
         }
-        inline bool radii_valid(const std::vector<double>& radii, bool positive = false) {
+        inline bool radii_valid(const std::vector<double> & radii, bool positive = false) {
             if (radii.empty())
                 return false;
             for (size_t i = 0; i < radii.size(); ++i)
@@ -141,7 +143,7 @@ namespace FML::COUNTS_IN_CELLS {
                     return false;
             return true;
         }
-        inline bool edges_valid(const std::vector<double>& edges) {
+        inline bool edges_valid(const std::vector<double> & edges) {
             if (edges.empty())
                 return true;
             if (edges.size() < 2)
@@ -158,7 +160,7 @@ namespace FML::COUNTS_IN_CELLS {
             std::vector<double> factorial;
             Accumulator(size_t bins, size_t dbins, unsigned order)
                 : histogram(bins), density(dbins), factorial(order + 1) {}
-            void add(size_t count, double expected, const Options& options) {
+            void add(size_t count, double expected, const Options & options) {
                 ++n;
                 const double delta = double(count) - mean;
                 mean += delta / double(n);
@@ -186,7 +188,7 @@ namespace FML::COUNTS_IN_CELLS {
                         std::upper_bound(options.delta_edges.begin(), options.delta_edges.end(), contrast) -
                         options.delta_edges.begin() - 1)];
             }
-            void merge(const Accumulator& other) {
+            void merge(const Accumulator & other) {
                 if (other.n) {
                     const double total = double(n) + other.n, delta = other.mean - mean;
                     m2 += other.m2 + delta * delta * double(n) * double(other.n) / total;
@@ -206,8 +208,11 @@ namespace FML::COUNTS_IN_CELLS {
         };
     } // namespace detail
     /// Query-ID-keyed uniform volume samples. Distribute disjoint global ID ranges across MPI ranks.
-    inline std::vector<Query> uniform_queries(size_t number, const Bounds& bounds, std::uint64_t seed,
-                                              std::uint64_t first_id = 0, std::uint32_t stream = 0) {
+    inline std::vector<Query> uniform_queries(size_t number,
+                                              const Bounds & bounds,
+                                              std::uint64_t seed,
+                                              std::uint64_t first_id = 0,
+                                              std::uint32_t stream = 0) {
         if (!detail::valid_bounds(bounds) ||
             (number && number - 1 > std::numeric_limits<std::uint64_t>::max() - first_id))
             throw std::invalid_argument("Invalid query bounds or overflowing global query IDs");
@@ -227,7 +232,7 @@ namespace FML::COUNTS_IN_CELLS {
         std::uint64_t fingerprint = 1469598103934665603ULL;
         Bounds tracer_extent{{INFINITY, INFINITY, INFINITY}, {-INFINITY, -INFINITY, -INFINITY}};
         double box = 0;
-        void add_point(const Point& p) {
+        void add_point(const Point & p) {
             if (!detail::finite_point(p))
                 throw std::invalid_argument("Invalid tracer position");
             for (int d = 0; d < 3; ++d) {
@@ -242,24 +247,26 @@ namespace FML::COUNTS_IN_CELLS {
                 throw std::invalid_argument("Invalid periodic box size");
             detail::hash_double(fingerprint, box);
         }
-        bool valid_queries(const std::vector<Query>& queries) const {
-            for (const auto& q : queries)
+        bool valid_queries(const std::vector<Query> & queries) const {
+            for (const auto & q : queries)
                 if (!detail::finite_point(q.position) ||
                     (q.exclude != std::numeric_limits<size_t>::max() && q.exclude >= tree.size()))
                     return false;
             return true;
         }
-        void begin_summary(bool valid, const std::vector<Query>& queries, std::uint64_t schema,
-                           Reduction reduction) const {
-            detail::check(valid && valid_queries(queries), reduction,
+        void
+        begin_summary(bool valid, const std::vector<Query> & queries, std::uint64_t schema, Reduction reduction) const {
+            detail::check(valid && valid_queries(queries),
+                          reduction,
                           "Invalid spatial query, radius/order or summary options");
             detail::same(fingerprint, reduction);
             detail::same(schema, reduction);
             detail::check(reduction == Reduction::Local ||
                               queries.size() <= std::numeric_limits<Count>::max() / size_t(FML::NTasks),
-                          reduction, "Global query count can overflow");
+                          reduction,
+                          "Global query count can overflow");
         }
-        std::vector<double> squared_distances(const Query& query, const std::vector<size_t>& orders) const {
+        std::vector<double> squared_distances(const Query & query, const std::vector<size_t> & orders) const {
             std::vector<double> result(orders.size(), INFINITY);
             const bool exclude = query.exclude != std::numeric_limits<size_t>::max();
             const size_t available = tree.size() - size_t(exclude);
@@ -282,7 +289,7 @@ namespace FML::COUNTS_IN_CELLS {
                 }
             return result;
         }
-        std::vector<double> sorted_neighbors(const Query& query, double radius) const {
+        std::vector<double> sorted_neighbors(const Query & query, double radius) const {
             if (tree.size() == 0)
                 return {};
             std::vector<size_t> ids;
@@ -296,7 +303,7 @@ namespace FML::COUNTS_IN_CELLS {
             std::sort(d2.begin(), d2.end());
             return d2;
         }
-        static bool valid_orders(const std::vector<size_t>& orders) {
+        static bool valid_orders(const std::vector<size_t> & orders) {
             if (orders.empty())
                 return false;
             for (size_t i = 0; i < orders.size(); ++i)
@@ -306,10 +313,10 @@ namespace FML::COUNTS_IN_CELLS {
         }
 
       public:
-        explicit SpatialStatistics(const FML::KDTREE::pointVec& tracers, double boxsize = 0, int leaf = 8)
+        explicit SpatialStatistics(const FML::KDTREE::pointVec & tracers, double boxsize = 0, int leaf = 8)
             : box(boxsize) {
             validate_box();
-            for (const auto& p : tracers) {
+            for (const auto & p : tracers) {
                 if (p.size() != 3)
                     throw std::invalid_argument("Spatial statistics require 3D tracers");
                 add_point({p[0], p[1], p[2]});
@@ -318,7 +325,7 @@ namespace FML::COUNTS_IN_CELLS {
             detail::hash_word(fingerprint, tracers.size());
         }
         template <class Particle>
-        SpatialStatistics(Particle* tracers, size_t number, double boxsize = 0, int leaf = 8) : box(boxsize) {
+        SpatialStatistics(Particle * tracers, size_t number, double boxsize = 0, int leaf = 8) : box(boxsize) {
             validate_box();
             if (FML::PARTICLE::GetNDIM(Particle()) != 3 || (number && !tracers))
                 throw std::invalid_argument("Spatial statistics require valid 3D particles");
@@ -330,7 +337,7 @@ namespace FML::COUNTS_IN_CELLS {
             detail::hash_word(fingerprint, number);
         }
         size_t size() const { return tree.size(); }
-        KnnDistances knn_distances(const std::vector<Query>& queries, const std::vector<size_t>& orders) const {
+        KnnDistances knn_distances(const std::vector<Query> & queries, const std::vector<size_t> & orders) const {
             detail::check(valid_queries(queries) && valid_orders(orders), Reduction::Local, "Invalid kNN query/orders");
             KnnDistances out;
             out.orders = orders;
@@ -345,8 +352,10 @@ namespace FML::COUNTS_IN_CELLS {
             }
             return out;
         }
-        KnnCDF knn_cdf(const std::vector<Query>& queries, const std::vector<size_t>& orders,
-                       const std::vector<double>& radii, Reduction reduction = Reduction::Global) const {
+        KnnCDF knn_cdf(const std::vector<Query> & queries,
+                       const std::vector<size_t> & orders,
+                       const std::vector<double> & radii,
+                       Reduction reduction = Reduction::Global) const {
             std::uint64_t schema = 25;
             for (auto k : orders)
                 detail::hash_word(schema, k);
@@ -366,19 +375,19 @@ namespace FML::COUNTS_IN_CELLS {
 #endif
             for (size_t i = 0; i < queries.size(); ++i) {
                 const auto d = squared_distances(queries[i], orders);
-                auto& counts = hits[detail::thread()];
+                auto & counts = hits[detail::thread()];
                 for (size_t k = 0; k < orders.size(); ++k)
                     for (size_t r = 0; r < radii.size(); ++r)
                         if (d[k] <= radii[r] * radii[r])
                             ++counts[k][r];
             }
             out.hits.assign(orders.size(), std::vector<Count>(radii.size()));
-            for (const auto& h : hits)
+            for (const auto & h : hits)
                 for (size_t k = 0; k < orders.size(); ++k)
                     for (size_t r = 0; r < radii.size(); ++r)
                         out.hits[k][r] += h[k][r];
             Count excluded = 0;
-            for (const auto& q : queries)
+            for (const auto & q : queries)
                 excluded += q.exclude != std::numeric_limits<size_t>::max();
             std::vector<Count> n{Count(queries.size()), excluded};
             detail::sum(n, reduction);
@@ -394,9 +403,10 @@ namespace FML::COUNTS_IN_CELLS {
             return out;
         }
         /// Raw toroidal/Euclidean sphere counts, inclusive boundary. Any finite nonnegative radius is allowed.
-        std::vector<std::vector<size_t>> sphere_counts(const std::vector<Query>& queries,
-                                                       const std::vector<double>& radii) const {
-            detail::check(valid_queries(queries) && detail::radii_valid(radii), Reduction::Local,
+        std::vector<std::vector<size_t>> sphere_counts(const std::vector<Query> & queries,
+                                                       const std::vector<double> & radii) const {
+            detail::check(valid_queries(queries) && detail::radii_valid(radii),
+                          Reduction::Local,
                           "Invalid sphere-count query/radii");
             std::vector<std::vector<size_t>> result(radii.size(), std::vector<size_t>(queries.size()));
 #ifdef USE_OMP
@@ -409,8 +419,9 @@ namespace FML::COUNTS_IN_CELLS {
             }
             return result;
         }
-        CountsInCells counts_in_cells(const std::vector<Query>& queries, const std::vector<double>& radii,
-                                      const Options& options = {}) const {
+        CountsInCells counts_in_cells(const std::vector<Query> & queries,
+                                      const std::vector<double> & radii,
+                                      const Options & options = {}) const {
             bool valid = detail::radii_valid(radii, true) && detail::edges_valid(options.delta_edges) &&
                          options.factorial_order <= 16 &&
                          options.histogram_limit <= std::vector<Count>().max_size() - 2;
@@ -423,7 +434,7 @@ namespace FML::COUNTS_IN_CELLS {
             if (box == 0 && !options.allow_truncated_cells) {
                 valid &= bool(options.window);
                 if (options.window && !radii.empty())
-                    for (const auto& q : queries)
+                    for (const auto & q : queries)
                         for (int d = 0; d < 3; ++d)
                             valid &= q.position[d] - radii.back() >= options.window->lower[d] &&
                                      q.position[d] + radii.back() <= options.window->upper[d];
@@ -455,17 +466,19 @@ namespace FML::COUNTS_IN_CELLS {
                 }
             detail::hash_word(schema, options.allow_truncated_cells);
             begin_summary(valid, queries, schema, options.reduction);
-            const double density = options.number_density
-                                       ? *options.number_density
-                                       : double(tree.size()) / (box > 0 ? box * box * box : options.window->volume());
-            detail::check(std::isfinite(density), options.reduction,
+            const double density = options.number_density ?
+                                       *options.number_density :
+                                       double(tree.size()) / (box > 0 ? box * box * box : options.window->volume());
+            detail::check(std::isfinite(density),
+                          options.reduction,
                           "Reference number density exceeds finite arithmetic");
             for (double r : radii)
-                detail::check(std::isfinite(density * 4.1887902047863909846 * r * r * r), options.reduction,
+                detail::check(std::isfinite(density * 4.1887902047863909846 * r * r * r),
+                              options.reduction,
                               "Reference expected count exceeds finite arithmetic");
             CountsInCells result;
             std::vector<Count> excluded{0};
-            for (const auto& q : queries)
+            for (const auto & q : queries)
                 excluded[0] += q.exclude != std::numeric_limits<size_t>::max();
             detail::sum(excluded, options.reduction);
             result.excluded_queries = excluded[0];
@@ -475,7 +488,7 @@ namespace FML::COUNTS_IN_CELLS {
             result.histogram_limit = options.histogram_limit;
             const size_t dbins = options.delta_edges.empty() ? 0 : options.delta_edges.size() - 1;
             std::vector<std::vector<detail::Accumulator>> workers(static_cast<size_t>(detail::threads()));
-            for (auto& worker : workers)
+            for (auto & worker : workers)
                 for (size_t r = 0; r < radii.size(); ++r)
                     worker.emplace_back(options.histogram_limit + 2, dbins, options.factorial_order);
 #ifdef USE_OMP
@@ -483,7 +496,7 @@ namespace FML::COUNTS_IN_CELLS {
 #endif
             for (size_t i = 0; i < queries.size(); ++i) {
                 const auto neighbors = sorted_neighbors(queries[i], radii.back());
-                auto& worker = workers[detail::thread()];
+                auto & worker = workers[detail::thread()];
                 for (size_t r = 0; r < radii.size(); ++r) {
                     const size_t count =
                         std::upper_bound(neighbors.begin(), neighbors.end(), radii[r] * radii[r]) - neighbors.begin();
@@ -492,7 +505,7 @@ namespace FML::COUNTS_IN_CELLS {
             }
             for (size_t r = 0; r < radii.size(); ++r) {
                 detail::Accumulator aggregate(options.histogram_limit + 2, dbins, options.factorial_order);
-                for (const auto& worker : workers)
+                for (const auto & worker : workers)
                     aggregate.merge(worker[r]);
                 std::vector<Count> numbers{aggregate.n, aggregate.under, aggregate.over, aggregate.undefined};
                 detail::sum(numbers, options.reduction);

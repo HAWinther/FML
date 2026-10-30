@@ -4,7 +4,7 @@
 #include <sstream>
 using namespace FML::HALO_HISTORY;
 int failures = 0;
-void check(bool ok, const std::string& label) {
+void check(bool ok, const std::string & label) {
     int bad = !ok;
     FML::MaxOverTasks(&bad);
     failures += bad;
@@ -32,7 +32,7 @@ Snapshot snapshot(ID id, double a, std::vector<Halo> halos) {
     s.halos = std::move(halos);
     return s;
 }
-bool same_links(const History& a, const History& b) {
+bool same_links(const History & a, const History & b) {
     if (a.links.size() != b.links.size() || a.nodes.size() != b.nodes.size())
         return false;
     for (size_t i = 0; i < a.links.size(); ++i)
@@ -50,12 +50,12 @@ int main() {
               m.descendants.at(2).target == 101,
           "particle-overlap merit and many-to-one merger match a hand-computed catalogue");
     bool direct = true;
-    for (const auto& c : m.candidates) {
+    for (const auto & c : m.candidates) {
         const Halo *from = nullptr, *to = nullptr;
-        for (const auto& h : a.halos)
+        for (const auto & h : a.halos)
             if (h.id == c.source)
                 from = &h;
-        for (const auto& h : b.halos)
+        for (const auto & h : b.halos)
             if (h.id == c.target)
                 to = &h;
         size_t shared = 0;
@@ -66,8 +66,8 @@ int main() {
     }
     check(direct, "inverted ID index agrees with independent all-halo/all-particle intersection counting");
     auto tree = build({a, b});
-    const Node* merged = nullptr;
-    for (const auto& n : tree.nodes)
+    const Node * merged = nullptr;
+    for (const auto & n : tree.nodes)
         if (n.key == NodeKey{20, 101})
             merged = &n;
     check(merged && merged->progenitors.size() == 2 && merged->main_progenitor == std::optional<NodeKey>{{10, 1}} &&
@@ -84,7 +84,7 @@ int main() {
     auto reversed_a = a, reversed_b = b;
     std::reverse(reversed_a.halos.begin(), reversed_a.halos.end());
     std::reverse(reversed_b.halos.begin(), reversed_b.halos.end());
-    for (auto& h : reversed_a.halos)
+    for (auto & h : reversed_a.halos)
         std::reverse(h.particles.begin(), h.particles.end());
     check(same_links(tree, build({reversed_a, reversed_b})),
           "halo and member ordering do not change graph identities or links");
@@ -117,7 +117,7 @@ int main() {
     next.halos[1].host = 11;
     auto sub = build({inclusive, next});
     bool host = false;
-    for (const auto& n : sub.nodes)
+    for (const auto & n : sub.nodes)
         if (n.key == NodeKey{10, 2})
             host = n.host == std::optional<NodeKey>{{10, 1}};
     check(host && sub.links.size() == 2,
@@ -127,7 +127,7 @@ int main() {
     bool rejected = false;
     try {
         validate(exclusive);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "overlapping memberships require an explicit inclusive convention");
@@ -136,7 +136,7 @@ int main() {
     rejected = false;
     try {
         validate(cyclic);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "cyclic host hierarchies are rejected");
@@ -145,7 +145,7 @@ int main() {
     rejected = false;
     try {
         validate(duplicate);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "duplicate IDs within one halo are rejected rather than double-counted");
@@ -158,14 +158,14 @@ int main() {
     rejected = false;
     try {
         match(host_early, host_late, budget);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "overlap work budget fails explicitly without truncating links");
     bool exclusive_ok = true;
     try {
         exclusive_ok = match(a, b, budget).descendants.size() == 3;
-    } catch (const std::exception&) {
+    } catch (const std::exception &) {
         exclusive_ok = false;
     }
     check(exclusive_ok, "the overlap budget counts only inclusive owner cross products (exclusive catalogues pass)");
@@ -174,7 +174,7 @@ int main() {
     rejected = false;
     try {
         match(a, b, budget);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "candidate memory budget fails explicitly without truncating links");
@@ -183,7 +183,7 @@ int main() {
     rejected = false;
     try {
         match(a, incompatible);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "inconsistent particle ID namespaces/units are rejected");
@@ -221,7 +221,7 @@ int main() {
     try {
         std::istringstream bad(text.substr(0, text.size() - 6));
         read_catalogue(bad);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "truncated catalogue membership input is rejected");
@@ -229,7 +229,7 @@ int main() {
     try {
         std::istringstream bad(text + "junk");
         read_catalogue(bad);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "unexpected trailing content is rejected");
@@ -237,13 +237,12 @@ int main() {
     try {
         std::istringstream too_large(text);
         read_catalogue(too_large, 1, 100);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "external catalogue read budgets are enforced before allocation");
-    auto hod = to_hod(inclusive, 6, [](const Halo&) { return 150.; });
-    auto all_hod = to_hod(
-        inclusive, 6, [](const Halo&) { return 150.; }, true);
+    auto hod = to_hod(inclusive, 6, [](const Halo &) { return 150.; });
+    auto all_hod = to_hod(inclusive, 6, [](const Halo &) { return 150.; }, true);
     check(hod.size() == 1 && all_hod.size() == 2 && hod[0].id == 1 && hod[0].mass == 1e12 &&
               hod[0].concentration == 6 && hod[0].velocity_dispersion == 150 && hod[0].members.empty(),
           "HOD adapter preserves units/IDs and requires explicit concentration/velocity-dispersion assumptions");

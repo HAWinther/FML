@@ -53,18 +53,18 @@ namespace FML::PERFORMANCE {
             std::array<std::atomic<Count>, number_of_counters> values;
             std::atomic<bool> overflow{false};
             State() {
-                for (auto &value : values)
+                for (auto & value : values)
                     value.store(0, std::memory_order_relaxed);
             }
         };
-        inline State &state() {
+        inline State & state() {
             static State state;
             return state;
         }
     } // namespace detail
     inline void record(Counter counter, Count amount = 1) noexcept {
-        auto &s = detail::state();
-        auto &value = s.values[size_t(counter)];
+        auto & s = detail::state();
+        auto & value = s.values[size_t(counter)];
         Count old = value.load(std::memory_order_relaxed);
         while (true) {
             const bool overflow = amount > std::numeric_limits<Count>::max() - old;
@@ -78,14 +78,14 @@ namespace FML::PERFORMANCE {
     }
     /// Reset/snapshot at quiescent boundaries; a reset is process-local and is not an MPI collective.
     inline void reset() noexcept {
-        auto &s = detail::state();
-        for (auto &value : s.values)
+        auto & s = detail::state();
+        for (auto & value : s.values)
             value.store(0, std::memory_order_relaxed);
         s.overflow.store(false, std::memory_order_relaxed);
     }
     inline Snapshot snapshot() noexcept {
         Snapshot result;
-        auto &s = detail::state();
+        auto & s = detail::state();
         for (size_t i = 0; i < number_of_counters; ++i)
             result.values[i] = s.values[i].load(std::memory_order_relaxed);
         result.overflow = s.overflow.load(std::memory_order_relaxed);

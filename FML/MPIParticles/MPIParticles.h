@@ -82,7 +82,7 @@ namespace FML {
             Vector<T> p{};
 
             // Info about the particle distribution
-            size_t NpartTotal{0};        // Total number of particles across all tasks
+            size_t NpartTotal{0}; // Total number of particles across all tasks
             MigrationRoute last_migration_route{MigrationRoute::Serial};
             size_t NpartLocal_in_use{0}; // Number of particles in use (total allocated given by p.size())
 
@@ -752,7 +752,7 @@ namespace FML {
                                               "[MPIParticles] Slabs must partition [0,1] in rank order");
             const int left = int((static_cast<long long>(ThisTask) + NTasks - 1) % NTasks);
             const int right = int((static_cast<long long>(ThisTask) + 1) % NTasks);
-            auto owner_of = [&](const auto &x) {
+            auto owner_of = [&](const auto & x) {
                 // Most departures end on a neighbor; avoid even a logarithmic search in that case.
                 if (x >= x_min_per_task[right] && x < x_max_per_task[right])
                     return right;
@@ -785,7 +785,7 @@ namespace FML {
             std::vector<Count> n_to_send(NTasks, 0), n_to_recv(NTasks, 0);
             std::vector<Count> nbytes_to_send(NTasks, 0), nbytes_to_recv(NTasks, 0);
             bool valid_counts = true;
-            auto count_outgoing = [&](int task, T &particle) {
+            auto count_outgoing = [&](int task, T & particle) {
                 route = std::max(route, task == left || task == right ? 1 : 2);
                 auto bytes = FML::PARTICLE::GetSize(particle);
                 valid_counts = valid_counts && bytes > 0;
@@ -840,18 +840,38 @@ namespace FML {
                     const int source = int((static_cast<long long>(ThisTask) - step + NTasks) % NTasks);
                     const Count outgoing[2] = {n_to_send[dest], nbytes_to_send[dest]};
                     Count incoming[2]{};
-                    MPI_Sendrecv(outgoing, 2, MPI_UNSIGNED_LONG_LONG, dest, 0, incoming, 2, MPI_UNSIGNED_LONG_LONG,
-                                 source, 0, FML::communicator, MPI_STATUS_IGNORE);
+                    MPI_Sendrecv(outgoing,
+                                 2,
+                                 MPI_UNSIGNED_LONG_LONG,
+                                 dest,
+                                 0,
+                                 incoming,
+                                 2,
+                                 MPI_UNSIGNED_LONG_LONG,
+                                 source,
+                                 0,
+                                 FML::communicator,
+                                 MPI_STATUS_IGNORE);
                     n_to_recv[source] = incoming[0];
                     nbytes_to_recv[source] = incoming[1];
                 }
             } else {
                 for (int step = 1; step < NTasks; ++step)
                     peer_steps.push_back(step);
-                MPI_Alltoall(n_to_send.data(), 1, MPI_UNSIGNED_LONG_LONG, n_to_recv.data(), 1, MPI_UNSIGNED_LONG_LONG,
+                MPI_Alltoall(n_to_send.data(),
+                             1,
+                             MPI_UNSIGNED_LONG_LONG,
+                             n_to_recv.data(),
+                             1,
+                             MPI_UNSIGNED_LONG_LONG,
                              FML::communicator);
-                MPI_Alltoall(nbytes_to_send.data(), 1, MPI_UNSIGNED_LONG_LONG, nbytes_to_recv.data(), 1,
-                             MPI_UNSIGNED_LONG_LONG, FML::communicator);
+                MPI_Alltoall(nbytes_to_send.data(),
+                             1,
+                             MPI_UNSIGNED_LONG_LONG,
+                             nbytes_to_recv.data(),
+                             1,
+                             MPI_UNSIGNED_LONG_LONG,
+                             FML::communicator);
             }
 
 #ifdef DEBUG_MPIPARTICLES
@@ -962,14 +982,14 @@ namespace FML {
 
                 for (Count ichunk = 0; ichunk < nchunks; ichunk++) {
                     const Count offset = ichunk * max_chunk_bytes;
-                    const int nsend = int(offset < nbytes_to_send[send_request_to]
-                                              ? std::min(nbytes_to_send[send_request_to] - offset, max_chunk_bytes)
-                                              : 0);
-                    const int nrecv = int(offset < nbytes_to_recv[get_request_from]
-                                              ? std::min(nbytes_to_recv[get_request_from] - offset, max_chunk_bytes)
-                                              : 0);
-                    char *send_ptr = nsend ? send_buffer_by_task[send_request_to] + size_t(offset) : nullptr;
-                    char *recv_ptr = nrecv ? recv_buffer_by_task[get_request_from] + size_t(offset) : nullptr;
+                    const int nsend = int(offset < nbytes_to_send[send_request_to] ?
+                                              std::min(nbytes_to_send[send_request_to] - offset, max_chunk_bytes) :
+                                              0);
+                    const int nrecv = int(offset < nbytes_to_recv[get_request_from] ?
+                                              std::min(nbytes_to_recv[get_request_from] - offset, max_chunk_bytes) :
+                                              0);
+                    char * send_ptr = nsend ? send_buffer_by_task[send_request_to] + size_t(offset) : nullptr;
+                    char * recv_ptr = nrecv ? recv_buffer_by_task[get_request_from] + size_t(offset) : nullptr;
 
                     // Send to the right, receive from left
                     MPI_Status status;

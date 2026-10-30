@@ -3,7 +3,7 @@
 #include <iostream>
 using namespace FML::ENVIRONMENT;
 int failures = 0;
-void check(bool ok, const std::string& label) {
+void check(bool ok, const std::string & label) {
     int bad = !ok;
     FML::MaxOverTasks(&bad);
     failures += bad;
@@ -13,7 +13,7 @@ void check(bool ok, const std::string& label) {
 bool near(double x, double y, double tolerance = 2e-10) {
     return std::abs(x - y) <= tolerance * std::max({1., std::abs(x), std::abs(y)});
 }
-double distance(const Sample& a, const Sample& b, double L) {
+double distance(const Sample & a, const Sample & b, double L) {
     double r2 = 0;
     for (int d = 0; d < 3; ++d) {
         double x = std::abs(a.position[d] - b.position[d]);
@@ -22,8 +22,14 @@ double distance(const Sample& a, const Sample& b, double L) {
     }
     return std::sqrt(r2);
 }
-std::vector<double> pairs(const std::vector<Sample>& a, const std::vector<Sample>& b, double L, double low, double high,
-                          int bins, bool auto_pairs = false, const std::vector<double>& mark = {}) {
+std::vector<double> pairs(const std::vector<Sample> & a,
+                          const std::vector<Sample> & b,
+                          double L,
+                          double low,
+                          double high,
+                          int bins,
+                          bool auto_pairs = false,
+                          const std::vector<double> & mark = {}) {
     std::vector<double> out(bins);
     double mean = 1;
     if (!mark.empty())
@@ -43,7 +49,7 @@ std::vector<Sample> random_points(size_t n, double L, std::uint64_t seed) {
     for (size_t i = 0; i < n; ++i) {
         FML::RANDOM::COUNTER_BASED::Stream rng(seed, i);
         p[i].id = i + 100;
-        for (double& x : p[i].position)
+        for (double & x : p[i].position)
             x = L * rng.uniform();
     }
     return p;
@@ -67,7 +73,7 @@ void test_quantiles() {
     bool rejected = false;
     try {
         density_quantiles({0, 1}, {2, 2}, 2);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "duplicate quantile IDs rejected");
@@ -88,7 +94,7 @@ void test_density() {
     bool ok = true;
     for (size_t i = 0; i < b.size(); ++i) {
         size_t n = 0;
-        for (const auto& point : a)
+        for (const auto & point : a)
             n += distance(point, b[i], 10) <= 1.7;
         ok &= measured.counts[i] == n;
     }
@@ -100,7 +106,7 @@ void test_density() {
     bool rejected = false;
     try {
         top_hat_environment(p, wrong, 10, .5, true);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "self-exclusion ID/position mismatch rejected");
@@ -129,7 +135,7 @@ void test_marked() {
     check(ok, "one-pass marked/unmarked pairs, xi and mark ratio match independent direct sums");
     auto constant = marked_correlation(p, std::vector<double>(p.size(), 7), 10, .1, 5, 9);
     auto rescaled = m;
-    for (auto& x : rescaled)
+    for (auto & x : rescaled)
         x *= 11;
     auto scale = marked_correlation(p, rescaled, 10, .1, 5, 9);
     ok = true;
@@ -151,8 +157,8 @@ void test_marked() {
     check(edge_result.unmarked.pairs == std::vector<double>({2, 2, 1}),
           "radial lower edges are included and final upper edge is excluded");
     auto enlarged = edges;
-    for (auto& sample : enlarged)
-        for (auto& x : sample.position)
+    for (auto & sample : enlarged)
+        for (auto & x : sample.position)
             x *= 10;
     auto enlarged_result = marked_correlation(enlarged, {1, 2, 3, 4}, 10, 1.25, 5, 3);
     bool length_ok = true;
@@ -180,7 +186,7 @@ void test_marked() {
     bool rejected = false;
     try {
         marked_correlation(original, std::vector<double>(original.size(), 0), 10, .1, 5, 9);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "zero-mean marks rejected");
@@ -228,14 +234,14 @@ void test_failures() {
     bool rejected = false;
     try {
         marked_correlation(p, marks, 10, 0, 5, 4);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "zero separation bins rejected explicitly");
     rejected = false;
     try {
         marked_correlation(p, marks, 10, .1, 5.1, 4);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "shells beyond half the periodic box rejected");
@@ -245,7 +251,7 @@ void test_failures() {
     rejected = false;
     try {
         marked_correlation(bad, marks, 10, .1, 5, 4);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "one-rank nonfinite catalogue fails collectively");
@@ -255,7 +261,7 @@ void test_failures() {
         rejected = false;
         try {
             top_hat_environment(divergent, p, 10, 1);
-        } catch (const std::invalid_argument&) {
+        } catch (const std::invalid_argument &) {
             rejected = true;
         }
         check(rejected, "different replicated catalogues rejected across ranks");
@@ -264,7 +270,7 @@ void test_failures() {
         rejected = false;
         try {
             density_split_correlation(p, density, p, 2, 10, .1, 5, 4);
-        } catch (const std::invalid_argument&) {
+        } catch (const std::invalid_argument &) {
             rejected = true;
         }
         check(rejected, "different quantile densities rejected across ranks");

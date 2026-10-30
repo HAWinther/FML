@@ -10,8 +10,12 @@ namespace FML::SURVEY {
     };
     /// FFT correlation of the random selection field; mesh-node local LOS.
     /// At fixed order this uses O(Nmesh^3 log Nmesh) work and three mesh buffers.
-    inline WindowMultipoles estimate_window(const std::vector<CatalogPoint>& randoms, const Geometry& g,
-                                            const std::vector<double>& edges, double alpha, double i2, int maxell = 8,
+    inline WindowMultipoles estimate_window(const std::vector<CatalogPoint> & randoms,
+                                            const Geometry & g,
+                                            const std::vector<double> & edges,
+                                            double alpha,
+                                            double i2,
+                                            int maxell = 8,
                                             bool subtract_self = true) {
         g.validate();
         detail::validate_edges(edges);
@@ -20,7 +24,7 @@ namespace FML::SURVEY {
                 "Invalid window normalization/order or separation beyond half the padded box");
         auto selection = paint_catalog(randoms, g);
         Vector low{INFINITY, INFINITY, INFINITY}, high{-INFINITY, -INFINITY, -INFINITY};
-        for (const auto& p : randoms)
+        for (const auto & p : randoms)
             if (p.weight > 0)
                 for (int d = 0; d < 3; ++d) {
                     low[d] = std::min(low[d], p.position[d]);
@@ -53,7 +57,7 @@ namespace FML::SURVEY {
         std::vector<std::vector<double>> coefficients;
         for (auto ell : result.ells)
             coefficients.push_back(detail::legendre_coefficients(ell));
-        auto separation = [&](const Mesh& mesh, FML::IndexIntType i) {
+        auto separation = [&](const Mesh & mesh, FML::IndexIntType i) {
             auto c = mesh.get_coord_from_index(i);
             c[0] += mesh.get_local_x_start();
             Vector s;
@@ -85,7 +89,7 @@ namespace FML::SURVEY {
         // which is exact for G isotropic on the shell (the anisotropic part times the lattice anisotropy
         // remains, a second-order error).
         std::vector<std::vector<double>> correction(result.ells.size(), std::vector<double>(nb, 0));
-        auto sphere_moment = [](const std::array<int, 3>& e) {
+        auto sphere_moment = [](const std::array<int, 3> & e) {
             // <x^a y^b z^c> over the unit sphere: (a-1)!!(b-1)!!(c-1)!!/(a+b+c+1)!! for a, b, c even, else 0
             auto odd_factorial = [](int n) {
                 double f = 1;
@@ -114,7 +118,7 @@ namespace FML::SURVEY {
 #pragma omp for schedule(static)
 #endif
                 for (size_t i = 0; i < randoms.size(); ++i) {
-                    const auto& p = randoms[i];
+                    const auto & p = randoms[i];
                     if (p.weight == 0)
                         continue;
                     const double factor = alpha * alpha * p.weight * p.weight / cellvolume;
@@ -143,18 +147,20 @@ namespace FML::SURVEY {
                 for (int j = 0; j < 27; ++j)
                     self_pairs[t][j] = total[t * 27 + j];
         }
-        for (const auto& tensor : tensors) {
+        for (const auto & tensor : tensors) {
             std::vector<double> gsum(nb, 0);
             std::vector<std::vector<double>> fsum(result.ells.size(), std::vector<double>(nb, 0));
-            const auto& self = self_pairs[&tensor - tensors.data()];
+            const auto & self = self_pairs[&tensor - tensors.data()];
             auto correlation = detail::empty_mesh(g);
             for (auto i : selection.get_real_range())
-                correlation.set_real_from_index(i, Real(selection.get_real_from_index(i) *
-                                                        detail::monomial(g.los(g.position(selection, i)), tensor)));
+                correlation.set_real_from_index(
+                    i,
+                    Real(selection.get_real_from_index(i) * detail::monomial(g.los(g.position(selection, i)), tensor)));
             correlation.fftw_r2c();
             for (auto i : correlation.get_fourier_range())
-                correlation.set_fourier_from_index(i, std::conj(correlation.get_fourier_from_index(i)) *
-                                                          fourier.get_fourier_from_index(i));
+                correlation.set_fourier_from_index(i,
+                                                   std::conj(correlation.get_fourier_from_index(i)) *
+                                                       fourier.get_fourier_from_index(i));
             correlation.fftw_c2r();
             for (auto i : correlation.get_real_range()) {
                 auto s = separation(correlation, i);
@@ -183,8 +189,8 @@ namespace FML::SURVEY {
                         factor = detail::legendre(ell, dot(shat, unit(g.fixed_los)));
                     else
                         factor = tensor.degree <= ell ? coefficients[l][tensor.degree] * tensor.multiplicity *
-                                                            detail::monomial(shat, tensor)
-                                                      : 0;
+                                                            detail::monomial(shat, tensor) :
+                                                        0;
                     result.q[l][b] += (2 * ell + 1) * factor * value / i2;
                     if (r > 0)
                         fsum[l][b] += factor;
@@ -200,16 +206,16 @@ namespace FML::SURVEY {
                 if (!g.local_los)
                     sphere = 0; // <L_ell(shat.n)> over the sphere, ell > 0
                 else
-                    sphere = tensor.degree <= ell ? coefficients[l][tensor.degree] * tensor.multiplicity *
-                                                        sphere_moment(tensor.exponent)
-                                                  : 0;
+                    sphere = tensor.degree <= ell ?
+                                 coefficients[l][tensor.degree] * tensor.multiplicity * sphere_moment(tensor.exponent) :
+                                 0;
                 for (size_t b = 0; b < nb; ++b)
                     if (nonzero[b] > 0)
-                        correction[l][b] -= (2 * ell + 1) * (gsum[b] / nonzero[b]) *
-                                            (fsum[l][b] / nonzero[b] - sphere) / i2;
+                        correction[l][b] -=
+                            (2 * ell + 1) * (gsum[b] / nonzero[b]) * (fsum[l][b] / nonzero[b] - sphere) / i2;
             }
         }
-        for (auto& q : result.q)
+        for (auto & q : result.q)
             detail::sum(q);
         for (size_t b = 0; b < nb; ++b) {
             const double count = result.nvectors[b];
@@ -252,13 +258,24 @@ namespace FML::SURVEY {
             return j1;
         }
         // Positive half of the 16-point Gauss-Legendre rule.
-        inline constexpr std::array<double, 8> gx{.09501250983763744, .2816035507792589, .4580167776572274,
-                                                  .6178762444026438,  .7554044083550030, .8656312023878318,
-                                                  .9445750230732326,  .9894009349916499};
-        inline constexpr std::array<double, 8> gw{.1894506104550685, .1826034150449236, .1691565193950025,
-                                                  .1495959888165767, .1246289712555339, .0951585116824928,
-                                                  .0622535239386479, .0271524594117541};
-        template <class Function> double quadrature(double a, double b, Function f) {
+        inline constexpr std::array<double, 8> gx{.09501250983763744,
+                                                  .2816035507792589,
+                                                  .4580167776572274,
+                                                  .6178762444026438,
+                                                  .7554044083550030,
+                                                  .8656312023878318,
+                                                  .9445750230732326,
+                                                  .9894009349916499};
+        inline constexpr std::array<double, 8> gw{.1894506104550685,
+                                                  .1826034150449236,
+                                                  .1691565193950025,
+                                                  .1495959888165767,
+                                                  .1246289712555339,
+                                                  .0951585116824928,
+                                                  .0622535239386479,
+                                                  .0271524594117541};
+        template <class Function>
+        double quadrature(double a, double b, Function f) {
             double sum = 0;
             for (size_t j = 0; j < gx.size(); ++j)
                 sum += gw[j] * (f(.5 * (a + b) + .5 * (b - a) * gx[j]) + f(.5 * (a + b) - .5 * (b - a) * gx[j]));
@@ -276,10 +293,10 @@ namespace FML::SURVEY {
         std::vector<double> input_edges, output_k, output_edges;
         std::vector<std::vector<double>> values; // [output ell-major row][input ell-major bandpower]
         bool global_integral_constraint = false;
-        std::vector<double> apply(const std::vector<double>& bandpowers) const {
+        std::vector<double> apply(const std::vector<double> & bandpowers) const {
             if (values.empty() || bandpowers.size() != values[0].size())
                 throw std::invalid_argument("Window matrix input has wrong number of bandpowers");
-            for (const auto& row : values)
+            for (const auto & row : values)
                 if (row.size() != bandpowers.size())
                     throw std::invalid_argument("Window matrix has inconsistent row lengths");
             std::vector<double> result(values.size());
@@ -291,11 +308,13 @@ namespace FML::SURVEY {
     /// Local-plane-parallel configuration-space window convolution. Input P is
     /// piecewise constant in each k bin. Output is evaluated at output_k nodes.
     /// Optional conventional global IC: xi_l -> xi_l - C Q_l, making convolved P0(0)=0.
-    inline WindowMatrix make_window_matrix(const WindowMultipoles& w, const std::vector<double>& input_edges,
-                                           const std::vector<double>& output_k,
-                                           const std::vector<int>& input_ells = {0, 2, 4},
-                                           const std::vector<int>& output_ells = {0, 2, 4}, bool global_ic = true) {
-        auto validate = [](bool ok, const char* message) {
+    inline WindowMatrix make_window_matrix(const WindowMultipoles & w,
+                                           const std::vector<double> & input_edges,
+                                           const std::vector<double> & output_k,
+                                           const std::vector<int> & input_ells = {0, 2, 4},
+                                           const std::vector<int> & output_ells = {0, 2, 4},
+                                           bool global_ic = true) {
+        auto validate = [](bool ok, const char * message) {
             if (!ok)
                 throw std::invalid_argument(message);
         };
@@ -309,7 +328,7 @@ namespace FML::SURVEY {
         detail::validate_edges(w.edges, false);
         for (double k : output_k)
             valid &= std::isfinite(k) && k >= 0;
-        for (const auto& q : w.q) {
+        for (const auto & q : w.q) {
             valid &= q.size() == ns;
             for (double value : q)
                 valid &= std::isfinite(value);
@@ -351,7 +370,7 @@ namespace FML::SURVEY {
             while (hi < used.size() && w.s[used[hi]] < x)
                 ++hi;
             for (size_t j = 0; j < w.ells.size(); ++j) {
-                const auto& qj = w.q[j];
+                const auto & qj = w.q[j];
                 if (hi == 0)
                     qnode[j][node] = qj[used.front()];
                 else if (hi == used.size())
@@ -378,11 +397,13 @@ namespace FML::SURVEY {
                  "Global integral constraint needs positive integrated Q0");
         // Bessel kernels of the outputs at the nodes
         std::vector<std::vector<std::vector<double>>> kernel(
-            output_ells.size(), std::vector<std::vector<double>>(output_k.size(), std::vector<double>(nn)));
+            output_ells.size(),
+            std::vector<std::vector<double>>(output_k.size(), std::vector<double>(nn)));
         for (size_t out = 0; out < output_ells.size(); ++out)
             for (size_t k = 0; k < output_k.size(); ++k)
                 for (size_t node = 0; node < nn; ++node)
-                    kernel[out][k][node] = node_weights[node] * detail::bessel(output_ells[out], output_k[k] * nodes[node]);
+                    kernel[out][k][node] =
+                        node_weights[node] * detail::bessel(output_ells[out], output_k[k] * nodes[node]);
         for (size_t l = 0; l < input_ells.size(); ++l) {
             const int in = input_ells[l];
             // Window factor of each output multipole: sum_j coupling(out, in, ell_j) Q_j
@@ -424,10 +445,12 @@ namespace FML::SURVEY {
     }
     /// Continuous k^2-weighted output-shell averages, useful for measured bandpowers.
     /// Unlike make_window_matrix at output_k nodes, this integrates across each output bin.
-    inline WindowMatrix
-    make_binned_window_matrix(const WindowMultipoles& window, const std::vector<double>& input_edges,
-                              const std::vector<double>& output_edges, const std::vector<int>& input_ells = {0, 2, 4},
-                              const std::vector<int>& output_ells = {0, 2, 4}, bool global_ic = true) {
+    inline WindowMatrix make_binned_window_matrix(const WindowMultipoles & window,
+                                                  const std::vector<double> & input_edges,
+                                                  const std::vector<double> & output_edges,
+                                                  const std::vector<int> & input_ells = {0, 2, 4},
+                                                  const std::vector<int> & output_ells = {0, 2, 4},
+                                                  bool global_ic = true) {
         detail::validate_edges(output_edges, false);
         const size_t nb = output_edges.size() - 1;
         std::vector<double> nodes, weights;

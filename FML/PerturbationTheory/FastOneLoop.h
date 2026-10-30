@@ -56,7 +56,7 @@ namespace FML::PERTURBATION {
         double cached_step = 0;
         size_t cached_n = 0;
         size_t builds = 0;
-        std::pair<Vector, Vector> xi(int ell, int exponent, const Vector& k, const Vector& pk) {
+        std::pair<Vector, Vector> xi(int ell, int exponent, const Vector & k, const Vector & pk) {
             FML::SOLVERS::FFTLog::CVector input(k.size());
             for (size_t i = 0; i < k.size(); ++i)
                 input[i] = std::pow(k[i], exponent + 1.5) * pk[i];
@@ -67,7 +67,7 @@ namespace FML::PERTURBATION {
                                            std::pow(2 * detail::pi * transformed.first[i], -1.5));
             return {std::move(transformed.first), std::move(values)};
         }
-        Vector p13_fft(const Vector& k, const Vector& pk, double step) {
+        Vector p13_fft(const Vector & k, const Vector & pk, double step) {
             const size_t n = k.size();
             size_t size = 1;
             while (size < 3 * n - 2) {
@@ -79,7 +79,7 @@ namespace FML::PERTURBATION {
                 cached_n = 0;
                 ++builds;
             }
-            auto& p = *plans;
+            auto & p = *plans;
             if (cached_n != n || cached_step != step) {
                 for (int i = 0; i < p.n; ++i)
                     p.a[i][0] = p.a[i][1] = 0;
@@ -121,7 +121,7 @@ namespace FML::PERTURBATION {
         /// Uniform log-k input, zero outside its finite support. Padding adds zeros,
         /// not a power-law extrapolation. Trust only an interior range checked by convergence.
       private:
-        Prediction raw(const Vector& k, const Vector& pk, size_t padding, double taper) {
+        Prediction raw(const Vector & k, const Vector & pk, size_t padding, double taper) {
             const size_t n = k.size();
             detail::require(n >= 64 && n == pk.size() && n <= size_t(INT_MAX) / 4 &&
                                 padding <= (size_t(INT_MAX) - n) / 2,
@@ -195,8 +195,8 @@ namespace FML::PERTURBATION {
       public:
         /// Return only requested input-grid modes. Mandatory direct spot checks
         /// fail explicitly on inaccurate tails; they are not an error bound between checks.
-        Prediction evaluate(const Vector& k, const Vector& pk, double kmin, double kmax,
-                            const FastOptions& options = {}) {
+        Prediction
+        evaluate(const Vector & k, const Vector & pk, double kmin, double kmax, const FastOptions & options = {}) {
             detail::require(k.size() >= 64 && k.size() == pk.size() && kmin > 0 && kmax > kmin && kmin >= k.front() &&
                                 kmax <= k.back(),
                             "Invalid fast output range");
@@ -243,13 +243,13 @@ namespace FML::PERTURBATION {
             out.reference_p22 = reference.p22;
             out.reference_p13 = reference.p13;
             for (size_t i = 0; i < checks; ++i)
-                for (const auto& pair : {std::make_pair(out.p22[indices[i]], reference.p22[i]),
-                                         std::make_pair(out.p13[indices[i]], reference.p13[i])}) {
+                for (const auto & pair : {std::make_pair(out.p22[indices[i]], reference.p22[i]),
+                                          std::make_pair(out.p13[indices[i]], reference.p13[i])}) {
                     double error = std::abs(pair.first - pair.second), scale = std::abs(pair.second);
-                    out.max_reference_relative_error =
-                        std::max(out.max_reference_relative_error, scale > 0    ? error / scale
-                                                                   : error == 0 ? 0
-                                                                                : std::numeric_limits<double>::max());
+                    out.max_reference_relative_error = std::max(out.max_reference_relative_error,
+                                                                scale > 0  ? error / scale :
+                                                                error == 0 ? 0 :
+                                                                             std::numeric_limits<double>::max());
                     if (error > options.absolute_tolerance + options.relative_tolerance * scale)
                         throw std::runtime_error("Fast EdS failed direct-reference checks: adjust "
                                                  "support/resolution/padding or use direct_one_loop");

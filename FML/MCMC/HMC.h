@@ -34,13 +34,13 @@ namespace FML::MCMC {
     struct HMCOptions {
         int warmup = 500;
         int samples = 1000;
-        int n_leapfrog = 16;        // jittered uniformly in [n_leapfrog / 2, n_leapfrog] (fixed if jitter = false)
+        int n_leapfrog = 16; // jittered uniformly in [n_leapfrog / 2, n_leapfrog] (fixed if jitter = false)
         bool jitter = true;
-        double step_size = 0.1;     // initial; adapted during warmup (unless adapt_step_size = false)
+        double step_size = 0.1; // initial; adapted during warmup (unless adapt_step_size = false)
         bool adapt_step_size = true;
         double target_acceptance = 0.8;
-        bool adapt_mass = true;     // windowed estimate of the diagonal mass of the parameter block
-        std::vector<double> lower, upper; // bounds of the parameter block (empty: unbounded; +-inf allowed)
+        bool adapt_mass = true;             // windowed estimate of the diagonal mass of the parameter block
+        std::vector<double> lower, upper;   // bounds of the parameter block (empty: unbounded; +-inf allowed)
         double divergence_threshold = 1000; // H1 - H0 above this counts as a divergence
         std::uint64_t seed = 1;
         int verbose_every = 0; // print progress every this many iterations (0: silent)
@@ -191,8 +191,9 @@ namespace FML::MCMC {
             x_new = x;
             grad_new = grad;
             double U_new = U;
-            const int nlf = opt.jitter ? opt.n_leapfrog / 2 + int(uniform(rng) * (opt.n_leapfrog - opt.n_leapfrog / 2 + 1))
-                                       : opt.n_leapfrog;
+            const int nlf = opt.jitter ?
+                                opt.n_leapfrog / 2 + int(uniform(rng) * (opt.n_leapfrog - opt.n_leapfrog / 2 + 1)) :
+                                opt.n_leapfrog;
             bool finite = true;
             for (int l = 0; l < std::max(1, nlf) && finite; ++l) {
                 for (std::size_t i = 0; i < n; ++i)
@@ -288,7 +289,8 @@ namespace FML::MCMC {
         if (n < 4)
             return std::numeric_limits<double>::infinity();
         for (double value : x)
-            if (!std::isfinite(value)) return std::numeric_limits<double>::infinity();
+            if (!std::isfinite(value))
+                return std::numeric_limits<double>::infinity();
         if (std::all_of(x.begin(), x.end(), [&](double value) { return value == x.front(); }))
             return std::numeric_limits<double>::infinity();
         double mean = 0, var = 0;
@@ -324,7 +326,8 @@ namespace FML::MCMC {
     /// Post-warmup recorded scalar across independent HMC runs (not successive chunks of one run).
     inline ChainDiagnostics diagnose_hmc_chains(const std::vector<HMCResult> & runs, std::size_t column = 0) {
         std::vector<std::vector<double>> chains;
-        for (const auto & run : runs) chains.push_back(recorded_column(run, column));
+        for (const auto & run : runs)
+            chains.push_back(recorded_column(run, column));
         return diagnose_chains(chains);
     }
 

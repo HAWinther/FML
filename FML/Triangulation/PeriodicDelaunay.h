@@ -338,14 +338,15 @@ namespace FML {
                 const int RightTask = (FML::ThisTask + 1) % FML::NTasks;
 
                 // Pack particles to send
-                auto pack = [&](const std::vector<size_t> &index, std::vector<char> &buffer) {
+                auto pack = [&](const std::vector<size_t> & index, std::vector<char> & buffer) {
                     FML::COMMUNICATION::Count bytes = 0;
                     bool valid = true;
                     for (auto i : index) {
                         const auto size = FML::PARTICLE::GetSize(p[i]);
                         valid &= size > 0;
                         if (size > 0)
-                            valid &= FML::COMMUNICATION::add_count(bytes, FML::COMMUNICATION::Count(size),
+                            valid &= FML::COMMUNICATION::add_count(bytes,
+                                                                   FML::COMMUNICATION::Count(size),
                                                                    buffer.max_size());
                     }
                     FML::COMMUNICATION::require_count(valid, "[Delaunay] Serialized byte count overflow");
@@ -446,9 +447,17 @@ namespace FML {
                 const size_t sr = FML::COMMUNICATION::checked_bytes(to_right.size(), sizeof(Q));
                 const size_t rl = FML::COMMUNICATION::checked_bytes(recv_left, sizeof(Q));
                 const size_t rr = FML::COMMUNICATION::checked_bytes(recv_right, sizeof(Q));
-                detail::sendrecv_bytes(to_left.data(), sl, LeftTask, recv_right ? result.data() + recv_left : nullptr,
-                                       rr, RightTask);
-                detail::sendrecv_bytes(to_right.data(), sr, RightTask, recv_left ? result.data() : nullptr, rl,
+                detail::sendrecv_bytes(to_left.data(),
+                                       sl,
+                                       LeftTask,
+                                       recv_right ? result.data() + recv_left : nullptr,
+                                       rr,
+                                       RightTask);
+                detail::sendrecv_bytes(to_right.data(),
+                                       sr,
+                                       RightTask,
+                                       recv_left ? result.data() : nullptr,
+                                       rl,
                                        LeftTask);
 #endif
                 return result;

@@ -132,9 +132,10 @@ void test_termination_status() {
                   !std::isfinite(result.residual) && calls == 0,
               "one-rank nonfinite initial residual stops collectively before the callback");
     }
-    MultiGridFunction<NDIM, double> late_failure = [](Solver *sol, int, IndexInt) {
+    MultiGridFunction<NDIM, double> late_failure = [](Solver * sol, int, IndexInt) {
         return std::pair<double, double>{
-            FML::ThisTask == 0 && sol->get_number_of_vcycles() > 0 ? std::numeric_limits<double>::infinity() : 1., 1.};
+            FML::ThisTask == 0 && sol->get_number_of_vcycles() > 0 ? std::numeric_limits<double>::infinity() : 1.,
+            1.};
     };
     s.set_maxsteps(1);
     result = s.solve(late_failure, at_limit);
@@ -154,8 +155,9 @@ void test_termination_status() {
     coarse.set_ngs_sweeps(0, 0, 0);
     coarse.set_maxsteps(1);
     MultiGridFunction<NDIM, double> coarse_failure = [](Solver *, int level, IndexInt) {
-        return std::pair<double, double>{
-            FML::ThisTask == 0 && level > 0 ? std::numeric_limits<double>::quiet_NaN() : 1., 1.};
+        return std::pair<double, double>{FML::ThisTask == 0 && level > 0 ? std::numeric_limits<double>::quiet_NaN() :
+                                                                           1.,
+                                         1.};
     };
     result = coarse.solve(coarse_failure, never);
     check(result.status == SolveStatus::NonFinite && result.iterations == 1 && result.residual == 1.,

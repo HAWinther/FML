@@ -10,35 +10,48 @@ int fails = 0;
 void check(bool ok, const std::string & label) {
     int bad = !ok;
     FML::MaxOverTasks(&bad);
-    if (FML::ThisTask == 0) std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
+    if (FML::ThisTask == 0)
+        std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
     fails += bad;
 }
-struct Record { double x; int id; };
+struct Record {
+    double x;
+    int id;
+};
 
 // Independent image-intersection predicate, rather than the transport's distance function.
 bool included(double x, double lo, double hi, double buffer) {
-    if (lo == hi) return false;
+    if (lo == hi)
+        return false;
     for (int shift = -2; shift <= 2; ++shift)
-        if (x + shift >= lo - buffer && x + shift <= hi + buffer) return true;
+        if (x + shift >= lo - buffer && x + shift <= hi + buffer)
+            return true;
     return false;
 }
 
 void test_exchange() {
     std::vector<Record> all;
-    for (int i = 0; i < 128; ++i) all.push_back({i / 128.0, i});
+    for (int i = 0; i < 128; ++i)
+        all.push_back({i / 128.0, i});
     all.push_back({std::nextafter(1.0, 0.0), 128});
     auto run = [&](double buffer, bool sparse, const std::string & label) {
         std::vector<Record> local;
         std::set<int> expected;
         for (const auto & r : all) {
-            if (sparse && r.x >= .5) continue; // empty source ranks
+            if (sparse && r.x >= .5)
+                continue; // empty source ranks
             const bool owned = r.x >= FML::xmin_domain && r.x < FML::xmax_domain;
-            if (owned) local.push_back(r);
-            if (owned || included(r.x, FML::xmin_domain, FML::xmax_domain, buffer)) expected.insert(r.id);
+            if (owned)
+                local.push_back(r);
+            if (owned || included(r.x, FML::xmin_domain, FML::xmax_domain, buffer))
+                expected.insert(r.id);
         }
         // Rank-dependent limits force multiple whole-record rounds and zero-length edges.
-        FML::COMMUNICATION::append_periodic_slab_ghosts(local, buffer,
-            [](const Record & r) { return r.x; }, sizeof(Record) * (1 + FML::ThisTask % 3));
+        FML::COMMUNICATION::append_periodic_slab_ghosts(
+            local,
+            buffer,
+            [](const Record & r) { return r.x; },
+            sizeof(Record) * (1 + FML::ThisTask % 3));
         std::set<int> actual;
         bool unchanged = true;
         for (const auto & r : local) {
@@ -63,7 +76,8 @@ void test_exchange() {
     const double saved_lo = FML::xmin_domain, saved_hi = FML::xmax_domain;
     // Nonuniform domains, including an empty final slab for MPI builds.
     auto boundary = [](int task) {
-        if (FML::NTasks == 1) return double(task);
+        if (FML::NTasks == 1)
+            return double(task);
         const double t = std::min(task, FML::NTasks - 1) / double(FML::NTasks - 1);
         return t * t;
     };
@@ -82,8 +96,8 @@ struct Particle {
     constexpr int get_ndim() const { return 3; }
 };
 
-std::vector<Void> brute_force(const std::vector<Particle> & all, std::vector<Particle> & local,
-                              const SphericalOptions & options) {
+std::vector<Void>
+brute_force(const std::vector<Particle> & all, std::vector<Particle> & local, const SphericalOptions & options) {
     FML::GRID::FFTWGrid<3> grid;
     void_density_field(local.data(), local.size(), options.grid, grid);
     const int n = grid.get_nmesh();
@@ -96,7 +110,8 @@ std::vector<Void> brute_force(const std::vector<Particle> & all, std::vector<Par
     MPI_Allreduce(MPI_IN_PLACE, density.data(), int(density.size()), MPI_DOUBLE, MPI_SUM, FML::communicator);
 #endif
     double total_mass = 0;
-    for (const auto & p : all) total_mass += p.mass;
+    for (const auto & p : all)
+        total_mass += p.mass;
     const double separation = std::cbrt(1.0 / all.size());
     const double rmax = std::min(.2, options.max_radius_in_mean_separation * separation);
     const double rmin = options.min_radius_in_mean_separation * separation;
@@ -112,12 +127,15 @@ std::vector<Void> brute_force(const std::vector<Particle> & all, std::vector<Par
                 dx -= std::round(dx);
                 d2 += dx * dx;
             }
-            if (d2 <= rmax * rmax) distances.push_back({std::sqrt(d2), p.mass});
+            if (d2 <= rmax * rmax)
+                distances.push_back({std::sqrt(d2), p.mass});
         }
         std::sort(distances.begin(), distances.end());
-        mass = 0; count = 0;
+        mass = 0;
+        count = 0;
         for (const auto & dm : distances) {
-            if (mass + dm.second > threshold * dm.first * dm.first * dm.first) return dm.first;
+            if (mass + dm.second > threshold * dm.first * dm.first * dm.first)
+                return dm.first;
             mass += dm.second;
             ++count;
         }
@@ -128,7 +146,8 @@ std::vector<Void> brute_force(const std::vector<Particle> & all, std::vector<Par
         for (int iy = 0; iy < n; ++iy)
             for (int iz = 0; iz < n; ++iz) {
                 const size_t index = (size_t(ix) * n + iy) * n + iz;
-                if (density[index] >= options.candidate_density_cut) continue;
+                if (density[index] >= options.candidate_density_cut)
+                    continue;
                 Sphere c{};
                 c.index = index;
                 c.candidate_density = density[index];
@@ -143,7 +162,10 @@ std::vector<Void> brute_force(const std::vector<Particle> & all, std::vector<Par
                         double u[3], u2;
                         do {
                             u2 = 0;
-                            for (auto & v : u) { v = uniform(rng); u2 += v * v; }
+                            for (auto & v : u) {
+                                v = uniform(rng);
+                                u2 += v * v;
+                            }
                         } while (u2 > 1);
                         double trial[3], drift2 = 0;
                         for (int d = 0; d < 3; ++d) {
@@ -152,23 +174,30 @@ std::vector<Void> brute_force(const std::vector<Particle> & all, std::vector<Par
                             dx -= std::round(dx);
                             drift2 += dx * dx;
                             trial[d] -= std::floor(trial[d]);
-                            if (trial[d] >= 1) trial[d] = 0;
+                            if (trial[d] >= 1)
+                                trial[d] = 0;
                         }
-                        if (drift2 > max_drift * max_drift) continue;
+                        if (drift2 > max_drift * max_drift)
+                            continue;
                         double mass;
                         long long count;
                         const double r = radius(trial, mass, count);
                         if (r > c.radius) {
                             std::copy(trial, trial + 3, c.center);
-                            c.radius = r; c.mass_inside = mass; c.n_inside = count;
+                            c.radius = r;
+                            c.mass_inside = mass;
+                            c.n_inside = count;
                         }
                     }
                 }
-                if (c.radius > 0 && c.radius >= rmin) spheres.push_back(c);
+                if (c.radius > 0 && c.radius >= rmin)
+                    spheres.push_back(c);
             }
     std::sort(spheres.begin(), spheres.end(), [](const Sphere & a, const Sphere & b) {
-        if (a.radius != b.radius) return a.radius > b.radius;
-        if (a.candidate_density != b.candidate_density) return a.candidate_density < b.candidate_density;
+        if (a.radius != b.radius)
+            return a.radius > b.radius;
+        if (a.candidate_density != b.candidate_density)
+            return a.candidate_density < b.candidate_density;
         return a.index < b.index;
     });
     std::vector<Void> result;
@@ -182,9 +211,13 @@ std::vector<Void> brute_force(const std::vector<Particle> & all, std::vector<Par
                 d2 += dx * dx;
             }
             const double dmin = (1 - options.max_overlap) * (c.radius + kept.radius);
-            if (d2 < dmin * dmin) { overlap = true; break; }
+            if (d2 < dmin * dmin) {
+                overlap = true;
+                break;
+            }
         }
-        if (overlap) continue;
+        if (overlap)
+            continue;
         Void v;
         std::copy(c.center, c.center + 3, v.pos.begin());
         v.pos_barycenter = v.pos;
@@ -210,44 +243,56 @@ void test_catalogue() {
                 for (const auto & center : {std::array<double, 3>{.99, .5, .5}, {.5, .25, .7}}) {
                     double d2 = 0;
                     for (int d = 0; d < 3; ++d) {
-                        double dx = p.pos[d] - center[d]; dx -= std::round(dx); d2 += dx * dx;
+                        double dx = p.pos[d] - center[d];
+                        dx -= std::round(dx);
+                        d2 += dx * dx;
                     }
                     hole |= d2 < .14 * .14;
                 }
-                if (!hole) all.push_back(p);
+                if (!hole)
+                    all.push_back(p);
             }
     for (bool weighted : {false, true}) {
-        for (size_t i = 0; i < all.size(); ++i) all[i].mass = weighted ? (i % 3 ? .5 : 2) : 1;
+        for (size_t i = 0; i < all.size(); ++i)
+            all[i].mass = weighted ? (i % 3 ? .5 : 2) : 1;
         local.clear();
         for (const auto & p : all)
-            if (p.pos[0] >= FML::xmin_domain && p.pos[0] < FML::xmax_domain) local.push_back(p);
-        for (double max_radius : {8.0, .6}) for (int drift : {0, 6}) {
-            SphericalOptions options;
-            options.grid.Nmesh = 16;
-            options.grid.smoothing_scale = 0;
-            options.grid.density_assignment_method = "NGP";
-            options.max_radius_in_mean_separation = max_radius;
-            options.min_radius_in_mean_separation = 0;
-            options.recentering_steps = drift;
-            const auto expected = brute_force(all, local, options);
-            const auto actual = SphericalVoidFinder(local.data(), local.size(), options);
-            bool same = !expected.empty() && expected.size() == actual.size();
-            if (same) for (size_t i = 0; i < actual.size(); ++i) {
-                const auto & a = actual[i]; const auto & b = expected[i];
-                same &= a.id == b.id && a.nmembers == b.nmembers;
-                same &= a.pos == b.pos && a.pos_min == b.pos_min && a.pos_barycenter == b.pos_barycenter;
-                same &= std::abs(a.radius - b.radius) < 1e-13 && std::abs(a.volume - b.volume) < 1e-13;
-                same &= std::abs(a.density_min - b.density_min) < 1e-12 && std::abs(a.density_avg - b.density_avg) < 1e-12;
+            if (p.pos[0] >= FML::xmin_domain && p.pos[0] < FML::xmax_domain)
+                local.push_back(p);
+        for (double max_radius : {8.0, .6})
+            for (int drift : {0, 6}) {
+                SphericalOptions options;
+                options.grid.Nmesh = 16;
+                options.grid.smoothing_scale = 0;
+                options.grid.density_assignment_method = "NGP";
+                options.max_radius_in_mean_separation = max_radius;
+                options.min_radius_in_mean_separation = 0;
+                options.recentering_steps = drift;
+                const auto expected = brute_force(all, local, options);
+                const auto actual = SphericalVoidFinder(local.data(), local.size(), options);
+                bool same = !expected.empty() && expected.size() == actual.size();
+                if (same)
+                    for (size_t i = 0; i < actual.size(); ++i) {
+                        const auto & a = actual[i];
+                        const auto & b = expected[i];
+                        same &= a.id == b.id && a.nmembers == b.nmembers;
+                        same &= a.pos == b.pos && a.pos_min == b.pos_min && a.pos_barycenter == b.pos_barycenter;
+                        same &= std::abs(a.radius - b.radius) < 1e-13 && std::abs(a.volume - b.volume) < 1e-13;
+                        same &= std::abs(a.density_min - b.density_min) < 1e-12 &&
+                                std::abs(a.density_avg - b.density_avg) < 1e-12;
+                    }
+                check(same,
+                      std::string("brute-force catalogue including masses, counts and overlap: ") +
+                          (weighted ? "weighted" : "unit mass") + ", recenter=" + std::to_string(drift) +
+                          ", max separation=" + std::to_string(max_radius));
             }
-            check(same, std::string("brute-force catalogue including masses, counts and overlap: ") +
-                        (weighted ? "weighted" : "unit mass") + ", recenter=" + std::to_string(drift) +
-                        ", max separation=" + std::to_string(max_radius));
-        }
     }
 }
 int main(int argc, char ** argv) {
     test_exchange();
-    if (argc == 1 || std::string(argv[1]) != "exchange") test_catalogue();
-    if (FML::ThisTask == 0) std::cout << (fails ? "Spherical void tests FAILED\n" : "All spherical void tests passed\n");
+    if (argc == 1 || std::string(argv[1]) != "exchange")
+        test_catalogue();
+    if (FML::ThisTask == 0)
+        std::cout << (fails ? "Spherical void tests FAILED\n" : "All spherical void tests passed\n");
     return fails ? 1 : 0;
 }

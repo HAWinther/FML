@@ -48,7 +48,7 @@ namespace FML {
 
             // Helper function to go from f(k) -> DiDj f
             // Read the retained Fourier source while filling each output directly.
-            auto ComputeSecondDerivative = [&](const FFTWGrid<N> &source, FFTWGrid<N> &grid, int i1, int i2) {
+            auto ComputeSecondDerivative = [&](const FFTWGrid<N> & source, FFTWGrid<N> & grid, int i1, int i2) {
                 if (FML::ThisTask == 0)
                     std::cout << "[ComputeHessianWithFT::ComputeSecondDerivative] Computing phi_" << i1 << "," << i2
                               << "\n";

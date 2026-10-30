@@ -26,7 +26,8 @@ namespace FML {
         //========================================================================================
         /// The spherical overdensity (SO) properties of a halo around a given (guess for the) center
         //========================================================================================
-        template <int NDIM> struct SOHalo {
+        template <int NDIM>
+        struct SOHalo {
             /// The center (shrinking sphere center of mass) in [0,1)
             std::array<double, NDIM> pos{};
             /// Mass weighted mean velocity and velocity dispersion (per dimension) of the particles inside the radius
@@ -49,7 +50,7 @@ namespace FML {
 
         namespace SO_DETAIL {
             using Count = unsigned long long;
-            inline void require(bool valid, const char* message) {
+            inline void require(bool valid, const char * message) {
                 int good = valid;
                 FML::MinOverTasks(&good);
                 if (!good)
@@ -82,7 +83,9 @@ namespace FML {
         /// Particle serialization may have variable record sizes. A complete framed
         /// record must fit max_message_bytes; the smallest rank limit is used.
         template <class T>
-        std::vector<T> fetch_boundary_particles(T* part, size_t NumPart, double dx,
+        std::vector<T> fetch_boundary_particles(T * part,
+                                                size_t NumPart,
+                                                double dx,
                                                 size_t max_message_bytes = 8 * 1024 * 1024,
                                                 bool unwrap_periodic_images = true) {
             using SO_DETAIL::Count;
@@ -114,7 +117,7 @@ namespace FML {
                 }
                 SO_DETAIL::require(valid, "[SO exchange] Serialized particle plus length header exceeds message limit");
                 auto needed = [&](size_t i, int dest) {
-                    const auto& slab = slabs[dest];
+                    const auto & slab = slabs[dest];
                     return slab[0] < slab[1] &&
                            SO_DETAIL::distance_to_slab(FML::PARTICLE::GetPos(part[i])[0], slab[0], slab[1]) <= slab[2];
                 };
@@ -123,7 +126,12 @@ namespace FML {
                     if (dest != FML::ThisTask)
                         for (size_t i = 0; i < NumPart; ++i)
                             sends[dest] += needed(i, dest);
-                MPI_Alltoall(sends.data(), 1, MPI_UNSIGNED_LONG_LONG, receives.data(), 1, MPI_UNSIGNED_LONG_LONG,
+                MPI_Alltoall(sends.data(),
+                             1,
+                             MPI_UNSIGNED_LONG_LONG,
+                             receives.data(),
+                             1,
+                             MPI_UNSIGNED_LONG_LONG,
                              FML::communicator);
                 size_t total = 0;
                 valid = true;
@@ -195,17 +203,36 @@ namespace FML {
                         SO_DETAIL::require(valid,
                                            "[SO exchange] Particle serialization failed or changed its record size");
                         Count ns = send_buffer.size(), nr = 0;
-                        MPI_Sendrecv(&ns, 1, MPI_UNSIGNED_LONG_LONG, dest, 13510, &nr, 1, MPI_UNSIGNED_LONG_LONG,
-                                     source, 13510, FML::communicator, MPI_STATUS_IGNORE);
+                        MPI_Sendrecv(&ns,
+                                     1,
+                                     MPI_UNSIGNED_LONG_LONG,
+                                     dest,
+                                     13510,
+                                     &nr,
+                                     1,
+                                     MPI_UNSIGNED_LONG_LONG,
+                                     source,
+                                     13510,
+                                     FML::communicator,
+                                     MPI_STATUS_IGNORE);
                         SO_DETAIL::require(nr <= capacity, "[SO exchange] Invalid received byte count");
                         if (nr > receive_buffer.capacity()) {
                             std::vector<char> exact(static_cast<size_t>(nr));
                             receive_buffer.swap(exact);
                         } else
                             receive_buffer.resize(size_t(nr));
-                        MPI_Sendrecv(ns ? send_buffer.data() : nullptr, int(ns), MPI_BYTE, dest, 13511,
-                                     nr ? receive_buffer.data() : nullptr, int(nr), MPI_BYTE, source, 13511,
-                                     FML::communicator, MPI_STATUS_IGNORE);
+                        MPI_Sendrecv(ns ? send_buffer.data() : nullptr,
+                                     int(ns),
+                                     MPI_BYTE,
+                                     dest,
+                                     13511,
+                                     nr ? receive_buffer.data() : nullptr,
+                                     int(nr),
+                                     MPI_BYTE,
+                                     source,
+                                     13511,
+                                     FML::communicator,
+                                     MPI_STATUS_IGNORE);
                         position = 0;
                         valid = true;
                         try {
@@ -234,7 +261,7 @@ namespace FML {
                                     break;
                                 }
                                 if (unwrap_periodic_images) {
-                                    auto* x = FML::PARTICLE::GetPos(particle);
+                                    auto * x = FML::PARTICLE::GetPos(particle);
                                     x[0] += SO_DETAIL::nearest_image(x[0], lo, hi);
                                 }
                                 boundary.push_back(std::move(particle));
@@ -292,11 +319,15 @@ namespace FML {
         /// selectively exchanged buffer before a query would leave its coverage. See SphericalOverdensity.md.
         //========================================================================================
         template <class T, int NDIM>
-        std::vector<SOHalo<NDIM>>
-        SphericalOverdensity(T* part, size_t NumPart, double total_mass,
-                             const std::vector<std::array<double, NDIM>>& centers,
-                             const std::vector<double>& initial_radius, const std::vector<double>& thresholds,
-                             double search_radius, int nmin_center = 20, size_t max_exchange_bytes = 8 * 1024 * 1024) {
+        std::vector<SOHalo<NDIM>> SphericalOverdensity(T * part,
+                                                       size_t NumPart,
+                                                       double total_mass,
+                                                       const std::vector<std::array<double, NDIM>> & centers,
+                                                       const std::vector<double> & initial_radius,
+                                                       const std::vector<double> & thresholds,
+                                                       double search_radius,
+                                                       int nmin_center = 20,
+                                                       size_t max_exchange_bytes = 8 * 1024 * 1024) {
             static_assert(NDIM >= 1, "SphericalOverdensity: need NDIM >= 1");
             bool valid = centers.size() == initial_radius.size() && total_mass > 0 && std::isfinite(total_mass) &&
                          search_radius > 0 && std::isfinite(search_radius) &&
@@ -311,7 +342,7 @@ namespace FML {
             for (double delta : thresholds)
                 valid &= delta > 0 && std::isfinite(delta * total_mass);
             for (size_t i = 0; part && i < NumPart; ++i) {
-                const auto* x = FML::PARTICLE::GetPos(part[i]);
+                const auto * x = FML::PARTICLE::GetPos(part[i]);
                 for (int d = 0; d < NDIM; ++d)
                     valid &= std::isfinite(x[d]) && x[d] >= 0 && x[d] < 1;
                 valid &= std::isfinite(FML::PARTICLE::GetMass(part[i])) && FML::PARTICLE::GetMass(part[i]) > 0;
@@ -321,20 +352,20 @@ namespace FML {
             // Sparse periodic cell keys; only owned and selectively received records are stored.
             const int ncell = int(std::max(1., std::min(512., 2. / search_radius)));
             const double cellsize = 1. / ncell;
-            auto cell_coord = [&](const auto* pos, int dim) {
+            auto cell_coord = [&](const auto * pos, int dim) {
                 double x = pos[dim] - std::floor(pos[dim]);
                 return std::min(ncell - 1, int(x * ncell));
             };
             // Particle pointers per cell (sparse: only cells with particles)
-            std::map<long long int, std::vector<T*>> cells;
-            auto cell_key = [&](const std::array<int, NDIM>& c) {
+            std::map<long long int, std::vector<T *>> cells;
+            auto cell_key = [&](const std::array<int, NDIM> & c) {
                 long long int key = c[0];
                 for (int idim = 1; idim < NDIM; idim++)
                     key = key * ncell + c[idim];
                 return key;
             };
-            auto add_to_cell = [&](T& p) {
-                const auto* pos = FML::PARTICLE::GetPos(p);
+            auto add_to_cell = [&](T & p) {
+                const auto * pos = FML::PARTICLE::GetPos(p);
                 std::array<int, NDIM> c;
                 for (int idim = 0; idim < NDIM; idim++)
                     c[idim] = cell_coord(pos, idim);
@@ -343,17 +374,20 @@ namespace FML {
             auto exchange_and_rebuild = [&](double coverage) {
                 cells.clear();
                 std::vector<T>().swap(boundary);
-                boundary = fetch_boundary_particles(
-                    part, NumPart, std::min(.5, coverage + 32 * std::numeric_limits<double>::epsilon()),
-                    max_exchange_bytes, false);
+                boundary =
+                    fetch_boundary_particles(part,
+                                             NumPart,
+                                             std::min(.5, coverage + 32 * std::numeric_limits<double>::epsilon()),
+                                             max_exchange_bytes,
+                                             false);
                 for (size_t i = 0; i < NumPart; ++i)
                     add_to_cell(part[i]);
-                for (auto& p : boundary)
+                for (auto & p : boundary)
                     add_to_cell(p);
             };
 
             // Minimum-image separation in every dimension, independent of MPI layout.
-            auto separation = [&](const auto* x, const std::array<double, NDIM>& c, std::array<double, NDIM>& d) {
+            auto separation = [&](const auto * x, const std::array<double, NDIM> & c, std::array<double, NDIM> & d) {
                 double r2 = 0.0;
                 for (int idim = 0; idim < NDIM; idim++) {
                     d[idim] = x[idim] - c[idim];
@@ -365,8 +399,8 @@ namespace FML {
 
             // The particles within radius r of c: (r^2, particle)
             const int nsearch = int(std::min(double(ncell), std::ceil(search_radius / cellsize)));
-            auto particles_within = [&](const std::array<double, NDIM>& c, double r) {
-                std::vector<std::pair<double, T*>> result;
+            auto particles_within = [&](const std::array<double, NDIM> & c, double r) {
+                std::vector<std::pair<double, T *>> result;
                 std::array<int, NDIM> c0;
                 for (int idim = 0; idim < NDIM; idim++)
                     c0[idim] = cell_coord(c.data(), idim);
@@ -396,7 +430,7 @@ namespace FML {
                         cc[idim] = cellrange[idim][index[idim]];
                     auto it = cells.find(cell_key(cc));
                     if (it != cells.end())
-                        for (auto* p : it->second) {
+                        for (auto * p : it->second) {
                             const double r2 = separation(FML::PARTICLE::GetPos(*p), c, d);
                             if (r2 <= r2max)
                                 result.push_back({r2, p});
@@ -427,12 +461,12 @@ namespace FML {
             std::vector<CenterState> states;
             states.reserve(centers.size());
             double coverage = 0;
-            auto requirement = [&](const auto& c, double r) {
+            auto requirement = [&](const auto & c, double r) {
                 return r + SO_DETAIL::distance_to_slab(c[0], FML::xmin_domain, FML::xmax_domain);
             };
             for (size_t i = 0; i < centers.size(); ++i) {
                 auto wrapped = centers[i];
-                for (double& x : wrapped)
+                for (double & x : wrapped)
                     x -= std::floor(x);
                 states.push_back({wrapped, std::min(initial_radius[i], search_radius)});
                 coverage = std::max(coverage, requirement(wrapped, search_radius));
@@ -442,7 +476,7 @@ namespace FML {
             exchange_and_rebuild(coverage);
             for (;;) {
                 double needed = coverage;
-                for (auto& state : states) {
+                for (auto & state : states) {
                     while (!state.done && state.iteration < 200) {
                         double required = requirement(state.center, state.radius);
                         if (coverage < .5 && required > coverage) {
@@ -459,7 +493,7 @@ namespace FML {
                         }
                         std::array<double, NDIM> com{}, d{};
                         double mass = 0;
-                        for (const auto& particle : inside) {
+                        for (const auto & particle : inside) {
                             double m = FML::PARTICLE::GetMass(*particle.second);
                             separation(FML::PARTICLE::GetPos(*particle.second), state.center, d);
                             for (int dim = 0; dim < NDIM; ++dim)
@@ -491,17 +525,17 @@ namespace FML {
             std::vector<SOHalo<NDIM>> halos(centers.size());
             size_t ntruncated = 0;
             for (size_t ih = 0; ih < centers.size(); ih++) {
-                auto& h = halos[ih];
+                auto & h = halos[ih];
                 h.radius.assign(thresholds.size(), 0.0);
                 h.mass.assign(thresholds.size(), 0.0);
                 h.npart.assign(thresholds.size(), 0);
 
-                const auto& c = states[ih].center;
+                const auto & c = states[ih].center;
                 h.pos = c;
 
                 // 2. Grow the sphere
                 auto all = particles_within(c, search_radius);
-                std::sort(all.begin(), all.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+                std::sort(all.begin(), all.end(), [](const auto & a, const auto & b) { return a.first < b.first; });
                 std::vector<double> cummass(all.size());
                 double m = 0.0;
                 for (size_t i = 0; i < all.size(); i++) {
@@ -536,11 +570,11 @@ namespace FML {
                 if constexpr (FML::PARTICLE::has_get_vel<T>()) {
                     const double R = thresholds.empty() ? 0.0 : h.radius[0];
                     double mtot = 0.0;
-                    for (auto& ip : all) {
+                    for (auto & ip : all) {
                         if (ip.first > R * R)
                             break;
                         const double mp = FML::PARTICLE::GetMass(*ip.second);
-                        const auto* v = FML::PARTICLE::GetVel(*ip.second);
+                        const auto * v = FML::PARTICLE::GetVel(*ip.second);
                         for (int idim = 0; idim < NDIM; idim++) {
                             h.vel[idim] += mp * v[idim];
                             h.vel_rms[idim] += mp * v[idim] * v[idim];

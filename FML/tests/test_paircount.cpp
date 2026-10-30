@@ -164,17 +164,21 @@ void test_rank_assignment() {
     std::mt19937_64 schedule_rng(92847);
     for (size_t i = 0; i < 1024; ++i)
         generated.emplace_back(double(schedule_rng() % 97) * .1, i);
-    std::sort(generated.begin(), generated.end(), [](const auto &a, const auto &b) {
+    std::sort(generated.begin(), generated.end(), [](const auto & a, const auto & b) {
         return a.first > b.first || (a.first == b.first && a.second < b.second);
     });
     // Includes empty schedules, idle ranks, repeated ties, zero increments, skewed loads and rounding.
-    for (const auto &cost : {Costs{}, tied, Costs{{1., 7}}, Costs{{0., 0}, {0., 1}, {0., 2}},
-                             Costs{{0x1p100, 0}, {1., 1}, {1., 2}, {.5, 3}, {.5, 4}},
-                             Costs{{0x1p100, 0}, {0x1p100, 1}, {1., 2}, {1., 3}, {.5, 4}}, generated}) {
+    for (const auto & cost : {Costs{},
+                              tied,
+                              Costs{{1., 7}},
+                              Costs{{0., 0}, {0., 1}, {0., 2}},
+                              Costs{{0x1p100, 0}, {1., 1}, {1., 2}, {.5, 3}, {.5, 4}},
+                              Costs{{0x1p100, 0}, {0x1p100, 1}, {1., 2}, {1., 3}, {.5, 4}},
+                              generated}) {
         for (int nranks : {1, 2, 3, 4, 7, 16, 65}) {
             std::vector<double> load(nranks, 0.);
             std::vector<std::vector<size_t>> expected(nranks);
-            for (const auto &cell : cost) {
+            for (const auto & cell : cost) {
                 int rank = int(std::min_element(load.begin(), load.end()) - load.begin());
                 expected[rank].push_back(cell.second);
                 load[rank] += cell.first;
@@ -191,7 +195,8 @@ void test_rank_assignment() {
     check(true, "heap assignment matches the legacy scan, including each rank's cell order");
 }
 
-template <int N> detail::CellList<N> occupancy_grid(int ngrid, const std::vector<size_t> &counts) {
+template <int N>
+detail::CellList<N> occupancy_grid(int ngrid, const std::vector<size_t> & counts) {
     detail::CellList<N> grid;
     grid.ngrid = ngrid;
     grid.start.push_back(0);
@@ -201,16 +206,22 @@ template <int N> detail::CellList<N> occupancy_grid(int ngrid, const std::vector
 }
 
 // Independent exhaustive cell-box geometry, without the production offset traversal.
-template <int N> void test_neighbor_costs() {
+template <int N>
+void test_neighbor_costs() {
     bool correct = true;
     struct Case {
         int ngrid;
         double radius;
         bool periodic, full;
     };
-    for (const auto config :
-         {Case{8, .08, false, false}, Case{8, .08, true, false}, Case{8, .26, true, false}, Case{8, .4, false, false},
-          Case{8, .4, true, true}, Case{5, .21, true, true}, Case{4, .26, true, true}, Case{1, .1, true, true}}) {
+    for (const auto config : {Case{8, .08, false, false},
+                              Case{8, .08, true, false},
+                              Case{8, .26, true, false},
+                              Case{8, .4, false, false},
+                              Case{8, .4, true, true},
+                              Case{5, .21, true, true},
+                              Case{4, .26, true, true},
+                              Case{1, .1, true, true}}) {
         size_t ncells = 1;
         for (int d = 0; d < N; ++d)
             ncells *= config.ngrid;
@@ -242,13 +253,14 @@ template <int N> void test_neighbor_costs() {
                         }
                         if (!config.full && gap2 >= config.radius * config.radius)
                             continue;
-                        cost += automatic && c1 == c2 ? double(a[c1]) * (a[c1] - 1) * .5
-                                                      : double(a[c1]) * double(automatic ? a[c2] : b[c2]);
+                        cost += automatic && c1 == c2 ? double(a[c1]) * (a[c1] - 1) * .5 :
+                                                        double(a[c1]) * double(automatic ? a[c2] : b[c2]);
                     }
                     expected.emplace_back(cost, c1);
                 }
-            std::sort(expected.begin(), expected.end(),
-                      [](auto a, auto b) { return a.first > b.first || (a.first == b.first && a.second < b.second); });
+            std::sort(expected.begin(), expected.end(), [](auto a, auto b) {
+                return a.first > b.first || (a.first == b.first && a.second < b.second);
+            });
             correct &=
                 detail::estimate_cell_costs<N>(A, automatic ? A : B, offsets, automatic, config.periodic) == expected;
         }
@@ -274,7 +286,7 @@ void test_cross_schedule_balance() {
     for (size_t c = 0; c < a.size(); ++c)
         if (a[c])
             old.emplace_back(double(a[c]) * (b[c] + 1.), c);
-    auto peak_candidates = [&](const auto &cost) {
+    auto peak_candidates = [&](const auto & cost) {
         double peak = 0.;
         for (int rank = 0; rank < 2; ++rank) {
             double candidates = 0.;
@@ -297,8 +309,9 @@ void test_cross_schedule_balance() {
     auto realA = detail::make_cell_list<1>(pa.data(), pa.size(), 24);
     auto realB = detail::make_cell_list<1>(pb.data(), pb.size(), 24);
     std::vector<unsigned long long> thread_counts(FML::NThreads, 0);
-    detail::count_pairs<1>(realA, realB, false, .04, false,
-                           [&](int thread, size_t, size_t, const double *, double) { ++thread_counts[thread]; });
+    detail::count_pairs<1>(realA, realB, false, .04, false, [&](int thread, size_t, size_t, const double *, double) {
+        ++thread_counts[thread];
+    });
     unsigned long long total = 0;
     for (auto count : thread_counts)
         total += count;

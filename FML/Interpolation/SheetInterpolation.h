@@ -54,8 +54,15 @@ namespace FML {
                 MPI_Datatype type;
                 MPI_Type_contiguous(int(sizeof(T)), MPI_BYTE, &type);
                 MPI_Type_commit(&type);
-                MPI_Alltoallv(sendbuf.data(), outgoing.counts.data(), outgoing.offsets.data(), type, recv.data(),
-                              nrecv.data(), incoming.offsets.data(), type, FML::communicator);
+                MPI_Alltoallv(sendbuf.data(),
+                              outgoing.counts.data(),
+                              outgoing.offsets.data(),
+                              type,
+                              recv.data(),
+                              nrecv.data(),
+                              incoming.offsets.data(),
+                              type,
+                              FML::communicator);
                 MPI_Type_free(&type);
                 return recv;
             }

@@ -117,10 +117,19 @@ int main() {
         check("modern sampler rank Rhat", diagnostic.rhat < 1.02);
         check("modern sampler bulk/tail ESS", diagnostic.ess_bulk > 400 && diagnostic.ess_tail > 400);
         std::vector<std::vector<double>> traces(4);
-        for (int i = 0; i < 4; ++i) for (const auto & row : mc.samples(i)) traces[i].push_back(row[3]);
-        check_close("sampler adapter preserves full traces", diagnostic.ess_bulk, diagnose_chains(traces).ess_bulk, 1e-12);
+        for (int i = 0; i < 4; ++i)
+            for (const auto & row : mc.samples(i))
+                traces[i].push_back(row[3]);
+        check_close("sampler adapter preserves full traces",
+                    diagnostic.ess_bulk,
+                    diagnose_chains(traces).ess_bulk,
+                    1e-12);
         bool invalid_column = false;
-        try { mc.diagnostics(4); } catch (const std::out_of_range &) { invalid_column = true; }
+        try {
+            mc.diagnostics(4);
+        } catch (const std::out_of_range &) {
+            invalid_column = true;
+        }
         check("sampler diagnostic invalid column", invalid_column);
         const auto m = mc.mean(), s = mc.stddev();
         const auto cv = mc.covariance();
@@ -352,7 +361,11 @@ int main() {
     }
 
     {
-        LikelihoodFunction flat = [](const std::vector<double> &) { LikelihoodResult r; r.loglike = 0; return r; };
+        LikelihoodFunction flat = [](const std::vector<double> &) {
+            LikelihoodResult r;
+            r.loglike = 0;
+            return r;
+        };
         auto options = quiet(2, 0, 16);
         options.max_steps = 32;
         Sampler frozen({P("frozen", .1, 0., 2., 1e-100)}, {}, {}, flat, options);

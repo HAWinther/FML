@@ -84,7 +84,7 @@ namespace FML::CORRELATIONFUNCTIONS::detail {
                         std::count_if(entries.begin(), entries.end(), [](const Entry & e) { return e.bin >= 0; });
                     stats.peak_cached_shells = std::max(stats.peak_cached_shells, resident);
                     size_t resident_bytes = 0;
-                    for (const auto &entry : entries)
+                    for (const auto & entry : entries)
                         resident_bytes += entry.grid.allocated_storage_bytes();
                     stats.memory.shell_bytes = std::max(stats.memory.shell_bytes, resident_bytes);
                 }
@@ -125,20 +125,32 @@ namespace FML::CORRELATIONFUNCTIONS::detail {
                 store(configs[start + i], sums[i]);
         }
     }
-    template <int N, int ORDER, bool COMPACT> void finish_memory_report(PolyspectrumBinning<N, ORDER, COMPACT> &bins) {
-        auto &m = bins.statistics.memory;
+    template <int N, int ORDER, bool COMPACT>
+    void finish_memory_report(PolyspectrumBinning<N, ORDER, COMPACT> & bins) {
+        auto & m = bins.statistics.memory;
         m.result_bytes = bins.result_storage_bytes();
         m.bin_metadata_bytes = bins.metadata_storage_bytes();
         m.fft_workspace_allowance_bytes = bins.options.fft_workspace_allowance_bytes.value_or(0);
-        std::array<size_t *, 11> fields{
-            &m.input_bytes,          &m.result_bytes,    &m.bin_metadata_bytes,           &m.configuration_bytes,
-            &m.cache_metadata_bytes, &m.shell_bytes,     &m.padding_source_bytes,         &m.remapping_bytes,
-            &m.metadata_work_bytes,  &m.reduction_bytes, &m.fft_workspace_allowance_bytes};
+        std::array<size_t *, 11> fields{&m.input_bytes,
+                                        &m.result_bytes,
+                                        &m.bin_metadata_bytes,
+                                        &m.configuration_bytes,
+                                        &m.cache_metadata_bytes,
+                                        &m.shell_bytes,
+                                        &m.padding_source_bytes,
+                                        &m.remapping_bytes,
+                                        &m.metadata_work_bytes,
+                                        &m.reduction_bytes,
+                                        &m.fft_workspace_allowance_bytes};
         std::array<FML::COMMUNICATION::Count, 11> values{};
         for (size_t i = 0; i < fields.size(); ++i)
             values[i] = *fields[i];
 #ifdef USE_MPI
-        MPI_Allreduce(MPI_IN_PLACE, values.data(), int(values.size()), MPI_UNSIGNED_LONG_LONG, MPI_MAX,
+        MPI_Allreduce(MPI_IN_PLACE,
+                      values.data(),
+                      int(values.size()),
+                      MPI_UNSIGNED_LONG_LONG,
+                      MPI_MAX,
                       FML::communicator);
 #endif
         int supplied = bins.options.fft_workspace_allowance_bytes.has_value();

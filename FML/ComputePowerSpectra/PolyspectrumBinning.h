@@ -189,7 +189,8 @@ namespace FML {
             }
 
           private:
-            template <int, int, bool> friend class PolyspectrumBinning;
+            template <int, int, bool>
+            friend class PolyspectrumBinning;
             std::vector<Configuration> compact_configs;
             size_t compact_index(Configuration cfg) const {
                 for (auto bin : cfg)
@@ -197,7 +198,8 @@ namespace FML {
                         throw std::out_of_range("[PolyspectrumBinning] Bin is out of range");
                 std::sort(cfg.begin(), cfg.end());
                 auto found = std::lower_bound(compact_configs.begin(), compact_configs.end(), cfg);
-                return found != compact_configs.end() && *found == cfg ? size_t(found - compact_configs.begin()) : compact_configs.size();
+                return found != compact_configs.end() && *found == cfg ? size_t(found - compact_configs.begin()) :
+                                                                         compact_configs.size();
             }
             std::vector<Configuration> selected, cached_selected;
             int cached_mesh{-1};
@@ -278,7 +280,10 @@ namespace FML {
             : PolyspectrumBinning(0.0, 2.0 * M_PI * Nmesh / 2.0, nbins, bin_type){};
 
         template <int N, int ORDER, bool COMPACT>
-        PolyspectrumBinning<N, ORDER, COMPACT>::PolyspectrumBinning(double _kmin, double _kmax, int nbins, int bin_type) {
+        PolyspectrumBinning<N, ORDER, COMPACT>::PolyspectrumBinning(double _kmin,
+                                                                    double _kmax,
+                                                                    int nbins,
+                                                                    int bin_type) {
             assert_mpi(nbins >= 2, "[PolyspectrumBinning] We need at least 2 bins");
             this->bin_type = bin_type;
             n = nbins;

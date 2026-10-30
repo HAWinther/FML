@@ -49,9 +49,18 @@ namespace FML::COMMUNICATION {
             auto & send = outgoing[dest];
             const unsigned long long nsend = send.size();
             unsigned long long nrecv = 0;
-            MPI_Sendrecv(&nsend, 1, MPI_UNSIGNED_LONG_LONG, dest, 0,
-                         &nrecv, 1, MPI_UNSIGNED_LONG_LONG, source, 0,
-                         FML::communicator, MPI_STATUS_IGNORE);
+            MPI_Sendrecv(&nsend,
+                         1,
+                         MPI_UNSIGNED_LONG_LONG,
+                         dest,
+                         0,
+                         &nrecv,
+                         1,
+                         MPI_UNSIGNED_LONG_LONG,
+                         source,
+                         0,
+                         FML::communicator,
+                         MPI_STATUS_IGNORE);
             assert_mpi(nrecv <= std::numeric_limits<size_t>::max(),
                        "[exchange_records_chunked] Receive count exceeds addressable range");
             auto rounds = detail::chunk_count(std::max(nsend, nrecv), capacity);
@@ -67,10 +76,17 @@ namespace FML::COMMUNICATION {
                 const auto rcount = offset < nrecv ? std::min(capacity, nrecv - offset) : 0;
                 // Whole-record chunking proves both byte counts fit int before narrowing.
                 MPI_Sendrecv(scount ? send.data() + size_t(offset) : nullptr,
-                             int(scount * sizeof(Record)), MPI_BYTE, dest, 1,
+                             int(scount * sizeof(Record)),
+                             MPI_BYTE,
+                             dest,
+                             1,
                              rcount ? receive.data() : nullptr,
-                             int(rcount * sizeof(Record)), MPI_BYTE, source, 1,
-                             FML::communicator, MPI_STATUS_IGNORE);
+                             int(rcount * sizeof(Record)),
+                             MPI_BYTE,
+                             source,
+                             1,
+                             FML::communicator,
+                             MPI_STATUS_IGNORE);
                 if (rcount)
                     consume(receive.data(), size_t(rcount));
             }

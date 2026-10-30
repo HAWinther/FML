@@ -4,14 +4,15 @@
 #include <limits>
 using namespace FML::COMMUNICATION;
 int failures = 0;
-void check(bool good, const char *message) {
+void check(bool good, const char * message) {
     int bad = !good;
     FML::MaxOverTasks(&bad);
     failures += bad;
     if (!FML::ThisTask)
         std::cout << (bad ? "[FAIL] " : "[PASS] ") << message << '\n';
 }
-template <class F> void rejects(F &&function, const char *message) {
+template <class F>
+void rejects(F && function, const char * message) {
     bool caught = false;
     try {
         function();
@@ -64,13 +65,13 @@ int main() {
     const int n = FML::ThisTask % 3 + (FML::ThisTask == FML::NTasks - 1);
     for (int i = 0; i < n; ++i)
         local.push_back({FML::ThisTask, i, .5 + FML::ThisTask + i});
-    auto validate = [](const std::vector<Record> &records) {
+    auto validate = [](const std::vector<Record> & records) {
         size_t cursor = 0;
         for (int rank = 0; rank < FML::NTasks; ++rank)
             for (int i = 0; i < rank % 3 + (rank == FML::NTasks - 1); ++i) {
                 if (cursor >= records.size())
                     return false;
-                const auto &r = records[cursor++];
+                const auto & r = records[cursor++];
                 if (r.owner != rank || r.index != i || r.value != .5 + rank + i)
                     return false;
             }

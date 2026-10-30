@@ -156,10 +156,11 @@ std::array<double, 3> reconstruction_test(int Nmesh, int niter, double beta, int
     return {std::sqrt(S[0] / S[3]) * Nmesh, S[1] / S[0], S[4] > 0 ? -1.0 : std::sqrt(S[2] / S[3]) * Nmesh};
 }
 
-template <int N> void test_tensor_empty_storage() {
+template <int N>
+void test_tensor_empty_storage() {
     Grid<N> source(16, 1, 2);
     source.fill_fourier_grid({17, -9});
-    source.fill_real_grid([](std::array<double, N> &x) { return 1 + std::cos(tp * x[0]); });
+    source.fill_real_grid([](std::array<double, N> & x) { return 1 + std::cos(tp * x[0]); });
     auto snapshot = source;
     auto blank = source.clone_empty();
     bool good = blank.get_nmesh() == 16 && blank.get_n_extra_slices_left() == 1 &&
@@ -172,8 +173,8 @@ template <int N> void test_tensor_empty_storage() {
         if (i < 0 || i >= source.get_ntot_fourier())
             good &= blank.get_fourier_from_index(i) == source.get_fourier_from_index(i);
     }
-    auto *a = source.get_real_grid();
-    auto *b = blank.get_real_grid();
+    auto * a = source.get_real_grid();
+    auto * b = blank.get_real_grid();
     const ptrdiff_t stride = 2 * (16 / 2 + 1);
     for (ptrdiff_t row = 0; row < 2 * source.get_ntot_fourier(); row += stride)
         for (int j = 16; j < stride; ++j)
@@ -186,12 +187,12 @@ template <int N> void test_tensor_empty_storage() {
     source.set_grid_status_real(true);
     std::vector<Grid<N>> hessian, eval, evec;
     FML::HESSIAN::ComputeHessianWithFT(source, hessian);
-    double error = maxdiff<N>(hessian[0], [](std::array<double, N> &x) { return -tp * tp * std::cos(tp * x[0]); });
+    double error = maxdiff<N>(hessian[0], [](std::array<double, N> & x) { return -tp * tp * std::cos(tp * x[0]); });
     for (size_t j = 1; j < hessian.size(); ++j)
         error = std::max(error, maxdiff<N>(hessian[j], [](std::array<double, N> &) { return 0.; }));
     FML::HESSIAN::SymmetricTensorEigensystem(hessian, eval, evec, true);
-    for (auto *outputs : {&eval, &evec})
-        for (auto &g : *outputs) {
+    for (auto * outputs : {&eval, &evec})
+        for (auto & g : *outputs) {
             good &= g.get_n_extra_slices_left() == 1 && g.get_n_extra_slices_right() == 2 && g.get_grid_status_real();
             for (ptrdiff_t i = -left; i < g.get_ntot_fourier_alloc() - left; ++i)
                 if (i < 0 || i >= g.get_ntot_fourier())

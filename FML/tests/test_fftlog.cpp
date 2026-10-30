@@ -67,35 +67,46 @@ std::pair<DVector, CVector> reference(const DVector & r, const CVector & a, doub
     auto u = ComputeCoefficients(n, mu, q, L, kr);
     auto input = a;
     CVector b(n);
-    auto forward = fftw_plan_dft_1d(n, reinterpret_cast<fftw_complex *>(input.data()),
-                                   reinterpret_cast<fftw_complex *>(b.data()), FFTW_FORWARD, FFTW_ESTIMATE);
-    auto reverse = fftw_plan_dft_1d(n, reinterpret_cast<fftw_complex *>(b.data()),
-                                   reinterpret_cast<fftw_complex *>(b.data()), FFTW_BACKWARD, FFTW_ESTIMATE);
+    auto forward = fftw_plan_dft_1d(n,
+                                    reinterpret_cast<fftw_complex *>(input.data()),
+                                    reinterpret_cast<fftw_complex *>(b.data()),
+                                    FFTW_FORWARD,
+                                    FFTW_ESTIMATE);
+    auto reverse = fftw_plan_dft_1d(n,
+                                    reinterpret_cast<fftw_complex *>(b.data()),
+                                    reinterpret_cast<fftw_complex *>(b.data()),
+                                    FFTW_BACKWARD,
+                                    FFTW_ESTIMATE);
     fftw_execute(forward);
-    for (int i = 0; i < n; ++i) b[i] *= u[i] / double(n);
+    for (int i = 0; i < n; ++i)
+        b[i] *= u[i] / double(n);
     fftw_execute(reverse);
     fftw_destroy_plan(forward);
     fftw_destroy_plan(reverse);
     std::reverse(b.begin(), b.end());
     DVector k(n);
     k[0] = kr * std::exp(-L + L / n) / r[0];
-    for (int i = 1; i < n; ++i) k[i] = k[0] * std::exp(i * L / n);
+    for (int i = 1; i < n; ++i)
+        k[i] = k[0] * std::exp(i * L / n);
     return {k, b};
 }
 
-template<class T> bool close_vectors(const std::vector<T> & a, const std::vector<T> & b) {
-    if (a.size() != b.size()) return false;
+template <class T>
+bool close_vectors(const std::vector<T> & a, const std::vector<T> & b) {
+    if (a.size() != b.size())
+        return false;
     double scale = 0, diff = 0;
     for (size_t i = 0; i < a.size(); ++i) {
-        if (!std::isfinite(std::abs(a[i])) || !std::isfinite(std::abs(b[i]))) return false;
+        if (!std::isfinite(std::abs(a[i])) || !std::isfinite(std::abs(b[i])))
+            return false;
         scale = std::max(scale, std::abs(b[i]));
         diff = std::max(diff, std::abs(a[i] - b[i]));
     }
     return diff <= 2e-12 * std::max(scale, 1e-100);
 }
 
-template<class T> bool close_results(const std::pair<DVector, std::vector<T>> & a,
-                                    const std::pair<DVector, std::vector<T>> & b) {
+template <class T>
+bool close_results(const std::pair<DVector, std::vector<T>> & a, const std::pair<DVector, std::vector<T>> & b) {
     return close_vectors(a.first, b.first) && close_vectors(a.second, b.second);
 }
 
@@ -106,12 +117,14 @@ void test_workspace() {
     for (int n : {128, 129}) {
         const auto r = logspace(1e-3, 1e3, n);
         CVector a(n);
-        for (int i = 0; i < n; ++i) a[i] = CDouble(std::sin(i * .2), std::cos(i * .3));
+        for (int i = 0; i < n; ++i)
+            a[i] = CDouble(std::sin(i * .2), std::cos(i * .3));
         const auto original = a;
         for (double q : {0.0, -.4}) {
             auto result = DiscreteHankelTransform(r, a, workspace, 2.5, q, 1.2, false);
             check(close_results(result, reference(r, a, 2.5, q, 1.2)),
-                  "workspace complex convolution matches independent reference, N=" + std::to_string(n) + ", q=" + num(q));
+                  "workspace complex convolution matches independent reference, N=" + std::to_string(n) +
+                      ", q=" + num(q));
         }
         check(a == original, "transform preserves complex input");
     }
@@ -140,22 +153,27 @@ void test_workspace() {
     keys &= compare_fresh(3.5, -.2, 1.4, true);
     r = logspace(1e-3, 1e4, 129);
     keys &= compare_fresh(3.5, -.2, 1.4, true);
-    check(keys && workspace.statistics().coefficient_builds == builds + 5 &&
-              workspace.statistics().plan_builds == 4, "all geometry keys invalidate coefficients without rebuilding plans");
+    check(keys && workspace.statistics().coefficient_builds == builds + 5 && workspace.statistics().plan_builds == 4,
+          "all geometry keys invalidate coefficients without rebuilding plans");
     builds = workspace.statistics().coefficient_builds;
     auto unscaled = DiscreteHankelTransform(r, a, workspace, 3.5, -.2, 1.4, true);
-    for (auto & x : r) x *= 2;
+    for (auto & x : r)
+        x *= 2;
     auto scaled = DiscreteHankelTransform(r, a, workspace, 3.5, -.2, 1.4, true);
     bool scaling = close_vectors(unscaled.second, scaled.second);
-    for (size_t i = 0; i < r.size(); ++i) scaling &= std::abs(2 * scaled.first[i] / unscaled.first[i] - 1) < 1e-13;
-    check(scaling && workspace.statistics().coefficient_builds == builds, "absolute grid rescaling reuses coefficients and rescales dual grid");
+    for (size_t i = 0; i < r.size(); ++i)
+        scaling &= std::abs(2 * scaled.first[i] / unscaled.first[i] - 1) < 1e-13;
+    check(scaling && workspace.statistics().coefficient_builds == builds,
+          "absolute grid rescaling reuses coefficients and rescales dual grid");
     const double L = std::log(r.back() / r.front()) * r.size() / (r.size() - 1.0);
     auto u = ComputeCoefficients(int(r.size()), 1.5, .1, L, 1.3);
     auto external = DiscreteHankelTransform(r, a, workspace, 1.5, .1, 1.3, true, &u);
     check(close_results(external, reference(r, a, 1.5, .1, 1.3)), "external coefficients bypass no-ringing adjustment");
-    for (auto & x : u) x *= 2;
+    for (auto & x : u)
+        x *= 2;
     auto external2 = DiscreteHankelTransform(r, a, workspace, 1.5, .1, 1.3, true, &u);
-    for (auto & x : external.second) x *= 2;
+    for (auto & x : external.second)
+        x *= 2;
     check(close_results(external, external2) && workspace.statistics().coefficient_builds == builds,
           "modified external coefficients are read live and not cached");
     auto internal = DiscreteHankelTransform(r, a, workspace, 3.5, -.2, 1.4, true);
@@ -169,12 +187,13 @@ void test_workspace() {
     moved.prepare(8);
     check(moved.size() == 8, "moved-from workspace can be prepared again");
     workspace.clear();
-    check(workspace.size() == 0 && workspace.statistics().plan_builds == 0, "clear releases buffers and resets statistics");
+    check(workspace.size() == 0 && workspace.statistics().plan_builds == 0,
+          "clear releases buffers and resets statistics");
     Workspace measured(FFTW_MEASURE);
     const auto saved_r = r;
     const auto saved_a = a;
-    check(close_results(reference(r, a, 1.5, .1, 1.3),
-                        DiscreteHankelTransform(r, a, measured, 1.5, .1, 1.3, false)) && r == saved_r && a == saved_a,
+    check(close_results(reference(r, a, 1.5, .1, 1.3), DiscreteHankelTransform(r, a, measured, 1.5, .1, 1.3, false)) &&
+              r == saved_r && a == saved_a,
           "FFTW_MEASURE plans on owned scratch and preserves caller input");
     const auto small_r = logspace(.01, 100, 32);
     const CVector small_a(32, CDouble(.5, -.2));
@@ -184,7 +203,11 @@ void test_workspace() {
               measured.buffer_bytes() == 64 * sizeof(fftw_complex),
           "FFTW_MEASURE resizing preserves input and updates owned buffer size");
     auto rejects = [](auto operation) {
-        try { operation(); } catch (const std::invalid_argument &) { return true; }
+        try {
+            operation();
+        } catch (const std::invalid_argument &) {
+            return true;
+        }
         return false;
     };
     bool invalid = rejects([&] { workspace.prepare(1); });
@@ -203,7 +226,8 @@ void test_workspace() {
 
     auto k = logspace(1e-4, 1e4, 1024);
     DVector pk(k.size());
-    for (size_t i = 0; i < k.size(); ++i) pk[i] = std::exp(-k[i] * k[i]);
+    for (size_t i = 0; i < k.size(); ++i)
+        pk[i] = std::exp(-k[i] * k[i]);
     for (int ell : {0, 2, 4})
         check(error(ell, ComputeXiLM(ell, ell + 2, k, pk, workspace, ell ? -1.0 : 0.0), ell ? .01 : .05, 10) < 1e-6,
               "retained workspace analytic multipole ell=" + std::to_string(ell));
@@ -217,9 +241,11 @@ void test_workspace() {
 #ifdef USE_OMP
     std::vector<Workspace> workers(4);
     std::vector<std::pair<DVector, DVector>> results(4);
-    for (auto & worker : workers) ComputeCorrelationFunction(k, pk, worker); // serial planning/warm-up
+    for (auto & worker : workers)
+        ComputeCorrelationFunction(k, pk, worker); // serial planning/warm-up
 #pragma omp parallel for num_threads(4)
-    for (int i = 0; i < 4; ++i) results[i] = ComputeCorrelationFunction(k, pk, workers[i]);
+    for (int i = 0; i < 4; ++i)
+        results[i] = ComputeCorrelationFunction(k, pk, workers[i]);
     bool concurrent = true;
     for (int i = 0; i < 4; ++i)
         concurrent &= close_results(results[i], xi) && workers[i].statistics().plan_builds == 2;

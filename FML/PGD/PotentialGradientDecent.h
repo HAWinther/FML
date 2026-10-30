@@ -137,8 +137,12 @@ namespace FML {
                 }
                 return max_disp;
             };
-            double max_disp = FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions_apply<N, T>(
-                force_real, p, NumPart, interpolation_method, apply);
+            double max_disp =
+                FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions_apply<N, T>(force_real,
+                                                                                              p,
+                                                                                              NumPart,
+                                                                                              interpolation_method,
+                                                                                              apply);
 
             for (int idim = 0; idim < N; idim++)
                 force_real[idim].free();

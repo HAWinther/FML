@@ -8,8 +8,7 @@ int main() {
     kernels.f2 = [](double, double, double) { return 1.; };
     kernels.f3_collapsed = [](double, double, double) { return 0.; };
     Vector k{.2, .7, .95};
-    auto result = direct_one_loop(
-        k, [](double) { return 1.; }, 1e-4, 1, {}, kernels);
+    auto result = direct_one_loop(k, [](double) { return 1.; }, 1e-4, 1, {}, kernels);
     bool ok = true;
     for (size_t i = 0; i < k.size(); ++i) {
         double exact = (4 + k[i]) * (2 - k[i]) * (2 - k[i]) / (48 * detail::pi * detail::pi);

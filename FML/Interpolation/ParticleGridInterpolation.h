@@ -1322,8 +1322,18 @@ namespace FML {
                 int send_to = (ThisTask + 1) % NTasks;
                 int recv_from = (ThisTask - 1 + NTasks) % NTasks;
 
-                MPI_Sendrecv(&(extra_slice_right[0]), slice_bytes, MPI_CHAR, send_to, 0, &(temp[0]), slice_bytes,
-                             MPI_CHAR, int(recv_from), 0, FML::communicator, &status);
+                MPI_Sendrecv(&(extra_slice_right[0]),
+                             slice_bytes,
+                             MPI_CHAR,
+                             send_to,
+                             0,
+                             &(temp[0]),
+                             slice_bytes,
+                             MPI_CHAR,
+                             int(recv_from),
+                             0,
+                             FML::communicator,
+                             &status);
 #else
                 temp = extra_slice_right;
 #endif
@@ -1346,8 +1356,18 @@ namespace FML {
                 int send_to = (ThisTask - 1 + NTasks) % NTasks;
                 int recv_from = (ThisTask + 1) % NTasks;
 
-                MPI_Sendrecv(&(extra_slice_left[0]), slice_bytes, MPI_CHAR, send_to, 0, &(temp[0]), slice_bytes,
-                             MPI_CHAR, recv_from, 0, FML::communicator, &status);
+                MPI_Sendrecv(&(extra_slice_left[0]),
+                             slice_bytes,
+                             MPI_CHAR,
+                             send_to,
+                             0,
+                             &(temp[0]),
+                             slice_bytes,
+                             MPI_CHAR,
+                             recv_from,
+                             0,
+                             FML::communicator,
+                             &status);
 #else
                 temp = extra_slice_left;
 #endif

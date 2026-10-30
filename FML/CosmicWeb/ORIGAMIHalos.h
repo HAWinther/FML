@@ -87,7 +87,7 @@ namespace FML {
                 const size_t bytes =
                     FML::COMMUNICATION::checked_bytes(n, sizeof(S), std::numeric_limits<std::ptrdiff_t>::max());
                 v.resize(size_t(n));
-                auto *data = reinterpret_cast<char *>(v.data());
+                auto * data = reinterpret_cast<char *>(v.data());
                 for (size_t offset = 0; offset < bytes;) {
                     const int count = int(std::min(size_t(1) << 28, bytes - offset));
                     MPI_Bcast(data + offset, count, MPI_BYTE, 0, FML::communicator);

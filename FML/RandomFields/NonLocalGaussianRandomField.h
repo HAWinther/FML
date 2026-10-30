@@ -330,9 +330,12 @@ namespace FML {
                         FML::GRID::FloatType pofk_p23 = need_m23 ? pofk_p13 * pofk_p13 : 0;
                         FML::GRID::FloatType pofk_p33 = term3_active ? pofk_p23 * pofk_p13 : 0;
 
-                        auto term1 = term1_active ? temp1.get_fourier_from_index(fourier_index) * pofk_p13 : FML::GRID::ComplexType(0);
-                        auto term2 = term2_active ? temp2.get_fourier_from_index(fourier_index) * pofk_p23 : FML::GRID::ComplexType(0);
-                        auto term3 = term3_active ? temp3.get_fourier_from_index(fourier_index) * pofk_p33 : FML::GRID::ComplexType(0);
+                        auto term1 = term1_active ? temp1.get_fourier_from_index(fourier_index) * pofk_p13 :
+                                                    FML::GRID::ComplexType(0);
+                        auto term2 = term2_active ? temp2.get_fourier_from_index(fourier_index) * pofk_p23 :
+                                                    FML::GRID::ComplexType(0);
+                        auto term3 = term3_active ? temp3.get_fourier_from_index(fourier_index) * pofk_p33 :
+                                                    FML::GRID::ComplexType(0);
 
                         auto s = source.get_fourier_from_index(fourier_index);
                         s += term1 * FML::GRID::FloatType(kernel_values[1]) +

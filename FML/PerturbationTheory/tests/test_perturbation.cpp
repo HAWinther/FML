@@ -5,7 +5,7 @@
 #include <iostream>
 using namespace FML::PERTURBATION;
 int failures = 0;
-void check(bool ok, const std::string& label) {
+void check(bool ok, const std::string & label) {
     int bad = !ok;
     FML::MaxOverTasks(&bad);
     failures += bad;
@@ -108,7 +108,7 @@ int main() {
 #endif
     auto builds = workspace.convolution_plan_builds();
     Vector scaled = p;
-    for (auto& x : scaled)
+    for (auto & x : scaled)
         x *= 3;
     auto amplitude = workspace.evaluate(k, scaled, .1, 2.1);
     ok = true;
@@ -179,7 +179,7 @@ int main() {
     bool rejected = false;
     try {
         workspace.evaluate(k, p, .01, .08);
-    } catch (const std::runtime_error&) {
+    } catch (const std::runtime_error &) {
         rejected = true;
     }
     check(rejected, "an inaccurate low-k FFTLog tail fails direct-reference checks instead of returning a prediction");
@@ -188,7 +188,7 @@ int main() {
     rejected = false;
     try {
         workspace.evaluate(bad, p, .1, 2);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "nonlogarithmic input is rejected");
@@ -197,7 +197,7 @@ int main() {
     incomplete.f2 = custom.f2;
     try {
         direct_one_loop(output, power, 1e-5, 100, {}, incomplete);
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         rejected = true;
     }
     check(rejected, "incomplete custom kernel sets are rejected rather than silently using EdS");
@@ -240,7 +240,7 @@ int main() {
             auto all = direct_one_loop(f.k, table, lk.front(), lk.back());
             for (size_t i = 0; i < f.k.size(); ++i)
                 fast_ok &= near(f.p22[i], all.p22[i], 1e-3) && near(f.p13[i], all.p13[i], 1e-4);
-        } catch (const std::exception&) {
+        } catch (const std::exception &) {
             fast_ok = false;
         }
         check(fast_ok, "LCDM-like spectrum: tapered fast P22 and P13 agree with direct for every mode in 0.02-1 h/Mpc");
@@ -249,7 +249,7 @@ int main() {
         bool rejected = false;
         try {
             lcdm.evaluate(lk, lp, .02, 1., untapered);
-        } catch (const std::runtime_error&) {
+        } catch (const std::runtime_error &) {
             rejected = true;
         }
         check(rejected, "LCDM-like spectrum without the taper: the ringing P22 is caught by the reference checks");

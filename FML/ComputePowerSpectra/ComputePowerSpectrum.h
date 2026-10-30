@@ -1340,7 +1340,7 @@ namespace FML {
                             0.0);
                 }
                 if (mesh != Nmesh) {
-                    auto &memory = bins.statistics.memory;
+                    auto & memory = bins.statistics.memory;
                     memory.padding_source_bytes =
                         std::max(memory.padding_source_bytes, field.allocated_storage_bytes());
                     FFTWGrid<N> padded(mesh);
@@ -1460,7 +1460,7 @@ namespace FML {
                     field.set_fourier_from_index(index, use ? input.get_fourier_from_index(index) : 0.0);
                 }
                 if (mesh != Nmesh) {
-                    auto &memory = bins.statistics.memory;
+                    auto & memory = bins.statistics.memory;
                     memory.padding_source_bytes =
                         std::max(memory.padding_source_bytes, field.allocated_storage_bytes());
                     FFTWGrid<N> padded(mesh);
