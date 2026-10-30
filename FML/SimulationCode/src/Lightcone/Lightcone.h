@@ -11,6 +11,7 @@
 #include <FML/ODESolver/ODESolver.h>
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
+#include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h>
 
 #include <cmath>
@@ -71,6 +72,10 @@ class Lightcone {
 
     // The cosmology needed to compute comoving distance r(a)
     std::shared_ptr<Cosmology> cosmo;
+
+    // Phi/c^2 in real space (plc_relativistic_effects) for the step that starts at scale factor phi_a (-1: none)
+    FML::GRID::FFTWGrid<NDIM> phi_grid;
+    double phi_a{-1.0};
 
     // Lightcone parameters
     bool lightcone_on{false};
@@ -153,13 +158,14 @@ class Lightcone {
 
     void init(std::vector<std::string> & particle_types);
 
+    /// Record the particles that cross the lightcone during the step apos -> apos_new. When the step needs the
+    /// potential (needs_potential) it must have been computed first with compute_potential(..., apos, ...): it is
+    /// interpolated to the particles (with interpolation_method) and freed at the end of the step
     void create_lightcone(MPIParticles<T> & part,
                           double apos,
                           double apos_new,
                           double avel,
                           double delta_time_drift,
-                          const std::vector<FML::GRID::FloatType> * potential_at_particles = nullptr,
-                          const FML::GRID::FFTWGrid<NDIM> * potential_grid = nullptr,
                           const std::string & interpolation_method = "CIC");
 
     bool lightcone_active() const { return lightcone_on; }
@@ -189,6 +195,24 @@ class Lightcone {
         if (std::abs(apos_new / apos - 1.0) < 1e-6)
             return false;
         return not(apos_new < plc_a_init + 1e-3 or apos > plc_a_finish - 1e-3);
+    }
+
+    /// Compute Phi/c^2 in real space for the step that starts at scale factor a from the density contrast delta(k)
+    /// of the step: Phi/c^2(k) = -1.5 Omega_M (H0/c)^2 delta(k) / (a k^2) (the GR Poisson equation, k in h/Mpc).
+    /// With deconvolve_window the assignment window W(k)^2 of density_assignment_method is divided out (as for the
+    /// force). The boundaries are communicated, ready for interpolation
+    void compute_potential(const FML::GRID::FFTWGrid<NDIM> & density_fourier,
+                           double a,
+                           const std::string & density_assignment_method,
+                           bool deconvolve_window);
+
+    /// Has the potential been computed for the step that starts at scale factor a?
+    bool has_potential(double a) const { return phi_a == a; }
+
+    /// Free the potential grid
+    void free_potential() {
+        phi_grid.free();
+        phi_a = -1.0;
     }
 
     /// The radial velocity (km/s), the cosmological redshift and the observed redshift of a lightcone particle (its
@@ -330,14 +354,61 @@ void Lightcone<NDIM, T, U>::init(std::vector<std::string> & particle_types) {
 // We only take a copy of the particles when they cross the lightcone
 // and store them in part_lc
 template <int NDIM, class T, class U>
+void Lightcone<NDIM, T, U>::compute_potential(const FML::GRID::FFTWGrid<NDIM> & density_fourier,
+                                              double a,
+                                              const std::string & density_assignment_method,
+                                              bool deconvolve_window) {
+    phi_grid = density_fourier;
+    phi_grid.add_memory_label("Lightcone potential");
+    const double c_over_H0 = 2997.92458; // Mpc/h
+    const double norm = -1.5 * cosmo->get_OmegaM() / (a * c_over_H0 * c_over_H0) * boxsize * boxsize;
+    const FML::INTERPOLATION::WindowFunctionTable<NDIM> window(density_assignment_method, phi_grid.get_nmesh());
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+    for (FML::IndexIntType irow = 0; irow < phi_grid.get_local_nrows(); irow++) {
+        std::array<double, NDIM> kvec;
+        double kmag2;
+        for (auto && index : phi_grid.get_fourier_range_of_rows(irow, irow + 1)) {
+            phi_grid.get_fourier_wavevector_and_norm2_by_index(index, kvec, kmag2);
+            if (kmag2 == 0.0) {
+                phi_grid.set_fourier_from_index(index, 0.0);
+                continue;
+            }
+            double fac = norm / kmag2;
+            if (deconvolve_window) {
+                const double W = window(kvec);
+                fac /= W * W;
+            }
+            phi_grid.set_fourier_from_index(index, phi_grid.get_fourier_from_index(index) * FML::GRID::FloatType(fac));
+        }
+    }
+    phi_grid.fftw_c2r();
+    phi_grid.communicate_boundaries();
+    phi_a = a;
+}
+
+template <int NDIM, class T, class U>
 void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
                                              double apos,
                                              double apos_new,
                                              double avel,
                                              double delta_time_drift,
-                                             const std::vector<FML::GRID::FloatType> * potential_at_particles,
-                                             const FML::GRID::FFTWGrid<NDIM> * potential_grid,
                                              const std::string & interpolation_method) {
+
+    // The potential at the particles (plc_relativistic_effects), freed at the end of the step
+    const bool use_potential = needs_potential(apos, apos_new);
+    if (use_potential and not has_potential(apos))
+        throw std::runtime_error("[Lightcone::create_lightcone] plc_relativistic_effects: the potential for this step "
+                                 "was not computed (call compute_potential first)");
+    std::vector<FML::GRID::FloatType> potential_at_particles;
+    if (use_potential)
+        FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, T>(
+            phi_grid, part.get_particles_ptr(), part.get_npart(), potential_at_particles, interpolation_method);
+    struct FreePotentialAtEnd {
+        Lightcone & lc;
+        ~FreePotentialAtEnd() { lc.free_potential(); }
+    } free_potential_at_end{*this};
 
     // In current version of the code we only have one particle type
     const std::string particle_type = "cb";
@@ -472,8 +543,8 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
         // This is what we are going to store and output so lets save some memory
         U p_bare;
         p_bare.assign_from_particle(part[ipart]);
-        if (relativistic_effects and potential_at_particles)
-            p_bare.set_potential((*potential_at_particles)[ipart]);
+        if (use_potential)
+            p_bare.set_potential(potential_at_particles[ipart]);
 
         // Measure the position relative to the observer position
         // and compute the distance per dimension that the particle moves over a full step
@@ -715,8 +786,8 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
         }
 
         // Maps of the potential at the same shells
-        if (relativistic_effects and potential_grid)
-            make_potential_maps(*potential_grid, interpolation_method);
+        if (use_potential)
+            make_potential_maps(phi_grid, interpolation_method);
 
         // To reduce memory overhead we can free the map
         // We can easily just read it from file if we need it again
