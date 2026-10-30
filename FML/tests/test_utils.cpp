@@ -29,24 +29,15 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 using namespace FML::FILEUTILS;
 
 const double * units_si_constant_address();
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os.precision(6);
-    os << x;
-    return os.str();
-}
 
 // Run f with a time limit (the old reader looped forever on some files)
 template <class F>
@@ -81,34 +72,35 @@ void test_fileutils() {
     write("k P(k) err\n# comment\n0.1 10.0 1.0\n\n0.2 20.0 2.0 # inline\n   # indented comment\n0.3 nan 1e-320\n");
     DVector2D d;
     finishes([&] { d = read_regular_ascii(fn, 3, {0, 1, 2}, 1); });
-    check(d.size() == 3 and d[1][1] == 20.0 and std::isnan(d[2][1]) and d[2][2] > 0.0 and d[2][2] < 1e-300,
-          "read_regular_ascii: comments, blank lines, nan and denormals (hang before), " + std::to_string(d.size()) +
-              " rows");
+    check_local(d.size() == 3 and d[1][1] == 20.0 and std::isnan(d[2][1]) and d[2][2] > 0.0 and d[2][2] < 1e-300,
+                "read_regular_ascii: comments, blank lines, nan and denormals (hang before), " +
+                    std::to_string(d.size()) + " rows");
     write("# k P(k) err\n0.1 10.0 1.0\n\n0.2 20.0 2.0 # inline\n   # indented comment\n0.3 nan 1e-320\n");
     finishes([&] { d = loadtxt(fn); });
-    check(d.size() == 3 and d[0].size() == 3 and d[2][0] == 0.3,
-          "loadtxt: no empty rows for blank lines, denormals read (threw 'stod' before)");
+    check_local(d.size() == 3 and d[0].size() == 3 and d[2][0] == 0.3,
+                "loadtxt: no empty rows for blank lines, denormals read (threw 'stod' before)");
 
     // Wrong number of columns: on the first data line (more: out of bounds write before) and later
     write("1 2 3 4 5 6 7 8\n1 2\n");
     auto err = error_of([&] { finishes([&] { read_regular_ascii(fn, 2, {0, 1}, 0); }); });
-    check(err.find("line 1") != std::string::npos, "read_regular_ascii: too many columns on the first line: " + err);
+    check_local(err.find("line 1") != std::string::npos,
+                "read_regular_ascii: too many columns on the first line: " + err);
     write("1 2\n3 4\n5 6 7\n8 9\n");
     err = error_of([&] { finishes([&] { read_regular_ascii(fn, 2, {0, 1}, 0); }); });
-    check(err.find("line 3") != std::string::npos, "read_regular_ascii: 3 columns on line 3: " + err);
+    check_local(err.find("line 3") != std::string::npos, "read_regular_ascii: 3 columns on line 3: " + err);
     write("1 2\n3 x\n");
     err = error_of([&] { finishes([&] { read_regular_ascii(fn, 2, {0, 1}, 0); }); });
-    check(err.find("[x]") != std::string::npos and err.find("line 2") != std::string::npos,
-          "read_regular_ascii: a token that is not a number: " + err);
+    check_local(err.find("[x]") != std::string::npos and err.find("line 2") != std::string::npos,
+                "read_regular_ascii: a token that is not a number: " + err);
     err = error_of([&] { read_regular_ascii(fn, 2, {0, 2}, 0); });
-    check(not err.empty(), "read_regular_ascii: column to keep out of range: " + err);
+    check_local(not err.empty(), "read_regular_ascii: column to keep out of range: " + err);
 
     // Two columns
     write("# x a y\n1 5 2\n3 6 4\n");
     auto xy = read_file_and_extract_two_columns(fn, 0, 2);
-    check(xy.first == DVector{1, 3} and xy.second == DVector{2, 4}, "read_file_and_extract_two_columns");
+    check_local(xy.first == DVector{1, 3} and xy.second == DVector{2, 4}, "read_file_and_extract_two_columns");
     err = error_of([&] { read_file_and_extract_two_columns(fn, 0, 3); });
-    check(not err.empty(), "read_file_and_extract_two_columns: missing column: " + err);
+    check_local(not err.empty(), "read_file_and_extract_two_columns: missing column: " + err);
 
     // Subsampling: fraction 0 keeps nothing (the first line was always kept), fraction 1 everything
     {
@@ -119,9 +111,9 @@ void test_fileutils() {
     auto none = read_regular_ascii_subsampled(fn, 2, {1}, 0, 10, 0.0);
     auto all = read_regular_ascii_subsampled(fn, 2, {1}, 0, 10, 1.0);
     auto half = read_regular_ascii_subsampled(fn, 2, {1}, 0, 10, 0.5);
-    check(none.empty() and all.size() == 1000 and half.size() > 400 and half.size() < 600,
-          "read_regular_ascii_subsampled: fraction 0 / 0.5 / 1 keeps " + std::to_string(none.size()) + " / " +
-              std::to_string(half.size()) + " / " + std::to_string(all.size()) + " of 1000");
+    check_local(none.empty() and all.size() == 1000 and half.size() > 400 and half.size() < 600,
+                "read_regular_ascii_subsampled: fraction 0 / 0.5 / 1 keeps " + std::to_string(none.size()) + " / " +
+                    std::to_string(half.size()) + " / " + std::to_string(all.size()) + " of 1000");
     std::remove(fn.c_str());
 }
 
@@ -143,8 +135,8 @@ void test_random() {
     GSLRandomGenerator gsl(5);
     gsl.set_normal_sigma(10.0);
     const double rms_gsl = rms(gsl);
-    check(std::fabs(rms_gsl / 10.0 - 1) < 0.01 and std::fabs(rms_mt / 10.0 - 1) < 0.01,
-          "set_normal_sigma(10): rms " + num(rms_gsl) + " (GSL, was 1) and " + num(rms_mt) + " (mt19937)");
+    check_local(std::fabs(rms_gsl / 10.0 - 1) < 0.01 and std::fabs(rms_mt / 10.0 - 1) < 0.01,
+                "set_normal_sigma(10): rms " + num(rms_gsl) + " (GSL, was 1) and " + num(rms_mt) + " (mt19937)");
 
     // Assignment copies the state: the copy and the original are independent and give the same numbers
     GSLRandomGenerator a(7), b(1);
@@ -153,10 +145,10 @@ void test_random() {
     const double a1 = a.generate_uniform(), a2 = a.generate_uniform();
     auto c = a.clone();
     const double a3 = a.generate_uniform(), c3 = c->generate_uniform();
-    check(a1 == b1 and a2 == b2 and a3 == c3,
-          "GSL generator: assignment and clone copy the state (assignment shared it before)");
+    check_local(a1 == b1 and a2 == b2 and a3 == c3,
+                "GSL generator: assignment and clone copy the state (assignment shared it before)");
 #else
-    check(std::fabs(rms_mt / 10.0 - 1) < 0.01, "set_normal_sigma(10): rms " + num(rms_mt) + " (mt19937)");
+    check_local(std::fabs(rms_mt / 10.0 - 1) < 0.01, "set_normal_sigma(10): rms " + num(rms_mt) + " (mt19937)");
 #endif
 }
 
@@ -185,19 +177,19 @@ void test_fofbinning() {
             maxdisp = std::max(maxdisp, disp[d]);
         }
     }
-    check(nnan == 0 and maxdisp < 1e-5,
-          "FoFHalo: velocity dispersion of particles with the same velocity is 0 (" + std::to_string(nnan) +
-              " NaN, max " + num(maxdisp) + "; get_velocity_dispersion did not compile)");
+    check_local(nnan == 0 and maxdisp < 1e-5,
+                "FoFHalo: velocity dispersion of particles with the same velocity is 0 (" + std::to_string(nnan) +
+                    " NaN, max " + num(maxdisp) + "; get_velocity_dispersion did not compile)");
 
     FML::FOF::FoFHalo<FoFParticle, 3> h;
     FoFParticle p1{{0.999, 0.5, 0.5}, {1.0, 0.0, 0.0}}, p2{{0.001, 0.5, 0.5}, {3.0, 0.0, 0.0}};
     h.add(p1);
     h.add(p2);
     h.finalize();
-    check(std::fabs(h.pos[0]) < 1e-12 or std::fabs(h.pos[0] - 1) < 1e-12,
-          "FoFHalo: periodic center of mass across the boundary");
-    check(std::fabs(h.vel[0] - 2.0) < 1e-12 and std::fabs(h.vel_rms[0] - 1.0) < 1e-12,
-          "FoFHalo: mean velocity 2 and dispersion 1");
+    check_local(std::fabs(h.pos[0]) < 1e-12 or std::fabs(h.pos[0] - 1) < 1e-12,
+                "FoFHalo: periodic center of mass across the boundary");
+    check_local(std::fabs(h.vel[0] - 2.0) < 1e-12 and std::fabs(h.vel_rms[0] - 1.0) < 1e-12,
+                "FoFHalo: mean velocity 2 and dispersion 1");
 }
 
 void test_memorylog() {
@@ -210,8 +202,8 @@ void test_memorylog() {
         Vec v(4);
         v[0] = i;
     }
-    check(log->is_logging() and log->get_memory_in_use() == base,
-          "MemoryLog: still logging after 150000 allocations over time (stopped after 100000 before)");
+    check_local(log->is_logging() and log->get_memory_in_use() == base,
+                "MemoryLog: still logging after 150000 allocations over time (stopped after 100000 before)");
 
     // Allocations, labels and frees from several threads at the same time
     Vec keep(1000);
@@ -223,10 +215,10 @@ void test_memorylog() {
         Vec v(16 + i % 7);
         log->add_label(v.data(), "tmp");
     }
-    check(log->is_logging() and log->get_memory_in_use() == base + 1000 * sizeof(double) and
-              log->get_label(keep.data()) == "keep" and log->get_peak_memory_use() >= base + 8000,
-          "MemoryLog: allocations and labels from " + std::to_string(FML::NThreads) +
-              " threads, memory in use = the vector we keep");
+    check_local(log->is_logging() and log->get_memory_in_use() == base + 1000 * sizeof(double) and
+                    log->get_label(keep.data()) == "keep" and log->get_peak_memory_use() >= base + 8000,
+                "MemoryLog: allocations and labels from " + std::to_string(FML::NThreads) +
+                    " threads, memory in use = the vector we keep");
 }
 
 void test_timings() {
@@ -240,13 +232,14 @@ void test_timings() {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     const double t3 = t.EndTiming("a");
     const double total = t.GetTotalTime("a");
-    check(t1 >= 0.02 and t2 == 0.0 and std::fabs(total - (t1 + t3)) < 1e-12,
-          "Timings: a second EndTiming adds nothing (" + num(t2) + "), total over two runs = " + num(total) + " s");
+    check_local(t1 >= 0.02 and t2 == 0.0 and std::fabs(total - (t1 + t3)) < 1e-12,
+                "Timings: a second EndTiming adds nothing (" + num(t2) + "), total over two runs = " + num(total) +
+                    " s");
     FML::UTILS::Timings copy = t;
     FML::UTILS::Timings assigned;
     assigned = t;
-    check(copy.GetTotalTime("a") == total and assigned.GetTotalTime("a") == total,
-          "Timings: copies keep the recorded times");
+    check_local(copy.GetTotalTime("a") == total and assigned.GetTotalTime("a") == total,
+                "Timings: copies keep the recorded times");
 }
 
 void test_parametermap() {
@@ -255,13 +248,15 @@ void test_parametermap() {
     p["x"] = 1.5;
     p["name"] = std::string("abc");
     const auto err = error_of([&] { p.get<double>("n", 1.0); });
-    check(err.find("double") != std::string::npos and err.find("int") != std::string::npos,
-          "ParameterMap: an int read as double with a fiducial value is an error (used the fiducial value before): " +
-              err);
-    check(p.get<double>("missing", 2.5) == 2.5 and p.get<double>("x", 0.0) == 1.5 and
-              p.get<std::string>("name") == "abc",
-          "ParameterMap: fiducial value for a missing parameter, values of the right type");
-    check(not error_of([&] { p.get<int>("missing"); }).empty(), "ParameterMap: missing required parameter throws");
+    check_local(
+        err.find("double") != std::string::npos and err.find("int") != std::string::npos,
+        "ParameterMap: an int read as double with a fiducial value is an error (used the fiducial value before): " +
+            err);
+    check_local(p.get<double>("missing", 2.5) == 2.5 and p.get<double>("x", 0.0) == 1.5 and
+                    p.get<std::string>("name") == "abc",
+                "ParameterMap: fiducial value for a missing parameter, values of the right type");
+    check_local(not error_of([&] { p.get<int>("missing"); }).empty(),
+                "ParameterMap: missing required parameter throws");
 }
 
 void test_units() {
@@ -271,26 +266,27 @@ void test_units() {
     ConstantsAndUnits assigned;
     assigned = copy;
     auto rel = [](double a, double b) { return std::fabs(a / b - 1); };
-    check(rel(assigned.c, 1) < 1e-12 and rel(assigned.hbar, 1) < 1e-12 and rel(assigned.G, 1) < 1e-12 and
-              rel(assigned.k_b, 1) < 1e-12,
-          "Units: copy and assignment (did not compile), Planck units c = hbar = G = k_b = 1");
+    check_local(rel(assigned.c, 1) < 1e-12 and rel(assigned.hbar, 1) < 1e-12 and rel(assigned.G, 1) < 1e-12 and
+                    rel(assigned.k_b, 1) < 1e-12,
+                "Units: copy and assignment (did not compile), Planck units c = hbar = G = k_b = 1");
     ConstantsAndUnits pp("ParticlePhysics"), cosmo("Cosmology"), si;
     namespace SI = FML::UTILS::SI;
-    check(si.c == SI::c and si.G == SI::G and si.k_b == SI::k_b and si.eV == SI::eV and si.m_e == SI::m_e and
-              si.sigma_T == SI::sigma_T and si.Mpc == SI::Mpc and si.alpha == SI::alpha and
-              si.epsilon_0 == SI::epsilon_0 and si.xhi0 == SI::xhi0 and si.xhi1 == SI::xhi1,
-          "Units: SI instances use the shared physical and atomic constants");
-    check(si.yr == 31557600.0 and si.Gyr == 1e9 * SI::yr, "Units: shared Julian year is exactly 365.25 days");
+    check_local(si.c == SI::c and si.G == SI::G and si.k_b == SI::k_b and si.eV == SI::eV and si.m_e == SI::m_e and
+                    si.sigma_T == SI::sigma_T and si.Mpc == SI::Mpc and si.alpha == SI::alpha and
+                    si.epsilon_0 == SI::epsilon_0 and si.xhi0 == SI::xhi0 and si.xhi1 == SI::xhi1,
+                "Units: SI instances use the shared physical and atomic constants");
+    check_local(si.yr == 31557600.0 and si.Gyr == 1e9 * SI::yr, "Units: shared Julian year is exactly 365.25 days");
 #if (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L
-    check(units_si_constant_address() == &SI::c,
-          "Units: inline SI constants have one address across translation units");
+    check_local(units_si_constant_address() == &SI::c,
+                "Units: inline SI constants have one address across translation units");
 #endif
-    check(rel(pp.eV, 1) < 1e-12 and rel(pp.c, 1) < 1e-12 and rel(pp.hbar, 1) < 1e-12 and rel(cosmo.Mpc, 1) < 1e-12 and
-              rel(cosmo.H0_over_h, 1) < 1e-12 and rel(cosmo.Msun, 1) < 1e-12 and rel(si.km, 1000) < 1e-15,
-          "Units: particle physics (eV = c = hbar = 1), cosmology (Mpc = H0/h = Msun = 1), SI");
+    check_local(rel(pp.eV, 1) < 1e-12 and rel(pp.c, 1) < 1e-12 and rel(pp.hbar, 1) < 1e-12 and
+                    rel(cosmo.Mpc, 1) < 1e-12 and rel(cosmo.H0_over_h, 1) < 1e-12 and rel(cosmo.Msun, 1) < 1e-12 and
+                    rel(si.km, 1000) < 1e-15,
+                "Units: particle physics (eV = c = hbar = 1), cosmology (Mpc = H0/h = Msun = 1), SI");
     ConstantsAndUnits km(1e-3, 1.0, 1.0, 1.0, 1.0);
-    check(rel(km.length_to_SI(2.0), 2000.0) < 1e-15 and rel(km.c, 2.99792458e5) < 1e-15,
-          "Units: user units with km as the length unit (m = 1e-3): 2 units = 2000 m, c = 299792.458");
+    check_local(rel(km.length_to_SI(2.0), 2000.0) < 1e-15 and rel(km.c, 2.99792458e5) < 1e-15,
+                "Units: user units with km as the length unit (m = 1e-3): 2 units = 2000 m, c = 299792.458");
     ConstantsAndUnits custom(0.002, 7.0, 11.0, 13.0, 17.0);
     bool consistent = true;
     for (const auto & u : {si, planck, pp, cosmo, custom}) {
@@ -303,7 +299,8 @@ void test_units() {
                      rel(u.epsilon_0 / u.J, SI::epsilon_0) < 1e-12 and rel(u.H0_over_h * u.s, SI::H0_over_h) < 1e-12 and
                      rel(u.yr / u.s, SI::yr) < 1e-12 and u.alpha == SI::alpha;
     }
-    check(consistent, "Units: shared constants round-trip through every built-in system and nontrivial custom units");
+    check_local(consistent,
+                "Units: shared constants round-trip through every built-in system and nontrivial custom units");
 }
 
 int main() {
@@ -316,7 +313,5 @@ int main() {
     test_parametermap();
     test_units();
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All utility tests passed\n" : std::to_string(fails) + " utility test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("utility");
 }

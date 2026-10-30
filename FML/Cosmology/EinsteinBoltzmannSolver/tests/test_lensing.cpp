@@ -5,7 +5,7 @@
 // =============================================================================
 
 #include <FML/Cosmology/Spectra/Lensing.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 
 #include <gsl/gsl_integration.h>
 #include <gsl/gsl_sf_legendre.h>
@@ -16,9 +16,9 @@
 
 using namespace FML::COSMOLOGY;
 
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 // Synthetic spectra with acoustic-like oscillations and a damping tail, and a realistic-shaped
 // lensing potential (amplitude ~ the LCDM deflection power)
@@ -51,17 +51,17 @@ int main() {
             for (int l : {0, 1, 2, 10, 100, 300})
                 err = std::max(err, std::fabs(d[l] - gsl_sf_legendre_Pl(l, mu)));
         }
-        check_close("d^l_00 = P_l(mu)", err, 0.0, 1e-12);
+        check_close(err, 0.0, 1e-12, "d^l_00 = P_l(mu)");
         // l = 2 closed forms
         const double mu = 0.37, c2 = 0.5 * (1 + mu), s2 = 0.5 * (1 - mu), sb2 = 1 - mu * mu;
         Lensing::wigner_d(2, 2, mu, 2, d);
-        check_close("d^2_22 = cos^4(beta/2)", d[2], c2 * c2, 1e-14);
+        check_close(d[2], c2 * c2, 1e-14, "d^2_22 = cos^4(beta/2)");
         Lensing::wigner_d(2, -2, mu, 2, d);
-        check_close("d^2_2-2 = sin^4(beta/2)", d[2], s2 * s2, 1e-14);
+        check_close(d[2], s2 * s2, 1e-14, "d^2_2-2 = sin^4(beta/2)");
         Lensing::wigner_d(2, 0, mu, 2, d);
-        check_close("d^2_20 = sqrt(3/8) sin^2(beta)", d[2], std::sqrt(3.0 / 8.0) * sb2, 1e-14);
+        check_close(d[2], std::sqrt(3.0 / 8.0) * sb2, 1e-14, "d^2_20 = sqrt(3/8) sin^2(beta)");
         Lensing::wigner_d(1, -1, mu, 1, d);
-        check_close("d^1_1-1 = sin^2(beta/2)", d[1], s2, 1e-14);
+        check_close(d[1], s2, 1e-14, "d^1_1-1 = sin^2(beta/2)");
         // Orthogonality: int d^l_mm' d^l'_mm' dmu = 2/(2l+1) delta_ll'
         const int N = 1500;
         gsl_integration_glfixed_table * gl = gsl_integration_glfixed_table_alloc(N);
@@ -80,8 +80,8 @@ int main() {
             overlap = std::max(overlap, std::fabs(o));
         }
         gsl_integration_glfixed_table_free(gl);
-        check_close("orthogonality: (2l+1)/2 int (d^l)^2 = 1, l = 1000", norm_err, 0.0, 1e-7);
-        check_close("orthogonality: int d^l d^(l-1) = 0", overlap, 0.0, 1e-10);
+        check_close(norm_err, 0.0, 1e-7, "orthogonality: (2l+1)/2 int (d^l)^2 = 1, l = 1000");
+        check_close(overlap, 0.0, 1e-10, "orthogonality: int d^l d^(l-1) = 0");
     }
 
     const int L = 2600, lmax = 2000;
@@ -96,8 +96,8 @@ int main() {
             err = std::max({err, std::fabs(r.tt[l] / tt[l] - 1), std::fabs(r.ee[l] / ee[l] - 1)});
             bb = std::max(bb, std::fabs(r.bb[l]) / ee[l]);
         }
-        check_close("C_phiphi = 0: lensed = unlensed", err, 0.0, 1e-11);
-        check_close("C_phiphi = 0: no B-modes", bb, 0.0, 1e-11);
+        check_close(err, 0.0, 1e-11, "C_phiphi = 0: lensed = unlensed");
+        check_close(bb, 0.0, 1e-11, "C_phiphi = 0: no B-modes");
     }
 
     std::cout << "Physical behaviour\n";
@@ -114,23 +114,23 @@ int main() {
             }
             return (mx - mn) / (mx + mn);
         };
-        check("lensing smooths the acoustic oscillations of TT (ell ~ 1500)",
-              contrast(r.tt, 1400) < 0.95 * contrast(tt, 1400));
+        check(contrast(r.tt, 1400) < 0.95 * contrast(tt, 1400),
+              "lensing smooths the acoustic oscillations of TT (ell ~ 1500)");
         double low = 0.0;
         for (int l = 2; l <= 30; l++)
             low = std::max(low, std::fabs(r.tt[l] / tt[l] - 1));
-        check_close("large scales are hardly affected (ell <= 30)", low, 0.0, 2e-3);
+        check_close(low, 0.0, 2e-3, "large scales are hardly affected (ell <= 30)");
         bool bb_pos = true;
         for (int l = 2; l <= lmax; l++)
             bb_pos &= r.bb[l] > 0.0;
-        check("lensing turns E into positive C_l^BB", bb_pos);
+        check(bb_pos, "lensing turns E into positive C_l^BB");
         // Total TT variance sum (2l+1) C_l is nearly conserved (lensing remaps the sky)
         double s0 = 0.0, s1 = 0.0;
         for (int l = 2; l <= lmax; l++) {
             s0 += (2 * l + 1) * tt[l];
             s1 += (2 * l + 1) * r.tt[l];
         }
-        check_close("sum (2l+1) C_l^TT nearly conserved", s1 / s0 - 1.0, 0.0, 2e-3);
+        check_close(s1 / s0 - 1.0, 0.0, 2e-3, "sum (2l+1) C_l^TT nearly conserved");
 
         // Small deflections: the change is linear in C_phiphi
         std::vector<double> pph = pp, pp2 = pp;
@@ -143,8 +143,8 @@ int main() {
         double lin = 0.0;
         for (int l : {300, 800, 1500})
             lin = std::max(lin, std::fabs((r2.tt[l] - tt[l]) / (r1.tt[l] - tt[l]) - 2.0));
-        check_close("weak deflections: Delta C_l linear in C_phiphi", lin, 0.0, 1e-2);
-        check_rel("weak deflections: C_l^BB linear in C_phiphi", r2.bb[1000] / r1.bb[1000], 2.0, 1e-2);
+        check_close(lin, 0.0, 1e-2, "weak deflections: Delta C_l linear in C_phiphi");
+        check_rel(r2.bb[1000] / r1.bb[1000], 2.0, 1e-2, "weak deflections: C_l^BB linear in C_phiphi");
     }
 
     std::cout << "Truncation of the input at L (Gauss-Legendre points L + n_mu_extra)\n";
@@ -168,8 +168,8 @@ int main() {
         }
         std::cout << "    lensed BB at lmax_out - 200..lmax_out: default " << err_def << ", n_mu_extra = 0 " << err0
                   << "\n";
-        check_close("lensed BB near lmax_out with the input cut at L (5% here)", err_def, 0.0, 0.07);
-        check("more Gauss-Legendre points than L reduce the truncation error", err_def < 0.5 * err0);
+        check_close(err_def, 0.0, 0.07, "lensed BB near lmax_out with the input cut at L (5% here)");
+        check(err_def < 0.5 * err0, "more Gauss-Legendre points than L reduce the truncation error");
     }
-    return Test::summary();
+    return FML::TESTS::summary("EBS lensing");
 }

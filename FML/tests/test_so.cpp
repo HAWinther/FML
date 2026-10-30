@@ -17,30 +17,16 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 constexpr int NDIM = 3;
 
-struct Particle {
-    double pos[NDIM];
-    double vel[NDIM];
-    double * get_pos() { return pos; }
-    double * get_vel() { return vel; }
-    constexpr int get_ndim() const { return NDIM; }
-};
+using Particle = FML::TESTS::PositionVelocityParticle<NDIM>;
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
 double wrap(double x) { return x - std::floor(x); }
-std::string num(double x) {
-    std::ostringstream os;
-    os << std::setprecision(3) << x;
-    return os.str();
-}
 
 int main() {
     const int nbackground = 20000;
@@ -126,14 +112,17 @@ int main() {
     size_t nfound = so.size();
     FML::SumOverTasks(&nfound);
     const std::string label = std::to_string(FML::NTasks) + " task(s): ";
-    check(nfound == centers.size(), label + "all halos measured");
-    check(FML::FOF::SO_number_of_truncated_halos == 0, label + "no halo truncated");
+    check_local(nfound == centers.size(), label + "all halos measured");
+    check_local(FML::FOF::SO_number_of_truncated_halos == 0, label + "no halo truncated");
     // Poisson noise with N(<R) = 1000 - 3000: for an isothermal sphere dln R = dln N / 2 (1.6% for N = 1000) and
     // dln M = 3 dln R (M = Delta rho V(R)); the limits are 3 sigma
-    check(maxerr_R < 0.05, label + "radius of a singular isothermal sphere (max rel. error " + num(maxerr_R) + ")");
-    check(maxerr_M < 0.15, label + "mass (max rel. error " + num(maxerr_M) + ")");
-    check(maxerr_pos < 0.1 * Rmax, label + "shrinking sphere center (max error " + num(maxerr_pos / Rmax) + " Rmax)");
-    check(maxerr_vel < 0.2, label + "mean velocity of the halo particles (max rel. error " + num(maxerr_vel) + ")");
+    check_local(maxerr_R < 0.05,
+                label + "radius of a singular isothermal sphere (max rel. error " + num(maxerr_R, 3) + ")");
+    check_local(maxerr_M < 0.15, label + "mass (max rel. error " + num(maxerr_M, 3) + ")");
+    check_local(maxerr_pos < 0.1 * Rmax,
+                label + "shrinking sphere center (max error " + num(maxerr_pos / Rmax, 3) + " Rmax)");
+    check_local(maxerr_vel < 0.2,
+                label + "mean velocity of the halo particles (max rel. error " + num(maxerr_vel, 3) + ")");
 
     // A threshold whose radius is larger than the search radius: truncated
     const double Rbig = 0.08;
@@ -145,8 +134,8 @@ int main() {
                                                    initial_radius,
                                                    low,
                                                    search_radius);
-    check(FML::FOF::SO_number_of_truncated_halos == centers.size(),
-          label + "spheres larger than the search radius reported");
+    check_local(FML::FOF::SO_number_of_truncated_halos == centers.size(),
+                label + "spheres larger than the search radius reported");
 
     // Resolution test: NFW-like halos with a core as large as the halo (as halos in a PM/COLA simulation where R200
     // is about the force resolution), rho ~ 1 / ((r + r_c) (r + r_s)^2) with r_s = r_c = 2 R200, truncated at 2 R200,
@@ -222,15 +211,14 @@ int main() {
         FML::SumOverTasks(&sumerr);
         FML::SumOverTasks(&nnfw);
         FML::MinOverTasks(&minfrac);
-        check(nnfw == cnfw.size(), label + "all cored NFW halos measured");
-        check(minfrac > 0.25,
-              label + "cored NFW halos with N200 = " + num(M200) +
-                  ": no halo collapses to a few particles (min N/N200 = " + num(minfrac) + ")");
-        check(std::fabs(sumerr / double(cnfw.size())) < 0.1,
-              label + "mean M200 of the cored NFW halos (mean rel. error " + num(sumerr / double(cnfw.size())) + ")");
+        check_local(nnfw == cnfw.size(), label + "all cored NFW halos measured");
+        check_local(minfrac > 0.25,
+                    label + "cored NFW halos with N200 = " + num(M200, 3) +
+                        ": no halo collapses to a few particles (min N/N200 = " + num(minfrac, 3) + ")");
+        check_local(std::fabs(sumerr / double(cnfw.size())) < 0.1,
+                    label + "mean M200 of the cored NFW halos (mean rel. error " +
+                        num(sumerr / double(cnfw.size()), 3) + ")");
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All SO tests passed\n" : std::to_string(fails) + " SO test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("So");
 }

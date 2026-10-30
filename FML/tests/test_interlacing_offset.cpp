@@ -11,16 +11,11 @@
 #include <random>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check;
 
 namespace I = FML::INTERPOLATION;
-int failures = 0;
-void check(bool ok, const std::string & what) {
-    int bad = !ok;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (FML::ThisTask == 0)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << what << '\n';
-}
 
 template <int N, class Position, int Weight = 0>
 struct Particle {
@@ -214,7 +209,5 @@ int main(int argc, char ** argv) {
     run_case<3, Particle<3, float>>("3D float");
     run_case<3, Particle<3, double, 1>>("3D mass weighted", true);
     run_case<3, Particle<3, float, 2>>("3D delta-f weighted", true);
-    if (FML::ThisTask == 0)
-        std::cout << "Offset/interlacing failures: " << failures << '\n';
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("offset/interlacing");
 }

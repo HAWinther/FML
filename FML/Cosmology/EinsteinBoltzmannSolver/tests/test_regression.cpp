@@ -23,7 +23,7 @@
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include "RegressionMetric.h"
 #include <FML/Cosmology/Common.h>
 
@@ -219,15 +219,15 @@ int main(int argc, char ** argv) {
         changes.push_back({Test::regression_error(k, v, ref), k});
     }
     std::sort(changes.rbegin(), changes.rend());
-    Test::check("all values present in the reference", missing == 0 && ref.size() == values.size());
+    FML::TESTS::check(missing == 0 && ref.size() == values.size(), "all values present in the reference");
     std::cout << "  largest scaled changes:\n";
     for (size_t i = 0; i < std::min<size_t>(5, changes.size()); i++)
         std::cout << "    " << changes[i].first << "  " << changes[i].second << "\n";
     const double worst = changes.empty() ? 0.0 : changes[0].first;
 #if defined(__FMA__) || defined(__ARM_FEATURE_FMA) || defined(__aarch64__)
-    Test::check_close("outputs unchanged (scaled 1e-4 with FMA)", worst, 0.0, 1e-4);
+    FML::TESTS::check_close(worst, 0.0, 1e-4, "outputs unchanged (scaled 1e-4 with FMA)");
 #else
-    Test::check_close("outputs unchanged (scaled 3e-7)", worst, 0.0, 3e-7);
+    FML::TESTS::check_close(worst, 0.0, 3e-7, "outputs unchanged (scaled 3e-7)");
 #endif
-    return Test::summary();
+    return FML::TESTS::summary("EBS regression");
 }

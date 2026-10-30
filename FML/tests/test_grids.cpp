@@ -29,6 +29,9 @@
 #include <random>
 #include <sstream>
 #include <unistd.h>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 
 template <int N>
 using FFTWGrid = FML::GRID::FFTWGrid<N>;
@@ -37,17 +40,10 @@ using MPIGrid = FML::GRID::MPIGrid<N, T>;
 using FloatType = FML::GRID::FloatType;
 using IndexInt = FML::GRID::IndexInt;
 
-int fails = 0;
 std::string sci(double x) {
     std::ostringstream os;
     os << std::scientific << std::setprecision(1) << x;
     return os.str();
-}
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
 }
 // True only if true on all tasks
 bool all_tasks(bool ok) {
@@ -114,9 +110,9 @@ void fft_roundtrip_with_extra_slices(int Nmesh, int nleft, int nright, std::stri
         err = std::max(err, std::fabs(double(g.get_real_from_index(real_index) - orig[k++])));
     FML::MaxOverTasks(&err);
     const double tol = sizeof(FloatType) == sizeof(float) ? 1e-5 : 1e-12;
-    check(all_tasks(same_buffer), label + ": the grid buffer is not replaced by the transform");
-    check(all_tasks(ok_r2c and ok_c2r), label + ": extra slices are preserved by r2c and c2r");
-    check(err < tol, label + ": r2c + c2r gives back the field (err " + sci(err) + ")");
+    check_local(all_tasks(same_buffer), label + ": the grid buffer is not replaced by the transform");
+    check_local(all_tasks(ok_r2c and ok_c2r), label + ": extra slices are preserved by r2c and c2r");
+    check_local(err < tol, label + ": r2c + c2r gives back the field (err " + sci(err) + ")");
 }
 
 void test_measure() {
@@ -145,8 +141,8 @@ void test_index() {
     const IndexInt expected = (IndexInt(x) * 16 + 3) * 16 + 5;
     std::array<int, 3> gcoord{x + g.get_xStartLocal(), 3, 5};
     const bool ok = g.index_from_coord(coord) == expected and g.index_from_globalcoord(gcoord) == expected;
-    check(all_tasks(ok and expected > IndexInt(INT_MAX)),
-          "MPIGrid index_from_coord / index_from_globalcoord in 64 bit (index " + std::to_string(expected) + ")");
+    check_local(all_tasks(ok and expected > IndexInt(INT_MAX)),
+                "MPIGrid index_from_coord / index_from_globalcoord in 64 bit (index " + std::to_string(expected) + ")");
 
     // And the normal round trips
     bool okrt = true;
@@ -158,7 +154,7 @@ void test_index() {
     FFTWGrid<4> f(8);
     for (auto && index : f.get_fourier_range())
         okrt = okrt and f.get_index_fourier(f.get_fourier_coord_from_index(index)) == index;
-    check(all_tasks(okrt), "MPIGrid and FFTWGrid<4> index <-> coord round trips");
+    check_local(all_tasks(okrt), "MPIGrid and FFTWGrid<4> index <-> coord round trips");
 }
 
 void test_mpigrid_ops() {
@@ -177,7 +173,7 @@ void test_mpigrid_ops() {
     // a and b are unchanged
     for (IndexInt i = 0; ok and i < a.get_NtotLocal(); i++)
         ok = a[i] == 1.0 + i and b[i] == 2.0;
-    check(all_tasks(ok), "MPIGrid a+b, a*b, a-b, a/b (grid op grid)");
+    check_local(all_tasks(ok), "MPIGrid a+b, a*b, a-b, a/b (grid op grid)");
 }
 
 void test_move_and_free() {
@@ -192,7 +188,7 @@ void test_move_and_free() {
               b.get_n_extra_slices_right() == 1;
     for (auto && real_index : b.get_real_range())
         ok = ok and b.get_real_from_index(real_index) == FloatType(real_index);
-    check(all_tasks(ok), "FFTWGrid move constructor takes over the buffer and leaves the source empty");
+    check_local(all_tasks(ok), "FFTWGrid move constructor takes over the buffer and leaves the source empty");
 
     FFTWGrid<3> c(8);
     c = std::move(b);
@@ -200,25 +196,26 @@ void test_move_and_free() {
     // The moved-from grid can be reused
     b = FFTWGrid<3>(8, 0, 1);
     ok = ok and bool(b) and b.get_nmesh() == 8 and b.get_real_grid() != c.get_real_grid();
-    check(all_tasks(ok), "FFTWGrid move assignment takes over the buffer and leaves the source empty");
+    check_local(all_tasks(ok), "FFTWGrid move assignment takes over the buffer and leaves the source empty");
 
     // Copies are deep
     FFTWGrid<3> d = c;
     d.set_real_from_index(0, -1.0);
-    check(all_tasks(d.get_real_grid() != c.get_real_grid() and c.get_real_from_index(0) == 0.0),
-          "FFTWGrid copy is a deep copy");
+    check_local(all_tasks(d.get_real_grid() != c.get_real_grid() and c.get_real_from_index(0) == 0.0),
+                "FFTWGrid copy is a deep copy");
 
     c.free();
-    check(all_tasks(not bool(c) and c.get_nmesh() == 0 and c.get_local_nx() == 0 and c.get_ntot_fourier_alloc() == 0),
-          "FFTWGrid::free releases the memory and resets the grid");
+    check_local(
+        all_tasks(not bool(c) and c.get_nmesh() == 0 and c.get_local_nx() == 0 and c.get_ntot_fourier_alloc() == 0),
+        "FFTWGrid::free releases the memory and resets the grid");
 
     MPIGrid<3, double> m(8, true, 1, 1);
     m.free();
-    check(all_tasks(m.get_N() == 0 and m.get_NtotLocal() == 0 and m.get_n_extra_slices_left() == 0),
-          "MPIGrid::free resets the grid");
+    check_local(all_tasks(m.get_N() == 0 and m.get_NtotLocal() == 0 and m.get_n_extra_slices_left() == 0),
+                "MPIGrid::free resets the grid");
     FML::GRID::MPIMultiGrid<3, double> mg(8, 2, true, 1, 1);
     mg.free();
-    check(all_tasks(mg.get_Nlevel() == 0), "MPIMultiGrid::free resets the grid");
+    check_local(all_tasks(mg.get_Nlevel() == 0), "MPIMultiGrid::free resets the grid");
 }
 
 void test_status_and_nan() {
@@ -227,7 +224,7 @@ void test_status_and_nan() {
     const bool fourier = not g.get_grid_status_real();
     g.fill_real_grid(1.0);
     const bool real = g.get_grid_status_real();
-    check(all_tasks(fourier and real), "fill_fourier_grid / fill_real_grid set the grid status");
+    check_local(all_tasks(fourier and real), "fill_fourier_grid / fill_real_grid set the grid status");
 
     bool ok = not g.nan_in_grids();
     auto set_last = [&](FloatType v) {
@@ -242,7 +239,7 @@ void test_status_and_nan() {
     ok = ok and g.nan_in_grids();
     set_last(1.0);
     ok = ok and not g.nan_in_grids();
-    check(all_tasks(ok), "nan_in_grids detects NaN and +-Inf (also in the extra slices)");
+    check_local(all_tasks(ok), "nan_in_grids detects NaN and +-Inf (also in the extra slices)");
 }
 
 void test_dump_load() {
@@ -265,7 +262,7 @@ void test_dump_load() {
         ncells++;
     }
     ok = ok and ncells == g.get_local_nx() * 16 * 16;
-    check(all_tasks(ok), "dump_to_file + load_from_file into an empty grid gives the same grid");
+    check_local(all_tasks(ok), "dump_to_file + load_from_file into an empty grid gives the same grid");
 }
 
 // The bad input modes: these must abort
@@ -319,9 +316,9 @@ void test_mpigrid_ghosts() {
             for (int iy = 0; iy < N; iy++)
                 ok = ok and g[s * nperslice + iy] == 100 * gx + iy;
         }
-        check(all_tasks(ok),
-              "MPIGrid periodic ghosts are the periodic neighbors (" + std::to_string(nextra) +
-                  " extra slices, NLocal = " + std::to_string(g.get_NLocal()) + ")");
+        check_local(all_tasks(ok),
+                    "MPIGrid periodic ghosts are the periodic neighbors (" + std::to_string(nextra) +
+                        " extra slices, NLocal = " + std::to_string(g.get_NLocal()) + ")");
     }
 
     // Non-periodic: ghosts outside the box are not touched, the others are the neighbors
@@ -339,7 +336,7 @@ void test_mpigrid_ghosts() {
         bool ok = true;
         for (int iy = 0; iy < N; iy++)
             ok = ok and g[-N + iy] == expl and g[g.get_NtotLocal() + iy] == expr;
-        check(all_tasks(ok), "MPIGrid non-periodic ghosts: neighbors inside the box, untouched outside");
+        check_local(all_tasks(ok), "MPIGrid non-periodic ghosts: neighbors inside the box, untouched outside");
     }
 
     // Non-periodic with fewer slices than tasks (the last tasks have no cells): the right edge of the box is the
@@ -362,7 +359,7 @@ void test_mpigrid_ghosts() {
             for (int iy = 0; iy < N; iy++)
                 ok = ok and g[-N + iy] == expl and g[g.get_NtotLocal() + iy] == expr;
         }
-        check(all_tasks(ok), "MPIGrid non-periodic ghosts with tasks without cells (N = NTasks - 1)");
+        check_local(all_tasks(ok), "MPIGrid non-periodic ghosts with tasks without cells (N = NTasks - 1)");
     }
 
     // send_slice gives one slice (and with one task the slice itself)
@@ -376,7 +373,7 @@ void test_mpigrid_ghosts() {
         bool ok = recv.size() == size_t(64);
         for (auto v : recv)
             ok = ok and v == from;
-        check(all_tasks(ok), "MPIGrid send_slice_right receives one slice of the left task");
+        check_local(all_tasks(ok), "MPIGrid send_slice_right receives one slice of the left task");
     }
 }
 
@@ -397,9 +394,9 @@ void test_fftwgrid_thin_slabs() {
                 for (int iz = 0; iz < Nmesh; iz++)
                     ok = ok and g.get_real({s, iy, iz}) == FloatType(100 * gx + iy);
         }
-        check(all_tasks(ok),
-              "FFTWGrid ghosts are the periodic neighbors (" + std::to_string(nextra) +
-                  " extra slices, Local_nx = " + std::to_string(g.get_local_nx()) + ")");
+        check_local(all_tasks(ok),
+                    "FFTWGrid ghosts are the periodic neighbors (" + std::to_string(nextra) +
+                        " extra slices, Local_nx = " + std::to_string(g.get_local_nx()) + ")");
     }
 }
 
@@ -437,7 +434,5 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All grid tests passed\n" : std::to_string(fails) + " grid test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("grid");
 }

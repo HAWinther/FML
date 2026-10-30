@@ -6,29 +6,16 @@
 #include <limits>
 #include <random>
 #include <string>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 
 using namespace FML::BARYONIFICATION;
 int baryonification_odr_check();
 
 namespace {
-    int failures = 0;
-    void check(bool ok, const std::string & what) {
-        if (!ok)
-            ++failures;
-        if (FML::ThisTask == 0)
-            std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << '\n';
-    }
     bool close(double a, double b, double tolerance = 1e-10) {
         return std::isfinite(a) && std::isfinite(b) && std::abs(a - b) <= tolerance;
-    }
-    template <class F>
-    bool rejects(F f) {
-        try {
-            f();
-        } catch (const std::invalid_argument &) {
-            return true;
-        }
-        return false;
     }
     struct Particle {
         double pos[3];
@@ -56,10 +43,10 @@ namespace {
 } // namespace
 
 int main() {
-    check(baryonification_odr_check() == 1, "headers are usable from multiple translation units");
+    check_local(baryonification_odr_check() == 1, "headers are usable from multiple translation units");
     EnclosedMassProfile profile({0, 1, 2, 3}, {0, 1, 1, 4});
-    check(close(profile.mass(1.5), 1) && close(profile.radius(1), 1) && close(profile.radius(2.5), 2.5),
-          "monotone interpolation and inverse handle a mass plateau");
+    check_local(close(profile.mass(1.5), 1) && close(profile.radius(1), 1) && close(profile.radius(2.5), 2.5),
+                "monotone interpolation and inverse handle a mass plateau");
     auto map = analytic_mapping();
     double error = 0;
     for (int i = 1; i < 200; ++i) {
@@ -68,28 +55,29 @@ int main() {
     }
     if (FML::ThisTask == 0)
         std::cout << "Analytic mapping maximum absolute error: " << error << '\n';
-    check(error < 1e-8, "mass-shell transport agrees with independent analytic r_new = r_old^3");
-    check(map.displacement(0) == 0 && map.displacement(1) == 0 && map.displacement(5) == 0,
-          "center and exterior have zero displacement");
+    check_local(error < 1e-8, "mass-shell transport agrees with independent analytic r_new = r_old^3");
+    check_local(map.displacement(0) == 0 && map.displacement(1) == 0 && map.displacement(5) == 0,
+                "center and exterior have zero displacement");
 
     ModelParameters model;
     HaloProperties halo{1e14, 0.7, 5};
     auto profiles = make_halo_profiles(halo, model, 8e10);
     const double total = profiles.total_halo_mass;
-    check(close(profiles.reference.mass(halo.radius200) / halo.mass200, 1, 1e-14),
-          "reference NFW is normalized to the input M200");
-    check(
+    check_local(close(profiles.reference.mass(halo.radius200) / halo.mass200, 1, 1e-14),
+                "reference NFW is normalized to the input M200");
+    check_local(
         close((profiles.gas.total_mass() + profiles.central_stars.total_mass() + profiles.collisionless.total_mass()) /
                   total,
               1,
               1e-14),
         "gas, central stars and collisionless fractions conserve halo mass");
-    check(close((profiles.source.total_mass() - total) /
-                    ((4 * detail::pi / 3) * 8e10 * std::pow(profiles.source.maximum_radius(), 3)),
-                1,
-                1e-14),
-          "source includes the specified uniform background");
-    check(profiles.source.total_mass() == profiles.target.total_mass(), "outer source and target masses match exactly");
+    check_local(close((profiles.source.total_mass() - total) /
+                          ((4 * detail::pi / 3) * 8e10 * std::pow(profiles.source.maximum_radius(), 3)),
+                      1,
+                      1e-14),
+                "source includes the specified uniform background");
+    check_local(profiles.source.total_mass() == profiles.target.total_mass(),
+                "outer source and target masses match exactly");
     bool monotone = true, matched = true;
     auto physical_map = profiles.mapping();
     double previous = 0;
@@ -101,7 +89,7 @@ int main() {
                                    2e-14);
         previous = moved;
     }
-    check(monotone && matched, "physical profile transport is monotone and matches enclosed masses");
+    check_local(monotone && matched, "physical profile transport is monotone and matches enclosed masses");
 
     // Independent references: adaptive SciPy quadrature of the analytic densities, then brentq for
     // ri at fixed rf (the reverse of the C++ shell solver). Values are divided by total halo mass.
@@ -114,7 +102,7 @@ int main() {
         independent = independent && close(profiles.gas.mass(row[0]) / total, row[1], 1e-5) &&
                       close(profiles.central_stars.mass(row[0]) / total, row[2], 1e-5) &&
                       close(profiles.collisionless.mass(row[0]) / total, row[3], 1e-5);
-    check(independent, "gas, stars and relaxed matter agree with independent quadrature/root-solve references");
+    check_local(independent, "gas, stars and relaxed matter agree with independent quadrature/root-solve references");
 
     // Independently verify quadrature at R200 with a much finer table, including the relaxation solution.
     ProfileNumerics fine;
@@ -129,15 +117,15 @@ int main() {
     }
     if (FML::ThisTask == 0)
         std::cout << "Radial convergence error / halo mass: " << convergence << '\n';
-    check(convergence < 3e-5, "profiles including relaxation converge with radial resolution");
+    check_local(convergence < 3e-5, "profiles including relaxation converge with radial resolution");
     model.relax_collisionless = false;
     auto unrelaxed = make_halo_profiles(halo, model, 0);
-    check(close(unrelaxed.collisionless.mass(0.1) / unrelaxed.reference.mass(0.1),
-                unrelaxed.collisionless_fraction,
-                1e-14),
-          "optional unrelaxed matter follows the reference profile");
-    check(profiles.collisionless.mass(0.001) > unrelaxed.collisionless.mass(0.001),
-          "central stellar condensation contracts the collisionless core");
+    check_local(close(unrelaxed.collisionless.mass(0.1) / unrelaxed.reference.mass(0.1),
+                      unrelaxed.collisionless_fraction,
+                      1e-14),
+                "optional unrelaxed matter follows the reference profile");
+    check_local(profiles.collisionless.mass(0.001) > unrelaxed.collisionless.mass(0.001),
+                "central stellar condensation contracts the collisionless core");
 
     // Exact null limit and qualitative limits of the feedback model.
     model.baryon_fraction = 0;
@@ -148,14 +136,14 @@ int main() {
         unchanged = unchanged && identity.displacement(r) == 0;
     for (double r : {0.0000321, 0.13456, 2.3456, 7.89012})
         unchanged = unchanged && identity.displacement(r) == 0;
-    check(unchanged, "zero baryon fraction gives an exactly identity transport");
+    check_local(unchanged, "zero baryon fraction gives an exactly identity transport");
     model.baryon_fraction = 0.157;
     auto gas_only = make_halo_profiles(halo, model, 0).mapping();
-    check(gas_only.displacement(halo.radius200) > 0, "extended gas moves mass outward near R200");
+    check_local(gas_only.displacement(halo.radius200) > 0, "extended gas moves mass outward near R200");
     model.stellar_amplitude = model.baryon_fraction;
     model.stellar_total_exponent = model.stellar_central_exponent = 0;
     auto stars_only = make_halo_profiles(halo, model, 0).mapping();
-    check(stars_only.displacement(0.05 * halo.radius200) < 0, "central stars move mass inward");
+    check_local(stars_only.displacement(0.05 * halo.radius200) < 0, "central stars move mass inward");
 
     // Every rank has the full halo list; particles are partitioned by global ID.
     // This also tests halos whose centers lie on another MPI task.
@@ -199,13 +187,13 @@ int main() {
         }
         attributes_ok = attributes_ok && original[i].id == particles[i].id && original[i].mass == particles[i].mass;
     }
-    check(partition_ok,
-          "KD-tree displacements and MPI partitions agree with an analytic periodic brute-force calculation");
-    check(overlap_ok, "overlapping halos add at original positions and are independent of halo order");
-    check(attributes_ok, "particle masses, IDs and velocities are preserved");
+    check_local(partition_ok,
+                "KD-tree displacements and MPI partitions agree with an analytic periodic brute-force calculation");
+    check_local(overlap_ok, "overlapping halos add at original positions and are independent of halo order");
+    check_local(attributes_ok, "particle masses, IDs and velocities are preserved");
     const auto edge = one.displacement_at({3.9, 1, 1});
-    check(edge[0] > 0 && edge[1] == 0 && edge[2] == 0, "periodic boundary uses the closest halo image");
-    check(one.displacement_at({0.1, 1, 1}) == std::array<double, 3>{}, "particle at a halo center stays fixed");
+    check_local(edge[0] > 0 && edge[1] == 0 && edge[2] == 0, "periodic boundary uses the closest halo image");
+    check_local(one.displacement_at({0.1, 1, 1}) == std::array<double, 3>{}, "particle at a halo center stays fixed");
     Baryonifier empty({}, 4);
     empty.apply<Particle>(nullptr, 0);
     auto copy = original;
@@ -214,10 +202,10 @@ int main() {
     for (size_t i = 0; i < copy.size(); ++i)
         for (size_t d = 0; d < 3; ++d)
             empty_ok = empty_ok && copy[i].pos[d] == original[i].pos[d];
-    check(empty_ok, "empty halo and particle lists are valid and leave wrapped positions unchanged");
+    check_local(empty_ok, "empty halo and particle lists are valid and leave wrapped positions unchanged");
     Baryonifier isolated({halos[0]}, 4, false);
-    check(isolated.displacement_at({3.9, 1, 1}) == std::array<double, 3>{},
-          "nonperiodic mode does not use halo images");
+    check_local(isolated.displacement_at({3.9, 1, 1}) == std::array<double, 3>{},
+                "nonperiodic mode does not use halo images");
 
     // Independent buffered application of the public displacement array: the streamed
     // path must preserve operation order, position casts and periodic edge handling.
@@ -241,17 +229,17 @@ int main() {
                     return false;
         return true;
     };
-    check(matches_buffered(field, original, true) && matches_buffered(isolated, original, false),
-          "streamed double positions exactly match buffered application in periodic and nonperiodic modes");
+    check_local(matches_buffered(field, original, true) && matches_buffered(isolated, original, false),
+                "streamed double positions exactly match buffered application in periodic and nonperiodic modes");
     std::vector<FloatParticle> floats{{{-0.1f, 1.01f, 1.02f}},
                                       {{0.4f, 1.02f, 1.03f}},
                                       {{3.9f, 1.01f, 1.02f}},
                                       {{8.1f, 1.01f, 1.02f}}};
-    check(matches_buffered(field, floats, true) && matches_buffered(isolated, floats, false),
-          "streamed float positions exactly match buffered application, including unwrapped inputs");
+    check_local(matches_buffered(field, floats, true) && matches_buffered(isolated, floats, false),
+                "streamed float positions exactly match buffered application, including unwrapped inputs");
     FloatParticle rounded_edge{{-1e-8f, 0, 0}};
     empty.apply(&rounded_edge, 1);
-    check(rounded_edge.pos[0] == 0, "a wrapped float that rounds to the box size is restored to zero");
+    check_local(rounded_edge.pos[0] == 0, "a wrapped float that rounds to the box size is restored to zero");
     // Invert a genuinely nonlinear cumulative table, independently of the cubic-source transport above.
     std::vector<double> inverse_r, inverse_m;
     for (int i = 0; i <= 10000; ++i) {
@@ -263,38 +251,37 @@ int main() {
     bool inverse_ok = true;
     for (double mass : {0.00123, 0.0234, 0.345, 0.789})
         inverse_ok = inverse_ok && close(square_mass.radius(mass), std::sqrt(mass), 1e-7);
-    check(inverse_ok, "nonlinear cumulative inverse agrees with sqrt(mass)");
+    check_local(inverse_ok, "nonlinear cumulative inverse agrees with sqrt(mass)");
 
     const double nan = std::numeric_limits<double>::quiet_NaN();
-    check(rejects([] { EnclosedMassProfile({0, 1, 2}, {0, 2, 1}); }) &&
-              rejects([] { EnclosedMassProfile({0, 1, 1}, {0, 1, 2}); }) &&
-              rejects([&] { EnclosedMassProfile({0, 1}, {0, nan}); }),
-          "invalid profile tables are rejected");
-    check(rejects([] { RadialMapping(EnclosedMassProfile({0, 1}, {0, 1}), EnclosedMassProfile({0, 1}, {0, 2})); }) &&
-              rejects([&] { map.displacement(nan); }),
-          "invalid radial mappings and queries are rejected");
-    check(rejects([&] { Baryonifier(halos, 2); }) && rejects([&] { field.displacement_at({nan, 0, 0}); }),
-          "ambiguous periodic supports and non-finite positions are rejected");
-    check(rejects([&] { make_halo_profiles({0, 1, 5}, {}, 0); }) &&
-              rejects([&] { make_halo_profiles({1e8, 1, 5}, {}, 0); }) &&
-              rejects([&] { make_halo_profiles(halo, {}, -1); }),
-          "invalid halos, stellar budgets and backgrounds are rejected");
+    check_local(FML::TESTS::throws<std::invalid_argument>([] { EnclosedMassProfile({0, 1, 2}, {0, 2, 1}); }) &&
+                    FML::TESTS::throws<std::invalid_argument>([] { EnclosedMassProfile({0, 1, 1}, {0, 1, 2}); }) &&
+                    FML::TESTS::throws<std::invalid_argument>([&] { EnclosedMassProfile({0, 1}, {0, nan}); }),
+                "invalid profile tables are rejected");
+    check_local(FML::TESTS::throws<std::invalid_argument>(
+                    [] { RadialMapping(EnclosedMassProfile({0, 1}, {0, 1}), EnclosedMassProfile({0, 1}, {0, 2})); }) &&
+                    FML::TESTS::throws<std::invalid_argument>([&] { map.displacement(nan); }),
+                "invalid radial mappings and queries are rejected");
+    check_local(FML::TESTS::throws<std::invalid_argument>([&] { Baryonifier(halos, 2); }) &&
+                    FML::TESTS::throws<std::invalid_argument>([&] { field.displacement_at({nan, 0, 0}); }),
+                "ambiguous periodic supports and non-finite positions are rejected");
+    check_local(FML::TESTS::throws<std::invalid_argument>([&] { make_halo_profiles({0, 1, 5}, {}, 0); }) &&
+                    FML::TESTS::throws<std::invalid_argument>([&] { make_halo_profiles({1e8, 1, 5}, {}, 0); }) &&
+                    FML::TESTS::throws<std::invalid_argument>([&] { make_halo_profiles(halo, {}, -1); }),
+                "invalid halos, stellar budgets and backgrounds are rejected");
     auto bad = original;
     if (!bad.empty()) {
         bad.back().pos[0] = nan;
-        const bool rejected = rejects([&] { field.apply(bad.data(), bad.size()); });
+        const bool rejected = FML::TESTS::throws<std::invalid_argument>([&] { field.apply(bad.data(), bad.size()); });
         bool untouched = true;
         for (size_t i = 0; i < bad.size(); ++i)
             for (size_t d = 0; d < 3; ++d)
                 untouched = untouched && (i == bad.size() - 1 && d == 0 ? std::isnan(bad[i].pos[d]) :
                                                                           bad[i].pos[d] == original[i].pos[d]);
-        check(rejected && untouched, "bad input is rejected before any particles are modified");
+        check_local(rejected && untouched, "bad input is rejected before any particles are modified");
     }
-    check(rejects([&] { field.apply<Particle>(nullptr, 1); }) &&
-              rejects([&] { field.displacements<Particle>(nullptr, 1); }),
-          "both particle interfaces reject a null nonempty array");
-    FML::SumOverTasks(&failures);
-    if (FML::ThisTask == 0)
-        std::cout << (failures ? "BARYONIFICATION FAILED\n" : "ALL BARYONIFICATION TESTS PASSED\n");
-    return failures ? 1 : 0;
+    check_local(FML::TESTS::throws<std::invalid_argument>([&] { field.apply<Particle>(nullptr, 1); }) &&
+                    FML::TESTS::throws<std::invalid_argument>([&] { field.displacements<Particle>(nullptr, 1); }),
+                "both particle interfaces reject a null nonempty array");
+    return FML::TESTS::summary("Baryonification");
 }

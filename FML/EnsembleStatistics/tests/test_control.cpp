@@ -1,18 +1,12 @@
 #include <FML/EnsembleStatistics/ControlVariates.h>
 #include <FML/RandomGenerator/CounterBasedRandom.h>
 #include <iostream>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::near;
+
+using FML::TESTS::check;
 using namespace FML::ENSEMBLE;
-int failures = 0;
-void check(bool ok, const std::string & label) {
-    int bad = !ok;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (!FML::ThisTask)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
-}
-bool near(double a, double b, double tolerance = 1e-10) {
-    return std::abs(a - b) <= tolerance * std::max({1.0, std::abs(a), std::abs(b)});
-}
 Metadata meta() { return {"test-cosmology", "two observables, physical units; schema-v1", "truth", "ZA-control"}; }
 PhaseKey key(std::uint64_t id) {
     PhaseKey k;
@@ -38,8 +32,8 @@ void test_moments() {
         b.add(rows[i]);
     a.merge(b);
     auto s = a.summary();
-    check(s.count == 3 && s.mean == Vector({3, 4}) && near(s.covariance[0], 4) && near(s.covariance[1], 2) &&
-              near(s.covariance[3], 4),
+    check(s.count == 3 && s.mean == Vector({3, 4}) && near(s.covariance[0], 4, 1e-10) &&
+              near(s.covariance[1], 2, 1e-10) && near(s.covariance[3], 4, 1e-10),
           "streaming covariance and Chan merge reproduce hand-computed sample covariance");
     RunningCovariance local(2);
     for (int i = 0; i < 37; ++i)
@@ -47,8 +41,8 @@ void test_moments() {
             local.add({1e12 + .125 * i, -2e12 + .25 * i});
     auto global = local.global().summary();
     const double variance = .125 * .125 * 37 * 38 / 12;
-    check(global.count == 37 && near(global.mean[0], 1e12 + 2.25) && near(global.covariance[0], variance, 2e-6) &&
-              near(global.covariance[1], 2 * variance, 2e-6),
+    check(global.count == 37 && near(global.mean[0], 1e12 + 2.25, 1e-10) &&
+              near(global.covariance[0], variance, 2e-6) && near(global.covariance[1], 2 * variance, 2e-6),
           "global merge handles large offsets, unequal sample counts and empty ranks");
     RunningCovariance root(1);
     if (!FML::ThisTask) {
@@ -73,7 +67,7 @@ void test_fit() {
     options.ridge = 0;
     auto model = t.fit(MeanEstimate::exact({.25, -.5}, meta()), options);
     const auto & b = model.coefficients();
-    check(near(b[0], 2) && near(b[1], -3) && near(b[2], .5) && near(b[3], 4),
+    check(near(b[0], 2, 1e-10) && near(b[1], -3, 1e-10) && near(b[2], .5, 1e-10) && near(b[3], 4, 1e-10),
           "full standardized multivariate fit recovers exact known control coefficients");
     ControlEvaluation e(model);
     for (int i = 0; i < 17; ++i)
@@ -82,13 +76,13 @@ void test_fit() {
             e.add(target(c), c, key(1000 + i), key(1000 + i));
         }
     auto result = e.global().estimate();
-    check(result.count == 17 && near(result.mean[0], 12) && near(result.mean[1], -5.875) &&
+    check(result.count == 17 && near(result.mean[0], 12, 1e-10) && near(result.mean[1], -5.875, 1e-10) &&
               std::abs(result.sample_covariance[0]) < 1e-24,
           "held-out affine observables collapse to the analytically controlled mean");
     options.mode = FitMode::Diagonal;
     auto diagonal = t.fit(MeanEstimate::exact({0, 0}, meta()), options);
-    check(near(diagonal.coefficients()[0], 2) && diagonal.coefficients()[1] == 0 && diagonal.coefficients()[2] == 0 &&
-              near(diagonal.coefficients()[3], 4),
+    check(near(diagonal.coefficients()[0], 2, 1e-10) && diagonal.coefficients()[1] == 0 &&
+              diagonal.coefficients()[2] == 0 && near(diagonal.coefficients()[3], 4, 1e-10),
           "diagonal per-bin control variates keep cross-bin coefficients zero");
     PairedTraining singular(1, 2, meta());
     for (int i = 0; i < 6; ++i) {
@@ -146,9 +140,9 @@ void test_mean_uncertainty() {
     auto f = few.global().estimate(), m = many.global().estimate();
     bool floor = true;
     for (size_t i = 0; i < 4; ++i)
-        floor &= near(f.covariance_of_mean[i], expected[i]) && near(m.covariance_of_mean[i], expected[i]);
+        floor &= near(f.covariance_of_mean[i], expected[i], 1e-10) && near(m.covariance_of_mean[i], expected[i], 1e-10);
     const auto controlled = target(mean.mean());
-    check(floor && near(m.mean[0], controlled[0]) && near(m.mean[1], controlled[1]),
+    check(floor && near(m.mean[0], controlled[0], 1e-10) && near(m.mean[1], controlled[1], 1e-10),
           "independent surrogate-mean uncertainty is propagated and does not shrink with evaluation count");
 }
 void test_variance_reduction() {
@@ -243,7 +237,5 @@ int main() {
     test_mean_uncertainty();
     test_variance_reduction();
     test_validation();
-    if (!FML::ThisTask)
-        std::cout << (failures ? "Ensemble tests FAILED\n" : "All ensemble tests passed\n");
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("ensemble");
 }

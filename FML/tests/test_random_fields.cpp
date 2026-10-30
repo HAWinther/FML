@@ -10,14 +10,11 @@
 #include <cstdint>
 #ifdef USE_OMP
 #include <omp.h>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 #endif
 using namespace FML::RANDOM;
-int failures = 0;
-void check(bool ok, const std::string & label) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << label << "\n";
-    failures += !ok;
-}
 template <int N>
 using Grid = FML::GRID::FFTWGrid<N>;
 template <int N>
@@ -61,23 +58,23 @@ void test_field(int mesh) {
     FML::MaxOverTasks(&worst);
     int bad = !zeros;
     FML::MaxOverTasks(&bad);
-    check(!bad && worst < 2e-14,
-          "Philox DC/Nyquist and fixed-amplitude phase conventions, " + std::to_string(N) + "D mesh " +
-              std::to_string(mesh));
+    check_local(!bad && worst < 2e-14,
+                "Philox DC/Nyquist and fixed-amplitude phase conventions, " + std::to_string(N) + "D mesh " +
+                    std::to_string(mesh));
     auto roundtrip = field;
     roundtrip.fftw_c2r();
     roundtrip.fftw_r2c();
-    check(difference(field, roundtrip) < 2e-14, "Philox satisfies Hermitian symmetry through FFT round trip");
+    check_local(difference(field, roundtrip) < 2e-14, "Philox satisfies Hermitian symmetry through FFT round trip");
     opts.stream++;
     generate_gaussian_random_field_fourier<N>(other, nullptr, power, false, opts);
-    check(difference(field, other) > 0.1, "independent stream changes the realization");
+    check_local(difference(field, other) > 0.1, "independent stream changes the realization");
     opts.stream--;
 #ifdef USE_OMP
     int old = omp_get_max_threads();
     omp_set_num_threads(1);
     generate_gaussian_random_field_fourier<N>(other, nullptr, power, false, opts);
     omp_set_num_threads(old);
-    check(difference(field, other) == 0, "Philox output is bit-identical across thread counts");
+    check_local(difference(field, other) == 0, "Philox output is bit-identical across thread counts");
 #endif
     unsigned long long hash = 0;
     for (auto index : field.get_fourier_range()) {
@@ -102,15 +99,15 @@ void test_field(int mesh) {
 }
 int main() {
     using COUNTER_BASED::philox4x32;
-    check(philox4x32({0, 0, 0, 0}, {0, 0}) ==
-              std::array<uint32_t, 4>{0x6627e8d5u, 0xe169c58du, 0xbc57ac4cu, 0x9b00dbd8u},
-          "Philox zero known-answer vector matches Random123");
-    check(philox4x32({~0u, ~0u, ~0u, ~0u}, {~0u, ~0u}) ==
-              std::array<uint32_t, 4>{0x408f276du, 0x41c83b0eu, 0xa20bc7c6u, 0x6d5451fdu},
-          "Philox all-ones known-answer vector matches Random123");
-    check(philox4x32({0x243f6a88u, 0x85a308d3u, 0x13198a2eu, 0x03707344u}, {0xa4093822u, 0x299f31d0u}) ==
-              std::array<uint32_t, 4>{0xd16cfe09u, 0x94fdccebu, 0x5001e420u, 0x24126ea1u},
-          "Philox pi known-answer vector matches Random123");
+    check_local(philox4x32({0, 0, 0, 0}, {0, 0}) ==
+                    std::array<uint32_t, 4>{0x6627e8d5u, 0xe169c58du, 0xbc57ac4cu, 0x9b00dbd8u},
+                "Philox zero known-answer vector matches Random123");
+    check_local(philox4x32({~0u, ~0u, ~0u, ~0u}, {~0u, ~0u}) ==
+                    std::array<uint32_t, 4>{0x408f276du, 0x41c83b0eu, 0xa20bc7c6u, 0x6d5451fdu},
+                "Philox all-ones known-answer vector matches Random123");
+    check_local(philox4x32({0x243f6a88u, 0x85a308d3u, 0x13198a2eu, 0x03707344u}, {0xa4093822u, 0x299f31d0u}) ==
+                    std::array<uint32_t, 4>{0xd16cfe09u, 0x94fdccebu, 0x5001e420u, 0x24126ea1u},
+                "Philox pi known-answer vector matches Random123");
     test_field<3>(16);
     test_field<2>(16);
     if (FML::NTasks == 1)
@@ -123,14 +120,14 @@ int main() {
         RandomGenerator one(1234), two(1234);
         generate_gaussian_random_field_fourier<3>(a, &one, power, fixed);
         generate_gaussian_random_field_fourier<3>(b, &two, power, fixed, legacy);
-        check(difference(a, b) == 0 && one.generate_uniform() == two.generate_uniform(),
-              "explicit N-GenIC backend preserves legacy field and RNG state");
+        check_local(difference(a, b) == 0 && one.generate_uniform() == two.generate_uniform(),
+                    "explicit N-GenIC backend preserves legacy field and RNG state");
 #ifdef USE_GSL
         GSLRandomGenerator gsl_one(1234), gsl_two(1234);
         generate_gaussian_random_field_fourier<3>(a, &gsl_one, power, fixed);
         generate_gaussian_random_field_fourier<3>(b, &gsl_two, power, fixed, legacy);
-        check(difference(a, b) == 0 && gsl_one.generate_uniform() == gsl_two.generate_uniform(),
-              "explicit N-GenIC backend preserves the GSL/2LPTic path");
+        check_local(difference(a, b) == 0 && gsl_one.generate_uniform() == gsl_two.generate_uniform(),
+                    "explicit N-GenIC backend preserves the GSL/2LPTic path");
 #endif
     }
     RandomFieldOptions philox;
@@ -140,7 +137,7 @@ int main() {
     generate_gaussian_random_field_fourier<3>(small, nullptr, power, true, philox);
     generate_gaussian_random_field_fourier<3>(large, nullptr, power, true, philox);
     auto down = FML::GRID::resize_fourier_grid(large, 16);
-    check(difference(small, down) == 0, "common signed Fourier modes match exactly across mesh resolutions");
+    check_local(difference(small, down) == 0, "common signed Fourier modes match exactly across mesh resolutions");
     Grid<3> sample(32);
     generate_gaussian_random_field_fourier<3>(sample, nullptr, power, false, philox);
     double re = 0, im = 0, variance = 0, count = 0;
@@ -159,8 +156,8 @@ int main() {
     FML::SumOverTasks(&im);
     FML::SumOverTasks(&variance);
     FML::SumOverTasks(&count);
-    check(std::abs(re / count) < 0.04 && std::abs(im / count) < 0.04 && std::abs(variance / count - 1) < 0.05,
-          "Philox complex Gaussian sample has the expected mean and power");
+    check_local(std::abs(re / count) < 0.04 && std::abs(im / count) < 0.04 && std::abs(variance / count - 1) < 0.05,
+                "Philox complex Gaussian sample has the expected mean and power");
     Grid<3> ng(16), g(16);
     NONGAUSSIAN::generate_nonlocal_gaussian_random_field_fourier<3>(ng,
                                                                     nullptr,
@@ -172,11 +169,11 @@ int main() {
                                                                     {},
                                                                     philox);
     generate_gaussian_random_field_fourier<3>(g, nullptr, power, true, philox);
-    check(difference(ng, g) < 1e-13, "fNL=0 uses the selected Philox Gaussian backend");
+    check_local(difference(ng, g) < 1e-13, "fNL=0 uses the selected Philox Gaussian backend");
     {
         SIMCODE::ICSettings ic{};
-        check(ic.random_field_backend == SIMCODE::RandomFieldBackend::NGenIC,
-              "direct ICSettings construction retains the legacy backend");
+        check_local(ic.random_field_backend == SIMCODE::RandomFieldBackend::NGenIC,
+                    "direct ICSettings construction retains the legacy backend");
         ic.random_field_type = SIMCODE::ICRandomFieldType::Gaussian;
         ic.random_field_backend = SIMCODE::RandomFieldBackend::Philox;
         ic.random_seed = 897;
@@ -185,20 +182,19 @@ int main() {
                                                 std::vector<double>{1, 1, 1},
                                                 "flat power");
         SIMCODE::generate_initial_density_field<3>(ng, ic, 1.0, flat, flat, {}, {}, nullptr);
-        check(difference(ng, g) < 1e-14, "SimulationCode Gaussian IC path dispatches to Philox");
+        check_local(difference(ng, g) < 1e-14, "SimulationCode Gaussian IC path dispatches to Philox");
         ic.random_field_backend = SIMCODE::RandomFieldBackend::NGenIC;
         RandomGenerator legacy_one(897), legacy_two(897);
         SIMCODE::generate_initial_density_field<3>(ng, ic, 1.0, flat, flat, {}, {}, &legacy_one);
         generate_gaussian_random_field_fourier<3>(g, &legacy_two, power, true);
-        check(difference(ng, g) == 0, "SimulationCode explicit legacy IC path retains the original realization");
+        check_local(difference(ng, g) == 0, "SimulationCode explicit legacy IC path retains the original realization");
     }
     const auto & schema = SIMCODE::parameter_schema<3>();
     auto option =
         std::find_if(schema.begin(), schema.end(), [](const auto & s) { return s.name == "ic_random_field_backend"; });
-    check(option != schema.end() && option->need == SIMCODE::Need::AlwaysOptional &&
-              std::get<std::string>(option->default_value) == "ngenic" &&
-              option->choices == std::vector<std::string>{"ngenic", "philox"},
-          "SimulationCode exposes both backends and defaults to N-GenIC compatibility");
-    FML::SumOverTasks(&failures);
-    return failures ? 1 : 0;
+    check_local(option != schema.end() && option->need == SIMCODE::Need::AlwaysOptional &&
+                    std::get<std::string>(option->default_value) == "ngenic" &&
+                    option->choices == std::vector<std::string>{"ngenic", "philox"},
+                "SimulationCode exposes both backends and defaults to N-GenIC compatibility");
+    return FML::TESTS::summary("random field");
 }

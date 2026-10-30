@@ -6,7 +6,7 @@
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
 #include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Models/StandardSpecies.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 
 #include <cmath>
@@ -17,9 +17,9 @@
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 // Independent E(a) = H/H0 for LCDM + curvature, written out directly from the parameters
 static double E_reference(const CosmologyParameters & p, double a) {
@@ -63,8 +63,8 @@ static void check_Hp_derivatives(const BackgroundCosmology & cosmo, const std::s
         max_err1 = std::max(max_err1, std::fabs(cosmo.dHpdx_of_x(x) - d1) / std::max(std::fabs(d1), H));
         max_err2 = std::max(max_err2, std::fabs(cosmo.ddHpddx_of_x(x) - d2) / std::max(std::fabs(d2), H));
     }
-    check_close(label + ": dHp/dx vs finite difference", max_err1, 0.0, 1e-7);
-    check_close(label + ": d2Hp/dx2 vs finite difference", max_err2, 0.0, 1e-5);
+    check_close(max_err1, 0.0, 1e-7, label + ": dHp/dx vs finite difference");
+    check_close(max_err2, 0.0, 1e-5, label + ": d2Hp/dx2 vs finite difference");
 }
 
 static void check_closure(const BackgroundCosmology & cosmo, const std::string & label) {
@@ -74,8 +74,8 @@ static void check_closure(const BackgroundCosmology & cosmo, const std::string &
                            cosmo.OmegaNu_of_x(x) + cosmo.OmegaK_of_x(x) + cosmo.OmegaDE_of_x(x);
         max_err = std::max(max_err, std::fabs(sum - 1.0));
     }
-    check_close(label + ": E^2(0) = 1", cosmo.E2_of_x(0.0), 1.0, 1e-14);
-    check_close(label + ": sum of Omega_i(x) = 1 for all x", max_err, 0.0, 1e-14);
+    check_close(cosmo.E2_of_x(0.0), 1.0, 1e-14, label + ": E^2(0) = 1");
+    check_close(max_err, 0.0, 1e-14, label + ": sum of Omega_i(x) = 1 for all x");
 }
 
 // -----------------------------------------------------------------------------
@@ -91,11 +91,11 @@ static void test_fiducial() {
 
     // Radiation era: Hp ~ e^{-x}  =>  Hp'/Hp = -1, Hp''/Hp = 1, eta Hp / c = 1
     const double xr = -18.0;
-    check_close("RD: dHp/dx / Hp = -1", cosmo.dHpdx_of_x(xr) / cosmo.Hp_of_x(xr), -1.0, 1e-4);
-    check_close("RD: d2Hp/dx2 / Hp = 1", cosmo.ddHpddx_of_x(xr) / cosmo.Hp_of_x(xr), 1.0, 1e-4);
-    check_close("RD: eta Hp / c = 1", cosmo.eta_of_x(xr) * cosmo.Hp_of_x(xr) / c, 1.0, 1e-4);
+    check_close(cosmo.dHpdx_of_x(xr) / cosmo.Hp_of_x(xr), -1.0, 1e-4, "RD: dHp/dx / Hp = -1");
+    check_close(cosmo.ddHpddx_of_x(xr) / cosmo.Hp_of_x(xr), 1.0, 1e-4, "RD: d2Hp/dx2 / Hp = 1");
+    check_close(cosmo.eta_of_x(xr) * cosmo.Hp_of_x(xr) / c, 1.0, 1e-4, "RD: eta Hp / c = 1");
     // Far future, Lambda domination: Hp ~ e^{x}
-    check_close("DE era (x=5): dHp/dx / Hp = 1", cosmo.dHpdx_of_x(5.0) / cosmo.Hp_of_x(5.0), 1.0, 1e-5);
+    check_close(cosmo.dHpdx_of_x(5.0) / cosmo.Hp_of_x(5.0), 1.0, 1e-5, "DE era (x=5): dHp/dx / Hp = 1");
 
     // Spline consistency: d eta/dx from the spline vs c/Hp
     {
@@ -105,48 +105,48 @@ static void test_fiducial() {
             const double d = (cosmo.eta_of_x(x + h) - cosmo.eta_of_x(x - h)) / (2.0 * h);
             max_err = std::max(max_err, std::fabs(d / cosmo.detadx_of_x(x) - 1.0));
         }
-        check_close("spline d(eta)/dx vs c/Hp", max_err, 0.0, 1e-6);
+        check_close(max_err, 0.0, 1e-6, "spline d(eta)/dx vs c/Hp");
     }
 
     // Independent quadrature for eta and t, both today and at early times (tests the ICs)
-    check_rel("eta0 vs quadrature", cosmo.eta0(), eta_reference(p, 1.0), 1e-8);
-    check_rel("t0 vs quadrature", cosmo.t0(), t_reference(p, 1.0), 1e-8);
-    check_rel("eta(x=-15) vs quadrature", cosmo.eta_of_x(-15.0), eta_reference(p, std::exp(-15.0)), 1e-8);
-    check_rel("t(x=-15) vs quadrature", cosmo.t_of_x(-15.0), t_reference(p, std::exp(-15.0)), 1e-8);
-    check_rel("t(x=-7) (recombination) vs quadrature", cosmo.t_of_x(-7.0), t_reference(p, std::exp(-7.0)), 1e-8);
+    check_rel(cosmo.eta0(), eta_reference(p, 1.0), 1e-8, "eta0 vs quadrature");
+    check_rel(cosmo.t0(), t_reference(p, 1.0), 1e-8, "t0 vs quadrature");
+    check_rel(cosmo.eta_of_x(-15.0), eta_reference(p, std::exp(-15.0)), 1e-8, "eta(x=-15) vs quadrature");
+    check_rel(cosmo.t_of_x(-15.0), t_reference(p, std::exp(-15.0)), 1e-8, "t(x=-15) vs quadrature");
+    check_rel(cosmo.t_of_x(-7.0), t_reference(p, std::exp(-7.0)), 1e-8, "t(x=-7) (recombination) vs quadrature");
 
     // Age without radiation: t0 = 2/(3 H0 sqrt(OmL)) asinh(sqrt(OmL/OmM)). Radiation shifts it by ~1e-4.
     const double OmM = p.OmegaM(), OmL = p.OmegaLambda(), OmR = p.OmegaR();
-    check_rel("t0 vs matter+Lambda formula (radiation ~1e-4)",
-              cosmo.t0(),
+    check_rel(cosmo.t0(),
               2.0 / (3.0 * p.H0() * std::sqrt(OmL)) * std::asinh(std::sqrt(OmL / OmM)),
-              5e-4);
+              5e-4,
+              "t0 vs matter+Lambda formula (radiation ~1e-4)");
 
     // Epochs
-    check_close("matter-radiation equality x = ln(OmR/OmM)",
-                cosmo.x_matter_radiation_equality(),
+    check_close(cosmo.x_matter_radiation_equality(),
                 std::log(OmR / OmM),
-                1e-10);
-    check_close("matter-Lambda equality x = ln(OmM/OmL)/3",
-                cosmo.x_matter_DE_equality(),
+                1e-10,
+                "matter-radiation equality x = ln(OmR/OmM)");
+    check_close(cosmo.x_matter_DE_equality(),
                 std::log(OmM / OmL) / 3.0,
-                1e-10);
+                1e-10,
+                "matter-Lambda equality x = ln(OmM/OmL)/3");
     // Acceleration onset with radiation: OmM a^-3 + 2 OmR a^-4 = 2 OmL  ->  solve numerically here
     const double x_acc =
         Utils::find_root([&](double x) { return OmM * std::exp(-3 * x) + 2 * OmR * std::exp(-4 * x) - 2 * OmL; },
                          -3.0,
                          0.0);
-    check_close("acceleration onset", cosmo.x_acceleration_onset(), x_acc, 1e-9);
+    check_close(cosmo.x_acceleration_onset(), x_acc, 1e-9, "acceleration onset");
 
     // Low-z luminosity distance: d_L = (c z/H0) [1 + (1 - q0) z/2 + O(z^2)],  q0 = OmM/2 + OmR - OmL
     const double z = 1e-3, q0 = 0.5 * OmM + OmR - OmL;
-    check_rel("d_L at z = 0.001 vs Hubble-law expansion",
-              cosmo.luminosity_distance_of_x(-std::log1p(z)),
+    check_rel(cosmo.luminosity_distance_of_x(-std::log1p(z)),
               c * z / p.H0() * (1.0 + 0.5 * (1.0 - q0) * z),
-              1e-6);
+              1e-6,
+              "d_L at z = 0.001 vs Hubble-law expansion");
     const double xz = -std::log(1.0 + 2.0);
-    check_rel("d_A = d_L / (1+z)^2", cosmo.angular_distance_of_x(xz), cosmo.luminosity_distance_of_x(xz) / 9.0, 1e-14);
-    check_rel("T_CMB(z=1089) = 2.7255*1090 K", cosmo.TCMB_of_x(-std::log(1090.0)), 2.7255 * 1090.0, 1e-12);
+    check_rel(cosmo.angular_distance_of_x(xz), cosmo.luminosity_distance_of_x(xz) / 9.0, 1e-14, "d_A = d_L / (1+z)^2");
+    check_rel(cosmo.TCMB_of_x(-std::log(1090.0)), 2.7255 * 1090.0, 1e-12, "T_CMB(z=1089) = 2.7255*1090 K");
 
     cosmo.info();
 }
@@ -160,17 +160,17 @@ static void test_einstein_de_sitter() {
     p.TCMB = 1e-4; // Omega_gamma ~ 1e-22
     BackgroundCosmology cosmo(p);
     cosmo.solve();
-    check_rel("eta0 = 2c/H0", cosmo.eta0(), 2.0 * c / p.H0(), 1e-9);
-    check_rel("t0 = 2/(3 H0)", cosmo.t0(), 2.0 / (3.0 * p.H0()), 1e-9);
-    check_close("dHp/dx / Hp = -1/2", cosmo.dHpdx_of_x(-5.0) / cosmo.Hp_of_x(-5.0), -0.5, 1e-10);
-    check_close("d2Hp/dx2 / Hp = 1/4", cosmo.ddHpddx_of_x(-5.0) / cosmo.Hp_of_x(-5.0), 0.25, 1e-10);
-    check_close("eta Hp / c = 2", cosmo.eta_of_x(-5.0) * cosmo.Hp_of_x(-5.0) / c, 2.0, 1e-9);
+    check_rel(cosmo.eta0(), 2.0 * c / p.H0(), 1e-9, "eta0 = 2c/H0");
+    check_rel(cosmo.t0(), 2.0 / (3.0 * p.H0()), 1e-9, "t0 = 2/(3 H0)");
+    check_close(cosmo.dHpdx_of_x(-5.0) / cosmo.Hp_of_x(-5.0), -0.5, 1e-10, "dHp/dx / Hp = -1/2");
+    check_close(cosmo.ddHpddx_of_x(-5.0) / cosmo.Hp_of_x(-5.0), 0.25, 1e-10, "d2Hp/dx2 / Hp = 1/4");
+    check_close(cosmo.eta_of_x(-5.0) * cosmo.Hp_of_x(-5.0) / c, 2.0, 1e-9, "eta Hp / c = 2");
     // d_L = (2c/H0) (1 + z) (1 - 1/sqrt(1+z))
     const double z = 2.0;
-    check_rel("d_L(z=2) analytic",
-              cosmo.luminosity_distance_of_x(-std::log(1.0 + z)),
+    check_rel(cosmo.luminosity_distance_of_x(-std::log(1.0 + z)),
               2.0 * c / p.H0() * (1.0 + z) * (1.0 - 1.0 / std::sqrt(1.0 + z)),
-              1e-9);
+              1e-9,
+              "d_L(z=2) analytic");
 }
 
 static void test_curvature() {
@@ -183,17 +183,17 @@ static void test_curvature() {
         const std::string label = std::string("OmegaK = ") + (OmK > 0 ? "+0.1" : "-0.1");
         check_closure(cosmo, label);
         check_Hp_derivatives(cosmo, label);
-        check_rel(label + ": eta0 vs quadrature", cosmo.eta0(), eta_reference(p, 1.0), 1e-8);
+        check_rel(cosmo.eta0(), eta_reference(p, 1.0), 1e-8, label + ": eta0 vs quadrature");
 
         // d_L = (1+z) c/(H0 sqrt|OmK|) S(sqrt|OmK| H0 chi / c) with chi from quadrature
         const double z = 1.5, a = 1.0 / (1.0 + z);
         const double chi = eta_reference(p, 1.0) - eta_reference(p, a);
         const double s = std::sqrt(std::fabs(OmK)) * p.H0() * chi / c;
         const double S = OmK > 0 ? std::sinh(s) : std::sin(s);
-        check_rel(label + ": d_L(z=1.5) vs quadrature",
-                  cosmo.luminosity_distance_of_x(std::log(a)),
+        check_rel(cosmo.luminosity_distance_of_x(std::log(a)),
                   (1.0 + z) * c / (p.H0() * std::sqrt(std::fabs(OmK))) * S,
-                  1e-8);
+                  1e-8,
+                  label + ": d_L(z=1.5) vs quadrature");
     }
 }
 
@@ -204,8 +204,8 @@ static void test_geometry() {
         CosmologyParameters p;
         BackgroundCosmology flat(p);
         const double chi = 1e4 * Mpc;
-        check_close("flat: sinK(chi) = chi", flat.sinK(chi) / chi, 1.0, 0.0);
-        check_close("flat: cotK(chi) = 1/chi", flat.cotK(chi) * chi, 1.0, 0.0);
+        check_close(flat.sinK(chi) / chi, 1.0, 0.0, "flat: sinK(chi) = chi");
+        check_close(flat.cotK(chi) * chi, 1.0, 0.0, "flat: cotK(chi) = 1/chi");
     }
     for (double OmK : {0.05, -0.05}) {
         CosmologyParameters p;
@@ -213,29 +213,29 @@ static void test_geometry() {
         BackgroundCosmology cosmo(p);
         const std::string label = std::string("OmegaK = ") + (OmK > 0 ? "+0.05: " : "-0.05: ");
         const double K = cosmo.get_K(), sK = std::sqrt(std::fabs(K));
-        check_rel(label + "K = -OmegaK H0^2/c^2", K, -OmK * p.H0() * p.H0() / (c * c), 1e-14);
+        check_rel(K, -OmK * p.H0() * p.H0() / (c * c), 1e-14, label + "K = -OmegaK H0^2/c^2");
 
         // Closed form far from the series region
         const double chi = 1.0 / sK;
-        check_rel(label + "sinK(1/sqrt|K|) closed form",
-                  cosmo.sinK(chi),
+        check_rel(cosmo.sinK(chi),
                   (K > 0 ? std::sin(1.0) : std::sinh(1.0)) / sK,
-                  1e-14);
-        check_rel(label + "cotK(1/sqrt|K|) closed form",
-                  cosmo.cotK(chi),
+                  1e-14,
+                  label + "sinK(1/sqrt|K|) closed form");
+        check_rel(cosmo.cotK(chi),
                   sK * (K > 0 ? 1.0 / std::tan(1.0) : 1.0 / std::tanh(1.0)),
-                  1e-14);
+                  1e-14,
+                  label + "cotK(1/sqrt|K|) closed form");
 
         // Continuity across the switch to the series at |K| chi^2 = 1e-4
         const double chi_s = 1e-2 / sK;
-        check_rel(label + "sinK continuous at series switch",
-                  cosmo.sinK(chi_s * (1 + 1e-9)) / cosmo.sinK(chi_s * (1 - 1e-9)),
+        check_rel(cosmo.sinK(chi_s * (1 + 1e-9)) / cosmo.sinK(chi_s * (1 - 1e-9)),
                   1.0 + 2e-9,
-                  1e-12);
-        check_rel(label + "cotK continuous at series switch",
-                  cosmo.cotK(chi_s * (1 + 1e-9)) / cosmo.cotK(chi_s * (1 - 1e-9)),
+                  1e-12,
+                  label + "sinK continuous at series switch");
+        check_rel(cosmo.cotK(chi_s * (1 + 1e-9)) / cosmo.cotK(chi_s * (1 - 1e-9)),
                   1.0 - 2e-9,
-                  1e-12);
+                  1e-12,
+                  label + "cotK continuous at series switch");
 
         // cotK = d ln sinK / d chi and sinK'' = -K sinK (finite differences), at several chi
         double err_cot = 0.0, err_ode = 0.0;
@@ -247,17 +247,17 @@ static void test_geometry() {
             if (y >= 0.3)
                 err_ode = std::max(err_ode, std::fabs((sp - 2.0 * s0 + sm) / (h * h) / (-K * s0) - 1.0));
         }
-        check_close(label + "cotK = d ln sinK / dchi", err_cot, 0.0, 1e-7);
-        check_close(label + "sinK'' = -K sinK", err_ode, 0.0, 1e-4);
+        check_close(err_cot, 0.0, 1e-7, label + "cotK = d ln sinK / dchi");
+        check_close(err_ode, 0.0, 1e-4, label + "sinK'' = -K sinK");
 
         if (K > 0)
-            check_close(label + "sinK(pi/sqrt K) = 0", cosmo.sinK(M_PI / sK) * sK, 0.0, 1e-14);
+            check_close(cosmo.sinK(M_PI / sK) * sK, 0.0, 1e-14, label + "sinK(pi/sqrt K) = 0");
         cosmo.solve();
         const double xz = -std::log(1.0 + 1.5);
-        check_rel(label + "transverse distance = sinK(eta0 - eta)",
-                  cosmo.transverse_distance_of_x(xz),
+        check_rel(cosmo.transverse_distance_of_x(xz),
                   cosmo.sinK(cosmo.eta0() - cosmo.eta_of_x(xz)),
-                  1e-15);
+                  1e-15,
+                  label + "transverse distance = sinK(eta0 - eta)");
     }
 }
 
@@ -279,11 +279,11 @@ static void test_wcdm() {
     double max_diff = 0.0;
     for (double x = -15.0; x <= 3.0; x += 0.5)
         max_diff = std::max(max_diff, std::fabs(w_lcdm.Hp_of_x(x) / lcdm.Hp_of_x(x) - 1.0));
-    check_close("w0=-1, wa=0 reproduces LCDM: Hp(x)", max_diff, 0.0, 1e-14);
-    check_rel("w0=-1, wa=0 reproduces LCDM: eta0", w_lcdm.eta0(), lcdm.eta0(), 1e-12);
+    check_close(max_diff, 0.0, 1e-14, "w0=-1, wa=0 reproduces LCDM: Hp(x)");
+    check_rel(w_lcdm.eta0(), lcdm.eta0(), 1e-12, "w0=-1, wa=0 reproduces LCDM: eta0");
 
     BackgroundCosmology wconst = cpl_model(p, -0.8, 0.0);
-    check_rel("constant w=-0.8: rho_DE ~ a^{-0.6}", wconst.rhoDE(-1.0) / wconst.rhoDE(0.0), std::exp(0.6), 1e-14);
+    check_rel(wconst.rhoDE(-1.0) / wconst.rhoDE(0.0), std::exp(0.6), 1e-14, "constant w=-0.8: rho_DE ~ a^{-0.6}");
 
     BackgroundCosmology cpl = cpl_model(p, -0.9, 0.3);
     cpl.solve();
@@ -304,7 +304,7 @@ static void test_wcdm() {
         1.0,
         0.0,
         1e-12);
-    check_rel("CPL: eta0 vs quadrature", cpl.eta0(), eta0_ref, 1e-8);
+    check_rel(cpl.eta0(), eta0_ref, 1e-8, "CPL: eta0 vs quadrature");
 }
 
 // Matter-radiation equality with massive neutrinos (3 p_ncdm radiation, rho_ncdm - 3 p_ncdm matter) against CLASS
@@ -320,10 +320,10 @@ static void test_equality_massive_nu() {
         p.m_nu = m;
         BackgroundCosmology bg(p);
         bg.solve();
-        check_rel("z_eq with m_nu = " + std::to_string(m).substr(0, 4) + " eV = CLASS",
-                  std::exp(-bg.x_matter_radiation_equality()) - 1.0,
+        check_rel(std::exp(-bg.x_matter_radiation_equality()) - 1.0,
                   zeq,
-                  1e-4);
+                  1e-4,
+                  "z_eq with m_nu = " + std::to_string(m).substr(0, 4) + " eV = CLASS");
     }
 }
 
@@ -334,5 +334,5 @@ int main() {
     test_curvature();
     test_geometry();
     test_wcdm();
-    return Test::summary();
+    return FML::TESTS::summary("EBS background");
 }

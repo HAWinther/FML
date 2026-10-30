@@ -13,7 +13,7 @@
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 #include <FML/Cosmology/Models/GeneralRelativity.h>
 #include <FML/Cosmology/Models/StandardSpecies.h>
@@ -21,22 +21,16 @@
 #include <cmath>
 #include <functional>
 
+using FML::TESTS::throws;
+
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 namespace {
-    bool throws(const std::function<void()> & f) {
-        try {
-            f();
-        } catch (const std::exception &) {
-            return true;
-        }
-        return false;
-    }
 
     // Pressureless matter, written independently of the CDM in StandardSpecies.cpp
     class DustPerturbations : public SpeciesPerturbations {
@@ -101,30 +95,30 @@ namespace {
 int main() {
     std::cout << "Registry\n";
     {
-        check("lcdm is registered", !throws([] { Models::find("lcdm"); }));
-        check("unknown model is an error", throws([] { Models::find("no_such_model"); }));
+        check(!throws([] { Models::find("lcdm"); }), "lcdm is registered");
+        check(throws([] { Models::find("no_such_model"); }), "unknown model is an error");
         CosmologyParameters p;
-        check("default model is lcdm", p.model == "lcdm");
+        check(p.model == "lcdm", "default model is lcdm");
         const Model m = Models::build(p);
-        check("lcdm: 5 species (no massive neutrinos), GR",
-              m.species.size() == 5 && m.gravity->name() == "GR" &&
-                  m.species.back()->role() == Species::Role::DarkEnergy);
+        check(m.species.size() == 5 && m.gravity->name() == "GR" &&
+                  m.species.back()->role() == Species::Role::DarkEnergy,
+              "lcdm: 5 species (no massive neutrinos), GR");
         p.m_nu = 0.06;
-        check("lcdm with m_nu > 0: 6 species", Models::build(p).species.size() == 6);
+        check(Models::build(p).species.size() == 6, "lcdm with m_nu > 0: 6 species");
         CosmologyParameters q;
         q.model_params["mu0"] = 0.1;
-        check("parameter of no model is an error (validate)", throws([&] { q.validate(); }));
+        check(throws([&] { q.validate(); }), "parameter of no model is an error (validate)");
         q.model_params.clear();
         q.model = "no_such_model";
-        check("unknown model is an error (validate)", throws([&] { q.validate(); }));
+        check(throws([&] { q.validate(); }), "unknown model is an error (validate)");
     }
 
     std::cout << "Parameter file\n";
     {
-        check("model = lcdm", ParameterFile::read("", {"model=lcdm"}).cosmo.model == "lcdm");
-        check("unknown model is an error", throws([] { ParameterFile::read("", {"model=foo"}); }));
-        check("model parameter of no model is an error", throws([] { ParameterFile::read("", {"mu0=0.1"}); }));
-        check("lcdm has no model parameters", ParameterFile::model_parameter_names("lcdm").empty());
+        check(ParameterFile::read("", {"model=lcdm"}).cosmo.model == "lcdm", "model = lcdm");
+        check(throws([] { ParameterFile::read("", {"model=foo"}); }), "unknown model is an error");
+        check(throws([] { ParameterFile::read("", {"mu0=0.1"}); }), "model parameter of no model is an error");
+        check(ParameterFile::model_parameter_names("lcdm").empty(), "lcdm has no model parameters");
     }
 
     std::cout << "Background of a custom model (CDM split into cdm + dust)\n";
@@ -138,9 +132,9 @@ int main() {
         double err = 0.0;
         for (double x = -15.0; x <= 2.0; x += 0.5)
             err = std::max(err, std::fabs(sp.Hp_of_x(x) / lcdm.Hp_of_x(x) - 1.0));
-        check_close("Hp(x) = LCDM", err, 0.0, 1e-14);
-        check_rel("rho_of(Other) = dust", sp.rho_of(Species::Role::Other, -1.0), 0.5 * lcdm.rhoCDM(-1.0), 1e-14);
-        check_rel("rhoCDM = half of LCDM", sp.rhoCDM(-1.0), 0.5 * lcdm.rhoCDM(-1.0), 1e-14);
+        check_close(err, 0.0, 1e-14, "Hp(x) = LCDM");
+        check_rel(sp.rho_of(Species::Role::Other, -1.0), 0.5 * lcdm.rhoCDM(-1.0), 1e-14, "rho_of(Other) = dust");
+        check_rel(sp.rhoCDM(-1.0), 0.5 * lcdm.rhoCDM(-1.0), 1e-14, "rhoCDM = half of LCDM");
     }
 
     std::cout << "Perturbations of the custom model\n";
@@ -150,9 +144,9 @@ int main() {
         o.k_min = 0.001 / Mpc;
         o.k_max = 0.2 / Mpc;
         Run l(p, Models::lcdm(p), o), s(p, split, o);
-        check("species outputs: delta_cdm, delta_dust, Nu_0",
-              s.pert.has("delta_cdm") && s.pert.has("delta_dust") && s.pert.has("Nu_0") && !l.pert.has("delta_dust"));
-        check("unknown output is an error", throws([&] { s.pert.get("delta_foo", 0.0, 0.01 / Mpc); }));
+        check(s.pert.has("delta_cdm") && s.pert.has("delta_dust") && s.pert.has("Nu_0") && !l.pert.has("delta_dust"),
+              "species outputs: delta_cdm, delta_dust, Nu_0");
+        check(throws([&] { s.pert.get("delta_foo", 0.0, 0.01 / Mpc); }), "unknown output is an error");
         double ePhi = 0.0, eT = 0.0, eD = 0.0;
         for (double k : s.pert.get_k_array())
             for (double x : {-10.0, -7.0, -3.0, 0.0}) {
@@ -163,17 +157,17 @@ int main() {
                 eD = std::max(eD, std::fabs(s.pert.get("delta_dust", x, k) / l.pert.get_delta_cdm(x, k) - 1.0));
                 eD = std::max(eD, std::fabs(s.pert.get_delta_cdm(x, k) / l.pert.get_delta_cdm(x, k) - 1.0));
             }
-        check_close("Phi = LCDM", ePhi, 0.0, 1e-6);
-        check_close("S_T = LCDM (relative to Theta_0 + Psi)", eT, 0.0, 3e-5);
-        check_close("delta_dust = delta_cdm = LCDM delta_cdm", eD, 0.0, 1e-6);
+        check_close(ePhi, 0.0, 1e-6, "Phi = LCDM");
+        check_close(eT, 0.0, 3e-5, "S_T = LCDM (relative to Theta_0 + Psi)");
+        check_close(eD, 0.0, 1e-6, "delta_dust = delta_cdm = LCDM delta_cdm");
 
         Model dup = Models::lcdm(p);
         dup.species.push_back(std::make_shared<SecondCDM>(0.0));
         BackgroundCosmology cd(p, dup);
         cd.solve();
         RecombinationHistory rd(cd);
-        check("two species with the same output names is an error", throws([&] { Perturbations pd(cd, rd, o); }));
+        check(throws([&] { Perturbations pd(cd, rd, o); }), "two species with the same output names is an error");
     }
 
-    return Test::summary();
+    return FML::TESTS::summary("EBS models");
 }

@@ -21,30 +21,17 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 using namespace FML;
 using FFTWGrid = FML::GRID::FFTWGrid<3>;
 using FloatType = FML::GRID::FloatType;
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os.precision(3);
-    os << x;
-    return os.str();
-}
 
-struct Particle {
-    double pos[3];
-    double * get_pos() { return pos; }
-    constexpr int get_ndim() const { return 3; }
-};
+using Particle = FML::TESTS::PositionParticle<3>;
 
 const std::vector<std::string> methods{"NGP", "CIC", "TSC", "PCS", "PQS"};
 
@@ -80,9 +67,9 @@ void test_vector_ngp() {
             bad += (out[d][i] != 1.0) + (d == 0 and sc[i] != 1.0);
     SumOverTasks(&bad);
     SumOverTasks(&n);
-    check(bad == 0,
-          "NGP vector interpolation of a constant field = the constant for all particles (" + num(100 * bad / (3 * n)) +
-              "% wrong; was 87.5% zero)");
+    check_local(bad == 0,
+                "NGP vector interpolation of a constant field = the constant for all particles (" +
+                    num(100 * bad / (3 * n), 3) + "% wrong; was 87.5% zero)");
 }
 
 void test_interpolation_exact() {
@@ -116,7 +103,8 @@ void test_interpolation_exact() {
             maxerr = std::max({maxerr, std::fabs(sc[i] - expected), std::fabs(out[1][i] - expected)});
         }
         MaxOverTasks(&maxerr);
-        check(maxerr < 1e-12, m + " interpolation (scalar and vector) of a linear field: max error " + num(maxerr));
+        check_local(maxerr < 1e-12,
+                    m + " interpolation (scalar and vector) of a linear field: max error " + num(maxerr, 3));
     }
 }
 
@@ -145,9 +133,9 @@ void test_slab_boundary_ulp() {
         for (auto && idx : g.get_real_range())
             sum += g.get_real_from_index(idx);
         SumOverTasks(&sum);
-        check(std::fabs(sum) < 1e-6,
-              m + ": particles 1 ulp from the slab boundaries are all assigned: sum(delta) = " + num(sum) +
-                  " (were outside the grid: lost, or written out of bounds)");
+        check_local(std::fabs(sum) < 1e-6,
+                    m + ": particles 1 ulp from the slab boundaries are all assigned: sum(delta) = " + num(sum, 3) +
+                        " (were outside the grid: lost, or written out of bounds)");
     }
 }
 
@@ -170,9 +158,9 @@ void test_slab_boundary() {
             Nfound = Nm;
     }
     if (Nfound == 0) {
-        check(true,
-              "slab boundary: no lattice puts a particle outside its slab with " + std::to_string(NTasks) +
-                  " task(s) (try 10 tasks)");
+        check_local(true,
+                    "slab boundary: no lattice puts a particle outside its slab with " + std::to_string(NTasks) +
+                        " task(s) (try 10 tasks)");
         return;
     }
     const int Nm = Nfound, Np = Nfound;
@@ -199,10 +187,10 @@ void test_slab_boundary() {
         SumOverTasks(&sum);
         MaxOverTasks(&maxd);
         // (for NGP the cell of a particle exactly on a node is decided by round-off, so only the sum is checked)
-        check(std::fabs(sum) < 1e-6 and (m == "NGP" or maxd < 1e-10),
-              m + ": lattice Np = Nmesh = " + std::to_string(Nm) + " on " + std::to_string(NTasks) +
-                  " tasks, particles on the slab boundary: sum(delta) = " + num(sum) + ", max|delta| = " + num(maxd) +
-                  " (NGP lost a plane of particles, CIC wrote outside the grid)");
+        check_local(std::fabs(sum) < 1e-6 and (m == "NGP" or maxd < 1e-10),
+                    m + ": lattice Np = Nmesh = " + std::to_string(Nm) + " on " + std::to_string(NTasks) +
+                        " tasks, particles on the slab boundary: sum(delta) = " + num(sum, 3) + ", max|delta| = " +
+                        num(maxd, 3) + " (NGP lost a plane of particles, CIC wrote outside the grid)");
     }
 }
 
@@ -232,8 +220,5 @@ int main(int argc, char ** argv) {
         test_slab_boundary_ulp();
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All interpolation tests passed\n" :
-                                   std::to_string(fails) + " interpolation test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("interpolation");
 }

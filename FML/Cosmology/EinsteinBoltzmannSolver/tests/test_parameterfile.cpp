@@ -3,7 +3,7 @@
 // =============================================================================
 
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 
 #include <cstdio>
@@ -13,10 +13,12 @@
 #include <sstream>
 #include <string>
 
+using FML::TESTS::throws;
+
 using namespace FML::COSMOLOGY;
 
-using Test::check;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_rel;
 
 namespace {
     std::string slurp(const std::string & f) {
@@ -24,14 +26,6 @@ namespace {
         std::stringstream ss;
         ss << in.rdbuf();
         return ss.str();
-    }
-    bool throws(const std::function<void()> & f) {
-        try {
-            f();
-        } catch (const std::exception &) {
-            return true;
-        }
-        return false;
     }
 } // namespace
 
@@ -43,19 +37,21 @@ int main() {
     std::cout << "Defaults and round trip\n";
     {
         const RunSettings d = ParameterFile::read("");
-        check_rel("defaults = fiducial cosmology (h)", d.cosmo.h, CosmologyParameters::fiducial().h, 0.0);
-        check_rel("defaults = PerturbationOptions defaults (k_max)", d.pert.k_max, PerturbationOptions().k_max, 0.0);
+        check_rel(d.cosmo.h, CosmologyParameters::fiducial().h, 0.0, "defaults = fiducial cosmology (h)");
+        check_rel(d.pert.k_max, PerturbationOptions().k_max, 0.0, "defaults = PerturbationOptions defaults (k_max)");
         ParameterFile::write(d, dir + "/a.ini");
         const RunSettings r = ParameterFile::read(dir + "/a.ini");
         ParameterFile::write(r, dir + "/b.ini");
-        check("write -> read -> write is identical", slurp(dir + "/a.ini") == slurp(dir + "/b.ini"));
-        check("every parameter appears in the written file", [&] {
-            const std::string txt = slurp(dir + "/a.ini");
-            for (const auto & n : ParameterFile::names())
-                if (txt.find("\n" + n + " = ") == std::string::npos)
-                    return false;
-            return true;
-        }());
+        check(slurp(dir + "/a.ini") == slurp(dir + "/b.ini"), "write -> read -> write is identical");
+        check(
+            [&] {
+                const std::string txt = slurp(dir + "/a.ini");
+                for (const auto & n : ParameterFile::names())
+                    if (txt.find("\n" + n + " = ") == std::string::npos)
+                        return false;
+                return true;
+            }(),
+            "every parameter appears in the written file");
     }
 
     std::cout << "Reading values\n";
@@ -71,63 +67,63 @@ int main() {
                                          "ells =\n"
                                          "output_dir = out/run 1\n";
         const RunSettings s = ParameterFile::read(dir + "/c.ini", {"m_nu=0.1", "h=0.68"});
-        check_rel("double with trailing comment, overridden on the command line", s.cosmo.h, 0.68, 0.0);
-        check_rel("units: pert_k_max in 1/Mpc", s.pert.k_max * Mpc, 1.0, 1e-15);
-        check("boolean 'yes'", s.ps.lensing);
-        check("ODE method by name", s.pert.method_full == gsl_odeiv2_step_rk8pd);
-        check("integer list", s.transfer_ells.size() == 3 && s.transfer_ells[2] == 30);
-        check("double list", s.angular_z.size() == 2 && s.angular_z[1] == 1.0);
-        check("empty list", s.ps.ells.empty());
-        check("string with a space", s.output_dir == "out/run 1");
-        check_rel("command-line override of an unset parameter", s.cosmo.m_nu, 0.1, 0.0);
+        check_rel(s.cosmo.h, 0.68, 0.0, "double with trailing comment, overridden on the command line");
+        check_rel(s.pert.k_max * Mpc, 1.0, 1e-15, "units: pert_k_max in 1/Mpc");
+        check(s.ps.lensing, "boolean 'yes'");
+        check(s.pert.method_full == gsl_odeiv2_step_rk8pd, "ODE method by name");
+        check(s.transfer_ells.size() == 3 && s.transfer_ells[2] == 30, "integer list");
+        check(s.angular_z.size() == 2 && s.angular_z[1] == 1.0, "double list");
+        check(s.ps.ells.empty(), "empty list");
+        check(s.output_dir == "out/run 1", "string with a space");
+        check_rel(s.cosmo.m_nu, 0.1, 0.0, "command-line override of an unset parameter");
     }
 
     std::cout << "Presets\n";
     {
         std::ofstream(dir + "/d.ini") << "OmegaK = 0.01\npreset = planck2018\n";
         const RunSettings s = ParameterFile::read(dir + "/d.ini");
-        check_rel("preset planck2018 (applied first)", s.cosmo.h, CosmologyParameters::Planck2018().h, 0.0);
-        check_rel("... other parameters still applied", s.cosmo.OmegaK, 0.01, 0.0);
+        check_rel(s.cosmo.h, CosmologyParameters::Planck2018().h, 0.0, "preset planck2018 (applied first)");
+        check_rel(s.cosmo.OmegaK, 0.01, 0.0, "... other parameters still applied");
         const RunSettings b = ParameterFile::read("", {"preset=planck2018_baseline"});
-        check_rel("preset planck2018_baseline: m_nu = 0.06 eV", b.cosmo.m_nu, 0.06, 0.0);
+        check_rel(b.cosmo.m_nu, 0.06, 0.0, "preset planck2018_baseline: m_nu = 0.06 eV");
         std::ofstream(dir + "/f.ini") << "lmax_nu = 20\nprecision = fast\n";
         const RunSettings f = ParameterFile::read(dir + "/f.ini", {"ell_step=20"});
-        check("precision = fast sets its parameters",
-              f.pert.dk_max > 0.0 && f.pert.n_k == 60 && f.ps.n_k_per_oscillation == 2.0);
-        check("... explicit precision parameters override it (also earlier in the file)",
-              f.pert.lmax_nu == 20 && f.ps.ell_step == 20);
-        check("precision = default changes nothing",
-              ParameterFile::read("", {"precision=default"}).pert.n_k == PerturbationOptions().n_k);
-        check("unknown precision preset is an error", throws([] { ParameterFile::read("", {"precision=ultra"}); }));
+        check(f.pert.dk_max > 0.0 && f.pert.n_k == 60 && f.ps.n_k_per_oscillation == 2.0,
+              "precision = fast sets its parameters");
+        check(f.pert.lmax_nu == 20 && f.ps.ell_step == 20,
+              "... explicit precision parameters override it (also earlier in the file)");
+        check(ParameterFile::read("", {"precision=default"}).pert.n_k == PerturbationOptions().n_k,
+              "precision = default changes nothing");
+        check(throws([] { ParameterFile::read("", {"precision=ultra"}); }), "unknown precision preset is an error");
     }
 
     std::cout << "Errors\n";
     {
         std::ofstream(dir + "/e1.ini") << "hh = 0.7\n";
-        check("unknown parameter is an error", throws([&] { ParameterFile::read(dir + "/e1.ini"); }));
+        check(throws([&] { ParameterFile::read(dir + "/e1.ini"); }), "unknown parameter is an error");
         std::ofstream(dir + "/e2.ini") << "h = abc\n";
-        check("non-numeric value is an error", throws([&] { ParameterFile::read(dir + "/e2.ini"); }));
+        check(throws([&] { ParameterFile::read(dir + "/e2.ini"); }), "non-numeric value is an error");
         std::ofstream(dir + "/e3.ini") << "pert_n_k = 10.5\n";
-        check("non-integer for an integer is an error", throws([&] { ParameterFile::read(dir + "/e3.ini"); }));
-        check("z_reion < 0 is an error", throws([&] { ParameterFile::read("", {"z_reion=-1"}); }));
-        check("z_He_reion > 50 is an error", throws([&] { ParameterFile::read("", {"z_He_reion=60"}); }));
-        check("... but not without reionization",
-              !throws([&] { ParameterFile::read("", {"z_reion=-1", "reionization=false"}); }));
-        check("alpha_s with an isocurvature mode is an error",
-              throws([&] { ParameterFile::read("", {"alpha_s=-0.01", "f_cdi=0.1"}); }));
-        check("nan is an error", throws([&] { ParameterFile::read("", {"h=nan"}); }));
-        check("inf is an error", throws([&] { ParameterFile::read("", {"A_s=inf"}); }));
-        check("1e400 is an error", throws([&] { ParameterFile::read("", {"h=1e400"}); }));
-        check("integer beyond the int range is an error", throws([&] { ParameterFile::read("", {"ell_max=1e10"}); }));
+        check(throws([&] { ParameterFile::read(dir + "/e3.ini"); }), "non-integer for an integer is an error");
+        check(throws([&] { ParameterFile::read("", {"z_reion=-1"}); }), "z_reion < 0 is an error");
+        check(throws([&] { ParameterFile::read("", {"z_He_reion=60"}); }), "z_He_reion > 50 is an error");
+        check(!throws([&] { ParameterFile::read("", {"z_reion=-1", "reionization=false"}); }),
+              "... but not without reionization");
+        check(throws([&] { ParameterFile::read("", {"alpha_s=-0.01", "f_cdi=0.1"}); }),
+              "alpha_s with an isocurvature mode is an error");
+        check(throws([&] { ParameterFile::read("", {"h=nan"}); }), "nan is an error");
+        check(throws([&] { ParameterFile::read("", {"A_s=inf"}); }), "inf is an error");
+        check(throws([&] { ParameterFile::read("", {"h=1e400"}); }), "1e400 is an error");
+        check(throws([&] { ParameterFile::read("", {"ell_max=1e10"}); }), "integer beyond the int range is an error");
         std::ofstream(dir + "/e4.ini") << "lensing = maybe\n";
-        check("bad boolean is an error", throws([&] { ParameterFile::read(dir + "/e4.ini"); }));
+        check(throws([&] { ParameterFile::read(dir + "/e4.ini"); }), "bad boolean is an error");
         std::ofstream(dir + "/e5.ini") << "method_tc = euler\n";
-        check("unknown ODE method is an error", throws([&] { ParameterFile::read(dir + "/e5.ini"); }));
+        check(throws([&] { ParameterFile::read(dir + "/e5.ini"); }), "unknown ODE method is an error");
         std::ofstream(dir + "/e6.ini") << "h = 0.7\nh = 0.8\n";
-        check("parameter set twice in the file is an error", throws([&] { ParameterFile::read(dir + "/e6.ini"); }));
+        check(throws([&] { ParameterFile::read(dir + "/e6.ini"); }), "parameter set twice in the file is an error");
         std::ofstream(dir + "/e7.ini") << "OmegaB = -0.1\n";
-        check("unphysical cosmology is an error (validate)", throws([&] { ParameterFile::read(dir + "/e7.ini"); }));
-        check("missing file is an error", throws([&] { ParameterFile::read(dir + "/does_not_exist.ini"); }));
+        check(throws([&] { ParameterFile::read(dir + "/e7.ini"); }), "unphysical cosmology is an error (validate)");
+        check(throws([&] { ParameterFile::read(dir + "/does_not_exist.ini"); }), "missing file is an error");
     }
 
     std::cout << "Example parameter files in params/\n";
@@ -150,21 +146,21 @@ int main() {
                            "params/tensors.ini"}) {
         if (!std::filesystem::exists(f))
             continue; // tests may run from another directory
-        check(std::string("reads ") + f, !throws([&] { ParameterFile::read(f); }));
+        check(!throws([&] { ParameterFile::read(f); }), std::string("reads ") + f);
     }
     std::cout << "Model parameters\n";
     {
         const RunSettings m = ParameterFile::read("", {"model=musigma", "mu0=0.2"});
-        check_rel("model parameter is read", m.cosmo.model_param("mu0"), 0.2, 0.0);
-        Test::check_close("unset model parameter takes the default", m.cosmo.model_param("Sigma0"), 0.0, 0.0);
-        check("parameter of another model is an error",
-              throws([] { ParameterFile::read("", {"model=musigma", "bd_omega=100"}); }));
-        check("model parameter without its model is an error", throws([] { ParameterFile::read("", {"mu0=0.2"}); }));
+        check_rel(m.cosmo.model_param("mu0"), 0.2, 0.0, "model parameter is read");
+        FML::TESTS::check_close(m.cosmo.model_param("Sigma0"), 0.0, 0.0, "unset model parameter takes the default");
+        check(throws([] { ParameterFile::read("", {"model=musigma", "bd_omega=100"}); }),
+              "parameter of another model is an error");
+        check(throws([] { ParameterFile::read("", {"mu0=0.2"}); }), "model parameter without its model is an error");
         ParameterFile::write(m, dir + "/m.ini");
         const RunSettings m2 = ParameterFile::read(dir + "/m.ini");
-        check("written file keeps the model and its parameters",
-              m2.cosmo.model == "musigma" && m2.cosmo.model_param("mu0") == 0.2);
+        check(m2.cosmo.model == "musigma" && m2.cosmo.model_param("mu0") == 0.2,
+              "written file keeps the model and its parameters");
     }
     std::filesystem::remove_all(dir);
-    return Test::summary();
+    return FML::TESTS::summary("EBS parameterfile");
 }

@@ -14,7 +14,7 @@
 #include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 #include <FML/Cosmology/Models/CubicGalileon.h>
 
@@ -24,9 +24,9 @@
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 namespace {
     struct Run {
@@ -82,7 +82,7 @@ int main() {
         if (auto q = dynamic_cast<const CubicGalileonSpecies *>(s.get()))
             gs = q;
     {
-        check_close("E(0) = 1", b.E2_of_x(0.0), 1.0, 1e-13);
+        check_close(b.E2_of_x(0.0), 1.0, 1e-13, "E(0) = 1");
         double eF = 0.0, eP = 0.0, eW = 0.0, e1 = 0.0, e2 = 0.0;
         for (double x : {-8.0, -3.0, -1.0, 0.0, 1.0}) {
             const double E2 = b.E2_of_x(x), rho = b.rho_species(x) - gs->rho(x);
@@ -99,10 +99,10 @@ int main() {
             e2 = std::max(e2,
                           std::fabs((gs->drhodx(x + h) - gs->drhodx(x - h)) / (2 * h) - gs->ddrhoddx(x)) / gs->rho(x));
         }
-        check_close("E^4 - rho E^2 = Omega_phi", eF, 0.0, 1e-14);
-        check_close("pressure from the field = continuity", eP, 0.0, 1e-10);
-        check_close("w = -2/(1 + Omega_phi(a)) (matter + galileon; radiation 1e-4)", eW, 0.0, 5e-4);
-        check_close("rho', rho'' vs finite differences", std::max(e1, e2), 0.0, 1e-6);
+        check_close(eF, 0.0, 1e-14, "E^4 - rho E^2 = Omega_phi");
+        check_close(eP, 0.0, 1e-10, "pressure from the field = continuity");
+        check_close(eW, 0.0, 5e-4, "w = -2/(1 + Omega_phi(a)) (matter + galileon; radiation 1e-4)");
+        check_close(std::max(e1, e2), 0.0, 1e-6, "rho', rho'' vs finite differences");
         std::cout << "  w0 = " << gs->p(0.0) / gs->rho(0.0) << "\n";
     }
 
@@ -138,8 +138,8 @@ int main() {
                 scale = std::max(scale, scal / gr);
             }
         std::cout << "  scalar terms in the 0i equation: up to " << scale << " of the metric/matter terms\n";
-        check_close("momentum constraint (0i) holds", e0i, 0.0, 1e-6);
-        check("the scalar terms are tested (> 1e-3)", scale > 1e-3);
+        check_close(e0i, 0.0, 1e-6, "momentum constraint (0i) holds");
+        check(scale > 1e-3, "the scalar terms are tested (> 1e-3)");
 
         const double k = pt.get_k_array().back(), x0 = -4.0, h = 1e-3;
         auto dln = [&](const Perturbations & P) {
@@ -155,8 +155,8 @@ int main() {
                            growth(l.cosmo, [](double) { return 1.0; }, x0, dln(l.pert));
         std::cout << "  mu_QS today = " << mu_qs(cs, g, 0.0) << "; growth from z = 54 relative to LCDM: " << ratio
                   << ", quasi-static growth equation: " << ref << "\n";
-        check_close("sub-horizon growth = quasi-static growth equation", ratio / ref, 1.0, 1e-3);
+        check_close(ratio / ref, 1.0, 1e-3, "sub-horizon growth = quasi-static growth equation");
     }
 
-    return Test::summary();
+    return FML::TESTS::summary("EBS galileon");
 }

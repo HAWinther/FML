@@ -30,6 +30,12 @@
 #include <vector>
 #ifdef USE_OMP
 #include <omp.h>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::throws_with;
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 #endif
 
 using DVector = std::vector<double>;
@@ -39,31 +45,8 @@ using FML::SOLVERS::ODESOLVER::ODEFunction;
 using FML::SOLVERS::ODESOLVER::ODEFunctionJacobian;
 using FML::SOLVERS::ODESOLVER::ODESolver;
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os.precision(10);
-    os << x;
-    return os.str();
-}
 bool close(double a, double b, double rtol) { return std::fabs(a - b) <= rtol * std::fabs(b); }
 
-// Returns true if f throws std::exception whose message contains msg
-template <class F>
-bool throws_with(F && f, std::string msg) {
-    try {
-        f();
-    } catch (std::exception & e) {
-        return std::string(e.what()).find(msg) != std::string::npos;
-    }
-    return false;
-}
 
 Spline2D make_spline2d(bool decreasing_x, bool decreasing_y) {
     const int nx = 21, ny = 17;
@@ -123,31 +106,33 @@ int main(int argc, char ** argv) {
             r2 = FML::MATH::find_root_bisection(s, 4.0, {5.0, 0.0});
         } catch (std::exception & e) {
         }
-        check(std::fabs(r1 - 2.0) < 1e-6 and r1 == r2, "spline root with reversed range: " + num(r2));
+        check_local(std::fabs(r1 - 2.0) < 1e-6 and r1 == r2, "spline root with reversed range: " + num(r2, 10));
         double r3 = -1.0, r4 = -1.0;
         try {
             r3 = FML::MATH::find_root_bisection(s, 100.0);
             r4 = FML::MATH::find_root_bisection(s, 0.0);
         } catch (std::exception & e) {
         }
-        check(r3 == 10.0 and r4 == 0.0, "spline roots exactly at the end-points: " + num(r3) + " " + num(r4));
+        check_local(r3 == 10.0 and r4 == 0.0,
+                    "spline roots exactly at the end-points: " + num(r3, 10) + " " + num(r4, 10));
 
         // Unchanged result for a normal case (lower end of the final interval)
         auto f = [](double x) { return x - 1.0; };
         const double r5 = FML::MATH::find_root_bisection(f, {0.0, 3.0});
-        check(r5 < 1.0 and 1.0 - r5 < 3e-7 and r5 == FML::MATH::find_root_bisection(f, {3.0, 0.0}),
-              "bisection x-1 on (0,3): " + num(r5));
+        check_local(r5 < 1.0 and 1.0 - r5 < 3e-7 and r5 == FML::MATH::find_root_bisection(f, {3.0, 0.0}),
+                    "bisection x-1 on (0,3): " + num(r5, 10));
         // f = 0 belongs to the side of xlow (SphericalCollapse relies on this): converges to the end of the plateau
         const double r8 = FML::MATH::find_root_bisection([](double x) { return x < 0.4 ? 0.0 : 1.0; }, {0.0, 1.0});
-        check(std::fabs(r8 - 0.4) < 1e-6, "bisection with f = 0 on part of the range: " + num(r8));
+        check_local(std::fabs(r8 - 0.4) < 1e-6, "bisection with f = 0 on part of the range: " + num(r8, 10));
 
         // NaN at an end-point must be an error, not a wrong root
         auto fnan = [](double x) { return std::sqrt(x - 1.0) - 0.5; };
-        check(throws_with([&]() { FML::MATH::find_root_bisection(fnan, {0.0, 3.0}); }, "NaN"),
-              "bisection with f(xlow) = NaN throws");
-        check(throws_with([&]() { FML::MATH::find_root_bisection([](double x) { return x * x + 1.0; }, {0.0, 3.0}); },
-                          "same sign"),
-              "bisection without a root throws");
+        check_local(throws_with([&]() { FML::MATH::find_root_bisection(fnan, {0.0, 3.0}); }, "NaN"),
+                    "bisection with f(xlow) = NaN throws");
+        check_local(
+            throws_with([&]() { FML::MATH::find_root_bisection([](double x) { return x * x + 1.0; }, {0.0, 3.0}); },
+                        "same sign"),
+            "bisection without a root throws");
     }
 
     //==========================================================
@@ -155,23 +140,27 @@ int main(int argc, char ** argv) {
     //==========================================================
     {
         auto a = FML::MATH::j_ell_array(10, 2.0 * M_PI);
-        check(close(a[4], 1.859324505594785e-01, 1e-10), "j_ell_array j_4(2 pi) (zero of j_0): " + num(a[4]));
+        check_local(close(a[4], 1.859324505594785e-01, 1e-10), "j_ell_array j_4(2 pi) (zero of j_0): " + num(a[4], 10));
         auto b = FML::MATH::j_ell_array(50, 10.0 * M_PI);
-        check(close(b[28], 4.786217200196330e-02, 1e-10), "j_ell_array j_28(10 pi) (zero of j_0): " + num(b[28]));
+        check_local(close(b[28], 4.786217200196330e-02, 1e-10),
+                    "j_ell_array j_28(10 pi) (zero of j_0): " + num(b[28], 10));
         auto c = FML::MATH::j_ell_array(10, 6.862);
-        check(close(c[10], 5.772085051241143e-03, 1e-9), "j_ell_array j_10(6.862) with lmax = 10: " + num(c[10]));
+        check_local(close(c[10], 5.772085051241143e-03, 1e-9),
+                    "j_ell_array j_10(6.862) with lmax = 10: " + num(c[10], 10));
         auto d = FML::MATH::j_ell_array(100, 84.012);
-        check(close(d[100], 7.933616953491621e-06, 1e-8), "j_ell_array j_100(84.012) with lmax = 100: " + num(d[100]));
+        check_local(close(d[100], 7.933616953491621e-06, 1e-8),
+                    "j_ell_array j_100(84.012) with lmax = 100: " + num(d[100], 10));
         auto e = FML::MATH::j_ell_array(5, 1.187);
-        check(close(e[5], 2.146883323046425e-04, 1e-10), "j_ell_array j_5(1.187) with lmax = 5: " + num(e[5]));
-        check(FML::MATH::j_ell(0, 0.0) == 1.0 && FML::MATH::j_ell(3, 0.0) == 0.0 &&
-                  close(FML::MATH::j_ell(0, 1.2), std::sin(1.2) / 1.2, 1e-12) &&
-                  close(FML::MATH::j_ell(1, 1.2), std::sin(1.2) / (1.2 * 1.2) - std::cos(1.2) / 1.2, 1e-12),
-              "scalar spherical Bessel backend agrees with analytic j0/j1 and origin limits");
+        check_local(close(e[5], 2.146883323046425e-04, 1e-10),
+                    "j_ell_array j_5(1.187) with lmax = 5: " + num(e[5], 10));
+        check_local(FML::MATH::j_ell(0, 0.0) == 1.0 && FML::MATH::j_ell(3, 0.0) == 0.0 &&
+                        close(FML::MATH::j_ell(0, 1.2), std::sin(1.2) / 1.2, 1e-12) &&
+                        close(FML::MATH::j_ell(1, 1.2), std::sin(1.2) / (1.2 * 1.2) - std::cos(1.2) / 1.2, 1e-12),
+                    "scalar spherical Bessel backend agrees with analytic j0/j1 and origin limits");
         const double j10 = FML::MATH::j_ell(10, 20000.0);
         const double j2 = FML::MATH::j_ell(2, 14001.0);
-        check(close(j10, -2.921094489548591e-05, 1e-8) and close(j2, -6.293323508535110e-05, 1e-8),
-              "j_ell for x > 14000: " + num(j10) + " " + num(j2));
+        check_local(close(j10, -2.921094489548591e-05, 1e-8) and close(j2, -6.293323508535110e-05, 1e-8),
+                    "j_ell for x > 14000: " + num(j10, 10) + " " + num(j2, 10));
     }
 
     //==========================================================
@@ -181,25 +170,28 @@ int main(int argc, char ** argv) {
         auto l1 = FML::MATH::linspace(1.0, 2.0, 1);
         auto l0 = FML::MATH::linspace(1.0, 2.0, 0);
         auto l3 = FML::MATH::linspace(1.0, 2.0, 3);
-        check(l1.size() == 1 and l1[0] == 1.0 and l0.empty() and l3[0] == 1.0 and l3[1] == 1.5 and l3[2] == 2.0,
-              "linspace with 1, 0 and 3 points (as numpy)");
+        check_local(l1.size() == 1 and l1[0] == 1.0 and l0.empty() and l3[0] == 1.0 and l3[1] == 1.5 and l3[2] == 2.0,
+                    "linspace with 1, 0 and 3 points (as numpy)");
 
         const double a1 = FML::MATH::Airy_Ai(5.0001);
         const double a2 = FML::MATH::Airy_Ai(-50.0001);
         const double a3 = FML::MATH::Airy_Ai(7.0);
-        check(close(a1, 1.083196894554103e-04, 1e-8) and close(a2, -1.619782821175962e-01, 1e-8) and
-                  close(a3, 7.492128863997157e-07, 1e-8),
-              "Airy_Ai outside the spline range: " + num(a1) + " " + num(a2) + " " + num(a3));
-        check(close(FML::MATH::Airy_Ai(0.0), 1.0 / std::pow(3., 2. / 3.) / std::tgamma(2. / 3.), 1e-6), "Airy_Ai(0)");
+        check_local(close(a1, 1.083196894554103e-04, 1e-8) and close(a2, -1.619782821175962e-01, 1e-8) and
+                        close(a3, 7.492128863997157e-07, 1e-8),
+                    "Airy_Ai outside the spline range: " + num(a1, 10) + " " + num(a2, 10) + " " + num(a3, 10));
+        check_local(close(FML::MATH::Airy_Ai(0.0), 1.0 / std::pow(3., 2. / 3.) / std::tgamma(2. / 3.), 1e-6),
+                    "Airy_Ai(0)");
 
         const double w = FML::MATH::HyperSphericalBesselWKB(10, 1.0, std::sqrt(110.0), 0.0);
-        check(std::isfinite(w) and close(w, 7.862800300679687e-02, 1e-2), "WKB j_10 at the turning point: " + num(w));
+        check_local(std::isfinite(w) and close(w, 7.862800300679687e-02, 1e-2),
+                    "WKB j_10 at the turning point: " + num(w, 10));
 
         // ell = 0 is exact: sin(nu chi) / (nu sin_K(chi)) (the WKB formula divides by sqrt(ell(ell+1)))
         const double w0 = FML::MATH::HyperSphericalBesselWKB(0, 1.0, 5.0, 0.0);
         const double w0open = FML::MATH::HyperSphericalBesselWKB(0, 3.0, 0.7, -1.0);
-        check(close(w0, std::sin(5.0) / 5.0, 1e-14) and close(w0open, std::sin(2.1) / (3.0 * std::sinh(0.7)), 1e-14),
-              "WKB ell = 0 (flat and open): " + num(w0) + " " + num(w0open));
+        check_local(close(w0, std::sin(5.0) / 5.0, 1e-14) and
+                        close(w0open, std::sin(2.1) / (3.0 * std::sinh(0.7)), 1e-14),
+                    "WKB ell = 0 (flat and open): " + num(w0, 10) + " " + num(w0open, 10));
     }
 
     //==========================================================
@@ -213,10 +205,10 @@ int main(int argc, char ** argv) {
             y[i] = std::sin(x[i]);
         }
         Spline s(x, y, "sin");
-        check(std::fabs(s(3.3) - std::sin(3.3)) < 1e-6 and std::fabs(s.deriv_x(3.3) - std::cos(3.3)) < 1e-5 and
-                  std::fabs(s.deriv_xx(3.3) + std::sin(3.3)) < 1e-3,
-              "1D spline value and derivatives");
-        check(s(12.0) == s(10.0) and s.deriv_x(12.0) == s.deriv_x(10.0), "1D spline out of range: clamped x");
+        check_local(std::fabs(s(3.3) - std::sin(3.3)) < 1e-6 and std::fabs(s.deriv_x(3.3) - std::cos(3.3)) < 1e-5 and
+                        std::fabs(s.deriv_xx(3.3) + std::sin(3.3)) < 1e-3,
+                    "1D spline value and derivatives");
+        check_local(s(12.0) == s(10.0) and s.deriv_x(12.0) == s.deriv_x(10.0), "1D spline out of range: clamped x");
 
         // A copy keeps the out-of-bounds warning setting
         s.set_out_of_bounds_warning(true);
@@ -227,24 +219,24 @@ int main(int argc, char ** argv) {
         s2(20.0);
         s3(20.0);
         std::cout.rdbuf(old);
-        check(buffer.str().find("out of bounds") != std::string::npos and
-                  buffer.str().find("out of bounds") != buffer.str().rfind("out of bounds"),
-              "copies keep the out-of-bounds warning setting");
+        check_local(buffer.str().find("out of bounds") != std::string::npos and
+                        buffer.str().find("out of bounds") != buffer.str().rfind("out of bounds"),
+                    "copies keep the out-of-bounds warning setting");
 
         // Integral (and a > b), moving a spline, and the uniform-grid spline
-        check(std::fabs(s.integral(0.0, 3.0) - (1.0 - std::cos(3.0))) < 1e-6 and
-                  std::fabs(s.integral(3.0, 0.0) + s.integral(0.0, 3.0)) < 1e-15,
-              "1D spline integral");
+        check_local(std::fabs(s.integral(0.0, 3.0) - (1.0 - std::cos(3.0))) < 1e-6 and
+                        std::fabs(s.integral(3.0, 0.0) + s.integral(0.0, 3.0)) < 1e-15,
+                    "1D spline integral");
         Spline sm(std::move(s2));
         Spline sm2;
         sm2 = std::move(sm);
-        check(sm2 and !sm and !s2 and std::fabs(sm2(3.3) - s(3.3)) == 0.0, "moved splines");
+        check_local(sm2 and !sm and !s2 and std::fabs(sm2(3.3) - s(3.3)) == 0.0, "moved splines");
         FML::INTERPOLATION::SPLINE::UniformSpline u(0.0, 0.05, y);
         double uerr = 0.0;
         for (double xx = 0.0; xx <= 10.0; xx += 0.0123)
             uerr = std::max(uerr, std::fabs(u(xx) - std::sin(xx)));
-        check(uerr < 1e-6 and u(-1.0) == y.front() and u(11.0) == y.back(),
-              "uniform-grid spline: max error " + num(uerr));
+        check_local(uerr < 1e-6 and u(-1.0) == y.front() and u(11.0) == y.back(),
+                    "uniform-grid spline: max error " + num(uerr, 10));
 
         // 2D with decreasing axes gives the same as increasing axes
         auto f = make_spline2d(false, false);
@@ -257,17 +249,17 @@ int main(int argc, char ** argv) {
                 maxdiff = std::max(maxdiff, std::fabs(f.deriv_xy(xx, yy) - h.deriv_xy(xx, yy)));
             }
         const double exact = std::sin(0.77) * std::exp(0.45) + 0.77 * 0.77 * 0.9;
-        check(maxdiff < 1e-12 and std::fabs(f(0.77, 0.9) - exact) < 1e-5,
-              "2D spline with decreasing axes: max difference " + num(maxdiff));
+        check_local(maxdiff < 1e-12 and std::fabs(f(0.77, 0.9) - exact) < 1e-5,
+                    "2D spline with decreasing axes: max difference " + num(maxdiff, 10));
 
 #ifndef USE_MPI
         // Without MPI errors are exceptions
-        check(throws_with([]() { Spline t(DVector{0.0}, DVector{0.0}); }, "needs at least"),
-              "1D spline with 1 point throws");
-        check(throws_with([&]() { f.eval_deriv(0.5, 0.5, 2, 1); }, "eval_deriv"), "2D eval_deriv(2,1) throws");
-        check(throws_with([&]() { f.eval_deriv(0.5, 0.5, 4, -1); }, "eval_deriv"), "2D eval_deriv(4,-1) throws");
-        check(throws_with([]() { Spline2D t(DVector{0, 1}, DVector{0, 1}, DVector(4, 0.0)); }, "needs at least"),
-              "2D bicubic spline with 2x2 points throws");
+        check_local(throws_with([]() { Spline t(DVector{0.0}, DVector{0.0}); }, "needs at least"),
+                    "1D spline with 1 point throws");
+        check_local(throws_with([&]() { f.eval_deriv(0.5, 0.5, 2, 1); }, "eval_deriv"), "2D eval_deriv(2,1) throws");
+        check_local(throws_with([&]() { f.eval_deriv(0.5, 0.5, 4, -1); }, "eval_deriv"), "2D eval_deriv(4,-1) throws");
+        check_local(throws_with([]() { Spline2D t(DVector{0, 1}, DVector{0, 1}, DVector(4, 0.0)); }, "needs at least"),
+                    "2D bicubic spline with 2x2 points throws");
 #endif
 
 #ifdef USE_OMP
@@ -288,7 +280,8 @@ int main(int argc, char ** argv) {
             for (int i = i0; i < i1; i++)
                 res[i] = s(q[i]);
         }
-        check(res == ref, "spline evaluation in nested OpenMP regions (" + std::to_string(nthreads) + " threads)");
+        check_local(res == ref,
+                    "spline evaluation in nested OpenMP regions (" + std::to_string(nthreads) + " threads)");
 #endif
     }
 
@@ -309,8 +302,8 @@ int main(int argc, char ** argv) {
         double maxerr = 0.0;
         for (size_t i = 0; i < x.size(); i++)
             maxerr = std::max({maxerr, std::fabs(y[i][0] - std::sin(x[i])), std::fabs(dy[i][0] - std::cos(x[i]))});
-        check(maxerr < 1e-6 and ode.get_data_transpose()[0][2] == y[2][0],
-              "ODESolver y'' = -y: max error " + num(maxerr));
+        check_local(maxerr < 1e-6 and ode.get_data_transpose()[0][2] == y[2][0],
+                    "ODESolver y'' = -y: max error " + num(maxerr, 10));
 
         // An implicit stepper with the jacobian
         ODEFunction g = [](double t, const double * yy, double * dydx) {
@@ -327,15 +320,16 @@ int main(int argc, char ** argv) {
         ode2.solve(g, x2, y2, gsl_odeiv2_step_bsimp, J);
         const double a = 1000.0, A = a * a / (a * a + 1), B = a / (a * a + 1);
         const double exact = A * std::cos(1.0) + B * std::sin(1.0) - A * std::exp(-a);
-        check(std::fabs(ode2.get_final_data()[0] - exact) < 1e-6, "ODESolver stiff problem with bsimp + jacobian");
+        check_local(std::fabs(ode2.get_final_data()[0] - exact) < 1e-6,
+                    "ODESolver stiff problem with bsimp + jacobian");
 #ifndef USE_MPI
-        check(throws_with(
-                  [&]() {
-                      ODESolver o;
-                      o.solve(g, x2, y2, gsl_odeiv2_step_msbdf);
-                  },
-                  "requires the jacobian"),
-              "ODESolver implicit stepper without jacobian throws");
+        check_local(throws_with(
+                        [&]() {
+                            ODESolver o;
+                            o.solve(g, x2, y2, gsl_odeiv2_step_msbdf);
+                        },
+                        "requires the jacobian"),
+                    "ODESolver implicit stepper without jacobian throws");
 #endif
 
         // An implicit stepper with a finite-difference jacobian (no jacobian given)
@@ -346,7 +340,8 @@ int main(int argc, char ** argv) {
             ode3.solve(g, x2, y2, st);
             fderr = std::max(fderr, std::fabs(ode3.get_final_data()[0] - exact));
         }
-        check(fderr < 1e-6, "ODESolver implicit steppers with a finite-difference jacobian: error " + num(fderr));
+        check_local(fderr < 1e-6,
+                    "ODESolver implicit steppers with a finite-difference jacobian: error " + num(fderr, 10));
         // ... also integrating backwards in time (exp(x) from x = 0 to -5): the same as with the exact jacobian
         ODEFunction grow = [](double, const double * yy, double * dydx) {
             dydx[0] = yy[0];
@@ -362,8 +357,8 @@ int main(int argc, char ** argv) {
         ode4.solve(grow, DVector{0.0, -2.5, -5.0}, DVector{1.0}, gsl_odeiv2_step_msbdf);
         ode5.solve(grow, DVector{0.0, -2.5, -5.0}, DVector{1.0}, gsl_odeiv2_step_msbdf, Jg);
         const double berr = std::fabs(ode4.get_final_data()[0] / std::exp(-5.0) - 1.0);
-        check(berr < 1e-6 and std::fabs(ode4.get_final_data()[0] / ode5.get_final_data()[0] - 1.0) < 1e-9,
-              "ODESolver backwards with a finite-difference jacobian: error " + num(berr));
+        check_local(berr < 1e-6 and std::fabs(ode4.get_final_data()[0] / ode5.get_final_data()[0] - 1.0) < 1e-9,
+                    "ODESolver backwards with a finite-difference jacobian: error " + num(berr, 10));
 
         // An exception from the ODE function is passed on and the solver can be used again
         ODEFunction bad = [](double t, const double *, double * dydx) {
@@ -372,9 +367,9 @@ int main(int argc, char ** argv) {
             dydx[0] = 1.0;
             return GSL_SUCCESS;
         };
-        check(throws_with([&]() { ode2.solve(bad, x2, y2); }, "user error"), "exception from the ODE function");
+        check_local(throws_with([&]() { ode2.solve(bad, x2, y2); }, "user error"), "exception from the ODE function");
         ode2.solve(g, x2, y2, gsl_odeiv2_step_bsimp, J);
-        check(std::fabs(ode2.get_final_data()[0] - exact) < 1e-6, "ODESolver reused after an exception");
+        check_local(std::fabs(ode2.get_final_data()[0] - exact) < 1e-6, "ODESolver reused after an exception");
     }
 
     // Root finding with epsilon below the floating point precision must terminate (used to loop forever,
@@ -383,11 +378,9 @@ int main(int argc, char ** argv) {
         const double r6 = FML::MATH::find_root_bisection([](double x) { return x - 1.5; }, {1.0, 2.0}, 1e-17);
         const double r7 =
             FML::MATH::find_root_bisection([](double x) { return x - (1e10 + 0.3); }, {1e10, 1e10 + 1.0}, 1e-7);
-        check(std::fabs(r6 - 1.5) < 1e-15 and std::fabs(r7 - (1e10 + 0.3)) < 1e-5,
-              "bisection terminates when epsilon is below the floating point precision");
+        check_local(std::fabs(r6 - 1.5) < 1e-15 and std::fabs(r7 - (1e10 + 0.3)) < 1e-5,
+                    "bisection terminates when epsilon is below the floating point precision");
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All numcore tests passed\n" : std::to_string(fails) + " numcore test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("numcore");
 }

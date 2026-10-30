@@ -8,7 +8,7 @@
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 
 #include <cmath>
@@ -20,9 +20,9 @@
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 // Max relative deviation between an analytic derivative and a central difference of f,
 // normalised by the maximum of |f'| over the range (the scale that matters for integrals)
@@ -58,53 +58,53 @@ static void test_fiducial() {
                            std::exp(-2.0 * M_PI * hbar * c * 1.096787737e7 / kT) /
                            nH; // reduced-mass H ionization energy
         const double Xe = rec.Xe_saha_of_x(x);
-        check_rel("Saha solution satisfies Xe^2/(1-Xe) = S", Xe * Xe / (1.0 - Xe), rhs, 1e-12);
-        check_rel("n_H = (1 - Yp) Omega_b rho_c0 / (m_H a^3)", rec.nH_of_x(x), nH, 1e-12);
+        check_rel(Xe * Xe / (1.0 - Xe), rhs, 1e-12, "Saha solution satisfies Xe^2/(1-Xe) = S");
+        check_rel(rec.nH_of_x(x), nH, 1e-12, "n_H = (1 - Yp) Omega_b rho_c0 / (m_H a^3)");
     }
-    check_close("fully ionized early: X_e(x=-12) = 1", rec.Xe_of_x(-12.0), 1.0, 1e-6);
-    check("Saha recombines earlier than Peebles", rec.x_Xe_half_saha() < rec.x_Xe_half());
+    check_close(rec.Xe_of_x(-12.0), 1.0, 1e-6, "fully ionized early: X_e(x=-12) = 1");
+    check(rec.x_Xe_half_saha() < rec.x_Xe_half(), "Saha recombines earlier than Peebles");
     {
         // Shortly after the switch, Peebles should still track Saha closely
         const double xs = Utils::find_root([&](double x) { return rec.Xe_saha_of_x(x) - 0.98; }, -9.0, -6.0);
-        check_close("Peebles ~ Saha just after the switch (X_e ~ 0.98)", rec.Xe_of_x(xs), rec.Xe_saha_of_x(xs), 5e-3);
+        check_close(rec.Xe_of_x(xs), rec.Xe_saha_of_x(xs), 5e-3, "Peebles ~ Saha just after the switch (X_e ~ 0.98)");
     }
 
     // --- Optical depth ----------------------------------------------------------
-    check_close("tau(0) = 0", rec.tau_of_x(0.0), 0.0, 1e-14);
+    check_close(rec.tau_of_x(0.0), 0.0, 1e-14, "tau(0) = 0");
     {
         bool monotone = true;
         for (double x = -19.9; x < -0.01; x += 0.01)
             monotone &= rec.tau_of_x(x) > rec.tau_of_x(x + 0.01);
-        check("tau decreasing in x", monotone);
+        check(monotone, "tau decreasing in x");
     }
     {
         const double x = -12.0; // fully ionized: tau' = -c sigma_T n_H / H
-        check_rel("tau' fully ionized = -c sigma_T n_H / H",
-                  rec.dtaudx_of_x(x),
+        check_rel(rec.dtaudx_of_x(x),
                   -c * sigma_T * rec.nH_of_x(x) / cosmo.H_of_x(x),
-                  1e-6);
+                  1e-6,
+                  "tau' fully ionized = -c sigma_T n_H / H");
     }
-    check_close("tau' vs finite difference of tau",
-                derivative_error([&](double x) { return rec.tau_of_x(x); },
+    check_close(derivative_error([&](double x) { return rec.tau_of_x(x); },
                                  [&](double x) { return rec.dtaudx_of_x(x); },
                                  -12.0,
                                  -0.01),
                 0.0,
-                1e-6);
+                1e-6,
+                "tau' vs finite difference of tau");
     {
         // d ln X_e/dx jumps from the Saha to the Peebles slope at the switch (X_e = 0.99, z ~ 1575),
         // so tau'' has a small discontinuity there. Harmless (tau ~ 1e3, g ~ 0), so test on both sides.
         const double x_sw = Utils::find_root([&](double x) { return rec.Xe_saha_of_x(x) - 0.99; }, -9.0, -6.0);
         auto dtau = [&](double x) { return rec.dtaudx_of_x(x); };
         auto ddtau = [&](double x) { return rec.ddtauddx_of_x(x); };
-        check_close("tau'' vs finite difference of tau' (Saha regime)",
-                    derivative_error(dtau, ddtau, -12.0, x_sw - 0.02),
+        check_close(derivative_error(dtau, ddtau, -12.0, x_sw - 0.02),
                     0.0,
-                    1e-5);
-        check_close("tau'' vs finite difference of tau' (Peebles regime)",
-                    derivative_error(dtau, ddtau, x_sw + 0.02, -0.01),
+                    1e-5,
+                    "tau'' vs finite difference of tau' (Saha regime)");
+        check_close(derivative_error(dtau, ddtau, x_sw + 0.02, -0.01),
                     0.0,
-                    1e-5);
+                    1e-5,
+                    "tau'' vs finite difference of tau' (Peebles regime)");
     }
 
     // --- Visibility function ----------------------------------------------------
@@ -113,38 +113,38 @@ static void test_fiducial() {
         std::vector<double> gs(xs.size());
         for (size_t i = 0; i < xs.size(); i++)
             gs[i] = rec.g_tilde_of_x(xs[i]);
-        check_close("int g dx = 1 (trapezoid)", Utils::trapz(xs, gs), 1.0, 1e-6);
+        check_close(Utils::trapz(xs, gs), 1.0, 1e-6, "int g dx = 1 (trapezoid)");
     }
-    check_close("g' vs finite difference of g",
-                derivative_error([&](double x) { return rec.g_tilde_of_x(x); },
+    check_close(derivative_error([&](double x) { return rec.g_tilde_of_x(x); },
                                  [&](double x) { return rec.dgdx_tilde_of_x(x); },
                                  -8.0,
                                  -5.0),
                 0.0,
-                1e-5);
-    check_close("g'' vs finite difference of g'",
-                derivative_error([&](double x) { return rec.dgdx_tilde_of_x(x); },
+                1e-5,
+                "g' vs finite difference of g");
+    check_close(derivative_error([&](double x) { return rec.dgdx_tilde_of_x(x); },
                                  [&](double x) { return rec.ddgddx_tilde_of_x(x); },
                                  -8.0,
                                  -5.0),
                 0.0,
-                1e-3);
-    check_close("g = -tau' exp(-tau)",
-                rec.g_tilde_of_x(-7.0),
+                1e-3,
+                "g'' vs finite difference of g'");
+    check_close(rec.g_tilde_of_x(-7.0),
                 -rec.dtaudx_of_x(-7.0) * std::exp(-rec.tau_of_x(-7.0)),
-                1e-8);
+                1e-8,
+                "g = -tau' exp(-tau)");
 
     const double z_ls = std::expm1(-rec.x_last_scattering());
     const double z_peak = std::expm1(-rec.x_visibility_peak());
-    check("last scattering 1050 < z_* < 1130", z_ls > 1050 && z_ls < 1130);
-    check("visibility peak within 1% of tau = 1", std::fabs(z_peak / z_ls - 1.0) < 0.01);
-    check("X_e freeze-out in [1e-4, 5e-4]", rec.Xe_of_x(0.0) > 1e-4 && rec.Xe_of_x(0.0) < 5e-4);
+    check(z_ls > 1050 && z_ls < 1130, "last scattering 1050 < z_* < 1130");
+    check(std::fabs(z_peak / z_ls - 1.0) < 0.01, "visibility peak within 1% of tau = 1");
+    check(rec.Xe_of_x(0.0) > 1e-4 && rec.Xe_of_x(0.0) < 5e-4, "X_e freeze-out in [1e-4, 5e-4]");
 
     // --- Baryon temperature -----------------------------------------------------
     // Residual lag T_gamma - T_b ~ T H / Gamma_C ~ 1e-5 T at z ~ 1100
-    check_rel("T_b = T_gamma during recombination (z ~ 1100)", rec.Tb_of_x(-7.0), cosmo.TCMB_of_x(-7.0), 1e-4);
-    check("T_b < T_gamma after thermal decoupling (z = 50)",
-          rec.Tb_of_x(-std::log(51.0)) < 0.98 * cosmo.TCMB_of_x(-std::log(51.0)));
+    check_rel(rec.Tb_of_x(-7.0), cosmo.TCMB_of_x(-7.0), 1e-4, "T_b = T_gamma during recombination (z ~ 1100)");
+    check(rec.Tb_of_x(-std::log(51.0)) < 0.98 * cosmo.TCMB_of_x(-std::log(51.0)),
+          "T_b < T_gamma after thermal decoupling (z = 50)");
 
     // --- Sound horizon vs independent quadrature in a ------------------------------
     {
@@ -161,7 +161,7 @@ static void test_fiducial() {
             std::exp(x_ls),
             0.0,
             1e-12);
-        check_rel("sound horizon at z_* vs quadrature", rec.sound_horizon_of_x(x_ls), s_ref, 1e-7);
+        check_rel(rec.sound_horizon_of_x(x_ls), s_ref, 1e-7, "sound horizon at z_* vs quadrature");
     }
 
     rec.info();
@@ -180,17 +180,17 @@ static void test_options() {
     o.evolve_Tb = false;
     RecombinationHistory rec_Tg(cosmo, o);
     rec_Tg.solve();
-    check_rel("evolve_Tb = false gives T_b = T_gamma", rec_Tg.Tb_of_x(-2.0), cosmo.TCMB_of_x(-2.0), 1e-14);
+    check_rel(rec_Tg.Tb_of_x(-2.0), cosmo.TCMB_of_x(-2.0), 1e-14, "evolve_Tb = false gives T_b = T_gamma");
 
     RecombinationHistory rec(cosmo, h);
     rec.solve();
-    check("cooler baryons recombine more: X_e(0) lower with T_b evolved", rec.Xe_of_x(0.0) < rec_Tg.Xe_of_x(0.0));
+    check(rec.Xe_of_x(0.0) < rec_Tg.Xe_of_x(0.0), "cooler baryons recombine more: X_e(0) lower with T_b evolved");
 
     RecombinationOptions of = h;
     of.peebles_fudge = 1.14;
     RecombinationHistory rec_f(cosmo, of);
     rec_f.solve();
-    check("fudge 1.14 speeds up recombination: lower X_e(0)", rec_f.Xe_of_x(0.0) < rec.Xe_of_x(0.0));
+    check(rec_f.Xe_of_x(0.0) < rec.Xe_of_x(0.0), "fudge 1.14 speeds up recombination: lower X_e(0)");
 
     CosmologyParameters p0;
     p0.Yp = 0.0;
@@ -198,8 +198,8 @@ static void test_options() {
     cosmo0.solve();
     RecombinationHistory rec0(cosmo0, h);
     rec0.solve();
-    check("pure hydrogen (Yp = 0): more electrons, tau larger at z = 1100",
-          rec0.tau_of_x(-std::log(1101.0)) > rec.tau_of_x(-std::log(1101.0)));
+    check(rec0.tau_of_x(-std::log(1101.0)) > rec.tau_of_x(-std::log(1101.0)),
+          "pure hydrogen (Yp = 0): more electrons, tau larger at z = 1100");
 
     auto throws = [&](RecombinationOptions opt) {
         try {
@@ -211,14 +211,14 @@ static void test_options() {
     };
     RecombinationOptions bad3;
     bad3.x_end = -1.0;
-    check("x_end != 0 rejected", throws(bad3));
+    check(throws(bad3), "x_end != 0 rejected");
 
     CosmologyParameters pn = p;
     pn.reionization = false;
     BackgroundCosmology cosmo_n(pn);
     cosmo_n.solve();
     RecombinationHistory rec_n(cosmo_n);
-    check("params.reionization = false switches reionization off", !rec_n.has_reionization());
+    check(!rec_n.has_reionization(), "params.reionization = false switches reionization off");
 }
 
 static void test_helium_reionization() {
@@ -233,10 +233,10 @@ static void test_helium_reionization() {
     const double fHe = rec.f_He();
     auto Xz = [&](double z) { return rec.Xe_of_x(-std::log1p(z)); };
 
-    check_rel("f_He = Yp / (4 (1 - Yp))", fHe, p.Yp / (4.0 * (1.0 - p.Yp)), 1e-14);
-    check_rel("z = 1.6e5: H+ and He++ fully ionized, X_e = 1 + 2 f_He", rec.Xe_of_x(-12.0), 1.0 + 2.0 * fHe, 1e-6);
-    check_rel("z = 4000: He++ recombined, X_e = 1 + f_He", Xz(4000.0), 1.0 + fHe, 1e-3);
-    check_rel("z = 1700: He neutral, X_e = 1", Xz(1700.0), 1.0, 2e-3);
+    check_rel(fHe, p.Yp / (4.0 * (1.0 - p.Yp)), 1e-14, "f_He = Yp / (4 (1 - Yp))");
+    check_rel(rec.Xe_of_x(-12.0), 1.0 + 2.0 * fHe, 1e-6, "z = 1.6e5: H+ and He++ fully ionized, X_e = 1 + 2 f_He");
+    check_rel(Xz(4000.0), 1.0 + fHe, 1e-3, "z = 4000: He++ recombined, X_e = 1 + f_He");
+    check_rel(Xz(1700.0), 1.0, 2e-3, "z = 1700: He neutral, X_e = 1");
     {
         // X_e continuous across the Saha -> Peebles switch: a jump J shows up as |second difference| ~ J,
         // while a smooth ln X_e gives (d^2 ln X_e/dx^2) h^2 ~ 1e-5
@@ -247,18 +247,18 @@ static void test_helium_reionization() {
                 std::log(rec.Xe_of_x(x + h)) - 2.0 * std::log(rec.Xe_of_x(x)) + std::log(rec.Xe_of_x(x - h));
             max_d2 = std::max(max_d2, std::fabs(d2));
         }
-        check_close("X_e continuous across the Saha/Peebles switch (max 2nd difference of ln X_e)", max_d2, 0.0, 1e-4);
+        check_close(max_d2, 0.0, 1e-4, "X_e continuous across the Saha/Peebles switch (max 2nd difference of ln X_e)");
     }
-    check_rel("reionized (z = 6): X_e = 1 + f_He", Xz(6.0), 1.0 + fHe, 1e-3);
-    check_rel("today: He fully reionized, X_e = 1 + 2 f_He", Xz(0.0), 1.0 + 2.0 * fHe, 1e-3);
-    check_close("half-way at z_reion: X_e ~ (1 + f_He)/2", Xz(p.z_reion), 0.5 * (1.0 + fHe) + 0.5 * Xz(30.0), 2e-3);
-    check_close("tau_reion = 0.0578 (CLASS reio_camb, same parameters)", rec.tau_reionization(), 0.0578, 0.002);
+    check_rel(Xz(6.0), 1.0 + fHe, 1e-3, "reionized (z = 6): X_e = 1 + f_He");
+    check_rel(Xz(0.0), 1.0 + 2.0 * fHe, 1e-3, "today: He fully reionized, X_e = 1 + 2 f_He");
+    check_close(Xz(p.z_reion), 0.5 * (1.0 + fHe) + 0.5 * Xz(30.0), 2e-3, "half-way at z_reion: X_e ~ (1 + f_He)/2");
+    check_close(rec.tau_reionization(), 0.0578, 0.002, "tau_reion = 0.0578 (CLASS reio_camb, same parameters)");
     {
         auto xs = Utils::linspace(-20.0, 0.0, 200001);
         std::vector<double> gs(xs.size());
         for (size_t i = 0; i < xs.size(); i++)
             gs[i] = rec.g_tilde_of_x(xs[i]);
-        check_close("int g dx = 1 with reionization", Utils::trapz(xs, gs), 1.0, 1e-6);
+        check_close(Utils::trapz(xs, gs), 1.0, 1e-6, "int g dx = 1 with reionization");
         // Fraction of photons last scattered during reionization = 1 - exp(-tau_reion)
         std::vector<double> xr, gr;
         for (size_t i = 0; i < xs.size(); i++)
@@ -266,18 +266,18 @@ static void test_helium_reionization() {
                 xr.push_back(xs[i]);
                 gr.push_back(gs[i]);
             }
-        check_rel("int g dx over z < z_reion + 8 dz = 1 - exp(-tau_reion)",
-                  Utils::trapz(xr, gr),
+        check_rel(Utils::trapz(xr, gr),
                   1.0 - std::exp(-rec.tau_reionization()),
-                  1e-4);
+                  1e-4,
+                  "int g dx over z < z_reion + 8 dz = 1 - exp(-tau_reion)");
     }
     {
         auto dtau = [&](double x) { return rec.dtaudx_of_x(x); };
         auto ddtau = [&](double x) { return rec.ddtauddx_of_x(x); };
-        check_close("tau'' vs finite difference of tau' (reionization era)",
-                    derivative_error(dtau, ddtau, -3.5, -0.01),
+        check_close(derivative_error(dtau, ddtau, -3.5, -0.01),
                     0.0,
-                    1e-4);
+                    1e-4,
+                    "tau'' vs finite difference of tau' (reionization era)");
     }
     rec.info();
 }
@@ -291,8 +291,8 @@ static void test_recfast() {
     RecombinationHistory rec(cosmo);
     rec.solve();
     auto Xz = [&](double z) { return rec.Xe_of_x(-std::log1p(z)); };
-    check("RECFAST is the default", rec.get_options().model == RecombinationOptions::Model::Recfast);
-    check_rel("f_He = Yp / (3.9715 (1 - Yp)) (RECFAST helium mass)", rec.f_He(), p.Yp / (3.9715 * (1.0 - p.Yp)), 1e-14);
+    check(rec.get_options().model == RecombinationOptions::Model::Recfast, "RECFAST is the default");
+    check_rel(rec.f_He(), p.Yp / (3.9715 * (1.0 - p.Yp)), 1e-14, "f_He = Yp / (3.9715 (1 - Yp)) (RECFAST helium mass)");
     // CLASS 3.3, recombination = RECFAST, same cosmology, no reionization
     const double ref[][2] = {{5000, 1.0818e+00},
                              {2500, 1.0729e+00},
@@ -309,15 +309,15 @@ static void test_recfast() {
     double e = 0.0;
     for (const auto & r : ref)
         e = std::max(e, std::fabs(Xz(r[0]) / r[1] - 1.0));
-    check_close("X_e(z) = CLASS RECFAST (z = 5000 ... 0, 4-digit reference)", e, 0.0, 2e-4);
-    check_close("z_* (tau = 1) = 1089.79 (CLASS RECFAST)",
-                std::expm1(-rec.x_last_scattering()),
+    check_close(e, 0.0, 2e-4, "X_e(z) = CLASS RECFAST (z = 5000 ... 0, 4-digit reference)");
+    check_close(std::expm1(-rec.x_last_scattering()),
                 1089.79,
-                2e-5 * 1089.79);
-    check_close("r_s(z_*) = 144.421 Mpc (CLASS RECFAST)",
-                rec.sound_horizon_of_x(rec.x_last_scattering()) / Mpc,
+                2e-5 * 1089.79,
+                "z_* (tau = 1) = 1089.79 (CLASS RECFAST)");
+    check_close(rec.sound_horizon_of_x(rec.x_last_scattering()) / Mpc,
                 144.421,
-                2e-5 * 144.421);
+                2e-5 * 144.421,
+                "r_s(z_*) = 144.421 Mpc (CLASS RECFAST)");
     {
         // smooth across the phase switches (Saha -> helium ODE -> full ODE)
         double max_d2 = 0.0;
@@ -327,19 +327,19 @@ static void test_recfast() {
                 std::log(rec.Xe_of_x(x + h)) - 2.0 * std::log(rec.Xe_of_x(x)) + std::log(rec.Xe_of_x(x - h));
             max_d2 = std::max(max_d2, std::fabs(d2));
         }
-        check_close("X_e continuous across the RECFAST phases (max 2nd difference of ln X_e)", max_d2, 0.0, 1e-4);
+        check_close(max_d2, 0.0, 1e-4, "X_e continuous across the RECFAST phases (max 2nd difference of ln X_e)");
         auto dtau = [&](double x) { return rec.dtaudx_of_x(x); };
         auto ddtau = [&](double x) { return rec.ddtauddx_of_x(x); };
         // (excluding z ~ 1600, where the hydrogen equation takes over from Saha and X_e' has a small kink, as in
         // RECFAST)
-        check_close("tau'' vs finite difference of tau' (before the H switch)",
-                    derivative_error(dtau, ddtau, -8.5, -7.40),
+        check_close(derivative_error(dtau, ddtau, -8.5, -7.40),
                     0.0,
-                    1e-4);
-        check_close("tau'' vs finite difference of tau' (recombination)",
-                    derivative_error(dtau, ddtau, -7.37, -6.0),
+                    1e-4,
+                    "tau'' vs finite difference of tau' (before the H switch)");
+        check_close(derivative_error(dtau, ddtau, -7.37, -6.0),
                     0.0,
-                    1e-4);
+                    1e-4,
+                    "tau'' vs finite difference of tau' (recombination)");
     }
     // the Peebles model for comparison
     RecombinationOptions po;
@@ -355,11 +355,11 @@ static void test_recfast() {
     ho.reionization = false;
     RecombinationHistory rh(cosmo, ho);
     rh.solve();
-    check_close("hydrogen only: X_e = 1 before H recombination (z = 2500)", rh.Xe_of_x(-std::log(2501.0)), 1.0, 1e-6);
-    check_rel("hydrogen only: X_e(z = 1100) within 1% of the full model (helium is neutral then)",
-              rh.Xe_of_x(-std::log(1101.0)),
+    check_close(rh.Xe_of_x(-std::log(2501.0)), 1.0, 1e-6, "hydrogen only: X_e = 1 before H recombination (z = 2500)");
+    check_rel(rh.Xe_of_x(-std::log(1101.0)),
               Xz(1100.0),
-              1e-2);
+              1e-2,
+              "hydrogen only: X_e(z = 1100) within 1% of the full model (helium is neutral then)");
     rec.info();
 }
 
@@ -374,30 +374,30 @@ void test_bbn() {
                           Ref{0.020, 3.044, 0.244192},
                           Ref{0.02237, 3.5, 0.251188},
                           Ref{0.024, 2.5, 0.238366}})
-        check_close("Y_He(omega_b = " + std::to_string(r.wb).substr(0, 7) +
-                        ", N_eff = " + std::to_string(r.N).substr(0, 5) + ") = CLASS",
-                    BBN::helium_fraction(r.wb, r.N),
+        check_close(BBN::helium_fraction(r.wb, r.N),
                     r.Y,
-                    5e-5);
+                    5e-5,
+                    "Y_He(omega_b = " + std::to_string(r.wb).substr(0, 7) +
+                        ", N_eff = " + std::to_string(r.N).substr(0, 5) + ") = CLASS");
     const RunSettings s = ParameterFile::read("", {"preset=planck2018", "Yp_bbn=true"});
-    check_close("Yp_bbn: helium_fraction() from omega_b, Neff",
-                s.cosmo.helium_fraction(),
+    check_close(s.cosmo.helium_fraction(),
                 BBN::helium_fraction(s.cosmo.OmegaB * s.cosmo.h * s.cosmo.h, s.cosmo.Neff),
-                0.0);
+                0.0,
+                "Yp_bbn: helium_fraction() from omega_b, Neff");
     BackgroundCosmology bg(s.cosmo);
     bg.solve();
     RecombinationHistory rec(bg);
-    check_rel("... used by the recombination (f_He)",
-              rec.f_He(),
+    check_rel(rec.f_He(),
               s.cosmo.helium_fraction() / (3.9715 * (1.0 - s.cosmo.helium_fraction())),
-              1e-14);
+              1e-14,
+              "... used by the recombination (f_He)");
     bool threw = false;
     try {
         BBN::helium_fraction(0.1, 3.044);
     } catch (const std::exception &) {
         threw = true;
     }
-    check("omega_b outside the table is an error", threw);
+    check(threw, "omega_b outside the table is an error");
 }
 
 // eta(x) and t(x) are integrals from bg_x_start: outside the solved range they are an error (the spline returned the
@@ -415,14 +415,14 @@ static void test_ranges() {
     CosmologyParameters p;
     BackgroundCosmology bg(p);
     bg.solve(-15.0, 1.0, 2000);
-    check("eta_of_x below bg_x_start throws", throws([&] { bg.eta_of_x(-16.0); }));
-    check("t_of_x above bg_x_end throws", throws([&] { bg.t_of_x(2.0); }));
-    check("eta_of_x at the ends is fine", !throws([&] { bg.eta_of_x(-15.0) + bg.eta_of_x(1.0); }));
-    check("recombination from x = -20 with bg_x_start = -15 throws",
-          throws([&] { RecombinationHistory rec(bg, RecombinationOptions()); }));
+    check(throws([&] { bg.eta_of_x(-16.0); }), "eta_of_x below bg_x_start throws");
+    check(throws([&] { bg.t_of_x(2.0); }), "t_of_x above bg_x_end throws");
+    check(!throws([&] { bg.eta_of_x(-15.0) + bg.eta_of_x(1.0); }), "eta_of_x at the ends is fine");
+    check(throws([&] { RecombinationHistory rec(bg, RecombinationOptions()); }),
+          "recombination from x = -20 with bg_x_start = -15 throws");
     RecombinationOptions o;
     o.x_start = -15.0;
-    check("recombination inside the background range is fine", !throws([&] { RecombinationHistory rec(bg, o); }));
+    check(!throws([&] { RecombinationHistory rec(bg, o); }), "recombination inside the background range is fine");
 }
 
 // The presets against CLASS v3.4 (RECFAST, reio_camb, same N_eff and neutrinos): 100 theta_s = 100 r_s / chi at
@@ -442,12 +442,12 @@ static void test_presets() {
         rec.solve();
         const double x = -std::log1p(r.z_rec);
         const double theta = 100.0 * rec.sound_horizon_of_x(x) / bg.comoving_distance_of_x(x);
-        check_rel(std::string(r.preset) + ": 100 theta_s = CLASS", theta, r.theta, 1e-5);
+        check_rel(theta, r.theta, 1e-5, std::string(r.preset) + ": 100 theta_s = CLASS");
         if (std::string(r.preset) == "planck2018") { // CLASS tau_reio (to z_reion + 8 delta_z, with the residual X_e)
-            check_rel("planck2018: tau_reio = CLASS", rec.tau_reionization(), 0.054525721886338085, 1e-3);
+            check_rel(rec.tau_reionization(), 0.054525721886338085, 1e-3, "planck2018: tau_reio = CLASS");
             // T_b after reionization: Compton heating with the reionized X_e (CLASS Tb, linear in z between its rows)
-            check_rel("planck2018: T_b(z = 6) = CLASS", rec.Tb_of_x(-std::log(7.0)), 6.877609027972515, 3e-3);
-            check_rel("planck2018: T_b(z = 1) = CLASS", rec.Tb_of_x(-std::log(2.0)), 1.3411749544482057, 3e-3);
+            check_rel(rec.Tb_of_x(-std::log(7.0)), 6.877609027972515, 3e-3, "planck2018: T_b(z = 6) = CLASS");
+            check_rel(rec.Tb_of_x(-std::log(2.0)), 1.3411749544482057, 3e-3, "planck2018: T_b(z = 1) = CLASS");
         }
     }
 }
@@ -460,5 +460,5 @@ int main() {
     test_bbn();
     test_ranges();
     test_presets();
-    return Test::summary();
+    return FML::TESTS::summary("EBS recombination");
 }

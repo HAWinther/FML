@@ -1,18 +1,12 @@
 #include <FML/Environment/EnvironmentClustering.h>
 #include <FML/RandomGenerator/CounterBasedRandom.h>
 #include <iostream>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::near;
+
+using FML::TESTS::check;
 using namespace FML::ENVIRONMENT;
-int failures = 0;
-void check(bool ok, const std::string & label) {
-    int bad = !ok;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (!FML::ThisTask)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
-}
-bool near(double x, double y, double tolerance = 2e-10) {
-    return std::abs(x - y) <= tolerance * std::max({1., std::abs(x), std::abs(y)});
-}
 double distance(const Sample & a, const Sample & b, double L) {
     double r2 = 0;
     for (int d = 0; d < 3; ++d) {
@@ -83,11 +77,11 @@ void test_density() {
     std::vector<Sample> q{{{0, 2, 2}, 100}, {{9.9, 2, 2}, 101}, {{2.5, 2, 2}, 102}};
     auto result = top_hat_environment(p, q, 10, .5);
     double f = 4 * M_PI / 3 * std::pow(.5 / 10, 3);
-    check(result.counts == std::vector<Count>({2, 2, 1}) && near(result.delta[0], 2 / (4 * f) - 1) &&
-              near(result.delta[2], 1 / (4 * f) - 1),
+    check(result.counts == std::vector<Count>({2, 2, 1}) && near(result.delta[0], 2 / (4 * f) - 1, 2e-10) &&
+              near(result.delta[2], 1 / (4 * f) - 1, 2e-10),
           "periodic top-hat counts, inclusive radius and overdensity match hand calculation");
     auto self = top_hat_environment(p, p, 10, .5, true);
-    check(self.counts == std::vector<Count>({1, 1, 0, 0}) && near(self.delta[0], 1 / (3 * f) - 1),
+    check(self.counts == std::vector<Count>({1, 1, 0, 0}) && near(self.delta[0], 1 / (3 * f) - 1, 2e-10),
           "same-ID self exclusion also uses the N-1 reference number density");
     auto a = random_points(43, 10, 1), b = random_points(37, 10, 2);
     auto measured = top_hat_environment(a, b, 10, 1.7);
@@ -123,12 +117,12 @@ void test_marked() {
     for (int b = 0; b < 9; ++b) {
         double lo = (.1 + 4.9 * b / 9) / 10, hi = (.1 + 4.9 * (b + 1) / 9) / 10,
                volume = 4 * M_PI / 3 * (hi * hi * hi - lo * lo * lo);
-        ok &= near(measured.unmarked.pairs[b], raw[b]) && near(measured.marked_pairs[b], weighted[b]) &&
-              near(measured.unmarked.xi[b], raw[b] / (norm * volume) - 1) &&
-              near(measured.weighted_xi[b], weighted[b] / (norm * volume) - 1);
+        ok &= near(measured.unmarked.pairs[b], raw[b], 2e-10) && near(measured.marked_pairs[b], weighted[b], 2e-10) &&
+              near(measured.unmarked.xi[b], raw[b] / (norm * volume) - 1, 2e-10) &&
+              near(measured.weighted_xi[b], weighted[b] / (norm * volume) - 1, 2e-10);
         if (raw[b] > 0)
-            ok &= near(measured.mark_ratio[b], weighted[b] / raw[b]) &&
-                  near(measured.mark_ratio[b], (1 + measured.weighted_xi[b]) / (1 + measured.unmarked.xi[b]));
+            ok &= near(measured.mark_ratio[b], weighted[b] / raw[b], 2e-10) &&
+                  near(measured.mark_ratio[b], (1 + measured.weighted_xi[b]) / (1 + measured.unmarked.xi[b]), 2e-10);
         else
             ok &= std::isnan(measured.mark_ratio[b]);
     }
@@ -141,13 +135,14 @@ void test_marked() {
     ok = true;
     for (int b = 0; b < 9; ++b)
         if (raw[b] > 0)
-            ok &= near(constant.mark_ratio[b], 1) && near(constant.pair_normalized_ratio[b], 1) &&
-                  near(scale.mark_ratio[b], measured.mark_ratio[b]);
+            ok &= near(constant.mark_ratio[b], 1, 2e-10) && near(constant.pair_normalized_ratio[b], 1, 2e-10) &&
+                  near(scale.mark_ratio[b], measured.mark_ratio[b], 2e-10);
     check(ok, "unit/constant marks and global mark rescaling preserve normalization");
     std::vector<Sample> line{{{.05, .1, .1}, 1}, {{.15, .1, .1}, 2}, {{.3, .1, .1}, 3}, {{.45, .1, .1}, 4}};
     auto finite = marked_correlation(line, {1, 2, 3, 4}, 1, .001, .5, 1);
-    check(near(finite.mean_mark, 2.5) && near(finite.mark_ratio[0], 35 / (6 * 6.25)) &&
-              near(finite.finite_pair_baseline, 35 / (6 * 6.25)) && near(finite.pair_normalized_ratio[0], 1),
+    check(near(finite.mean_mark, 2.5, 2e-10) && near(finite.mark_ratio[0], 35 / (6 * 6.25), 2e-10) &&
+              near(finite.finite_pair_baseline, 35 / (6 * 6.25), 2e-10) &&
+              near(finite.pair_normalized_ratio[0], 1, 2e-10),
           "sample-mean and all-pair finite-population normalizations remain distinct");
     auto sparse = marked_correlation(line, {1, 0, 0, 0}, 1, .001, .5, 2);
     check(sparse.finite_pair_baseline == 0 && std::isnan(sparse.pair_normalized_ratio[0]),
@@ -163,9 +158,9 @@ void test_marked() {
     auto enlarged_result = marked_correlation(enlarged, {1, 2, 3, 4}, 10, 1.25, 5, 3);
     bool length_ok = true;
     for (int bin = 0; bin < 3; ++bin)
-        length_ok &= near(enlarged_result.unmarked.radius[bin], 10 * edge_result.unmarked.radius[bin]) &&
-                     near(enlarged_result.mark_ratio[bin], edge_result.mark_ratio[bin]) &&
-                     near(enlarged_result.unmarked.xi[bin], edge_result.unmarked.xi[bin]);
+        length_ok &= near(enlarged_result.unmarked.radius[bin], 10 * edge_result.unmarked.radius[bin], 2e-10) &&
+                     near(enlarged_result.mark_ratio[bin], edge_result.mark_ratio[bin], 2e-10) &&
+                     near(enlarged_result.unmarked.xi[bin], edge_result.unmarked.xi[bin], 2e-10);
     check(length_ok, "physical length rescaling changes radius while preserving dimensionless statistics");
     auto empty_bins = marked_correlation(line, {1, 1, 1, 1}, 1, .001, .02, 2);
     check(empty_bins.unmarked.pairs == std::vector<double>({0, 0}) &&
@@ -173,7 +168,7 @@ void test_marked() {
               std::isnan(empty_bins.pair_normalized_ratio[1]),
           "empty pair bins have xi=-1 and undefined mark ratios");
     auto recipe = inverse_density_marks({-1, 0, 1}, 1, 2);
-    check(near(recipe[0], 4) && near(recipe[1], 1) && near(recipe[2], 4. / 9),
+    check(near(recipe[0], 4, 2e-10) && near(recipe[1], 1, 2e-10) && near(recipe[2], 4. / 9, 2e-10),
           "inverse-density mark recipe matches analytic values");
     auto original = p;
     std::reverse(p.begin(), p.end());
@@ -181,7 +176,7 @@ void test_marked() {
     auto reversed = marked_correlation(p, m, 10, .1, 5, 9);
     ok = true;
     for (int b = 0; b < 9; ++b)
-        ok &= near(reversed.marked_pairs[b], measured.marked_pairs[b]);
+        ok &= near(reversed.marked_pairs[b], measured.marked_pairs[b], 2e-10);
     check(ok, "marked statistic is invariant under catalogue/mark reordering");
     bool rejected = false;
     try {
@@ -205,13 +200,13 @@ void test_split() {
         for (int b = 0; b < 7; ++b) {
             double lo = (.1 + 4.9 * b / 7) / 10, hi = (.1 + 4.9 * (b + 1) / 7) / 10,
                    volume = 4 * M_PI / 3 * (hi * hi * hi - lo * lo * lo);
-            ok &= near(split.cross[q].pairs[b], direct[b]) &&
-                  near(split.cross[q].xi[b], direct[b] / (selected.size() * tracers.size() * volume) - 1);
+            ok &= near(split.cross[q].pairs[b], direct[b], 2e-10) &&
+                  near(split.cross[q].xi[b], direct[b] / (selected.size() * tracers.size() * volume) - 1, 2e-10);
         }
     }
     auto direct = pairs(centers, tracers, 10, .1, 5, 7);
     for (int b = 0; b < 7; ++b)
-        ok &= near(split.parent.pairs[b], direct[b]);
+        ok &= near(split.parent.pairs[b], direct[b], 2e-10);
     check(ok, "quantile cross-correlations and recombined parent counts match direct enumeration");
     double nonzero = 0;
     ok = true;
@@ -219,7 +214,7 @@ void test_split() {
         double combined = 0;
         for (size_t q = 0; q < 5; ++q)
             combined += split.quantiles.counts[q] * split.cross[q].xi[b] / centers.size();
-        ok &= near(combined, split.parent.xi[b]);
+        ok &= near(combined, split.parent.xi[b], 2e-10);
         nonzero += std::abs(combined);
     }
     check(ok && nonzero > 0, "weighted quantile sum equals the finite-query parent, without falsely forcing zero");
@@ -282,7 +277,5 @@ int main() {
     test_marked();
     test_split();
     test_failures();
-    if (!FML::ThisTask)
-        std::cout << (failures ? "Environment tests FAILED" : "All environment tests passed") << '\n';
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("environment");
 }

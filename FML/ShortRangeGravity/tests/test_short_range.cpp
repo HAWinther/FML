@@ -6,16 +6,11 @@
 #include <iostream>
 #include <random>
 #include <set>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check;
 
 using namespace FML::SHORT_RANGE_GRAVITY;
-int failures = 0;
-void check(bool good, const char * label) {
-    int bad = !good;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (FML::ThisTask == 0)
-        std::cout << (bad ? "FAIL " : "PASS ") << label << '\n';
-}
 bool near(double a, double b, double relative = 1e-12, double absolute = 1e-12) {
     return std::abs(a - b) <= absolute + relative * std::max(std::abs(a), std::abs(b));
 }
@@ -431,7 +426,5 @@ int main(int argc, char ** argv) {
     ghosts();
     normalization_and_scaling();
     chunked_ghosts_and_errors();
-    if (FML::ThisTask == 0)
-        std::cout << "ShortRangeGravity failures: " << failures << '\n';
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("ShortRangeGravity");
 }

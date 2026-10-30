@@ -1,15 +1,10 @@
 #include <FML/FFTWGrid/FourierResampling.h>
 #include <iostream>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check;
 
 using namespace FML::GRID;
-int failures = 0;
-void check(bool good, const std::string & label) {
-    int bad = !good;
-    FML::MaxOverTasks(&bad);
-    if (!FML::ThisTask)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
-    failures += bad;
-}
 template <size_t N>
 ComplexType value(const std::array<int, N> & wave, int generation) {
     int code = generation * 1000, weight = 1;
@@ -117,7 +112,5 @@ int main() {
         test<3>(9, 12);
         test<3>(12, 9);
     }
-    if (!FML::ThisTask)
-        std::cout << (failures ? "Fourier resampling tests FAILED\n" : "All Fourier resampling tests passed\n");
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("Fourier resampling");
 }

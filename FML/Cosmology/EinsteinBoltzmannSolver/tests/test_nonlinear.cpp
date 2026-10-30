@@ -14,7 +14,7 @@
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 
 #include <cmath>
@@ -28,9 +28,9 @@
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 int main() {
     Utils::verbose = false;
@@ -48,10 +48,10 @@ int main() {
         const bool ok = Halofit::nonlinear(lnk, D2, 0.3, 0.7, -1.0, NL, ks, ne, C);
         // sigma^2(R) = Gamma((n+3)/2)/2 (k0 R)^{-(n+3)}  ->  k_sigma = k0 [Gamma((n+3)/2)/2]^{-1/(n+3)}
         const double ks_exact = k0 * std::pow(std::tgamma((n + 3.0) / 2.0) / 2.0, -1.0 / (n + 3.0));
-        check("nonlinear scale found", ok);
-        check_rel("k_sigma", ks, ks_exact, 1e-4);
-        check_close("n_eff = n", ne, n, 1e-4);
-        check_close("C = 0", C, 0.0, 1e-4);
+        check(ok, "nonlinear scale found");
+        check_rel(ks, ks_exact, 1e-4, "k_sigma");
+        check_close(ne, n, 1e-4, "n_eff = n");
+        check_close(C, 0.0, 1e-4, "C = 0");
     }
 
     std::cout << "Planck 2018: P_NL/P_L against CLASS (non_linear = halofit)\n";
@@ -68,8 +68,8 @@ int main() {
         const double h = s.cosmo.h;
         // Delta^2_Q ~ Delta^2_L exp(-y/4) for y = k/k_sigma -> 0: linear only as k -> 0 (0.3% below at 0.005 h/Mpc, as
         // CLASS)
-        check_close("linear on large scales (k = 2e-4 h/Mpc, z = 0)", hf.ratio(0.0, 2e-4 * h / Mpc), 1.0, 5e-4);
-        check_close("ratio = 1 above z_max", hf.ratio(-std::log(20.0), 1.0 / Mpc), 1.0, 0.0);
+        check_close(hf.ratio(0.0, 2e-4 * h / Mpc), 1.0, 5e-4, "linear on large scales (k = 2e-4 h/Mpc, z = 0)");
+        check_close(hf.ratio(-std::log(20.0), 1.0 / Mpc), 1.0, 0.0, "ratio = 1 above z_max");
         // CLASS: pk/pk_lin at k = 0.1, 0.3, 1 h/Mpc
         struct Ref {
             double z, k, r;
@@ -81,10 +81,10 @@ int main() {
                               Ref{1.0, 0.3, 1.24156},
                               Ref{1.0, 1.0, 3.28870}}) {
             const double v = hf.ratio(-std::log1p(r.z), r.k * h / Mpc);
-            check_rel("z = " + std::to_string(int(r.z)) + ", k = " + std::to_string(r.k).substr(0, 3) + " h/Mpc",
-                      v,
+            check_rel(v,
                       r.r,
-                      5e-3);
+                      5e-3,
+                      "z = " + std::to_string(int(r.z)) + ", k = " + std::to_string(r.k).substr(0, 3) + " h/Mpc");
         }
 
         // P(k) outputs without the C_ell (compute_cells = false): solve_matter() sets up Halofit only
@@ -98,7 +98,7 @@ int main() {
         } catch (const std::exception &) {
             threw = true;
         }
-        check("output_matter_power before solve_matter() is an error", threw);
+        check(threw, "output_matter_power before solve_matter() is an error");
         pm.solve_matter();
         pm.output_matter_power(file, 0.0);
         std::ifstream in(file);
@@ -109,14 +109,14 @@ int main() {
         double v, n = 0;
         while (ls >> v)
             n++;
-        check("solve_matter(): matter_power with the Halofit column", n == 4);
+        check(n == 4, "solve_matter(): matter_power with the Halofit column");
         const double k = 0.3 * h / Mpc;
-        check_rel("solve_matter(): P_NL/P_L = Halofit",
-                  pm.get_matter_power_spectrum_nonlinear(0.0, k) / pm.get_matter_power_spectrum_extrapolated(0.0, k),
+        check_rel(pm.get_matter_power_spectrum_nonlinear(0.0, k) / pm.get_matter_power_spectrum_extrapolated(0.0, k),
                   hf.ratio(0.0, k),
-                  1e-12);
+                  1e-12,
+                  "solve_matter(): P_NL/P_L = Halofit");
         std::remove(file.c_str());
     }
 
-    return Test::summary();
+    return FML::TESTS::summary("EBS nonlinear");
 }

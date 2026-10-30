@@ -7,19 +7,13 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::near;
+
+using FML::TESTS::check_local;
 using namespace FML::NBODY;
 using FML::COSMOLOGY::GrowthHistory;
-int failures = 0;
-void check(bool ok, const std::string & label) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << label << '\n';
-    if (!ok)
-        failures++;
-}
-bool near(double x, double y, double tolerance = 2e-9) {
-    return std::isfinite(x) && std::isfinite(y) &&
-           std::abs(x - y) <= tolerance * std::max({1.0, std::abs(x), std::abs(y)});
-}
 GrowthHistory eds_growth(double normalization = 1.0) {
     return {[=](double a) { return normalization * a; },
             [](double) { return 1.0; },
@@ -51,9 +45,9 @@ void test_analytic_coefficients() {
             }
             correct = correct && near(step.delta_time_drift, drift, 2e-6) && near(step.delta_time_kick, kick, 2e-6);
         }
-        check(correct,
-              method == TimestepMethod::Quinn ? "Quinn coefficients match independent EdS integrals" :
-                                                "Tassev coefficients match independent EdS integrals");
+        check_local(correct,
+                    method == TimestepMethod::Quinn ? "Quinn coefficients match independent EdS integrals" :
+                                                      "Tassev coefficients match independent EdS integrals");
     }
 }
 void test_growing_modes() {
@@ -84,20 +78,22 @@ void test_growing_modes() {
                         x1 += s.delta_time_drift * v1;
                         x2 += s.delta_time_drift * v2;
                     }
-                    linear = linear && near(x1, growth.linear(1.0)) && near(v1, growth.linear_momentum(1.0, 1.0));
+                    linear = linear && near(x1, growth.linear(1.0), 2e-9) &&
+                             near(v1, growth.linear_momentum(1.0, 1.0), 2e-9);
                     if (method == TimestepMethod::BullFrog)
-                        second_order = second_order && near(x2, growth.second_order(1.0)) &&
-                                       near(v2, growth.linear_momentum(1.0, 1.0) * growth.second_order_slope(1.0));
-                    normalization_independent = normalization_independent && near(x1 / normalization, 1.0);
+                        second_order =
+                            second_order && near(x2, growth.second_order(1.0), 2e-9) &&
+                            near(v2, growth.linear_momentum(1.0, 1.0) * growth.second_order_slope(1.0), 2e-9);
+                    normalization_independent = normalization_independent && near(x1 / normalization, 1.0, 2e-9);
                 }
             }
         }
-        check(linear,
-              method == TimestepMethod::FastPM ? "FastPM follows the linear growing mode at coarse steps" :
-                                                 "BullFrog follows the linear growing mode at coarse steps");
+        check_local(linear,
+                    method == TimestepMethod::FastPM ? "FastPM follows the linear growing mode at coarse steps" :
+                                                       "BullFrog follows the linear growing mode at coarse steps");
         if (method == TimestepMethod::BullFrog)
-            check(second_order, "BullFrog follows the EdS second-order displacement and velocity");
-        check(normalization_independent, "growth normalization is consistent across all timestep spacings");
+            check_local(second_order, "BullFrog follows the EdS second-order displacement and velocity");
+        check_local(normalization_independent, "growth normalization is consistent across all timestep spacings");
     }
 }
 class TestCosmology : public Cosmology {
@@ -163,8 +159,8 @@ void test_schedules() {
             synchronized =
                 synchronized && steps[i].apos == steps[i - 1].apos_new && steps[i].avel == steps[i - 1].avel_new;
     }
-    check(correct, "all spacing policies match independent schedules with nonlinear growth and negative power");
-    check(synchronized, "staggered schedules are continuous and synchronize at the output epoch");
+    check_local(correct, "all spacing policies match independent schedules with nonlinear growth and negative power");
+    check_local(synchronized, "staggered schedules are continuous and synchronize at the output epoch");
 }
 void test_cola_force_options() {
     auto cosmo = std::make_shared<TestCosmology>();
@@ -185,7 +181,8 @@ void test_cola_force_options() {
             for (auto i : actual[d].get_real_range())
                 matches = matches && near(actual[d].get_real_from_index(i), expected[d].get_real_from_index(i), 1e-12);
     }
-    check(matches, "SimulationCode forwards explicit options through Fourier and finite-difference gravity paths");
+    check_local(matches,
+                "SimulationCode forwards explicit options through Fourier and finite-difference gravity paths");
 }
 void test_cola_adapter() {
     auto cosmo = std::make_shared<TestCosmology>();
@@ -211,13 +208,13 @@ void test_cola_adapter() {
                    a[i].delta_time_kick == b[i].delta_time_kick && a[i].velocity_scale == b[i].velocity_scale;
         ownership = ownership && !adapter.steps(0.05, 1.0, 1).empty();
     }
-    check(same, "SimulationCode adapts every policy to the shared coefficient generator exactly");
+    check_local(same, "SimulationCode adapts every policy to the shared coefficient generator exactly");
     auto owned = SIMCODE::large_scale_growth_history<3>(grav);
     const double expected = grav->get_D_1LPT(0.5);
     grav.reset();
     cosmo.reset();
     ownership = ownership && owned.linear(0.5) == expected;
-    check(ownership, "SimulationCode growth adapter retains its model ownership");
+    check_local(ownership, "SimulationCode growth adapter retains its model ownership");
 }
 template <class Function>
 void expect_error(Function fn, const std::string & label) {
@@ -227,12 +224,12 @@ void expect_error(Function fn, const std::string & label) {
     } catch (const std::exception &) {
         caught = true;
     }
-    check(caught, label);
+    check_local(caught, label);
 }
 void test_contracts() {
     TimeStepping standard({}, eds_H, eds_force);
-    check(standard.steps(0.05, 1.0, 0).empty() && standard.deltatime_KDK(0.05, 1.0, 0).first.empty(),
-          "zero requested steps produce no updates");
+    check_local(standard.steps(0.05, 1.0, 0).empty() && standard.deltatime_KDK(0.05, 1.0, 0).first.empty(),
+                "zero requested steps produce no updates");
     expect_error([&] { standard.steps(0, 1, 5); }, "nonpositive scale factors are rejected");
     expect_error([&] { standard.steps(1, 0.05, 5); }, "reversed integration intervals are rejected");
     expect_error([&] { standard.steps(0.05, 1, -1); }, "negative step counts are rejected");
@@ -277,6 +274,5 @@ int main() {
     test_cola_adapter();
     test_cola_force_options();
     test_contracts();
-    FML::SumOverTasks(&failures);
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("time stepping");
 }

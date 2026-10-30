@@ -14,7 +14,7 @@
 #include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 #include <FML/Cosmology/Models/DarkScattering.h>
 
@@ -23,9 +23,9 @@
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 namespace {
     CosmologyParameters ds(double w, double xi) {
@@ -136,20 +136,22 @@ int main() {
     std::cout << "Background (w = " << w << ")\n";
     {
         BackgroundCosmology b(ds(w, xi));
-        check_close("E(0) = 1", b.E2_of_x(0.0), 1.0, 1e-13);
-        check_rel("rho_DE ~ a^{-3(1+w)}", b.rhoDE(-1.0) / b.rhoDE(0.0), std::exp(3.0 * (1.0 + w)), 1e-13);
+        check_close(b.E2_of_x(0.0), 1.0, 1e-13, "E(0) = 1");
+        check_rel(b.rhoDE(-1.0) / b.rhoDE(0.0), std::exp(3.0 * (1.0 + w)), 1e-13, "rho_DE ~ a^{-3(1+w)}");
         double gde, gc;
         rates(b, 0.0, gde, gc);
         std::cout << "  today: Gamma_DE/Hp = " << gde << ", Gamma_c/Hp = " << gc << "\n";
-        check("Gamma_c << Gamma_DE today (rho_c >> (1 + w) rho_DE)", gc < gde);
-        check("model needs w != -1", [] {
-            try {
-                BackgroundCosmology bb(ds(-1.0, 1.0));
-            } catch (...) {
-                return true;
-            }
-            return false;
-        }());
+        check(gc < gde, "Gamma_c << Gamma_DE today (rho_c >> (1 + w) rho_DE)");
+        check(
+            [] {
+                try {
+                    BackgroundCosmology bb(ds(-1.0, 1.0));
+                } catch (...) {
+                    return true;
+                }
+                return false;
+            }(),
+            "model needs w != -1");
     }
 
     PerturbationOptions o;
@@ -161,11 +163,11 @@ int main() {
     {
         double eP, eM;
         constraints(r0, eP, eM);
-        check_close("xi = 0 (wCDM): Poisson constraint", eP, 0.0, 1e-6);
-        check_close("xi = 0 (wCDM): momentum constraint", eM, 0.0, 1e-6);
+        check_close(eP, 0.0, 1e-6, "xi = 0 (wCDM): Poisson constraint");
+        check_close(eM, 0.0, 1e-6, "xi = 0 (wCDM): momentum constraint");
         constraints(r, eP, eM);
-        check_close("xi = 30 b/GeV: Poisson constraint", eP, 0.0, 1e-6);
-        check_close("xi = 30 b/GeV: momentum constraint (exchange cancels)", eM, 0.0, 1e-6);
+        check_close(eP, 0.0, 1e-6, "xi = 30 b/GeV: Poisson constraint");
+        check_close(eM, 0.0, 1e-6, "xi = 30 b/GeV: momentum constraint (exchange cancels)");
     }
 
     std::cout << "Drag on the dark matter\n";
@@ -176,14 +178,14 @@ int main() {
         const double ref = growth(r, k, x0) / growth(r0, k, x0);
         std::cout << "  growth from z = 19 to 0, xi = " << xi << " b/GeV relative to xi = 0: " << code
                   << ", growth equations with drag: " << ref << "\n";
-        check_close("growth with drag = two-fluid growth equations", code / ref, 1.0, 5e-4);
-        check("w > -1: scattering suppresses the growth", code < 0.99);
+        check_close(code / ref, 1.0, 5e-4, "growth with drag = two-fluid growth equations");
+        check(code < 0.99, "w > -1: scattering suppresses the growth");
         Run rp(ds(-1.1, xi), o), rp0(ds(-1.1, 0.0), o);
         const double codep = (rp.pert.get_delta_cdm(0.0, k) / rp.pert.get_delta_cdm(x0, k)) /
                              (rp0.pert.get_delta_cdm(0.0, k) / rp0.pert.get_delta_cdm(x0, k));
         std::cout << "  w = -1.1: " << codep << "\n";
-        check("w < -1: scattering enhances the growth", codep > 1.01);
+        check(codep > 1.01, "w < -1: scattering enhances the growth");
     }
 
-    return Test::summary();
+    return FML::TESTS::summary("EBS dark scattering");
 }

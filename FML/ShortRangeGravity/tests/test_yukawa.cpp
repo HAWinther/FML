@@ -5,20 +5,14 @@
 #include "YukawaReference.h"
 #include <iostream>
 #include <random>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::near;
+
+using FML::TESTS::check;
 
 using namespace FML::SHORT_RANGE_GRAVITY;
-int failures = 0;
-void check(bool good, const char * label) {
-    int bad = !good;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (FML::ThisTask == 0)
-        std::cout << (bad ? "FAIL " : "PASS ") << label << '\n';
-}
 double norm(Vector v) { return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
-bool close(double a, double b, double tol = 2e-12, double floor = 1) {
-    return std::isfinite(a) && std::isfinite(b) && std::abs(a - b) <= tol * std::max({floor, std::abs(a), std::abs(b)});
-}
 void reference_values() {
     bool good = true;
     double worst = 0;
@@ -32,14 +26,14 @@ void reference_values() {
         }
         const auto dl = detail::yukawa_long_difference(2 * q, 1, 1 / z);
         for (int d = 0; d < 2; ++d)
-            good &= close(dl[d], row[6 + d], 3e-12, 1e-20);
+            good &= near(dl[d], row[6 + d], 3e-12, 1e-20);
         if (q > 0) {
             const auto ds = detail::yukawa_short_difference(2 * q, 1, 1 / z);
             for (int d = 0; d < 2; ++d)
-                good &= close(ds[d], row[8 + d], 3e-12, 1e-20);
+                good &= near(ds[d], row[8 + d], 3e-12, 1e-20);
             const auto short_part = detail::yukawa_short(2 * q, 1, 1 / z);
             for (int d = 0; d < 2; ++d)
-                good &= close(short_part[d], row[4 + d], 3e-12, 1e-20);
+                good &= near(short_part[d], row[4 + d], 3e-12, 1e-20);
         }
     }
     check(good, "Ewald Yukawa kernels and cancellation differences match independent 100-digit reference values");
@@ -87,7 +81,7 @@ void kernels() {
             }
             const double radius = k.cutoff();
             const double envelope = (1 + std::abs(alpha)) * short_range_window(radius / (2 * o.split_scale));
-            consistent &= close(envelope, o.cutoff_tolerance, 2e-12, 1e-12) && k.coefficient(radius) == 0;
+            consistent &= near(envelope, o.cutoff_tolerance, 2e-12, 1e-12) && k.coefficient(radius) == 0;
         }
     // Also exercise softening that crosses q=1, where the long-range evaluation changes representation.
     Options broad = o;
@@ -107,20 +101,20 @@ void kernels() {
     Kernel large(o, NewtonYukawa{.7, 1e8}), small(o, NewtonYukawa{.7, 1e-8});
     bool limits = true;
     for (double r : {0., .001, .003, .005, .05}) {
-        limits &= close(large.full_coefficient(r), 1.7 * n.full_coefficient(r), 1e-12);
+        limits &= near(large.full_coefficient(r), 1.7 * n.full_coefficient(r), 1e-12);
         limits &= small.full_coefficient(r) == n.full_coefficient(r);
-        limits &= close(large.untruncated_coefficient(r), 1.7 * n.untruncated_coefficient(r), 1e-11);
+        limits &= near(large.untruncated_coefficient(r), 1.7 * n.untruncated_coefficient(r), 1e-11);
     }
     check(limits, "large/small lambda recover enhanced/Newtonian gravity, including softened radii");
     Kernel cancellation(o, NewtonYukawa{-1, 1e8});
     const double r = .02;
     const double expected = 1 / (2 * r * 1e16); // Leading mu^2/(2r), corrections O(r/lambda).
     const double split = cancellation.untruncated_coefficient(r) + o.coupling * cancellation.long_range_coefficient(r);
-    check(close(cancellation.full_coefficient(r), expected, 3e-10, 1e-30) && close(split, expected, 3e-10, 1e-30) &&
-              close(cancellation.long_range_filter(100),
-                    std::exp(-100 * o.split_scale * o.split_scale) * (1.0 / 100 + o.split_scale * o.split_scale) / 1e16,
-                    2e-12,
-                    1e-30),
+    check(near(cancellation.full_coefficient(r), expected, 3e-10, 1e-30) && near(split, expected, 3e-10, 1e-30) &&
+              near(cancellation.long_range_filter(100),
+                   std::exp(-100 * o.split_scale * o.split_scale) * (1.0 / 100 + o.split_scale * o.split_scale) / 1e16,
+                   2e-12,
+                   1e-30),
           "alpha=-1 large-range forces retain the small physical remainder");
     bool rejected = true;
     for (auto model : {NewtonYukawa{1, 0}, NewtonYukawa{1, -1}, NewtonYukawa{NAN, 1}, NewtonYukawa{1, INFINITY}}) {
@@ -207,7 +201,7 @@ void pm() {
     Kernel base(unit, NewtonYukawa{.6, .05});
     bool good = true;
     for (double k2 : {0., 1., 100., 1e6})
-        good &= close(scaled.long_range_filter(k2 / 250 / 250), base.long_range_filter(k2));
+        good &= near(scaled.long_range_filter(k2 / 250 / 250), base.long_range_filter(k2), 2e-12);
     check(good, "PM kernel and lambda use explicit coordinate/box units");
 }
 void backends_and_ghosts() {
@@ -277,7 +271,5 @@ int main() {
     kernels();
     pm();
     backends_and_ghosts();
-    if (FML::ThisTask == 0)
-        std::cout << "Yukawa failures: " << failures << '\n';
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("Yukawa");
 }

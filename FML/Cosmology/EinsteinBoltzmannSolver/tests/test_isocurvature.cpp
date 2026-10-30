@@ -21,7 +21,7 @@
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 
 #include <cmath>
@@ -31,23 +31,15 @@
 #include <string>
 #include <vector>
 
+using FML::TESTS::throws;
+
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
-namespace {
-    bool throws(const std::function<void()> & f) {
-        try {
-            f();
-        } catch (const std::exception &) {
-            return true;
-        }
-        return false;
-    }
-} // namespace
 
 int main() {
     Utils::verbose = false;
@@ -58,7 +50,7 @@ int main() {
             "",
             {"preset=planck2018", "f_cdi=0.5", "n_cdi=1.2", "c_ad_cdi=0.4", "f_nid=0.3", "n_nid=0.9", "c_ad_nid=-0.6"});
         const auto comps = Isocurvature::components(s.cosmo, s.pert);
-        check("three components (adiabatic + two modes)", comps.size() == 3);
+        check(comps.size() == 3, "three components (adiabatic + two modes)");
         const double k = 0.01 / Mpc, kp = s.cosmo.k_pivot, ns = s.cosmo.n_s;
         double PRR = 0, PCC = 0, PNN = 0, PRC = 0, PRN = 0, PCN = 0;
         for (const auto & o : comps) {
@@ -74,21 +66,22 @@ int main() {
         }
         // relative to P_RR(k): P_II/P_RR = f^2 (k/kp)^(n - n_s)
         const double rC = 0.25 * std::pow(k * Mpc / kp, 1.2 - ns), rN = 0.09 * std::pow(k * Mpc / kp, 0.9 - ns);
-        check_close("P_RR", PRR, 1.0, 1e-14);
-        check_rel("P_cdi", PCC, rC, 1e-13);
-        check_rel("P_nid", PNN, rN, 1e-13);
-        check_rel("P_R,cdi = c sqrt(P_RR P_cdi)", PRC, 0.4 * std::sqrt(rC), 1e-13);
-        check_rel("P_R,nid = c sqrt(P_RR P_nid)", PRN, -0.6 * std::sqrt(rN), 1e-13);
-        check_close("P_cdi,nid = 0", PCN, 0.0, 1e-14);
-        check("sum c^2 >= 1 is an error",
-              throws([] { ParameterFile::read("", {"f_cdi=1", "c_ad_cdi=0.8", "f_bi=1", "c_ad_bi=0.7"}); }));
-        check("isocurvature with modified gravity is an error", throws([] {
+        check_close(PRR, 1.0, 1e-14, "P_RR");
+        check_rel(PCC, rC, 1e-13, "P_cdi");
+        check_rel(PNN, rN, 1e-13, "P_nid");
+        check_rel(PRC, 0.4 * std::sqrt(rC), 1e-13, "P_R,cdi = c sqrt(P_RR P_cdi)");
+        check_rel(PRN, -0.6 * std::sqrt(rN), 1e-13, "P_R,nid = c sqrt(P_RR P_nid)");
+        check_close(PCN, 0.0, 1e-14, "P_cdi,nid = 0");
+        check(throws([] { ParameterFile::read("", {"f_cdi=1", "c_ad_cdi=0.8", "f_bi=1", "c_ad_bi=0.7"}); }),
+              "sum c^2 >= 1 is an error");
+        check(throws([] {
                   RunSettings m = ParameterFile::read("", {"model=jbd", "f_cdi=1"});
                   BackgroundCosmology bg(m.cosmo);
                   bg.solve();
                   RecombinationHistory rec(bg);
                   Perturbations p(bg, rec, Isocurvature::components(m.cosmo, m.pert)[1]);
-              }));
+              }),
+              "isocurvature with modified gravity is an error");
     }
 
     std::cout << "CDM isocurvature in the models with their own dark-matter block\n";
@@ -128,9 +121,9 @@ int main() {
             e_ds_lcdm = std::max(e_ds_lcdm, std::fabs(ds[i] / lcdm[i] - 1.0));
             e_cq_lcdm = std::max(e_cq_lcdm, std::fabs(cq[i] / lcdm[i] - 1.0));
         }
-        check_close("CDI: dark_scattering (xi = 0) = ide (xi = 0)", e_ds_ide, 0.0, 1e-4);
-        check_close("CDI: dark_scattering (xi = 0, w = -0.95) ~ LCDM", e_ds_lcdm, 0.0, 0.1);
-        check_close("CDI: coupled_quintessence (beta = 0, lambda = 1e-3) = LCDM", e_cq_lcdm, 0.0, 1e-4);
+        check_close(e_ds_ide, 0.0, 1e-4, "CDI: dark_scattering (xi = 0) = ide (xi = 0)");
+        check_close(e_ds_lcdm, 0.0, 0.1, "CDI: dark_scattering (xi = 0, w = -0.95) ~ LCDM");
+        check_close(e_cq_lcdm, 0.0, 1e-4, "CDI: coupled_quintessence (beta = 0, lambda = 1e-3) = LCDM");
     }
 
     std::cout << "Initial conditions and attractor\n";
@@ -158,8 +151,8 @@ int main() {
             const double k = p1->get_k_array()[20], x0 = -18.0;
             if (m == 0) {
                 const double S = p1->get_delta_cdm(x0, k) - 3.0 * p1->get_Theta(0, x0, k); // delta_gamma = 4 Theta_0
-                check_close(n + ": entropy delta_c - 3/4 delta_gamma = -1 initially", S, -1.0, 1e-4);
-                check("... Phi << 1 initially", std::fabs(p1->get_Phi(x0, k)) < 1e-4);
+                check_close(S, -1.0, 1e-4, n + ": entropy delta_c - 3/4 delta_gamma = -1 initially");
+                check(std::fabs(p1->get_Phi(x0, k)) < 1e-4, "... Phi << 1 initially");
             }
             // delta_cdm and Phi at recombination, z ~ 20 and today, Theta_0 at recombination, relative to max(|value|,
             // 0.1) (Phi of the NID mode crosses zero near recombination). The neutrino modes keep a small x_start
@@ -173,8 +166,8 @@ int main() {
             }
             worst = std::max(worst, rel(p1->get_Theta(0, -7.0, k), p2->get_Theta(0, -7.0, k)));
             const bool nu = m >= 2;
-            check(n + ": independent of the initial time (x_start = -18 vs -16, < " + (nu ? "1e-3" : "1e-6") + ")",
-                  worst < (nu ? 1e-3 : 1e-6));
+            check(worst < (nu ? 1e-3 : 1e-6),
+                  n + ": independent of the initial time (x_start = -18 vs -16, < " + (nu ? "1e-3" : "1e-6") + ")");
         }
     }
 
@@ -208,14 +201,14 @@ int main() {
             for (size_t i = 1; i < ps.size(); i++)
                 P.add_component(*ps[i]);
             P.solve();
-            check_rel(m + ": TT ell = 10", P.get_Dell_TT(10), r.tt10, 5e-3);
-            check_rel(m + ": TT ell = 100", P.get_Dell_TT(100), r.tt100, 3e-3);
-            check_rel(m + ": TT ell = 500", P.get_Dell_TT(500), r.tt500, 3e-3);
-            check_rel(m + ": EE ell = 100", P.get_Dell_EE(100), r.ee100, 5e-3);
-            check_rel(m + ": EE ell = 500", P.get_Dell_EE(500), r.ee500, 5e-3);
-            check_rel(m + ": TE ell = 100", P.get_Dell_TE(100), r.te100, 5e-3);
+            check_rel(P.get_Dell_TT(10), r.tt10, 5e-3, m + ": TT ell = 10");
+            check_rel(P.get_Dell_TT(100), r.tt100, 3e-3, m + ": TT ell = 100");
+            check_rel(P.get_Dell_TT(500), r.tt500, 3e-3, m + ": TT ell = 500");
+            check_rel(P.get_Dell_EE(100), r.ee100, 5e-3, m + ": EE ell = 100");
+            check_rel(P.get_Dell_EE(500), r.ee500, 5e-3, m + ": EE ell = 500");
+            check_rel(P.get_Dell_TE(100), r.te100, 5e-3, m + ": TE ell = 100");
         }
     }
 
-    return Test::summary();
+    return FML::TESTS::summary("EBS isocurvature");
 }

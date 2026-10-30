@@ -13,7 +13,7 @@ USE_LUA             ?= true
 
 TARGETS := test_core test_mpi_counts test_grid_tools test_fof test_so test_so_multislab test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_halomodel test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_lpt test_nbody
 TARGETS += test_baryonification test_numericalmethods test_interlacing_offset test_streamed_kick test_lightcone test_random_fields test_timestepping test_transfers
-TARGETS += test_fourier_resampling
+TARGETS += test_fourier_resampling test_testhelpers
 TARGETS += test_cosmicweb test_short_range test_yukawa test_phase_space_halos test_control test_morphology test_environment test_pt_direct test_halo_history
 
 include ../Makefile.config
@@ -182,7 +182,11 @@ test_camb: test_camb.o test_camb_odr.o Global.o Spline.o
 	$(LINK_EXE)
 
 # Numerical core: splines, ODE solver and math functions (GSL)
-test_numericalmethods: test_numericalmethods.o NumericalMethods.o
+test_numericalmethods: test_numericalmethods.o NumericalMethods.o Global.o
+	$(LINK_EXE)
+
+# The shared test helpers (TestHelpers.h)
+test_testhelpers: test_testhelpers.o Global.o
 	$(LINK_EXE)
 
 test_numcore: test_numcore.o Global.o Spline.o ODESolver.o Math.o
@@ -251,6 +255,11 @@ export OMP_WAIT_POLICY = passive
 .PHONY: run
 run: $(TARGETS)
 	@set -e; for np in $(NP_LIST); do \
+	  echo "== Running test_testhelpers with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_testhelpers; \
+	  ! $(RUN) ./test_testhelpers fail > testhelpers.log 2>&1; \
+	  grep -q "deliberate failure: 2 of 2 checks FAILED" testhelpers.log; \
+	  echo "[PASS] failing collective and local checks give a nonzero exit code"; \
 	  echo "== Running test_core with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_core; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_mpi_counts; \
@@ -342,7 +351,7 @@ run: $(TARGETS)
 ifeq ($(USE_MPI),true)
 	@! $(MPIRUN) -np 2 ./test_core unwrapped > unwrapped.log 2>&1 && grep -q "outside \[0,1)" unwrapped.log && echo "[PASS] unwrapped particle aborts"
 endif
-	@rm -f alloc.log unwrapped.log
+	@rm -f alloc.log unwrapped.log testhelpers.log
 	@for m in "truncated:File is truncated or unreadable" "decomposition:does not match the current domain decomposition" "dumpfail:Failed to open file for writing"; do \
 	  ! $(RUN1) ./test_grids $${m%%:*} > grids.log 2>&1 && grep -qF "$${m#*:}" grids.log && echo "[PASS] test_grids $${m%%:*} gives an error" || exit 1; \
 	done; rm -f grids.log

@@ -21,7 +21,7 @@
 #include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 #include <FML/Cosmology/Models/CoupledQuintessence.h>
 #include <FML/Cosmology/Models/Quintessence.h>
@@ -31,9 +31,9 @@
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 namespace {
     CosmologyParameters quint(double lambda) {
@@ -113,8 +113,8 @@ int main() {
         for (double k : l.pert.get_k_array())
             for (double x : {-7.0, -2.0, 0.0})
                 ep = std::max(ep, std::fabs(q.pert.get_Phi(x, k) / l.pert.get_Phi(x, k) - 1.0));
-        check_close("Hp(x) = LCDM", eb, 0.0, 1e-12);
-        check_close("Phi = LCDM", ep, 0.0, 1e-9);
+        check_close(eb, 0.0, 1e-12, "Hp(x) = LCDM");
+        check_close(ep, 0.0, 1e-9, "Phi = LCDM");
     }
 
     std::cout << "Background (lambda = 1)\n";
@@ -122,17 +122,17 @@ int main() {
     b.solve();
     const auto & qs = field(b);
     {
-        check_close("closure: E^2(0) = 1", b.E2_of_x(0.0), 1.0, 1e-12);
-        check_rel("Omega_phi = 1 - Omega_others", qs.rho(0.0), CosmologyParameters().OmegaLambda(), 1e-10);
+        check_close(b.E2_of_x(0.0), 1.0, 1e-12, "closure: E^2(0) = 1");
+        check_rel(qs.rho(0.0), CosmologyParameters().OmegaLambda(), 1e-10, "Omega_phi = 1 - Omega_others");
         double e1 = 0.0, e2 = 0.0;
         for (double x : {-8.0, -3.0, -1.0, 0.0, 1.0}) {
             const double h = 1e-4;
             e1 = std::max(e1, std::fabs((qs.rho(x + h) - qs.rho(x - h)) / (2 * h) - qs.drhodx(x)) / qs.rho(x));
             e2 = std::max(e2, std::fabs((qs.drhodx(x + h) - qs.drhodx(x - h)) / (2 * h) - qs.ddrhoddx(x)) / qs.rho(x));
         }
-        check_close("drho/dx vs finite differences", e1, 0.0, 1e-7);
-        check_close("d2rho/dx2 vs finite differences", e2, 0.0, 1e-6);
-        check("thawing: w = -1 early, w0 > -1", std::fabs(qs.w(-5.0) + 1.0) < 1e-4 && qs.w(0.0) > -0.95);
+        check_close(e1, 0.0, 1e-7, "drho/dx vs finite differences");
+        check_close(e2, 0.0, 1e-6, "d2rho/dx2 vs finite differences");
+        check(std::fabs(qs.w(-5.0) + 1.0) < 1e-4 && qs.w(0.0) > -0.95, "thawing: w = -1 early, w0 > -1");
 
         // Independent solution in cosmic time t (units 1/H0), y = (a, phi, dphi/dt), from the background of the
         // other species: H^2 = rho_o(a) + (dphi/dt)^2/6 + V0 e^{-phi}, phi'' = -3 H phi' + 3 V0 e^{-phi}
@@ -174,8 +174,8 @@ int main() {
         const double rho_phi = df * df / 6.0 + V0 * std::exp(-f), p_phi = df * df / 6.0 - V0 * std::exp(-f);
         std::cout << "  w0 = " << qs.w(0.0) << " (cosmic-time integration: " << p_phi / rho_phi
                   << "), phi0 = " << qs.phi(0.0) << " (" << f << ")\n";
-        check_close("w0 = independent integration", qs.w(0.0), p_phi / rho_phi, 1e-6);
-        check_close("phi0 = independent integration", qs.phi(0.0), f, 1e-6);
+        check_close(qs.w(0.0), p_phi / rho_phi, 1e-6, "w0 = independent integration");
+        check_close(qs.phi(0.0), f, 1e-6, "phi0 = independent integration");
     }
 
     std::cout << "Perturbations (lambda = 1): Einstein constraints with the field\n";
@@ -207,9 +207,9 @@ int main() {
             }
         }
         std::cout << "  field contribution to rho Delta: up to " << de_frac << "\n";
-        check("the field perturbation contributes > 1% of rho Delta", de_frac > 1e-2);
-        check_close("Poisson constraint with the field", ePoisson, 0.0, 1e-6);
-        check_close("momentum constraint with the field", eMomentum, 0.0, 1e-6);
+        check(de_frac > 1e-2, "the field perturbation contributes > 1% of rho Delta");
+        check_close(ePoisson, 0.0, 1e-6, "Poisson constraint with the field");
+        check_close(eMomentum, 0.0, 1e-6, "momentum constraint with the field");
     }
 
     std::cout << "Coupled quintessence: beta = 0 is quintessence\n";
@@ -223,7 +223,7 @@ int main() {
                 e = std::max(e, std::fabs(b0.pert.get_Phi(x, k) / a.pert.get_Phi(x, k) - 1.0));
                 e = std::max(e, std::fabs(b0.pert.get_delta_cdm(x, k) / a.pert.get_delta_cdm(x, k) - 1.0));
             }
-        check_close("beta = 0: Phi, delta_cdm = quintessence model", e, 0.0, 1e-8);
+        check_close(e, 0.0, 1e-8, "beta = 0: Phi, delta_cdm = quintessence model");
     }
 
     const double lam = 0.5, beta = 0.1;
@@ -237,9 +237,9 @@ int main() {
     const auto & d = cf->sector();
     {
         const CosmologyParameters p0;
-        check_close("E(0) = 1", cb.E2_of_x(0.0), 1.0, 1e-12);
-        check_rel("Omega_c(0) = OmegaCDM", cb.rhoCDM(0.0), p0.OmegaCDM, 1e-12);
-        check_rel("Omega_phi(0) from closure", cb.rhoDE(0.0), p0.OmegaLambda(), 1e-10);
+        check_close(cb.E2_of_x(0.0), 1.0, 1e-12, "E(0) = 1");
+        check_rel(cb.rhoCDM(0.0), p0.OmegaCDM, 1e-12, "Omega_c(0) = OmegaCDM");
+        check_rel(cb.rhoDE(0.0), p0.OmegaLambda(), 1e-10, "Omega_phi(0) from closure");
         double e1 = 0.0, e2 = 0.0, eex = 0.0;
         for (double x : {-8.0, -3.0, -1.0, 0.0, 1.0}) {
             const double h = 1e-4;
@@ -255,10 +255,10 @@ int main() {
                 std::fabs(cb.drhoCDMdx(x) + cf->drhodx(x) + 3.0 * cb.rhoCDM(x) + 3.0 * (cf->rho(x) + cf->p(x))) /
                     cb.rhoCDM(x));
         }
-        check_close("rho', rho'' vs finite differences (CDM and field)", std::max(e1, e2), 0.0, 1e-6);
-        check_close("energy exchange cancels in the total", eex, 0.0, 1e-12);
-        check("CDM dilutes faster than a^-3 (energy flows to the field)",
-              cb.rhoCDM(-1.0) * std::exp(-3.0) > cb.rhoCDM(0.0));
+        check_close(std::max(e1, e2), 0.0, 1e-6, "rho', rho'' vs finite differences (CDM and field)");
+        check_close(eex, 0.0, 1e-12, "energy exchange cancels in the total");
+        check(cb.rhoCDM(-1.0) * std::exp(-3.0) > cb.rhoCDM(0.0),
+              "CDM dilutes faster than a^-3 (energy flows to the field)");
 
         // Independent integration in cosmic time (units 1/H0): rho_c = C a^-3 e^{-beta phi},
         //   H^2 = rho_o(a) + rho_c + phi'^2/6 + V0 e^{-lambda phi},  phi'' = -3 H phi' + 3 lambda V0 e^{-lambda phi} +
@@ -305,9 +305,9 @@ int main() {
         const double rphi = df * df / 6.0 + V0 * std::exp(-lam * f), pphi = df * df / 6.0 - V0 * std::exp(-lam * f);
         std::cout << "  w0 = " << cf->p(0.0) / cf->rho(0.0) << " (cosmic time: " << pphi / rphi
                   << "), phi0 = " << d.phi(0.0) << " (" << f << "), Omega_c(0) " << rc(1.0, f) << "\n";
-        check_close("w0 = independent integration", cf->p(0.0) / cf->rho(0.0), pphi / rphi, 1e-6);
-        check_close("phi0 = independent integration", d.phi(0.0), f, 1e-6);
-        check_rel("Omega_c(0) = independent integration", cb.rhoCDM(0.0), rc(1.0, f), 1e-6);
+        check_close(cf->p(0.0) / cf->rho(0.0), pphi / rphi, 1e-6, "w0 = independent integration");
+        check_close(d.phi(0.0), f, 1e-6, "phi0 = independent integration");
+        check_rel(cb.rhoCDM(0.0), rc(1.0, f), 1e-6, "Omega_c(0) = independent integration");
     }
 
     std::cout << "Coupled quintessence: perturbations\n";
@@ -330,8 +330,8 @@ int main() {
             eM,
             frac);
         std::cout << "  field contribution to rho Delta: up to " << frac << "\n";
-        check_close("Poisson constraint with coupled CDM and field", eP, 0.0, 1e-6);
-        check_close("momentum constraint with coupled CDM and field", eM, 0.0, 1e-6);
+        check_close(eP, 0.0, 1e-6, "Poisson constraint with coupled CDM and field");
+        check_close(eM, 0.0, 1e-6, "momentum constraint with coupled CDM and field");
 
         // Quasi-static two-fluid growth from x0 = -4, started with the code's values; ratio to beta = 0 (same lambda)
         auto growth = [&](const Run & run, double bt, double k) {
@@ -385,8 +385,8 @@ int main() {
         const double ref = growth(r, beta, k) / growth(r0, 0.0, k);
         std::cout << "  growth of delta_cdm from z = 54 to 0, beta = " << beta << " vs 0: " << code
                   << ", two-fluid growth equations: " << ref << "\n";
-        check_close("CDM growth with fifth force and drag = growth equations", code / ref, 1.0, 5e-4);
+        check_close(code / ref, 1.0, 5e-4, "CDM growth with fifth force and drag = growth equations");
     }
 
-    return Test::summary();
+    return FML::TESTS::summary("EBS quintessence");
 }

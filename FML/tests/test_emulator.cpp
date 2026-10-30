@@ -14,18 +14,14 @@
 #include <memory>
 #include <string>
 #include <type_traits>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 
 using namespace FML::EMULATOR::EUCLIDEMULATOR2;
 
 int emulator_odr_check(); // defined in test_emulator_odr.cpp
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
 
 double boost_at(const std::pair<std::vector<double>, std::vector<double>> & b, double k) {
     size_t i = 0;
@@ -35,7 +31,7 @@ double boost_at(const std::pair<std::vector<double>, std::vector<double>> & b, d
 }
 
 int main() {
-    check(emulator_odr_check() == 1, "EuclidEmulator2.h can be included in several translation units");
+    check_local(emulator_odr_check() == 1, "EuclidEmulator2.h can be included in several translation units");
 
     // Reference values (k = 0.0150042, 0.304633, 1.00213, 5.02027 h/Mpc)
     {
@@ -49,7 +45,7 @@ int main() {
             for (double k : {0.01, 0.3, 1.0, 5.0})
                 maxerr = std::max(maxerr, std::fabs(boost_at(b, k) / ref[iz][ik++] - 1.0));
         }
-        check(maxerr < 1e-10, "boost at z = 0, 1 = reference values");
+        check_local(maxerr < 1e-10, "boost at z = 0, 1 = reference values");
 
         // Too many redshifts
         bool thrown = false;
@@ -58,7 +54,7 @@ int main() {
         } catch (std::exception &) {
             thrown = true;
         }
-        check(thrown, "more than 101 redshifts throws (buffer overflow before)");
+        check_local(thrown, "more than 101 redshifts throws (buffer overflow before)");
     }
 
     // Missing data file
@@ -72,7 +68,7 @@ int main() {
             thrown = true;
         }
         set_path_to_ee2_data(path);
-        check(thrown, "a missing data file throws (segfault before)");
+        check_local(thrown, "a missing data file throws (segfault before)");
     }
 
     // Copies
@@ -83,13 +79,11 @@ int main() {
         csm.reset();
         Cosmology copy2(0.05, 0.3, 0.0, 0.96, 0.7, -1.0, 0.0, 2.0e-9);
         copy2 = copy;
-        check(copy.compute_step_number(1.0) == ref and copy2.compute_step_number(1.0) == ref,
-              "copies of Cosmology own their GSL objects (double free before)");
-        check(not std::is_copy_constructible_v<EuclidEmulator>, "EuclidEmulator cannot be copied (double free before)");
+        check_local(copy.compute_step_number(1.0) == ref and copy2.compute_step_number(1.0) == ref,
+                    "copies of Cosmology own their GSL objects (double free before)");
+        check_local(not std::is_copy_constructible_v<EuclidEmulator>,
+                    "EuclidEmulator cannot be copied (double free before)");
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All emulator tests passed\n" :
-                                   std::to_string(fails) + " emulator test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("emulator");
 }

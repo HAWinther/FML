@@ -15,6 +15,9 @@
 #include <iomanip>
 #include <sstream>
 #include <random>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 
 template <int N>
 using FFTWGrid = FML::GRID::FFTWGrid<N>;
@@ -30,17 +33,10 @@ struct Particle {
     constexpr int get_ndim() const { return N; }
 };
 
-int fails = 0;
 std::string sci(double x) {
     std::ostringstream os;
     os << std::scientific << std::setprecision(1) << x;
     return os.str();
-}
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
 }
 
 // The same random particles on all tasks; keep the ones in the local domain
@@ -119,9 +115,9 @@ void test_nufft(int nmesh, size_t npart, double epsilon, double sigma = 2.0) {
     }
     FML::MaxOverTasks(&maxerr);
     FML::MaxOverTasks(&maxval);
-    check(maxerr < 10 * epsilon * maxval,
-          "NUFFT type 1 (" + std::to_string(N) + "D, eps = " + sci(epsilon) + ", sigma = " + sci(sigma) +
-              ") matches direct sum: max rel err " + sci(maxerr / maxval));
+    check_local(maxerr < 10 * epsilon * maxval,
+                "NUFFT type 1 (" + std::to_string(N) + "D, eps = " + sci(epsilon) + ", sigma = " + sci(sigma) +
+                    ") matches direct sum: max rel err " + sci(maxerr / maxval));
 
     // Type 2: evaluate the field from the grid above at the particle positions and compare to the direct sum
     // f(x) = sum_m F(m) e^{ikx} (each task sums its own modes for all particles, then reduce)
@@ -153,9 +149,9 @@ void test_nufft(int nmesh, size_t npart, double epsilon, double sigma = 2.0) {
     }
     FML::MaxOverTasks(&maxerr);
     FML::MaxOverTasks(&maxval);
-    check(maxerr < 10 * epsilon * maxval,
-          "NUFFT type 2 (" + std::to_string(N) + "D, eps = " + sci(epsilon) + ", sigma = " + sci(sigma) +
-              ") matches direct sum: max rel err " + sci(maxerr / maxval));
+    check_local(maxerr < 10 * epsilon * maxval,
+                "NUFFT type 2 (" + std::to_string(N) + "D, eps = " + sci(epsilon) + ", sigma = " + sci(sigma) +
+                    ") matches direct sum: max rel err " + sci(maxerr / maxval));
 }
 
 void test_chunked_exchange() {
@@ -164,12 +160,12 @@ void test_chunked_exchange() {
     };
     using namespace FML::COMMUNICATION;
     const auto capacity = detail::records_per_chunk<Record>(std::numeric_limits<size_t>::max());
-    check(capacity == size_t(INT_MAX) / sizeof(Record) && capacity * sizeof(Record) <= size_t(INT_MAX) &&
-              detail::records_per_chunk<Record>(sizeof(Record) - 1) == 0 &&
-              detail::chunk_count(capacity + 1, capacity) == 2 &&
-              detail::chunk_count(std::numeric_limits<unsigned long long>::max(), 1) ==
-                  std::numeric_limits<unsigned long long>::max(),
-          "record chunk arithmetic handles byte counts beyond INT_MAX without large allocations");
+    check_local(capacity == size_t(INT_MAX) / sizeof(Record) && capacity * sizeof(Record) <= size_t(INT_MAX) &&
+                    detail::records_per_chunk<Record>(sizeof(Record) - 1) == 0 &&
+                    detail::chunk_count(capacity + 1, capacity) == 2 &&
+                    detail::chunk_count(std::numeric_limits<unsigned long long>::max(), 1) ==
+                        std::numeric_limits<unsigned long long>::max(),
+                "record chunk arithmetic handles byte counts beyond INT_MAX without large allocations");
     for (int pattern = 0; pattern < 3; ++pattern)
         for (size_t bytes : {sizeof(Record), 3 * sizeof(Record) + 7, size_t(INT_MAX) + 1}) {
             auto count = [pattern](int source, int dest) -> size_t {
@@ -210,9 +206,9 @@ void test_chunked_exchange() {
                 ok = ok && peer.empty() && peer.capacity() == 0;
             int bad = !ok;
             FML::MaxOverTasks(&bad);
-            check(!bad,
-                  "chunked exchange delivers every record exactly once, pattern " + std::to_string(pattern) +
-                      ", byte limit " + std::to_string(bytes));
+            check_local(!bad,
+                        "chunked exchange delivers every record exactly once, pattern " + std::to_string(pattern) +
+                            ", byte limit " + std::to_string(bytes));
         }
 }
 
@@ -252,9 +248,9 @@ void test_mode_redistribution(int source_mesh, int dest_mesh) {
         bad = bad ||
               source.get_fourier_from_index(index) != value(source.get_fourier_integer_wavevector_from_index(index));
     FML::MaxOverTasks(&bad);
-    check(!bad,
-          "NUFFT mode redistribution preserves exact coefficients, factor and cutoff: " + std::to_string(N) + "D " +
-              std::to_string(source_mesh) + " -> " + std::to_string(dest_mesh));
+    check_local(!bad,
+                "NUFFT mode redistribution preserves exact coefficients, factor and cutoff: " + std::to_string(N) +
+                    "D " + std::to_string(source_mesh) + " -> " + std::to_string(dest_mesh));
 }
 
 void test_redistribution_suite() {
@@ -282,8 +278,8 @@ int main(int argc, char ** argv) {
         if (t == FML::ThisTask)
             expected.push_back(-1);
     }
-    check(FML::INTERPOLATION::detail::alltoallv_elements(outgoing) == expected,
-          "checked sheet exchange preserves peer order and handles empty edges");
+    check_local(FML::INTERPOLATION::detail::alltoallv_elements(outgoing) == expected,
+                "checked sheet exchange preserves peer order and handles empty edges");
     bool rejected_layout = false;
     std::vector<std::vector<int>> invalid(FML::ThisTask == 0 ? 0 : FML::NTasks);
     try {
@@ -291,7 +287,7 @@ int main(int argc, char ** argv) {
     } catch (const std::overflow_error &) {
         rejected_layout = true;
     }
-    check(rejected_layout, "one-rank invalid sheet layout fails collectively before indexing");
+    check_local(rejected_layout, "one-rank invalid sheet layout fails collectively before indexing");
 #endif
 
     if (argc > 1 && std::string(argv[1]) == "chunk_limit") {
@@ -304,7 +300,7 @@ int main(int argc, char ** argv) {
     }
     test_redistribution_suite();
     if (argc > 1 && std::string(argv[1]) == "redistribution")
-        return fails == 0 ? 0 : 1;
+        return FML::TESTS::summary("grid tools (redistribution)");
 
     //===========================================================
     // 1. shift_grid_fourier: exact for band-limited fields, cos(k s) at Nyquist
@@ -333,7 +329,7 @@ int main(int argc, char ** argv) {
             maxerr = std::max(maxerr, std::abs(grid.get_real_from_index(real_index) - fshift(x)));
         }
         FML::MaxOverTasks(&maxerr);
-        check(maxerr < 1e-10, "shift_grid_fourier is exact for a band-limited field (err " + sci(maxerr) + ")");
+        check_local(maxerr < 1e-10, "shift_grid_fourier is exact for a band-limited field (err " + sci(maxerr) + ")");
     }
 
     //===========================================================
@@ -350,7 +346,7 @@ int main(int argc, char ** argv) {
         FML::PARTICLE::shift_particles<Particle<3>, 3>(p.data(), 1, {0.2, 0.1, -0.1}, -1.0, 1);
         ok = ok and std::abs(p[0].pos[0] - 0.9) < 1e-14 and std::abs(p[0].pos[1] - 0.95) < 1e-14 and
              std::abs(p[0].pos[2] - 0.05) < 1e-14;
-        check(ok, "shift_particles with and without wrapping in x");
+        check_local(ok, "shift_particles with and without wrapping in x");
     }
 
     //===========================================================
@@ -386,7 +382,7 @@ int main(int argc, char ** argv) {
         } catch (std::runtime_error &) {
             threw = true;
         }
-        check(ok and threw, "generate_interlacing_shifts (orders 2, 4, 8, 16 in 3D; 3 is rejected)");
+        check_local(ok and threw, "generate_interlacing_shifts (orders 2, 4, 8, 16 in 3D; 3 is rejected)");
     }
 
     //===========================================================
@@ -439,8 +435,9 @@ int main(int argc, char ** argv) {
                       << err[1] << " " << err[2] << " " << err[3] << " " << err[4] << "\n";
         // Half-cell shifts cancel the odd alias images (the largest, n = (1,0,0)). After that the error is
         // dominated by the even images (n = (2,0,0), ...) which only quarter-cell shifts (order 4^3 = 64) cancel
-        check(err[1] < 0.1 * err[0] and err[2] < 1.01 * err[1] and err[3] < 1.01 * err[1] and err[4] < 0.1 * err[3],
-              "Interlacing of order 1, 2, 4, 8, 64 reduces aliasing as expected");
+        check_local(err[1] < 0.1 * err[0] and err[2] < 1.01 * err[1] and err[3] < 1.01 * err[1] and
+                        err[4] < 0.1 * err[3],
+                    "Interlacing of order 1, 2, 4, 8, 64 reduces aliasing as expected");
     }
 
     //===========================================================
@@ -483,7 +480,8 @@ int main(int argc, char ** argv) {
         }
         FML::MaxOverTasks(&maxerr);
         FML::MaxOverTasks(&maxval);
-        check(maxerr < 1e-6 * maxval, "NUFFT force matches the direct mode sum: max rel err " + sci(maxerr / maxval));
+        check_local(maxerr < 1e-6 * maxval,
+                    "NUFFT force matches the direct mode sum: max rel err " + sci(maxerr / maxval));
     }
 
     //===========================================================
@@ -524,7 +522,7 @@ int main(int argc, char ** argv) {
         bool ok = true;
         for (int idim = 0; idim < 3; idim++)
             ok = ok and std::abs(lattice_offset[idim] - offset[idim]) < 1e-10;
-        check(ok, "displacement_field_from_particles finds the lattice offset");
+        check_local(ok, "displacement_field_from_particles finds the lattice offset");
 
         // Tracers for an arbitrary shift must be at q + s + Psi(q + s)
         for (int idim = 0; idim < 3; idim++)
@@ -561,8 +559,8 @@ int main(int argc, char ** argv) {
         }
         FML::MaxOverTasks(&maxerr);
         FML::MaxOverTasks(&outside);
-        check(ntracers == size_t(Np * Np * Np) and outside == 0 and maxerr < 1e-10,
-              "sheet_tracers are at q + s + Psi(q + s) (max err " + sci(maxerr) + ")");
+        check_local(ntracers == size_t(Np * Np * Np) and outside == 0 and maxerr < 1e-10,
+                    "sheet_tracers are at q + s + Psi(q + s) (max err " + sci(maxerr) + ")");
 
         // Sheet density with R = 2 on a 32^3 grid equals the density of the analytic tracers
         const int R = 2, nmesh = 32;
@@ -597,7 +595,8 @@ int main(int argc, char ** argv) {
         }
         FML::MaxOverTasks(&maxdiff);
         FML::MaxOverTasks(&maxref);
-        check(maxdiff < 1e-8 * maxref, "particles_to_fourier_grid_sheet (R = 2) equals the analytic sheet density");
+        check_local(maxdiff < 1e-8 * maxref,
+                    "particles_to_fourier_grid_sheet (R = 2) equals the analytic sheet density");
 
         // The same with the exact Fourier modes of the tracers (NUFFT)
         FFTWGrid<3> density_nufft(nmesh);
@@ -623,10 +622,10 @@ int main(int argc, char ** argv) {
         }
         FML::MaxOverTasks(&maxdiff);
         FML::MaxOverTasks(&maxref);
-        check(maxdiff < 1e-6 * maxref,
-              "particles_to_fourier_grid_sheet with NUFFT equals the NUFFT of the analytic "
-              "sheet tracers (rel err " +
-                  sci(maxdiff / maxref) + ")");
+        check_local(maxdiff < 1e-6 * maxref,
+                    "particles_to_fourier_grid_sheet with NUFFT equals the NUFFT of the analytic "
+                    "sheet tracers (rel err " +
+                        sci(maxdiff / maxref) + ")");
     }
 
     // sort_particles_by_position: the same order as a stable sort by block (x-major), particles moved whole, and the
@@ -663,8 +662,8 @@ int main(int argc, char ** argv) {
             maxdiff =
                 std::max(maxdiff, std::fabs(double(g1.get_real_from_index(index)) - g2.get_real_from_index(index)));
         FML::MaxOverTasks(&maxdiff);
-        check(nok == 1 and maxdiff < 1e-12,
-              "sort_particles_by_position = stable sort by block, density unchanged (" + sci(maxdiff) + ")");
+        check_local(nok == 1 and maxdiff < 1e-12,
+                    "sort_particles_by_position = stable sort by block, density unchanged (" + sci(maxdiff) + ")");
     }
 
 #ifdef USE_OMP
@@ -705,11 +704,9 @@ int main(int argc, char ** argv) {
             ok = ok and maxdiff < 1e-12 and (not chunked or maxdiff23 == 0.0);
             info += " " + method + ": " + sci(maxdiff) + (chunked ? " (2 = 3 threads: " + sci(maxdiff23) + ")" : "");
         }
-        check(ok, "particles_to_grid with threads equals one thread, deterministic:" + info);
+        check_local(ok, "particles_to_grid with threads equals one thread, deterministic:" + info);
     }
 #endif
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All tests passed\n" : std::to_string(fails) + " test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("grid tools");
 }

@@ -1,5 +1,5 @@
 // Tests of the HMC sampler (HMC.h) on targets with known moments.
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/MCMC/HMC.h>
 #include <cstdlib>
 #include <numeric>
@@ -20,9 +20,9 @@ static void check_moments(const std::string & what, const std::vector<double> & 
     double mean, var;
     moments(x, mean, var);
     const double ess = double(x.size()) / integrated_autocorrelation_time(x);
-    Test::check_close(what + " mean (5 sigma)", (mean - mean_true) / std::sqrt(var_true / ess), 0, 5);
+    FML::TESTS::check_close((mean - mean_true) / std::sqrt(var_true / ess), 0, 5, what + " mean (5 sigma)");
     // var of a sample variance ~ 2 var^2 / ess for a Gaussian
-    Test::check_rel(what + " variance", var, var_true, 5 * std::sqrt(2 / ess) + .02);
+    FML::TESTS::check_rel(var, var_true, 5 * std::sqrt(2 / ess) + .02, what + " variance");
 }
 
 // 1. Independent Gaussians with variances spanning 1e-4 .. 1e2: diagonal mass adaptation must find them
@@ -51,13 +51,13 @@ static void test_diagonal_adaptation() {
     std::cout << "  acceptance " << r.acceptance << ", step " << r.step_size << ", divergences " << r.divergences
               << "\n";
     // Dual averaging returns the averaged (smaller) step, so the realised acceptance lies somewhat above the target
-    Test::check_close("acceptance in [0.7, 0.97] (target 0.8)",
-                      (r.acceptance > .7 && r.acceptance < .97) ? 0. : 1.,
-                      0,
-                      0);
+    FML::TESTS::check_close((r.acceptance > .7 && r.acceptance < .97) ? 0. : 1.,
+                            0,
+                            0,
+                            "acceptance in [0.7, 0.97] (target 0.8)");
     for (int i : {0, d / 2, d - 1}) {
         check_moments("x" + std::to_string(i), recorded_column(r, i), mu[i], var[i]);
-        Test::check_rel("adapted mass of x" + std::to_string(i) + " ~ 1/var", r.diagonal[i] * var[i], 1., .35);
+        FML::TESTS::check_rel(r.diagonal[i] * var[i], 1., .35, "adapted mass of x" + std::to_string(i) + " ~ 1/var");
     }
 }
 
@@ -159,7 +159,7 @@ static void test_bounds() {
         lo = std::min(lo, std::min(row[0], row[1] + 1));
         hi = std::max(hi, row[1]);
     }
-    Test::check_close("all samples inside the bounds", (lo >= 0 && hi <= 2) ? 0. : 1., 0, 0);
+    FML::TESTS::check_close((lo >= 0 && hi <= 2) ? 0. : 1., 0, 0, "all samples inside the bounds");
 }
 
 // 4. Gelman-Rubin from independent chains of the same target is ~0, and detects chains stuck in different modes
@@ -179,11 +179,11 @@ static void test_gelman_rubin() {
     }
     const double R = gelman_rubin(chains);
     std::cout << "  R - 1 = " << R << "\n";
-    Test::check_close("R - 1 small for converged chains", R, 0, .02);
+    FML::TESTS::check_close(R, 0, .02, "R - 1 small for converged chains");
     for (std::size_t j = 0; j < chains.size(); ++j)
         for (auto & v : chains[j])
             v += 3. * double(j);
-    Test::check_close("R - 1 large for separated chains", gelman_rubin(chains) > .5 ? 0. : 1., 0, 0);
+    FML::TESTS::check_close(gelman_rubin(chains) > .5 ? 0. : 1., 0, 0, "R - 1 large for separated chains");
 }
 
 int main() {
@@ -191,5 +191,5 @@ int main() {
     test_custom_block();
     test_bounds();
     test_gelman_rubin();
-    return Test::summary();
+    return FML::TESTS::summary("MCMC hmc");
 }

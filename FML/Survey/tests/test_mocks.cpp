@@ -13,16 +13,13 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 
 using namespace FML::SURVEY::MOCKS;
 
 namespace {
-    int failures = 0;
-    void check(bool ok, const std::string & label) {
-        if (FML::ThisTask == 0)
-            std::cout << (ok ? "[PASS] " : "[FAIL] ") << label << "\n";
-        failures += !ok;
-    }
     const double c_over_H0 = speed_of_light_kms / 100.0; // Mpc/h
     double hubble_eds(double z) { return std::pow(1 + z, 1.5) / c_over_H0; }
     double hubble_lcdm(double z) { return std::sqrt(0.3 * std::pow(1 + z, 3) + 0.7) / c_over_H0; }
@@ -54,8 +51,8 @@ int main() {
         }
         if (FML::ThisTask == 0)
             std::cout << "  r(z) relative error " << err << "\n";
-        check(err < 1e-8, "r(z) = 2 c/H0 (1 - (1+z)^-1/2) in EdS");
-        check(err_inv < 1e-12, "z(r(z)) = z");
+        check_local(err < 1e-8, "r(z) = 2 c/H0 (1 - (1+z)^-1/2) in EdS");
+        check_local(err_inv < 1e-12, "z(r(z)) = z");
 
         MockOptions o;
         o.boxsize = 500;
@@ -90,7 +87,8 @@ int main() {
         }
         double emax = e;
         FML::MaxOverTasks(&emax);
-        check(emax < 1e-6, "(RA, Dec, z) -> Cartesian -> box position round trip (" + std::to_string(emax) + " Mpc/h)");
+        check_local(emax < 1e-6,
+                    "(RA, Dec, z) -> Cartesian -> box position round trip (" + std::to_string(emax) + " Mpc/h)");
     }
 
     // 2. Velocities: z_obs = z_cos for v = 0; a receding object is redder by (1 + v_r/c)
@@ -120,7 +118,8 @@ int main() {
         }
         int n = int(cat.galaxies.size());
         FML::SumOverTasks(&n);
-        check(ok && n == 2, "zero velocity: z_obs = z_cos; receding: 1 + z_obs = (1 + z_cos)(1 + v_r/c), farther");
+        check_local(ok && n == 2,
+                    "zero velocity: z_obs = z_cos; receding: 1 + z_obs = (1 + z_cos)(1 + v_r/c), farther");
     }
 
     // 3-5. Footprint area, radial selection n(z), randoms (uniform box, LCDM, RA-Dec box footprint)
@@ -143,7 +142,7 @@ int main() {
                 mine.push_back(all[i]);
         const auto cat = make_survey(mine, o);
         const auto ran = make_randoms(o, cat.parent_nbar);
-        check(std::fabs(cat.parent_nbar / parent - 1) < 1e-12, "parent density N/L^3 summed over the tasks");
+        check_local(std::fabs(cat.parent_nbar / parent - 1) < 1e-12, "parent density N/L^3 summed over the tasks");
 
         // footprint fraction from the randoms
         const double area = 120 * deg * (std::sin(50 * deg) - std::sin(-10 * deg)) / (4 * M_PI);
@@ -179,15 +178,15 @@ int main() {
             std::cout << "  data " << nd << " (expected " << ntot_exp << "), randoms " << nr << " (expected "
                       << ntot_exp * o.random_factor << "), max |pull| of n(z): data " << pull << ", randoms " << pull_r
                       << ", footprint fraction " << area << "\n";
-        check(pull < 4.5, "data n(z) = target n(z) in the footprint (Poisson)");
-        check(pull_r < 4.5, "randoms n(z) = random_factor x target in the footprint (Poisson)");
-        check(std::fabs(nr / (o.random_factor * ntot_exp) - 1) < 5 / std::sqrt(nr), "randoms: footprint area");
+        check_local(pull < 4.5, "data n(z) = target n(z) in the footprint (Poisson)");
+        check_local(pull_r < 4.5, "randoms n(z) = random_factor x target in the footprint (Poisson)");
+        check_local(std::fabs(nr / (o.random_factor * ntot_exp) - 1) < 5 / std::sqrt(nr), "randoms: footprint area");
         bool in_footprint = true, nbar_ok = true;
         for (const auto & g : cat.galaxies) {
             in_footprint &= o.footprint(g.ra, g.dec) == 1.0;
             nbar_ok &= std::fabs(g.nbar - o.target_nbar(g.z_obs)) < 1e-15;
         }
-        check(in_footprint && nbar_ok, "data inside the footprint, nbar = target n(z_obs)");
+        check_local(in_footprint && nbar_ok, "data inside the footprint, nbar = target n(z_obs)");
         // feasibility
         MockOptions bad = o;
         bad.target_nbar = [](double) { return 1e-3; };
@@ -197,7 +196,7 @@ int main() {
         } catch (const std::invalid_argument &) {
             threw = true;
         }
-        check(threw, "a target density above the box density is an error");
+        check_local(threw, "a target density above the box density is an error");
 
         // 7. reproducibility: the distributed catalogue = the serial one (order independent checksum)
         auto checksum = [](const std::vector<MockGalaxy> & gs) {
@@ -212,8 +211,9 @@ int main() {
         serial.parent_nbar = cat.parent_nbar; // local: no reduction
         const auto ref = make_survey(all, serial);
         const double reference = checksum(ref.galaxies);
-        check(std::fabs(distributed - reference) < 1e-9 * std::fabs(reference) && double(ref.galaxies.size()) == nd,
-              "the catalogue does not depend on the number of MPI tasks");
+        check_local(std::fabs(distributed - reference) < 1e-9 * std::fabs(reference) &&
+                        double(ref.galaxies.size()) == nd,
+                    "the catalogue does not depend on the number of MPI tasks");
     }
 
     // Lightcone input: positions anywhere (Mpc/h, observer frame), the given observed redshift is used
@@ -249,8 +249,8 @@ int main() {
         } catch (const std::invalid_argument &) {
             threw = true;
         }
-        check(ok && n == 2 && threw,
-              "lightcone input: positions outside the box, the given z_obs; parent_nbar required");
+        check_local(ok && n == 2 && threw,
+                    "lightcone input: positions outside the box, the given z_obs; parent_nbar required");
     }
 
     // 8. Remapping: one to one onto the cuboid, volume preserving, uniform
@@ -298,7 +298,7 @@ int main() {
         } catch (const std::invalid_argument &) {
             threw = true;
         }
-        check(ok && threw, "remapping: inside the cuboid, back to the box, uniform, volume 1; det != 1 rejected");
+        check_local(ok && threw, "remapping: inside the cuboid, back to the box, uniform, volume 1; det != 1 rejected");
 
         // a deep pencil survey in a remapped cuboid (not periodic): no repetition, the right density
         const double L = 500;
@@ -335,8 +335,8 @@ int main() {
         if (FML::ThisTask == 0)
             std::cout << "  pencil to z = 0.6 (" << rmax << " Mpc/h, box " << L << "): " << n << " objects, expected "
                       << expected << ", cuboid " << o.extent[0] << " x " << o.extent[1] << " x " << o.extent[2] << "\n";
-        check(unique && std::fabs(n - expected) < 5 * std::sqrt(expected) && !cat.repeated && cat.truncated,
-              "remapped cuboid: a survey deeper than the box without repeated objects, the right density");
+        check_local(unique && std::fabs(n - expected) < 5 * std::sqrt(expected) && !cat.repeated && cat.truncated,
+                    "remapped cuboid: a survey deeper than the box without repeated objects, the right density");
     }
 
     // 9. Healpix RING pixels (healpy 1.20 reference values) and a Healpix footprint
@@ -397,7 +397,7 @@ int main() {
         for (int i = 0; i < 17; i++)
             ok &= healpix_ang2pix_ring(4, th[i], ph[i]) == ref4[i] &&
                   healpix_ang2pix_ring(1024, th[i], ph[i]) == ref1024[i];
-        check(ok, "Healpix ang2pix (RING) = healpy for nside = 4 and 1024");
+        check_local(ok, "Healpix ang2pix (RING) = healpy for nside = 4 and 1024");
         // the first half of the pixels of an nside = 8 map (half the sky)
         std::vector<double> map(12 * 64, 0.0);
         for (std::size_t p = 0; p < map.size() / 2; p++)
@@ -416,8 +416,8 @@ int main() {
         FML::SumOverTasks(&all_r);
         detail::DistanceRedshift dr(hubble_lcdm, 0.2);
         const double expected = 1e-3 * 4 * M_PI / 3 * std::pow(dr.r_of_z(0.1), 3) / 2;
-        check(north == all_r && std::fabs(all_r - expected) < 5 * std::sqrt(expected),
-              "Healpix footprint: randoms only in the map pixels, half the sky");
+        check_local(north == all_r && std::fabs(all_r - expected) < 5 * std::sqrt(expected),
+                    "Healpix footprint: randoms only in the map pixels, half the sky");
     }
 
     // MANGLE: an RA/Dec box (weight 0.8), a circle and a ring (a circle minus a smaller one, weight 0.5) against
@@ -482,10 +482,9 @@ int main() {
             threw = true;
         }
         std::remove(file.c_str());
-        check(ok && threw, "MANGLE polygons = analytic box/circle/ring membership (3 grid sizes); weight > 1 rejected");
+        check_local(ok && threw,
+                    "MANGLE polygons = analytic box/circle/ring membership (3 grid sizes); weight > 1 rejected");
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (failures ? "Some survey mock tests FAILED\n" : "All survey mock tests passed\n");
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("survey mock");
 }

@@ -13,7 +13,7 @@
 #include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 #include <FML/Cosmology/Models/DGP.h>
 #include <FML/Cosmology/Models/HuSawicky.h>
@@ -23,22 +23,16 @@
 #include <functional>
 #include <memory>
 
+using FML::TESTS::throws;
+
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 namespace {
-    bool throws(const std::function<void()> & f) {
-        try {
-            f();
-        } catch (const std::exception &) {
-            return true;
-        }
-        return false;
-    }
 
     struct Run {
         BackgroundCosmology cosmo;
@@ -122,10 +116,10 @@ int main() {
                               std::fabs(ms.pert.get_Source_T(x, k) - lcdm.pert.get_Source_T(x, k)) /
                                   std::fabs(lcdm.pert.get_Theta(0, x, k) + lcdm.pert.get_Psi(x, k)));
             }
-        check_close("mu0 = Sigma0 = 0: Phi, Psi, delta_cdm = LCDM", e, 0.0, 1e-9);
+        check_close(e, 0.0, 1e-9, "mu0 = Sigma0 = 0: Phi, Psi, delta_cdm = LCDM");
         // (ODE-tolerance level: the two use different metric equations in the stiff full-hierarchy phase after
         // tight coupling; 2.6e-6 with ode_relerr = 1e-8, 8e-7 with 1e-10)
-        check_close("mu0 = Sigma0 = 0: S_T = LCDM", eS, 0.0, 1e-5);
+        check_close(eS, 0.0, 1e-5, "mu0 = Sigma0 = 0: S_T = LCDM");
     }
 
     std::cout << "mu-Sigma: modified potentials and growth\n";
@@ -144,35 +138,35 @@ int main() {
                 ePsi = std::max(ePsi,
                                 std::fabs(ms.pert.get_Psi(x, k) / (-m.mu * PhiGR - 3.0 * S / (c * c * k * k)) - 1.0));
             }
-        check_close("Phi = (2 Sigma - mu) Phi_GR(rho Delta)", ePhi, 0.0, 1e-4);
-        check_close("Psi = -mu Phi_GR(rho Delta) - shear", ePsi, 0.0, 1e-4);
-        check_rel("mu(x=0) = 1 + mu0", g.mu_sigma(0.0, 0.0, ms.cosmo).mu, 1.0 + mu0, 1e-12);
+        check_close(ePhi, 0.0, 1e-4, "Phi = (2 Sigma - mu) Phi_GR(rho Delta)");
+        check_close(ePsi, 0.0, 1e-4, "Psi = -mu Phi_GR(rho Delta) - shear");
+        check_rel(g.mu_sigma(0.0, 0.0, ms.cosmo).mu, 1.0 + mu0, 1e-12, "mu(x=0) = 1 + mu0");
 
         const double k = ks.back(); // 0.2/Mpc: sub-horizon, quasi-static
         const double ratio = ms.pert.get_delta_cdm(0.0, k) / lcdm.pert.get_delta_cdm(0.0, k);
         const double ref = growth(ms.cosmo, [&](double x) { return g.mu_sigma(x, 0.0, ms.cosmo).mu; }) /
                            growth(lcdm.cosmo, [](double) { return 1.0; });
         std::cout << "  delta_cdm(mu0 = " << mu0 << ") / LCDM = " << ratio << ", growth equation: " << ref << "\n";
-        check_close("growth: delta_cdm ratio = growth equation", ratio / ref, 1.0, 3e-4);
+        check_close(ratio / ref, 1.0, 3e-4, "growth: delta_cdm ratio = growth equation");
 
         // Sigma only: no change of the growth, Weyl potential scaled by Sigma(0) = 1 + Sigma0
         Run s(model("musigma", {{"Sigma0", Sigma0}}), o);
-        check_close("Sigma0 only: delta_cdm unchanged",
-                    s.pert.get_delta_cdm(0.0, k) / lcdm.pert.get_delta_cdm(0.0, k),
+        check_close(s.pert.get_delta_cdm(0.0, k) / lcdm.pert.get_delta_cdm(0.0, k),
                     1.0,
-                    1e-5);
+                    1e-5,
+                    "Sigma0 only: delta_cdm unchanged");
         const double weyl =
             (s.pert.get_Psi(0.0, k) - s.pert.get_Phi(0.0, k)) / (lcdm.pert.get_Psi(0.0, k) - lcdm.pert.get_Phi(0.0, k));
-        check_close("Sigma0 only: (Psi - Phi) / LCDM = 1 + Sigma0 today", weyl, 1.0 + Sigma0, 1e-5);
+        check_close(weyl, 1.0 + Sigma0, 1e-5, "Sigma0 only: (Psi - Phi) / LCDM = 1 + Sigma0 today");
     }
 
     std::cout << "mu-Sigma: errors\n";
     {
-        check("1 + 2 Sigma0 - mu0 < 0 is an error",
-              throws([] { BackgroundCosmology b(model("musigma", {{"mu0", 1.5}, {"Sigma0", 0.1}})); }));
+        check(throws([] { BackgroundCosmology b(model("musigma", {{"mu0", 1.5}, {"Sigma0", 0.1}})); }),
+              "1 + 2 Sigma0 - mu0 < 0 is an error");
         CosmologyParameters pk = model("musigma", {{"mu0", 0.1}});
         pk.OmegaK = 0.01;
-        check("curvature is an error", throws([&] { BackgroundCosmology b(pk); }));
+        check(throws([&] { BackgroundCosmology b(pk); }), "curvature is an error");
     }
 
     std::cout << "DGP: background\n";
@@ -192,10 +186,10 @@ int main() {
                            std::fabs((b.dHpdx_of_x(x + h) - b.dHpdx_of_x(x - h)) / (2 * h) - b.ddHpddx_of_x(x)) /
                                std::fabs(b.Hp_of_x(x)));
         }
-        check_close("sDGP: no dark energy", b.rhoDE(0.0), 0.0, 1e-14);
-        check_close("sDGP: E^2 - 2 sqrt(Omega_rc) E = rho", res, 0.0, 1e-13);
-        check_close("sDGP: dHp/dx vs finite differences", eH, 0.0, 1e-7);
-        check_close("sDGP: d2Hp/dx2 vs finite differences", eHH, 0.0, 1e-7);
+        check_close(b.rhoDE(0.0), 0.0, 1e-14, "sDGP: no dark energy");
+        check_close(res, 0.0, 1e-13, "sDGP: E^2 - 2 sqrt(Omega_rc) E = rho");
+        check_close(eH, 0.0, 1e-7, "sDGP: dHp/dx vs finite differences");
+        check_close(eHH, 0.0, 1e-7, "sDGP: d2Hp/dx2 vs finite differences");
         // eta0 by quadrature of the DGP expansion rate
         const double eta0 = Utils::integrate(
             [&](double u) {
@@ -207,8 +201,8 @@ int main() {
             1.0,
             0.0,
             1e-12);
-        check_rel("sDGP: eta0 vs quadrature", b.eta0(), eta0, 1e-7);
-        check("sDGP accelerates today", b.dHpdx_of_x(0.0) > 0.0);
+        check_rel(b.eta0(), eta0, 1e-7, "sDGP: eta0 vs quadrature");
+        check(b.dHpdx_of_x(0.0) > 0.0, "sDGP accelerates today");
     }
 
     std::cout << "DGP: perturbations\n";
@@ -230,7 +224,7 @@ int main() {
             const double beta = 1.0 - eps * E * (1.0 + dlnE / 3.0) / std::sqrt(O);
             emu = std::max(emu, std::fabs(g.mu_sigma(x, 0.0, r.cosmo).mu - (1.0 + 1.0 / (3.0 * beta))));
         }
-        check_close(label + ": mu = 1 + 1/(3 beta)", emu, 0.0, 1e-8);
+        check_close(emu, 0.0, 1e-8, label + ": mu = 1 + 1/(3 beta)");
 
         double eW = 0.0;
         for (double k : ks)
@@ -243,7 +237,7 @@ int main() {
                                             (-2.0 * PhiGR - 3.0 * S / (c * c * k * k)) -
                                         1.0));
             }
-        check_close(label + ": Sigma = 1 (Psi - Phi from rho Delta as in GR)", eW, 0.0, 1e-4);
+        check_close(eW, 0.0, 1e-4, label + ": Sigma = 1 (Psi - Phi from rho Delta as in GR)");
 
         const double k = ks.back();
         const double ratio = r.pert.get_delta_cdm(0.0, k) / lcdm.pert.get_delta_cdm(0.0, k);
@@ -251,7 +245,7 @@ int main() {
                            growth(lcdm.cosmo, [](double) { return 1.0; });
         std::cout << "  " << label << ": mu(0) = " << g.mu_sigma(0.0, 0.0, r.cosmo).mu
                   << ", delta_cdm / LCDM = " << ratio << ", growth equation: " << ref << "\n";
-        check_close(label + ": growth = growth equation", ratio / ref, 1.0, 3e-4);
+        check_close(ratio / ref, 1.0, 3e-4, label + ": growth = growth equation");
     }
 
     std::cout << "Hu-Sawicky f(R)\n";
@@ -261,7 +255,7 @@ int main() {
         for (double k : ks)
             for (double x : {-7.0, -2.0, 0.0})
                 e = std::max(e, std::fabs(r0.pert.get_Phi(x, k) / lcdm.pert.get_Phi(x, k) - 1.0));
-        check_close("|f_R0| = 0: Phi = LCDM", e, 0.0, 1e-9);
+        check_close(e, 0.0, 1e-9, "|f_R0| = 0: Phi = LCDM");
 
         const double fR0 = 1e-4;
         PerturbationOptions of = o;
@@ -272,29 +266,29 @@ int main() {
         // f_R(0) and the Compton wavelength today: lambda_C^2 = 3 (n+1) |f_R0| / (R0 (1 - |f_R0|)), R0 = 3 H0^2 (rho -
         // 3p)(0)
         const double R0 = 3.0 * std::pow(cs.get_H0() / c, 2) * (cs.rhoB(0.0) + cs.rhoCDM(0.0) + 4.0 * cs.rhoDE(0.0));
-        check_rel("f_R(0) = -|f_R0|", g.fR(0.0, cs), -fR0, 1e-14);
-        check_rel("Compton wavelength today",
-                  g.compton_wavelength(0.0, cs),
+        check_rel(g.fR(0.0, cs), -fR0, 1e-14, "f_R(0) = -|f_R0|");
+        check_rel(g.compton_wavelength(0.0, cs),
                   std::sqrt(6.0 * fR0 / (R0 * (1.0 - fR0))),
-                  1e-10);
-        check_rel("f_R ~ a^{-3(n+1)} in the matter era", g.fR(-6.0, cs) / g.fR(-5.0, cs), std::exp(-6.0), 1e-5);
-        check_rel("mu -> 4/3 (1 + f_R)^-1 for k >> 1/lambda_C",
-                  g.mu_sigma(0.0, 1e3 / Mpc, cs).mu,
+                  1e-10,
+                  "Compton wavelength today");
+        check_rel(g.fR(-6.0, cs) / g.fR(-5.0, cs), std::exp(-6.0), 1e-5, "f_R ~ a^{-3(n+1)} in the matter era");
+        check_rel(g.mu_sigma(0.0, 1e3 / Mpc, cs).mu,
                   4.0 / 3.0 / (1.0 - fR0),
-                  1e-5);
-        check_rel("mu -> (1 + f_R)^-1 for k << 1/lambda_C",
-                  g.mu_sigma(0.0, 1e-5 / Mpc, cs).mu,
+                  1e-5,
+                  "mu -> 4/3 (1 + f_R)^-1 for k >> 1/lambda_C");
+        check_rel(g.mu_sigma(0.0, 1e-5 / Mpc, cs).mu,
                   1.0 / (1.0 - fR0),
-                  1e-6);
+                  1e-6,
+                  "mu -> (1 + f_R)^-1 for k << 1/lambda_C");
         // The transition: the Yukawa form mu = [1 + (1/3) k^2 / (k^2 + a^2 m^2)] / (1 + f_R), m = 1/lambda_C,
         // at k/a = m and k/a = 3 m (Q = 1/3 and 3)
         for (double x : {-1.0, 0.0})
             for (double s : {1.0, 3.0}) {
                 const double k = s * std::exp(x) / g.compton_wavelength(x, cs);
-                check_rel("mu = Yukawa form at k/a = " + std::to_string(int(s)) + " m, x = " + std::to_string(x),
-                          g.mu_sigma(x, k, cs).mu,
+                check_rel(g.mu_sigma(x, k, cs).mu,
                           (1.0 + s * s / (3.0 * (s * s + 1.0))) / (1.0 + g.fR(x, cs)),
-                          1e-12);
+                          1e-12,
+                          "mu = Yukawa form at k/a = " + std::to_string(int(s)) + " m, x = " + std::to_string(x));
             }
 
         double ePhi = 0.0, ePsi = 0.0;
@@ -308,8 +302,8 @@ int main() {
                 ePsi =
                     std::max(ePsi, std::fabs(r.pert.get_Psi(x, k) / (-m.mu * PhiGR - 3.0 * S / (c * c * k * k)) - 1.0));
             }
-        check_close("f(R): Phi = (2 Sigma - mu) Phi_GR(rho Delta) for every k", ePhi, 0.0, 1e-4);
-        check_close("f(R): Psi = -mu Phi_GR(rho Delta) - shear for every k", ePsi, 0.0, 1e-4);
+        check_close(ePhi, 0.0, 1e-4, "f(R): Phi = (2 Sigma - mu) Phi_GR(rho Delta) for every k");
+        check_close(ePsi, 0.0, 1e-4, "f(R): Psi = -mu Phi_GR(rho Delta) - shear for every k");
 
         // Scale-dependent growth: each k (grid nodes, no interpolation in k) against the growth equation with mu(k, a)
         for (size_t ik = 2; ik < r.pert.get_k_array().size(); ik++) {
@@ -319,12 +313,12 @@ int main() {
                                growth(l.cosmo, [](double) { return 1.0; });
             std::cout << "  |f_R0| = 1e-4, k = " << kM << "/Mpc: delta_cdm / LCDM = " << ratio
                       << ", growth equation: " << ref << "\n";
-            check_close("f(R) growth at k = " + std::to_string(kM).substr(0, 5) + "/Mpc = growth equation",
-                        ratio / ref,
+            check_close(ratio / ref,
                         1.0,
-                        3e-4);
+                        3e-4,
+                        "f(R) growth at k = " + std::to_string(kM).substr(0, 5) + "/Mpc = growth equation");
         }
     }
 
-    return Test::summary();
+    return FML::TESTS::summary("EBS modified gravity");
 }

@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 
 #include <cmath>
@@ -16,9 +16,9 @@
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 int main() {
     CosmologyParameters p;
@@ -38,11 +38,11 @@ int main() {
     ps.solve();
 
     std::cout << "Primordial spectrum\n";
-    check_rel("P_R(k_pivot) = A_s", ps.primordial_power_spectrum(p.k_pivot / Mpc), p.A_s, 1e-14);
-    check_rel("P_R slope = n_s - 1",
-              ps.primordial_power_spectrum(2.0 * p.k_pivot / Mpc) / p.A_s,
+    check_rel(ps.primordial_power_spectrum(p.k_pivot / Mpc), p.A_s, 1e-14, "P_R(k_pivot) = A_s");
+    check_rel(ps.primordial_power_spectrum(2.0 * p.k_pivot / Mpc) / p.A_s,
               std::pow(2.0, p.n_s - 1.0),
-              1e-14);
+              1e-14,
+              "P_R slope = n_s - 1");
 
     std::cout << "CMB temperature spectrum\n";
     {
@@ -52,18 +52,18 @@ int main() {
                 D_peak = ps.get_Dell_TT(l);
                 l_peak = l;
             }
-        check("first acoustic peak at 190 < ell < 230", l_peak > 190 && l_peak < 230);
-        check("first peak higher than the Sachs-Wolfe plateau by > 4x", D_peak > 4.0 * ps.get_Dell_TT(10));
+        check(l_peak > 190 && l_peak < 230, "first acoustic peak at 190 < ell < 230");
+        check(D_peak > 4.0 * ps.get_Dell_TT(10), "first peak higher than the Sachs-Wolfe plateau by > 4x");
     }
     {
         bool positive = true;
         for (int l = 2; l <= 1000; l++)
             positive &= ps.get_Cell_TT(l) > 0.0;
-        check("C_ell > 0 for all ell", positive);
-        check_rel("D_ell and C_ell consistent",
-                  ps.get_Dell_TT(500),
+        check(positive, "C_ell > 0 for all ell");
+        check_rel(ps.get_Dell_TT(500),
                   500.0 * 501.0 * ps.get_Cell_TT(500) / (2.0 * M_PI) * std::pow(p.TCMB * 1e6, 2),
-                  1e-12);
+                  1e-12,
+                  "D_ell and C_ell consistent");
     }
     {
         // Theta_ell(k) for low ell peaks near k (eta0 - eta_*) ~ ell
@@ -75,7 +75,7 @@ int main() {
                 k_peak = k;
             }
         const double D = cosmo.eta0() - cosmo.eta_of_x(rec.x_last_scattering());
-        check_close("Theta_100(k) peaks near k D_* ~ ell", k_peak * D / ell, 1.0, 0.3);
+        check_close(k_peak * D / ell, 1.0, 0.3, "Theta_100(k) peaks near k D_* ~ ell");
     }
 
     std::cout << "Polarization spectra\n";
@@ -83,16 +83,16 @@ int main() {
         bool positive = true;
         for (int l = 2; l <= 1000; l++)
             positive &= ps.get_Dell_EE(l) > 0.0;
-        check("C_ell^EE > 0 for all ell", positive);
+        check(positive, "C_ell^EE > 0 for all ell");
         // Cauchy-Schwarz: |C^TE| <= sqrt(C^TT C^EE)
         bool cs = true;
         for (int l = 2; l <= 1000; l++)
             cs &= std::fabs(ps.get_Dell_TE(l)) <= std::sqrt(ps.get_Dell_TT(l) * ps.get_Dell_EE(l)) * (1 + 1e-6);
-        check("|C^TE| <= sqrt(C^TT C^EE) for all ell", cs);
+        check(cs, "|C^TE| <= sqrt(C^TT C^EE) for all ell");
         int sign_changes = 0;
         for (int l = 3; l <= 1000; l++)
             sign_changes += (ps.get_Dell_TE(l) * ps.get_Dell_TE(l - 1) < 0);
-        check("TE oscillates (>= 5 sign changes up to ell = 1000)", sign_changes >= 5);
+        check(sign_changes >= 5, "TE oscillates (>= 5 sign changes up to ell = 1000)");
         // E-modes trace the velocity: EE peaks are out of phase with TT (first EE peak near the first TT trough)
         double l_EE = 0.0, D_EE = 0.0;
         for (double l = 300; l <= 450; l += 1.0)
@@ -106,8 +106,8 @@ int main() {
                 D_TT = ps.get_Dell_TT(l);
                 l_TT = l;
             }
-        check_close("EE peak near the first TT trough (ell ratio)", l_EE / l_TT, 1.0, 0.1);
-        check("polarization fraction: EE << TT at the first peak", ps.get_Dell_EE(210) < 0.01 * ps.get_Dell_TT(210));
+        check_close(l_EE / l_TT, 1.0, 0.1, "EE peak near the first TT trough (ell ratio)");
+        check(ps.get_Dell_EE(210) < 0.01 * ps.get_Dell_TT(210), "polarization fraction: EE << TT at the first peak");
     }
 
     std::cout << "Numerical convergence (doubled LOS resolution in k and x)\n";
@@ -124,8 +124,8 @@ int main() {
             max_diff = std::max(max_diff, std::fabs(ps2.get_Dell_TT(l) / ps.get_Dell_TT(l) - 1.0));
             max_diff_E = std::max(max_diff_E, std::fabs(ps2.get_Dell_EE(l) / ps.get_Dell_EE(l) - 1.0));
         }
-        check_close("max relative change in D_ell^TT", max_diff, 0.0, 1e-3);
-        check_close("max relative change in D_ell^EE", max_diff_E, 0.0, 1e-3);
+        check_close(max_diff, 0.0, 1e-3, "max relative change in D_ell^TT");
+        check_close(max_diff_E, 0.0, 1e-3, "max relative change in D_ell^EE");
     }
 
     std::cout << "Matter power spectrum\n";
@@ -133,7 +133,7 @@ int main() {
         const double k1 = 1e-4 / Mpc, k2 = 2e-4 / Mpc;
         const double slope =
             std::log(ps.get_matter_power_spectrum(0.0, k2) / ps.get_matter_power_spectrum(0.0, k1)) / std::log(2.0);
-        check_close("large scales: P(k) ~ k^{n_s}", slope, p.n_s, 0.01);
+        check_close(slope, p.n_s, 0.01, "large scales: P(k) ~ k^{n_s}");
 
         // Turnover near the horizon scale at matter-radiation equality, k_eq = Hp(x_eq)/c
         const double k_eq = cosmo.Hp_of_x(cosmo.x_matter_radiation_equality()) / c;
@@ -143,12 +143,12 @@ int main() {
                 P_max = ps.get_matter_power_spectrum(0.0, k);
                 k_peak = k;
             }
-        check("P(k) peaks within a factor 2 of k_eq", k_peak > 0.5 * k_eq && k_peak < 2.0 * k_eq);
-        check_rel("P(k) scales as Delta_M^2",
-                  ps.get_matter_power_spectrum(0.0, 0.05 / Mpc),
+        check(k_peak > 0.5 * k_eq && k_peak < 2.0 * k_eq, "P(k) peaks within a factor 2 of k_eq");
+        check_rel(ps.get_matter_power_spectrum(0.0, 0.05 / Mpc),
                   2.0 * M_PI * M_PI / std::pow(0.05 / Mpc, 3) * ps.primordial_power_spectrum(0.05 / Mpc) *
                       std::pow(ps.get_Delta_M(0.0, 0.05 / Mpc), 2),
-                  1e-14);
+                  1e-14,
+                  "P(k) scales as Delta_M^2");
     }
 
     ps.info();
@@ -171,9 +171,9 @@ int main() {
             dee = std::max(dee, std::fabs(b.get_Dell_EE(l) / a.get_Dell_EE(l) - 1.0));
             dte = std::max(dte, std::fabs(b.get_Dell_TE(l) - a.get_Dell_TE(l)) / temax);
         }
-        check_close("flat: radial functions = integrated by parts, TT (ell <= 400)", dtt, 0.0, 3e-4);
-        check_close("flat: radial functions = integrated by parts, EE (ell <= 400)", dee, 0.0, 3e-4);
-        check_close("flat: radial functions = integrated by parts, TE/max|TE|", dte, 0.0, 1e-4);
+        check_close(dtt, 0.0, 3e-4, "flat: radial functions = integrated by parts, TT (ell <= 400)");
+        check_close(dee, 0.0, 3e-4, "flat: radial functions = integrated by parts, EE (ell <= 400)");
+        check_close(dte, 0.0, 1e-4, "flat: radial functions = integrated by parts, TE/max|TE|");
     }
     {
         // Curved universes: geometry of the acoustic peaks and the closed-universe mode sum
@@ -227,19 +227,19 @@ int main() {
                     return d;
                 };
                 const double e1 = max_err(600.0), e2 = max_err(900.0);
-                check_close(lab + "flat approximation (nu >= 600) vs exact recurrence, TT", e1, 0.0, 0.03);
-                check(lab + "flat approximation error decreases with a higher nu threshold", e2 < 0.5 * e1);
+                check_close(e1, 0.0, 0.03, lab + "flat approximation (nu >= 600) vs exact recurrence, TT");
+                check(e2 < 0.5 * e1, lab + "flat approximation error decreases with a higher nu threshold");
             }
             const double ratio_peak = first_peak(ps) / lp0, ratio_lA = ell_A(cc, rc) / lA0;
-            check_rel(lab + "first peak moves with ell_A = pi r(chi_*)/r_s", ratio_peak, ratio_lA, 0.015);
-            check(lab + (OmK > 0 ? "open: peak at higher ell" : "closed: peak at lower ell"),
-                  OmK > 0 ? ratio_peak > 1.03 : ratio_peak < 0.97);
+            check_rel(ratio_peak, ratio_lA, 0.015, lab + "first peak moves with ell_A = pi r(chi_*)/r_s");
+            check(OmK > 0 ? ratio_peak > 1.03 : ratio_peak < 0.97,
+                  lab + (OmK > 0 ? "open: peak at higher ell" : "closed: peak at lower ell"));
             bool positive = true, cs = true;
             for (int l = 2; l <= 400; l++) {
                 positive &= ps.get_Dell_TT(l) > 0.0 && ps.get_Dell_EE(l) > 0.0;
                 cs &= std::fabs(ps.get_Dell_TE(l)) <= std::sqrt(ps.get_Dell_TT(l) * ps.get_Dell_EE(l)) * (1 + 1e-6);
             }
-            check(lab + "C_ell^TT, C_ell^EE > 0 and |C^TE| <= sqrt(C^TT C^EE)", positive && cs);
+            check(positive && cs, lab + "C_ell^TT, C_ell^EE > 0 and |C^TE| <= sqrt(C^TT C^EE)");
             const auto & kl = ps.get_k_los();
             const double K = cc.get_K();
             if (K > 0) {
@@ -251,14 +251,14 @@ int main() {
                     integer &= std::fabs(nu - std::round(nu)) < 1e-6 && nu >= 3.0 - 1e-9;
                     nus.push_back(std::round(nu));
                 }
-                check(lab + "closed: LOS modes have integer nu >= 3", integer);
+                check(integer, lab + "closed: LOS modes have integer nu >= 3");
                 const size_t n = nus.size();
                 bool uniform = true;
                 for (size_t i = n / 2; i + 2 < n; i++)
                     uniform &= (nus[i + 1] - nus[i]) == (nus[n / 2 + 1] - nus[n / 2]);
-                check(lab + "closed: uniform stride in nu at large nu", uniform);
+                check(uniform, lab + "closed: uniform stride in nu at large nu");
             } else {
-                check_rel(lab + "open: LOS modes start at k ~ sqrt|K| (q -> 0)", kl.front(), std::sqrt(-K), 1e-3);
+                check_rel(kl.front(), std::sqrt(-K), 1e-3, lab + "open: LOS modes start at k ~ sqrt|K| (q -> 0)");
             }
         }
     }
@@ -278,7 +278,7 @@ int main() {
         double dlim = 0.0;
         for (int l : {40, 60, 100, 200})
             dlim = std::max(dlim, std::fabs(lp.get_Cell_phiphi(l) / ln.get_Cell_phiphi(l) - 1.0));
-        check_close("C_phiphi: Limber vs full line of sight, ell = 40-200", dlim, 0.0, 1e-2);
+        check_close(dlim, 0.0, 1e-2, "C_phiphi: Limber vs full line of sight, ell = 40-200");
         double lpk = 0.0, Dpk = 0.0;
         for (int l = 2; l <= 600; l++) {
             const double D = std::pow(l * (l + 1.0), 2) * lp.get_Cell_phiphi(l);
@@ -287,16 +287,16 @@ int main() {
                 lpk = l;
             }
         }
-        check("[l(l+1)]^2 C_phiphi peaks at ell = 20-80", lpk >= 20 && lpk <= 80);
+        check(lpk >= 20 && lpk <= 80, "[l(l+1)]^2 C_phiphi peaks at ell = 20-80");
         double low = 0.0;
         for (int l = 2; l <= 30; l++)
             low = std::max(low, std::fabs(lp.get_Dell_TT_lensed(l) / lp.get_Dell_TT(l) - 1.0));
-        check_close("lensed TT = unlensed at ell <= 30 (to 1e-3)", low, 0.0, 1e-3);
+        check_close(low, 0.0, 1e-3, "lensed TT = unlensed at ell <= 30 (to 1e-3)");
         bool bb = true;
         for (int l = 2; l <= 600; l++)
             bb &= lp.get_Dell_BB_lensed(l) > 0.0;
-        check("lensed BB > 0", bb);
-        check("lensing lowers the first peak", lp.get_Dell_TT_lensed(220) < lp.get_Dell_TT(220));
+        check(bb, "lensed BB > 0");
+        check(lp.get_Dell_TT_lensed(220) < lp.get_Dell_TT(220), "lensing lowers the first peak");
     }
 
     std::cout << "Multipole list and k-range\n";
@@ -307,7 +307,7 @@ int main() {
         bool all = true;
         for (int l = 2; l <= 30; l++)
             all &= std::find(ells.begin(), ells.end(), l) != ells.end();
-        check("the default ell list has every ell = 2..30", all);
+        check(all, "the default ell list has every ell = 2..30");
         // ell beyond k_max r_* (here k_max = 0.3/Mpc, k_max r_* ~ 4200): Theta_ell = 0 and C_ell = 0 gave NaN
         // spectra at every ell; now a clear error
         PowerSpectrumOptions sbig = so;
@@ -319,7 +319,7 @@ int main() {
         } catch (const std::invalid_argument & e) {
             threw = std::string(e.what()).find("k-range") != std::string::npos;
         }
-        check("ell_max beyond the k-range gives an error (not NaN spectra)", threw);
+        check(threw, "ell_max beyond the k-range gives an error (not NaN spectra)");
     }
 
     // Running alpha_s: P_R ratio exact, and the C_ell ratio alpha_s = -0.02 / 0 against CLASS v3.4 (Planck 2018,
@@ -341,10 +341,10 @@ int main() {
         PowerSpectrum Pr(bgr, rc, pt, s.ps);
         Pr.solve();
         const double k = 0.5 / Mpc, l = std::log(0.5 / s.cosmo.k_pivot);
-        check_rel("alpha_s: P_R(k) ratio = exp(alpha_s/2 ln^2(k/k_pivot))",
-                  Pr.primordial_power_spectrum(k) / P0.primordial_power_spectrum(k),
+        check_rel(Pr.primordial_power_spectrum(k) / P0.primordial_power_spectrum(k),
                   std::exp(-0.01 * l * l),
-                  1e-12);
+                  1e-12,
+                  "alpha_s: P_R(k) ratio = exp(alpha_s/2 ln^2(k/k_pivot))");
         struct Ref {
             int ell;
             double tt, ee;
@@ -354,16 +354,16 @@ int main() {
                               Ref{500, 0.9992934686462546, 0.9993642198702183},
                               Ref{1000, 0.9962567905971743, 0.9982434564165134}}) {
             const std::string e = std::to_string(r.ell);
-            check_rel("alpha_s = -0.02: TT ratio at ell = " + e + " = CLASS",
-                      Pr.get_Dell_TT(r.ell) / P0.get_Dell_TT(r.ell),
+            check_rel(Pr.get_Dell_TT(r.ell) / P0.get_Dell_TT(r.ell),
                       r.tt,
-                      1e-3);
-            check_rel("alpha_s = -0.02: EE ratio at ell = " + e + " = CLASS",
-                      Pr.get_Dell_EE(r.ell) / P0.get_Dell_EE(r.ell),
+                      1e-3,
+                      "alpha_s = -0.02: TT ratio at ell = " + e + " = CLASS");
+            check_rel(Pr.get_Dell_EE(r.ell) / P0.get_Dell_EE(r.ell),
                       r.ee,
-                      1e-3);
+                      1e-3,
+                      "alpha_s = -0.02: EE ratio at ell = " + e + " = CLASS");
         }
     }
 
-    return Test::summary();
+    return FML::TESTS::summary("EBS power spectrum");
 }

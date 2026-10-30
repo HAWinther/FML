@@ -5,7 +5,7 @@
 
 #include <FML/Cosmology/Background/CosmologyParameters.h>
 #include <FML/Cosmology/Common.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include "RegressionMetric.h"
 
 #include <cmath>
@@ -19,8 +19,8 @@
 
 using namespace FML::COSMOLOGY;
 
-using Test::check;
-using Test::check_close;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
 
 // Independent reference for j_ell: Miller's downward recurrence normalised to j_0,
 // in long double. Accurate for all z > 0.
@@ -58,24 +58,24 @@ static long double j_ell_reference(int ell, long double z) {
 static void test_grids_and_quadrature() {
     std::cout << "Grids, quadrature, root finding\n";
     auto x = Utils::linspace(-3.0, 2.0, 11);
-    check("linspace endpoints and spacing",
-          x.front() == -3.0 && x.back() == 2.0 && std::fabs(x[1] - x[0] - 0.5) < 1e-14);
+    check(x.front() == -3.0 && x.back() == 2.0 && std::fabs(x[1] - x[0] - 0.5) < 1e-14,
+          "linspace endpoints and spacing");
     auto k = Utils::logspace(1e-5, 1.0, 6);
-    check_close("logspace middle point", k[1], 1e-4, 1e-12);
+    check_close(k[1], 1e-4, 1e-12, "logspace middle point");
 
-    check_close("integrate sin on [0,pi]",
-                Utils::integrate([](double t) { return std::sin(t); }, 0.0, M_PI),
+    check_close(Utils::integrate([](double t) { return std::sin(t); }, 0.0, M_PI),
                 2.0,
-                1e-12);
+                1e-12,
+                "integrate sin on [0,pi]");
     auto xs = Utils::linspace(0.0, M_PI, 2001);
     std::vector<double> ys(xs.size());
     for (size_t i = 0; i < xs.size(); i++)
         ys[i] = std::sin(xs[i]);
-    check_close("trapz sin on [0,pi]", Utils::trapz(xs, ys), 2.0, 1e-6);
-    check_close("find_root cos(x) = x",
-                Utils::find_root([](double t) { return std::cos(t) - t; }, 0.0, 1.0),
+    check_close(Utils::trapz(xs, ys), 2.0, 1e-6, "trapz sin on [0,pi]");
+    check_close(Utils::find_root([](double t) { return std::cos(t) - t; }, 0.0, 1.0),
                 0.739085133215160642,
-                1e-12);
+                1e-12,
+                "find_root cos(x) = x");
 }
 
 static void test_spline1d() {
@@ -86,15 +86,15 @@ static void test_spline1d() {
         y[i] = std::sin(x[i]);
     Spline1D f(x, y, "sin");
 
-    check_close("value", f(1.234), std::sin(1.234), 1e-8);
-    check_close("deriv_x", f.deriv_x(1.234), std::cos(1.234), 1e-5);
-    check_close("deriv_xx", f.deriv_xx(1.234), -std::sin(1.234), 1e-3);
-    check_close("integral", f.integral(0.0, M_PI), 2.0, 1e-8);
+    check_close(f(1.234), std::sin(1.234), 1e-8, "value");
+    check_close(f.deriv_x(1.234), std::cos(1.234), 1e-5, "deriv_x");
+    check_close(f.deriv_xx(1.234), -std::sin(1.234), 1e-3, "deriv_xx");
+    check_close(f.integral(0.0, M_PI), 2.0, 1e-8, "integral");
 
     // Decreasing x-array (e.g. integrating tau backwards in time)
     std::vector<double> xr(x.rbegin(), x.rend()), yr(y.rbegin(), y.rend());
     Spline1D fr(xr, yr, "sin reversed");
-    check_close("decreasing x input", fr(2.5), std::sin(2.5), 1e-8);
+    check_close(fr(2.5), std::sin(2.5), 1e-8, "decreasing x input");
 
     // Copies share the data and remain valid after the original is gone
     Spline1D g;
@@ -102,12 +102,12 @@ static void test_spline1d() {
         Spline1D tmp(x, y, "tmp");
         g = tmp;
     }
-    check_close("copy outlives original", g(0.5), std::sin(0.5), 1e-8);
+    check_close(g(0.5), std::sin(0.5), 1e-8, "copy outlives original");
 
     // Out of range: clamped (and one warning on stderr)
     Spline1D h(x, y, "clamp test");
     h.set_out_of_bounds_warning(false);
-    check_close("out-of-range clamps to endpoint", h(10.0), y.back(), 1e-14);
+    check_close(h(10.0), y.back(), 1e-14, "out-of-range clamps to endpoint");
 
     // Thread-safe evaluation
     const int n = 100000;
@@ -115,7 +115,7 @@ static void test_spline1d() {
 #pragma omp parallel for reduction(+ : sum)
     for (int i = 0; i < n; i++)
         sum += f(2.0 * M_PI * i / (n - 1.0));
-    check_close("parallel evaluation (sum of sin ~ 0)", sum / n, 0.0, 1e-6);
+    check_close(sum / n, 0.0, 1e-6, "parallel evaluation (sum of sin ~ 0)");
 }
 
 static void test_uniform_spline() {
@@ -132,9 +132,9 @@ static void test_uniform_spline() {
         max_err = std::max(max_err, std::fabs(f(z) - ref));
         jmax = std::max(jmax, std::fabs(ref));
     }
-    check_close("j_100 table (32 points per 2 pi) vs direct", max_err / jmax, 0.0, 1e-5);
-    check_close("value at a node is exact", f(37 * dx), y[37], 1e-15);
-    check("out of range returns end-point values", f(-1.0) == y.front() && f(1e6) == y.back());
+    check_close(max_err / jmax, 0.0, 1e-5, "j_100 table (32 points per 2 pi) vs direct");
+    check_close(f(37 * dx), y[37], 1e-15, "value at a node is exact");
+    check(f(-1.0) == y.front() && f(1e6) == y.back(), "out of range returns end-point values");
 }
 
 static void test_spline2d() {
@@ -148,11 +148,11 @@ static void test_spline2d() {
     Spline2D f(x, y, z, "sin*cos");
 
     const double x0 = 1.3, y0 = 0.4;
-    check_close("value", f(x0, y0), std::sin(x0) * std::cos(y0), 1e-7);
-    check_close("deriv_x", f.deriv_x(x0, y0), std::cos(x0) * std::cos(y0), 1e-5);
-    check_close("deriv_y", f.deriv_y(x0, y0), -std::sin(x0) * std::sin(y0), 1e-5);
-    check_close("deriv_xx", f.deriv_xx(x0, y0), -std::sin(x0) * std::cos(y0), 1e-3);
-    check_close("deriv_xy", f.deriv_xy(x0, y0), -std::cos(x0) * std::sin(y0), 1e-3);
+    check_close(f(x0, y0), std::sin(x0) * std::cos(y0), 1e-7, "value");
+    check_close(f.deriv_x(x0, y0), std::cos(x0) * std::cos(y0), 1e-5, "deriv_x");
+    check_close(f.deriv_y(x0, y0), -std::sin(x0) * std::sin(y0), 1e-5, "deriv_y");
+    check_close(f.deriv_xx(x0, y0), -std::sin(x0) * std::cos(y0), 1e-3, "deriv_xx");
+    check_close(f.deriv_xy(x0, y0), -std::cos(x0) * std::sin(y0), 1e-3, "deriv_xy");
 
     // Decreasing y-array
     std::vector<double> yr(y.rbegin(), y.rend());
@@ -161,7 +161,7 @@ static void test_spline2d() {
         for (size_t j = 0; j < y.size(); j++)
             zr[i][j] = z[i][y.size() - 1 - j];
     Spline2D fr(x, yr, zr, "reversed y");
-    check_close("decreasing y input", fr(x0, y0), std::sin(x0) * std::cos(y0), 1e-7);
+    check_close(fr(x0, y0), std::sin(x0) * std::cos(y0), 1e-7, "decreasing y input");
 }
 
 static void test_ode() {
@@ -176,8 +176,8 @@ static void test_ode() {
     ODESolver ode(1e-3, 1e-10, 1e-10);
     auto x = Utils::linspace(0.0, 10.0, 101);
     ode.solve(sho, x, {0.0, 1.0}, gsl_odeiv2_step_rk8pd);
-    check_close("harmonic oscillator y(10)", ode.get_final_data_by_component(0), std::sin(10.0), 1e-8);
-    check_close("stored derivative y'(10)", ode.get_derivative_data_by_component(0).back(), std::cos(10.0), 1e-8);
+    check_close(ode.get_final_data_by_component(0), std::sin(10.0), 1e-8, "harmonic oscillator y(10)");
+    check_close(ode.get_derivative_data_by_component(0).back(), std::cos(10.0), 1e-8, "stored derivative y'(10)");
 
     // Backwards integration: y' = y from x=0 (y=1) to x=-5  ->  y = exp(x)
     ODEFunction growth = [](double, const double * y, double * dydx) {
@@ -185,7 +185,7 @@ static void test_ode() {
         return GSL_SUCCESS;
     };
     ode.solve(growth, Utils::linspace(0.0, -5.0, 50), {1.0}, gsl_odeiv2_step_rk8pd);
-    check_close("backward integration exp(-5)", ode.get_final_data_by_component(0), std::exp(-5.0), 1e-9);
+    check_close(ode.get_final_data_by_component(0), std::exp(-5.0), 1e-9, "backward integration exp(-5)");
 
     // Stiff problem: y' = -lambda (y - cos x) - sin x, y(0) = 1  ->  y = cos(x)
     const double lambda = 1e5;
@@ -197,10 +197,10 @@ static void test_ode() {
         ODESolver s(1e-6, 1e-10, 1e-10);
         s.set_finite_difference_jacobian(true);
         s.solve(stiff, Utils::linspace(0.0, 3.0, 31), {1.0}, m);
-        check_close(std::string("stiff problem, ") + name + " (FD Jacobian)",
-                    s.get_final_data_by_component(0),
+        check_close(s.get_final_data_by_component(0),
                     std::cos(3.0),
-                    1e-7);
+                    1e-7,
+                    std::string("stiff problem, ") + name + " (FD Jacobian)");
     }
 
     // Error reporting
@@ -214,14 +214,14 @@ static void test_ode() {
     } catch (const std::runtime_error &) {
         threw = true;
     }
-    check("failing rhs throws", threw);
+    check(threw, "failing rhs throws");
 }
 
 static void test_bessel() {
     std::cout << "Spherical Bessel functions\n";
-    check_close("j_0(2.5)", Utils::j_ell(0, 2.5), std::sin(2.5) / 2.5, 1e-14);
-    check_close("j_1(2.5)", Utils::j_ell(1, 2.5), std::sin(2.5) / 6.25 - std::cos(2.5) / 2.5, 1e-14);
-    check("j_ell(ell>0, 0) = 0 and j_0(0) = 1", Utils::j_ell(5, 0.0) == 0.0 && Utils::j_ell(0, 0.0) == 1.0);
+    check_close(Utils::j_ell(0, 2.5), std::sin(2.5) / 2.5, 1e-14, "j_0(2.5)");
+    check_close(Utils::j_ell(1, 2.5), std::sin(2.5) / 6.25 - std::cos(2.5) / 2.5, 1e-14, "j_1(2.5)");
+    check(Utils::j_ell(5, 0.0) == 0.0 && Utils::j_ell(0, 0.0) == 1.0, "j_ell(ell>0, 0) = 0 and j_0(0) = 1");
 
     // Compare against independent recurrence over a wide range of (ell, z),
     // relative to the maximum of |j_ell| (the quantity that matters for integrals)
@@ -246,7 +246,7 @@ static void test_bessel() {
         }
     }
     std::cout << "    (worst at ell = " << worst_ell << ", z = " << worst_z << ")\n";
-    check_close("j_ell vs recurrence, ell in [2,3000]", max_err, 0.0, 1e-9);
+    check_close(max_err, 0.0, 1e-9, "j_ell vs recurrence, ell in [2,3000]");
 
     Utils::Timer t;
     double s = 0.0;
@@ -261,13 +261,13 @@ static void test_parameters() {
     CosmologyParameters p;
     p.validate();
     // Omega_gamma h^2 = 2.4728e-5 (T/2.7255 K)^4
-    check_close("Omega_gamma h^2", p.OmegaGamma() * p.h * p.h, 2.4728e-5, 1e-3);
-    check_close("Omega_nu/Omega_gamma (Neff=3.046)",
-                p.OmegaNu() / p.OmegaGamma(),
+    check_close(p.OmegaGamma() * p.h * p.h, 2.4728e-5, 1e-3, "Omega_gamma h^2");
+    check_close(p.OmegaNu() / p.OmegaGamma(),
                 3.046 * 7.0 / 8.0 * std::pow(4.0 / 11.0, 4.0 / 3.0),
-                1e-14);
-    check_close("closure relation", p.OmegaB + p.OmegaCDM + p.OmegaR() + p.OmegaK + p.OmegaLambda(), 1.0, 1e-14);
-    check_close("H0 [km/s/Mpc]", p.H0() * Constants::Mpc / Constants::km, 67.0, 1e-12);
+                1e-14,
+                "Omega_nu/Omega_gamma (Neff=3.046)");
+    check_close(p.OmegaB + p.OmegaCDM + p.OmegaR() + p.OmegaK + p.OmegaLambda(), 1.0, 1e-14, "closure relation");
+    check_close(p.H0() * Constants::Mpc / Constants::km, 67.0, 1e-12, "H0 [km/s/Mpc]");
 
     bool threw = false;
     p.h = -1.0;
@@ -276,7 +276,7 @@ static void test_parameters() {
     } catch (const std::invalid_argument &) {
         threw = true;
     }
-    check("invalid parameters rejected", threw);
+    check(threw, "invalid parameters rejected");
 }
 
 int main() {
@@ -284,14 +284,14 @@ int main() {
         const std::map<std::string, double> reference{{"model.TT(50)", 100.0},
                                                       {"model.EE(50)", 1.0},
                                                       {"model.TE(50)", 0.0}};
-        check("TE zero crossing accepts roundoff on the covariance scale",
-              Test::regression_error("model.TE(50)", 1e-8, reference) < 3e-7);
-        check("TE covariance metric rejects a physical change",
-              Test::regression_error("model.TE(50)", 1e-3, reference) > 3e-7);
-        check("autospectra retain their strict relative comparison",
-              Test::regression_error("model.TT(50)", 100.001, reference) > 3e-7);
-        check("regression metric rejects nonfinite outputs",
-              std::isinf(Test::regression_error("model.TE(50)", std::numeric_limits<double>::quiet_NaN(), reference)));
+        check(Test::regression_error("model.TE(50)", 1e-8, reference) < 3e-7,
+              "TE zero crossing accepts roundoff on the covariance scale");
+        check(Test::regression_error("model.TE(50)", 1e-3, reference) > 3e-7,
+              "TE covariance metric rejects a physical change");
+        check(Test::regression_error("model.TT(50)", 100.001, reference) > 3e-7,
+              "autospectra retain their strict relative comparison");
+        check(std::isinf(Test::regression_error("model.TE(50)", std::numeric_limits<double>::quiet_NaN(), reference)),
+              "regression metric rejects nonfinite outputs");
     }
 
     test_grids_and_quadrature();
@@ -301,5 +301,5 @@ int main() {
     test_ode();
     test_bessel();
     test_parameters();
-    return Test::summary();
+    return FML::TESTS::summary("EBS utils");
 }

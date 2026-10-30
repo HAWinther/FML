@@ -3,15 +3,10 @@
 #include <array>
 #include <chrono>
 #include <iostream>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check;
 using namespace FML::PERTURBATION;
-int failures = 0;
-void check(bool ok, const std::string & label) {
-    int bad = !ok;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (!FML::ThisTask)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
-}
 bool near(double a, double b, double relative = 1e-6, double absolute = 1e-15) {
     return std::abs(a - b) <= absolute + relative * std::max(std::abs(a), std::abs(b));
 }
@@ -274,7 +269,6 @@ int main() {
     if (!FML::ThisTask)
         std::cout << "Timing: " << fast.k.size() << " modes; checked fast=" << fast_time << " s; direct=" << direct_time
                   << " s; ratio=" << direct_time / fast_time << "; FFT buffers=" << workspace.fft_buffer_bytes()
-                  << " bytes\n"
-                  << (failures ? "Perturbation tests FAILED" : "All perturbation tests passed") << '\n';
-    return failures ? 1 : 0;
+                  << " bytes\n";
+    return FML::TESTS::summary("perturbation");
 }

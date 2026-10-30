@@ -26,25 +26,13 @@
 #include <string>
 #include <unistd.h>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check;
+using FML::TESTS::num;
 
 using namespace FML::FILEUTILS::GADGET;
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    // All tasks must agree
-    int bad = ok ? 0 : 1;
-    FML::SumOverTasks(&bad);
-    ok = bad == 0;
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os << x;
-    return os.str();
-}
 void barrier() {
 #ifdef USE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
@@ -677,7 +665,5 @@ int main(int argc, char ** argv) {
     for (auto & f : my_files)
         std::remove(f.c_str());
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All tests passed\n" : num(fails) + " test(s) failed\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("GADGET");
 }

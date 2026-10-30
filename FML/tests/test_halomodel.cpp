@@ -19,23 +19,14 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 using namespace FML::COSMOLOGY::HALOMODEL;
 using SphericalCollapseModel = FML::COSMOLOGY::SPHERICALCOLLAPSE::SphericalCollapseModel;
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os.precision(6);
-    os << x;
-    return os.str();
-}
 
 const std::string folder = "../HaloModel/example/";
 const double OmegaM = 0.295;
@@ -70,15 +61,16 @@ int main() {
                 continue;
             maxerr = std::max(maxerr, std::fabs(pnl(hm, row[0]) / row[1] - 1.0));
         }
-        check(maxerr < 0.004,
-              "HMCode P(k, z=0) = reference HMCode output for 0.01 < k < 100 h/Mpc (max error " + num(100 * maxerr) +
-                  "%, was 1.6%)");
+        check_local(maxerr < 0.004,
+                    "HMCode P(k, z=0) = reference HMCode output for 0.01 < k < 100 h/Mpc (max error " +
+                        num(100 * maxerr) + "%, was 1.6%)");
 
         // A copy
         HaloModel copy = hm;
         copy.compute_at_redshift(0.5);
         hm.compute_at_redshift(0.5);
-        check(std::fabs(pnl(copy, 1.0) / pnl(hm, 1.0) - 1) < 1e-12, "a copy of a HaloModel gives the same result");
+        check_local(std::fabs(pnl(copy, 1.0) / pnl(hm, 1.0) - 1) < 1e-12,
+                    "a copy of a HaloModel gives the same result");
 
         // Very high redshift with HMCode and P(k) given up to k = 50 h/Mpc only (nu = 1 is then not in the range
         // where neff is computed)
@@ -108,7 +100,7 @@ int main() {
 #endif
         if (FML::ThisTask == 0)
             std::remove(fn.c_str());
-        check(ok, "HMCode at z = 20 with P(k) up to k = 50 h/Mpc (crashed before)");
+        check_local(ok, "HMCode at z = 20 with P(k) up to k = 50 h/Mpc (crashed before)");
 
         // Output outside the computed k-range
         bool thrown = false;
@@ -118,7 +110,7 @@ int main() {
             thrown = true;
         }
         std::remove("test_halomodel_pofk.txt");
-        check(thrown, "P(k) output outside [kmin_pofk, kmax_pofk] throws (P(k) is wrong there)");
+        check_local(thrown, "P(k) output outside [kmin_pofk, kmax_pofk] throws (P(k) is wrong there)");
     }
 
     // The mass function at z = 1 against a direct computation
@@ -153,9 +145,9 @@ int main() {
             const double dndlnM = rho_mean / M * f * dnudlnM;
             maxerr = std::max(maxerr, std::fabs(hm.dndlogM_of_logM_spline(std::log(M)) / dndlnM - 1.0));
         }
-        check(maxerr < 0.01,
-              "dn/dlnM at z = 1 = direct computation for M = 1e11-1e15 Msun/h (max error " + num(100 * maxerr) +
-                  "%, M(R) was (1+z)^3 too large)");
+        check_local(maxerr < 0.01,
+                    "dn/dlnM at z = 1 = direct computation for M = 1e11-1e15 Msun/h (max error " + num(100 * maxerr) +
+                        "%, M(R) was (1+z)^3 too large)");
     }
 
     // Fourier transforms: uniform sphere numerically, NFW analytically
@@ -170,8 +162,9 @@ int main() {
             const double exact = 3 * (std::sin(x) - x * std::cos(x)) / (x * x * x);
             maxerr = std::max(maxerr, std::fabs(y[i] - exact));
         }
-        check(maxerr < 1e-3,
-              "numerical Fourier transform of a truncated profile (uniform sphere) (max error " + num(maxerr) + ")");
+        check_local(maxerr < 1e-3,
+                    "numerical Fourier transform of a truncated profile (uniform sphere) (max error " + num(maxerr) +
+                        ")");
 
         HaloModel hm(scm, logDelta, 0.0, true, false);
         hm.compute_at_redshift(0.0);
@@ -194,7 +187,8 @@ int main() {
                 maxerr = std::max(maxerr, std::fabs(nfw.fourier(k, Mh, &hm) - s));
             }
         }
-        check(maxerr < 1e-6, "analytic NFW Fourier transform = direct integration (max error " + num(maxerr) + ")");
+        check_local(maxerr < 1e-6,
+                    "analytic NFW Fourier transform = direct integration (max error " + num(maxerr) + ")");
     }
 
     // Without HMCode (deltac, DeltaVir from spherical collapse)
@@ -207,9 +201,10 @@ int main() {
         const double p1 = pnl(hm, 10.0);
         hm.compute_at_redshift(0.0);
         hm.compute_at_redshift(0.0);
-        check(std::fabs(pnl(hm, 10.0) / p1 - 1) < 1e-12,
-              "compute_at_redshift again gives the same P(k) (cofM_multiplier = 1.5 is not applied again; was x1.5 "
-              "for k = 10 on the third call)");
+        check_local(
+            std::fabs(pnl(hm, 10.0) / p1 - 1) < 1e-12,
+            "compute_at_redshift again gives the same P(k) (cofM_multiplier = 1.5 is not applied again; was x1.5 "
+            "for k = 10 on the third call)");
 
         bool thrown = false;
         try {
@@ -217,7 +212,7 @@ int main() {
         } catch (std::exception & e) {
             thrown = std::string(e.what()).find("zmax_spherical_collapse") != std::string::npos;
         }
-        check(thrown, "z beyond the spherical collapse splines throws (was silently using z = 10)");
+        check_local(thrown, "z beyond the spherical collapse splines throws (was silently using z = 10)");
 
         const std::string fn = "test_halomodel_zero.txt";
         if (FML::ThisTask == 0) {
@@ -239,11 +234,8 @@ int main() {
 #endif
         if (FML::ThisTask == 0)
             std::remove(fn.c_str());
-        check(thrown, "P(k) = 0 in the input file throws a clear error (aborted in GSL before)");
+        check_local(thrown, "P(k) = 0 in the input file throws a clear error (aborted in GSL before)");
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All halo model tests passed\n" :
-                                   std::to_string(fails) + " halo model test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("halo model");
 }

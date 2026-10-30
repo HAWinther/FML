@@ -19,22 +19,13 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 using namespace FML::SOLVERS::FFTLog;
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os.precision(3);
-    os << x;
-    return os.str();
-}
 
 DVector logspace(double xmin, double xmax, int n) {
     DVector x(n);
@@ -113,7 +104,7 @@ bool close_results(const std::pair<DVector, std::vector<T>> & a, const std::pair
 void test_workspace() {
     static_assert(!std::is_copy_constructible<Workspace>::value, "Workspace owns FFTW plans");
     Workspace workspace;
-    check(workspace.size() == 0 && workspace.buffer_bytes() == 0, "workspace starts empty");
+    check_local(workspace.size() == 0 && workspace.buffer_bytes() == 0, "workspace starts empty");
     for (int n : {128, 129}) {
         const auto r = logspace(1e-3, 1e3, n);
         CVector a(n);
@@ -122,14 +113,14 @@ void test_workspace() {
         const auto original = a;
         for (double q : {0.0, -.4}) {
             auto result = DiscreteHankelTransform(r, a, workspace, 2.5, q, 1.2, false);
-            check(close_results(result, reference(r, a, 2.5, q, 1.2)),
-                  "workspace complex convolution matches independent reference, N=" + std::to_string(n) +
-                      ", q=" + num(q));
+            check_local(close_results(result, reference(r, a, 2.5, q, 1.2)),
+                        "workspace complex convolution matches independent reference, N=" + std::to_string(n) +
+                            ", q=" + num(q, 3));
         }
-        check(a == original, "transform preserves complex input");
+        check_local(a == original, "transform preserves complex input");
     }
-    check(workspace.statistics().plan_builds == 4 && workspace.statistics().coefficient_builds == 4,
-          "odd/even lengths rebuild plans; bias changes only rebuild coefficients");
+    check_local(workspace.statistics().plan_builds == 4 && workspace.statistics().coefficient_builds == 4,
+                "odd/even lengths rebuild plans; bias changes only rebuild coefficients");
     auto r = logspace(1e-3, 1e3, 129);
     CVector a(r.size(), CDouble(1, .3));
     const auto before = workspace.statistics();
@@ -137,10 +128,10 @@ void test_workspace() {
     const auto snapshot = retained;
     a[3] *= 2;
     auto changed = DiscreteHankelTransform(r, a, workspace, 2.5, -.4, 1.2, false);
-    check(close_results(changed, reference(r, a, 2.5, -.4, 1.2)) && retained == snapshot &&
-              workspace.statistics().plan_builds == before.plan_builds &&
-              workspace.statistics().coefficient_builds == before.coefficient_builds,
-          "new amplitudes reuse plans/coefficients and returned results remain owned");
+    check_local(close_results(changed, reference(r, a, 2.5, -.4, 1.2)) && retained == snapshot &&
+                    workspace.statistics().plan_builds == before.plan_builds &&
+                    workspace.statistics().coefficient_builds == before.coefficient_builds,
+                "new amplitudes reuse plans/coefficients and returned results remain owned");
     // Each part of the coefficient key changes independently.
     size_t builds = workspace.statistics().coefficient_builds;
     auto compare_fresh = [&](double mu, double q, double kr, bool noring) {
@@ -153,8 +144,9 @@ void test_workspace() {
     keys &= compare_fresh(3.5, -.2, 1.4, true);
     r = logspace(1e-3, 1e4, 129);
     keys &= compare_fresh(3.5, -.2, 1.4, true);
-    check(keys && workspace.statistics().coefficient_builds == builds + 5 && workspace.statistics().plan_builds == 4,
-          "all geometry keys invalidate coefficients without rebuilding plans");
+    check_local(keys && workspace.statistics().coefficient_builds == builds + 5 &&
+                    workspace.statistics().plan_builds == 4,
+                "all geometry keys invalidate coefficients without rebuilding plans");
     builds = workspace.statistics().coefficient_builds;
     auto unscaled = DiscreteHankelTransform(r, a, workspace, 3.5, -.2, 1.4, true);
     for (auto & x : r)
@@ -163,45 +155,48 @@ void test_workspace() {
     bool scaling = close_vectors(unscaled.second, scaled.second);
     for (size_t i = 0; i < r.size(); ++i)
         scaling &= std::abs(2 * scaled.first[i] / unscaled.first[i] - 1) < 1e-13;
-    check(scaling && workspace.statistics().coefficient_builds == builds,
-          "absolute grid rescaling reuses coefficients and rescales dual grid");
+    check_local(scaling && workspace.statistics().coefficient_builds == builds,
+                "absolute grid rescaling reuses coefficients and rescales dual grid");
     const double L = std::log(r.back() / r.front()) * r.size() / (r.size() - 1.0);
     auto u = ComputeCoefficients(int(r.size()), 1.5, .1, L, 1.3);
     auto external = DiscreteHankelTransform(r, a, workspace, 1.5, .1, 1.3, true, &u);
-    check(close_results(external, reference(r, a, 1.5, .1, 1.3)), "external coefficients bypass no-ringing adjustment");
+    check_local(close_results(external, reference(r, a, 1.5, .1, 1.3)),
+                "external coefficients bypass no-ringing adjustment");
     for (auto & x : u)
         x *= 2;
     auto external2 = DiscreteHankelTransform(r, a, workspace, 1.5, .1, 1.3, true, &u);
     for (auto & x : external.second)
         x *= 2;
-    check(close_results(external, external2) && workspace.statistics().coefficient_builds == builds,
-          "modified external coefficients are read live and not cached");
+    check_local(close_results(external, external2) && workspace.statistics().coefficient_builds == builds,
+                "modified external coefficients are read live and not cached");
     auto internal = DiscreteHankelTransform(r, a, workspace, 3.5, -.2, 1.4, true);
-    check(close_results(internal, scaled) && workspace.statistics().coefficient_builds == builds,
-          "external coefficients preserve the internal cache");
+    check_local(close_results(internal, scaled) && workspace.statistics().coefficient_builds == builds,
+                "external coefficients preserve the internal cache");
     Workspace moved(std::move(workspace));
     workspace.prepare(16); // move-assign over existing plans, releasing the old ownership
     workspace = std::move(moved);
-    check(moved.size() == 0 && close_results(internal, DiscreteHankelTransform(r, a, workspace, 3.5, -.2, 1.4, true)),
-          "workspace ownership survives move construction and assignment");
+    check_local(moved.size() == 0 &&
+                    close_results(internal, DiscreteHankelTransform(r, a, workspace, 3.5, -.2, 1.4, true)),
+                "workspace ownership survives move construction and assignment");
     moved.prepare(8);
-    check(moved.size() == 8, "moved-from workspace can be prepared again");
+    check_local(moved.size() == 8, "moved-from workspace can be prepared again");
     workspace.clear();
-    check(workspace.size() == 0 && workspace.statistics().plan_builds == 0,
-          "clear releases buffers and resets statistics");
+    check_local(workspace.size() == 0 && workspace.statistics().plan_builds == 0,
+                "clear releases buffers and resets statistics");
     Workspace measured(FFTW_MEASURE);
     const auto saved_r = r;
     const auto saved_a = a;
-    check(close_results(reference(r, a, 1.5, .1, 1.3), DiscreteHankelTransform(r, a, measured, 1.5, .1, 1.3, false)) &&
-              r == saved_r && a == saved_a,
-          "FFTW_MEASURE plans on owned scratch and preserves caller input");
+    check_local(
+        close_results(reference(r, a, 1.5, .1, 1.3), DiscreteHankelTransform(r, a, measured, 1.5, .1, 1.3, false)) &&
+            r == saved_r && a == saved_a,
+        "FFTW_MEASURE plans on owned scratch and preserves caller input");
     const auto small_r = logspace(.01, 100, 32);
     const CVector small_a(32, CDouble(.5, -.2));
-    check(close_results(reference(small_r, small_a, .5, 0, 1),
-                        DiscreteHankelTransform(small_r, small_a, measured, .5, 0, 1, false)) &&
-              small_a == CVector(32, CDouble(.5, -.2)) && measured.statistics().plan_builds == 4 &&
-              measured.buffer_bytes() == 64 * sizeof(fftw_complex),
-          "FFTW_MEASURE resizing preserves input and updates owned buffer size");
+    check_local(close_results(reference(small_r, small_a, .5, 0, 1),
+                              DiscreteHankelTransform(small_r, small_a, measured, .5, 0, 1, false)) &&
+                    small_a == CVector(32, CDouble(.5, -.2)) && measured.statistics().plan_builds == 4 &&
+                    measured.buffer_bytes() == 64 * sizeof(fftw_complex),
+                "FFTW_MEASURE resizing preserves input and updates owned buffer size");
     auto rejects = [](auto operation) {
         try {
             operation();
@@ -220,24 +215,25 @@ void test_workspace() {
     invalid &= rejects([&] { DiscreteHankelTransform({0, 1}, CVector(2), workspace, .5); });
     invalid &= rejects([&] { DiscreteHankelTransform(r, a, workspace, .5, 0, -1); });
     invalid &= rejects([&] { ComputeXiLM(0, 2, r, {}, workspace); });
-    check(invalid && close_results(reference(r, a, 1.5, .1, 1.3),
-                                   DiscreteHankelTransform(r, a, workspace, 1.5, .1, 1.3, false)),
-          "invalid shapes, lengths and geometry throw; workspace remains usable");
+    check_local(invalid && close_results(reference(r, a, 1.5, .1, 1.3),
+                                         DiscreteHankelTransform(r, a, workspace, 1.5, .1, 1.3, false)),
+                "invalid shapes, lengths and geometry throw; workspace remains usable");
 
     auto k = logspace(1e-4, 1e4, 1024);
     DVector pk(k.size());
     for (size_t i = 0; i < k.size(); ++i)
         pk[i] = std::exp(-k[i] * k[i]);
     for (int ell : {0, 2, 4})
-        check(error(ell, ComputeXiLM(ell, ell + 2, k, pk, workspace, ell ? -1.0 : 0.0), ell ? .01 : .05, 10) < 1e-6,
-              "retained workspace analytic multipole ell=" + std::to_string(ell));
+        check_local(error(ell, ComputeXiLM(ell, ell + 2, k, pk, workspace, ell ? -1.0 : 0.0), ell ? .01 : .05, 10) <
+                        1e-6,
+                    "retained workspace analytic multipole ell=" + std::to_string(ell));
     auto xi = ComputeCorrelationFunction(k, pk, workspace);
     auto back = ComputePowerSpectrum(xi.first, xi.second, workspace);
     double maxerr = 0;
     for (size_t i = 0; i < k.size(); ++i)
         if (back.first[i] > .01 && back.first[i] < 3)
             maxerr = std::max(maxerr, std::abs(back.second[i] - std::exp(-back.first[i] * back.first[i])));
-    check(maxerr < 1e-6, "retained workspace spectrum/correlation round trip");
+    check_local(maxerr < 1e-6, "retained workspace spectrum/correlation round trip");
 #ifdef USE_OMP
     std::vector<Workspace> workers(4);
     std::vector<std::pair<DVector, DVector>> results(4);
@@ -249,7 +245,7 @@ void test_workspace() {
     bool concurrent = true;
     for (int i = 0; i < 4; ++i)
         concurrent &= close_results(results[i], xi) && workers[i].statistics().plan_builds == 2;
-    check(concurrent, "separately prepared workspaces execute concurrently");
+    check_local(concurrent, "separately prepared workspaces execute concurrently");
 #endif
 }
 
@@ -266,13 +262,13 @@ int main() {
             auto res = ComputeXiLM(ell, ell + 2, k, pk, q);
             // (with q = 0 the transform rings at the smallest r: use r >= 0.05 for ell = 0)
             const double err = error(ell, res, ell == 0 ? 0.05 : 0.01, 10.0);
-            check(err < 1e-6,
-                  "xi_" + std::to_string(ell) + " of exp(-k^2), N = 1024 (q = " + num(q) + "): max error " + num(err) +
-                      " (the output r-grid was one log-step off; q != 0 had the wrong phase)");
+            check_local(err < 1e-6,
+                        "xi_" + std::to_string(ell) + " of exp(-k^2), N = 1024 (q = " + num(q, 3) + "): max error " +
+                            num(err, 3) + " (the output r-grid was one log-step off; q != 0 had the wrong phase)");
         }
         // xi from the default (q = 0) correlation function
         auto res0 = ComputeCorrelationFunction(k, pk);
-        check(error(0, res0, 0.05, 10.0) < 1e-6, "ComputeCorrelationFunction = analytic");
+        check_local(error(0, res0, 0.05, 10.0) < 1e-6, "ComputeCorrelationFunction = analytic");
 
         // Round trip P(k) -> xi(r) -> P(k)
         auto back = ComputePowerSpectrum(res0.first, res0.second);
@@ -283,7 +279,7 @@ int main() {
                 continue;
             maxerr = std::max(maxerr, std::fabs(back.second[i] - std::exp(-kk * kk)));
         }
-        check(maxerr < 1e-6, "P(k) -> xi(r) -> P(k) (max error " + num(maxerr) + ")");
+        check_local(maxerr < 1e-6, "P(k) -> xi(r) -> P(k) (max error " + num(maxerr, 3) + ")");
 
         // DiscreteHankelTransform with precomputed coefficients (the declared overload, did not link before)
         const int N = int(k.size());
@@ -297,7 +293,8 @@ int main() {
         double maxdiff = 0.0;
         for (int i = 0; i < N; i++)
             maxdiff = std::max(maxdiff, std::abs(dht.second[i] - dht2.second[i]));
-        check(maxdiff < 1e-12 and dht.first == dht2.first, "DiscreteHankelTransform with precomputed coefficients");
+        check_local(maxdiff < 1e-12 and dht.first == dht2.first,
+                    "DiscreteHankelTransform with precomputed coefficients");
     }
 
     // Many points over few decades: |Im z| of the log-gamma up to ~700
@@ -311,10 +308,8 @@ int main() {
         for (auto x : res.second)
             finite = finite and std::isfinite(x);
         const double err = error(2, res, 0.01, 10.0);
-        check(finite and err < 1e-6, "N = 8192 over 8 decades, ell = 2: finite, max error " + num(err));
+        check_local(finite and err < 1e-6, "N = 8192 over 8 decades, ell = 2: finite, max error " + num(err, 3));
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All FFTLog tests passed\n" : std::to_string(fails) + " FFTLog test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("FFTLog");
 }

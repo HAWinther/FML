@@ -19,24 +19,15 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 using namespace FML::FILEUTILS;
 
 int camb_odr_check(); // defined in test_camb_odr.cpp
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os.precision(3);
-    os << x;
-    return os.str();
-}
 
 const std::string tables = "../SimulationCode/input/camb_data_lcdm_nu0.4_zmax200";
 const std::string infofile_repo = "../SimulationCode/input/transfer_infofile_lcdm_nu0.4_zmax200.txt";
@@ -66,7 +57,7 @@ LinearTransferData make(const std::string & infofile) {
 }
 
 int main() {
-    check(camb_odr_check() == 1, "CAMBReader.h can be included in several translation units");
+    check_local(camb_odr_check() == 1, "CAMBReader.h can be included in several translation units");
 
     const std::string info = "test_camb_info_" + std::to_string(FML::ThisTask) + ".txt";
     const std::string info_rev = "test_camb_info_rev_" + std::to_string(FML::ThisTask) + ".txt";
@@ -93,26 +84,27 @@ int main() {
         err_cb = std::max(err_cb, std::fabs(pcb / r[2] - 1.0));
         err_tot = std::max(err_tot, std::fabs(ptot / pcb / r[3] - 1.0));
     }
-    check(err_cb < 3e-3, "P_cb(k, z = 0, 51, 200) = CAMB (max error " + num(err_cb) + ")");
-    check(err_tot < 3e-4,
-          "P_total / P_cb = CAMB (max error " + num(err_tot) + ", was 0.2% at z = 51 and 2% at z = 200)");
+    check_local(err_cb < 3e-3, "P_cb(k, z = 0, 51, 200) = CAMB (max error " + num(err_cb, 3) + ")");
+    check_local(err_tot < 3e-4,
+                "P_total / P_cb = CAMB (max error " + num(err_tot, 3) + ", was 0.2% at z = 51 and 2% at z = 200)");
 
     // Beyond the largest k of the tables
     const double kmax = td.get_kmax_hmpc_splines();
     const double p1 = td.get_cdm_baryon_power_spectrum(kmax, 1.0), p2 = td.get_cdm_baryon_power_spectrum(5 * kmax, 1.0);
-    check(p2 < p1 and p2 > 0.0,
-          "P(k) above kmax = " + num(kmax) + " h/Mpc falls (P(5 kmax)/P(kmax) = " + num(p2 / p1) +
-              ", was 4.7: T was constant)");
+    check_local(p2 < p1 and p2 > 0.0,
+                "P(k) above kmax = " + num(kmax, 3) + " h/Mpc falls (P(5 kmax)/P(kmax) = " + num(p2 / p1, 3) +
+                    ", was 4.7: T was constant)");
 
     // Redshift range
-    check(td.get_zmin_splines() == 0.0 and std::fabs(td.get_zmax_splines() - 200.0) < 1e-10,
-          "redshift range of the tables [" + num(td.get_zmin_splines()) + ", " + num(td.get_zmax_splines()) + "]");
+    check_local(td.get_zmin_splines() == 0.0 and std::fabs(td.get_zmax_splines() - 200.0) < 1e-10,
+                "redshift range of the tables [" + num(td.get_zmin_splines(), 3) + ", " +
+                    num(td.get_zmax_splines(), 3) + "]");
 
     // Growth rate beyond the tables: the value at the end (not an extrapolation)
     const double f200 = td.get_cdm_baryon_growth_rate(0.1, 1.0 / 201.0);
     const double f332 = td.get_cdm_baryon_growth_rate(0.1, 1.0 / 333.0);
-    check(f332 == f200 and f200 > 0.9 and f200 < 1.0,
-          "growth rate beyond the tables = the value at z = 200 (" + num(f332) + ", was 1.07)");
+    check_local(f332 == f200 and f200 > 0.9 and f200 < 1.0,
+                "growth rate beyond the tables = the value at z = 200 (" + num(f332, 3) + ", was 1.07)");
 
     // Infofile not ordered in redshift
     bool ok = true;
@@ -125,13 +117,10 @@ int main() {
     } catch (...) {
         ok = false;
     }
-    check(ok, "infofile not ordered in redshift = ordered infofile (aborted in GSL before)");
+    check_local(ok, "infofile not ordered in redshift = ordered infofile (aborted in GSL before)");
 
     std::remove(info.c_str());
     std::remove(info_rev.c_str());
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All CAMB reader tests passed\n" :
-                                   std::to_string(fails) + " CAMB reader test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("CAMB reader");
 }

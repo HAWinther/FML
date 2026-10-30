@@ -19,6 +19,9 @@
 #include <set>
 #include <sstream>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 
 constexpr int NDIM = 3;
 
@@ -32,13 +35,6 @@ struct Particle {
     size_t get_fofid() const { return fofid; }
 };
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
 
 double wrap(double x) { return x - std::floor(x); }
 
@@ -142,11 +138,11 @@ void test(bool filament, double buffer) {
 
     if (filament) {
         // The filament (0.2 of the box) is longer than the buffer: this must be reported with more than one task
-        check(FML::NTasks == 1 ? nedge == 0 : nedge > 0,
-              label + "groups reaching the buffer edge reported (" + std::to_string(nedge) + ")");
+        check_local(FML::NTasks == 1 ? nedge == 0 : nedge > 0,
+                    label + "groups reaching the buffer edge reported (" + std::to_string(nedge) + ")");
         return;
     }
-    check(nedge == 0, label + "no group reaches the buffer edge");
+    check_local(nedge == 0, label + "no group reaches the buffer edge");
 
     // The reference groups
     const double linking_distance = linking_length / std::cbrt(double(all.size()));
@@ -196,9 +192,9 @@ void test(bool filament, double buffer) {
     for (size_t i = 0; i < allgroups.size(); i += 4)
         sizes.push_back(size_t(allgroups[i]));
     std::sort(sizes.begin(), sizes.end());
-    check(sizes == ref_sizes,
-          label + "the same groups as the serial FoF (" + std::to_string(sizes.size()) + " vs " +
-              std::to_string(ref_sizes.size()) + ")");
+    check_local(sizes == ref_sizes,
+                label + "the same groups as the serial FoF (" + std::to_string(sizes.size()) + " vs " +
+                    std::to_string(ref_sizes.size()) + ")");
 
     // Centers: compare each group with the reference group of the same size (all sizes here are distinct)
     double maxerr = 0.0;
@@ -222,7 +218,7 @@ void test(bool filament, double buffer) {
             }
         }
     }
-    check(maxerr < 1e-10, label + "the same group centers (max difference " + std::to_string(maxerr) + ")");
+    check_local(maxerr < 1e-10, label + "the same group centers (max difference " + std::to_string(maxerr) + ")");
 
     // FoF IDs in the particles: one-to-one with the reference groups (no_FoF_ID outside groups with >= nmin)
     std::vector<long long int> pairs;
@@ -275,7 +271,7 @@ void test(bool filament, double buffer) {
     for (auto & r : id_to_root)
         ok = ok and r.second.size() == 1;
     ok = ok and root_to_id.size() == ref_sizes.size();
-    check(ok, label + "the FoF IDs in the particles are one-to-one with the groups");
+    check_local(ok, label + "the FoF IDs in the particles are one-to-one with the groups");
 }
 
 // A user halo class (FoFHaloClass) with an extra quantity
@@ -320,8 +316,8 @@ void test_extra() {
         ymax = std::max(ymax, h.ymax);
     FML::SumOverTasks(&n);
     FML::MaxOverTasks(&ymax);
-    check(n == 2 and ymax == 1.0,
-          "custom halo class (did not compile) with a particle at y = 1.0: " + std::to_string(n) + " groups");
+    check_local(n == 2 and ymax == 1.0,
+                "custom halo class (did not compile) with a particle at y = 1.0: " + std::to_string(n) + " groups");
 
     // 2D: 100 x 100 lattice, one particle moved 0.5 mean separations towards its neighbor: no link with b = 0.2
     std::vector<Particle2D> p2;
@@ -338,16 +334,16 @@ void test_extra() {
     FML::FOF::FriendsOfFriends<Particle2D, 2>(p2.data(), p2.size(), 0.2, 2, true, 0.05, h2);
     size_t ng = h2.size();
     FML::SumOverTasks(&ng);
-    check(ng == 0,
-          "2D: particles 0.5 mean separations apart are not linked with b = 0.2 (" + std::to_string(ng) +
-              " groups; the linking distance used N^(-1/3))");
+    check_local(ng == 0,
+                "2D: particles 0.5 mean separations apart are not linked with b = 0.2 (" + std::to_string(ng) +
+                    " groups; the linking distance used N^(-1/3))");
 }
 
 int main() {
     {
         std::vector<FML::FOF::FoFHalo<Particle, NDIM>> empty;
         FML::FOF::FriendsOfFriends<Particle, NDIM>(nullptr, 0, .2, 1, true, .001, empty, 8);
-        check(empty.empty(), "all-empty FoF input returns an empty catalogue collectively");
+        check_local(empty.empty(), "all-empty FoF input returns an empty catalogue collectively");
         if (FML::NTasks > 1) {
             Particle p{{.5 * (FML::xmin_domain + FML::xmax_domain), .5, .5}, 0, 0};
             bool rejected = false;
@@ -356,14 +352,12 @@ int main() {
             } catch (const std::overflow_error &) {
                 rejected = true;
             }
-            check(rejected, "partially empty FoF ranks fail collectively instead of splitting the MPI path");
+            check_local(rejected, "partially empty FoF ranks fail collectively instead of splitting the MPI path");
         }
     }
 
     test(false, 0.05);
     test(true, 0.05);
     test_extra();
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All FoF tests passed\n" : std::to_string(fails) + " FoF test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("FoF");
 }

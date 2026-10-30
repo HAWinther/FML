@@ -7,7 +7,7 @@
 //   * GetDist output, fast/slow sampling, checkpoint and resume
 // =============================================================================
 
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/MCMC/Sampler.h>
 
 #include <cmath>
@@ -19,9 +19,9 @@
 
 using namespace FML::MCMC;
 
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 namespace {
     SamplerOptions quiet(int chains = 4, int burn = 2000, int samples = 20000) {
@@ -52,7 +52,7 @@ int main() {
     std::cout << "Cholesky\n";
     {
         std::vector<std::vector<double>> A = {{4, 2, 0.4}, {2, 5, 1}, {0.4, 1, 3}}, L;
-        check("positive definite matrix factorized", FML::MCMC::cholesky(A, L));
+        check(FML::MCMC::cholesky(A, L), "positive definite matrix factorized");
         double e = 0.0;
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < 3; j++) {
@@ -61,8 +61,8 @@ int main() {
                     s += L[i][k] * L[j][k];
                 e = std::max(e, std::fabs(s - A[i][j]));
             }
-        check_close("L L^T = A", e, 0.0, 1e-14);
-        check("indefinite matrix rejected", !FML::MCMC::cholesky({{1, 2}, {2, 1}}, L));
+        check_close(e, 0.0, 1e-14, "L L^T = A");
+        check(!FML::MCMC::cholesky({{1, 2}, {2, 1}}, L), "indefinite matrix rejected");
     }
 
     std::cout << "Correlated 3D Gaussian\n";
@@ -113,24 +113,24 @@ int main() {
                    quiet(4, 4000, 30000));
         mc.run();
         const auto diagnostic = mc.diagnostics(3); // includes derived a+b and rejected-step repeats
-        check("modern sampler diagnostics valid", diagnostic.valid());
-        check("modern sampler rank Rhat", diagnostic.rhat < 1.02);
-        check("modern sampler bulk/tail ESS", diagnostic.ess_bulk > 400 && diagnostic.ess_tail > 400);
+        check(diagnostic.valid(), "modern sampler diagnostics valid");
+        check(diagnostic.rhat < 1.02, "modern sampler rank Rhat");
+        check(diagnostic.ess_bulk > 400 && diagnostic.ess_tail > 400, "modern sampler bulk/tail ESS");
         std::vector<std::vector<double>> traces(4);
         for (int i = 0; i < 4; ++i)
             for (const auto & row : mc.samples(i))
                 traces[i].push_back(row[3]);
-        check_close("sampler adapter preserves full traces",
-                    diagnostic.ess_bulk,
+        check_close(diagnostic.ess_bulk,
                     diagnose_chains(traces).ess_bulk,
-                    1e-12);
+                    1e-12,
+                    "sampler adapter preserves full traces");
         bool invalid_column = false;
         try {
             mc.diagnostics(4);
         } catch (const std::out_of_range &) {
             invalid_column = true;
         }
-        check("sampler diagnostic invalid column", invalid_column);
+        check(invalid_column, "sampler diagnostic invalid column");
         const auto m = mc.mean(), s = mc.stddev();
         const auto cv = mc.covariance();
         double em = 0.0, ec = 0.0;
@@ -140,12 +140,12 @@ int main() {
                 ec = std::max(ec, std::fabs(cv[i][j] - C[i][j]) / (sig[i] * sig[j]));
         }
         std::cout << "  acceptance " << mc.acceptance() << ", R-1 = " << mc.Rminus1() << "\n";
-        check_close("means (in units of sigma)", em, 0.0, 0.05);
-        check_close("covariance (in units of sigma_i sigma_j)", ec, 0.0, 0.05);
+        check_close(em, 0.0, 0.05, "means (in units of sigma)");
+        check_close(ec, 0.0, 0.05, "covariance (in units of sigma_i sigma_j)");
         const double sab = std::sqrt(C[0][0] + C[1][1] + 2 * C[0][1]);
-        check_rel("derived a + b: standard deviation", s[3], sab, 0.05);
-        check("R-1 < 0.01", mc.Rminus1() < 0.01);
-        check("converged() after a stop on R-1", mc.converged());
+        check_rel(s[3], sab, 0.05, "derived a + b: standard deviation");
+        check(mc.Rminus1() < 0.01, "R-1 < 0.01");
+        check(mc.converged(), "converged() after a stop on R-1");
         {
             // R-1 recomputed from the chains: largest eigenvalue of W^-1 B by power iteration (CosmoMC/Cobaya)
             const int nc = 4, dd = 3;
@@ -201,10 +201,10 @@ int main() {
                 for (int i = 0; i < dd; i++)
                     v[i] = w[i] / norm;
             }
-            check_rel("R-1 = largest eigenvalue of W^-1 B from the chains", mc.Rminus1(), lambda, 1e-6);
+            check_rel(mc.Rminus1(), lambda, 1e-6, "R-1 = largest eigenvalue of W^-1 B from the chains");
         }
-        check("acceptance near 0.25-0.35 (adapted)", mc.acceptance() > 0.15 && mc.acceptance() < 0.45);
-        check_close("best fit near the peak", std::fabs(mc.best_fit()[0] - mu[0]) / sig[0], 0.0, 0.3);
+        check(mc.acceptance() > 0.15 && mc.acceptance() < 0.45, "acceptance near 0.25-0.35 (adapted)");
+        check_close(std::fabs(mc.best_fit()[0] - mu[0]) / sig[0], 0.0, 0.3, "best fit near the peak");
     }
 
     std::cout << "Priors\n";
@@ -216,16 +216,16 @@ int main() {
         };
         Sampler u({P("u", 0.5, 0.0, 1.0, 0.2)}, {}, {}, flat, quiet(4, 1000, 40000));
         u.run();
-        check_close("flat prior on [0, 1]: mean 1/2", u.mean()[0], 0.5, 0.01);
-        check_rel("flat prior: variance 1/12", u.stddev()[0] * u.stddev()[0], 1.0 / 12.0, 0.03);
+        check_close(u.mean()[0], 0.5, 0.01, "flat prior on [0, 1]: mean 1/2");
+        check_rel(u.stddev()[0] * u.stddev()[0], 1.0 / 12.0, 0.03, "flat prior: variance 1/12");
         auto g = P("g", 0.0, -100, 100, 1.0);
         g.gaussian_prior = true;
         g.prior_mean = 3.0;
         g.prior_sigma = 0.7;
         Sampler gm({g}, {}, {}, flat, quiet(4, 1000, 40000));
         gm.run();
-        check_close("Gaussian prior: mean", gm.mean()[0], 3.0, 0.03);
-        check_rel("Gaussian prior: sigma", gm.stddev()[0], 0.7, 0.03);
+        check_close(gm.mean()[0], 3.0, 0.03, "Gaussian prior: mean");
+        check_rel(gm.stddev()[0], 0.7, 0.03, "Gaussian prior: sigma");
         // likelihood that fails for x < 0: no sample there, and the run does not stop
         LikelihoodFunction half = [](const std::vector<double> & x) {
             if (x[0] < 0.0)
@@ -240,8 +240,8 @@ int main() {
         for (int c = 0; c < 2; c++)
             for (const auto & r : hm.samples(c))
                 xmin = std::min(xmin, r[0]);
-        check("failed evaluations are rejected (no sample with x < 0)", xmin >= 0.0);
-        check_close("half-normal mean sqrt(2/pi)", hm.mean()[0], std::sqrt(2.0 / M_PI), 0.03);
+        check(xmin >= 0.0, "failed evaluations are rejected (no sample with x < 0)");
+        check_close(hm.mean()[0], std::sqrt(2.0 / M_PI), 0.03, "half-normal mean sqrt(2/pi)");
     }
 
     std::cout << "GetDist output\n";
@@ -273,11 +273,11 @@ int main() {
             if (std::fabs(row[3] - 2.0 * row[2]) > 1e-8)
                 cols = -1;
         }
-        check("chain file: weight, -ln posterior, x, derived", cols == 4);
-        check_close("weights sum to the number of steps", w, 3000.0, 1e-12);
-        check("paramnames, ranges, covmat, summary written",
-              std::filesystem::exists(dir + "/toy.paramnames") && std::filesystem::exists(dir + "/toy.ranges") &&
-                  std::filesystem::exists(dir + "/toy.covmat") && std::filesystem::exists(dir + "/toy.summary.txt"));
+        check(cols == 4, "chain file: weight, -ln posterior, x, derived");
+        check_close(w, 3000.0, 1e-12, "weights sum to the number of steps");
+        check(std::filesystem::exists(dir + "/toy.paramnames") && std::filesystem::exists(dir + "/toy.ranges") &&
+                  std::filesystem::exists(dir + "/toy.covmat") && std::filesystem::exists(dir + "/toy.summary.txt"),
+              "paramnames, ranges, covmat, summary written");
     }
 
     std::cout << "Fast/slow sampling\n";
@@ -311,19 +311,19 @@ int main() {
         const auto cv = mc.covariance();
         std::cout << "  acceptance " << mc.acceptance() << ", " << calls << " calls, " << slow_calls
                   << " with a new slow value\n";
-        check_close("mean of the slow parameter", m[0], 0.0, 0.05);
-        check_close("mean of the fast parameter", m[1], 1.0, 0.025);
-        check_rel("sigma of the fast parameter", sd[1], 0.5, 0.03);
-        check_close("correlation", cv[0][1] / (sd[0] * sd[1]), rho, 0.03);
-        check("4 fast calls per slow step: ~5 calls per step", calls > 4.5 * 4 * 22000 && calls < 5.5 * 4 * 22000);
-        check("fast updates reuse the slow part: one new slow value per step", slow_calls < 1.01 * 4 * 22000 + 100);
+        check_close(m[0], 0.0, 0.05, "mean of the slow parameter");
+        check_close(m[1], 1.0, 0.025, "mean of the fast parameter");
+        check_rel(sd[1], 0.5, 0.03, "sigma of the fast parameter");
+        check_close(cv[0][1] / (sd[0] * sd[1]), rho, 0.03, "correlation");
+        check(calls > 4.5 * 4 * 22000 && calls < 5.5 * 4 * 22000, "4 fast calls per slow step: ~5 calls per step");
+        check(slow_calls < 1.01 * 4 * 22000 + 100, "fast updates reuse the slow part: one new slow value per step");
         bool threw = false;
         try {
             Sampler({pb, pa}, {}, {}, like, o);
         } catch (const std::exception &) {
             threw = true;
         }
-        check("fast parameters must come last", threw);
+        check(threw, "fast parameters must come last");
     }
 
     std::cout << "Checkpoint and resume\n";
@@ -349,14 +349,14 @@ int main() {
         };
         const auto full = run(dir + "/full", 1600, false);
         run(dir + "/part", 1000, false); // "interrupted" after 600 samples per chain
-        check("checkpoint written", std::filesystem::exists(dir + "/part_2.checkpoint"));
+        check(std::filesystem::exists(dir + "/part_2.checkpoint"), "checkpoint written");
         const auto resumed = run(dir + "/part", 1600, true);
         bool same = full.size() == resumed.size();
         for (size_t i = 0; same && i < full.size(); i++)
             for (size_t j = 0; j < full[i].size(); j++)
                 same = same && std::fabs(full[i][j] - resumed[i][j]) <= 1e-10 * (1.0 + std::fabs(full[i][j]));
-        check("resumed run = uninterrupted run (" + std::to_string(full.size()) + " samples of chain 1)", same);
-        check("resume without checkpoints starts afresh", run(dir + "/new", 1600, true).size() == full.size());
+        check(same, "resumed run = uninterrupted run (" + std::to_string(full.size()) + " samples of chain 1)");
+        check(run(dir + "/new", 1600, true).size() == full.size(), "resume without checkpoints starts afresh");
         std::filesystem::remove_all(dir);
     }
 
@@ -370,9 +370,9 @@ int main() {
         options.max_steps = 32;
         Sampler frozen({P("frozen", .1, 0., 2., 1e-100)}, {}, {}, flat, options);
         frozen.run();
-        check("legacy stopping rejects zero within-chain variance", std::isinf(frozen.Rminus1()));
-        check("frozen sampler reaches step cap", frozen.n_samples() == 64);
-        check("modern frozen sampler status", frozen.diagnostics(0).status == DiagnosticStatus::ConstantChain);
+        check(std::isinf(frozen.Rminus1()), "legacy stopping rejects zero within-chain variance");
+        check(frozen.n_samples() == 64, "frozen sampler reaches step cap");
+        check(frozen.diagnostics(0).status == DiagnosticStatus::ConstantChain, "modern frozen sampler status");
     }
-    return Test::summary();
+    return FML::TESTS::summary("MCMC sampler");
 }

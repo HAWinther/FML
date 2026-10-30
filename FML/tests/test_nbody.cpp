@@ -33,6 +33,10 @@
 #include <string>
 #include <type_traits>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 using namespace FML;
 using FFTWGrid = FML::GRID::FFTWGrid<3>;
@@ -42,19 +46,6 @@ using MPIParticles = FML::PARTICLE::MPIParticles<T>;
 
 int nbody_odr_check(); // defined in test_nbody_odr.cpp
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os.precision(6);
-    os << x;
-    return os.str();
-}
 
 struct Particle {
     double pos[3];
@@ -228,10 +219,10 @@ void check_streamed_pgd(const std::string & label) {
     int bad[] = {int(!positions), int(!attributes), int(!diagnostics), int(!wrapped), int(!large_displacement)};
     for (auto & value : bad)
         FML::MaxOverTasks(&value);
-    check(!bad[0], label + ": PGD positions match buffered updates bit-for-bit for all assignment methods");
-    check(!bad[1], label + ": PGD preserves velocities and IDs");
-    check(!bad[2], label + ": PGD maximum-displacement diagnostic is unchanged");
-    check(!bad[3] && !bad[4], label + ": PGD wraps displacements larger than a box");
+    check_local(!bad[0], label + ": PGD positions match buffered updates bit-for-bit for all assignment methods");
+    check_local(!bad[1], label + ": PGD preserves velocities and IDs");
+    check_local(!bad[2], label + ": PGD maximum-displacement diagnostic is unchanged");
+    check_local(!bad[3] && !bad[4], label + ": PGD wraps displacements larger than a box");
 }
 
 void check_streamed_pgd_suite() {
@@ -257,15 +248,15 @@ void test_explicit_force_options() {
     NBODY::compute_force_from_density_fourier<3>(density, repeated, "CIC", 1.5, standard);
     NBODY::compute_force_from_density_fourier<3>(density, defaults, "CIC", 1.5);
     NBODY::compute_force_from_density_real<3>(real_density, from_real, "CIC", 1.5, different);
-    check(rel_diff(first, repeated) == 0 && rel_diff(first, defaults) == 0,
-          "interleaved explicit force choices preserve independent calls and fixed defaults");
-    check(rel_diff(first, second) > 1e-3, "explicit force options change the selected discretization");
-    check(rel_diff(second, from_real) < 1e-12, "real-density wrapper forwards every force option");
-    check(NBODY::laplace_kernel_from_name("fiducial") == standard.laplace_kernel &&
-              NBODY::gradient_kernel_from_name("") == standard.gradient_kernel &&
-              NBODY::laplace_kernel_from_name("discrete_2pt") == different.laplace_kernel &&
-              NBODY::gradient_kernel_from_name("discrete_4pt") == different.gradient_kernel,
-          "kernel names parse into typed choices with deterministic fiducial defaults");
+    check_local(rel_diff(first, repeated) == 0 && rel_diff(first, defaults) == 0,
+                "interleaved explicit force choices preserve independent calls and fixed defaults");
+    check_local(rel_diff(first, second) > 1e-3, "explicit force options change the selected discretization");
+    check_local(rel_diff(second, from_real) < 1e-12, "real-density wrapper forwards every force option");
+    check_local(NBODY::laplace_kernel_from_name("fiducial") == standard.laplace_kernel &&
+                    NBODY::gradient_kernel_from_name("") == standard.gradient_kernel &&
+                    NBODY::laplace_kernel_from_name("discrete_2pt") == different.laplace_kernel &&
+                    NBODY::gradient_kernel_from_name("discrete_4pt") == different.gradient_kernel,
+                "kernel names parse into typed choices with deterministic fiducial defaults");
     bool invalid_name = false, invalid_value = false;
     try {
         NBODY::gradient_kernel_from_name("missing");
@@ -279,7 +270,7 @@ void test_explicit_force_options() {
     } catch (const std::exception &) {
         invalid_value = true;
     }
-    check(invalid_name && invalid_value, "invalid force options are rejected before parallel force work");
+    check_local(invalid_name && invalid_value, "invalid force options are rejected before parallel force work");
 }
 
 //==========================================================
@@ -373,7 +364,7 @@ int main(int argc, char ** argv) {
     std::string mode = argc > 1 ? argv[1] : "all";
     if (mode == "streamed_pgd") {
         check_streamed_pgd_suite();
-        return fails == 0 ? 0 : 1;
+        return FML::TESTS::summary("streamed PGD");
     }
     const int Nmesh = 16;
     const double dx = 1.0 / Nmesh;
@@ -417,7 +408,8 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    check(nbody_odr_check() == 1, "NBody.h and PotentialGradientDecent.h can be included in several translation units");
+    check_local(nbody_odr_check() == 1,
+                "NBody.h and PotentialGradientDecent.h can be included in several translation units");
 
     //=====================================================
     // 1. The 4-point Green's function is -1/D4^2
@@ -446,8 +438,8 @@ int main(int argc, char ** argv) {
                                                                    NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT);
             maxerr = std::max(maxerr, std::fabs(G * sumD2 + 1.0));
         }
-        check(maxerr < 1e-12,
-              "discrete_4pt Green's function = -1 / (4-point gradient)^2 (max error " + num(maxerr) + ")");
+        check_local(maxerr < 1e-12,
+                    "discrete_4pt Green's function = -1 / (4-point gradient)^2 (max error " + num(maxerr) + ")");
         // The 4-point gradient vanishes when all components are 0 or the Nyquist frequency: no (infinite) potential
         std::array<double, 3> knyq{M_PI * Nmesh, 0.0, -M_PI * Nmesh};
         const double Gnyq =
@@ -455,8 +447,8 @@ int main(int argc, char ** argv) {
                                                                knyq,
                                                                Nmesh,
                                                                NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT);
-        check(Gnyq == 0.0,
-              "discrete_4pt Green's function is 0 for the Nyquist modes where D4 = 0 (got " + num(Gnyq) + ")");
+        check_local(Gnyq == 0.0,
+                    "discrete_4pt Green's function is 0 for the Nyquist modes where D4 = 0 (got " + num(Gnyq) + ")");
     }
 
     //=====================================================
@@ -480,9 +472,9 @@ int main(int argc, char ** argv) {
             maxerr = std::max(maxerr, double(std::fabs(force[0].get_real_from_index(i))) * D4);
         }
         FML::MaxOverTasks(&maxerr);
-        check(maxerr < 1e-10,
-              "Fourier force on a plane wave with the 4-point kernels is sin(kx)/D4(k) (rel. error " + num(maxerr) +
-                  ")");
+        check_local(maxerr < 1e-10,
+                    "Fourier force on a plane wave with the 4-point kernels is sin(kx)/D4(k) (rel. error " +
+                        num(maxerr) + ")");
     }
 
     //=====================================================
@@ -529,7 +521,8 @@ int main(int argc, char ** argv) {
             NBODY::compute_potential_real_from_density_fourier<3>(density, potential, 1.5, c.stencil / 2, options);
             NBODY::compute_force_from_potential_real<3>(potential, force_fd, "CIC", c.stencil, options);
             const double err = rel_diff(force_fd, force_fourier);
-            check(err < 1e-10, "finite difference force = Fourier force (" + c.name + ", rel. diff " + num(err) + ")");
+            check_local(err < 1e-10,
+                        "finite difference force = Fourier force (" + c.name + ", rel. diff " + num(err) + ")");
         }
     }
 
@@ -570,9 +563,9 @@ int main(int argc, char ** argv) {
                     same_as_before = same_as_before and p[i].pos[idim] == xold;
             }
         }
-        check(in_box, "drift: positions are in [0,1) (never exactly 1.0)");
-        check(correct, "drift: displacements larger than the box are wrapped");
-        check(same_as_before, "drift: the usual positions are wrapped exactly as before (bit-identical)");
+        check_local(in_box, "drift: positions are in [0,1) (never exactly 1.0)");
+        check_local(correct, "drift: displacements larger than the box are wrapped");
+        check_local(same_as_before, "drift: the usual positions are wrapped exactly as before (bit-identical)");
     }
 
     //=====================================================
@@ -609,9 +602,10 @@ int main(int argc, char ** argv) {
         }
         FML::MaxOverTasks(&maxerr);
         FML::SumOverTasks(&outside);
-        check(mp.get_npart_total() == size_t(npart) and outside == 0 and maxerr < 1e-12,
-              "DriftParticles with tasks without particles (npart_total = " + std::to_string(mp.get_npart_total()) +
-                  ", outside the domain " + std::to_string(outside) + ", max error " + num(maxerr) + ")");
+        check_local(
+            mp.get_npart_total() == size_t(npart) and outside == 0 and maxerr < 1e-12,
+            "DriftParticles with tasks without particles (npart_total = " + std::to_string(mp.get_npart_total()) +
+                ", outside the domain " + std::to_string(outside) + ", max error " + num(maxerr) + ")");
     }
 
     //=====================================================
@@ -648,8 +642,8 @@ int main(int argc, char ** argv) {
             }
         FML::SumOverTasks(&bad);
         FML::SumOverTasks(&xsum);
-        check(mp.get_npart_total() == size_t(npart) and bad == 0 and std::isfinite(xsum),
-              "PGD with tasks without particles (npart_total = " + std::to_string(mp.get_npart_total()) + ")");
+        check_local(mp.get_npart_total() == size_t(npart) and bad == 0 and std::isfinite(xsum),
+                    "PGD with tasks without particles (npart_total = " + std::to_string(mp.get_npart_total()) + ")");
     }
 
     //=====================================================
@@ -691,9 +685,10 @@ int main(int argc, char ** argv) {
         FML::SumOverTasks(&num_);
         FML::SumOverTasks(&den);
         const double ratio = num_ / den;
-        check(std::fabs(ratio - 1.0) < 0.02,
-              "PGD displacement is -alpha norm grad grad^-2 delta (towards the overdensity), measured/expected = " +
-                  num(ratio));
+        check_local(
+            std::fabs(ratio - 1.0) < 0.02,
+            "PGD displacement is -alpha norm grad grad^-2 delta (towards the overdensity), measured/expected = " +
+                num(ratio));
         mp.communicate_particles();
     }
 
@@ -754,26 +749,27 @@ int main(int argc, char ** argv) {
         const double expected_xy = g(std::sqrt(2.0) * k1);
         for (int idim = 0; idim < 2; idim++) {
             auto r = compare(a, b, idim, expected_xy);
-            check(a.get_npart() == b.get_npart() and r[0] < 1e-5 and r[1] > 0.0 and r[2] == 0.0,
-                  "NBodyInitialConditions: 2LPT velocity " + std::string(1, "xyz"[idim]) +
-                      " = norm(k) Psi_2LPT at |k| = sqrt(2) k1 (rel. error " + num(r[0]) +
-                      ", positions unchanged: max diff " + num(r[2]) + ")");
+            check_local(a.get_npart() == b.get_npart() and r[0] < 1e-5 and r[1] > 0.0 and r[2] == 0.0,
+                        "NBodyInitialConditions: 2LPT velocity " + std::string(1, "xyz"[idim]) +
+                            " = norm(k) Psi_2LPT at |k| = sqrt(2) k1 (rel. error " + num(r[0]) +
+                            ", positions unchanged: max diff " + num(r[2]) + ")");
         }
         // With the third wave: the z-velocity comes from the shell |k| = sqrt(k1^2 + k2^2)
         auto c = make_ic(true, nullptr);
         auto d = make_ic(true, g);
         auto r = compare(c, d, 2, g(std::sqrt(k1 * k1 + k2 * k2)));
-        check(r[0] < 1e-5 and r[1] > 0.0 and r[2] == 0.0,
-              "NBodyInitialConditions: 2LPT z-velocity = norm(k) Psi_2LPT at |k| = sqrt(k1^2 + k2^2) (rel. error " +
-                  num(r[0]) + ")");
+        check_local(
+            r[0] < 1e-5 and r[1] > 0.0 and r[2] == 0.0,
+            "NBodyInitialConditions: 2LPT z-velocity = norm(k) Psi_2LPT at |k| = sqrt(k1^2 + k2^2) (rel. error " +
+                num(r[0]) + ")");
         // A constant norm(k) is the same as velocity_norms[1]
         auto e = make_ic(true, [](double) { return 1.0; });
         double maxerr = 0.0;
         for (int idim = 0; idim < 3; idim++)
             maxerr = std::max(maxerr, compare(c, e, idim, 1.0)[0]);
-        check(maxerr < 1e-6,
-              "NBodyInitialConditions: a constant 2LPT velocity norm(k) = velocity_norms[1] (rel. diff " + num(maxerr) +
-                  ")");
+        check_local(maxerr < 1e-6,
+                    "NBodyInitialConditions: a constant 2LPT velocity norm(k) = velocity_norms[1] (rel. diff " +
+                        num(maxerr) + ")");
     }
 
     //=====================================================
@@ -811,24 +807,23 @@ int main(int argc, char ** argv) {
         for (auto & c : cases) {
             const auto options = force_options(c.laplace, c.gradient, c.deconvolve);
             const double err3 = force_reflection_error<3>(16, options, c.finite_difference);
-            check(err3 < 1e-10,
-                  "3D force (Nmesh = 16) is covariant under reflections (" + c.name + ", rel. err " + num(err3) + ")");
+            check_local(err3 < 1e-10,
+                        "3D force (Nmesh = 16) is covariant under reflections (" + c.name + ", rel. err " + num(err3) +
+                            ")");
         }
         // The general (N != 3) loop of compute_force_from_density_fourier and an odd mesh
         const double err2 = force_reflection_error<2>(16, NBODY::ForceOptions{});
-        check(err2 < 1e-10,
-              "2D force (Nmesh = 16) is covariant under reflections (default, rel. err " + num(err2) + ")");
+        check_local(err2 < 1e-10,
+                    "2D force (Nmesh = 16) is covariant under reflections (default, rel. err " + num(err2) + ")");
         // (the number of tasks must divide Nmesh)
         if (15 % FML::NTasks == 0) {
             const double errodd = force_reflection_error<3>(15, NBODY::ForceOptions{});
-            check(errodd < 1e-10,
-                  "3D force (Nmesh = 15) is covariant under reflections (default, rel. err " + num(errodd) + ")");
+            check_local(errodd < 1e-10,
+                        "3D force (Nmesh = 15) is covariant under reflections (default, rel. err " + num(errodd) + ")");
         }
     }
 
     check_streamed_pgd_suite();
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All NBody tests passed\n" : std::to_string(fails) + " NBody test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("NBody");
 }

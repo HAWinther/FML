@@ -2,20 +2,14 @@
 #include <FML/Survey/SurveyWindow.h>
 #include <iostream>
 #include <map>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::near;
+
+using FML::TESTS::check;
 using namespace FML::SURVEY;
 namespace survey_detail = FML::SURVEY::detail;
-int failures = 0;
 const double tolerance = sizeof(Real) == 4 ? 3e-4 : 2e-9;
-void check(bool good, const std::string & label) {
-    int bad = !good;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (FML::ThisTask == 0)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
-}
-bool near(double a, double b, double tol = tolerance) {
-    return std::abs(a - b) <= tol * std::max({1.0, std::abs(a), std::abs(b)});
-}
 std::vector<CatalogPoint> split(const std::vector<CatalogPoint> & points, bool root_only = false) {
     std::vector<CatalogPoint> result;
     for (size_t i = 0; i < points.size(); ++i)
@@ -183,7 +177,8 @@ void test_power() {
     for (auto i : painted.get_real_range())
         total += painted.get_real_from_index(i);
     FML::SumOverTasks(&total);
-    check(near(total, weight_sum(data)), "CIC conserves physical catalogue weights across arbitrary source ranks");
+    check(near(total, weight_sum(data), tolerance),
+          "CIC conserves physical catalogue weights across arbitrary source ranks");
     PowerOptions options;
     options.edges = {0, .7, 1.3, 2, 2.7};
     for (bool local : {false, true})
@@ -193,13 +188,13 @@ void test_power() {
             options.compensate_cic = compensate;
             const auto expected = direct_power(all_data, all_randoms, g, options);
             const auto actual = estimate_power(data, randoms, g, options);
-            bool same = near(actual.alpha, expected.alpha) && near(actual.i2, expected.i2);
+            bool same = near(actual.alpha, expected.alpha, tolerance) && near(actual.i2, expected.i2, tolerance);
             for (size_t b = 0; b < actual.k.size(); ++b) {
-                same &= actual.nmodes[b] == expected.nmodes[b] && near(actual.k[b], expected.k[b]);
+                same &= actual.nmodes[b] == expected.nmodes[b] && near(actual.k[b], expected.k[b], tolerance);
                 for (size_t l = 0; l < actual.ells.size(); ++l)
-                    same &= near(actual.raw[l][b], expected.raw[l][b]) &&
-                            near(actual.shotnoise[l][b], expected.shotnoise[l][b]) &&
-                            near(actual.power[l][b], expected.raw[l][b] - expected.shotnoise[l][b]);
+                    same &= near(actual.raw[l][b], expected.raw[l][b], tolerance) &&
+                            near(actual.shotnoise[l][b], expected.shotnoise[l][b], tolerance) &&
+                            near(actual.power[l][b], expected.raw[l][b] - expected.shotnoise[l][b], tolerance);
             }
             check(same,
                   std::string("FFT monopole/quadrupole/hexadecapole and weighted shot terms match direct DFT: ") +
@@ -215,9 +210,9 @@ void test_power() {
     bool invariant = true;
     for (size_t l = 0; l < 3; ++l)
         for (size_t b = 0; b < original.k.size(); ++b)
-            invariant &= near(original.power[l][b], scaled.power[l][b]);
+            invariant &= near(original.power[l][b], scaled.power[l][b], tolerance);
     check(invariant, "common catalogue-weight rescaling preserves normalized power and noise");
-    check(near(fkp_weight(.001, 1000), .5), "FKP helper uses physical nbar times P0");
+    check(near(fkp_weight(.001, 1000), .5, tolerance), "FKP helper uses physical nbar times P0");
     if (FML::NTasks == 1) {
         g.nmesh = 15;
         options.compensate_cic = false;
@@ -226,7 +221,7 @@ void test_power() {
         bool odd = true;
         for (size_t l = 0; l < 3; ++l)
             for (size_t b = 0; b < got.k.size(); ++b)
-                odd &= near(got.raw[l][b], ref.raw[l][b]);
+                odd &= near(got.raw[l][b], ref.raw[l][b], tolerance);
         check(odd, "odd mesh Hermitian multiplicities match full direct DFT");
     }
 }
@@ -431,8 +426,9 @@ void test_window() {
                 small &= std::abs(table.q[2][b] - exact_q4(table.s[b])) < .03;
         check(small, "window multipoles of a uniform cube: no lattice-shell leakage into Q4 (shell correction)");
     }
-    check(near(survey_detail::coupling(0, 2, 2), .2) && near(survey_detail::coupling(2, 0, 2), 1) &&
-              near(survey_detail::coupling(4, 0, 2), 0),
+    check(near(survey_detail::coupling(0, 2, 2), .2, tolerance) &&
+              near(survey_detail::coupling(2, 0, 2), 1, tolerance) &&
+              near(survey_detail::coupling(4, 0, 2), 0, tolerance),
           "window Legendre couplings include correct mixing and selection rules");
     WindowMultipoles w;
     w.ells = {0, 2, 4, 6, 8};
@@ -606,7 +602,7 @@ void test_reconstruction() {
     for (auto i : constant.get_real_range())
         constant.set_real_from_index(i, 1);
     auto zero = solve_displacement(constant, g, options);
-    check(zero.report.converged && zero.report.iterations == 0 && near(zero.report.removed_mean, 1),
+    check(zero.report.converged && zero.report.iterations == 0 && near(zero.report.removed_mean, 1, tolerance),
           "constant source is projected out and zero source converges without iterations");
     std::array<Mesh, 3> fields{survey_detail::empty_mesh(g, 1),
                                survey_detail::empty_mesh(g, 1),
@@ -624,7 +620,7 @@ void test_reconstruction() {
     bool samples = values.size() == points.size();
     for (const auto & v : values)
         for (int d = 0; d < 3; ++d)
-            samples &= near(v[d], d + .5);
+            samples &= near(v[d], d + .5, tolerance);
     check(samples, "CIC displacement queries across MPI slabs return in original local catalogue order");
 
     auto all_randoms = catalogue(false), all_data = all_randoms;
@@ -644,16 +640,18 @@ void test_reconstruction() {
         const auto los = line_of_sight(g, data[i].position);
         const double radial = options.growth_rate * dot(sym.data_displacement[i], los);
         for (int d = 0; d < 3; ++d)
-            conventions &=
-                near(sym.data[i].position[d], data[i].position[d] - sym.data_displacement[i][d] - radial * los[d]);
+            conventions &= near(sym.data[i].position[d],
+                                data[i].position[d] - sym.data_displacement[i][d] - radial * los[d],
+                                tolerance);
     }
     for (size_t i = 0; i < randoms.size(); ++i) {
         conventions &= sym.randoms[i].weight == randoms[i].weight && sym.randoms[i].nbar == randoms[i].nbar;
         const auto los = line_of_sight(g, randoms[i].position);
         const double radial = options.growth_rate * dot(sym.random_displacement[i], los);
         for (int d = 0; d < 3; ++d) {
-            conventions &= near(iso.randoms[i].position[d], randoms[i].position[d] - sym.random_displacement[i][d]);
-            conventions &= near(sym.randoms[i].position[d], iso.randoms[i].position[d] - radial * los[d]);
+            conventions &=
+                near(iso.randoms[i].position[d], randoms[i].position[d] - sym.random_displacement[i][d], tolerance);
+            conventions &= near(sym.randoms[i].position[d], iso.randoms[i].position[d] - radial * los[d], tolerance);
         }
     }
     check(conventions, "end-to-end RecIso/RecSym preserve weights/order and apply distinct random RSD shifts");
@@ -730,7 +728,5 @@ int main(int argc, char ** argv) {
         test_reconstruction();
     if (mode == "all")
         test_validation();
-    if (FML::ThisTask == 0)
-        std::cout << (failures ? "Survey workflow tests FAILED\n" : "All survey workflow tests passed\n");
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("survey workflow");
 }

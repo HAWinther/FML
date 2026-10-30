@@ -6,26 +6,16 @@
 #endif
 #include <iostream>
 #include <string>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 using namespace FML::WEAKLENSING;
-static int failures = 0, checks = 0;
-static void check(bool ok, const std::string & label) {
-    ++checks;
-    failures += !ok;
-    if (!ok || FML::ThisTask == 0)
-        std::cout << (ok ? "PASS " : "FAIL ") << label << "\n";
-}
 static void close(double x, double expected, double tolerance, const std::string & label) {
-    check(std::isfinite(x) && std::abs(x - expected) <= tolerance * std::max(1., std::abs(expected)), label);
+    check_local(std::isfinite(x) && std::abs(x - expected) <= tolerance * std::max(1., std::abs(expected)), label);
 }
 template <class F>
 static void rejects(F && f, const std::string & label) {
-    bool rejected = false;
-    try {
-        f();
-    } catch (const std::exception &) {
-        rejected = true;
-    }
-    check(rejected, label);
+    check_local(FML::TESTS::throws(f), label);
 }
 static void scalar_tests() {
     FlatGeometry toy{2. / 3, 1., [](double) { return 0.; }};
@@ -85,7 +75,7 @@ static void scalar_tests() {
     BornAccumulator empty(plan, 0);
     empty.add_shell(0, static_cast<double *>(nullptr), 0);
     empty.add_shell(1, static_cast<double *>(nullptr), 0);
-    check(empty.complete() && empty.maps()[0].empty(), "empty local pixel ownership");
+    check_local(empty.complete() && empty.maps()[0].empty(), "empty local pixel ownership");
     FlatGeometry zero{0., 1., [](double) { return 0.; }};
     close(zero.kernel(source, 1), 0., 0, "zero matter gives zero lensing");
     FlatGeometry evolving{2. / 3, 1., [](double x) { return x; }};
@@ -162,7 +152,7 @@ static void scalar_tests() {
         }
         return std::abs(a.maps()[0][0] - std::pow(2.3, 4) / 20);
     };
-    check(radial_error(16) < radial_error(4) / 10, "radial shell representation converges on refinement");
+    check_local(radial_error(16) < radial_error(4) / 10, "radial shell representation converges on refinement");
     const double dh = 2997.92458;
     const FlatGeometry eds{1., dh, [=](double x) { return 1 / std::pow(1 - x / (2 * dh), 2) - 1; }};
     const auto a = convergence_kernel(Sources::plane(1200), eds), b = convergence_kernel(Sources::plane(2200), eds);
@@ -179,9 +169,9 @@ static void scalar_tests() {
         const auto ca = limber_spectrum({row[0]}, a, a, matter, eds, edges, 16);
         const auto cab = limber_spectrum({row[0]}, a, b, matter, eds, edges, 16);
         const auto cg = limber_spectrum({row[0]}, triangle, b, gm, eds, edges, 16);
-        check(std::abs(ca[0] / row[1] - 1) < 2e-8, "independent SciPy Ckk physical-unit reference");
-        check(std::abs(cab[0] / row[2] - 1) < 2e-8, "independent SciPy tomographic cross reference");
-        check(std::abs(cg[0] / row[3] - 1) < 2e-8, "independent SciPy scale-dependent Pgm reference");
+        check_local(std::abs(ca[0] / row[1] - 1) < 2e-8, "independent SciPy Ckk physical-unit reference");
+        check_local(std::abs(cab[0] / row[2] - 1) < 2e-8, "independent SciPy tomographic cross reference");
+        check_local(std::abs(cg[0] / row[3] - 1) < 2e-8, "independent SciPy scale-dependent Pgm reference");
     }
     rejects([] { Sources({0.}, {1.}); }, "observer source rejected");
     rejects([] { Sources({2.}, {-1.}); }, "negative source mass rejected");
@@ -272,8 +262,5 @@ int main() {
 #ifdef USE_FFTW
     shear_tests();
 #endif
-    FML::MaxOverTasks(&failures);
-    if (FML::ThisTask == 0)
-        std::cout << "WeakLensing: " << checks << " checks on root, " << failures << " failures\n";
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("WeakLensing");
 }

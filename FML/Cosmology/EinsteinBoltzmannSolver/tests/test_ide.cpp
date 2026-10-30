@@ -15,7 +15,7 @@
 #include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 #include <FML/Cosmology/Models/InteractingDarkEnergy.h>
 
@@ -24,9 +24,9 @@
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 namespace {
     CosmologyParameters ide(double xi, double w) {
@@ -89,11 +89,11 @@ int main() {
     {
         BackgroundCosmology b(ide(xi, w));
         std::cout << "  " << b.get_model().species.back()->info() << "\n";
-        check_close("E(0) = 1", b.E2_of_x(0.0), 1.0, 1e-13);
-        check_rel("rho_DE ~ a^{-3(1+w)-xi}",
-                  b.rhoDE(-2.0) / b.rhoDE(0.0),
+        check_close(b.E2_of_x(0.0), 1.0, 1e-13, "E(0) = 1");
+        check_rel(b.rhoDE(-2.0) / b.rhoDE(0.0),
                   std::exp(2.0 * (3.0 * (1.0 + w) + xi)),
-                  1e-13);
+                  1e-13,
+                  "rho_DE ~ a^{-3(1+w)-xi}");
         // rho_c' = -3 rho_c + xi rho_DE, RK4 from today back to x = -10
         const int n = 100000;
         const double h = -10.0 / n;
@@ -105,12 +105,12 @@ int main() {
                          k4 = f(x + h, rc + h * k3);
             rc += h / 6 * (k1 + 2 * k2 + 2 * k3 + k4);
         }
-        check_rel("rho_c = integral of rho_c' = -3 rho_c + xi rho_DE", rc, b.rhoCDM(-10.0), 1e-10);
+        check_rel(rc, b.rhoCDM(-10.0), 1e-10, "rho_c = integral of rho_c' = -3 rho_c + xi rho_DE");
         const double a10 = std::exp(-10.0);
         std::cout << "  rho_c a^3 at a = e^-10 relative to today: " << b.rhoCDM(-10.0) * a10 * a10 * a10 / b.rhoCDM(0.0)
                   << "\n";
-        check("xi < 0 (energy to the dark energy): more dark matter in the past",
-              b.rhoCDM(-10.0) * a10 * a10 * a10 > b.rhoCDM(0.0));
+        check(b.rhoCDM(-10.0) * a10 * a10 * a10 > b.rhoCDM(0.0),
+              "xi < 0 (energy to the dark energy): more dark matter in the past");
         double e1 = 0.0;
         for (const auto & s : b.species())
             for (double x : {-5.0, -1.0, 0.0}) {
@@ -120,10 +120,10 @@ int main() {
                               std::fabs((s->drhodx(x + hh) - s->drhodx(x - hh)) / (2 * hh) - s->ddrhoddx(x)) /
                                   s->rho(x));
             }
-        check_close("rho', rho'' vs finite differences", e1, 0.0, 1e-6);
-        check("doom factor d > 0 rejected (xi > 0, w > -1)", rejected(ide(0.1, -0.95)));
-        check("rho_c < 0 in the past rejected (xi = 2, w = -1.1)", rejected(ide(2.0, -1.1)));
-        check("w = -1 rejected", rejected(ide(-0.1, -1.0)));
+        check_close(e1, 0.0, 1e-6, "rho', rho'' vs finite differences");
+        check(rejected(ide(0.1, -0.95)), "doom factor d > 0 rejected (xi > 0, w > -1)");
+        check(rejected(ide(2.0, -1.1)), "rho_c < 0 in the past rejected (xi = 2, w = -1.1)");
+        check(rejected(ide(-0.1, -1.0)), "w = -1 rejected");
     }
 
     PerturbationOptions o;
@@ -143,7 +143,7 @@ int main() {
                 e = std::max(e, std::fabs(a.pert.get_Phi(x, k) / b.pert.get_Phi(x, k) - 1.0));
                 e = std::max(e, std::fabs(a.pert.get("delta_de", x, k) / b.pert.get("delta_de", x, k) - 1.0));
             }
-        check_close("delta_cdm, Phi, delta_DE = dark scattering (xi = 0)", e, 0.0, 1e-6);
+        check_close(e, 0.0, 1e-6, "delta_cdm, Phi, delta_DE = dark scattering (xi = 0)");
     }
 
     std::cout << "Perturbations with exchange\n";
@@ -151,22 +151,22 @@ int main() {
     {
         double eP, eM;
         constraints(r, eP, eM);
-        check_close("Poisson constraint", eP, 0.0, 2e-6);
-        check_close("momentum constraint", eM, 0.0, 1e-6);
+        check_close(eP, 0.0, 2e-6, "Poisson constraint");
+        check_close(eM, 0.0, 1e-6, "momentum constraint");
         const double k = r.pert.get_k_array().back();
         const double g = r.pert.get_delta_cdm(0.0, k) / r.pert.get_delta_cdm(-3.0, k);
         const double g0 = r0.pert.get_delta_cdm(0.0, k) / r0.pert.get_delta_cdm(-3.0, k);
         std::cout << "  growth of delta_cdm from z = 19 to 0 relative to xi = 0: " << g / g0 << "\n";
         // the outflow is proportional to the smooth rho_DE: rho_c drops but delta rho_c does not, so delta_c grows
-        check("xi < 0: faster growth of delta_c (energy leaves the dark matter uniformly)", g / g0 > 1.05);
+        check(g / g0 > 1.05, "xi < 0: faster growth of delta_c (energy leaves the dark matter uniformly)");
     }
     // xi > 0 with w < -1 (d < 0, stable): runs, constraints hold
     {
         Run rp(ide(0.05, -1.05), o);
         double eP, eM;
         constraints(rp, eP, eM);
-        check_close("xi = 0.05, w = -1.05: Poisson and momentum constraints", std::max(eP, eM), 0.0, 1e-6);
+        check_close(std::max(eP, eM), 0.0, 1e-6, "xi = 0.05, w = -1.05: Poisson and momentum constraints");
     }
 
-    return Test::summary();
+    return FML::TESTS::summary("EBS ide");
 }

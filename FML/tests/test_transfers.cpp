@@ -6,23 +6,13 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 using namespace FML::INITIALCONDITIONS;
-int failures = 0;
-void check(bool ok, const char * label) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << label << '\n';
-    if (!ok)
-        failures++;
-}
 template <class F>
-void rejects(F fn, const char * label) {
-    bool caught = false;
-    try {
-        fn();
-    } catch (const std::exception &) {
-        caught = true;
-    }
-    check(caught, label);
+void rejects(F && f, const char * label) {
+    check_local(FML::TESTS::throws<std::exception>(f), label);
 }
 int main() {
     const std::string prefix = "test_transfers_" + std::to_string(FML::ThisTask);
@@ -62,12 +52,12 @@ int main() {
                 velocity &&
                 std::abs(provider.velocity_divergence_transfer(Species::CDM, k, a) / (-.6 * expected) - 1) < 1e-12;
         }
-    check(exact, "CAMB transfers and legacy power arithmetic are unchanged");
-    check(normal, "physical k^2 and primordial normalization use the declared units");
-    check(rates, "density derivative prescription is retained");
-    check(velocity, "direct Newtonian velocity sign and normalization are explicit");
-    check(provider.density_gauge() == Gauge::SynchronousCDM && provider.velocity_gauge() == Gauge::Newtonian,
-          "density and velocity gauges are separate");
+    check_local(exact, "CAMB transfers and legacy power arithmetic are unchanged");
+    check_local(normal, "physical k^2 and primordial normalization use the declared units");
+    check_local(rates, "density derivative prescription is retained");
+    check_local(velocity, "direct Newtonian velocity sign and normalization are explicit");
+    check_local(provider.density_gauge() == Gauge::SynchronousCDM && provider.velocity_gauge() == Gauge::Newtonian,
+                "density and velocity gauges are separate");
     CAMBTransferProvider strict(raw, RangePolicy::Reject);
     rejects([&] { strict.density_transfer(Species::CDM, 3, 1); }, "strict k coverage is enforced");
     rejects([&] { strict.density_transfer(Species::CDM, .1, .001); }, "strict time coverage is enforced");
@@ -75,7 +65,7 @@ int main() {
     rejects([&] { provider.velocity_divergence_transfer(Species::MassiveNeutrino, .1, 1); },
             "missing velocities are not synthesized from density derivatives");
     raw->transfer_col_vcdm = -1;
-    check(!provider.has_velocity(Species::CDM), "velocity capabilities reflect available columns");
+    check_local(!provider.has_velocity(Species::CDM), "velocity capabilities reflect available columns");
     raw->transfer_col_vcdm = 10;
     {
         std::ofstream p(prefix + ".pk"), t(prefix + ".tk");
@@ -95,37 +85,37 @@ int main() {
         simple =
             simple && power.power[i] == .02 * .02 * 100 && power.transfer[i] == std::sqrt(power.power[i] / 2) / (k * k);
     }
-    check(simple, "simple P(k,z=0) works without transfer providers or a Boltzmann solver");
+    check_local(simple, "simple P(k,z=0) works without transfer providers or a Boltzmann solver");
     auto transfer =
         prepare_linear_input({LinearInputType::TransferFunction, prefix + ".tk", 1., .67}, growth, primordial);
-    check(transfer.transfer[0] == -4. && transfer.power[0] == 2. * std::pow(-4. * (.01 * .67) * (.01 * .67), 2),
-          "single-transfer input preserves its sign and normalization");
+    check_local(transfer.transfer[0] == -4. && transfer.power[0] == 2. * std::pow(-4. * (.01 * .67) * (.01 * .67), 2),
+                "single-transfer input preserves its sign and normalization");
     auto sampled =
         prepare_linear_input({LinearInputType::TransferInfoFile, "", 1. / 11, .67}, growth, primordial, &provider);
     bool same = true;
     for (size_t i = 0; i < sampled.k.size(); i++)
         same = same && sampled.transfer[i] == raw->get_cdm_baryon_transfer_function(sampled.k[i], 1. / 11) * .02 &&
                sampled.power[i] == raw->get_cdm_baryon_power_spectrum(sampled.k[i], 1. / 11) * (.02 * .02);
-    check(same, "shared table preparation retains exact legacy sampled amplitudes");
+    check_local(same, "shared table preparation retains exact legacy sampled amplitudes");
     auto species = two_species_ic_splines(provider, [](double, double) { return 1.; }, 9., .25 / .30, .05 / .30);
-    check(std::abs(species.ratio_cdm(std::log(.1)) - .30 / (.25 + .05 * .8)) < 1e-12 &&
-              std::abs(species.f_cdm(std::log(.1)) - 1) < 1e-12,
-          "shared species ratios and relative growth are consistent");
+    check_local(std::abs(species.ratio_cdm(std::log(.1)) - .30 / (.25 + .05 * .8)) < 1e-12 &&
+                    std::abs(species.f_cdm(std::log(.1)) - 1) < 1e-12,
+                "shared species ratios and relative growth are consistent");
     rejects([&] { two_species_ic_splines(provider, [](double, double) { return 1.; }, 9., .5, .5); },
             "inconsistent species weights are rejected");
     auto mass = two_species_mass_contrast_today(provider, 9.);
-    check(std::abs(.25 * mass.first(std::log(.1)) + .05 * mass.second(std::log(.1))) < 1e-12,
-          "mass relative modes preserve weighted matter density");
+    check_local(std::abs(.25 * mass.first(std::log(.1)) + .05 * mass.second(std::log(.1))) < 1e-12,
+                "mass relative modes preserve weighted matter density");
 #ifndef USE_INTERNAL_COSMOLOGY
     rejects([] { load_internal_transfers({}); },
             "ordinary builds report the optional internal feature without linking a Boltzmann solver");
 #endif
     raw.reset();
-    check(std::isfinite(provider.power(Species::CDMBaryon, .1, 1.)), "providers retain ownership of transfer data");
+    check_local(std::isfinite(provider.power(Species::CDMBaryon, .1, 1.)),
+                "providers retain ownership of transfer data");
     for (auto & f : files)
         std::remove(f.c_str());
     for (auto ext : {".pk", ".tk", ".info"})
         std::remove((prefix + ext).c_str());
-    FML::SumOverTasks(&failures);
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("transfer");
 }

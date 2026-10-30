@@ -7,7 +7,7 @@
 #include <FML/Cosmology/Background/MassiveNeutrinos.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 
 #include <gsl/gsl_integration.h>
@@ -18,9 +18,9 @@
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 namespace {
     // Adaptive reference for int_0^inf q^a eps^b f0 dq
@@ -72,30 +72,30 @@ int main() {
     std::cout << "Momentum integrals\n";
     {
         const double I0 = 7.0 * std::pow(M_PI, 4) / 120.0;
-        check_rel("I_rho(0) = 7 pi^4/120", MassiveNeutrinos::I_rho(0.0), I0, 1e-9);
-        check_rel("I_p(0) = I_rho(0)/3 (radiation)", MassiveNeutrinos::I_p(0.0), I0 / 3.0, 1e-9);
-        check_rel("I_rho(M) -> (3/2) zeta(3) M for M >> 1",
-                  MassiveNeutrinos::I_rho(1e4),
+        check_rel(MassiveNeutrinos::I_rho(0.0), I0, 1e-9, "I_rho(0) = 7 pi^4/120");
+        check_rel(MassiveNeutrinos::I_p(0.0), I0 / 3.0, 1e-9, "I_p(0) = I_rho(0)/3 (radiation)");
+        check_rel(MassiveNeutrinos::I_rho(1e4),
                   1.5 * 1.2020569031595942 * 1e4,
-                  1e-7);
+                  1e-7,
+                  "I_rho(M) -> (3/2) zeta(3) M for M >> 1");
         double err = 0.0;
         for (double M : {0.1, 1.0, 3.0, 30.0, 300.0}) {
             err = std::max(err, std::fabs(MassiveNeutrinos::I_rho(M) / reference_integral(M, 2, 1) - 1.0));
             err = std::max(err, std::fabs(MassiveNeutrinos::I_p(M) / (reference_integral(M, 4, -1) / 3.0) - 1.0));
             err = std::max(err, std::fabs(MassiveNeutrinos::I_pp(M) / (reference_integral(M, 6, -3) / 3.0) - 1.0));
         }
-        check_close("48-node quadrature vs adaptive (rho, p, pseudo-p)", err, 0.0, 3e-7);
+        check_close(err, 0.0, 3e-7, "48-node quadrature vs adaptive (rho, p, pseudo-p)");
         const double M = 2.7, h = 1e-5;
-        check_rel("dI_p/dlnM = I_pp - I_p",
-                  (MassiveNeutrinos::I_p(M * (1 + h)) - MassiveNeutrinos::I_p(M * (1 - h))) / (2 * h),
+        check_rel((MassiveNeutrinos::I_p(M * (1 + h)) - MassiveNeutrinos::I_p(M * (1 - h))) / (2 * h),
                   MassiveNeutrinos::I_pp(M) - MassiveNeutrinos::I_p(M),
-                  1e-7);
+                  1e-7,
+                  "dI_p/dlnM = I_pp - I_p");
         // Perturbation quadrature: 8 nodes integrate the massless density moment to 3e-5
         MassiveNeutrinos::Quadrature q8(8);
         double s = 0.0;
         for (int i = 0; i < q8.size(); i++)
             s += q8.w[i] * std::pow(q8.q[i], 3);
-        check_rel("8-node quadrature: int q^3 f0", s, I0, 5e-5);
+        check_rel(s, I0, 5e-5, "8-node quadrature: int q^3 f0");
     }
 
     std::cout << "Background\n";
@@ -104,19 +104,19 @@ int main() {
         p.m_nu = 0.06;
         BackgroundCosmology cosmo(p);
         cosmo.solve();
-        check_rel("Omega_ncdm h^2 = m_nu / 93.14 eV (T_ncdm = 0.71611)", p.OmegaNcdm() * p.h * p.h, 0.06 / 93.14, 1e-4);
-        check_close("closure: E^2(x = 0) = 1", cosmo.E2_of_x(0.0), 1.0, 1e-13);
-        check_rel("N_ncdm = (0.71611/(4/11)^(1/3))^4 = 1.0132", p.N_ncdm(), 1.01319, 2e-5);
+        check_rel(p.OmegaNcdm() * p.h * p.h, 0.06 / 93.14, 1e-4, "Omega_ncdm h^2 = m_nu / 93.14 eV (T_ncdm = 0.71611)");
+        check_close(cosmo.E2_of_x(0.0), 1.0, 1e-13, "closure: E^2(x = 0) = 1");
+        check_rel(p.N_ncdm(), 1.01319, 2e-5, "N_ncdm = (0.71611/(4/11)^(1/3))^4 = 1.0132");
         // Early times: the total radiation is the same as for Neff massless species
         CosmologyParameters p0;
         BackgroundCosmology c0(p0);
         const double x = -16.0;
-        check_rel("relativistic: rho_nu + rho_ncdm = rho_nu(Neff massless)",
-                  cosmo.rhoNu(x) + cosmo.rhoNcdm(x),
+        check_rel(cosmo.rhoNu(x) + cosmo.rhoNcdm(x),
                   c0.rhoNu(x),
-                  1e-6);
-        check_close("w = 1/3 early", cosmo.pNcdm(x) / cosmo.rhoNcdm(x), 1.0 / 3.0, 1e-7);
-        check_close("w ~ <q^2>/(3 M^2) ~ 0 today", cosmo.pNcdm(0.0) / cosmo.rhoNcdm(0.0), 0.0, 1e-4);
+                  1e-6,
+                  "relativistic: rho_nu + rho_ncdm = rho_nu(Neff massless)");
+        check_close(cosmo.pNcdm(x) / cosmo.rhoNcdm(x), 1.0 / 3.0, 1e-7, "w = 1/3 early");
+        check_close(cosmo.pNcdm(0.0) / cosmo.rhoNcdm(0.0), 0.0, 1e-4, "w ~ <q^2>/(3 M^2) ~ 0 today");
         double err = 0.0;
         for (double xx : {-12.0, -7.0, -4.0, -1.0}) {
             const double h = 1e-4;
@@ -128,11 +128,11 @@ int main() {
                 std::fabs((cosmo.drhoNcdmdx(xx + h) - cosmo.drhoNcdmdx(xx - h)) / (2 * h) / cosmo.ddrhoNcdmddx(xx) -
                           1));
         }
-        check_close("drho/dx, d2rho/dx2 vs finite differences", err, 0.0, 1e-6);
-        check_close("m_nu = 0 reproduces the massless model (Omega_Lambda)",
-                    p0.OmegaLambda() - CosmologyParameters().OmegaLambda(),
+        check_close(err, 0.0, 1e-6, "drho/dx, d2rho/dx2 vs finite differences");
+        check_close(p0.OmegaLambda() - CosmologyParameters().OmegaLambda(),
                     0.0,
-                    1e-15);
+                    1e-15,
+                    "m_nu = 0 reproduces the massless model (Omega_Lambda)");
     }
 
     std::cout << "Perturbations\n";
@@ -153,44 +153,44 @@ int main() {
         ot.n_q_ncdm = 16;
         Run mt(pt, ot);
         const auto & ks = m0.pert.get_k_array();
-        check("m_nu > 0: massive neutrino hierarchy active", m3.pert.has_massive_nu() && !m0.pert.has_massive_nu());
+        check(m3.pert.has_massive_nu() && !m0.pert.has_massive_nu(), "m_nu > 0: massive neutrino hierarchy active");
 
         // Adiabatic initial conditions: delta_ncdm = delta_nu = delta_gamma
         const double xs = o.x_start;
-        check_rel("IC: delta_ncdm = 4 Nu_0",
-                  m3.pert.get_delta_ncdm(xs, ks[1]),
+        check_rel(m3.pert.get_delta_ncdm(xs, ks[1]),
                   4.0 * m3.pert.get_Nu(0, xs, ks[1]),
-                  1e-4);
+                  1e-4,
+                  "IC: delta_ncdm = 4 Nu_0");
 
         // A very light species behaves like a massless one until it becomes non-relativistic (z ~ 2 m/T)
         double err = 0.0;
         for (double k : ks)
             err = std::max(err, std::fabs(mt.pert.get_Phi(-7.0, k) / m0.pert.get_Phi(-7.0, k) - 1.0));
-        check_close("m_nu = 1e-4 eV: Phi(z = 1100) as for massless", err, 0.0, 1e-5);
+        check_close(err, 0.0, 1e-5, "m_nu = 1e-4 eV: Phi(z = 1100) as for massless");
 
         // Fluid approximation vs the full hierarchy (CLASS's ncdmfa has the same ~0.2% error in P(k))
         err = 0.0;
         for (double k : ks)
             err = std::max(err, std::fabs(m3.pert.get_Phi(0.0, k) / m3h.pert.get_Phi(0.0, k) - 1.0));
-        check_close("m_nu = 0.3 eV: fluid approximation vs hierarchy, Phi today", err, 0.0, 3e-3);
+        check_close(err, 0.0, 3e-3, "m_nu = 0.3 eV: fluid approximation vs hierarchy, Phi today");
 
         // Free streaming: neutrinos cluster like CDM on large scales but not below the free-streaming scale
         const double kl = ks.front(), kh = ks.back();
-        check_rel("k = 0.001/Mpc: delta_ncdm = delta_cdm today",
-                  m3.pert.get_delta_ncdm(0.0, kl),
+        check_rel(m3.pert.get_delta_ncdm(0.0, kl),
                   m3.pert.get_delta_cdm(0.0, kl),
-                  2e-2);
+                  2e-2,
+                  "k = 0.001/Mpc: delta_ncdm = delta_cdm today");
         const double rfs = m3.pert.get_delta_ncdm(0.0, kh) / m3.pert.get_delta_cdm(0.0, kh);
         std::cout << "    delta_ncdm / delta_cdm today at k = 0.3/Mpc: " << rfs << "\n";
-        check("k = 0.3/Mpc: delta_ncdm < delta_cdm / 5 today (free streaming)", std::fabs(rfs) < 0.2);
+        check(std::fabs(rfs) < 0.2, "k = 0.3/Mpc: delta_ncdm < delta_cdm / 5 today (free streaming)");
 
         // Small-scale suppression of the matter power spectrum, roughly -8 f_nu (Hu, Eisenstein & Tegmark 1998)
         const double f_nu = p3.OmegaNcdm() / (p3.OmegaB + p3.OmegaCDM + p3.OmegaNcdm());
         const double r = std::pow(Delta_m(m3.cosmo, m3.pert, 0.0, kh) / Delta_m(m0.cosmo, m0.pert, 0.0, kh), 2) - 1.0;
         std::cout << "    P_m(k = 0.3/Mpc) change: " << r << " = " << r / f_nu << " f_nu\n";
-        check("P_m(k = 0.3/Mpc) suppressed by 5-9 f_nu", r < -5.0 * f_nu && r > -9.0 * f_nu);
+        check(r < -5.0 * f_nu && r > -9.0 * f_nu, "P_m(k = 0.3/Mpc) suppressed by 5-9 f_nu");
         const double rl = std::pow(Delta_m(m3.cosmo, m3.pert, 0.0, kl) / Delta_m(m0.cosmo, m0.pert, 0.0, kl), 2) - 1.0;
-        check("large scales much less affected than small scales", std::fabs(rl) < 0.3 * std::fabs(r));
+        check(std::fabs(rl) < 0.3 * std::fabs(r), "large scales much less affected than small scales");
     }
-    return Test::summary();
+    return FML::TESTS::summary("EBS massive neutrinos");
 }

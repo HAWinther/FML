@@ -1,17 +1,13 @@
 #include <FML/Morphology/VoxelMorphology.h>
 #include <iostream>
 #include <set>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::near;
+
+using FML::TESTS::check;
 using namespace FML::MORPHOLOGY;
 using Cell = std::array<int, 3>;
-int failures = 0;
-void check(bool ok, const std::string & label) {
-    int bad = !ok;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (!FML::ThisTask)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
-}
-bool near(double a, double b) { return std::abs(a - b) < 1e-10 * std::max({1.0, std::abs(a), std::abs(b)}); }
 BinarySlab slab(int n, const std::set<Cell> & cells) {
     BinarySlab s;
     s.nmesh = n;
@@ -71,8 +67,8 @@ void shape(const std::set<Cell> & cells,
            int chi,
            const std::string & label) {
     auto m = measure(slab(8, cells), 8, b);
-    check(near(m.volume, volume) && near(m.surface_area, area) && near(m.integrated_mean_curvature, h * M_PI) &&
-              m.euler_characteristic == chi,
+    check(near(m.volume, volume, 1e-10) && near(m.surface_area, area, 1e-10) &&
+              near(m.integrated_mean_curvature, h * M_PI, 1e-10) && m.euler_characteristic == chi,
           label);
     compare(8, cells, b, label + " explicit cell-complex reference");
 }
@@ -120,9 +116,10 @@ int main() {
     shape(ring, Boundary::Periodic, 8, 32, 8, 0, "periodic solid ring");
     auto s = slab(8, {{3, 3, 3}});
     auto a = measure(s, 8, Boundary::Open), b = measure(s, 16, Boundary::Open);
-    check(near(b.volume, 8 * a.volume) && near(b.surface_area, 4 * a.surface_area) &&
-              near(b.integrated_mean_curvature, 2 * a.integrated_mean_curvature) &&
-              b.euler_characteristic == a.euler_characteristic && near(a.crofton_density[1], (2.0 / 9) * 3 / 512),
+    check(near(b.volume, 8 * a.volume, 1e-10) && near(b.surface_area, 4 * a.surface_area, 1e-10) &&
+              near(b.integrated_mean_curvature, 2 * a.integrated_mean_curvature, 1e-10) &&
+              b.euler_characteristic == a.euler_characteristic &&
+              near(a.crofton_density[1], (2.0 / 9) * 3 / 512, 1e-10),
           "physical units and explicit Crofton normalization");
     for (int n : {1, 2, 7}) {
         std::set<Cell> random;
@@ -182,7 +179,5 @@ int main() {
         }
         check(failed, "different threshold schemas rejected across MPI ranks");
     }
-    if (!FML::ThisTask)
-        std::cout << (failures ? "Morphology tests FAILED" : "All morphology tests passed") << '\n';
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("morphology");
 }

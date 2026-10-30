@@ -16,7 +16,7 @@
 #include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 #include <FML/Cosmology/Models/EarlyDarkEnergy.h>
 
@@ -25,9 +25,9 @@
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 namespace {
     CosmologyParameters ede(double f, double log10zc, double theta, double n) {
@@ -66,9 +66,9 @@ int main() {
     {
         double fm, xp;
         e.peak(fm, xp);
-        check_rel("max rho_EDE/rho_tot = f_EDE", fm, 0.1, 1e-9);
-        check_close("at z_c", std::log10(std::exp(-xp) - 1.0), 3.5, 1e-8);
-        check_close("E(0) = 1", b.E2_of_x(0.0), 1.0, 1e-12);
+        check_rel(fm, 0.1, 1e-9, "max rho_EDE/rho_tot = f_EDE");
+        check_close(std::log10(std::exp(-xp) - 1.0), 3.5, 1e-8, "at z_c");
+        check_close(b.E2_of_x(0.0), 1.0, 1e-12, "E(0) = 1");
         double e1 = 0.0, e2 = 0.0, ekg = 0.0;
         for (double x : {-10.0, -8.3, -8.06, -7.9, -7.5, -6.0, -3.0}) {
             const double h = 1e-4;
@@ -81,26 +81,28 @@ int main() {
                            std::fabs((e.dphidx(x + h) - e.dphidx(x - h)) / (2 * h) - e.ddphidx(x)) /
                                (e.f() * e.mass_over_H0() / std::sqrt(b.E2_of_x(x))));
         }
-        check_close("rho', rho'' vs finite differences", std::max(e1, e2), 0.0, 1e-4);
-        check_close("stored solution satisfies the Klein-Gordon equation", ekg, 0.0, 1e-5);
+        check_close(std::max(e1, e2), 0.0, 1e-4, "rho', rho'' vs finite differences");
+        check_close(ekg, 0.0, 1e-5, "stored solution satisfies the Klein-Gordon equation");
         // energy redshifting in the oscillating phase: slope of ln rho over many oscillations
         const double slope = (std::log(e.rho(-4.0)) - std::log(e.rho(-6.0))) / 2.0;
         std::cout << "  dln rho/dln a over x = -6..-4: " << slope << " (oscillation average -6n/(n+1) = -4.5)\n";
-        check_close("w -> (n-1)/(n+1) = 1/2 (n = 3)", slope / -4.5, 1.0, 0.03);
+        check_close(slope / -4.5, 1.0, 0.03, "w -> (n-1)/(n+1) = 1/2 (n = 3)");
         // slow oscillations (theta_i = 2, z_c = 1e4: a few per e-fold), averaged over x = -8..-3
         BackgroundCosmology b2(ede(0.05, 4.0, 2.0, 3.0));
         const auto & e2s = field(b2);
         const double slope2 = (std::log(e2s.rho(-3.0)) - std::log(e2s.rho(-8.0))) / 5.0;
         std::cout << "  theta_i = 2, z_c = 1e4: " << slope2 << "\n";
-        check_close("w -> 1/2 (theta_i = 2, z_c = 1e4)", slope2 / -4.5, 1.0, 0.03);
-        check("n <= 2 rejected", [] {
-            try {
-                BackgroundCosmology bb(ede(0.05, 3.5, 2.0, 2.0));
-            } catch (const std::invalid_argument &) {
-                return true;
-            }
-            return false;
-        }());
+        check_close(slope2 / -4.5, 1.0, 0.03, "w -> 1/2 (theta_i = 2, z_c = 1e4)");
+        check(
+            [] {
+                try {
+                    BackgroundCosmology bb(ede(0.05, 3.5, 2.0, 2.0));
+                } catch (const std::invalid_argument &) {
+                    return true;
+                }
+                return false;
+            }(),
+            "n <= 2 rejected");
     }
 
     PerturbationOptions o;
@@ -137,9 +139,9 @@ int main() {
                     std::fabs((pt.get_dPhidx(x, k) - pt.get_Psi(x, k)) / (-1.5 * flux / (ckH * Hp * Hp)) - 1.0));
             }
         std::cout << "  field share of the comoving density perturbation: up to " << frac << "\n";
-        check_close("Poisson constraint (relative to delta rho)", eP, 0.0, 5e-6);
-        check_close("momentum constraint", eM, 0.0, 1e-5);
-        check("the field's perturbations are tested (> 1%)", frac > 0.01);
+        check_close(eP, 0.0, 5e-6, "Poisson constraint (relative to delta rho)");
+        check_close(eM, 0.0, 1e-5, "momentum constraint");
+        check(frac > 0.01, "the field's perturbations are tested (> 1%)");
     }
 
     std::cout << "Small f_EDE\n";
@@ -150,8 +152,8 @@ int main() {
         double e = 0.0;
         for (double k : s.pert.get_k_array())
             e = std::max(e, std::fabs(s.pert.get_delta_cdm(0.0, k) / l.pert.get_delta_cdm(0.0, k) - 1.0));
-        check_close("f_EDE = 1e-5: delta_cdm today = LCDM (to 1e-4)", e, 0.0, 1e-4);
+        check_close(e, 0.0, 1e-4, "f_EDE = 1e-5: delta_cdm today = LCDM (to 1e-4)");
     }
 
-    return Test::summary();
+    return FML::TESTS::summary("EBS ede");
 }

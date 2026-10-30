@@ -24,23 +24,15 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 template <int N>
 using Grid = FML::GRID::FFTWGrid<N>;
 const double tp = 2.0 * M_PI;
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os << x;
-    return os.str();
-}
 
 // Largest |g - f(x)| over the grid (all tasks)
 template <int N>
@@ -200,8 +192,9 @@ void test_tensor_empty_storage() {
         }
     int bad = !good;
     FML::MaxOverTasks(&bad);
-    check(!bad && error < 1e-9,
-          std::to_string(N) + "D empty tensor allocation preserves input, halos/padding and analytic derivatives");
+    check_local(!bad && error < 1e-9,
+                std::to_string(N) +
+                    "D empty tensor allocation preserves input, halos/padding and analytic derivatives");
 }
 
 int main() {
@@ -223,8 +216,8 @@ int main() {
             const double W = filter == "gaussian" ? std::exp(-x * x / 2) :
                              filter == "tophat"   ? 3 * (std::sin(x) - x * std::cos(x)) / (x * x * x) :
                                                     (x < 1 ? 1.0 : 0.0);
-            check(maxdiff<3>(g, [&](std::array<double, 3> & y) { return W * mode(y); }) < 1e-12,
-                  "3D " + filter + " filter of a single mode");
+            check_local(maxdiff<3>(g, [&](std::array<double, 3> & y) { return W * mode(y); }) < 1e-12,
+                        "3D " + filter + " filter of a single mode");
         }
     }
 
@@ -238,7 +231,7 @@ int main() {
         g.fftw_c2r();
         const double W = 0.4818942589026656; // kR = 2pi sqrt(13) 0.1
         const double md = maxdiff<2>(g, [&](std::array<double, 2> & y) { return W * mode(y); });
-        check(md < 1e-7, "2D tophat filter = 2 J1(kR) / kR (error " + num(md) + ")");
+        check_local(md < 1e-7, "2D tophat filter = 2 J1(kR) / kR (error " + num(md) + ")");
     }
 
     // Hessian of a sum of modes and of its potential
@@ -267,7 +260,7 @@ int main() {
         for (int i = 0, n = 0; i < 3; i++)
             for (int j = i; j < 3; j++, n++)
                 md = std::max(md, maxdiff<3>(hess[n], [&](std::array<double, 3> & x) { return H(i, j, x); }));
-        check(hess.size() == 6 and md < 1e-9, "3D Hessian = analytic (" + num(md) + ")");
+        check_local(hess.size() == 6 and md < 1e-9, "3D Hessian = analytic (" + num(md) + ")");
 
         Grid<3> lap(Nmesh);
         lap.fill_real_grid([&](std::array<double, 3> & x) { return H(0, 0, x) + H(1, 1, x) + H(2, 2, x); });
@@ -277,7 +270,7 @@ int main() {
         for (int i = 0, n = 0; i < 3; i++)
             for (int j = i; j < 3; j++, n++)
                 md = std::max(md, maxdiff<3>(hp[n], [&](std::array<double, 3> & x) { return H(i, j, x); }));
-        check(md < 1e-9, "3D Hessian of the potential = analytic (" + num(md) + ")");
+        check_local(md < 1e-9, "3D Hessian of the potential = analytic (" + num(md) + ")");
 
         // Eigensystem against GSL per cell (and M v = lambda v), with threads
         std::vector<Grid<3>> eval, evec, eval2, evec2;
@@ -315,8 +308,8 @@ int main() {
         gsl_eigen_symm_free(w);
         FML::MaxOverTasks(&mde);
         FML::MaxOverTasks(&mdv);
-        check(mde < 1e-8 and mdv < 1e-8,
-              "eigenvalues (" + num(mde) + ") and eigenvectors evec[i * N + k] (" + num(mdv) + ")");
+        check_local(mde < 1e-8 and mdv < 1e-8,
+                    "eigenvalues (" + num(mde) + ") and eigenvectors evec[i * N + k] (" + num(mdv) + ")");
     }
     {
         // 2D: 3 components
@@ -336,7 +329,7 @@ int main() {
                                               return -4.0 * tp * tp * std::cos(tp * x[0]) * std::cos(tp * 2 * x[1]);
                                           }) :
                                1.0;
-        check(hess.size() == 3 and mxy < 1e-9 and myy < 1e-9, "2D Hessian: 3 components = analytic");
+        check_local(hess.size() == 3 and mxy < 1e-9 and myy < 1e-9, "2D Hessian: 3 components = analytic");
     }
     {
         // A Nyquist mode in x: f_xz = 0 on the grid
@@ -351,7 +344,8 @@ int main() {
         const double kny = M_PI * Nmesh;
         const double mxz = maxdiff<3>(hess[2], [](std::array<double, 3> &) { return 0.0; });
         const double mxx = maxdiff<3>(hess[0], [&](std::array<double, 3> & x) { return -kny * kny * nyq(x); });
-        check(mxz < 1e-9 and mxx < 1e-9 * kny * kny, "Nyquist mode: f_xz = 0 (" + num(mxz) + "), f_xx = -k_ny^2 f");
+        check_local(mxz < 1e-9 and mxx < 1e-9 * kny * kny,
+                    "Nyquist mode: f_xz = 0 (" + num(mxz) + "), f_xx = -k_ny^2 f");
     }
 
     // compute_grid_PDF
@@ -367,14 +361,14 @@ int main() {
         double md = 0.0;
         for (size_t i = 0; i < pdf.size(); i++)
             md = std::max(md, std::fabs(pdf[i] - pdfref[i]));
-        check(md == 0.0, "PDF with reused output vectors = PDF with new vectors");
+        check_local(md == 0.0, "PDF with reused output vectors = PDF with new vectors");
 
         // Half the cells 0 and half 1: two bins with the same probability
         Grid<3> g(Nmesh);
         g.fill_real_grid([&](std::array<double, 3> & y) { return double(int(std::round(y[1] * Nmesh)) % 2); });
         FML::GRID::compute_grid_PDF(g, 2, x, pdf);
-        check(std::fabs(pdf[0] - 1.0) < 1e-12 and std::fabs(pdf[1] - 1.0) < 1e-12,
-              "PDF includes the largest value (" + num(pdf[0]) + ", " + num(pdf[1]) + ")");
+        check_local(std::fabs(pdf[0] - 1.0) < 1e-12 and std::fabs(pdf[1] - 1.0) < 1e-12,
+                    "PDF includes the largest value (" + num(pdf[0]) + ", " + num(pdf[1]) + ")");
 
         Grid<3> c(Nmesh);
         c.fill_real_grid(2.5);
@@ -385,7 +379,7 @@ int main() {
             integral += pdf[i] * (x[1] - x[0]);
             finite = finite and std::isfinite(pdf[i]) and std::isfinite(x[i]);
         }
-        check(finite and std::fabs(integral - 1.0) < 1e-12, "PDF of a constant grid");
+        check_local(finite and std::fabs(integral - 1.0) < 1e-12, "PDF of a constant grid");
     }
 
     // RSD reconstruction (beta = 0.5): the removed shift matches the RSD shift put in (a bit less: the CIC assignment
@@ -394,18 +388,17 @@ int main() {
         auto r3 = reconstruction_test(Nmesh, 3, 0.5, 2);
         auto r6 = reconstruction_test(Nmesh, 6, 0.5, 2);
         auto rx = reconstruction_test(Nmesh, 3, 0.5, 0);
-        check(r3[2] >= 0.0 and rx[2] >= 0.0, "RSD reconstruction only moves the particles along the line of sight");
-        check(r3[1] > 0.8 and r3[1] < 1.1 and r3[2] < 0.35 * r3[0],
-              "RSD reconstruction, 3 iterations: removed / put in = " + num(r3[1]) + ", rms residual " + num(r3[2]) +
-                  " of " + num(r3[0]) + " cells");
-        check(r6[1] > 0.8 and r6[1] < 1.1 and r6[2] < 0.35 * r6[0],
-              "RSD reconstruction, 6 iterations: removed / put in = " + num(r6[1]) + ", rms residual " + num(r6[2]));
-        check(rx[1] > 0.8 and rx[1] < 1.1 and rx[2] < 0.35 * rx[0],
-              "RSD reconstruction, line of sight along x (across the MPI slabs): " + num(rx[1]));
+        check_local(r3[2] >= 0.0 and rx[2] >= 0.0,
+                    "RSD reconstruction only moves the particles along the line of sight");
+        check_local(r3[1] > 0.8 and r3[1] < 1.1 and r3[2] < 0.35 * r3[0],
+                    "RSD reconstruction, 3 iterations: removed / put in = " + num(r3[1]) + ", rms residual " +
+                        num(r3[2]) + " of " + num(r3[0]) + " cells");
+        check_local(r6[1] > 0.8 and r6[1] < 1.1 and r6[2] < 0.35 * r6[0],
+                    "RSD reconstruction, 6 iterations: removed / put in = " + num(r6[1]) + ", rms residual " +
+                        num(r6[2]));
+        check_local(rx[1] > 0.8 and rx[1] < 1.1 and rx[2] < 0.35 * rx[0],
+                    "RSD reconstruction, line of sight along x (across the MPI slabs): " + num(rx[1]));
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All reconstruction/Hessian/smoothing tests passed\n" :
-                                   std::to_string(fails) + " reconstruction/Hessian/smoothing test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("reconstruction/Hessian/smoothing");
 }

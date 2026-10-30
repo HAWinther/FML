@@ -19,23 +19,14 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 using namespace FML::COSMOLOGY::SPHERICALCOLLAPSE;
 using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os.precision(8);
-    os << x;
-    return os.str();
-}
 
 // Flat or curved w0wa model with constant mu
 SphericalCollapseModel make_model(double Om, double Ok, double w0, double wa, double mu0) {
@@ -96,12 +87,14 @@ int main() {
             err_ta = std::max(err_ta, std::fabs(std::exp(r.xta - xc) / std::pow(2.0, -2.0 / 3.0) - 1));
             err_dta = std::max(err_dta, std::fabs((1 + r.delta(r.xta)) / (9.0 * M_PI * M_PI / 16.0) - 1));
         }
-        check(err_dc < 2e-6, "EdS deltac = 1.686470 for z = 0, 1, 10 (max rel. error " + num(err_dc) + ")");
-        check(err_dv < 2e-5, "EdS DeltaVir = 18 pi^2 (max rel. error " + num(err_dv) + ")");
-        check(err_ta < 1e-5 and err_dta < 1e-4, "EdS turnaround a_ta / a_c = 2^(-2/3) and 1 + delta_ta = 9 pi^2 / 16");
+        check_local(err_dc < 2e-6, "EdS deltac = 1.686470 for z = 0, 1, 10 (max rel. error " + num(err_dc, 8) + ")");
+        check_local(err_dv < 2e-5, "EdS DeltaVir = 18 pi^2 (max rel. error " + num(err_dv, 8) + ")");
+        check_local(err_ta < 1e-5 and err_dta < 1e-4,
+                    "EdS turnaround a_ta / a_c = 2^(-2/3) and 1 + delta_ta = 9 pi^2 / 16");
         auto late = run(eds, 10.0, 1e-3);
-        check(std::fabs(late.deltac / deltac_EdS - 1) < 5e-4,
-              "EdS deltac when starting at a = 1e-3 and collapse at z = 10: " + num(late.deltac) + " (was 1.7226)");
+        check_local(std::fabs(late.deltac / deltac_EdS - 1) < 5e-4,
+                    "EdS deltac when starting at a = 1e-3 and collapse at z = 10: " + num(late.deltac, 8) +
+                        " (was 1.7226)");
     }
 
     // LCDM, open, w0wa + mu against the independent integration (deltac, DeltaVir)
@@ -119,9 +112,9 @@ int main() {
         };
         for (auto & c : cases) {
             auto r = run(make_model(c.Om, c.Ok, c.w0, c.wa, c.mu), c.z);
-            check(std::fabs(r.deltac / c.deltac - 1) < 2e-6 and std::fabs(r.DeltaVir / c.DeltaVir - 1) < 2e-4,
-                  c.name + ": deltac " + num(r.deltac) + " (" + num(c.deltac) + "), DeltaVir " + num(r.DeltaVir) +
-                      " (" + num(c.DeltaVir) + ")");
+            check_local(std::fabs(r.deltac / c.deltac - 1) < 2e-6 and std::fabs(r.DeltaVir / c.DeltaVir - 1) < 2e-4,
+                        c.name + ": deltac " + num(r.deltac, 8) + " (" + num(c.deltac, 8) + "), DeltaVir " +
+                            num(r.DeltaVir, 8) + " (" + num(c.DeltaVir, 8) + ")");
         }
     }
 
@@ -137,8 +130,9 @@ int main() {
             const double x = -std::log(1 + z);
             maxerr = std::max({maxerr, std::fabs(deltac(x) / r.deltac - 1), std::fabs(DeltaVir(x) / r.DeltaVir - 1)});
         }
-        check(maxerr < 1e-5,
-              "deltac(z), DeltaVir(z) splines = single redshift runs (max rel. difference " + num(maxerr) + ")");
+        check_local(maxerr < 1e-5,
+                    "deltac(z), DeltaVir(z) splines = single redshift runs (max rel. difference " + num(maxerr, 8) +
+                        ")");
     }
 
     // The linear solution after the collapse follows the growth factor
@@ -148,9 +142,9 @@ int main() {
         Spline d, dp, dl;
         double deltac, DV, xnl, xta, xvir, dini = 2.0 * 1.686470 * 1e-5; // collapses at a = 0.5
         sc.run_single_redshift(0.0, d, dp, dl, deltac, DV, xnl, xta, xvir, dini, true);
-        check(std::fabs(dl(0.0) / (dini * 1e5) - 1) < 1e-4,
-              "linear delta keeps growing after the collapse (delta_lin(a=1) / (delta_ini a / a_ini) = " +
-                  num(dl(0.0) / (dini * 1e5)) + ")");
+        check_local(std::fabs(dl(0.0) / (dini * 1e5) - 1) < 1e-4,
+                    "linear delta keeps growing after the collapse (delta_lin(a=1) / (delta_ini a / a_ini) = " +
+                        num(dl(0.0) / (dini * 1e5), 8) + ")");
     }
 
     // A copy of the LCDM model uses its own OmegaM and does not refer to the original
@@ -162,8 +156,8 @@ int main() {
         copy.OmegaM = 0.1;
         const double om = copy.OmegaMofx(0.0);
         auto r = run(copy, 0.0);
-        check(std::fabs(om - 0.1) < 1e-14 and std::fabs(r.DeltaVir / 715.15 - 1) < 2e-4,
-              "copy of the LCDM model uses its own OmegaM (OmegaM(z=0) = " + num(om) + ")");
+        check_local(std::fabs(om - 0.1) < 1e-14 and std::fabs(r.DeltaVir / 715.15 - 1) < 2e-4,
+                    "copy of the LCDM model uses its own OmegaM (OmegaM(z=0) = " + num(om, 8) + ")");
     }
 
     // Errors are reported as exceptions (also from the OpenMP loop)
@@ -176,7 +170,7 @@ int main() {
         } catch (std::exception & e) {
             thrown = std::string(e.what()).find("Negative Geff/G") != std::string::npos;
         }
-        check(thrown, "mu < 0 throws a clear exception");
+        check_local(thrown, "mu < 0 throws a clear exception");
 
         // Starting at a = 1e-2 nothing collapses at z = 1000
         thrown = false;
@@ -185,11 +179,8 @@ int main() {
         } catch (std::exception & e) {
             thrown = std::string(e.what()).find("No collapse") != std::string::npos;
         }
-        check(thrown, "no collapse before the given redshift throws (no garbage result)");
+        check_local(thrown, "no collapse before the given redshift throws (no garbage result)");
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All spherical collapse tests passed\n" :
-                                   std::to_string(fails) + " spherical collapse test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("spherical collapse");
 }

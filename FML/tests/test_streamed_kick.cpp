@@ -11,16 +11,11 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check;
 
 namespace I = FML::INTERPOLATION;
-int failures = 0;
-void check(bool ok, const std::string & label) {
-    int bad = !ok;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (FML::ThisTask == 0)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
-}
 
 template <int N, class Position, class Velocity>
 struct Particle {
@@ -182,7 +177,5 @@ int main() {
     run_case<3, Particle<3, double, float>>("3D double position/float velocity", true);
     run_case<3, Particle<3, double, double>>("all ranks empty", false, true);
     test_container();
-    if (FML::ThisTask == 0)
-        std::cout << "Streamed-kick failures: " << failures << '\n';
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("streamed-kick");
 }

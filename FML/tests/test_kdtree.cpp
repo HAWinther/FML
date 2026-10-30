@@ -17,18 +17,14 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 
 using namespace FML::KDTREE;
 
 int kdtree_odr_check(); // defined in test_kdtree_odr.cpp
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
 
 double pdist2(const point_t & a, const point_t & b, double boxsize) {
     double d = 0.0;
@@ -50,7 +46,7 @@ struct Point3 {
 int main() {
     std::mt19937_64 rng(1234);
     std::uniform_real_distribution<double> uniform(0.0, 1.0);
-    check(kdtree_odr_check() == 1, "KDTree.h can be included in several translation units");
+    check_local(kdtree_odr_check() == 1, "KDTree.h can be included in several translation units");
 
     // Nearest neighbour and radius queries against brute force
     for (double boxsize : {0.0, 1.0, 2.5}) {
@@ -105,10 +101,11 @@ int main() {
             }
             const std::string label =
                 "box " + std::to_string(boxsize).substr(0, 3) + ", " + std::to_string(ndim) + "D: ";
-            check(bad_knn == 0,
-                  label + "k nearest neighbours and distances (" + std::to_string(bad_knn) + " of 100 wrong)");
-            check(bad_nearest == 0, label + "nearest neighbour (" + std::to_string(bad_nearest) + " of 300 wrong)");
-            check(bad_radius == 0, label + "points within r (" + std::to_string(bad_radius) + " of 300 wrong)");
+            check_local(bad_knn == 0,
+                        label + "k nearest neighbours and distances (" + std::to_string(bad_knn) + " of 100 wrong)");
+            check_local(bad_nearest == 0,
+                        label + "nearest neighbour (" + std::to_string(bad_nearest) + " of 300 wrong)");
+            check_local(bad_radius == 0, label + "points within r (" + std::to_string(bad_radius) + " of 300 wrong)");
         }
     }
 
@@ -127,26 +124,27 @@ int main() {
                 truth += pdist2(p, pt, boxsize) <= r * r;
             auto found = tree.neighborhood_indices(pt, r);
             std::set<size_t> unique(found.begin(), found.end());
-            check(found.size() == truth and unique.size() == truth,
-                  "periodic r = " + std::to_string(r).substr(0, 3) + " (>= boxsize/2): " +
-                      std::to_string(found.size()) + " of " + std::to_string(truth) + ", each once");
+            check_local(found.size() == truth and unique.size() == truth,
+                        "periodic r = " + std::to_string(r).substr(0, 3) + " (>= boxsize/2): " +
+                            std::to_string(found.size()) + " of " + std::to_string(truth) + ", each once");
         }
         point_t outside{1.02, -0.03, 0.5}, wrapped{0.02, 0.97, 0.5};
         auto a = tree.neighborhood_indices(outside, 0.1), b = tree.neighborhood_indices(wrapped, 0.1);
-        check(std::set<size_t>(a.begin(), a.end()) == std::set<size_t>(b.begin(), b.end()) and a.size() > 0,
-              "periodic query outside the box = wrapped query (" + std::to_string(a.size()) + " points)");
-        check(tree.nearest_index(outside) == tree.nearest_index(wrapped), "periodic nearest outside the box");
+        check_local(std::set<size_t>(a.begin(), a.end()) == std::set<size_t>(b.begin(), b.end()) and a.size() > 0,
+                    "periodic query outside the box = wrapped query (" + std::to_string(a.size()) + " points)");
+        check_local(tree.nearest_index(outside) == tree.nearest_index(wrapped), "periodic nearest outside the box");
 
         pointVec same(50, point_t{0.0, 0.0, 0.0});
         KDTree tree_same(same, boxsize);
-        check(tree_same.neighborhood_indices(point_t{0.999, 0.0, 0.001}, 0.5).size() == 50,
-              "50 identical points on the boundary, r = boxsize/2: each found once");
+        check_local(tree_same.neighborhood_indices(point_t{0.999, 0.0, 0.001}, 0.5).size() == 50,
+                    "50 identical points on the boundary, r = boxsize/2: each found once");
         KDTree empty(pointVec{}, boxsize);
-        check(empty.neighborhood_indices(point_t{0.5, 0.5, 0.5}, 0.2).empty() and
-                  empty.nearest_index(point_t{0.5, 0.5, 0.5}) == size_t(-1) and
-                  empty.knearest_indices(point_t{0.5, 0.5, 0.5}, 3).empty(),
-              "empty tree");
-        check(tree_same.knearest_indices(point_t{0.5, 0.5, 0.5}, 10).size() == 10, "k nearest of identical points");
+        check_local(empty.neighborhood_indices(point_t{0.5, 0.5, 0.5}, 0.2).empty() and
+                        empty.nearest_index(point_t{0.5, 0.5, 0.5}) == size_t(-1) and
+                        empty.knearest_indices(point_t{0.5, 0.5, 0.5}, 3).empty(),
+                    "empty tree");
+        check_local(tree_same.knearest_indices(point_t{0.5, 0.5, 0.5}, 10).size() == 10,
+                    "k nearest of identical points");
         // The tree from particles = the tree from points
         std::vector<Point3> particles(pts.size());
         for (size_t i = 0; i < pts.size(); i++)
@@ -155,7 +153,8 @@ int main() {
         KDTree tree_part(particles.data(), particles.size(), boxsize);
         auto c = tree_part.neighborhood_indices(point_t{0.1, 0.9, 0.5}, 0.15),
              d = tree.neighborhood_indices(point_t{0.1, 0.9, 0.5}, 0.15);
-        check(std::set<size_t>(c.begin(), c.end()) == std::set<size_t>(d.begin(), d.end()), "tree from particles");
+        check_local(std::set<size_t>(c.begin(), c.end()) == std::set<size_t>(d.begin(), d.end()),
+                    "tree from particles");
     }
 
     // Tree from particles + DensityProfileBinner against brute force (periodic, unit box)
@@ -186,10 +185,9 @@ int main() {
                 maxerr = std::max(maxerr, std::fabs(profiles[i][b] - count[b] / expected));
             }
         }
-        check(maxerr < 1e-12, "DensityProfileBinner = brute force (max difference " + std::to_string(maxerr) + ")");
+        check_local(maxerr < 1e-12,
+                    "DensityProfileBinner = brute force (max difference " + std::to_string(maxerr) + ")");
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All kd-tree tests passed\n" : std::to_string(fails) + " kd-tree test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("kd-tree");
 }

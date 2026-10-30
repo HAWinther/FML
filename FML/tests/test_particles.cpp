@@ -31,14 +31,10 @@
 #include <random>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
+using FML::TESTS::check_local;
+
 
 // True only if ok on all tasks
 bool all_tasks(bool ok) {
@@ -121,10 +117,10 @@ void test_lattice() {
         }
         FML::SumOverTasks(&idsum0);
         const size_t needed = size_t(std::ceil(N * (FML::xmax_domain - FML::xmin_domain) - 1e-9)) * N * N;
-        check(all_tasks(mp.get_particles().size() >= needed),
-              "create_particle_grid N = " + std::to_string(N) +
-                  ": capacity >= the particles of the most lattice "
-                  "slices the domain can hold");
+        check_local(all_tasks(mp.get_particles().size() >= needed),
+                    "create_particle_grid N = " + std::to_string(N) +
+                        ": capacity >= the particles of the most lattice "
+                        "slices the domain can hold");
 
         // Uniform shift by half a lattice spacing in x then communicate
         for (auto & p : mp) {
@@ -142,10 +138,10 @@ void test_lattice() {
             ok = ok and in_domain(p.pos[0], FML::xmin_domain, FML::xmax_domain);
         }
         FML::SumOverTasks(&idsum);
-        check(all_tasks(ok) and n == size_t(N * N * N) and idsum == idsum0,
-              "create_particle_grid N = " + std::to_string(N) +
-                  ": uniform shift + communicate_particles keeps all "
-                  "particles");
+        check_local(all_tasks(ok) and n == size_t(N * N * N) and idsum == idsum0,
+                    "create_particle_grid N = " + std::to_string(N) +
+                        ": uniform shift + communicate_particles keeps all "
+                        "particles");
     }
 }
 
@@ -175,8 +171,8 @@ void test_create() {
             ok = ok and in_domain(p.pos[0], FML::xmin_domain, FML::xmax_domain);
         }
         FML::SumOverTasks(&idsum);
-        check(all_tasks(ok) and mp.get_npart_total() == ntot and idsum == idsum0,
-              "create with all particles on task 0 (batched read, nallocate < particles to read)");
+        check_local(all_tasks(ok) and mp.get_npart_total() == ntot and idsum == idsum0,
+                    "create with all particles on task 0 (batched read, nallocate < particles to read)");
     }
     {
         std::vector<Particle> part(4);
@@ -189,8 +185,8 @@ void test_create() {
         bool ok = true;
         for (auto & p : mp)
             ok = ok and in_domain(p.pos[0], FML::xmin_domain, FML::xmax_domain) and p.pos[0] >= 0.0 and p.pos[0] < 1.0;
-        check(all_tasks(ok) and mp.get_npart_total() == 4,
-              "create (all tasks same particles) keeps particles at x = 1.0 and x = -1e-17 (inside [0,1))");
+        check_local(all_tasks(ok) and mp.get_npart_total() == 4,
+                    "create (all tasks same particles) keeps particles at x = 1.0 and x = -1e-17 (inside [0,1))");
     }
 }
 
@@ -225,10 +221,10 @@ void dump_load_roundtrip(FML::PARTICLE::MPIParticles<T> & mp, size_t buffer_byte
     const size_t filesize = f.good() ? size_t(f.tellg()) : 0;
     f.close();
     std::remove(filename.c_str());
-    check(all_tasks(ok and filesize == expected),
-          "dump_to_file/load_from_file round trip (" + label +
-              ", more particles than fit in the buffer, file has "
-              "only the particles in use)");
+    check_local(all_tasks(ok and filesize == expected),
+                "dump_to_file/load_from_file round trip (" + label +
+                    ", more particles than fit in the buffer, file has "
+                    "only the particles in use)");
 }
 
 void test_dump() {
@@ -254,14 +250,14 @@ void test_custom_serialisation() {
         char * bp = buf.data();
         FML::PARTICLE::AppendToBuffer(a, bp);
         FML::PARTICLE::AssignFromBuffer(b, bp);
-        check(FML::PARTICLE::GetSize(a) == int(3 * sizeof(double) + sizeof(int) + 2 * sizeof(double)) and b.n == 2 and
-                  b.extra[0] == 1.0 and b.extra[1] == 2.0 and b.pos[2] == 0.3,
-              "AppendToBuffer/AssignFromBuffer use the particle's own methods");
+        check_local(FML::PARTICLE::GetSize(a) == int(3 * sizeof(double) + sizeof(int) + 2 * sizeof(double)) and
+                        b.n == 2 and b.extra[0] == 1.0 and b.extra[1] == 2.0 and b.pos[2] == 0.3,
+                    "AppendToBuffer/AssignFromBuffer use the particle's own methods");
         Particle p{{0.1, 0.2, 0.3}, 42}, q{};
         std::vector<char> buf2(sizeof(Particle));
         FML::PARTICLE::AppendToBuffer(p, buf2.data());
         FML::PARTICLE::AssignFromBuffer(q, buf2.data());
-        check(q.id == 42 and q.pos[1] == 0.2, "AppendToBuffer/AssignFromBuffer fiducial (memcpy) methods");
+        check_local(q.id == 42 and q.pos[1] == 0.2, "AppendToBuffer/AssignFromBuffer fiducial (memcpy) methods");
     }
 
     // Communicate and dump/load with variable size particles
@@ -298,7 +294,7 @@ void test_custom_serialisation() {
         } catch (const std::overflow_error &) {
             rejected_cap = true;
         }
-        check(rejected_cap, "one-rank zero migration message cap is rejected collectively before mutation");
+        check_local(rejected_cap, "one-rank zero migration message cap is rejected collectively before mutation");
         mv.communicate_particles(97);
     }
     double sum = 0.0;
@@ -312,9 +308,9 @@ void test_custom_serialisation() {
     }
     FML::SumOverTasks(&sum);
     FML::SumOverTasks(&nextra);
-    check(all_tasks(ok) and nextra == nextra0 and std::fabs(sum - sum0) < 1e-10 * sum0 and
-              mv.get_npart_total() == 500 * size_t(FML::NTasks),
-          "Variable size particles with custom serialisation: create + communicate_particles");
+    check_local(all_tasks(ok) and nextra == nextra0 and std::fabs(sum - sum0) < 1e-10 * sum0 and
+                    mv.get_npart_total() == 500 * size_t(FML::NTasks),
+                "Variable size particles with custom serialisation: create + communicate_particles");
     dump_load_roundtrip(mv, 120 * sizeof(VarParticle), "custom", [](VarParticle & a, VarParticle & b) {
         bool eq = a.n == b.n and a.pos[0] == b.pos[0] and a.pos[1] == b.pos[1] and a.pos[2] == b.pos[2];
         for (int k = 0; eq and k < a.n; k++)
@@ -322,7 +318,7 @@ void test_custom_serialisation() {
         return eq;
     });
 #else
-    check(false, "Custom serialisation methods (does not compile with the old code: ambiguous overloads)");
+    check_local(false, "Custom serialisation methods (does not compile with the old code: ambiguous overloads)");
 #endif
 }
 
@@ -339,16 +335,16 @@ void test_particles_in_boxes() {
         } catch (std::runtime_error &) {
             threw = true;
         }
-        check(threw, "ParticlesInBoxes: a position y = -0.3 is an error (was a wrapped cell index)");
+        check_local(threw, "ParticlesInBoxes: a position y = -0.3 is an error (was a wrapped cell index)");
     }
     {
         std::vector<Particle> v{Particle{{0.1, -1e-17, 0.99}, 0}, Particle{{0.6, 0.6, 0.6}, 1}};
         FML::PARTICLE::ParticlesInBoxes<Particle> grid;
         grid.create(v, 4);
         auto & cells = grid.get_cells();
-        check(cells.size() == 64 and cells[0 * 16 + 0 * 4 + 3].get_np() == 1 and
-                  cells[2 * 16 + 2 * 4 + 2].get_np() == 1,
-              "ParticlesInBoxes: y = -1e-17 (round-off) is accepted (first cell)");
+        check_local(cells.size() == 64 and cells[0 * 16 + 0 * 4 + 3].get_np() == 1 and
+                        cells[2 * 16 + 2 * 4 + 2].get_np() == 1,
+                    "ParticlesInBoxes: y = -1e-17 (round-off) is accepted (first cell)");
 
         // Recreate with no particles: no stale cells/Ngrid
         std::vector<Particle> none;
@@ -356,8 +352,8 @@ void test_particles_in_boxes() {
         size_t n = 0;
         for (auto & c : grid.get_cells())
             n += c.get_np() + c.get_part().size();
-        check(grid.get_ngrid() == 2 and grid.get_npart() == 0 and grid.get_cells().size() == 8 and n == 0,
-              "ParticlesInBoxes: create with no particles resets the grid");
+        check_local(grid.get_ngrid() == 2 and grid.get_npart() == 0 and grid.get_cells().size() == 8 and n == 0,
+                    "ParticlesInBoxes: create with no particles resets the grid");
     }
 }
 
@@ -372,13 +368,13 @@ void test_reflection() {
         g.set_DEC(5.0);
         g.set_z(6.0);
         g.set_weight(0.5);
-        check(FML::PARTICLE::GetRA(g) == 4.0 and FML::PARTICLE::GetDEC(g) == 5.0 and
-                  FML::PARTICLE::GetRedshift(g) == 6.0 and FML::PARTICLE::GetWeight(g) == 0.5 and
-                  FML::PARTICLE::has_set_RA<SimpleGalaxy>(),
-              "SimpleGalaxy compiles and its setters/getters work");
+        check_local(FML::PARTICLE::GetRA(g) == 4.0 and FML::PARTICLE::GetDEC(g) == 5.0 and
+                        FML::PARTICLE::GetRedshift(g) == 6.0 and FML::PARTICLE::GetWeight(g) == 0.5 and
+                        FML::PARTICLE::has_set_RA<SimpleGalaxy>(),
+                    "SimpleGalaxy compiles and its setters/getters work");
     }
 #else
-    check(false, "SimpleGalaxy (does not compile with the old code)");
+    check_local(false, "SimpleGalaxy (does not compile with the old code)");
 #endif
 
     {
@@ -394,7 +390,7 @@ void test_reflection() {
             mp.create(v.data(), v.size(), 2, FML::xmin_domain, FML::xmax_domain, true);
             ok = ok and mp.get_npart_total() == 1;
         }
-        check(ok, "Detection of overloaded (const and non-const) get_pos");
+        check_local(ok, "Detection of overloaded (const and non-const) get_pos");
     }
 
 #ifndef TEST_PARTICLES_OLD_API
@@ -406,11 +402,11 @@ void test_reflection() {
         b[0].pos[0] = 0.1;
         b[0].q[0] = 0.2;
         FML::PARTICLE::swap_eulerian_and_lagrangian_positions(b, 1);
-        check(a[0].pos[0] == 0.5 and b[0].pos[0] == 0.2 and b[0].q[0] == 0.1,
-              "swap_eulerian_and_lagrangian_positions for non-literal particles with and without get_q");
+        check_local(a[0].pos[0] == 0.5 and b[0].pos[0] == 0.2 and b[0].q[0] == 0.1,
+                    "swap_eulerian_and_lagrangian_positions for non-literal particles with and without get_q");
     }
 #else
-    check(false, "swap_eulerian_and_lagrangian_positions without get_q (does not compile with the old code)");
+    check_local(false, "swap_eulerian_and_lagrangian_positions without get_q (does not compile with the old code)");
 #endif
 }
 
@@ -428,8 +424,8 @@ void test_shift() {
         FML::PARTICLE::shift_particles<P, 3>(&p, 1, {0.0, 0.0, 0.0}, 1.0, 1);
         P q{{0.5, 0.5, 0.5}};
         FML::PARTICLE::shift_particles<P, 3>(&q, 1, {0.0, -0.5 - 1e-17, 0.0}, 1.0, 2);
-        check(p.pos[1] >= 0.0 and p.pos[1] < 1.0 and q.pos[1] >= 0.0 and q.pos[1] < 1.0,
-              "shift_particles wraps y = -1e-17 into [0,1) (was exactly 1.0)");
+        check_local(p.pos[1] >= 0.0 and p.pos[1] < 1.0 and q.pos[1] >= 0.0 and q.pos[1] < 1.0,
+                    "shift_particles wraps y = -1e-17 into [0,1) (was exactly 1.0)");
     }
     std::mt19937 g(1);
     std::uniform_real_distribution<double> U(0, 1);
@@ -462,8 +458,8 @@ void test_shift() {
                     exact = exact and v[i].pos[d] == v0[i].pos[d];
         }
     }
-    check(in_range, "shift_particles results are always in [0,1)");
-    check(exact, "Positions are restored exactly after shift_particles (save/restore_particle_positions)");
+    check_local(in_range, "shift_particles results are always in [0,1)");
+    check_local(exact, "Positions are restored exactly after shift_particles (save/restore_particle_positions)");
 }
 
 //==========================================================
@@ -487,23 +483,23 @@ void test_chunkpix() {
         double sum = 0.0;
         for (long i = 0; i < npix; i++)
             sum += full[i];
-        check(c.ordering() == NEST and full.Scheme() == RING and full.Npix() == npix and
-                  full[to_ring(npix - 1)] == 1.0 and full[to_ring(65536 * 4 + 1)] == 0.5 and sum == 1.5,
-              "Chunkpix with 786432 chunks and fractional weights (NEST chunks, RING map)");
+        check_local(c.ordering() == NEST and full.Scheme() == RING and full.Npix() == npix and
+                        full[to_ring(npix - 1)] == 1.0 and full[to_ring(65536 * 4 + 1)] == 0.5 and sum == 1.5,
+                    "Chunkpix with 786432 chunks and fractional weights (NEST chunks, RING map)");
     }
     {
         FML::CHUNKPIX::Chunkpix<double> c;
         c.init(16, 2);
         for (int ch = 0; ch < 24; ch++)
             c.increase_ipix_count(ch * (12 * 256 / 48), 1.0);
-        check(std::fabs(c.chunk_sparsity() - 0.5) < 1e-14, "Chunkpix chunk_sparsity");
+        check_local(std::fabs(c.chunk_sparsity() - 0.5) < 1e-14, "Chunkpix chunk_sparsity");
         bool threw = false;
         try {
             c.init(12, 8);
         } catch (std::runtime_error &) {
             threw = true;
         }
-        check(threw, "Chunkpix: nside not a multiple of nside_chunks is an error");
+        check_local(threw, "Chunkpix: nside not a multiple of nside_chunks is an error");
     }
     {
         // The point of the chunks: a map of part of the sky only allocates about that fraction of them. A cap of
@@ -530,9 +526,9 @@ void test_chunkpix() {
         bool same = full.Scheme() == RING;
         for (long i = 0; same and i < 12 * nside * nside; i++)
             same = full[i] == direct[i];
-        check(same, "Chunkpix map = the map filled directly (RING)");
-        check(sparsity < 0.12,
-              "Chunkpix: a 5% sky cap allocates < 12% of the chunks (" + std::to_string(sparsity) + ")");
+        check_local(same, "Chunkpix map = the map filled directly (RING)");
+        check_local(sparsity < 0.12,
+                    "Chunkpix: a 5% sky cap allocates < 12% of the chunks (" + std::to_string(sparsity) + ")");
     }
     {
         // nside not a power of two: RING chunks (NEST is not defined), same map
@@ -553,7 +549,7 @@ void test_chunkpix() {
         bool same = c.ordering() == RING;
         for (long i = 0; same and i < 12 * 48 * 48; i++)
             same = full[i] == direct[i];
-        check(same, "Chunkpix with nside = 48 (RING chunks) = the map filled directly");
+        check_local(same, "Chunkpix with nside = 48 (RING chunks) = the map filled directly");
     }
     {
         // OnionSlice with chunkpix: the chunks are made into full maps before the sum over tasks and the result
@@ -584,7 +580,8 @@ void test_chunkpix() {
         } catch (std::exception &) {
             ok = false;
         }
-        check(all_tasks(ok), "OnionSlice with chunkpix: reduce_over_tasks gives the same map as without chunkpix");
+        check_local(all_tasks(ok),
+                    "OnionSlice with chunkpix: reduce_over_tasks gives the same map as without chunkpix");
     }
 }
 #endif
@@ -704,7 +701,7 @@ void migration_case(std::vector<double> edges, int mode, bool empty_source, cons
                                      Route::Neighbors;
     good &= automatic.get_last_migration_route() == route &&
             general.get_last_migration_route() == (ranks == 1 ? Route::Serial : Route::General);
-    check(all_tasks(good), label + ": exact IDs, fields, receive order and collective route match the reference");
+    check_local(all_tasks(good), label + ": exact IDs, fields, receive order and collective route match the reference");
 }
 
 struct ExtendedPositionParticle {
@@ -730,7 +727,7 @@ void test_extended_boundary_migration() {
         if (q.id == 1)
             good &= q.pos[0] == just_below;
     }
-    check(all_tasks(good), "extended-precision boundary positions are not narrowed during ownership lookup");
+    check_local(all_tasks(good), "extended-precision boundary positions are not narrowed during ownership lookup");
 }
 
 void test_migration_routing() {
@@ -772,8 +769,5 @@ int main(int argc, char ** argv) {
 #ifdef USE_HEALPIX
     run("chunkpix", test_chunkpix);
 #endif
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All particle tests passed\n" :
-                                   std::to_string(fails) + " particle test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("particle");
 }

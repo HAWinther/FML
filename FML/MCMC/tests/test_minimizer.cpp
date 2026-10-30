@@ -10,7 +10,7 @@
 //   * Hessian: the covariance of a Gaussian (central differences are exact for a quadratic)
 // =============================================================================
 
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/MCMC/Minimizer.h>
 
 #include <cmath>
@@ -18,9 +18,9 @@
 
 using namespace FML::MCMC;
 
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 namespace {
     SampledParameter P(const std::string & n, double start, double lo, double hi, double prop, bool fast = false) {
@@ -84,18 +84,18 @@ int main() {
             return r;
         };
         Posterior post({p}, {}, {}, thrower);
-        check_close("Gaussian prior", post.log_prior({0.0}), -2.0, 1e-15);
-        check("outside the box: -inf", !std::isfinite(post.log_prior({1.5})));
-        check("likelihood throws: invalid point", !post.evaluate({0.95}).valid());
-        check("likelihood NaN: invalid point", !post.evaluate({-0.95}).valid());
-        check_close("valid point: ln P = ln prior + ln L", post.evaluate({0.5}).logpost, 0.0, 1e-15);
+        check_close(post.log_prior({0.0}), -2.0, 1e-15, "Gaussian prior");
+        check(!std::isfinite(post.log_prior({1.5})), "outside the box: -inf");
+        check(!post.evaluate({0.95}).valid(), "likelihood throws: invalid point");
+        check(!post.evaluate({-0.95}).valid(), "likelihood NaN: invalid point");
+        check_close(post.evaluate({0.5}).logpost, 0.0, 1e-15, "valid point: ln P = ln prior + ln L");
         bool threw = false;
         try {
             Posterior({P("f", 0, -1, 1, 1, true), P("s", 0, -1, 1, 1)}, {}, {}, thrower);
         } catch (const std::exception &) {
             threw = true;
         }
-        check("fast parameters must come last", threw);
+        check(threw, "fast parameters must come last");
     }
 
     std::cout << "Correlated 4D Gaussian with a Gaussian prior\n";
@@ -122,11 +122,11 @@ int main() {
         double worst = 0.0;
         for (size_t i = 0; i < 4; i++)
             worst = std::max(worst, std::fabs(r.x[i] - xmax[i]) / sig[i]);
-        check_close("maximum (|dx|/sigma)", worst, 0.0, 0.02);
-        check_close("-2 ln P at the maximum", -2.0 * r.logpost, m2lnP, 2e-4);
-        check_close("derived parameter at the maximum", r.derived[0], r.x[0] + r.x[1], 1e-14);
-        check("converged", r.converged);
-        check("< 1500 evaluations", r.evals < 1500);
+        check_close(worst, 0.0, 0.02, "maximum (|dx|/sigma)");
+        check_close(-2.0 * r.logpost, m2lnP, 2e-4, "-2 ln P at the maximum");
+        check_close(r.derived[0], r.x[0] + r.x[1], 1e-14, "derived parameter at the maximum");
+        check(r.converged, "converged");
+        check(r.evals < 1500, "< 1500 evaluations");
     }
 
     std::cout << "Rosenbrock function\n";
@@ -140,8 +140,8 @@ int main() {
         MinimizerOptions o = quiet();
         o.tol = 1e-8;
         const auto r = Minimizer(post, o).run();
-        check_close("x = 1", r.x[0], 1.0, 2e-3);
-        check_close("y = 1", r.x[1], 1.0, 4e-3);
+        check_close(r.x[0], 1.0, 2e-3, "x = 1");
+        check_close(r.x[1], 1.0, 4e-3, "y = 1");
     }
 
     std::cout << "Fast/slow parameters\n";
@@ -172,10 +172,10 @@ int main() {
         for (size_t i = 0; i < 4; i++)
             worst = std::max(worst, std::fabs(r.x[i] - mu[i]) / sig[i]);
         std::cout << "  " << r.evals << " slow points, " << slow << " slow changes, " << calls << " calls\n";
-        check_close("maximum (|dx|/sigma)", worst, 0.0, 0.03);
-        check_close("-2 ln P = 0", -2.0 * r.logpost, 0.0, 2e-3);
-        check("one slow change per slow point (inner minimization keeps it)", slow <= r.evals + 1);
-        check("fast parameters minimized inside (calls >> slow points)", calls > 5 * r.evals);
+        check_close(worst, 0.0, 0.03, "maximum (|dx|/sigma)");
+        check_close(-2.0 * r.logpost, 0.0, 2e-3, "-2 ln P = 0");
+        check(slow <= r.evals + 1, "one slow change per slow point (inner minimization keeps it)");
+        check(calls > 5 * r.evals, "fast parameters minimized inside (calls >> slow points)");
     }
 
     std::cout << "Maximum outside the prior\n";
@@ -189,8 +189,8 @@ int main() {
         MinimizerOptions o = quiet();
         o.tol = 1e-7;
         const auto r = Minimizer(post, o).run();
-        check_close("on the boundary x = 1", r.x[0], 1.0, 1e-3);
-        check_close("y = 0.3", r.x[1], 0.3, 1e-2);
+        check_close(r.x[0], 1.0, 1e-3, "on the boundary x = 1");
+        check_close(r.x[1], 0.3, 1e-2, "y = 0.3");
     }
 
     std::cout << "Several starts: two peaks\n";
@@ -207,8 +207,8 @@ int main() {
         o.start_scatter = 12.0; // starts spread over the prior
         Minimizer mz(post, o);
         const auto r = mz.run();
-        check_close("first start finds the local peak", mz.start_results()[0].x[0], -3.0, 1e-2);
-        check_close("best of the starts is the global peak", r.x[0], 3.0, 1e-2);
+        check_close(mz.start_results()[0].x[0], -3.0, 1e-2, "first start finds the local peak");
+        check_close(r.x[0], 3.0, 1e-2, "best of the starts is the global peak");
     }
 
     std::cout << "Profile likelihood\n";
@@ -230,7 +230,7 @@ int main() {
             worst = std::max(worst, std::fabs(-2.0 * prof[k].logpost - expect));
             worst = std::max(worst, std::fabs(prof[k].x[1] - vals[k]));
         }
-        check_close("-2 ln P(b) = ((b - mu)/sigma_b)^2, b fixed", worst, 0.0, 1e-3);
+        check_close(worst, 0.0, 1e-3, "-2 ln P(b) = ((b - mu)/sigma_b)^2, b fixed");
     }
 
     std::cout << "Hessian\n";
@@ -251,8 +251,8 @@ int main() {
         for (size_t i = 0; i < 4; i++)
             for (size_t j = 0; j < 4; j++)
                 worst = std::max(worst, std::fabs(C[i][j] - C0[i][j]) / (sig[i] * sig[j]));
-        check("positive definite", ok);
-        check_close("covariance = C (relative to sigma_i sigma_j)", worst, 0.0, 1e-8);
+        check(ok, "positive definite");
+        check_close(worst, 0.0, 1e-8, "covariance = C (relative to sigma_i sigma_j)");
         // adapted steps: 1.5 conditional sigma (1/sqrt(H_ii)) from steps 20x too large, same covariance
         std::vector<double> h2 = {1.0, 10.0, 2.0, 9.0};
         std::vector<std::vector<double>> Ci, C2;
@@ -264,9 +264,9 @@ int main() {
             for (size_t j = 0; j < 4; j++)
                 wc = std::max(wc, std::fabs(C2[i][j] - C0[i][j]) / (sig[i] * sig[j]));
         }
-        check_close("adapted steps = 1.5 / sqrt(H_ii)", ws, 0.0, 0.4);
-        check_close("... covariance = C", wc, 0.0, 1e-8);
+        check_close(ws, 0.0, 0.4, "adapted steps = 1.5 / sqrt(H_ii)");
+        check_close(wc, 0.0, 1e-8, "... covariance = C");
     }
 
-    return Test::summary();
+    return FML::TESTS::summary("MCMC minimizer");
 }

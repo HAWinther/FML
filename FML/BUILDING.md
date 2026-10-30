@@ -54,6 +54,8 @@ make -C FML examples-extra -j4
 make -C FML/SimulationCode -j4 USE_HDF5=true
 ```
 
+Tests use the shared helpers in [`tests/TestHelpers.h`](tests/TestHelpers.h) (`FML::TESTS`): `check(ok, label)` is collective (every task must call it; it fails on every task if it fails on any), `check_local(ok, label)` makes no MPI calls and may be used on some tasks only, `check_close`/`check_rel` print the error, and `return summary("name");` ends `main` with the exit code. The header also has tolerance (`near`) and exception (`throws`, `throws_with`) helpers. Only tests include it, and a test that includes it must link `Global.o`.
+
 `examples-extra` selects dependency-heavy examples such as CGAL/Python-related workflows. The SWIG wrappers are built by `make -C FML python`; import with the interpreter matching their build headers and NumPy installation. The new [analysis package](PythonAnalysis/README.md) instead uses `python -m pip install ./FML/PythonAnalysis` from the repository root, or `make -C FML python-analysis PYTHON=/path/to/venv/bin/python`. `make -C FML test-python-analysis PYTHON=...` tests an already installed package.
 
 The [CI workflow](../.github/workflows/ci.yml) records the Linux regression configuration. Linked tests describe coverage; listing a target here does not assert every example was rerun during the current documentation change. External test data and optional libraries are required only by the targets that use them. Production convergence/accuracy checks remain separate from build/unit tests.

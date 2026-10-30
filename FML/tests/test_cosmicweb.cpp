@@ -8,6 +8,9 @@
 #include <limits>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check;
 
 namespace CW = FML::COSMICWEB;
 using Grid = FML::GRID::FFTWGrid<3>;
@@ -17,15 +20,7 @@ constexpr int mesh = 16;
 constexpr int ii[6] = {0, 0, 0, 1, 1, 2};
 constexpr int jj[6] = {0, 1, 2, 1, 2, 2};
 const double tolerance = 128 * std::numeric_limits<Float>::epsilon();
-int failures = 0;
 
-void check(bool ok, const std::string & label) {
-    int bad = !ok;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (FML::ThisTask == 0)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
-}
 void set_threads(int n) {
 #ifdef USE_OMP
     omp_set_num_threads(n);
@@ -402,7 +397,5 @@ int main() {
     CW::TWeb(particles.data(), particles.size(), mesh, options, compact);
     check(compact_layout(compact) && same_result(compact, regular, tolerance),
           "particle T-web propagates byte storage and retains legacy option initialization");
-    if (FML::ThisTask == 0)
-        std::cout << (failures ? "COSMICWEB TESTS FAILED\n" : "ALL COSMICWEB TESTS PASSED\n");
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("CosmicWeb");
 }

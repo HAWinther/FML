@@ -6,18 +6,12 @@
 #include <iostream>
 #include <random>
 #include <set>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::near;
+
+using FML::TESTS::check;
 using namespace FML::PHASE_SPACE_HALOS;
-int failures = 0;
-void check(bool valid, const char * label) {
-    int bad = !valid;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (FML::ThisTask == 0)
-        std::cout << (bad ? "FAIL " : "PASS ") << label << '\n';
-}
-bool near(double a, double b, double rel = 1e-10, double floor = 1) {
-    return std::isfinite(a) && std::isfinite(b) && std::abs(a - b) <= rel * std::max({floor, std::abs(a), std::abs(b)});
-}
 std::vector<Particle> cloud(std::size_t n,
                             Vector centre,
                             Vector bulk,
@@ -161,7 +155,7 @@ void substructure() {
     bool good = main && satellite;
     if (good)
         good = satellite->host == main->id &&
-               near(main->inclusive_bound_mass, main->bound_mass + satellite->bound_mass) &&
+               near(main->inclusive_bound_mass, main->bound_mass + satellite->bound_mass, 1e-10) &&
                satellite->binding_performed && satellite->unbinding_converged;
     for (const auto & a : c.assignments)
         if (a.particle >= 20000)
@@ -204,8 +198,8 @@ void unbinding() {
     pair[1].velocity[0] = 20;
     const auto escaping = find(pair, o);
     check(bound.halos.size() == 1 && escaping.halos.empty(), "analytic two-particle bound/unbound classification");
-    check(bound.halos.size() == 1 && near(bound.halos[0].bound_mass, 2) && near(bound.halos[0].rmax, .01) &&
-              near(bound.halos[0].vmax, std::sqrt(200.)),
+    check(bound.halos.size() == 1 && near(bound.halos[0].bound_mass, 2, 1e-10) &&
+              near(bound.halos[0].rmax, .01, 1e-10) && near(bound.halos[0].vmax, std::sqrt(200.), 1e-10),
           "bound mass and equal-radius circular-velocity shells match analytic values");
     o.hubble_velocity_gradient = 200;
     pair[0].velocity = {0, 0, 0};
@@ -283,7 +277,8 @@ void distributed() {
             std::find_if(reference.halos.begin(), reference.halos.end(), [&](const auto & x) { return x.id == h.id; });
         good &= it != reference.halos.end();
         if (it != reference.halos.end())
-            good &= it->particle_ids == h.particle_ids && it->host == h.host && near(it->bound_mass, h.bound_mass);
+            good &=
+                it->particle_ids == h.particle_ids && it->host == h.host && near(it->bound_mass, h.bound_mass, 1e-10);
     }
     for (const auto & a : c.assignments) {
         const auto it = std::lower_bound(reference.assignments.begin(),
@@ -591,7 +586,5 @@ int main(int argc, char ** argv) {
     invariants();
     distributed();
     adapters();
-    if (FML::ThisTask == 0)
-        std::cout << "Phase-space halo failures: " << failures << '\n';
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("phase-space halo");
 }

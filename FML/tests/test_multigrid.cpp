@@ -27,23 +27,15 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 using namespace FML::SOLVERS::MULTIGRIDSOLVER;
 constexpr int NDIM = 3;
 using Solver = MultiGridSolver<NDIM, double>;
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os << std::setprecision(3) << x;
-    return os.str();
-}
 
 // Deterministic noise in [-1,1] from the global coordinate (the same for any number of tasks)
 double noise(const std::array<int, NDIM> & c) {
@@ -84,8 +76,9 @@ void test_termination_status() {
     Solver s(16, 1, false, true, 1, 1);
     s.set_initial_guess(0.0);
     s.set_ngs_sweeps(0, 0, 0);
-    check(s.get_solve_result().status == SolveStatus::NotStarted && !s.is_converged() && std::isnan(s.get_residual()),
-          "status before the first solve is NotStarted");
+    check_local(s.get_solve_result().status == SolveStatus::NotStarted && !s.is_converged() &&
+                    std::isnan(s.get_residual()),
+                "status before the first solve is NotStarted");
     MultiGridFunction<NDIM, double> constant = [](Solver *, int, IndexInt) {
         return std::pair<double, double>{1., 1.};
     };
@@ -96,27 +89,28 @@ void test_termination_status() {
     };
     s.set_maxsteps(2);
     auto result = s.solve(constant, never);
-    check(result.status == SolveStatus::MaxIterations && !s.is_converged() && result.iterations == 2 &&
-              result.residual == 1. && result.initial_residual == 1. && calls == 3,
-          "exhaustion returns MaxIterations, exact V-cycle count and residuals");
+    check_local(result.status == SolveStatus::MaxIterations && !s.is_converged() && result.iterations == 2 &&
+                    result.residual == 1. && result.initial_residual == 1. && calls == 3,
+                "exhaustion returns MaxIterations, exact V-cycle count and residuals");
     s.is_converged();
     s.get_solve_result();
-    check(calls == 3, "status queries do not invoke the convergence callback");
+    check_local(calls == 3, "status queries do not invoke the convergence callback");
     MultiGridConvCrit at_limit = [](double, double, int step) { return step >= 1; };
     s.set_maxsteps(1);
     result = s.solve(constant, at_limit);
-    check(result.converged() && s.is_converged() && result.iterations == 1,
-          "convergence at the iteration limit takes precedence and resets the previous failure");
+    check_local(result.converged() && s.is_converged() && result.iterations == 1,
+                "convergence at the iteration limit takes precedence and resets the previous failure");
     s.set_maxsteps(0);
     result = s.solve(constant, never);
-    check(result.status == SolveStatus::MaxIterations && result.iterations == 0,
-          "zero V-cycle budget stops after the initial fine-grid sweeps");
+    check_local(result.status == SolveStatus::MaxIterations && result.iterations == 0,
+                "zero V-cycle budget stops after the initial fine-grid sweeps");
     MultiGridFunction<NDIM, double> zero = [](Solver *, int, IndexInt) { return std::pair<double, double>{0., 1.}; };
     result = s.solve(zero, s.ConvergenceCriterionResidual);
-    check(result.converged() && result.iterations == 0 && result.residual == 0.,
-          "initial convergence is reported before a zero iteration limit");
+    check_local(result.converged() && result.iterations == 0 && result.residual == 0.,
+                "initial convergence is reported before a zero iteration limit");
     result = s.solve(zero, s.ConvergenceCriterionError);
-    check(result.converged() && result.iterations == 0, "relative criterion accepts an exactly zero initial residual");
+    check_local(result.converged() && result.iterations == 0,
+                "relative criterion accepts an exactly zero initial residual");
     for (double invalid : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
         MultiGridFunction<NDIM, double> broken = [=](Solver *, int, IndexInt) {
             return std::pair<double, double>{FML::ThisTask == 0 ? invalid : 1., 1.};
@@ -128,9 +122,9 @@ void test_termination_status() {
         };
         s.set_maxsteps(4);
         result = s.solve(broken, permissive);
-        check(result.status == SolveStatus::NonFinite && !s.is_converged() && result.iterations == 0 &&
-                  !std::isfinite(result.residual) && calls == 0,
-              "one-rank nonfinite initial residual stops collectively before the callback");
+        check_local(result.status == SolveStatus::NonFinite && !s.is_converged() && result.iterations == 0 &&
+                        !std::isfinite(result.residual) && calls == 0,
+                    "one-rank nonfinite initial residual stops collectively before the callback");
     }
     MultiGridFunction<NDIM, double> late_failure = [](Solver * sol, int, IndexInt) {
         return std::pair<double, double>{
@@ -139,17 +133,17 @@ void test_termination_status() {
     };
     s.set_maxsteps(1);
     result = s.solve(late_failure, at_limit);
-    check(result.status == SolveStatus::NonFinite && result.iterations == 1 && result.initial_residual == 1.,
-          "nonfinite failure during a V-cycle takes precedence over callback and iteration limit");
+    check_local(result.status == SolveStatus::NonFinite && result.iterations == 1 && result.initial_residual == 1.,
+                "nonfinite failure during a V-cycle takes precedence over callback and iteration limit");
     s.set_maxsteps(2);
     MultiGridConvCrit rank_dependent = [](double, double, int) { return FML::ThisTask != 0; };
     result = s.solve(constant, rank_dependent);
-    check(result.status == SolveStatus::MaxIterations && result.iterations == 2,
-          "rank-dependent criteria stop only when every rank agrees");
+    check_local(result.status == SolveStatus::MaxIterations && result.iterations == 2,
+                "rank-dependent criteria stop only when every rank agrees");
     s.set_maxsteps(FML::ThisTask == 0 ? 1 : 3);
     result = s.solve(constant, rank_dependent);
-    check(result.status == SolveStatus::MaxIterations && result.iterations == 1,
-          "different rank budgets collectively honor the smallest V-cycle limit");
+    check_local(result.status == SolveStatus::MaxIterations && result.iterations == 1,
+                "different rank budgets collectively honor the smallest V-cycle limit");
     Solver coarse(16, 2, false, true, 1, 1);
     coarse.set_initial_guess(0.0);
     coarse.set_ngs_sweeps(0, 0, 0);
@@ -160,8 +154,8 @@ void test_termination_status() {
                                          1.};
     };
     result = coarse.solve(coarse_failure, never);
-    check(result.status == SolveStatus::NonFinite && result.iterations == 1 && result.residual == 1.,
-          "coarse-grid nonfinite residual remains a failure even if final fine-grid residual is finite");
+    check_local(result.status == SolveStatus::NonFinite && result.iterations == 1 && result.residual == 1.,
+                "coarse-grid nonfinite residual remains a failure even if final fine-grid residual is finite");
 }
 
 int main() {
@@ -195,9 +189,9 @@ int main() {
         FML::MaxOverTasks(&e2);
         // Truncation error ~ (k h)^(2 order) with k h = 4 pi / 32
         const double expected = std::pow(4 * M_PI / N, 2 * order);
-        check(e1 < expected and e2 < expected,
-              "get_Gradient / get_Gradient2 of order " + std::to_string(order) + ": relative errors " + num(e1) + ", " +
-                  num(e2) + " (truncation error ~" + num(expected) + ")");
+        check_local(e1 < expected and e2 < expected,
+                    "get_Gradient / get_Gradient2 of order " + std::to_string(order) + ": relative errors " +
+                        num(e1, 3) + ", " + num(e2, 3) + " (truncation error ~" + num(expected, 3) + ")");
     }
 
     // 2. Poisson
@@ -218,11 +212,12 @@ int main() {
                                              sol->get_derivLaplacian(level, il)};
         };
         const auto result = s.solve(eq, crit);
-        check(result.converged() && result.iterations == 8 && result.residual == hist.back() &&
-                  result.initial_residual == hist.front(),
-              "Poisson solve returns its actual final residual and V-cycle count");
+        check_local(result.converged() && result.iterations == 8 && result.residual == hist.back() &&
+                        result.initial_residual == hist.front(),
+                    "Poisson solve returns its actual final residual and V-cycle count");
         const double factor = std::pow(hist.back() / hist[1], 1.0 / (hist.size() - 2));
-        check(factor < 0.2, "Poisson: residual reduced by a factor " + num(factor) + " per V-cycle (2+2 sweeps)");
+        check_local(factor < 0.2,
+                    "Poisson: residual reduced by a factor " + num(factor, 3) + " per V-cycle (2+2 sweeps)");
     }
 
     // 3. DGP-type equation: D^2 phi - 0.5 alpha (sqrt(1 + 4 (2/3) sigma / alpha^2) - 1) / (2/3) = 0
@@ -262,9 +257,9 @@ int main() {
             return std::pair<double, double>{lap - 0.75 * alpha * (std::sqrt(disc) - 1.0), -6.0 / (h * h)};
         };
         s.solve(eq, crit);
-        check(s.get_residual() < 1e-8 and s.get_number_of_vcycles() < 30,
-              "DGP-type equation: residual " + num(s.get_residual()) + " after " +
-                  std::to_string(s.get_number_of_vcycles()) + " V-cycles (cube ordering, mean subtracted)");
+        check_local(s.get_residual() < 1e-8 and s.get_number_of_vcycles() < 30,
+                    "DGP-type equation: residual " + num(s.get_residual(), 3) + " after " +
+                        std::to_string(s.get_number_of_vcycles()) + " V-cycles (cube ordering, mean subtracted)");
     }
 
 #ifdef USE_FFTW
@@ -280,7 +275,7 @@ int main() {
                 if (not(u > 0.0))
                     maxerr = 1.0;
             }
-        check(maxerr < 1e-12, "f(R): positive root of the cubic (relative error " + num(maxerr) + ")");
+        check_local(maxerr < 1e-12, "f(R): positive root of the cubic (relative error " + num(maxerr, 3) + ")");
 
         // A clustered density field
         FML::GRID::FFTWGrid<NDIM> delta(N, 1, 1);
@@ -352,9 +347,9 @@ int main() {
         solve("log", 1e-5, 1.0, 1.0, phi_log);
         const int nv = solve("sqrt", 1e-5, 1.0, 1.0, phi_sqrt);
         const double diff = force_difference(phi_log, phi_sqrt);
-        check(diff < 0.01 and nv < 20,
-              "f(R) |f_R0| = 1e-5, a = 1: sqrt and log methods agree (rms fifth force difference " + num(diff) +
-                  "; sqrt " + std::to_string(nv) + " V-cycles)");
+        check_local(diff < 0.01 and nv < 20,
+                    "f(R) |f_R0| = 1e-5, a = 1: sqrt and log methods agree (rms fifth force difference " +
+                        num(diff, 3) + "; sqrt " + std::to_string(nv) + " V-cycles)");
 
         // Hard cases for the log method (it gives NaN here): check that sqrt converges to a tight tolerance and is
         // the same as with a looser one
@@ -364,11 +359,11 @@ int main() {
             const int nv1 = solve("sqrt", 1e-6, n, 0.5, phi1, 1e-13, 10.0, 1);
             solve("sqrt", 1e-6, n, 0.5, phi2, 1e-7, 10.0, 1);
             const double dd = force_difference(phi1, phi2);
-            check(nv1 > 0 and dd < 1e-4,
-                  "f(R) |f_R0| = 1e-6, n = " + num(n) +
-                      ", a = 0.5 with the sqrt method: the solution with residual < "
-                      "1e-7 is within " +
-                      num(dd) + " of one with < 1e-13 (" + std::to_string(nv1) + " V-cycles)");
+            check_local(nv1 > 0 and dd < 1e-4,
+                        "f(R) |f_R0| = 1e-6, n = " + num(n, 3) +
+                            ", a = 0.5 with the sqrt method: the solution with residual < "
+                            "1e-7 is within " +
+                            num(dd, 3) + " of one with < 1e-13 (" + std::to_string(nv1) + " V-cycles)");
         }
 
         // 5. Symmetron (assb = 0.5, range 8 Mpc/h today, box 256 Mpc/h). The solver returns forcenorm (phi/phi0)^2
@@ -391,7 +386,7 @@ int main() {
                 for (auto && ri : phi.get_real_range(islice, islice + 1))
                     pmax = std::max(pmax, std::abs(phi.get_real_from_index(ri)));
             FML::MaxOverTasks(&pmax);
-            check(pmax == 0.0, "Symmetron a = 0.4 < assb: zero field (max " + num(pmax) + ")");
+            check_local(pmax == 0.0, "Symmetron a = 0.4 < assb: zero field (max " + num(pmax, 3) + ")");
         }
         {
             // delta = A cos(2 pi m x): phi = f0 + dphi with D^2 dphi = norm (fac delta f0 + 2 f0^2 dphi)
@@ -418,9 +413,9 @@ int main() {
                     maxerr = std::max(maxerr, std::abs(phi.get_real_from_index(ri) - lin));
                 }
             FML::MaxOverTasks(&maxerr);
-            check(maxerr < 1e-4 * std::abs(amp),
-                  "Symmetron: linear theory for a small cosine perturbation (error " + num(maxerr / std::abs(amp)) +
-                      " of the amplitude)");
+            check_local(maxerr < 1e-4 * std::abs(amp),
+                        "Symmetron: linear theory for a small cosine perturbation (error " +
+                            num(maxerr / std::abs(amp), 3) + " of the amplitude)");
         }
         {
             // A halo: screened in the center (phi << phi0), unscreened far away
@@ -435,9 +430,9 @@ int main() {
             FML::MinOverTasks(&pmin);
             FML::MaxOverTasks(&pmax);
             const double f0 = std::sqrt(1.0 - std::pow(assb, 3));
-            check(pmin < 0.3 * f0 and pmax > f0 and pmax < 1.0,
-                  "Symmetron a = 1 with a halo: phi/phi0 from " + num(pmin) + " (screened) to " + num(pmax) +
-                      " (background " + num(f0) + ", vacuum 1)");
+            check_local(pmin < 0.3 * f0 and pmax > f0 and pmax < 1.0,
+                        "Symmetron a = 1 with a halo: phi/phi0 from " + num(pmin, 3) + " (screened) to " +
+                            num(pmax, 3) + " (background " + num(f0, 3) + ", vacuum 1)");
         }
 
         // 6. DGP (rc H0 = 1, a = 1)
@@ -453,12 +448,10 @@ int main() {
             for (int islice = 0; islice < phi.get_local_nx(); islice++)
                 for (auto && ri : phi.get_real_range(islice, islice + 1))
                     finite = finite and std::isfinite(phi.get_real_from_index(ri));
-            check(finite, "DGP rc H0 = 1 with a halo: finite solution");
+            check_local(finite, "DGP rc H0 = 1 with a halo: finite solution");
         }
     }
 #endif
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All multigrid tests passed\n" : "Some multigrid tests FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("multigrid");
 }

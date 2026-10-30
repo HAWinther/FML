@@ -2,24 +2,13 @@
 #include <climits>
 #include <iostream>
 #include <limits>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check;
 using namespace FML::COMMUNICATION;
-int failures = 0;
-void check(bool good, const char * message) {
-    int bad = !good;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (!FML::ThisTask)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << message << '\n';
-}
 template <class F>
-void rejects(F && function, const char * message) {
-    bool caught = false;
-    try {
-        function();
-    } catch (const std::overflow_error &) {
-        caught = true;
-    }
-    check(caught, message);
+void rejects(F && f, const char * label) {
+    check(FML::TESTS::throws<std::overflow_error>(f), label);
 }
 struct Record {
     int owner, index;
@@ -87,7 +76,5 @@ int main() {
             "gather rejects an aggregate limit before payload communication");
     check(validate(gather_records_checked(local, true)),
           "valid communication succeeds after collective count failures");
-    if (!FML::ThisTask)
-        std::cout << (failures ? "MPI count tests FAILED\n" : "All MPI count tests passed\n");
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("MPI count");
 }

@@ -17,19 +17,11 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os << x;
-    return os.str();
-}
+using FML::TESTS::check_local;
+using FML::TESTS::num;
+
 
 struct Galaxy {
     double RA, DEC, z;
@@ -37,11 +29,7 @@ struct Galaxy {
     double get_DEC() const { return DEC; }
     double get_z() const { return z; }
 };
-struct Particle {
-    double pos[3];
-    double * get_pos() { return pos; }
-    constexpr int get_ndim() const { return 3; }
-};
+using Particle = FML::TESTS::PositionParticle<3>;
 
 const std::function<double(double)> hubble_over_c = [](double z) {
     return 1.0 / 2997.92458 * std::sqrt(0.315 * (1 + z) * (1 + z) * (1 + z) + 0.685);
@@ -94,9 +82,9 @@ int main() {
         auto [maxerr, inside] = check_box(gal, xyz, observer, boxsize);
         int ok = maxerr < 1e-6 and inside ? 0 : 1;
         FML::SumOverTasks(&ok);
-        check(ok == 0,
-              "GalaxiesToBox, " + std::to_string(n) + " galaxies: in [0,1), |x - observer| = r(z) (" + num(maxerr) +
-                  ")");
+        check_local(ok == 0,
+                    "GalaxiesToBox, " + std::to_string(n) + " galaxies: in [0,1), |x - observer| = r(z) (" +
+                        num(maxerr) + ")");
     }
 
     // Galaxies and randoms in the southern sky around RA = 200 (not the first octant)
@@ -127,9 +115,9 @@ int main() {
         auto [er, ir] = check_box(ran, rxyz, observer, boxsize);
         int ok = eg < 1e-6 and er < 1e-6 and ig and ir ? 0 : 1;
         FML::SumOverTasks(&ok);
-        check(ok == 0,
-              "GalaxiesRandomsToBox, southern survey: all in [0,1), |x - observer| = r(z) (" + num(std::max(eg, er)) +
-                  ")");
+        check_local(ok == 0,
+                    "GalaxiesRandomsToBox, southern survey: all in [0,1), |x - observer| = r(z) (" +
+                        num(std::max(eg, er)) + ")");
 
         // All the tasks have the same box (each task has different galaxies)
         double bmin = boxsize, bmax = boxsize, omin = observer[0], omax = observer[0];
@@ -137,7 +125,7 @@ int main() {
         FML::MaxOverTasks(&bmax);
         FML::MinOverTasks(&omin);
         FML::MaxOverTasks(&omax);
-        check(bmin == bmax and omin == omax, "the same boxsize and observer on all the tasks");
+        check_local(bmin == bmax and omin == omax, "the same boxsize and observer on all the tasks");
     }
 
     // The largest redshift is in the r(z) table also with several threads (one galaxy at z = 2 among many at 0.1)
@@ -150,7 +138,7 @@ int main() {
         FML::SURVEY::GalaxiesToBox(gal.data(), gal.size(), xyz, hubble_over_c, boxsize, observer, false, false, false);
         const double r =
             std::sqrt(std::pow(xyz[17].pos[0], 2) + std::pow(xyz[17].pos[1], 2) + std::pow(xyz[17].pos[2], 2));
-        check(std::fabs(r / r_reference(2.0) - 1.0) < 1e-6, "r(z = 2) with many galaxies and threads: " + num(r));
+        check_local(std::fabs(r / r_reference(2.0) - 1.0) < 1e-6, "r(z = 2) with many galaxies and threads: " + num(r));
     }
 
     // All galaxies at z = 0: no exception, positions at the origin
@@ -160,10 +148,8 @@ int main() {
         std::vector<double> observer;
         double boxsize;
         FML::SURVEY::GalaxiesToBox(gal.data(), gal.size(), xyz, hubble_over_c, boxsize, observer, true, false, false);
-        check(xyz[0].pos[0] == 0.0 and boxsize == 0.0, "all galaxies at z = 0 (no scaling)");
+        check_local(xyz[0].pos[0] == 0.0 and boxsize == 0.0, "all galaxies at z = 0 (no scaling)");
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All survey tests passed\n" : std::to_string(fails) + " survey test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("survey");
 }

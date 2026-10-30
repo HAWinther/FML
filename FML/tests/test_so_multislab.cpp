@@ -6,6 +6,9 @@
 #include <limits>
 #include <random>
 #include <set>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check;
 using Halo = FML::FOF::SOHalo<3>;
 using Point = std::array<double, 3>;
 struct Particle {
@@ -56,14 +59,6 @@ struct Particle {
             get(payload.data(), n * sizeof(double));
     }
 };
-int failures = 0;
-void check(bool ok, const std::string & label) {
-    int bad = !ok;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (!FML::ThisTask)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
-}
 double wrap(double x) { return x - std::floor(x); }
 double distance(const Point & x, const Point & y) {
     double value = 0;
@@ -443,7 +438,5 @@ int main() {
         rejected = true;
     }
     check(rejected, "invalid center/radius shapes fail collectively before indexing");
-    if (!FML::ThisTask)
-        std::cout << (failures ? "Multi-slab SO tests FAILED" : "All multi-slab SO tests passed") << '\n';
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("multi-slab SO");
 }

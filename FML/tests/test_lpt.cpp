@@ -34,23 +34,15 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 int lpt_odr_check(); // defined in test_lpt_odr.cpp
 
 using cplx = std::complex<double>;
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os << std::setprecision(4) << x;
-    return os.str();
-}
 
 //==========================================================
 // Sparse plane-wave fields f(x) = sum_n c_n exp(2 pi i n.x) (box = 1)
@@ -312,8 +304,10 @@ void test_3LPT(bool alternate = false,
     FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_fourier, phi2, dealiasing);
     double e1 = max_diff_fourier<3>(phi1, ref.p1) / maxabs<3>(ref.p1);
     double e2 = max_diff_fourier<3>(phi2, ref.p2) / maxabs<3>(ref.p2);
-    check(e1 < 1e-12, "compute_1LPT_potential_fourier matches the plane-wave reference (rel err " + num(e1) + ")");
-    check(e2 < 1e-12, "compute_2LPT_potential_fourier matches the plane-wave reference (rel err " + num(e2) + ")");
+    check_local(e1 < 1e-12,
+                "compute_1LPT_potential_fourier matches the plane-wave reference (rel err " + num(e1, 4) + ")");
+    check_local(e2 < 1e-12,
+                "compute_2LPT_potential_fourier matches the plane-wave reference (rel err " + num(e2, 4) + ")");
 
     // 3LPT potentials
     Grid p1, p2, p3a, p3b;
@@ -328,11 +322,11 @@ void test_3LPT(bool alternate = false,
         Amax = std::max(Amax, maxabs<3>(ref.A[i]));
     for (int i = 0; i < 3; i++)
         rA = std::max(rA, max_diff_fourier<3>(A[i], ref.A[i]) / Amax);
-    check(r1 < 1e-12 and r2 < 1e-12,
-          "3LPT: phi_1LPT and phi_2LPT match the reference (rel err " + num(r1) + ", " + num(r2) + ")");
-    check(r3a < 1e-10, "3LPT: phi_3LPT_a matches the reference (rel err " + num(r3a) + ")");
-    check(r3b < 1e-10, "3LPT: phi_3LPT_b matches the reference (rel err " + num(r3b) + ")");
-    check(rA < 1e-10, "3LPT: curl term A_3LPT matches the reference (rel err " + num(rA) + ")");
+    check_local(r1 < 1e-12 and r2 < 1e-12,
+                "3LPT: phi_1LPT and phi_2LPT match the reference (rel err " + num(r1, 4) + ", " + num(r2, 4) + ")");
+    check_local(r3a < 1e-10, "3LPT: phi_3LPT_a matches the reference (rel err " + num(r3a, 4) + ")");
+    check_local(r3b < 1e-10, "3LPT: phi_3LPT_b matches the reference (rel err " + num(r3b, 4) + ")");
+    check_local(rA < 1e-10, "3LPT: curl term A_3LPT matches the reference (rel err " + num(rA, 4) + ")");
 
     // Without the curl term the scalar potentials are the same
     {
@@ -340,7 +334,7 @@ void test_3LPT(bool alternate = false,
         std::array<Grid, 3> B;
         FML::COSMOLOGY::LPT::compute_3LPT_potential_fourier<3>(delta_fourier, q1, q2, q3a, q3b, B, true, dealiasing);
         double s3b = max_diff_fourier<3>(q3b, ref.p3b) / maxabs<3>(ref.p3b);
-        check(s3b < 1e-10, "3LPT: phi_3LPT_b with ignore_curl_term (rel err " + num(s3b) + ")");
+        check_local(s3b < 1e-10, "3LPT: phi_3LPT_b with ignore_curl_term (rel err " + num(s3b, 4) + ")");
     }
 
     // The total displacement field and its time derivative
@@ -361,8 +355,10 @@ void test_3LPT(bool alternate = false,
         ePsi = std::max(ePsi, max_diff_real<3>(Psi[i], psi) / maxabs<3>(psi));
         edPsi = std::max(edPsi, max_diff_real<3>(dPsidt[i], dpsi) / maxabs<3>(dpsi));
     }
-    check(ePsi < 1e-10, "compute_3LPT_displacement_field: Psi matches the reference (rel err " + num(ePsi) + ")");
-    check(edPsi < 1e-10, "compute_3LPT_displacement_field: dPsidt matches the reference (rel err " + num(edPsi) + ")");
+    check_local(ePsi < 1e-10,
+                "compute_3LPT_displacement_field: Psi matches the reference (rel err " + num(ePsi, 4) + ")");
+    check_local(edPsi < 1e-10,
+                "compute_3LPT_displacement_field: dPsidt matches the reference (rel err " + num(edPsi, 4) + ")");
 }
 
 // High-frequency products deliberately cross the original mesh Nyquist limit.
@@ -409,17 +405,17 @@ void test_dealiased_LPT() {
         // relative to these deliberately high-frequency reference potentials.
         const double potential_tolerance =
             std::max(5e-12, 32 * Nmesh * Nmesh * double(std::numeric_limits<FML::GRID::FloatType>::epsilon()));
-        check(error < potential_tolerance && source_error < tolerance,
-              "de-aliased " + label + " matches unwrapped convolution (potential rel err " + num(error) +
-                  ", source rel err " + num(source_error) + ")");
+        check_local(error < potential_tolerance && source_error < tolerance,
+                    "de-aliased " + label + " matches unwrapped convolution (potential rel err " + num(error, 4) +
+                        ", source rel err " + num(source_error, 4) + ")");
     };
     Grid p1, p2, pa, pb, quadratic, legacy;
     std::array<Grid, 3> A;
     compute_2LPT_potential_fourier(input, quadratic, Dealiasing::Padding);
     compare(quadratic, reference.p2, "standalone 2LPT");
     compute_2LPT_potential_fourier(input, legacy);
-    check(max_diff_fourier<3>(legacy, crop_reference(reference.p2)) > 1e-7,
-          "high-frequency fixture exposes legacy quadratic aliasing");
+    check_local(max_diff_fourier<3>(legacy, crop_reference(reference.p2)) > 1e-7,
+                "high-frequency fixture exposes legacy quadratic aliasing");
     for (bool ignore_curl : {false, true}) {
         compute_3LPT_potential_fourier<3>(input, p1, p2, pa, pb, A, ignore_curl, Dealiasing::Padding);
         compare(p1, reference.p1, "1LPT");
@@ -447,14 +443,15 @@ void test_dealiased_LPT() {
                                                                                      {&A[0], &reference.A[0]}}) {
         const auto cropped = crop_reference(*entry.second);
         const double error = max_diff_fourier<3>(*entry.first, cropped) / maxabs<3>(cropped);
-        check(error > 1e-3, "high-frequency fixture exposes legacy nonlinear aliasing (rel err " + num(error) + ")");
+        check_local(error > 1e-3,
+                    "high-frequency fixture exposes legacy nonlinear aliasing (rel err " + num(error, 4) + ")");
     }
     auto padded = FML::GRID::resize_fourier_grid(input, detail::padded_lpt_mesh(Nmesh, 3));
     auto restored = FML::GRID::resize_fourier_grid(padded, Nmesh, 1, 1);
     compare(restored, delta, "Fourier padding/cropping normalization");
-    check(max_diff_fourier<3>(input, delta) < tolerance, "de-aliasing preserves the input grid");
-    check(restored.get_n_extra_slices_left() == 1 && restored.get_n_extra_slices_right() == 1,
-          "Fourier cropping preserves requested boundary allocation");
+    check_local(max_diff_fourier<3>(input, delta) < tolerance, "de-aliasing preserves the input grid");
+    check_local(restored.get_n_extra_slices_left() == 1 && restored.get_n_extra_slices_right() == 1,
+                "Fourier cropping preserves requested boundary allocation");
     std::array<Grid, 3> psi, velocity;
     constexpr double rate = 0.63;
     compute_3LPT_displacement_field<3>(input, psi, velocity, rate, false, Dealiasing::Padding);
@@ -466,9 +463,10 @@ void test_dealiased_LPT() {
         auto curl = add<3>(grad<3>(reference.A[k], j), grad<3>(reference.A[j], k), 1, -1);
         auto expected = crop_reference(add<3>(grad<3>(total, d), curl));
         auto expected_velocity = crop_reference(add<3>(grad<3>(derivative, d), curl, rate, 3 * rate));
-        check(max_diff_real<3>(psi[d], expected) < tolerance, "de-aliased displacement component " + std::to_string(d));
-        check(max_diff_real<3>(velocity[d], expected_velocity) < tolerance,
-              "de-aliased velocity component " + std::to_string(d));
+        check_local(max_diff_real<3>(psi[d], expected) < tolerance,
+                    "de-aliased displacement component " + std::to_string(d));
+        check_local(max_diff_real<3>(velocity[d], expected_velocity) < tolerance,
+                    "de-aliased velocity component " + std::to_string(d));
     }
     // Exercise 2D and odd input meshes as well as cross-rank slab remapping.
     std::vector<int> meshes{16};
@@ -479,8 +477,8 @@ void test_dealiased_LPT() {
         auto small = make_delta_fourier<2>(modes, mesh);
         auto large = FML::GRID::resize_fourier_grid(small, detail::padded_lpt_mesh(mesh, 3));
         auto back = FML::GRID::resize_fourier_grid(large, mesh);
-        check(max_diff_fourier<2>(back, modes) < tolerance,
-              "2D Fourier resize round trip (mesh " + std::to_string(mesh) + ")");
+        check_local(max_diff_fourier<2>(back, modes) < tolerance,
+                    "2D Fourier resize round trip (mesh " + std::to_string(mesh) + ")");
         FML::GRID::FFTWGrid<2> q1, q2, qa, qb;
         std::array<FML::GRID::FFTWGrid<2>, 2> B;
         compute_3LPT_potential_fourier<2>(small, q1, q2, qa, qb, B, false, Dealiasing::Padding);
@@ -510,9 +508,9 @@ void test_dealiased_LPT() {
                                                                               {&qb, project(exact.p3b)},
                                                                               {&B[0], project(exact.A[2])}}) {
             double error = max_diff_fourier<2>(*entry.first, entry.second);
-            check(error < tolerance,
-                  "2D padded nonlinear potential matches unwrapped convolution (mesh " + std::to_string(mesh) +
-                      ", abs err " + num(error) + ")");
+            check_local(error < tolerance,
+                        "2D padded nonlinear potential matches unwrapped convolution (mesh " + std::to_string(mesh) +
+                            ", abs err " + num(error, 4) + ")");
         }
     }
 }
@@ -559,9 +557,9 @@ void test_3LPT_2D() {
     FML::MaxOverTasks(&e);
     FML::MaxOverTasks(&ed);
     FML::MaxOverTasks(&scale);
-    check(e / scale < 1e-12 and ed / scale < 1e-12 and scale > 0.0,
-          "compute_3LPT_displacement_field<2>: Psi and dPsidt agree with the 2D potentials (rel err " + num(e / scale) +
-              ", " + num(ed / scale) + ")");
+    check_local(e / scale < 1e-12 and ed / scale < 1e-12 and scale > 0.0,
+                "compute_3LPT_displacement_field<2>: Psi and dPsidt agree with the 2D potentials (rel err " +
+                    num(e / scale, 4) + ", " + num(ed / scale, 4) + ")");
 }
 
 void test_ALPT() {
@@ -598,8 +596,8 @@ void test_ALPT() {
         }
     FML::MaxOverTasks(&esc);
     FML::MaxOverTasks(&scmax);
-    check(esc / scmax < 1e-12,
-          "spherical collapse potential = -source/k^2 with k=0 mode zero (rel err " + num(esc / scmax) + ")");
+    check_local(esc / scmax < 1e-12,
+                "spherical collapse potential = -source/k^2 with k=0 mode zero (rel err " + num(esc / scmax, 4) + ")");
 
     // To linear order phi_SC = D phi_1LPT
     {
@@ -611,7 +609,7 @@ void test_ALPT() {
         for (auto & [n, c] : p1)
             c = -c;
         double e = max_diff_fourier<3>(sct, p1) / maxabs<3>(p1);
-        check(e < 1e-5, "spherical collapse potential = phi_1LPT to linear order (rel err " + num(e) + ")");
+        check_local(e < 1e-5, "spherical collapse potential = phi_1LPT to linear order (rel err " + num(e, 4) + ")");
     }
 
     // ALPT: finite, and the two limits of the smoothing
@@ -621,7 +619,7 @@ void test_ALPT() {
     FML::COSMOLOGY::LPT::compute_ALPT_potential_fourier(delta_fourier, phi2, alpt0, 0.0, "sharpk");
     FML::COSMOLOGY::LPT::compute_ALPT_potential_fourier(delta_fourier, phi2, alptinf, 1e6, "sharpk");
     FML::COSMOLOGY::LPT::compute_spherical_collapse_potential(delta_fourier, sc1, 1.0);
-    check(all_finite_fourier<3>(alpt0) and all_finite_fourier<3>(alptinf), "ALPT potential is finite (no NaN)");
+    check_local(all_finite_fourier<3>(alpt0) and all_finite_fourier<3>(alptinf), "ALPT potential is finite (no NaN)");
     double e0 = 0.0, einf = 0.0, s0 = 0.0, sinf = 0.0;
     for (int islice = 0; islice < alpt0.get_local_nx(); islice++)
         for (auto && fi : alpt0.get_fourier_range(islice, islice + 1)) {
@@ -638,8 +636,9 @@ void test_ALPT() {
     FML::MaxOverTasks(&einf);
     FML::MaxOverTasks(&s0);
     FML::MaxOverTasks(&sinf);
-    check(e0 / s0 < 1e-12, "ALPT with no smoothing (R=0) = phi_1LPT + phi_2LPT (rel err " + num(e0 / s0) + ")");
-    check(einf / sinf < 1e-12, "ALPT with total smoothing = phi_SC (rel err " + num(einf / sinf) + ")");
+    check_local(e0 / s0 < 1e-12,
+                "ALPT with no smoothing (R=0) = phi_1LPT + phi_2LPT (rel err " + num(e0 / s0, 4) + ")");
+    check_local(einf / sinf < 1e-12, "ALPT with total smoothing = phi_SC (rel err " + num(einf / sinf, 4) + ")");
 }
 
 void test_nongaussian_dc_mode() {
@@ -664,7 +663,7 @@ void test_nongaussian_dc_mode() {
                                                                                  false,
                                                                                  100.0,
                                                                                  "local");
-    check(all_finite_fourier<3>(delta), "non-gaussian field with P/P_primordial = 0/0 at k=0 is finite");
+    check_local(all_finite_fourier<3>(delta), "non-gaussian field with P/P_primordial = 0/0 at k=0 is finite");
     // The other modes are sqrt(ratio) * phi and the DC mode is zero
     double e = 0.0, s = 0.0;
     for (int islice = 0; islice < delta.get_local_nx(); islice++)
@@ -679,8 +678,9 @@ void test_nongaussian_dc_mode() {
         }
     FML::MaxOverTasks(&e);
     FML::MaxOverTasks(&s);
-    check(e / s < 1e-12,
-          "non-gaussian field: delta = sqrt(P/P_primordial) phi and delta(k=0) = 0 (rel err " + num(e / s) + ")");
+    check_local(e / s < 1e-12,
+                "non-gaussian field: delta = sqrt(P/P_primordial) phi and delta(k=0) = 0 (rel err " + num(e / s, 4) +
+                    ")");
     delta.fftw_c2r();
     int ok = 1;
     for (int islice = 0; islice < delta.get_local_nx(); islice++)
@@ -688,7 +688,7 @@ void test_nongaussian_dc_mode() {
             if (not std::isfinite(double(delta.get_real_from_index(ri))))
                 ok = 0;
     FML::MinOverTasks(&ok);
-    check(ok == 1, "non-gaussian field is finite in real space");
+    check_local(ok == 1, "non-gaussian field is finite in real space");
 }
 
 void test_growth_factors() {
@@ -727,9 +727,9 @@ void test_growth_factors() {
     };
     const double Dref = integrate_to(0.0) / integrate_to(std::log(1.0 / (1.0 + zini)));
     const double Dfml = D1(0.0);
-    check(std::fabs(Dfml / Dref - 1.0) < 1e-5,
-          "growth factor D1(a=1) for w=-0.8: " + num(Dfml) + " vs ODE " + num(Dref) + " (rel err " +
-              num(Dfml / Dref - 1.0) + ")");
+    check_local(std::fabs(Dfml / Dref - 1.0) < 1e-5,
+                "growth factor D1(a=1) for w=-0.8: " + num(Dfml, 4) + " vs ODE " + num(Dref, 4) + " (rel err " +
+                    num(Dfml / Dref - 1.0, 4) + ")");
 
     // EdS: D1 = a/aini and D2 = -3/7 D1^2, D3a = -1/3 D1^3, D3b = 5/21 D1^3 exactly (also at a = 1)
     auto HEdS = [](double a) { return std::pow(a, -1.5); };
@@ -737,22 +737,23 @@ void test_growth_factors() {
     auto growth = FML::COSMOLOGY::growth_history_from_log_a_splines(D1, D2);
     const double expected_linear = D1(std::log(0.5));
     const double expected_second = D2(std::log(0.5));
-    check(growth.linear(0.5) == expected_linear && growth.second_order(0.5) == expected_second &&
-              std::abs(growth.linear_rate(0.5) - 1.0) < 1e-5 && std::abs(growth.second_order_rate(0.5) - 2.0) < 1e-5,
-          "shared growth history preserves LPT normalization and signed second-order rates");
+    check_local(growth.linear(0.5) == expected_linear && growth.second_order(0.5) == expected_second &&
+                    std::abs(growth.linear_rate(0.5) - 1.0) < 1e-5 &&
+                    std::abs(growth.second_order_rate(0.5) - 2.0) < 1e-5,
+                "shared growth history preserves LPT normalization and signed second-order rates");
     double d1 = D1(0.0);
     double e = std::fabs(d1 / (1.0 + zini) - 1.0);
     e = std::max(e, std::fabs(D2(0.0) / (d1 * d1) + 3.0 / 7.0) / (3.0 / 7.0));
     e = std::max(e, std::fabs(D3a(0.0) / (d1 * d1 * d1) + 1.0 / 3.0) / (1.0 / 3.0));
     e = std::max(e, std::fabs(D3b(0.0) / (d1 * d1 * d1) - 5.0 / 21.0) / (5.0 / 21.0));
-    check(e < 1e-5,
-          "EdS growth factors at a=1: D1 = a/aini, D2/D1^2 = -3/7, D3a/D1^3 = -1/3, D3b/D1^3 = 5/21 "
-          "(max rel err " +
-              num(e) + ")");
+    check_local(e < 1e-5,
+                "EdS growth factors at a=1: D1 = a/aini, D2/D1^2 = -3/7, D3a/D1^3 = -1/3, D3b/D1^3 = 5/21 "
+                "(max rel err " +
+                    num(e, 4) + ")");
     D1.free();
     D2.free();
-    check(growth.linear(0.5) == expected_linear && growth.second_order(0.5) == expected_second,
-          "shared growth history owns spline data after source splines are released");
+    check_local(growth.linear(0.5) == expected_linear && growth.second_order(0.5) == expected_second,
+                "shared growth history owns spline data after source splines are released");
 }
 
 void test_random() {
@@ -762,12 +763,12 @@ void test_random() {
     a.set_seed(5u);
     double x1 = a.generate_normal(), x2 = a.generate_normal();
     double y1 = b.generate_normal(), y2 = b.generate_normal();
-    check(x1 == y1 and x2 == y2, "RandomGenerator::set_seed(unsigned) resets the normal distribution");
+    check_local(x1 == y1 and x2 == y2, "RandomGenerator::set_seed(unsigned) resets the normal distribution");
     FML::RANDOM::RandomGenerator d(2);
     d.generate_normal(); // the second number of the pair is now cached
     d.set_seed(std::vector<unsigned int>(624, 5));
     double z1 = d.generate_normal();
-    check(z1 == c.generate_normal(), "RandomGenerator::set_seed(vector) resets the normal distribution");
+    check_local(z1 == c.generate_normal(), "RandomGenerator::set_seed(vector) resets the normal distribution");
 
     // White noise: each slice has its own seed so the slices must not start with the same number
     FML::GRID::FFTWGrid<3> g(Nmesh);
@@ -783,8 +784,8 @@ void test_random() {
         for (int j = i + 1; j < Nmesh; j++)
             if (first[i] == first[j])
                 ndup++;
-    check(ndup == 0,
-          "white noise: the slices do not start with the same value (" + std::to_string(ndup) + " equal pairs)");
+    check_local(ndup == 0,
+                "white noise: the slices do not start with the same value (" + std::to_string(ndup) + " equal pairs)");
 }
 
 //==========================================================
@@ -889,10 +890,10 @@ void test_nyquist_reflection() {
                 worst_name = original[i].name;
             }
         }
-        check(worst < 1e-10,
-              "LPT fields are covariant under the reflection x_" + std::to_string(axis) +
-                  " -> -x (Nyquist odd/mixed derivatives are zero; worst rel err " + num(worst) + " in " + worst_name +
-                  (failing.empty() ? "" : "; not covariant:" + failing) + ")");
+        check_local(worst < 1e-10,
+                    "LPT fields are covariant under the reflection x_" + std::to_string(axis) +
+                        " -> -x (Nyquist odd/mixed derivatives are zero; worst rel err " + num(worst, 4) + " in " +
+                        worst_name + (failing.empty() ? "" : "; not covariant:" + failing) + ")");
     }
 }
 
@@ -907,10 +908,8 @@ int main() {
     test_nongaussian_dc_mode();
     test_growth_factors();
     test_random();
-    check(lpt_odr_check() == 1,
-          "GaussianRandomField.h and DisplacementFields.h can be included in several translation units");
+    check_local(lpt_odr_check() == 1,
+                "GaussianRandomField.h and DisplacementFields.h can be included in several translation units");
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All LPT tests passed\n" : std::to_string(fails) + " LPT test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("Lpt");
 }

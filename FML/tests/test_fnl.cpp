@@ -20,23 +20,15 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 constexpr int NDIM = 3;
 using Grid = FML::GRID::FFTWGrid<NDIM>;
 using Binning = FML::CORRELATIONFUNCTIONS::BispectrumBinning<NDIM>;
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os << std::setprecision(4) << x;
-    return os.str();
-}
 
 const int Nmesh = 64;
 const int nbin = 8;
@@ -310,9 +302,9 @@ void test_active_kernels() {
                 FML::MaxOverTasks(&value);
             const std::string label =
                 std::to_string(N) + "D backend=" + std::to_string(int(backend)) + " fixed=" + std::to_string(fixed);
-            check(!bad[0] && worst < (sizeof(FML::GRID::FloatType) == sizeof(float) ? 3e-5 : 3e-12),
-                  label + ": all named/generic kernels match the full reference (rel err " + num(worst) + ")");
-            check(!bad[1] && !bad[2], label + ": DC, halos, Fourier state and RNG continuation are preserved");
+            check_local(!bad[0] && worst < (sizeof(FML::GRID::FloatType) == sizeof(float) ? 3e-5 : 3e-12),
+                        label + ": all named/generic kernels match the full reference (rel err " + num(worst, 4) + ")");
+            check_local(!bad[1] && !bad[2], label + ": DC, halos, Fourier state and RNG continuation are preserved");
         }
 }
 
@@ -320,7 +312,7 @@ int main(int argc, char ** argv) {
     test_active_kernels<2>();
     test_active_kernels<3>();
     if (argc > 1 && std::string(argv[1]) == "kernels")
-        return fails ? 1 : 0;
+        return FML::TESTS::summary("fNL kernel");
     const std::string label = std::to_string(FML::NTasks) + " task(s): ";
 
     // Binned prediction (needs the bin edges only)
@@ -328,9 +320,9 @@ int main(int argc, char ** argv) {
     const Prediction pred = binned_prediction(edges);
     const double expected = fNL * pred.total_ratio;
     if (FML::ThisTask == 0)
-        std::cout << "Binned prediction of the estimator: " << num(pred.total_ratio) << " fNL\n";
-    check(pred.total_ratio > 1.0 and pred.total_ratio < 1.06,
-          label + "binned prediction within a few percent of Q = 2 fNL (" + num(pred.total_ratio) + ")");
+        std::cout << "Binned prediction of the estimator: " << num(pred.total_ratio, 4) << " fNL\n";
+    check_local(pred.total_ratio > 1.0 and pred.total_ratio < 1.06,
+                label + "binned prediction within a few percent of Q = 2 fNL (" + num(pred.total_ratio, 4) + ")");
 
     double mean0 = 0.0, meanp = 0.0, meanm = 0.0, meand = 0.0;
     for (int s = 1; s <= nseeds; s++) {
@@ -341,8 +333,8 @@ int main(int argc, char ** argv) {
                      em = estimate(bm, nullptr, pred);
         const double ed = estimate(bp, &b0, pred);
         if (FML::ThisTask == 0)
-            std::cout << "  seed " << s << ": fNL = 0: " << num(e0) << "  fNL = " << fNL << ": " << num(ep)
-                      << "  fNL = " << -fNL << ": " << num(em) << "  same seed difference: " << num(ed) << "\n";
+            std::cout << "  seed " << s << ": fNL = 0: " << num(e0, 4) << "  fNL = " << fNL << ": " << num(ep, 4)
+                      << "  fNL = " << -fNL << ": " << num(em, 4) << "  same seed difference: " << num(ed, 4) << "\n";
         mean0 += e0 / nseeds;
         meanp += ep / nseeds;
         meanm += em / nseeds;
@@ -351,15 +343,16 @@ int main(int argc, char ** argv) {
 
     // The scatter between seeds (64^3, 8 bins, Delta2 = 1e-7, 10 seeds) is 8 for the estimate and 1.5% of fNL for the
     // same-seed difference; the limits are about 4 sigma of the mean of 4 seeds
-    check(std::fabs(mean0) < 16.0, label + "gaussian field: fNL = " + num(mean0) + " consistent with 0");
-    check(std::fabs(meanp - expected) < 16.0,
-          label + "fNL = " + num(fNL) + ": estimate " + num(meanp) + " (expected " + num(expected) + ")");
-    check(std::fabs(meanm + expected) < 16.0,
-          label + "fNL = " + num(-fNL) + ": estimate " + num(meanm) + " (expected " + num(-expected) + ")");
-    check(std::fabs(meand / expected - 1.0) < 0.03,
-          label + "same-seed difference (Q(fNL) - Q(0)) / 2 = " + num(meand) + " (expected " + num(expected) + ")");
+    check_local(std::fabs(mean0) < 16.0, label + "gaussian field: fNL = " + num(mean0, 4) + " consistent with 0");
+    check_local(std::fabs(meanp - expected) < 16.0,
+                label + "fNL = " + num(fNL, 4) + ": estimate " + num(meanp, 4) + " (expected " + num(expected, 4) +
+                    ")");
+    check_local(std::fabs(meanm + expected) < 16.0,
+                label + "fNL = " + num(-fNL, 4) + ": estimate " + num(meanm, 4) + " (expected " + num(-expected, 4) +
+                    ")");
+    check_local(std::fabs(meand / expected - 1.0) < 0.03,
+                label + "same-seed difference (Q(fNL) - Q(0)) / 2 = " + num(meand, 4) + " (expected " +
+                    num(expected, 4) + ")");
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All fNL tests passed\n" : std::to_string(fails) + " fNL test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("fNL");
 }

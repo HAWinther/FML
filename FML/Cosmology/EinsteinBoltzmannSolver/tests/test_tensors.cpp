@@ -16,7 +16,7 @@
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/Cosmology/Perturbations/Tensors.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 
 #include <cmath>
@@ -26,9 +26,9 @@
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 namespace {
     struct World {
@@ -66,8 +66,8 @@ int main() {
         Tensors t(w.bg, w.rec);
         const double k = 1e-5 / Mpc; // k eta0 = 0.14
         const auto m = t.mode(k);
-        check_rel("h = 1/sqrt6 at x = -10", at_x(m, -10.0)[1], h0, 1e-6);
-        check_rel("... still at z ~ 10 (k eta << 1)", at_x(m, -2.4)[1], h0, 2e-3);
+        check_rel(at_x(m, -10.0)[1], h0, 1e-6, "h = 1/sqrt6 at x = -10");
+        check_rel(at_x(m, -2.4)[1], h0, 2e-3, "... still at z ~ 10 (k eta << 1)");
     }
 
     std::cout << "Einstein-de Sitter, no anisotropic stress: h = 3 j1(k eta)/(k eta) / sqrt6\n";
@@ -87,11 +87,11 @@ int main() {
                 const double Om = w.s.cosmo.OmegaB + w.s.cosmo.OmegaCDM, Or = w.s.cosmo.OmegaGamma();
                 const double u = k * 2.0 * c * std::sqrt(Om * std::exp(x) + Or) / (w.bg.get_H0() * Om);
                 const double expected = 3.0 * (std::sin(u) / (u * u) - std::cos(u) / u) / u * h0;
-                check_close("k = " + std::to_string(kM).substr(0, 6) + "/Mpc, x = " + std::to_string(x).substr(0, 4) +
-                                " (k eta = " + std::to_string(u).substr(0, 4) + ")",
-                            at_x(m, x)[1],
+                check_close(at_x(m, x)[1],
                             expected,
-                            2e-3 * h0);
+                            2e-3 * h0,
+                            "k = " + std::to_string(kM).substr(0, 6) + "/Mpc, x = " + std::to_string(x).substr(0, 4) +
+                                " (k eta = " + std::to_string(u).substr(0, 4) + ")");
             }
         }
     }
@@ -112,7 +112,7 @@ int main() {
         const double fnu = w.bg.rhoNu(-15.0) / (w.bg.rhoNu(-15.0) + w.bg.rhoGamma(-15.0));
         std::cout << std::setprecision(5) << "  f_nu = " << fnu
                   << ", amplitude ratio with/without neutrino stress = " << ratio << "\n";
-        check_close("ratio = 0.80 (Weinberg; f_nu = 0.409 here, 0.405 there)", ratio, 0.8026, 0.003);
+        check_close(ratio, 0.8026, 0.003, "ratio = 0.80 (Weinberg; f_nu = 0.409 here, 0.405 there)");
     }
 
     std::cout << "Modified gravity\n";
@@ -129,17 +129,17 @@ int main() {
         double ratio = amplitude(mg, m1, k, 0.0) / amplitude(g, m0, k, 0.0);
         std::cout << std::setprecision(6) << "  M*^2 today / at z = 150: " << M2_0 / M2_e << ", amplitude ratio today "
                   << ratio << " (WKB " << wkb << ")\n";
-        check_close("Horndeski c_M = 0.5: h ~ 1/M* (WKB)", ratio, wkb, 2e-3);
-        check("... the background is LCDM (same H)", std::fabs(mg.bg.H_of_x(0.0) / g.bg.H_of_x(0.0) - 1.0) < 1e-10);
+        check_close(ratio, wkb, 2e-3, "Horndeski c_M = 0.5: h ~ 1/M* (WKB)");
+        check(std::fabs(mg.bg.H_of_x(0.0) / g.bg.H_of_x(0.0) - 1.0) < 1e-10, "... the background is LCDM (same H)");
         // f(R): M*^2 = 1 + f_R ~ 1 - 1e-5
         World fr(ParameterFile::read("", {"preset=planck2018", "r=0.1", "model=fr", "fR0=1e-5"}));
         const auto tc = fr.bg.gravity().tensor(0.0, fr.bg);
-        check_close("f(R): M*^2 today = 1 + f_R0", tc.M2, 1.0 - 1e-5, 1e-7);
+        check_close(tc.M2, 1.0 - 1e-5, 1e-7, "f(R): M*^2 today = 1 + f_R0");
         const auto mf = Tensors(fr.bg, fr.rec).mode(k);
-        check_rel("f(R) f_R0 = 1e-5: h today as in GR (1e-3, different background)",
-                  amplitude(fr, mf, k, 0.0),
+        check_rel(amplitude(fr, mf, k, 0.0),
                   amplitude(g, m0, k, 0.0),
-                  1e-3);
+                  1e-3,
+                  "f(R) f_R0 = 1e-5: h today as in GR (1e-3, different background)");
     }
 
     std::cout << "Spectra against CLASS (r = 0.1, n_t = 0, Planck 2018, unlensed tensor contributions)\n";
@@ -157,21 +157,21 @@ int main() {
                               Ref{80, 17.61, 8.770e-3, 6.485e-3},
                               Ref{200, 0.6819, 2.146e-3, 1.254e-3}}) {
             const std::string l = "ell = " + std::to_string(r.l) + ": ";
-            check_rel(l + "TT", t.get_Dell_TT(r.l), r.tt, 6e-3);
-            check_rel(l + "EE", t.get_Dell_EE(r.l), r.ee, 6e-3);
-            check_rel(l + "BB", t.get_Dell_BB(r.l), r.bb, 6e-3);
+            check_rel(t.get_Dell_TT(r.l), r.tt, 6e-3, l + "TT");
+            check_rel(t.get_Dell_EE(r.l), r.ee, 6e-3, l + "EE");
+            check_rel(t.get_Dell_BB(r.l), r.bb, 6e-3, l + "BB");
         }
-        check("zero above ell_max", t.get_Dell_BB(t.ell_max() + 1) == 0.0);
+        check(t.get_Dell_BB(t.ell_max() + 1) == 0.0, "zero above ell_max");
         // C_ell proportional to r
         World w2(ParameterFile::read("", {"preset=planck2018", "r=0.05", "n_t_consistency=false", "n_t=0"}));
         Tensors t2(w2.bg, w2.rec);
         t2.solve();
-        check_rel("C_ell proportional to r", t2.get_Dell_BB(80), 0.5 * t.get_Dell_BB(80), 1e-10);
-        check_close("consistency relation n_t = -r/8 (2 - r/8 - n_s)",
-                    ParameterFile::read("", {"preset=planck2018", "r=0.1"}).cosmo.tensor_tilt(),
+        check_rel(t2.get_Dell_BB(80), 0.5 * t.get_Dell_BB(80), 1e-10, "C_ell proportional to r");
+        check_close(ParameterFile::read("", {"preset=planck2018", "r=0.1"}).cosmo.tensor_tilt(),
                     -0.1 / 8.0 * (2.0 - 0.1 / 8.0 - 0.9665),
-                    1e-15);
+                    1e-15,
+                    "consistency relation n_t = -r/8 (2 - r/8 - n_s)");
     }
 
-    return Test::summary();
+    return FML::TESTS::summary("EBS tensors");
 }

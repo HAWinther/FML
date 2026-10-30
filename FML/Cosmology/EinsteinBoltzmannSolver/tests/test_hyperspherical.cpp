@@ -3,7 +3,7 @@
 // =============================================================================
 
 #include <FML/Cosmology/Spectra/HypersphericalBessel.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 
 #include <gsl/gsl_sf_gegenbauer.h>
@@ -15,9 +15,9 @@
 
 using namespace FML::COSMOLOGY;
 
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 static std::string geom(int sign) { return sign == 1 ? "closed" : (sign == -1 ? "open" : "flat"); }
 
@@ -53,7 +53,7 @@ int main() {
             for (int l = 0; l <= lmax; l += 7)
                 err = std::max(err, std::fabs(col[l] - Utils::j_ell(l, z)) / amp);
         }
-        check_close("recurrence vs j_ell, z = 0.3..3000, ell <= 2500", err, 0.0, 1e-10);
+        check_close(err, 0.0, 1e-10, "recurrence vs j_ell, z = 0.3..3000, ell <= 2500");
     }
 
     std::cout << "Flat limit of the curved functions (nu -> infinity, nu chi fixed)\n";
@@ -75,8 +75,8 @@ int main() {
         };
         const double e5 = deviation(1e5), e6 = deviation(1e6);
         // The curvature corrections are O(chi^2) = O((nu chi)^2 / nu^2): ~1e-4 at nu = 1e5
-        check_close(geom(sign) + ": Phi -> j_ell(nu chi), nu = 1e5, ell <= 400", e5, 0.0, 2e-4);
-        check_rel(geom(sign) + ": deviation scales as 1/nu^2 (nu = 1e5 -> 1e6)", e6 / e5, 0.01, 0.05);
+        check_close(e5, 0.0, 2e-4, geom(sign) + ": Phi -> j_ell(nu chi), nu = 1e5, ell <= 400");
+        check_rel(e6 / e5, 0.01, 0.05, geom(sign) + ": deviation scales as 1/nu^2 (nu = 1e5 -> 1e6)");
     }
 
     std::cout << "Radial equation (finite differences)\n";
@@ -100,7 +100,7 @@ int main() {
                     worst = std::max(worst, ode_residual(hb, l, chi));
                 }
             }
-            check_close(geom(sign) + ": ODE residual, nu = " + std::to_string(int(nu)), worst, 0.0, 1e-4);
+            check_close(worst, 0.0, 1e-4, geom(sign) + ": ODE residual, nu = " + std::to_string(int(nu)));
         }
     }
 
@@ -117,7 +117,7 @@ int main() {
             const double h = 1e-5;
             err = std::max(err, std::fabs((hb(l, chi + h) - hb(l, chi - h)) / (2 * h) - dp[l]) / amp);
         }
-        check_close(geom(sign) + ": dPhi/dchi = l cot_K Phi_l - sqrt(nu^2 - s(l+1)^2) Phi_{l+1}", err, 0.0, 1e-6);
+        check_close(err, 0.0, 1e-6, geom(sign) + ": dPhi/dchi = l cot_K Phi_l - sqrt(nu^2 - s(l+1)^2) Phi_{l+1}");
     }
 
     std::cout << "Closed universe: exact properties\n";
@@ -138,7 +138,7 @@ int main() {
             for (double r : ratio)
                 spread = std::max(spread, std::fabs(r / ratio[0] - 1.0));
         }
-        check_close("Phi ~ sin^l C^(l+1)_{nu-l-1}(cos chi), nu = 30", spread, 0.0, 1e-10);
+        check_close(spread, 0.0, 1e-10, "Phi ~ sin^l C^(l+1)_{nu-l-1}(cos chi), nu = 30");
 
         // Symmetry Phi(pi - chi) = (-1)^(nu - l - 1) Phi(chi)
         double err = 0.0;
@@ -147,13 +147,13 @@ int main() {
         hb.column(M_PI - 0.8, 29, b);
         for (int l = 0; l < nu; l++)
             err = std::max(err, std::fabs(b[l] - ((nu - l - 1) % 2 == 0 ? 1.0 : -1.0) * a[l]));
-        check_close("Phi(pi - chi) = (-1)^(nu-l-1) Phi(chi)", err, 0.0, 1e-12);
+        check_close(err, 0.0, 1e-12, "Phi(pi - chi) = (-1)^(nu-l-1) Phi(chi)");
 
         hb.column(1.0, 40, col);
         double tail = 0.0;
         for (int l = nu; l <= 40; l++)
             tail = std::max(tail, std::fabs(col[l]));
-        check_close("Phi_l = 0 for l >= nu", tail, 0.0, 0.0);
+        check_close(tail, 0.0, 0.0, "Phi_l = 0 for l >= nu");
 
         bool threw = false;
         try {
@@ -161,7 +161,7 @@ int main() {
         } catch (const std::invalid_argument &) {
             threw = true;
         }
-        check("closed universe rejects non-integer nu", threw);
+        check(threw, "closed universe rejects non-integer nu");
     }
 
     std::cout << "Downward recurrence: independent of where it starts\n";
@@ -174,9 +174,9 @@ int main() {
         double err = 0.0;
         for (int l = 0; l <= 700; l++)
             err = std::max(err, std::fabs(a[l] - b[l]) / (std::fabs(a[l]) + 1e-300));
-        check_close(geom(sign) + ": column(lmax = 700) = column(lmax = 2500) for l <= 700", err, 0.0, 1e-8);
-        check("decays beyond the turning point: |Phi_700| < 1e-10 |Phi_500|",
-              std::fabs(b[700]) < 1e-10 * std::fabs(b[500]) || std::fabs(b[500]) == 0.0);
+        check_close(err, 0.0, 1e-8, geom(sign) + ": column(lmax = 700) = column(lmax = 2500) for l <= 700");
+        check(std::fabs(b[700]) < 1e-10 * std::fabs(b[500]) || std::fabs(b[500]) == 0.0,
+              "decays beyond the turning point: |Phi_700| < 1e-10 |Phi_500|");
     }
 
     std::cout << "Small chi\n";
@@ -184,14 +184,14 @@ int main() {
         HypersphericalBessel hb(sign, 50.0);
         std::vector<double> p, dp;
         hb.column_with_derivative(0.0, 3, p, dp);
-        check_close(geom(sign) + ": Phi_0(0) = 1", p[0], 1.0, 0.0);
+        check_close(p[0], 1.0, 0.0, geom(sign) + ": Phi_0(0) = 1");
         // Phi_1 ~ sqrt(nu^2 - sign) chi / 3 for small chi
         const double chi = 1e-6;
-        check_rel(geom(sign) + ": Phi_1 ~ sqrt(nu^2 - s) chi / 3",
-                  hb(1, chi),
+        check_rel(hb(1, chi),
                   std::sqrt(2500.0 - sign) * chi / 3.0,
-                  1e-6);
-        check_rel(geom(sign) + ": dPhi_1/dchi(0) = sqrt(nu^2 - s)/3", dp[1], std::sqrt(2500.0 - sign) / 3.0, 1e-14);
+                  1e-6,
+                  geom(sign) + ": Phi_1 ~ sqrt(nu^2 - s) chi / 3");
+        check_rel(dp[1], std::sqrt(2500.0 - sign) / 3.0, 1e-14, geom(sign) + ": dPhi_1/dchi(0) = sqrt(nu^2 - s)/3");
     }
 
     {
@@ -204,7 +204,7 @@ int main() {
             sum += col[100];
         }
         t.print();
-        check("timing run finite", std::isfinite(sum));
+        check(std::isfinite(sum), "timing run finite");
     }
-    return Test::summary();
+    return FML::TESTS::summary("EBS hyperspherical");
 }

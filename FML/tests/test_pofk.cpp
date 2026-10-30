@@ -25,6 +25,10 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 using namespace FML::CORRELATIONFUNCTIONS;
 template <int N>
@@ -32,24 +36,8 @@ using Grid = FML::GRID::FFTWGrid<N>;
 
 int pofk_odr_check(); // defined in test_pofk_odr.cpp
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os << x;
-    return os.str();
-}
 
-struct Particle {
-    double pos[3];
-    double * get_pos() { return pos; }
-    constexpr int get_ndim() const { return 3; }
-};
+using Particle = FML::TESTS::PositionParticle<3>;
 struct ParticleMass {
     double pos[3];
     double mass;
@@ -136,17 +124,18 @@ void test_high_frequency_triangle_closure() {
             }
             wrapped += in_shell(third);
         }
-    check(closed > 0 && wrapped > closed, "high-frequency fixture distinguishes true from wrapped triangle closure");
+    check_local(closed > 0 && wrapped > closed,
+                "high-frequency fixture distinguishes true from wrapped triangle closure");
     compute_polyspectrum_bincount<3, 3>(Nmesh, b);
     const double measured = b.get_bincount(shell, shell, shell) * std::pow(2.0 * M_PI, 3);
-    check(std::abs(measured - double(closed)) < 1e-6,
-          "high-frequency N123 counts exactly closed triangles: measured " + num(measured) + ", expected " +
-              std::to_string(closed) + ", modulo-grid count " + std::to_string(wrapped));
+    check_local(std::abs(measured - double(closed)) < 1e-6,
+                "high-frequency N123 counts exactly closed triangles: measured " + num(measured) + ", expected " +
+                    std::to_string(closed) + ", modulo-grid count " + std::to_string(wrapped));
 
     b.dealias = false;
     compute_polyspectrum_bincount<3, 3>(Nmesh, b);
-    check(std::abs(b.get_bincount(shell, shell, shell) * std::pow(2 * M_PI, 3) - double(wrapped)) < 1e-6,
-          "explicit legacy closure reproduces the modulo-grid count");
+    check_local(std::abs(b.get_bincount(shell, shell, shell) * std::pow(2 * M_PI, 3) - double(wrapped)) < 1e-6,
+                "explicit legacy closure reproduces the modulo-grid count");
     b.dealias = true;
 
     // None of the signed triples of these three wavevectors sums to zero.
@@ -160,8 +149,8 @@ void test_high_frequency_triangle_closure() {
     field.fftw_r2c();
     compute_bispectrum(field, b);
     const double bispectrum = b.get_spectrum(shell, shell, shell);
-    check(std::abs(bispectrum) < 1e-12,
-          "non-closing high-frequency plane waves have zero bispectrum (measured " + num(bispectrum) + ")");
+    check_local(std::abs(bispectrum) < 1e-12,
+                "non-closing high-frequency plane waves have zero bispectrum (measured " + num(bispectrum) + ")");
 }
 
 void test_four_point_closure() {
@@ -193,34 +182,34 @@ void test_four_point_closure() {
     compute_trispectrum(field, bins);
     const double measure = std::pow(2 * M_PI, 3);
     const double count = bins.get_bincount(shell, shell, shell, shell) * measure;
-    check(std::abs(count - double(exact)) < 1e-5, "four-point geometry matches unwrapped integer pair sums");
+    check_local(std::abs(count - double(exact)) < 1e-5, "four-point geometry matches unwrapped integer pair sums");
     const double moment = bins.get_spectrum(shell, shell, shell, shell) * count;
-    check(std::abs(moment - 3.0 / 8) < 1e-12, "de-aliased fourth moment of cos(4x) is 3/8, not the wrapped 1/2");
+    check_local(std::abs(moment - 3.0 / 8) < 1e-12, "de-aliased fourth moment of cos(4x) is 3/8, not the wrapped 1/2");
 }
 
 void test_automatic_geometry_cache() {
     constexpr int Nmesh = 16;
     BispectrumBinning<3> geometry(0.0, 2.0 * M_PI * Nmesh / 4, 6, BispectrumBinning<3>::LINEAR_SPACING);
     compute_polyspectrum_bincount<3, 3>(Nmesh, geometry);
-    check(geometry.bincount_is_set, "automatically computed geometry counts are marked reusable");
+    check_local(geometry.bincount_is_set, "automatically computed geometry counts are marked reusable");
 
     Grid<3> field(Nmesh);
     field.fill_fourier_grid(0.0);
     field.set_grid_status_real(false);
     BispectrumBinning<3> result(0.0, 2.0 * M_PI * Nmesh / 4, 6, BispectrumBinning<3>::LINEAR_SPACING);
     compute_bispectrum(field, result);
-    check(result.bincount_is_set, "bispectrum estimation retains reusable geometry counts");
+    check_local(result.bincount_is_set, "bispectrum estimation retains reusable geometry counts");
 
-    check(result.has_bincount(Nmesh), "computed geometry has the matching mesh identity");
-    check(!result.has_bincount(2 * Nmesh), "geometry cache rejects a different mesh");
+    check_local(result.has_bincount(Nmesh), "computed geometry has the matching mesh identity");
+    check_local(!result.has_bincount(2 * Nmesh), "geometry cache rejects a different mesh");
     result.klow[0] += 0.01;
-    check(!result.has_bincount(Nmesh), "geometry cache rejects changed bin edges");
+    check_local(!result.has_bincount(Nmesh), "geometry cache rejects changed bin edges");
     result.klow[0] -= 0.01;
     result.dealias = false;
-    check(!result.has_bincount(Nmesh), "geometry cache rejects a different closure policy");
+    check_local(!result.has_bincount(Nmesh), "geometry cache rejects a different closure policy");
     result.dealias = true;
     result.reset();
-    check(!result.has_bincount(Nmesh), "reset invalidates computed geometry");
+    check_local(!result.has_bincount(Nmesh), "reset invalidates computed geometry");
 }
 
 template <int N, int ORDER>
@@ -251,8 +240,8 @@ void test_shell_workspace() {
             diff = std::max(diff, std::abs(a[i] - b[i]));
             scale = std::max(scale, std::abs(b[i]));
         }
-        check(diff / std::max(scale, 1e-30) < 2e-11,
-              label + " (" + std::to_string(N) + "D order " + std::to_string(ORDER) + ")");
+        check_local(diff / std::max(scale, 1e-30) < 2e-11,
+                    label + " (" + std::to_string(N) + "D order " + std::to_string(ORDER) + ")");
     };
     PolyspectrumBinning<N, ORDER> limited(nbins, mesh);
     limited.options.max_cached_shells = ORDER;
@@ -263,16 +252,17 @@ void test_shell_workspace() {
     compare(limited.N123, full.N123, "bounded shell cache preserves geometry");
     compare(limited.pofk, full.pofk, "one-pass shell powers agree");
     compare(limited.kmean, full.kmean, "one-pass mean wavenumbers agree");
-    check(limited.statistics.peak_cached_shells <= ORDER, "resident shell count respects both budgets");
-    check(limited.statistics.geometry_reduction_batches == (configs + 6) / 7 &&
-              limited.statistics.field_reduction_batches == (configs + 6) / 7 &&
-              limited.statistics.metadata_reduction_batches == 1,
-          "canonical configuration sums use bounded collective batches");
+    check_local(limited.statistics.peak_cached_shells <= ORDER, "resident shell count respects both budgets");
+    check_local(limited.statistics.geometry_reduction_batches == (configs + 6) / 7 &&
+                    limited.statistics.field_reduction_batches == (configs + 6) / 7 &&
+                    limited.statistics.metadata_reduction_batches == 1,
+                "canonical configuration sums use bounded collective batches");
     limited.options.max_cached_shells = 0;
     limited.options.shell_memory_budget_bytes = ORDER * full.statistics.shell_grid_bytes;
     compute_polyspectrum<N, ORDER>(input, limited);
-    check(limited.statistics.peak_cached_shells <= ORDER, "byte-only shell budget limits resident grids");
-    check(limited.statistics.geometry_shell_builds == 0, "changing the workspace does not discard reusable geometry");
+    check_local(limited.statistics.peak_cached_shells <= ORDER, "byte-only shell budget limits resident grids");
+    check_local(limited.statistics.geometry_shell_builds == 0,
+                "changing the workspace does not discard reusable geometry");
     compare(limited.P123, full.P123, "cached geometry and bounded workspace preserve repeated spectra");
     using Config = std::array<int, ORDER>;
     Config mixed{}, diagonal{};
@@ -296,7 +286,7 @@ void test_shell_workspace() {
         } else
             zero = zero && selected.P123[i] == 0 && selected.N123[i] == 0;
     }
-    check(same && zero, "selected configurations retain all permutations and zero unrequested results");
+    check_local(same && zero, "selected configurations retain all permutations and zero unrequested results");
     compare(selected.pofk, full.pofk, "selected configurations retain auxiliary powers for all shells");
     selected.set_bincount(full.N123, mesh);
     compute_polyspectrum<N, ORDER>(input, selected);
@@ -307,19 +297,19 @@ void test_shell_workspace() {
         if (cfg != mixed && cfg != diagonal)
             unrequested_zero = unrequested_zero && selected.N123[i] == 0;
     }
-    check(selected.statistics.geometry_shell_builds == 0 && unrequested_zero,
-          "selected configurations reuse externally supplied full geometry without exposing unrequested counts");
+    check_local(selected.statistics.geometry_shell_builds == 0 && unrequested_zero,
+                "selected configurations reuse externally supplied full geometry without exposing unrequested counts");
     selected.set_configurations({reversed, diagonal, mixed});
-    check(selected.has_bincount(mesh), "equivalent canonical selections preserve cached geometry");
+    check_local(selected.has_bincount(mesh), "equivalent canonical selections preserve cached geometry");
     selected.set_configurations({diagonal});
     selected.options.max_cached_shells = 1;
     compute_polyspectrum<N, ORDER>(input, selected);
-    check(selected.statistics.peak_cached_shells == 1 && selected.statistics.field_shell_builds == 1,
-          "diagonal selection needs one shell even at higher order");
+    check_local(selected.statistics.peak_cached_shells == 1 && selected.statistics.field_shell_builds == 1,
+                "diagonal selection needs one shell even at higher order");
     const auto diagonal_index = selected.get_index_from_coord(diagonal);
-    check(std::abs(selected.P123[diagonal_index] - full.P123[diagonal_index]) <
-              2e-11 * std::max(1e-15, std::abs(full.P123[diagonal_index])),
-          "a low-frequency selection agrees without padding the unrequested upper shells");
+    check_local(std::abs(selected.P123[diagonal_index] - full.P123[diagonal_index]) <
+                    2e-11 * std::max(1e-15, std::abs(full.P123[diagonal_index])),
+                "a low-frequency selection agrees without padding the unrequested upper shells");
     bool rejected = false;
     try {
         selected.set_configurations({mixed});
@@ -327,7 +317,7 @@ void test_shell_workspace() {
     } catch (const std::invalid_argument &) {
         rejected = true;
     }
-    check(rejected, "a budget smaller than one configuration is rejected before FFTs");
+    check_local(rejected, "a budget smaller than one configuration is rejected before FFTs");
     selected.options.max_cached_shells = 0;
     selected.options.shell_memory_budget_bytes = ORDER * full.statistics.shell_grid_bytes - 1;
     rejected = false;
@@ -336,7 +326,7 @@ void test_shell_workspace() {
     } catch (const std::invalid_argument &) {
         rejected = true;
     }
-    check(rejected, "byte budget below a complete configuration is rejected");
+    check_local(rejected, "byte budget below a complete configuration is rejected");
 }
 
 template <int N, int ORDER>
@@ -368,30 +358,30 @@ void test_sparse_results() {
                  std::abs(sparse.kmean[i] - dense.kmean[i]) <= tolerance * std::max(1.0, std::abs(dense.kmean[i]));
         int bad = !ok;
         FML::MaxOverTasks(&bad);
-        check(!bad, label + " (" + std::to_string(N) + "D order " + std::to_string(ORDER) + ")");
+        check_local(!bad, label + " (" + std::to_string(N) + "D order " + std::to_string(ORDER) + ")");
     };
     for (bool dealias : {false, true}) {
         Dense dense(nbins, mesh);
         Sparse sparse(nbins, mesh);
-        check(sparse.P123.empty() && sparse.N123.empty() && sparse.stored_configurations().empty(),
-              "sparse construction allocates only shell metadata");
+        check_local(sparse.P123.empty() && sparse.N123.empty() && sparse.stored_configurations().empty(),
+                    "sparse construction allocates only shell metadata");
         dense.dealias = sparse.dealias = dealias;
         sparse.options.max_cached_shells = ORDER;
         sparse.options.reduction_batch_size = 3;
         compute_polyspectrum<N, ORDER>(input, dense);
         compute_polyspectrum<N, ORDER>(input, sparse);
         compare(sparse, dense, "all canonical results and permutations match dense estimation");
-        check(sparse.P123.size() == dense.configurations().size() && sparse.P123.size() < dense.P123.size(),
-              "sparse arrays contain only valid canonical configurations");
+        check_local(sparse.P123.size() == dense.configurations().size() && sparse.P123.size() < dense.P123.size(),
+                    "sparse arrays contain only valid canonical configurations");
         auto expanded = sparse.to_dense();
         compare(sparse, expanded, "explicit dense materialization preserves values and metadata");
-        check(expanded.has_bincount(mesh), "dense materialization retains reusable geometry identity");
+        check_local(expanded.has_bincount(mesh), "dense materialization retains reusable geometry identity");
         const auto all_counts = sparse.N123;
         sparse.reset();
         sparse.set_bincount(all_counts, mesh);
         compute_polyspectrum<N, ORDER>(input, sparse);
         compare(sparse, dense, "compact geometry imports preserve estimates");
-        check(sparse.statistics.geometry_shell_builds == 0, "imported compact counts skip geometry FFTs");
+        check_local(sparse.statistics.geometry_shell_builds == 0, "imported compact counts skip geometry FFTs");
 
         Config mixed{}, diagonal{};
         for (int d = 0; d < ORDER; ++d)
@@ -401,13 +391,14 @@ void test_sparse_results() {
         std::reverse(reversed.begin(), reversed.end());
         sparse.set_configurations({mixed, reversed, diagonal});
         dense.set_configurations({mixed, diagonal});
-        check(sparse.P123.empty() && sparse.N123.empty(), "changing sparse selection discards stale result arrays");
+        check_local(sparse.P123.empty() && sparse.N123.empty(),
+                    "changing sparse selection discards stale result arrays");
         compute_polyspectrum<N, ORDER>(input, dense);
         compute_polyspectrum<N, ORDER>(input, sparse);
         compare(sparse, dense, "selected configurations use permutation-aware compact lookups");
         sparse.set_configurations({reversed, diagonal, mixed});
         compute_polyspectrum<N, ORDER>(input, sparse);
-        check(sparse.statistics.geometry_shell_builds == 0, "equivalent sparse selections retain geometry reuse");
+        check_local(sparse.statistics.geometry_shell_builds == 0, "equivalent sparse selections retain geometry reuse");
         compare(sparse, dense, "repeated sparse estimates preserve selected results");
         bool indices = sparse.P123.size() == 2 && sparse.get_spectrum(reversed) == sparse.get_spectrum(mixed);
         for (size_t i = 0; i < sparse.P123.size(); ++i)
@@ -431,7 +422,8 @@ void test_sparse_results() {
         } catch (const std::out_of_range &) {
             range_error = true;
         }
-        check(indices && range_error, "sparse indices round-trip, unrequested tuples return zero, invalid bins reject");
+        check_local(indices && range_error,
+                    "sparse indices round-trip, unrequested tuples return zero, invalid bins reject");
 
         auto scaled_dense = sparse.to_dense();
         auto scaled_sparse = sparse;
@@ -449,30 +441,31 @@ void test_sparse_results() {
 
         sparse.dealias = !dealias;
         compute_polyspectrum<N, ORDER>(input, sparse);
-        check(sparse.statistics.geometry_shell_builds > 0, "closure changes invalidate sparse geometry");
+        check_local(sparse.statistics.geometry_shell_builds > 0, "closure changes invalidate sparse geometry");
         sparse.reset();
-        check(!sparse.bincount_is_set &&
-                  std::all_of(sparse.N123.begin(), sparse.N123.end(), [](double n) { return n == 0; }),
-              "sparse reset clears counts and invalidates geometry");
+        check_local(!sparse.bincount_is_set &&
+                        std::all_of(sparse.N123.begin(), sparse.N123.end(), [](double n) { return n == 0; }),
+                    "sparse reset clears counts and invalidates geometry");
         sparse.free();
-        check(sparse.P123.capacity() == 0 && sparse.N123.capacity() == 0 && sparse.stored_configurations().empty(),
-              "sparse free releases result storage");
+        check_local(sparse.P123.capacity() == 0 && sparse.N123.capacity() == 0 &&
+                        sparse.stored_configurations().empty(),
+                    "sparse free releases result storage");
         compute_polyspectrum<N, ORDER>(input, sparse);
-        check(sparse.P123.size() == 2 && sparse.statistics.geometry_shell_builds > 0,
-              "freed sparse storage rebuilds lazily for the retained selection");
+        check_local(sparse.P123.size() == 2 && sparse.statistics.geometry_shell_builds > 0,
+                    "freed sparse storage rebuilds lazily for the retained selection");
         if constexpr (ORDER > 2) {
             sparse.klow[mixed[ORDER - 1]] = 1000;
             sparse.khigh[mixed[ORDER - 1]] = 1001;
             compute_polyspectrum<N, ORDER>(input, sparse);
-            check(sparse.statistics.geometry_shell_builds > 0 && sparse.P123.size() == 1 &&
-                      sparse.get_spectrum(mixed) == 0,
-                  "changed shell edges invalidate geometry and remove newly impossible compact slots");
+            check_local(sparse.statistics.geometry_shell_builds > 0 && sparse.P123.size() == 1 &&
+                            sparse.get_spectrum(mixed) == 0,
+                        "changed shell edges invalidate geometry and remove newly impossible compact slots");
             Config impossible{};
             impossible[ORDER - 1] = nbins - 1;
             sparse.set_configurations({impossible});
             compute_polyspectrum<N, ORDER>(input, sparse);
-            check(sparse.P123.empty() && sparse.N123.empty() && sparse.statistics.field_shell_builds == 0,
-                  "an impossible selection needs no canonical slots or shell FFTs");
+            check_local(sparse.P123.empty() && sparse.N123.empty() && sparse.statistics.field_shell_builds == 0,
+                        "an impossible selection needs no canonical slots or shell FFTs");
         }
     }
 }
@@ -481,20 +474,20 @@ void test_sparse_allocation_limits() {
     SparseTrispectrumBinning<3> sparse(1000, 16);
     sparse.set_configurations({{1, 1, 1, 1}, {1, 1, 1, 1}});
     sparse.prepare_storage();
-    check(sparse.P123.size() == 1 && sparse.N123.size() == 1 && sparse.stored_configurations().size() == 1,
-          "1000-bin sparse fourth moments allocate one selected slot instead of a trillion dense slots");
+    check_local(sparse.P123.size() == 1 && sparse.N123.size() == 1 && sparse.stored_configurations().size() == 1,
+                "1000-bin sparse fourth moments allocate one selected slot instead of a trillion dense slots");
     bool overflow = false;
     try {
         TrispectrumBinning<3> dense(100000, 16);
     } catch (const std::length_error &) {
         overflow = true;
     }
-    check(overflow, "dense result dimensions reject overflow before allocating memory");
+    check_local(overflow, "dense result dimensions reject overflow before allocating memory");
     SparseBispectrumBinning<3> uncomputed(4, 8);
     auto zeros = uncomputed.to_dense();
-    check(uncomputed.stored_configurations().empty() && zeros.P123.size() == 64 &&
-              std::all_of(zeros.P123.begin(), zeros.P123.end(), [](double p) { return p == 0; }),
-          "materializing an uncomputed sparse result does not populate canonical storage");
+    check_local(uncomputed.stored_configurations().empty() && zeros.P123.size() == 64 &&
+                    std::all_of(zeros.P123.begin(), zeros.P123.end(), [](double p) { return p == 0; }),
+                "materializing an uncomputed sparse result does not populate canonical storage");
 }
 
 template <int ORDER>
@@ -538,9 +531,9 @@ void test_sparse_particle_estimates() {
             ok = ok && std::abs(sparse.pofk[i] - dense.pofk[i]) <= tolerance * std::max(1.0, std::abs(dense.pofk[i]));
         int bad = !ok;
         FML::MaxOverTasks(&bad);
-        check(!bad,
-              "sparse particle wrapper matches dense output, order=" + std::to_string(ORDER) +
-                  ", subtract_shotnoise=" + std::to_string(subtract));
+        check_local(!bad,
+                    "sparse particle wrapper matches dense output, order=" + std::to_string(ORDER) +
+                        ", subtract_shotnoise=" + std::to_string(subtract));
     }
 #ifdef USE_OMP
     omp_set_num_threads(previous_threads);
@@ -587,11 +580,11 @@ void test_fourier_multiplicities() {
             for (int i = 0; i < b.n; i++)
                 power_sum += b.pofk[i] * b.count[i];
             const auto label = estimator + " on " + std::to_string(Nmesh) + "^3 mesh";
-            check(count == expected_count,
-                  label + " counts all nonzero modes: " + num(count) + " expected " + num(expected_count));
-            check(std::abs(power_sum - expected_power_sum) < 1e-9,
-                  label + " weights the final Fourier plane correctly: " + num(power_sum) + " expected " +
-                      num(expected_power_sum));
+            check_local(count == expected_count,
+                        label + " counts all nonzero modes: " + num(count) + " expected " + num(expected_count));
+            check_local(std::abs(power_sum - expected_power_sum) < 1e-9,
+                        label + " weights the final Fourier plane correctly: " + num(power_sum) + " expected " +
+                            num(expected_power_sum));
         };
         validate(power, "P(k)");
         validate(multipoles[0], "Monopole");
@@ -612,38 +605,40 @@ void test_memory_report() {
     dense.options.max_cached_shells = 1;
     compute_bispectrum(input, dense);
     auto m = dense.statistics.memory;
-    check(m.input_bytes == input_bytes &&
-              m.input_bytes >= size_t(small.get_ntot_fourier_alloc()) * sizeof(FML::GRID::ComplexType) &&
-              m.result_bytes >= 2 * 27 * sizeof(double) && m.shell_bytes > 0 && m.padding_source_bytes > 0 &&
-              m.remapping_bytes > 0 && m.configuration_bytes >= sizeof(std::array<int, 3>) &&
-              m.reduction_bytes >= sizeof(double) && m.accounted_peak_bytes > m.shell_bytes && !m.estimated_peak_bytes,
-          "memory report includes input capacity/halos, dense results, padded source and remapping storage");
+    check_local(m.input_bytes == input_bytes &&
+                    m.input_bytes >= size_t(small.get_ntot_fourier_alloc()) * sizeof(FML::GRID::ComplexType) &&
+                    m.result_bytes >= 2 * 27 * sizeof(double) && m.shell_bytes > 0 && m.padding_source_bytes > 0 &&
+                    m.remapping_bytes > 0 && m.configuration_bytes >= sizeof(std::array<int, 3>) &&
+                    m.reduction_bytes >= sizeof(double) && m.accounted_peak_bytes > m.shell_bytes &&
+                    !m.estimated_peak_bytes,
+                "memory report includes input capacity/halos, dense results, padded source and remapping storage");
     SparsePolyspectrumBinning<N, 3> sparse(3, mesh);
     sparse.set_configurations({{2, 2, 2}});
     sparse.options.max_cached_shells = 1;
     sparse.options.fft_workspace_allowance_bytes = size_t(100 + FML::ThisTask);
     compute_bispectrum(input, sparse);
     auto sm = sparse.statistics.memory;
-    check(sm.result_bytes < m.result_bytes && sm.estimated_peak_bytes &&
-              *sm.estimated_peak_bytes == sm.accounted_peak_bytes + size_t(100 + FML::NTasks - 1),
-          "compact result memory is smaller and FFT allowance uses the maximum rank estimate");
+    check_local(sm.result_bytes < m.result_bytes && sm.estimated_peak_bytes &&
+                    *sm.estimated_peak_bytes == sm.accounted_peak_bytes + size_t(100 + FML::NTasks - 1),
+                "compact result memory is smaller and FFT allowance uses the maximum rank estimate");
     const auto powers = sparse.P123;
     sparse.options.fft_workspace_allowance_bytes = 0;
     compute_bispectrum(input, sparse);
-    check(sparse.statistics.geometry_shell_builds == 0 && sparse.P123 == powers &&
-              sparse.statistics.memory.estimated_peak_bytes == sparse.statistics.memory.accounted_peak_bytes,
-          "report resets on geometry reuse; explicit zero FFT allowance differs from an unspecified allowance");
+    check_local(sparse.statistics.geometry_shell_builds == 0 && sparse.P123 == powers &&
+                    sparse.statistics.memory.estimated_peak_bytes == sparse.statistics.memory.accounted_peak_bytes,
+                "report resets on geometry reuse; explicit zero FFT allowance differs from an unspecified allowance");
     if (FML::ThisTask == 0)
         sparse.options.fft_workspace_allowance_bytes.reset();
     compute_bispectrum(input, sparse);
-    check(!sparse.statistics.memory.estimated_peak_bytes,
-          "one rank without an FFT allowance leaves total workspace estimate unspecified everywhere");
+    check_local(!sparse.statistics.memory.estimated_peak_bytes,
+                "one rank without an FFT allowance leaves total workspace estimate unspecified everywhere");
     sparse.dealias = false;
     compute_bispectrum(input, sparse);
-    check(sparse.statistics.memory.padding_source_bytes == 0 && sparse.statistics.memory.remapping_bytes == 0,
-          "unpadded execution does not inherit stale padding/remapping memory");
+    check_local(sparse.statistics.memory.padding_source_bytes == 0 && sparse.statistics.memory.remapping_bytes == 0,
+                "unpadded execution does not inherit stale padding/remapping memory");
     compute_polyspectrum_bincount(mesh, sparse);
-    check(sparse.statistics.memory.input_bytes == 0, "standalone geometry report does not invent a caller input grid");
+    check_local(sparse.statistics.memory.input_bytes == 0,
+                "standalone geometry report does not invent a caller input grid");
     sparse.options.fft_workspace_allowance_bytes = std::numeric_limits<size_t>::max();
     bool rejected = false;
     try {
@@ -653,34 +648,34 @@ void test_memory_report() {
     }
     int bad = !rejected;
     FML::MaxOverTasks(&bad);
-    check(!bad, "memory-estimate total overflow fails collectively instead of wrapping");
+    check_local(!bad, "memory-estimate total overflow fails collectively instead of wrapping");
     sparse.options.fft_workspace_allowance_bytes = 0;
     compute_bispectrum(input, sparse);
-    check(sparse.statistics.memory.estimated_peak_bytes.has_value(),
-          "memory report remains usable after an overflow rejection");
+    check_local(sparse.statistics.memory.estimated_peak_bytes.has_value(),
+                "memory report remains usable after an overflow rejection");
 }
 
 int main(int argc, char ** argv) {
     if (argc > 1 && std::string(argv[1]) == "memory") {
         test_memory_report<2>();
         test_memory_report<3>();
-        return fails == 0 ? 0 : 1;
+        return FML::TESTS::summary("P(k) memory report");
     }
     if (argc > 1 && std::string(argv[1]) == "sparse") {
         test_sparse_suite();
-        return fails == 0 ? 0 : 1;
+        return FML::TESTS::summary("P(k) sparse");
     }
     test_memory_report<2>();
     test_memory_report<3>();
-    check(pofk_odr_check() == 1, "ComputePowerSpectrum.h can be included in several translation units");
+    check_local(pofk_odr_check() == 1, "ComputePowerSpectrum.h can be included in several translation units");
 
     // Shot noise: equal masses, masses and delta-f weights
     {
         const size_t Np = 400000 / FML::NTasks * FML::NTasks;
         auto part = make_particles<Particle>(Np, 1, [](Particle &, double) {});
         auto [d0, m0] = shotnoise_test(part, Np, 1.0 / double(Np));
-        check(d0 < 1e-12 and std::fabs(m0) < 0.08,
-              "equal masses: shot noise 1/N subtracted, mean P(k) - 1/N = " + num(m0) + " x 1/N");
+        check_local(d0 < 1e-12 and std::fabs(m0) < 0.08,
+                    "equal masses: shot noise 1/N subtracted, mean P(k) - 1/N = " + num(m0) + " x 1/N");
 
         auto pm = make_particles<ParticleMass>(Np, 2, [](ParticleMass & p, double u) { p.mass = 0.2 + 2.8 * u; });
         double s1 = 0.0, s2 = 0.0, s3 = 0.0;
@@ -694,9 +689,9 @@ int main(int argc, char ** argv) {
         FML::SumOverTasks(&s3);
         const double S2 = s2 / (s1 * s1), S3 = s3 / (s1 * s1 * s1);
         auto [d1, m1] = shotnoise_test(pm, Np, S2);
-        check(d1 < 1e-10 and std::fabs(m1) < 0.08,
-              "masses: shot noise sum m^2/(sum m)^2 subtracted (" + num(d1) + "), mean P(k) - shot noise = " + num(m1) +
-                  " x shot noise (" + num(1.0 - 1.0 / (Np * S2)) + " with 1/N)");
+        check_local(d1 < 1e-10 and std::fabs(m1) < 0.08,
+                    "masses: shot noise sum m^2/(sum m)^2 subtracted (" + num(d1) + "), mean P(k) - shot noise = " +
+                        num(m1) + " x shot noise (" + num(1.0 - 1.0 / (Np * S2)) + " with 1/N)");
 
         auto pw = make_particles<ParticleDeltaf>(Np, 3, [](ParticleDeltaf & p, double u) { p.w = 2.0 * u - 1.0; });
         double w2 = 0.0;
@@ -704,9 +699,9 @@ int main(int argc, char ** argv) {
             w2 += p.w * p.w;
         FML::SumOverTasks(&w2);
         auto [d2, m2] = shotnoise_test(pw, Np, w2 / double(Np) / double(Np));
-        check(d2 < 1e-10 and std::fabs(m2) < 0.08,
-              "delta-f weights: shot noise sum w^2/N^2 subtracted, mean P(k) - shot noise = " + num(m2) +
-                  " x shot noise");
+        check_local(d2 < 1e-10 and std::fabs(m2) < 0.08,
+                    "delta-f weights: shot noise sum w^2/N^2 subtracted, mean P(k) - shot noise = " + num(m2) +
+                        " x shot noise");
 
         // Bispectrum with masses: B_nosub - B_sub = S2 (P1 + P2 + P3) + S3 with P the subtracted P(k)
         const int Nmesh = 16, nbins = 4;
@@ -725,9 +720,9 @@ int main(int argc, char ** argv) {
             maxerr = std::max(maxerr, std::fabs((bnosub.P123[i] - bsub.P123[i]) / expected - 1.0));
             nconf++;
         }
-        check(nconf > 0 and maxerr < 1e-8,
-              "bispectrum with masses: S2 (P1 + P2 + P3) + S3 subtracted (" + std::to_string(nconf) +
-                  " configurations)");
+        check_local(nconf > 0 and maxerr < 1e-8,
+                    "bispectrum with masses: S2 (P1 + P2 + P3) + S3 subtracted (" + std::to_string(nconf) +
+                        " configurations)");
     }
 
     // NGP (and CIC) with interlacing conserves the mass: the k = 0 mode (mean delta) is 0
@@ -742,7 +737,7 @@ int main(int argc, char ** argv) {
         FML::INTERPOLATION::particles_to_fourier_grid_interlacing(part.data(), part.size(), Np, grid, method);
         double dc = FML::ThisTask == 0 ? std::abs(grid.get_fourier_from_index(0)) : 0.0;
         FML::SumOverTasks(&dc);
-        check(dc < 1e-12, method + " with interlacing: mean density contrast " + num(dc) + " (should be 0)");
+        check_local(dc < 1e-12, method + " with interlacing: mean density contrast " + num(dc) + " (should be 0)");
     }
 
     // The number of triangles in the bispectrum bins against a brute-force count (small bins included)
@@ -791,20 +786,20 @@ int main(int argc, char ** argv) {
             nchecked++;
             nsmall += count[i] > 0 and count[i] < 248;
         }
-        check(maxerr < 1e-6,
-              "N123 x (2pi)^3 = brute-force number of triangles (" + std::to_string(nchecked) + " bins, " +
-                  std::to_string(nsmall) + " with < (2pi)^3 triangles), max error " + num(maxerr));
+        check_local(maxerr < 1e-6,
+                    "N123 x (2pi)^3 = brute-force number of triangles (" + std::to_string(nchecked) + " bins, " +
+                        std::to_string(nsmall) + " with < (2pi)^3 triangles), max error " + num(maxerr));
     }
 
     // The bin index below the first bin
     {
         PowerSpectrumBinning<3> lin(1.0, 11.0, 11, PowerSpectrumBinning<3>::LINEAR_SPACING);
         PowerSpectrumBinning<3> log(1.0, 100.0, 3, PowerSpectrumBinning<3>::LOG_SPACING);
-        check(lin.get_bin_index(0.3, 1.0, 11.0, 11, lin.bin_type) == -1 and
-                  lin.get_bin_index(0.6, 1.0, 11.0, 11, lin.bin_type) == 0 and
-                  log.get_bin_index(0.05, 1.0, 100.0, 3, log.bin_type) == -1 and
-                  log.get_bin_index(0.5, 1.0, 100.0, 3, log.bin_type) == 0,
-              "P(k) bin index below the first bin is -1 (linear and log)");
+        check_local(lin.get_bin_index(0.3, 1.0, 11.0, 11, lin.bin_type) == -1 and
+                        lin.get_bin_index(0.6, 1.0, 11.0, 11, lin.bin_type) == 0 and
+                        log.get_bin_index(0.05, 1.0, 100.0, 3, log.bin_type) == -1 and
+                        log.get_bin_index(0.5, 1.0, 100.0, 3, log.bin_type) == 0,
+                    "P(k) bin index below the first bin is -1 (linear and log)");
     }
 
     // Monopole from the multipole estimator = P(k), with the same mode counts (over the MPI tasks)
@@ -827,18 +822,18 @@ int main(int argc, char ** argv) {
                 maxerr = std::max(maxerr, std::fabs(Pell[0].pofk[i] / pofk.pofk[i] - 1.0));
             countdiff = std::max(countdiff, std::fabs(Pell[0].count[i] - pofk.count[i]));
         }
-        check(maxerr < 1e-10 and countdiff == 0.0, "multipoles: P_0 = P(k) and the same mode counts");
+        check_local(maxerr < 1e-10 and countdiff == 0.0, "multipoles: P_0 = P(k) and the same mode counts");
     }
 
     // PolyspectrumBinning
     {
         BispectrumBinning<3> b(0.1, 10.0, 4, BispectrumBinning<3>::LOG_SPACING);
-        check(b.bin_type == BispectrumBinning<3>::LOG_SPACING, "PolyspectrumBinning keeps the binning type");
+        check_local(b.bin_type == BispectrumBinning<3>::LOG_SPACING, "PolyspectrumBinning keeps the binning type");
         std::vector<double> N123(b.N123.size(), 1.0);
         b.set_bincount(N123);
         b.reset();
-        check(not b.bincount_is_set, "PolyspectrumBinning::reset() clears the bin count");
-        check(b.get_reduced_spectrum({0, 0, 3}) == 0.0, "reduced bispectrum of an empty bin is 0");
+        check_local(not b.bincount_is_set, "PolyspectrumBinning::reset() clears the bin count");
+        check_local(b.get_reduced_spectrum({0, 0, 3}) == 0.0, "reduced bispectrum of an empty bin is 0");
     }
 
     test_high_frequency_triangle_closure();
@@ -851,7 +846,5 @@ int main(int argc, char ** argv) {
     test_shell_workspace<2, 3>();
     test_sparse_suite();
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All P(k) tests passed\n" : std::to_string(fails) + " P(k) test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("P(k)");
 }

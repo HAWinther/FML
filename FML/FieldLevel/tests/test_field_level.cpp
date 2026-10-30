@@ -3,13 +3,11 @@
 #include <FML/FieldLevel/FieldLevelBAO.h>
 #include <cstdlib>
 #include <iostream>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 
 using namespace FML::FIELDLEVEL;
-static int failures = 0;
-static void check(bool ok, const std::string & what) {
-    std::cout << (ok ? "  ok   " : "  FAIL ") << what << "\n";
-    failures += !ok;
-}
 
 static Settings small_settings(Model model) {
     Settings st;
@@ -50,8 +48,8 @@ static void test_gradient(Settings st, const std::string & name) {
     std::cout << name << ": dU.v analytic " << analytic << " numeric " << numeric << "; dU/dbeta analytic " << grad_beta
               << " numeric " << numeric_beta << " (relative differences " << std::abs(analytic / numeric - 1) << ", "
               << std::abs(grad_beta / numeric_beta - 1) << ")\n";
-    check(std::abs(analytic - numeric) < 1e-5 * std::abs(numeric), name + " gradient in s");
-    check(std::abs(grad_beta - numeric_beta) < 1e-4 * std::abs(numeric_beta) + 1e-6, name + " gradient in beta");
+    check_local(std::abs(analytic - numeric) < 1e-5 * std::abs(numeric), name + " gradient in s");
+    check_local(std::abs(grad_beta - numeric_beta) < 1e-4 * std::abs(numeric_beta) + 1e-6, name + " gradient in beta");
 }
 
 static void test_gradient(Model model, double centering, const std::string & name) {
@@ -81,7 +79,7 @@ static void test_lpt_reduces_to_lpt1() {
     for (std::size_t i = 0; i < pa.size(); ++i)
         diff += std::norm(pa[i] - pb[i]), norm += std::norm(pb[i]);
     std::cout << "LPT order 1, b = 1 vs LPT1: relative difference " << std::sqrt(diff / norm) << "\n";
-    check(std::sqrt(diff / norm) < 1e-12, "LPT at first order without bias equals LPT1");
+    check_local(std::sqrt(diff / norm) < 1e-12, "LPT at first order without bias equals LPT1");
 }
 
 // Two orthogonal plane waves delta = A cos(k1 x) + B cos(k2 y): Psi1 = -A sin(k1 x) / k1 xhat - ..., and 2LPT
@@ -119,7 +117,8 @@ static void test_two_plane_waves() {
             }
         std::cout << "two plane waves, f = " << f << ": max |Psi - Psi_exact| = " << err << " (2LPT amplitude " << scale
                   << ")\n";
-        check(err < 1e-10, "1LPT + 2LPT displacement of two plane waves" + std::string(f ? " in redshift space" : ""));
+        check_local(err < 1e-10,
+                    "1LPT + 2LPT displacement of two plane waves" + std::string(f ? " in redshift space" : ""));
     }
 }
 
@@ -159,10 +158,10 @@ static void test_smooth_assignment_accuracy() {
         std::cout << "smooth assignment, width " << width
                   << ": |pred - direct sum| / |direct| = " << std::sqrt(err / norm) << " (rms displacement "
                   << std::sqrt(psi2 / fl.ncells()) * 2 * N << " density cells)\n";
-        check(std::sqrt(err / norm) < (width == 4 ? 1e-2 :
-                                       width == 6 ? 1e-4 :
-                                                    1e-5),
-              "smooth assignment equals the direct Fourier sum");
+        check_local(std::sqrt(err / norm) < (width == 4 ? 1e-2 :
+                                             width == 6 ? 1e-4 :
+                                                          1e-5),
+                    "smooth assignment equals the direct Fourier sum");
     }
 }
 
@@ -193,7 +192,7 @@ static void test_no_linear_harmonics() {
         }
         std::cout << "plane wave A = " << A << ": |second harmonic| / |fundamental| = " << harmonic / fundamental
                   << "\n";
-        check(harmonic / fundamental < 10 * A, "1LPT CIC: second harmonic is second order in the amplitude");
+        check_local(harmonic / fundamental < 10 * A, "1LPT CIC: second harmonic is second order in the amplitude");
     }
 }
 
@@ -220,7 +219,8 @@ static void test_large_scale_amplitude() {
         den += m.weight * std::norm(expected);
     }
     std::cout << "linear regime: |pred - (b + f mu^2) delta_lin| / |...| = " << std::sqrt(num / den) << "\n";
-    check(std::sqrt(num / den) < .03, "2LPT + bias + RSD prediction approaches (b + f mu^2) delta_lin on large scales");
+    check_local(std::sqrt(num / den) < .03,
+                "2LPT + bias + RSD prediction approaches (b + f mu^2) delta_lin on large scales");
 }
 
 static void test_mock_normalisation() {
@@ -237,7 +237,7 @@ static void test_mock_normalisation() {
         }
     }
     std::cout << "mock: sum |d|^2/C / N_modes = " << chi2 / dof << " (" << dof << " modes)\n";
-    check(std::abs(chi2 / dof - 1) < 5 / std::sqrt(dof), "mock power equals (b^2 P + P_eps) / V");
+    check_local(std::abs(chi2 / dof - 1) < 5 / std::sqrt(dof), "mock power equals (b^2 P + P_eps) / V");
 }
 
 static void moments(const std::vector<double> & x, double & mean, double & sd) {
@@ -286,9 +286,9 @@ static void test_linear_posterior() {
     ++opt.seed;
     runs.push_back(sample(fl, fl.white_noise(rng), 1.04, opt));
     const auto diagnostic = FML::MCMC::diagnose_hmc_chains(runs);
-    check(diagnostic.valid(), "linear HMC diagnostics valid");
-    check(diagnostic.rhat < 1.05, "linear HMC rank-normalized split Rhat");
-    check(diagnostic.ess_bulk > 50 && diagnostic.ess_tail > 30, "linear HMC bulk/tail ESS");
+    check_local(diagnostic.valid(), "linear HMC diagnostics valid");
+    check_local(diagnostic.rhat < 1.05, "linear HMC rank-normalized split Rhat");
+    check_local(diagnostic.ess_bulk > 50 && diagnostic.ess_tail > 30, "linear HMC bulk/tail ESS");
     std::cout << "linear diagnostics: Rhat " << diagnostic.rhat << " bulk ESS " << diagnostic.ess_bulk << " tail ESS "
               << diagnostic.ess_tail << "\n";
     const auto & chain = runs.front();
@@ -297,13 +297,14 @@ static void test_linear_posterior() {
     moments(beta, mean, sd);
     const double tau = FML::MCMC::integrated_autocorrelation_time(beta);
     const double ess = double(beta.size()) / tau;
-    check(std::isfinite(tau) && ess > 0, "linear HMC nondegenerate legacy ESS");
+    check_local(std::isfinite(tau) && ess > 0, "linear HMC nondegenerate legacy ESS");
     std::cout << "linear: exact beta = " << mean_exact << " +- " << sd_exact << "; HMC " << mean << " +- " << sd
               << " (acceptance " << chain.acceptance << ", tau " << tau << ", ESS " << ess << ")\n";
-    check(std::abs(mean - mean_exact) < 4 * sd_exact / std::sqrt(ess),
-          "linear HMC mean of beta matches exact marginal");
-    check(std::abs(sd / sd_exact - 1) < 4 / std::sqrt(2 * ess) + .05, "linear HMC std of beta matches exact marginal");
-    check(chain.acceptance > .4, "linear HMC acceptance");
+    check_local(std::abs(mean - mean_exact) < 4 * sd_exact / std::sqrt(ess),
+                "linear HMC mean of beta matches exact marginal");
+    check_local(std::abs(sd / sd_exact - 1) < 4 / std::sqrt(2 * ess) + .05,
+                "linear HMC std of beta matches exact marginal");
+    check_local(chain.acceptance > .4, "linear HMC acceptance");
 }
 
 static void test_lpt_recovery() {
@@ -324,8 +325,8 @@ static void test_lpt_recovery() {
     moments(beta, mean, sd);
     std::cout << "1LPT: beta_true " << beta_true << "; HMC " << mean << " +- " << sd << " (acceptance "
               << chain.acceptance << ", tau " << FML::MCMC::integrated_autocorrelation_time(beta) << ")\n";
-    check(std::abs(mean - beta_true) < 3.5 * sd, "1LPT HMC recovers beta");
-    check(chain.acceptance > .4, "1LPT HMC acceptance");
+    check_local(std::abs(mean - beta_true) < 3.5 * sd, "1LPT HMC recovers beta");
+    check_local(chain.acceptance > .4, "1LPT HMC acceptance");
 }
 
 int main(int argc, char ** argv) {
@@ -347,6 +348,5 @@ int main(int argc, char ** argv) {
     test_mock_normalisation();
     test_linear_posterior();
     test_lpt_recovery();
-    std::cout << (failures ? "FAILED" : "All field-level tests passed") << "\n";
-    return failures ? EXIT_FAILURE : EXIT_SUCCESS;
+    return FML::TESTS::summary("field-level");
 }

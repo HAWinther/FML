@@ -2,18 +2,12 @@
 #include <FML/HOD/HOD.h>
 #include <iostream>
 #include <map>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::near;
+
+using FML::TESTS::check;
 using namespace FML::HOD;
-int failures = 0;
-void check(bool good, const std::string & label) {
-    int bad = !good;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (FML::ThisTask == 0)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
-}
-bool close(double a, double b, double tolerance = 1e-12) {
-    return std::abs(a - b) <= tolerance * std::max({1.0, std::abs(a), std::abs(b)});
-}
 bool same(const Galaxy & a, const Galaxy & b) {
     return a.halo_id == b.halo_id && a.ordinal == b.ordinal && a.central == b.central && a.position == b.position &&
            a.velocity == b.velocity;
@@ -48,8 +42,8 @@ void test_occupations() {
     Zheng07 model;
     Halo h;
     h.mass = std::pow(10, model.log10_mmin);
-    check(close(model(h).central_probability, .5) &&
-              close(model(h).satellites_if_central, (h.mass - model.m0) / model.m1),
+    check(near(model(h).central_probability, .5, 1e-12) &&
+              near(model(h).satellites_if_central, (h.mass - model.m0) / model.m1, 1e-12),
           "Zheng07 transition and conditional satellite means");
     h.mass = model.m0;
     check(model(h).satellites_if_central == 0, "satellite cutoff at M0");
@@ -171,13 +165,13 @@ void test_profiles() {
         bool inverse = true;
         for (double u : {0.0, 1e-8, .1, .5, .9, 1.0}) {
             const double r = nfw_radius_fraction(u, c);
-            inverse &= r >= 0 && r <= 1 && close(reference_nfw_mass(c * r) / reference_nfw_mass(c), u, 1e-8);
+            inverse &= r >= 0 && r <= 1 && near(reference_nfw_mass(c * r) / reference_nfw_mass(c), u, 1e-8);
         }
         check(inverse, "truncated NFW inverse CDF, concentration=" + std::to_string(c));
     }
     bool small_limit = true;
     for (double u : {1e-12, .1, .5, .99})
-        small_limit &= close(nfw_radius_fraction(u, 1e-200), std::sqrt(u), 1e-12);
+        small_limit &= near(nfw_radius_fraction(u, 1e-200), std::sqrt(u), 1e-12);
     check(small_limit, "NFW inverse CDF remains normalized when the unscaled mass would underflow");
     Halo h;
     h.id = 891;
@@ -245,7 +239,7 @@ void test_profiles() {
             const double new_u = reference_nfw_mass(2 * h.concentration * std::sqrt(new_r2) / h.radius) /
                                  reference_nfw_mass(2 * h.concentration);
             concentration &=
-                close(old_u, new_u, 1e-10) && mock.galaxies[i].velocity == concentrated.galaxies[i].velocity;
+                near(old_u, new_u, 1e-10) && mock.galaxies[i].velocity == concentrated.galaxies[i].velocity;
         }
     check(concentration, "concentration bias changes radial mapping while preserving ranks and velocity streams");
     h.members = {{90, {.9, .1, .3}, {10, 20, 30}}, {3, {.1, .2, .3}, {50, 60, 70}}, {72, {.3, .4, .5}, {90, 100, 110}}};
@@ -264,7 +258,7 @@ void test_profiles() {
             if (g.position == p.position) {
                 found = true;
                 for (int d = 0; d < 3; ++d)
-                    found &= close(g.velocity[d], h.velocity[d] + .8 * (p.velocity[d] - h.velocity[d]));
+                    found &= near(g.velocity[d], h.velocity[d] + .8 * (p.velocity[d] - h.velocity[d]), 1e-12);
             }
         selected &= found;
     }
@@ -328,7 +322,5 @@ int main() {
     test_population();
     test_profiles();
     test_invalid();
-    if (FML::ThisTask == 0)
-        std::cout << (failures ? "HOD tests FAILED\n" : "All HOD tests passed\n");
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("Hod");
 }

@@ -5,6 +5,9 @@
 #include <cmath>
 #include <iostream>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check;
 
 //=========================================================
 // Tests of reading and writing GADGET HDF5 files:
@@ -68,15 +71,6 @@ std::vector<T> make_particles(size_t n_per_task, bool families) {
     return part;
 }
 
-int nfailed = 0;
-void check(bool ok, const std::string & what) {
-    int failed = ok ? 0 : 1;
-    FML::SumOverTasks(&failed);
-    if (FML::ThisTask == 0)
-        std::cout << (failed == 0 ? "PASS " : "FAIL ") << what << "\n";
-    if (failed)
-        nfailed++;
-}
 
 // Check that particles read back are what we wrote and are in the local domain
 template <class T>
@@ -235,7 +229,5 @@ int main(int argc, char ** argv) {
               "is_hdf5_snapshot detects the format");
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (nfailed == 0 ? "All tests passed\n" : "Some tests FAILED\n");
-    return nfailed == 0 ? 0 : 1;
+    return FML::TESTS::summary("GADGET HDF5");
 }

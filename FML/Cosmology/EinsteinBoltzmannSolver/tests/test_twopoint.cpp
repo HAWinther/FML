@@ -8,7 +8,7 @@
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Spectra/TwoPoint.h>
 #include <FML/Cosmology/Common.h>
 
@@ -21,9 +21,9 @@
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 int main() {
     std::cout << "Spherical Bessel functions for all ell\n";
@@ -38,7 +38,7 @@ int main() {
                     err = std::max(err, std::fabs(j[l] / r - 1.0));
             }
         }
-        check_close("j_ell_array vs j_ell (upward and Miller recurrences)", err, 0.0, 1e-9);
+        check_close(err, 0.0, 1e-9, "j_ell_array vs j_ell (upward and Miller recurrences)");
     }
 
     // Synthetic band-limited spectra
@@ -60,12 +60,12 @@ int main() {
             var += (2 * l + 1) / (4 * M_PI) * tt[l];
             varP += (2 * l + 1) / (4 * M_PI) * (ee[l] + bb[l]);
         }
-        check_rel("C^TT(0) = sum (2l+1)/(4 pi) C_l (variance)", C.TT[0], var, 1e-12);
-        check_rel("xi_+(0) = <Q^2 + U^2>", C.plus[0], varP, 1e-12);
-        check_close("xi_-(0) = 0, xi_X(0) = 0 (no preferred direction at zero lag)",
-                    std::fabs(C.minus[0]) + std::fabs(C.TQ[0]),
+        check_rel(C.TT[0], var, 1e-12, "C^TT(0) = sum (2l+1)/(4 pi) C_l (variance)");
+        check_rel(C.plus[0], varP, 1e-12, "xi_+(0) = <Q^2 + U^2>");
+        check_close(std::fabs(C.minus[0]) + std::fabs(C.TQ[0]),
                     0.0,
-                    1e-14);
+                    1e-14,
+                    "xi_-(0) = 0, xi_X(0) = 0 (no preferred direction at zero lag)");
 
         // Inversion with Gauss-Legendre quadrature recovers the C_l
         auto w = [&](double t) { return TwoPoint::angular_correlation(tt, {t})[0]; };
@@ -75,8 +75,8 @@ int main() {
         double err = 0.0;
         for (int l = 2; l <= L; l++)
             err = std::max(err, std::fabs(cl[l] - tt[l]) / tmax);
-        check_close("Legendre transform of C^TT(theta) returns C_l^TT", err, 0.0, 1e-8);
-        check_close("... and no monopole/dipole", (std::fabs(cl[0]) + std::fabs(cl[1])) / tmax, 0.0, 1e-8);
+        check_close(err, 0.0, 1e-8, "Legendre transform of C^TT(theta) returns C_l^TT");
+        check_close((std::fabs(cl[0]) + std::fabs(cl[1])) / tmax, 0.0, 1e-8, "... and no monopole/dipole");
 
         // Spin-2: C_l^EE + C_l^BB = 2 pi int xi_+ d^l_22 dmu, C_l^TE = 2 pi int xi_X d^l_20 dmu
         gsl_integration_glfixed_table * gl = gsl_integration_glfixed_table_alloc(L + 10);
@@ -102,16 +102,16 @@ int main() {
             ep = std::max(ep, std::fabs(sp[l] - ee[l] - bb[l]) / pmax);
             ex = std::max(ex, std::fabs(sx[l] - te[l]) / temax);
         }
-        check_close("spin-2 inversion: xi_+ -> C_l^EE + C_l^BB", ep, 0.0, 1e-8);
-        check_close("spin-0/2 inversion: xi_X -> C_l^TE", ex, 0.0, 1e-8);
+        check_close(ep, 0.0, 1e-8, "spin-2 inversion: xi_+ -> C_l^EE + C_l^BB");
+        check_close(ex, 0.0, 1e-8, "spin-0/2 inversion: xi_X -> C_l^TE");
 
         // Gaussian beam: B_l and smoothing of the variance
         const double fwhm = 10.0 * M_PI / 180.0, sig = fwhm / std::sqrt(8 * std::log(2.0));
-        check_rel("beam B_l = exp(-l(l+1) sigma^2/2)",
-                  TwoPoint::beam(100, fwhm),
+        check_rel(TwoPoint::beam(100, fwhm),
                   std::exp(-0.5 * 100 * 101 * sig * sig),
-                  1e-14);
-        check("beam lowers the variance", TwoPoint::angular_correlation(tt, {0.0}, fwhm)[0] < 0.9 * var);
+                  1e-14,
+                  "beam B_l = exp(-l(l+1) sigma^2/2)");
+        check(TwoPoint::angular_correlation(tt, {0.0}, fwhm)[0] < 0.9 * var, "beam lowers the variance");
     }
 
     std::cout << "3D correlation function and sigma_R\n";
@@ -130,12 +130,12 @@ int main() {
         double err = 0.0;
         for (size_t i = 0; i < r.size(); i++)
             err = std::max(err, std::fabs(xi[i] - exact(r[i], R0 * R0)) / exact(0, R0 * R0));
-        check_close("xi(r) of a Gaussian P(k) (Filon)", err, 0.0, 1e-6);
+        check_close(err, 0.0, 1e-6, "xi(r) of a Gaussian P(k) (Filon)");
         const auto xis = TwoPoint::xi_of_r(k, P, r, 1.5); // smoothing adds in quadrature
         err = 0.0;
         for (size_t i = 0; i < r.size(); i++)
             err = std::max(err, std::fabs(xis[i] - exact(r[i], R0 * R0 + 2.25)) / exact(0, R0 * R0 + 2.25));
-        check_close("Gaussian smoothing R: R0^2 -> R0^2 + R^2", err, 0.0, 1e-6);
+        check_close(err, 0.0, 1e-6, "Gaussian smoothing R: R0^2 -> R0^2 + R^2");
         // Oscillating P(k): Filon handles large r on a coarse grid; compare with adaptive QAWO-like quadrature
         for (size_t i = 0; i < k.size(); i++)
             P[i] = A * std::exp(-k[i] * k[i]) * (1.0 + 0.2 * std::sin(150.0 * k[i]));
@@ -150,7 +150,7 @@ int main() {
                 0.0,
                 1e-11) /
             (2 * M_PI * M_PI * 150.0);
-        check_rel("xi(r = 150) of an oscillating P(k) (BAO-like feature)", xo[0], ref, 1e-3);
+        check_rel(xo[0], ref, 1e-3, "xi(r = 150) of an oscillating P(k) (BAO-like feature)");
 
         for (size_t i = 0; i < k.size(); i++)
             P[i] = A * std::exp(-k[i] * k[i] * R0 * R0);
@@ -164,7 +164,7 @@ int main() {
             20.0,
             0.0,
             1e-12);
-        check_rel("sigma_R (top hat) vs adaptive quadrature", TwoPoint::sigma_R(k, P, R), std::sqrt(s2), 1e-6);
+        check_rel(TwoPoint::sigma_R(k, P, R), std::sqrt(s2), 1e-6, "sigma_R (top hat) vs adaptive quadrature");
     }
 
     std::cout << "Matter field of the fiducial model\n";
@@ -181,13 +181,13 @@ int main() {
         PowerSpectrum ps(cosmo, rec, pert);
 
         // sigma_8: CLASS gives 0.82068 for this model
-        check_rel("sigma_8 = 0.8207 (CLASS)", ps.get_sigma8(), 0.82068, 2e-3);
+        check_rel(ps.get_sigma8(), 0.82068, 2e-3, "sigma_8 = 0.8207 (CLASS)");
         // Extrapolation beyond k_max is continuous
         const double kmax = pert.get_k_array().back();
-        check_rel("Delta_M extrapolation continuous at k_max",
-                  ps.get_Delta_M_extrapolated(0.0, kmax * (1 + 1e-9)),
+        check_rel(ps.get_Delta_M_extrapolated(0.0, kmax * (1 + 1e-9)),
                   ps.get_Delta_M(0.0, kmax),
-                  1e-6);
+                  1e-6,
+                  "Delta_M extrapolation continuous at k_max");
 
         // BAO peak in r^2 xi(r) near r_d ~ 147 Mpc ~ 99 Mpc/h
         const double Mh = Mpc / p.h;
@@ -200,21 +200,21 @@ int main() {
             if (r[i] * r[i] * xi[i] > r[imax] * r[imax] * xi[imax])
                 imax = i;
         std::cout << "    BAO peak of r^2 xi at r = " << r[imax] / Mh << " Mpc/h\n";
-        check("BAO peak of r^2 xi(r) at 95-105 Mpc/h", r[imax] / Mh > 95.0 && r[imax] / Mh < 105.0);
+        check(r[imax] / Mh > 95.0 && r[imax] / Mh < 105.0, "BAO peak of r^2 xi(r) at 95-105 Mpc/h");
 
         // Projected density: exact vs Limber, bias, window normalisation
         auto w = TwoPoint::RedshiftWindow::gaussian(1.0, 0.1);
         const std::vector<int> ells = {10, 300};
         const auto ce = ps.get_angular_cl_matter(w, ells, PowerSpectrum::Projection::Exact);
         const auto cl = ps.get_angular_cl_matter(w, ells, PowerSpectrum::Projection::Limber);
-        check_rel("Limber = exact at ell = 300 (sigma_z = 0.1)", cl[1], ce[1], 2e-3);
-        check("Limber fails at ell = 10 (> 2%)", std::fabs(cl[0] / ce[0] - 1.0) > 0.02);
+        check_rel(cl[1], ce[1], 2e-3, "Limber = exact at ell = 300 (sigma_z = 0.1)");
+        check(std::fabs(cl[0] / ce[0] - 1.0) > 0.02, "Limber fails at ell = 10 (> 2%)");
         auto w2 = w;
         w2.bias = 2.0;
         const double n0 = 5.0;
         w2.n = [&w, n0](double z) { return n0 * w.n(z); };
         const auto c2 = ps.get_angular_cl_matter(w2, ells, PowerSpectrum::Projection::Limber);
-        check_rel("C_ell ~ b^2 and independent of the normalisation of n(z)", c2[1], 4.0 * cl[1], 1e-12);
+        check_rel(c2[1], 4.0 * cl[1], 1e-12, "C_ell ~ b^2 and independent of the normalisation of n(z)");
     }
-    return Test::summary();
+    return FML::TESTS::summary("EBS twopoint");
 }

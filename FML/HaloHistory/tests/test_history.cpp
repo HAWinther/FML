@@ -2,15 +2,10 @@
 #include <FML/HaloHistory/CatalogueIO.h>
 #include <iostream>
 #include <sstream>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check;
 using namespace FML::HALO_HISTORY;
-int failures = 0;
-void check(bool ok, const std::string & label) {
-    int bad = !ok;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (!FML::ThisTask)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
-}
 Halo halo(ID id, std::vector<ID> members, std::optional<ID> host = {}) {
     Halo h;
     h.id = id;
@@ -246,7 +241,5 @@ int main() {
     check(hod.size() == 1 && all_hod.size() == 2 && hod[0].id == 1 && hod[0].mass == 1e12 &&
               hod[0].concentration == 6 && hod[0].velocity_dispersion == 150 && hod[0].members.empty(),
           "HOD adapter preserves units/IDs and requires explicit concentration/velocity-dispersion assumptions");
-    if (!FML::ThisTask)
-        std::cout << (failures ? "Halo history tests FAILED" : "All halo history tests passed") << '\n';
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("halo history");
 }

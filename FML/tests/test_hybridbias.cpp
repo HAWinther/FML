@@ -19,21 +19,13 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 using namespace FML::CORRELATIONFUNCTIONS::HYBRIDBIAS;
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os << std::setprecision(3) << x;
-    return os.str();
-}
 
 // A smooth LCDM-like linear power spectrum (BBKS, sigma8 ~ 0.8 at z = 0)
 double pofk_bbks(double k) {
@@ -132,8 +124,9 @@ int main() {
             dev(al + be / 5, 3.0 / 35 * (-4 * L.R1 + 12 * L.R2 - 2 * L.Q1 + 6 * L.Q2));
             i3dev = std::max(i3dev, std::abs(0.5 * Pk * M.I3 / (5.0 / 21 * L.R1) - 1.0));
         }
-        check(maxdev < 1e-3, "GR (EdS): second order loop functions = EdS ones (max deviation " + num(maxdev) + ")");
-        check(i3dev < 1e-3, "GR (EdS): third order (A13) = 5/21 R1 (max deviation " + num(i3dev) + ")");
+        check_local(maxdev < 1e-3,
+                    "GR (EdS): second order loop functions = EdS ones (max deviation " + num(maxdev, 3) + ")");
+        check_local(i3dev < 1e-3, "GR (EdS): third order (A13) = 5/21 R1 (max deviation " + num(i3dev, 3) + ")");
 
         // 2. The kernels vs the Eulerian fluid equations (Omega_M = 0.281)
         struct Ref {
@@ -158,12 +151,10 @@ int main() {
         for (auto & r : refs) {
             const auto c = kernels_at_node(r.model, r.k, r.p, r.mu);
             const double dev = std::abs(c[2] / r.c3 - 1.0);
-            check(dev < 3e-5,
-                  "third order LPT kernel = Eulerian, " + r.name + " (k, p, mu) = (" + num(r.k) + ", " + num(r.p) +
-                      ", " + num(r.mu) + "): relative deviation " + num(dev));
+            check_local(dev < 3e-5,
+                        "third order LPT kernel = Eulerian, " + r.name + " (k, p, mu) = (" + num(r.k, 3) + ", " +
+                            num(r.p, 3) + ", " + num(r.mu, 3) + "): relative deviation " + num(dev, 3));
         }
     }
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All hybrid bias tests passed\n" : "Some hybrid bias tests FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("hybrid bias");
 }

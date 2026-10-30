@@ -20,16 +20,12 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 
 int lua_odr_check(); // test_lua_odr.cpp
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
 
 int main(int argc, char ** argv) {
     const std::string mode = argc > 1 ? argv[1] : "";
@@ -52,8 +48,8 @@ int main(int argc, char ** argv) {
     if (not mode.empty())
         return 0;
 
-    check(lua_odr_check() == 1,
-          "LuaFileParser.h can be included in several translation units (13 multiple definitions before)");
+    check_local(lua_odr_check() == 1,
+                "LuaFileParser.h can be included in several translation units (13 multiple definitions before)");
 
     // Many missing optional parameters, then the real ones
     bool defaults_ok = true;
@@ -61,15 +57,15 @@ int main(int argc, char ** argv) {
         defaults_ok = defaults_ok and lfp.read_double("missing_" + std::to_string(i), 1.5) == 1.5 and
                       lfp.read_bool("missing_b_" + std::to_string(i), true) and
                       lfp.read_string_array("missing_s_" + std::to_string(i), {"d"}, false).size() == 1;
-    check(defaults_ok and lfp.read_int("n") == 3 and lfp.read_double("x") == 2.5,
-          "6000 optional parameters not in the file (crashed after ~50 before), then the values");
+    check_local(defaults_ok and lfp.read_int("n") == 3 and lfp.read_double("x") == 2.5,
+                "6000 optional parameters not in the file (crashed after ~50 before), then the values");
 
-    check(lfp.read_int("n") == 3 and lfp.read_double("n") == 3.0 and lfp.read_bool("flag") and
-              lfp.read_string("name") == "abc" and lfp.read_string("missing", "def") == "def" and
-              lfp.read_number_array<double>("nums", {}, true) == std::vector<double>{1, 2.5, 3} and
-              lfp.read_number_array<int>("ints", {}, true) == std::vector<int>{4, 5} and
-              lfp.read_string_array("strs", {}, true) == std::vector<std::string>{"a", "b"},
-          "values and defaults of all types");
+    check_local(lfp.read_int("n") == 3 and lfp.read_double("n") == 3.0 and lfp.read_bool("flag") and
+                    lfp.read_string("name") == "abc" and lfp.read_string("missing", "def") == "def" and
+                    lfp.read_number_array<double>("nums", {}, true) == std::vector<double>{1, 2.5, 3} and
+                    lfp.read_number_array<int>("ints", {}, true) == std::vector<int>{4, 5} and
+                    lfp.read_string_array("strs", {}, true) == std::vector<std::string>{"a", "b"},
+                "values and defaults of all types");
 
     // A second file with the same object
     const std::string fn2 = "test_lua2_" + std::to_string(FML::ThisTask) + ".lua";
@@ -78,14 +74,11 @@ int main(int argc, char ** argv) {
         fp << "n = 7\n";
     }
     lfp.open(fn2);
-    check(lfp.read_int("n") == 7 and lfp.read_double("x", -1.0) == -1.0, "open a second file");
+    check_local(lfp.read_int("n") == 7 and lfp.read_double("x", -1.0) == -1.0, "open a second file");
     auto names = lfp.get_global_variable_names();
-    check(names == std::vector<std::string>{"n"}, "global variable names of the file");
+    check_local(names == std::vector<std::string>{"n"}, "global variable names of the file");
 
     std::remove(fn.c_str());
     std::remove(fn2.c_str());
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All Lua parser tests passed\n" :
-                                   std::to_string(fails) + " Lua parser test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("Lua parser");
 }

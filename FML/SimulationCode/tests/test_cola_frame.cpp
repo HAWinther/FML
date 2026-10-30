@@ -24,6 +24,11 @@
 #include <cmath>
 #include <iostream>
 #include <sstream>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::quietly;
+
+using FML::TESTS::check_local;
 
 namespace {
     using ParameterMap = FML::UTILS::ParameterMap;
@@ -71,22 +76,9 @@ namespace {
         return grav;
     }
 
-    // Silence the output of the code while f runs
-    template <class F>
-    void quietly(F && f) {
-        std::ostringstream sink;
-        auto * old = std::cout.rdbuf(sink.rdbuf());
-        f();
-        std::cout.rdbuf(old);
-    }
 } // namespace
 
 int main() {
-    int failed = 0;
-    auto check = [&](bool ok, const std::string & message) {
-        failed += !ok;
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << message << '\n';
-    };
 
     std::shared_ptr<GravityModel<NDIM>> gr, dgp, dgp_noscreening;
     quietly([&]() {
@@ -139,7 +131,7 @@ int main() {
             std::ostringstream msg;
             msg << "time-stepping, " << c.name << " (20 steps, a = 0.05 -> 1): linear growth error " << errD * 100
                 << "%, velocity " << errv * 100 << "%";
-            check(std::abs(errD) < c.max_err_D and std::abs(errv) < c.max_err_v, msg.str());
+            check_local(std::abs(errD) < c.max_err_D and std::abs(errv) < c.max_err_v, msg.str());
         }
     }
 
@@ -185,13 +177,9 @@ int main() {
             std::ostringstream msg;
             msg << name << ": " << order << "LPT COLA frame kick = -(change of the LPT velocity) (rel. diff " << err
                 << ")";
-            check(std::abs(err) < 1e-4, msg.str());
+            check_local(std::abs(err) < 1e-4, msg.str());
         }
     }
 
-    if (failed)
-        std::cout << failed << " test(s) failed\n";
-    else
-        std::cout << "All tests passed\n";
-    return failed ? 1 : 0;
+    return FML::TESTS::summary("COLA frame");
 }

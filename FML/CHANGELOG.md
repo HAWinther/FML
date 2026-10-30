@@ -5,6 +5,15 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Tests: shared test helpers (`FML/tests/TestHelpers.h`)
+- `FML::TESTS::check` (collective), `check_local`, `check_close`, `check_rel`, `summary`, `near`, `throws`, `throws_with`,
+  `num`, `quietly` and minimal particle types replace the private `check()` functions and failure counters of 59 test
+  programs and the three identical module `TestHelpers.h` files used by 28 more (EinsteinBoltzmannSolver, MCMC,
+  CosmologyFitting; their `check(label, ok)` argument order is now `check(ok, label)` everywhere). Each test keeps its previous
+  collective or per-task semantics; every test ends with `return FML::TESTS::summary("name")`. Failures on tasks
+  other than 0 are now printed. The same numbers of checks pass as before (4193 library, 1634 module, 47 SimulationCode
+  test lines on 1/2/4 tasks). New `tests/test_testhelpers.cpp` also checks that failing checks give a nonzero exit code.
+
 ### COLASolver renamed to SimulationCode
 - The folder `COLASolver/` is now `SimulationCode/` and the namespace `COLASOLVER` is `SIMCODE` (macros and
   include guards `COLASOLVER_*` -> `SIMCODE_*`). Makefiles, CI workflows, scripts and documentation follow; the

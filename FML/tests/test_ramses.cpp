@@ -20,18 +20,14 @@
 #include <string>
 #include <sys/stat.h>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 
 using namespace FML::FILEUTILS::RAMSES;
 
 int ramses_odr_check(); // defined in test_ramses_odr.cpp
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
 
 struct Particle {
     double pos[3];
@@ -129,7 +125,7 @@ void write_snapshot(const std::string & dir, int ncpu, int npart, double Mpc_cm,
 }
 
 int main() {
-    check(ramses_odr_check() == 1, "RamsesUtils.h can be included in several translation units");
+    check_local(ramses_odr_check() == 1, "RamsesUtils.h can be included in several translation units");
 
     const int npart = 103, ncpu = 4;
     const std::string dir_old = "test_ramses_tmp/output_00001", dir_new = "test_ramses_tmp2/output_00001";
@@ -165,12 +161,13 @@ int main() {
             }
             int bad = not fields_ok;
             FML::SumOverTasks(&bad);
-            check(n == npart and bad == 0 and std::fabs(reader.get_boxsize() - 500.0) < 1e-9,
-                  "all " + std::to_string(npart) + " particles (one at x = 1, an empty CPU file), fields, boxsize " +
-                      std::to_string(reader.get_boxsize()) + label);
+            check_local(n == npart and bad == 0 and std::fabs(reader.get_boxsize() - 500.0) < 1e-9,
+                        "all " + std::to_string(npart) +
+                            " particles (one at x = 1, an empty CPU file), fields, boxsize " +
+                            std::to_string(reader.get_boxsize()) + label);
         } catch (std::exception & e) {
             ok = false;
-            check(false, std::string("reading failed: ") + e.what() + label);
+            check_local(false, std::string("reading failed: ") + e.what() + label);
         }
         (void)ok;
     }
@@ -185,7 +182,8 @@ int main() {
             ids.insert(q.id);
         int bad = not(p.size() == size_t(npart) and ids.size() == size_t(npart));
         FML::SumOverTasks(&bad);
-        check(bad == 0, "keep_only_particles_in_domain = false: all particles on every task (an empty vector before)");
+        check_local(bad == 0,
+                    "keep_only_particles_in_domain = false: all particles on every task (an empty vector before)");
     }
 
     // read_ramses_single: only the particles in the domain (no extra zero particles)
@@ -198,7 +196,7 @@ int main() {
             ok = ok and q.id > 0 and q.pos[0] >= FML::xmin_domain and q.pos[0] < FML::xmax_domain;
         int bad = not ok;
         FML::SumOverTasks(&bad);
-        check(bad == 0, "read_ramses_single returns only the particles in the domain");
+        check_local(bad == 0, "read_ramses_single returns only the particles in the domain");
     }
 
 #ifdef USE_MPI
@@ -218,7 +216,5 @@ int main() {
         }
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All RAMSES tests passed\n" : std::to_string(fails) + " RAMSES test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("Ramses");
 }

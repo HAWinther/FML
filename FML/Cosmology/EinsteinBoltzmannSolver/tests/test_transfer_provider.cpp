@@ -4,6 +4,9 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 using namespace FML::INITIALCONDITIONS;
 int main(int argc, char ** argv) {
     FML::COSMOLOGY::Utils::verbose = false;
@@ -23,12 +26,6 @@ int main(int argc, char ** argv) {
     settings.rec.n_points = 20000;
     InternalTransferProvider synchronous(settings);
     auto native = synchronous.with_density_gauge(Gauge::Newtonian);
-    int failures = 0;
-    auto check = [&](bool ok, const char * label) {
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << label << '\n';
-        if (!ok)
-            failures++;
-    };
     bool converted = true, velocity = true, weighted = true, power = true, reference_matches = true;
     std::ifstream reference(FML::COSMOLOGY::Utils::fml_file(
         "Cosmology/EinsteinBoltzmannSolver/tests/reference/transfer_provider_camb.txt"));
@@ -73,12 +70,12 @@ int main(int argc, char ** argv) {
                        << synchronous.velocity_divergence_transfer(Species::Baryon, k, a) << " "
                        << synchronous.density_growth_rate(Species::CDM, k, a) << '\n';
         }
-    check(reference_matches,
-          "gauge-converted densities and direct velocities agree with independent CAMB values within 0.1%");
-    check(converted, "CDM-rest-frame conversion uses the CDM time shift for every species");
-    check(velocity, "changing the density gauge leaves explicitly Newtonian velocities unchanged");
-    check(weighted, "combined density preserves background species weights");
-    check(power, "converted spectra preserve primordial normalization");
+    check_local(reference_matches,
+                "gauge-converted densities and direct velocities agree with independent CAMB values within 0.1%");
+    check_local(converted, "CDM-rest-frame conversion uses the CDM time shift for every species");
+    check_local(velocity, "changing the density gauge leaves explicitly Newtonian velocities unchanged");
+    check_local(weighted, "combined density preserves background species weights");
+    check_local(power, "converted spectra preserve primordial normalization");
     bool wrong = false;
     try {
         prepare_linear_input(
@@ -89,31 +86,31 @@ int main(int argc, char ** argv) {
     } catch (const std::invalid_argument &) {
         wrong = true;
     }
-    check(wrong, "native Newtonian density cannot enter the legacy IC prescription silently");
+    check_local(wrong, "native Newtonian density cannot enter the legacy IC prescription silently");
     bool range = false;
     try {
         synchronous.density_transfer(Species::CDM, 10, 1);
     } catch (const std::out_of_range &) {
         range = true;
     }
-    check(range, "internal transfer range is strict");
+    check_local(range, "internal transfer range is strict");
     auto sampled = prepare_linear_input(
         {LinearInputType::TransferInfoFile, "", 1. / 50, .67},
         [](double) { return 1.; },
         [&](double k) { return synchronous.primordial_power(k); },
         &synchronous);
-    check(sampled.k.size() == 1000 && std::abs(sampled.k.back() / synchronous.range().kmax_hmpc - 1) < 1e-12,
-          "converted IC table covers both endpoints without extrapolation");
+    check_local(sampled.k.size() == 1000 && std::abs(sampled.k.back() / synchronous.range().kmax_hmpc - 1) < 1e-12,
+                "converted IC table covers both endpoints without extrapolation");
     bool noNu = !synchronous.has_density(Species::MassiveNeutrino);
-    check(noNu, "unsupported massive-neutrino ICs are not advertised");
+    check_local(noNu, "unsupported massive-neutrino ICs are not advertised");
     auto species = two_species_ic_splines(synchronous, [](double, double) { return 1.; }, 49., .267 / .317, .05 / .317);
-    check(std::isfinite(species.f_baryon(std::log(.01))), "converted provider prepares separate CDM/baryon ICs");
+    check_local(std::isfinite(species.f_baryon(std::log(.01))), "converted provider prepares separate CDM/baryon ICs");
     const double before = synchronous.power(Species::CDMBaryon, .01, 1.),
                  density_before = synchronous.density_transfer(Species::CDMBaryon, .01, 1.);
     synchronous.rescale_primordial_power(4.);
-    check(std::abs(synchronous.power(Species::CDMBaryon, .01, 1.) / before - 4.) < 1e-12 &&
-              synchronous.density_transfer(Species::CDMBaryon, .01, 1.) == density_before,
-          "primordial rescaling changes power without changing unit-curvature transfers");
+    check_local(std::abs(synchronous.power(Species::CDMBaryon, .01, 1.) / before - 4.) < 1e-12 &&
+                    synchronous.density_transfer(Species::CDMBaryon, .01, 1.) == density_before,
+                "primordial rescaling changes power without changing unit-curvature transfers");
     settings.cosmo.m_nu = .1;
     bool rejected = false;
     try {
@@ -121,7 +118,7 @@ int main(int argc, char ** argv) {
     } catch (const std::invalid_argument &) {
         rejected = true;
     }
-    check(rejected, "unsupported cosmologies fail before solving");
+    check_local(rejected, "unsupported cosmologies fail before solving");
     settings.cosmo.m_nu = 0.0;
     settings.cosmo.alpha_s = -0.01;
     rejected = false;
@@ -130,6 +127,6 @@ int main(int argc, char ** argv) {
     } catch (const std::invalid_argument &) {
         rejected = true;
     }
-    check(rejected, "running alpha_s (not in the primordial power) fails before solving");
-    return failures ? 1 : 0;
+    check_local(rejected, "running alpha_s (not in the primordial power) fails before solving");
+    return FML::TESTS::summary("EBS transfer provider");
 }

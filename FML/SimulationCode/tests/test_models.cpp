@@ -28,17 +28,16 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::quietly;
+
+using FML::TESTS::check_local;
 
 namespace {
     using ParameterMap = FML::UTILS::ParameterMap;
     constexpr int NDIM = 3;
 
-    int fails = 0;
-    void check(bool ok, const std::string & what) {
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-        if (not ok)
-            fails++;
-    }
 
     ParameterMap cosmology_parameters(double OmegaCDM, double OmegaK = 0.0) {
         ParameterMap p;
@@ -57,13 +56,6 @@ namespace {
         return p;
     }
 
-    template <class F>
-    void quietly(F && f) {
-        std::ostringstream sink;
-        auto * old = std::cout.rdbuf(sink.rdbuf());
-        f();
-        std::cout.rdbuf(old);
-    }
 } // namespace
 
 int main() {
@@ -91,9 +83,9 @@ int main() {
         for (double a : {0.1, 1.0, 5.0}) {
             const double expected = 9.0 * OmegaM * pars[0] / (pars[2] * pars[2]) * std::pow(a, p) / p;
             const double err = grav->phi_over_mpl_of_a(a) / expected - 1.0;
-            check(std::fabs(err) < 2e-3,
-                  "mbeta n = " + std::to_string(pars[1]) + ", m = " + std::to_string(pars[3]) +
-                      ": phi(a = " + std::to_string(a) + ") / analytic - 1 = " + std::to_string(err));
+            check_local(std::fabs(err) < 2e-3,
+                        "mbeta n = " + std::to_string(pars[1]) + ", m = " + std::to_string(pars[3]) +
+                            ": phi(a = " + std::to_string(a) + ") / analytic - 1 = " + std::to_string(err));
         }
     }
 
@@ -112,10 +104,11 @@ int main() {
         });
         const double g = cosmo->get_potential_growth_suppression_today();
         const double OmegaM = cosmo->get_OmegaM();
-        check(std::fabs(g / r[2] - 1.0) < 1e-6,
-              "g(z = 0) for OmegaM = " + std::to_string(OmegaM) + ", OmegaK = " + std::to_string(r[1]) + ": " +
-                  std::to_string(g) + " (scipy " + std::to_string(r[2]) +
-                  "); the old factor 1.5 OmegaM gave fNL_eff / fNL = " + std::to_string(1.5 * OmegaM / (0.6 * g)));
+        check_local(
+            std::fabs(g / r[2] - 1.0) < 1e-6,
+            "g(z = 0) for OmegaM = " + std::to_string(OmegaM) + ", OmegaK = " + std::to_string(r[1]) + ": " +
+                std::to_string(g) + " (scipy " + std::to_string(r[2]) +
+                "); the old factor 1.5 OmegaM gave fNL_eff / fNL = " + std::to_string(1.5 * OmegaM / (0.6 * g)));
     }
 
     // 3. Neutrino Boltzmann integrals F(y) = int x^2 sqrt(x^2 + y^2) / (e^x + 1) dx and
@@ -142,9 +135,9 @@ int main() {
         for (auto & r : nu_refs) {
             const double errF = cosmo->get_neutrino_boltzmann_integral_energydensity(r[0]) / F0 / r[1] - 1.0;
             const double errG = cosmo->get_neutrino_boltzmann_integral_pressure(r[0]) / F0 / r[2] - 1.0;
-            check(std::fabs(errF) < 1e-5 and std::fabs(errG) < 1e-4,
-                  "neutrino F(y), G(y) at y = " + std::to_string(r[0]) + ": F / scipy - 1 = " + std::to_string(errF) +
-                      ", G / scipy - 1 = " + std::to_string(errG));
+            check_local(std::fabs(errF) < 1e-5 and std::fabs(errG) < 1e-4,
+                        "neutrino F(y), G(y) at y = " + std::to_string(r[0]) +
+                            ": F / scipy - 1 = " + std::to_string(errF) + ", G / scipy - 1 = " + std::to_string(errG));
         }
         // Non-relativistic today and later: rho_nu ~ a^-3 (dlog(rho_nu)/dloga = -3 + O(1/y^2)), w_nu ~ 1/y
         for (double a : {1.0, 10.0}) {
@@ -153,17 +146,18 @@ int main() {
             const double w = cosmo->get_pNu_exact(a) / cosmo->get_rhoNu_exact(a);
             // <p/rho> -> <x^2>/(3 y^2) = I4 / (3 I2 y^2) with I4 / I2 = 15 zeta(5) / zeta(3)
             const double w_expected = 15.0 * 1.03692775514336 / 1.20205690315959 / (3.0 * y * y);
-            check(std::fabs(dlogrho + 3.0) < 1e-5 and std::fabs(w / w_expected - 1.0) < 1e-3,
-                  "Mnu = 0.6 eV at a = " + std::to_string(a) + " (y = " + std::to_string(y) +
-                      "): dlog(rho_nu)/dloga = " + std::to_string(dlogrho) +
-                      ", w_nu / expected - 1 = " + std::to_string(w / w_expected - 1.0));
+            check_local(std::fabs(dlogrho + 3.0) < 1e-5 and std::fabs(w / w_expected - 1.0) < 1e-3,
+                        "Mnu = 0.6 eV at a = " + std::to_string(a) + " (y = " + std::to_string(y) +
+                            "): dlog(rho_nu)/dloga = " + std::to_string(dlogrho) +
+                            ", w_nu / expected - 1 = " + std::to_string(w / w_expected - 1.0));
         }
         // The sound speed uses the mass of one neutrino (Mnu / N_nu), not the sum
         const double cs = cosmo->get_neutrino_sound_speed_cs_over_c(1.0);
         const double cs_expected = std::sqrt(25.0 * 1.03692775514336 / 1.20205690315959 / 3.0) *
                                    cosmo->get_neutrino_temperature_eV(1.0) / (cosmo->get_Mnu_eV() / 3.0);
-        check(std::fabs(cs / cs_expected - 1.0) < 1e-10,
-              "neutrino sound speed today: " + std::to_string(cs) + " (expected " + std::to_string(cs_expected) + ")");
+        check_local(std::fabs(cs / cs_expected - 1.0) < 1e-10,
+                    "neutrino sound speed today: " + std::to_string(cs) + " (expected " + std::to_string(cs_expected) +
+                        ")");
     }
 
     // 4. Tabulated H(z) of an LCDM background: dlogH/dloga at the end of the table (a = 1). The natural end condition
@@ -195,9 +189,9 @@ int main() {
         std::remove(filename.c_str());
         for (double a : {1.0, 0.98, 0.5}) {
             const double err = tab->dlogHdloga_of_a(a) - lcdm->dlogHdloga_of_a(a);
-            check(std::fabs(err) < 1e-5 and std::fabs(tab->w_DE(a) + 1.0) < 1e-5,
-                  "Tabulated LCDM at a = " + std::to_string(a) + ": dlogH/dloga - LCDM = " + std::to_string(err) +
-                      ", w_DE + 1 = " + std::to_string(tab->w_DE(a) + 1.0));
+            check_local(std::fabs(err) < 1e-5 and std::fabs(tab->w_DE(a) + 1.0) < 1e-5,
+                        "Tabulated LCDM at a = " + std::to_string(a) + ": dlogH/dloga - LCDM = " + std::to_string(err) +
+                            ", w_DE + 1 = " + std::to_string(tab->w_DE(a) + 1.0));
         }
     }
 
@@ -216,9 +210,10 @@ int main() {
         for (double a : {9.9, 20.0}) {
             const double fd = std::log(jbd->HoverH0_of_a(a * 1.01) / jbd->HoverH0_of_a(a / 1.01)) / std::log(1.0201);
             const double err = jbd->dlogHdloga_of_a(a) - fd;
-            check(std::fabs(err) < 1e-6,
-                  "JBD at a = " + std::to_string(a) + ": dlogH/dloga = " + std::to_string(jbd->dlogHdloga_of_a(a)) +
-                      ", finite difference of H = " + std::to_string(fd));
+            check_local(std::fabs(err) < 1e-6,
+                        "JBD at a = " + std::to_string(a) +
+                            ": dlogH/dloga = " + std::to_string(jbd->dlogHdloga_of_a(a)) +
+                            ", finite difference of H = " + std::to_string(fd));
         }
     }
 
@@ -238,11 +233,10 @@ int main() {
         });
         const double dlogD = std::log(grav->get_D_1LPT(10.0) / grav->get_D_1LPT(9.9));
         const double expected = grav->get_f_1LPT(9.95) * std::log(10.0 / 9.9);
-        check(std::fabs(dlogD / expected - 1.0) < 1e-3,
-              "GR growth: log(D(10)/D(9.9)) = " + std::to_string(dlogD) + " (f dloga = " + std::to_string(expected) +
-                  ")");
+        check_local(std::fabs(dlogD / expected - 1.0) < 1e-3,
+                    "GR growth: log(D(10)/D(9.9)) = " + std::to_string(dlogD) +
+                        " (f dloga = " + std::to_string(expected) + ")");
     }
 
-    std::cout << (fails == 0 ? "All model tests passed\n" : std::to_string(fails) + " model test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("model");
 }

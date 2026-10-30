@@ -17,7 +17,7 @@
 #include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 #include <FML/Cosmology/Models/BransDicke.h>
 #include <FML/Cosmology/Models/HorndeskiAlpha.h>
@@ -28,9 +28,9 @@
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 namespace {
     struct Run {
@@ -102,7 +102,7 @@ int main() {
     Run lcdm(CosmologyParameters(), o);
     {
         Run r(horndeski(0.0, 0.0, 0.0), o);
-        check_close("all alphas zero = LCDM (Phi, Psi, delta_cdm)", compare(r.pert, lcdm.pert, xs), 0.0, 1e-6);
+        check_close(compare(r.pert, lcdm.pert, xs), 0.0, 1e-6, "all alphas zero = LCDM (Phi, Psi, delta_cdm)");
     }
 
     std::cout << "Momentum constraint, w0-wa expansion, kineticity + braiding + running Planck mass\n";
@@ -136,8 +136,8 @@ int main() {
                 scal = std::max(scal, (std::fabs(t[1]) + std::fabs(t[4])) / gr);
             }
         std::cout << "  scalar terms in the 0i equation: up to " << scal << " of the metric/matter terms\n";
-        check_close("momentum constraint (0i) holds", e0i, 0.0, 1e-6);
-        check("the scalar terms are tested (> 1e-2)", scal > 1e-2);
+        check_close(e0i, 0.0, 1e-6, "momentum constraint (0i) holds");
+        check(scal > 1e-2, "the scalar terms are tested (> 1e-2)");
     }
 
     std::cout << "Stability conditions\n";
@@ -151,16 +151,16 @@ int main() {
             }
             return false;
         };
-        check("ghost (c_K = -1) rejected", throws(horndeski(-1.0, 0.0, 0.0)));
-        check("gradient instability (c_B = -1, LCDM) rejected", throws(horndeski(1.0, -1.0, 0.0)));
-        check("stable model accepted", !throws(horndeski(1.0, 0.6, 0.3)));
+        check(throws(horndeski(-1.0, 0.0, 0.0)), "ghost (c_K = -1) rejected");
+        check(throws(horndeski(1.0, -1.0, 0.0)), "gradient instability (c_B = -1, LCDM) rejected");
+        check(!throws(horndeski(1.0, 0.6, 0.3)), "stable model accepted");
         // alpha_K = alpha_B = 0 with alpha_M != 0: D = 0, the scalar would be dropped (not the small-alpha_K limit)
-        check("D = 0 with alpha_M != 0 (c_K = c_B = 0, c_M = 0.3) rejected", throws(horndeski(0.0, 0.0, 0.3)));
+        check(throws(horndeski(0.0, 0.0, 0.3)), "D = 0 with alpha_M != 0 (c_K = c_B = 0, c_M = 0.3) rejected");
         auto unchecked = horndeski(0.0, 0.0, 0.3);
         unchecked.model_params["hd_stability_check"] = 0.0;
-        check("... also without the stability check", throws(unchecked));
+        check(throws(unchecked), "... also without the stability check");
         // alpha_K = 0 with braiding: c_s^2 ~ 1/alpha_B diverges at early times (too stiff to integrate)
-        check("c_K = 0, c_B = 0.6 (c_s^2 -> infinity at early times) rejected", throws(horndeski(0.0, 0.6, 0.0)));
+        check(throws(horndeski(0.0, 0.6, 0.0)), "c_K = 0, c_B = 0.6 (c_s^2 -> infinity at early times) rejected");
     }
 
     std::cout << "Cubic Galileon from alpha_K = 6 Omega_DE, alpha_B = 2 Omega_DE\n";
@@ -175,7 +175,7 @@ int main() {
         const double e = compare(r.pert, ref.pert, xs);
         const double eL = compare(lcdm.pert, ref.pert, {0.0});
         std::cout << "  (Galileon vs LCDM: " << eL << ")\n";
-        check_close("Phi, Psi, delta_cdm = cubic Galileon implementation", e, 0.0, 1e-6);
+        check_close(e, 0.0, 1e-6, "Phi, Psi, delta_cdm = cubic Galileon implementation");
     }
 
     std::cout << "Quintessence from alpha_K = 3 (rho + p)_phi / H^2\n";
@@ -201,7 +201,7 @@ int main() {
         Run r(p, m, o);
         const double e = compare(r.pert, ref.pert, xs);
         std::cout << "  (quintessence vs LCDM: " << compare(lcdm.pert, ref.pert, {0.0}) << ")\n";
-        check_close("Phi, Psi, delta_cdm = quintessence implementation", e, 0.0, 1e-8);
+        check_close(e, 0.0, 1e-8, "Phi, Psi, delta_cdm = quintessence implementation");
     }
 
     std::cout << "Brans-Dicke from M*^2 = phi, alpha_M = -alpha_B, alpha_K = omega alpha_M^2\n";
@@ -243,7 +243,7 @@ int main() {
         Run r(p, m, o);
         const double e = compare(r.pert, ref.pert, xs);
         std::cout << "  (Brans-Dicke vs LCDM: " << compare(lcdm.pert, ref.pert, {0.0}) << ")\n";
-        check_close("Phi, Psi, delta_cdm = Brans-Dicke implementation", e, 0.0, 1e-6);
+        check_close(e, 0.0, 1e-6, "Phi, Psi, delta_cdm = Brans-Dicke implementation");
         double ev = 0.0;
         for (double k : r.pert.get_k_array())
             for (double x : {-1.0, 0.0}) {
@@ -251,8 +251,8 @@ int main() {
                 const double v_bd = -ref.pert.get("delta_phi_BD", x, k) * bd->phi(x) / (H * bd->dphidx(x));
                 ev = std::max(ev, std::fabs(r.pert.get("v_horndeski", x, k) / v_bd - 1.0));
             }
-        check_close("v = -delta phi / phi' = Brans-Dicke field perturbation", ev, 0.0, 1e-5);
+        check_close(ev, 0.0, 1e-5, "v = -delta phi / phi' = Brans-Dicke field perturbation");
     }
 
-    return Test::summary();
+    return FML::TESTS::summary("EBS horndeski");
 }

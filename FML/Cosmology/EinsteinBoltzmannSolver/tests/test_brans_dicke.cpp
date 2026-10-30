@@ -13,7 +13,7 @@
 #include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include "TestHelpers.h"
+#include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 #include <FML/Cosmology/Models/BransDicke.h>
 
@@ -23,9 +23,9 @@
 using namespace FML::COSMOLOGY;
 
 using namespace Constants;
-using Test::check;
-using Test::check_close;
-using Test::check_rel;
+using FML::TESTS::check;
+using FML::TESTS::check_close;
+using FML::TESTS::check_rel;
 
 namespace {
     CosmologyParameters jbd(double omega) {
@@ -75,11 +75,11 @@ int main() {
     b.solve();
     const auto & g = dynamic_cast<const BransDickeGravity &>(b.gravity());
     {
-        check_rel("phi(0) = (4 + 2 omega)/(3 + 2 omega): G_eff(0) = G",
-                  g.phi(0.0),
+        check_rel(g.phi(0.0),
                   (4.0 + 2.0 * omega) / (3.0 + 2.0 * omega),
-                  1e-12);
-        check_close("E(0) = 1", b.E2_of_x(0.0), 1.0, 1e-12);
+                  1e-12,
+                  "phi(0) = (4 + 2 omega)/(3 + 2 omega): G_eff(0) = G");
+        check_close(b.E2_of_x(0.0), 1.0, 1e-12, "E(0) = 1");
         double e1 = 0.0, e2 = 0.0, eKG = 0.0;
         for (double x : {-12.0, -6.0, -2.0, 0.0, 1.0}) {
             const double h = 1e-4;
@@ -96,12 +96,12 @@ int main() {
                 -(3.0 + L) * g.dphidx(x) + 3.0 * (b.rho_species(x) - 3.0 * p) / ((3.0 + 2.0 * omega) * b.E2_of_x(x));
             eKG = std::max(eKG, std::fabs(Fxx - rhs) / std::fabs(g.dphidx(x)));
         }
-        check_close("dE2/dx vs finite differences", e1, 0.0, 1e-7);
-        check_close("d2E2/dx2 vs finite differences", e2, 0.0, 1e-5);
-        check_close("field equation vs finite differences", eKG, 0.0, 1e-5);
+        check_close(e1, 0.0, 1e-7, "dE2/dx vs finite differences");
+        check_close(e2, 0.0, 1e-5, "d2E2/dx2 vs finite differences");
+        check_close(eKG, 0.0, 1e-5, "field equation vs finite differences");
         // Matter era (Nariai): phi ~ a^{1/(1 + omega)}; small corrections from radiation and Lambda at x = -4
-        check_close("matter era: dln phi/dx = 1/(1 + omega)", g.dphidx(-3.0) / g.phi(-3.0) * (1.0 + omega), 1.0, 2e-2);
-        check("radiation era: phi frozen (dln phi/dx < 1e-5)", std::fabs(g.dphidx(-16.0) / g.phi(-16.0)) < 1e-5);
+        check_close(g.dphidx(-3.0) / g.phi(-3.0) * (1.0 + omega), 1.0, 2e-2, "matter era: dln phi/dx = 1/(1 + omega)");
+        check(std::fabs(g.dphidx(-16.0) / g.phi(-16.0)) < 1e-5, "radiation era: phi frozen (dln phi/dx < 1e-5)");
     }
 
     PerturbationOptions o;
@@ -120,7 +120,7 @@ int main() {
                 e = std::max(e, std::fabs(r.pert.get_Phi(x, k) / lcdm.pert.get_Phi(x, k) - 1.0));
                 e = std::max(e, std::fabs(r.pert.get_delta_cdm(x, k) / lcdm.pert.get_delta_cdm(x, k) - 1.0));
             }
-        check_close("omega = 1e8: Phi, delta_cdm = LCDM", e, 0.0, 1e-6);
+        check_close(e, 0.0, 1e-6, "omega = 1e8: Phi, delta_cdm = LCDM");
     }
 
     std::cout << "Perturbations (omega = " << omega << ")\n";
@@ -144,8 +144,8 @@ int main() {
                 scale = std::max(scale, std::fabs(dF - omega * dF * Fx / F - dFx + Fx * Psi) / std::fabs(rhs));
             }
         std::cout << "  scalar-field terms in the momentum constraint: up to " << scale << " of the matter flux term\n";
-        check_close("momentum constraint (0i) holds", emom, 0.0, 1e-5);
-        check("the scalar-field terms are tested (> 1e-3 of the flux term)", scale > 1e-3);
+        check_close(emom, 0.0, 1e-5, "momentum constraint (0i) holds");
+        check(scale > 1e-3, "the scalar-field terms are tested (> 1e-3 of the flux term)");
 
         // Growth from x0 (matter era) to today, started with each run's own dln delta/dx at x0 (removes the
         // different early evolution and the baryon transient)
@@ -163,8 +163,8 @@ int main() {
                            growth(lcdm.cosmo, [](double) { return 1.0; }, x0, dln(lcdm.pert));
         std::cout << "  growth from z = 54 to 0 relative to LCDM: " << ratio << ", growth equation with G_eff: " << ref
                   << "\n";
-        check_close("growth = growth equation with G_eff = G phi_0/phi", ratio / ref, 1.0, 1e-3);
+        check_close(ratio / ref, 1.0, 1e-3, "growth = growth equation with G_eff = G phi_0/phi");
     }
 
-    return Test::summary();
+    return FML::TESTS::summary("EBS brans dicke");
 }

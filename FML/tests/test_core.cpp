@@ -13,6 +13,9 @@
 #endif
 #include <cstdlib>
 #include <random>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
 
 // A non-arithmetic type to test the generic (gather based) reductions
 struct Pair {
@@ -63,13 +66,6 @@ struct ParticleWithInit {
 };
 
 int main(int argc, char ** argv) {
-    int fails = 0;
-    auto check = [&](bool ok, std::string what) {
-        if (FML::ThisTask == 0)
-            std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-        if (not ok)
-            fails++;
-    };
     std::string mode = argc > 1 ? argv[1] : "all";
 
     if (mode == "all") {
@@ -77,7 +73,7 @@ int main(int argc, char ** argv) {
         FML::GRID::FFTWGrid<3> g;
         g.reallocate(16, 0, 0);
         g.reallocate(16, 1, 1); // and again with different padding
-        check(g.get_nmesh() == 16 and g.get_n_extra_slices_left() == 1 and bool(g), "FFTWGrid::reallocate");
+        check_local(g.get_nmesh() == 16 and g.get_n_extra_slices_left() == 1 and bool(g), "FFTWGrid::reallocate");
 
         // 2. index computation does not overflow for large Nmesh (pure arithmetic, no allocation needed)
         {
@@ -86,7 +82,7 @@ int main(int argc, char ** argv) {
             std::array<int, 3> c{int(Nmesh - 1), int(Nmesh - 1), int(Nmesh - 1)};
             long long expected = ((Nmesh - 1) * Nmesh + (Nmesh - 1)) * (2 * (Nmesh / 2 + 1)) + (Nmesh - 1);
             long long got = (FML::IndexIntType(c[0]) * int(Nmesh) + c[1]) * (2 * (int(Nmesh) / 2 + 1)) + c[2];
-            check(got == expected and got > (1LL << 31), "index formula (Nmesh=2048) no overflow");
+            check_local(got == expected and got > (1LL << 31), "index formula (Nmesh=2048) no overflow");
         }
         // Use the real method on a small grid to check it is still consistent
         {
@@ -96,14 +92,14 @@ int main(int argc, char ** argv) {
                 auto coord = h.get_coord_from_index(ri);
                 ok = ok and (h.get_index_real(coord) == ri);
             }
-            check(ok, "get_index_real <-> get_coord_from_index roundtrip");
+            check_local(ok, "get_index_real <-> get_coord_from_index roundtrip");
         }
 
         // 5. Vector math functions compile and work
         FML::Vector<double> v{0.0, 1.0, 2.0};
         auto e = FML::exp(v);
         auto l = FML::log(e);
-        check(std::abs(e[1] - std::exp(1.0)) < 1e-14 and std::abs(l[2] - 2.0) < 1e-14, "FML::exp/log on Vector");
+        check_local(std::abs(e[1] - std::exp(1.0)) < 1e-14 and std::abs(l[2] - 2.0) < 1e-14, "FML::exp/log on Vector");
 
         // 6. Spline used from more threads than it was created for and nested regions
 #if defined(USE_GSL) && defined(USE_OMP)
@@ -126,7 +122,7 @@ int main(int argc, char ** argv) {
                     maxerr = std::max(maxerr, std::abs(s(xx) - xx * xx));
                 }
             }
-            check(maxerr < 1e-4, "Spline eval with more threads than at creation + nested OMP");
+            check_local(maxerr < 1e-4, "Spline eval with more threads than at creation + nested OMP");
         }
 #endif
 
@@ -162,11 +158,12 @@ int main(int argc, char ** argv) {
             Pair q{double(r), 1.0};
             FML::MaxOverTasks(&q);
             ok = ok and q.a == n - 1;
-            check(ok, "Sum/Min/Max/SumArray OverTasks (int, size_t, long long, float, long double, char, struct)");
+            check_local(ok,
+                        "Sum/Min/Max/SumArray OverTasks (int, size_t, long long, float, long double, char, struct)");
 #ifdef USE_MPI
             int result;
             MPI_Comm_compare(FML::communicator, MPI_COMM_WORLD, &result);
-            check(result == MPI_IDENT, "FML::communicator defaults to MPI_COMM_WORLD");
+            check_local(result == MPI_IDENT, "FML::communicator defaults to MPI_COMM_WORLD");
 #endif
         }
 
@@ -175,9 +172,9 @@ int main(int argc, char ** argv) {
 #ifdef USE_FFTW
         {
 #if defined(USE_FFTW_THREADS) && !defined(USE_MPI)
-            check(FML::FFTWThreadsOK, "FFTW threading initializes without MPI");
-            check(FML::GRID::get_fftw_nthreads() == FML::NThreads,
-                  "FFTW uses the available OpenMP threads without MPI");
+            check_local(FML::FFTWThreadsOK, "FFTW threading initializes without MPI");
+            check_local(FML::GRID::get_fftw_nthreads() == FML::NThreads,
+                        "FFTW uses the available OpenMP threads without MPI");
 #endif
             FML::GRID::FFTWGrid<3> a(32, 1, 1), b(32, 2, 3);
             FML::GRID::FFTWGrid<2> c(64);
@@ -186,7 +183,7 @@ int main(int argc, char ** argv) {
             err = std::max(err, fft_roundtrip_error(a, 2)); // reuses the cached plan
             err = std::max(err, fft_roundtrip_error(b, 3));
             err = std::max(err, fft_roundtrip_error(c, 4));
-            check(err < 1e-12, "FFT roundtrip with cached plans (different sizes/padding)");
+            check_local(err < 1e-12, "FFT roundtrip with cached plans (different sizes/padding)");
 
             // Same transform with FFTW_ESTIMATE and FFTW_MEASURE plans must agree
             FML::GRID::FFTWGrid<3> d(16), e(16);
@@ -207,7 +204,7 @@ int main(int argc, char ** argv) {
                     maxdiff,
                     std::abs(d.get_fourier_from_index(fourier_index) - e.get_fourier_from_index(fourier_index)));
             FML::MaxOverTasks(&maxdiff);
-            check(maxdiff < 1e-14, "FFTW_MEASURE planning preserves grid data and agrees with FFTW_ESTIMATE");
+            check_local(maxdiff < 1e-14, "FFTW_MEASURE planning preserves grid data and agrees with FFTW_ESTIMATE");
         }
 #endif
 
@@ -228,13 +225,13 @@ int main(int argc, char ** argv) {
             }
             int iok = ok ? 0 : 1;
             FML::SumOverTasks(&iok);
-            check(iok == 0, "MPIParticles create/communicate keeps all particles in correct domain");
+            check_local(iok == 0, "MPIParticles create/communicate keeps all particles in correct domain");
         }
         {
             FML::PARTICLE::MPIParticles<ParticleWithInit> mp;
             mp.create_particle_grid(8, 2.0, FML::xmin_domain, FML::xmax_domain);
-            check(mp.get_npart_total() == 512 and mp[0].mass == 1.0,
-                  "MPIParticles of a particle with a default member initializer (create_particle_grid)");
+            check_local(mp.get_npart_total() == 512 and mp[0].mass == 1.0,
+                        "MPIParticles of a particle with a default member initializer (create_particle_grid)");
         }
     }
 
@@ -259,7 +256,5 @@ int main(int argc, char ** argv) {
         mp.communicate_particles();
     }
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "ALL PASSED\n" : "SOME FAILED\n");
-    return fails;
+    return FML::TESTS::summary("core");
 }

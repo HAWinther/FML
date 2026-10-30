@@ -4,16 +4,11 @@
 #include <iomanip>
 #include <iostream>
 #include <set>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check;
 
 using namespace FML::VOIDFINDER;
-int fails = 0;
-void check(bool ok, const std::string & label) {
-    int bad = !ok;
-    FML::MaxOverTasks(&bad);
-    if (FML::ThisTask == 0)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
-    fails += bad;
-}
 struct Record {
     double x;
     int id;
@@ -292,7 +287,5 @@ int main(int argc, char ** argv) {
     test_exchange();
     if (argc == 1 || std::string(argv[1]) != "exchange")
         test_catalogue();
-    if (FML::ThisTask == 0)
-        std::cout << (fails ? "Spherical void tests FAILED\n" : "All spherical void tests passed\n");
-    return fails ? 1 : 0;
+    return FML::TESTS::summary("spherical void");
 }

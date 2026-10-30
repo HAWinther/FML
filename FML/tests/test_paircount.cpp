@@ -19,23 +19,15 @@
 #include <random>
 #include <string>
 #include <vector>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check_local;
+using FML::TESTS::num;
 
 using namespace FML::CORRELATIONFUNCTIONS::PAIRCOUNTS;
 
 int paircount_odr_check(); // defined in test_paircount_odr.cpp
 
-int fails = 0;
-void check(bool ok, std::string what) {
-    if (FML::ThisTask == 0)
-        std::cout << (ok ? "[PASS] " : "[FAIL] ") << what << "\n";
-    if (not ok)
-        fails++;
-}
-std::string num(double x) {
-    std::ostringstream os;
-    os << std::setprecision(5) << x;
-    return os.str();
-}
 
 // A particle with a weight (and a default member initializer, which must compile)
 template <int N>
@@ -150,16 +142,17 @@ void compare_counts(std::string label,
             maxdiff = std::max(maxdiff, std::fabs(count - bf[m][i]) / std::max(1.0, bf[m][i]));
             total += bf[m][i];
         }
-    check(maxdiff < 1e-10, label + ": " + num(total) + " (weighted) pairs, max relative difference " + num(maxdiff));
+    check_local(maxdiff < 1e-10,
+                label + ": " + num(total, 5) + " (weighted) pairs, max relative difference " + num(maxdiff, 5));
 }
 
 // The old linear scan is an independent reference for the exact assignment/order contract.
 void test_rank_assignment() {
     using Costs = std::vector<std::pair<double, size_t>>;
     const Costs tied{{8., 0}, {8., 1}, {4., 2}, {4., 3}, {4., 4}, {4., 5}, {0., 6}};
-    check(detail::assign_cells_to_rank(tied, 2, 0) == std::vector<size_t>({0, 2, 4, 6}) &&
-              detail::assign_cells_to_rank(tied, 2, 1) == std::vector<size_t>({1, 3, 5}),
-          "rank assignment breaks equal-load ties by the lowest rank");
+    check_local(detail::assign_cells_to_rank(tied, 2, 0) == std::vector<size_t>({0, 2, 4, 6}) &&
+                    detail::assign_cells_to_rank(tied, 2, 1) == std::vector<size_t>({1, 3, 5}),
+                "rank assignment breaks equal-load ties by the lowest rank");
     Costs generated;
     std::mt19937_64 schedule_rng(92847);
     for (size_t i = 0; i < 1024; ++i)
@@ -187,12 +180,12 @@ void test_rank_assignment() {
             for (int rank = 0; rank < nranks; ++rank)
                 same &= detail::assign_cells_to_rank(cost, nranks, rank) == expected[rank];
             if (!same) {
-                check(false, "heap assignment matches the legacy scan, including each rank's cell order");
+                check_local(false, "heap assignment matches the legacy scan, including each rank's cell order");
                 return;
             }
         }
     }
-    check(true, "heap assignment matches the legacy scan, including each rank's cell order");
+    check_local(true, "heap assignment matches the legacy scan, including each rank's cell order");
 }
 
 template <int N>
@@ -268,7 +261,7 @@ void test_neighbor_costs() {
         auto empty = occupancy_grid<N>(config.ngrid, a);
         correct &= detail::estimate_cell_costs<N>(empty, B, offsets, false, config.periodic).empty();
     }
-    check(correct, "neighbor candidate costs match exhaustive cell-box geometry in " + std::to_string(N) + "D");
+    check_local(correct, "neighbor candidate costs match exhaustive cell-box geometry in " + std::to_string(N) + "D");
 }
 
 void test_cross_schedule_balance() {
@@ -296,8 +289,8 @@ void test_cross_schedule_balance() {
         }
         return peak;
     };
-    check(peak_candidates(old) == 19000. && peak_candidates(improved) == 10000.,
-          "adjacent disjoint cross-catalogue peaks reduce worst-rank candidate work from 19000 to 10000");
+    check_local(peak_candidates(old) == 19000. && peak_candidates(improved) == 10000.,
+                "adjacent disjoint cross-catalogue peaks reduce worst-rank candidate work from 19000 to 10000");
     // Put all particles near their shared cell face so every candidate passes the distance cut.
     std::vector<Particle<1>> pa, pb;
     for (size_t c = 0; c < a.size(); ++c) {
@@ -318,15 +311,15 @@ void test_cross_schedule_balance() {
     auto maximum = total;
     FML::SumOverTasks(&total);
     FML::MaxOverTasks(&maximum);
-    check(total == 19200 && maximum == (FML::NTasks == 1 ? 19200ULL : 10000ULL),
-          "distributed cross counts and maximum-rank workload match the predicted neighbor schedule");
+    check_local(total == 19200 && maximum == (FML::NTasks == 1 ? 19200ULL : 10000ULL),
+                "distributed cross counts and maximum-rank workload match the predicted neighbor schedule");
     if constexpr (sizeof(size_t) >= 8) {
         const size_t large = size_t(1ULL << 40);
         auto huge = occupancy_grid<1>(1, {large});
         auto one = detail::pair_cell_offsets<1>(1, .1, true);
         auto cost = detail::estimate_cell_costs<1>(huge, huge, one, false, true);
-        check(cost[0].first == std::ldexp(1., 80),
-              "candidate cost products exceed 64-bit counts without integer overflow");
+        check_local(cost[0].first == std::ldexp(1., 80),
+                    "candidate cost products exceed 64-bit counts without integer overflow");
     }
 }
 
@@ -336,7 +329,7 @@ int main() {
     test_neighbor_costs<3>();
     test_cross_schedule_balance();
     test_rank_assignment();
-    check(paircount_odr_check() == 1, "PairCount.h can be included in several translation units");
+    check_local(paircount_odr_check() == 1, "PairCount.h can be included in several translation units");
 
     // Pair counts against brute force
     {
@@ -373,8 +366,9 @@ int main() {
                 asym = std::max(asym, std::fabs(pc[3 + m][i] - pc[2 - m][i]));
                 total += pc[3 + m][i] + pc[2 - m][i];
             }
-        check(asym < 1e-10,
-              "auto pairs symmetric in mu (max |N(mu) - N(-mu)| = " + num(asym) + " of " + num(total) + ")");
+        check_local(asym < 1e-10,
+                    "auto pairs symmetric in mu (max |N(mu) - N(-mu)| = " + num(asym, 5) + " of " + num(total, 5) +
+                        ")");
     }
 
     // The correlation function of uniform random points is ~ 0
@@ -388,7 +382,8 @@ int main() {
             double mx = 0.0;
             for (auto x : xi)
                 mx = std::max(mx, std::fabs(x));
-            check(mx < 0.05, "xi of uniform random points in " + std::to_string(N) + "D: max |xi| = " + num(mx));
+            check_local(mx < 0.05,
+                        "xi of uniform random points in " + std::to_string(N) + "D: max |xi| = " + num(mx, 5));
             // (r, mu) in 2D: the mu bins are not uniform in angle
             if constexpr (N >= 2) {
                 DVector mu_array, observer(N, 0.5);
@@ -414,8 +409,9 @@ int main() {
                 for (auto & row : xi2)
                     for (auto x : row)
                         mx2 = std::max(mx2, std::fabs(x));
-                check(mx2 < 0.1,
-                      "xi(r, mu) of uniform random points in " + std::to_string(N) + "D: max |xi| = " + num(mx2));
+                check_local(mx2 < 0.1,
+                            "xi(r, mu) of uniform random points in " + std::to_string(N) +
+                                "D: max |xi| = " + num(mx2, 5));
             }
         };
         run(std::integral_constant<int, 1>{});
@@ -440,7 +436,7 @@ int main() {
             const double rmean = extra[i][1] / extra[i][0];
             ok = ok and extra[i][0] == pc[i] and rmean > 0.02 * i and rmean < 0.02 * (i + 1);
         }
-        check(ok, "extra quantities (pair count = paircounts, mean r inside the bins)");
+        check_local(ok, "extra quantities (pair count = paircounts, mean r inside the bins)");
     }
 
     // A pair at r just below rmax where (r - rmin) / (rmax - rmin) * nbins rounds to nbins
@@ -462,7 +458,7 @@ int main() {
         a[1].pos[0] = r;
         DVector r_array, pc, xi;
         RadialCorrelationFunctionBox<Particle<3>>(a.data(), 2, rmin, rmax, nb, r_array, pc, false, xi, false, false);
-        check(found and pc.back() == 1.0, "a pair at r just below rmax goes in the last bin");
+        check_local(found and pc.back() == 1.0, "a pair at r just below rmax goes in the last bin");
     }
 
     // Survey: uniform data and randoms (not periodic): Landy-Szalay xi ~ 0, and D1R2 = the box cross counts
@@ -500,7 +496,7 @@ int main() {
         double mx = 0.0;
         for (auto x : xi)
             mx = std::max(mx, std::fabs(x));
-        check(mx < 0.05, "survey Landy-Szalay xi of uniform points ~ 0 (max |xi| = " + num(mx) + ")");
+        check_local(mx < 0.05, "survey Landy-Szalay xi of uniform points ~ 0 (max |xi| = " + num(mx, 5) + ")");
         DVector pc, xib;
         RadialCorrelationFunctionBox<Particle<3>, Particle<3>>(data.data(),
                                                                data.size(),
@@ -518,7 +514,8 @@ int main() {
         double maxdiff = 0.0;
         for (size_t i = 0; i < pc.size(); i++)
             maxdiff = std::max(maxdiff, std::fabs(pc[i] - dr[i]) / pc[i]);
-        check(maxdiff < 1e-12 and rd == dr, "survey D1R2 = box cross pair counts (normalized), R1D2 = D1R2 for auto");
+        check_local(maxdiff < 1e-12 and rd == dr,
+                    "survey D1R2 = box cross pair counts (normalized), R1D2 = D1R2 for auto");
     }
 
 #ifdef USE_GSL
@@ -529,12 +526,9 @@ int main() {
         Spline2D xi_spline(mu, r, z);
         std::vector<DVector> multipoles(1);
         FromAngularCorrelationToMultipoles(r, xi_spline, multipoles);
-        check(std::fabs(multipoles[0][2] - 1.0) < 1e-10, "monopole of xi = 1 (one multipole)");
+        check_local(std::fabs(multipoles[0][2] - 1.0) < 1e-10, "monopole of xi = 1 (one multipole)");
     }
 #endif
 
-    if (FML::ThisTask == 0)
-        std::cout << (fails == 0 ? "All pair count tests passed\n" :
-                                   std::to_string(fails) + " pair count test(s) FAILED\n");
-    return fails == 0 ? 0 : 1;
+    return FML::TESTS::summary("pair count");
 }

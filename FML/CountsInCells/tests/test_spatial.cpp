@@ -1,15 +1,10 @@
 #include <FML/CountsInCells/SpatialStatistics.h>
 #include <FML/HOD/HOD.h>
 #include <iostream>
+#include <FML/tests/TestHelpers.h>
+
+using FML::TESTS::check;
 using namespace FML::COUNTS_IN_CELLS;
-int failures = 0;
-void check(bool good, const std::string & label) {
-    int bad = !good;
-    FML::MaxOverTasks(&bad);
-    failures += bad;
-    if (FML::ThisTask == 0)
-        std::cout << (bad ? "[FAIL] " : "[PASS] ") << label << '\n';
-}
 bool near(double a, double b, double tolerance = 1e-12) {
     if (std::isnan(a) || std::isnan(b))
         return std::isnan(a) && std::isnan(b);
@@ -312,37 +307,32 @@ void test_local_only() {
     check(local, "local summaries can run on rank zero alone without hidden MPI collectives");
 }
 void test_invalid() {
-    auto rejects = [](auto operation) {
-        try {
-            operation();
-        } catch (const std::invalid_argument &) {
-            return true;
-        }
-        return false;
-    };
     SpatialStatistics stats(FML::KDTREE::pointVec{{.1, .2, .3}}, 1);
     auto q = local_queries({{{.2, .3, .4}}});
-    check(rejects([&] { stats.knn_cdf(q, {0}, {.1}); }) && rejects([&] { stats.knn_cdf(q, {1, 1}, {.1}); }),
+    check(FML::TESTS::throws<std::invalid_argument>([&] { stats.knn_cdf(q, {0}, {.1}); }) &&
+              FML::TESTS::throws<std::invalid_argument>([&] { stats.knn_cdf(q, {1, 1}, {.1}); }),
           "zero/duplicate kNN orders are rejected collectively");
-    check(rejects([&] { stats.counts_in_cells(q, {.6}); }) && rejects([&] { stats.counts_in_cells(q, {0}); }),
+    check(FML::TESTS::throws<std::invalid_argument>([&] { stats.counts_in_cells(q, {.6}); }) &&
+              FML::TESTS::throws<std::invalid_argument>([&] { stats.counts_in_cells(q, {0}); }),
           "density cell radii must have positive standard spherical volume without torus overlap");
     if (FML::ThisTask == 0)
         q.push_back({{NAN, .2, .3}});
-    check(rejects([&] { stats.knn_cdf(q, {1}, {.1}); }), "invalid query on one rank fails collectively");
+    check(FML::TESTS::throws<std::invalid_argument>([&] { stats.knn_cdf(q, {1}, {.1}); }),
+          "invalid query on one rank fails collectively");
     SpatialStatistics nonperiodic(FML::KDTREE::pointVec{{.1, .2, .3}});
     const std::vector<Query> edge{{{.01, .01, .01}}};
     Options options;
     options.window = Bounds{};
-    check(rejects([&] { nonperiodic.counts_in_cells(edge, {.1}, options); }) &&
-              rejects([&] { nonperiodic.counts_in_cells(edge, {.1}); }),
+    check(FML::TESTS::throws<std::invalid_argument>([&] { nonperiodic.counts_in_cells(edge, {.1}, options); }) &&
+              FML::TESTS::throws<std::invalid_argument>([&] { nonperiodic.counts_in_cells(edge, {.1}); }),
           "unconfigured or partially clipped nonperiodic windows are rejected");
     if (FML::NTasks > 1) {
         Options mismatch;
         mismatch.histogram_limit = 10 + FML::ThisTask;
-        check(rejects([&] { stats.counts_in_cells({}, {.1}, mismatch); }),
+        check(FML::TESTS::throws<std::invalid_argument>([&] { stats.counts_in_cells({}, {.1}, mismatch); }),
               "different summary schemas across ranks fail before reducing arrays");
         SpatialStatistics different(FML::KDTREE::pointVec{{.1 + .01 * FML::ThisTask, .2, .3}}, 1);
-        check(rejects([&] { different.knn_cdf({}, {1}, {.1}); }),
+        check(FML::TESTS::throws<std::invalid_argument>([&] { different.knn_cdf({}, {1}, {.1}); }),
               "global reductions reject differing tracer catalogue fingerprints");
     }
 }
@@ -354,7 +344,5 @@ int main() {
     test_mock_integration();
     test_local_only();
     test_invalid();
-    if (FML::ThisTask == 0)
-        std::cout << (failures ? "Spatial statistics tests FAILED\n" : "All spatial statistics tests passed\n");
-    return failures ? 1 : 0;
+    return FML::TESTS::summary("spatial statistics");
 }
