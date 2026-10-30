@@ -39,7 +39,14 @@ def convert(args):
     pos, vel, ids, mass, box = read_gadget(args.gadget)
     pos = np.mod(pos, box)
     pos[pos >= box] = 0
-    np.savetxt(args.output + ".0.txt", np.column_stack([ids, pos, vel, np.full(len(ids), mass)]),
+    # A homogeneous stack with floating-point columns would round uint64 IDs above 2**53.
+    rows = np.empty(len(ids), dtype=[("id", np.uint64)] +
+                    [(name, np.float64) for name in ("x", "y", "z", "vx", "vy", "vz", "mass")])
+    rows["id"] = ids
+    for name, values in zip(("x", "y", "z", "vx", "vy", "vz"), (*pos.T, *vel.T)):
+        rows[name] = values
+    rows["mass"] = mass
+    np.savetxt(args.output + ".0.txt", rows,
                fmt="%d %.7f %.7f %.7f %.5f %.5f %.5f %.10e")
     data = bytearray(open(args.gadget, "rb").read())
     om = struct.unpack("d", data[4 + 136:4 + 144])[0]
@@ -58,10 +65,13 @@ def compare(args):
                          for f in sorted(glob.glob(args.fml + ".*.members.txt"))])
     lines = open(args.rockstar).read().split("\n")
     start = [i for i, l in enumerate(lines) if l.startswith("#Halo table begins")][0]
-    H = np.array([l[1:].split() for l in lines[start + 1:] if l.startswith("#") and len(l[1:].split()) == 20], float)
-    H = H[H[:, 0] >= 0]
-    rint, rm, rn, rr, rv, rx = H[:, 1], H[:, 3], np.rint(H[:, 4] / mp), H[:, 5] / 1e3, H[:, 6], H[:, 9:12]
-    P = np.loadtxt(args.rockstar, comments="#", usecols=(6, 7))
+    H = np.array([l[1:].split() for l in lines[start + 1:] if l.startswith("#") and len(l[1:].split()) == 20], str)
+    H = H[np.array([int(row[0]) >= 0 for row in H], dtype=bool)]
+    rint, rm = H[:, 1].astype(np.int64), H[:, 3].astype(float)
+    rn, rr = np.rint(H[:, 4].astype(float) / mp), H[:, 5].astype(float) / 1e3
+    rv, rx = H[:, 6].astype(float), H[:, 9:12].astype(float)
+    P = np.loadtxt(args.rockstar, comments="#", usecols=(6, 7),
+                   dtype=[("particle", np.uint64), ("halo", np.int64)], ndmin=1)
     fhost_is = fhost == no_halo
     rparent = np.full(len(rm), -1)
     tree = cKDTree(np.mod(rx, box), boxsize=box)
@@ -74,11 +84,16 @@ def compare(args):
     rhost_is = rparent < 0
     # particle -> object index in each catalogue
     findex = {int(k): i for i, k in enumerate(fid)}
-    f_of = np.full(int(max(members[:, 0].max(), P[:, 0].max())) + 1, -1)
-    f_of[members[:, 0].astype(np.int64)] = [findex.get(int(h), -1) for h in members[:, 1]]
+    # Join on sorted uint64 IDs; workspace depends on particle count, not the largest ID.
+    order = np.argsort(members[:, 0])
+    sorted_ids = members[order, 0]
+    offsets = np.searchsorted(sorted_ids, P["particle"])
+    matched = np.flatnonzero(offsets < len(sorted_ids))
+    matched = matched[sorted_ids[offsets[matched]] == P["particle"][matched]]
+    f_of = np.full(len(P), -1, dtype=np.intp)
+    f_of[matched] = [findex.get(int(h), -1) for h in members[order[offsets[matched]], 1]]
     rindex = {int(k): i for i, k in enumerate(rint)}
-    r_of = np.array([rindex.get(int(k), -1) for k in P[:, 1]])
-    f_of = f_of[P[:, 0].astype(np.int64)]
+    r_of = np.array([rindex.get(int(k), -1) for k in P["halo"]], dtype=np.intp)
     ok = (r_of >= 0) & (f_of >= 0)
     pairs, counts = np.unique(np.stack([f_of[ok], r_of[ok]], 1), axis=0, return_counts=True)
     bestF, bF = np.full(len(fid), -1), np.zeros(len(fid))

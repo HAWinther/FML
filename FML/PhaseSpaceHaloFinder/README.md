@@ -20,12 +20,19 @@ The normalization, adaptive nearest-neighbour linking and hierarchical seed-assi
 
 Unbinding uses the **full isolated Newtonian potential**, not a truncated PM/TreePM correction. `BindingPotentialTree` uses a monopole binary tree, excludes self potentials and opens nodes intersecting the softening support. The default opening angle is .7 (`potential_opening_angle`; .3 changed 26 of 5686 objects of a cosmological snapshot by at most 1.7% of their particles at 1.15x the cost, tests/RESULTS.md); opening angle zero gives exact leaf sums. The compact spline Green function is shared with `ShortRangeGravity/Softening.h`; the input length is its support h, not Plummer-equivalent epsilon. The tree can be tested independently against direct sums.
 
-At each iteration the bulk velocity and potential are recomputed. A particle remains if
+At each iteration the bulk velocity is recomputed. Approximate tree potentials are rebuilt after every removal;
+exact-opening potentials may instead subtract the removed particles directly when that costs fewer interactions.
+Exact subtraction from an approximate monopole is unsafe: the removed sources' approximation error would remain
+in the surviving potential. A particle remains if
 
 ```
 0.5 * |v_pec - v_bulk + hubble_velocity_gradient * (x-x_bulk)|^2 + Phi_self < 0.
 Phi_self = - (G/position_to_physical) * sum_other mass * spline_green(distance,softening_support).
 ```
+
+The historical cosmological timings and opening-angle comparisons in `tests/RESULTS.md` predate this cache
+correction. Rebuilding approximate potentials can increase runtime for objects requiring several unbinding passes
+and can change their surviving memberships; the correction's focused regression and timing checks are recorded there.
 
 The Hubble term is optional and enters binding only, not the phase-space clustering metric. The potential is that of the assigned halo, with zero at infinity. Host tidal fields, a tidal-radius solver, combined-system major-merger unbinding and modified-gravity binding are not implemented. This is an isolated self-bound convention. Objects below the minimum particle count or minimum retained **mass fraction** are discarded. Failure to reach a stable membership by `max_unbinding_iterations` throws, rather than returning a falsely converged bound object.
 
@@ -103,6 +110,10 @@ OMP_NUM_THREADS=4 FML/PhaseSpaceHaloFinder/tests/test_phase_space_halos --benchm
 ```
 
 Tests are also registered in `FML/tests`. The module requires only Global plus header dependencies; FFTW/GSL are not required for standalone builds. Change compiler/MPI options in separate build directories or clean first.
+
+The optional comparison harness has separate regression checks (NumPy and SciPy required, no ROCKSTAR binary):
+`make -C FML/PhaseSpaceHaloFinder/tests run-python`. They exercise uint64 ID round trips and sparse membership
+joins, including IDs above 2^53 and 2^63. IDs are never converted to floating point or used as dense array indices.
 
 The text-input example reads `input_prefix.rank.txt` rows `id x y z vx vy vz mass`, already distributed to their owning slabs, and writes parent-owner halo catalogues plus input-owner particle assignments:
 

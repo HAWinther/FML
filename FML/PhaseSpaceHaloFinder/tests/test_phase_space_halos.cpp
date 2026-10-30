@@ -217,6 +217,32 @@ void unbinding() {
     check(hubble.halos.empty() && no_hubble.halos.size() == 1,
           "optional Hubble flow enters kinetic energy in explicit velocity/length units");
 }
+void unequal_mass_unbinding() {
+    // Removing two massive interlopers must also remove their tree-approximation error.
+    // Exact subtraction from an approximate monopole leaves a positive potential in
+    // the left cloud and used to discard this entirely cold, self-bound remnant.
+    std::vector<Particle> p;
+    for (int i = 0; i < 32; ++i)
+        p.push_back({ID(i), {.3 + 1e-4 * i, .5, .5}, {}, 1});
+    for (int i = 0; i < 32; ++i)
+        p.push_back({ID(32 + i), {.48 + .04 * i / 31., .5, .5}, {}, (i == 0 || i == 31) ? 1e6 : 1});
+    p[32].velocity = {1e6, 0, 0};
+    p[63].velocity = {-1e6, 0, 0};
+    Options o;
+    o.minimum_seed_particles = o.minimum_particles = 62;
+    o.minimum_bound_fraction = 0;
+    o.linking_length = 1;
+    o.potential_opening_angle = 0;
+    const auto exact = find(p, o);
+    bool good = exact.halos.size() == 1 && exact.halos.front().particle_ids.size() == 62 &&
+                exact.statistics.unbound_particles == 2;
+    for (double angle : {.3, .7}) {
+        o.potential_opening_angle = angle;
+        const auto approximate = find(p, o);
+        good &= same_membership(exact, approximate) && approximate.statistics.unbound_particles == 2;
+    }
+    check(good, "approximate unbinding removes massive interlopers without losing the cold bound remnant");
+}
 void invariants() {
     auto p = overlap();
     auto o = options();
@@ -588,6 +614,7 @@ int main(int argc, char ** argv) {
     substructure();
     planted_subhalo();
     unbinding();
+    unequal_mass_unbinding();
     invariants();
     distributed();
     adapters();

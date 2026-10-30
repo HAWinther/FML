@@ -2,6 +2,33 @@
 
 This records a first independent single-snapshot implementation. It is not a production completeness/purity calibration or a claim of ROCKSTAR equivalence.
 
+## Review corrections (30 October 2026)
+
+Approximate potentials are now rebuilt after particle removals. The previous optimization subtracted exact
+particle potentials from approximate monopoles and could leave the removed sources' approximation error in the
+surviving potential. A 64-particle unequal-mass regression loses its cold bound remnant with the previous code;
+the corrected finder retains all 62 cold survivors after removing the two massive interlopers, at opening angles
+0, .3 and .7. Exact-opening runs retain the direct-subtraction shortcut.
+
+The serial/OpenMP executable passes 33 checks (including this regression) with GCC 12, `-O3 -Wall -Wextra` and
+two threads. Three end-to-end Python harness tests pass with NumPy 2.4.6 and SciPy 1.17.1: uint64 conversion
+round trips, unsorted sparse membership joins and missing/unassigned IDs. The fixtures cover adjacent IDs above
+2^53, IDs above 2^63, and large reference halo IDs. The new `run-python` Makefile target passes. These tests require
+no external ROCKSTAR binary. The new regressions fail with the previous implementation. Multi-rank and external
+ROCKSTAR runs were not repeated for this correction.
+
+The historical timing and cosmological comparison sections below predate this correction. In focused local
+before/after runs on the same 16000-particle Plummer fixture (default opening angle .7, two threads), the
+unmodified velocities require no removals: 1.55 s before and 1.54 s after, with 15341 retained members. Scaling
+velocities by 1.3 requires 802 removals: 1.74 s before and 4.35 s after, with the same 14539 retained members.
+Potential interaction counts in the latter case rise from 102905764 to 584763075. These are single-run timings,
+not a portable slowdown estimate; the extra work depends on the number of unbinding passes. The existing
+1000/4000/16000-particle benchmark (opening angle .3) has unchanged interaction counts in these no-removal cases.
+
+The comparison harness now preserves integer IDs during conversion and reference parsing, and joins sorted
+uint64 particle IDs rather than allocating through the maximum ID. Membership-join workspace therefore scales
+with catalogue record counts, including for sparse IDs near the uint64 limit.
+
 ## Regression and manufactured-truth checks
 
 GCC 12 `-O2 -Wall -Wextra`, OpenMP; MPICH with 2 threads per rank for MPI. Serial sanitizer build: Clang 19, AddressSanitizer plus UndefinedBehaviorSanitizer, with leak detection. C++ is formatted using `FML/.clang-format` and clang-format 19.

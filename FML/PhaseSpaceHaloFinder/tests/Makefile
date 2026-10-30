@@ -16,8 +16,12 @@ else
 NP_LIST = 1
 RUN =
 endif
-.PHONY: run
+.PHONY: run run-python
 run: $(TARGETS)
 	@set -e; for np in $(NP_LIST); do \
 	  OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive $(RUN) ./test_phase_space_halos; \
 	done
+
+# Optional harness checks; requires NumPy and SciPy, but no ROCKSTAR binary.
+run-python:
+	$(PYTHON) test_compare_rockstar_cosmo.py
