@@ -2,6 +2,7 @@
 #include <FML/Spline/Spline.h>
 #include <FML/Math/Math.h>
 #include <FML/FileUtils/FileUtils.h>
+#include <FML/Units/Units.h>
 #include "Halomodel.h"
 #include <gsl/gsl_sf_expint.h>
 #include <stdexcept>
@@ -16,6 +17,12 @@ namespace FML {
             // 2 for <1% accuracy. Runtime is quadratic in this
             //================================================
             int _ACCURACY_BOOST = 1;
+               
+
+            // Constants
+            constexpr double Mpl2overMsunH0overh = FML::UTILS::SI::c * FML::UTILS::SI::c * FML::UTILS::SI::c / 
+              (8.0*M_PI*FML::UTILS::SI::G * FML::UTILS::SI::Msun * FML::UTILS::SI::H0_over_h);
+            constexpr double H0overh_in_hmpc = FML::UTILS::SI::H0_over_h / FML::UTILS::SI::c * FML::UTILS::SI::Mpc;
 
             // Extend a logY(logx) spline assuming
             // Y ~ x^n close to the endpoints
@@ -226,8 +233,6 @@ namespace FML {
             double RofM(double M, double OmegaM, [[maybe_unused]] double x) {
                 // R is comoving (as in sigma(R)) so we use the comoving mean matter density (before rho_mean * a^-3 was
                 // used, so M(R) was a factor (1+z)^3 too large for z > 0)
-                const double Mpl2overMsunH0overh = 2.493e21;
-                const double H0overh_in_hmpc = 1.0 / 2997.92458;
                 const double rho_mean_in_msunh_over_mpch3 =
                     3.0 * OmegaM * std::pow(H0overh_in_hmpc, 3) * Mpl2overMsunH0overh;
                 return std::pow(M / (4.0 * M_PI / 3.0 * rho_mean_in_msunh_over_mpch3), 1.0 / 3.0);
@@ -245,8 +250,6 @@ namespace FML {
             //================================================
             double MofR(double R, double OmegaM, [[maybe_unused]] double x) {
                 // Comoving R and the comoving mean matter density (see RofM)
-                const double Mpl2overMsunH0overh = 2.493e21;
-                const double H0overh_in_hmpc = 1.0 / 2997.92458;
                 const double rho_mean_in_msunh_over_mpch3 =
                     3.0 * OmegaM * std::pow(H0overh_in_hmpc, 3) * Mpl2overMsunH0overh;
                 return 4.0 * M_PI / 3.0 * rho_mean_in_msunh_over_mpch3 * std::pow(R, 3);
