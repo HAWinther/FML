@@ -213,7 +213,7 @@ void ExamplesPower() {
             std::cout << "Running compute_power_spectrum_multipoles (from particles)\n";
 
         // Density assignment method and the number of extra slices we need for this
-        auto nleftright = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(density_assignment_method);
+        auto nleftright = FML::INTERPOLATION::get_extra_slices(density_assignment_method);
 
         // Make density grid (make sure we have enough slices)
         FFTWGrid<NDIM> density_k(Nmesh, nleftright.first, nleftright.second);

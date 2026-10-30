@@ -258,8 +258,7 @@ void NBodySimulation<NDIM, T>::store_initial_density_field(const FFTWGrid<NDIM> 
     if (not initial_density_field_fourier) {
         const auto saved_force = current_force;
         current_force = params.force;
-        const auto nleftright =
-            FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(current_force.density_assignment_method);
+        const auto nleftright = FML::INTERPOLATION::get_extra_slices(current_force.density_assignment_method);
         initial_density_field_fourier = FFTWGrid<NDIM>(current_force.nmesh, nleftright.first, nleftright.second);
         initial_density_field_fourier.add_memory_label("density(k,zini)");
         assign_cb_particles_to_grid(initial_density_field_fourier, a, false);

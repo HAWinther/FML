@@ -346,7 +346,7 @@ namespace FML {
                 return;
             }
 
-            auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
+            auto nleftright = get_extra_slices(density_assignment_method);
             FFTWGrid<N> density_shift(nmesh, nleftright.first, nleftright.second);
             density_shift.add_memory_label("FFTWGrid::sheet_density_fourier::density_shift");
             // Keep the extra slices of the output grid (they are needed if it is used for interpolation later)

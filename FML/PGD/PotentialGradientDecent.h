@@ -86,8 +86,7 @@ namespace FML {
             assert_mpi(NumPartTotal > 0, "[potential_gradient_decent_method] There are no particles (on any task)");
 
             // Bin particles to grid and fourier transform
-            const auto nleftright =
-                FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(density_assignment_method);
+            const auto nleftright = FML::INTERPOLATION::get_extra_slices(density_assignment_method);
             FFTWGrid<N> density_k(Ngrid, nleftright.first, nleftright.second);
             const bool interlacing = false;
             FML::INTERPOLATION::particles_to_fourier_grid(p,

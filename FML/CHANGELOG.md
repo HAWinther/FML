@@ -5,6 +5,12 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### `get_extra_slices` replaces `get_extra_slices_needed_for_density_assignment`
+- `FML::INTERPOLATION::get_extra_slices(density_assignment_method)` returns the extra slices {left, right} an
+  FFTWGrid needs for a density assignment / interpolation method (NGP, CIC, TSC, PCS, PQS), as before.
+  `get_extra_slices_needed_for_density_assignment` is kept as a `[[deprecated]]` wrapper; all uses in the library,
+  examples, tests and SimulationCode use the new name.
+
 ### SimulationCode: the PM density and force grids are kept from step to step
 - The density grid and the force grids of a step (also with force interlacing) are members of the simulation and
   reused at the next step instead of being allocated again (each new grid makes the operating system map and zero

@@ -732,7 +732,7 @@ int main(int argc, char ** argv) {
         // Some particles in the last half cell (these are shifted outside the box for the interlaced grid)
         for (size_t i = 0; i < part.size(); i += 10)
             part[i].pos[0] = std::min(FML::xmax_domain, 1.0) - 0.25 / 24.0;
-        auto lr = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(method);
+        auto lr = FML::INTERPOLATION::get_extra_slices(method);
         Grid<3> grid(24, lr.first, lr.second + 1);
         FML::INTERPOLATION::particles_to_fourier_grid_interlacing(part.data(), part.size(), Np, grid, method);
         double dc = FML::ThisTask == 0 ? std::abs(grid.get_fourier_from_index(0)) : 0.0;

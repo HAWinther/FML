@@ -637,10 +637,10 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
     //=============================================================
     // Make the initial density field delta(k,zini)
     //=============================================================
-    auto nextra = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment("CIC");
+    auto nextra = FML::INTERPOLATION::get_extra_slices("CIC");
     if (ic.random_field_type == SIMCODE::ICRandomFieldType::ReadPhases) {
         // If read_phases then delta_ini is computed from particles
-        nextra = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(ic.reconstruct_assigment_method);
+        nextra = FML::INTERPOLATION::get_extra_slices(ic.reconstruct_assigment_method);
     }
     FFTWGrid<NDIM> delta_ini_fourier(ic.nmesh, nextra.first, nextra.second);
     delta_ini_fourier.add_memory_label("delta_ini_fourier(k)");
@@ -1115,8 +1115,7 @@ void NBodySimulation<NDIM, T>::setup_nbody_gauge() {
     }
 
     // delta_cb(k,zini) of the particles on the force grid
-    const auto nleftright =
-        FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(force.density_assignment_method);
+    const auto nleftright = FML::INTERPOLATION::get_extra_slices(force.density_assignment_method);
     initial_density_field_fourier = FFTWGrid<NDIM>(force.nmesh, nleftright.first, nleftright.second);
     initial_density_field_fourier.add_memory_label("density(k,zini)");
     FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
@@ -1361,8 +1360,7 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
     const auto & force = current_force;
 
     // Force interlacing: average the force over copies of the particles shifted relative to the grid
-    const auto nleftright =
-        FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(force.density_assignment_method);
+    const auto nleftright = FML::INTERPOLATION::get_extra_slices(force.density_assignment_method);
     if (force.interlacing_order > 1 and s.delta_time_kick != 0.0 and not sim.enforce_LPT_trajectories) {
         kick_with_interlaced_force(s);
         return drift_and_lightcone(s);
@@ -1473,8 +1471,7 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
         // The potential of this step (if not computed with the force, e.g. with force interlacing: from the
         // CDM+baryon density only)
         if (lightcone->needs_potential(s.apos, s.apos_new) and not lightcone->has_potential(s.apos)) {
-            const auto nleftright = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(
-                current_force.density_assignment_method);
+            const auto nleftright = FML::INTERPOLATION::get_extra_slices(current_force.density_assignment_method);
             FFTWGrid<NDIM> density(current_force.nmesh, nleftright.first, nleftright.second);
             assign_cb_particles_to_grid(density, s.apos);
             compute_lightcone_potential(density, s.apos);
@@ -1514,8 +1511,7 @@ template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const StepInfo & s) {
     const auto & sim = params.simulation;
     const auto & force = current_force;
-    const auto nleftright =
-        FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(force.density_assignment_method);
+    const auto nleftright = FML::INTERPOLATION::get_extra_slices(force.density_assignment_method);
     const auto shifts =
         FML::INTERPOLATION::generate_interlacing_shifts<NDIM>(force.interlacing_order, 1.0 / double(force.nmesh));
     // With one task the shifted particles can be wrapped in all directions. Otherwise not in x (they stay on

@@ -52,7 +52,7 @@ std::vector<P> make_particles(bool empty_rank, bool all_empty) {
 
 template <int N>
 std::array<FML::GRID::FFTWGrid<N>, N> make_force(const std::string & method) {
-    auto halo = I::get_extra_slices_needed_for_density_assignment(method);
+    auto halo = I::get_extra_slices(method);
     std::array<FML::GRID::FFTWGrid<N>, N> force;
     for (int d = 0; d < N; d++) {
         force[d] = FML::GRID::FFTWGrid<N>(24, halo.first, halo.second);

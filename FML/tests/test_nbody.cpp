@@ -104,7 +104,7 @@ double buffered_pgd(std::vector<T> & particles, const std::string & method, doub
     using Grid = FML::GRID::FFTWGrid<N>;
     size_t total = particles.size();
     FML::SumOverTasks(&total);
-    const auto halo = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(method);
+    const auto halo = FML::INTERPOLATION::get_extra_slices(method);
     Grid density(24, halo.first, halo.second);
     FML::INTERPOLATION::particles_to_fourier_grid<N, T>(particles.data(),
                                                         particles.size(),

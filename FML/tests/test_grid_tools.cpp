@@ -677,7 +677,7 @@ int main(int argc, char ** argv) {
         std::string info;
         for (std::string method : {"NGP", "CIC", "TSC", "PCS"}) {
             const int order = FML::INTERPOLATION::interpolation_order_from_name(method);
-            auto nlr = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(method);
+            auto nlr = FML::INTERPOLATION::get_extra_slices(method);
             std::vector<FFTWGrid<3>> grids;
             for (int nthreads : {1, 2, 3}) {
                 omp_set_num_threads(nthreads);

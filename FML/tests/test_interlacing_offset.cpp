@@ -105,7 +105,7 @@ void run_case(const std::string & label, bool empty_rank = false) {
     double worst_deposition = 0, worst_legacy = 0, worst_multi = 0;
     bool conserved = true;
     for (const std::string method : {"NGP", "CIC", "TSC", "PCS", "PQS"}) {
-        auto halo = I::get_extra_slices_needed_for_density_assignment(method);
+        auto halo = I::get_extra_slices(method);
         std::array<double, N> offset;
         offset.fill(0.375 / chunk_mesh);
         FML::GRID::FFTWGrid<N> a(chunk_mesh, halo.first, halo.second + 1), b = a;
@@ -197,7 +197,7 @@ int main(int argc, char ** argv) {
     if (!mode.empty()) {
         using P = Particle<3, double>;
         auto p = particles<3, P>(false);
-        auto halo = I::get_extra_slices_needed_for_density_assignment("CIC");
+        auto halo = I::get_extra_slices("CIC");
         FML::GRID::FFTWGrid<3> grid(24, halo.first, halo.second);
         std::array<double, 3> shift{};
         shift[0] = mode == "negative" ? -0.1 : 0.5 / 24;

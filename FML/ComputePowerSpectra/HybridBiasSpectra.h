@@ -578,8 +578,7 @@ namespace FML {
                     for (int idim = 0; idim < N; idim++)
                         wp[i].pos[idim] = pos[idim];
                 }
-                const auto nleftright = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(
-                    options.density_assignment_method);
+                const auto nleftright = FML::INTERPOLATION::get_extra_slices(options.density_assignment_method);
                 advected.clear();
                 for (int f = -1; f < nfields; f++) {
 #ifdef USE_OMP

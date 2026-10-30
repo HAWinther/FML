@@ -387,8 +387,7 @@ namespace FML {
                           << " (box units)\n";
 
             // Density assignment gives delta
-            const auto nextra =
-                FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(options.density_assignment_method);
+            const auto nextra = FML::INTERPOLATION::get_extra_slices(options.density_assignment_method);
             grid = FML::GRID::FFTWGrid<3>(Nmesh, nextra.first, nextra.second);
             FML::INTERPOLATION::particles_to_grid(p,
                                                   NumPart,

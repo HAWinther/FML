@@ -103,7 +103,7 @@ int main() {
     // to the particles (use NGP or CIC)
     //=====================================================
     std::string interpolation_method = "CIC";
-    const auto nextra = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(interpolation_method);
+    const auto nextra = FML::INTERPOLATION::get_extra_slices(interpolation_method);
     FFTWGrid<Ndim> delta(Nmesh, nextra.first, nextra.second);
     generate_delta(delta);
 
@@ -262,7 +262,7 @@ int main() {
     //=====================================================
     const bool interlacing = true;
     const std::string density_assignment_method = "PQS";
-    const auto nlr = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(density_assignment_method);
+    const auto nlr = FML::INTERPOLATION::get_extra_slices(density_assignment_method);
     FFTWGrid<Ndim> delta_from_part(Nmesh, nlr.first, nlr.second);
     FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim> pofk_cross(Nmesh / 2);
     FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<Ndim> pofk_part(Nmesh / 2);

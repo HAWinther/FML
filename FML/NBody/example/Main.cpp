@@ -287,7 +287,7 @@ int main() {
         const double norm_poisson_equation = poisson_factor(apos_old);
 
         // Particles -> density field(x) -> density fielk(k)
-        auto nleftright = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(interpolation_method);
+        auto nleftright = FML::INTERPOLATION::get_extra_slices(interpolation_method);
         FFTWGrid<NDIM> density_grid_fourier(Nmesh, nleftright.first, nleftright.second);
         FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
                                               part.get_npart(),

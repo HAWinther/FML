@@ -151,8 +151,7 @@ namespace FML {
             const bool periodic_box = true;
 
             // Particles -> density field
-            auto nleftright =
-                FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(density_assignment_method);
+            auto nleftright = FML::INTERPOLATION::get_extra_slices(density_assignment_method);
             FFTWGrid<N> density_grid_real(Nmesh, nleftright.first, nleftright.second);
             density_grid_real.add_memory_label("FFTWGrid::KickDriftKickNBodyStep::density_grid_real");
             density_grid_real.set_grid_status_real(true);
@@ -232,8 +231,7 @@ namespace FML {
             assert(std::fabs(d1 + d2 + d3 - 1.0) < 1e-10);
 
             // Set up a density grid to use
-            auto nleftright =
-                FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(density_assignment_method);
+            auto nleftright = FML::INTERPOLATION::get_extra_slices(density_assignment_method);
             FFTWGrid<N> density_grid_real(Nmesh, nleftright.first, nleftright.second);
             density_grid_real.add_memory_label("FFTWGrid::YoshidaNBodyStep::density_grid_real");
             density_grid_real.set_grid_status_real(true);
@@ -737,7 +735,7 @@ namespace FML {
                        "[NBodyInitialConditions] Invalid parameters");
 
             // Generate the random field first
-            auto nextra = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment("CIC");
+            auto nextra = FML::INTERPOLATION::get_extra_slices("CIC");
             FFTWGrid<N> delta_fourier(Nmesh, nextra.first, nextra.second);
             delta_fourier.add_memory_label("FFTWGrid::NBodyInitialConditions::delta_fourier");
             delta_fourier.set_grid_status_real(false);
@@ -902,8 +900,7 @@ namespace FML {
                        "field: 1 for LPT_order = 1, 2 for LPT_order = 2 and 4 (1LPT, 2LPT, 3LPTa, 3LPTb) for "
                        "LPT_order = 3");
             const std::string interpolation_method = "CIC"; // We use n-linear interpolation below
-            const auto nextra_cic =
-                FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(interpolation_method);
+            const auto nextra_cic = FML::INTERPOLATION::get_extra_slices(interpolation_method);
             assert_mpi(delta_fourier.get_n_extra_slices_left() >= nextra_cic.first and
                            delta_fourier.get_n_extra_slices_right() >= nextra_cic.second,
                        "[NBodyInitialConditions] We use CIC interpolation in this routine so the grid needs to have "
@@ -1575,8 +1572,7 @@ namespace FML {
             potential.communicate_boundaries();
 
             // Allocate grid
-            auto nextra =
-                FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(force_interpolation_method);
+            auto nextra = FML::INTERPOLATION::get_extra_slices(force_interpolation_method);
             for (int idim = 0; idim < N; idim++)
                 force_grid_real[idim] = FFTWGrid<N>(Nmesh, nextra.first, nextra.second);
 

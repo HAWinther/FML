@@ -50,7 +50,7 @@ void ExamplesInterpolation() {
     //=======================================================
     // Density assignment method and the number of extra slices we need for this
     //=======================================================
-    auto nleftright = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(interpolation_method);
+    auto nleftright = FML::INTERPOLATION::get_extra_slices(interpolation_method);
 
     //=======================================================
     // Make density grid (make sure we have enough slices)

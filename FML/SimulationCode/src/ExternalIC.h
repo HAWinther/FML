@@ -403,8 +403,7 @@ namespace SIMCODE {
         }
 
         // Assign particles to grid
-        const auto nleftright =
-            FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(ic.reconstruct_assigment_method);
+        const auto nleftright = FML::INTERPOLATION::get_extra_slices(ic.reconstruct_assigment_method);
         FML::GRID::FFTWGrid<NDIM> delta_fourier(ic.nmesh, nleftright.first, nleftright.second);
         FML::INTERPOLATION::particles_to_fourier_grid(part.get_particles_ptr(),
                                                       part.get_npart(),

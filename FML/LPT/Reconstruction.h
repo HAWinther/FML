@@ -126,8 +126,7 @@ namespace FML {
                     return x >= 1.0 ? 0.0 : x;
                 };
 
-                auto nleftright =
-                    FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(density_assignment_method);
+                auto nleftright = FML::INTERPOLATION::get_extra_slices(density_assignment_method);
 
                 for (int i = 0; i < niterations; i++) {
                     if (FML::ThisTask == 0)

@@ -405,8 +405,7 @@ namespace FML {
         void TWeb(T * p, size_t NumPart, int Nmesh, const TWebOptions & options, CosmicWeb & result) {
             long long int NumPartTot = (long long int)(NumPart);
             FML::SumOverTasks(&NumPartTot);
-            const auto nextra =
-                FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(options.density_assignment_method);
+            const auto nextra = FML::INTERPOLATION::get_extra_slices(options.density_assignment_method);
             FML::GRID::FFTWGrid<3> delta(Nmesh, nextra.first, nextra.second);
             FML::INTERPOLATION::particles_to_grid(p,
                                                   NumPart,

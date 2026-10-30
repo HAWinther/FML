@@ -381,12 +381,11 @@ namespace FML {
         /// @details
         /// Example usage:
         ///
-        /// auto nleftright = get_extra_slices_needed_for_density_assignment("CIC");
+        /// auto nleftright = get_extra_slices("CIC");
         ///
         /// FFTWGrid<N> grid (Nmesh, nleftright.first, nleftright.second);
         ///
-        inline std::pair<int, int>
-        get_extra_slices_needed_for_density_assignment(std::string density_assignment_method) {
+        inline std::pair<int, int> get_extra_slices(const std::string & density_assignment_method) {
             int p = 0;
             if (density_assignment_method.compare("NGP") == 0)
                 p = 1;
@@ -398,7 +397,7 @@ namespace FML {
                 p = 4;
             if (density_assignment_method.compare("PQS") == 0)
                 p = 5;
-            assert_mpi(p > 0, "[extra_slices_needed_density_assignment] Unknown density assignment method\n");
+            assert_mpi(p > 0, "[get_extra_slices] Unknown density assignment method\n");
             if (p == 1)
                 return {0, 0};
 #ifdef CELLCENTERSHIFTED
@@ -413,6 +412,12 @@ namespace FML {
                 return {p / 2 - 1, p / 2};
 #endif
             return {0, 0};
+        }
+
+        /// @brief Deprecated: use get_extra_slices (the same function with a shorter name)
+        [[deprecated("use FML::INTERPOLATION::get_extra_slices")]] inline std::pair<int, int>
+        get_extra_slices_needed_for_density_assignment(std::string density_assignment_method) {
+            return get_extra_slices(density_assignment_method);
         }
 
         /// @brief Compute how many extra slices we need in the FFTWGrid for a given density assignment order.
@@ -584,7 +589,7 @@ namespace FML {
         //==============================================================================
         // Bin particles to grid using NGP, CIC, TSC, PCS, PQS, ...
         // Some of the methods require extra slices, see
-        // get_extra_slices_needed_for_density_assignment
+        // get_extra_slices
         //
         // NumPart: number of particles at the head of part
         // NumPartTot: total number of particles across tasks
@@ -1486,7 +1491,7 @@ namespace FML {
 
             // Set how many extra slices we need for the density assignment to go smoothly
             // One extra slice in general as we need to shift the particle half a grid-cell
-            auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
+            auto nleftright = get_extra_slices(density_assignment_method);
             int nleft = nleftright.first;
             int nright = nleftright.second + 1;
 
@@ -1698,7 +1703,7 @@ namespace FML {
             assert_mpi(Ngrid > 0, "[particles_to_fourier_grid_interlaced] Grid must be allocated\n");
 
             // One extra slice on the right as the particles are shifted by less than a cell without wrapping in x
-            auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
+            auto nleftright = get_extra_slices(density_assignment_method);
             const int nleft = nleftright.first;
             const int nright = nleftright.second + (interlacing_order > 1 ? 1 : 0);
             if (density_grid_fourier.get_n_extra_slices_left() < nleft or

@@ -889,7 +889,7 @@ namespace FML {
 
             // Set how many extra slices we need for the density assignment to go smoothly
             // One extra slice if we use interlacing due to displacing particles by one half cell to the right
-            const auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
+            const auto nleftright = get_extra_slices(density_assignment_method);
             const int nleft = nleftright.first;
             const int nright = nleftright.second + (interlacing ? 1 : 0);
 
@@ -998,7 +998,7 @@ namespace FML {
                                     bool interlacing) {
 
             // Set how many extra slices we need for the density assignment to go smoothly
-            const auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
+            const auto nleftright = get_extra_slices(density_assignment_method);
             const int nleft = nleftright.first;
             const int nright = nleftright.second + (interlacing ? 1 : 0);
 
@@ -1197,7 +1197,7 @@ namespace FML {
                                   bool interlacing) {
 
             // Set how many extra slices we need for the density assignment to go smoothly
-            const auto nleftright = get_extra_slices_needed_for_density_assignment(density_assignment_method);
+            const auto nleftright = get_extra_slices(density_assignment_method);
             const int nleft = nleftright.first;
             const int nright = nleftright.second + 1;
 

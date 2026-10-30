@@ -78,7 +78,7 @@ void test_interpolation_exact() {
     const int Nm = 24;
     auto part = random_particles(20000, 2);
     for (auto & m : methods) {
-        auto nlr = INTERPOLATION::get_extra_slices_needed_for_density_assignment(m);
+        auto nlr = INTERPOLATION::get_extra_slices(m);
         FFTWGrid g(Nm, nlr.first, nlr.second);
         for (auto && real_index : g.get_real_range()) {
             auto coord = g.get_coord_from_index(real_index);
@@ -126,7 +126,7 @@ void test_slab_boundary_ulp() {
     size_t NP = part.size(), NPT = NP;
     SumOverTasks(&NPT);
     for (auto & m : methods) {
-        auto nlr = INTERPOLATION::get_extra_slices_needed_for_density_assignment(m);
+        auto nlr = INTERPOLATION::get_extra_slices(m);
         FFTWGrid g(Nm, nlr.first, nlr.second);
         INTERPOLATION::particles_to_grid<3, Particle>(part.data(), NP, NPT, g, m);
         double sum = 0.0;
@@ -176,7 +176,7 @@ void test_slab_boundary() {
     size_t NP = part.size(), NPT = NP;
     SumOverTasks(&NPT);
     for (auto & m : methods) {
-        auto nlr = INTERPOLATION::get_extra_slices_needed_for_density_assignment(m);
+        auto nlr = INTERPOLATION::get_extra_slices(m);
         FFTWGrid g(Nm, nlr.first, nlr.second);
         INTERPOLATION::particles_to_grid<3, Particle>(part.data(), NP, NPT, g, m);
         double sum = 0.0, maxd = 0.0;
@@ -204,7 +204,7 @@ int main(int argc, char ** argv) {
     }
     if (mode == "thin") {
         // 4 tasks, Nmesh 4: one slice per task, PQS needs 2 extra slices
-        auto nlr = INTERPOLATION::get_extra_slices_needed_for_density_assignment("PQS");
+        auto nlr = INTERPOLATION::get_extra_slices("PQS");
         FFTWGrid g(4, nlr.first, nlr.second);
         std::vector<Particle> part(1, Particle{{xmin_domain, 0.5, 0.5}});
         INTERPOLATION::particles_to_grid<3, Particle>(part.data(), 1, NTasks, g, "PQS");
