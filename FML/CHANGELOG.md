@@ -5,6 +5,20 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### MultigridSolver: faster f(R) and DGP solves (review Oct 30)
+- Gauss-Seidel colour sweeps visit only the cells of the colour (was every cell per colour: 8 passes for the DGP cube
+  ordering) and `get_cube_gridindex` builds the 27 indices from strides: identical solutions; DGP 7.4 s -> 3.6 s
+  (128^3 CIC density of a COLA snapshot, 2 threads).
+- f(R) pointwise update for n = 1 by the safeguarded Newton-bisection already used for n != 1 instead of the
+  trigonometric cubic root: 7.0 s -> 4.7 s, solutions equal to 8e-14.
+- Warm start: `set_previous_solution` in FofrSolverCosmology (rescaled to the new background) and DGPSolverCosmology;
+  COLASolver starts each exact solve from the previous one (about 20% fewer V-cycles in a 10-step run).
+- COLASolver runs the f(R), DGP and symmetron solvers quietly (verbose computed an extra residual per sweep, +18-35%)
+  and prints the number of V-cycles per solve. In a 64^3, 10-step COLA run the force time went from 3.9 to 2.2 s
+  (f(R)) and 5.4 to 2.1 s (DGP); P(k) at z = 0 unchanged to 4e-5.
+- DGPSolverCosmology stops with an error for NDIM != 3 (the operator splitting is written for 3D); `set_ngs_steps`
+  takes ints.
+
 ### PhaseSpaceHaloFinder: 2.9x faster unbinding
 - Unbinding passes after the first update the potential by subtracting the removed particles (while cheaper than a
   new tree evaluation) instead of recomputing the tree potential; `newtonian_spline_green` (shared with

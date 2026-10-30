@@ -114,11 +114,14 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
                                  FFTWGrid<NDIM> & density_real,
                                  FFTWGrid<NDIM> & potential_real) const override {
         // The solution is the potential C phi^2
-        const bool verbose = true;
+        const bool verbose = false;
         SymmetronSolverCosmology<NDIM, double> mgsolver(this->cosmo->get_OmegaM(), assb, beta, L_mpch, H0Box, verbose);
         mgsolver.set_ngs_steps(this->multigrid_nsweeps, this->multigrid_nsweeps, this->multigrid_nsweeps_first_step);
         mgsolver.set_epsilon(this->multigrid_solver_residual_convergence);
         mgsolver.solve(a, density_real, potential_real);
+        if (FML::ThisTask == 0)
+            std::cout << "Symmetron multigrid solve at a = " << a << ": " << mgsolver.get_number_of_vcycles()
+                      << " V-cycles\n";
     }
 
     std::string fifth_force_label() const override { return "symmetron"; }

@@ -89,6 +89,10 @@ class FofrSolverCosmology {
     /// The number of V-cycles of the last solve
     int last_nvcycles{0};
 
+    /// A previous solution (PhiF, real space) and its scale factor to start from (warm start)
+    FFTWGrid<NDIM> * previous_solution{nullptr};
+    double a_previous{0.0};
+
   public:
     FofrSolverCosmology(double OmegaM, double nfofr, double fofr0, double H0Box, bool verbose)
         : OmegaM(OmegaM), nfofr(nfofr), fofr0(fofr0), H0Box(H0Box), verbose(verbose) {}
@@ -115,6 +119,13 @@ class FofrSolverCosmology {
 
     /// The number of V-cycles of the last solve
     int get_number_of_vcycles() const { return last_nvcycles; }
+
+    /// Start the next solve from a previous solution PhiF (real space, same grid) at scale factor a_prev, rescaled by
+    /// the change of the background (PhiF / PhiF_bar is kept). The grid must stay alive until solve() is called
+    void set_previous_solution(FFTWGrid<NDIM> & previous_potential_real, double a_prev) {
+        previous_solution = &previous_potential_real;
+        a_previous = a_prev;
+    }
 
     /// The cosmological background value |f_R|(a)
     double get_fofr_background(double a) const {
@@ -164,7 +175,7 @@ class FofrSolverCosmology {
         double lo = 0.0, hi = std::numeric_limits<double>::infinity();
         double x = u;
         for (int iter = 0; iter < 50; iter++) {
-            const double r = std::pow(f0 / x, alpha);
+            const double r = alpha == 1.0 ? f0 / x : std::pow(f0 / x, alpha);
             const double gx = (sumnb - 2.0 * NDIM * x * x) / h2 + prefac * (r - 1.0) - rhs;
             const double dgx = -4.0 * NDIM * x / h2 - prefac * alpha * r / x;
             // Stop when g is zero to round-off (with u much smaller than its neighbors the terms cancel to many
@@ -255,8 +266,26 @@ class FofrSolverCosmology {
         g.set_ngs_sweeps(ngs_fine, ngs_coarse, ngs_first);
         g.set_maxsteps(maxsteps);
 
-        // Set the initial guess
+        // Set the initial guess: the background value, or a previous solution with the same PhiF / PhiF_bar
         g.set_initial_guess(f0);
+        if (previous_solution and previous_solution->get_nmesh() == Nmesh) {
+            const double phibar_previous =
+                a_previous * a_previous * get_fofr_background(a_previous) / 2.0 / std::pow(H0Box, 2);
+            const double scale = phibar / phibar_previous;
+            FML::GRID::MPIGrid<NDIM, SolverType> guess;
+            ConvertToMPIGrid(*previous_solution, guess);
+            const IndexInt NtotLocal = guess.get_NtotLocal();
+            SolverType * y = guess.get_y();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (IndexInt i = 0; i < NtotLocal; i++) {
+                const double value = double(y[i]) * scale;
+                const bool ok = value > 0.0 and std::isfinite(value);
+                y[i] = SolverType(ok ? (use_sqrt ? std::sqrt(value) : std::log(value)) : f0);
+            }
+            g.set_initial_guess(y);
+        }
 
         //======================================================================
         // Set the convergence criterion
@@ -333,12 +362,8 @@ class FofrSolverCosmology {
                 const double h2 = std::pow(sol->get_Gridspacing(level), 2);
                 const double delta = density_multigrid.get_y(level, index);
                 const double sumnb = sum_of_neighbors_squared(sol, level, index);
-                if (not n_is_one)
-                    return SolverType(
-                        solve_cell_general_n(u, sumnb, h2, poisson_norm * delta + fas_source, prefac, f0, exponent));
-                const double p = (-sumnb + h2 * (poisson_norm * delta + prefac + fas_source)) / (2.0 * NDIM);
-                const double q = -h2 * prefac * f0 / (2.0 * NDIM);
-                return SolverType(positive_cubic_root(p, q));
+                return SolverType(
+                    solve_cell_general_n(u, sumnb, h2, poisson_norm * delta + fas_source, prefac, f0, exponent));
             };
 
         // Solve the equation and fetch the solution

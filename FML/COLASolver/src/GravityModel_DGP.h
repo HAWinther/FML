@@ -124,11 +124,17 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
                                  double H0Box,
                                  FFTWGrid<NDIM> & density_real,
                                  FFTWGrid<NDIM> & potential_real) const override {
-        const bool verbose = true;
+        const bool verbose = false;
         DGPSolverCosmology<NDIM, double> mgsolver(this->cosmo->get_OmegaM(), rcH0_DGP, get_beta_dgp(a), H0Box, verbose);
         mgsolver.set_ngs_steps(this->multigrid_nsweeps, this->multigrid_nsweeps, this->multigrid_nsweeps_first_step);
         mgsolver.set_epsilon(this->multigrid_solver_residual_convergence);
+        // Start from the previous solution
+        if (this->multigrid_previous_a > 0.0)
+            mgsolver.set_previous_solution(this->multigrid_previous_solution);
         mgsolver.solve(a, density_real, potential_real);
+        if (FML::ThisTask == 0)
+            std::cout << "DGP multigrid solve at a = " << a << ": " << mgsolver.get_number_of_vcycles()
+                      << " V-cycles\n";
     }
 
     //========================================================================

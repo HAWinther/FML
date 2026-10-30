@@ -241,7 +241,7 @@ namespace FML {
 #endif
 
                 // The method that does all the work. Solve the PDE
-                SolveResult solve(MultiGridFunction<NDIM, T> &Equation, MultiGridConvCrit &ConvergenceCriterion) {
+                SolveResult solve(MultiGridFunction<NDIM, T> & Equation, MultiGridConvCrit & ConvergenceCriterion) {
                     _Equation = Equation;
                     _ConvergenceCriterion = ConvergenceCriterion;
                     run_solver();
@@ -296,15 +296,15 @@ namespace FML {
                     return false;
                 };
                 // Error on domain grid < epsillon (residual relative to residuals after presweeps)
-                MultiGridConvCrit ConvergenceCriterionError = [=](double rms_residual, double rms_residual_ini,
-                                                                  [[maybe_unused]] int step_number) {
-                    double err = rms_residual_ini != 0.0
-                                     ? rms_residual / rms_residual_ini
-                                     : (rms_residual == 0.0 ? 0.0 : std::numeric_limits<double>::infinity());
-                    if (err < _eps_converge)
-                        return true;
-                    return false;
-                };
+                MultiGridConvCrit ConvergenceCriterionError =
+                    [=](double rms_residual, double rms_residual_ini, [[maybe_unused]] int step_number) {
+                        double err = rms_residual_ini != 0.0 ?
+                                         rms_residual / rms_residual_ini :
+                                         (rms_residual == 0.0 ? 0.0 : std::numeric_limits<double>::infinity());
+                        if (err < _eps_converge)
+                            return true;
+                        return false;
+                    };
 
                 // Example implementation of a PDE
                 // Poisson equation with source s.t. the solution is f(x_1,x_2,...) = Sum_i sin(2 pi x_i)
@@ -800,44 +800,27 @@ namespace FML {
             template <int NDIM, class T>
             std::array<IndexInt, FML::power(3, NDIM)> MultiGridSolver<NDIM, T>::get_cube_gridindex(int level,
                                                                                                    IndexInt index) {
+                // The index offsets of -1, 0, +1 in each direction (periodic wrap in the local grid, the x-neighbors
+                // in the extra slices with MPI), then all 3^NDIM sums with the x-offset varying fastest
+                const auto coord = _f.get_grid(level).coord_from_index(index);
                 const int N = _f.get_grid(level).get_N();
-
-                // (Global) coordinate of cell
-                const auto center_coord = _f.get_grid(level).globalcoord_from_index(index);
-
-                std::array<int, NDIM> add;
-                add.fill(-1);
-
+                std::array<std::array<IndexInt, 3>, NDIM> offset;
+                IndexInt Npow = 1;
+                for (int idim = NDIM - 1; idim >= 0; idim--, Npow *= N) {
+                    for (int d = -1; d <= 1; d++) {
+                        int c = coord[idim] + d;
+                        if (_periodic and not(idim == 0 and FML::NTasks > 1))
+                            c = (c + N) % N;
+                        offset[idim][d + 1] = (c - coord[idim]) * Npow;
+                    }
+                }
                 constexpr int ncells = FML::power(3, NDIM);
                 std::array<IndexInt, ncells> index_list;
                 for (int k = 0; k < ncells; k++) {
-                    // Output the list for NDIM=3 (exit after the loop to prevent endless printing):
-                    // std::cout << "(" << std::setw(2) << add[0] << ", " << std::setw(2) << add[1] << ", " <<
-                    // std::setw(2)
-                    //          << add[2] << ")\n";
-
-                    auto coord = center_coord;
-                    for (int idim = 0; idim < NDIM; idim++) {
-                        coord[idim] += add[idim];
-                        if (_periodic and not(idim == 0 and FML::NTasks > 1)) {
-                            if (coord[idim] < 0)
-                                coord[idim] += N;
-                            if (coord[idim] >= N)
-                                coord[idim] -= N;
-                        }
-                    }
-                    // std::cout << ccoord[0] << " " << ccoord[1] << " -> " << coord[0] << " " << coord[1] << "\n";
-                    index_list[k] = _f.get_grid(level).index_from_globalcoord(coord);
-
-                    // Do addition with carry with elements of 'add' as digits to compute all indices
-                    int i = 0;
-                    while (i < NDIM) {
-                        ++add[i];
-                        if (add[i] < 2)
-                            break;
-                        add[i] = -1;
-                        i++;
-                    }
+                    IndexInt i = index;
+                    for (int idim = 0, kk = k; idim < NDIM; idim++, kk /= 3)
+                        i += offset[idim][kk % 3];
+                    index_list[k] = i;
                 }
                 return index_list;
             }
@@ -1000,35 +983,56 @@ namespace FML {
 
             template <int NDIM, class T>
             void MultiGridSolver<NDIM, T>::GaussSeidelSweep(int level, int curcolor, T * f) {
-                IndexInt NtotLocal = get_NtotLocal(level);
+                // Loop over rows of fixed (x, y, ...) coordinates and visit only the cells of the current colour in
+                // each row (every second cell along the last direction). The colour is the sum of the global
+                // coordinates mod 2 (chess-board) or, with the cube ordering, the parity of each coordinate
                 auto & grid = _f.get_grid(level);
+                const int N = get_N(level);
+                const int xstart = grid.get_xStartLocal();
+                // In 1D the rows are single cells (the x-direction is split over the tasks)
+                const int rowlength = NDIM == 1 ? 1 : N;
+                const int rowstep = NDIM == 1 ? 1 : 2;
+                const IndexInt nrows = get_NtotLocal(level) / rowlength;
 
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (IndexInt i = 0; i < NtotLocal; i++) {
-#ifdef USE_MASK
-                    if (_bmask[level][i] <= 0.0)
-                        continue;
-#endif
-
-                    // Fetch the global coordinate or the current cell
-                    auto coord = grid.globalcoord_from_index(i);
-
-                    // The color of the cell: sum of coordinates mod 2 (chess-board) or the parity of each coordinate
-                    int color = 0;
-                    if (_cube_ordering) {
-                        for (int idim = 0; idim < NDIM; idim++)
-                            color += (coord[idim] & 1) << idim;
+                for (IndexInt row = 0; row < nrows; row++) {
+                    // The coordinates of the row (all but the last direction)
+                    std::array<int, NDIM> coord{};
+                    IndexInt r = row;
+                    for (int idim = NDIM - 2; idim >= 0; idim--) {
+                        coord[idim] = int(r % N);
+                        r /= N;
+                    }
+                    if constexpr (NDIM > 1)
+                        coord[0] += xstart;
+                    int start;
+                    if constexpr (NDIM == 1) {
+                        // The colour of the single cell in the row
+                        if (((row + xstart) & 1) != curcolor)
+                            continue;
+                        start = 0;
+                    } else if (_cube_ordering) {
+                        bool match = true;
+                        for (int idim = 0; idim < NDIM - 1; idim++)
+                            match = match and ((coord[idim] & 1) == ((curcolor >> idim) & 1));
+                        if (not match)
+                            continue;
+                        start = (curcolor >> (NDIM - 1)) & 1;
                     } else {
-                        for (auto & c : coord)
-                            color += c;
-                        color = color % _ngridcolours;
+                        int sum = 0;
+                        for (int idim = 0; idim < NDIM - 1; idim++)
+                            sum += coord[idim];
+                        start = ((curcolor - sum) % 2 + 2) % 2;
                     }
 
-                    // Only select cells with right color
-                    if (color == curcolor) {
-
+                    for (int iz = start; iz < rowlength; iz += rowstep) {
+                        const IndexInt i = row * rowlength + iz;
+#ifdef USE_MASK
+                        if (_bmask[level][i] <= 0.0)
+                            continue;
+#endif
                         // A user provided pointwise solve of L(f) = source in this cell
                         if (_CustomUpdate) {
                             T source = (level > 0 ? _source[level][i] : T(0));

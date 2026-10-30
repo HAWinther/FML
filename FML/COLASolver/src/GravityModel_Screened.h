@@ -39,6 +39,9 @@ class GravityModelScreened : public GravityModel<NDIM> {
     int multigrid_nsweeps_first_step{10};
     int multigrid_nsweeps{10};
     double multigrid_solver_residual_convergence{1e-7};
+    // The last exact (multigrid) solution in real space and its scale factor: the starting point of the next solve
+    mutable FML::GRID::FFTWGrid<NDIM> multigrid_previous_solution;
+    mutable double multigrid_previous_a{-1.0};
 
   public:
     template <int N>
@@ -136,6 +139,8 @@ class GravityModelScreened : public GravityModel<NDIM> {
             // Get back the real-space density field
             density_real.fftw_c2r();
             solve_exact_fifth_force(a, H0Box, density_real, density_fifth_force);
+            multigrid_previous_solution = density_fifth_force;
+            multigrid_previous_a = a;
             // It returns it in real-space so go back to fourier space
             density_fifth_force.fftw_r2c();
 

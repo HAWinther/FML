@@ -113,12 +113,18 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
                                  FFTWGrid<NDIM> & density_real,
                                  FFTWGrid<NDIM> & potential_real) const override {
         // The solution is a^2 f_R / (2 H0Box^2)
-        const bool verbose = true;
+        const bool verbose = false;
         FofrSolverCosmology<NDIM, double> mgsolver(this->cosmo->get_OmegaM(), nfofr, fofr0, H0Box, verbose);
         mgsolver.set_ngs_steps(this->multigrid_nsweeps, this->multigrid_nsweeps, this->multigrid_nsweeps_first_step);
         mgsolver.set_epsilon(this->multigrid_solver_residual_convergence);
         mgsolver.set_method(multigrid_method);
+        // Start from the previous solution (rescaled to the new background)
+        if (this->multigrid_previous_a > 0.0)
+            mgsolver.set_previous_solution(this->multigrid_previous_solution, this->multigrid_previous_a);
         mgsolver.solve(a, density_real, potential_real);
+        if (FML::ThisTask == 0)
+            std::cout << "f(R) multigrid solve at a = " << a << ": " << mgsolver.get_number_of_vcycles()
+                      << " V-cycles\n";
     }
 
     std::string fifth_force_label() const override { return "f(R)"; }

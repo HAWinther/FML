@@ -61,7 +61,13 @@ class SymmetronSolverCosmology {
     /// The box is periodic?
     bool periodic{true};
 
+    /// The number of V-cycles of the last solve
+    int last_nvcycles{0};
+
   public:
+    /// The number of V-cycles of the last solve
+    int get_number_of_vcycles() const { return last_nvcycles; }
+
     SymmetronSolverCosmology(double OmegaM, double assb, double beta, double L_mpch, double H0Box, bool verbose)
         : OmegaM(OmegaM), assb(assb), beta(beta), L_mpch(L_mpch), H0Box(H0Box), verbose(verbose) {}
 
@@ -191,6 +197,7 @@ class SymmetronSolverCosmology {
 
         // Solve the equation and fetch the solution
         g.solve(Equation, ConvergenceCriterion);
+        last_nvcycles = g.get_number_of_vcycles();
         auto sol = g.get_grid(0);
         ConvertToFFTWGrid(sol, fifth_force_potential_real);
 

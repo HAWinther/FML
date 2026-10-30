@@ -8,6 +8,7 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <stdexcept>
 
 
 //======================================================================
@@ -61,12 +62,18 @@ class DGPSolverCosmology {
     /// The box is periodic?
     bool periodic{true};
 
+    /// The number of V-cycles of the last solve
+    int last_nvcycles{0};
+
+    /// A previous solution (real space, same grid) to start from (warm start)
+    FFTWGrid<NDIM> * previous_solution{nullptr};
+
   public:
     DGPSolverCosmology(double OmegaM, double rcH0_DGP, double beta_DGP, double H0Box, bool verbose)
         : OmegaM(OmegaM), rcH0_DGP(rcH0_DGP), beta_DGP(beta_DGP), H0Box(H0Box), verbose(verbose) {}
 
     /// Set how many sweeps over the grid to use when solving a given level
-    void set_ngs_steps(double _ngs_fine, double _ngs_coarse, double _ngs_first) {
+    void set_ngs_steps(int _ngs_fine, int _ngs_coarse, int _ngs_first) {
         ngs_fine = _ngs_fine;
         ngs_coarse = _ngs_coarse;
         ngs_first = _ngs_first;
@@ -78,9 +85,23 @@ class DGPSolverCosmology {
     /// Set maximum number of steps to take (in case residual saturates)
     void set_maxsteps(int _maxsteps) { maxsteps = _maxsteps; }
 
+    /// The number of V-cycles of the last solve
+    int get_number_of_vcycles() const { return last_nvcycles; }
+
+    /// Start the next solve from a previous solution (the returned fifth-force potential, real space, same grid). The
+    /// grid must stay alive until solve() is called
+    void set_previous_solution(FFTWGrid<NDIM> & previous_potential_real) {
+        previous_solution = &previous_potential_real;
+    }
+
     /// Do the solving and return the fifth-force potential.
     /// We solve for f where a phi / phi0 f_R / (2 (H0Box)^2) = e^f and return e^f
     void solve(double a, FFTWGrid<NDIM> & overdensity_real, FFTWGrid<NDIM> & fifth_force_potential_real) {
+
+        // The operator splitting with w = 1/3 below (it makes the Jacobian of the square-root term vanish) and the
+        // second derivatives are written for three dimensions
+        if constexpr (NDIM != 3)
+            throw std::runtime_error("[DGPSolverCosmology] The DGP equation is only implemented for NDIM = 3");
 
         Nmesh = overdensity_real.get_nmesh();
         auto Local_nx = overdensity_real.get_local_nx();
@@ -133,7 +154,6 @@ class DGPSolverCosmology {
         // Set some options
         g.set_epsilon(epsilon);
         g.set_ngs_sweeps(ngs_fine, ngs_coarse, ngs_first);
-        g.set_epsilon(epsilon);
         g.set_maxsteps(maxsteps);
 
         // The equation uses the mixed derivatives (the 3^NDIM cells around a cell) so sweep over the grid in the
@@ -146,8 +166,18 @@ class DGPSolverCosmology {
         // (the constant is the mean of L; it does not affect the force)
         g.set_subtract_mean_residual(true);
 
-        // Set the initial guess
+        // Set the initial guess: zero or a previous solution (the returned potential is forcenorm times the field)
+        const double forcenorm = 0.5;
         g.set_initial_guess(f0);
+        if (previous_solution and previous_solution->get_nmesh() == Nmesh) {
+            FML::GRID::MPIGrid<NDIM, SolverType> guess;
+            ConvertToMPIGrid(*previous_solution, guess);
+            const IndexInt NtotLocal = guess.get_NtotLocal();
+            SolverType * y = guess.get_y();
+            for (IndexInt i = 0; i < NtotLocal; i++)
+                y[i] /= forcenorm;
+            g.set_initial_guess(y);
+        }
 
         //======================================================================
         // Set the convergence criterion
@@ -249,6 +279,7 @@ class DGPSolverCosmology {
 
         // Solve the equation and fetch the solution
         g.solve(Equation, ConvergenceCriterion);
+        last_nvcycles = g.get_number_of_vcycles();
 
         // The solution is only real if the discriminant is non-negative everywhere on the main grid
         {
@@ -276,7 +307,6 @@ class DGPSolverCosmology {
         ConvertToFFTWGrid(sol, fifth_force_potential_real);
 
         // Convert to fifth-force potential
-        const double forcenorm = 0.5;
 
         FML::GRID::FloatType fmin = std::numeric_limits<FML::GRID::FloatType>::max();
         FML::GRID::FloatType fmax = -std::numeric_limits<FML::GRID::FloatType>::max();
