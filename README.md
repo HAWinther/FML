@@ -1,5 +1,7 @@
 # FML
 
+NB: The newest version of the library, and the one the documentation is pointing to, is in the branch FMLDevelop.
+
 FML is a C++17 library for large-scale-structure cosmology: particles and grids, Fourier statistics, initial conditions, perturbation theory, N-body/COLA tools, halo/void analysis and numerical solvers. Algorithms use templates to adapt to particle types and dimension. MPI slab decomposition and OpenMP are available where the module supports them; catalogue ownership and collective-call requirements remain part of each API.
 
 Start with the [capability matrix](FML/CAPABILITIES.md) for implemented scope, dependencies, parallel contracts and linked regression examples. The [build and API guide](FML/BUILDING.md) is the reference for C++17 compilation, optional features and integration. The [development backlog](FML/DEVELOPMENT_BACKLOG.md) distinguishes delivered work, production-validation follow-ups and proposed capabilities.
