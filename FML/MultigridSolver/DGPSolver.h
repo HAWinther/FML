@@ -325,6 +325,8 @@ class DGPSolverCosmology {
                 fmin = std::min(fmin, value);
             }
         }
+        FML::MinOverTasks(&fmin);
+        FML::MaxOverTasks(&fmax);
         FML::SumOverTasks(&fmean);
         fmean /= std::pow(Nmesh, NDIM);
 

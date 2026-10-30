@@ -223,6 +223,8 @@ class SymmetronSolverCosmology {
                 fifth_force_potential_real.set_real_from_index(real_index, value);
             }
         }
+        FML::MinOverTasks(&fmin);
+        FML::MaxOverTasks(&fmax);
         FML::SumOverTasks(&fmean);
         fmean /= std::pow(Nmesh, NDIM);
 
