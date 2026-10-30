@@ -5,6 +5,12 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cleanup: deprecated legacy pair counter, removed `HybridBiasModifiedGravity.h`
+- `PAIRCOUNTS::GeneralPairCounter` (and its knobs `ncells_to_rmax`, `ngrid_min_size`) is marked `[[deprecated]]`: it is
+  no longer used in FML (the correlation-function routines use the `detail::CellList` engine). Kept for now.
+- `ComputePowerSpectra/HybridBiasModifiedGravity.h` removed: unused, superseded by `HybridBiasOneLoopMG.h` (same f(R)
+  m^2(a) and linear growth).
+
 ### Tests: shared test helpers (`FML/tests/TestHelpers.h`)
 - `FML::TESTS::check` (collective), `check_local`, `check_close`, `check_rel`, `summary`, `near`, `throws`, `throws_with`,
   `num`, `quietly` and minimal particle types replace the private `check()` functions and failure counters of 59 test
