@@ -82,6 +82,19 @@ namespace FML {
             // This is 1/H0 in units of Mpc/h used to set the mass of particles
             extern const double HubbleLengthInMpch;
 
+            /// A position x (in the units of Boxsize) wrapped into [0, Boxsize). With as_float it also stays in
+            /// [0, Boxsize) after rounding to float (GADGET's positions are floats, and a position just below Boxsize
+            /// rounds up to Boxsize): it is then put at 0, the same point of the periodic box
+            inline double wrap_periodic_position(double x, double Boxsize, bool as_float = true) {
+                if (x >= Boxsize)
+                    x -= Boxsize;
+                if (x < 0.0)
+                    x += Boxsize;
+                if (as_float and float(x) >= float(Boxsize))
+                    x = 0.0;
+                return x;
+            }
+
             // The (smallest) ID type we write
 #ifdef GADGET_LONG_INT_IDS
             using gadget_particle_id_type = long long int;
@@ -230,6 +243,7 @@ namespace FML {
                 GadgetHeader header{};
 
                 int NDIM{3};
+                bool periodic_wrap{true};
 
                 void throw_error(std::string errormessage) const;
 
@@ -240,6 +254,11 @@ namespace FML {
               public:
                 GadgetWriter() = default;
                 GadgetWriter(int ndim);
+
+                /// Wrap the positions into [0, BoxSize) (the default, as GADGET expects; also after rounding to
+                /// float). Turn off for data that is not a periodic box, e.g. a lightcone where the positions are
+                /// relative to an observer
+                void set_periodic_wrap(bool wrap) { periodic_wrap = wrap; }
 
                 /// Write a single gadget file with multiple species. pos_norm is to convert from user units to
                 /// positions in [0, box) vel_norm is to convert from user units to sqrt(a) dxdt in units of km/s
@@ -720,8 +739,11 @@ namespace FML {
                     float_buffer = reinterpret_cast<float *>(buffer.data());
                     for (size_t count = 0; count < ntowrite; count++) {
                         auto * pos = FML::PARTICLE::GetPos(part[order[count]]);
-                        for (int idim = 0; idim < NDIM; idim++)
-                            float_buffer[NDIM * count + idim] = float(pos[idim]) * pos_norm;
+                        for (int idim = 0; idim < NDIM; idim++) {
+                            const double x = double(pos[idim]) * pos_norm;
+                            float_buffer[NDIM * count + idim] =
+                                float(periodic_wrap ? wrap_periodic_position(x, Boxsize) : x);
+                        }
                     }
                     write_section(fp, buffer, bytes);
                 }
@@ -815,7 +837,7 @@ namespace FML {
                             return false;
                     return true;
                 };
-                auto write_vector_block = [&](auto member, double norm) {
+                auto write_vector_block = [&](auto member, double norm, bool wrap) {
                     const size_t bytes = ntowrite * NDIM * sizeof(float);
                     buffer.resize(bytes);
                     float * float_buffer = reinterpret_cast<float *>(buffer.data());
@@ -824,16 +846,19 @@ namespace FML {
                     for (auto & sp : species)
                         for (size_t j = 0; j < sp.npart; j++) {
                             (sp.*member)(j, x.data());
-                            for (int idim = 0; idim < NDIM; idim++)
-                                float_buffer[NDIM * count + idim] = float(x[idim] * norm);
+                            for (int idim = 0; idim < NDIM; idim++) {
+                                const double xi = x[idim] * norm;
+                                float_buffer[NDIM * count + idim] =
+                                    float(wrap ? wrap_periodic_position(xi, Boxsize) : xi);
+                            }
                             count++;
                         }
                     write_section(fp, buffer, bytes);
                 };
                 if (all_have(&GadgetSpecies::get_pos))
-                    write_vector_block(&GadgetSpecies::get_pos, pos_norm);
+                    write_vector_block(&GadgetSpecies::get_pos, pos_norm, periodic_wrap);
                 if (all_have(&GadgetSpecies::get_vel))
-                    write_vector_block(&GadgetSpecies::get_vel, vel_norm);
+                    write_vector_block(&GadgetSpecies::get_vel, vel_norm, false);
                 if (all_have(&GadgetSpecies::get_id)) {
                     // 8 byte IDs if some ID does not fit in an int or if there are more than 2^31 particles
                     size_t ntot = 0;

@@ -970,6 +970,7 @@ void Lightcone<NDIM, T, U>::output_gadget(FML::Vector<U> & part_lc,
     }
 
     FML::FILEUTILS::GADGET::GadgetWriter gw;
+    gw.set_periodic_wrap(false); // positions relative to the observer, not a periodic box
     gw.write_gadget_single(fileprefix + std::to_string(FML::ThisTask),
                            part_lc.data(),
                            npart_lc,

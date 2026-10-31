@@ -657,16 +657,9 @@ namespace FML {
                         if constexpr (FML::PARTICLE::has_get_pos<T>()) {
                             gather([](auto & p) { return FML::PARTICLE::GetPos(p); }, pos_norm);
                             // Positions must be in [0, Boxsize) also after rounding to float
-                            for (auto & x : buffer) {
-                                if (not periodic_wrap)
-                                    break;
-                                if (x >= Boxsize)
-                                    x -= Boxsize;
-                                if (x < 0.0)
-                                    x += Boxsize;
-                                if (not double_precision and float(x) >= float(Boxsize))
-                                    x = 0.0;
-                            }
+                            if (periodic_wrap)
+                                for (auto & x : buffer)
+                                    x = wrap_periodic_position(x, Boxsize, not double_precision);
                             HDF5::write_dataset(g, "Coordinates", filetype, H5T_NATIVE_DOUBLE, buffer.data(), n, NDIM);
                         }
                         if constexpr (FML::PARTICLE::has_get_vel<T>()) {
@@ -791,16 +784,9 @@ namespace FML {
                         };
                         if (sp.get_pos) {
                             gather(sp.get_pos, pos_norm);
-                            for (auto & x : buffer) {
-                                if (not periodic_wrap)
-                                    break;
-                                if (x >= Boxsize)
-                                    x -= Boxsize;
-                                if (x < 0.0)
-                                    x += Boxsize;
-                                if (not double_precision and float(x) >= float(Boxsize))
-                                    x = 0.0;
-                            }
+                            if (periodic_wrap)
+                                for (auto & x : buffer)
+                                    x = wrap_periodic_position(x, Boxsize, not double_precision);
                             HDF5::write_dataset(g, "Coordinates", filetype, H5T_NATIVE_DOUBLE, buffer.data(), n, NDIM);
                         }
                         if (sp.get_vel) {

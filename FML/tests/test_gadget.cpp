@@ -663,6 +663,45 @@ int main(int argc, char ** argv) {
     }
 #endif
 
+    // Positions just below the box size round up to the box size as floats, and positions outside the box: written
+    // wrapped into [0, BoxSize) (and not wrapped with set_periodic_wrap(false), e.g. lightcones)
+    {
+        const std::string filename = "test_gadget_wrap_" + std::to_string(FML::ThisTask);
+        std::vector<Particle> part(3);
+        const double xs[3] = {1.0 - 1e-9, 1.25, -0.25}; // in units of the box (pos_norm = box)
+        for (int i = 0; i < 3; i++) {
+            part[i] = Particle{};
+            part[i].id = i;
+            for (int idim = 0; idim < 3; idim++)
+                part[i].pos[idim] = xs[i];
+        }
+        auto read_raw_positions = [&]() {
+            std::ifstream fp(filename, std::ios::binary);
+            int n;
+            fp.read((char *)&n, 4);
+            fp.seekg(4 + n + 4, std::ios::beg);
+            fp.read((char *)&n, 4);
+            std::vector<float> pos(n / sizeof(float));
+            fp.read((char *)pos.data(), n);
+            return pos;
+        };
+        GadgetWriter gw;
+        gw.write_gadget_single(filename, part.data(), 3, 3, 1, aexp, box, OmegaM, 1 - OmegaM, 0.7, box, 1.0);
+        auto pos = read_raw_positions();
+        bool inside = pos.size() == 9;
+        for (auto x : pos)
+            inside = inside and x >= 0.0f and x < float(box);
+        check(inside and pos[0] == 0.0f and std::fabs(pos[3] - 0.25 * box) < 1e-4 and std::fabs(pos[6] - 0.75 * box) < 1e-4,
+              "positions are written in [0, BoxSize) also after rounding to float: " + num(pos[0]) + " " + num(pos[3]) +
+                  " " + num(pos[6]));
+        gw.set_periodic_wrap(false);
+        gw.write_gadget_single(filename, part.data(), 3, 3, 1, aexp, box, OmegaM, 1 - OmegaM, 0.7, box, 1.0);
+        pos = read_raw_positions();
+        check(pos.size() == 9 and std::fabs(pos[3] - 1.25 * box) < 1e-4 and std::fabs(pos[6] + 0.25 * box) < 1e-4,
+              "set_periodic_wrap(false) writes the positions as they are");
+        my_files.push_back(filename);
+    }
+
     // Clean up
     barrier();
     for (auto & f : my_files)
