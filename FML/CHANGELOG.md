@@ -5,6 +5,24 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### TransferProviders: one module for CAMB, CLASS and the internal solver; SimulationCode uses it
+- New `TransferProviders/`: `make_transfer_provider` makes a `TransferProvider` from CAMB transfer files
+  (`CAMBFileTransferProvider`: columns by header name or position, no `CAMBUtils` dependency), native CLASS output in
+  the synchronous or Newtonian gauge (`CLASSTransferProvider`, Newtonian converted to CDM-synchronous) or FML's
+  Einstein-Boltzmann solver (`source = internal`, now with one massive neutrino species). Shared tables, interpolation
+  in (log a, log k), Lagrange growth rates and extrapolation in `TabulatedTransferProvider`. Tested against CLASS 3.4.1
+  and CAMB (`TransferProviders/tests`).
+- SimulationCode reads its transfer functions through it (`src/TransferInput.cpp`) instead of `LinearTransferData`:
+  one provider shared by the gravity model, the IC and the outputs. New `ic_type_of_input = class` with
+  `ic_input_gauge`; `ic_type_of_input_fileformat` is removed (the columns are detected). Outputs of runs with transfer
+  tables change by up to 3e-4 in P(k) (interpolation in log a instead of z); the species' linear P(k) in the outputs
+  now also uses the transfers with `internal_transfer`.
+- `InternalTransferProvider` supports one massive neutrino species (`MassiveNeutrino`, `TotalMatter` with it).
+- Removed: `CAMBUtils/` (`CAMBReader.h`, `LinearTransferData` and its example), `InitialConditions/CAMBTransferProvider.h`
+  and `InitialConditions/InternalTransferLoader.{h,cpp}`. `tests/test_camb.cpp` (the CAMB reader against CAMB, the
+  same reference values) and `tests/test_transfers.cpp` (LinearInput, SpeciesIC and the table conventions) now test
+  `CAMBFileTransferProvider`; `tests/test_camb_odr.cpp` is gone.
+
 ### Global: library reductions instead of hand-written MPI_Allreduce
 - New `FML::MinArrayOverTasks` / `FML::MaxArrayOverTasks` (chunked, like `SumArrayOverTasks`, which now shares their
   implementation). 45 hand-written `MPI_Allreduce` calls (min/max/sum of single values and arrays) in Global.cpp,

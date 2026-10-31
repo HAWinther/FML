@@ -1,7 +1,7 @@
 #ifndef SPECIES_HEADER
 #define SPECIES_HEADER
 
-#include <FML/CAMBUtils/CAMBReader.h>
+#include "TransferInput.h"
 
 #include "Cosmology.h"
 #include "SimulationParameters.h"
@@ -61,19 +61,19 @@ namespace SIMCODE {
 
     /// The transfer function of a species from the tables ("total" for the total matter)
     inline double species_transfer_function(const std::string & name,
-                                            const FML::FILEUTILS::LinearTransferData & transferdata,
+                                            const TransferProvider & transfers,
                                             double k_hmpc,
                                             double a) {
         if (name == "cb")
-            return transferdata.get_cdm_baryon_transfer_function(k_hmpc, a);
+            return transfers.density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k_hmpc, a);
         if (name == "cdm")
-            return transferdata.get_cdm_transfer_function(k_hmpc, a);
+            return transfers.density_over_k_mpc2(SIMCODE::TransferSpecies::CDM, k_hmpc, a);
         if (name == "baryon")
-            return transferdata.get_baryon_transfer_function(k_hmpc, a);
+            return transfers.density_over_k_mpc2(SIMCODE::TransferSpecies::Baryon, k_hmpc, a);
         if (name == "nu")
-            return transferdata.get_massive_neutrino_transfer_function(k_hmpc, a);
+            return transfers.density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k_hmpc, a);
         if (name == "total")
-            return transferdata.get_total_transfer_function(k_hmpc, a);
+            return transfers.density_over_k_mpc2(SIMCODE::TransferSpecies::TotalMatter, k_hmpc, a);
         throw std::runtime_error("species_transfer_function: unknown species " + name);
     }
 

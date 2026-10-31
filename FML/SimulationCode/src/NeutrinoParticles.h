@@ -1,7 +1,7 @@
 #ifndef NEUTRINOPARTICLES_HEADER
 #define NEUTRINOPARTICLES_HEADER
 
-#include <FML/CAMBUtils/CAMBReader.h>
+#include "TransferInput.h"
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
@@ -33,7 +33,7 @@ namespace SIMCODE {
       public:
         using Particle = ParticleNeutrino<NDIM>;
         using Container = FML::PARTICLE::MPIParticles<Particle>;
-        using LinearTransferData = FML::FILEUTILS::LinearTransferData;
+        using TransferProvider = SIMCODE::TransferProvider;
         using Spline = FML::INTERPOLATION::SPLINE::Spline;
         using DVector = FML::INTERPOLATION::SPLINE::DVector;
 
@@ -56,7 +56,7 @@ namespace SIMCODE {
         /// a random direction, with y drawn from the Fermi-Dirac distribution (the random numbers depend only on
         /// the seed and the particle ID). We store y and the linear delta_nu at the particle (for the weights)
         void generate(const FML::GRID::FFTWGrid<NDIM> & delta_cb_fourier,
-                      const LinearTransferData & transferdata,
+                      const TransferProvider & transfers,
                       double zini,
                       double HoverH0_ini,
                       int Npart_1D,
@@ -131,7 +131,7 @@ namespace SIMCODE {
 
     template <int NDIM>
     void NeutrinoParticles<NDIM>::generate(const FML::GRID::FFTWGrid<NDIM> & delta_cb_fourier,
-                                           const LinearTransferData & transferdata,
+                                           const TransferProvider & transfers,
                                            double zini,
                                            double HoverH0_ini,
                                            int Npart_1D,
@@ -140,21 +140,21 @@ namespace SIMCODE {
                                            long long int id_offset) {
         namespace NU = SIMCODE::NEUTRINOS;
         const double aini = 1.0 / (1.0 + zini);
-        if (aini < 1.0 / (1.0 + transferdata.get_zmax_splines()) * (1.0 - 1e-10))
+        if (aini < 1.0 / (1.0 + SIMCODE::transfer_zmax(transfers)) * (1.0 - 1e-10))
             throw std::runtime_error("particle_neutrinos: the transfer functions only go up to z = " +
-                                     std::to_string(transferdata.get_zmax_splines()) + " (need zini)");
+                                     std::to_string(SIMCODE::transfer_zmax(transfers)) + " (need zini)");
 
         // T_nu / T_cb and f_nu at zini
-        const double kmin = transferdata.get_kmin_hmpc_splines();
-        const double kmax = transferdata.get_kmax_hmpc_splines();
+        const double kmin = transfers.range().kmin_hmpc;
+        const double kmax = transfers.range().kmax_hmpc;
         const int nk = 512;
         DVector logk(nk), ratio(nk), f_nu(nk);
         for (int i = 0; i < nk; i++) {
             logk[i] = std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1);
             const double k = std::exp(logk[i]);
-            ratio[i] = transferdata.get_massive_neutrino_transfer_function(k, aini) /
-                       transferdata.get_cdm_baryon_transfer_function(k, aini);
-            f_nu[i] = transferdata.get_massive_neutrino_growth_rate(k, aini);
+            ratio[i] = transfers.density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k, aini) /
+                       transfers.density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, aini);
+            f_nu[i] = transfers.density_growth_rate(SIMCODE::TransferSpecies::MassiveNeutrino, k, aini);
         }
         Spline ratio_spline(logk, ratio, "T_nu/T_cb(k,zini)");
         Spline f_nu_spline(logk, f_nu, "f_nu(k,zini)");

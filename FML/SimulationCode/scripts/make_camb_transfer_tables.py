@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Make CAMB transfer function tables in the format SimulationCode reads (ic_type_of_input = "transferinfofile",
-ic_type_of_input_fileformat = "CAMB"), with accurate massive neutrino transfer functions.
+"""Make CAMB transfer function tables in the format SimulationCode reads (ic_type_of_input = "transferinfofile"),
+with accurate massive neutrino transfer functions.
 
 The redshifts are uniform in log(1+z) from 0 to zmax (the growth rates are computed from the tables with a 4-point
 Lagrange derivative in log(a), so the spacing should be fine enough: the default 60 redshifts up to z = 200 give

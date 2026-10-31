@@ -3,7 +3,7 @@
 #include <FML/InitialConditions/SpeciesIC.h>
 
 #include <FML/FFTWGrid/FFTWGrid.h>
-#include <FML/CAMBUtils/CAMBReader.h>
+#include "TransferInput.h"
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/NBody/NBody.h>

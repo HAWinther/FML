@@ -3,7 +3,7 @@
 
 #include "ParameterDefaults.h"
 
-#include <FML/CAMBUtils/CAMBReader.h>
+#include "TransferInput.h"
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
@@ -76,7 +76,7 @@ class NBodySimulation {
     using ParameterMap = FML::UTILS::ParameterMap;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
     using DVector = FML::INTERPOLATION::SPLINE::DVector;
-    using LinearTransferData = FML::FILEUTILS::LinearTransferData;
+    using TransferProvider = SIMCODE::TransferProvider;
     using PowerSpectrumBinning = FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM>;
     using Parameters = SIMCODE::SimulationParameters;
 
@@ -89,10 +89,9 @@ class NBodySimulation {
     /// The gravity model used to make the IC (GR if ic_use_gravity_model_GR, otherwise grav)
     std::shared_ptr<GravityModel<NDIM>> grav_ic;
 
-    /// Linear perturbations, transfer functions, initial pofk
-    /// This is only used if ic_type_of_input == transferinfofile
-    std::shared_ptr<LinearTransferData> transferdata;
-    std::shared_ptr<FML::INITIALCONDITIONS::TransferProvider> ic_transfers;
+    /// The transfer functions (ic_type_of_input = transferinfofile, class or internal_transfer; see TransferInput.h).
+    /// The same object as in the gravity model (grav)
+    std::shared_ptr<TransferProvider> transfers;
 
     /// A copy of the parameterfile (passed on to the models we create)
     std::shared_ptr<ParameterMap> parameters;
@@ -261,7 +260,7 @@ class NBodySimulation {
     std::shared_ptr<Cosmology> get_cosmology() const { return cosmo; }
     std::shared_ptr<GravityModel<NDIM>> get_gravity_model() const { return grav; }
     std::shared_ptr<GravityModel<NDIM>> get_gravity_model_ic() const { return grav_ic; }
-    std::shared_ptr<LinearTransferData> get_transferdata() const { return transferdata; }
+    std::shared_ptr<TransferProvider> get_transfers() const { return transfers; }
     const Spline & get_power_initial_spline() const { return power_initial_spline; }
     const auto & get_pofk_cb_every_step() const { return pofk_cb_every_step; }
     const auto & get_pofk_total_every_step() const { return pofk_total_every_step; }
@@ -534,8 +533,7 @@ void NBodySimulation<NDIM, T>::setup_initial_power_spectrum() {
                                                             cosmo,
                                                             grav,
                                                             grav_ic,
-                                                            transferdata,
-                                                            &ic_transfers,
+                                                            transfers,
                                                             params.simulation.boxsize);
     auto make_splines = [&](std::string label) {
         power_initial_spline.create(table.k, table.power, "P(k,zini)" + label);
@@ -582,11 +580,8 @@ void NBodySimulation<NDIM, T>::setup_initial_power_spectrum() {
         make_splines(" sigma8 normalized");
 
         // Update transfer data. This also updates data in gravity model (as its the same object)
-        if (transferdata) {
-            transferdata->set_As(transferdata->get_As() * pofk_norm_factor);
-        }
-        if (!transferdata && ic_transfers)
-            ic_transfers->rescale_primordial_power(pofk_norm_factor);
+        if (transfers)
+            transfers->rescale_primordial_power(pofk_norm_factor);
         cosmo->set_As(cosmo->get_As() * pofk_norm_factor);
 
         if (FML::ThisTask == 0) {
@@ -682,10 +677,10 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
     // Massive neutrino particles (made from the same random field)
     if (has_neutrino_particles()) {
         timer.StartTiming("InitialConditionsNeutrinos");
-        FML::assert_mpi(transferdata != nullptr, "particle_neutrinos needs the transfer functions (transferinfofile)");
+        FML::assert_mpi(transfers != nullptr, "particle_neutrinos needs the transfer functions (transferinfofile or class)");
         const auto & nu = species.back();
         neutrinos.generate(delta_ini_fourier,
-                           *transferdata,
+                           *transfers,
                            ic.initial_redshift,
                            cosmo->HoverH0_of_a(ic.a_initial()),
                            nu.Npart_1D,
@@ -735,14 +730,14 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
     std::function<double(double)> velocity_norm_1LPT_of_kBox = nullptr;
     Spline growth_rate_of_logk{"f_cb(k,zini)"};
     if (params.force.nbody_gauge) {
-        FML::assert_mpi(transferdata != nullptr, "force_nbody_gauge needs the transfer functions");
-        const double kmin = transferdata->get_kmin_hmpc_splines();
-        const double kmax = transferdata->get_kmax_hmpc_splines();
+        FML::assert_mpi(transfers != nullptr, "force_nbody_gauge needs the transfer functions");
+        const double kmin = transfers->range().kmin_hmpc;
+        const double kmax = transfers->range().kmax_hmpc;
         const int nk = 512;
         DVector logk(nk), f(nk);
         for (int i = 0; i < nk; i++) {
             logk[i] = std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1);
-            f[i] = transferdata->get_cdm_baryon_growth_rate(std::exp(logk[i]), aini);
+            f[i] = transfers->density_growth_rate(SIMCODE::TransferSpecies::CDMBaryon, std::exp(logk[i]), aini);
         }
         growth_rate_of_logk.create(logk, f, "f_cb(k,zini)");
         // With COLA the velocities are relative to the COLA frame, which has the growth rate of the gravity model
@@ -935,10 +930,11 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     const auto & ic = params.ic;
     const double boxsize = params.simulation.boxsize;
     const double aini = ic.a_initial();
-    FML::assert_mpi(ic_transfers != nullptr, "particle_baryons needs the transfer functions (transferinfofile)");
+    FML::assert_mpi(transfers != nullptr,
+                    "particle_baryons needs the transfer functions (transferinfofile, class or internal_transfer)");
     const auto & cdm = species[0];
     const auto & baryon = species[1];
-    const auto splines = SIMCODE::two_species_ic_splines<NDIM>(*ic_transfers,
+    const auto splines = SIMCODE::two_species_ic_splines<NDIM>(*transfers,
                                                                *grav_ic,
                                                                ic.initial_redshift,
                                                                cdm.weight_cb,
@@ -949,8 +945,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
                                              fac * grav_ic->get_f_2LPT(aini),
                                              fac * grav_ic->get_f_3LPTa(aini),
                                              fac * grav_ic->get_f_3LPTb(aini)};
-    const double kmin = ic_transfers->range().kmin_hmpc;
-    const double kmax = ic_transfers->range().kmax_hmpc;
+    const double kmin = transfers->range().kmin_hmpc;
+    const double kmax = transfers->range().kmax_hmpc;
     auto clamp_logk = [&](double kBox) { return std::log(std::min(std::max(kBox / boxsize, kmin), kmax)); };
     // The baryon-CDM relative mode: in the displacement (each species its own displacement and velocity), the
     // masses m = 1 + eps (mass: shared CDM+baryon flow, eps = the linear relative mode today; mass_ini: shared
@@ -959,7 +955,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     const bool mass_mode = relative_mode == "mass" or relative_mode == "mass_ini";
     std::pair<Spline, Spline> eps_today;
     if (relative_mode == "mass") {
-        eps_today = SIMCODE::two_species_mass_contrast_today(*ic_transfers, ic.initial_redshift);
+        eps_today = SIMCODE::two_species_mass_contrast_today(*transfers, ic.initial_redshift);
         if (FML::ThisTask == 0) {
             std::cout << "# Mass-encoded relative mode: eps_b / delta_cb(zini) = ";
             for (double k : {0.01, 0.1, 1.0})
@@ -1094,7 +1090,7 @@ void NBodySimulation<NDIM, T>::setup_nbody_gauge() {
     if (grav->get_name() != "GR" or cosmo->get_name() != "LCDM")
         throw std::runtime_error("force_nbody_gauge is only implemented for cosmology_model = LCDM and gravity_model "
                                  "= GR (the source is computed with CLASS)");
-    FML::assert_mpi(transferdata != nullptr, "force_nbody_gauge needs the transfer functions");
+    FML::assert_mpi(transfers != nullptr, "force_nbody_gauge needs the transfer functions");
 
     if (FML::ThisTask == 0)
         std::cout << "# Running in the N-body gauge. Reading the linear source [" << force.nbody_gauge_filename
@@ -1106,7 +1102,7 @@ void NBodySimulation<NDIM, T>::setup_nbody_gauge() {
     if (FML::ThisTask == 0) {
         const double aini = params.ic.a_initial();
         for (double a : {aini, 0.5, 1.0}) {
-            const auto ratio = nbody_gauge->ratio_spline(a, aini, *transferdata);
+            const auto ratio = nbody_gauge->ratio_spline(a, aini, *transfers);
             std::cout << "# N-body gauge source: delta_extra(k,z) / delta_cb(k,zini) at z = " << 1.0 / a - 1.0 << ":";
             for (double k : {1e-3, 1e-2, 1e-1})
                 std::cout << " " << ratio(std::log(k)) << " (k = " << k << ")";

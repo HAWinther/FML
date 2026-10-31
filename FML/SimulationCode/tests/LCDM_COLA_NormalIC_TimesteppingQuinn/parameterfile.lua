@@ -244,7 +244,6 @@ ic_LPT_order = 2
 -- reconstruct_from_particles (see below)
 -- read_particles   (if not COLA read GADGET file and use that for sim) 
 ic_type_of_input = "powerspectrum"
-ic_type_of_input_fileformat = "CAMB" -- CAMB, CLASS (run with format=camb), AXIONCAMB. Easy to add more in CAMBReader.h
 -- Path to the input (NB: for using the example files update the path at the top of the file below)
 ic_input_filename = "input_power_spectrum.dat"
 -- The redshift of the P(k), T(k) we give as input

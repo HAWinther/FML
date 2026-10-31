@@ -56,7 +56,7 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
     const auto grav = sim.get_gravity_model();
     const auto & cosmo = grav->get_cosmo();
     const auto grav_ic = sim.get_gravity_model_ic();
-    const auto transferdata = sim.get_transferdata();
+    const auto transfers = sim.get_transfers();
     const auto & power_initial_spline = sim.get_power_initial_spline();
     const auto ic_use_gravity_model_GR = params.ic.use_gravity_model_GR;
     const auto pofk_subtract_shotnoise = params.pofk.subtract_shotnoise;
@@ -113,12 +113,12 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
             for (int i = 0; i < binning.n; i++) {
                 const double k = binning.kbin[i];
                 double plin = 0.0;
-                if (transferdata) {
-                    const double Ti = SIMCODE::species_transfer_function(label, *transferdata, k, a);
+                if (transfers) {
+                    const double Ti = SIMCODE::species_transfer_function(label, *transfers, k, a);
                     const double D = grav->get_D_1LPT(a, k / grav->H0_hmpc);
                     const double Dini = grav->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
                     plin = power_initial_spline(k) * std::pow(D / Dini, 2) *
-                           std::pow(Ti / transferdata->get_cdm_baryon_transfer_function(k, a), 2);
+                           std::pow(Ti / transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, a), 2);
                 }
                 fp << std::setw(15) << k << " " << std::setw(15) << binning.pofk[i] << " " << std::setw(15) << plin
                    << "\n";
@@ -134,7 +134,7 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
         auto binning = p.second;
         auto pofk_total = [&](double k) {
             double fac = 1.0;
-            // If ic_use_gravity_model_GR then transferdata is that of GR so
+            // If ic_use_gravity_model_GR then transfers is that of GR so
             // we need to rescale it with growthfactors
             if (ic_use_gravity_model_GR) {
                 double D = grav->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
@@ -143,8 +143,8 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
                 double Dini_GR = grav_ic->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
                 fac = std::pow((D / Dini) / (D_GR / Dini_GR), 2);
             }
-            if (transferdata)
-                return fac * transferdata->get_total_power_spectrum(k, 1.0 / (1.0 + redshift));
+            if (transfers)
+                return fac * transfers->power(SIMCODE::TransferSpecies::TotalMatter, k, 1.0 / (1.0 + redshift));
             // If we don't have transfer data we don't have this info so just output 0.0
             return 0.0;
         };
@@ -399,7 +399,7 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
     const double ic_initial_redshift = sim.get_parameters().ic.initial_redshift;
     const int Npart_1D = sim.get_parameters().particle.Npart_1D;
     const auto grav = sim.get_gravity_model();
-    const auto transferdata = sim.get_transferdata();
+    const auto transfers = sim.get_transfers();
     const auto & power_initial_spline = sim.get_power_initial_spline();
     auto & part = sim.get_particles();
     const double a = 1.0 / (1.0 + redshift);
@@ -459,8 +459,8 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
             const double D = grav->get_D_1LPT(a, k / grav->H0_hmpc);
             const double Dini = grav->get_D_1LPT(aini, k / grav->H0_hmpc);
             pofk_linear[i] = power_initial_spline(k) * std::pow(D / Dini, 2);
-        } else if (transferdata) {
-            pofk_linear[i] = transferdata->get_cdm_baryon_power_spectrum(k, a);
+        } else if (transfers) {
+            pofk_linear[i] = transfers->power(SIMCODE::TransferSpecies::CDMBaryon, k, a);
         }
     }
 
@@ -695,7 +695,7 @@ compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double redshif
     const bool pofk_multipole_interlacing = settings.interlacing;
     const bool pofk_multipole_subtract_shotnoise = settings.subtract_shotnoise;
     const int pofk_multipole_ellmax = settings.ellmax;
-    const auto transferdata = sim.get_transferdata();
+    const auto transfers = sim.get_transfers();
     const auto & power_initial_spline = sim.get_power_initial_spline();
     const auto grav = sim.get_gravity_model();
     const auto cosmo = sim.get_cosmology();
@@ -737,8 +737,8 @@ compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double redshif
             double D = grav->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
             double Dini = grav->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
             return pofk_ini * std::pow(D / Dini, 2);
-        } else if (transferdata) {
-            return transferdata->get_cdm_baryon_power_spectrum(k, 1.0 / (1.0 + redshift));
+        } else if (transfers) {
+            return transfers->power(SIMCODE::TransferSpecies::CDMBaryon, k, 1.0 / (1.0 + redshift));
         }
         return 0.0;
     };
@@ -792,7 +792,7 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     const std::string pofk_density_assignment_method = settings.density_assignment_method;
     const bool pofk_interlacing = settings.interlacing;
     const bool pofk_subtract_shotnoise = settings.subtract_shotnoise;
-    const auto transferdata = sim.get_transferdata();
+    const auto transfers = sim.get_transfers();
     const auto & power_initial_spline = sim.get_power_initial_spline();
     const auto grav = sim.get_gravity_model();
     const auto & cosmo = grav->get_cosmo();
@@ -929,8 +929,8 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
             double D = grav->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
             double Dini = grav->get_D_1LPT(1.0 / (1.0 + ic_initial_redshift), k / grav->H0_hmpc);
             return pofk_ini * std::pow(D / Dini, 2);
-        } else if (transferdata) {
-            return transferdata->get_cdm_baryon_power_spectrum(k, 1.0 / (1.0 + redshift));
+        } else if (transfers) {
+            return transfers->power(SIMCODE::TransferSpecies::CDMBaryon, k, 1.0 / (1.0 + redshift));
         }
         return 0.0;
     };
@@ -989,9 +989,9 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
             for (int i = 0; i < sp.second.n; i++) {
                 const double k = sp.second.kbin[i];
                 double ratio = 1.0;
-                if (transferdata) {
-                    const double Ti = SIMCODE::species_transfer_function(sp.first, *transferdata, k, a);
-                    ratio = std::pow(Ti / transferdata->get_cdm_baryon_transfer_function(k, a), 2);
+                if (transfers) {
+                    const double Ti = SIMCODE::species_transfer_function(sp.first, *transfers, k, a);
+                    ratio = std::pow(Ti / transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, a), 2);
                 }
                 fps << std::setw(15) << k << " " << std::setw(15) << sp.second.pofk[i] << " " << std::setw(15)
                     << pofk_cb_linear_spline(k) * ratio << "\n";

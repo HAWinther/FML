@@ -33,7 +33,7 @@ namespace SIMCODE {
     // Options that are given as strings in the parameterfile
     //=============================================================================
     enum class ICRandomFieldType { Gaussian, NonGaussian, ReadParticles, ReadPhases };
-    enum class ICInputType { PowerSpectrum, TransferFunction, TransferInfoFile, InternalTransfer };
+    enum class ICInputType { PowerSpectrum, TransferFunction, TransferInfoFile, ClassFiles, InternalTransfer };
     enum class RandomGeneratorType { GSL, MT19937 };
     enum class RandomFieldBackend { NGenIC, Philox };
     using TimestepMethod = FML::NBODY::TimestepMethod;
@@ -170,9 +170,9 @@ namespace SIMCODE {
         int LPT_order;                        // The LPT order to use to make IC (1,2,3)
 
         // Input file (power-spectrum / transfer functions)
-        ICInputType type_of_input;            // powerspectrum, transferfunction, transferinfofile or internal_transfer
-        std::string type_of_input_fileformat; // Format, CAMB, CLASS (with format=camb), ..., for transfer files
-        std::string input_filename;           // The filename
+        ICInputType type_of_input; // powerspectrum, transferfunction, transferinfofile, class or internal_transfer
+        std::string input_filename; // The filename (class: the root of the CLASS run)
+        std::string input_gauge{"synchronous"}; // class: the gauge CLASS was run in (synchronous or newtonian)
         double input_redshift;                // The redshift of P(k,z) / T(k,z) that we read in
         bool use_gravity_model_GR;            // Input power-spectrum is for LCDM so if MG use LCDM to set the IC
 
@@ -199,6 +199,26 @@ namespace SIMCODE {
         bool reconstruct_exact;                     // Reconstruct the LPT fields exactly from pos+vel
 
         double a_initial() const { return 1.0 / (1.0 + initial_redshift); }
+        /// The value of ic_type_of_input
+        std::string type_of_input_name() const {
+            switch (type_of_input) {
+                case ICInputType::PowerSpectrum:
+                    return "powerspectrum";
+                case ICInputType::TransferFunction:
+                    return "transferfunction";
+                case ICInputType::TransferInfoFile:
+                    return "transferinfofile";
+                case ICInputType::ClassFiles:
+                    return "class";
+                case ICInputType::InternalTransfer:
+                    return "internal_transfer";
+            }
+            return "";
+        }
+        /// The input has transfer tables of all species at many redshifts (CAMB or CLASS)
+        bool has_transfer_tables() const {
+            return type_of_input == ICInputType::TransferInfoFile or type_of_input == ICInputType::ClassFiles;
+        }
         bool reads_particles() const {
             return random_field_type == ICRandomFieldType::ReadParticles or
                    random_field_type == ICRandomFieldType::ReadPhases;
@@ -380,8 +400,9 @@ namespace SIMCODE {
                          {{"powerspectrum", ICInputType::PowerSpectrum},
                           {"transferfunction", ICInputType::TransferFunction},
                           {"transferinfofile", ICInputType::TransferInfoFile},
+                          {"class", ICInputType::ClassFiles},
                           {"internal_transfer", ICInputType::InternalTransfer}});
-            r.get_optional("ic_type_of_input_fileformat", ic.type_of_input_fileformat);
+            r.get_optional("ic_input_gauge", ic.input_gauge);
             r.get("ic_input_filename", ic.input_filename);
             r.get_choice("ic_random_field_type",
                          ic.random_field_type,
@@ -765,13 +786,10 @@ namespace SIMCODE {
              true,
              true,
              [](P p) { return not p.simulation.enforce_LPT_trajectories; }},
-            {"`ic_type_of_input = transferinfofile` or `internal_transfer` (species transfers at zini)",
+            {"`ic_type_of_input = transferinfofile`, `class` or `internal_transfer` (species transfers at zini)",
              true,
              true,
-             [](P p) {
-                 return p.ic.type_of_input == ICInputType::TransferInfoFile ||
-                        p.ic.type_of_input == ICInputType::InternalTransfer;
-             }},
+             [](P p) { return p.ic.has_transfer_tables() || p.ic.type_of_input == ICInputType::InternalTransfer; }},
             {"`ic_random_field_type = gaussian` or `nongaussian`",
              true,
              true,

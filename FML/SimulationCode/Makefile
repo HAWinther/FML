@@ -36,16 +36,17 @@ INTERNAL_COSMO_OBJS :=
 ifeq ($(USE_INTERNAL_COSMOLOGY),true)
 include ../Cosmology/EinsteinBoltzmannSolver/Cosmology.mk
 OPTIONS += -DUSE_INTERNAL_COSMOLOGY
-FML_MODULES += $(filter-out Cosmology/EinsteinBoltzmannSolver,$(COSMO_MODULES)) $(COSMO_FML_MODULES) InitialConditions
+FML_MODULES += $(filter-out Cosmology/EinsteinBoltzmannSolver,$(COSMO_MODULES)) $(COSMO_FML_MODULES)
 vpath ParameterFile.cpp $(FML_ROOT)/Cosmology/EinsteinBoltzmannSolver
-INTERNAL_COSMO_OBJS := $(filter-out Spline.o ODESolver.o,$(COSMO_OBJS)) InternalTransferLoader.o
+INTERNAL_COSMO_OBJS := $(filter-out Spline.o ODESolver.o,$(COSMO_OBJS))
 endif
 
 # The simulation is compiled once per particle type, each in its own file (use make -j to compile them in parallel)
 RUN_SIMULATION_OBJS := RunSimulation_COLAScaleDepWithMass.o RunSimulation_COLAWithMass.o RunSimulation_BasicWithMass.o RunSimulation_COLAScaleDep.o RunSimulation_COLA.o RunSimulation_BasicQ.o RunSimulation_Basic.o
 
-nbody: $(INTERNAL_COSMO_OBJS) Main.o $(RUN_SIMULATION_OBJS) BaryonificationOutput.o Global.o Spline.o ODESolver.o GadgetUtils.o ParameterMap.o FileUtils.o Math.o
+# The transfer functions (FML/TransferProviders; with USE_INTERNAL_COSMOLOGY also the solver) are made in TransferInput.o
+nbody: $(INTERNAL_COSMO_OBJS) Main.o $(RUN_SIMULATION_OBJS) TransferInput.o BaryonificationOutput.o Global.o Spline.o ODESolver.o GadgetUtils.o ParameterMap.o FileUtils.o Math.o
 	$(LINK_EXE)
 
 # Rebuild if build options change
-Main.o $(RUN_SIMULATION_OBJS): Makefile
+Main.o $(RUN_SIMULATION_OBJS) TransferInput.o: Makefile

@@ -316,7 +316,6 @@ bispectrum_density_assignment_method = "PCS"
 simulation_enforce_LPT_trajectories = false
 simulation_cola_LPT_order = 2
 gravity_model_screening_efficiency = 1
-ic_type_of_input_fileformat = "CAMB"
 force_use_finite_difference_force = false
 force_finite_difference_stencil_order = 4
 lightcone = false

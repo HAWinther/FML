@@ -28,6 +28,8 @@ TARGETS += test_lua
 endif
 
 FML_MODULES := Global Spline ODESolver Math SphericalCollapse HaloModel FileUtils GadgetUtils FFTLog ParameterMap
+# SimulationCode/src: TransferInput.cpp (the transfer functions the SimulationCode gravity models read)
+EXTRA_VPATH += $(FML_ROOT)/SimulationCode/src
 EXTRA_VPATH += $(FML_ROOT)/Baryonification/tests $(FML_ROOT)/ShortRangeGravity/tests $(FML_ROOT)/PhaseSpaceHaloFinder/tests $(FML_ROOT)/EnsembleStatistics/tests $(FML_ROOT)/Morphology/tests
 
 TEST_OBJS = test_core.o Global.o
@@ -38,13 +40,13 @@ endif
 test_transfers: test_transfers.o Global.o Spline.o FileUtils.o
 	$(LINK_EXE)
 
-test_timestepping: test_timestepping.o Global.o Spline.o ODESolver.o ParameterMap.o
+test_timestepping: test_timestepping.o TransferInput.o Global.o Spline.o ODESolver.o ParameterMap.o
 	$(LINK_EXE)
 
 test_fourier_resampling: test_fourier_resampling.o Global.o
 	$(LINK_EXE)
 
-test_random_fields: test_random_fields.o Global.o Spline.o ODESolver.o ParameterMap.o
+test_random_fields: test_random_fields.o TransferInput.o Global.o Spline.o ODESolver.o ParameterMap.o
 	$(LINK_EXE)
 
 test_lightcone: test_lightcone.o Global.o Spline.o ParameterMap.o
@@ -177,8 +179,8 @@ test_gadget: test_gadget.o Global.o GadgetUtils.o
 test_ramses: test_ramses.o test_ramses_odr.o Global.o
 	$(LINK_EXE)
 
-# CAMBUtils (reads the tables in ../SimulationCode/input)
-test_camb: test_camb.o test_camb_odr.o Global.o Spline.o
+# The CAMB reader of TransferProviders (reads the tables in ../SimulationCode/input)
+test_camb: test_camb.o Global.o Spline.o
 	$(LINK_EXE)
 
 # Numerical core: splines, ODE solver and math functions (GSL)

@@ -55,7 +55,10 @@ int main(int argc, char ** argv) {
             }
             const double cb = (.267 * deltaC + .05 * deltaB) / .317;
             weighted = weighted && std::abs(cb / synchronous.density_transfer(Species::CDMBaryon, k, a) - 1) < 1e-13;
-            power = power && synchronous.power(Species::CDMBaryon, k, a) == cb * cb * synchronous.primordial_power(k);
+            // Relative, not ==: with FMA contraction (-march=native) the two sides round differently
+            power = power && std::abs(synchronous.power(Species::CDMBaryon, k, a) /
+                                          (cb * cb * synchronous.primordial_power(k)) -
+                                      1) < 1e-12;
             double rk, ra, rc, rb, rtC, rtB;
             if (!(reference >> rk >> ra >> rc >> rb >> rtC >> rtB))
                 reference_matches = false;
@@ -102,7 +105,7 @@ int main(int argc, char ** argv) {
     check_local(sampled.k.size() == 1000 && std::abs(sampled.k.back() / synchronous.range().kmax_hmpc - 1) < 1e-12,
                 "converted IC table covers both endpoints without extrapolation");
     bool noNu = !synchronous.has_density(Species::MassiveNeutrino);
-    check_local(noNu, "unsupported massive-neutrino ICs are not advertised");
+    check_local(noNu, "no MassiveNeutrino without massive neutrinos");
     auto species = two_species_ic_splines(synchronous, [](double, double) { return 1.; }, 49., .267 / .317, .05 / .317);
     check_local(std::isfinite(species.f_baryon(std::log(.01))), "converted provider prepares separate CDM/baryon ICs");
     const double before = synchronous.power(Species::CDMBaryon, .01, 1.),
@@ -111,7 +114,8 @@ int main(int argc, char ** argv) {
     check_local(std::abs(synchronous.power(Species::CDMBaryon, .01, 1.) / before - 4.) < 1e-12 &&
                     synchronous.density_transfer(Species::CDMBaryon, .01, 1.) == density_before,
                 "primordial rescaling changes power without changing unit-curvature transfers");
-    settings.cosmo.m_nu = .1;
+    // Massive neutrinos are supported (tested against CLASS in TransferProviders/tests); a curved background is not
+    settings.cosmo.OmegaK = 0.01;
     bool rejected = false;
     try {
         InternalTransferProvider bad(settings);
@@ -119,7 +123,7 @@ int main(int argc, char ** argv) {
         rejected = true;
     }
     check_local(rejected, "unsupported cosmologies fail before solving");
-    settings.cosmo.m_nu = 0.0;
+    settings.cosmo.OmegaK = 0.0;
     settings.cosmo.alpha_s = -0.01;
     rejected = false;
     try {

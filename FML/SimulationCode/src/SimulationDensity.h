@@ -51,7 +51,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         add_neutrino_particles(density_grid_fourier, a);
         if (subtract_shotnoise)
             total_shotnoise_value = total_shotnoise(a);
-    } else if (force.linear_massive_neutrinos and cosmo->get_fMNu() > 0.0 and transferdata) {
+    } else if (force.linear_massive_neutrinos and cosmo->get_fMNu() > 0.0 and transfers) {
         add_linear_neutrinos(density_grid_fourier, a);
     } else {
         has_total = false;
@@ -150,7 +150,7 @@ void NBodySimulation<NDIM, T>::add_nbody_gauge_source(FFTWGrid<NDIM> & density_g
         std::cout << "Adding the N-body gauge linear source (radiation, neutrinos, GR) to the densityfield\n";
     const double boxsize = params.simulation.boxsize;
     const double aini = 1.0 / (1.0 + params.ic.initial_redshift);
-    const Spline ratio = nbody_gauge->ratio_spline(a, aini, *transferdata);
+    const Spline ratio = nbody_gauge->ratio_spline(a, aini, *transfers);
     const double logkmin = std::log(nbody_gauge->get_kmin_hmpc());
     const double logkmax = std::log(nbody_gauge->get_kmax_hmpc());
 
@@ -215,9 +215,12 @@ void NBodySimulation<NDIM, T>::add_linear_neutrinos(FFTWGrid<NDIM> & density_gri
     // delta_cb(zini,k) -> delta_nu(z,k) using the transfer functions
     const double aini = 1.0 / (1.0 + ic_initial_redshift);
     const double koverkBox = 1.0 / params.simulation.boxsize;
+    // (below k_min of the tables, including the k = 0 mode, the ratio at k_min)
+    const double kmin = transfers->range().kmin_hmpc;
     auto norm = [&](double kBox) {
-        double T_mnu = transferdata->get_massive_neutrino_transfer_function(kBox * koverkBox, a);
-        double T_cb_ini = transferdata->get_cdm_baryon_transfer_function(kBox * koverkBox, aini);
+        const double k = std::max(kBox * koverkBox, kmin);
+        double T_mnu = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k, a);
+        double T_cb_ini = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, aini);
         return (T_mnu / T_cb_ini);
     };
 

@@ -1,16 +1,16 @@
 //==========================================================
-// Tests for FML::FILEUTILS::LinearTransferData (CAMBUtils/CAMBReader.h) with the CAMB tables in
+// Tests for the CAMB reader of FML/TransferProviders (CAMBFileTransferProvider) with the CAMB tables in
 // ../SimulationCode/input/camb_data_lcdm_nu0.4_zmax200 (0.4 eV, 60 redshifts up to z = 200) against CAMB itself
 // (P_cb and P_total / P_cb computed with camb 2.0.5 for the same cosmology):
-//   - P_cb(k, z) and the total-matter P(k, z) (the neutrino weight was wrong at high z)
-//   - P(k) above the largest k of the tables falls (it grew as k^ns)
-//   - growth rates outside the redshift range of the tables (were extrapolated), the redshift range getters
-//   - an infofile not ordered in redshift (aborted in GSL)
-// The header is also included in test_camb_odr.cpp (it must be usable from several translation units)
+//   - P_cb(k, z) and the total-matter P(k, z) (CAMB's total column)
+//   - P(k) above the largest k of the tables falls (power-law extrapolation of T)
+//   - growth rates outside the redshift range of the tables (the value at the end), the redshift range
+//   - an infofile not ordered in redshift
+// The comparison with CLASS and the gauge conversion are in TransferProviders/tests (they need generated data)
 // Run with: make run (in this folder) or make test (from the top folder)
 //==========================================================
-#include <FML/CAMBUtils/CAMBReader.h>
 #include <FML/Global/Global.h>
+#include <FML/TransferProviders/CAMBFileTransferProvider.h>
 
 #include <cmath>
 #include <cstdio>
@@ -24,10 +24,7 @@
 using FML::TESTS::check_local;
 using FML::TESTS::num;
 
-using namespace FML::FILEUTILS;
-
-int camb_odr_check(); // defined in test_camb_odr.cpp
-
+using namespace FML::INITIALCONDITIONS;
 
 const std::string tables = "../SimulationCode/input/camb_data_lcdm_nu0.4_zmax200";
 const std::string infofile_repo = "../SimulationCode/input/transfer_infofile_lcdm_nu0.4_zmax200.txt";
@@ -49,16 +46,21 @@ void write_infofile(const std::string & filename, bool shuffled) {
     }
 }
 
-LinearTransferData make(const std::string & infofile) {
-    const double h = 0.671, OmegaM = 0.3175, Omegab = 0.049, OmegaMNu = 0.0095;
-    LinearTransferData td(Omegab, OmegaM - Omegab - OmegaMNu, OmegaMNu, 0.05, 2.215e-9, 0.966, h);
-    td.read_transfer(infofile);
-    return td;
+CAMBFileTransferProvider make(const std::string & infofile) {
+    CAMBFileTransferProvider::Settings s;
+    s.infofile = infofile;
+    s.h = 0.671;
+    s.Omegab = 0.049;
+    s.OmegaMNu = 0.0095;
+    s.OmegaCDM = 0.3175 - s.Omegab - s.OmegaMNu;
+    s.A_s = 2.215e-9;
+    s.n_s = 0.966;
+    s.k_pivot_mpc = 0.05;
+    s.range_policy = RangePolicy::SourceExtrapolation;
+    return CAMBFileTransferProvider(s);
 }
 
 int main() {
-    check_local(camb_odr_check() == 1, "CAMBReader.h can be included in several translation units");
-
     const std::string info = "test_camb_info_" + std::to_string(FML::ThisTask) + ".txt";
     const std::string info_rev = "test_camb_info_rev_" + std::to_string(FML::ThisTask) + ".txt";
     write_infofile(info, false);
@@ -79,32 +81,30 @@ int main() {
     double err_cb = 0.0, err_tot = 0.0;
     for (auto & r : ref) {
         const double a = 1.0 / (1.0 + r[0]), k = r[1];
-        const double pcb = td.get_cdm_baryon_power_spectrum(k, a);
-        const double ptot = td.get_total_power_spectrum(k, a);
+        const double pcb = td.power(Species::CDMBaryon, k, a);
+        const double ptot = td.power(Species::TotalMatter, k, a);
         err_cb = std::max(err_cb, std::fabs(pcb / r[2] - 1.0));
         err_tot = std::max(err_tot, std::fabs(ptot / pcb / r[3] - 1.0));
     }
     check_local(err_cb < 3e-3, "P_cb(k, z = 0, 51, 200) = CAMB (max error " + num(err_cb, 3) + ")");
-    check_local(err_tot < 3e-4,
-                "P_total / P_cb = CAMB (max error " + num(err_tot, 3) + ", was 0.2% at z = 51 and 2% at z = 200)");
+    check_local(err_tot < 3e-4, "P_total / P_cb = CAMB (max error " + num(err_tot, 3) + ")");
 
     // Beyond the largest k of the tables
-    const double kmax = td.get_kmax_hmpc_splines();
-    const double p1 = td.get_cdm_baryon_power_spectrum(kmax, 1.0), p2 = td.get_cdm_baryon_power_spectrum(5 * kmax, 1.0);
+    const double kmax = td.range().kmax_hmpc;
+    const double p1 = td.power(Species::CDMBaryon, kmax, 1.0), p2 = td.power(Species::CDMBaryon, 5 * kmax, 1.0);
     check_local(p2 < p1 and p2 > 0.0,
-                "P(k) above kmax = " + num(kmax, 3) + " h/Mpc falls (P(5 kmax)/P(kmax) = " + num(p2 / p1, 3) +
-                    ", was 4.7: T was constant)");
+                "P(k) above kmax = " + num(kmax, 3) + " h/Mpc falls (P(5 kmax)/P(kmax) = " + num(p2 / p1, 3) + ")");
 
     // Redshift range
-    check_local(td.get_zmin_splines() == 0.0 and std::fabs(td.get_zmax_splines() - 200.0) < 1e-10,
-                "redshift range of the tables [" + num(td.get_zmin_splines(), 3) + ", " +
-                    num(td.get_zmax_splines(), 3) + "]");
+    const double zmin = 1.0 / td.range().amax - 1.0, zmax = 1.0 / td.range().amin - 1.0;
+    check_local(std::fabs(zmin) < 1e-12 and std::fabs(zmax - 200.0) < 1e-10,
+                "redshift range of the tables [" + num(zmin, 3) + ", " + num(zmax, 3) + "]");
 
     // Growth rate beyond the tables: the value at the end (not an extrapolation)
-    const double f200 = td.get_cdm_baryon_growth_rate(0.1, 1.0 / 201.0);
-    const double f332 = td.get_cdm_baryon_growth_rate(0.1, 1.0 / 333.0);
+    const double f200 = td.density_growth_rate(Species::CDMBaryon, 0.1, 1.0 / 201.0);
+    const double f332 = td.density_growth_rate(Species::CDMBaryon, 0.1, 1.0 / 333.0);
     check_local(f332 == f200 and f200 > 0.9 and f200 < 1.0,
-                "growth rate beyond the tables = the value at z = 200 (" + num(f332, 3) + ", was 1.07)");
+                "growth rate beyond the tables = the value at z = 200 (" + num(f332, 3) + ")");
 
     // Infofile not ordered in redshift
     bool ok = true;
@@ -112,12 +112,12 @@ int main() {
         auto td_rev = make(info_rev);
         for (double z : {0.0, 1.0, 49.0})
             for (double k : {0.01, 0.1, 1.0})
-                ok = ok and td_rev.get_cdm_baryon_transfer_function(k, 1.0 / (1.0 + z)) ==
-                                td.get_cdm_baryon_transfer_function(k, 1.0 / (1.0 + z));
+                ok = ok and td_rev.density_transfer(Species::CDMBaryon, k, 1.0 / (1.0 + z)) ==
+                                td.density_transfer(Species::CDMBaryon, k, 1.0 / (1.0 + z));
     } catch (...) {
         ok = false;
     }
-    check_local(ok, "infofile not ordered in redshift = ordered infofile (aborted in GSL before)");
+    check_local(ok, "infofile not ordered in redshift = ordered infofile");
 
     std::remove(info.c_str());
     std::remove(info_rev.c_str());

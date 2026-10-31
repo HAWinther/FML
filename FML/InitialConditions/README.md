@@ -4,12 +4,13 @@ This module prepares linear inputs independently of SimulationCode. The existing
 particle/LPT assignment routines remain in their owning modules.
 
 - `TransferProvider.h`: species, density/velocity gauges, units, capabilities and k/a coverage.
-- `CAMBTransferProvider.h`: an owning adapter around `LinearTransferData`, retaining its exact
-  transfer representation, derivative prescription and legacy power multiplication order.
 - `LinearInput.h`: preparation of a two-column P(k), a single transfer, or provider-based input,
   with caller-supplied growth rescaling and primordial power.
 - `SpeciesIC.h`: CDM/baryon transfer ratios, relative-mode velocities and mass contrasts.
 - `InternalTransferProvider.h`: owning FML Einstein–Boltzmann solver adapter and explicit density-gauge views.
+
+The providers for CAMB and CLASS files, and `make_transfer_provider` (CAMB, CLASS or the internal solver, with the
+gauge of the input declared), are in [TransferProviders](../TransferProviders/README.md).
 
 ## Conventions
 
@@ -31,12 +32,12 @@ reference](https://camb.readthedocs.io/en/latest/transfer_variables.html).
 The table adapter assumes that input files follow these conventions, including
 CLASS output with `format=camb`; it cannot infer the gauge of arbitrary user files.
 
-The internal solver stores Newtonian density and v = -theta/(c k). For uncoupled
-pressureless CDM/baryons, its CDM-synchronous view applies the **same CDM time shift**
-to both species:
+The internal solver stores Newtonian density and v = -theta/(c k). Its CDM-synchronous
+view applies the **same CDM time shift** to every species (CDM, baryons and massive
+neutrinos, with w_s = p_s/rho_s; 0 for CDM and baryons):
 
 ```
-delta_s_sync = delta_s_Newtonian - 3 (a H)/(c k) v_cdm
+delta_s_sync = delta_s_Newtonian - 3 (1 + w_s) (a H)/(c k) v_cdm
 ```
 
 It does not transform each species into its own rest frame. Native Newtonian
@@ -56,14 +57,17 @@ particle coordinate system with a different velocity convention.
 ## Ranges, ownership and normalization
 
 The internal provider rejects extrapolation and owns the background, recombination
-and perturbation solutions for its lifetime. Its first release supports flat GR
-LCDM, unit adiabatic initial perturbations, CDM and baryons, and massless radiation.
-Massive neutrinos, curved backgrounds, isocurvature mixtures and modified gravity
-are rejected before solving. Independent gauge views share the solved state.
+and perturbation solutions for its lifetime. It supports flat GR LCDM, unit
+adiabatic initial perturbations, CDM, baryons, massless radiation and at most one
+massive neutrino species (the solver's `m_nu`: then `MassiveNeutrino` is available and
+`TotalMatter` includes it, combinations weighted by rho_i for densities and
+rho_i + p_i for velocities). Curved backgrounds, isocurvature mixtures, running and
+modified gravity are rejected before solving. Independent gauge views share the
+solved state. SimulationCode's `internal_transfer` loader still runs it without
+massive neutrinos.
 
-The CAMB provider owns a shared reference to its table data. Its default
-`SourceExtrapolation` policy retains the existing reader's behavior, including
-high-k power-law extrapolation and its existing time/derivative boundary handling.
+The table providers of TransferProviders own their tables. Their `SourceExtrapolation`
+policy extrapolates above k_max as a power law and uses the end values elsewhere.
 Choose `RangePolicy::Reject` for strict coverage checks. Unavailable species and
 velocity columns are reported explicitly. Adapters do not launch independent
 random fields for different species: IC generation still uses one shared
@@ -76,8 +80,8 @@ The legacy IC table retains its historical normalization behavior for compatibil
 
 ## SimulationCode
 
-All existing `powerspectrum`, `transferfunction` and `transferinfofile` choices
-remain supported. A simple P(k,z=0) input requires neither species transfers nor a
+SimulationCode reads its transfer functions with TransferProviders (`transferinfofile`, `class`,
+`internal_transfer`; see its README). A simple P(k,z=0) input requires neither species transfers nor a
 Boltzmann solve. Ordinary builds do not compile/link the internal solver.
 
 To enable the optional internal source, rebuild with
@@ -131,7 +135,8 @@ before solving and the sigma8 diagnostic is skipped. Use As normalization for
 ordinary finite-range internal runs, or supply sufficiently wide transfers.
 Existing P(k)/table normalization behavior is unchanged.
 
-Tests: `FML/tests/test_transfers.cpp` covers the lightweight/table paths;
+Tests: `FML/tests/test_transfers.cpp` covers the lightweight/table paths (`LinearInput`, `SpeciesIC` and the
+conventions of a table provider); `FML/tests/test_camb.cpp` the CAMB reader against CAMB;
 `Cosmology/EinsteinBoltzmannSolver/tests/test_transfer_provider.cpp` checks the
 converted densities/velocities against stored CAMB 1.5.4 values and tests the
 internal adapter. `SimulationCode/tests/check_internal_transfers.py` exercises the

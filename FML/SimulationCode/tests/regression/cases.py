@@ -58,7 +58,6 @@ BASE = dict(
     ic_use_gravity_model_GR=False,
     ic_LPT_order=2,
     ic_type_of_input="powerspectrum",
-    ic_type_of_input_fileformat="CAMB",
     ic_input_filename=INPUT + "/example_power_spectrum_cb_z0.000.txt",
     ic_input_redshift=0.0,
     ic_initial_redshift=20.0,

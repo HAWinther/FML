@@ -8,7 +8,6 @@ __pycache__/
 *_wrap.cxx
 
 # Example executables (named in each example Makefile)
-CAMBUtils/example/cambreader
 SimulationCode/nbody
 ComputePowerSpectra/example/powspec
 Cosmology/Legacy/BackgroundCosmology/example/cosmo

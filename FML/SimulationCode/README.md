@@ -112,7 +112,7 @@ If your particle has dynamically allocated memory then you must implement a func
 
 ## CDM and baryons as separate particles
 
-By default CDM and baryons are one set of particles ("cb"). With `particle_baryons = true` they are two sets (one MPIParticles container each, `particle_Npart_1D^3` of each) with masses in the ratio Omegab / OmegaCDM. Both feel the gravity of the total CDM+baryon density delta_cb = (OmegaCDM delta_cdm + Omegab delta_b) / OmegaCB (plus linear massive neutrinos), so the baryons are collisionless (no hydrodynamics). What this gets right is the difference between baryons and CDM left over from before decoupling (the baryons lag behind the CDM and catch up). The initial conditions are made from the CDM and baryon transfer functions at zini (`ic_type_of_input = transferinfofile`):
+By default CDM and baryons are one set of particles ("cb"). With `particle_baryons = true` they are two sets (one MPIParticles container each, `particle_Npart_1D^3` of each) with masses in the ratio Omegab / OmegaCDM. Both feel the gravity of the total CDM+baryon density delta_cb = (OmegaCDM delta_cdm + Omegab delta_b) / OmegaCB (plus linear massive neutrinos), so the baryons are collisionless (no hydrodynamics). What this gets right is the difference between baryons and CDM left over from before decoupling (the baryons lag behind the CDM and catch up). The initial conditions are made from the CDM and baryon transfer functions at zini (`ic_type_of_input = transferinfofile`, `class` or `internal_transfer`):
 
 - delta_i(k) = delta_cb(k) T_i(k,zini) / T_cb(k,zini) from the same random field;
 - 1LPT velocities with f_i = f_cb + dlog(T_i/T_cb)/dlna, where f_cb is the growth rate of the gravity model. The total CDM+baryon velocity is then exactly the growing mode, and the relative velocity comes from the transfer functions. (The growth rates computed directly from the CAMB transfer functions are inaccurate near the ends of the redshift range of the table: from z = 49 they gave 0.8% too much CDM+baryon power.)
@@ -176,7 +176,7 @@ By default massive neutrinos are included with linear theory (`force_linear_mass
 - delta-f weights w = 1 - f0(y) / f_i, where f_i = f0(y_ini) (1 + delta_ini) is the phase-space density the particle carries (conserved along its path) and f0(y) the unperturbed distribution at its current momentum. The weighted density (N_grid^3 / N_nu) Sum w_i W(x - x_i) is delta_nu: the particles only carry the perturbation, so the shot noise is that of w (Sum w^2 / N^2 instead of 1 / N). `particle_neutrino_deltaf = false` uses plain particles (w = 1), for testing.
 - The force is computed from delta_m = (1 - f_nu) delta_cb + f_nu delta_nu with f_nu = OmegaMNu / OmegaM (the same non-relativistic mass weighting as the linear option; the neutrino energy density is larger than the rest mass density at early times: by 33% at z = 50 and 7% at z = 20 for 0.1 eV, 3% at z = 50 for 0.4 eV).
 
-Needs `ic_type_of_input = transferinfofile` with tables up to zini, accurate massive neutrino transfer functions and N_nu = 3 degenerate neutrinos. `scripts/make_camb_transfer_tables.py` makes them with CAMB; `input/transfer_infofile_lcdm_nu0.1_zmax200.txt` and `..._nu0.4_zmax200.txt` are examples (OmegaM = 0.3175, OmegaMNu = 0.0024 and 0.0095, `cosmology_OmegaCDM = 0.2661` and `0.259`). Use a CAMB accuracy boost: with the default accuracy CAMB underestimates P_nu below the free-streaming scale (for 0.1 eV by 3 / 13 / 16% at k = 0.014 / 0.05 / 0.1 h/Mpc at z = 0, relative to CAMB with AccuracyBoost = 3 and to CLASS without the fluid approximation). The older tables in `input/camb_data_lcdm_nu*` are made with one massive neutrino and the approximate neutrino transfer functions, so they should not be used for neutrino particles.
+Needs `ic_type_of_input = transferinfofile` or `class` with tables up to zini, accurate massive neutrino transfer functions and N_nu = 3 degenerate neutrinos. `scripts/make_camb_transfer_tables.py` makes them with CAMB; `input/transfer_infofile_lcdm_nu0.1_zmax200.txt` and `..._nu0.4_zmax200.txt` are examples (OmegaM = 0.3175, OmegaMNu = 0.0024 and 0.0095, `cosmology_OmegaCDM = 0.2661` and `0.259`). Use a CAMB accuracy boost: with the default accuracy CAMB underestimates P_nu below the free-streaming scale (for 0.1 eV by 3 / 13 / 16% at k = 0.014 / 0.05 / 0.1 h/Mpc at z = 0, relative to CAMB with AccuracyBoost = 3 and to CLASS without the fluid approximation). The older tables in `input/camb_data_lcdm_nu*` are made with one massive neutrino and the approximate neutrino transfer functions, so they should not be used for neutrino particles.
 
 Tests: 1024 Mpc/h, 128^3 CDM+baryon and 128^3 neutrino particles, 256^3 force grid, z_ini = 50, 40 logarithmic Quinn steps, fixed amplitude IC. P_nu at z = 0 (shot noise subtracted) relative to linear theory (CAMB, from the measured P_cb at z_ini), and P_cb / P_total compared with the same simulation with linear neutrinos:
 
@@ -581,12 +581,30 @@ its model adapters, output scheduling and step reporting.
 Force discretization uses per-simulation [ForceOptions](../NBody/ForceOptions.md),
 passed explicitly to the gravity calculation, including early-time force switching.
 
-## Shared linear inputs and optional internal transfers
+## Transfer function input
 
-Power/transfer preparation and species-ratio helpers now use the shared
-[InitialConditions module](../InitialConditions/README.md). Simple P(k,z=0) input
-remains supported without a Boltzmann solve. Optional builds with
-`USE_INTERNAL_COSMOLOGY=true` add `ic_type_of_input = "internal_transfer"`, using
-a matching solver .ini file and explicitly converted CDM-synchronous density
-transfers. The first release requires flat GR LCDM without massive neutrinos.
-See the module guide for units, gauges, coverage checks and validation.
+The transfer functions (`ic_type_of_input = transferinfofile`, `class` or `internal_transfer`) are read with
+[FML/TransferProviders](../TransferProviders/README.md) (`src/TransferInput.cpp`): one `TransferProvider`, shared by the
+gravity model (the growth factors with massive neutrinos), the initial conditions (species ratios, two species,
+neutrino particles, the N-body gauge) and the linear predictions in the outputs. Power/transfer preparation and the
+species-ratio helpers use the shared [InitialConditions module](../InitialConditions/README.md). Simple P(k,z=0) input
+remains supported without a Boltzmann solve.
+
+- `transferinfofile`: CAMB transfer files listed in a transfer info file. The columns are read by name from the
+  header line (or by position without one: 13 columns CAMB, 9 AxionCAMB, 7 old CAMB or CLASS with `format = camb`),
+  so `ic_type_of_input_fileformat` is no longer needed (it is ignored with a warning). Files not found in the folder
+  of the info file are looked for next to it.
+- `class`: native CLASS output (`format = class`, `output = mTk,vTk`, `write_background = yes`), with
+  `ic_input_filename` the root of the run (e.g. `output/run_` for `output/run_z1_tk.dat`, ..., `output/run_background.dat`)
+  and `ic_input_gauge` the gauge CLASS was run in (`synchronous`, CLASS's default, or `newtonian`, which is converted to
+  the CDM-synchronous gauge at the tabulated redshifts). h and the presence of massive neutrinos are checked against
+  the simulation. `tests/check_class_input.py` runs a simulation with massive neutrinos from CLASS in both gauges and
+  from CAMB for the same cosmology: P_cb and P_total agree to 1.4e-3 (synchronous) and 7e-4 (Newtonian) at all outputs.
+- `internal_transfer` (builds with `USE_INTERNAL_COSMOLOGY=true`): FML's Einstein-Boltzmann solver with a matching
+  solver .ini file, CDM-synchronous density transfers. Flat GR LCDM without massive neutrinos here (the provider
+  supports one massive species; the gravity model would need it before the IC are made). The solver's table is run to
+  a = 1.1 (or the .ini's x_end if later) so that a = 1 is not at the end of the table.
+
+The CAMB and CLASS tables are interpolated in (log a, log k) and extrapolated above their k_max as a power law, as
+before. Compared with the old reader (`LinearTransferData`, interpolation in z) the regression outputs of the runs with
+transfer tables change by up to 3e-4 in P(k) (5e-4 for P_nu).

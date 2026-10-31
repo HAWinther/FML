@@ -3,7 +3,7 @@
 
 #include "ParameterDefaults.h"
 
-#include <FML/CAMBUtils/CAMBReader.h>
+#include "TransferInput.h"
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/LPT/DisplacementFields.h>
@@ -19,6 +19,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -34,7 +35,7 @@ class GravityModel {
     using ParameterMap = FML::UTILS::ParameterMap;
     using DVector = FML::INTERPOLATION::SPLINE::DVector;
     using DVector2D = FML::INTERPOLATION::SPLINE::DVector2D;
-    using LinearTransferData = FML::FILEUTILS::LinearTransferData;
+    using TransferProvider = SIMCODE::TransferProvider;
     const double H0_hmpc = 1.0 / 2997.92458;
 
     //========================================================================
@@ -130,7 +131,7 @@ class GravityModel {
         output_element(fp, "D1(a,k)");
         fp << " ";
         output_element(fp, "D1mnu(a,k)");
-        if (transferdata) {
+        if (transfers) {
             fp << " ";
             output_element(fp, "D1_Tk(a,k)");
             fp << " ";
@@ -161,15 +162,19 @@ class GravityModel {
         output_element(fp, get_D_1LPT(a, koverH0));
         fp << " ";
         output_element(fp, get_Dmnu_1LPT(a, koverH0));
-        if (transferdata) {
+        if (transfers) {
+            // (D1mnu_Tk: NaN without massive neutrinos)
+            const double k = koverH0 * H0_hmpc;
             fp << " ";
             output_element(fp,
-                           transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, a) /
-                               transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, aini));
+                           transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, a) /
+                               transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, aini));
             fp << " ";
             output_element(fp,
-                           transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, a) /
-                               transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, aini));
+                           has_neutrino_transfers() ?
+                               transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k, a) /
+                                   transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k, aini) :
+                               std::numeric_limits<double>::quiet_NaN());
         }
         fp << " ";
         output_element(fp, get_D_2LPT(a, koverH0));
@@ -224,22 +229,10 @@ class GravityModel {
     }
 
     //========================================================================
-    // Read the transferinfo data from file
+    // The transfer functions (shared with the simulation: see TransferInput.h)
     //========================================================================
-    void init_transferdata(std::string transferinfofilename, std::string fileformat = "CAMB") {
-        transferdata = std::make_shared<LinearTransferData>(cosmo->get_Omegab(),
-                                                            cosmo->get_OmegaCDM(),
-                                                            cosmo->get_OmegaMNu(),
-                                                            cosmo->get_kpivot_mpc(),
-                                                            cosmo->get_As(),
-                                                            cosmo->get_ns(),
-                                                            cosmo->get_h(),
-                                                            fileformat);
-        const bool verbose = false; // For testing
-        transferdata->read_transfer(transferinfofilename, verbose);
-    }
-    std::shared_ptr<LinearTransferData> get_transferdata() { return transferdata; }
-    void set_transferdata(std::shared_ptr<LinearTransferData> _transferdata) { transferdata = _transferdata; }
+    std::shared_ptr<TransferProvider> get_transfers() { return transfers; }
+    void set_transfers(std::shared_ptr<TransferProvider> _transfers) { transfers = _transfers; }
 
     //========================================================================
     // Read the parameters we need
@@ -249,16 +242,20 @@ class GravityModel {
         aini = 1.0 / (1.0 + param.get<double>("ic_initial_redshift"));
         // The growth factor splines must start before the simulation (e.g. when starting at very high redshift)
         alow = std::min(alow, aini / 10.0);
-        if (param.get<std::string>("ic_type_of_input") == "transferinfofile") {
-            init_transferdata(param.get<std::string>("ic_input_filename"),
-                              SIMCODE::get_parameter<std::string>(param, "ic_type_of_input_fileformat"));
-        }
+        // The transfer tables (CAMB or CLASS): needed for the growth factors with massive neutrinos
+        const auto type_of_input = param.get<std::string>("ic_type_of_input");
+        if (SIMCODE::input_has_transfer_tables(type_of_input))
+            transfers = SIMCODE::load_transfers(
+                SIMCODE::make_transfer_request(type_of_input,
+                                               param.get<std::string>("ic_input_filename"),
+                                               SIMCODE::get_parameter<std::string>(param, "ic_input_gauge"),
+                                               *cosmo));
         this->scaledependent_growth = this->cosmo->get_fMNu() > 0.0;
         // The growth factors with massive neutrinos are computed from the transfer functions (and start at their
         // highest redshift). Without them we would dereference a null pointer in compute_growth_factors
-        FML::assert_mpi(not(this->cosmo->get_OmegaMNu() > 0.0 and not transferdata),
-                        "cosmology_OmegaMNu > 0 needs ic_type_of_input = transferinfofile (the growth factors with "
-                        "massive neutrinos are computed from the transfer functions)");
+        FML::assert_mpi(not(this->cosmo->get_OmegaMNu() > 0.0 and not transfers),
+                        "cosmology_OmegaMNu > 0 needs ic_type_of_input = transferinfofile or class (the growth factors "
+                        "with massive neutrinos are computed from the transfer functions)");
 
         // Experimental option with finite-difference forces (instead of fourier)
         force_use_finite_difference_force = SIMCODE::get_parameter<bool>(param, "force_use_finite_difference_force");
@@ -277,9 +274,9 @@ class GravityModel {
         double factor = 1.0;
         const double fnu = this->cosmo->get_fMNu();
         if (fnu > 0.0 and koverH0 > 0.0) {
-            if (transferdata) {
-                const double T_nu = transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, a);
-                const double T_cb = transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, a);
+            if (transfers) {
+                const double T_nu = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, koverH0 * H0_hmpc, a);
+                const double T_cb = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, koverH0 * H0_hmpc, a);
                 factor = (1.0 - fnu) + fnu * T_nu / T_cb;
             }
         }
@@ -420,11 +417,11 @@ class GravityModel {
     //========================================================================
     virtual void compute_growth_factors() {
 
-        // When we have massive neutrinos we use the transferdata when
+        // When we have massive neutrinos we use the transfers when
         // solving the LPT equations so we cannot start earlier than what we
         // have splines for and we cannot do
         if (scaledependent_growth and cosmo->get_fMNu() > 0.0) {
-            const double zstart = transferdata->get_zmax_splines();
+            const double zstart = SIMCODE::transfer_zmax(*transfers);
             const double astart = 1.0 / (1.0 + zstart);
             if (alow < astart) {
                 alow = astart;
@@ -466,7 +463,7 @@ class GravityModel {
         // scale: the equations in 1605.05283) is kept for reference but not used: it overestimates the growth of
         // delta_cb by up to 2% (z = 49 -> 0, 0.4 eV, k ~ 0.01-0.1 h/Mpc) compared with CAMB, while the exact source
         // agrees with CAMB to 0.02% (k > 0.03 h/Mpc) and 0.1% (k = 0.01 h/Mpc)
-        const bool use_neutrino_transfer = transferdata and scaledependent_growth and cosmo->get_fMNu() > 0.0;
+        const bool use_neutrino_transfer = transfers and scaledependent_growth and cosmo->get_fMNu() > 0.0;
         const bool solve_for_neutrinos = false;
 
         // A quite general set of LPT equations up to 3rd order
@@ -552,11 +549,11 @@ class GravityModel {
             // To solve properly for massive neutrinos we need the transfer-functions
             // and growth rates at the initial redshift
             if (use_neutrino_transfer and koverH0 > 0.0)
-                dD1dx_ini = D1_ini * transferdata->get_cdm_baryon_growth_rate(koverH0 * H0_hmpc, alow);
+                dD1dx_ini = D1_ini * transfers->density_growth_rate(SIMCODE::TransferSpecies::CDMBaryon, koverH0 * H0_hmpc, alow);
             if (solve_for_neutrinos and koverH0 > 0.0) {
-                D1mnu_ini = D1_ini * transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc, alow) /
-                            transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, alow);
-                dD1mnu_ini = D1mnu_ini * transferdata->get_massive_neutrino_growth_rate(koverH0 * H0_hmpc, alow);
+                D1mnu_ini = D1_ini * transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, koverH0 * H0_hmpc, alow) /
+                            transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, koverH0 * H0_hmpc, alow);
+                dD1mnu_ini = D1mnu_ini * transfers->density_growth_rate(SIMCODE::TransferSpecies::MassiveNeutrino, koverH0 * H0_hmpc, alow);
             }
 
             std::vector<double> yini{D1_ini,
@@ -593,10 +590,10 @@ class GravityModel {
                     // Neutrinos treated as CDM
                     D1mnu[i] = D1[i];
                     // Neutrinos treated exactly by using transfer functions
-                    if (transferdata and koverH0 > 0.0) {
-                        D1mnu[i] = transferdata->get_massive_neutrino_transfer_function(koverH0 * H0_hmpc,
+                    if (has_neutrino_transfers() and koverH0 > 0.0) {
+                        D1mnu[i] = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, koverH0 * H0_hmpc,
                                                                                         std::exp(loga_arr[i])) /
-                                   transferdata->get_cdm_baryon_transfer_function(koverH0 * H0_hmpc, aini);
+                                   transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, koverH0 * H0_hmpc, aini);
                     }
                 }
             }
@@ -644,7 +641,10 @@ class GravityModel {
 
   protected:
     // For massive neutrinos we need transfer functions
-    std::shared_ptr<LinearTransferData> transferdata;
+    std::shared_ptr<TransferProvider> transfers;
+    bool has_neutrino_transfers() const {
+        return transfers and transfers->has_density(SIMCODE::TransferSpecies::MassiveNeutrino);
+    }
 
     // The background cosmology
     std::shared_ptr<Cosmology> cosmo;

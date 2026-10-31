@@ -1,9 +1,7 @@
 #ifndef INITIALPOWERSPECTRUM_HEADER
 #define INITIALPOWERSPECTRUM_HEADER
 
-#include <FML/InitialConditions/CAMBTransferProvider.h>
 #include <FML/InitialConditions/LinearInput.h>
-#include <FML/InitialConditions/InternalTransferLoader.h>
 #include <FML/FileUtils/FileUtils.h>
 #include <FML/Global/Global.h>
 #include <FML/NBody/NBody.h>
@@ -12,6 +10,7 @@
 #include "Cosmology.h"
 #include "GravityModel.h"
 #include "SimulationParameters.h"
+#include "TransferInput.h"
 
 #include <cmath>
 #include <iomanip>
@@ -31,7 +30,6 @@ namespace SIMCODE {
 
     using DVector = FML::INTERPOLATION::SPLINE::DVector;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
-    using LinearTransferData = FML::FILEUTILS::LinearTransferData;
 
     using LinearPowerSpectrumTable = FML::INITIALCONDITIONS::LinearPowerSpectrumTable;
 
@@ -39,8 +37,8 @@ namespace SIMCODE {
     /// Read the input power-spectrum / transfer function (as given by ic.type_of_input)
     /// and bring it to the initial redshift with the growth factors of grav_ic.
     ///
-    /// For ic.type_of_input = transferinfofile we read in all the transfer functions
-    /// T_i(k,z) and store them in transferdata (which is shared with the gravity model)
+    /// For ic.type_of_input = transferinfofile, class or internal_transfer the transfer functions T_i(k,z) are
+    /// returned in transfers (the same object as in the gravity model)
     //=============================================================================
     template <int NDIM>
     LinearPowerSpectrumTable
@@ -48,8 +46,7 @@ namespace SIMCODE {
                                 std::shared_ptr<Cosmology> cosmo,
                                 std::shared_ptr<GravityModel<NDIM>> grav,
                                 std::shared_ptr<GravityModel<NDIM>> grav_ic,
-                                std::shared_ptr<LinearTransferData> & transferdata,
-                                std::shared_ptr<FML::INITIALCONDITIONS::TransferProvider> * provider_out = nullptr,
+                                std::shared_ptr<TransferProvider> & transfers,
                                 double boxsize_mpch = 0.0) {
 
         const double ainput = 1.0 / (1.0 + ic.input_redshift);
@@ -61,25 +58,16 @@ namespace SIMCODE {
                    grav_ic->get_D_1LPT(ainput, k_hmpc / grav_ic->H0_hmpc);
         };
 
-        std::shared_ptr<FML::INITIALCONDITIONS::TransferProvider> provider;
-        if (ic.type_of_input == ICInputType::TransferInfoFile) {
-            transferdata = grav->get_transferdata();
-            if (not transferdata) {
-                transferdata = std::make_shared<LinearTransferData>(cosmo->get_Omegab(),
-                                                                    cosmo->get_OmegaCDM(),
-                                                                    cosmo->get_OmegaMNu(),
-                                                                    cosmo->get_kpivot_mpc(),
-                                                                    cosmo->get_As(),
-                                                                    cosmo->get_ns(),
-                                                                    cosmo->get_h(),
-                                                                    ic.type_of_input_fileformat);
-                transferdata->read_transfer(ic.input_filename);
-
-                // Make sure the gravity model also gets a pointer to this
-                grav->set_transferdata(transferdata);
+        // The transfer functions: shared with the gravity model, which reads the CAMB/CLASS tables already (it needs
+        // them for the growth factors with massive neutrinos)
+        transfers = nullptr;
+        if (ic.type_of_input == ICInputType::TransferInfoFile or ic.type_of_input == ICInputType::ClassFiles) {
+            transfers = grav->get_transfers();
+            if (not transfers) {
+                transfers = load_transfers(
+                    make_transfer_request(ic.type_of_input_name(), ic.input_filename, ic.input_gauge, *cosmo));
+                grav->set_transfers(transfers);
             }
-
-            provider = std::make_shared<FML::INITIALCONDITIONS::CAMBTransferProvider>(transferdata);
         }
         if (ic.type_of_input == ICInputType::InternalTransfer) {
             if (cosmo->get_name() != "LCDM" || grav->get_name() != "GR" || cosmo->get_OmegaK() != 0 ||
@@ -88,21 +76,14 @@ namespace SIMCODE {
                     "internal_transfer currently requires flat LCDM, GR and no massive neutrinos");
             if (!(boxsize_mpch > 0))
                 throw std::invalid_argument("internal_transfer needs a positive box size");
-            provider = FML::INITIALCONDITIONS::load_internal_transfers(
-                {ic.input_filename,
-                 cosmo->get_h(),
-                 cosmo->get_Omegab(),
-                 cosmo->get_OmegaCDM(),
-                 cosmo->get_TCMB_kelvin(),
-                 cosmo->get_Neff(),
-                 cosmo->get_As(),
-                 cosmo->get_ns(),
-                 cosmo->get_kpivot_mpc(),
-                 {2 * M_PI / boxsize_mpch,
-                  std::sqrt(double(NDIM)) * M_PI * ic.nmesh / boxsize_mpch,
-                  std::min(aini, ainput),
-                  std::max({1.0, aini, ainput})},
-                 ic.sigma8_normalization});
+            auto request = make_transfer_request(ic.type_of_input_name(), ic.input_filename, ic.input_gauge, *cosmo);
+            request.required = {2 * M_PI / boxsize_mpch,
+                                std::sqrt(double(NDIM)) * M_PI * ic.nmesh / boxsize_mpch,
+                                std::min(aini, ainput),
+                                std::max({1.0, aini, ainput})};
+            request.require_sigma8_coverage = ic.sigma8_normalization;
+            transfers = load_transfers(request);
+            grav->set_transfers(transfers);
         }
         auto type = ic.type_of_input == ICInputType::PowerSpectrum ?
                         FML::INITIALCONDITIONS::LinearInputType::PowerSpectrum :
@@ -113,9 +94,7 @@ namespace SIMCODE {
             {type, ic.input_filename, ainput, cosmo->get_h()},
             D_ini_over_D_input,
             [cosmo](double k) { return cosmo->get_primordial_pofk(k); },
-            provider.get());
-        if (provider_out)
-            *provider_out = provider;
+            transfers.get());
 
         table.print_sample("Read [" + ic.input_filename + "] at z = " + std::to_string(ic.input_redshift) +
                            " and scaled to z = " + std::to_string(ic.initial_redshift));
