@@ -130,6 +130,6 @@ int main() {
             }
             fp.close();
         }
-        MPI_Barrier(FML::communicator);
+        FML::Barrier();
     }
 }

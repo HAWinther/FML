@@ -203,6 +203,9 @@ namespace FML {
         *value = minvalue;
     }
 
+    // Barrier for the FML communicator
+    int Barrier();
+
     /// Inplace sum over tasks of a single value
     template <class T>
     void SumOverTasks(T * value) {

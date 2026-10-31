@@ -27,6 +27,13 @@ namespace FML {
     // as it is used when FML is initialized
     MPI_Comm communicator = MPI_COMM_WORLD;
 #endif
+    
+    int Barrier() {
+#ifdef USE_MPI
+        return MPI_Barrier(FML::communicator);
+#endif
+        return 0;
+    }
 
     FML::UTILS::Timings global_timer;
 

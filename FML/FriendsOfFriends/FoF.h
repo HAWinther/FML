@@ -275,10 +275,10 @@ namespace FML {
             const size_t bytes_per_particle = record_size > 0 ? size_t(record_size) : 0;
             // How many particles we send to / receive from the left and right task (used again at the end to send
             // the FoF IDs of the boundary particles back to the task they belong to)
-            size_t n_send_left = 0;
-            size_t n_send_right = 0;
-            size_t n_recv_left = 0;
-            size_t n_recv_right = 0;
+            [[maybe_unused]] size_t n_send_left = 0;
+            [[maybe_unused]] size_t n_send_right = 0;
+            [[maybe_unused]] size_t n_recv_left = 0;
+            [[maybe_unused]] size_t n_recv_right = 0;
             [[maybe_unused]] const int RightTask = (FML::ThisTask + 1) % FML::NTasks;
             [[maybe_unused]] const int LeftTask = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
 #ifdef USE_MPI
