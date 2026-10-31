@@ -5,6 +5,7 @@
 #include <FML/TransferProviders/GaugeView.h>
 #include <FML/TransferProviders/TabulatedTransferProvider.h>
 #include <FML/Spline/Spline.h>
+#include <FML/Units/Units.h>
 
 #include <algorithm>
 #include <cmath>
@@ -179,7 +180,7 @@ namespace FML::INITIALCONDITIONS {
         }
 
         /// The Hubble parameter today in units of 100 km/s/Mpc (CLASS: H0 in 1/Mpc times c)
-        double h() const { return H0_mpc * 2997.92458; }
+        double h() const { return H0_mpc * FML::UTILS::SI::c_over_H0_mpch; }
         /// H(a)/H0
         double E(double a) const { return H_of_loga(std::log(a)) / H0_mpc; }
         int n_ncdm() const { return int(rho_ncdm_of_loga.size()); }
@@ -328,7 +329,7 @@ namespace FML::INITIALCONDITIONS {
                     if (std::abs(kk[ik] / k[ik] - 1.0) > 1e-6)
                         throw std::invalid_argument("[CLASSTransferProvider] The files have different k-grids");
                 // calH = a H in 1/Mpc (CLASS: conformal time in Mpc, so theta is in 1/Mpc)
-                const double calH = a * bg.E(a) * t.h / 2997.92458;
+                const double calH = a * bg.E(a) * t.h / FML::UTILS::SI::c_over_H0_mpch;
                 const auto get = [&](const std::string & name) { return e.table.get(e.table.require_column(name, e.filename)); };
                 const auto cdm = get("d_cdm"), b = get("d_b");
                 for (size_t ik = 0; ik < nk; ik++) {
@@ -368,7 +369,7 @@ namespace FML::INITIALCONDITIONS {
                 if (settings.output_gauge != settings.gauge) {
                     const double one_plus_w_nu = nncdm > 0 ? bg.one_plus_w(Species::MassiveNeutrino, a) : 1.0;
                     for (size_t ik = 0; ik < nk; ik++) {
-                        const double x = a * bg.E(a) / (2997.92458 * k[ik]);
+                        const double x = a * bg.E(a) / (FML::UTILS::SI::c_over_H0_mpch * k[ik]);
                         const double shift = 3.0 * x * x * vc[ia][ik];
                         dc[ia][ik] += shift;
                         db[ia][ik] += shift;

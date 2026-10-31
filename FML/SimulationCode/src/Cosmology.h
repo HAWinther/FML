@@ -447,7 +447,7 @@ class Cosmology {
     //========================================================================
     // Parameters all models have (Baryons, CDM, neutrinos, Cosmological constant)
     //========================================================================
-    const double H0_hmpc = 1.0 / 2997.92458;
+    const double H0_hmpc = 1.0 / FML::UTILS::SI::c_over_H0_mpch;
     double h;             // Hubble parameter (little h)
     double OmegaMNu;      // Massive neutrinos (in the matter era)
     double Omegab;        // Baryons

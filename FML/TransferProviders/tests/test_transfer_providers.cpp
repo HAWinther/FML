@@ -10,6 +10,7 @@
 //=====================================================================================================================
 
 #include <FML/TransferProviders/MakeTransferProvider.h>
+#include <FML/Units/Units.h>
 #include <FML/tests/TestHelpers.h>
 
 #include <cmath>
@@ -400,7 +401,7 @@ int main(int argc, char ** argv) {
         // which the solver also uses). OmegaMNu from the CLASS background
         {
             const auto & bg = std::dynamic_pointer_cast<const CLASSTransferProvider>(sync)->background();
-            const double H0_mpc = bg.h() / 2997.92458, OmegaMNu = bg.rho_ncdm(0, 1.0) / (H0_mpc * H0_mpc);
+            const double H0_mpc = bg.h() / FML::UTILS::SI::c_over_H0_mpch, OmegaMNu = bg.rho_ncdm(0, 1.0) / (H0_mpc * H0_mpc);
             auto [internal_sync, internal_newt] = make_internal(OmegaMNu);
             auto class_newt = class_run("class_newtonian_00_", Gauge::Newtonian);
             compare("internal (m_nu = 0.1 eV)", internal_sync, internal_newt, sync, class_newt,

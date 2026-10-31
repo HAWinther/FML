@@ -1,11 +1,12 @@
 #include "GadgetUtils.h"
+#include <FML/Units/Units.h>
 
 namespace FML {
     namespace FILEUTILS {
         namespace GADGET {
 
-            const double MplMpl_over_H0Msunh = 2.49264e21;
-            const double HubbleLengthInMpch = 2997.92458;
+            const double MplMpl_over_H0Msunh = FML::UTILS::SI::MplMpl_over_H0_msunh;
+            const double HubbleLengthInMpch = FML::UTILS::SI::c_over_H0_mpch;
 
             // Handle errors
             void GadgetReader::throw_error(std::string errormessage) const {

@@ -2,6 +2,7 @@
 #define FML_HYBRIDBIASONELOOPMG_HEADER
 
 #include <FML/ComputePowerSpectra/HybridBiasOneLoop.h>
+#include <FML/Units/Units.h>
 
 #include <array>
 #include <cmath>
@@ -124,7 +125,7 @@ namespace FML {
 
             namespace detail {
 
-                constexpr double c_over_H0_mpch = 2997.92458;
+                constexpr double c_over_H0_mpch = FML::UTILS::SI::c_over_H0_mpch;
 
                 using Vec3 = std::array<double, 3>;
                 inline double dot3(const Vec3 & a, const Vec3 & b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }

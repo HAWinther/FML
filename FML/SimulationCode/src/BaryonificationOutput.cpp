@@ -8,6 +8,7 @@
 #include <FML/GadgetUtils/GadgetUtilsHDF5.h>
 #include <FML/Global/MPICounts.h>
 #include <FML/MPIParticles/MPIParticles.h>
+#include <FML/Units/Units.h>
 #include <climits>
 #include <fstream>
 #include <iomanip>
@@ -114,7 +115,7 @@ namespace SIMCODE {
         flag_overlapping_so_halos<3>(records);
 
         // Exactly the mass convention used by the existing halo catalogue writer (Msun/h).
-        const double mass_per_particle = halo_particle_mass_msunh(omega, box, 1.0 / 2997.92458, total);
+        const double mass_per_particle = halo_particle_mass_msunh(omega, box, 1.0 / FML::UTILS::SI::c_over_H0_mpch, total);
         const double background_mass_per_box_volume = mass_per_particle * double(total);
         std::vector<HostHalo> local;
         long long truncated = 0, nested = 0, unresolved = 0, below_cut = 0, too_large = 0;

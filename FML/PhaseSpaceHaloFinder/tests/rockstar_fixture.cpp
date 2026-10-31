@@ -10,7 +10,7 @@ int main(int argc, char ** argv) {
     const std::string directory = argv[1];
     using namespace FML::PHASE_SPACE_HALOS;
     namespace SI = FML::UTILS::SI;
-    const double G = SI::G * SI::Msun / (SI::Mpc * std::pow(SI::km / SI::s, 2)), total_mass = .3 * 2.77536627e11;
+    const double G = SI::G * SI::Msun / (SI::Mpc * std::pow(SI::km / SI::s, 2)), total_mass = .3 * SI::rho_crit_over_h2_msun_mpc3;
     auto p = phase_test::plummer(4000);
     for (auto & x : p) {
         x.mass *= total_mass;

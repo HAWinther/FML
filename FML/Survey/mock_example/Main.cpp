@@ -3,6 +3,7 @@
 // With a simulation: fill the MockObject list with objects_from_particles or objects_from_hod (SurveyMocks.h).
 #include <FML/Global/Global.h>
 #include <FML/Survey/SurveyMocks.h>
+#include <FML/Units/Units.h>
 
 #include <cmath>
 #include <iostream>
@@ -29,7 +30,7 @@ int main() {
     o.observer = {0.5 * L, 0.5 * L, 0.5 * L};
     o.z_min = 0.05;
     o.z_max = 0.2;
-    o.hubble_over_c = [](double z) { return std::sqrt(0.3 * std::pow(1 + z, 3) + 0.7) / 2997.92458; }; // h/Mpc
+    o.hubble_over_c = [](double z) { return std::sqrt(0.3 * std::pow(1 + z, 3) + 0.7) / FML::UTILS::SI::c_over_H0_mpch; }; // h/Mpc
     o.footprint = ra_dec_box(120, 240, 0, 60);
     o.target_nbar = [](double z) { return 5e-5 * (1 + 5 * z); }; // (h/Mpc)^3
     o.random_factor = 20;

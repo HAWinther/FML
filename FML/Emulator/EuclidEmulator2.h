@@ -1,5 +1,7 @@
 #ifndef EUCLIDEMULATOR2_HEADER
 #define EUCLIDEMULATOR2_HEADER
+#include <FML/Units/Units.h>
+
 #include <array>
 #include <assert.h>
 #include <fcntl.h>
@@ -68,23 +70,23 @@ namespace FML {
             inline std::string path_to_ee2_datafile = "EuclidEmulator2.dat";
 #endif
 
-            // Base units
-            const double second = 1.0;
-            const double meter = 1.0;
-            const double kilogram = 1.0;
-            const double Kelvin = 1.0;
-            // derived units
-            const double kilometer = 1000 * meter;
-            const double Joule = kilogram * std::pow(meter, 2) / std::pow(second, 2);
-            const double Mpc = 3.085677581282e22 * meter;
-            const double Msol = 1.98841e30 * kilogram;
-            // units constant
-            const double c = 2.99792458e8 * meter / second;
-            const double G = 6.67428e-11 * std::pow(meter, 3) / (kilogram * std::pow(second, 2));
-            const double kB = 1.3806504e-23 * Joule / Kelvin;
-            const double eV = 1.602176487e-19 * Joule;
-            const double hbar = 6.62606896e-34 / (2 * M_PI) * Joule * second;
-            const double rho_crit_over_h2 = 2.77536627e11 * Msol / std::pow(Mpc, 3);
+            // Units and constants (SI) from Units.h. The original EuclidEmulator2 code had CODATA 2006 values
+            // (Mpc = 3.085677581282e22 m, Msun = 1.98841e30 kg, G = 6.67428e-11, kB = 1.3806504e-23,
+            // eV = 1.602176487e-19 J, h = 6.62606896e-34 J s, rho_crit/h^2 = 2.77536627e11 Msun/Mpc^3)
+            const double second = FML::UTILS::SI::s;
+            const double meter = FML::UTILS::SI::m;
+            const double kilogram = FML::UTILS::SI::kg;
+            const double Kelvin = FML::UTILS::SI::K;
+            const double kilometer = FML::UTILS::SI::km;
+            const double Joule = FML::UTILS::SI::J;
+            const double Mpc = FML::UTILS::SI::Mpc;
+            const double Msol = FML::UTILS::SI::Msun;
+            const double c = FML::UTILS::SI::c;
+            const double G = FML::UTILS::SI::G;
+            const double kB = FML::UTILS::SI::k_b;
+            const double eV = FML::UTILS::SI::eV;
+            const double hbar = FML::UTILS::SI::hbar;
+            const double rho_crit_over_h2 = FML::UTILS::SI::rho_crit_over_h2;
             // Constants and specifications of the training simulations
             const double Lbox = 1000 * Mpc;
             const double Tgamma = 2.7255 * Kelvin;

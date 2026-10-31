@@ -1,4 +1,5 @@
 #include <FML/MultigridSolver/MultiGridSolver.h>
+#include <FML/Units/Units.h>
 #include <cmath>
 #include <iostream>
 
@@ -34,7 +35,7 @@ void ContinuitySolver() {
     const double _omegam = 0.3;
     const double _aexp = 1.0;
     const double _box = 1000.0;
-    const double c_kms = 299792.458;
+    const double c_kms = FML::UTILS::SI::c_kms;
     const double H_invMpch = 100.0 / c_kms * sqrt(_omegam / (_aexp * _aexp * _aexp) + 1.0 - _omegam);
     const double f = pow(_omegam / (_aexp * _aexp * _aexp) / (_omegam / (_aexp * _aexp * _aexp) + 1.0 - _omegam), 0.55);
 

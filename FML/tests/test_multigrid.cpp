@@ -14,6 +14,7 @@
 //==========================================================
 #include <FML/Global/Global.h>
 #include <FML/MultigridSolver/MultiGridSolver.h>
+#include <FML/Units/Units.h>
 #ifdef USE_FFTW
 #include <FML/MultigridSolver/DGPSolver.h>
 #include <FML/MultigridSolver/FofrSolver.h>
@@ -316,7 +317,7 @@ int main() {
                     const double dd = d.get_real_from_index(ri);
                     d.set_real_from_index(ri, dd > 0 ? dd * a * boost : dd * a);
                 }
-            FofrSolverCosmology<NDIM> solver(0.3, n, fofr0, 256.0 / 2997.92458, false);
+            FofrSolverCosmology<NDIM> solver(0.3, n, fofr0, 256.0 / FML::UTILS::SI::c_over_H0_mpch, false);
             solver.set_method(method);
             solver.set_ngs_steps(nsweeps, nsweeps, 2 * nsweeps);
             solver.set_epsilon(eps);
@@ -367,7 +368,7 @@ int main() {
         }
 
         // 5. Symmetron (assb = 0.5, range 8 Mpc/h today, box 256 Mpc/h). The solver returns forcenorm (phi/phi0)^2
-        const double H0Box = 256.0 / 2997.92458, assb = 0.5, L = 8.0, H0L = L / 2997.92458;
+        const double H0Box = 256.0 / FML::UTILS::SI::c_over_H0_mpch, assb = 0.5, L = 8.0, H0L = L / FML::UTILS::SI::c_over_H0_mpch;
         auto symmetron_field = [&](double a, FML::GRID::FFTWGrid<NDIM> & d, FML::GRID::FFTWGrid<NDIM> & phi) {
             SymmetronSolverCosmology<NDIM> solver(0.3, assb, 1.0, L, H0Box, false);
             solver.set_epsilon(1e-10);

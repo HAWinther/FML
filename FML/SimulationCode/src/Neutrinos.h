@@ -1,6 +1,8 @@
 #ifndef SIMCODE_NEUTRINOS_HEADER
 #define SIMCODE_NEUTRINOS_HEADER
 
+#include <FML/Units/Units.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -23,7 +25,7 @@ namespace SIMCODE {
     namespace NEUTRINOS {
 
         /// The speed of light in units of H0 B (B in Mpc/h)
-        inline double c_code(double boxsize) { return 2997.92458 / boxsize; }
+        inline double c_code(double boxsize) { return FML::UTILS::SI::c_over_H0_mpch / boxsize; }
 
         /// The unperturbed (relativistic) Fermi-Dirac occupation number
         inline double fermi_dirac(double y) { return 1.0 / (std::exp(y) + 1.0); }

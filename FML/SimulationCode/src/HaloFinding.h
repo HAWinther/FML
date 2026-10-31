@@ -8,6 +8,7 @@
 #include <FML/Global/MPICounts.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Spline/Spline.h>
+#include <FML/Units/Units.h>
 
 #include "OutputUtils.h"
 #include "Species.h"
@@ -44,8 +45,7 @@ namespace SIMCODE {
 
     /// Equal-mass CDM+baryon particle mass in Msun/h (boxsize in comoving Mpc/h).
     inline double halo_particle_mass_msunh(double omega_cb, double boxsize, double H0_hmpc, size_t npart_total) {
-        const double MplMpl_over_H0Msunh = 2.49264e21;
-        return 3.0 * omega_cb * MplMpl_over_H0Msunh * std::pow(boxsize * H0_hmpc, 3) / double(npart_total);
+        return 3.0 * omega_cb * FML::UTILS::SI::MplMpl_over_H0_msunh * std::pow(boxsize * H0_hmpc, 3) / double(npart_total);
     }
 
     /// A halo as written to the catalogue (code units: positions in [0,1), velocities in code units, mass in units
@@ -395,7 +395,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
 
     // Convert to physical units
     // Code masses are in units of the mean mass -> Msun/h
-    const double MplMpl_over_H0Msunh = 2.49264e21;
+    const double MplMpl_over_H0Msunh = FML::UTILS::SI::MplMpl_over_H0_msunh;
     const double mass_norm = SIMCODE::halo_particle_mass_msunh(OmegaCB, boxsize, H0_hmpc, size_t(npart_total));
     // Code positions are in [0,1) -> Mpc/h
     const double pos_norm = boxsize;

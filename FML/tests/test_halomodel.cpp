@@ -12,6 +12,7 @@
 #include <FML/Global/Global.h>
 #include <FML/HaloModel/Halomodel.h>
 #include <FML/FileUtils/FileUtils.h>
+#include <FML/Units/Units.h>
 
 #include <cmath>
 #include <cstdio>
@@ -131,7 +132,7 @@ int main() {
             }
             return D * std::sqrt(s2);
         };
-        const double rho_mean = 2.77536627e11 * OmegaM; // comoving, h^2 Msun / Mpc^3
+        const double rho_mean = FML::UTILS::SI::rho_crit_over_h2_msun_mpc3 * OmegaM; // comoving, h^2 Msun / Mpc^3
         double maxerr = 0.0;
         for (double M : {1e11, 1e13, 1e14, 1e15}) {
             auto nu_of_lnM = [&](double lnM) {

@@ -2,6 +2,7 @@
 #define FML_GAUGE_VIEW_H
 
 #include <FML/InitialConditions/TransferProvider.h>
+#include <FML/Units/Units.h>
 
 #include <algorithm>
 #include <cmath>
@@ -52,7 +53,7 @@ namespace FML::INITIALCONDITIONS {
         }
 
         double converted_density(Species s, double k, double a) const {
-            const double x = a * bg.E_of_a(a) / (2997.92458 * k);
+            const double x = a * bg.E_of_a(a) / (FML::UTILS::SI::c_over_H0_mpch * k);
             return source->density_transfer(s, k, a) +
                    3.0 * one_plus_w(s, a) * x * x * source->velocity_divergence_transfer(Species::CDM, k, a);
         }

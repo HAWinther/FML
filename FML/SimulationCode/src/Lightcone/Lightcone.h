@@ -13,6 +13,7 @@
 #include <FML/Spline/Spline.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h>
+#include <FML/Units/Units.h>
 
 #include <cmath>
 #include <iostream>
@@ -230,7 +231,7 @@ class Lightcone {
         const double r = std::sqrt(r2);
         vr = r > 0.0 ? vr / r : 0.0;
         const double zcos = 1.0 / get_distance_inv(r / boxsize) - 1.0;
-        const double c_kms = 299792.458;
+        const double c_kms = FML::UTILS::SI::c_kms;
         const double zobs = (1.0 + zcos) * (1.0 + vr / c_kms - double(p.get_potential())) - 1.0;
         return {vr, zcos, zobs};
     }
@@ -360,7 +361,7 @@ void Lightcone<NDIM, T, U>::compute_potential(const FML::GRID::FFTWGrid<NDIM> & 
                                               bool deconvolve_window) {
     phi_grid = density_fourier;
     phi_grid.add_memory_label("Lightcone potential");
-    const double c_over_H0 = 2997.92458; // Mpc/h
+    const double c_over_H0 = FML::UTILS::SI::c_over_H0_mpch; // Mpc/h
     const double norm = -1.5 * cosmo->get_OmegaM() / (a * c_over_H0 * c_over_H0) * boxsize * boxsize;
     const FML::INTERPOLATION::WindowFunctionTable<NDIM> window(density_assignment_method, phi_grid.get_nmesh());
 #ifdef USE_OMP

@@ -136,7 +136,7 @@ namespace FML::COSMOLOGY {
                     s->role() == Species::Role::CDM ?
                         std::make_shared<PowerLawSpecies>("cdm (scattering)", Species::Role::CDM, p.OmegaCDM, 3.0) :
                         s);
-            const double barn_per_GeV = 1e-28 / 1.78266192e-27; // m^2/kg
+            const double barn_per_GeV = 1e-28 / GeV_over_c2; // m^2/kg
             const double rho_crit0 = 3.0 * p.H0() * p.H0() / (8.0 * M_PI * G);
             m.species.push_back(std::make_shared<FluidDarkEnergy>(p.OmegaLambda(),
                                                                   parameter(p, "ds_w"),

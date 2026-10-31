@@ -2,6 +2,7 @@
 #include <FML/Spline/Spline.h>
 #include <FML/Survey/GalaxiesToBox.h>
 #include <FML/FileUtils/FileUtils.h>
+#include <FML/Units/Units.h>
 #include <fstream>
 
 using DVector = FML::INTERPOLATION::SPLINE::DVector;
@@ -73,7 +74,7 @@ void ExampleRadialCorrelationFunctionSurvey() {
     //===============================================
     const double OmegaM = 0.315;
     const double OmegaLambda = 1.0 - OmegaM;
-    const double H0_hmpc = 1.0 / 2997.92458;
+    const double H0_hmpc = 1.0 / FML::UTILS::SI::c_over_H0_mpch;
     std::function<double(double)> hubble_over_c_of_z = [&](double z) -> double {
         return H0_hmpc * sqrt(OmegaM * (1 + z) * (1 + z) * (1 + z) + OmegaLambda);
     };

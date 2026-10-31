@@ -14,6 +14,7 @@
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/Spline/Spline.h>
 #include <FML/Timing/Timings.h>
+#include <FML/Units/Units.h>
 
 #include <cmath>
 #include <fstream>
@@ -36,7 +37,7 @@ class GravityModel {
     using DVector = FML::INTERPOLATION::SPLINE::DVector;
     using DVector2D = FML::INTERPOLATION::SPLINE::DVector2D;
     using TransferProvider = SIMCODE::TransferProvider;
-    const double H0_hmpc = 1.0 / 2997.92458;
+    const double H0_hmpc = 1.0 / FML::UTILS::SI::c_over_H0_mpch;
 
     //========================================================================
     // Constructors

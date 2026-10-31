@@ -1,3 +1,4 @@
+#include <FML/Units/Units.h>
 #include <FML/WeakLensing/WeakLensing.h>
 #include "Reference.h"
 #include <FML/Global/Global.h>
@@ -153,7 +154,7 @@ static void scalar_tests() {
         return std::abs(a.maps()[0][0] - std::pow(2.3, 4) / 20);
     };
     check_local(radial_error(16) < radial_error(4) / 10, "radial shell representation converges on refinement");
-    const double dh = 2997.92458;
+    const double dh = FML::UTILS::SI::c_over_H0_mpch;
     const FlatGeometry eds{1., dh, [=](double x) { return 1 / std::pow(1 - x / (2 * dh), 2) - 1; }};
     const auto a = convergence_kernel(Sources::plane(1200), eds), b = convergence_kernel(Sources::plane(2200), eds);
     const RadialSelection triangle({200., 800., 1000.}, {0., 1., 0.});

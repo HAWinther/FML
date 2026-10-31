@@ -1,5 +1,6 @@
 // Toy flat geometry and Gaussian spectra/profiles: a runnable API demonstration,
 // not a calibrated cosmological prediction. FML initializes itself automatically.
+#include <FML/Units/Units.h>
 #include <FML/WeakLensing/WeakLensing.h>
 #include <FML/Global/Global.h>
 #ifdef USE_FFTW
@@ -9,7 +10,7 @@
 #include <iomanip>
 using namespace FML::WEAKLENSING;
 int main() {
-    const double dh = 2997.92458;
+    const double dh = FML::UTILS::SI::c_over_H0_mpch;
     const FlatGeometry geometry{.3, dh, [=](double chi) { return chi / dh; }};
     const std::vector<Sources> bins = {
         Sources::plane(1600.),

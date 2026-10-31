@@ -10,6 +10,7 @@
 //==========================================================
 #include <FML/Global/Global.h>
 #include <FML/Survey/GalaxiesToBox.h>
+#include <FML/Units/Units.h>
 
 #include <cmath>
 #include <iostream>
@@ -32,7 +33,7 @@ struct Galaxy {
 using Particle = FML::TESTS::PositionParticle<3>;
 
 const std::function<double(double)> hubble_over_c = [](double z) {
-    return 1.0 / 2997.92458 * std::sqrt(0.315 * (1 + z) * (1 + z) * (1 + z) + 0.685);
+    return 1.0 / FML::UTILS::SI::c_over_H0_mpch * std::sqrt(0.315 * (1 + z) * (1 + z) * (1 + z) + 0.685);
 };
 
 // r(z) in Mpc/h from scipy.integrate.quad

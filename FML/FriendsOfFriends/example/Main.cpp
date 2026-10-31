@@ -3,6 +3,7 @@
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/ParticleTypes/SimpleParticle.h>
+#include <FML/Units/Units.h>
 
 #include <fstream>
 #include <vector>
@@ -99,8 +100,8 @@ int main() {
     // Mass of particle
     const double NumPartDMtot = 256 * 256 * 256;
     const double OmegaM = 0.3;
-    const double MplMpl_over_H0Msunh = 2.49264e21;
-    const double HubbleLengthInMpch = 2997.92458;
+    const double MplMpl_over_H0Msunh = FML::UTILS::SI::MplMpl_over_H0_msunh;
+    const double HubbleLengthInMpch = FML::UTILS::SI::c_over_H0_mpch;
     double massofparticle =
         3.0 * OmegaM * MplMpl_over_H0Msunh * std::pow(box / HubbleLengthInMpch, 3) / double(NumPartDMtot);
 

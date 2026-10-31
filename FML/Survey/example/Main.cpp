@@ -1,5 +1,6 @@
 #include <FML/FileUtils/FileUtils.h>
 #include <FML/Survey/GalaxiesToBox.h>
+#include <FML/Units/Units.h>
 #include <fstream>
 
 // RA, DEC is in degrees
@@ -46,7 +47,7 @@ int main() {
 
     // The Hubble function H/c needed to compute the comoving distance
     std::function<double(double)> hubble_over_c_of_z = [&](double z) -> double {
-        return 1.0 / 2997.92458 * sqrt(0.315 * (1 + z) * (1 + z) * (1 + z) + 0.685);
+        return 1.0 / FML::UTILS::SI::c_over_H0_mpch * sqrt(0.315 * (1 + z) * (1 + z) * (1 + z) + 0.685);
     };
 
     // Galaxies to box options (shift/scale the positions to [0,1))

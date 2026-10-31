@@ -1,4 +1,5 @@
 #include <FML/MultigridSolver/MultiGridSolver.h>
+#include <FML/Units/Units.h>
 #include <cmath>
 #include <iostream>
 
@@ -36,7 +37,7 @@ void FofrSolver() {
     const double _box = 10.0;
 
     // Deried factors needed to define the equation
-    const double coverH0_Mpch = 2997.92458;
+    const double coverH0_Mpch = FML::UTILS::SI::c_over_H0_mpch;
     const double _fac1 = 1.0 + 4.0 * _aexp * _aexp * _aexp * (1.0 - _omegam) / _omegam;
     const double _fac2 =
         (1.0 + 4.0 * (1.0 - _omegam) / _omegam) * _aexp * _aexp * _aexp * pow(_fofr0 * _aexp, 1.0 / (_nfofr + 1.0));

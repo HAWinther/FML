@@ -36,6 +36,7 @@
 #include <FML/Global/Global.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/RandomGenerator/CounterBasedRandom.h>
+#include <FML/Units/Units.h>
 #ifdef USE_HEALPIX
 #include <healpix_map.h>
 #include <healpix_map_fitsio.h>
@@ -60,7 +61,7 @@
 namespace FML::SURVEY::MOCKS {
 
     using Vec3 = std::array<double, 3>;
-    constexpr double speed_of_light_kms = 299792.458;
+    constexpr double speed_of_light_kms = FML::UTILS::SI::c_kms;
     constexpr double deg = 3.14159265358979323846 / 180.0;
 
     /// An object of the periodic box: position in [0, L) (Mpc/h), peculiar velocity (km/s), a unique id

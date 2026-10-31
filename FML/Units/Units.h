@@ -63,6 +63,21 @@ namespace FML {
             FML_UNITS_INLINE constexpr double xhi0 = 24.587387 * eV;
             FML_UNITS_INLINE constexpr double xhi1 = 4.0 * epsilon_0;
             FML_UNITS_INLINE constexpr double H0_over_h = 100.0 * km / s / Mpc;
+
+            // Derived constants for cosmology (in the units in their names)
+            /// c in km/s (299792.458)
+            FML_UNITS_INLINE constexpr double c_kms = c / (km / s);
+            /// The Hubble distance c / (H0/h) in Mpc/h (2997.92458)
+            FML_UNITS_INLINE constexpr double c_over_H0_mpch = c / (100.0 * km / s);
+            /// The critical density today over h^2, 3 (H0/h)^2 / (8 pi G), in kg/m^3
+            FML_UNITS_INLINE constexpr double rho_crit_over_h2 = 3.0 * H0_over_h * H0_over_h / (8.0 * M_PI * G);
+            /// The same in Msun/Mpc^3 (= h^2 Msun/Mpc^3 with h = 1: 2.7753e11)
+            FML_UNITS_INLINE constexpr double rho_crit_over_h2_msun_mpc3 = rho_crit_over_h2 * Mpc * Mpc * Mpc / Msun;
+            /// c^3 / (8 pi G H0/h) in Msun/h (2.4926e21): the mass in a box of side L Mpc/h with density Omega rho_crit
+            /// is 3 Omega MplMpl_over_H0_msunh (L / c_over_H0_mpch)^3 (the GADGET particle mass convention)
+            FML_UNITS_INLINE constexpr double MplMpl_over_H0_msunh = c * c * c / (8.0 * M_PI * G * H0_over_h) / Msun;
+            /// GeV / c^2 in kg
+            FML_UNITS_INLINE constexpr double GeV_over_c2 = 1e9 * eV / (c * c);
         } // namespace SI
 #undef FML_UNITS_INLINE
 

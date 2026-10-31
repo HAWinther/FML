@@ -4,6 +4,7 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/MPIGrid/ConvertMPIGridFFTWGrid.h>
 #include <FML/MultigridSolver/MultiGridSolver.h>
+#include <FML/Units/Units.h>
 
 #include <cmath>
 #include <iostream>
@@ -129,7 +130,7 @@ class SymmetronSolverCosmology {
         density_multigrid.restrict_down_all();
 
         // Factors to define the equation
-        const double H0L = L_mpch / 2997.92458;
+        const double H0L = L_mpch / FML::UTILS::SI::c_over_H0_mpch;
         const double norm = 0.5 * a * a * (H0Box * H0Box) / (H0L * H0L);
         const double fac = (assb * assb * assb) / (a * a * a);
 

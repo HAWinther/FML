@@ -2,6 +2,8 @@
 #define FML_WEAK_LENSING_HEADER
 // Flat GR Born projection primitives. All distances: comoving Mpc/h; k: h/Mpc;
 // P: (Mpc/h)^3. No implicit factors of h, masks, bias or shot-noise subtraction.
+#include <FML/Units/Units.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -112,7 +114,7 @@ namespace FML::WEAKLENSING {
 
     struct FlatGeometry {
         double omega_m = .3;
-        double hubble_distance = 2997.92458; // c/H0 in Mpc/h
+        double hubble_distance = FML::UTILS::SI::c_over_H0_mpch; // c/H0 in Mpc/h
         Function z_of_chi;
         void validate() const {
             detail::require(std::isfinite(omega_m) && omega_m >= 0 && std::isfinite(hubble_distance) &&
