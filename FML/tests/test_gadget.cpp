@@ -16,6 +16,7 @@
 #include <FML/GadgetUtils/GadgetUtils.h>
 #include <FML/GadgetUtils/GadgetUtilsHDF5.h>
 #include <FML/Global/Global.h>
+#include <FML/Units/Units.h>
 
 #include <cmath>
 #include <cstdio>
@@ -43,7 +44,9 @@ const double box = 500.0;
 const double aexp = 0.25;
 const double OmegaM = 0.3;
 // rho_crit = 2.7753e11 h^2 Msun / Mpc^3 (SI::rho_crit_over_h2_msun_mpc3): the mass of a particle in 1e10 Msun/h
-double expected_mass(double fraction, size_t n) { return 27.7536627 * OmegaM * fraction * box * box * box / double(n); }
+double expected_mass(double fraction, size_t n) {
+    return FML::UTILS::SI::rho_crit_over_h2_msun_mpc3 / 1e10 * OmegaM * fraction * box * box * box / double(n);
+}
 
 // The particles are a function of the ID so we can check them after reading
 double expected_pos(long long id, int idim) {

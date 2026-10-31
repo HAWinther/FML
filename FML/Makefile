@@ -16,7 +16,7 @@
 
 # Examples that only need MPI/OpenMP/FFTW/GSL
 EXAMPLE_DIRS := $(sort $(dir $(wildcard */example/Makefile */examples/Makefile */*/example/Makefile */*/*/example/Makefile))) \
-                Cosmology/Legacy/EinsteinBoltzmannSolver/ Cosmology/EinsteinBoltzmannSolver/ CosmologyFitting/ \
+                Cosmology/EinsteinBoltzmannSolver/ CosmologyFitting/ \
                 RamsesUtils/ramses2pk/ SimulationCode/
 
 # Examples that need extra libraries (built with make examples-extra)
