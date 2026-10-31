@@ -423,7 +423,7 @@ namespace SIMCODE {
                               "Massive neutrinos as particles with the delta-f method (Elbers et al. 2021): thermal "
                               "Fermi-Dirac velocities, relativistic equations of motion, the particles only carry the "
                               "perturbation. Replaces force_linear_massive_neutrinos (needs cosmology_OmegaMNu > 0, "
-                              "transferinfofile or class, timestep_method = Quinn, no COLA)");
+                              "camb or class, timestep_method = Quinn, no COLA)");
             b.always_optional("particle_neutrino_Npart_1D",
                               0,
                               "particle_neutrinos: number of neutrino particles per dimension (0: particle_Npart_1D)");
@@ -510,12 +510,13 @@ namespace SIMCODE {
             b.required("ic_type_of_input",
                        "powerspectrum",
                        "The input: powerspectrum (file with [k (h/Mpc), P(k) (Mpc/h)^3]), transferfunction (file "
-                       "with [k (h/Mpc), T(k) Mpc^2]), transferinfofile (file listing T(k,z) files from CAMB; the "
+                       "with [k (h/Mpc), T(k) Mpc^2]), camb (a transfer info file listing T(k,z) files from CAMB; the old name "
+                       "transferinfofile is also accepted; the "
                        "columns are read by name from the header, or by position: 13 CAMB, 9 AxionCAMB, 7 old CAMB / "
                        "CLASS with format=camb), class (native CLASS output: ic_input_filename is the root of the run, "
                        "with format = class, output = mTk,vTk, write_background = yes) or internal_transfer (FML solver "
                        ".ini; optional compiled feature). See FML/TransferProviders",
-                       {"powerspectrum", "transferfunction", "transferinfofile", "class", "internal_transfer"});
+                       {"powerspectrum", "transferfunction", "camb", "class", "internal_transfer", "transferinfofile"});
             b.when(is_one_of("ic_type_of_input", {"class"}), "ic_type_of_input = class", [&]() {
                 b.optional("ic_input_gauge",
                            "synchronous",
@@ -657,7 +658,7 @@ namespace SIMCODE {
             b.optional("force_linear_massive_neutrinos",
                        false,
                        "Include massive neutrinos in the density field using linear theory (requires "
-                       "ic_type_of_input = transferinfofile or class)");
+                       "ic_type_of_input = camb or class)");
             b.always_optional(
                 "force_neutrino_energy_density",
                 false,

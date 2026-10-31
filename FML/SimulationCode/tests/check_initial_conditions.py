@@ -15,7 +15,7 @@
 #       and two species, scale-independent and scale-dependent COLA, and the N-body gauge
 #     - ic_use_gravity_model_GR with modified gravity (f(R), mu(a,k), mu(a)): the IC have the GR growth rate, the
 #       frame that of the gravity model. One and two species, scale-independent and scale-dependent COLA, order 1 and 2
-#  2. Massive neutrinos without ic_type_of_input = transferinfofile give a clear error (not a segfault)
+#  2. Massive neutrinos without ic_type_of_input = camb or class give a clear error (not a segfault)
 #  3. Reading particles (ic_random_field_type = read_particles):
 #     - exact LPT reconstruction from an offset lattice (SimulationCode's own fiducial offset with a 2x force grid,
 #       and half_force_cell with a force grid equal to the particle grid): the run continued from the file must
@@ -58,7 +58,7 @@ def run(name, overrides, expected_error=None):
     p = dict(cases.BASE)
     p.update(overrides)
     # A transfer info file starts with the folder of the transfer files (as in cases.write_case)
-    if p["ic_type_of_input"] == "transferinfofile":
+    if p["ic_type_of_input"] == "camb":
         with open(p["ic_input_filename"]) as f:
             lines = f.read().split("\n")
         folder = os.path.basename(lines[0].split()[0].rstrip("/"))
@@ -118,7 +118,7 @@ snap_zini = "output/snapshot_Reg_z20.000/gadget_z20.000"
 #==========================================================================
 nu04 = dict(cosmology_OmegaMNu=0.0095,
             cosmology_OmegaCDM=0.259,
-            ic_type_of_input="transferinfofile",
+            ic_type_of_input="camb",
             ic_input_filename=cases.INPUT + "/transfer_infofile_lcdm_nu0.4_zmax200.txt",
             ic_input_redshift=ZINI,
             **at_zini)
@@ -157,7 +157,7 @@ for label, extra in [("two_species", dict(particle_baryons=True)), ("one_species
 # A COLA frame of lower LPT order than the IC (simulation_cola_LPT_order < ic_LPT_order): the frame only has the
 # orders up to simulation_cola_LPT_order and the particles must keep the IC velocity of the higher orders (the 2LPT
 # velocity was dropped with COLA order 1: 1.7% rms in LCDM, and the 3LPT velocity with COLA order 2)
-lcdm = dict(ic_type_of_input="transferinfofile",
+lcdm = dict(ic_type_of_input="camb",
             ic_input_filename=cases.INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
             ic_input_redshift=ZINI,
             **at_zini)
@@ -214,7 +214,7 @@ for model, mg in [("fofr", fofr), ("mubz", mu_bz), ("mu1.2", mu_const)]:
 BOX = 4000.0
 nbg = dict(simulation_boxsize=BOX,
            ic_fix_amplitude=True,
-           ic_type_of_input="transferinfofile",
+           ic_type_of_input="camb",
            ic_input_filename=cases.INPUT + "/nbody_gauge_lcdm/nbgauge_transferinfo.txt",
            ic_input_redshift=ZINI,
            force_nbody_gauge=True,
@@ -237,7 +237,7 @@ for label, extra in [("", dict()), ("_cola1", cola1)]:
 # 2. Massive neutrinos need the transfer functions
 #==========================================================================
 run("neutrinos_powerspectrum", dict(cosmology_OmegaMNu=0.0048, cosmology_OmegaCDM=0.2637, **at_zini),
-    expected_error="cosmology_OmegaMNu > 0 needs ic_type_of_input = transferinfofile")
+    expected_error="cosmology_OmegaMNu > 0 needs ic_type_of_input = camb")
 
 #==========================================================================
 # 3. Reading particles

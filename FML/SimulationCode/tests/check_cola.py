@@ -53,7 +53,7 @@ def run(name, overrides):
     p = dict(cases.BASE)
     p.update(overrides)
     # A transfer info file starts with the folder of the transfer files (as in cases.write_case)
-    if p["ic_type_of_input"] == "transferinfofile":
+    if p["ic_type_of_input"] == "camb":
         with open(p["ic_input_filename"]) as f:
             lines = f.read().split("\n")
         folder = os.path.basename(lines[0].split()[0].rstrip("/"))
@@ -126,7 +126,7 @@ pk_on, pk_off = (np.loadtxt(os.path.join(d, "output", "pofk_Reg_cb_z0.000.txt"))
 check(np.array_equal(pk_on, pk_off), "GR: simulation_use_scaledependent_cola = true gives the same P(k) as false")
 nu04 = dict(cosmology_OmegaMNu=0.0095,
             cosmology_OmegaCDM=0.259,
-            ic_type_of_input="transferinfofile",
+            ic_type_of_input="camb",
             ic_input_filename=cases.INPUT + "/transfer_infofile_lcdm_nu0.4_zmax200.txt",
             ic_input_redshift=ZINI)
 _, text = run("nu_scaledep_true", dict(short, simulation_use_scaledependent_cola=True, **nu04))

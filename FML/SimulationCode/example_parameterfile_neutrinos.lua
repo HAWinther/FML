@@ -286,11 +286,11 @@ ic_LPT_order = 2
 -- The type of input: 
 -- powerspectrum    (file with [k (h/Mph) , P(k) (Mpc/h)^3)])
 -- transferfunction (file with [k (h/Mph) , T(k)  Mpc^2)]
--- transferinfofile (file containing paths to a bunch of T(k,z) files from CAMB)
+-- camb             (a transfer info file listing T(k,z) files from CAMB; the old name transferinfofile also works)
 -- class            (native CLASS output: ic_input_filename is the root, e.g. "output/run_" for run_z1_tk.dat, ...,
 --                   run_background.dat; CLASS run with format = class, output = mTk,vTk, write_background = yes)
 -- internal_transfer (an .ini file of FML's Einstein-Boltzmann solver; needs USE_INTERNAL_COSMOLOGY=true)
-ic_type_of_input = "transferinfofile"
+ic_type_of_input = "camb"
 ic_input_gauge = "synchronous" -- class: the gauge CLASS was run in (synchronous or newtonian; converted to CDM-synchronous)
 -- Path to the input (NB: for using the example files update the path at the top of the file below)
 ic_input_filename = "input/transfer_infofile_lcdm_nu0.2.txt"
@@ -347,7 +347,7 @@ force_greens_function_kernel = "fiducial"
 force_gradient_kernel = "fiducial"
 -- Include the effects of massive neutrinos when computing
 -- the density field (density of mnu is the linear prediction)
--- Requires: transferinfofile above (we need all T(k,z))
+-- Requires: ic_type_of_input = camb or class above (we need all T(k,z))
 force_linear_massive_neutrinos = true
 
 -- Experimental feature: Use finite difference on the gravitational 

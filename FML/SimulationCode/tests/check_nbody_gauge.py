@@ -86,7 +86,7 @@ with open(os.path.join(inputdir, "nbgauge_extra.txt")) as fin, open(zero_source,
             cols = line.split()
             fout.write(cols[0] + " " + " ".join("0.0" for _ in cols[1:]) + "\n")
 
-nbgauge_ic = dict(ic_type_of_input="transferinfofile",
+nbgauge_ic = dict(ic_type_of_input="camb",
                   ic_input_filename=inputdir + "/nbgauge_transferinfo.txt")
 runs = {
     "with_source": dict(nbgauge_ic, force_nbody_gauge=True, force_nbody_gauge_filename=inputdir + "/nbgauge_extra.txt"),

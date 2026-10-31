@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: `ic_type_of_input = camb` (was `transferinfofile`)
+- The CAMB transfer-file input is now `ic_type_of_input = "camb"`, next to `class` and `internal_transfer` (the source
+  names of `make_transfer_provider`). The old name `transferinfofile` still works and prints a warning. The parameter
+  files, examples, tests and scripts in the repository use `camb`.
+- `InitialConditions::LinearInputType::TransferInfoFile` is renamed `LinearInputType::Provider` (the IC table sampled
+  from a `TransferProvider`, used for camb, class and internal_transfer).
+
 ### TransferProviders: one module for CAMB, CLASS and the internal solver; SimulationCode uses it
 - New `TransferProviders/`: `make_transfer_provider` makes a `TransferProvider` from CAMB transfer files
   (`CAMBFileTransferProvider`: columns by header name or position, no `CAMBUtils` dependency), native CLASS output in

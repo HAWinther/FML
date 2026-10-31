@@ -299,7 +299,7 @@ def main():
 Wrote {len(files)} transfer files and the extra source to {out}
 Put this in the parameterfile:
 
-ic_type_of_input = "transferinfofile"
+ic_type_of_input = "camb"
 ic_input_filename = "{out}/nbgauge_transferinfo.txt"
 ic_input_redshift = {p['zini']!r}
 ic_initial_redshift = {p['zini']!r}

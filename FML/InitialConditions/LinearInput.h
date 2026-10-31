@@ -55,7 +55,7 @@ namespace FML::INITIALCONDITIONS {
     };
 
 
-    enum class LinearInputType { PowerSpectrum, TransferFunction, TransferInfoFile };
+    enum class LinearInputType { PowerSpectrum, TransferFunction, Provider };
     struct LinearInput {
         LinearInputType type;
         std::string filename;
@@ -109,7 +109,7 @@ namespace FML::INITIALCONDITIONS {
                 }
                 break;
             }
-            case LinearInputType::TransferInfoFile: {
+            case LinearInputType::Provider: {
                 if (!provider)
                     throw std::invalid_argument("[LinearInput] Transfer provider is required");
                 provider->require_ic_density_gauge();

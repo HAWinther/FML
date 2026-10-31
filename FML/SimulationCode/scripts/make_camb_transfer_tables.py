@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Make CAMB transfer function tables in the format SimulationCode reads (ic_type_of_input = "transferinfofile"),
+"""Make CAMB transfer function tables in the format SimulationCode reads (ic_type_of_input = "camb"),
 with accurate massive neutrino transfer functions.
 
 The redshifts are uniform in log(1+z) from 0 to zmax (the growth rates are computed from the tables with a 4-point

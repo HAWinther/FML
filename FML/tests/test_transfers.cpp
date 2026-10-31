@@ -126,7 +126,7 @@ int main() {
     check_local(transfer.transfer[0] == -4. && transfer.power[0] == 2. * std::pow(-4. * (.01 * h) * (.01 * h), 2),
                 "single-transfer input preserves its sign and normalization");
     auto sampled = prepare_linear_input(
-        {LinearInputType::TransferInfoFile, "", 1. / 11, h}, growth, primordial, provider.get());
+        {LinearInputType::Provider, "", 1. / 11, h}, growth, primordial, provider.get());
     bool same = std::abs(sampled.k.front() / provider->range().kmin_hmpc - 1) < 1e-12 &&
                 std::abs(sampled.k.back() / provider->range().kmax_hmpc - 1) < 1e-12;
     for (size_t i = 0; i < sampled.k.size(); i++)

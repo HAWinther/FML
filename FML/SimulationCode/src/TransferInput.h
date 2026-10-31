@@ -7,7 +7,7 @@
 #include <string>
 
 //=============================================================================
-// The transfer functions of the simulation (ic_type_of_input = transferinfofile, class or internal_transfer), made
+// The transfer functions of the simulation (ic_type_of_input = camb, class or internal_transfer), made
 // with FML/TransferProviders (make_transfer_provider). The provider is shared by the gravity model (scale-dependent
 // growth with massive neutrinos), the initial conditions and the analysis. Only TransferInput.cpp includes
 // MakeTransferProvider.h (and with USE_INTERNAL_COSMOLOGY the Einstein-Boltzmann solver).
@@ -19,7 +19,7 @@ namespace SIMCODE {
     using TransferSpecies = FML::INITIALCONDITIONS::Species;
 
     struct TransferInputRequest {
-        /// transferinfofile (CAMB transfer info file), class (the root of a native CLASS run) or internal_transfer
+        /// camb (a CAMB transfer info file), class (the root of a native CLASS run) or internal_transfer
         /// (an .ini file of FML's Einstein-Boltzmann solver)
         std::string type;
         std::string filename;
@@ -34,10 +34,15 @@ namespace SIMCODE {
         bool require_sigma8_coverage{false};
     };
 
+    /// ic_type_of_input with the old name transferinfofile replaced by camb
+    inline std::string canonical_input_type(const std::string & type) {
+        return type == "transferinfofile" ? "camb" : type;
+    }
+
     /// Whether ic_type_of_input gives transfer tables of all species at many redshifts (the gravity model needs them
     /// with massive neutrinos, and so do neutrino particles and the N-body gauge)
     inline bool input_has_transfer_tables(const std::string & type) {
-        return type == "transferinfofile" or type == "class";
+        return canonical_input_type(type) == "camb" or type == "class";
     }
 
     /// The transfer functions of the input (see TransferInput.cpp)
@@ -50,7 +55,7 @@ namespace SIMCODE {
                                                const std::string & gauge,
                                                CosmologyType & cosmo) {
         TransferInputRequest r;
-        r.type = type;
+        r.type = canonical_input_type(type);
         r.filename = filename;
         r.gauge = gauge;
         r.h = cosmo.get_h();

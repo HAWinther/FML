@@ -135,7 +135,7 @@ CASES = {
         simulation_use_scaledependent_cola=True,
         cosmology_OmegaMNu=0.0048,
         cosmology_OmegaCDM=0.2637,
-        ic_type_of_input="transferinfofile",
+        ic_type_of_input="camb",
         ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.2.txt",
         ic_input_redshift=20.0,
     ),
@@ -237,7 +237,7 @@ CASES = {
     # N-body gauge: IC from the N-body gauge transfer functions and the linear source from radiation,
     # neutrinos and GR (input made with scripts/make_nbody_gauge_transfer.py)
     "nbody_gauge": dict(
-        ic_type_of_input="transferinfofile",
+        ic_type_of_input="camb",
         ic_input_filename=INPUT + "/nbody_gauge_lcdm/nbgauge_transferinfo.txt",
         ic_input_redshift=20.0,
         force_nbody_gauge=True,
@@ -368,7 +368,7 @@ CASES = {
         particle_baryon_lattice="same",
         simulation_use_cola=False,
         timestep_method="BullFrog",
-        ic_type_of_input="transferinfofile",
+        ic_type_of_input="camb",
         ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
         ic_input_redshift=20.0,
         pofk_subtract_shotnoise=True,
@@ -380,7 +380,7 @@ CASES = {
         simulation_use_cola=False,
         cosmology_OmegaMNu=0.0048,
         cosmology_OmegaCDM=0.2637,
-        ic_type_of_input="transferinfofile",
+        ic_type_of_input="camb",
         ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.2.txt",
         ic_input_redshift=20.0,
         output_fileformat="HDF5",
@@ -390,7 +390,7 @@ CASES = {
         particle_baryons=True,
         simulation_use_cola=True,
         timestep_method="Quinn",
-        ic_type_of_input="transferinfofile",
+        ic_type_of_input="camb",
         ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
         ic_input_redshift=20.0,
     ),
@@ -404,7 +404,7 @@ CASES = {
         cosmology_OmegaMNu=0.0095,
         cosmology_OmegaCDM=0.259,
         force_linear_massive_neutrinos=True,
-        ic_type_of_input="transferinfofile",
+        ic_type_of_input="camb",
         ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.4_zmax200.txt",
         ic_input_redshift=20.0,
     ),
@@ -413,7 +413,7 @@ CASES = {
         particle_baryons=True,
         simulation_use_cola=False,
         timestep_method="Quinn",
-        ic_type_of_input="transferinfofile",
+        ic_type_of_input="camb",
         ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
         ic_input_redshift=20.0,
         fof=True,
@@ -429,7 +429,7 @@ CASES = {
         particle_baryon_relative_mode="mass",
         simulation_use_cola=True,
         timestep_method="Quinn",
-        ic_type_of_input="transferinfofile",
+        ic_type_of_input="camb",
         ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
         ic_input_redshift=20.0,
         output_fileformat="HDF5",
@@ -445,7 +445,7 @@ CASES = {
         particle_baryon_relative_mode="mass_ini",
         simulation_use_cola=False,
         timestep_method="Quinn",
-        ic_type_of_input="transferinfofile",
+        ic_type_of_input="camb",
         ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
         ic_input_redshift=20.0,
     ),
@@ -487,7 +487,7 @@ CASES = {
         cosmology_OmegaMNu=0.0095,
         cosmology_OmegaCDM=0.259,
         force_linear_massive_neutrinos=False,
-        ic_type_of_input="transferinfofile",
+        ic_type_of_input="camb",
         ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.4_zmax200.txt",
         ic_input_redshift=20.0,
     ),
@@ -500,7 +500,7 @@ CASES = {
         cosmology_OmegaMNu=0.0024,
         cosmology_OmegaCDM=0.2661,
         force_linear_massive_neutrinos=False,
-        ic_type_of_input="transferinfofile",
+        ic_type_of_input="camb",
         ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.1_zmax200.txt",
         ic_input_redshift=20.0,
     ),
@@ -515,7 +515,7 @@ CASES = {
         cosmology_OmegaMNu=0.0024,
         cosmology_OmegaCDM=0.2661,
         force_linear_massive_neutrinos=False,
-        ic_type_of_input="transferinfofile",
+        ic_type_of_input="camb",
         ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.1_zmax200.txt",
         ic_input_redshift=20.0,
         output_fileformat="HDF5",
@@ -657,7 +657,7 @@ def write_case(outdir, name):
 
     # A transfer info file starts with the folder holding the transfer files. Write a copy
     # pointing to the folder in this repository so the case runs on any machine
-    if params["ic_type_of_input"] == "transferinfofile":
+    if params["ic_type_of_input"] == "camb":
         with open(params["ic_input_filename"]) as f:
             lines = f.read().split("\n")
         folder = os.path.basename(lines[0].split()[0].rstrip("/"))

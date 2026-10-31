@@ -201,7 +201,7 @@ void NBodySimulation<NDIM, T>::add_neutrino_particles(FFTWGrid<NDIM> & density_g
 }
 
 /// Linear massive neutrinos: delta_m = (1 - f_nu) delta_cb + f_nu delta_cb(k,zini) T_nu(k,z) / T_cb(k,zini)
-/// (needs the transfer functions, i.e. transferinfofile). The first time we store delta_cb(k,zini)
+/// (needs the transfer functions with massive neutrinos: camb or class). The first time we store delta_cb(k,zini)
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::add_linear_neutrinos(FFTWGrid<NDIM> & density_grid_fourier, double a) {
     const double ic_initial_redshift = params.ic.initial_redshift;

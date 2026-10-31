@@ -33,7 +33,7 @@ namespace SIMCODE {
     // Options that are given as strings in the parameterfile
     //=============================================================================
     enum class ICRandomFieldType { Gaussian, NonGaussian, ReadParticles, ReadPhases };
-    enum class ICInputType { PowerSpectrum, TransferFunction, TransferInfoFile, ClassFiles, InternalTransfer };
+    enum class ICInputType { PowerSpectrum, TransferFunction, CambFiles, ClassFiles, InternalTransfer };
     enum class RandomGeneratorType { GSL, MT19937 };
     enum class RandomFieldBackend { NGenIC, Philox };
     using TimestepMethod = FML::NBODY::TimestepMethod;
@@ -170,7 +170,7 @@ namespace SIMCODE {
         int LPT_order;                        // The LPT order to use to make IC (1,2,3)
 
         // Input file (power-spectrum / transfer functions)
-        ICInputType type_of_input; // powerspectrum, transferfunction, transferinfofile, class or internal_transfer
+        ICInputType type_of_input; // powerspectrum, transferfunction, camb, class or internal_transfer
         std::string input_filename; // The filename (class: the root of the CLASS run)
         std::string input_gauge{"synchronous"}; // class: the gauge CLASS was run in (synchronous or newtonian)
         double input_redshift;                // The redshift of P(k,z) / T(k,z) that we read in
@@ -206,8 +206,8 @@ namespace SIMCODE {
                     return "powerspectrum";
                 case ICInputType::TransferFunction:
                     return "transferfunction";
-                case ICInputType::TransferInfoFile:
-                    return "transferinfofile";
+                case ICInputType::CambFiles:
+                    return "camb";
                 case ICInputType::ClassFiles:
                     return "class";
                 case ICInputType::InternalTransfer:
@@ -217,7 +217,7 @@ namespace SIMCODE {
         }
         /// The input has transfer tables of all species at many redshifts (CAMB or CLASS)
         bool has_transfer_tables() const {
-            return type_of_input == ICInputType::TransferInfoFile or type_of_input == ICInputType::ClassFiles;
+            return type_of_input == ICInputType::CambFiles or type_of_input == ICInputType::ClassFiles;
         }
         bool reads_particles() const {
             return random_field_type == ICRandomFieldType::ReadParticles or
@@ -399,9 +399,12 @@ namespace SIMCODE {
                          ic.type_of_input,
                          {{"powerspectrum", ICInputType::PowerSpectrum},
                           {"transferfunction", ICInputType::TransferFunction},
-                          {"transferinfofile", ICInputType::TransferInfoFile},
+                          {"camb", ICInputType::CambFiles},
+                          {"transferinfofile", ICInputType::CambFiles}, // the old name of camb
                           {"class", ICInputType::ClassFiles},
                           {"internal_transfer", ICInputType::InternalTransfer}});
+            if (param.get<std::string>("ic_type_of_input") == "transferinfofile" and FML::ThisTask == 0)
+                std::cout << "WARNING: ic_type_of_input = transferinfofile is the old name of ic_type_of_input = camb\n";
             r.get_optional("ic_input_gauge", ic.input_gauge);
             r.get("ic_input_filename", ic.input_filename);
             r.get_choice("ic_random_field_type",
@@ -679,8 +682,8 @@ namespace SIMCODE {
             if (not(force.nufft_epsilon > 0.0 and force.nufft_epsilon < 0.1))
                 fail("force_nufft_epsilon must be in (0, 0.1)");
             if (force.nbody_gauge) {
-                if (ic.type_of_input != ICInputType::TransferInfoFile)
-                    fail("force_nbody_gauge = true needs ic_type_of_input = transferinfofile (the N-body gauge "
+                if (ic.type_of_input != ICInputType::CambFiles)
+                    fail("force_nbody_gauge = true needs ic_type_of_input = camb (the N-body gauge "
                          "transfer functions made by scripts/make_nbody_gauge_transfer.py)");
                 if (std::fabs(ic.input_redshift - ic.initial_redshift) > 1e-6)
                     fail("force_nbody_gauge = true needs ic_input_redshift = ic_initial_redshift (scaling the "
@@ -786,7 +789,7 @@ namespace SIMCODE {
              true,
              true,
              [](P p) { return not p.simulation.enforce_LPT_trajectories; }},
-            {"`ic_type_of_input = transferinfofile`, `class` or `internal_transfer` (species transfers at zini)",
+            {"`ic_type_of_input = camb`, `class` or `internal_transfer` (species transfers at zini)",
              true,
              true,
              [](P p) { return p.ic.has_transfer_tables() || p.ic.type_of_input == ICInputType::InternalTransfer; }},

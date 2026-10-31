@@ -19,7 +19,7 @@ namespace SIMCODE {
     } // namespace
 
     //=============================================================================
-    /// transferinfofile: CAMB transfer files (the columns read by name from the header, or by position), with the
+    /// camb: CAMB transfer files (the columns read by name from the header, or by position), with the
     ///   weights of CDM+baryons from the cosmology of the simulation. The densities are CDM-synchronous.
     /// class: native CLASS output (format = class, output = mTk, vTk, write_background = yes) with the root
     ///   ic_input_filename, run in the gauge ic_input_gauge (Newtonian is converted to CDM-synchronous). h and
@@ -43,7 +43,7 @@ namespace SIMCODE {
         s.output_gauge = Gauge::SynchronousCDM;
         s.range_policy = RangePolicy::SourceExtrapolation;
 
-        if (r.type == "transferinfofile") {
+        if (canonical_input_type(r.type) == "camb") {
             s.source = "camb";
             s.camb_infofile = r.filename;
             return make_transfer_provider(s);
@@ -103,7 +103,7 @@ namespace SIMCODE {
         }
 
         throw std::invalid_argument("[load_transfers] Unknown ic_type_of_input [" + r.type +
-                                    "] (transferinfofile, class or internal_transfer)");
+                                    "] (camb, class or internal_transfer)");
     }
 
 } // namespace SIMCODE

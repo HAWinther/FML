@@ -12,7 +12,7 @@ user declares the gauge of the input, and the provider returns densities in the 
 
 This folder replaces the old CAMB reader (`CAMBUtils/CAMBReader.h`, `LinearTransferData`) and
 `InitialConditions/CAMBTransferProvider.h`, which have been removed. SimulationCode reads its transfer functions with it
-(`SimulationCode/src/TransferInput.cpp`: `ic_type_of_input = transferinfofile`, `class` or `internal_transfer`).
+(`SimulationCode/src/TransferInput.cpp`: `ic_type_of_input = camb`, `class` or `internal_transfer`).
 
 ```cpp
 #include <FML/TransferProviders/MakeTransferProvider.h>

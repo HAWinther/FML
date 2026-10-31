@@ -37,7 +37,7 @@ namespace SIMCODE {
     /// Read the input power-spectrum / transfer function (as given by ic.type_of_input)
     /// and bring it to the initial redshift with the growth factors of grav_ic.
     ///
-    /// For ic.type_of_input = transferinfofile, class or internal_transfer the transfer functions T_i(k,z) are
+    /// For ic.type_of_input = camb, class or internal_transfer the transfer functions T_i(k,z) are
     /// returned in transfers (the same object as in the gravity model)
     //=============================================================================
     template <int NDIM>
@@ -61,7 +61,7 @@ namespace SIMCODE {
         // The transfer functions: shared with the gravity model, which reads the CAMB/CLASS tables already (it needs
         // them for the growth factors with massive neutrinos)
         transfers = nullptr;
-        if (ic.type_of_input == ICInputType::TransferInfoFile or ic.type_of_input == ICInputType::ClassFiles) {
+        if (ic.has_transfer_tables()) {
             transfers = grav->get_transfers();
             if (not transfers) {
                 transfers = load_transfers(
@@ -89,7 +89,7 @@ namespace SIMCODE {
                         FML::INITIALCONDITIONS::LinearInputType::PowerSpectrum :
                     ic.type_of_input == ICInputType::TransferFunction ?
                         FML::INITIALCONDITIONS::LinearInputType::TransferFunction :
-                        FML::INITIALCONDITIONS::LinearInputType::TransferInfoFile;
+                        FML::INITIALCONDITIONS::LinearInputType::Provider;
         auto table = FML::INITIALCONDITIONS::prepare_linear_input(
             {type, ic.input_filename, ainput, cosmo->get_h()},
             D_ini_over_D_input,

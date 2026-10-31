@@ -82,7 +82,7 @@ int main(int argc, char ** argv) {
     bool wrong = false;
     try {
         prepare_linear_input(
-            {LinearInputType::TransferInfoFile, "", 1., .67},
+            {LinearInputType::Provider, "", 1., .67},
             [](double) { return 1.; },
             [](double) { return 1.; },
             &native);
@@ -98,7 +98,7 @@ int main(int argc, char ** argv) {
     }
     check_local(range, "internal transfer range is strict");
     auto sampled = prepare_linear_input(
-        {LinearInputType::TransferInfoFile, "", 1. / 50, .67},
+        {LinearInputType::Provider, "", 1. / 50, .67},
         [](double) { return 1.; },
         [&](double k) { return synchronous.primordial_power(k); },
         &synchronous);

@@ -274,11 +274,11 @@ end
 particle_Npart_1D = 128
 -- Factor of how many more particles to allocate space
 particle_allocation_factor = 1.25
--- CDM and baryons as two sets of particles (particle_Npart_1D^3 of each)? Needs ic_type_of_input = transferinfofile
+-- CDM and baryons as two sets of particles (particle_Npart_1D^3 of each)? Needs ic_type_of_input = camb, class or internal_transfer
 particle_baryons = false
 -- Start the baryons from the same lattice as the CDM (same, recommended) or offset by half a particle spacing (offset)
 particle_baryon_lattice = "same"
--- Massive neutrinos as particles with the delta-f method? Needs cosmology_OmegaMNu > 0, ic_type_of_input = transferinfofile
+-- Massive neutrinos as particles with the delta-f method? Needs cosmology_OmegaMNu > 0, ic_type_of_input = camb or class
 -- (accurate neutrino transfer functions up to zini, see scripts/make_camb_transfer_tables.py), timestep_method = Quinn
 -- and force_linear_massive_neutrinos = false
 particle_neutrinos = false
@@ -348,7 +348,7 @@ ic_LPT_order = 2
 -- The type of input: 
 -- powerspectrum    (file with [k (h/Mph) , P(k) (Mpc/h)^3)])
 -- transferfunction (file with [k (h/Mph) , T(k)  Mpc^2)]
--- transferinfofile (file containing paths to a bunch of T(k,z) files from CAMB)
+-- camb             (a transfer info file listing T(k,z) files from CAMB; the old name transferinfofile also works)
 -- class            (native CLASS output: ic_input_filename is the root, e.g. "output/run_" for run_z1_tk.dat, ...,
 --                   run_background.dat; CLASS run with format = class, output = mTk,vTk, write_background = yes)
 -- internal_transfer (an .ini file of FML's Einstein-Boltzmann solver; needs USE_INTERNAL_COSMOLOGY=true)
@@ -430,14 +430,14 @@ force_deconvolve_window = false
 force_early_method = "none"
 -- Include the effects of massive neutrinos when computing
 -- the density field (density of mnu is the linear prediction)
--- Requires: transferinfofile above (we need all T(k,z))
+-- Requires: ic_type_of_input = camb or class above (we need all T(k,z))
 force_linear_massive_neutrinos = true
 
 -- Run in the N-body gauge (Fidler et al. 2015, 2016): add the linear source from photons,
 -- massless and massive neutrinos and GR to the density field. This makes the simulation
 -- correct to linear order in GR on all scales (matters for k < ~0.01 h/Mpc).
 -- Make the input with CLASS:  python3 scripts/make_nbody_gauge_transfer.py parameterfile.lua --outdir nbgauge_input
--- which prints the lines to use (ic_type_of_input = "transferinfofile" with the N-body gauge
+-- which prints the lines to use (ic_type_of_input = "camb" with the N-body gauge
 -- transfer functions, ic_input_redshift = ic_initial_redshift). Replaces force_linear_massive_neutrinos
 force_nbody_gauge = false
 if force_nbody_gauge then

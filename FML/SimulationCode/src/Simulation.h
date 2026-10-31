@@ -89,7 +89,7 @@ class NBodySimulation {
     /// The gravity model used to make the IC (GR if ic_use_gravity_model_GR, otherwise grav)
     std::shared_ptr<GravityModel<NDIM>> grav_ic;
 
-    /// The transfer functions (ic_type_of_input = transferinfofile, class or internal_transfer; see TransferInput.h).
+    /// The transfer functions (ic_type_of_input = camb, class or internal_transfer; see TransferInput.h).
     /// The same object as in the gravity model (grav)
     std::shared_ptr<TransferProvider> transfers;
 
@@ -677,7 +677,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
     // Massive neutrino particles (made from the same random field)
     if (has_neutrino_particles()) {
         timer.StartTiming("InitialConditionsNeutrinos");
-        FML::assert_mpi(transfers != nullptr, "particle_neutrinos needs the transfer functions (transferinfofile or class)");
+        FML::assert_mpi(transfers != nullptr, "particle_neutrinos needs the transfer functions (camb or class)");
         const auto & nu = species.back();
         neutrinos.generate(delta_ini_fourier,
                            *transfers,
@@ -931,7 +931,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     const double boxsize = params.simulation.boxsize;
     const double aini = ic.a_initial();
     FML::assert_mpi(transfers != nullptr,
-                    "particle_baryons needs the transfer functions (transferinfofile, class or internal_transfer)");
+                    "particle_baryons needs the transfer functions (camb, class or internal_transfer)");
     const auto & cdm = species[0];
     const auto & baryon = species[1];
     const auto splines = SIMCODE::two_species_ic_splines<NDIM>(*transfers,

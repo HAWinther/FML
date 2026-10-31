@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ic_type_of_input = class (native CLASS output through FML/TransferProviders) against transferinfofile (CAMB).
+"""ic_type_of_input = class (native CLASS output through FML/TransferProviders) against camb (CAMB transfer files).
 
 Usage: python3 check_class_input.py /path/to/nbody /path/to/scratch-output [transfer data folder]
 
@@ -57,7 +57,7 @@ def run(name, overrides, error=None):
     return folder / "output"
 
 
-camb = run("camb", dict(ic_type_of_input="transferinfofile", ic_input_filename=str(data / "camb_transferinfo.txt")))
+camb = run("camb", dict(ic_type_of_input="camb", ic_input_filename=str(data / "camb_transferinfo.txt")))
 for gauge in ["synchronous", "newtonian"]:
     out = run("class_" + gauge, dict(ic_type_of_input="class", ic_input_filename=str(data / f"class_{gauge}_00_"),
                                      ic_input_gauge=gauge))

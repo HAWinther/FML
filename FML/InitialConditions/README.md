@@ -80,7 +80,7 @@ The legacy IC table retains its historical normalization behavior for compatibil
 
 ## SimulationCode
 
-SimulationCode reads its transfer functions with TransferProviders (`transferinfofile`, `class`,
+SimulationCode reads its transfer functions with TransferProviders (`camb`, `class`,
 `internal_transfer`; see its README). A simple P(k,z=0) input requires neither species transfers nor a
 Boltzmann solve. Ordinary builds do not compile/link the internal solver.
 

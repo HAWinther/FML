@@ -184,10 +184,12 @@ ic_LPT_order = 2
 -- The type of input: 
 -- powerspectrum    (file with [k (h/Mph) , P(k) (Mpc/h)^3)])
 -- transferfunction (file with [k (h/Mph) , T(k)  Mpc^2)]
--- transferinfofile (file containing paths to a bunch of T(k,z) files from CAMB)
+-- camb             (a transfer info file listing T(k,z) files from CAMB; the old name transferinfofile also works)
+-- class            (native CLASS output: ic_input_filename is the root of the run; see README)
+-- internal_transfer (an .ini file of FML's Einstein-Boltzmann solver; needs USE_INTERNAL_COSMOLOGY=true)
 -- reconstruct_from_particles (see below)
 -- read_particles   (if not COLA read GADGET file and use that for sim) 
-ic_type_of_input = "transferinfofile"
+ic_type_of_input = "camb"
 -- Path to the input
 ic_input_filename = "../../input/transfer_infofile_lcdm_nu0.0.txt"
 -- The redshift of the P(k), T(k) we give as input
@@ -244,7 +246,7 @@ force_greens_function_kernel = "continuous"
 force_gradient_kernel = "continuous"
 -- Include the effects of massive neutrinos when computing
 -- the density field (density of mnu is the linear prediction)
--- Requires: transferinfofile above (we need all T(k,z))
+-- Requires: ic_type_of_input = camb or class above (we need all T(k,z))
 force_linear_massive_neutrinos = true
 
 ------------------------------------------------------------
