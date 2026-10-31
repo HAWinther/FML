@@ -114,10 +114,8 @@ namespace FML {
                 const int ncores = CPU_COUNT(&mask);
                 NTasksThreadsShareCores = ncores < NThreads ? 1 : 0;
                 MinCoresPerTask = ncores;
-#ifdef USE_MPI
-                MPI_Allreduce(MPI_IN_PLACE, &NTasksThreadsShareCores, 1, MPI_INT, MPI_SUM, FML::communicator);
-                MPI_Allreduce(MPI_IN_PLACE, &MinCoresPerTask, 1, MPI_INT, MPI_MIN, FML::communicator);
-#endif
+                FML::SumOverTasks(&NTasksThreadsShareCores);
+                FML::MinOverTasks(&MinCoresPerTask);
             }
         }
 #endif

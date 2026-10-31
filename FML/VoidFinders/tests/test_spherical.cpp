@@ -101,9 +101,7 @@ brute_force(const std::vector<Particle> & all, std::vector<Particle> & local, co
         for (int iy = 0; iy < n; ++iy)
             for (int iz = 0; iz < n; ++iz)
                 density[(size_t(ix + grid.get_local_x_start()) * n + iy) * n + iz] = grid.get_real({ix, iy, iz});
-#ifdef USE_MPI
-    MPI_Allreduce(MPI_IN_PLACE, density.data(), int(density.size()), MPI_DOUBLE, MPI_SUM, FML::communicator);
-#endif
+    FML::SumArrayOverTasks(density.data(), density.size());
     double total_mass = 0;
     for (const auto & p : all)
         total_mass += p.mass;

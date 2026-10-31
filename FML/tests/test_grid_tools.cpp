@@ -133,9 +133,7 @@ void test_nufft(int nmesh, size_t npart, double epsilon, double sigma = 2.0) {
             fdirect[ip] += weight * (value * std::polar(1.0, kx)).real();
         }
     }
-#ifdef USE_MPI
-    MPI_Allreduce(MPI_IN_PLACE, fdirect.data(), int(fdirect.size()), MPI_DOUBLE, MPI_SUM, FML::communicator);
-#endif
+    FML::SumArrayOverTasks(fdirect.data(), fdirect.size());
     std::vector<FloatType> fnufft;
     FML::NUFFT::nufft_type2<N>(grid, part.data(), part.size(), fnufft, kernel);
     maxerr = 0.0;

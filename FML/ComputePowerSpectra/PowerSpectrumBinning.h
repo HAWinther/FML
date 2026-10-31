@@ -200,11 +200,9 @@ namespace FML {
             }
 #endif
 
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, pofk.data(), n, MPI_DOUBLE, MPI_SUM, FML::communicator);
-            MPI_Allreduce(MPI_IN_PLACE, count.data(), n, MPI_DOUBLE, MPI_SUM, FML::communicator);
-            MPI_Allreduce(MPI_IN_PLACE, kbin.data(), n, MPI_DOUBLE, MPI_SUM, FML::communicator);
-#endif
+            FML::SumArrayOverTasks(pofk.data(), size_t(n));
+            FML::SumArrayOverTasks(count.data(), size_t(n));
+            FML::SumArrayOverTasks(kbin.data(), size_t(n));
 
             for (int i = 0; i < n; i++) {
                 if (count[i] > 0) {

@@ -45,10 +45,6 @@ namespace FML {
 #include <omp.h>
 #endif
 
-#ifdef MEMORY_LOGGING
-#include <FML/MemoryLogging/MemoryLogging.h>
-#endif
-
 #include <FML/Timing/Timings.h>
 
 // The FFTW C API must be declared in the global namespace (FFTWGlobal.h is included
@@ -86,23 +82,6 @@ namespace FML {
     extern FML::UTILS::Timings global_timer;
 
     auto uniform_random() -> double;
-
-    //================================================
-    // Allocator to allow for logging of memory
-    // usage
-    //================================================
-    template <class T>
-#ifdef MEMORY_LOGGING
-    using Allocator = FML::LogAllocator<T>;
-#else
-    using Allocator = std::allocator<T>;
-#endif
-
-    //================================================
-    // Standard container
-    //================================================
-    template <class T>
-    using Vector = std::vector<T, Allocator<T>>;
 
     //================================================
     // Integer type for array indices
@@ -243,27 +222,80 @@ namespace FML {
         *value = sum;
     }
 
-    /// Inplace sum over tasks of a contiguous array of values
+    namespace detail {
+        /// Inplace element-wise reduction over tasks of a contiguous array of values (op = MPI_SUM, MPI_MIN or
+        /// MPI_MAX). The caller supplies the same valid array length on every task.
+        template <class T>
+        void ReduceArrayOverTasks(T * value, size_t n, [[maybe_unused]] int op) {
+            if (FML::NTasks == 1)
+                return;
+#ifdef USE_MPI
+            if constexpr (is_mpi_reducible_v<T>) {
+                const MPI_Op mpi_op = op == 0 ? MPI_SUM : (op == 1 ? MPI_MIN : MPI_MAX);
+                if (n > size_t(std::numeric_limits<std::ptrdiff_t>::max()) / sizeof(T) || (n && !value))
+                    abort_mpi(1);
+                for (size_t offset = 0; offset < n;) {
+                    const int count = int(std::min(size_t(1) << 28, n - offset));
+                    MPI_Allreduce(MPI_IN_PLACE, value + offset, count, get_mpi_type<T>(), mpi_op, FML::communicator);
+                    offset += size_t(count);
+                }
+                return;
+            }
+#endif
+            for (size_t i = 0; i < n; i++) {
+                if (op == 0)
+                    SumOverTasks(&value[i]);
+                else if (op == 1)
+                    MinOverTasks(&value[i]);
+                else
+                    MaxOverTasks(&value[i]);
+            }
+        }
+    } // namespace detail
+
+    /// Inplace sum over tasks of a contiguous array of values (same n on all tasks)
     template <class T>
     void SumArrayOverTasks(T * value, size_t n) {
-        if (FML::NTasks == 1)
-            return;
-#ifdef USE_MPI
-        if constexpr (is_mpi_reducible_v<T>) {
-            // The caller supplies the same valid array length on every task.
-            if (n > size_t(std::numeric_limits<std::ptrdiff_t>::max()) / sizeof(T) || (n && !value))
-                abort_mpi(1);
-            for (size_t offset = 0; offset < n;) {
-                const int count = int(std::min(size_t(1) << 28, n - offset));
-                MPI_Allreduce(MPI_IN_PLACE, value + offset, count, get_mpi_type<T>(), MPI_SUM, FML::communicator);
-                offset += size_t(count);
-            }
-            return;
-        }
-#endif
-        for (size_t i = 0; i < n; i++)
-            SumOverTasks(&value[i]);
+        detail::ReduceArrayOverTasks(value, n, 0);
     }
+
+    /// Inplace element-wise min over tasks of a contiguous array of values (same n on all tasks)
+    template <class T>
+    void MinArrayOverTasks(T * value, size_t n) {
+        detail::ReduceArrayOverTasks(value, n, 1);
+    }
+
+    /// Inplace element-wise max over tasks of a contiguous array of values (same n on all tasks)
+    template <class T>
+    void MaxArrayOverTasks(T * value, size_t n) {
+        detail::ReduceArrayOverTasks(value, n, 2);
+    }
+
+} // namespace FML
+
+// MemoryLogging uses the reductions above, so it is included here (and not at the top)
+#ifdef MEMORY_LOGGING
+#include <FML/MemoryLogging/MemoryLogging.h>
+#endif
+
+namespace FML {
+
+    //================================================
+    // Allocator to allow for logging of memory
+    // usage
+    //================================================
+    template <class T>
+#ifdef MEMORY_LOGGING
+    using Allocator = FML::LogAllocator<T>;
+#else
+    using Allocator = std::allocator<T>;
+#endif
+
+    //================================================
+    // Standard container
+    //================================================
+    template <class T>
+    using Vector = std::vector<T, Allocator<T>>;
 
     //============================================
     /// An assert function that calls MPI_Abort

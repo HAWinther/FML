@@ -1,6 +1,11 @@
 #ifndef MEMORYLOG_HEADER
 #define MEMORYLOG_HEADER
 
+// Uses the MPI reductions in Global.h (Global.h includes this file itself when MEMORY_LOGGING is defined)
+#ifndef GLOBAL_HEADER
+#error "Include <FML/Global/Global.h> before <FML/MemoryLogging/MemoryLogging.h>"
+#endif
+
 #include <chrono>
 #include <cstdlib>
 #include <iomanip>
@@ -213,9 +218,7 @@ namespace FML {
 
             // Check if any task has saturated the allocation limit
             char ok = stop_logging ? 0 : 1;
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, &ok, 1, MPI_CHAR, MPI_MIN, FML::communicator);
-#endif
+            FML::MinOverTasks(&ok);
 
             // Fetch system memory usage
             auto sysmem = get_system_memory_use();
@@ -226,14 +229,12 @@ namespace FML {
             double max_sys_rssmemory = sysmem.second;
             double mean_sys_rssmemory = sysmem.second;
 
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, &min_sys_vmemory, 1, MPI_DOUBLE, MPI_MIN, FML::communicator);
-            MPI_Allreduce(MPI_IN_PLACE, &max_sys_vmemory, 1, MPI_DOUBLE, MPI_MAX, FML::communicator);
-            MPI_Allreduce(MPI_IN_PLACE, &mean_sys_vmemory, 1, MPI_DOUBLE, MPI_SUM, FML::communicator);
-            MPI_Allreduce(MPI_IN_PLACE, &min_sys_rssmemory, 1, MPI_DOUBLE, MPI_MIN, FML::communicator);
-            MPI_Allreduce(MPI_IN_PLACE, &max_sys_rssmemory, 1, MPI_DOUBLE, MPI_MAX, FML::communicator);
-            MPI_Allreduce(MPI_IN_PLACE, &mean_sys_rssmemory, 1, MPI_DOUBLE, MPI_SUM, FML::communicator);
-#endif
+            FML::MinOverTasks(&min_sys_vmemory);
+            FML::MaxOverTasks(&max_sys_vmemory);
+            FML::SumOverTasks(&mean_sys_vmemory);
+            FML::MinOverTasks(&min_sys_rssmemory);
+            FML::MaxOverTasks(&max_sys_rssmemory);
+            FML::SumOverTasks(&mean_sys_rssmemory);
             mean_sys_vmemory /= NTasks;
             mean_sys_rssmemory /= NTasks;
             if (ThisTask == 0) {
@@ -274,12 +275,10 @@ namespace FML {
             long long int max_memory = memory_in_use;
             long long int mean_memory = memory_in_use;
             long long int peak_memory = peak_memory_use;
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, &min_memory, 1, MPI_LONG_LONG, MPI_MIN, FML::communicator);
-            MPI_Allreduce(MPI_IN_PLACE, &max_memory, 1, MPI_LONG_LONG, MPI_MAX, FML::communicator);
-            MPI_Allreduce(MPI_IN_PLACE, &mean_memory, 1, MPI_LONG_LONG, MPI_SUM, FML::communicator);
-            MPI_Allreduce(MPI_IN_PLACE, &peak_memory, 1, MPI_LONG_LONG, MPI_MAX, FML::communicator);
-#endif
+            FML::MinOverTasks(&min_memory);
+            FML::MaxOverTasks(&max_memory);
+            FML::SumOverTasks(&mean_memory);
+            FML::MaxOverTasks(&peak_memory);
             mean_memory /= NTasks;
             if (ThisTask == 0) {
                 std::cout << "Memory in use (Task 0):   " << std::setw(15) << double(memory_in_use) / 1.0e6 << " MB\n";

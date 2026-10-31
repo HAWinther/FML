@@ -146,7 +146,7 @@ namespace FML::GRID {
             // One vector reduction for the whole plan, instead of a reduction at every peer step/call.
             for (int step = 1; step < tasks; ++step)
                 max_per_step[step] = send_count[int((static_cast<long long>(rank) + step) % tasks)];
-            MPI_Allreduce(MPI_IN_PLACE, max_per_step.data(), tasks, MPI_UNSIGNED_LONG_LONG, MPI_MAX, FML::communicator);
+            FML::MaxArrayOverTasks(max_per_step.data(), size_t(tasks));
 #endif
         }
 

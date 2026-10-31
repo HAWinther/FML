@@ -985,14 +985,7 @@ namespace FML {
                     minima.push_back(i);
             std::vector<long long int> nminima_per_task(FML::NTasks, 0);
             nminima_per_task[FML::ThisTask] = (long long int)(minima.size());
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE,
-                          nminima_per_task.data(),
-                          FML::NTasks,
-                          MPI_LONG_LONG,
-                          MPI_SUM,
-                          FML::communicator);
-#endif
+            FML::SumArrayOverTasks(nminima_per_task.data(), nminima_per_task.size());
             FML::COMMUNICATION::checked_size_layout(
                 std::vector<FML::COMMUNICATION::Count>(nminima_per_task.begin(), nminima_per_task.end()),
                 size_t(LLONG_MAX));
@@ -1105,17 +1098,7 @@ namespace FML {
                 *links = std::move(local_links);
 #endif
             }
-#ifdef USE_MPI
-            for (size_t offset = 0; offset < leak_quantity.size(); offset += (size_t(1) << 28)) {
-                const int count = int(std::min(size_t(1) << 28, leak_quantity.size() - offset));
-                MPI_Allreduce(MPI_IN_PLACE,
-                              leak_quantity.data() + offset,
-                              count,
-                              MPI_DOUBLE,
-                              MPI_MIN,
-                              FML::communicator);
-            }
-#endif
+            FML::MinArrayOverTasks(leak_quantity.data(), leak_quantity.size());
 
             // Store the labels in the tessellation
             for (size_t i = 0; i < NumPart; i++)
@@ -1232,14 +1215,8 @@ namespace FML {
             if (FML::ThisTask == 0 and ncircumcenter_failed > 0)
                 std::cout << "[WatershedGeneral] Warning: could not compute the circumcenter for "
                           << ncircumcenter_failed << " basins, using the position of the minimum for these\n";
-#ifdef USE_MPI
-            for (auto * vec : {&pos_minima, &pos_circumcenter}) {
-                for (size_t offset = 0; offset < vec->size(); offset += (size_t(1) << 28)) {
-                    const int count = int(std::min(size_t(1) << 28, vec->size() - offset));
-                    MPI_Allreduce(MPI_IN_PLACE, vec->data() + offset, count, MPI_DOUBLE, MPI_SUM, FML::communicator);
-                }
-            }
-#endif
+            for (auto * vec : {&pos_minima, &pos_circumcenter})
+                FML::SumArrayOverTasks(vec->data(), vec->size());
 
             // Make the groups and bin up the particles
             watershed_groups.resize(ntotal_minima);

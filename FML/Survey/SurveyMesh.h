@@ -228,18 +228,7 @@ namespace FML::SURVEY {
                 return -1;
             return int(std::upper_bound(edges.begin(), edges.end(), value) - edges.begin() - 1);
         }
-        inline void sum(std::vector<double> & a) {
-#ifdef USE_MPI
-            // Chunked even for ancillary bin/moment arrays.
-            for (size_t offset = 0; offset < a.size();) {
-                const int n = int(std::min(a.size() - offset, size_t(INT_MAX)));
-                MPI_Allreduce(MPI_IN_PLACE, a.data() + offset, n, MPI_DOUBLE, MPI_SUM, FML::communicator);
-                offset += n;
-            }
-#else
-            (void)a;
-#endif
-        }
+        inline void sum(std::vector<double> & a) { FML::SumArrayOverTasks(a.data(), a.size()); }
     } // namespace detail
     inline double weight_sum(const std::vector<CatalogPoint> & points) {
         double value = 0;

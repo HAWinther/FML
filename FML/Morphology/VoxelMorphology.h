@@ -191,9 +191,7 @@ namespace FML::MORPHOLOGY {
             counts[2] += c.f;
             counts[3] += c.c;
         }
-#ifdef USE_MPI
-        MPI_Allreduce(MPI_IN_PLACE, counts.data(), 4, MPI_UNSIGNED_LONG_LONG, MPI_SUM, FML::communicator);
-#endif
+        FML::SumArrayOverTasks(counts.data(), counts.size());
         Measures result;
         result.nmesh = n;
         result.boxsize = boxsize;

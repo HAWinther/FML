@@ -101,24 +101,9 @@ namespace FML::COUNTS_IN_CELLS {
         }
         template <class T>
         void sum(std::vector<T> & values, Reduction reduction) {
-#ifdef USE_MPI
+            static_assert(std::is_same_v<T, double> or std::is_same_v<T, Count>);
             if (reduction == Reduction::Global)
-                for (size_t offset = 0; offset < values.size();) {
-                    const int n = int(std::min(values.size() - offset, size_t(INT_MAX)));
-                    MPI_Datatype type;
-                    if constexpr (std::is_same_v<T, double>)
-                        type = MPI_DOUBLE;
-                    else {
-                        static_assert(std::is_same_v<T, Count>);
-                        type = MPI_UNSIGNED_LONG_LONG;
-                    }
-                    MPI_Allreduce(MPI_IN_PLACE, values.data() + offset, n, type, MPI_SUM, FML::communicator);
-                    offset += n;
-                }
-#else
-            (void)values;
-            (void)reduction;
-#endif
+                FML::SumArrayOverTasks(values.data(), values.size());
         }
         inline int threads() {
 #ifdef USE_OMP

@@ -465,9 +465,7 @@ namespace FML {
             }
 
             // Sum over tasks
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, pdf.data(), nbins, MPI_DOUBLE, MPI_SUM, FML::communicator);
-#endif
+            FML::SumArrayOverTasks(pdf.data(), size_t(nbins));
 
             // Normalize so that the PDF integrates to unity
             const double dx = (grid_max - grid_min) / double(nbins);

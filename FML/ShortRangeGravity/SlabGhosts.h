@@ -97,7 +97,7 @@ namespace FML::SHORT_RANGE_GRAVITY {
             const int source = (FML::ThisTask - offset + FML::NTasks) % FML::NTasks;
             std::uint64_t rounds = std::max(send_counts[dest], recv_counts[source]) / batch +
                                    (std::max(send_counts[dest], recv_counts[source]) % batch != 0);
-            MPI_Allreduce(MPI_IN_PLACE, &rounds, 1, MPI_UINT64_T, MPI_MAX, FML::communicator);
+            FML::MaxOverTasks(&rounds);
             std::size_t cursor = 0;
             std::uint64_t sent = 0, received = 0;
             for (std::uint64_t round = 0; round < rounds; ++round) {

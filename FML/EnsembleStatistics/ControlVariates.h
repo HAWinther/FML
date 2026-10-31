@@ -51,15 +51,7 @@ namespace FML::ENSEMBLE {
         }
         template <class T>
         void sum(std::vector<T> & a) {
-#ifdef USE_MPI
-            for (size_t offset = 0; offset < a.size();) {
-                int n = int(std::min(size_t(INT_MAX), a.size() - offset));
-                MPI_Allreduce(MPI_IN_PLACE, a.data() + offset, n, FML::get_mpi_type<T>(), MPI_SUM, FML::communicator);
-                offset += n;
-            }
-#else
-            (void)a;
-#endif
+            FML::SumArrayOverTasks(a.data(), a.size());
         }
         template <class T>
         void broadcast(std::vector<T> & a, int root) {

@@ -74,9 +74,7 @@ namespace FML {
                         seedtable[i] = (unsigned int)(INT_MAX * rng->generate_uniform());
                     }
                 }
-#ifdef USE_MPI
-                MPI_Allreduce(MPI_IN_PLACE, seedtable.data(), Nmesh, MPI_UNSIGNED, MPI_SUM, FML::communicator);
-#endif
+                FML::SumArrayOverTasks(seedtable.data(), size_t(Nmesh));
                 // Make random generators for each slice to ensure we get the same
                 // result no matter how many threads we use
                 std::vector<std::shared_ptr<RandomGenerator>> rngs(Local_nx);
@@ -205,9 +203,7 @@ namespace FML {
                         seedtable[i] = (unsigned int)(INT_MAX * rng->generate_uniform());
                     }
                 }
-#ifdef USE_MPI
-                MPI_Allreduce(MPI_IN_PLACE, seedtable.data(), num_seeds, MPI_UNSIGNED, MPI_SUM, FML::communicator);
-#endif
+                FML::SumArrayOverTasks(seedtable.data(), size_t(num_seeds));
 
                 // Generate gaussian random field in k-space
                 std::vector<int> coord(N, 0), mirrorcoord(N, 0);
@@ -389,14 +385,7 @@ namespace FML {
                                 (unsigned int)(INT_MAX * rng->generate_uniform());
                     }
 
-#ifdef USE_MPI
-                MPI_Allreduce(MPI_IN_PLACE,
-                              seedtable.data(),
-                              int(seed_count),
-                              MPI_UNSIGNED,
-                              MPI_SUM,
-                              FML::communicator);
-#endif
+                FML::SumArrayOverTasks(seedtable.data(), size_t(seed_count));
 
                 // If we use GSL make a spline (std::function can be slow) otherwise this is just a copy
                 // of the function itself

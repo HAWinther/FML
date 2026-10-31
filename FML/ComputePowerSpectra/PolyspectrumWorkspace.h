@@ -145,14 +145,7 @@ namespace FML::CORRELATIONFUNCTIONS::detail {
         std::array<FML::COMMUNICATION::Count, 11> values{};
         for (size_t i = 0; i < fields.size(); ++i)
             values[i] = *fields[i];
-#ifdef USE_MPI
-        MPI_Allreduce(MPI_IN_PLACE,
-                      values.data(),
-                      int(values.size()),
-                      MPI_UNSIGNED_LONG_LONG,
-                      MPI_MAX,
-                      FML::communicator);
-#endif
+        FML::MaxArrayOverTasks(values.data(), values.size());
         int supplied = bins.options.fft_workspace_allowance_bytes.has_value();
         FML::MinOverTasks(&supplied);
         FML::COMMUNICATION::Count total = 0;

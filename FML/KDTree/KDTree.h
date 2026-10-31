@@ -513,17 +513,8 @@ namespace FML {
 
             GenericPairBinner(tracer1, npart1, tracer2, npart2, rmax, periodic, binning_function);
 
-#ifdef USE_MPI
-            // One reduction of all the profiles (in chunks that fit in an int)
-            const size_t chunk = size_t(std::numeric_limits<int>::max() / 2);
-            for (size_t start = 0; start < counts.size(); start += chunk)
-                MPI_Allreduce(MPI_IN_PLACE,
-                              counts.data() + start,
-                              int(std::min(chunk, counts.size() - start)),
-                              MPI_DOUBLE,
-                              MPI_SUM,
-                              FML::communicator);
-#endif
+            // One reduction of all the profiles
+            FML::SumArrayOverTasks(counts.data(), counts.size());
 
             individual_density_profiles = std::vector<DVector>(npart1, DVector(nbins, 0.0));
             const double rho2_average = double(npart2);

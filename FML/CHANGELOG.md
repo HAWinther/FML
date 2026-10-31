@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Global: library reductions instead of hand-written MPI_Allreduce
+- New `FML::MinArrayOverTasks` / `FML::MaxArrayOverTasks` (chunked, like `SumArrayOverTasks`, which now shares their
+  implementation). 45 hand-written `MPI_Allreduce` calls (min/max/sum of single values and arrays) in Global.cpp,
+  MemoryLogging, KDTree, FoF, VoxelVoidFinder, FourierResampling, SmoothingFourier, PeriodicDelaunay,
+  EnvironmentClustering, VoxelMorphology, SurveyMesh, GaussianRandomField, SpatialStatistics, ControlVariates,
+  PowerSpectrumBinning, PolyspectrumWorkspace, SlabGhosts, MCMC, Performance, examples and tests now call
+  `FML::Min/Max/SumOverTasks` and `FML::Sum/Min/MaxArrayOverTasks`. Same MPI operations, results unchanged.
+- `Global.h` includes `MemoryLogging.h` after the reductions (MemoryLogging uses them); `MemoryLogging.h` must be
+  included after `Global.h` (compile-time check).
+
 ### `get_extra_slices` replaces `get_extra_slices_needed_for_density_assignment`
 - `FML::INTERPOLATION::get_extra_slices(density_assignment_method)` returns the extra slices {left, right} an
   FFTWGrid needs for a density assignment / interpolation method (NGP, CIC, TSC, PCS, PQS), as before.

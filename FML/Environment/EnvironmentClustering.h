@@ -216,18 +216,7 @@ namespace FML::ENVIRONMENT {
         out.delta.resize(centers.size());
         for (size_t i = 0; i < owned.size(); ++i)
             out.counts[owned[i]] = counts[0][i];
-#ifdef USE_MPI
-        for (size_t offset = 0; offset < out.counts.size();) {
-            int n = int(std::min(size_t(INT_MAX), out.counts.size() - offset));
-            MPI_Allreduce(MPI_IN_PLACE,
-                          out.counts.data() + offset,
-                          n,
-                          MPI_UNSIGNED_LONG_LONG,
-                          MPI_SUM,
-                          FML::communicator);
-            offset += size_t(n);
-        }
-#endif
+        FML::SumArrayOverTasks(out.counts.data(), out.counts.size());
         valid = true;
         for (size_t i = 0; i < centers.size(); ++i) {
             out.delta[i] = double(out.counts[i]) / (double(tracers.size() - size_t(excluded[i])) * fraction) - 1;

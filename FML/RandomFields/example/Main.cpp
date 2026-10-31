@@ -315,11 +315,9 @@ int main() {
             delta_max = delta;
         delta_mean += delta;
     }
-#ifdef USE_MPI
-    MPI_Allreduce(MPI_IN_PLACE, &delta_min, 1, MPI_DOUBLE, MPI_MIN, FML::communicator);
-    MPI_Allreduce(MPI_IN_PLACE, &delta_max, 1, MPI_DOUBLE, MPI_MAX, FML::communicator);
-    MPI_Allreduce(MPI_IN_PLACE, &delta_mean, 1, MPI_DOUBLE, MPI_SUM, FML::communicator);
-#endif
+    FML::MinOverTasks(&delta_min);
+    FML::MaxOverTasks(&delta_max);
+    FML::SumOverTasks(&delta_mean);
     delta_mean /= std::pow(grid.get_nmesh(), Ndim);
 
     if (FML::ThisTask == 0)
@@ -338,9 +336,7 @@ int main() {
             count[index] += weight;
         }
     }
-#ifdef USE_MPI
-    MPI_Allreduce(MPI_IN_PLACE, count.data(), nbins, MPI_DOUBLE, MPI_SUM, FML::communicator);
-#endif
+    FML::SumArrayOverTasks(count.data(), count.size());
 
     //=========================================================================
     // Output PDF of the density field

@@ -47,9 +47,7 @@ void RunTests() {
     std::vector<int> n_per_task(FML::NTasks + 1, 0);
     n_per_task[FML::ThisTask] = local_nx;
     n_per_task[FML::NTasks] = local_nx;
-#ifdef USE_MPI
-    MPI_Allreduce(MPI_IN_PLACE, n_per_task.data(), FML::NTasks + 1, MPI_INT, MPI_SUM, FML::communicator);
-#endif
+    FML::SumArrayOverTasks(n_per_task.data(), n_per_task.size());
     assert(n_per_task[FML::NTasks] == Nmesh);
 
     int nbefore = 0;

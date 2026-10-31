@@ -373,17 +373,12 @@ int main(int argc, char ** argv) {
         FML::COMMUNICATION::require_count(good, "benchmark correctness/counter check failed");
         auto sums = counters.values, maxima = counters.values;
 #ifdef USE_MPI
-        MPI_Allreduce(MPI_IN_PLACE,
-                      maxima.data(),
-                      int(maxima.size()),
-                      MPI_UNSIGNED_LONG_LONG,
-                      MPI_MAX,
-                      FML::communicator);
+        FML::MaxArrayOverTasks(maxima.data(), maxima.size());
         bool sums_fit = true;
         for (auto value : maxima)
             sums_fit &= value <= std::numeric_limits<Count>::max() / Count(FML::NTasks);
         FML::COMMUNICATION::require_count(sums_fit, "rank-summed counter upper bound exceeds supported range");
-        MPI_Allreduce(MPI_IN_PLACE, sums.data(), int(sums.size()), MPI_UNSIGNED_LONG_LONG, MPI_SUM, FML::communicator);
+        FML::SumArrayOverTasks(sums.data(), sums.size());
 #endif
         FML::COMMUNICATION::require_count(sums[size_t(Counter::PayloadSentBytes)] ==
                                               sums[size_t(Counter::PayloadReceivedBytes)],

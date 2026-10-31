@@ -148,14 +148,7 @@ namespace FML {
             // Give the minima an ID that is unique across tasks
             std::vector<long long int> nminima_per_task(FML::NTasks, 0);
             nminima_per_task[FML::ThisTask] = (long long int)(minima.size());
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE,
-                          nminima_per_task.data(),
-                          FML::NTasks,
-                          MPI_LONG_LONG,
-                          MPI_SUM,
-                          FML::communicator);
-#endif
+            FML::SumArrayOverTasks(nminima_per_task.data(), nminima_per_task.size());
             FML::COMMUNICATION::checked_size_layout(
                 std::vector<FML::COMMUNICATION::Count>(nminima_per_task.begin(), nminima_per_task.end()),
                 size_t(LLONG_MAX));
@@ -254,15 +247,7 @@ namespace FML {
                 c[3] = q.get_real({int(ix), int(iy), int(iz)});
             }
 
-#ifdef USE_MPI
-            auto allreduce = [](std::vector<double> & v, MPI_Op op) {
-                for (size_t offset = 0; offset < v.size(); offset += (size_t(1) << 28)) {
-                    const int count = int(std::min(size_t(1) << 28, v.size() - offset));
-                    MPI_Allreduce(MPI_IN_PLACE, v.data() + offset, count, MPI_DOUBLE, op, FML::communicator);
-                }
-            };
-            allreduce(core, MPI_SUM);
-#endif
+            FML::SumArrayOverTasks(core.data(), core.size());
 
             // Bin up: number of voxels, sum of density, barycenter, leak quantity
             std::vector<double> sums(FML::COMMUNICATION::checked_bytes(nzones, 6, std::vector<double>().max_size()),
@@ -304,7 +289,7 @@ namespace FML {
             if (FML::ThisTask == 0 and nunassigned > 0)
                 std::cout << "[VoxelWatershed] Warning: " << nunassigned << " voxels were not assigned to a zone\n";
 #ifdef USE_MPI
-            allreduce(sums, MPI_SUM);
+            FML::SumArrayOverTasks(sums.data(), sums.size());
             // Gather the links on task 0
             if (not serial) {
                 links = FML::COMMUNICATION::gather_records_checked(links);

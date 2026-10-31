@@ -829,9 +829,7 @@ namespace FML {
             std::vector<long long int> addfofid(FML::NTasks, 0);
             for (int i = FML::ThisTask + 1; i < FML::NTasks; i++)
                 addfofid[i] = (long long int)FoFID;
-#ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, addfofid.data(), NTasks, MPI_LONG_LONG, MPI_SUM, FML::communicator);
-#endif
+            FML::SumArrayOverTasks(addfofid.data(), addfofid.size());
 
             // Finalize computation of halos
             const size_t add = size_t(addfofid[FML::ThisTask]);
