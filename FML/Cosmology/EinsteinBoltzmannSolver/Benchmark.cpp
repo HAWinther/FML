@@ -9,6 +9,7 @@
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
+#include <FML/Cosmology/EinsteinBoltzmannSolver/EinsteinBoltzmannSolver.h>
 #include <FML/Cosmology/Background/CosmologyParameters.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
@@ -101,24 +102,22 @@ int main(int argc, char ** argv) {
         if (!want.empty() && std::find(want.begin(), want.end(), cfg.name) == want.end())
             continue;
         std::cout << "\n=== " << cfg.name << ": " << cfg.description << " ===\n" << std::flush;
-        CosmologyParameters p = CosmologyParameters::fiducial();
-        PerturbationOptions po;
-        PowerSpectrumOptions so;
-        cfg.set(p, po, so);
+        RunSettings rs;
+        rs.cosmo = CosmologyParameters::fiducial();
+        cfg.set(rs.cosmo, rs.pert, rs.ps);
+        const CosmologyParameters & p = rs.cosmo;
 
         Utils::Timer total, t;
-        BackgroundCosmology cosmo(p);
-        cosmo.solve();
-        RecombinationHistory rec(cosmo);
-        rec.solve();
+        EinsteinBoltzmannSolver ebs(rs);
+        ebs.set_verbose(false);
+        ebs.solve(EinsteinBoltzmannSolver::Stage::Recombination);
         const double t_bg = t.elapsed();
         t.start();
-        Perturbations pert(cosmo, rec, po);
-        pert.solve();
+        ebs.solve(EinsteinBoltzmannSolver::Stage::Perturbations);
         const double t_pert = t.elapsed();
         t.start();
-        PowerSpectrum ps(cosmo, rec, pert, so);
-        ps.solve();
+        ebs.solve(EinsteinBoltzmannSolver::Stage::Spectra);
+        const auto & ps = ebs.power_spectrum();
         const double t_los = t.elapsed();
         double t_2p = 0.0;
         if (cfg.twopoint) {

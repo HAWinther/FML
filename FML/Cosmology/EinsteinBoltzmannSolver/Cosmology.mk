@@ -6,9 +6,10 @@
 
 COSMO_MODULES := Cosmology/Background Cosmology/Recombination \
                  Cosmology/Perturbations Cosmology/Spectra Cosmology/EinsteinBoltzmannSolver
-# All .cpp files of the solver (ParameterFile.cpp from EinsteinBoltzmannSolver, not its programs)
+# All .cpp files of the solver (ParameterFile.cpp and EinsteinBoltzmannSolver.cpp from EinsteinBoltzmannSolver, not
+# its programs)
 COSMO_OBJS := $(notdir $(patsubst %.cpp,%.o,$(wildcard $(addsuffix /*.cpp,$(addprefix $(FML_ROOT)/,$(filter-out Cosmology/EinsteinBoltzmannSolver,$(COSMO_MODULES))))))) \
-              ParameterFile.o
+              ParameterFile.o EinsteinBoltzmannSolver.o
 
 # FML modules the solver uses (FML_MODULES must include them: $(COSMO_FML_MODULES))
 COSMO_FML_MODULES := Spline ODESolver Math

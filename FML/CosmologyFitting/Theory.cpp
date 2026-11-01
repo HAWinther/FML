@@ -1,8 +1,5 @@
 #include <FML/CosmologyFitting/Theory.h>
-#include <FML/Cosmology/Perturbations/Isocurvature.h>
-#include <FML/Cosmology/Perturbations/Perturbations.h>
-#include <FML/Cosmology/Spectra/PowerSpectrum.h>
-#include <FML/Cosmology/Perturbations/Tensors.h>
+#include <FML/Cosmology/EinsteinBoltzmannSolver/EinsteinBoltzmannSolver.h>
 #include <FML/Cosmology/Common.h>
 
 #include <cmath>
@@ -13,8 +10,14 @@ namespace FML::COSMOLOGY::FITTING {
     using namespace Constants;
 
     Theory::Theory(const RunSettings & settings, Options options) : s(settings), opt(options) {
-        bg = std::make_unique<BackgroundCosmology>(s.cosmo);
-        bg->solve(s.bg_x_start, s.bg_x_end, s.bg_n_points);
+        RunSettings run = s; // the CMB is always computed, lensed, to cmb_ell_max
+        run.compute_cells = true;
+        run.ps.lensing = true;
+        run.ps.ell_max = opt.cmb_ell_max;
+        ebs = std::make_unique<EinsteinBoltzmannSolver>(run);
+        ebs->set_verbose(false);
+        ebs->solve(EinsteinBoltzmannSolver::Stage::Background);
+        bg = &ebs->background();
     }
 
     Theory::~Theory() = default;
@@ -172,11 +175,8 @@ namespace FML::COSMOLOGY::FITTING {
 
     // --- CMB -------------------------------------------------------------------------------------------------
     const RecombinationHistory & Theory::recombination_reionized() const {
-        if (!rec_full) {
-            rec_full = std::make_unique<RecombinationHistory>(*bg, s.rec);
-            rec_full->solve();
-        }
-        return *rec_full;
+        ebs->solve(EinsteinBoltzmannSolver::Stage::Recombination);
+        return ebs->recombination();
     }
 
     double Theory::tau_reio() const {
@@ -187,46 +187,25 @@ namespace FML::COSMOLOGY::FITTING {
     const CMBSpectra & Theory::cmb() const {
         if (spectra)
             return *spectra;
-        const auto & r = recombination_reionized();
-        const auto comp_opts = Isocurvature::components(s.cosmo, s.pert);
-        pert = std::make_unique<Perturbations>(*bg, r, comp_opts[0]);
-        pert->solve();
-        std::vector<std::unique_ptr<Perturbations>> extra; // isocurvature components
-        for (size_t i = 1; i < comp_opts.size(); i++) {
-            extra.push_back(std::make_unique<Perturbations>(*bg, r, comp_opts[i]));
-            extra.back()->solve();
-        }
-        PowerSpectrumOptions o = s.ps;
-        o.lensing = true;
-        o.ell_max = opt.cmb_ell_max;
-        ps = std::make_unique<PowerSpectrum>(*bg, r, *pert, o);
-        for (const auto & e : extra)
-            ps->add_component(*e);
-        if (s.cosmo.r > 0.0) {
-            tens = std::make_unique<Tensors>(*bg, r, s.tensor);
-            tens->solve();
-            ps->set_tensors(tens.get());
-        }
-        ps->solve();
+        ebs->solve();
+        const auto & ps = ebs->power_spectrum();
         auto c = std::make_unique<CMBSpectra>();
         const int L = opt.cmb_ell_max;
         c->ell_max = L;
         for (auto * v : {&c->tt, &c->ee, &c->te, &c->bb, &c->pp})
             v->assign(L + 1, 0.0);
         for (int l = 2; l <= L; l++) {
-            c->tt[l] = ps->get_Dell_TT_lensed(l);
-            c->ee[l] = ps->get_Dell_EE_lensed(l);
-            c->te[l] = ps->get_Dell_TE_lensed(l);
-            c->bb[l] = ps->get_Dell_BB_lensed(l);
+            c->tt[l] = ps.get_Dell_TT_lensed(l);
+            c->ee[l] = ps.get_Dell_EE_lensed(l);
+            c->te[l] = ps.get_Dell_TE_lensed(l);
+            c->bb[l] = ps.get_Dell_BB_lensed(l);
             const double ll = double(l) * (l + 1.0);
-            c->pp[l] = ll * ll * ps->get_Cell_phiphi(l) / (2.0 * M_PI);
+            c->pp[l] = ll * ll * ps.get_Cell_phiphi(l) / (2.0 * M_PI);
         }
-        sigma8_ = ps->get_sigma8(0.0);
+        sigma8_ = ps.get_sigma8(0.0);
         spectra = std::move(c);
         // the spectra are all that is needed: free the perturbations (the theory may be cached by the sampler)
-        ps.reset();
-        tens.reset();
-        pert.reset();
+        ebs->reset(EinsteinBoltzmannSolver::Stage::Perturbations);
         return *spectra;
     }
 

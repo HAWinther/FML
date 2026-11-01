@@ -196,6 +196,19 @@ computes Δχ² of any run against a reference (see its header for the reference
 | default | 70 s | 0.02 | 5.4 |
 | `precision = fast` | 13–16 s | 0.22 | 5.8 |
 
+## Using the solver from code
+
+```cpp
+#include <FML/Cosmology/EinsteinBoltzmannSolver/EinsteinBoltzmannSolver.h>
+using namespace FML::COSMOLOGY;
+
+auto ebs = EinsteinBoltzmannSolver::from_file("params/planck2018.ini", {"lensing=true"});
+ebs.solve();                                    // or solve(EinsteinBoltzmannSolver::Stage::Perturbations)
+double sigma8 = ebs.power_spectrum().get_sigma8();
+const auto & bg = ebs.background();             // recombination(), perturbations(), tensors() likewise
+ebs.output();                                   // the files enabled in the settings, in output_dir
+```
+
 ## Code layout
 
 | File (in `FML/Cosmology/`) | Contents |
@@ -217,7 +230,8 @@ computes Δχ² of any run against a reference (see its header for the reference
 | `Background/BBN.h/.cpp` | Primordial helium from the BBN table (`external/bbn/`) |
 | `Spectra/Lensing.h/.cpp` | Lensing of the CMB spectra (Challinor & Lewis 2005), Wigner d-functions |
 | `Spectra/TwoPoint.h/.cpp` | Two-point numerics: Legendre/Wigner sums, Filon transform for ξ(r), σ_R, redshift windows |
-| `EinsteinBoltzmannSolver/Main.cpp` | `./cmb`: runs the pipeline from a parameter file |
+| `EinsteinBoltzmannSolver/EinsteinBoltzmannSolver.{h,cpp}` | the whole solver in one class: settings, `solve()` (all stages or up to one), accessors, `output()` |
+| `EinsteinBoltzmannSolver/Main.cpp` | `./cmb`: reads a parameter file and runs an `EinsteinBoltzmannSolver` |
 | `EinsteinBoltzmannSolver/tests/` | One unit-test program per module and model (~650 checks): analytic limits, conservation laws, convergence, internal consistency; `test_regression` compares key outputs of several configurations and all models with stored values (`tests/reference/`) |
 | `EinsteinBoltzmannSolver/Milestones.cpp` | `./milestones`: all models and numbers for the report (`report/data/`) |
 | `EinsteinBoltzmannSolver/Benchmark.cpp` | `./benchmark [config ...]`: run time per stage (`data/benchmark.txt`) |

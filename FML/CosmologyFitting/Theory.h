@@ -45,9 +45,7 @@
 #include <vector>
 
 namespace FML::COSMOLOGY {
-    class Perturbations;
-    class PowerSpectrum;
-    class Tensors;
+    class EinsteinBoltzmannSolver;
 } // namespace FML::COSMOLOGY
 
 namespace FML::COSMOLOGY::FITTING {
@@ -114,7 +112,10 @@ namespace FML::COSMOLOGY::FITTING {
       private:
         RunSettings s;
         Options opt;
-        std::unique_ptr<BackgroundCosmology> bg;
+        // The solver (background on construction, recombination with reionization and the CMB on first use; the
+        // perturbations are freed once the spectra are extracted) and its background
+        mutable std::unique_ptr<EinsteinBoltzmannSolver> ebs;
+        const BackgroundCosmology * bg = nullptr;
         mutable std::unique_ptr<RecombinationHistory> rec;
         mutable double zs = -1.0, rs = -1.0, zd = -1.0, rd = -1.0;
         void compute_star() const;
@@ -125,10 +126,6 @@ namespace FML::COSMOLOGY::FITTING {
         double D_M_chen(double z) const;
         double r_s_chen(double z) const;
         mutable double R_c = -1.0, lA_c = -1.0;
-        mutable std::unique_ptr<RecombinationHistory> rec_full;
-        mutable std::unique_ptr<Perturbations> pert;
-        mutable std::unique_ptr<PowerSpectrum> ps;
-        mutable std::unique_ptr<Tensors> tens;
         mutable std::unique_ptr<CMBSpectra> spectra;
         mutable double sigma8_ = 0.0;
         std::map<std::string, double> nuis;

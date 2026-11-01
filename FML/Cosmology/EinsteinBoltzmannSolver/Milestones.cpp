@@ -13,6 +13,7 @@
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
+#include <FML/Cosmology/EinsteinBoltzmannSolver/EinsteinBoltzmannSolver.h>
 #include <FML/Cosmology/Background/CosmologyParameters.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
@@ -196,15 +197,11 @@ static void milestone2(const BackgroundCosmology & cosmo) {
 // =============================================================================
 // Milestones III and IV
 // =============================================================================
-static void milestone34(const BackgroundCosmology & cosmo) {
-    RecombinationHistory rec(cosmo, peebles());
-    rec.solve();
-
-    PerturbationOptions po;
-    po.store_source_components = true;
-    Perturbations pert(cosmo, rec, po);
-    pert.solve();
-    pert.info();
+static void milestone34(EinsteinBoltzmannSolver & ebs) {
+    ebs.solve(EinsteinBoltzmannSolver::Stage::Perturbations);
+    const auto & cosmo = ebs.background();
+    const auto & rec = ebs.recombination();
+    const auto & pert = ebs.perturbations();
 
     Numbers n3;
     for (double k_Mpc : {0.001, 0.01, 0.1, 0.3}) {
@@ -223,13 +220,10 @@ static void milestone34(const BackgroundCosmology & cosmo) {
     n3.write("m3_numbers.txt");
     std::cout << "Milestone III: done\n";
 
-    // Milestone IV (ell up to 2500 to cover the Planck data; k_max = 0.3/Mpc gives k eta0 ~ 4300)
-    PowerSpectrumOptions so_fid;
-    so_fid.ell_max = 2500;
-    so_fid.lensing = true; // also C_ell^phiphi and the lensed spectra (unlensed computed to ell = 3333)
-    PowerSpectrum ps(cosmo, rec, pert, so_fid);
-    ps.solve();
-    ps.info();
+    // Milestone IV (the settings of the fiducial run are in main)
+    ebs.solve();
+    const auto & ps = ebs.power_spectrum();
+    const PowerSpectrumOptions & so_fid = ebs.settings().ps;
     ps.output_cells(DIR + "cells_fiducial.txt");
     ps.output_cells_lensed(DIR + "cells_lensed_fiducial.txt");
     ps.output_matter_power(DIR + "matter_power_fiducial.txt");
@@ -278,23 +272,20 @@ static void milestone34(const BackgroundCosmology & cosmo) {
 // Toy cosmology of the course reference figures: Omega_b = 0.05, Omega_cdm = 0.45,
 // Omega_Lambda = 0.5, h = 0.7, no neutrinos, Yp = 0, no reionization, temperature only
 static void toy_cosmology() {
-    CosmologyParameters p;
+    RunSettings s;
+    CosmologyParameters & p = s.cosmo;
     p.h = 0.7;
     p.OmegaB = 0.05;
     p.OmegaCDM = 0.45;
     p.Neff = 0.0;
     p.Yp = 0.0;
     p.reionization = false;
-    BackgroundCosmology cosmo(p);
-    cosmo.solve();
-    RecombinationHistory rec(cosmo, peebles());
-    rec.solve();
-    PerturbationOptions po;
-    po.polarization = false;
-    Perturbations pert(cosmo, rec, po);
-    pert.solve();
-    PowerSpectrum ps(cosmo, rec, pert);
-    ps.solve();
+    s.rec = peebles();
+    s.pert.polarization = false;
+    EinsteinBoltzmannSolver ebs(s);
+    ebs.set_verbose(false);
+    ebs.solve();
+    const auto & ps = ebs.power_spectrum();
     ps.output_cells(DIR + "cells_toy.txt");
     ps.output_matter_power(DIR + "matter_power_toy.txt");
     std::cout << "Toy cosmology: done\n";
@@ -304,17 +295,22 @@ int main() {
     Utils::Timer timer("milestones");
     std::filesystem::create_directories(DIR);
 
-    CosmologyParameters params = CosmologyParameters::fiducial();
-    params.print();
-    params.write(DIR + "params.txt");
+    // The fiducial run: Peebles recombination, source components stored (for the decomposition of milestone IV),
+    // ell up to 2500 to cover the Planck data (k_max = 0.3/Mpc gives k eta0 ~ 4300), lensing (also C_ell^phiphi and
+    // the lensed spectra; the unlensed computed to ell = 3333)
+    RunSettings s;
+    s.cosmo = CosmologyParameters::fiducial();
+    s.rec = peebles();
+    s.pert.store_source_components = true;
+    s.ps.ell_max = 2500;
+    s.ps.lensing = true;
+    s.cosmo.write(DIR + "params.txt");
+    EinsteinBoltzmannSolver ebs(s);
+    ebs.solve(EinsteinBoltzmannSolver::Stage::Background);
 
-    BackgroundCosmology cosmo(params);
-    cosmo.solve();
-    cosmo.info();
-
-    milestone1(cosmo);
-    milestone2(cosmo);
-    milestone34(cosmo);
+    milestone1(ebs.background());
+    milestone2(ebs.background());
+    milestone34(ebs);
     toy_cosmology();
 
     timer.print();
