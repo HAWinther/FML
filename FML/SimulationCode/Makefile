@@ -45,7 +45,7 @@ endif
 RUN_SIMULATION_OBJS := RunSimulation_COLAScaleDepWithMass.o RunSimulation_COLAWithMass.o RunSimulation_BasicWithMass.o RunSimulation_COLAScaleDep.o RunSimulation_COLA.o RunSimulation_BasicQ.o RunSimulation_Basic.o
 
 # The transfer functions (FML/TransferProviders; with USE_INTERNAL_COSMOLOGY also the solver) are made in TransferInput.o
-nbody: $(INTERNAL_COSMO_OBJS) Main.o $(RUN_SIMULATION_OBJS) TransferInput.o BaryonificationOutput.o Global.o Spline.o ODESolver.o GadgetUtils.o ParameterMap.o FileUtils.o Math.o
+nbody: $(INTERNAL_COSMO_OBJS) Main.o $(RUN_SIMULATION_OBJS) TransferInput.o BaryonificationOutput.o Global.o Spline.o ODESolver.o GadgetUtils.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o
 	$(LINK_EXE)
 
 # Rebuild if build options change

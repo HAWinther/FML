@@ -13,10 +13,10 @@ EXTRA_VPATH := ../src
 test_baryonification_parameters: test_baryonification_parameters.o Global.o
 	$(LINK_EXE)
 
-test_cola_frame: test_cola_frame.o TransferInput.o Global.o Spline.o ODESolver.o ParameterMap.o FileUtils.o Math.o
+test_cola_frame: test_cola_frame.o TransferInput.o Global.o Spline.o ODESolver.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o
 	$(LINK_EXE)
 
-test_models: test_models.o TransferInput.o Global.o Spline.o ODESolver.o ParameterMap.o FileUtils.o Math.o
+test_models: test_models.o TransferInput.o Global.o Spline.o ODESolver.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o
 	$(LINK_EXE)
 
 .PHONY: run

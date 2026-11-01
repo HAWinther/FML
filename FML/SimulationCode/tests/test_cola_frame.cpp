@@ -14,7 +14,7 @@
 // Build and run: make test_cola_frame && ./test_cola_frame (in this folder)
 //==========================================================================
 // (the cosmology before the gravity models and COLA)
-#include "../src/Cosmology_LCDM.h"
+#include "../src/Cosmology.h"
 #include "../src/GravityModel_DGP.h"
 #include "../src/GravityModel_GR.h"
 #include "../src/COLA.h"
@@ -63,7 +63,7 @@ namespace {
     std::shared_ptr<GravityModel<NDIM>> make_model(const std::string & name, bool screening) {
         auto param = base_parameters();
         param["gravity_model_screening"] = screening;
-        auto cosmo = std::make_shared<CosmologyLCDM>();
+        auto cosmo = std::make_shared<Cosmology>("LCDM");
         cosmo->read_parameters(param);
         cosmo->init();
         std::shared_ptr<GravityModel<NDIM>> grav;

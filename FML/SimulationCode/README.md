@@ -46,7 +46,7 @@ How the code is organised:
 
 # Models
 
-The two main concepts in the code is that of a Cosmology and a GravityModel. The former contains all of the background evolution quantities (Hubble function etc.) and the latter everything related to growth of perturbations: LPT growth factors and how to compute forces from the density field. The reason these things are separate is that it makes it possible to combine different thing while keeping the rest fixed. Adding a new model is as simple as making a new class that inherits from the base class Cosmology or GravityModel and implement the relevant functions, adding it to the list in `src/Models.h` and adding the parameters it reads to `src/ParameterSchema.h`.
+The two main concepts in the code is that of a Cosmology and a GravityModel. The former contains all of the background evolution quantities (Hubble function etc.) and the latter everything related to growth of perturbations: LPT growth factors and how to compute forces from the density field. The reason these things are separate is that it makes it possible to combine different thing while keeping the rest fixed. The background expansion comes from FML's background module (`FML/Cosmology/Background`, shared with the Einstein-Boltzmann solver): `src/Cosmology.h` maps `cosmology_model` and its parameters to a model of that module's registry (LCDM, w0waCDM, DGP, JBD, Quintessence, EDE, Tabulated). A new cosmology is a new background model there plus its mapping in `src/Cosmology.h`; a new gravity model is a class that inherits from GravityModel. Add either to the list in `src/Models.h` and the parameters it reads to `src/ParameterSchema.h`.
 
 The models that are currently implemented are
 

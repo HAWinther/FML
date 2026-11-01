@@ -277,7 +277,8 @@ namespace SIMCODE {
                 b.required("cosmology_dgp_OmegaRC",
                            0.0,
                            "The cross-over scale of the self-accelerating DGP model "
-                           "(Omega_rc = 1/(4 rc^2 H0^2))");
+                           "(Omega_rc = 1/(4 rc^2 H0^2)). A cosmological constant makes up E(0) = 1 (a warning if "
+                           "it is not zero; no dark energy for Omega_rc = (1 - Omega_matter - Omega_radiation)^2/4)");
             });
 
             b.section("Gravity model");

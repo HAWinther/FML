@@ -3,8 +3,9 @@
 //   - exponential quintessence and early dark energy against the Einstein-Boltzmann solver's models before the solver
 //     moved onto this module (same parameters, with massive neutrinos and curvature; its old model classes, stored
 //     tables, see SolverReference.h; x in steps of 0.185): E, dlogE/dx, Omega_i, eta, t, chi
-//   - all four quintessence potentials (with phi_ini, dphidlna_ini) and EDE against SimulationCode's
-//     CosmologyQuintessence / CosmologyEDE (massless neutrinos: the same radiation in both)
+//   - all four quintessence potentials (with phi_ini, dphidlna_ini) and EDE against SimulationCode's former
+//     CosmologyQuintessence / CosmologyEDE (its own scalar-field solver, massless neutrinos; values stored in
+//     data/simcode_scalar_fields.txt)
 //   - independent checks: lambda = 0 is LCDM, the Klein-Gordon drho/dx against a finite difference, -1 <= w <= 1,
 //     the inverse-power-law tracker w = -2/(alpha + 2) in matter domination, EDE f_max = f_EDE at z_c, the switch to
 //     the oscillating fluid
@@ -15,8 +16,6 @@
 #include <FML/Cosmology/Background/BackgroundModel_Quintessence.h>
 
 #include "SolverReference.h"
-#include <FML/SimulationCode/src/Cosmology_EDE.h>
-#include <FML/SimulationCode/src/Cosmology_Quintessence.h>
 
 #include <cmath>
 #include <iostream>
@@ -103,29 +102,19 @@ void test_vs_solver() {
 // Against SimulationCode
 // ---------------------------------------------------------------------------------------------------------------------
 
-FML::UTILS::ParameterMap simcode_parameters(const BackgroundParameters & p) {
-    FML::UTILS::ParameterMap m;
-    m["cosmology_OmegaMNu"] = 0.0;
-    m["cosmology_Omegab"] = p.Omega_b;
-    m["cosmology_OmegaCDM"] = p.Omega_cdm;
-    m["cosmology_OmegaK"] = p.Omega_k;
-    m["cosmology_h"] = p.h;
-    m["cosmology_As"] = 2.1e-9;
-    m["cosmology_ns"] = 0.965;
-    m["cosmology_kpivot_mpc"] = 0.05;
-    m["cosmology_Neffective"] = p.N_eff;
-    m["cosmology_TCMB_kelvin"] = p.T_CMB;
-    return m;
-}
-
-// SimulationCode's dark energy (field + bare Lambda) and E against ours
-template <class SimCosmology>
-void compare_with_simcode(const ComponentBackground & bg, SimCosmology & sim, const std::string & label, double tol) {
+// SimulationCode's former dark energy (field + bare Lambda) and E (block `label` of data/simcode_scalar_fields.txt)
+// against ours
+void compare_with_simcode(const ComponentBackground & bg,
+                          const std::string & block_label,
+                          const std::string & label,
+                          double tol) {
+    const FML::TESTS::ReferenceData data(std::string(REFERENCE_DATA_DIR) + "/simcode_scalar_fields.txt");
+    auto block = data.block(block_label);
     double errE = 0.0, errO = 0.0;
-    for (double x = -22.0; x <= 1.5; x += 0.037) {
-        const double a = std::exp(x);
-        errE = std::max(errE, rel(bg.E(x), sim.HoverH0_of_a(a)));
-        errO = std::max(errO, std::abs(bg.Omega(Component::DarkEnergy, x) - sim.get_OmegaLambda(a)));
+    while (not block.done()) {
+        const auto r = block.numbers("x"); // x, E, Omega_DE
+        errE = std::max(errE, rel(bg.E(r[0]), r[1]));
+        errO = std::max(errO, std::abs(bg.Omega(Component::DarkEnergy, r[0]) - r[2]));
     }
     check_local(errE < tol and errO < tol,
                 label + ": E, Omega_DE = SimulationCode (max error " + num(errE, 2) + ", " + num(errO, 2) + ")");
@@ -148,41 +137,23 @@ void test_vs_simcode() {
         {"hilltop", QuintessencePotential::hilltop(1.0, 2.0), 0.1, 0.0},
         {"hilltop", QuintessencePotential::hilltop(2.0, 4.0), -0.5, 0.0},
     };
+    int icase = 0;
     for (const auto & c : cases) {
-        auto m = simcode_parameters(p);
-        m["cosmology_quintessence_potential"] = c.potential;
-        m["cosmology_quintessence_phi_ini"] = c.phi_ini;
-        m["cosmology_quintessence_dphidlna_ini"] = c.dphi_ini;
-        m["cosmology_quintessence_lambda"] = c.V.lambda;
-        m["cosmology_quintessence_alpha"] = c.V.alpha;
-        m["cosmology_quintessence_f"] = c.V.f;
-        m["cosmology_quintessence_mu"] = c.V.mu;
-        m["cosmology_quintessence_p"] = c.V.p;
-        CosmologyQuintessence sim;
-        sim.read_parameters(m);
-        sim.init();
         auto bg = make_quintessence(p, c.V, c.phi_ini, c.dphi_ini);
-        // SimulationCode starts the field at a = 1e-10, we at x = -25: the same except for a kinetic start
+        // SimulationCode started the field at a = 1e-10, we at x = -25: the same except for a kinetic start
         compare_with_simcode(*bg,
-                             sim,
+                             "quintessence " + std::to_string(icase++),
                              "quintessence " + c.V.info() + ", phi_ini = " + num(c.phi_ini, 2) +
                                  ", dphidlna_ini = " + num(c.dphi_ini, 2),
                              c.dphi_ini == 0.0 ? 2e-6 : 1e-4);
     }
     // (n = 1.5 with z_c after equality: allowed by SimulationCode and here, not by the Einstein-Boltzmann solver)
+    int iede = 0;
     for (auto [fEDE, zc, th, n] :
          {std::tuple{0.1, 3500.0, 2.8, 3.0}, {0.05, 20000.0, 2.0, 3.5}, {0.03, 300.0, 2.0, 1.5}}) {
-        auto m = simcode_parameters(p);
-        m["cosmology_ede_fEDE"] = fEDE;
-        m["cosmology_ede_zc"] = zc;
-        m["cosmology_ede_theta_ini"] = th;
-        m["cosmology_ede_n"] = n;
-        CosmologyEDE sim;
-        sim.read_parameters(m);
-        sim.init();
         auto bg = make_ede(p, fEDE, std::log10(zc), th, n);
         compare_with_simcode(*bg,
-                             sim,
+                             "ede " + std::to_string(iede++),
                              "EDE f = " + num(fEDE, 2) + ", z_c = " + num(zc, 5) + ", n = " + num(n, 2),
                              1e-5);
     }

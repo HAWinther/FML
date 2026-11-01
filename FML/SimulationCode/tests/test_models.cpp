@@ -15,9 +15,7 @@
 //
 // Build and run: make test_models && ./test_models (in this folder)
 //==========================================================================
-#include "../src/Cosmology_JBD.h"
-#include "../src/Cosmology_LCDM.h"
-#include "../src/Cosmology_Tabulated.h"
+#include "../src/Cosmology.h"
 #include "../src/GravityModel_GR.h"
 #include "../src/GravityModel_mbeta.h"
 
@@ -70,7 +68,7 @@ int main() {
         param["gravity_model_screening_linear_scale_hmpc"] = 0.1;
         param["gravity_model_screening_efficiency"] = 1.0;
         param["gravity_model_mbeta_params"] = pars;
-        auto cosmo = std::make_shared<CosmologyLCDM>();
+        auto cosmo = std::make_shared<Cosmology>("LCDM");
         auto grav = std::make_shared<GravityModelmbeta<NDIM>>(cosmo);
         quietly([&]() {
             cosmo->read_parameters(param);
@@ -97,7 +95,7 @@ int main() {
     for (auto & r : refs) {
         // OmegaM = OmegaCDM + Omegab (0.05)
         auto param = cosmology_parameters(r[0] - 0.05, r[1]);
-        auto cosmo = std::make_shared<CosmologyLCDM>();
+        auto cosmo = std::make_shared<Cosmology>("LCDM");
         quietly([&]() {
             cosmo->read_parameters(param);
             cosmo->init();
@@ -112,13 +110,12 @@ int main() {
     }
 
     // 3. Neutrino Boltzmann integrals F(y) = int x^2 sqrt(x^2 + y^2) / (e^x + 1) dx and
-    //    G(y) = int x^4 / (3 sqrt(x^2 + y^2)) / (e^x + 1) dx over F(0) (reference: scipy quad). The splines used to
-    //    stop at y = 1000 and hold the end value of F / (F(0) + C y) (0.28% low at y = 1e4) and of G (G falls as 1/y:
-    //    10x too large at y = 1e4)
+    //    G(y) = int x^4 / (3 sqrt(x^2 + y^2)) / (e^x + 1) dx over F(0) (reference: scipy quad), now those of the
+    //    background module (FermiDiracIntegrals I_rho, I_p), and the massive neutrinos of the background
     {
         auto param = cosmology_parameters(0.25);
         param["cosmology_OmegaMNu"] = 0.6 / 93.14 / (0.7 * 0.7); // Mnu = 0.6 eV
-        auto cosmo = std::make_shared<CosmologyLCDM>();
+        auto cosmo = std::make_shared<Cosmology>("LCDM");
         quietly([&]() {
             cosmo->read_parameters(param);
             cosmo->init();
@@ -133,8 +130,9 @@ int main() {
                                                          {1e6, 317321.8672380953, 1.3686533914536596e-06}};
         const double F0 = 7.0 / 120.0 * std::pow(M_PI, 4);
         for (auto & r : nu_refs) {
-            const double errF = cosmo->get_neutrino_boltzmann_integral_energydensity(r[0]) / F0 / r[1] - 1.0;
-            const double errG = cosmo->get_neutrino_boltzmann_integral_pressure(r[0]) / F0 / r[2] - 1.0;
+            const auto & fd = FML::COSMOLOGY::BACKGROUND::FermiDiracIntegrals::get();
+            const double errF = fd.I_rho(r[0]) / F0 / r[1] - 1.0;
+            const double errG = fd.I_p(r[0]) / F0 / r[2] - 1.0;
             check_local(std::fabs(errF) < 1e-5 and std::fabs(errG) < 1e-4,
                         "neutrino F(y), G(y) at y = " + std::to_string(r[0]) +
                             ": F / scipy - 1 = " + std::to_string(errF) + ", G / scipy - 1 = " + std::to_string(errG));
@@ -142,8 +140,10 @@ int main() {
         // Non-relativistic today and later: rho_nu ~ a^-3 (dlog(rho_nu)/dloga = -3 + O(1/y^2)), w_nu ~ 1/y
         for (double a : {1.0, 10.0}) {
             const double y = cosmo->get_Mnu_eV() / cosmo->get_N_nu() / cosmo->get_neutrino_temperature_eV(a);
-            const double dlogrho = cosmo->get_drhoNudloga_exact(a) / cosmo->get_rhoNu_exact(a);
-            const double w = cosmo->get_pNu_exact(a) / cosmo->get_rhoNu_exact(a);
+            const auto nu = FML::COSMOLOGY::BACKGROUND::Component::MassiveNeutrinos;
+            const auto & bg = cosmo->background();
+            const double dlogrho = bg.drhodx(nu, std::log(a)) / bg.rho(nu, std::log(a));
+            const double w = bg.w(nu, std::log(a));
             // <p/rho> -> <x^2>/(3 y^2) = I4 / (3 I2 y^2) with I4 / I2 = 15 zeta(5) / zeta(3)
             const double w_expected = 15.0 * 1.03692775514336 / 1.20205690315959 / (3.0 * y * y);
             check_local(std::fabs(dlogrho + 3.0) < 1e-5 and std::fabs(w / w_expected - 1.0) < 1e-3,
@@ -164,7 +164,7 @@ int main() {
     //    of the spline gave dlogH/dloga 6e-3 off (w_DE(z = 0) = -0.994) for this table with dlog(a) = 0.023
     {
         auto param = cosmology_parameters(0.25);
-        auto lcdm = std::make_shared<CosmologyLCDM>();
+        auto lcdm = std::make_shared<Cosmology>("LCDM");
         quietly([&]() {
             lcdm->read_parameters(param);
             lcdm->init();
@@ -181,7 +181,7 @@ int main() {
         }
         param["cosmology_tabulated_filename"] = filename;
         param["cosmology_tabulated_format"] = std::string("H");
-        auto tab = std::make_shared<CosmologyTabulated>();
+        auto tab = std::make_shared<Cosmology>("Tabulated");
         quietly([&]() {
             tab->read_parameters(param);
             tab->init();
@@ -189,9 +189,9 @@ int main() {
         std::remove(filename.c_str());
         for (double a : {1.0, 0.98, 0.5}) {
             const double err = tab->dlogHdloga_of_a(a) - lcdm->dlogHdloga_of_a(a);
-            check_local(std::fabs(err) < 1e-5 and std::fabs(tab->w_DE(a) + 1.0) < 1e-5,
+            check_local(std::fabs(err) < 1e-5 and std::fabs(tab->background().w(FML::COSMOLOGY::BACKGROUND::Component::DarkEnergy, std::log(a)) + 1.0) < 1e-5,
                         "Tabulated LCDM at a = " + std::to_string(a) + ": dlogH/dloga - LCDM = " + std::to_string(err) +
-                            ", w_DE + 1 = " + std::to_string(tab->w_DE(a) + 1.0));
+                            ", w_DE + 1 = " + std::to_string(tab->background().w(FML::COSMOLOGY::BACKGROUND::Component::DarkEnergy, std::log(a)) + 1.0));
         }
     }
 
@@ -202,7 +202,7 @@ int main() {
         param["cosmology_JBD_wBD"] = 100.0;
         param["cosmology_JBD_GeffG_today"] = 1.0;
         param["cosmology_JBD_density_parameter_definition"] = std::string("hi-class");
-        auto jbd = std::make_shared<CosmologyJBD>();
+        auto jbd = std::make_shared<Cosmology>("JBD");
         quietly([&]() {
             jbd->read_parameters(param);
             jbd->init();
@@ -223,7 +223,7 @@ int main() {
         auto param = cosmology_parameters(0.25);
         param["force_use_finite_difference_force"] = false;
         param["force_finite_difference_stencil_order"] = 4;
-        auto cosmo = std::make_shared<CosmologyLCDM>();
+        auto cosmo = std::make_shared<Cosmology>("LCDM");
         auto grav = std::make_shared<GravityModelGR<NDIM>>(cosmo);
         quietly([&]() {
             cosmo->read_parameters(param);

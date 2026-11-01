@@ -9,7 +9,9 @@
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
 
-#include "Cosmology_JBD.h"
+#include "Cosmology.h"
+
+#include <FML/Cosmology/Background/FieldEquation_BransDicke.h>
 #include "GravityModel.h"
 
 /// Jordan-Brans-Dicke
@@ -51,10 +53,11 @@ class GravityModelJBD : public GravityModel<NDIM> {
     // the correct Newtonian limit)
     //========================================================================
     double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0) const override {
-        CosmologyJBD * jbd = dynamic_cast<CosmologyJBD *>(this->cosmo.get());
-        double phi_star = jbd->get_phi_star();
-        double G_over_Gdensityparams = jbd->get_G_over_Gdensityparams();
-        return G_over_Gdensityparams * phi_star / jbd->phi_of_a(a);
+        const auto * jbd = this->cosmo->background()
+                               .template field_equations_as<FML::COSMOLOGY::BACKGROUND::BransDickeFieldEquations>();
+        if (not jbd)
+            throw std::runtime_error("gravity_model = JBD needs cosmology_model = JBD");
+        return jbd->G_over_Gstar() * jbd->phi_star() / jbd->phi(std::log(a));
     }
 
     //========================================================================

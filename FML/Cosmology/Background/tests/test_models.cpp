@@ -6,7 +6,8 @@
 //     this module (its old model classes; stored tables, see SolverReference.h): E, dlogE/dx, Omega_i, eta, t, chi,
 //     D_A, with and without massive neutrinos
 //   - Jordan-Brans-Dicke with GeffG_today != 1 and the density parameter definitions: against SimulationCode's
-//     CosmologyJBD, and the physical equivalence of the Gtoday, Gnewton and Gbare definitions
+//     former CosmologyJBD (its own JBD solver; values stored in data/simcode_jbd.txt), and the physical equivalence
+//     of the Gtoday, Gnewton and Gbare definitions
 //   - the registry entries (Presets.h registry()) and errors
 //==========================================================
 #include <FML/Cosmology/Background/BackgroundModel_BransDicke.h>
@@ -17,7 +18,6 @@
 #include <FML/Cosmology/Background/Presets.h>
 
 #include "SolverReference.h"
-#include <FML/SimulationCode/src/Cosmology_JBD.h>
 
 #include <cmath>
 #include <iostream>
@@ -139,45 +139,26 @@ const BransDickeFieldEquations & bd_of(const ComponentBackground & bg) {
     return *bg.field_equations_as<BransDickeFieldEquations>();
 }
 
-// SimulationCode's CosmologyJBD (massless neutrinos: its massive ones are specified by OmegaMNu and have other
-// conventions) against make_jbd. Returns the max error in E, dlogE/dx, phi, Omega_b, Omega_gamma, Omega_Lambda
-double
-compare_with_simcode(const BackgroundParameters & p, double omega, double GeffG, BransDickeDensityDefinition def) {
-    static const char * names[] = {"hi-class", "Gtoday", "Gnewton", "Gbare"};
-    FML::UTILS::ParameterMap pm;
-    pm["cosmology_OmegaMNu"] = 0.0;
-    pm["cosmology_Omegab"] = p.Omega_b;
-    pm["cosmology_OmegaCDM"] = p.Omega_cdm;
-    pm["cosmology_OmegaK"] = p.Omega_k;
-    pm["cosmology_h"] = p.h;
-    pm["cosmology_As"] = 2.1e-9;
-    pm["cosmology_ns"] = 0.965;
-    pm["cosmology_kpivot_mpc"] = 0.05;
-    pm["cosmology_Neffective"] = p.N_eff;
-    pm["cosmology_TCMB_kelvin"] = p.T_CMB;
-    pm["cosmology_JBD_wBD"] = omega;
-    pm["cosmology_JBD_GeffG_today"] = GeffG;
-    pm["cosmology_JBD_density_parameter_definition"] = std::string(names[int(def)]);
-    CosmologyJBD sc;
-    sc.read_parameters(pm);
-    {
-        std::ostringstream quiet;
-        auto * old = std::cout.rdbuf(quiet.rdbuf());
-        sc.init();
-        std::cout.rdbuf(old);
-    }
+// SimulationCode's former CosmologyJBD (massless neutrinos: its massive ones were specified by OmegaMNu and had other
+// conventions; stored in data/simcode_jbd.txt, block "jbd <icase>") against make_jbd. Returns the max error in E,
+// dlogE/dx, phi, Omega_b, Omega_gamma, Omega_Lambda
+double compare_with_simcode(
+    int icase, const BackgroundParameters & p, double omega, double GeffG, BransDickeDensityDefinition def) {
+    const FML::TESTS::ReferenceData data(std::string(REFERENCE_DATA_DIR) + "/simcode_jbd.txt");
+    auto block = data.block("jbd " + std::to_string(icase));
     auto bg = make_jbd(p, omega, GeffG, def);
     const auto & bd = bd_of(*bg);
     double err = 0.0;
-    for (double x = -20.0; x <= 2.0; x += 0.29) {
-        const double a = std::exp(x);
+    while (not block.done()) {
+        const auto r = block.numbers("x"); // x, E, dlogH/dloga, phi, Omega_b, Omega_R, Omega_Lambda
+        const double x = r[0];
         err = std::max({err,
-                        rel(bg->E(x), sc.HoverH0_of_a(a)),
-                        std::abs(bg->dlogEdx(x) - sc.dlogHdloga_of_a(a)),
-                        rel(bd.phi(x), sc.phi_of_a(a)),
-                        std::abs(bg->Omega(Component::Baryons, x) - sc.get_Omegab(a)),
-                        std::abs(bg->Omega(Component::Photons, x) - sc.get_OmegaR(a)),
-                        std::abs(bg->Omega(Component::DarkEnergy, x) - sc.get_OmegaLambda(a))});
+                        rel(bg->E(x), r[1]),
+                        std::abs(bg->dlogEdx(x) - r[2]),
+                        rel(bd.phi(x), r[3]),
+                        std::abs(bg->Omega(Component::Baryons, x) - r[4]),
+                        std::abs(bg->Omega(Component::Photons, x) - r[5]),
+                        std::abs(bg->Omega(Component::DarkEnergy, x) - r[6])});
     }
     return err;
 }
@@ -194,8 +175,9 @@ void test_jbd_options() {
                         "phi_*/GeffG_today, E(0) = 1");
     }
 
-    // SimulationCode (its closed universes do not converge for Omega_k <~ -0.03)
+    // SimulationCode's former JBD (its closed universes did not converge for Omega_k <~ -0.03)
     const auto p = planck();
+    int icase = 0;
     for (auto [def, GeffG, omega, Ok] :
          std::vector<std::tuple<D, double, double, double>>{{D::HiClass, 1.0, 1000.0, 0.0},
                                                             {D::HiClass, 0.95, 100.0, 0.0},
@@ -207,9 +189,9 @@ void test_jbd_options() {
                                                             {D::Gnewton, 0.95, 100.0, 0.0}}) {
         auto pk = p;
         pk.Omega_k = Ok;
-        const double err = compare_with_simcode(pk, omega, GeffG, def);
+        const double err = compare_with_simcode(icase++, pk, omega, GeffG, def);
         check_local(err < 1e-5,
-                    "jbd = SimulationCode's CosmologyJBD (definition " + std::to_string(int(def)) +
+                    "jbd = SimulationCode's former CosmologyJBD (definition " + std::to_string(int(def)) +
                         ", omega = " + num(omega, 4) + ", GeffG_today = " + num(GeffG, 3) +
                         ", Omega_k = " + num(Ok, 2) + "; max error E, dlogE/dx, phi, Omega_i " + num(err, 2) + ")");
     }

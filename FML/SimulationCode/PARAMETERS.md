@@ -54,7 +54,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `cosmology_ede_n` | double | `3` | cosmology_model = EDE | Early dark energy: V = m^2 f^2 (1 - cos(phi/f))^n |
 | `cosmology_tabulated_filename` | string | *required* | cosmology_model = Tabulated | The file with the background |
 | `cosmology_tabulated_format` | string | *required* | cosmology_model = Tabulated | H: columns z, H/H0. CLASS: a CLASS background file. w: columns a, w(a) of the dark energy. Options: `H`, `CLASS`, `w` |
-| `cosmology_dgp_OmegaRC` | double | *required* | cosmology_model = DGP | The cross-over scale of the self-accelerating DGP model (Omega_rc = 1/(4 rc^2 H0^2)) |
+| `cosmology_dgp_OmegaRC` | double | *required* | cosmology_model = DGP | The cross-over scale of the self-accelerating DGP model (Omega_rc = 1/(4 rc^2 H0^2)). A cosmological constant makes up E(0) = 1 (a warning if it is not zero; no dark energy for Omega_rc = (1 - Omega_matter - Omega_radiation)^2/4) |
 
 ## Gravity model
 

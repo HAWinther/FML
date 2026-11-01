@@ -17,6 +17,7 @@
 //   dark_scattering                        BackgroundModel_DarkScattering.h        make_dark_scattering
 //   ide                                    BackgroundModel_IDE.h                   make_ide
 //   musigma, fr, horndeski                 the LCDM / w0wa background of the models that modify the perturbations
+//   (not in the registry: BackgroundModel_Tabulated.h, make_tabulated_E / make_tabulated_w, from a table)
 //
 // Every entry lists the parameters of the background only, with their defaults and descriptions (ModelParameter). A
 // full model (background + perturbations) is an entry of the same name in the perturbation registry
