@@ -97,6 +97,22 @@ namespace FML::COSMOLOGY::BACKGROUND {
                 }
             }
         }
+        double u_phiphi(double phi) const {
+            switch (type) {
+                case Type::Exponential:
+                    return lambda * lambda * std::exp(-lambda * phi);
+                case Type::InversePowerLaw:
+                    return phi > 0.0 ? alpha * (alpha + 1.0) * std::pow(phi, -alpha - 2.0) : 0.0;
+                case Type::PNGB:
+                    return -std::cos(phi / f) / (f * f);
+                default: {
+                    // u = s^2, s = 1 - y^p, y = |phi| / mu: u'' = 2 s'^2 + 2 s s''
+                    const double y = std::abs(phi) / mu, s = 1.0 - std::pow(y, p);
+                    const double ds = p * std::pow(y, p - 1.0) / mu, dds = -p * (p - 1.0) * std::pow(y, p - 2.0) / (mu * mu);
+                    return 2.0 * ds * ds + 2.0 * s * dds;
+                }
+            }
+        }
         std::string name() const {
             switch (type) {
                 case Type::Exponential:
@@ -210,6 +226,7 @@ namespace FML::COSMOLOGY::BACKGROUND {
 
         double v(double phi) const override { return V0 * V.u(phi); }
         double v_phi(double phi) const override { return V0 * V.u_phi(phi); }
+        double v_phiphi(double phi) const override { return V0 * V.u_phiphi(phi); }
         bool has_minimum() const override {
             return V.type == QuintessencePotential::Type::PNGB or V.type == QuintessencePotential::Type::Hilltop;
         }

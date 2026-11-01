@@ -87,6 +87,15 @@ namespace FML::COSMOLOGY::BACKGROUND {
         double phi(double x) const { return x < x_ini ? 0.0 : phi_spline(x); }
         double dphidx(double x) const { return x < x_ini ? 0.0 : dphi_spline(x); }
         double v(double f) const { return V0 * std::exp(-lambda * f); }
+        double v_phi(double f) const { return -lambda * v(f); }
+        double v_phiphi(double f) const { return lambda * lambda * v(f); }
+        /// d^2phi/dx^2 from the field equation, and dlnE/dx
+        double ddphidx(double x) const {
+            const double f = phi(x), df = dphidx(x);
+            const double e2 = E2(x, f, df), rc = C * std::exp(-3.0 * x - beta * f);
+            return -(3.0 + dlnE(x, f, df)) * df + 3.0 * lambda * v(f) / e2 + 3.0 * beta * rc / e2;
+        }
+        double dlnEdx(double x) const { return dlnE(x, phi(x), dphidx(x)); }
         double rho_c(double x) const { return C * std::exp(-3.0 * x - beta * phi(x)); }
         double drho_c(double x) const { return -(3.0 + beta * dphidx(x)) * rho_c(x); }
         double E2(double x) const { return E2(x, phi(x), dphidx(x)); }
@@ -161,6 +170,11 @@ namespace FML::COSMOLOGY::BACKGROUND {
         double rho(double x) const override { return d->rho_c(x); }
         double p(double) const override { return 0.0; }
         double drhodx(double x) const override { return d->drho_c(x); }
+        /// rho_c'' = [(3 + beta phi_x)^2 - beta phi_xx] rho_c
+        double d2rhodx2(double x) const override {
+            const double a = 3.0 + d->beta * d->dphidx(x);
+            return (a * a - d->beta * d->ddphidx(x)) * d->rho_c(x);
+        }
 
       private:
         std::shared_ptr<const CoupledDarkSector> d;
@@ -175,6 +189,12 @@ namespace FML::COSMOLOGY::BACKGROUND {
         double rho(double x) const override { return d->rho_phi(x); }
         double p(double x) const override { return d->p_phi(x); }
         double drhodx(double x) const override { return d->drho_phi(x); }
+        /// rho_phi'' = -(E^2' phi_x^2 + 2 E^2 phi_x phi_xx) + beta (phi_xx rho_c + phi_x rho_c')
+        double d2rhodx2(double x) const override {
+            const double df = d->dphidx(x), ddf = d->ddphidx(x), e2 = d->E2(x), de2 = 2.0 * d->dlnEdx(x) * e2;
+            const double rc = d->rho_c(x), drc = d->drho_c(x);
+            return -(de2 * df * df + 2.0 * e2 * df * ddf) + d->beta * (ddf * rc + df * drc);
+        }
         std::string info() const override {
             std::ostringstream s;
             s << "coupled quintessence: lambda = " << d->lambda << ", beta = " << d->beta << ", V0 = " << d->V0

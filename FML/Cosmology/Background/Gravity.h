@@ -23,10 +23,9 @@
 // (GR: M*^2 = 1, alpha_M = alpha_T = 0).
 // =============================================================================
 
-// TRANSITIONAL (see Species.h): used for the models whose perturbations are not in FML/Perturbations yet (wrapped as
-// PERTURBATIONS::PerturbedFieldEquation by Perturbations.cpp) and for explicit models (as the field equations of their
-// ComponentBackground); the ported models use FML/Background's FieldEquations and FML/Perturbations'
-// PerturbedFieldEquation.
+// TRANSITIONAL (see Species.h): not used by the solver; the gravity of an explicit Model (the reference of the tests of
+// FML/Background and FML/Perturbations) becomes the field equations of its ComponentBackground through an adapter. The
+// solver uses FML/Background's FieldEquations and FML/Perturbations' PerturbedFieldEquation.
 // =============================================================================
 
 #include <FML/Cosmology/Background/Species.h>

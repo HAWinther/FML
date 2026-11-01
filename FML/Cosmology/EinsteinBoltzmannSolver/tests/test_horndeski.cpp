@@ -1,26 +1,25 @@
 // =============================================================================
-// Tests of Horndeski gravity in the alpha parameterization (models/HorndeskiAlpha.h). Run with `make test`.
+// Tests of Horndeski gravity in the alpha parameterization (FML/Perturbations/PerturbedFieldEquation_HorndeskiAlpha.h).
+// Run with `make test`.
 //
 //   * All alphas zero is LCDM (same solution)
 //   * The momentum constraint (0i Einstein equation), which is not used in the evolution, holds with braiding,
 //     running Planck mass and kineticity (python/derive_horndeski_alpha.py)
 //   * The stability conditions reject a ghost (alpha_K < 0) and a gradient instability, and a non-dynamical
 //     scalar (alpha_K = alpha_B = 0 with alpha_M != 0) and a too stiff one (c_s^2 > 1e5) are rejected
-//   * Known theories rebuilt from their alphas reproduce the dedicated implementations (different variables
-//     and equations):
+//   * Known theories rebuilt from their alphas (custom models: PERTURBATIONS::PerturbationModel_Assembled on the
+//     theory's background) reproduce the dedicated implementations (different variables and equations):
 //       cubic Galileon on the tracker:  alpha_K = 6 Omega_DE(a), alpha_B = 2 Omega_DE(a)  (propto_omega)
 //       quintessence:                  alpha_K = 3 (rho + p)_phi / (H^2 M_pl^2), the field perturbations in v
 //       Brans-Dicke (its own expansion): M*^2 = phi, alpha_M = -alpha_B = dln phi/dx, alpha_K = omega alpha_M^2
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
-#include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
+#include <FML/Perturbations/Presets.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Cosmology/Models/BransDicke.h>
-#include <FML/Cosmology/Models/HorndeskiAlpha.h>
 
 #include <cmath>
 #include <functional>
@@ -31,6 +30,8 @@ using namespace Constants;
 using FML::TESTS::check;
 using FML::TESTS::check_close;
 using FML::TESTS::check_rel;
+namespace BG = FML::COSMOLOGY::BACKGROUND;
+namespace PT = FML::COSMOLOGY::PERTURBATIONS;
 
 namespace {
     struct Run {
@@ -41,7 +42,7 @@ namespace {
             : cosmo(p), rec((cosmo.solve(), cosmo)), pert(cosmo, rec, o) {
             finish();
         }
-        Run(const CosmologyParameters & p, Model m, const PerturbationOptions & o)
+        Run(const CosmologyParameters & p, PT::PerturbationModelPtr m, const PerturbationOptions & o)
             : cosmo(p, std::move(m)), rec((cosmo.solve(), cosmo)), pert(cosmo, rec, o) {
             finish();
         }
@@ -51,20 +52,25 @@ namespace {
         }
     };
 
-    // A species seen only through its background (its perturbations are the gravity's scalar)
-    class BackgroundOnly : public Species {
-      public:
-        explicit BackgroundOnly(std::shared_ptr<const Species> s) : s_(std::move(s)) {}
-        std::string name() const override { return s_->name() + " (background)"; }
-        Role role() const override { return s_->role(); }
-        double rho(double x) const override { return s_->rho(x); }
-        double p(double x) const override { return s_->p(x); }
-        double drhodx(double x) const override { return s_->drhodx(x); }
-        double ddrhoddx(double x) const override { return s_->ddrhoddx(x); }
-
-      private:
-        std::shared_ptr<const Species> s_;
-    };
+    // The standard species with the Horndeski field equations of the given alphas, on a background (the theory's own,
+    // whose dark energy is seen only through the background: its perturbations are the scalar's)
+    PT::PerturbationModelPtr from_alphas(const std::string & name,
+                                         BG::ComponentBackgroundPtr bg,
+                                         std::shared_ptr<PT::AlphaFunctions> alphas) {
+        auto hd = std::make_shared<const PT::HorndeskiAlphaBackground>(std::move(alphas), *bg);
+        auto standard = std::make_shared<PT::StandardSpeciesPerturbations>(*bg);
+        return std::make_shared<const PT::PerturbationModel_Assembled>(
+            name,
+            bg,
+            [standard](const PT::PerturbationContext & ctx) {
+                PT::SpeciesPerturbationList l;
+                standard->add_to(ctx, l);
+                return l;
+            },
+            [hd](const PT::PerturbationContext & ctx) {
+                return std::make_unique<PT::PerturbedFieldEquation_HorndeskiAlpha>(hd, ctx);
+            });
+    }
 
     CosmologyParameters horndeski(double cK, double cB, double cM, double w0 = -1.0, double wa = 0.0) {
         CosmologyParameters p;
@@ -108,14 +114,15 @@ int main() {
     std::cout << "Momentum constraint, w0-wa expansion, kineticity + braiding + running Planck mass\n";
     {
         Run r(horndeski(1.0, 0.6, 0.3, -0.95, 0.1), o);
-        const auto & g = dynamic_cast<const HorndeskiAlphaGravity &>(r.cosmo.gravity());
+        const auto & fe = dynamic_cast<const PT::PerturbedFieldEquation_HorndeskiAlpha &>(r.pert.get_field_equations());
+        const auto & g = fe.alpha_background();
         std::cout << "  " << g.info() << "\n";
         const auto & cs = r.cosmo;
         const auto & pt = r.pert;
         double e0i = 0.0, scal = 0.0;
         for (double k : pt.get_k_array())
             for (double x : {-3.0, -1.0, 0.0}) {
-                const auto s = g.state(x, cs);
+                const auto s = g.state(x);
                 const double a = s.a, H = s.H, M2 = s.al.M2, aB = s.al.aB, H0 = cs.get_H0(), kt = c * k / H0;
                 const double rc = cs.rhoCDM(x), rb = cs.rhoB(x), rg = cs.rhoGamma(x), rn = cs.rhoNu(x);
                 const double flux = H0 * H0 * a * a *
@@ -168,10 +175,11 @@ int main() {
         CosmologyParameters p;
         p.model = "cubic_galileon";
         Run ref(p, o);
-        Model m = Models::build(p);
-        m.gravity = std::make_shared<HorndeskiAlphaGravity>(
-            std::make_shared<StandardAlphas>(StandardAlphas::Type::ProptoOmega, 6.0, 2.0, 0.0, 1.0));
-        Run r(p, m, o);
+        Run r(p,
+              from_alphas("galileon from alphas",
+                          ref.cosmo.background_ptr(),
+                          std::make_shared<PT::StandardAlphas>(PT::StandardAlphas::Type::ProptoOmega, 6.0, 2.0, 0.0, 1.0)),
+              o);
         const double e = compare(r.pert, ref.pert, xs);
         const double eL = compare(lcdm.pert, ref.pert, {0.0});
         std::cout << "  (Galileon vs LCDM: " << eL << ")\n";
@@ -184,21 +192,20 @@ int main() {
         p.model = "quintessence";
         p.model_params["quint_lambda"] = 1.0;
         Run ref(p, o);
-        Model m = Models::build(p);
-        std::shared_ptr<const Species> q;
-        for (auto & s : m.species)
-            if (s->role() == Species::Role::DarkEnergy)
-                s = q = std::make_shared<BackgroundOnly>(s);
+        auto bg = ref.cosmo.background_ptr();
+        const BG::Species * q = nullptr;
+        for (const auto & s : bg->species())
+            if (dynamic_cast<const BG::QuintessenceSpecies *>(s.get()))
+                q = s.get();
         // alpha_K = 3 (rho + p)_phi / E^2 = -rho_phi' / E^2 (x-derivatives)
-        auto al = std::make_shared<FunctionAlphas>("quintessence", [q](double x, const BackgroundCosmology & bg) {
-            Alphas a;
-            const double E2 = bg.rho_species(x), dE2 = bg.drho_species(x);
+        auto al = std::make_shared<PT::FunctionAlphas>("quintessence", [q](double x, const BG::ComponentBackground & b) {
+            PT::Alphas a;
+            const double E2 = b.rho_total(x), dE2 = b.drho_total(x);
             a.aK = -q->drhodx(x) / E2;
-            a.daKdx = -(q->ddrhoddx(x) - q->drhodx(x) * dE2 / E2) / E2;
+            a.daKdx = -(q->d2rhodx2(x) - q->drhodx(x) * dE2 / E2) / E2;
             return a;
         });
-        m.gravity = std::make_shared<HorndeskiAlphaGravity>(al);
-        Run r(p, m, o);
+        Run r(p, from_alphas("quintessence from alphas", bg, al), o);
         const double e = compare(r.pert, ref.pert, xs);
         std::cout << "  (quintessence vs LCDM: " << compare(lcdm.pert, ref.pert, {0.0}) << ")\n";
         check_close(e, 0.0, 1e-8, "Phi, Psi, delta_cdm = quintessence implementation");
@@ -211,19 +218,15 @@ int main() {
         p.model = "jbd";
         p.model_params["bd_omega"] = omega;
         Run ref(p, o);
-        Model m = Models::build(p);
-        auto bd = std::dynamic_pointer_cast<BransDickeGravity>(m.gravity);
+        auto bgp = ref.cosmo.background_ptr();
+        const auto * bd = bgp->field_equations_as<BG::BransDickeFieldEquations>();
         auto al =
-            std::make_shared<FunctionAlphas>("Brans-Dicke", [bd, omega](double x, const BackgroundCosmology & bg) {
-                double rho = 0.0, p = 0.0;
-                for (const auto & s : bg.species()) {
-                    rho += s->rho(x);
-                    p += s->p(x);
-                }
-                const double F = bd->phi(x), Fx = bd->dphidx(x), E2 = bd->E2(x, bg), L = 0.5 * bd->dE2dx(x, bg) / E2;
+            std::make_shared<PT::FunctionAlphas>("Brans-Dicke", [bd, omega](double x, const BG::ComponentBackground & bg) {
+                const double rho = bg.rho_total(x), p = bg.p_total(x);
+                const double E = bg.E(x), F = bd->phi(x), Fx = bd->dphidx(x), E2 = E * E, L = bg.dlogEdx(x);
                 const double S = 3.0 * (rho - 3.0 * p) / (3.0 + 2.0 * omega), Fxx = -(3.0 + L) * Fx + S / E2;
                 const double y = Fx / F, q = 1.0 - omega * y / 3.0, a2 = std::exp(2.0 * x);
-                Alphas a;
+                PT::Alphas a;
                 a.M2 = F;
                 a.dM2 = F - 1.0;
                 a.aM = y;
@@ -239,8 +242,7 @@ int main() {
                        (2.0 * F + Fx);
                 return a;
             });
-        m.gravity = std::make_shared<HorndeskiAlphaGravity>(al, bd);
-        Run r(p, m, o);
+        Run r(p, from_alphas("Brans-Dicke from alphas", bgp, al), o);
         const double e = compare(r.pert, ref.pert, xs);
         std::cout << "  (Brans-Dicke vs LCDM: " << compare(lcdm.pert, ref.pert, {0.0}) << ")\n";
         check_close(e, 0.0, 1e-6, "Phi, Psi, delta_cdm = Brans-Dicke implementation");

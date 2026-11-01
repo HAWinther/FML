@@ -139,6 +139,13 @@ namespace FML::COSMOLOGY::BACKGROUND {
             const double th = phi / f_;
             return mu_ * n * std::pow(1.0 - std::cos(th), n - 1.0) * std::sin(th) / f_;
         }
+        double v_phiphi(double phi) const override {
+            const double th = phi / f_, u = 1.0 - std::cos(th), s = std::sin(th);
+            double r = std::pow(u, n - 1.0) * std::cos(th);
+            if (n != 1.0)
+                r += (n - 1.0) * std::pow(u, n - 2.0) * s * s;
+            return mu_ * n * r / (f_ * f_);
+        }
         bool has_minimum() const override { return true; }
         double phi_min() const override { return 0.0; }
         double w_oscillating() const override { return (n - 1.0) / (n + 1.0); }

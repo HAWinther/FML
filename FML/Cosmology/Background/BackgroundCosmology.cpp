@@ -63,13 +63,6 @@ namespace FML::COSMOLOGY {
             const double h = 1e-3;
             return (f(x - 2.0 * h) - 8.0 * f(x - h) + 8.0 * f(x + h) - f(x + 2.0 * h)) / (12.0 * h);
         }
-
-        const PERTURBATIONS::PerturbationModelInfo * ported(const std::string & name) {
-            for (const auto & m : PERTURBATIONS::perturbation_registry())
-                if (m.name == name)
-                    return &m;
-            return nullptr;
-        }
     } // namespace
 
     namespace detail {
@@ -119,15 +112,31 @@ namespace FML::COSMOLOGY {
         params.validate();
         build_background();
         find_massive_neutrinos();
-        if (!pmodel) {
-            // TRANSITIONAL: the solver's own model for the perturbations (its background is not used)
-            legacy = true;
-            model = Models::build(params);
-            for (const auto & s : model.species)
-                if (!s)
-                    throw std::invalid_argument("BackgroundCosmology: null species in model " + model.name);
-            model.gravity->init_background(*this);
-        }
+    }
+
+    BackgroundCosmology::BackgroundCosmology(const CosmologyParameters & params_in,
+                                             PERTURBATIONS::PerturbationModelPtr model_in)
+        : params(params_in), H0(params_in.H0()), OmegaK0(params_in.OmegaK),
+          K(-params_in.OmegaK * params_in.H0() * params_in.H0() / (Constants::c * Constants::c)),
+          L_unit(Constants::c / params_in.H0() / Constants::c_over_H0_mpch),
+          pmodel(std::move(model_in)), range{default_x_min, default_x_max, default_points_per_unit_x},
+          explicit_pmodel(true) {
+        params.validate();
+        if (!pmodel)
+            throw std::invalid_argument("BackgroundCosmology: no perturbation model");
+        bg = pmodel->background_ptr();
+        // The cosmological parameters must be those of the model's background
+        const auto p = background_parameters(params), & q = bg->parameters();
+        if (p.h != q.h || p.Omega_b != q.Omega_b || p.Omega_cdm != q.Omega_cdm || p.Omega_k != q.Omega_k ||
+            p.T_CMB != q.T_CMB || p.N_eff != q.N_eff || p.m_nu_eV != q.m_nu_eV ||
+            (!p.m_nu_eV.empty() && p.T_ncdm_over_TCMB != q.T_ncdm_over_TCMB))
+            throw std::invalid_argument("BackgroundCosmology: the parameters are not those of the background of the "
+                                        "perturbation model " +
+                                        pmodel->name());
+        range.x_min = bg->x_min();
+        range.x_max = bg->x_max();
+        tensor_fe = pmodel->field_equation_perturbations(pmodel->context());
+        find_massive_neutrinos();
     }
 
     BackgroundCosmology::BackgroundCosmology(const CosmologyParameters & params_in, Model model_in)
@@ -158,7 +167,7 @@ namespace FML::COSMOLOGY {
     BackgroundCosmology::BackgroundCosmology(BackgroundCosmology && o) noexcept
         : params(std::move(o.params)), H0(o.H0), OmegaK0(o.OmegaK0), K(o.K), L_unit(o.L_unit), bg(std::move(o.bg)),
           pmodel(std::move(o.pmodel)), tensor_fe(std::move(o.tensor_fe)), range(o.range), ncdm_new(o.ncdm_new),
-          ncdm_factor(o.ncdm_factor), legacy(o.legacy), explicit_model(o.explicit_model), model(std::move(o.model)),
+          ncdm_factor(o.ncdm_factor), explicit_pmodel(o.explicit_pmodel), legacy(o.legacy), explicit_model(o.explicit_model), model(std::move(o.model)),
           ncdm_old(o.ncdm_old), legacy_eqs(std::move(o.legacy_eqs)), x_start(o.x_start), x_end(o.x_end),
           solved(o.solved) {
         if (legacy_eqs)
@@ -181,10 +190,8 @@ namespace FML::COSMOLOGY {
             return;
         }
         bg = BACKGROUND::make_background(params.model, p, params.model_params, range);
-        if (const auto * info = ported(params.model)) {
-            pmodel = info->build(bg);
-            tensor_fe = pmodel->field_equation_perturbations(pmodel->context());
-        }
+        pmodel = PERTURBATIONS::make_perturbation_model(params.model, bg, params.model_params);
+        tensor_fe = pmodel->field_equation_perturbations(pmodel->context());
     }
 
     void BackgroundCosmology::find_massive_neutrinos() {
@@ -214,8 +221,8 @@ namespace FML::COSMOLOGY {
     const Model & BackgroundCosmology::get_model() const {
         if (!legacy)
             throw std::logic_error("BackgroundCosmology: model " + params.model +
-                                   " has no solver Model (its background and perturbations come from FML/Background "
-                                   "and FML/Perturbations: background(), perturbation_model())");
+                                   " is not an explicit Model of the old classes (its background and perturbations "
+                                   "come from FML/Background and FML/Perturbations: background(), perturbation_model())");
         return model;
     }
 
@@ -375,7 +382,12 @@ namespace FML::COSMOLOGY {
         if (!(x_end_in > x_start_in))
             throw std::invalid_argument("BackgroundCosmology::solve: need x_end > x_start");
         const int ppx = std::max(default_points_per_unit_x, int(std::ceil(n_points / (x_end_in - x_start_in))));
-        if (x_start_in < bg->x_min() || x_end_in > bg->x_max() || ppx > range.points_per_unit_x) {
+        if (explicit_pmodel) {
+            if (x_start_in < bg->x_min() || x_end_in > bg->x_max())
+                throw std::invalid_argument("BackgroundCosmology::solve: [" + std::to_string(x_start_in) + ", " +
+                                            std::to_string(x_end_in) + "] outside the range of the background of " +
+                                            "the perturbation model");
+        } else if (x_start_in < bg->x_min() || x_end_in > bg->x_max() || ppx > range.points_per_unit_x) {
             range.x_min = std::min(x_start_in, default_x_min);
             range.x_max = std::max(x_end_in, default_x_max);
             range.points_per_unit_x = ppx;
@@ -473,8 +485,8 @@ namespace FML::COSMOLOGY {
     void BackgroundCosmology::info() const {
         const auto f = std::cout.flags();
         std::cout << std::setprecision(6);
-        std::cout << "\nBackgroundCosmology: model " << params.model << ", gravity " << bg->field_equations().info()
-                  << (legacy ? " (perturbations: solver model, " + model.gravity->info() + ")" : "") << "\n";
+        std::cout << "\nBackgroundCosmology: model " << (legacy ? model.name : explicit_pmodel ? pmodel->name() : params.model) << ", gravity "
+                  << bg->field_equations().info() << ", perturbations " << gravity_name() << "\n";
         std::cout << "  Species: ";
         for (size_t i = 0; i < bg->species().size(); i++)
             std::cout << (i ? "\n           " : "") << bg->species()[i]->info();

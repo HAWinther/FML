@@ -30,7 +30,10 @@ Presets.h                  the registry and make_background(name, params, model 
 ```
 
 Background only: models that only modify the perturbations (mu-Sigma, Hu-Sawicky f(R), Horndeski alphas) have the
-LCDM or w0wa background, and perturbation parameters (ds_xi, ds_cs2, ide_cs2, ...) are accepted but not used.
+LCDM or w0wa background, and perturbation parameters (ds_xi, ds_cs2, ide_cs2, ...) are accepted but not used (they are
+read by the perturbation registry of `FML/Perturbations`). For the perturbations a species also gives d2rho/dx2
+(`d2rhodx2`, analytic for the species here, a 5-point difference of drho/dx by default), a scalar field d2v/dphi2
+(`v_phiphi`) and d2phi/dx2 (`ddphidx`), and ComponentBackground the sums `d2rho_total`, `d2rhodx2(component)`.
 
 Units: E dimensionless, conformal time and distances in Mpc/h, cosmic time in Gyr (`t_H0`: units of 1/H0);
 `sinK(chi)`, `cotK(chi)` take chi in Mpc/h (curvature `K_hmpc2()` = -Omega_k (H0/c)^2).

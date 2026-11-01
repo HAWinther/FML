@@ -93,6 +93,13 @@ namespace FML::COSMOLOGY::BACKGROUND {
                 sum += s->drhodx(x);
             return sum;
         }
+        /// d^2/dx^2 of the sum (Species::d2rhodx2)
+        double d2rho_total(double x) const {
+            double sum = 0.0;
+            for (const auto & s : list)
+                sum += s->d2rhodx2(x);
+            return sum;
+        }
         /// Sum over all species of p_i / (rho_c0 c^2)
         double p_total(double x) const {
             double sum = 0.0;
@@ -120,6 +127,13 @@ namespace FML::COSMOLOGY::BACKGROUND {
             for (const auto & s : list)
                 if (s->component() == c)
                     sum += s->drhodx(x);
+            return sum;
+        }
+        double d2rhodx2(Component c, double x) const {
+            double sum = 0.0;
+            for (const auto & s : list)
+                if (s->component() == c)
+                    sum += s->d2rhodx2(x);
             return sum;
         }
         /// p / rho of a component (0 if there is none)

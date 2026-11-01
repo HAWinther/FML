@@ -1,5 +1,6 @@
 // =============================================================================
-// Tests of interacting dark energy (models/InteractingDarkEnergy.h). Run with `make test`.
+// Tests of interacting dark energy (FML/Background/BackgroundModel_IDE.h,
+// FML/Perturbations/SpeciesPerturbation_DarkEnergyFluid.h). Run with `make test`.
 //
 //   * Background: rho_DE ~ a^{-3(1+w)-xi}; rho_c against an independent integration of
 //     rho_c' = -3 rho_c + xi rho_DE; derivatives; closure; rejection of rho_c < 0 and of the doom factor d > 0
@@ -12,12 +13,11 @@
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
-#include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Cosmology/Models/InteractingDarkEnergy.h>
+#include <FML/Perturbations/PerturbationModel_IDE.h>
 
 #include <cmath>
 
@@ -66,7 +66,7 @@ namespace {
                 const double H0a2 = std::pow(cs.get_H0() * std::exp(x), 2), Hp = cs.Hp_of_x(x), ckH = c * k / Hp;
                 const double rc = cs.rhoCDM(x), rb = cs.rhoB(x), rg = cs.rhoGamma(x), rn = cs.rhoNu(x),
                              rd = cs.rhoDE(x);
-                const double w = cs.get_model().species.back()->p(x) / rd;
+                const double w = cs.background().species().back()->p(x) / rd;
                 const double drho =
                     H0a2 * (rc * pt.get_delta_cdm(x, k) + rb * pt.get_delta_b(x, k) + 4.0 * rg * pt.get_Theta(0, x, k) +
                             4.0 * rn * pt.get_Nu(0, x, k) + rd * pt.get("delta_de", x, k));
@@ -88,7 +88,7 @@ int main() {
     std::cout << "Background (xi = " << xi << ", w = " << w << ")\n";
     {
         BackgroundCosmology b(ide(xi, w));
-        std::cout << "  " << b.get_model().species.back()->info() << "\n";
+        std::cout << "  " << b.background().species().back()->info() << "\n";
         check_close(b.E2_of_x(0.0), 1.0, 1e-13, "E(0) = 1");
         check_rel(b.rhoDE(-2.0) / b.rhoDE(0.0),
                   std::exp(2.0 * (3.0 * (1.0 + w) + xi)),
@@ -112,12 +112,12 @@ int main() {
         check(b.rhoCDM(-10.0) * a10 * a10 * a10 > b.rhoCDM(0.0),
               "xi < 0 (energy to the dark energy): more dark matter in the past");
         double e1 = 0.0;
-        for (const auto & s : b.species())
+        for (const auto & s : b.background().species())
             for (double x : {-5.0, -1.0, 0.0}) {
                 const double hh = 1e-4;
                 e1 = std::max(e1, std::fabs((s->rho(x + hh) - s->rho(x - hh)) / (2 * hh) - s->drhodx(x)) / s->rho(x));
                 e1 = std::max(e1,
-                              std::fabs((s->drhodx(x + hh) - s->drhodx(x - hh)) / (2 * hh) - s->ddrhoddx(x)) /
+                              std::fabs((s->drhodx(x + hh) - s->drhodx(x - hh)) / (2 * hh) - s->d2rhodx2(x)) /
                                   s->rho(x));
             }
         check_close(e1, 0.0, 1e-6, "rho', rho'' vs finite differences");

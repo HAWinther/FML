@@ -12,15 +12,15 @@
 // from a PERTURBATIONS::PerturbationModel of FML/Perturbations built on the same background:
 //
 //   BackgroundCosmology(params)         params.model from the registries of FML/Background (make_background)
-//                                       and FML/Perturbations (perturbation_registry: lcdm, jbd). A model whose
-//                                       perturbations are not ported yet (TRANSITIONAL: w0wa, dgp, musigma, fr,
-//                                       quintessence, ede, coupled_quintessence, dark_scattering, cubic_galileon,
-//                                       horndeski, ide) also builds the solver's own Model (Model.h: species and
-//                                       gravity), which only supplies the perturbations (Perturbations wraps
-//                                       them); the background is the new one in either case.
-//   BackgroundCosmology(params, model)  an explicit Model (e.g. assembled in a test; TRANSITIONAL): its species
-//                                       and gravity become a ComponentBackground through adapters, and the
-//                                       perturbations are the model's own.
+//                                       and FML/Perturbations (make_perturbation_model), with params.model_params
+//   BackgroundCosmology(params, pmodel) an explicit PERTURBATIONS::PerturbationModel (a custom model, e.g. a
+//                                       PerturbationModel_Assembled) and its background; the cosmological parameters
+//                                       of params must be those of its background. The background is not rebuilt by
+//                                       solve() (its range must cover the solve range)
+//   BackgroundCosmology(params, model)  TRANSITIONAL: an explicit Model of the solver's old classes (Model.h): its
+//                                       species and gravity become a ComponentBackground through adapters. Background
+//                                       only (the reference of the tests of FML/Background and FML/Perturbations):
+//                                       it has no perturbation model, and Perturbations cannot be solved on it.
 //
 // The named accessors rhoB, rhoCDM, ... sum the species of that component (0 if there is none).
 // Second derivatives (ddHpddx, ddE2ddx, ddrho...): an explicit Model gives them analytically (its gravity
@@ -58,7 +58,9 @@ namespace FML::COSMOLOGY {
       public:
         // Model selected by params.model (see above)
         explicit BackgroundCosmology(const CosmologyParameters & params);
-        // Explicit model (e.g. assembled in a test)
+        // Explicit perturbation model with its background (a custom model)
+        BackgroundCosmology(const CosmologyParameters & params, PERTURBATIONS::PerturbationModelPtr model);
+        // TRANSITIONAL: explicit Model of the old classes (background only, see above)
         BackgroundCosmology(const CosmologyParameters & params, Model model);
         BackgroundCosmology(BackgroundCosmology && other) noexcept;
         BackgroundCosmology(const BackgroundCosmology &) = delete;
@@ -77,13 +79,13 @@ namespace FML::COSMOLOGY {
         // -------------------------------------------------------------------------
         const BACKGROUND::ComponentBackground & background() const { return *bg; }
         const BACKGROUND::ComponentBackgroundPtr & background_ptr() const { return bg; }
-        // The perturbations of the model from FML/Perturbations (nullptr: not ported yet, the solver's own
-        // Model supplies them, see has_legacy_model)
+        // The perturbations of the model from FML/Perturbations (nullptr only for an explicit Model of the old classes,
+        // see has_legacy_model)
         const PERTURBATIONS::PerturbationModelPtr & perturbation_model() const { return pmodel; }
 
         // -------------------------------------------------------------------------
-        // The solver's own Model (TRANSITIONAL: only for models whose perturbations are not ported, and
-        // explicit models). get_model, species and gravity throw without one.
+        // TRANSITIONAL: an explicit Model of the solver's old classes (background only). get_model, species and
+        // gravity throw without one.
         // -------------------------------------------------------------------------
         bool has_legacy_model() const { return legacy; }
         const Model & get_model() const;
@@ -225,8 +227,10 @@ namespace FML::COSMOLOGY {
         const BACKGROUND::MassiveNeutrinoSpecies * ncdm_new = nullptr;
         double ncdm_factor = 1.0;
 
-        // TRANSITIONAL: the solver's own Model (legacy), for models whose perturbations are not ported and
-        // explicit models (explicit_model: the background is made of adapters of its species and gravity)
+        // An explicit perturbation model (its background is not rebuilt)
+        bool explicit_pmodel = false;
+        // TRANSITIONAL: an explicit Model of the old classes (legacy; the background is made of adapters of its species
+        // and gravity)
         bool legacy = false, explicit_model = false;
         Model model;
         const MassiveNeutrinoSpecies * ncdm_old = nullptr; // of an explicit model

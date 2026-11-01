@@ -34,6 +34,7 @@ namespace FML::COSMOLOGY::BACKGROUND {
         double rho(double x) const override { return Omega0 * std::exp(-L * x); }
         double p(double x) const override { return w * rho(x); }
         double drhodx(double x) const override { return -L * rho(x); }
+        double d2rhodx2(double x) const override { return L * L * rho(x); }
         std::string info() const override {
             std::ostringstream s;
             s << "interacting dark energy (Q = xi H rho_DE): Omega0 = " << Omega0 << ", w = " << w << ", xi = " << xi;
@@ -60,6 +61,7 @@ namespace FML::COSMOLOGY::BACKGROUND {
         }
         double p(double) const override { return 0.0; }
         double drhodx(double x) const override { return -3.0 * rho(x) + de->xi * de->rho(x); }
+        double d2rhodx2(double x) const override { return -3.0 * drhodx(x) + de->xi * de->drhodx(x); }
 
       private:
         double Omega_c;

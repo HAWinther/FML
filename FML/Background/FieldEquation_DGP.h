@@ -60,6 +60,7 @@ namespace FML::COSMOLOGY::BACKGROUND {
         }
         double get_Omega_rc() const { return Omega_rc; }
         int get_branch() const { return branch; }
+        bool get_lcdm_background() const { return lcdm_bg; }
 
       private:
         double Omega_rc, sq;

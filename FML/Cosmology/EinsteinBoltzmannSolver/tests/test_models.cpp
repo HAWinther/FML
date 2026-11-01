@@ -1,11 +1,12 @@
 // =============================================================================
-// Tests of the model framework (Model.h, Species.h, Gravity.h): the registry, model parameters in the
-// parameter file, and a model assembled from custom parts. Run with `make test`.
+// Tests of the model framework: the registry (model names and parameters, Model.h's metadata and the registries of
+// FML/Background and FML/Perturbations), model parameters in the parameter file, and a model assembled from custom
+// parts (a ComponentBackground and a PERTURBATIONS::PerturbationModel_Assembled). Run with `make test`.
 //
-// The custom model splits the CDM into the standard ColdDarkMatter and a second pressureless species
-// ("dust") with its own SpeciesPerturbations written here. This must reproduce LCDM exactly (up to the
-// ODE tolerance), which checks that an extra species enters the background, the initial conditions, the
-// state vector, the Einstein equations (through its Moments) and the stored outputs correctly.
+// The custom model splits the CDM into the standard CDM and a second pressureless species ("dust") with its own
+// SpeciesPerturbation written here. This must reproduce LCDM exactly (up to the ODE tolerance), which checks that an
+// extra species enters the background, the initial conditions, the state vector, the Einstein equations (through its
+// Moments) and the stored outputs correctly.
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
@@ -15,8 +16,8 @@
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Cosmology/Models/GeneralRelativity.h>
-#include <FML/Cosmology/Models/StandardSpecies.h>
+#include <FML/Background/Presets.h>
+#include <FML/Perturbations/Presets.h>
 
 #include <cmath>
 #include <functional>
@@ -29,13 +30,15 @@ using namespace Constants;
 using FML::TESTS::check;
 using FML::TESTS::check_close;
 using FML::TESTS::check_rel;
+namespace BG = FML::COSMOLOGY::BACKGROUND;
+namespace PT = FML::COSMOLOGY::PERTURBATIONS;
 
 namespace {
 
-    // Pressureless matter, written independently of the CDM in StandardSpecies.cpp
-    class DustPerturbations : public SpeciesPerturbations {
+    // Pressureless matter, written independently of SpeciesPerturbation_CDM
+    class DustPerturbations : public PT::SpeciesPerturbation {
       public:
-        explicit DustPerturbations(const Species & s) : species(s) {}
+        explicit DustPerturbations(const BG::Species & s) : species(s) {}
         std::string name() const override { return "dust"; }
         int n_vars(int) const override { return 2; }
         int cache_size() const override { return 1; }
@@ -62,30 +65,68 @@ namespace {
         }
 
       private:
-        const Species & species;
+        const BG::Species & species;
     };
 
-    class Dust : public PowerLawSpecies {
-      public:
-        explicit Dust(double Omega0) : PowerLawSpecies("dust", Role::Other, Omega0, 3.0) {}
-        std::unique_ptr<SpeciesPerturbations> perturbations(const Perturbations &) const override {
-            return std::make_unique<DustPerturbations>(*this);
-        }
-    };
+    // The parameters of the background of a run (as BackgroundCosmology)
+    BG::BackgroundParameters background_parameters(const CosmologyParameters & p) {
+        BG::BackgroundParameters b;
+        b.h = p.h;
+        b.Omega_b = p.OmegaB;
+        b.Omega_cdm = p.OmegaCDM;
+        b.Omega_k = p.OmegaK;
+        b.T_CMB = p.TCMB;
+        b.N_eff = p.Neff;
+        if (p.has_massive_nu())
+            b.m_nu_eV = {p.m_nu};
+        b.T_ncdm_over_TCMB = p.T_ncdm_over_TCMB;
+        return b;
+    }
 
-    // A second CDM species (duplicate output names)
-    class SecondCDM : public ColdDarkMatter {
-      public:
-        using ColdDarkMatter::ColdDarkMatter;
-        std::string name() const override { return "cdm2"; }
-    };
+    // LCDM with the CDM split into cdm + dust (half each), on the range of BackgroundCosmology; with_dust_perturbations
+    // = false: a second CDM perturbation instead of the dust's (duplicate output names)
+    PT::PerturbationModelPtr split_model(const CosmologyParameters & p, bool with_dust_perturbations = true) {
+        const auto bp = background_parameters(p);
+        auto s = BG::standard_species(bp);
+        s[1] = std::make_shared<BG::PowerLawSpecies>("cdm", BG::Component::CDM, 0.5 * p.OmegaCDM, 3.0);
+        auto dust = std::make_shared<BG::PowerLawSpecies>("dust", BG::Component::Other, 0.5 * p.OmegaCDM, 3.0);
+        s.insert(s.begin() + 2, dust);
+        s.push_back(std::make_shared<BG::PowerLawSpecies>(
+            "lambda", BG::Component::DarkEnergy, 1.0 - p.OmegaK - BG::density_today(s), 0.0));
+        auto bg = std::make_shared<const BG::ComponentBackground>(
+            "split", bp, s, std::make_shared<BG::GeneralRelativity>(), BG::BackgroundRange{-25.0, 5.0, 200});
+        const BG::Species * d = dust.get();
+        auto standard = std::make_shared<PT::StandardSpeciesPerturbations>(*bg);
+        return std::make_shared<const PT::PerturbationModel_Assembled>(
+            "split",
+            bg,
+            [standard, d, with_dust_perturbations](const PT::PerturbationContext & ctx) {
+                PT::SpeciesPerturbationList l;
+                standard->add_to(ctx, l);
+                if (with_dust_perturbations)
+                    l.push_back(std::make_unique<DustPerturbations>(*d));
+                else
+                    l.push_back(std::make_unique<PT::SpeciesPerturbation_CDM>(*d, ctx));
+                return l;
+            },
+            [](const PT::PerturbationContext & ctx) {
+                return std::make_unique<PT::PerturbedFieldEquation_GeneralRelativity>(ctx);
+            });
+    }
 
     struct Run {
         BackgroundCosmology cosmo;
         RecombinationHistory rec;
         Perturbations pert;
-        Run(const CosmologyParameters & p, const Model & m, const PerturbationOptions & o)
-            : cosmo(p, m), rec((cosmo.solve(), cosmo)), pert(cosmo, rec, o) {
+        Run(const CosmologyParameters & p, const PerturbationOptions & o)
+            : cosmo(p), rec((cosmo.solve(), cosmo)), pert(cosmo, rec, o) {
+            finish();
+        }
+        Run(const CosmologyParameters & p, PT::PerturbationModelPtr m, const PerturbationOptions & o)
+            : cosmo(p, std::move(m)), rec((cosmo.solve(), cosmo)), pert(cosmo, rec, o) {
+            finish();
+        }
+        void finish() {
             rec.solve();
             pert.solve();
         }
@@ -99,12 +140,28 @@ int main() {
         check(throws([] { Models::find("no_such_model"); }), "unknown model is an error");
         CosmologyParameters p;
         check(p.model == "lcdm", "default model is lcdm");
-        const Model m = Models::build(p);
-        check(m.species.size() == 5 && m.gravity->name() == "GR" &&
-                  m.species.back()->role() == Species::Role::DarkEnergy,
-              "lcdm: 5 species (no massive neutrinos), GR");
+        {
+            BackgroundCosmology b(p);
+            check(b.background().species().size() == 5 && b.gravity_name() == "GR" &&
+                      b.perturbation_model()->species_perturbations(b.perturbation_model()->context()).size() == 2,
+                  "lcdm: 5 species (no massive neutrinos), GR, perturbations of cdm and massless neutrinos");
+        }
         p.m_nu = 0.06;
-        check(Models::build(p).species.size() == 6, "lcdm with m_nu > 0: 6 species");
+        check(BackgroundCosmology(p).background().species().size() == 6, "lcdm with m_nu > 0: 6 species");
+        // every model of the solver's parameter registry has a background and perturbations
+        bool all = true;
+        for (const auto & m : Models::registry()) {
+            CosmologyParameters q;
+            q.model = m.name;
+            try {
+                BackgroundCosmology b(q);
+                all = all && b.perturbation_model() && b.perturbation_model()->background_ptr() == b.background_ptr();
+            } catch (const std::exception & e) {
+                std::cout << "  " << m.name << ": " << e.what() << "\n";
+                all = false;
+            }
+        }
+        check(all, "every model (default parameters) has its background and perturbation model");
         CosmologyParameters q;
         q.model_params["mu0"] = 0.1;
         check(throws([&] { q.validate(); }), "parameter of no model is an error (validate)");
@@ -123,18 +180,19 @@ int main() {
 
     std::cout << "Background of a custom model (CDM split into cdm + dust)\n";
     CosmologyParameters p;
-    Model split = Models::lcdm(p);
-    split.name = "split";
-    split.species[1] = std::make_shared<ColdDarkMatter>(0.5 * p.OmegaCDM);
-    split.species.insert(split.species.begin() + 2, std::make_shared<Dust>(0.5 * p.OmegaCDM));
     {
-        BackgroundCosmology lcdm(p), sp(p, split);
+        BackgroundCosmology lcdm(p), sp(p, split_model(p));
         double err = 0.0;
         for (double x = -15.0; x <= 2.0; x += 0.5)
             err = std::max(err, std::fabs(sp.Hp_of_x(x) / lcdm.Hp_of_x(x) - 1.0));
         check_close(err, 0.0, 1e-14, "Hp(x) = LCDM");
         check_rel(sp.rho_of(Species::Role::Other, -1.0), 0.5 * lcdm.rhoCDM(-1.0), 1e-14, "rho_of(Other) = dust");
         check_rel(sp.rhoCDM(-1.0), 0.5 * lcdm.rhoCDM(-1.0), 1e-14, "rhoCDM = half of LCDM");
+        CosmologyParameters q = p;
+        q.h = 0.7;
+        check(throws([&] { BackgroundCosmology b(q, split_model(p)); }),
+              "parameters that are not those of the model's background are an error");
+        check(throws([&] { sp.solve(-30.0, 0.0); }), "solving beyond the range of the model's background is an error");
     }
 
     std::cout << "Perturbations of the custom model\n";
@@ -143,7 +201,7 @@ int main() {
         o.n_k = 6;
         o.k_min = 0.001 / Mpc;
         o.k_max = 0.2 / Mpc;
-        Run l(p, Models::lcdm(p), o), s(p, split, o);
+        Run l(p, o), s(p, split_model(p), o);
         check(s.pert.has("delta_cdm") && s.pert.has("delta_dust") && s.pert.has("Nu_0") && !l.pert.has("delta_dust"),
               "species outputs: delta_cdm, delta_dust, Nu_0");
         check(throws([&] { s.pert.get("delta_foo", 0.0, 0.01 / Mpc); }), "unknown output is an error");
@@ -161,12 +219,18 @@ int main() {
         check_close(eT, 0.0, 3e-5, "S_T = LCDM (relative to Theta_0 + Psi)");
         check_close(eD, 0.0, 1e-6, "delta_dust = delta_cdm = LCDM delta_cdm");
 
-        Model dup = Models::lcdm(p);
-        dup.species.push_back(std::make_shared<SecondCDM>(0.0));
-        BackgroundCosmology cd(p, dup);
+        BackgroundCosmology cd(p, split_model(p, false));
         cd.solve();
         RecombinationHistory rd(cd);
         check(throws([&] { Perturbations pd(cd, rd, o); }), "two species with the same output names is an error");
+
+        // An explicit Model of the old classes is background only (TRANSITIONAL)
+        BackgroundCosmology old(p, Models::lcdm(p));
+        old.solve();
+        RecombinationHistory ro(old);
+        Perturbations po(old, ro, o);
+        check(po.get_species().empty() && throws([&] { po.solve(); }),
+              "an explicit Model of the old classes has no perturbations (Perturbations cannot be solved)");
     }
 
     return FML::TESTS::summary("EBS models");

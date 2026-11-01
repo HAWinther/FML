@@ -1,5 +1,6 @@
 // =============================================================================
-// Tests of the cubic Galileon (models/CubicGalileon.h). Run with `make test`.
+// Tests of the cubic Galileon (FML/Background/BackgroundModel_CubicGalileon.h and
+// FML/Perturbations/PerturbedFieldEquation_CubicGalileon.h). Run with `make test`.
 //
 //   * Tracker background: E^4 - rho E^2 = Omega_phi, closure, derivatives; the pressure from the scalar field,
 //     p = c2 phidot^2/2 - g3 phidot^2 phiddot (with H phidot = xi), agrees with the continuity equation;
@@ -16,12 +17,15 @@
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Cosmology/Models/CubicGalileon.h>
+#include <FML/Perturbations/PerturbationModel_CubicGalileon.h>
 
 #include <cmath>
 #include <functional>
 
 using namespace FML::COSMOLOGY;
+namespace PT = FML::COSMOLOGY::PERTURBATIONS;
+using CubicGalileonGravity = PT::PerturbedFieldEquation_CubicGalileon;
+using CubicGalileonSpecies = FML::COSMOLOGY::BACKGROUND::CubicGalileonSpecies;
 
 using namespace Constants;
 using FML::TESTS::check;
@@ -76,9 +80,10 @@ int main() {
     std::cout << "Tracker background\n";
     BackgroundCosmology b(p);
     b.solve();
-    const auto & g = dynamic_cast<const CubicGalileonGravity &>(b.gravity());
+    const auto fe = b.perturbation_model()->field_equation_perturbations(b.perturbation_model()->context());
+    const auto & g = dynamic_cast<const CubicGalileonGravity &>(*fe);
     const CubicGalileonSpecies * gs = nullptr;
-    for (const auto & s : b.species())
+    for (const auto & s : b.background().species())
         if (auto q = dynamic_cast<const CubicGalileonSpecies *>(s.get()))
             gs = q;
     {
@@ -97,7 +102,7 @@ int main() {
             const double h = 1e-4;
             e1 = std::max(e1, std::fabs((gs->rho(x + h) - gs->rho(x - h)) / (2 * h) - gs->drhodx(x)) / gs->rho(x));
             e2 = std::max(e2,
-                          std::fabs((gs->drhodx(x + h) - gs->drhodx(x - h)) / (2 * h) - gs->ddrhoddx(x)) / gs->rho(x));
+                          std::fabs((gs->drhodx(x + h) - gs->drhodx(x - h)) / (2 * h) - gs->d2rhodx2(x)) / gs->rho(x));
         }
         check_close(eF, 0.0, 1e-14, "E^4 - rho E^2 = Omega_phi");
         check_close(eP, 0.0, 1e-10, "pressure from the field = continuity");

@@ -2,18 +2,20 @@
 #define FML_COSMOLOGY_BACKGROUND_MODEL_H
 
 // =============================================================================
-// Models: a list of species and a theory of gravity, and the registry of built-in models.
+// The registry of the built-in models (names, parameters with defaults and descriptions) and, TRANSITIONAL, the old
+// models as a list of species and a theory of gravity.
 //
 // A run selects a model by name (CosmologyParameters::model, "model = lcdm" in a parameter file); the
 // model's own parameters are in CosmologyParameters::model_params (name -> value, defaults from the
-// registry). Models::build(params) constructs it, and BackgroundCosmology(params) does so automatically.
+// registry). The registry (registry, find, parameter, validate) gives the parameter file, params_used.ini and the
+// --write-defaults output their models and parameters. BackgroundCosmology(params) builds the model from the
+// registries of FML/Background and FML/Perturbations (same names and parameters).
 //
-// Adding a model:
-//   1. write its new species and/or gravity (Cosmology/Models/),
-//   2. add a ModelInfo entry (name, description, parameters with defaults, build function) to the
-//      registry in Model.cpp.
-// The parameter file, params_used.ini and the --write-defaults output pick up the new model and its
-// parameters automatically.
+// TRANSITIONAL: Model, the build functions and Models::build (the old classes, Cosmology/Models/) are no longer used by
+// the solver; they remain as the references of the tests of FML/Background and FML/Perturbations.
+//
+// Adding a model: its background and perturbations in FML/Background and FML/Perturbations (with their registry
+// entries), and a ModelInfo entry (name, description, parameters with defaults) here.
 // =============================================================================
 
 #include <FML/Cosmology/Background/CosmologyParameters.h>

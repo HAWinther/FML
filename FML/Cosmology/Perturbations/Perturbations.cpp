@@ -15,90 +15,6 @@ namespace FML::COSMOLOGY {
 
     using namespace Constants;
 
-    namespace {
-        // TRANSITIONAL: the perturbations of the solver's own models (Species::perturbations, Gravity; for the models
-        // not ported to FML/Perturbations) as the types of FML/Perturbations. The interfaces are the same (the data
-        // types are shared), except that the free-streaming density comes from the background Species and the gravity
-        // takes the BackgroundCosmology.
-        class LegacySpeciesPerturbation : public PERTURBATIONS::SpeciesPerturbation {
-          public:
-            LegacySpeciesPerturbation(std::unique_ptr<SpeciesPerturbations> p, const Species & s)
-                : p(std::move(p)), s(s) {}
-            std::string name() const override { return p->name(); }
-            std::string info() const override { return p->info(); }
-            std::vector<double> switch_points(double k) const override { return p->switch_points(k); }
-            int n_vars(int mode) const override { return p->n_vars(mode); }
-            bool prefers_explicit(int mode) const override { return p->prefers_explicit(mode); }
-            int cache_size() const override { return p->cache_size(); }
-            void update_cache(const ModeAtX & b, double * cache) const override { p->update_cache(b, cache); }
-            void initial_conditions(const ModeAtX & b, const InitialData & ic, double * y) const override {
-                p->initial_conditions(b, ic, y);
-            }
-            void switch_mode(const ModeAtX & b,
-                             const double * cache,
-                             int new_mode,
-                             const double * y_old,
-                             double * y_new) const override {
-                p->switch_mode(b, cache, new_mode, y_old, y_new);
-            }
-            Moments moments(const ModeAtX & b, const double * cache, int mode, const double * y) const override {
-                return p->moments(b, cache, mode, y);
-            }
-            void rhs(const ModeAtX & b,
-                     const double * cache,
-                     int mode,
-                     const MetricAtX & m,
-                     const double * y,
-                     double * dydx) const override {
-                p->rhs(b, cache, mode, m, y, dydx);
-            }
-            std::vector<std::string> output_names() const override { return p->output_names(); }
-            void outputs(const ModeAtX & b, const double * cache, int mode, const double * y, double * out)
-                const override {
-                p->outputs(b, cache, mode, y, out);
-            }
-            double free_streaming_density(double x) const override { return s.free_streaming() ? s.rho(x) : 0.0; }
-
-          private:
-            std::unique_ptr<SpeciesPerturbations> p;
-            const Species & s;
-        };
-
-        class LegacyFieldEquation : public PERTURBATIONS::PerturbedFieldEquation {
-          public:
-            LegacyFieldEquation(const Gravity & g,
-                                const BackgroundCosmology & cosmo,
-                                const PERTURBATIONS::PerturbationContext & ctx)
-                : PerturbedFieldEquation(ctx), g(g), cosmo(cosmo) {}
-            std::string name() const override { return g.name(); }
-            std::string info() const override { return g.info(); }
-            int n_vars() const override { return g.n_vars(); }
-            int cache_size() const override { return g.cache_size(); }
-            void update_cache(const ModeAtX & b, double * cache) const override { g.update_cache(cosmo, b, cache); }
-            double G_eff_initial() const override { return g.G_eff_initial(); }
-            void initial_conditions(const ModeAtX & b, const InitialData & ic, double * y) const override {
-                g.initial_conditions(b, ic, y);
-            }
-            MetricAtX metric(const ModeAtX & b,
-                             const double * cache,
-                             const double * y,
-                             const Moments & total,
-                             double * dydx) const override {
-                return g.metric(b, cache, y, total, dydx);
-            }
-            TensorCoefficients tensor(double x) const override { return g.tensor(x, cosmo); }
-            std::vector<std::string> output_names() const override { return g.output_names(); }
-            void outputs(const ModeAtX & b, const double * cache, const double * y, const MetricAtX & m, double * out)
-                const override {
-                g.outputs(b, cache, y, m, out);
-            }
-
-          private:
-            const Gravity & g;
-            const BackgroundCosmology & cosmo;
-        };
-    } // namespace
-
     Perturbations::Perturbations(const BackgroundCosmology & cosmo_in,
                                  const RecombinationHistory & rec_in,
                                  PerturbationOptions options_in)
@@ -111,7 +27,7 @@ namespace FML::COSMOLOGY {
             throw std::invalid_argument("Perturbations: x-range [" + std::to_string(options.x_start) + ", " +
                                         std::to_string(options.x_end) +
                                         "] extends outside the background solution (bg_x_start, bg_x_end)");
-        // The species and field equations of the model (FML/Perturbations, or TRANSITIONAL the solver's own)
+        // The species and field equations of the model (FML/Perturbations)
         PERTURBATIONS::PerturbationSettings settings;
         settings.neutrinos = options.neutrinos;
         settings.lmax_nu = options.lmax_nu;
@@ -121,15 +37,11 @@ namespace FML::COSMOLOGY {
         settings.x_start = options.x_start;
         settings.x_end = options.x_end;
         ctx = std::make_unique<PERTURBATIONS::PerturbationContext>(cosmo.background(), settings);
-        if (const auto & pm = cosmo.perturbation_model()) {
-            species = pm->species_perturbations(*ctx);
-            field_eq = pm->field_equation_perturbations(*ctx);
-        } else {
-            for (const auto & s : cosmo.species())
-                if (auto p = s->perturbations(*this))
-                    species.push_back(std::make_unique<LegacySpeciesPerturbation>(std::move(p), *s));
-            field_eq = std::make_unique<LegacyFieldEquation>(cosmo.gravity(), cosmo, *ctx);
-        }
+        const auto & pm = cosmo.perturbation_model();
+        if (!pm) // TRANSITIONAL: an explicit Model of the old classes has no perturbations (see the header)
+            return;
+        species = pm->species_perturbations(*ctx);
+        field_eq = pm->field_equation_perturbations(*ctx);
         for (double a : options.iso_amplitude)
             if (a != 0.0 && field_eq->name() != "GR")
                 throw std::invalid_argument("Perturbations: isocurvature modes need GR (model " +
@@ -583,6 +495,9 @@ namespace FML::COSMOLOGY {
 
     void Perturbations::solve() {
         Utils::Timer timer("Perturbations::solve");
+        if (!field_eq)
+            throw std::invalid_argument("Perturbations::solve: the model has no perturbations (an explicit Model of "
+                                        "the old classes: use a PERTURBATIONS::PerturbationModel)");
         if (!cosmo.is_solved() || !rec.is_solved())
             throw std::runtime_error("Perturbations::solve: background and recombination must be solved first");
 
@@ -945,7 +860,7 @@ namespace FML::COSMOLOGY {
 
     void Perturbations::info() const {
         std::cout << "\nPerturbations (" << (options.polarization ? "temperature + polarization" : "temperature only")
-                  << ", gravity " << field_eq->info() << "):\n";
+                  << ", gravity " << (field_eq ? field_eq->info() : "none") << "):\n";
         std::cout << "  species: photons, baryons";
         for (const auto & s : species)
             std::cout << ", " << s->info();

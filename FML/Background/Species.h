@@ -6,7 +6,9 @@
 // units of today's critical density rho_c0 (pressure: rho_c0 c^2).
 //
 // A species that only exchanges energy with itself obeys the continuity equation, drho/dx = -3 (rho + p), which is the
-// default of drhodx; coupled species (interacting dark energy, ...) override it.
+// default of drhodx; coupled species (interacting dark energy, ...) override it. d2rhodx2, the second derivative (used
+// by the perturbations of some theories), is a 5-point central difference of drhodx (step 1e-3) by default; the
+// species here give it analytically.
 //
 // The standard species are here:
 //   PowerLawSpecies         rho = Omega0 a^{-n}: baryons, CDM (n = 3), photons, massless neutrinos (n = 4), Lambda
@@ -71,6 +73,11 @@ namespace FML::COSMOLOGY::BACKGROUND {
         virtual double p(double x) const = 0;
         /// drho/dx (default: the continuity equation of an uncoupled species)
         virtual double drhodx(double x) const { return -3.0 * (rho(x) + p(x)); }
+        /// d^2rho/dx^2 (default: 5-point central difference of drhodx, step 1e-3, error ~ h^4 rho^(5) / 30)
+        virtual double d2rhodx2(double x) const {
+            const double h = 1e-3;
+            return (drhodx(x - 2.0 * h) - 8.0 * drhodx(x - h) + 8.0 * drhodx(x + h) - drhodx(x + 2.0 * h)) / (12.0 * h);
+        }
         double w(double x) const { return p(x) / rho(x); }
         virtual std::string info() const { return name(); }
     };
@@ -85,6 +92,7 @@ namespace FML::COSMOLOGY::BACKGROUND {
         double rho(double x) const override { return Omega0 * std::exp(-n * x); }
         double p(double x) const override { return (n / 3.0 - 1.0) * rho(x); }
         double drhodx(double x) const override { return -n * rho(x); }
+        double d2rhodx2(double x) const override { return n * n * rho(x); }
         std::string info() const override {
             std::ostringstream s;
             s << label << ": Omega0 = " << Omega0 << ", rho ~ a^-" << n;
@@ -108,11 +116,18 @@ namespace FML::COSMOLOGY::BACKGROUND {
             return Omega0 * std::exp(-3.0 * (1.0 + w0 + wa) * x - 3.0 * wa * (1.0 - std::exp(x)));
         }
         double p(double x) const override { return w_of_x(x) * rho(x); }
+        /// rho'' = 3 wa a rho + 9 (1 + w)^2 rho  (rho' = -3 (1 + w) rho, w' = -wa a)
+        double d2rhodx2(double x) const override {
+            const double opw = 1.0 + w_of_x(x);
+            return (3.0 * wa * std::exp(x) + 9.0 * opw * opw) * rho(x);
+        }
         std::string info() const override {
             std::ostringstream s;
             s << "w0wa dark energy: Omega0 = " << Omega0 << ", w0 = " << w0 << ", wa = " << wa;
             return s.str();
         }
+        double get_w0() const { return w0; }
+        double get_wa() const { return wa; }
 
       private:
         double Omega0, w0, wa;
@@ -218,6 +233,8 @@ namespace FML::COSMOLOGY::BACKGROUND {
         double pseudo_p(double x) const { return C * std::exp(-4.0 * x) * FermiDiracIntegrals::get().I_pp(M_of_x(x)); }
         /// dp/dx = -(5p - pseudo_p)
         double dpdx(double x) const { return -(5.0 * p(x) - pseudo_p(x)); }
+        /// rho'' = -3 (rho' + p')
+        double d2rhodx2(double x) const override { return -3.0 * (drhodx(x) + dpdx(x)); }
         /// rho a^4 / I_rho(M) [rho_c0]
         double prefactor() const { return C; }
         /// m c^2 a / (k_B T_nu0): the mass in units of the temperature at x, and today
@@ -247,6 +264,7 @@ namespace FML::COSMOLOGY::BACKGROUND {
         double rho(double x) const override { return f * s->rho(x); }
         double p(double x) const override { return f * s->p(x); }
         double drhodx(double x) const override { return f * s->drhodx(x); }
+        double d2rhodx2(double x) const override { return f * s->d2rhodx2(x); }
         std::string info() const override {
             std::ostringstream o;
             o << s->info() << " (x " << f << ")";
@@ -303,9 +321,25 @@ namespace FML::COSMOLOGY::BACKGROUND {
             return -E2(x, f, df) * df * df;
         }
 
-        /// The potential v = V / (3 H0^2 M_pl^2) and dv/dphi (phi in M_pl)
+        /// rho'' = -(E^2' phi_x^2 + 2 E^2 phi_x phi_xx), E^2' = rho_o' + rho_phi' (the fluid: 9 (1 + w)^2 rho)
+        double d2rhodx2(double x) const override {
+            if (in_fluid(x)) {
+                const double opw = 1.0 + w_oscillating();
+                return 9.0 * opw * opw * rho(x);
+            }
+            const double f = phi(x), df = dphidx(x), e2 = E2(x, f, df);
+            const double de2 = drho_others(x) - e2 * df * df;
+            return -(de2 * df * df + 2.0 * e2 * df * ddphi(x, f, df));
+        }
+
+        /// The potential v = V / (3 H0^2 M_pl^2) and its derivatives dv/dphi, d^2v/dphi^2 (phi in M_pl; the default
+        /// of v_phiphi is a central difference of v_phi, the potentials here give it analytically)
         virtual double v(double phi) const = 0;
         virtual double v_phi(double phi) const = 0;
+        virtual double v_phiphi(double phi) const {
+            const double h = 1e-5 * std::max(1.0, std::abs(phi));
+            return (v_phi(phi + h) - v_phi(phi - h)) / (2.0 * h);
+        }
         /// A potential with a minimum: where it is and the cycle-averaged w of fast oscillations about it
         virtual bool has_minimum() const { return false; }
         virtual double phi_min() const { return 0.0; }
@@ -319,6 +353,11 @@ namespace FML::COSMOLOGY::BACKGROUND {
         double dphidx(double x) const {
             check(x);
             return in_fluid(x) ? 0.0 : interpolate(x, true);
+        }
+        /// d^2phi/dx^2 from the Klein-Gordon equation (0 once it is a fluid)
+        double ddphidx(double x) const {
+            check(x);
+            return in_fluid(x) ? 0.0 : ddphi(x, phi(x), dphidx(x));
         }
         /// (H/H0)^2 of the model (as summed by GR) and the fraction rho_phi / rho_tot
         double E2(double x) const { return rho_others(x) + rho(x); }

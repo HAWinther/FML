@@ -20,7 +20,9 @@
 //                                         the solver
 //   every massive-neutrino species        SpeciesPerturbation_MassiveNeutrinos (a MassiveNeutrinoSpecies, or one
 //                                         wrapped in a ScaledSpecies, e.g. the Brans-Dicke density definitions)
-// The models: PerturbationModel_LCDM.h, PerturbationModel_BransDicke.h; the registry: PerturbationPresets.h.
+// (except the species it is told to skip: a CDM whose perturbations are part of a dark-sector block).
+// The models: PerturbationModel_<name>.h; the registry: Presets.h. A model assembled from given parts (tests, custom
+// models): PerturbationModel_Assembled (below).
 // =====================================================================================================================
 
 #include <FML/Background/ComponentBackground.h>
@@ -32,6 +34,8 @@
 #include <FML/Perturbations/SpeciesPerturbation_MassiveNeutrinos.h>
 #include <FML/Perturbations/SpeciesPerturbation_MasslessNeutrinos.h>
 
+#include <algorithm>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -76,9 +80,13 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
     /// The perturbations of the standard species of a background (see the header)
     class StandardSpeciesPerturbations {
       public:
-        explicit StandardSpeciesPerturbations(const BACKGROUND::ComponentBackground & bg) {
+        /// skip: species not to perturb here (e.g. a CDM whose perturbations are part of another species' block)
+        explicit StandardSpeciesPerturbations(const BACKGROUND::ComponentBackground & bg,
+                                              const std::vector<const BACKGROUND::Species *> & skip = {}) {
             using BACKGROUND::Component;
             for (const auto & s : bg.species()) {
+                if (std::find(skip.begin(), skip.end(), s.get()) != skip.end())
+                    continue;
                 if (s->component() == Component::CDM)
                     entries.push_back({Kind::CDM, s.get(), nullptr, 0.0});
                 else if (s->component() == Component::MasslessNeutrinos)
@@ -134,6 +142,38 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
             double factor;                                      ///< the ScaledSpecies factor (1 if not wrapped)
         };
         std::vector<Entry> entries;
+    };
+
+    /// A model assembled from given parts: functions that build the species and the field equations in a context of
+    /// the background (tests, custom models)
+    class PerturbationModel_Assembled : public PerturbationModel {
+      public:
+        using SpeciesFactory = std::function<SpeciesPerturbationList(const PerturbationContext &)>;
+        using FieldEquationFactory = std::function<std::unique_ptr<PerturbedFieldEquation>(const PerturbationContext &)>;
+        PerturbationModel_Assembled(std::string name,
+                                    BACKGROUND::ComponentBackgroundPtr background,
+                                    SpeciesFactory species,
+                                    FieldEquationFactory field_equations)
+            : PerturbationModel(std::move(background)), label(std::move(name)), make_species(std::move(species)),
+              make_field_equations(std::move(field_equations)) {
+            if (not make_species or not make_field_equations)
+                throw std::invalid_argument("[PerturbationModel_Assembled] Need the species and field equations");
+        }
+        std::string name() const override { return label; }
+        SpeciesPerturbationList species_perturbations(const PerturbationContext & ctx) const override {
+            check(ctx);
+            return make_species(ctx);
+        }
+        std::unique_ptr<PerturbedFieldEquation>
+        field_equation_perturbations(const PerturbationContext & ctx) const override {
+            check(ctx);
+            return make_field_equations(ctx);
+        }
+
+      private:
+        std::string label;
+        SpeciesFactory make_species;
+        FieldEquationFactory make_field_equations;
     };
 
 } // namespace FML::COSMOLOGY::PERTURBATIONS

@@ -11,10 +11,11 @@
 // perturbations (with tight coupling, polarization and the line-of-sight sources) are part of the core of
 // Perturbations; their Species only describe the background.
 //
-// TRANSITIONAL: the solver now takes the background from FML/Background and, for the ported models (lcdm, jbd), the
-// perturbations from FML/Perturbations (BackgroundCosmology.h). These classes remain for the models whose
-// perturbations are not ported yet (their SpeciesPerturbations are wrapped as PERTURBATIONS::SpeciesPerturbation by
-// Perturbations.cpp) and for explicit models; new species belong in FML/Background and FML/Perturbations.
+// TRANSITIONAL: the solver takes the background from FML/Background and the perturbations from FML/Perturbations for
+// every model (BackgroundCosmology.h) and no longer uses these classes. They remain as the references of the tests of
+// FML/Background and FML/Perturbations (an explicit Model of BackgroundCosmology is background only; its species'
+// perturbations are made by the tests with a Perturbations object as the host). New species belong in FML/Background
+// and FML/Perturbations. The aliases of the perturbation data types below are used by the solver.
 //
 // Adding a species: derive from Species (background) and, if it clusters, from SpeciesPerturbations,
 // and return the latter from Species::perturbations(). The perturbation equations are written in

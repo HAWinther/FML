@@ -1,6 +1,7 @@
 // =============================================================================
-// Tests of the quintessence and coupled quintessence models (models/Quintessence.h,
-// models/CoupledQuintessence.h). Run with `make test`.
+// Tests of the quintessence and coupled quintessence models (FML/Background/BackgroundModel_Quintessence.h,
+// _CoupledQuintessence.h; FML/Perturbations/SpeciesPerturbation_ScalarField.h, _CoupledQuintessence.h). Run with
+// `make test`.
 //
 //   * lambda = 0 is LCDM (background and perturbations)
 //   * Background: closure, rho' and rho'' vs finite differences, and the field equation solved
@@ -18,17 +19,18 @@
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
-#include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Cosmology/Models/CoupledQuintessence.h>
-#include <FML/Cosmology/Models/Quintessence.h>
+#include <FML/Perturbations/PerturbationModel_CoupledQuintessence.h>
+#include <FML/Perturbations/PerturbationModel_Quintessence.h>
 
 #include <cmath>
 
 using namespace FML::COSMOLOGY;
+using QuintessenceSpecies = FML::COSMOLOGY::BACKGROUND::QuintessenceSpecies;
+using CoupledField = FML::COSMOLOGY::BACKGROUND::CoupledFieldSpecies;
 
 using namespace Constants;
 using FML::TESTS::check;
@@ -92,7 +94,7 @@ namespace {
     };
 
     const QuintessenceSpecies & field(const BackgroundCosmology & b) {
-        for (const auto & s : b.species())
+        for (const auto & s : b.background().species())
             if (auto q = dynamic_cast<const QuintessenceSpecies *>(s.get()))
                 return *q;
         throw std::runtime_error("no quintessence");
@@ -128,7 +130,7 @@ int main() {
         for (double x : {-8.0, -3.0, -1.0, 0.0, 1.0}) {
             const double h = 1e-4;
             e1 = std::max(e1, std::fabs((qs.rho(x + h) - qs.rho(x - h)) / (2 * h) - qs.drhodx(x)) / qs.rho(x));
-            e2 = std::max(e2, std::fabs((qs.drhodx(x + h) - qs.drhodx(x - h)) / (2 * h) - qs.ddrhoddx(x)) / qs.rho(x));
+            e2 = std::max(e2, std::fabs((qs.drhodx(x + h) - qs.drhodx(x - h)) / (2 * h) - qs.d2rhodx2(x)) / qs.rho(x));
         }
         check_close(e1, 0.0, 1e-7, "drho/dx vs finite differences");
         check_close(e2, 0.0, 1e-6, "d2rho/dx2 vs finite differences");
@@ -231,7 +233,7 @@ int main() {
     BackgroundCosmology cb(cq(lam, beta));
     cb.solve();
     const CoupledField * cf = nullptr;
-    for (const auto & s : cb.species())
+    for (const auto & s : cb.background().species())
         if (auto f = dynamic_cast<const CoupledField *>(s.get()))
             cf = f;
     const auto & d = cf->sector();
@@ -243,10 +245,10 @@ int main() {
         double e1 = 0.0, e2 = 0.0, eex = 0.0;
         for (double x : {-8.0, -3.0, -1.0, 0.0, 1.0}) {
             const double h = 1e-4;
-            for (const Species * sp : {static_cast<const Species *>(cf), cb.species()[1].get()}) {
+            for (const BACKGROUND::Species * sp : {static_cast<const BACKGROUND::Species *>(cf), cb.background().species()[1].get()}) {
                 e1 = std::max(e1, std::fabs((sp->rho(x + h) - sp->rho(x - h)) / (2 * h) - sp->drhodx(x)) / sp->rho(x));
                 e2 = std::max(e2,
-                              std::fabs((sp->drhodx(x + h) - sp->drhodx(x - h)) / (2 * h) - sp->ddrhoddx(x)) /
+                              std::fabs((sp->drhodx(x + h) - sp->drhodx(x - h)) / (2 * h) - sp->d2rhodx2(x)) /
                                   sp->rho(x));
             }
             // exchange: rho_c' + rho_phi' = -3 rho_c - 3 (rho_phi + p_phi)
@@ -273,7 +275,7 @@ int main() {
         auto H = [&](double a, double f, double df) {
             return std::sqrt(rho_o(a) + rc(a, f) + df * df / 6.0 + V0 * std::exp(-lam * f));
         };
-        double a = std::exp(-12.0), f = d.phi(-12.0), df = d.dphi(-12.0) * std::sqrt(d.E2(-12.0)); // dphi/dt = H phi_x
+        double a = std::exp(-12.0), f = d.phi(-12.0), df = d.dphidx(-12.0) * std::sqrt(d.E2(-12.0)); // dphi/dt = H phi_x
         auto der = [&](double a, double f, double df, double & da, double & dff, double & ddf) {
             const double Hh = H(a, f, df);
             da = a * Hh;
@@ -324,7 +326,7 @@ int main() {
             [&](double x, double k, double & drho, double & flux) {
                 const double H0a2 = std::pow(r.cosmo.get_H0() * std::exp(x), 2), Hp = r.cosmo.Hp_of_x(x);
                 drho = H0a2 * cf->rho(x) * r.pert.get("delta_de", x, k);
-                flux = (c * k / Hp) * Hp * Hp * d.dphi(x) * r.pert.get("delta_phi", x, k) / 3.0;
+                flux = (c * k / Hp) * Hp * Hp * d.dphidx(x) * r.pert.get("delta_phi", x, k) / 3.0;
             },
             eP,
             eM,
@@ -337,7 +339,7 @@ int main() {
         auto growth = [&](const Run & run, double bt, double k) {
             const BackgroundCosmology & bc = run.cosmo;
             const CoupledField * f = nullptr;
-            for (const auto & s : bc.species())
+            for (const auto & s : bc.background().species())
                 if (auto ff = dynamic_cast<const CoupledField *>(s.get()))
                     f = ff;
             const auto & sec = f->sector();
@@ -348,7 +350,7 @@ int main() {
             auto acc = [&](double x, double dc, double db, double dcx, double dbx, double & ac, double & ab) {
                 const double E2 = bc.E2_of_x(x), L = 0.5 * bc.dE2dx_of_x(x) / E2;
                 const double src = 1.5 * (bc.rhoCDM(x) * dc + bc.rhoB(x) * db) / E2;
-                ac = -(2.0 + L - bt * sec.dphi(x)) * dcx + src + 3.0 * bt * bt * bc.rhoCDM(x) * dc / E2;
+                ac = -(2.0 + L - bt * sec.dphidx(x)) * dcx + src + 3.0 * bt * bt * bc.rhoCDM(x) * dc / E2;
                 ab = -(2.0 + L) * dbx + src;
             };
             const int n = 40000;

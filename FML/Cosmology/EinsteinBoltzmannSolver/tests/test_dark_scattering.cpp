@@ -1,5 +1,6 @@
 // =============================================================================
-// Tests of the dark scattering model (models/DarkScattering.h). Run with `make test`.
+// Tests of the dark scattering model (FML/Background/BackgroundModel_DarkScattering.h,
+// FML/Perturbations/SpeciesPerturbation_DarkEnergyFluid.h). Run with `make test`.
 //
 //   * Background: rho_DE ~ a^{-3(1+w)}, closure; the velocity-locking epoch Gamma_DE/Hp = 200
 //   * xi = 0 (wCDM) and xi > 0: the Einstein constraints that are not evolved (Poisson, momentum) hold with
@@ -11,12 +12,10 @@
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
-#include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Cosmology/Models/DarkScattering.h>
 
 #include <cmath>
 
@@ -46,11 +45,18 @@ namespace {
         }
     };
 
-    const FluidDarkEnergy & fluid(const BackgroundCosmology & b) {
-        for (const auto & s : b.species())
-            if (auto f = dynamic_cast<const FluidDarkEnergy *>(s.get()))
-                return *f;
-        throw std::runtime_error("no dark energy fluid");
+    // The dark-energy fluid of a run: w, xi = sigma_D / m_c [m^2/kg] (from the model parameters), rho_c0 [kg/m^3]
+    // and rho_DE(x)
+    struct Fluid {
+        const BackgroundCosmology & b;
+        double w, xi, rho_crit0;
+        double rho(double x) const { return b.rhoDE(x); }
+    };
+    Fluid fluid(const BackgroundCosmology & b) {
+        const auto & p = b.get_params();
+        const double barn_per_GeV = 1e-28 / GeV_over_c2;
+        return {b, p.model_param("ds_w"), p.model_param("ds_xi") * barn_per_GeV,
+                3.0 * b.get_H0() * b.get_H0() / (8.0 * M_PI * G)};
     }
 
     // Gamma_DE / Hp and Gamma_c / Hp at x

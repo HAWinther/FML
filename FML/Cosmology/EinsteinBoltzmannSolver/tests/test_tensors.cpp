@@ -12,7 +12,6 @@
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
-#include <FML/Cosmology/Background/Gravity.h>
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/Cosmology/Perturbations/Tensors.h>
@@ -124,7 +123,7 @@ int main() {
             {"preset=planck2018", "r=0.1", "model=horndeski", "hd_cK=1", "hd_cB=0.2", "hd_cM=0.5"}));
         const double k = 0.05 / Mpc;
         const auto m0 = Tensors(g.bg, g.rec).mode(k), m1 = Tensors(mg.bg, mg.rec).mode(k);
-        const double M2_0 = mg.bg.gravity().tensor(0.0, mg.bg).M2, M2_e = mg.bg.gravity().tensor(-5.0, mg.bg).M2;
+        const double M2_0 = mg.bg.tensor_coefficients(0.0).M2, M2_e = mg.bg.tensor_coefficients(-5.0).M2;
         const double wkb = std::sqrt(M2_e / M2_0);
         double ratio = amplitude(mg, m1, k, 0.0) / amplitude(g, m0, k, 0.0);
         std::cout << std::setprecision(6) << "  M*^2 today / at z = 150: " << M2_0 / M2_e << ", amplitude ratio today "
@@ -133,7 +132,7 @@ int main() {
         check(std::fabs(mg.bg.H_of_x(0.0) / g.bg.H_of_x(0.0) - 1.0) < 1e-10, "... the background is LCDM (same H)");
         // f(R): M*^2 = 1 + f_R ~ 1 - 1e-5
         World fr(ParameterFile::read("", {"preset=planck2018", "r=0.1", "model=fr", "fR0=1e-5"}));
-        const auto tc = fr.bg.gravity().tensor(0.0, fr.bg);
+        const auto tc = fr.bg.tensor_coefficients(0.0);
         check_close(tc.M2, 1.0 - 1e-5, 1e-7, "f(R): M*^2 today = 1 + f_R0");
         const auto mf = Tensors(fr.bg, fr.rec).mode(k);
         check_rel(amplitude(fr, mf, k, 0.0),

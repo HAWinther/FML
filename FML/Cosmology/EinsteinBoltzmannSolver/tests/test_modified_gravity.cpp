@@ -15,9 +15,9 @@
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Cosmology/Models/DGP.h>
-#include <FML/Cosmology/Models/HuSawicky.h>
-#include <FML/Cosmology/Models/MuSigma.h>
+#include <FML/Perturbations/PerturbedFieldEquation_DGP.h>
+#include <FML/Perturbations/PerturbedFieldEquation_HuSawicky.h>
+#include <FML/Perturbations/PerturbedFieldEquation_MuSigma.h>
 
 #include <cmath>
 #include <functional>
@@ -26,6 +26,7 @@
 using FML::TESTS::throws;
 
 using namespace FML::COSMOLOGY;
+namespace PT = FML::COSMOLOGY::PERTURBATIONS;
 
 using namespace Constants;
 using FML::TESTS::check;
@@ -126,13 +127,13 @@ int main() {
     {
         const double mu0 = 0.4, Sigma0 = 0.2;
         Run ms(model("musigma", {{"mu0", mu0}, {"Sigma0", Sigma0}}), o);
-        MuSigmaGravity g(mu0, Sigma0);
+        const auto & g = dynamic_cast<const PT::PerturbedFieldEquation_MuSigma &>(ms.pert.get_field_equations());
         double ePhi = 0.0, ePsi = 0.0;
         for (double k : ks)
             for (double x : {-2.0, -1.0, 0.0}) {
                 double D, S;
                 comoving_density(ms, x, k, D, S);
-                const auto m = g.mu_sigma(x, 0.0, ms.cosmo);
+                const auto m = g.mu_sigma(x, 0.0);
                 const double PhiGR = 1.5 * D / (c * c * k * k);
                 ePhi = std::max(ePhi, std::fabs(ms.pert.get_Phi(x, k) / ((2.0 * m.Sigma - m.mu) * PhiGR) - 1.0));
                 ePsi = std::max(ePsi,
@@ -140,11 +141,11 @@ int main() {
             }
         check_close(ePhi, 0.0, 1e-4, "Phi = (2 Sigma - mu) Phi_GR(rho Delta)");
         check_close(ePsi, 0.0, 1e-4, "Psi = -mu Phi_GR(rho Delta) - shear");
-        check_rel(g.mu_sigma(0.0, 0.0, ms.cosmo).mu, 1.0 + mu0, 1e-12, "mu(x=0) = 1 + mu0");
+        check_rel(g.mu_sigma(0.0, 0.0).mu, 1.0 + mu0, 1e-12, "mu(x=0) = 1 + mu0");
 
         const double k = ks.back(); // 0.2/Mpc: sub-horizon, quasi-static
         const double ratio = ms.pert.get_delta_cdm(0.0, k) / lcdm.pert.get_delta_cdm(0.0, k);
-        const double ref = growth(ms.cosmo, [&](double x) { return g.mu_sigma(x, 0.0, ms.cosmo).mu; }) /
+        const double ref = growth(ms.cosmo, [&](double x) { return g.mu_sigma(x, 0.0).mu; }) /
                            growth(lcdm.cosmo, [](double) { return 1.0; });
         std::cout << "  delta_cdm(mu0 = " << mu0 << ") / LCDM = " << ratio << ", growth equation: " << ref << "\n";
         check_close(ratio / ref, 1.0, 3e-4, "growth: delta_cdm ratio = growth equation");
@@ -211,7 +212,7 @@ int main() {
              {"nDGP, LCDM background", {{"Omega_rc", 0.25}, {"dgp_lcdm_background", 1.0}}},
              {"sDGP", {{"Omega_rc", 0.0}, {"dgp_branch", 1.0}}}}) {
         Run r(model("dgp", mp), o);
-        const auto & g = dynamic_cast<const DGPGravity &>(r.cosmo.gravity());
+        const auto & g = dynamic_cast<const PT::PerturbedFieldEquation_DGP &>(r.pert.get_field_equations());
         // beta from the definition, with dlnH/dx by finite differences
         const double Orc = mp.at("Omega_rc") > 0.0 ? mp.at("Omega_rc") : -1.0;
         double emu = 0.0;
@@ -222,7 +223,7 @@ int main() {
             const double O =
                 Orc > 0.0 ? Orc : 0.25 * std::pow(1.0 - (r.cosmo.rho_species(0.0) - r.cosmo.rhoDE(0.0)), 2);
             const double beta = 1.0 - eps * E * (1.0 + dlnE / 3.0) / std::sqrt(O);
-            emu = std::max(emu, std::fabs(g.mu_sigma(x, 0.0, r.cosmo).mu - (1.0 + 1.0 / (3.0 * beta))));
+            emu = std::max(emu, std::fabs(g.mu_sigma(x, 0.0).mu - (1.0 + 1.0 / (3.0 * beta))));
         }
         check_close(emu, 0.0, 1e-8, label + ": mu = 1 + 1/(3 beta)");
 
@@ -241,9 +242,9 @@ int main() {
 
         const double k = ks.back();
         const double ratio = r.pert.get_delta_cdm(0.0, k) / lcdm.pert.get_delta_cdm(0.0, k);
-        const double ref = growth(r.cosmo, [&](double x) { return g.mu_sigma(x, 0.0, r.cosmo).mu; }) /
+        const double ref = growth(r.cosmo, [&](double x) { return g.mu_sigma(x, 0.0).mu; }) /
                            growth(lcdm.cosmo, [](double) { return 1.0; });
-        std::cout << "  " << label << ": mu(0) = " << g.mu_sigma(0.0, 0.0, r.cosmo).mu
+        std::cout << "  " << label << ": mu(0) = " << g.mu_sigma(0.0, 0.0).mu
                   << ", delta_cdm / LCDM = " << ratio << ", growth equation: " << ref << "\n";
         check_close(ratio / ref, 1.0, 3e-4, label + ": growth = growth equation");
     }
@@ -261,22 +262,22 @@ int main() {
         PerturbationOptions of = o;
         of.k_max = 0.5 / Mpc;
         Run r(model("fr", {{"fR0", fR0}}), of), l(CosmologyParameters(), of);
-        const auto & g = dynamic_cast<const HuSawickyGravity &>(r.cosmo.gravity());
+        const auto & g = dynamic_cast<const PT::PerturbedFieldEquation_HuSawicky &>(r.pert.get_field_equations());
         const auto & cs = r.cosmo;
         // f_R(0) and the Compton wavelength today: lambda_C^2 = 3 (n+1) |f_R0| / (R0 (1 - |f_R0|)), R0 = 3 H0^2 (rho -
         // 3p)(0)
         const double R0 = 3.0 * std::pow(cs.get_H0() / c, 2) * (cs.rhoB(0.0) + cs.rhoCDM(0.0) + 4.0 * cs.rhoDE(0.0));
-        check_rel(g.fR(0.0, cs), -fR0, 1e-14, "f_R(0) = -|f_R0|");
-        check_rel(g.compton_wavelength(0.0, cs),
+        check_rel(g.fR(0.0), -fR0, 1e-14, "f_R(0) = -|f_R0|");
+        check_rel(g.compton_wavelength(0.0),
                   std::sqrt(6.0 * fR0 / (R0 * (1.0 - fR0))),
                   1e-10,
                   "Compton wavelength today");
-        check_rel(g.fR(-6.0, cs) / g.fR(-5.0, cs), std::exp(-6.0), 1e-5, "f_R ~ a^{-3(n+1)} in the matter era");
-        check_rel(g.mu_sigma(0.0, 1e3 / Mpc, cs).mu,
+        check_rel(g.fR(-6.0) / g.fR(-5.0), std::exp(-6.0), 1e-5, "f_R ~ a^{-3(n+1)} in the matter era");
+        check_rel(g.mu_sigma(0.0, 1e3 / Mpc).mu,
                   4.0 / 3.0 / (1.0 - fR0),
                   1e-5,
                   "mu -> 4/3 (1 + f_R)^-1 for k >> 1/lambda_C");
-        check_rel(g.mu_sigma(0.0, 1e-5 / Mpc, cs).mu,
+        check_rel(g.mu_sigma(0.0, 1e-5 / Mpc).mu,
                   1.0 / (1.0 - fR0),
                   1e-6,
                   "mu -> (1 + f_R)^-1 for k << 1/lambda_C");
@@ -284,9 +285,9 @@ int main() {
         // at k/a = m and k/a = 3 m (Q = 1/3 and 3)
         for (double x : {-1.0, 0.0})
             for (double s : {1.0, 3.0}) {
-                const double k = s * std::exp(x) / g.compton_wavelength(x, cs);
-                check_rel(g.mu_sigma(x, k, cs).mu,
-                          (1.0 + s * s / (3.0 * (s * s + 1.0))) / (1.0 + g.fR(x, cs)),
+                const double k = s * std::exp(x) / g.compton_wavelength(x);
+                check_rel(g.mu_sigma(x, k).mu,
+                          (1.0 + s * s / (3.0 * (s * s + 1.0))) / (1.0 + g.fR(x)),
                           1e-12,
                           "mu = Yukawa form at k/a = " + std::to_string(int(s)) + " m, x = " + std::to_string(x));
             }
@@ -296,7 +297,7 @@ int main() {
             for (double x : {-1.0, 0.0}) {
                 double D, S;
                 comoving_density(r, x, k, D, S);
-                const auto m = g.mu_sigma(x, k, cs);
+                const auto m = g.mu_sigma(x, k);
                 const double PhiGR = 1.5 * D / (c * c * k * k);
                 ePhi = std::max(ePhi, std::fabs(r.pert.get_Phi(x, k) / ((2.0 * m.Sigma - m.mu) * PhiGR) - 1.0));
                 ePsi =
@@ -309,7 +310,7 @@ int main() {
         for (size_t ik = 2; ik < r.pert.get_k_array().size(); ik++) {
             const double k = r.pert.get_k_array()[ik], kM = k * Mpc;
             const double ratio = r.pert.get_delta_cdm(0.0, k) / l.pert.get_delta_cdm(0.0, k);
-            const double ref = growth(cs, [&](double x) { return g.mu_sigma(x, k, cs).mu; }) /
+            const double ref = growth(cs, [&](double x) { return g.mu_sigma(x, k).mu; }) /
                                growth(l.cosmo, [](double) { return 1.0; });
             std::cout << "  |f_R0| = 1e-4, k = " << kM << "/Mpc: delta_cdm / LCDM = " << ratio
                       << ", growth equation: " << ref << "\n";

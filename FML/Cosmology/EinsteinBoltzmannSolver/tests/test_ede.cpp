@@ -1,5 +1,6 @@
 // =============================================================================
-// Tests of early dark energy (models/EarlyDarkEnergy.h, models/ScalarField.h). Run with `make test`.
+// Tests of early dark energy (FML/Background/BackgroundModel_EDE.h, FML/Perturbations/SpeciesPerturbation_ScalarField.h).
+// Run with `make test`.
 //
 //   * Shooting: the maximum of rho_EDE/rho_tot is f_EDE at z_c; E(0) = 1 (Omega_Lambda from closure)
 //   * Background: rho', rho'' vs finite differences (the stored field and its derivative agree); the
@@ -7,22 +8,24 @@
 //   * Oscillating phase: the energy redshifts as a^{-6n/(n+1)} (w -> (n-1)/(n+1)) for two n = 3 models
 //     (for larger n the frequency drops with the amplitude and the average is reached only slowly)
 //   * Perturbations: the Einstein constraints that are not evolved (Poisson, momentum) hold with the field's
-//     density and momentum, around and after z_c
+//     density and momentum, around and after z_c; also after the switch to the oscillating fluid (n = 2.2, z_c = 1e6:
+//     the background replaces the field by a fluid at z ~ 1e4, and so do the perturbations)
 //   * Small f_EDE approaches LCDM
 // (python/compare_class_ede.py compares with CLASS_EDE of Hill et al. 2020.)
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
-#include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Cosmology/Models/EarlyDarkEnergy.h>
+#include <FML/Perturbations/PerturbationModel_EDE.h>
 
+#include <algorithm>
 #include <cmath>
 
 using namespace FML::COSMOLOGY;
+using EarlyDarkEnergySpecies = FML::COSMOLOGY::BACKGROUND::EarlyDarkEnergySpecies;
 
 using namespace Constants;
 using FML::TESTS::check;
@@ -49,7 +52,7 @@ namespace {
     };
 
     const EarlyDarkEnergySpecies & field(const BackgroundCosmology & b) {
-        for (const auto & s : b.species())
+        for (const auto & s : b.background().species())
             if (auto e = dynamic_cast<const EarlyDarkEnergySpecies *>(s.get()))
                 return *e;
         throw std::runtime_error("no early dark energy");
@@ -65,7 +68,7 @@ int main() {
     std::cout << "  " << e.info() << "\n";
     {
         double fm, xp;
-        e.peak(fm, xp);
+        e.fraction_peak(fm, xp);
         check_rel(fm, 0.1, 1e-9, "max rho_EDE/rho_tot = f_EDE");
         check_close(std::log10(std::exp(-xp) - 1.0), 3.5, 1e-8, "at z_c");
         check_close(b.E2_of_x(0.0), 1.0, 1e-12, "E(0) = 1");
@@ -73,7 +76,7 @@ int main() {
         for (double x : {-10.0, -8.3, -8.06, -7.9, -7.5, -6.0, -3.0}) {
             const double h = 1e-4;
             e1 = std::max(e1, std::fabs((e.rho(x + h) - e.rho(x - h)) / (2 * h) - e.drhodx(x)) / e.rho(x));
-            e2 = std::max(e2, std::fabs((e.drhodx(x + h) - e.drhodx(x - h)) / (2 * h) - e.ddrhoddx(x)) / e.rho(x));
+            e2 = std::max(e2, std::fabs((e.drhodx(x + h) - e.drhodx(x - h)) / (2 * h) - e.d2rhodx2(x)) / e.rho(x));
             // the stored phi_x is the derivative of the stored phi, and phi_xx of the Klein-Gordon equation that of
             // phi_x
             ekg = std::max(ekg, std::fabs((e.phi(x + h) - e.phi(x - h)) / (2 * h) - e.dphidx(x)) / e.f());
@@ -96,32 +99,27 @@ int main() {
         check(
             [] {
                 try {
-                    BackgroundCosmology bb(ede(0.05, 3.5, 2.0, 2.0));
+                    BackgroundCosmology bb(ede(0.05, 3.5, 2.0, 1.0));
                 } catch (const std::invalid_argument &) {
                     return true;
                 }
                 return false;
             }(),
-            "n <= 2 rejected");
+            "n <= 1 rejected");
     }
 
-    PerturbationOptions o;
-    o.n_k = 4;
-    o.k_min = 0.002 / Mpc;
-    o.k_max = 0.2 / Mpc;
-    std::cout << "Perturbations: Einstein constraints with the field\n";
-    Run r(ede(0.1, 3.5, 2.8, 3.0), o);
-    {
+    // The Einstein constraints (Poisson, momentum) with the field's density and momentum (delta_de, q_de) at xs
+    auto constraints = [](const Run & r, const std::vector<double> & xs, double & eP, double & eM, double & frac) {
         const auto & cs = r.cosmo;
         const auto & pt = r.pert;
         const auto & f = field(cs);
-        double eP = 0.0, eM = 0.0, frac = 0.0;
+        eP = eM = frac = 0.0;
         for (double k : pt.get_k_array())
-            for (double x : {-8.5, -8.06, -7.5, -6.5}) {
+            for (double x : xs) {
                 const double H0a2 = std::pow(cs.get_H0() * std::exp(x), 2), Hp = cs.Hp_of_x(x), ckH = c * k / Hp;
                 const double rc = cs.rhoCDM(x), rb = cs.rhoB(x), rg = cs.rhoGamma(x), rn = cs.rhoNu(x);
-                const double dphi = pt.get("delta_phi", x, k), dfield = H0a2 * f.rho(x) * pt.get("delta_de", x, k);
-                const double ffield = ckH * Hp * Hp * f.dphidx(x) * dphi / 3.0;
+                const double dfield = H0a2 * f.rho(x) * pt.get("delta_de", x, k);
+                const double ffield = H0a2 * f.rho(x) * pt.get("q_de", x, k);
                 const double drho = H0a2 * (rc * pt.get_delta_cdm(x, k) + rb * pt.get_delta_b(x, k) +
                                             4.0 * rg * pt.get_Theta(0, x, k) + 4.0 * rn * pt.get_Nu(0, x, k)) +
                                     dfield;
@@ -138,10 +136,48 @@ int main() {
                     eM,
                     std::fabs((pt.get_dPhidx(x, k) - pt.get_Psi(x, k)) / (-1.5 * flux / (ckH * Hp * Hp)) - 1.0));
             }
+    };
+
+    PerturbationOptions o;
+    o.n_k = 4;
+    o.k_min = 0.002 / Mpc;
+    o.k_max = 0.2 / Mpc;
+    std::cout << "Perturbations: Einstein constraints with the field\n";
+    {
+        Run r(ede(0.1, 3.5, 2.8, 3.0), o);
+        double eP, eM, frac;
+        constraints(r, {-8.5, -8.06, -7.5, -6.5}, eP, eM, frac);
         std::cout << "  field share of the comoving density perturbation: up to " << frac << "\n";
         check_close(eP, 0.0, 5e-6, "Poisson constraint (relative to delta rho)");
         check_close(eM, 0.0, 1e-5, "momentum constraint");
         check(frac > 0.01, "the field's perturbations are tested (> 1%)");
+    }
+
+    std::cout << "Perturbations: the oscillating fluid (f_EDE = 0.05, log10 z_c = 6, theta_i = 2, n = 2.2)\n";
+    {
+        Run r(ede(0.05, 6.0, 2.0, 2.2), o);
+        const double xf = field(r.cosmo).x_fluid();
+        std::cout << "  the background is a fluid with w = " << field(r.cosmo).w_oscillating() << " from x = " << xf
+                  << " (z = " << std::expm1(-xf) << ")\n";
+        check(xf > -10.0 && xf < -8.0, "the field becomes a fluid before recombination");
+        // at nodes of the x-grid (the field oscillates on the scale of the grid spacing before the switch)
+        auto nodes = [&](std::vector<double> xs) {
+            for (auto & x : xs) {
+                const auto & g = r.pert.get_x_array();
+                x = *std::min_element(g.begin(), g.end(), [x](double a, double b) { return std::fabs(a - x) < std::fabs(b - x); });
+            }
+            return xs;
+        };
+        double eP, eM, frac, eP0, eM0, frac0;
+        constraints(r, nodes({xf - 1.0, xf - 0.3}), eP0, eM0, frac0);
+        constraints(r, nodes({xf + 0.02, xf + 0.3, xf + 1.0, -7.0}), eP, eM, frac);
+        std::cout << "  field share of the comoving density perturbation: up to " << frac0 << " before, " << frac
+                  << " after the switch\n";
+        check_close(eP0, 0.0, 5e-6, "field: Poisson constraint");
+        check_close(eM0, 0.0, 1e-5, "field: momentum constraint");
+        check_close(eP, 0.0, 5e-6, "fluid: Poisson constraint");
+        check_close(eM, 0.0, 1e-5, "fluid: momentum constraint");
+        check(frac > 1e-3, "the fluid's perturbations are tested (> 1e-3)");
     }
 
     std::cout << "Small f_EDE\n";
