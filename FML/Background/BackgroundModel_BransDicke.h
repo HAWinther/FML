@@ -26,27 +26,6 @@
 
 namespace FML::COSMOLOGY::BACKGROUND {
 
-    /// A species with its density and pressure multiplied by a constant (another normalisation of the density
-    /// parameters)
-    class ScaledSpecies : public Species {
-      public:
-        ScaledSpecies(std::shared_ptr<const Species> s, double factor) : s(std::move(s)), f(factor) {}
-        std::string name() const override { return s->name(); }
-        Component component() const override { return s->component(); }
-        double rho(double x) const override { return f * s->rho(x); }
-        double p(double x) const override { return f * s->p(x); }
-        double drhodx(double x) const override { return f * s->drhodx(x); }
-        std::string info() const override {
-            std::ostringstream o;
-            o << s->info() << " (x " << f << ")";
-            return o.str();
-        }
-
-      private:
-        std::shared_ptr<const Species> s;
-        double f;
-    };
-
     /// Jordan-Brans-Dicke with Lambda: the standard species (in the units of the density definition) + Lambda from
     /// E(0) = 1. GeffG_today = G_eff/G today (phi(0) = phi_*/GeffG_today)
     inline ComponentBackgroundPtr

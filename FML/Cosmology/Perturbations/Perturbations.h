@@ -7,10 +7,15 @@
 //
 // Structure: the core evolves the photon-baryon plasma (baryons coupled to the photon temperature
 // and polarization hierarchies by Thomson scattering, with tight coupling) and the potential Phi. All other
-// species (CDM, neutrinos, ...) come from the model (Species.h): each contributes its own block of variables,
-// equations, initial conditions and stored outputs, and the Gravity of the model gives Psi and Phi' from
-// the summed Moments (density, momentum, anisotropic stress) of all species. See models/StandardSpecies.cpp
-// for CDM and the neutrinos, and models/GeneralRelativity.cpp for the Einstein equations.
+// species (CDM, neutrinos, ...) come from the model: each contributes its own block of variables,
+// equations, initial conditions and stored outputs (PERTURBATIONS::SpeciesPerturbation), and the perturbed
+// field equations of the model (PERTURBATIONS::PerturbedFieldEquation) give Psi and Phi' from the summed
+// Moments (density, momentum, anisotropic stress) of all species. Both are built by the model's
+// PERTURBATIONS::PerturbationModel (FML/Perturbations: lcdm, jbd) in a PerturbationContext of the background
+// (BackgroundCosmology::background()) with the species options of PerturbationOptions.
+// TRANSITIONAL: models whose perturbations are not ported yet (BackgroundCosmology::has_legacy_model) use
+// the solver's own Species::perturbations and Gravity (Cosmology/Models), wrapped as SpeciesPerturbation and
+// PerturbedFieldEquation (Perturbations.cpp).
 //
 // Physics of the core:
 //   * Baryons (delta_b, v_b), photon temperature multipoles Theta_0..Theta_lmax, photon polarization
@@ -42,6 +47,9 @@
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/Cosmology/Background/Species.h>
 #include <FML/Cosmology/Common.h>
+#include <FML/Perturbations/PerturbationTypes.h>
+#include <FML/Perturbations/PerturbedFieldEquation.h>
+#include <FML/Perturbations/SpeciesPerturbation.h>
 
 #include <array>
 #include <limits>
@@ -163,8 +171,14 @@ namespace FML::COSMOLOGY {
         const PerturbationOptions & get_options() const { return options; }
         const BackgroundCosmology & get_cosmo() const { return cosmo; }
         const RecombinationHistory & get_rec() const { return rec; }
-        // Perturbed species of the model (those whose Species::perturbations() is not null)
-        const std::vector<std::unique_ptr<SpeciesPerturbations>> & get_species() const { return species; }
+        // Perturbed species of the model (CDM, neutrinos, ...; not photons and baryons) and its perturbed field
+        // equations
+        const std::vector<std::unique_ptr<PERTURBATIONS::SpeciesPerturbation>> & get_species() const {
+            return species;
+        }
+        const PERTURBATIONS::PerturbedFieldEquation & get_field_equations() const { return *field_eq; }
+        // The context the species and field equations are built in (the settings from PerturbationOptions)
+        const PERTURBATIONS::PerturbationContext & get_context() const { return *ctx; }
 
         void info() const;
         // Write all quantities as a function of x for one k [1/m]
@@ -194,10 +208,11 @@ namespace FML::COSMOLOGY {
         PerturbationOptions options;
         double K = 0.0; // spatial curvature [1/m^2], see s_ell
 
-        // Perturbed species, the Species they belong to, and their stored outputs
-        std::vector<std::unique_ptr<SpeciesPerturbations>> species;
-        std::vector<const Species *> species_bg;
-        std::vector<std::string> output_names; // of the species, then of the gravity
+        // The perturbations of the model: species, field equations and their stored outputs
+        std::unique_ptr<PERTURBATIONS::PerturbationContext> ctx;
+        std::vector<std::unique_ptr<PERTURBATIONS::SpeciesPerturbation>> species;
+        std::unique_ptr<PERTURBATIONS::PerturbedFieldEquation> field_eq;
+        std::vector<std::string> output_names; // of the species, then of the field equations
         std::map<std::string, int> output_index;
         int n_gravity_outputs = 0;
 
@@ -219,7 +234,7 @@ namespace FML::COSMOLOGY {
         struct ModeState {
             ModeAtX b;
             std::vector<std::vector<double>> cache;
-            std::vector<double> gcache; // of the gravity
+            std::vector<double> gcache; // of the field equations
         };
         ModeState make_mode(double k) const;
         void update(double x, ModeState & st) const;

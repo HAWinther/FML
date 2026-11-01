@@ -12,6 +12,7 @@
 //   PowerLawSpecies         rho = Omega0 a^{-n}: baryons, CDM (n = 3), photons, massless neutrinos (n = 4), Lambda
 //   CPLDarkEnergy           w = w0 + wa (1 - a)
 //   MassiveNeutrinoSpecies  one Fermi-Dirac species of mass m (relativistic at early times, matter today)
+//   ScaledSpecies           another species with rho and p times a constant (other density normalisations)
 //   ScalarFieldSpecies      the base of the scalar-field dark energies (BackgroundModel_Quintessence.h, _EDE.h), which
 //                           solve the field in their constructor (see below)
 //
@@ -122,10 +123,13 @@ namespace FML::COSMOLOGY::BACKGROUND {
     // -----------------------------------------------------------------------------------------------------------------
 
     /// The Fermi-Dirac momentum integrals of one massive species (neutrino + antineutrino), f0(q) = 1/(e^q + 1),
-    /// with q the momentum and M = m c^2 a / (k_B T_nu0) the mass in units of the temperature:
-    ///   I_rho(M) = int q^2 sqrt(q^2 + M^2) f0 dq,   I_p(M) = int q^4 / (3 sqrt(q^2 + M^2)) f0 dq
+    /// with q the momentum, M = m c^2 a / (k_B T_nu0) the mass in units of the temperature and eps = sqrt(q^2 + M^2):
+    ///   I_rho(M) = int q^2 eps f0 dq,   I_p(M) = int q^4 / (3 eps) f0 dq,   I_pp(M) = int q^6 / (3 eps^3) f0 dq
     /// so that rho / rho_gamma = (15/pi^4) (T_nu/T_gamma)^4 I_rho (I_rho(0) = 7 pi^4/120: (7/8) (T_nu/T_gamma)^4).
-    /// Tabulated once (Simpson in q on [0, 60], spline in log M on [1e-4, 1e7]) with the series beyond the table.
+    /// I_pp is the pseudo-pressure of Lesgourgues & Tram 2011 (dI_p/dlnM = I_pp - I_p, so dp/dx = -(5p - pseudo_p)).
+    /// Tabulated once (Simpson in q on [0, 60], spline in log M on [1e-4, 1e7]) with the series beyond the table:
+    /// small M: I_rho_0 + pi^2 M^2/24, I_rho_0/3 - pi^2 M^2/72, I_rho_0/3 - pi^2 M^2/24; large M: (3/2) zeta(3) M +
+    /// (45/4) zeta(5)/M, (15/2) zeta(5)/M, (945/4) zeta(7)/M^3.
     class FermiDiracIntegrals {
       public:
         static const FermiDiracIntegrals & get() {
@@ -146,12 +150,19 @@ namespace FML::COSMOLOGY::BACKGROUND {
                 return 7.5 * zeta5 / M;
             return std::exp(log_I_p(std::log(M)));
         }
+        double I_pp(double M) const {
+            if (M <= M_lo)
+                return I_rho_0 / 3.0 - M * M * M_PI * M_PI / 24.0;
+            if (M >= M_hi)
+                return 236.25 * zeta7 / (M * M * M);
+            return std::exp(log_I_pp(std::log(M)));
+        }
         static constexpr double I_rho_0 = 7.0 * M_PI * M_PI * M_PI * M_PI / 120.0;
 
       private:
-        static constexpr double zeta3 = 1.2020569031595942, zeta5 = 1.0369277551433699;
+        static constexpr double zeta3 = 1.2020569031595942, zeta5 = 1.0369277551433699, zeta7 = 1.0083492773819228;
         static constexpr double M_lo = 1e-4, M_hi = 1e7;
-        FML::INTERPOLATION::SPLINE::GSLSpline log_I_rho, log_I_p;
+        FML::INTERPOLATION::SPLINE::GSLSpline log_I_rho, log_I_p, log_I_pp;
 
         FermiDiracIntegrals() {
             const int nq = 6000, nM = 1500;
@@ -162,25 +173,30 @@ namespace FML::COSMOLOGY::BACKGROUND {
                 const double simpson = (i == 0 or i == nq) ? 1.0 : (i % 2 == 1 ? 4.0 : 2.0);
                 wf[i] = simpson * dq / 3.0 / (std::exp(q[i]) + 1.0);
             }
-            std::vector<double> logM(nM), lr(nM), lp(nM);
+            std::vector<double> logM(nM), lr(nM), lp(nM), lpp(nM);
             for (int j = 0; j < nM; j++) {
                 logM[j] = std::log(M_lo) + (std::log(M_hi) - std::log(M_lo)) * j / double(nM - 1);
                 const double M = std::exp(logM[j]);
-                double r = 0.0, pp = 0.0;
+                double r = 0.0, pp = 0.0, ps = 0.0;
                 for (int i = 1; i <= nq; i++) {
                     const double q2 = q[i] * q[i], eps = std::sqrt(q2 + M * M);
                     r += wf[i] * q2 * eps;
                     pp += wf[i] * q2 * q2 / (3.0 * eps);
+                    ps += wf[i] * q2 * q2 * q2 / (3.0 * eps * eps * eps);
                 }
                 lr[j] = std::log(r);
                 lp[j] = std::log(pp);
+                lpp[j] = std::log(ps);
             }
             log_I_rho.create(logM, lr, "Fermi-Dirac log I_rho(log M)");
             log_I_p.create(logM, lp, "Fermi-Dirac log I_p(log M)");
+            log_I_pp.create(logM, lpp, "Fermi-Dirac log I_pp(log M)");
         }
     };
 
-    /// One massive neutrino species of mass m [eV] with temperature T_ncdm_over_TCMB * T_CMB today
+    /// One massive neutrino species of mass m [eV] with temperature T_ncdm_over_TCMB * T_CMB today:
+    ///   rho = C a^-4 I_rho(M(x)), p = C a^-4 I_p(M), pseudo_p = C a^-4 I_pp(M),  M(x) = M_today e^x,
+    ///   C = Omega_gamma (15/pi^4) (T_ncdm/T_CMB)^4,   dp/dx = -(5p - pseudo_p)
     class MassiveNeutrinoSpecies : public Species {
       public:
         MassiveNeutrinoSpecies(double m_eV, const BackgroundParameters & p) : m_eV(m_eV) {
@@ -190,17 +206,22 @@ namespace FML::COSMOLOGY::BACKGROUND {
                 throw std::invalid_argument("[MassiveNeutrinoSpecies] Need m > 0 and T_ncdm > 0");
             M0 = m_eV * eV / (k_b * T_ncdm);
             FermiDiracIntegrals::get(); // tabulated here, not first inside a parallel region
-            prefactor = p.Omega_gamma() * std::pow(p.T_ncdm_over_TCMB, 4) * 15.0 / std::pow(M_PI, 4);
+            C = p.Omega_gamma() * std::pow(p.T_ncdm_over_TCMB, 4) * 15.0 / std::pow(M_PI, 4);
         }
         std::string name() const override { return "massive_nu"; }
         Component component() const override { return Component::MassiveNeutrinos; }
         double rho(double x) const override {
-            return prefactor * std::exp(-4.0 * x) * FermiDiracIntegrals::get().I_rho(M0 * std::exp(x));
+            return C * std::exp(-4.0 * x) * FermiDiracIntegrals::get().I_rho(M_of_x(x));
         }
-        double p(double x) const override {
-            return prefactor * std::exp(-4.0 * x) * FermiDiracIntegrals::get().I_p(M0 * std::exp(x));
-        }
-        /// m c^2 / (k_B T_nu) today
+        double p(double x) const override { return C * std::exp(-4.0 * x) * FermiDiracIntegrals::get().I_p(M_of_x(x)); }
+        /// The pseudo-pressure (Lesgourgues & Tram 2011) [rho_c0 c^2]
+        double pseudo_p(double x) const { return C * std::exp(-4.0 * x) * FermiDiracIntegrals::get().I_pp(M_of_x(x)); }
+        /// dp/dx = -(5p - pseudo_p)
+        double dpdx(double x) const { return -(5.0 * p(x) - pseudo_p(x)); }
+        /// rho a^4 / I_rho(M) [rho_c0]
+        double prefactor() const { return C; }
+        /// m c^2 a / (k_B T_nu0): the mass in units of the temperature at x, and today
+        double M_of_x(double x) const { return M0 * std::exp(x); }
         double M_today() const { return M0; }
         double mass_eV() const { return m_eV; }
         std::string info() const override {
@@ -210,7 +231,35 @@ namespace FML::COSMOLOGY::BACKGROUND {
         }
 
       private:
-        double m_eV, M0, prefactor;
+        double m_eV, M0, C;
+    };
+
+    /// A species with its density and pressure multiplied by a constant (another normalisation of the density
+    /// parameters, e.g. the Brans-Dicke density definitions); species() and factor() give what it wraps
+    class ScaledSpecies : public Species {
+      public:
+        ScaledSpecies(std::shared_ptr<const Species> s, double factor) : s(std::move(s)), f(factor) {
+            if (not this->s)
+                throw std::invalid_argument("[ScaledSpecies] Null species");
+        }
+        std::string name() const override { return s->name(); }
+        Component component() const override { return s->component(); }
+        double rho(double x) const override { return f * s->rho(x); }
+        double p(double x) const override { return f * s->p(x); }
+        double drhodx(double x) const override { return f * s->drhodx(x); }
+        std::string info() const override {
+            std::ostringstream o;
+            o << s->info() << " (x " << f << ")";
+            return o.str();
+        }
+        /// The wrapped species and the factor
+        const Species & species() const { return *s; }
+        const std::shared_ptr<const Species> & species_ptr() const { return s; }
+        double factor() const { return f; }
+
+      private:
+        std::shared_ptr<const Species> s;
+        double f;
     };
 
     // -----------------------------------------------------------------------------------------------------------------
@@ -316,8 +365,8 @@ namespace FML::COSMOLOGY::BACKGROUND {
             return -(3.0 + dlnE) * dphi - 3.0 * v_phi(phi) / e2;
         }
 
-        /// Integrate from (phi_ini, phi_x = dphi_ini) at x_from to x_to (the grid x_from + i dx, extended to cover x_to)
-        /// and store the solution. Throws if the field makes E^2 <= 0 or phi_x^2 >= 6.
+        /// Integrate from (phi_ini, phi_x = dphi_ini) at x_from to x_to (the grid x_from + i dx, extended to cover
+        /// x_to) and store the solution. Throws if the field makes E^2 <= 0 or phi_x^2 >= 6.
         void solve(double phi_ini, double dphi_ini, double x_from, double x_to) {
             const std::string msg = "[" + name() + "] ";
             if (not(dphi_ini * dphi_ini < 6.0))
@@ -359,8 +408,8 @@ namespace FML::COSMOLOGY::BACKGROUND {
                 for (size_t j = 1; j < xx.size(); j++) {
                     const double e2 = E2(xx[j], sol[j][0], sol[j][1]);
                     if (not(e2 > 0.0) or not std::isfinite(e2) or not(sol[j][1] * sol[j][1] < 6.0))
-                        throw std::runtime_error(msg + "The field gives E^2 <= 0 or phi_x^2 >= 6 at x = " +
-                                                 std::to_string(xx[j]));
+                        throw std::runtime_error(
+                            msg + "The field gives E^2 <= 0 or phi_x^2 >= 6 at x = " + std::to_string(xx[j]));
                     f.push_back(sol[j][0]);
                     df.push_back(sol[j][1]);
                     ddf.push_back(ddphi(xx[j], sol[j][0], sol[j][1]));
@@ -413,8 +462,8 @@ namespace FML::COSMOLOGY::BACKGROUND {
         std::vector<double> f, df, ddf;
 
         /// phi (or phi_x) between the nodes: quintic Hermite interpolation of phi from phi, phi_x, phi_xx at the two
-        /// nodes around x (error ~ (omega dx)^6 for a field oscillating with frequency omega in x; a cubic spline of phi
-        /// and phi_x gives 1e-5 errors in E when the field oscillates with m / H ~ 100)
+        /// nodes around x (error ~ (omega dx)^6 for a field oscillating with frequency omega in x; a cubic spline of
+        /// phi and phi_x gives 1e-5 errors in E when the field oscillates with m / H ~ 100)
         double interpolate(double x, bool derivative) const {
             const int last = int(f.size()) - 2;
             const int i = std::clamp(int(std::floor((x - xs) / dx)), 0, last);
@@ -422,15 +471,18 @@ namespace FML::COSMOLOGY::BACKGROUND {
             const double h = dx, h2 = dx * dx;
             if (not derivative) {
                 const double t4 = t3 * t, t5 = t4 * t;
-                return f[i] * (1.0 - 10.0 * t3 + 15.0 * t4 - 6.0 * t5) + h * df[i] * (t - 6.0 * t3 + 8.0 * t4 - 3.0 * t5) +
+                return f[i] * (1.0 - 10.0 * t3 + 15.0 * t4 - 6.0 * t5) +
+                       h * df[i] * (t - 6.0 * t3 + 8.0 * t4 - 3.0 * t5) +
                        h2 * ddf[i] * 0.5 * (t2 - 3.0 * t3 + 3.0 * t4 - t5) +
-                       f[i + 1] * (10.0 * t3 - 15.0 * t4 + 6.0 * t5) + h * df[i + 1] * (-4.0 * t3 + 7.0 * t4 - 3.0 * t5) +
-                       h2 * ddf[i + 1] * 0.5 * (t3 - 2.0 * t4 + t5);
+                       f[i + 1] * (10.0 * t3 - 15.0 * t4 + 6.0 * t5) +
+                       h * df[i + 1] * (-4.0 * t3 + 7.0 * t4 - 3.0 * t5) + h2 * ddf[i + 1] * 0.5 * (t3 - 2.0 * t4 + t5);
             }
             const double t4 = t3 * t;
-            return (f[i] * (-30.0 * t2 + 60.0 * t3 - 30.0 * t4) + h * df[i] * (1.0 - 18.0 * t2 + 32.0 * t3 - 15.0 * t4) +
+            return (f[i] * (-30.0 * t2 + 60.0 * t3 - 30.0 * t4) +
+                    h * df[i] * (1.0 - 18.0 * t2 + 32.0 * t3 - 15.0 * t4) +
                     h2 * ddf[i] * 0.5 * (2.0 * t - 9.0 * t2 + 12.0 * t3 - 5.0 * t4) +
-                    f[i + 1] * (30.0 * t2 - 60.0 * t3 + 30.0 * t4) + h * df[i + 1] * (-12.0 * t2 + 28.0 * t3 - 15.0 * t4) +
+                    f[i + 1] * (30.0 * t2 - 60.0 * t3 + 30.0 * t4) +
+                    h * df[i + 1] * (-12.0 * t2 + 28.0 * t3 - 15.0 * t4) +
                     h2 * ddf[i + 1] * 0.5 * (3.0 * t2 - 8.0 * t3 + 5.0 * t4)) /
                    h;
         }

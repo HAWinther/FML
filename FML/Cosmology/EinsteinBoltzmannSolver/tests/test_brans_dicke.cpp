@@ -1,5 +1,6 @@
 // =============================================================================
-// Tests of Jordan-Brans-Dicke gravity (models/BransDicke.h). Run with `make test`.
+// Tests of Jordan-Brans-Dicke gravity (the background: FML/Background/FieldEquation_BransDicke.h, the perturbations:
+// FML/Perturbations/PerturbedFieldEquation_BransDicke.h). Run with `make test`.
 //
 //   * Background: phi(0) gives the Newtonian G, E(0) = 1, dlnE/dx and d2E2/dx2 vs finite differences,
 //     the field equation vs finite differences of the solution, and phi ~ a^{1/(1 + omega)} in the matter era
@@ -15,7 +16,7 @@
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Cosmology/Models/BransDicke.h>
+#include <FML/Background/FieldEquation_BransDicke.h>
 
 #include <cmath>
 #include <functional>
@@ -73,7 +74,7 @@ int main() {
     std::cout << "Background (omega = " << omega << ")\n";
     BackgroundCosmology b(jbd(omega));
     b.solve();
-    const auto & g = dynamic_cast<const BransDickeGravity &>(b.gravity());
+    const auto & g = *b.background().field_equations_as<BACKGROUND::BransDickeFieldEquations>();
     {
         check_rel(g.phi(0.0),
                   (4.0 + 2.0 * omega) / (3.0 + 2.0 * omega),
@@ -87,9 +88,7 @@ int main() {
             e2 = std::max(e2,
                           std::fabs((b.dE2dx_of_x(x + h) - b.dE2dx_of_x(x - h)) / (2 * h) / b.ddE2ddx_of_x(x) - 1.0));
             // F_xx (finite differences of the solution) = -(3 + dlnE/dx) F_x + 3 (rho - 3p) / ((3 + 2 omega) E^2)
-            double p = 0.0;
-            for (const auto & s : b.species())
-                p += s->p(x);
+            const double p = b.background().p_total(x);
             const double Fxx = (g.dphidx(x + h) - g.dphidx(x - h)) / (2 * h);
             const double L = 0.5 * b.dE2dx_of_x(x) / b.E2_of_x(x);
             const double rhs =
@@ -157,7 +156,7 @@ int main() {
                              (lcdm.pert.get_delta_cdm(0.0, k) / lcdm.pert.get_delta_cdm(x0, k));
         const double ref = growth(
                                cs,
-                               [&](double x) { return g.G_eff(x); },
+                               [&](double x) { return g.Geff_over_Geff_today(x); },
                                x0,
                                dln(pt)) /
                            growth(lcdm.cosmo, [](double) { return 1.0; }, x0, dln(lcdm.pert));

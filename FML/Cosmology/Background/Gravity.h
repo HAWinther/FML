@@ -23,6 +23,12 @@
 // (GR: M*^2 = 1, alpha_M = alpha_T = 0).
 // =============================================================================
 
+// TRANSITIONAL (see Species.h): used for the models whose perturbations are not in FML/Perturbations yet (wrapped as
+// PERTURBATIONS::PerturbedFieldEquation by Perturbations.cpp) and for explicit models (as the field equations of their
+// ComponentBackground); the ported models use FML/Background's FieldEquations and FML/Perturbations'
+// PerturbedFieldEquation.
+// =============================================================================
+
 #include <FML/Cosmology/Background/Species.h>
 
 #include <string>
@@ -32,9 +38,7 @@ namespace FML::COSMOLOGY {
 
     class BackgroundCosmology;
 
-    struct TensorCoefficients {
-        double M2 = 1.0, alpha_M = 0.0, alpha_T = 0.0;
-    };
+    using TensorCoefficients = PERTURBATIONS::TensorCoefficients;
 
     class Gravity {
       public:

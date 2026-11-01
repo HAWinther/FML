@@ -13,7 +13,8 @@
 // A derived class gives the virtual core: E, dlogEdx, Omega, the parameters and the valid range, and calls
 // finalize() at the end of its constructor. finalize() integrates the conformal time, the cosmic time and the
 // comoving distance once (5-point Gauss-Legendre on a fine grid in x, with the exact power-law solution at x_min) and
-// everything else (distances with curvature, times, the inverse x(chi), a- and z-versions) is non-virtual here.
+// everything else (distances with curvature, sin_K / cot_K, times, the inverse x(chi), a- and z-versions) is
+// non-virtual here.
 //
 // Implementations:
 //   ComponentBackground  species (Species.h) + field equations (FieldEquations.h): the physical models
@@ -95,7 +96,8 @@ namespace FML::COSMOLOGY::BACKGROUND {
         double x_max() const { return range.x_max; }
         bool in_range(double x) const { return x >= range.x_min - 1e-12 and x <= range.x_max + 1e-12; }
 
-        // ---- Parameters and today's values ---------------------------------------------------------------------------
+        // ---- Parameters and today's values
+        // ---------------------------------------------------------------------------
         double h() const { return parameters().h; }
         /// H0 in h/Mpc (with c = 1: 1 / 2997.92458)
         double H0_hmpc() const { return 1.0 / FML::UTILS::SI::c_over_H0_mpch; }
@@ -118,15 +120,14 @@ namespace FML::COSMOLOGY::BACKGROUND {
             return Omega(Component::Baryons, x) + Omega(Component::CDM, x) + Omega(Component::MassiveNeutrinos, x);
         }
         /// Radiation: photons + massless neutrinos
-        double Omega_r(double x) const {
-            return Omega(Component::Photons, x) + Omega(Component::MasslessNeutrinos, x);
-        }
+        double Omega_r(double x) const { return Omega(Component::Photons, x) + Omega(Component::MasslessNeutrinos, x); }
         /// The effective equation of state of the total: -1 - (2/3) dlnH/dx (curvature counted as a fluid w = -1/3)
         double w_eff(double x) const { return -1.0 - 2.0 / 3.0 * dlogEdx(x); }
         /// The deceleration parameter q = -1 - dlnH/dx
         double deceleration(double x) const { return -1.0 - dlogEdx(x); }
 
-        // ---- Times and distances (tabulated by finalize) -------------------------------------------------------------
+        // ---- Times and distances (tabulated by finalize)
+        // -------------------------------------------------------------
         /// Conformal time in Mpc/h
         double eta(double x) const {
             check(x, "eta");
@@ -160,13 +161,39 @@ namespace FML::COSMOLOGY::BACKGROUND {
             return x_of_chi_spline(d);
         }
         /// Transverse comoving distance D_M in Mpc/h (with curvature)
-        double D_M(double x) const { return FML::UTILS::SI::c_over_H0_mpch * sinK(chi(x) / FML::UTILS::SI::c_over_H0_mpch); }
+        double D_M(double x) const { return sinK(chi(x)); }
         /// Angular diameter distance in Mpc/h
         double D_A(double x) const { return std::exp(x) * D_M(x); }
         /// Luminosity distance in Mpc/h
         double D_L(double x) const { return D_M(x) / std::exp(x); }
         /// Hubble distance c/H(x) in Mpc/h
         double D_H(double x) const { return FML::UTILS::SI::c_over_H0_mpch / E(x); }
+
+        // ---- Spatial geometry
+        // -----------------------------------------------------------------------------------------
+        /// The spatial curvature K = -Omega_k (H0/c)^2 in (h/Mpc)^2 (K > 0 closed, K < 0 open)
+        double K_hmpc2() const {
+            const double H0c = 1.0 / FML::UTILS::SI::c_over_H0_mpch;
+            return -parameters().Omega_k * H0c * H0c;
+        }
+        /// sin_K(chi) [Mpc/h]: the transverse comoving distance for the comoving radial distance chi [Mpc/h],
+        /// sin(sqrt(K) chi)/sqrt(K) (closed), chi (flat), sinh(sqrt(-K) chi)/sqrt(-K) (open). Series for
+        /// |K chi^2| < 1e-4, so smooth through Omega_k = 0 (as the Einstein-Boltzmann solver)
+        double sinK(double chi_mpch) const {
+            const double u = K_hmpc2() * chi_mpch * chi_mpch;
+            if (std::abs(u) < 1e-4)
+                return chi_mpch * (1.0 - u / 6.0 * (1.0 - u / 20.0 * (1.0 - u / 42.0)));
+            const double s = std::sqrt(std::abs(u));
+            return chi_mpch * (u > 0.0 ? std::sin(s) : std::sinh(s)) / s;
+        }
+        /// cot_K(chi) = d ln sin_K / d chi [h/Mpc] (1/chi when flat; series for |K chi^2| < 1e-4)
+        double cotK(double chi_mpch) const {
+            const double u = K_hmpc2() * chi_mpch * chi_mpch;
+            if (std::abs(u) < 1e-4)
+                return (1.0 - u / 3.0 - u * u / 45.0 - 2.0 * u * u * u / 945.0) / chi_mpch;
+            const double s = std::sqrt(std::abs(u));
+            return (u > 0.0 ? s / std::tan(s) : s / std::tanh(s)) / chi_mpch;
+        }
 
         // ---- Convenience versions in a and z ------------------------------------------------------------------------
         static double x_of_a(double a) { return std::log(a); }
@@ -258,10 +285,16 @@ namespace FML::COSMOLOGY::BACKGROUND {
             t[0] = 1.0 / (E_start * n_start);
 
             // 5-point Gauss-Legendre on each interval
-            static constexpr double gx[5] = {
-                0.0, -0.5384693101056831, 0.5384693101056831, -0.9061798459386640, 0.9061798459386640};
-            static constexpr double gw[5] = {
-                0.5688888888888889, 0.4786286704993665, 0.4786286704993665, 0.2369268850561891, 0.2369268850561891};
+            static constexpr double gx[5] = {0.0,
+                                             -0.5384693101056831,
+                                             0.5384693101056831,
+                                             -0.9061798459386640,
+                                             0.9061798459386640};
+            static constexpr double gw[5] = {0.5688888888888889,
+                                             0.4786286704993665,
+                                             0.4786286704993665,
+                                             0.2369268850561891,
+                                             0.2369268850561891};
             for (size_t i = 1; i < x.size(); i++) {
                 const double mid = 0.5 * (x[i] + x[i - 1]), half = 0.5 * (x[i] - x[i - 1]);
                 double de = 0.0, dt = 0.0;
@@ -289,19 +322,25 @@ namespace FML::COSMOLOGY::BACKGROUND {
             log_eta_spline.create(x, log_eta, name() + " log eta(x)");
             log_t_spline.create(x, log_t, name() + " log t(x)");
             chi_spline.create(x, chi, name() + " chi(x)");
-            // chi decreases with x: the inverse on the reversed arrays
+            // chi decreases with x: the inverse on the reversed arrays. In the far future of a model whose E grows
+            // very fast (e.g. CPL with wa > 0, rho ~ exp(3 wa a)) chi stops changing in double precision; the inverse
+            // then only covers the part from today back where chi is strictly monotonic
             std::vector<double> chi_rev(chi.rbegin(), chi.rend()), x_rev(x.rbegin(), x.rend());
-            for (size_t i = 1; i < chi_rev.size(); i++)
-                if (not(chi_rev[i] > chi_rev[i - 1]))
-                    throw std::runtime_error(msg + "The comoving distance is not monotonic in x");
+            size_t first = chi_rev.size() - 1;
+            while (first > 0 and chi_rev[first] > chi_rev[first - 1])
+                first--;
+            if (x_rev[first] < 0.0)
+                throw std::runtime_error(msg + "The comoving distance is not monotonic in x");
+            chi_rev.erase(chi_rev.begin(), chi_rev.begin() + first);
+            x_rev.erase(x_rev.begin(), x_rev.begin() + first);
             x_of_chi_spline.create(chi_rev, x_rev, name() + " x(chi)");
             chi_range = {chi_rev.front(), chi_rev.back()};
         }
 
         void check(double x, const char * what) const {
             if (not in_range(x))
-                throw std::out_of_range("[" + name() + "] " + what + ": x = " + std::to_string(x) + " (a = " +
-                                        std::to_string(std::exp(x)) + ") outside the valid range [" +
+                throw std::out_of_range("[" + name() + "] " + what + ": x = " + std::to_string(x) +
+                                        " (a = " + std::to_string(std::exp(x)) + ") outside the valid range [" +
                                         std::to_string(range.x_min) + ", " + std::to_string(range.x_max) + "]");
         }
 
@@ -309,15 +348,6 @@ namespace FML::COSMOLOGY::BACKGROUND {
         using Spline = FML::INTERPOLATION::SPLINE::GSLSpline;
         Spline log_eta_spline, log_t_spline, chi_spline, x_of_chi_spline;
         std::pair<double, double> chi_range{0.0, 0.0};
-
-        /// The transverse comoving distance in units of c/H0 for the radial distance d (series for |Omega_k| d^2 small)
-        double sinK(double d) const {
-            const double Ok = parameters().Omega_k, u = Ok * d * d;
-            if (std::abs(u) < 1e-6)
-                return d * (1.0 + u / 6.0 + u * u / 120.0);
-            const double s = std::sqrt(std::abs(Ok));
-            return Ok > 0.0 ? std::sinh(s * d) / s : std::sin(s * d) / s;
-        }
     };
 
 } // namespace FML::COSMOLOGY::BACKGROUND

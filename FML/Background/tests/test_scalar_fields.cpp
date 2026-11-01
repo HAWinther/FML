@@ -71,7 +71,7 @@ EBS::CosmologyParameters ebs_parameters(const BackgroundParameters & p) {
 }
 
 void compare_with_ebs(const Background & bg, EBS::CosmologyParameters e, const std::string & label, double tol) {
-    EBS::BackgroundCosmology ebs(e);
+    EBS::BackgroundCosmology ebs(e, EBS::Models::build(e)); // the solver's own species and gravity
     ebs.solve(-24.0, 2.0, 20000);
     const double Mpch = FML::UTILS::SI::Mpc / e.h;
     double errE = 0.0, errO = 0.0, errd = 0.0;

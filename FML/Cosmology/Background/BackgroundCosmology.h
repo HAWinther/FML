@@ -6,12 +6,27 @@
 //
 // Time variable x = ln(a). SI units (H in 1/s, eta in m, t in s).
 //
-// The model (Model.h) is a list of species and a theory of gravity. The gravity gives the expansion
-// rate from the species densities; in GR
-//   E^2(x) = (H/H0)^2 = sum_i rho_i(x)/rho_c0 + Omega_K e^{-2x}.
-// The model is built from the registry (params.model, default lcdm), or passed explicitly. The named
-// accessors rhoB, rhoCDM, ... sum the species with that Role (0 if there is none).
-// Everything else (H, Hp and derivatives, Omega_i, eta, t, distances) follows from E^2.
+// This class is the solver's interface to the background; the background itself is a
+// BACKGROUND::ComponentBackground of FML/Background (species + field equations, one solve that tabulates
+// the conformal time, the cosmic time and the comoving distance), and the perturbations of the model come
+// from a PERTURBATIONS::PerturbationModel of FML/Perturbations built on the same background:
+//
+//   BackgroundCosmology(params)         params.model from the registries of FML/Background (make_background)
+//                                       and FML/Perturbations (perturbation_registry: lcdm, jbd). A model whose
+//                                       perturbations are not ported yet (TRANSITIONAL: w0wa, dgp, musigma, fr,
+//                                       quintessence, ede, coupled_quintessence, dark_scattering, cubic_galileon,
+//                                       horndeski, ide) also builds the solver's own Model (Model.h: species and
+//                                       gravity), which only supplies the perturbations (Perturbations wraps
+//                                       them); the background is the new one in either case.
+//   BackgroundCosmology(params, model)  an explicit Model (e.g. assembled in a test; TRANSITIONAL): its species
+//                                       and gravity become a ComponentBackground through adapters, and the
+//                                       perturbations are the model's own.
+//
+// The named accessors rhoB, rhoCDM, ... sum the species of that component (0 if there is none).
+// Second derivatives (ddHpddx, ddE2ddx, ddrho...): an explicit Model gives them analytically (its gravity
+// and species); otherwise a 5-point central difference (step 1e-3 in x) of the analytic first derivatives
+// of the ComponentBackground (relative error ~1e-11 for smooth backgrounds, 1e-8 near the knots of the
+// massive-neutrino tables).
 //
 // Usage:
 //   BackgroundCosmology cosmo(params);
@@ -20,11 +35,14 @@
 //   cosmo.output("data/background.txt");
 // =============================================================================
 
+#include <FML/Background/ComponentBackground.h>
 #include <FML/Cosmology/Background/CosmologyParameters.h>
 #include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Common.h>
+#include <FML/Perturbations/PerturbationModel.h>
 
 #include <cmath>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -32,23 +50,50 @@
 namespace FML::COSMOLOGY {
 
     class MassiveNeutrinoSpecies;
+    namespace detail {
+        class LegacyFieldEquations;
+    }
 
     class BackgroundCosmology {
       public:
-        // Model selected by params.model (Models::build)
+        // Model selected by params.model (see above)
         explicit BackgroundCosmology(const CosmologyParameters & params);
         // Explicit model (e.g. assembled in a test)
         BackgroundCosmology(const CosmologyParameters & params, Model model);
+        BackgroundCosmology(BackgroundCosmology && other) noexcept;
+        BackgroundCosmology(const BackgroundCosmology &) = delete;
+        BackgroundCosmology & operator=(const BackgroundCosmology &) = delete;
+        BackgroundCosmology & operator=(BackgroundCosmology &&) = delete;
+        ~BackgroundCosmology();
 
-        // Integrate eta(x) and t(x) on [x_start, x_end] and store them as splines
+        // Make the times and distances available on [x_start, x_end] (the range checked by eta_of_x, t_of_x).
+        // The ComponentBackground is built by the constructor on [-25, 5] with 200 points per unit x; it is
+        // only rebuilt if [x_start, x_end] is not inside that or n_points asks for a finer table
+        // (n_points / (x_end - x_start) points per unit x).
         void solve(double x_start = -20.0, double x_end = 5.0, int n_points = 5000);
 
         // -------------------------------------------------------------------------
-        // Model
+        // The new background and perturbation model (FML/Background, FML/Perturbations)
         // -------------------------------------------------------------------------
-        const Model & get_model() const { return model; }
-        const std::vector<std::shared_ptr<const Species>> & species() const { return model.species; }
-        const Gravity & gravity() const { return *model.gravity; }
+        const BACKGROUND::ComponentBackground & background() const { return *bg; }
+        const BACKGROUND::ComponentBackgroundPtr & background_ptr() const { return bg; }
+        // The perturbations of the model from FML/Perturbations (nullptr: not ported yet, the solver's own
+        // Model supplies them, see has_legacy_model)
+        const PERTURBATIONS::PerturbationModelPtr & perturbation_model() const { return pmodel; }
+
+        // -------------------------------------------------------------------------
+        // The solver's own Model (TRANSITIONAL: only for models whose perturbations are not ported, and
+        // explicit models). get_model, species and gravity throw without one.
+        // -------------------------------------------------------------------------
+        bool has_legacy_model() const { return legacy; }
+        const Model & get_model() const;
+        const std::vector<std::shared_ptr<const Species>> & species() const { return get_model().species; }
+        const Gravity & gravity() const { return *get_model().gravity; }
+        const std::string & model_name() const { return params.model; }
+        // Name of the theory of gravity of the perturbations ("GR", "Brans-Dicke", ...)
+        std::string gravity_name() const;
+        // Tensor-mode coefficients at x (Gravity.h)
+        TensorCoefficients tensor_coefficients(double x) const;
 
         // Sum over all species of rho_i / rho_c0 and its x-derivatives (curvature not included)
         double rho_species(double x) const;
@@ -87,9 +132,8 @@ namespace FML::COSMOLOGY {
         double ddrhoDEddx(double x) const { return ddrho_of(Species::Role::DarkEnergy, x); }
         double ddrhoKddx(double x) const { return 4.0 * rhoK(x); }
 
-        // Massive neutrinos (MassiveNeutrinoSpecies; all 0 without): pressure (units of rho_c0) and dp/dx,
-        // w = p/rho goes from 1/3 to 0
-        bool has_massive_nu() const { return ncdm != nullptr; }
+        // Massive neutrinos (all 0 without): pressure (units of rho_c0) and dp/dx, w = p/rho goes from 1/3 to 0
+        bool has_massive_nu() const { return ncdm_old != nullptr || ncdm_new != nullptr; }
         double pNcdm(double x) const;
         double dpNcdmdx(double x) const;
         double pseudo_pNcdm(double x) const; // pseudo-pressure, dp/dx = -(5p - pseudo_p)
@@ -97,13 +141,13 @@ namespace FML::COSMOLOGY {
         // rho_ncdm a^4 / I_rho(M) in units of rho_c0, so that rho_ncdm = ncdm_prefactor() e^{-4x} I_rho(M)
         double ncdm_prefactor() const;
 
-        // E^2 = (H/H0)^2 and derivatives (from the gravity)
+        // E^2 = (H/H0)^2 and derivatives
         double E2_of_x(double x) const;
         double dE2dx_of_x(double x) const;
         double ddE2ddx_of_x(double x) const;
 
         // -------------------------------------------------------------------------
-        // Expansion rate (analytic, available before solve())
+        // Expansion rate (available before solve())
         // -------------------------------------------------------------------------
         double H_of_x(double x) const;       // H        [1/s]
         double Hp_of_x(double x) const;      // Hp = aH  [1/s]
@@ -138,7 +182,7 @@ namespace FML::COSMOLOGY {
         //   sinK = sin(sqrt(K) chi)/sqrt(K) (closed), chi (flat), sinh(sqrt(-K) chi)/sqrt(-K) (open),
         // and cotK(chi) = d ln sinK / d chi (= 1/chi when flat). These enter the line-of-sight
         // integrals and the truncation of the Boltzmann hierarchies in a curved universe.
-        // Both use series expansions for |K| chi^2 << 1, so they are smooth through K = 0.
+        // Both use series expansions for |K| chi^2 << 1, so they are smooth through K = 0 (Background::sinK, cotK).
         // -------------------------------------------------------------------------
         double get_K() const { return K; }
         double sinK(double chi) const;
@@ -167,26 +211,35 @@ namespace FML::COSMOLOGY {
 
       private:
         CosmologyParameters params;
-        Model model;
         double H0;
         double OmegaK0;
-        double K;                                          // Spatial curvature -Omega_K H0^2 / c^2 [1/m^2]
-        std::vector<std::vector<const Species *>> by_role; // species of each Role
-        const MassiveNeutrinoSpecies * ncdm = nullptr;
+        double K;      // Spatial curvature -Omega_K H0^2 / c^2 [1/m^2]
+        double L_unit; // meters per Mpc/h of the background: c / H0 / c_over_H0_mpch
 
-        // Initial values eta(x_start), t(x_start): exact solution for a universe of matter (baryons + CDM)
-        // and radiation (photons, neutrinos, massive neutrinos while relativistic), accurate to
-        // ~ Omega_DE/Omega_M a^3 at early times.
-        double eta_initial(double x) const;
-        double t_initial(double x) const;
+        // The background and the perturbation model (FML/Background, FML/Perturbations)
+        BACKGROUND::ComponentBackgroundPtr bg;
+        PERTURBATIONS::PerturbationModelPtr pmodel;
+        std::unique_ptr<PERTURBATIONS::PerturbedFieldEquation> tensor_fe; // tensor coefficients of pmodel
+        BACKGROUND::BackgroundRange range;
+        // Massive neutrinos of the background (possibly rescaled: ncdm_factor)
+        const BACKGROUND::MassiveNeutrinoSpecies * ncdm_new = nullptr;
+        double ncdm_factor = 1.0;
+
+        // TRANSITIONAL: the solver's own Model (legacy), for models whose perturbations are not ported and
+        // explicit models (explicit_model: the background is made of adapters of its species and gravity)
+        bool legacy = false, explicit_model = false;
+        Model model;
+        const MassiveNeutrinoSpecies * ncdm_old = nullptr; // of an explicit model
+        std::shared_ptr<detail::LegacyFieldEquations> legacy_eqs;
+
+        void build_background(); // bg (+ pmodel, tensor_fe) on range
+        void find_massive_neutrinos();
+        double ddlogEdx(double x) const; // d^2 ln E / dx^2
 
       private:
         double x_start = 0.0, x_end = 0.0;
         void require_in_range(const char * func, double x) const; // throws outside [x_start, x_end]
         bool solved = false;
-        Spline1D eta_spline;
-        Spline1D t_spline;
-
         void require_solved(const char * func) const;
     };
 

@@ -417,7 +417,7 @@ static void test_ranges() {
     bg.solve(-15.0, 1.0, 2000);
     check(throws([&] { bg.eta_of_x(-16.0); }), "eta_of_x below bg_x_start throws");
     check(throws([&] { bg.t_of_x(2.0); }), "t_of_x above bg_x_end throws");
-    check(!throws([&] { bg.eta_of_x(-15.0) + bg.eta_of_x(1.0); }), "eta_of_x at the ends is fine");
+    check(!throws([&] { (void)(bg.eta_of_x(-15.0) + bg.eta_of_x(1.0)); }), "eta_of_x at the ends is fine");
     check(throws([&] { RecombinationHistory rec(bg, RecombinationOptions()); }),
           "recombination from x = -20 with bg_x_start = -15 throws");
     RecombinationOptions o;

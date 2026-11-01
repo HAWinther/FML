@@ -15,8 +15,17 @@ Everything is in namespace `FML::COSMOLOGY`. Parameter fits use it through `FML/
 ```
 CosmologyParameters ─► BackgroundCosmology ─► RecombinationHistory ─► Perturbations ─► PowerSpectrum ─► Lensing, TwoPoint
                               ▲                                              ▲
-                            Model = species + gravity (registry: lcdm, musigma, dgp, quintessence, jbd, fr, coupled_quintessence, dark_scattering, cubic_galileon, horndeski, ede, ide)
+            FML/Background ComponentBackground          FML/Perturbations PerturbationModel (lcdm, jbd)
+            (make_background: every model)              or, transitional, the solver's Model = species + gravity
+                                                        (musigma, dgp, quintessence, fr, coupled_quintessence, dark_scattering,
+                                                         cubic_galileon, horndeski, w0wa, ede, ide)
 ```
+
+The background of every model is a `BACKGROUND::ComponentBackground` of `FML/Background` (one solve: species,
+field equations, and the tables of η, t and χ); `BackgroundCosmology` is a thin adapter that gives it in SI units
+(`background()` returns it). The perturbations of the species and the field equations of `lcdm` and `jbd` come from
+`FML/Perturbations` (`PerturbationModel`, built on the same background); the other models are not ported yet and
+use their perturbation code in `Cosmology/Models` (see Models below).
 
 Conventions: SI units internally, time variable `x = ln a`, Newtonian gauge (Dodelson / Callin conventions).
 
@@ -202,7 +211,7 @@ computes Δχ² of any run against a reference (see its header for the reference
 | `Background/Gravity.h` | Interface of a theory of gravity: E²(x) from the species, Ψ and Φ' from their moments |
 | `Background/Model.h/.cpp` | `Model` (species + gravity) and the registry of built-in models with their parameters |
 | `Models/` | `StandardSpecies` (baryons, photons, CDM, massless and massive neutrinos, Λ, CPL), `GeneralRelativity`, `MuSigma`, `DGP`, `Quintessence`, `BransDicke`, `HuSawicky`, `CoupledQuintessence`, `DarkScattering`, `CubicGalileon`, `HorndeskiAlpha`, `ScalarField` (shared by `Quintessence` and `EarlyDarkEnergy`), `InteractingDarkEnergy` |
-| `Background/BackgroundCosmology.h/.cpp` | H, Hp and derivatives from the model, Ω_i(x), η, t, distances, curvature geometry `sinK`, `cotK` |
+| `Background/BackgroundCosmology.h/.cpp` | The solver's interface to the background (SI units): H, Hp and derivatives, Ω_i(x), η, t, distances, curvature geometry `sinK`, `cotK`, from the `FML/Background` `ComponentBackground` of the model; the `FML/Perturbations` `PerturbationModel` (or, transitional, the solver's `Model`) |
 | `Background/MassiveNeutrinos.h/.cpp` | Fermi–Dirac momentum integrals and Gauss–Laguerre momentum grid |
 | `Recombination/RecombinationHistory.h/.cpp` | X_e, T_b, τ, visibility function, sound horizon, reionization |
 | `Perturbations/Perturbations.h/.cpp` | Photon–baryon core (tight coupling, polarization), the species' blocks, segmentation of the ODE, source functions; 2D splines in (x, k) |
@@ -252,6 +261,18 @@ A model (`Background/Model.h`) is a list of species and a theory of gravity:
   another model is an error). `./cmb --write-defaults` lists them.
 
 To add a model: write its species and/or gravity in `Cosmology/Models/`, and add an entry to the registry.
+
+Transition to `FML/Background` and `FML/Perturbations` (in progress): the background of a run always comes from the
+registry of `FML/Background` (`make_background(model, ...)`, same names and parameters); the solver's `Model` of
+the registry above is only built for models whose perturbations are not yet in `FML/Perturbations`, and then only
+supplies their perturbations (`Species::perturbations`, the perturbation part of `Gravity`), which
+`Perturbations.cpp` wraps as `SpeciesPerturbation` / `PerturbedFieldEquation`. `lcdm` and `jbd` use
+`FML/Perturbations` and build no `Model` (`BackgroundCosmology::species()`/`gravity()` throw for them; use
+`background()` and `perturbation_model()`). An explicit `Model` (`BackgroundCosmology(params, model)`, used by tests)
+becomes a `ComponentBackground` through adapters of its species and gravity. The perturbation data types
+(`ModeAtX`, `Moments`, `MetricAtX`, `IsoValues`, `InitialData`, `TensorCoefficients`) are those of
+`FML/Perturbations/PerturbationTypes.h`. Porting a model = its `PerturbationModel_<name>.h` in `FML/Perturbations`
+(plus registry entry); its `Cosmology/Models` code can then go.
 
 Validation of the models (each test program prints what it checks): the GR/ΛCDM limit of every model;
 μ–Σ and DGP potentials against the algebraic relations with the comoving density, and the growth against an

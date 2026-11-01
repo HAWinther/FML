@@ -69,7 +69,6 @@ namespace FML::COSMOLOGY {
         const bool nu = options.neutrinos && cosmo.get_params().Neff > 0.0;
         // state: h, h_x, neutrino F_0..F_Ln, photon F_0..F_L, G_0..G_L
         const int iH = 0, iHX = 1, iN = 2, iF = iN + Ln + 1, iG = iF + L + 1, n = iG + L + 1;
-        const Gravity & grav = cosmo.gravity();
         const bool has_ncdm = cosmo.has_massive_nu();
 
         struct Bg {
@@ -84,7 +83,7 @@ namespace FML::COSMOLOGY {
             b.dlnHp = cosmo.dHpdx_of_x(x) / Hp;
             b.Og = cosmo.rhoGamma(x) / E2;
             b.Ofs = nu ? (cosmo.rhoNu(x) + (has_ncdm ? 3.0 * cosmo.pNcdm(x) : 0.0)) / E2 : 0.0;
-            const TensorCoefficients t = grav.tensor(x, cosmo);
+            const TensorCoefficients t = cosmo.tensor_coefficients(x);
             b.M2 = t.M2;
             b.aM = t.alpha_M;
             b.aT = t.alpha_T;

@@ -11,12 +11,19 @@
 // perturbations (with tight coupling, polarization and the line-of-sight sources) are part of the core of
 // Perturbations; their Species only describe the background.
 //
+// TRANSITIONAL: the solver now takes the background from FML/Background and, for the ported models (lcdm, jbd), the
+// perturbations from FML/Perturbations (BackgroundCosmology.h). These classes remain for the models whose
+// perturbations are not ported yet (their SpeciesPerturbations are wrapped as PERTURBATIONS::SpeciesPerturbation by
+// Perturbations.cpp) and for explicit models; new species belong in FML/Background and FML/Perturbations.
+//
 // Adding a species: derive from Species (background) and, if it clusters, from SpeciesPerturbations,
 // and return the latter from Species::perturbations(). The perturbation equations are written in
 // Newtonian gauge with the conventions of Perturbations.h; a species communicates with the metric only
 // through its Moments (density, momentum density and anisotropic stress) and receives Phi, Psi, Phi'.
 // See models/StandardSpecies.h for CDM, massless and massive neutrinos.
 // =============================================================================
+
+#include <FML/Perturbations/PerturbationTypes.h>
 
 #include <limits>
 #include <memory>
@@ -60,58 +67,18 @@ namespace FML::COSMOLOGY {
     // Perturbations of a species
     // -----------------------------------------------------------------------------
 
-    // Background quantities at one x for one mode k, computed once per x by Perturbations and shared by
-    // all species. Densities are multiplied by H0^2 a^2 (units 1/s^2), as they appear in the Einstein equations.
-    struct ModeAtX {
-        double x = std::numeric_limits<double>::quiet_NaN();
-        double k = 0.0;          // [1/m]
-        double s2 = 1.0;         // curvature factor s_2 of this mode (Perturbations::s_ell)
-        double curv = 1.0;       // (k^2 - 3K)/k^2
-        double a, Hp, dHpH, ckH; // a, Hp [1/s], Hp'/Hp, ck/Hp
-        double dtau, ddtau, R;   // tau', tau'', R = 4 rho_gamma / (3 rho_b)
-        double eta;              // conformal time [m]
-        double cotK_H;           // c cot_K(eta) / Hp: free-streaming truncation rate (= c / (Hp eta) when flat)
-        double H0a2;             // H0^2 a^2 [1/s^2]
-        double H0a2_rho_b, H0a2_rho_gamma;
-    };
-
-    // Contributions to the Einstein equations, all times H0^2 a^2 / rho_c0 (summed over species):
-    //   drho  = delta rho
-    //   dp    = delta p (pressure perturbation; enters only theories that couple to the trace, e.g. Brans-Dicke)
-    //   flux  = (rho + p) theta / (ck) = -(rho + p) v         (v as for CDM: delta_cdm' = (ck/Hp) v - 3 Phi')
-    //   shear = (3/2) (rho + p) sigma                         (= 4 rho Theta_2 for photons)
-    struct Moments {
-        double drho = 0.0, dp = 0.0, flux = 0.0, shear = 0.0;
-        Moments & operator+=(const Moments & m) {
-            drho += m.drho;
-            dp += m.dp;
-            flux += m.flux;
-            shear += m.shear;
-            return *this;
-        }
-    };
-
-    // Metric at one x: Phi (evolved), Psi and Phi' (from the Einstein equations, see Gravity.h)
-    struct MetricAtX {
-        double Phi = 0.0, Psi = 0.0, dPhi = 0.0;
-    };
-
-    // Explicit initial values of the standard species (isocurvature modes, Perturbations.h), in the variables of
-    // the code: photon Theta_0, Theta_1, baryon and CDM delta, v, free-streaming neutrino N_0, N_1, N_2
-    struct IsoValues {
-        double Theta0 = 0, Theta1 = 0, delta_b = 0, v_b = 0, delta_c = 0, v_c = 0, N0 = 0, N1 = 0, N2 = 0;
-    };
-
-    // Initial conditions (superhorizon, radiation domination): adiabatic with curvature perturbation R = 1, or, if
-    // iso is set, explicit values (species not covered by IsoValues start from the adiabatic form with Psi, Phi)
-    struct InitialData {
-        const IsoValues * iso = nullptr;
-        double Psi, Phi;
-        double f_nu;        // fraction of the radiation density in free-streaming species
-        double OmNu;        // a^4 rho of the free-streaming species [rho_c0]
-        double H0;          // [1/s]
-        double G_eff = 1.0; // effective gravitational constant / G at the initial time (Gravity::G_eff_initial)
-    };
+    // The data exchanged between the species, the gravity and the core of Perturbations are the types of
+    // FML/Perturbations (PerturbationTypes.h; identical to the solver's former structs):
+    //   ModeAtX     background quantities at one x for one mode k (densities times H0^2 a^2, units 1/s^2)
+    //   Moments     contributions to the Einstein equations (drho, dp, flux, shear) times H0^2 a^2 / rho_c0
+    //   MetricAtX   Phi (evolved), Psi and Phi' (from the field equations, see Gravity.h)
+    //   IsoValues   explicit initial values of the standard species (isocurvature modes)
+    //   InitialData initial conditions (adiabatic with R = 1, or isocurvature)
+    using ModeAtX = PERTURBATIONS::ModeAtX;
+    using Moments = PERTURBATIONS::Moments;
+    using MetricAtX = PERTURBATIONS::MetricAtX;
+    using IsoValues = PERTURBATIONS::IsoValues;
+    using InitialData = PERTURBATIONS::InitialData;
 
     // One object per species and run, shared by all k-modes (and threads): it must not keep per-mode state.
     // Per-x background quantities go in a cache (cache_size() doubles per mode) filled by update_cache().

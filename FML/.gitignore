@@ -23,6 +23,9 @@ Cosmology/EinsteinBoltzmannSolver/benchmark
 Background/tests/test_*
 !Background/tests/test_*.cpp
 Background/tests/*.d
+Perturbations/tests/test_*
+!Perturbations/tests/test_*.cpp
+Perturbations/tests/*.d
 Cosmology/EinsteinBoltzmannSolver/tests/test_*
 !Cosmology/EinsteinBoltzmannSolver/tests/test_*.cpp
 CosmologyFitting/mcmc

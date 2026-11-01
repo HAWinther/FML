@@ -118,6 +118,9 @@ namespace FML::COSMOLOGY::BACKGROUND {
         /// The scalar field and dphi/dx (frozen before the start of the solution)
         double phi(double x) const { return F_spline(std::max(x, x_ini)); }
         double dphidx(double x) const { return x < x_ini ? 0.0 : dF_spline(x); }
+        /// Where the field solution starts (at rest, phi = phi_initial(); phi is frozen before)
+        double x_start() const { return x_ini; }
+        double phi_initial() const { return F_spline(x_ini); }
         double phi_star() const { return (4.0 + 2.0 * omega) / (3.0 + 2.0 * omega); }
         /// G_eff / G_eff(today) = phi(0)/phi(x): the Cavendish constant relative to today
         double Geff_over_Geff_today(double x) const { return phi0 / phi(x); }

@@ -15,6 +15,90 @@ namespace FML::COSMOLOGY {
 
     using namespace Constants;
 
+    namespace {
+        // TRANSITIONAL: the perturbations of the solver's own models (Species::perturbations, Gravity; for the models
+        // not ported to FML/Perturbations) as the types of FML/Perturbations. The interfaces are the same (the data
+        // types are shared), except that the free-streaming density comes from the background Species and the gravity
+        // takes the BackgroundCosmology.
+        class LegacySpeciesPerturbation : public PERTURBATIONS::SpeciesPerturbation {
+          public:
+            LegacySpeciesPerturbation(std::unique_ptr<SpeciesPerturbations> p, const Species & s)
+                : p(std::move(p)), s(s) {}
+            std::string name() const override { return p->name(); }
+            std::string info() const override { return p->info(); }
+            std::vector<double> switch_points(double k) const override { return p->switch_points(k); }
+            int n_vars(int mode) const override { return p->n_vars(mode); }
+            bool prefers_explicit(int mode) const override { return p->prefers_explicit(mode); }
+            int cache_size() const override { return p->cache_size(); }
+            void update_cache(const ModeAtX & b, double * cache) const override { p->update_cache(b, cache); }
+            void initial_conditions(const ModeAtX & b, const InitialData & ic, double * y) const override {
+                p->initial_conditions(b, ic, y);
+            }
+            void switch_mode(const ModeAtX & b,
+                             const double * cache,
+                             int new_mode,
+                             const double * y_old,
+                             double * y_new) const override {
+                p->switch_mode(b, cache, new_mode, y_old, y_new);
+            }
+            Moments moments(const ModeAtX & b, const double * cache, int mode, const double * y) const override {
+                return p->moments(b, cache, mode, y);
+            }
+            void rhs(const ModeAtX & b,
+                     const double * cache,
+                     int mode,
+                     const MetricAtX & m,
+                     const double * y,
+                     double * dydx) const override {
+                p->rhs(b, cache, mode, m, y, dydx);
+            }
+            std::vector<std::string> output_names() const override { return p->output_names(); }
+            void outputs(const ModeAtX & b, const double * cache, int mode, const double * y, double * out)
+                const override {
+                p->outputs(b, cache, mode, y, out);
+            }
+            double free_streaming_density(double x) const override { return s.free_streaming() ? s.rho(x) : 0.0; }
+
+          private:
+            std::unique_ptr<SpeciesPerturbations> p;
+            const Species & s;
+        };
+
+        class LegacyFieldEquation : public PERTURBATIONS::PerturbedFieldEquation {
+          public:
+            LegacyFieldEquation(const Gravity & g,
+                                const BackgroundCosmology & cosmo,
+                                const PERTURBATIONS::PerturbationContext & ctx)
+                : PerturbedFieldEquation(ctx), g(g), cosmo(cosmo) {}
+            std::string name() const override { return g.name(); }
+            std::string info() const override { return g.info(); }
+            int n_vars() const override { return g.n_vars(); }
+            int cache_size() const override { return g.cache_size(); }
+            void update_cache(const ModeAtX & b, double * cache) const override { g.update_cache(cosmo, b, cache); }
+            double G_eff_initial() const override { return g.G_eff_initial(); }
+            void initial_conditions(const ModeAtX & b, const InitialData & ic, double * y) const override {
+                g.initial_conditions(b, ic, y);
+            }
+            MetricAtX metric(const ModeAtX & b,
+                             const double * cache,
+                             const double * y,
+                             const Moments & total,
+                             double * dydx) const override {
+                return g.metric(b, cache, y, total, dydx);
+            }
+            TensorCoefficients tensor(double x) const override { return g.tensor(x, cosmo); }
+            std::vector<std::string> output_names() const override { return g.output_names(); }
+            void outputs(const ModeAtX & b, const double * cache, const double * y, const MetricAtX & m, double * out)
+                const override {
+                g.outputs(b, cache, y, m, out);
+            }
+
+          private:
+            const Gravity & g;
+            const BackgroundCosmology & cosmo;
+        };
+    } // namespace
+
     Perturbations::Perturbations(const BackgroundCosmology & cosmo_in,
                                  const RecombinationHistory & rec_in,
                                  PerturbationOptions options_in)
@@ -27,24 +111,38 @@ namespace FML::COSMOLOGY {
             throw std::invalid_argument("Perturbations: x-range [" + std::to_string(options.x_start) + ", " +
                                         std::to_string(options.x_end) +
                                         "] extends outside the background solution (bg_x_start, bg_x_end)");
+        // The species and field equations of the model (FML/Perturbations, or TRANSITIONAL the solver's own)
+        PERTURBATIONS::PerturbationSettings settings;
+        settings.neutrinos = options.neutrinos;
+        settings.lmax_nu = options.lmax_nu;
+        settings.lmax_ncdm = options.lmax_ncdm;
+        settings.n_q_ncdm = options.n_q_ncdm;
+        settings.ncdm_fluid_trigger = options.ncdm_fluid_trigger;
+        settings.x_start = options.x_start;
+        settings.x_end = options.x_end;
+        ctx = std::make_unique<PERTURBATIONS::PerturbationContext>(cosmo.background(), settings);
+        if (const auto & pm = cosmo.perturbation_model()) {
+            species = pm->species_perturbations(*ctx);
+            field_eq = pm->field_equation_perturbations(*ctx);
+        } else {
+            for (const auto & s : cosmo.species())
+                if (auto p = s->perturbations(*this))
+                    species.push_back(std::make_unique<LegacySpeciesPerturbation>(std::move(p), *s));
+            field_eq = std::make_unique<LegacyFieldEquation>(cosmo.gravity(), cosmo, *ctx);
+        }
         for (double a : options.iso_amplitude)
-            if (a != 0.0 && cosmo.gravity().name() != "GR")
+            if (a != 0.0 && field_eq->name() != "GR")
                 throw std::invalid_argument("Perturbations: isocurvature modes need GR (model " +
                                             cosmo.get_params().model + ")");
-        for (const auto & s : cosmo.species()) {
-            auto p = s->perturbations(*this);
-            if (!p)
-                continue;
+        for (const auto & p : species) {
             for (const auto & name : p->output_names()) {
                 if (output_index.count(name))
                     throw std::invalid_argument("Perturbations: output " + name + " defined twice");
                 output_index[name] = int(output_names.size());
                 output_names.push_back(name);
             }
-            species.push_back(std::move(p));
-            species_bg.push_back(s.get());
         }
-        for (const auto & name : cosmo.gravity().output_names()) {
+        for (const auto & name : field_eq->output_names()) {
             if (output_index.count(name))
                 throw std::invalid_argument("Perturbations: output " + name + " defined twice");
             output_index[name] = int(output_names.size());
@@ -62,7 +160,7 @@ namespace FML::COSMOLOGY {
     Perturbations::Layout Perturbations::layout(bool tc, const std::vector<int> & modes) const {
         Layout l;
         l.tc = tc;
-        l.Theta = Layout::metric + cosmo.gravity().n_vars();
+        l.Theta = Layout::metric + field_eq->n_vars();
         l.n_Theta = tc ? 2 : options.lmax + 1;
         l.ThetaP = l.Theta + l.n_Theta;
         l.n_ThetaP = (!tc && options.polarization) ? options.lmax + 1 : 0;
@@ -85,7 +183,7 @@ namespace FML::COSMOLOGY {
             throw std::runtime_error("Perturbations: s_2 = 0 (closed universe mode with nu <= 2)");
         for (const auto & s : species)
             st.cache.emplace_back(s->cache_size());
-        st.gcache.resize(cosmo.gravity().cache_size());
+        st.gcache.resize(field_eq->cache_size());
         return st;
     }
 
@@ -94,10 +192,11 @@ namespace FML::COSMOLOGY {
         if (x == b.x)
             return;
         const double H0 = cosmo.get_H0();
+        const auto & bg = cosmo.background();
         b.x = x;
         b.a = std::exp(x);
-        b.Hp = cosmo.Hp_of_x(x);
-        b.dHpH = cosmo.dHpdx_of_x(x) / b.Hp;
+        b.Hp = H0 * b.a * bg.E(x);
+        b.dHpH = 1.0 + bg.dlogEdx(x);
         b.ckH = c * b.k / b.Hp;
         b.dtau = rec.dtaudx_of_x(x);
         b.ddtau = rec.ddtauddx_of_x(x);
@@ -109,7 +208,7 @@ namespace FML::COSMOLOGY {
         b.H0a2_rho_gamma = b.H0a2 * cosmo.rhoGamma(x);
         for (size_t i = 0; i < species.size(); i++)
             species[i]->update_cache(b, st.cache[i].data());
-        cosmo.gravity().update_cache(cosmo, b, st.gcache.data());
+        field_eq->update_cache(b, st.gcache.data());
     }
 
     // Moments of the core: baryons (delta rho = rho_b delta_b, flux = -rho_b v_b, no pressure) and photons
@@ -128,7 +227,7 @@ namespace FML::COSMOLOGY {
         tot.shear = 4.0 * b.H0a2_rho_gamma * Theta2;
         for (size_t i = 0; i < species.size(); i++)
             tot += species[i]->moments(b, st.cache[i].data(), lay.mode[i], y + lay.offset[i]);
-        return cosmo.gravity().metric(b, st.gcache.data(), y + Layout::metric, tot, dydx_metric);
+        return field_eq->metric(b, st.gcache.data(), y + Layout::metric, tot, dydx_metric);
     }
 
     void Perturbations::rhs_species(const ModeState & st,
@@ -155,18 +254,17 @@ namespace FML::COSMOLOGY {
         const Layout lay = layout(true, std::vector<int>(species.size(), 0));
         std::vector<double> y(lay.n_tot);
         double OmNu = 0.0;
-        for (size_t i = 0; i < species.size(); i++)
-            if (species_bg[i]->free_streaming())
-                OmNu += species_bg[i]->rho(x) * std::exp(4.0 * x);
+        for (const auto & s : species)
+            OmNu += s->free_streaming_density(x) * std::exp(4.0 * x);
         const double OmG = cosmo.rhoGamma(0.0);
         InitialData ic;
         ic.f_nu = OmNu / (OmG + OmNu);
         ic.OmNu = OmNu;
         ic.H0 = cosmo.get_H0();
-        ic.G_eff = cosmo.gravity().G_eff_initial();
+        ic.G_eff = field_eq->G_eff_initial();
         ic.Psi = -1.0 / (1.5 + 0.4 * ic.f_nu);
         ic.Phi = -(1.0 + 0.4 * ic.f_nu) * ic.Psi;
-        cosmo.gravity().initial_conditions(b, ic, y.data() + Layout::metric);
+        field_eq->initial_conditions(b, ic, y.data() + Layout::metric);
         y[Layout::delta_b] = -1.5 * ic.Psi;
         y[Layout::v_b] = -0.5 * b.ckH * ic.Psi;
         y[lay.Theta + 0] = -0.5 * ic.Psi;
@@ -186,7 +284,7 @@ namespace FML::COSMOLOGY {
             const IsoValues v = isocurvature_values(m, x, b.k, icm.Phi, icm.Psi);
             icm.iso = &v;
             std::vector<double> ym(lay.n_tot, 0.0);
-            cosmo.gravity().initial_conditions(b, icm, ym.data() + Layout::metric);
+            field_eq->initial_conditions(b, icm, ym.data() + Layout::metric);
             ym[Layout::delta_b] = v.delta_b;
             ym[Layout::v_b] = v.v_b;
             ym[lay.Theta + 0] = v.Theta0;
@@ -645,7 +743,7 @@ namespace FML::COSMOLOGY {
                 }
 
                 // Collect results on the grid
-                std::vector<double> th, thp, o, dmetric(cosmo.gravity().n_vars());
+                std::vector<double> th, thp, o, dmetric(field_eq->n_vars());
                 for (size_t ix = 0; ix < nx; ix++) {
                     const double x = x_array[ix];
                     const size_t j = ix + nx * ik;
@@ -683,7 +781,7 @@ namespace FML::COSMOLOGY {
                     if (n_gravity_outputs > 0) {
                         const int i0 = int(output_names.size()) - n_gravity_outputs;
                         o.resize(n_gravity_outputs);
-                        cosmo.gravity().outputs(st.b, st.gcache.data(), yx + Layout::metric, m, o.data());
+                        field_eq->outputs(st.b, st.gcache.data(), yx + Layout::metric, m, o.data());
                         for (int io = 0; io < n_gravity_outputs; io++)
                             out[i0 + io][j] = o[io];
                     }
@@ -847,7 +945,7 @@ namespace FML::COSMOLOGY {
 
     void Perturbations::info() const {
         std::cout << "\nPerturbations (" << (options.polarization ? "temperature + polarization" : "temperature only")
-                  << ", gravity " << cosmo.gravity().info() << "):\n";
+                  << ", gravity " << field_eq->info() << "):\n";
         std::cout << "  species: photons, baryons";
         for (const auto & s : species)
             std::cout << ", " << s->info();

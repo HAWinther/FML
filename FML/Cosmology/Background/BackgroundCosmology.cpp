@@ -1,6 +1,9 @@
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
-#include <FML/Cosmology/Models/StandardSpecies.h>
 #include <FML/Cosmology/Common.h>
+#include <FML/Cosmology/Models/StandardSpecies.h>
+
+#include <FML/Background/Presets.h>
+#include <FML/Perturbations/Presets.h>
 
 #include <cmath>
 #include <fstream>
@@ -13,109 +16,344 @@ namespace FML::COSMOLOGY {
 
     using namespace Constants;
 
+    namespace {
+        BACKGROUND::Component component_of(Species::Role r) {
+            using C = BACKGROUND::Component;
+            using R = Species::Role;
+            switch (r) {
+                case R::Baryons:
+                    return C::Baryons;
+                case R::Photons:
+                    return C::Photons;
+                case R::CDM:
+                    return C::CDM;
+                case R::MasslessNeutrinos:
+                    return C::MasslessNeutrinos;
+                case R::MassiveNeutrinos:
+                    return C::MassiveNeutrinos;
+                case R::DarkEnergy:
+                    return C::DarkEnergy;
+                default:
+                    return C::Other;
+            }
+        }
+
+        // The parameters of the background (FML/Background) of a run: one massive species of mass m_nu
+        BACKGROUND::BackgroundParameters background_parameters(const CosmologyParameters & p) {
+            BACKGROUND::BackgroundParameters b;
+            b.h = p.h;
+            b.Omega_b = p.OmegaB;
+            b.Omega_cdm = p.OmegaCDM;
+            b.Omega_k = p.OmegaK;
+            b.T_CMB = p.TCMB;
+            b.N_eff = p.Neff;
+            if (p.has_massive_nu())
+                b.m_nu_eV = {p.m_nu};
+            b.T_ncdm_over_TCMB = p.T_ncdm_over_TCMB;
+            return b;
+        }
+
+        // The ComponentBackground is built on this range unless solve() asks for more
+        constexpr double default_x_min = -25.0, default_x_max = 5.0;
+        constexpr int default_points_per_unit_x = 200;
+
+        // 5-point central difference, step 1e-3 (error ~ h^4 f^(5) / 30)
+        template <class F>
+        double derivative(const F & f, double x) {
+            const double h = 1e-3;
+            return (f(x - 2.0 * h) - 8.0 * f(x - h) + 8.0 * f(x + h) - f(x + 2.0 * h)) / (12.0 * h);
+        }
+
+        const PERTURBATIONS::PerturbationModelInfo * ported(const std::string & name) {
+            for (const auto & m : PERTURBATIONS::perturbation_registry())
+                if (m.name == name)
+                    return &m;
+            return nullptr;
+        }
+    } // namespace
+
+    namespace detail {
+        // TRANSITIONAL adapters of an explicit Model (Model.h) to FML/Background: a species, and the gravity as the
+        // field equations (whose E^2 needs the BackgroundCosmology, which sums the model's species while its
+        // background is being built)
+        class LegacySpecies : public BACKGROUND::Species {
+          public:
+            explicit LegacySpecies(std::shared_ptr<const COSMOLOGY::Species> s) : s(std::move(s)) {}
+            std::string name() const override { return s->name(); }
+            BACKGROUND::Component component() const override { return component_of(s->role()); }
+            double rho(double x) const override { return s->rho(x); }
+            double p(double x) const override { return s->p(x); }
+            double drhodx(double x) const override { return s->drhodx(x); }
+            std::string info() const override { return s->info(); }
+
+          private:
+            std::shared_ptr<const COSMOLOGY::Species> s;
+        };
+
+        class LegacyFieldEquations : public BACKGROUND::FieldEquations {
+          public:
+            LegacyFieldEquations(std::shared_ptr<Gravity> g, const BackgroundCosmology * owner)
+                : owner(owner), g(std::move(g)) {}
+            std::string name() const override { return g->name(); }
+            std::string info() const override { return g->info(); }
+            double E2(double x, const BACKGROUND::ComponentBackground &) const override { return g->E2(x, *owner); }
+            double dE2dx(double x, const BACKGROUND::ComponentBackground &) const override {
+                return g->dE2dx(x, *owner);
+            }
+            const BackgroundCosmology * owner;
+
+          private:
+            std::shared_ptr<Gravity> g;
+        };
+    } // namespace detail
+
+    // =============================================================================
+    // Construction
+    // =============================================================================
+
     BackgroundCosmology::BackgroundCosmology(const CosmologyParameters & params_in)
-        : BackgroundCosmology(params_in, Models::build(params_in)) {}
+        : params(params_in), H0(params_in.H0()), OmegaK0(params_in.OmegaK),
+          K(-params_in.OmegaK * params_in.H0() * params_in.H0() / (Constants::c * Constants::c)),
+          L_unit(Constants::c / params_in.H0() / Constants::c_over_H0_mpch),
+          range{default_x_min, default_x_max, default_points_per_unit_x} {
+        params.validate();
+        build_background();
+        find_massive_neutrinos();
+        if (!pmodel) {
+            // TRANSITIONAL: the solver's own model for the perturbations (its background is not used)
+            legacy = true;
+            model = Models::build(params);
+            for (const auto & s : model.species)
+                if (!s)
+                    throw std::invalid_argument("BackgroundCosmology: null species in model " + model.name);
+            model.gravity->init_background(*this);
+        }
+    }
 
     BackgroundCosmology::BackgroundCosmology(const CosmologyParameters & params_in, Model model_in)
-        : params(params_in), model(std::move(model_in)), H0(params_in.H0()), OmegaK0(params_in.OmegaK),
-          K(-params_in.OmegaK * params_in.H0() * params_in.H0() / (Constants::c * Constants::c)) {
+        : params(params_in), H0(params_in.H0()), OmegaK0(params_in.OmegaK),
+          K(-params_in.OmegaK * params_in.H0() * params_in.H0() / (Constants::c * Constants::c)),
+          L_unit(Constants::c / params_in.H0() / Constants::c_over_H0_mpch),
+          range{default_x_min, default_x_max, default_points_per_unit_x}, legacy(true), explicit_model(true),
+          model(std::move(model_in)) {
         params.validate();
         if (!model.gravity)
             throw std::invalid_argument("BackgroundCosmology: the model has no gravity");
-        by_role.resize(int(Species::Role::Other) + 1);
         for (const auto & s : model.species) {
             if (!s)
                 throw std::invalid_argument("BackgroundCosmology: null species in model " + model.name);
-            by_role[int(s->role())].push_back(s.get());
             if (s->role() == Species::Role::MassiveNeutrinos) {
-                if (ncdm)
+                if (ncdm_old)
                     throw std::invalid_argument("BackgroundCosmology: only one massive neutrino species is supported");
-                ncdm = dynamic_cast<const MassiveNeutrinoSpecies *>(s.get());
-                if (!ncdm)
+                ncdm_old = dynamic_cast<const MassiveNeutrinoSpecies *>(s.get());
+                if (!ncdm_old)
                     throw std::invalid_argument(
                         "BackgroundCosmology: massive neutrinos must be a MassiveNeutrinoSpecies");
             }
         }
         model.gravity->init_background(*this);
+        build_background();
+    }
+
+    BackgroundCosmology::BackgroundCosmology(BackgroundCosmology && o) noexcept
+        : params(std::move(o.params)), H0(o.H0), OmegaK0(o.OmegaK0), K(o.K), L_unit(o.L_unit), bg(std::move(o.bg)),
+          pmodel(std::move(o.pmodel)), tensor_fe(std::move(o.tensor_fe)), range(o.range), ncdm_new(o.ncdm_new),
+          ncdm_factor(o.ncdm_factor), legacy(o.legacy), explicit_model(o.explicit_model), model(std::move(o.model)),
+          ncdm_old(o.ncdm_old), legacy_eqs(std::move(o.legacy_eqs)), x_start(o.x_start), x_end(o.x_end),
+          solved(o.solved) {
+        if (legacy_eqs)
+            legacy_eqs->owner = this;
+    }
+
+    BackgroundCosmology::~BackgroundCosmology() = default;
+
+    void BackgroundCosmology::build_background() {
+        bg.reset();
+        pmodel.reset();
+        tensor_fe.reset();
+        const auto p = background_parameters(params);
+        if (explicit_model) {
+            BACKGROUND::ComponentBackground::SpeciesList list;
+            for (const auto & s : model.species)
+                list.push_back(std::make_shared<detail::LegacySpecies>(s));
+            legacy_eqs = std::make_shared<detail::LegacyFieldEquations>(model.gravity, this);
+            bg = std::make_shared<const BACKGROUND::ComponentBackground>(model.name, p, list, legacy_eqs, range);
+            return;
+        }
+        bg = BACKGROUND::make_background(params.model, p, params.model_params, range);
+        if (const auto * info = ported(params.model)) {
+            pmodel = info->build(bg);
+            tensor_fe = pmodel->field_equation_perturbations(pmodel->context());
+        }
+    }
+
+    void BackgroundCosmology::find_massive_neutrinos() {
+        ncdm_new = nullptr;
+        ncdm_factor = 1.0;
+        if (explicit_model) // ncdm_old, found by the constructor
+            return;
+        for (const auto & s : bg->species()) {
+            if (s->component() != BACKGROUND::Component::MassiveNeutrinos)
+                continue;
+            const BACKGROUND::Species * inner = s.get();
+            double factor = 1.0;
+            if (const auto * scaled = dynamic_cast<const BACKGROUND::ScaledSpecies *>(inner)) {
+                factor = scaled->factor();
+                inner = &scaled->species();
+            }
+            const auto * typed = dynamic_cast<const BACKGROUND::MassiveNeutrinoSpecies *>(inner);
+            if (!typed)
+                throw std::invalid_argument("BackgroundCosmology: massive neutrinos must be a MassiveNeutrinoSpecies");
+            if (ncdm_new)
+                throw std::invalid_argument("BackgroundCosmology: only one massive neutrino species is supported");
+            ncdm_new = typed;
+            ncdm_factor = factor;
+        }
+    }
+
+    const Model & BackgroundCosmology::get_model() const {
+        if (!legacy)
+            throw std::logic_error("BackgroundCosmology: model " + params.model +
+                                   " has no solver Model (its background and perturbations come from FML/Background "
+                                   "and FML/Perturbations: background(), perturbation_model())");
+        return model;
+    }
+
+    std::string BackgroundCosmology::gravity_name() const {
+        return legacy ? model.gravity->name() : tensor_fe->name();
+    }
+
+    TensorCoefficients BackgroundCosmology::tensor_coefficients(double x) const {
+        return legacy ? model.gravity->tensor(x, *this) : tensor_fe->tensor(x);
     }
 
     // =============================================================================
-    // Species sums
+    // Species sums: from the ComponentBackground (while the background of an explicit model is being built, which
+    // its gravity's E^2 needs: from the model's species)
     // =============================================================================
 
     double BackgroundCosmology::rho_species(double x) const {
+        if (bg)
+            return bg->rho_total(x);
         double r = 0.0;
         for (const auto & s : model.species)
             r += s->rho(x);
         return r;
     }
     double BackgroundCosmology::drho_species(double x) const {
+        if (bg)
+            return bg->drho_total(x);
         double r = 0.0;
         for (const auto & s : model.species)
             r += s->drhodx(x);
         return r;
     }
     double BackgroundCosmology::ddrho_species(double x) const {
-        double r = 0.0;
-        for (const auto & s : model.species)
-            r += s->ddrhoddx(x);
-        return r;
+        if (explicit_model) {
+            double r = 0.0;
+            for (const auto & s : model.species)
+                r += s->ddrhoddx(x);
+            return r;
+        }
+        return derivative([&](double xx) { return bg->drho_total(xx); }, x);
     }
     double BackgroundCosmology::rho_of(Species::Role role, double x) const {
+        if (bg)
+            return bg->rho(component_of(role), x);
         double r = 0.0;
-        for (const Species * s : by_role[int(role)])
-            r += s->rho(x);
+        for (const auto & s : model.species)
+            if (s->role() == role)
+                r += s->rho(x);
         return r;
     }
     double BackgroundCosmology::drho_of(Species::Role role, double x) const {
+        if (bg)
+            return bg->drhodx(component_of(role), x);
         double r = 0.0;
-        for (const Species * s : by_role[int(role)])
-            r += s->drhodx(x);
+        for (const auto & s : model.species)
+            if (s->role() == role)
+                r += s->drhodx(x);
         return r;
     }
     double BackgroundCosmology::ddrho_of(Species::Role role, double x) const {
-        double r = 0.0;
-        for (const Species * s : by_role[int(role)])
-            r += s->ddrhoddx(x);
-        return r;
+        if (explicit_model) {
+            double r = 0.0;
+            for (const auto & s : model.species)
+                if (s->role() == role)
+                    r += s->ddrhoddx(x);
+            return r;
+        }
+        const auto c = component_of(role);
+        return derivative([&](double xx) { return bg->drhodx(c, xx); }, x);
     }
     double BackgroundCosmology::p_of(Species::Role role, double x) const {
+        if (bg)
+            return bg->p(component_of(role), x);
         double r = 0.0;
-        for (const Species * s : by_role[int(role)])
-            r += s->p(x);
+        for (const auto & s : model.species)
+            if (s->role() == role)
+                r += s->p(x);
         return r;
     }
 
-    double BackgroundCosmology::pNcdm(double x) const { return ncdm ? ncdm->p(x) : 0.0; }
-    double BackgroundCosmology::dpNcdmdx(double x) const { return ncdm ? ncdm->dpdx(x) : 0.0; }
-    double BackgroundCosmology::pseudo_pNcdm(double x) const { return ncdm ? ncdm->pseudo_p(x) : 0.0; }
-    double BackgroundCosmology::M_ncdm_of_x(double x) const { return ncdm ? ncdm->M_of_x(x) : 0.0; }
-    double BackgroundCosmology::ncdm_prefactor() const { return ncdm ? ncdm->prefactor() : 0.0; }
-
-    double BackgroundCosmology::E2_of_x(double x) const { return model.gravity->E2(x, *this); }
-    double BackgroundCosmology::dE2dx_of_x(double x) const { return model.gravity->dE2dx(x, *this); }
-    double BackgroundCosmology::ddE2ddx_of_x(double x) const { return model.gravity->ddE2ddx(x, *this); }
-
-    // =============================================================================
-    // Expansion rate. With Hp = H0 e^x sqrt(E2) and L = E2'/E2:
-    //   Hp'  = Hp (1 + L/2)
-    //   Hp'' = Hp [ (1 + L/2)^2 + (E2''/E2 - L^2)/2 ]
-    // =============================================================================
-
-    double BackgroundCosmology::H_of_x(double x) const { return H0 * std::sqrt(E2_of_x(x)); }
-
-    double BackgroundCosmology::Hp_of_x(double x) const { return std::exp(x) * H_of_x(x); }
-
-    double BackgroundCosmology::dHpdx_of_x(double x) const {
-        const double L = dE2dx_of_x(x) / E2_of_x(x);
-        return Hp_of_x(x) * (1.0 + 0.5 * L);
+    double BackgroundCosmology::pNcdm(double x) const {
+        return has_massive_nu() ? p_of(Species::Role::MassiveNeutrinos, x) : 0.0;
+    }
+    double BackgroundCosmology::dpNcdmdx(double x) const {
+        return ncdm_old ? ncdm_old->dpdx(x) : (ncdm_new ? ncdm_factor * ncdm_new->dpdx(x) : 0.0);
+    }
+    double BackgroundCosmology::pseudo_pNcdm(double x) const {
+        return ncdm_old ? ncdm_old->pseudo_p(x) : (ncdm_new ? ncdm_factor * ncdm_new->pseudo_p(x) : 0.0);
+    }
+    double BackgroundCosmology::M_ncdm_of_x(double x) const {
+        return ncdm_old ? ncdm_old->M_of_x(x) : (ncdm_new ? ncdm_new->M_of_x(x) : 0.0);
+    }
+    double BackgroundCosmology::ncdm_prefactor() const {
+        return ncdm_old ? ncdm_old->prefactor() : (ncdm_new ? ncdm_factor * ncdm_new->prefactor() : 0.0);
     }
 
+    // =============================================================================
+    // Expansion rate, from the ComponentBackground: E and dlnE/dx analytic (species and field equations),
+    // d^2 lnE/dx^2 from the gravity of an explicit model or a 5-point difference of dlnE/dx. With Hp = H0 e^x E:
+    //   Hp'  = Hp (1 + dlnE/dx)
+    //   Hp'' = Hp [ (1 + dlnE/dx)^2 + d^2lnE/dx^2 ]
+    //   E2' = 2 E2 dlnE/dx,  E2'' = E2 [ 4 (dlnE/dx)^2 + 2 d^2lnE/dx^2 ]
+    // =============================================================================
+
+    double BackgroundCosmology::E2_of_x(double x) const {
+        if (!bg) // an explicit model's background being built
+            return model.gravity->E2(x, *this);
+        const double E = bg->E(x);
+        return E * E;
+    }
+    double BackgroundCosmology::dE2dx_of_x(double x) const {
+        if (!bg)
+            return model.gravity->dE2dx(x, *this);
+        return 2.0 * E2_of_x(x) * bg->dlogEdx(x);
+    }
+    double BackgroundCosmology::ddE2ddx_of_x(double x) const {
+        if (explicit_model)
+            return model.gravity->ddE2ddx(x, *this);
+        const double L = bg->dlogEdx(x);
+        return E2_of_x(x) * (4.0 * L * L + 2.0 * ddlogEdx(x));
+    }
+    double BackgroundCosmology::ddlogEdx(double x) const {
+        if (explicit_model) {
+            const double E2 = E2_of_x(x), L = dE2dx_of_x(x) / E2;
+            return 0.5 * (ddE2ddx_of_x(x) / E2 - L * L);
+        }
+        return derivative([&](double xx) { return bg->dlogEdx(xx); }, x);
+    }
+
+    double BackgroundCosmology::H_of_x(double x) const { return H0 * bg->E(x); }
+
+    double BackgroundCosmology::Hp_of_x(double x) const { return H0 * std::exp(x) * bg->E(x); }
+
+    double BackgroundCosmology::dHpdx_of_x(double x) const { return Hp_of_x(x) * (1.0 + bg->dlogEdx(x)); }
+
     double BackgroundCosmology::ddHpddx_of_x(double x) const {
-        const double E2 = E2_of_x(x);
-        const double L = dE2dx_of_x(x) / E2;
-        const double M = ddE2ddx_of_x(x) / E2;
-        return Hp_of_x(x) * ((1.0 + 0.5 * L) * (1.0 + 0.5 * L) + 0.5 * (M - L * L));
+        const double L = 1.0 + bg->dlogEdx(x);
+        return Hp_of_x(x) * (L * L + ddlogEdx(x));
     }
 
     double BackgroundCosmology::OmegaB_of_x(double x) const { return rhoB(x) / E2_of_x(x); }
@@ -129,58 +367,24 @@ namespace FML::COSMOLOGY {
     double BackgroundCosmology::TCMB_of_x(double x) const { return params.TCMB * std::exp(-x); }
 
     // =============================================================================
-    // Initial conditions: exact matter + radiation solution
-    //   eta(a) = 2c a / (H0 [sqrt(OmR + OmM a) + sqrt(OmR)])
-    //   t(a)   = 2 OmR^{3/2} / (3 H0 OmM^2) f(y),  y = OmM a / OmR,
-    //            f(y) = (y - 2) sqrt(1 + y) + 2  (series for small y to avoid cancellation)
-    // =============================================================================
-
-    double BackgroundCosmology::eta_initial(double x) const {
-        const double a = std::exp(x);
-        // Massive neutrinos are relativistic at x_start and counted as radiation
-        const double OmR = rhoGamma(0.0) + rhoNu(0.0) + rhoNcdm(x) * a * a * a * a, OmM = rhoB(0.0) + rhoCDM(0.0);
-        return 2.0 * c * a / (H0 * (std::sqrt(OmR + OmM * a) + std::sqrt(OmR)));
-    }
-
-    double BackgroundCosmology::t_initial(double x) const {
-        const double a = std::exp(x);
-        const double OmR = rhoGamma(0.0) + rhoNu(0.0) + rhoNcdm(x) * a * a * a * a, OmM = rhoB(0.0) + rhoCDM(0.0);
-        if (OmR <= 0.0)
-            return 2.0 / (3.0 * H0 * std::sqrt(OmM)) * std::pow(a, 1.5); // pure matter
-        const double y = OmM * a / OmR;
-        const double f = (y < 1e-3) ? y * y * (0.75 + y * (-0.25 + y * (9.0 / 64.0 - y * 3.0 / 32.0))) :
-                                      (y - 2.0) * std::sqrt(1.0 + y) + 2.0;
-        return 2.0 * std::pow(OmR, 1.5) / (3.0 * H0 * OmM * OmM) * f;
-    }
-
-    // =============================================================================
-    // Solve for eta(x) and t(x)
+    // Times and distances: tabulated by the ComponentBackground (Gauss-Legendre integrals of 1/(aE), 1/E)
     // =============================================================================
 
     void BackgroundCosmology::solve(double x_start_in, double x_end_in, int n_points) {
         Utils::Timer timer("BackgroundCosmology::solve");
         if (!(x_end_in > x_start_in))
             throw std::invalid_argument("BackgroundCosmology::solve: need x_end > x_start");
+        const int ppx = std::max(default_points_per_unit_x, int(std::ceil(n_points / (x_end_in - x_start_in))));
+        if (x_start_in < bg->x_min() || x_end_in > bg->x_max() || ppx > range.points_per_unit_x) {
+            range.x_min = std::min(x_start_in, default_x_min);
+            range.x_max = std::max(x_end_in, default_x_max);
+            range.points_per_unit_x = ppx;
+            build_background();
+            find_massive_neutrinos();
+        }
         x_start = x_start_in;
         x_end = x_end_in;
-
-        const auto x_array = Utils::linspace(x_start, x_end, n_points);
-
-        // y = (eta, t):  deta/dx = c / Hp,  dt/dx = 1 / H
-        ODEFunction rhs = [&](double x, const double *, double * dydx) {
-            const double H = H_of_x(x);
-            dydx[0] = c / (std::exp(x) * H);
-            dydx[1] = 1.0 / H;
-            return GSL_SUCCESS;
-        };
-
-        ODESolver ode(1e-3, 0.0, 1e-12);
-        ode.solve(rhs, x_array, {eta_initial(x_start), t_initial(x_start)}, gsl_odeiv2_step_rk8pd);
-
-        eta_spline.create(x_array, ode.get_data_by_component(0), "eta_of_x");
-        t_spline.create(x_array, ode.get_data_by_component(1), "t_of_x");
         solved = true;
-
         timer.print();
     }
 
@@ -189,7 +393,6 @@ namespace FML::COSMOLOGY {
             throw std::runtime_error(std::string("BackgroundCosmology::") + func + ": call solve() first");
     }
 
-    // eta and t are integrals from x_start: outside the solved range the spline would return the end value
     void BackgroundCosmology::require_in_range(const char * func, double x) const {
         const double tol = 1e-10 * (1.0 + std::fabs(x));
         if (x < x_start - tol || x > x_end + tol)
@@ -201,7 +404,7 @@ namespace FML::COSMOLOGY {
     double BackgroundCosmology::eta_of_x(double x) const {
         require_solved("eta_of_x");
         require_in_range("eta_of_x", x);
-        return eta_spline(x);
+        return bg->eta(x) * L_unit;
     }
 
     double BackgroundCosmology::detadx_of_x(double x) const { return c / Hp_of_x(x); }
@@ -209,36 +412,17 @@ namespace FML::COSMOLOGY {
     double BackgroundCosmology::t_of_x(double x) const {
         require_solved("t_of_x");
         require_in_range("t_of_x", x);
-        return t_spline(x);
+        return bg->t_H0(x) / H0;
     }
 
     double BackgroundCosmology::eta0() const { return eta_of_x(0.0); }
     double BackgroundCosmology::t0() const { return t_of_x(0.0); }
 
-    // =============================================================================
-    // Distances
-    // =============================================================================
-
     double BackgroundCosmology::comoving_distance_of_x(double x) const { return eta0() - eta_of_x(x); }
 
-    // sinK(chi) = chi * S(K chi^2) with S(u) = sin(sqrt u)/sqrt u (u > 0) or sinh(sqrt -u)/sqrt -u (u < 0).
-    // cotK(chi) = (1/chi) * C(K chi^2) with C(u) = sqrt(u) cot(sqrt u) or sqrt(-u) coth(sqrt -u).
-    // Series for small |u|: S = 1 - u/6 + u^2/120 - u^3/5040,  C = 1 - u/3 - u^2/45 - 2u^3/945.
-    double BackgroundCosmology::sinK(double chi) const {
-        const double u = K * chi * chi;
-        if (std::fabs(u) < 1e-4)
-            return chi * (1.0 - u / 6.0 * (1.0 - u / 20.0 * (1.0 - u / 42.0)));
-        const double s = std::sqrt(std::fabs(u));
-        return chi * (u > 0.0 ? std::sin(s) : std::sinh(s)) / s;
-    }
+    double BackgroundCosmology::sinK(double chi) const { return bg->sinK(chi / L_unit) * L_unit; }
 
-    double BackgroundCosmology::cotK(double chi) const {
-        const double u = K * chi * chi;
-        if (std::fabs(u) < 1e-4)
-            return (1.0 - u / 3.0 - u * u / 45.0 - 2.0 * u * u * u / 945.0) / chi;
-        const double s = std::sqrt(std::fabs(u));
-        return (u > 0.0 ? s / std::tan(s) : s / std::tanh(s)) / chi;
-    }
+    double BackgroundCosmology::cotK(double chi) const { return bg->cotK(chi / L_unit) / L_unit; }
 
     double BackgroundCosmology::transverse_distance_of_x(double x) const { return sinK(comoving_distance_of_x(x)); }
 
@@ -289,10 +473,11 @@ namespace FML::COSMOLOGY {
     void BackgroundCosmology::info() const {
         const auto f = std::cout.flags();
         std::cout << std::setprecision(6);
-        std::cout << "\nBackgroundCosmology: model " << model.name << ", gravity " << model.gravity->info() << "\n";
+        std::cout << "\nBackgroundCosmology: model " << params.model << ", gravity " << bg->field_equations().info()
+                  << (legacy ? " (perturbations: solver model, " + model.gravity->info() + ")" : "") << "\n";
         std::cout << "  Species: ";
-        for (size_t i = 0; i < model.species.size(); i++)
-            std::cout << (i ? "\n           " : "") << model.species[i]->info();
+        for (size_t i = 0; i < bg->species().size(); i++)
+            std::cout << (i ? "\n           " : "") << bg->species()[i]->info();
         std::cout << "\n";
         std::cout << "  E^2(x=0) (should be 1)   = " << E2_of_x(0.0) << "\n";
         std::cout << "  OmegaB, CDM, DE (today)  = " << OmegaB_of_x(0.0) << ", " << OmegaCDM_of_x(0.0) << ", "
@@ -303,8 +488,10 @@ namespace FML::COSMOLOGY {
                   << OmegaK_of_x(0.0) << "\n";
         if (K != 0.0) {
             std::cout << "  Curvature radius 1/sqrt|K| = " << 1.0 / std::sqrt(std::fabs(K)) / Mpc << " Mpc ("
-                      << (K > 0.0 ? "closed" : "open") << "), sqrt|K| eta0 = " << std::sqrt(std::fabs(K)) * eta0()
-                      << "\n";
+                      << (K > 0.0 ? "closed" : "open") << ")";
+            if (solved)
+                std::cout << ", sqrt|K| eta0 = " << std::sqrt(std::fabs(K)) * eta0();
+            std::cout << "\n";
         }
 
         auto print_epoch = [&](const char * name, double x) {
