@@ -7,26 +7,21 @@
 // Time variable x = ln(a). SI units (H in 1/s, eta in m, t in s).
 //
 // This class is the solver's interface to the background; the background itself is a
-// BACKGROUND::ComponentBackground of FML/Background (species + field equations, one solve that tabulates
+// BACKGROUND::ComponentBackground (Cosmology/Background: species + field equations, one solve that tabulates
 // the conformal time, the cosmic time and the comoving distance), and the perturbations of the model come
-// from a PERTURBATIONS::PerturbationModel of FML/Perturbations built on the same background:
+// from a PERTURBATIONS::PerturbationModel (Cosmology/Perturbations) built on the same background:
 //
-//   BackgroundCosmology(params)         params.model from the registries of FML/Background (make_background)
-//                                       and FML/Perturbations (make_perturbation_model), with params.model_params
+//   BackgroundCosmology(params)         params.model from the model registry (PERTURBATIONS::make_perturbation_model
+//                                       on PERTURBATIONS::make_model_background), with params.model_params
 //   BackgroundCosmology(params, pmodel) an explicit PERTURBATIONS::PerturbationModel (a custom model, e.g. a
 //                                       PerturbationModel_Assembled) and its background; the cosmological parameters
 //                                       of params must be those of its background. The background is not rebuilt by
 //                                       solve() (its range must cover the solve range)
-//   BackgroundCosmology(params, model)  TRANSITIONAL: an explicit Model of the solver's old classes (Model.h): its
-//                                       species and gravity become a ComponentBackground through adapters. Background
-//                                       only (the reference of the tests of FML/Background and FML/Perturbations):
-//                                       it has no perturbation model, and Perturbations cannot be solved on it.
 //
 // The named accessors rhoB, rhoCDM, ... sum the species of that component (0 if there is none).
-// Second derivatives (ddHpddx, ddE2ddx, ddrho...): an explicit Model gives them analytically (its gravity
-// and species); otherwise a 5-point central difference (step 1e-3 in x) of the analytic first derivatives
-// of the ComponentBackground (relative error ~1e-11 for smooth backgrounds, 1e-8 near the knots of the
-// massive-neutrino tables).
+// Second derivatives (ddHpddx, ddE2ddx, ddrho...): a 5-point central difference (step 1e-3 in x) of the analytic
+// first derivatives of the ComponentBackground (relative error ~1e-11 for smooth backgrounds, 1e-8 near the knots of
+// the massive-neutrino tables).
 //
 // Usage:
 //   BackgroundCosmology cosmo(params);
@@ -35,11 +30,11 @@
 //   cosmo.output("data/background.txt");
 // =============================================================================
 
-#include <FML/Background/ComponentBackground.h>
+#include <FML/Cosmology/Background/ComponentBackground.h>
 #include <FML/Cosmology/Background/CosmologyParameters.h>
-#include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Perturbations/PerturbationModel.h>
+#include <FML/Cosmology/Perturbations/PerturbationModel.h>
+#include <FML/Cosmology/Perturbations/PerturbationTypes.h>
 
 #include <cmath>
 #include <functional>
@@ -49,10 +44,8 @@
 
 namespace FML::COSMOLOGY {
 
-    class MassiveNeutrinoSpecies;
-    namespace detail {
-        class LegacyFieldEquations;
-    }
+    // Tensor-mode coefficients (M*^2, alpha_M, alpha_T) of the theory of gravity, see Tensors.h
+    using TensorCoefficients = PERTURBATIONS::TensorCoefficients;
 
     class BackgroundCosmology {
       public:
@@ -60,8 +53,6 @@ namespace FML::COSMOLOGY {
         explicit BackgroundCosmology(const CosmologyParameters & params);
         // Explicit perturbation model with its background (a custom model)
         BackgroundCosmology(const CosmologyParameters & params, PERTURBATIONS::PerturbationModelPtr model);
-        // TRANSITIONAL: explicit Model of the old classes (background only, see above)
-        BackgroundCosmology(const CosmologyParameters & params, Model model);
         BackgroundCosmology(BackgroundCosmology && other) noexcept;
         BackgroundCosmology(const BackgroundCosmology &) = delete;
         BackgroundCosmology & operator=(const BackgroundCosmology &) = delete;
@@ -75,67 +66,56 @@ namespace FML::COSMOLOGY {
         void solve(double x_start = -20.0, double x_end = 5.0, int n_points = 5000);
 
         // -------------------------------------------------------------------------
-        // The new background and perturbation model (FML/Background, FML/Perturbations)
+        // The background and the perturbation model (Cosmology/Background, Cosmology/Perturbations)
         // -------------------------------------------------------------------------
         const BACKGROUND::ComponentBackground & background() const { return *bg; }
         const BACKGROUND::ComponentBackgroundPtr & background_ptr() const { return bg; }
-        // The perturbations of the model from FML/Perturbations (nullptr only for an explicit Model of the old classes,
-        // see has_legacy_model)
         const PERTURBATIONS::PerturbationModelPtr & perturbation_model() const { return pmodel; }
-
-        // -------------------------------------------------------------------------
-        // TRANSITIONAL: an explicit Model of the solver's old classes (background only). get_model, species and
-        // gravity throw without one.
-        // -------------------------------------------------------------------------
-        bool has_legacy_model() const { return legacy; }
-        const Model & get_model() const;
-        const std::vector<std::shared_ptr<const Species>> & species() const { return get_model().species; }
-        const Gravity & gravity() const { return *get_model().gravity; }
         const std::string & model_name() const { return params.model; }
         // Name of the theory of gravity of the perturbations ("GR", "Brans-Dicke", ...)
         std::string gravity_name() const;
-        // Tensor-mode coefficients at x (Gravity.h)
+        // Tensor-mode coefficients at x (of the perturbed field equations)
         TensorCoefficients tensor_coefficients(double x) const;
 
         // Sum over all species of rho_i / rho_c0 and its x-derivatives (curvature not included)
         double rho_species(double x) const;
         double drho_species(double x) const;
         double ddrho_species(double x) const;
-        // Sum over the species with a given role
-        double rho_of(Species::Role role, double x) const;
-        double drho_of(Species::Role role, double x) const;
-        double ddrho_of(Species::Role role, double x) const;
-        double p_of(Species::Role role, double x) const;
+        // Sum over the species of a component (BACKGROUND::Component: Baryons, CDM, Photons, ..., Other)
+        double rho_of(BACKGROUND::Component c, double x) const;
+        double drho_of(BACKGROUND::Component c, double x) const;
+        double ddrho_of(BACKGROUND::Component c, double x) const;
+        double p_of(BACKGROUND::Component c, double x) const;
 
         // -------------------------------------------------------------------------
         // Energy densities in units of today's critical density: rho_i(x) / rho_c0
         // -------------------------------------------------------------------------
-        double rhoB(double x) const { return rho_of(Species::Role::Baryons, x); }
-        double rhoCDM(double x) const { return rho_of(Species::Role::CDM, x); }
-        double rhoGamma(double x) const { return rho_of(Species::Role::Photons, x); }
-        double rhoNu(double x) const { return rho_of(Species::Role::MasslessNeutrinos, x); }
-        double rhoNcdm(double x) const { return rho_of(Species::Role::MassiveNeutrinos, x); }
-        double rhoDE(double x) const { return rho_of(Species::Role::DarkEnergy, x); }
+        double rhoB(double x) const { return rho_of(BACKGROUND::Component::Baryons, x); }
+        double rhoCDM(double x) const { return rho_of(BACKGROUND::Component::CDM, x); }
+        double rhoGamma(double x) const { return rho_of(BACKGROUND::Component::Photons, x); }
+        double rhoNu(double x) const { return rho_of(BACKGROUND::Component::MasslessNeutrinos, x); }
+        double rhoNcdm(double x) const { return rho_of(BACKGROUND::Component::MassiveNeutrinos, x); }
+        double rhoDE(double x) const { return rho_of(BACKGROUND::Component::DarkEnergy, x); }
         double rhoK(double x) const { return OmegaK0 * std::exp(-2.0 * x); } // curvature, Omega_K e^{-2x}
 
-        double drhoBdx(double x) const { return drho_of(Species::Role::Baryons, x); }
-        double drhoCDMdx(double x) const { return drho_of(Species::Role::CDM, x); }
-        double drhoGammadx(double x) const { return drho_of(Species::Role::Photons, x); }
-        double drhoNudx(double x) const { return drho_of(Species::Role::MasslessNeutrinos, x); }
-        double drhoNcdmdx(double x) const { return drho_of(Species::Role::MassiveNeutrinos, x); }
-        double drhoDEdx(double x) const { return drho_of(Species::Role::DarkEnergy, x); }
+        double drhoBdx(double x) const { return drho_of(BACKGROUND::Component::Baryons, x); }
+        double drhoCDMdx(double x) const { return drho_of(BACKGROUND::Component::CDM, x); }
+        double drhoGammadx(double x) const { return drho_of(BACKGROUND::Component::Photons, x); }
+        double drhoNudx(double x) const { return drho_of(BACKGROUND::Component::MasslessNeutrinos, x); }
+        double drhoNcdmdx(double x) const { return drho_of(BACKGROUND::Component::MassiveNeutrinos, x); }
+        double drhoDEdx(double x) const { return drho_of(BACKGROUND::Component::DarkEnergy, x); }
         double drhoKdx(double x) const { return -2.0 * rhoK(x); }
 
-        double ddrhoBddx(double x) const { return ddrho_of(Species::Role::Baryons, x); }
-        double ddrhoCDMddx(double x) const { return ddrho_of(Species::Role::CDM, x); }
-        double ddrhoGammaddx(double x) const { return ddrho_of(Species::Role::Photons, x); }
-        double ddrhoNuddx(double x) const { return ddrho_of(Species::Role::MasslessNeutrinos, x); }
-        double ddrhoNcdmddx(double x) const { return ddrho_of(Species::Role::MassiveNeutrinos, x); }
-        double ddrhoDEddx(double x) const { return ddrho_of(Species::Role::DarkEnergy, x); }
+        double ddrhoBddx(double x) const { return ddrho_of(BACKGROUND::Component::Baryons, x); }
+        double ddrhoCDMddx(double x) const { return ddrho_of(BACKGROUND::Component::CDM, x); }
+        double ddrhoGammaddx(double x) const { return ddrho_of(BACKGROUND::Component::Photons, x); }
+        double ddrhoNuddx(double x) const { return ddrho_of(BACKGROUND::Component::MasslessNeutrinos, x); }
+        double ddrhoNcdmddx(double x) const { return ddrho_of(BACKGROUND::Component::MassiveNeutrinos, x); }
+        double ddrhoDEddx(double x) const { return ddrho_of(BACKGROUND::Component::DarkEnergy, x); }
         double ddrhoKddx(double x) const { return 4.0 * rhoK(x); }
 
         // Massive neutrinos (all 0 without): pressure (units of rho_c0) and dp/dx, w = p/rho goes from 1/3 to 0
-        bool has_massive_nu() const { return ncdm_old != nullptr || ncdm_new != nullptr; }
+        bool has_massive_nu() const { return ncdm != nullptr; }
         double pNcdm(double x) const;
         double dpNcdmdx(double x) const;
         double pseudo_pNcdm(double x) const; // pseudo-pressure, dp/dx = -(5p - pseudo_p)
@@ -218,23 +198,17 @@ namespace FML::COSMOLOGY {
         double K;      // Spatial curvature -Omega_K H0^2 / c^2 [1/m^2]
         double L_unit; // meters per Mpc/h of the background: c / H0 / c_over_H0_mpch
 
-        // The background and the perturbation model (FML/Background, FML/Perturbations)
+        // The background and the perturbation model
         BACKGROUND::ComponentBackgroundPtr bg;
         PERTURBATIONS::PerturbationModelPtr pmodel;
         std::unique_ptr<PERTURBATIONS::PerturbedFieldEquation> tensor_fe; // tensor coefficients of pmodel
         BACKGROUND::BackgroundRange range;
         // Massive neutrinos of the background (possibly rescaled: ncdm_factor)
-        const BACKGROUND::MassiveNeutrinoSpecies * ncdm_new = nullptr;
+        const BACKGROUND::MassiveNeutrinoSpecies * ncdm = nullptr;
         double ncdm_factor = 1.0;
 
         // An explicit perturbation model (its background is not rebuilt)
         bool explicit_pmodel = false;
-        // TRANSITIONAL: an explicit Model of the old classes (legacy; the background is made of adapters of its species
-        // and gravity)
-        bool legacy = false, explicit_model = false;
-        Model model;
-        const MassiveNeutrinoSpecies * ncdm_old = nullptr; // of an explicit model
-        std::shared_ptr<detail::LegacyFieldEquations> legacy_eqs;
 
         void build_background(); // bg (+ pmodel, tensor_fe) on range
         void find_massive_neutrinos();

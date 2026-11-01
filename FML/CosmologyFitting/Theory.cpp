@@ -1,6 +1,5 @@
 #include <FML/CosmologyFitting/Theory.h>
 #include <FML/Cosmology/Perturbations/Isocurvature.h>
-#include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
 #include <FML/Cosmology/Perturbations/Tensors.h>

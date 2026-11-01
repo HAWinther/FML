@@ -27,7 +27,7 @@ namespace FML::COSMOLOGY {
             throw std::invalid_argument("Perturbations: x-range [" + std::to_string(options.x_start) + ", " +
                                         std::to_string(options.x_end) +
                                         "] extends outside the background solution (bg_x_start, bg_x_end)");
-        // The species and field equations of the model (FML/Perturbations)
+        // The species and field equations of the model (PERTURBATIONS::PerturbationModel)
         PERTURBATIONS::PerturbationSettings settings;
         settings.neutrinos = options.neutrinos;
         settings.lmax_nu = options.lmax_nu;
@@ -38,8 +38,6 @@ namespace FML::COSMOLOGY {
         settings.x_end = options.x_end;
         ctx = std::make_unique<PERTURBATIONS::PerturbationContext>(cosmo.background(), settings);
         const auto & pm = cosmo.perturbation_model();
-        if (!pm) // TRANSITIONAL: an explicit Model of the old classes has no perturbations (see the header)
-            return;
         species = pm->species_perturbations(*ctx);
         field_eq = pm->field_equation_perturbations(*ctx);
         for (double a : options.iso_amplitude)
@@ -156,7 +154,7 @@ namespace FML::COSMOLOGY {
     //   Psi = -1/(3/2 + 2 f_nu/5),  Phi = -(1 + 2 f_nu/5) Psi,  delta_b = -3/2 Psi,  v_b = -(ck/2Hp) Psi,
     //   Theta_0 = -Psi/2,  Theta_1 = (ck/6Hp) Psi
     // f_nu is the fraction of free-streaming species (massless and, still relativistic, massive neutrinos)
-    // in the radiation. The species set their own variables (SpeciesPerturbations::initial_conditions).
+    // in the radiation. The species set their own variables (SpeciesPerturbation::initial_conditions).
     // =============================================================================
 
     std::vector<double> Perturbations::initial_conditions(ModeState & st) const {
@@ -495,9 +493,6 @@ namespace FML::COSMOLOGY {
 
     void Perturbations::solve() {
         Utils::Timer timer("Perturbations::solve");
-        if (!field_eq)
-            throw std::invalid_argument("Perturbations::solve: the model has no perturbations (an explicit Model of "
-                                        "the old classes: use a PERTURBATIONS::PerturbationModel)");
         if (!cosmo.is_solved() || !rec.is_solved())
             throw std::runtime_error("Perturbations::solve: background and recombination must be solved first");
 

@@ -5,6 +5,23 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology: the background and perturbation modules move into Cosmology/; the old model classes are removed
+- `Background/` is now `Cosmology/Background/` and `Perturbations/` is now `Cosmology/Perturbations/` (namespaces
+  `FML::COSMOLOGY::BACKGROUND` and `FML::COSMOLOGY::PERTURBATIONS` unchanged; includes `<FML/Cosmology/Background/...>`,
+  `<FML/Cosmology/Perturbations/...>`), with their tests in `tests/` of each folder (header-only, no longer linking the
+  Einstein-Boltzmann solver).
+- Removed the solver's old model classes, no longer used since the solver runs on the two modules: `Cosmology/Models/`,
+  the old `Species`/`SpeciesPerturbations` (`Cosmology/Background/Species.h`, replaced by the module's), `Gravity.h`,
+  `Model.h/.cpp` (the `Model`, its build functions and the solver's registry) and `MassiveNeutrinos.h/.cpp`
+  (`CosmologyParameters::OmegaNcdm` uses `BACKGROUND::FermiDiracIntegrals`), and the explicit-`Model` path of
+  `BackgroundCosmology` (`species()`, `gravity()`, `get_model()`; `rho_of` etc. take a `BACKGROUND::Component`). The
+  module tests that compared with the old classes compare with their values stored in `tests/data/solver_*.txt`.
+- One model registry: `Cosmology/Perturbations/Presets.h` (built on the background registry, whose entries now list
+  only the background parameters; every parameter has a description). The solver's parameter files, validation,
+  `--write-defaults` and `params_used.ini` use it, so all its models are selectable (also
+  `quintessence_inverse_power_law`, `quintessence_pngb`, `quintessence_hilltop`, `ede_zc`) with all their parameters
+  (`quint_phi_ini`, `quint_dphidlna_ini`, `bd_GeffG_today`, `bd_density_parameter_definition`, ...).
+
 ### SimulationCode: `ic_type_of_input = camb` (was `transferinfofile`)
 - The CAMB transfer-file input is now `ic_type_of_input = "camb"`, next to `class` and `internal_transfer` (the source
   names of `make_transfer_provider`). The old name `transferinfofile` still works and prints a warning. The parameter

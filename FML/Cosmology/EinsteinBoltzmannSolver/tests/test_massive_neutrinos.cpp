@@ -4,8 +4,9 @@
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
-#include <FML/Cosmology/Background/MassiveNeutrinos.h>
+#include <FML/Cosmology/Background/Species.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
+#include <FML/Cosmology/Perturbations/SpeciesPerturbation_MassiveNeutrinos.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
@@ -71,27 +72,26 @@ namespace {
 int main() {
     std::cout << "Momentum integrals\n";
     {
+        // The background's tabulated Fermi-Dirac integrals (Cosmology/Background/Species.h)
+        const auto & FD = BACKGROUND::FermiDiracIntegrals::get();
         const double I0 = 7.0 * std::pow(M_PI, 4) / 120.0;
-        check_rel(MassiveNeutrinos::I_rho(0.0), I0, 1e-9, "I_rho(0) = 7 pi^4/120");
-        check_rel(MassiveNeutrinos::I_p(0.0), I0 / 3.0, 1e-9, "I_p(0) = I_rho(0)/3 (radiation)");
-        check_rel(MassiveNeutrinos::I_rho(1e4),
-                  1.5 * 1.2020569031595942 * 1e4,
-                  1e-7,
-                  "I_rho(M) -> (3/2) zeta(3) M for M >> 1");
+        check_rel(FD.I_rho(0.0), I0, 1e-9, "I_rho(0) = 7 pi^4/120");
+        check_rel(FD.I_p(0.0), I0 / 3.0, 1e-9, "I_p(0) = I_rho(0)/3 (radiation)");
+        check_rel(FD.I_rho(1e4), 1.5 * 1.2020569031595942 * 1e4, 1e-7, "I_rho(M) -> (3/2) zeta(3) M for M >> 1");
         double err = 0.0;
         for (double M : {0.1, 1.0, 3.0, 30.0, 300.0}) {
-            err = std::max(err, std::fabs(MassiveNeutrinos::I_rho(M) / reference_integral(M, 2, 1) - 1.0));
-            err = std::max(err, std::fabs(MassiveNeutrinos::I_p(M) / (reference_integral(M, 4, -1) / 3.0) - 1.0));
-            err = std::max(err, std::fabs(MassiveNeutrinos::I_pp(M) / (reference_integral(M, 6, -3) / 3.0) - 1.0));
+            err = std::max(err, std::fabs(FD.I_rho(M) / reference_integral(M, 2, 1) - 1.0));
+            err = std::max(err, std::fabs(FD.I_p(M) / (reference_integral(M, 4, -1) / 3.0) - 1.0));
+            err = std::max(err, std::fabs(FD.I_pp(M) / (reference_integral(M, 6, -3) / 3.0) - 1.0));
         }
-        check_close(err, 0.0, 3e-7, "48-node quadrature vs adaptive (rho, p, pseudo-p)");
+        check_close(err, 0.0, 1e-9, "tabulated integrals vs adaptive (rho, p, pseudo-p)");
         const double M = 2.7, h = 1e-5;
-        check_rel((MassiveNeutrinos::I_p(M * (1 + h)) - MassiveNeutrinos::I_p(M * (1 - h))) / (2 * h),
-                  MassiveNeutrinos::I_pp(M) - MassiveNeutrinos::I_p(M),
+        check_rel((FD.I_p(M * (1 + h)) - FD.I_p(M * (1 - h))) / (2 * h),
+                  FD.I_pp(M) - FD.I_p(M),
                   1e-7,
                   "dI_p/dlnM = I_pp - I_p");
-        // Perturbation quadrature: 8 nodes integrate the massless density moment to 3e-5
-        MassiveNeutrinos::Quadrature q8(8);
+        // Perturbation quadrature (Gauss-Laguerre): 8 nodes integrate the massless density moment to 3e-5
+        const PERTURBATIONS::MassiveNeutrinoQuadrature q8(8);
         double s = 0.0;
         for (int i = 0; i < q8.size(); i++)
             s += q8.w[i] * std::pow(q8.q[i], 3);

@@ -1,6 +1,6 @@
 // =============================================================================
-// Tests of the dark scattering model (FML/Background/BackgroundModel_DarkScattering.h,
-// FML/Perturbations/SpeciesPerturbation_DarkEnergyFluid.h). Run with `make test`.
+// Tests of the dark scattering model (FML/Cosmology/Background/BackgroundModel_DarkScattering.h,
+// FML/Cosmology/Perturbations/SpeciesPerturbation_DarkEnergyFluid.h). Run with `make test`.
 //
 //   * Background: rho_DE ~ a^{-3(1+w)}, closure; the velocity-locking epoch Gamma_DE/Hp = 200
 //   * xi = 0 (wCDM) and xi > 0: the Einstein constraints that are not evolved (Poisson, momentum) hold with

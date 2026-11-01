@@ -8,7 +8,7 @@
 // arXiv:1305.3261, with s_l = 1 in flat space). Conformal time tau, ' = d/dtau, kappa' = a n_e sigma_T:
 //   h'' + (2 + alpha_M) Hp h' + (1 + alpha_T) k^2 h = -4 sqrt6 a^2 sum_X (8 pi G/3) rho_X
 //                                                    (F_0^X/15 + 2 F_2^X/21 + F_4^X/35) / M*^2
-// (X = photons and free-streaming neutrinos; M*^2, alpha_M, alpha_T from Gravity::tensor, GR: 1, 0, 0),
+// (X = photons and free-streaming neutrinos; M*^2, alpha_M, alpha_T from PerturbedFieldEquation::tensor, GR: 1, 0, 0),
 //   photon temperature  F_0' = -k F_1 - kappa' (F_0 + sqrt6 P) + sqrt6 h'
 //                       F_l' = k/(2l+1) [l F_{l-1} - (l+1) F_{l+1}] - kappa' F_l
 //   photon polarization G_0' = -k G_1 - kappa' (G_0 - sqrt6 P),  G_l' as F_l

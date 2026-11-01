@@ -4,8 +4,11 @@
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
-#include <FML/Cosmology/Background/Model.h>
-#include <FML/Cosmology/Models/StandardSpecies.h>
+#include <FML/Cosmology/Background/ComponentBackground.h>
+#include <FML/Cosmology/Background/FieldEquation_GeneralRelativity.h>
+#include <FML/Cosmology/Background/Species.h>
+#include <FML/Cosmology/Perturbations/PerturbationModel.h>
+#include <FML/Cosmology/Perturbations/PerturbedFieldEquation_GeneralRelativity.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 
@@ -261,12 +264,41 @@ static void test_geometry() {
     }
 }
 
-// LCDM with Lambda replaced by CPL dark energy, assembled from the building blocks of Model.h
+// LCDM with Lambda replaced by CPL dark energy, assembled from the building blocks of Cosmology/Background and
+// Cosmology/Perturbations (a custom model: the standard species and their perturbations, GR)
 static BackgroundCosmology cpl_model(const CosmologyParameters & p, double w0, double wa) {
-    Model m = Models::lcdm(p);
-    m.name = "cpl";
-    m.species.back() = std::make_shared<CPLDarkEnergy>(p.OmegaLambda(), w0, wa);
-    return BackgroundCosmology(p, m);
+    namespace BG = BACKGROUND;
+    namespace PT = PERTURBATIONS;
+    BG::BackgroundParameters b;
+    b.h = p.h;
+    b.Omega_b = p.OmegaB;
+    b.Omega_cdm = p.OmegaCDM;
+    b.Omega_k = p.OmegaK;
+    b.T_CMB = p.TCMB;
+    b.N_eff = p.Neff;
+    if (p.has_massive_nu())
+        b.m_nu_eV = {p.m_nu};
+    b.T_ncdm_over_TCMB = p.T_ncdm_over_TCMB;
+    auto s = BG::standard_species(b);
+    s.push_back(std::make_shared<BG::CPLDarkEnergy>(1.0 - p.OmegaK - BG::density_today(s), w0, wa));
+    auto bg = std::make_shared<const BG::ComponentBackground>("cpl",
+                                                              b,
+                                                              s,
+                                                              std::make_shared<BG::GeneralRelativity>(),
+                                                              BG::BackgroundRange{-25.0, 5.0, 200});
+    auto standard = std::make_shared<PT::StandardSpeciesPerturbations>(*bg);
+    auto model = std::make_shared<const PT::PerturbationModel_Assembled>(
+        "cpl",
+        bg,
+        [standard](const PT::PerturbationContext & ctx) {
+            PT::SpeciesPerturbationList l;
+            standard->add_to(ctx, l);
+            return l;
+        },
+        [](const PT::PerturbationContext & ctx) {
+            return std::make_unique<PT::PerturbedFieldEquation_GeneralRelativity>(ctx);
+        });
+    return BackgroundCosmology(p, model);
 }
 
 static void test_wcdm() {

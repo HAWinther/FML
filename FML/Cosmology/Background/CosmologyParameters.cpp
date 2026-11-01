@@ -1,8 +1,8 @@
 #include <FML/Cosmology/Background/CosmologyParameters.h>
 #include <FML/Cosmology/Background/BBN.h>
-#include <FML/Cosmology/Background/MassiveNeutrinos.h>
-#include <FML/Cosmology/Background/Model.h>
+#include <FML/Cosmology/Background/Species.h>
 #include <FML/Cosmology/Common.h>
+#include <FML/Cosmology/Perturbations/Presets.h>
 
 #include <cmath>
 #include <fstream>
@@ -30,14 +30,14 @@ namespace FML::COSMOLOGY {
         return has_massive_nu() ? std::pow(T_ncdm_over_TCMB / std::cbrt(4.0 / 11.0), 4) : 0.0;
     }
 
-    double CosmologyParameters::M_ncdm() const { return MassiveNeutrinos::M0(m_nu, T_ncdm()); }
+    double CosmologyParameters::M_ncdm() const { return m_nu * Constants::eV / (Constants::k_b * T_ncdm()); }
 
     double CosmologyParameters::OmegaNcdm() const {
         if (!has_massive_nu())
             return 0.0;
-        // rho_ncdm / rho_gamma = (15/pi^4) (T_ncdm/TCMB)^4 I_rho(M)
+        // rho_ncdm / rho_gamma = (15/pi^4) (T_ncdm/TCMB)^4 I_rho(M) (the Fermi-Dirac integral of the background)
         return OmegaGamma() * 15.0 / std::pow(M_PI, 4) * std::pow(T_ncdm_over_TCMB, 4) *
-               MassiveNeutrinos::I_rho(M_ncdm());
+               BACKGROUND::FermiDiracIntegrals::get().I_rho(M_ncdm());
     }
 
     double CosmologyParameters::OmegaLambda() const {
@@ -86,7 +86,7 @@ namespace FML::COSMOLOGY {
         require(!reionization || (z_reion > 0.0 && z_reion < 50.0), "z_reion must be in (0, 50)");
         require(!reionization || (z_He_reion > 0.0 && z_He_reion < 50.0), "z_He_reion must be in (0, 50)");
         try {
-            Models::validate(*this);
+            PERTURBATIONS::model_parameter_values(model, model_params);
         } catch (const std::invalid_argument & e) {
             throw std::invalid_argument(std::string("CosmologyParameters: ") + e.what());
         }
@@ -96,14 +96,20 @@ namespace FML::COSMOLOGY {
         return Yp_bbn ? BBN::helium_fraction(OmegaB * h * h, Neff) : Yp;
     }
 
-    double CosmologyParameters::model_param(const std::string & name) const { return Models::parameter(*this, name); }
+    double CosmologyParameters::model_param(const std::string & name) const {
+        const auto values = PERTURBATIONS::model_parameter_values(model, model_params);
+        const auto it = values.find(name);
+        if (it == values.end())
+            throw std::invalid_argument("model " + model + " has no parameter '" + name + "'");
+        return it->second;
+    }
 
     void CosmologyParameters::print(std::ostream & os) const {
         const auto f = os.flags();
         os << std::setprecision(6);
         os << "Cosmological parameters:\n"
            << "  model        = " << model << "\n";
-        for (const auto & p : Models::find(model).parameters)
+        for (const auto & p : PERTURBATIONS::model_parameters(model))
             os << "  " << std::left << std::setw(12) << p.name << std::right << " = " << model_param(p.name) << "\n";
         os << "  h            = " << h << "\n"
            << "  H0           = " << H0() / Constants::H0_over_h * 100.0 << " km/s/Mpc\n"
@@ -161,7 +167,7 @@ namespace FML::COSMOLOGY {
            << "\nn_nid = " << iso_n[2] << "\nc_ad_nid = " << iso_c[2] << "\nf_niv = " << iso_f[3]
            << "\nn_niv = " << iso_n[3] << "\nc_ad_niv = " << iso_c[3] << "\nr = " << r << "\nn_t = " << tensor_tilt()
            << "\nmodel = " << model << "\n";
-        for (const auto & p : Models::find(model).parameters)
+        for (const auto & p : PERTURBATIONS::model_parameters(model))
             fp << p.name << " = " << model_param(p.name) << "\n";
     }
 

@@ -1,6 +1,6 @@
 // =============================================================================
-// Tests of the quintessence and coupled quintessence models (FML/Background/BackgroundModel_Quintessence.h,
-// _CoupledQuintessence.h; FML/Perturbations/SpeciesPerturbation_ScalarField.h, _CoupledQuintessence.h). Run with
+// Tests of the quintessence and coupled quintessence models (FML/Cosmology/Background/BackgroundModel_Quintessence.h,
+// _CoupledQuintessence.h; FML/Cosmology/Perturbations/SpeciesPerturbation_ScalarField.h, _CoupledQuintessence.h). Run with
 // `make test`.
 //
 //   * lambda = 0 is LCDM (background and perturbations)
@@ -23,8 +23,8 @@
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Perturbations/PerturbationModel_CoupledQuintessence.h>
-#include <FML/Perturbations/PerturbationModel_Quintessence.h>
+#include <FML/Cosmology/Perturbations/PerturbationModel_CoupledQuintessence.h>
+#include <FML/Cosmology/Perturbations/PerturbationModel_Quintessence.h>
 
 #include <cmath>
 

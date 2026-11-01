@@ -1,6 +1,6 @@
 // =============================================================================
-// Tests of interacting dark energy (FML/Background/BackgroundModel_IDE.h,
-// FML/Perturbations/SpeciesPerturbation_DarkEnergyFluid.h). Run with `make test`.
+// Tests of interacting dark energy (FML/Cosmology/Background/BackgroundModel_IDE.h,
+// FML/Cosmology/Perturbations/SpeciesPerturbation_DarkEnergyFluid.h). Run with `make test`.
 //
 //   * Background: rho_DE ~ a^{-3(1+w)-xi}; rho_c against an independent integration of
 //     rho_c' = -3 rho_c + xi rho_DE; derivatives; closure; rejection of rho_c < 0 and of the doom factor d > 0
@@ -17,7 +17,7 @@
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Perturbations/PerturbationModel_IDE.h>
+#include <FML/Cosmology/Perturbations/PerturbationModel_IDE.h>
 
 #include <cmath>
 

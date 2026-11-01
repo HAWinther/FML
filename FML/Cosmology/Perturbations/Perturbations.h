@@ -11,11 +11,8 @@
 // equations, initial conditions and stored outputs (PERTURBATIONS::SpeciesPerturbation), and the perturbed
 // field equations of the model (PERTURBATIONS::PerturbedFieldEquation) give Psi and Phi' from the summed
 // Moments (density, momentum, anisotropic stress) of all species. Both are built by the model's
-// PERTURBATIONS::PerturbationModel (FML/Perturbations, every model) in a PerturbationContext of the background
-// (BackgroundCosmology::background()) with the species options of PerturbationOptions.
-// TRANSITIONAL: a BackgroundCosmology of an explicit Model of the old classes (BackgroundCosmology::has_legacy_model)
-// has no perturbation model: a Perturbations object can be made on it (no species, no field equations; the tests of
-// FML/Perturbations pass it to the old Species::perturbations as the reference), but not solved.
+// PERTURBATIONS::PerturbationModel (the module in this folder, every model) in a PerturbationContext of the
+// background (BackgroundCosmology::background()) with the species options of PerturbationOptions.
 //
 // Physics of the core:
 //   * Baryons (delta_b, v_b), photon temperature multipoles Theta_0..Theta_lmax, photon polarization
@@ -45,11 +42,10 @@
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
-#include <FML/Cosmology/Background/Species.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Perturbations/PerturbationTypes.h>
-#include <FML/Perturbations/PerturbedFieldEquation.h>
-#include <FML/Perturbations/SpeciesPerturbation.h>
+#include <FML/Cosmology/Perturbations/PerturbationTypes.h>
+#include <FML/Cosmology/Perturbations/PerturbedFieldEquation.h>
+#include <FML/Cosmology/Perturbations/SpeciesPerturbation.h>
 
 #include <array>
 #include <limits>
@@ -60,6 +56,18 @@
 #include <vector>
 
 namespace FML::COSMOLOGY {
+
+    // The data exchanged between the core, the species and the field equations (PerturbationTypes.h):
+    //   ModeAtX     background quantities at one x for one mode k (densities times H0^2 a^2, units 1/s^2)
+    //   Moments     contributions to the Einstein equations (drho, dp, flux, shear) times H0^2 a^2 / rho_c0
+    //   MetricAtX   Phi (evolved), Psi and Phi' (from the field equations)
+    //   IsoValues   explicit initial values of the standard species (isocurvature modes)
+    //   InitialData initial conditions (adiabatic with R = 1, or isocurvature)
+    using ModeAtX = PERTURBATIONS::ModeAtX;
+    using Moments = PERTURBATIONS::Moments;
+    using MetricAtX = PERTURBATIONS::MetricAtX;
+    using IsoValues = PERTURBATIONS::IsoValues;
+    using InitialData = PERTURBATIONS::InitialData;
 
     struct PerturbationOptions {
         // k-grid [1/m], logarithmically spaced. With curvature these are the bounds on
@@ -174,14 +182,8 @@ namespace FML::COSMOLOGY {
         const RecombinationHistory & get_rec() const { return rec; }
         // Perturbed species of the model (CDM, neutrinos, ...; not photons and baryons) and its perturbed field
         // equations
-        const std::vector<std::unique_ptr<PERTURBATIONS::SpeciesPerturbation>> & get_species() const {
-            return species;
-        }
-        const PERTURBATIONS::PerturbedFieldEquation & get_field_equations() const {
-            if (!field_eq)
-                throw std::logic_error("Perturbations: no field equations (an explicit Model of the old classes)");
-            return *field_eq;
-        }
+        const std::vector<std::unique_ptr<PERTURBATIONS::SpeciesPerturbation>> & get_species() const { return species; }
+        const PERTURBATIONS::PerturbedFieldEquation & get_field_equations() const { return *field_eq; }
         // The context the species and field equations are built in (the settings from PerturbationOptions)
         const PERTURBATIONS::PerturbationContext & get_context() const { return *ctx; }
 

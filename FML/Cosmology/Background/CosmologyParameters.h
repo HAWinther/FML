@@ -14,8 +14,8 @@
 // N_ncdm = (0.71611 / (4/11)^(1/3))^4 = 1.0132 to Neff). Neff is the total; the remaining
 // Neff - N_ncdm species are massless. m_nu = 0 means all Neff species are massless.
 //
-// Model: the name of a model in the registry (Model.h, default lcdm) and its own parameters
-// (model_params, name -> value; parameters that are not given take the registry default).
+// Model: the name of a model in the model registry (Cosmology/Perturbations/Presets.h, default lcdm) and its own
+// parameters (model_params, name -> value; parameters that are not given take the registry default).
 // =============================================================================
 
 #include <iosfwd>
@@ -46,7 +46,7 @@ namespace FML::COSMOLOGY {
         double z_He_reion = 3.5;    // Second helium reionization
         double delta_z_He_reion = 0.5;
 
-        // --- Model (Model.h) -----------------------------------------------------
+        // --- Model (the model registry, Cosmology/Perturbations/Presets.h) ---------
         std::string model = "lcdm";
         std::map<std::string, double> model_params;
 

@@ -1,5 +1,4 @@
 #include <FML/Cosmology/Perturbations/Tensors.h>
-#include <FML/Cosmology/Background/Gravity.h>
 #include <FML/Cosmology/Common.h>
 
 #include <algorithm>

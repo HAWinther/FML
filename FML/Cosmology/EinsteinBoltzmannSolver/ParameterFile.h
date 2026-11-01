@@ -15,9 +15,9 @@
 // The complete list of parameters with their defaults and descriptions is generated from the table in
 // ParameterFile.cpp: `./cmb --write-defaults params/default.ini`. Units in the file: k in 1/Mpc, angles
 // in degrees, everything else as in the code (x = ln a). `preset = planck2018` loads that parameter set
-// before the other cosmological parameters are applied. `model = <name>` selects a model from the
-// registry (Model.h); its parameters (with their defaults) are then valid names too, and a parameter of
-// another model is an error.
+// before the other cosmological parameters are applied. `model = <name>` selects a model from the model
+// registry (Cosmology/Perturbations/Presets.h: the parameters of its background and of its perturbations); its
+// parameters (with their defaults) are then valid names too, and a parameter of another model is an error.
 // =============================================================================
 
 #include <FML/Cosmology/Background/CosmologyParameters.h>

@@ -5,7 +5,7 @@ recombination, linear perturbations and line-of-sight power spectra of ΛCDM, it
 dark-energy and modified-gravity models, and is validated against CLASS module by module.
 
 The solver is split into the folders of `FML/Cosmology/`: `Background`
-(parameters, the model registry, the SI adapter of the background, massive neutrinos, BBN), `Recombination`, `Perturbations` (scalar, isocurvature and tensor modes), `Spectra`
+(the background module `BACKGROUND`, parameters, the SI adapter of the background, BBN), `Recombination`, `Perturbations` (scalar, isocurvature and tensor modes), `Spectra`
 (line-of-sight C_ℓ, lensing, Halofit, two-point functions) and this folder (the parameter files and the programs).
 Everything is in namespace `FML::COSMOLOGY`. Parameter fits use it through `FML/CosmologyFitting` (likelihoods,
 `./mcmc`) and the samplers of `FML/MCMC`. The original teaching solver is in `Cosmology/Legacy`.
@@ -14,13 +14,13 @@ Everything is in namespace `FML::COSMOLOGY`. Parameter fits use it through `FML/
 ```
 CosmologyParameters ─► BackgroundCosmology ─► RecombinationHistory ─► Perturbations ─► PowerSpectrum ─► Lensing, TwoPoint
                               ▲                                              ▲
-            FML/Background ComponentBackground          FML/Perturbations PerturbationModel
-            (make_background: every model)              (make_perturbation_model: every model)
+   Cosmology/Background ComponentBackground   Cosmology/Perturbations PerturbationModel
+   (make_background: every model)             (make_perturbation_model: every model)
 ```
 
-The background of every model is a `BACKGROUND::ComponentBackground` of `FML/Background` (one solve: species,
+The background of every model is a `BACKGROUND::ComponentBackground` of `Cosmology/Background` (one solve: species,
 field equations, and the tables of η, t and χ); `BackgroundCosmology` is a thin adapter that gives it in SI units
-(`background()` returns it). The perturbations of the species and the field equations come from `FML/Perturbations`
+(`background()` returns it). The perturbations of the species and the field equations come from `Cosmology/Perturbations`
 (`PerturbationModel`, built on the same background; see Models below).
 
 Conventions: SI units internally, time variable `x = ln a`, Newtonian gauge (Dodelson / Callin conventions).
@@ -203,10 +203,9 @@ computes Δχ² of any run against a reference (see its header for the reference
 | `Common.h` | Solver aliases and compatibility names for constants, numerical methods, splines, ODE solvers and timing. Implementations live in shared `FML/Units`, `Math`, `FileUtils`, `Timing` and `Spline` modules. |
 | `Background/CosmologyParameters.h/.cpp` | Parameters with derived Ω's; `fiducial()`, `Planck2018()`, `Planck2018Baseline()` |
 | `EinsteinBoltzmannSolver/ParameterFile.h/.cpp` | Parameter files: one table of all parameters (name, description, unit), reading with overrides and checks, writing |
-| `Background/Model.h/.cpp` | The registry of the built-in models with their parameters, defaults and descriptions (parameter file, validation); TRANSITIONAL: also the old `Model` (species + gravity) and its build functions, now only the reference of the tests of `FML/Background` and `FML/Perturbations` |
-| `Background/Species.h`, `Background/Gravity.h`, `Models/` | TRANSITIONAL, not used by the solver: the old interfaces of a species and a theory of gravity and the old models (`StandardSpecies`, `GeneralRelativity`, `MuSigma`, `DGP`, `Quintessence`, `BransDicke`, `HuSawicky`, `CoupledQuintessence`, `DarkScattering`, `CubicGalileon`, `HorndeskiAlpha`, `ScalarField`, `EarlyDarkEnergy`, `InteractingDarkEnergy`), the references of the tests of `FML/Background` and `FML/Perturbations` (`Species.h` also gives the solver's aliases of the perturbation data types) |
-| `Background/BackgroundCosmology.h/.cpp` | The solver's interface to the background (SI units): H, Hp and derivatives, Ω_i(x), η, t, distances, curvature geometry `sinK`, `cotK`, from the `FML/Background` `ComponentBackground` of the model; the `FML/Perturbations` `PerturbationModel` |
-| `Background/MassiveNeutrinos.h/.cpp` | Fermi–Dirac momentum integrals and Gauss–Laguerre momentum grid |
+| `Background/` (headers, `README.md`, `tests/`) | The background module (`BACKGROUND`): species (with the Fermi–Dirac integrals of massive neutrinos), field equations, `ComponentBackground` and the background models; `Presets.h`: the background registry (parameters with defaults and descriptions) |
+| `Background/BackgroundCosmology.h/.cpp` | The solver's interface to the background (SI units): H, Hp and derivatives, Ω_i(x), η, t, distances, curvature geometry `sinK`, `cotK`, from the `ComponentBackground` of the model; the `PerturbationModel` |
+| `Perturbations/` (headers, `README.md`, `tests/`) | The perturbation module (`PERTURBATIONS`): species perturbations, perturbed field equations, the `PerturbationModel` of every model; `Presets.h`: the model registry (built on the background registry: the models the solver offers, their parameters with defaults and descriptions; parameter file, validation, `--write-defaults`) |
 | `Recombination/RecombinationHistory.h/.cpp` | X_e, T_b, τ, visibility function, sound horizon, reionization |
 | `Perturbations/Perturbations.h/.cpp` | Photon–baryon core (tight coupling, polarization), the species' blocks, segmentation of the ODE, source functions; 2D splines in (x, k) |
 | `Spectra/HypersphericalBessel.h/.cpp` | Hyperspherical Bessel functions Φ^ν_ℓ(χ) (open, closed, flat) |
@@ -235,39 +234,39 @@ computes Δχ² of any run against a reference (see its header for the reference
 
 ### Models
 
-A model is a background (`FML/Background`: species and field equations) and its linear perturbations
-(`FML/Perturbations`: a `PerturbationModel` on that background):
+A model is a background (`Cosmology/Background`: species and field equations) and its linear perturbations
+(`Cosmology/Perturbations`: a `PerturbationModel` on that background):
 
-* A **species perturbation** (`FML/Perturbations/SpeciesPerturbation.h`) has its variables (possibly in several
+* A **species perturbation** (`Perturbations/SpeciesPerturbation.h`) has its variables (possibly in several
   approximation schemes, e.g. the massive-neutrino hierarchy and fluid, or a scalar field and the fluid of its
   oscillations), initial conditions, equations, and the quantities to store (`Perturbations::get(name, x, k)`). It
   talks to the metric only through its moments δρ, δp, (ρ+p)θ/(ck) and (ρ+p)σ, and receives Φ, Ψ and Φ'. Interacting
   species (coupled quintessence, dark scattering, interacting dark energy) are one perturbation block with all their
   variables. Photons and baryons are the fixed core of `Perturbations` (Thomson coupling, tight coupling,
   polarization and the line-of-sight sources).
-* The **perturbed field equations** (`FML/Perturbations/PerturbedFieldEquation.h`) own their own perturbation
+* The **perturbed field equations** (`Perturbations/PerturbedFieldEquation.h`) own their own perturbation
   variables (GR: Φ; Brans–Dicke, cubic Galileon and Horndeski: Φ and two scalar-field variables), from which, with
   the summed moments, they give Φ, Ψ and Φ'. `GeneralRelativity` implements the Einstein equations; `MuSigma` the
   μ–Σ parameterization (evolving the GR potential of the comoving density with an equation derived from
   energy-momentum conservation, so that μ = Σ = 1 is GR exactly), which `DGP` (μ(a) from its background) and
   `HuSawicky` (scale-dependent μ(k,a)) reuse.
-* The **registries**: `FML/Background/Presets.h` and `FML/Perturbations/Presets.h` build a model by name with its
-  parameters (`make_background`, `make_perturbation_model`); `Background/Model.cpp` lists the models the solver offers
-  with their parameters, defaults and descriptions. A run selects one with `model = <name>`; its parameters are then
-  valid in the parameter file (and a parameter of another model is an error). `./cmb --write-defaults` lists them.
+* The **registries**: `Background/Presets.h` (the backgrounds, with their parameters) and `Perturbations/Presets.h`
+  (the full models: each entry is built on the background entry of the same name and adds the parameters that only
+  concern the perturbations) build a model by name with its parameters (`make_background`, `make_perturbation_model`);
+  the model registry is the list of models the solver offers, `PERTURBATIONS::model_parameters(name)` their parameters
+  with defaults and descriptions. A run selects one with `model = <name>` (every name of the registry, also
+  `quintessence_inverse_power_law`, `quintessence_pngb`, `quintessence_hilltop` and `ede_zc`, with all their
+  parameters, e.g. `quint_phi_ini`, `quint_dphidlna_ini`, `bd_GeffG_today`, `bd_density_parameter_definition`); its
+  parameters are then valid in the parameter file (and a parameter of another model is an error). `./cmb
+  --write-defaults` lists the models, `params_used.ini` the parameters of the run's model.
 
-To add a model: its species and/or field equations in `FML/Background` and `FML/Perturbations` (a
-`BackgroundModel_<name>.h` and a `PerturbationModel_<name>.h` with their registry entries), and an entry (parameters
-and descriptions) in the registry of `Background/Model.cpp`. A custom model can also be run without a registry entry:
-`BackgroundCosmology(params, pmodel)` with any `PerturbationModel` (e.g. `PERTURBATIONS::PerturbationModel_Assembled`
-on a `ComponentBackground`; `tests/test_models.cpp`, `tests/test_horndeski.cpp`).
-
-The old classes (`Background/Species.h`, `Gravity.h`, the `Model` of `Model.h` and `Cosmology/Models`) are no longer
-used by the solver; they remain as the references of the tests of `FML/Background` and `FML/Perturbations` (an
-explicit `Model`, `BackgroundCosmology(params, model)`, becomes a `ComponentBackground` through adapters and has no
-perturbation model: `Perturbations` can be constructed on it, as the host of the old `Species::perturbations`, but
-not solved). The perturbation data types (`ModeAtX`, `Moments`, `MetricAtX`, `IsoValues`, `InitialData`,
-`TensorCoefficients`) are those of `FML/Perturbations/PerturbationTypes.h`.
+To add a model: its species and/or field equations in `Cosmology/Background` and `Cosmology/Perturbations` (a
+`BackgroundModel_<name>.h` and a `PerturbationModel_<name>.h` with their registry entries, the parameters with
+descriptions). A custom model can also be run without a registry entry: `BackgroundCosmology(params, pmodel)` with any
+`PerturbationModel` (e.g. `PERTURBATIONS::PerturbationModel_Assembled` on a `ComponentBackground`;
+`tests/test_models.cpp`, `tests/test_horndeski.cpp`, `tests/test_background.cpp`). The perturbation data types
+(`ModeAtX`, `Moments`, `MetricAtX`, `IsoValues`, `InitialData`, `TensorCoefficients`) are those of
+`Perturbations/PerturbationTypes.h`.
 
 Validation of the models (each test program prints what it checks): the GR/ΛCDM limit of every model;
 μ–Σ and DGP potentials against the algebraic relations with the comoving density, and the growth against an

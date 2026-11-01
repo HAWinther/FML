@@ -1,9 +1,6 @@
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Cosmology/Models/StandardSpecies.h>
-
-#include <FML/Background/Presets.h>
-#include <FML/Perturbations/Presets.h>
+#include <FML/Cosmology/Perturbations/Presets.h>
 
 #include <cmath>
 #include <fstream>
@@ -17,28 +14,7 @@ namespace FML::COSMOLOGY {
     using namespace Constants;
 
     namespace {
-        BACKGROUND::Component component_of(Species::Role r) {
-            using C = BACKGROUND::Component;
-            using R = Species::Role;
-            switch (r) {
-                case R::Baryons:
-                    return C::Baryons;
-                case R::Photons:
-                    return C::Photons;
-                case R::CDM:
-                    return C::CDM;
-                case R::MasslessNeutrinos:
-                    return C::MasslessNeutrinos;
-                case R::MassiveNeutrinos:
-                    return C::MassiveNeutrinos;
-                case R::DarkEnergy:
-                    return C::DarkEnergy;
-                default:
-                    return C::Other;
-            }
-        }
-
-        // The parameters of the background (FML/Background) of a run: one massive species of mass m_nu
+        // The parameters of the background of a run: one massive species of mass m_nu
         BACKGROUND::BackgroundParameters background_parameters(const CosmologyParameters & p) {
             BACKGROUND::BackgroundParameters b;
             b.h = p.h;
@@ -65,41 +41,6 @@ namespace FML::COSMOLOGY {
         }
     } // namespace
 
-    namespace detail {
-        // TRANSITIONAL adapters of an explicit Model (Model.h) to FML/Background: a species, and the gravity as the
-        // field equations (whose E^2 needs the BackgroundCosmology, which sums the model's species while its
-        // background is being built)
-        class LegacySpecies : public BACKGROUND::Species {
-          public:
-            explicit LegacySpecies(std::shared_ptr<const COSMOLOGY::Species> s) : s(std::move(s)) {}
-            std::string name() const override { return s->name(); }
-            BACKGROUND::Component component() const override { return component_of(s->role()); }
-            double rho(double x) const override { return s->rho(x); }
-            double p(double x) const override { return s->p(x); }
-            double drhodx(double x) const override { return s->drhodx(x); }
-            std::string info() const override { return s->info(); }
-
-          private:
-            std::shared_ptr<const COSMOLOGY::Species> s;
-        };
-
-        class LegacyFieldEquations : public BACKGROUND::FieldEquations {
-          public:
-            LegacyFieldEquations(std::shared_ptr<Gravity> g, const BackgroundCosmology * owner)
-                : owner(owner), g(std::move(g)) {}
-            std::string name() const override { return g->name(); }
-            std::string info() const override { return g->info(); }
-            double E2(double x, const BACKGROUND::ComponentBackground &) const override { return g->E2(x, *owner); }
-            double dE2dx(double x, const BACKGROUND::ComponentBackground &) const override {
-                return g->dE2dx(x, *owner);
-            }
-            const BackgroundCosmology * owner;
-
-          private:
-            std::shared_ptr<Gravity> g;
-        };
-    } // namespace detail
-
     // =============================================================================
     // Construction
     // =============================================================================
@@ -118,15 +59,14 @@ namespace FML::COSMOLOGY {
                                              PERTURBATIONS::PerturbationModelPtr model_in)
         : params(params_in), H0(params_in.H0()), OmegaK0(params_in.OmegaK),
           K(-params_in.OmegaK * params_in.H0() * params_in.H0() / (Constants::c * Constants::c)),
-          L_unit(Constants::c / params_in.H0() / Constants::c_over_H0_mpch),
-          pmodel(std::move(model_in)), range{default_x_min, default_x_max, default_points_per_unit_x},
-          explicit_pmodel(true) {
+          L_unit(Constants::c / params_in.H0() / Constants::c_over_H0_mpch), pmodel(std::move(model_in)),
+          range{default_x_min, default_x_max, default_points_per_unit_x}, explicit_pmodel(true) {
         params.validate();
         if (!pmodel)
             throw std::invalid_argument("BackgroundCosmology: no perturbation model");
         bg = pmodel->background_ptr();
         // The cosmological parameters must be those of the model's background
-        const auto p = background_parameters(params), & q = bg->parameters();
+        const auto p = background_parameters(params), &q = bg->parameters();
         if (p.h != q.h || p.Omega_b != q.Omega_b || p.Omega_cdm != q.Omega_cdm || p.Omega_k != q.Omega_k ||
             p.T_CMB != q.T_CMB || p.N_eff != q.N_eff || p.m_nu_eV != q.m_nu_eV ||
             (!p.m_nu_eV.empty() && p.T_ncdm_over_TCMB != q.T_ncdm_over_TCMB))
@@ -139,40 +79,7 @@ namespace FML::COSMOLOGY {
         find_massive_neutrinos();
     }
 
-    BackgroundCosmology::BackgroundCosmology(const CosmologyParameters & params_in, Model model_in)
-        : params(params_in), H0(params_in.H0()), OmegaK0(params_in.OmegaK),
-          K(-params_in.OmegaK * params_in.H0() * params_in.H0() / (Constants::c * Constants::c)),
-          L_unit(Constants::c / params_in.H0() / Constants::c_over_H0_mpch),
-          range{default_x_min, default_x_max, default_points_per_unit_x}, legacy(true), explicit_model(true),
-          model(std::move(model_in)) {
-        params.validate();
-        if (!model.gravity)
-            throw std::invalid_argument("BackgroundCosmology: the model has no gravity");
-        for (const auto & s : model.species) {
-            if (!s)
-                throw std::invalid_argument("BackgroundCosmology: null species in model " + model.name);
-            if (s->role() == Species::Role::MassiveNeutrinos) {
-                if (ncdm_old)
-                    throw std::invalid_argument("BackgroundCosmology: only one massive neutrino species is supported");
-                ncdm_old = dynamic_cast<const MassiveNeutrinoSpecies *>(s.get());
-                if (!ncdm_old)
-                    throw std::invalid_argument(
-                        "BackgroundCosmology: massive neutrinos must be a MassiveNeutrinoSpecies");
-            }
-        }
-        model.gravity->init_background(*this);
-        build_background();
-    }
-
-    BackgroundCosmology::BackgroundCosmology(BackgroundCosmology && o) noexcept
-        : params(std::move(o.params)), H0(o.H0), OmegaK0(o.OmegaK0), K(o.K), L_unit(o.L_unit), bg(std::move(o.bg)),
-          pmodel(std::move(o.pmodel)), tensor_fe(std::move(o.tensor_fe)), range(o.range), ncdm_new(o.ncdm_new),
-          ncdm_factor(o.ncdm_factor), explicit_pmodel(o.explicit_pmodel), legacy(o.legacy), explicit_model(o.explicit_model), model(std::move(o.model)),
-          ncdm_old(o.ncdm_old), legacy_eqs(std::move(o.legacy_eqs)), x_start(o.x_start), x_end(o.x_end),
-          solved(o.solved) {
-        if (legacy_eqs)
-            legacy_eqs->owner = this;
-    }
+    BackgroundCosmology::BackgroundCosmology(BackgroundCosmology &&) noexcept = default;
 
     BackgroundCosmology::~BackgroundCosmology() = default;
 
@@ -181,24 +88,14 @@ namespace FML::COSMOLOGY {
         pmodel.reset();
         tensor_fe.reset();
         const auto p = background_parameters(params);
-        if (explicit_model) {
-            BACKGROUND::ComponentBackground::SpeciesList list;
-            for (const auto & s : model.species)
-                list.push_back(std::make_shared<detail::LegacySpecies>(s));
-            legacy_eqs = std::make_shared<detail::LegacyFieldEquations>(model.gravity, this);
-            bg = std::make_shared<const BACKGROUND::ComponentBackground>(model.name, p, list, legacy_eqs, range);
-            return;
-        }
-        bg = BACKGROUND::make_background(params.model, p, params.model_params, range);
+        bg = PERTURBATIONS::make_model_background(params.model, p, params.model_params, range);
         pmodel = PERTURBATIONS::make_perturbation_model(params.model, bg, params.model_params);
         tensor_fe = pmodel->field_equation_perturbations(pmodel->context());
     }
 
     void BackgroundCosmology::find_massive_neutrinos() {
-        ncdm_new = nullptr;
+        ncdm = nullptr;
         ncdm_factor = 1.0;
-        if (explicit_model) // ncdm_old, found by the constructor
-            return;
         for (const auto & s : bg->species()) {
             if (s->component() != BACKGROUND::Component::MassiveNeutrinos)
                 continue;
@@ -211,144 +108,59 @@ namespace FML::COSMOLOGY {
             const auto * typed = dynamic_cast<const BACKGROUND::MassiveNeutrinoSpecies *>(inner);
             if (!typed)
                 throw std::invalid_argument("BackgroundCosmology: massive neutrinos must be a MassiveNeutrinoSpecies");
-            if (ncdm_new)
+            if (ncdm)
                 throw std::invalid_argument("BackgroundCosmology: only one massive neutrino species is supported");
-            ncdm_new = typed;
+            ncdm = typed;
             ncdm_factor = factor;
         }
     }
 
-    const Model & BackgroundCosmology::get_model() const {
-        if (!legacy)
-            throw std::logic_error("BackgroundCosmology: model " + params.model +
-                                   " is not an explicit Model of the old classes (its background and perturbations "
-                                   "come from FML/Background and FML/Perturbations: background(), perturbation_model())");
-        return model;
-    }
+    std::string BackgroundCosmology::gravity_name() const { return tensor_fe->name(); }
 
-    std::string BackgroundCosmology::gravity_name() const {
-        return legacy ? model.gravity->name() : tensor_fe->name();
-    }
-
-    TensorCoefficients BackgroundCosmology::tensor_coefficients(double x) const {
-        return legacy ? model.gravity->tensor(x, *this) : tensor_fe->tensor(x);
-    }
+    TensorCoefficients BackgroundCosmology::tensor_coefficients(double x) const { return tensor_fe->tensor(x); }
 
     // =============================================================================
-    // Species sums: from the ComponentBackground (while the background of an explicit model is being built, which
-    // its gravity's E^2 needs: from the model's species)
+    // Species sums: from the ComponentBackground (second derivatives: 5-point differences of the first)
     // =============================================================================
 
-    double BackgroundCosmology::rho_species(double x) const {
-        if (bg)
-            return bg->rho_total(x);
-        double r = 0.0;
-        for (const auto & s : model.species)
-            r += s->rho(x);
-        return r;
-    }
-    double BackgroundCosmology::drho_species(double x) const {
-        if (bg)
-            return bg->drho_total(x);
-        double r = 0.0;
-        for (const auto & s : model.species)
-            r += s->drhodx(x);
-        return r;
-    }
+    double BackgroundCosmology::rho_species(double x) const { return bg->rho_total(x); }
+    double BackgroundCosmology::drho_species(double x) const { return bg->drho_total(x); }
     double BackgroundCosmology::ddrho_species(double x) const {
-        if (explicit_model) {
-            double r = 0.0;
-            for (const auto & s : model.species)
-                r += s->ddrhoddx(x);
-            return r;
-        }
         return derivative([&](double xx) { return bg->drho_total(xx); }, x);
     }
-    double BackgroundCosmology::rho_of(Species::Role role, double x) const {
-        if (bg)
-            return bg->rho(component_of(role), x);
-        double r = 0.0;
-        for (const auto & s : model.species)
-            if (s->role() == role)
-                r += s->rho(x);
-        return r;
-    }
-    double BackgroundCosmology::drho_of(Species::Role role, double x) const {
-        if (bg)
-            return bg->drhodx(component_of(role), x);
-        double r = 0.0;
-        for (const auto & s : model.species)
-            if (s->role() == role)
-                r += s->drhodx(x);
-        return r;
-    }
-    double BackgroundCosmology::ddrho_of(Species::Role role, double x) const {
-        if (explicit_model) {
-            double r = 0.0;
-            for (const auto & s : model.species)
-                if (s->role() == role)
-                    r += s->ddrhoddx(x);
-            return r;
-        }
-        const auto c = component_of(role);
+    double BackgroundCosmology::rho_of(BACKGROUND::Component c, double x) const { return bg->rho(c, x); }
+    double BackgroundCosmology::drho_of(BACKGROUND::Component c, double x) const { return bg->drhodx(c, x); }
+    double BackgroundCosmology::ddrho_of(BACKGROUND::Component c, double x) const {
         return derivative([&](double xx) { return bg->drhodx(c, xx); }, x);
     }
-    double BackgroundCosmology::p_of(Species::Role role, double x) const {
-        if (bg)
-            return bg->p(component_of(role), x);
-        double r = 0.0;
-        for (const auto & s : model.species)
-            if (s->role() == role)
-                r += s->p(x);
-        return r;
-    }
+    double BackgroundCosmology::p_of(BACKGROUND::Component c, double x) const { return bg->p(c, x); }
 
     double BackgroundCosmology::pNcdm(double x) const {
-        return has_massive_nu() ? p_of(Species::Role::MassiveNeutrinos, x) : 0.0;
+        return has_massive_nu() ? p_of(BACKGROUND::Component::MassiveNeutrinos, x) : 0.0;
     }
-    double BackgroundCosmology::dpNcdmdx(double x) const {
-        return ncdm_old ? ncdm_old->dpdx(x) : (ncdm_new ? ncdm_factor * ncdm_new->dpdx(x) : 0.0);
-    }
-    double BackgroundCosmology::pseudo_pNcdm(double x) const {
-        return ncdm_old ? ncdm_old->pseudo_p(x) : (ncdm_new ? ncdm_factor * ncdm_new->pseudo_p(x) : 0.0);
-    }
-    double BackgroundCosmology::M_ncdm_of_x(double x) const {
-        return ncdm_old ? ncdm_old->M_of_x(x) : (ncdm_new ? ncdm_new->M_of_x(x) : 0.0);
-    }
-    double BackgroundCosmology::ncdm_prefactor() const {
-        return ncdm_old ? ncdm_old->prefactor() : (ncdm_new ? ncdm_factor * ncdm_new->prefactor() : 0.0);
-    }
+    double BackgroundCosmology::dpNcdmdx(double x) const { return ncdm ? ncdm_factor * ncdm->dpdx(x) : 0.0; }
+    double BackgroundCosmology::pseudo_pNcdm(double x) const { return ncdm ? ncdm_factor * ncdm->pseudo_p(x) : 0.0; }
+    double BackgroundCosmology::M_ncdm_of_x(double x) const { return ncdm ? ncdm->M_of_x(x) : 0.0; }
+    double BackgroundCosmology::ncdm_prefactor() const { return ncdm ? ncdm_factor * ncdm->prefactor() : 0.0; }
 
     // =============================================================================
     // Expansion rate, from the ComponentBackground: E and dlnE/dx analytic (species and field equations),
-    // d^2 lnE/dx^2 from the gravity of an explicit model or a 5-point difference of dlnE/dx. With Hp = H0 e^x E:
+    // d^2 lnE/dx^2 from a 5-point difference of dlnE/dx. With Hp = H0 e^x E:
     //   Hp'  = Hp (1 + dlnE/dx)
     //   Hp'' = Hp [ (1 + dlnE/dx)^2 + d^2lnE/dx^2 ]
     //   E2' = 2 E2 dlnE/dx,  E2'' = E2 [ 4 (dlnE/dx)^2 + 2 d^2lnE/dx^2 ]
     // =============================================================================
 
     double BackgroundCosmology::E2_of_x(double x) const {
-        if (!bg) // an explicit model's background being built
-            return model.gravity->E2(x, *this);
         const double E = bg->E(x);
         return E * E;
     }
-    double BackgroundCosmology::dE2dx_of_x(double x) const {
-        if (!bg)
-            return model.gravity->dE2dx(x, *this);
-        return 2.0 * E2_of_x(x) * bg->dlogEdx(x);
-    }
+    double BackgroundCosmology::dE2dx_of_x(double x) const { return 2.0 * E2_of_x(x) * bg->dlogEdx(x); }
     double BackgroundCosmology::ddE2ddx_of_x(double x) const {
-        if (explicit_model)
-            return model.gravity->ddE2ddx(x, *this);
         const double L = bg->dlogEdx(x);
         return E2_of_x(x) * (4.0 * L * L + 2.0 * ddlogEdx(x));
     }
     double BackgroundCosmology::ddlogEdx(double x) const {
-        if (explicit_model) {
-            const double E2 = E2_of_x(x), L = dE2dx_of_x(x) / E2;
-            return 0.5 * (ddE2ddx_of_x(x) / E2 - L * L);
-        }
         return derivative([&](double xx) { return bg->dlogEdx(xx); }, x);
     }
 
@@ -485,8 +297,8 @@ namespace FML::COSMOLOGY {
     void BackgroundCosmology::info() const {
         const auto f = std::cout.flags();
         std::cout << std::setprecision(6);
-        std::cout << "\nBackgroundCosmology: model " << (legacy ? model.name : explicit_pmodel ? pmodel->name() : params.model) << ", gravity "
-                  << bg->field_equations().info() << ", perturbations " << gravity_name() << "\n";
+        std::cout << "\nBackgroundCosmology: model " << (explicit_pmodel ? pmodel->name() : params.model)
+                  << ", gravity " << bg->field_equations().info() << ", perturbations " << gravity_name() << "\n";
         std::cout << "  Species: ";
         for (size_t i = 0; i < bg->species().size(); i++)
             std::cout << (i ? "\n           " : "") << bg->species()[i]->info();

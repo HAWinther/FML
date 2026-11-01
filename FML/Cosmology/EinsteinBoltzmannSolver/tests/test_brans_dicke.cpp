@@ -1,6 +1,6 @@
 // =============================================================================
-// Tests of Jordan-Brans-Dicke gravity (the background: FML/Background/FieldEquation_BransDicke.h, the perturbations:
-// FML/Perturbations/PerturbedFieldEquation_BransDicke.h). Run with `make test`.
+// Tests of Jordan-Brans-Dicke gravity (the background: FML/Cosmology/Background/FieldEquation_BransDicke.h, the perturbations:
+// FML/Cosmology/Perturbations/PerturbedFieldEquation_BransDicke.h). Run with `make test`.
 //
 //   * Background: phi(0) gives the Newtonian G, E(0) = 1, dlnE/dx and d2E2/dx2 vs finite differences,
 //     the field equation vs finite differences of the solution, and phi ~ a^{1/(1 + omega)} in the matter era
@@ -11,12 +11,11 @@
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
-#include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Background/FieldEquation_BransDicke.h>
+#include <FML/Cosmology/Background/FieldEquation_BransDicke.h>
 
 #include <cmath>
 #include <functional>

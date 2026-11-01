@@ -1,5 +1,5 @@
 // =============================================================================
-// Tests of Horndeski gravity in the alpha parameterization (FML/Perturbations/PerturbedFieldEquation_HorndeskiAlpha.h).
+// Tests of Horndeski gravity in the alpha parameterization (FML/Cosmology/Perturbations/PerturbedFieldEquation_HorndeskiAlpha.h).
 // Run with `make test`.
 //
 //   * All alphas zero is LCDM (same solution)
@@ -16,7 +16,7 @@
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
-#include <FML/Perturbations/Presets.h>
+#include <FML/Cosmology/Perturbations/Presets.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>

@@ -10,14 +10,13 @@
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
-#include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Perturbations/PerturbedFieldEquation_DGP.h>
-#include <FML/Perturbations/PerturbedFieldEquation_HuSawicky.h>
-#include <FML/Perturbations/PerturbedFieldEquation_MuSigma.h>
+#include <FML/Cosmology/Perturbations/PerturbedFieldEquation_DGP.h>
+#include <FML/Cosmology/Perturbations/PerturbedFieldEquation_HuSawicky.h>
+#include <FML/Cosmology/Perturbations/PerturbedFieldEquation_MuSigma.h>
 
 #include <cmath>
 #include <functional>

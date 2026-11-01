@@ -1,5 +1,5 @@
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
-#include <FML/Cosmology/Background/Model.h>
+#include <FML/Cosmology/Perturbations/Presets.h>
 #include <FML/Cosmology/Common.h>
 
 #include <algorithm>
@@ -207,8 +207,8 @@ namespace FML::COSMOLOGY {
         }
 
         std::string model_description() {
-            std::string d = "model (Model.h):";
-            for (const auto & m : Models::registry())
+            std::string d = "model (Cosmology/Perturbations/Presets.h):";
+            for (const auto & m : PERTURBATIONS::perturbation_registry())
                 d += " " + m.name + " = " + m.description + ";";
             return d + " its parameters follow";
         }
@@ -597,7 +597,7 @@ namespace FML::COSMOLOGY {
                     return;
                 }
             // Parameters of the selected model (the model is set before everything else, see read())
-            for (const auto & p : Models::find(s.cosmo.model).parameters)
+            for (const auto & p : PERTURBATIONS::model_parameters(s.cosmo.model))
                 if (p.name == name) {
                     try {
                         s.cosmo.model_params[name] = to_double(value);
@@ -606,8 +606,8 @@ namespace FML::COSMOLOGY {
                     }
                     return;
                 }
-            for (const auto & m : Models::registry())
-                for (const auto & p : m.parameters)
+            for (const auto & m : PERTURBATIONS::perturbation_registry())
+                for (const auto & p : PERTURBATIONS::model_parameters(m.name))
                     if (p.name == name)
                         throw std::invalid_argument(where + ": parameter '" + name + "' belongs to model " + m.name +
                                                     ", but model = " + s.cosmo.model);
@@ -702,7 +702,7 @@ namespace FML::COSMOLOGY {
             for (const auto & e : entries)
                 if (e.name == "model") {
                     try {
-                        Models::find(trim(e.value));
+                        PERTURBATIONS::find_perturbation_model(trim(e.value));
                     } catch (const std::exception & ex) {
                         throw std::invalid_argument(e.where + ": " + ex.what());
                     }
@@ -748,7 +748,7 @@ namespace FML::COSMOLOGY {
                 const std::string kv = p.name + " = " + p.get(s);
                 fp << std::left << std::setw(static_cast<int>(w)) << kv << "  # " << p.description << "\n";
                 if (p.name == "model")
-                    for (const auto & mp : Models::find(s.cosmo.model).parameters) {
+                    for (const auto & mp : PERTURBATIONS::model_parameters(s.cosmo.model)) {
                         const std::string mkv = mp.name + " = " + fmt(s.cosmo.model_param(mp.name));
                         fp << std::left << std::setw(static_cast<int>(w)) << mkv << "  # " << mp.description << "\n";
                     }
@@ -764,7 +764,7 @@ namespace FML::COSMOLOGY {
 
         std::vector<std::string> model_parameter_names(const std::string & model) {
             std::vector<std::string> n;
-            for (const auto & p : Models::find(model).parameters)
+            for (const auto & p : PERTURBATIONS::model_parameters(model))
                 n.push_back(p.name);
             return n;
         }

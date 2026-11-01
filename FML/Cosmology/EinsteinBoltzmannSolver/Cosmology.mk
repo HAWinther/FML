@@ -4,7 +4,7 @@
 # after Makefile.config (needs FML_ROOT).
 #===================================================================
 
-COSMO_MODULES := Cosmology/Background Cosmology/Models Cosmology/Recombination \
+COSMO_MODULES := Cosmology/Background Cosmology/Recombination \
                  Cosmology/Perturbations Cosmology/Spectra Cosmology/EinsteinBoltzmannSolver
 # All .cpp files of the solver (ParameterFile.cpp from EinsteinBoltzmannSolver, not its programs)
 COSMO_OBJS := $(notdir $(patsubst %.cpp,%.o,$(wildcard $(addsuffix /*.cpp,$(addprefix $(FML_ROOT)/,$(filter-out Cosmology/EinsteinBoltzmannSolver,$(COSMO_MODULES))))))) \

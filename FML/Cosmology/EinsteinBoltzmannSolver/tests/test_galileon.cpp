@@ -1,6 +1,6 @@
 // =============================================================================
-// Tests of the cubic Galileon (FML/Background/BackgroundModel_CubicGalileon.h and
-// FML/Perturbations/PerturbedFieldEquation_CubicGalileon.h). Run with `make test`.
+// Tests of the cubic Galileon (FML/Cosmology/Background/BackgroundModel_CubicGalileon.h and
+// FML/Cosmology/Perturbations/PerturbedFieldEquation_CubicGalileon.h). Run with `make test`.
 //
 //   * Tracker background: E^4 - rho E^2 = Omega_phi, closure, derivatives; the pressure from the scalar field,
 //     p = c2 phidot^2/2 - g3 phidot^2 phiddot (with H phidot = xi), agrees with the continuity equation;
@@ -12,12 +12,11 @@
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
-#include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Perturbations/PerturbationModel_CubicGalileon.h>
+#include <FML/Cosmology/Perturbations/PerturbationModel_CubicGalileon.h>
 
 #include <cmath>
 #include <functional>

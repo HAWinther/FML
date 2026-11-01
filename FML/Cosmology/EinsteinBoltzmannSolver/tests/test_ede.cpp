@@ -1,5 +1,5 @@
 // =============================================================================
-// Tests of early dark energy (FML/Background/BackgroundModel_EDE.h, FML/Perturbations/SpeciesPerturbation_ScalarField.h).
+// Tests of early dark energy (FML/Cosmology/Background/BackgroundModel_EDE.h, FML/Cosmology/Perturbations/SpeciesPerturbation_ScalarField.h).
 // Run with `make test`.
 //
 //   * Shooting: the maximum of rho_EDE/rho_tot is f_EDE at z_c; E(0) = 1 (Omega_Lambda from closure)
@@ -19,7 +19,7 @@
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Perturbations/PerturbationModel_EDE.h>
+#include <FML/Cosmology/Perturbations/PerturbationModel_EDE.h>
 
 #include <algorithm>
 #include <cmath>

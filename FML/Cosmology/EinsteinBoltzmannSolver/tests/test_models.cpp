@@ -1,7 +1,8 @@
 // =============================================================================
-// Tests of the model framework: the registry (model names and parameters, Model.h's metadata and the registries of
-// FML/Background and FML/Perturbations), model parameters in the parameter file, and a model assembled from custom
-// parts (a ComponentBackground and a PERTURBATIONS::PerturbationModel_Assembled). Run with `make test`.
+// Tests of the model framework: the model registry (Cosmology/Perturbations/Presets.h, built on the background registry
+// of Cosmology/Background/Presets.h: names, parameters, descriptions), model parameters in the parameter file, and a
+// model assembled from custom parts (a ComponentBackground and a PERTURBATIONS::PerturbationModel_Assembled). Run with
+// `make test`.
 //
 // The custom model splits the CDM into the standard CDM and a second pressureless species ("dust") with its own
 // SpeciesPerturbation written here. This must reproduce LCDM exactly (up to the ODE tolerance), which checks that an
@@ -10,17 +11,19 @@
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
-#include <FML/Cosmology/Background/Model.h>
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
-#include <FML/Background/Presets.h>
-#include <FML/Perturbations/Presets.h>
+#include <FML/Cosmology/Background/Presets.h>
+#include <FML/Cosmology/Perturbations/Presets.h>
 
 #include <cmath>
 #include <functional>
+#include <set>
+#include <string>
+#include <vector>
 
 using FML::TESTS::throws;
 
@@ -91,10 +94,15 @@ namespace {
         s[1] = std::make_shared<BG::PowerLawSpecies>("cdm", BG::Component::CDM, 0.5 * p.OmegaCDM, 3.0);
         auto dust = std::make_shared<BG::PowerLawSpecies>("dust", BG::Component::Other, 0.5 * p.OmegaCDM, 3.0);
         s.insert(s.begin() + 2, dust);
-        s.push_back(std::make_shared<BG::PowerLawSpecies>(
-            "lambda", BG::Component::DarkEnergy, 1.0 - p.OmegaK - BG::density_today(s), 0.0));
-        auto bg = std::make_shared<const BG::ComponentBackground>(
-            "split", bp, s, std::make_shared<BG::GeneralRelativity>(), BG::BackgroundRange{-25.0, 5.0, 200});
+        s.push_back(std::make_shared<BG::PowerLawSpecies>("lambda",
+                                                          BG::Component::DarkEnergy,
+                                                          1.0 - p.OmegaK - BG::density_today(s),
+                                                          0.0));
+        auto bg = std::make_shared<const BG::ComponentBackground>("split",
+                                                                  bp,
+                                                                  s,
+                                                                  std::make_shared<BG::GeneralRelativity>(),
+                                                                  BG::BackgroundRange{-25.0, 5.0, 200});
         const BG::Species * d = dust.get();
         auto standard = std::make_shared<PT::StandardSpeciesPerturbations>(*bg);
         return std::make_shared<const PT::PerturbationModel_Assembled>(
@@ -136,8 +144,35 @@ namespace {
 int main() {
     std::cout << "Registry\n";
     {
-        check(!throws([] { Models::find("lcdm"); }), "lcdm is registered");
-        check(throws([] { Models::find("no_such_model"); }), "unknown model is an error");
+        check(!throws([] { PT::find_perturbation_model("lcdm"); }), "lcdm is registered");
+        check(throws([] { PT::find_perturbation_model("no_such_model"); }), "unknown model is an error");
+        // One registry entry per model in both registries, every parameter once with a description; the model's
+        // parameters are those of its background followed by those of its perturbations
+        {
+            bool same = PT::perturbation_registry().size() == BG::registry().size();
+            bool described = true;
+            for (const auto & m : PT::perturbation_registry()) {
+                same = same && !throws([&] { BG::find_model(m.name); }) && !m.description.empty();
+                const auto all = PT::model_parameters(m.name);
+                const auto & bp = BG::find_model(m.name).parameters;
+                same = same && all.size() == bp.size() + m.parameters.size();
+                std::set<std::string> names;
+                for (size_t i = 0; i < all.size(); i++) {
+                    described = described && !all[i].description.empty() && names.insert(all[i].name).second;
+                    same = same && all[i].name == (i < bp.size() ? bp[i].name : m.parameters[i - bp.size()].name);
+                }
+            }
+            check(same, "model registry: the background registry's models, parameters = background's + perturbations'");
+            check(described, "model registry: every parameter once per model, with a description");
+            const auto names = [](const std::string & model) { return ParameterFile::model_parameter_names(model); };
+            check(names("jbd") ==
+                          std::vector<std::string>{"bd_omega", "bd_GeffG_today", "bd_density_parameter_definition"} &&
+                      names("dark_scattering") == std::vector<std::string>{"ds_w", "ds_xi", "ds_cs2"} &&
+                      names("quintessence_pngb") ==
+                          std::vector<std::string>{"quint_f", "quint_phi_ini", "quint_dphidlna_ini"} &&
+                      names("ede_zc") == std::vector<std::string>{"ede_fEDE", "ede_zc", "ede_theta_i", "ede_n"},
+                  "model parameters: jbd, dark_scattering, quintessence_pngb, ede_zc");
+        }
         CosmologyParameters p;
         check(p.model == "lcdm", "default model is lcdm");
         {
@@ -148,9 +183,9 @@ int main() {
         }
         p.m_nu = 0.06;
         check(BackgroundCosmology(p).background().species().size() == 6, "lcdm with m_nu > 0: 6 species");
-        // every model of the solver's parameter registry has a background and perturbations
+        // every model of the registry has a background and perturbations
         bool all = true;
-        for (const auto & m : Models::registry()) {
+        for (const auto & m : PT::perturbation_registry()) {
             CosmologyParameters q;
             q.model = m.name;
             try {
@@ -176,6 +211,18 @@ int main() {
         check(throws([] { ParameterFile::read("", {"model=foo"}); }), "unknown model is an error");
         check(throws([] { ParameterFile::read("", {"mu0=0.1"}); }), "model parameter of no model is an error");
         check(ParameterFile::model_parameter_names("lcdm").empty(), "lcdm has no model parameters");
+        const auto pngb = ParameterFile::read("", {"model=quintessence_pngb", "quint_f=0.8", "quint_phi_ini=0.5"});
+        const auto jbd =
+            ParameterFile::read("", {"model=jbd", "bd_GeffG_today=0.95", "bd_density_parameter_definition=1"});
+        check(pngb.cosmo.model_param("quint_f") == 0.8 && pngb.cosmo.model_param("quint_phi_ini") == 0.5 &&
+                  pngb.cosmo.model_param("quint_dphidlna_ini") == 0.0 &&
+                  jbd.cosmo.model_param("bd_GeffG_today") == 0.95 &&
+                  jbd.cosmo.model_param("bd_density_parameter_definition") == 1.0,
+              "the models and parameters of the registry: quintessence_pngb (quint_f, quint_phi_ini), jbd "
+              "(bd_GeffG_today, bd_density_parameter_definition)");
+        check(throws([] { ParameterFile::read("", {"model=dark_scattering", "bd_omega=10"}); }) &&
+                  throws([] { ParameterFile::read("", {"model=fr", "quint_phi_ini=0.1"}); }),
+              "a parameter of another model is an error");
     }
 
     std::cout << "Background of a custom model (CDM split into cdm + dust)\n";
@@ -186,7 +233,7 @@ int main() {
         for (double x = -15.0; x <= 2.0; x += 0.5)
             err = std::max(err, std::fabs(sp.Hp_of_x(x) / lcdm.Hp_of_x(x) - 1.0));
         check_close(err, 0.0, 1e-14, "Hp(x) = LCDM");
-        check_rel(sp.rho_of(Species::Role::Other, -1.0), 0.5 * lcdm.rhoCDM(-1.0), 1e-14, "rho_of(Other) = dust");
+        check_rel(sp.rho_of(BG::Component::Other, -1.0), 0.5 * lcdm.rhoCDM(-1.0), 1e-14, "rho_of(Other) = dust");
         check_rel(sp.rhoCDM(-1.0), 0.5 * lcdm.rhoCDM(-1.0), 1e-14, "rhoCDM = half of LCDM");
         CosmologyParameters q = p;
         q.h = 0.7;
@@ -223,14 +270,6 @@ int main() {
         cd.solve();
         RecombinationHistory rd(cd);
         check(throws([&] { Perturbations pd(cd, rd, o); }), "two species with the same output names is an error");
-
-        // An explicit Model of the old classes is background only (TRANSITIONAL)
-        BackgroundCosmology old(p, Models::lcdm(p));
-        old.solve();
-        RecombinationHistory ro(old);
-        Perturbations po(old, ro, o);
-        check(po.get_species().empty() && throws([&] { po.solve(); }),
-              "an explicit Model of the old classes has no perturbations (Perturbations cannot be solved)");
     }
 
     return FML::TESTS::summary("EBS models");
