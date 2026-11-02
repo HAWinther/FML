@@ -614,18 +614,20 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
                       << " h/Mpc)\n";
         zoptions.kmax_integration = std::min(kcut, krange.second);
         if (settings.oneloop_kernels == "model") {
-            // The scale- and time-dependent LPT kernels of the gravity model (flat LCDM background)
-            const double OmegaM = sim.get_cosmology()->get_OmegaM();
-            MGModel model = mgmodel_gr(OmegaM);
+            // The scale- and time-dependent LPT kernels of the gravity model: its theory (f(R) and DGP with their
+            // screening if the simulation has it, other theories through their mu(k, a)) on the run's background;
+            // models without a shared theory (Geff, mu BZ/table) through GeffOverG
+            auto cosmo = sim.get_cosmology();
             std::string description = "LCDM";
-            if (auto fofr = std::dynamic_pointer_cast<GravityModelFofR<NDIM>>(grav)) {
-                model = mgmodel_fofr(OmegaM, fofr->get_fofr0(), fofr->get_nfofr(), fofr->get_use_screening());
-            } else if (auto dgp = std::dynamic_pointer_cast<GravityModelDGP<NDIM>>(grav)) {
-                model = mgmodel_dgp(OmegaM, dgp->get_rcH0(), dgp->get_use_screening());
-            } else if (grav->get_name() != "GR") {
+            auto qs = grav->get_quasi_static_gravity();
+            bool screening = false;
+            if (auto scr = std::dynamic_pointer_cast<GravityModelScreened<NDIM>>(grav))
+                screening = scr->get_use_screening();
+            MGModel model = mgmodel_from_theory(cosmo->background(), qs, screening);
+            if (not qs and grav->get_name() != "GR") {
                 const double H0_hmpc = grav->H0_hmpc;
-                model = mgmodel_mu(OmegaM,
-                                   [grav, H0_hmpc](double k, double aa) { return grav->GeffOverG(aa, k / H0_hmpc); });
+                model.type = MGModel::MU;
+                model.mu_of_k_a = [grav, H0_hmpc](double k, double aa) { return grav->GeffOverG(aa, k / H0_hmpc); };
             }
             description = model.name();
             if (FML::ThisTask == 0)

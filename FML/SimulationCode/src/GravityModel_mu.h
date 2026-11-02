@@ -9,6 +9,7 @@
 
 #include "Cosmology.h"
 #include "GravityModel.h"
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_MuSigma.h>
 
 #include <algorithm>
 #include <cmath>
@@ -24,7 +25,8 @@
 /// densities, as in linear theory). The growth factors (also 2LPT/3LPT) use G_eff/G = mu(a,k).
 ///
 /// Parametrisations (gravity_model_mu_parametrization):
-///   DE    : mu(a) = 1 + mu0 Omega_DE(a) / Omega_DE(a=1) (the "late-time" parametrisation of Planck 2015 XIV / DES)
+///   DE    : mu(a) = 1 + mu0 Omega_DE(a) / Omega_DE(a=1) (the "late-time" parametrisation of Planck 2015 XIV / DES;
+///           the shared quasi-static theory FML/Cosmology/Perturbations/QuasiStaticGravity_MuSigma.h)
 ///   BZ    : mu(a,k) = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 a^s) (Bertschinger & Zukin 2008, as in Planck
 ///           2015 XIV), k in h/Mpc and lambda1 in Mpc/h
 ///   table : mu(a) or mu(a,k) from a file (e.g. computed with hi_class): rows "a mu" or "a k mu" (k in h/Mpc) on a
@@ -52,7 +54,6 @@ class GravityModelMu final : public GravityModel<NDIM> {
     bool table_has_k{false};
     Spline mu_of_loga_spline;
     Spline2D mu_of_loga_logk_spline;
-    double OmegaDE0{1.0};
 
   public:
     GravityModelMu() : GravityModel<NDIM>("mu") {}
@@ -63,7 +64,7 @@ class GravityModelMu final : public GravityModel<NDIM> {
     /// mu(a, k) with k in h/Mpc
     double mu_of_a_k(double a, double k_hmpc) const {
         if (parametrization == "DE")
-            return 1.0 + mu0 * this->cosmo->get_OmegaLambda(a) / OmegaDE0;
+            return this->qs().mu(std::log(a), 0.0);
         if (parametrization == "BZ") {
             const double x = BZ_lambda1_mpch * BZ_lambda1_mpch * k_hmpc * k_hmpc * std::pow(a, BZ_s);
             return (1.0 + BZ_beta1 * x) / (1.0 + x);
@@ -134,9 +135,12 @@ class GravityModelMu final : public GravityModel<NDIM> {
     }
 
     void init() override {
-        OmegaDE0 = this->cosmo->get_OmegaLambda(1.0);
-        if (parametrization == "DE")
-            FML::assert_mpi(OmegaDE0 > 0.0, "gravity_model_mu_parametrization = DE needs Omega_DE > 0");
+        if (parametrization == "DE") {
+            FML::assert_mpi(this->cosmo->get_OmegaLambda(1.0) > 0.0,
+                            "gravity_model_mu_parametrization = DE needs Omega_DE > 0");
+            this->quasi_static = std::make_shared<const FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_MuSigma>(
+                this->cosmo->background(), mu0);
+        }
         GravityModel<NDIM>::init();
     }
 

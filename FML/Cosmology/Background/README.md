@@ -77,4 +77,4 @@ The solver references are the backgrounds of the solver's old model classes (`Co
 
 ## Not yet here
 
-Reading SimulationCode / solver parameter files; the linear growth (`GrowthHistory`, separate from the background).
+Reading SimulationCode / solver parameter files. The linear growth is separate from the background: `Cosmology/Growth`.

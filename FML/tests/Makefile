@@ -168,7 +168,7 @@ test_reconstruction: test_reconstruction.o Global.o Spline.o ODESolver.o
 test_multigrid: test_multigrid.o Global.o
 	$(LINK_EXE)
 
-test_hybridbias: test_hybridbias.o Global.o
+test_hybridbias: test_hybridbias.o Global.o Spline.o
 	$(LINK_EXE)
 
 # GadgetUtils (binary GADGET format; the HDF5 part only with USE_HDF5=true)

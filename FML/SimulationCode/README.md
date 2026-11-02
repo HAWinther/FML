@@ -82,6 +82,8 @@ For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations)
 
 * JBD : Jordan-Brans-Dicke model. The gravity model corresponding to the cosmology with the same name (and currently requires this cosmology to work).
 
+The theory of f(R), DGP, JBD, the symmetron, (m(a), beta(a)) and mu (the DE parametrisation) - G_eff(k,a)/G, the f(R) scalaron mass and f_R(a), the DGP beta(a) and its second-order (2LPT) source, and the screening (its type, potential or density, its threshold and the screening factor) - is not defined here but in `FML/Cosmology/Perturbations/QuasiStaticGravity_*.h`, on the run's background, and is the same as in FML's Einstein-Boltzmann solver and the hybrid bias one-loop kernels. Applying the screening to the density field and the multigrid solvers are here (the f(R) solver takes the background curvature R(a) of the theory). The growth factors are solved by `FML/Cosmology/Growth/LPTGrowthFactors.h`.
+
 * Symmetron : The symmetron model. A f(R)-like modified gravity model - just to have a bit of variety.
 
 * Geff : G_eff/G(a) from a file (no scale dependence, no screening).

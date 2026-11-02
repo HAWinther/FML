@@ -20,8 +20,17 @@ SpeciesPerturbation_<name>.h CDM, MasslessNeutrinos (Boltzmann hierarchy), Massi
                              then the effective fluid of the oscillating field), DarkEnergyFluid (DarkScattering: CDM +
                              dark-energy fluid with momentum exchange; InteractingDarkEnergy: CDM + fluid with energy
                              exchange), CoupledQuintessence (coupled CDM + field)
-PerturbedFieldEquation_<name>.h  GeneralRelativity, BransDicke, MuSigma (Planck/DES mu, Sigma) with DGP and HuSawicky
-                             (quasi-static mu, Sigma) derived from it, HorndeskiAlpha (alpha parameterization:
+QuasiStaticGravity.h         the base: the quasi-static limit of a theory on a Background (any, not only a
+                             ComponentBackground): mu(x, k), Sigma(x, k), the second-order (2LPT) source, k in H0/c,
+                             and the screening (Screening: type potential / density / gradient, threshold, the
+                             surviving fraction of the fifth force). The one definition of these, used by the MuSigma
+                             field equations here, Cosmology/Growth, HybridBiasOneLoopMG (mgmodel_from_theory) and
+                             SimulationCode's gravity models (f(R), DGP, JBD, mu, symmetron, (m, beta))
+QuasiStaticGravity_<name>.h  MuSigma (Planck/DES), HuSawicky, DGP (either branch, H of any background), BransDicke,
+                             Symmetron, MBeta (power-law (m(a), beta(a)))
+PerturbedFieldEquation_<name>.h  GeneralRelativity, BransDicke (quasi_static(): its sub-horizon limit), MuSigma (the
+                             mu-Sigma equations for a QuasiStaticGravity; default Planck/DES) with DGP and HuSawicky
+                             derived from it, HorndeskiAlpha (alpha parameterization:
                              AlphaFunctions, StandardAlphas, FunctionAlphas, HorndeskiAlphaBackground with the stability
                              check), CubicGalileon
 PerturbationModel.h          the base: which background species get which perturbation, and the field equations;

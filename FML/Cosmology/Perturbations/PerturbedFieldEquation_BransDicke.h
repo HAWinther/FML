@@ -21,12 +21,14 @@
 // is not used. Initial conditions: Phi, and dF = w = 0 (the field is frozen in the radiation era, where its source
 // rho - 3p vanishes). G_eff_initial = g / phi(x_ini) (the coupling of the Friedmann equation at the start, where the
 // field is at rest). Tensors: M*^2 = phi/g, alpha_M = dln phi/dx, alpha_T = 0. Outputs delta_phi_BD = dF/F and
-// ddelta_phi_BD_dx = dF_x/F. omega -> infinity is GR.
+// ddelta_phi_BD_dx = dF_x/F. omega -> infinity is GR. quasi_static(): the sub-horizon limit
+// (QuasiStaticGravity_BransDicke.h).
 // =====================================================================================================================
 
 #include <FML/Cosmology/Background/FieldEquation_BransDicke.h>
 #include <FML/Cosmology/Perturbations/PerturbationTypes.h>
 #include <FML/Cosmology/Perturbations/PerturbedFieldEquation.h>
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_BransDicke.h>
 #include <FML/Units/Units.h>
 
 #include <stdexcept>
@@ -47,6 +49,9 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
         std::string info() const override {
             return "Brans-Dicke (omega = " + std::to_string(omega) + ", G/G_* = " + std::to_string(g) + ")";
         }
+
+        /// The sub-horizon (quasi-static) limit of these equations: mu = g phi_*/phi, Sigma = g/phi
+        QuasiStaticGravity_BransDicke quasi_static() const { return {ctx.background, bd}; }
 
         int n_vars() const override { return 3; }
         enum { F_, FX, B_, N_CACHE };

@@ -9,6 +9,7 @@
 // Run with: make run (in this folder) or make test (from the top folder)
 //==========================================================
 #include <FML/ComputePowerSpectra/HybridBiasOneLoopMG.h>
+#include <FML/Cosmology/Background/FunctionBackground.h>
 #include <FML/Global/Global.h>
 
 #include <array>
@@ -148,6 +149,45 @@ int main() {
              0.5,
              1.306400906674e-01,
              "mu(k,a)"}};
+        // The same through mgmodel_from_theory: the shared theories on a flat LCDM background without radiation
+        namespace BG = FML::COSMOLOGY::BACKGROUND;
+        namespace PT = FML::COSMOLOGY::PERTURBATIONS;
+        BG::BackgroundParameters bp;
+        bp.h = 0.7;
+        bp.Omega_b = 0.05;
+        bp.Omega_cdm = Om - 0.05;
+        bp.T_CMB = 0.0;
+        bp.N_eff = 0.0;
+        static BG::FunctionBackground lcdm(
+            "lcdm",
+            bp,
+            [Om](double x) { return std::sqrt(Om * std::exp(-3.0 * x) + 1.0 - Om); },
+            [Om](double x) {
+                const double m = Om * std::exp(-3.0 * x);
+                return -1.5 * m / (m + 1.0 - Om);
+            },
+            [&bp, Om](BG::Component c, double x) {
+                const double m = std::exp(-3.0 * x) / (Om * std::exp(-3.0 * x) + 1.0 - Om);
+                if (c == BG::Component::CDM)
+                    return bp.Omega_cdm * m;
+                if (c == BG::Component::Baryons)
+                    return bp.Omega_b * m;
+                if (c == BG::Component::DarkEnergy)
+                    return (1.0 - Om) / (Om * std::exp(-3.0 * x) + 1.0 - Om);
+                return 0.0;
+            });
+        refs.push_back({mgmodel_from_theory(lcdm, std::make_shared<PT::QuasiStaticGravity_HuSawicky>(lcdm, 1e-5, 1.0)),
+                        0.3,
+                        0.2,
+                        -0.7,
+                        9.606520027441e-02,
+                        "f(R) screening, from the theory"});
+        refs.push_back({mgmodel_from_theory(lcdm, std::make_shared<PT::QuasiStaticGravity_DGP>(lcdm, 1.0, -1)),
+                        0.3,
+                        0.2,
+                        -0.7,
+                        8.149455358511e-02,
+                        "DGP screening, from the theory"});
         for (auto & r : refs) {
             const auto c = kernels_at_node(r.model, r.k, r.p, r.mu);
             const double dev = std::abs(c[2] / r.c3 - 1.0);

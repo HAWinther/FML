@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -17,13 +18,16 @@
 /// The solver returns PhiF = a^2 |f_R| / (2 (H0 Box)^2) so that in a
 /// cosmological setting where PhiGR = a^2 Phi / (H0 Box)^2 we simply
 /// have the total force = D(PhiGR + PhiF)
-/// This class (kind of) assumes a LCDM cosmology
+/// The background curvature is that of flat LCDM without radiation, R c^2 / (3 H0^2) = OmegaM a^-3 + 4 (1 - OmegaM),
+/// unless another R(a) is given with set_background_ricci (e.g. the shared theory's,
+/// FML/Cosmology/Perturbations/QuasiStaticGravity_HuSawicky.h)
 ///
 /// The equation (box units, x in [0,1)) is
 ///
 ///   D^2 PhiF = (1/3) 1.5 OmegaM a delta - prefac [ (PhiF_bar / PhiF)^(1/(n+1)) - 1 ]
 ///
-/// with prefac = 0.5 OmegaM a^4 (a^-3 + 4 OmegaL / OmegaM). Two field variables (set_method):
+/// with prefac = 0.5 a^4 R(a) c^2 / (3 H0^2) (LCDM: 0.5 OmegaM a^4 (a^-3 + 4 OmegaL / OmegaM)). Two field variables
+/// (set_method):
 ///
 ///  "sqrt" (fiducial): PhiF = u^2 (Bose, Hellwing & Li 2017) with D^2 PhiF the standard Laplacian of PhiF. For n = 1
 ///         the equation in a cell (neighbors fixed) is a cubic u^3 + p u + q = 0 with q < 0 which has exactly one
@@ -80,6 +84,9 @@ class FofrSolverCosmology {
     /// The dimensionless number H0 * Box / c
     double H0Box{};
 
+    /// The background Ricci scalar R(a) c^2 / (3 H0^2) (empty: flat LCDM without radiation)
+    std::function<double(double)> R_of_a;
+
     /// Print info as we go along
     bool verbose{true};
 
@@ -127,11 +134,19 @@ class FofrSolverCosmology {
         a_previous = a_prev;
     }
 
+    /// Use this background Ricci scalar, R(a) c^2 / (3 H0^2), instead of flat LCDM without radiation
+    void set_background_ricci(std::function<double(double)> R_over_3H02_of_a) { R_of_a = std::move(R_over_3H02_of_a); }
+
+    /// The background Ricci scalar R(a) c^2 / (3 H0^2)
+    double get_ricci_background(double a) const {
+        if (R_of_a)
+            return R_of_a(a);
+        return OmegaM / (a * a * a) + 4.0 * (1.0 - OmegaM);
+    }
+
     /// The cosmological background value |f_R|(a)
     double get_fofr_background(double a) const {
-        const double fac1 = 1.0 + 4.0 * (1.0 - OmegaM) / OmegaM;
-        const double fac2 = 1.0 / (a * a * a) + 4.0 * (1.0 - OmegaM) / OmegaM;
-        return fofr0 * std::pow(fac1 / fac2, nfofr + 1);
+        return fofr0 * std::pow(get_ricci_background(1.0) / get_ricci_background(a), nfofr + 1);
     }
 
     /// The positive real root of u^3 + p u + q = 0 for q < 0 (there is exactly one)
@@ -249,7 +264,7 @@ class FofrSolverCosmology {
 
         // Factors to define the equation (the first term is GR times 1/3)
         const double poisson_norm = (1.0 / 3.0) * (1.5 * OmegaM * a);
-        const double prefac = 0.5 * OmegaM * a * a * a * a * (1.0 / (a * a * a) + 4.0 * (1.0 - OmegaM) / OmegaM);
+        const double prefac = 0.5 * a * a * a * a * get_ricci_background(a);
 
         // The background value of PhiF and of the field we solve for
         const double phibar = a * a * get_fofr_background(a) / 2.0 / std::pow(H0Box, 2);

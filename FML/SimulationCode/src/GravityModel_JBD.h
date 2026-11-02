@@ -11,10 +11,11 @@
 
 #include "Cosmology.h"
 
-#include <FML/Cosmology/Background/FieldEquation_BransDicke.h>
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_BransDicke.h>
 #include "GravityModel.h"
 
-/// Jordan-Brans-Dicke
+/// Jordan-Brans-Dicke: G_eff/G = g phi_*/phi(a) from the shared quasi-static theory
+/// (FML/Cosmology/Perturbations/QuasiStaticGravity_BransDicke.h, phi(a) of the JBD background)
 template <int NDIM>
 class GravityModelJBD : public GravityModel<NDIM> {
   public:
@@ -48,16 +49,18 @@ class GravityModelJBD : public GravityModel<NDIM> {
     }
 
     //========================================================================
-    // In JBD Geff = G/phi(a) where the parameter GeffG_today = phi_*/phi(0) is a free
+    // In JBD Geff = G phi_*/phi(a) where the parameter GeffG_today = phi_*/phi(0) is a free
     // parameter that sets the strength of gravity today (we need GeffG_today = 1 to have
     // the correct Newtonian limit)
     //========================================================================
     double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0) const override {
-        const auto * jbd = this->cosmo->background()
-                               .template field_equations_as<FML::COSMOLOGY::BACKGROUND::BransDickeFieldEquations>();
-        if (not jbd)
-            throw std::runtime_error("gravity_model = JBD needs cosmology_model = JBD");
-        return jbd->G_over_Gstar() * jbd->phi_star() / jbd->phi(std::log(a));
+        return this->qs().mu(std::log(a), koverH0);
+    }
+
+    void init() override {
+        this->quasi_static =
+            std::make_shared<const FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_BransDicke>(this->cosmo->background());
+        GravityModel<NDIM>::init();
     }
 
     //========================================================================

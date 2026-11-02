@@ -2,6 +2,9 @@
 #define FML_HYBRIDBIASONELOOPMG_HEADER
 
 #include <FML/ComputePowerSpectra/HybridBiasOneLoop.h>
+#include <FML/Cosmology/Background/Background.h>
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_DGP.h>
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_HuSawicky.h>
 #include <FML/Units/Units.h>
 
 #include <array>
@@ -56,18 +59,30 @@ namespace FML {
             ///
             /// Units: k in h/Mpc. Internally k in units of H0 (k/H0 = k [h/Mpc] * 2997.92458).
             ///
+            /// The model: mgmodel_gr/_mu/_fofr/_dgp on a flat LCDM background (matter and a cosmological constant,
+            /// Omega_M), or mgmodel_from_theory(background, theory) with the expansion of a Background and the
+            /// theory of FML/Cosmology/Perturbations/QuasiStaticGravity*.h (f(R): the background curvature R(a);
+            /// DGP: beta(a); other theories: their mu(k, a) without screening).
+            ///
             //=====================================================================================================
 
-            /// A modified gravity model on a flat LCDM background (matter and a cosmological constant)
+            /// A modified gravity model on a flat LCDM background (matter and a cosmological constant), or on the
+            /// background given by the hooks below
             struct MGModel {
                 enum Type { GR, MU, FOFR, DGP };
                 Type type{GR};
                 double OmegaM{0.3};
+                /// The background at a: H^2/H0^2, dlnH/dlna and 8 pi G rho_m / (3 H0^2) (empty: flat LCDM, OmegaM)
+                std::function<void(double a, double & H2, double & dlogHdx, double & rhofac)> background;
+                /// FOFR: the background Ricci scalar R(a) c^2 / (3 H0^2) (empty: rhofac + 4 (1 - OmegaM))
+                std::function<double(double a)> fofr_ricci;
+                /// DGP: beta(a) (empty: 1 + 2 H r_c (1 + dlnH/dlna / 3))
                 /// MU: mu(k [h/Mpc], a) (no screening)
                 std::function<double(double, double)> mu_of_k_a;
                 /// FOFR: |f_R0| and the Hu-Sawicki n
                 double fofr0{1e-5};
                 double nfofr{1.0};
+                std::function<double(double a)> dgp_beta;
                 /// DGP (normal branch): H0 r_c
                 double H0rc{1.0};
                 /// Include the screening (chameleon M2, M3 for f(R), Vainshtein for DGP)
@@ -123,6 +138,44 @@ namespace FML {
                 return m;
             }
 
+            /// The model of a theory (FML/Cosmology/Perturbations/QuasiStaticGravity*.h; nullptr: GR) on a background
+            /// (both must outlive the model; the theory is kept alive by it): Hu-Sawicky f(R) and DGP with their
+            /// screening terms (if screening), any other theory through its mu(k, a) (no screening)
+            inline MGModel mgmodel_from_theory(const FML::COSMOLOGY::BACKGROUND::Background & bg,
+                                               FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravityPtr qs,
+                                               bool screening = true) {
+                namespace PT = FML::COSMOLOGY::PERTURBATIONS;
+                MGModel m;
+                m.OmegaM = bg.Omega_m(0.0);
+                m.background = [&bg](double a, double & H2, double & dlogHdx, double & rhofac) {
+                    const double x = std::log(a), E = bg.E(x);
+                    H2 = E * E;
+                    dlogHdx = bg.dlogEdx(x);
+                    rhofac = bg.Omega_m(x) * H2;
+                };
+                m.screening = screening;
+                if (not qs) {
+                    m.type = MGModel::GR;
+                    m.screening = false;
+                } else if (auto hs = std::dynamic_pointer_cast<const PT::QuasiStaticGravity_HuSawicky>(qs)) {
+                    m.type = MGModel::FOFR;
+                    m.fofr0 = hs->get_fR0();
+                    m.nfofr = hs->get_n();
+                    m.fofr_ricci = [hs](double a) { return hs->R(std::log(a)); };
+                } else if (auto dgp = std::dynamic_pointer_cast<const PT::QuasiStaticGravity_DGP>(qs)) {
+                    m.type = MGModel::DGP;
+                    m.H0rc = dgp->get_rcH0();
+                    m.dgp_beta = [dgp](double a) { return dgp->beta(std::log(a)); };
+                } else {
+                    m.type = MGModel::MU;
+                    m.screening = false;
+                    m.mu_of_k_a = [qs](double k_hmpc, double a) {
+                        return qs->mu(std::log(a), k_hmpc * FML::UTILS::SI::c_over_H0_mpch);
+                    };
+                }
+                return m;
+            }
+
             namespace detail {
 
                 constexpr double c_over_H0_mpch = FML::UTILS::SI::c_over_H0_mpch;
@@ -143,12 +196,17 @@ namespace FML {
                         model = &mod;
                         a = aa;
                         const double OmegaM = mod.OmegaM, OmegaL = 1.0 - OmegaM;
-                        rhofac = OmegaM / (a * a * a);
-                        H2 = rhofac + OmegaL;
-                        dlogHdx = -1.5 * rhofac / H2;
+                        if (mod.background) {
+                            mod.background(a, H2, dlogHdx, rhofac);
+                        } else {
+                            rhofac = OmegaM / (a * a * a);
+                            H2 = rhofac + OmegaL;
+                            dlogHdx = -1.5 * rhofac / H2;
+                        }
                         screening = mod.screening and (mod.type == MGModel::FOFR or mod.type == MGModel::DGP);
                         if (mod.type == MGModel::FOFR) {
-                            const double c = rhofac + 4.0 * OmegaL, c0 = OmegaM + 4.0 * OmegaL;
+                            const double c = mod.fofr_ricci ? mod.fofr_ricci(a) : rhofac + 4.0 * OmegaL;
+                            const double c0 = mod.fofr_ricci ? mod.fofr_ricci(1.0) : OmegaM + 4.0 * OmegaL;
                             const double n = mod.nfofr, pexp = 1.0 / (n + 1.0);
                             const double Rbar = 3.0 * c;
                             const double fbar = mod.fofr0 * std::pow(c0 / c, n + 1.0);
@@ -160,7 +218,7 @@ namespace FML {
                         }
                         if (mod.type == MGModel::DGP) {
                             rc = mod.H0rc;
-                            beta = 1.0 + 2.0 * std::sqrt(H2) * rc * (1.0 + dlogHdx / 3.0);
+                            beta = mod.dgp_beta ? mod.dgp_beta(a) : 1.0 + 2.0 * std::sqrt(H2) * rc * (1.0 + dlogHdx / 3.0);
                         }
                     }
                     /// mu(k) with k in units of H0

@@ -19,18 +19,20 @@
 // GR code (the two differ only by violations of the Poisson constraint, which this damps). Requires a flat universe
 // and 2 Sigma - mu >= 0 (checked by the models).
 //
-// mu_sigma(x, k) gives mu, Sigma and d(2 Sigma - mu)/dx at fixed k; this class implements the Planck/DES form
+// mu and Sigma are those of a QuasiStaticGravity object (QuasiStaticGravity.h: the one definition of the theory's
+// quasi-static limit, shared with SimulationCode); mu_sigma(x, k) gives mu, Sigma and d(2 Sigma - mu)/dx at fixed k
+// [1/m]. The default is the Planck/DES form (QuasiStaticGravity_MuSigma.h)
 //   mu = 1 + mu0 Omega_DE(a)/Omega_DE,0,   Sigma = 1 + Sigma0 Omega_DE(a)/Omega_DE,0
-// (Omega_DE of the dark-energy component of the background), and DGP and Hu-Sawicky f(R) override it
-// (PerturbedFieldEquation_DGP.h, _HuSawicky.h). Cache: mu, Sigma, d(2 Sigma - mu)/dx, H0^2 a^2 (rho + p) of all
-// species, Hp'/Hp.
+// and DGP and Hu-Sawicky f(R) pass theirs (PerturbedFieldEquation_DGP.h, _HuSawicky.h). Cache: mu, Sigma,
+// d(2 Sigma - mu)/dx, H0^2 a^2 (rho + p) of all species, Hp'/Hp.
 // =====================================================================================================================
 
 #include <FML/Cosmology/Perturbations/PerturbationTypes.h>
 #include <FML/Cosmology/Perturbations/PerturbedFieldEquation.h>
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_MuSigma.h>
 #include <FML/Units/Units.h>
 
-#include <sstream>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -38,33 +40,22 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
 
     class PerturbedFieldEquation_MuSigma : public PerturbedFieldEquation {
       public:
+        /// The quasi-static theory qs (on ctx.background)
+        PerturbedFieldEquation_MuSigma(const PerturbationContext & ctx, QuasiStaticGravityPtr qs)
+            : PerturbedFieldEquation(ctx), qs(std::move(qs)) {}
+        /// Planck/DES
         PerturbedFieldEquation_MuSigma(const PerturbationContext & ctx, double mu0 = 0.0, double Sigma0 = 0.0)
-            : PerturbedFieldEquation(ctx), mu0(mu0), Sigma0(Sigma0),
-              rhoDE0(ctx.background.rho(BACKGROUND::Component::DarkEnergy, 0.0)) {}
+            : PerturbedFieldEquation_MuSigma(
+                  ctx, std::make_shared<const QuasiStaticGravity_MuSigma>(ctx.background, mu0, Sigma0)) {}
         std::string name() const override { return "mu-Sigma"; }
-        std::string info() const override {
-            std::ostringstream os;
-            os << "mu-Sigma (Planck/DES: mu0 = " << mu0 << ", Sigma0 = " << Sigma0 << ")";
-            return os.str();
-        }
+        std::string info() const override { return qs->info(); }
 
-        /// mu, Sigma and d(2 Sigma - mu)/dx (at fixed k) at x for the mode k [1/m] (k = 0: the scale-independent value)
-        struct MuSigma {
-            double mu = 1.0, Sigma = 1.0, dg = 0.0;
-        };
-        /// Planck/DES: Omega_DE(a)/Omega_DE,0 = (rho_DE / E^2) / rho_DE(0), and its x-derivative
-        virtual MuSigma mu_sigma(double x, double /*k*/) const {
-            const auto & bg = ctx.background;
-            const double E = bg.E(x), E2 = E * E, dE2 = 2.0 * E2 * bg.dlogEdx(x);
-            const double rde = bg.rho(BACKGROUND::Component::DarkEnergy, x);
-            const double f = rde / (E2 * rhoDE0);
-            const double df = f * (bg.drhodx(BACKGROUND::Component::DarkEnergy, x) / rde - dE2 / E2);
-            MuSigma m;
-            m.mu = 1.0 + mu0 * f;
-            m.Sigma = 1.0 + Sigma0 * f;
-            m.dg = (2.0 * Sigma0 - mu0) * df;
-            return m;
-        }
+        /// The quasi-static theory
+        const QuasiStaticGravity & quasi_static() const { return *qs; }
+
+        using MuSigma = QuasiStaticGravity::MuSigma;
+        /// mu, Sigma and d(2 Sigma - mu)/dx (at fixed k) at x for the mode k [1/m] (k = 0: the large-scale value)
+        MuSigma mu_sigma(double x, double k) const { return qs->mu_sigma(x, k * FML::UTILS::SI::c / ctx.H0); }
 
         enum { MU, SIGMA, DG, RPP, DHPH, N_CACHE };
         int cache_size() const override { return N_CACHE; }
@@ -104,7 +95,7 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
         }
 
       protected:
-        double mu0, Sigma0, rhoDE0;
+        QuasiStaticGravityPtr qs;
     };
 
 } // namespace FML::COSMOLOGY::PERTURBATIONS

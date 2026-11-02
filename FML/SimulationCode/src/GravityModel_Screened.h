@@ -17,13 +17,15 @@
 #include <vector>
 
 //==========================================================================================
-/// Base class for gravity models with a fifth force: D^2 Phi = 1.5 OmegaM a (delta + delta_FF), where the
+/// Base class for gravity models with a fifth force (and a shared quasi-static theory with its screening,
+/// FML/Cosmology/Perturbations/QuasiStaticGravity.h): D^2 Phi = 1.5 OmegaM a (delta + delta_FF), where the
 /// fifth-force "density" delta_FF is computed in one of three ways:
 ///  - exact: solving the (non-linear) field equation with the multigrid solver (if the model has one)
 ///  - screening: the screening approximation (with optionally the linear solution on large scales)
 ///  - linear: delta_FF(k) = (GeffOverG(a,k) - 1) delta(k)
-/// A model provides GeffOverG, the screened fifth force and (optionally) the exact solver. The rest (the parameters
-/// for screening and the multigrid solver, the large-scale blending and the force) is shared here.
+/// A model provides GeffOverG and its theory (whose screening() is applied here) and (optionally) the exact solver.
+/// The rest (the parameters for screening and the multigrid solver, the large-scale blending and the force) is shared
+/// here.
 //==========================================================================================
 template <int NDIM>
 class GravityModelScreened : public GravityModel<NDIM> {
@@ -58,13 +60,45 @@ class GravityModelScreened : public GravityModel<NDIM> {
     // Model specific parts
     //========================================================================
 
-    /// Compute the screened fifth-force density from the density (Fourier space). coupling(kBox) = GeffOverG - 1
+    /// Compute the screened fifth-force density from the density (Fourier space). coupling(kBox) = GeffOverG - 1.
+    /// The default applies the screening of the model's theory (QuasiStaticGravity::screening(): the type decides
+    /// whether the screening factor is a function of the Newtonian potential or of the density) times
+    /// gravity_model_screening_efficiency
     virtual void compute_screened_fifth_force(double a,
                                               double H0Box,
                                               double norm_poisson_equation,
                                               const CouplingFunction & coupling,
                                               FFTWGrid<NDIM> & density_fourier,
-                                              FFTWGrid<NDIM> & density_fifth_force) const = 0;
+                                              FFTWGrid<NDIM> & density_fifth_force) const {
+        using FML::COSMOLOGY::PERTURBATIONS::ScreeningType;
+        const auto screening = this->qs().screening();
+        const double x = std::log(a);
+        const double eff = screening_efficiency;
+        auto factor = [&screening, x, eff](double value) { return screening.factor(x, value, eff); };
+        if (FML::ThisTask == 0 and not fifth_force_label().empty())
+            std::cout << "Adding fifth-force " << fifth_force_label() << " (screening)\n";
+        switch (screening.type) {
+            case ScreeningType::Potential:
+                FML::NBODY::compute_delta_fifth_force_potential_screening(
+                    density_fourier, density_fifth_force, coupling, factor, norm_poisson_equation * std::pow(H0Box / a, 2));
+                return;
+            case ScreeningType::Density:
+                FML::NBODY::compute_delta_fifth_force_density_screening(density_fourier,
+                                                                        density_fifth_force,
+                                                                        coupling,
+                                                                        factor,
+                                                                        density_smoothing_scale_over_boxsize(),
+                                                                        density_smoothing_filter());
+                return;
+            default:
+                throw std::runtime_error("The gravity model " + this->get_name() + " has no screening of type " +
+                                         FML::COSMOLOGY::PERTURBATIONS::screening_type_name(screening.type) +
+                                         " implemented here");
+        }
+    }
+    /// Density screening: the smoothing of the density field before the screening factor is computed
+    virtual double density_smoothing_scale_over_boxsize() const { return 0.0; }
+    virtual std::string density_smoothing_filter() const { return "tophat"; }
 
     /// Solve the exact field equation (density in real space) for the fifth-force potential (real space) with the
     /// multigrid solver, normalized such that -k^2 / (1.5 OmegaM a) times it is the fifth-force density

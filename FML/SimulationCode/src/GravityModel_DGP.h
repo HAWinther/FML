@@ -10,9 +10,12 @@
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
 
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_DGP.h>
 #include <FML/MultigridSolver/DGPSolver.h>
 
-/// DGP model
+/// The normal branch of DGP (nDGP): beta(a), mu(a) and the second-order source from the shared quasi-static theory
+/// (FML/Cosmology/Perturbations/QuasiStaticGravity_DGP.h, H(a) of the cosmology's background), and its screening
+/// (applied to the grid in GravityModelScreened); the multigrid solver here
 template <int NDIM>
 class GravityModelDGP final : public GravityModelScreened<NDIM> {
   protected:
@@ -51,24 +54,28 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
     }
 
     //========================================================================
-    // Internal method: the beta function
+    // The shared theory (built in init)
     //========================================================================
-    double get_beta_dgp(double a) const {
-        double E = this->cosmo->HoverH0_of_a(a);
-        double dlogHdloga = this->cosmo->dlogHdloga_of_a(a);
-        return 1.0 + 2.0 * rcH0_DGP * E * (1.0 + dlogHdloga / 3.0);
+    using QuasiStaticGravity_DGP = FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_DGP;
+    const QuasiStaticGravity_DGP & dgp() const { return static_cast<const QuasiStaticGravity_DGP &>(this->qs()); }
+    void init() override {
+        this->quasi_static = std::make_shared<const QuasiStaticGravity_DGP>(this->cosmo->background(), rcH0_DGP, -1);
+        GravityModelScreened<NDIM>::init();
     }
 
+    /// beta(a) = 1 + 2 rcH0 E (1 + dlogH/dloga / 3)
+    double get_beta_dgp(double a) const { return dgp().beta(std::log(a)); }
+
     //========================================================================
-    // Effective newtonian constant
+    // Effective newtonian constant 1 + 1/(3 beta)
     //========================================================================
     double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0.0) const override {
-        return 1.0 + 1.0 / (3.0 * get_beta_dgp(a));
+        return this->qs().mu(std::log(a), koverH0);
     }
 
     //========================================================================
     // For the 2LPT equation: the nonlinear (brane-bending) term of the field equation adds a source -eps D1^2 with
-    //   eps = 2 rc^2 OmegaM / (9 a^3 beta^3 GeffOverG)
+    //   eps = 2 rc^2 rho_m(a) / (9 beta^3 GeffOverG)
     // relative to the GeffOverG (D2 - D1^2) of the linear force, i.e. D2 - (1 - eps) D1^2. It multiplied D2 as well
     // (D2/D1^2 at z = 0 was 0.6% too small for rcH0 = 1). It is the Vainshtein screening, so it is only there when
     // the force has it (gravity_model_screening or the exact solution), as in the hybrid bias LPT kernels
@@ -76,49 +83,17 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
     double nonlinear_source_factor_2LPT(double a, [[maybe_unused]] double koverH0 = 0.0) const override {
         if (not this->get_use_screening())
             return 1.0;
-        const double betadgp = get_beta_dgp(a);
-        return 1.0 - (2.0 * rcH0_DGP * rcH0_DGP * this->cosmo->get_OmegaM()) /
-                         (9.0 * a * a * a * (betadgp * betadgp * betadgp) * (1 + 1.0 / (3.0 * betadgp)));
+        return this->qs().second_order_source(std::log(a), koverH0);
     }
 
     //========================================================================
-    // Compute the force DPhi from the density field delta in fourier space
-    // We compute this from D^2 Phi_GR = norm_poisson_equation * delta (GR)
-    // and D^2 phi_DGP = C delta where Phi = Phi_GR + phi_DGP
-    // With screening we compute C as a function of delta
+    // The screening approximation is the theory's (QuasiStaticGravity_DGP::screening(): the spherical Vainshtein
+    // factor with rho/rho_mean in place of delta, see there), applied in GravityModelScreened to the density field
+    // smoothed on gravity_model_dgp_smoothing_scale_over_boxsize (0: no smoothing; 1, the old default, makes the
+    // screening very weak)
     //========================================================================
-    void compute_screened_fifth_force(double a,
-                                      [[maybe_unused]] double H0Box,
-                                      [[maybe_unused]] double norm_poisson_equation,
-                                      const typename GravityModelScreened<NDIM>::CouplingFunction & coupling,
-                                      FFTWGrid<NDIM> & density_fourier,
-                                      FFTWGrid<NDIM> & density_fifth_force) const override {
-        // Approximate screening method
-        //
-        // NB: this is not the spherical Vainshtein solution of the field equation. That solution (the one the
-        // multigrid solver DGPSolver.h solves, reduced to spherical symmetry) is
-        //   fac = 8 OmegaM (rc H0)^2 / (9 beta^2 a^3) * delta,
-        // with the density contrast delta (and 1 + fac >= 0), while the code below uses 1 + delta (it is passed the
-        // density rho/rhobar, see FML::NBODY::compute_delta_fifth_force_density_screening) and no 1/a^3: it does not
-        // tend to 1 (no screening) for delta -> 0 (0.990 at a = 1 for rcH0 = 1) and screens much less at z > 0
-        // (0.77 instead of 0.26 for delta = 100 at a = 1/3). It is kept as it is because it gives results closer to
-        // the exact (multigrid) solution in simulations. Smoothing the density field on a large scale
-        // (gravity_model_dgp_smoothing_scale_over_boxsize; it used to default to 1, the whole box) makes the screening
-        // very weak: the default is now 0 (no smoothing).
-        const double OmegaM = this->cosmo->get_OmegaM();
-        auto screening_function_dgp = [=, eff = this->screening_efficiency](double density_contrast) {
-            double fac = 8.0 * OmegaM * std::pow(rcH0_DGP * (GeffOverG(a) - 1.0), 2) * (density_contrast);
-            fac *= eff;
-            return fac < 1e-5 ? 1.0 : 2.0 * (std::sqrt(1.0 + fac) - 1) / fac;
-        };
-
-        FML::NBODY::compute_delta_fifth_force_density_screening(density_fourier,
-                                                                density_fifth_force,
-                                                                coupling,
-                                                                screening_function_dgp,
-                                                                smoothing_scale_over_boxsize,
-                                                                smoothing_filter);
-    }
+    double density_smoothing_scale_over_boxsize() const override { return smoothing_scale_over_boxsize; }
+    std::string density_smoothing_filter() const override { return smoothing_filter; }
 
     void solve_exact_fifth_force(double a,
                                  double H0Box,

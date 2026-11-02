@@ -62,6 +62,9 @@ including high-frequency cubic couplings and the transverse term.
 ## Shared growth interface
 
 `GrowthHistory.h` exposes D1, signed D2 and their growth rates independently of SimulationCode.
+The growth factors themselves (1LPT to 3LPT, scale dependent or not) are solved by
+`FML/Cosmology/Growth/LPTGrowthFactors.h` (whose `history()` gives a `GrowthHistory`);
+`compute_LPT_growth_factors_LCDM` / `_GeffGLCDM` here are wrappers of it.
 Use `growth_history_from_log_a_splines(D1, D2)` to adapt this module's growth-solver output
 to the shared [NBody timestep policies](../NBody/TimeStepping.md). The adapter owns copies
 of the splines and preserves their normalization and time domain.

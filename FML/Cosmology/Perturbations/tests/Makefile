@@ -5,7 +5,7 @@ USE_MPI ?= false
 USE_OMP ?= true
 USE_FFTW ?= false
 USE_GSL ?= true
-TARGETS := test_perturbations
+TARGETS := test_perturbations test_quasi_static
 include ../../../Makefile.config
 
 # Errors in splines and ODEs are exceptions (as in the solver); the stored references of the solver
@@ -18,6 +18,10 @@ OBJS := Global.o Spline.o ODESolver.o NumericalMethods.o
 test_perturbations: test_perturbations.o $(OBJS)
 	$(LINK_EXE)
 
+test_quasi_static: test_quasi_static.o $(OBJS)
+	$(LINK_EXE)
+
 .PHONY: run
-run: test_perturbations
+run: test_perturbations test_quasi_static
 	./test_perturbations
+	./test_quasi_static

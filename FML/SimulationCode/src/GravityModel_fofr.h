@@ -9,9 +9,12 @@
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
 
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_HuSawicky.h>
 #include <FML/MultigridSolver/FofrSolver.h>
 
-/// f(R) model
+/// Hu-Sawicky f(R): mu(k, a), f_R(a) and the scalaron mass from the shared quasi-static theory
+/// (FML/Cosmology/Perturbations/QuasiStaticGravity_HuSawicky.h, R of the cosmology's background), and its screening
+/// (applied to the grid in GravityModelScreened); the multigrid solver here
 template <int NDIM>
 class GravityModelFofR final : public GravityModelScreened<NDIM> {
   protected:
@@ -55,57 +58,25 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
     }
 
     //========================================================================
-    // Internal method: m^2(a) / H0^2
+    // The shared theory (built in init)
     //========================================================================
-    double mass_over_H0_squared(double a) const {
-        double OmegaM = this->cosmo->get_OmegaM();
-        double OmegaLambda = 1.0 - OmegaM;
-        double a3 = a * a * a;
-        double fac = OmegaM / a3 + 4.0 * OmegaLambda;
-        double fac0 = OmegaM + 4.0 * OmegaLambda;
-        double mass2 = fac * std::pow(fac / fac0, nfofr + 1.0) / ((nfofr + 1.0) * fofr0);
-        return mass2;
+    using QuasiStaticGravity_HuSawicky = FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_HuSawicky;
+    const QuasiStaticGravity_HuSawicky & hu_sawicky() const {
+        return static_cast<const QuasiStaticGravity_HuSawicky &>(this->qs());
+    }
+    void init() override {
+        this->quasi_static = std::make_shared<const QuasiStaticGravity_HuSawicky>(this->cosmo->background(), fofr0, nfofr);
+        GravityModelScreened<NDIM>::init();
     }
 
+    /// m^2(a) / H0^2 (the scalaron mass, c = 1)
+    double mass_over_H0_squared(double a) const { return hu_sawicky().mass2(std::log(a)); }
+
     //========================================================================
-    // Effective newtonian constant
+    // Effective newtonian constant: [1 + (1/3) k^2 / (k^2 + a^2 m^2)] / (1 + f_R)
     //========================================================================
     double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0.0) const override {
-        double mass2a2 = a * a * mass_over_H0_squared(a);
-        double koverH02 = koverH0 * koverH0;
-        return 1.0 + (1.0 / 3.0) * koverH02 / (koverH02 + mass2a2);
-    }
-
-    //========================================================================
-    // Compute the force DPhi from the density field delta in fourier space
-    // We compute this from D^2 Phi_GR = norm_poisson_equation * delta
-    // and D^2 phi + m^2 phi = C delta where Phi = Phi_GR + phi
-    // With screening C is a function of the newtonian potential
-    //========================================================================
-    void compute_screened_fifth_force(double a,
-                                      double H0Box,
-                                      double norm_poisson_equation,
-                                      const typename GravityModelScreened<NDIM>::CouplingFunction & coupling,
-                                      FFTWGrid<NDIM> & density_fourier,
-                                      FFTWGrid<NDIM> & density_fifth_force) const override {
-        // Critical threshold for screening in Hu-Sawicky (basically 3/2 f_R(a))
-        const double OmegaM = this->cosmo->get_OmegaM();
-        double PhiCrit = 1.5 * fofr0 *
-                         std::pow((OmegaM + 4.0 * (1.0 - OmegaM)) / (1.0 / (a * a * a) * OmegaM + 4.0 * (1.0 - OmegaM)),
-                                  nfofr + 1.0);
-
-        auto screening_function_fofr = [=, eff = this->screening_efficiency](double PhiNewton) {
-            double screenfac = std::abs(PhiCrit / PhiNewton) * eff;
-            return screenfac > 1.0 ? 1.0 : screenfac;
-        };
-
-        if (FML::ThisTask == 0)
-            std::cout << "Adding fifth-force f(R) (screening)\n";
-        FML::NBODY::compute_delta_fifth_force_potential_screening(density_fourier,
-                                                                  density_fifth_force,
-                                                                  coupling,
-                                                                  screening_function_fofr,
-                                                                  norm_poisson_equation * std::pow(H0Box / a, 2));
+        return this->qs().mu(std::log(a), koverH0);
     }
 
     void solve_exact_fifth_force(double a,
@@ -115,6 +86,9 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
         // The solution is a^2 f_R / (2 H0Box^2)
         const bool verbose = false;
         FofrSolverCosmology<NDIM, double> mgsolver(this->cosmo->get_OmegaM(), nfofr, fofr0, H0Box, verbose);
+        // The background curvature of the theory (the cosmology's background) instead of the solver's flat LCDM
+        const auto & hs = hu_sawicky();
+        mgsolver.set_background_ricci([&hs](double aa) { return hs.R(std::log(aa)); });
         mgsolver.set_ngs_steps(this->multigrid_nsweeps, this->multigrid_nsweeps, this->multigrid_nsweeps_first_step);
         mgsolver.set_epsilon(this->multigrid_solver_residual_convergence);
         mgsolver.set_method(multigrid_method);

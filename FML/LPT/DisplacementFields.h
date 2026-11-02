@@ -14,6 +14,9 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/LPT/Dealiasing.h>
 #include <FML/LPT/GrowthHistory.h>
+#ifdef USE_GSL
+#include <FML/Cosmology/Growth/LPTGrowthFactors.h>
+#endif
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h>
@@ -1320,100 +1323,50 @@ namespace FML {
                                                              FML::INTERPOLATION::SPLINE::Spline & D_3LPTa_of_loga,
                                                              FML::INTERPOLATION::SPLINE::Spline & D_3LPTb_of_loga) {
 
-                using DVector = std::vector<double>;
-
-                // Start at z = 1000 assuming no radiation, but this is fine because we want the solution to follow
-                // the matter attractor
-                // We integrate a bit beyond a = 1 so that the splines cover a = 1 (and slightly later times)
-                const int npts = 2000;
-                const double aini = 1.0 / 1000.0;
-                const double aend = 1.5;
-
+                // The growth equations of FML/Cosmology/Growth/LPTGrowthFactors.h with Omega_M / a^3 as the
+                // matter, EdS initial conditions at z = 1000 (no radiation assumed: the solution follows the matter
+                // attractor) and a grid of 2000 points up to a = 1.5 (so that the splines cover a = 1)
+                namespace GROWTH = FML::COSMOLOGY::GROWTH;
+                GROWTH::LPTGrowthEquations eq;
+                eq.E = [&](double x) { return HoverH0_of_a(std::exp(x)); };
                 // dlogH/dloga computed numerically from the H(a) we are given (central difference in loga)
                 const double dx_deriv = 1e-4;
-                auto dlogHdx_of_x = [&](double x) {
+                eq.dlogEdx = [&](double x) {
                     return (std::log(HoverH0_of_a(std::exp(x + dx_deriv))) -
                             std::log(HoverH0_of_a(std::exp(x - dx_deriv)))) /
                            (2.0 * dx_deriv);
                 };
-
-                FML::SOLVERS::ODESOLVER::ODEFunction deriv = [&](double x, const double * y, double * dydx) {
-                    const double a = std::exp(x);
-                    const double H = HoverH0_of_a(a);
-                    const double dlogHdx = dlogHdx_of_x(x);
-                    const double factor = 1.5 * OmegaM * GeffOverG_of_a(a) / (H * H * a * a * a);
-                    const double D1 = y[0];
-                    const double dD1dx = y[1];
-                    const double D2 = y[2];
-                    const double dD2dx = y[3];
-                    const double D3a = y[4];
-                    const double dD3adx = y[5];
-                    const double D3b = y[6];
-                    const double dD3bdx = y[7];
-                    dydx[0] = dD1dx;
-                    dydx[1] = factor * D1 - (2.0 + dlogHdx) * dD1dx;
-                    dydx[2] = dD2dx;
-                    dydx[3] = factor * (D2 - D1 * D1) - (2.0 + dlogHdx) * dD2dx;
-                    dydx[4] = dD3adx;
-                    dydx[5] = factor * (D3a - 2.0 * D1 * D1 * D1) - (2.0 + dlogHdx) * dD3adx;
-                    dydx[6] = dD3bdx;
-                    dydx[7] = factor * (D3b + D1 * D1 * D1 - D2 * D1) - (2.0 + dlogHdx) * dD3bdx;
-                    return GSL_SUCCESS;
-                };
-
-                const double D1_ini = 1.0;
-                const double dD1dx_ini = 1.0 * 1.0;
-                const double D2_ini = -3.0 / 7.0;
-                const double dD2dx_ini = -3.0 / 7.0 * 2.0;
-                const double D3a_ini = -1.0 / 3.0;
-                const double dD3adx_ini = -1.0 / 3.0 * 3.0;
-                const double D3b_ini = 5.0 / 21.0;
-                const double dD3bdx_ini = 5.0 / 21.0 * 3.0;
-
-                // The initial conditions
-                // D1 = a/aini, D2 = -3/7 D1^2, D3a = -1/3 D1^3 and D3b = 5/21 D1^3 for growing mode in EdS
-                DVector yini{D1_ini, dD1dx_ini, D2_ini, dD2dx_ini, D3a_ini, dD3adx_ini, D3b_ini, dD3bdx_ini};
-                DVector xarr(npts);
-                for (int i = 0; i < npts; i++)
-                    xarr[i] = std::log(aini) + std::log(aend / aini) * i / double(npts - 1);
-
-                // Solve the ODE
-                FML::SOLVERS::ODESOLVER::ODESolver ode;
-                ode.solve(deriv, xarr, yini);
-                auto D1 = ode.get_data_by_component(0);
-                auto D2 = ode.get_data_by_component(2);
-                auto D3a = ode.get_data_by_component(4);
-                auto D3b = ode.get_data_by_component(6);
-
-                FML::INTERPOLATION::SPLINE::Spline tmp;
-                tmp.create(xarr, D1, "D1(loga) Spline");
-                const double D = tmp(std::log(1.0 / (1.0 + zini)));
-
-                // Normalize such that D1LPT = 1 at zini
-                for (int i = 0; i < npts; i++) {
-                    D1[i] /= D;
-                    D2[i] /= D * D;
-                    D3a[i] /= D * D * D;
-                    D3b[i] /= D * D * D;
-                }
+                eq.matter_density = [OmegaM](double x) { return OmegaM * std::exp(-3.0 * x); };
+                eq.mu = [&](double x, double) { return GeffOverG_of_a(std::exp(x)); };
+                GROWTH::LPTGrowthSettings gs;
+                gs.a_min = 1.0 / 1000.0;
+                gs.a_max = 1.5;
+                gs.n_a = 2000;
+                gs.a_normalize = 1.0 / (1.0 + zini);
+                gs.start_in_radiation_era = false;
+                gs.eds_initial_conditions = true;
+                const GROWTH::LPTGrowthFactors growth(eq, gs);
 
                 // Print some values
+                const auto & xarr = growth.x_grid();
+                const int npts = int(xarr.size());
                 if (FML::ThisTask == 0) {
                     std::cout << "[compute_LPT_growth_factors_LCDM]  Scalefactor   Growth factors (D1LPT / a,   "
                                  "D2LPT / D1LPT^2,   D3LPTa / D1LPT^3,   D3LPTb / "
                                  "D1LPT^3)\n";
-                    for (int i = 0; i < npts; i += npts / 15)
-                        std::cout << std::exp(xarr[i]) << " " << D1[i] / (1.0 + zini) / std::exp(xarr[i]) << " "
-                                  << D2[i] / (D1[i] * D1[i]) << " " << D3a[i] / (D1[i] * D1[i] * D1[i]) << " "
-                                  << D3b[i] / (D1[i] * D1[i] * D1[i]) << " "
+                    for (int i = 0; i < npts; i += npts / 15) {
+                        const double x = xarr[i], D1 = growth.D1(x);
+                        std::cout << std::exp(x) << " " << D1 / (1.0 + zini) / std::exp(x) << " "
+                                  << growth.D2(x) / (D1 * D1) << " " << growth.D3a(x) / (D1 * D1 * D1) << " "
+                                  << growth.D3b(x) / (D1 * D1 * D1) << " "
                                   << "\n";
+                    }
                 }
 
-                // Spline it up
-                D_1LPT_of_loga.create(xarr, D1, "D1(loga) Spline");
-                D_2LPT_of_loga.create(xarr, D2, "D2(loga) Spline");
-                D_3LPTa_of_loga.create(xarr, D3a, "D3a(loga) Spline");
-                D_3LPTb_of_loga.create(xarr, D3b, "D3b(loga) Spline");
+                D_1LPT_of_loga = growth.splines_k0()[0];
+                D_2LPT_of_loga = growth.splines_k0()[1];
+                D_3LPTa_of_loga = growth.splines_k0()[2];
+                D_3LPTb_of_loga = growth.splines_k0()[3];
             }
 
             //=================================================================================

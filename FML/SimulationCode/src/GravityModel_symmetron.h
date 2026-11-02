@@ -9,9 +9,11 @@
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
 
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_Symmetron.h>
 #include <FML/MultigridSolver/SymmetronSolver.h>
 
-/// Symmetron model
+/// Symmetron: mu(k, a), the background field, the mass and the screening from the shared quasi-static theory
+/// (FML/Cosmology/Perturbations/QuasiStaticGravity_Symmetron.h); the multigrid solver here
 template <int NDIM>
 class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
   protected:
@@ -50,63 +52,29 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
         }
     }
 
-    // This is phi/phi0
-    double phi_background(double a) const {
-        return a < assb ? 0.0 : std::sqrt(1.0 - (assb * assb * assb) / (a * a * a));
+    //========================================================================
+    // The shared theory (built in init): mu(k, a), phi(a), the mass and the screening
+    //========================================================================
+    using QuasiStaticGravity_Symmetron = FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_Symmetron;
+    const QuasiStaticGravity_Symmetron & symmetron() const {
+        return static_cast<const QuasiStaticGravity_Symmetron &>(this->qs());
+    }
+    void init() override {
+        this->quasi_static =
+            std::make_shared<const QuasiStaticGravity_Symmetron>(this->cosmo->background(), assb, beta, L_mpch);
+        GravityModelScreened<NDIM>::init();
     }
 
-    //========================================================================
-    // Internal method: m^2(a) / H0^2
-    //========================================================================
-    double mass_over_H0_squared(double a) const {
-        double mu2H02 = 1.0 / (2.0 * this->H0_hmpc * this->H0_hmpc * L_mpch * L_mpch);
-        double rhorhossb = (assb * assb * assb) / (a * a * a);
-        return a < assb ? mu2H02 * (rhorhossb - 1.0) : 2.0 * mu2H02 * (1.0 - rhorhossb);
-    }
+    /// phi/phi0
+    double phi_background(double a) const { return symmetron().phi(std::log(a)); }
+    /// m^2(a) / H0^2
+    double mass_over_H0_squared(double a) const { return symmetron().mass2(std::log(a)); }
 
     //========================================================================
-    // Effective newtonian constant
+    // Effective newtonian constant 1 + 2 beta^2 (phi/phi0)^2 k^2 / (k^2 + a^2 m^2)
     //========================================================================
     double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0.0) const override {
-        double mass2a2 = a * a * mass_over_H0_squared(a);
-        double koverH02 = koverH0 * koverH0;
-        double phi = phi_background(a);
-        // No fifth force before symmetry breaking. At a = assb the mass is also zero so k = 0 would give 0 / 0
-        if (phi == 0.0)
-            return 1.0;
-        return 1.0 + 2.0 * beta * beta * phi * phi * koverH02 / (koverH02 + mass2a2);
-    }
-
-    //========================================================================
-    // Compute the force DPhi from the density field delta in fourier space
-    // We compute this from D^2 Phi_GR = norm_poisson_equation * delta
-    // and D^2 phi + m^2 phi = C delta where Phi = Phi_GR + phi
-    // With screening C is a function of the newtonian potential
-    //========================================================================
-    void compute_screened_fifth_force(double a,
-                                      double H0Box,
-                                      double norm_poisson_equation,
-                                      const typename GravityModelScreened<NDIM>::CouplingFunction & coupling,
-                                      FFTWGrid<NDIM> & density_fourier,
-                                      FFTWGrid<NDIM> & density_fifth_force) const override {
-        const double OmegaM = this->cosmo->get_OmegaM();
-        const double PhiCrit =
-            a < assb ? 0.0 : 3.0 * OmegaM * (this->H0_hmpc * L_mpch) * (this->H0_hmpc * L_mpch) / (assb * assb * assb);
-        auto screening_function_symmetron = [=, eff = this->screening_efficiency](double PhiNewton) {
-            // Before symmetry breaking there is no fifth force (and PhiCrit / PhiNewton could be 0 / 0)
-            if (PhiCrit == 0.0)
-                return 0.0;
-            double screenfac = std::abs(PhiCrit / PhiNewton) * eff;
-            return screenfac > 1.0 ? 1.0 : screenfac;
-        };
-
-        if (FML::ThisTask == 0)
-            std::cout << "Adding fifth-force symmetron (screening)\n";
-        FML::NBODY::compute_delta_fifth_force_potential_screening(density_fourier,
-                                                                  density_fifth_force,
-                                                                  coupling,
-                                                                  screening_function_symmetron,
-                                                                  norm_poisson_equation * std::pow(H0Box / a, 2));
+        return this->qs().mu(std::log(a), koverH0);
     }
 
     void solve_exact_fifth_force(double a,
