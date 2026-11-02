@@ -151,8 +151,8 @@ void NBodySimulation<NDIM, T>::add_nbody_gauge_source(FFTWGrid<NDIM> & density_g
     const double boxsize = params.simulation.boxsize;
     const double aini = 1.0 / (1.0 + params.ic.initial_redshift);
     const Spline ratio = nbody_gauge->ratio_spline(a, aini, *transfers);
-    const double logkmin = std::log(nbody_gauge->get_kmin_hmpc());
-    const double logkmax = std::log(nbody_gauge->get_kmax_hmpc());
+    const double kmin = nbody_gauge->get_kmin_hmpc();
+    const double kmax = nbody_gauge->get_kmax_hmpc();
 
     // The force is normalized to OmegaM = OmegaCB + OmegaMNu so the source is (1-fMNu)(delta_cb + delta_extra)
     const double fMNu = cosmo->get_fMNu();
@@ -161,8 +161,7 @@ void NBodySimulation<NDIM, T>::add_nbody_gauge_source(FFTWGrid<NDIM> & density_g
         store_initial_density_field(density_grid_fourier, a);
     const auto & delta_ini_grid = initial_density_in_particle_frame();
     FML::GRID::for_each_fourier_mode<NDIM>(density_grid_fourier, [&](size_t fourier_index, double kmag) {
-        const double logk = std::min(std::max(std::log(kmag / boxsize), logkmin), logkmax);
-        const double r = kmag > 0.0 ? ratio(logk) : 0.0;
+        const double r = kmag > 0.0 ? ratio(SIMCODE::clamped_logk(kmag / boxsize, kmin, kmax)) : 0.0;
         auto delta_ini = delta_ini_grid.get_fourier_from_index(fourier_index);
         auto deltaCB = density_grid_fourier.get_fourier_from_index(fourier_index);
         auto delta = (deltaCB + delta_ini * FML::GRID::FloatType(r)) * FML::GRID::FloatType(1.0 - fMNu);

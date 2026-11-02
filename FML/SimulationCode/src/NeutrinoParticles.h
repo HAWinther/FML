@@ -180,17 +180,22 @@ namespace SIMCODE {
         // T_nu / T_cb and f_nu at zini
         const double kmin = transfers.range().kmin_hmpc;
         const double kmax = transfers.range().kmax_hmpc;
-        const int nk = 512;
-        DVector logk(nk), ratio(nk), f_nu(nk);
-        for (int i = 0; i < nk; i++) {
-            logk[i] = std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1);
-            const double k = std::exp(logk[i]);
-            ratio[i] = transfers.density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k, aini) /
+        const Spline ratio_spline = SIMCODE::spline_of_logk(
+            kmin,
+            kmax,
+            [&](double logk) {
+                const double k = std::exp(logk);
+                return transfers.density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k, aini) /
                        transfers.density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, aini);
-            f_nu[i] = transfers.density_growth_rate(SIMCODE::TransferSpecies::MassiveNeutrino, k, aini);
-        }
-        Spline ratio_spline(logk, ratio, "T_nu/T_cb(k,zini)");
-        Spline f_nu_spline(logk, f_nu, "f_nu(k,zini)");
+            },
+            "T_nu/T_cb(k,zini)");
+        const Spline f_nu_spline = SIMCODE::spline_of_logk(
+            kmin,
+            kmax,
+            [&](double logk) {
+                return transfers.density_growth_rate(SIMCODE::TransferSpecies::MassiveNeutrino, std::exp(logk), aini);
+            },
+            "f_nu(k,zini)");
         if (FML::ThisTask == 0) {
             std::cout << "# Neutrino particles at z = " << zini << ": T_nu/T_cb, f_nu =";
             for (double k : {0.01, 0.1, 1.0})
@@ -198,7 +203,7 @@ namespace SIMCODE {
                           << ")";
             std::cout << "\n";
         }
-        auto clamp_logk = [&](double kBox) { return std::log(std::min(std::max(kBox / boxsize, kmin), kmax)); };
+        auto clamp_logk = [&](double kBox) { return SIMCODE::clamped_logk(kBox / boxsize, kmin, kmax); };
 
         // The bulk part (1LPT) from delta_nu(k, zini)
         const double fac = aini * aini * HoverH0_ini;

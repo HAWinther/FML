@@ -820,13 +820,14 @@ std::function<double(double)> NBodySimulation<NDIM, T>::ic_velocity_norm_1LPT_of
         FML::assert_mpi(transfers != nullptr, "force_nbody_gauge needs the transfer functions");
         const double kmin = transfers->range().kmin_hmpc;
         const double kmax = transfers->range().kmax_hmpc;
-        const int nk = 512;
-        DVector logk(nk), f(nk);
-        for (int i = 0; i < nk; i++) {
-            logk[i] = std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1);
-            f[i] = transfers->density_growth_rate(SIMCODE::TransferSpecies::CDMBaryon, std::exp(logk[i]), aini);
-        }
-        Spline growth_rate_of_logk(logk, f, "f_cb(k,zini)");
+        const auto & tr = *transfers;
+        const Spline growth_rate_of_logk = SIMCODE::spline_of_logk(
+            kmin,
+            kmax,
+            [&](double logk) {
+                return tr.density_growth_rate(SIMCODE::TransferSpecies::CDMBaryon, std::exp(logk), aini);
+            },
+            "f_cb(k,zini)");
         if (FML::ThisTask == 0)
             std::cout << "# N-body gauge: growth rate at zini f(k) = " << growth_rate_of_logk(std::log(kmin))
                       << " (k = " << kmin << " h/Mpc), " << growth_rate_of_logk(std::log(0.1)) << " (k = 0.1 h/Mpc). "
@@ -838,11 +839,11 @@ std::function<double(double)> NBodySimulation<NDIM, T>::ic_velocity_norm_1LPT_of
             ic_velocities_relative_to_cola_frame = true;
         return
             [g, growth_rate_of_logk, fac, aini, boxsize, kmin, kmax, cola_enabled, cola_scaledependent](double kBox) {
-                const double k = std::min(std::max(kBox / boxsize, kmin), kmax);
+                const double logk = SIMCODE::clamped_logk(kBox / boxsize, kmin, kmax);
                 const double f_frame = not cola_enabled    ? 0.0 :
                                        cola_scaledependent ? g->get_f_1LPT(aini, kBox / boxsize / g->H0_hmpc) :
                                                              g->get_f_1LPT(aini);
-                return fac * (growth_rate_of_logk(std::log(k)) - f_frame);
+                return fac * (growth_rate_of_logk(logk) - f_frame);
             };
     }
 
@@ -1015,7 +1016,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     const auto velocity_norm_2LPT = ic_velocity_norm_2LPT_of_kBox(fac);
     const double kmin = transfers->range().kmin_hmpc;
     const double kmax = transfers->range().kmax_hmpc;
-    auto clamp_logk = [&](double kBox) { return std::log(std::min(std::max(kBox / boxsize, kmin), kmax)); };
+    auto clamp_logk = [&](double kBox) { return SIMCODE::clamped_logk(kBox / boxsize, kmin, kmax); };
     // The baryon-CDM relative mode: in the displacement (each species its own displacement and velocity), the
     // masses m = 1 + eps (mass: shared CDM+baryon flow, eps = the linear relative mode today; mass_ini: shared
     // displacement, eps at zini and each species its own velocity)

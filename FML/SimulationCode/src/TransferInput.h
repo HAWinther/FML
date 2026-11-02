@@ -4,11 +4,13 @@
 #include <FML/Cosmology/Background/BackgroundParameters.h>
 #include <FML/InitialConditions/TransferProvider.h>
 #include <FML/ParameterMap/ParameterMap.h>
+#include <FML/Spline/Spline.h>
 
 #include "ParameterDefaults.h"
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -98,6 +100,26 @@ namespace SIMCODE {
                           std::max({1.0, aini, ainput})};
         }
         return r;
+    }
+
+    /// A function of log(k) (k in h/Mpc) as a spline on nk log-spaced points from kmin to kmax (the range of the
+    /// transfer tables; evaluate it at clamped_logk)
+    inline FML::INTERPOLATION::SPLINE::Spline spline_of_logk(double kmin,
+                                                             double kmax,
+                                                             const std::function<double(double)> & f_of_logk,
+                                                             const std::string & name,
+                                                             int nk = 512) {
+        std::vector<double> logk(nk), f(nk);
+        for (int i = 0; i < nk; i++) {
+            logk[i] = std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1);
+            f[i] = f_of_logk(logk[i]);
+        }
+        return FML::INTERPOLATION::SPLINE::Spline(logk, f, name);
+    }
+
+    /// log(k) with k (h/Mpc) clamped to [kmin, kmax] (outside the tables the value at the end)
+    inline double clamped_logk(double k, double kmin, double kmax) {
+        return std::log(std::min(std::max(k, kmin), kmax));
     }
 
     /// The highest redshift of the transfer tables

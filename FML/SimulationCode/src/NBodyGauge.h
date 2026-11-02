@@ -150,14 +150,14 @@ namespace SIMCODE {
         /// delta_extra(k,a) / delta_cb(k,a_ini) as a spline in log(k) [k in h/Mpc] at the scale factor a
         Spline ratio_spline(double a, double aini, const TransferProvider & transfers) const {
             const double zz = 1.0 / a - 1.0;
-            const int nk = 512;
-            DVector logk(nk), ratio(nk);
-            for (int i = 0; i < nk; i++) {
-                logk[i] = std::log(kmin_hmpc) + std::log(kmax_hmpc / kmin_hmpc) * i / double(nk - 1);
-                const double k = std::exp(logk[i]);
-                ratio[i] = Textra_spline(zz, logk[i]) / transfers.density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, aini);
-            }
-            return Spline(logk, ratio, "delta_extra(k,a) / delta_cb(k,aini)");
+            return SIMCODE::spline_of_logk(
+                kmin_hmpc,
+                kmax_hmpc,
+                [&](double logk) {
+                    return Textra_spline(zz, logk) /
+                           transfers.density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, std::exp(logk), aini);
+                },
+                "delta_extra(k,a) / delta_cb(k,aini)");
         }
 
         double get_kmin_hmpc() const { return kmin_hmpc; }
