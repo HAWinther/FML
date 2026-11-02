@@ -7,6 +7,7 @@
 #include <FML/Global/Global.h>
 #include <FML/Global/MPICounts.h>
 #include <FML/MPIParticles/MPIParticles.h>
+#include <FML/NBody/NBody.h>
 #include <FML/Spline/Spline.h>
 #include <FML/Units/Units.h>
 
@@ -275,34 +276,9 @@ namespace SIMCODE {
         }
     }
 
-    /// sigma(R) of a linear power-spectrum P(k) (k in h/Mpc, R in Mpc/h) with a top-hat filter
-    inline double sigma_of_R(const std::function<double(double)> & pofk, double R, double kmin, double kmax) {
-        const int n = 2000;
-        const double dlogk = std::log(kmax / kmin) / n;
-        double sum = 0.0;
-        for (int i = 0; i <= n; i++) {
-            const double k = kmin * std::exp(i * dlogk);
-            const double x = k * R;
-            const double w = x < 1e-3 ? 1.0 - x * x / 10.0 : 3.0 * (std::sin(x) - x * std::cos(x)) / (x * x * x);
-            const double integrand = k * k * k * pofk(k) * w * w / (2.0 * M_PI * M_PI);
-            sum += integrand * ((i == 0 or i == n) ? 0.5 : 1.0);
-        }
-        return std::sqrt(sum * dlogk);
-    }
-
-    /// The multiplicity functions f(sigma) with dn/dlnM = f(sigma) rho / M |dln sigma / dln M|
-    inline double f_tinker2008(double sigma, double z) {
-        // Delta = 200 with respect to the mean density (Tinker et al. 2008, Table 2 and eqs. 5-8)
-        const double Delta = 200.0;
-        const double alpha = std::pow(10.0, -std::pow(0.75 / std::log10(Delta / 75.0), 1.2));
-        const double A = 0.186 * std::pow(1.0 + z, -0.14);
-        const double a = 1.47 * std::pow(1.0 + z, -0.06);
-        const double b = 2.57 * std::pow(1.0 + z, -alpha);
-        const double c = 1.19;
-        return A * (std::pow(sigma / b, -a) + 1.0) * std::exp(-c / (sigma * sigma));
-    }
+    /// The universal FoF (b = 0.2) multiplicity function f(sigma) of Watson et al. 2013 (eq. 12) with
+    /// dn/dlnM = f(sigma) rho / M |dln sigma / dln M| (Tinker et al. 2008: f_tinker2008_delta)
     inline double f_watson2013_fof(double sigma) {
-        // The universal FoF (b = 0.2) fit of Watson et al. 2013 (eq. 12)
         const double A = 0.282, alpha = 2.163, beta = 1.406, gamma = 1.210;
         return A * (std::pow(beta / sigma, alpha) + 1.0) * std::exp(-gamma / (sigma * sigma));
     }
@@ -466,19 +442,25 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     // rho_cb in Msun/h / (Mpc/h)^3
     const double rho = 3.0 * OmegaCB * MplMpl_over_H0Msunh * std::pow(H0_hmpc, 3);
     if (have_fits) {
-        auto pofk = [&](double k) { return sim.linear_pofk_cb(k, 1.0 / (1.0 + redshift)); };
+        // sigma(R) of the linear P_cb(k, z) over the range of the P(k) table
         const auto krange = power_initial_spline.get_xrange();
+        auto sigma_of_R = [&](double R) {
+            auto pofk_over_volume = [&](double kBox) {
+                return sim.linear_pofk_cb(kBox / boxsize, 1.0 / (1.0 + redshift)) / std::pow(boxsize, NDIM);
+            };
+            return FML::NBODY::compute_sigma_of_R(pofk_over_volume, R, boxsize, krange.first, krange.second);
+        };
         auto R_of_M = [&](double M) { return std::cbrt(3.0 * M / (4.0 * M_PI * rho)); };
         if (FML::ThisTask == 0)
             std::cout << "# Mass function fits: sigma(R = 8 Mpc/h, z = " << redshift
                       << ") of the linear CDM+baryon P(k) = "
-                      << SIMCODE::sigma_of_R(pofk, 8.0, krange.first, krange.second) << "\n";
+                      << sigma_of_R(8.0) << "\n";
         for (int i = 0; i < nbins; i++) {
             const double M = std::exp(logM[i]);
             const double eps = 0.01;
-            sigma_of_M[i] = SIMCODE::sigma_of_R(pofk, R_of_M(M), krange.first, krange.second);
-            const double sp = SIMCODE::sigma_of_R(pofk, R_of_M(M * std::exp(eps)), krange.first, krange.second);
-            const double sm = SIMCODE::sigma_of_R(pofk, R_of_M(M * std::exp(-eps)), krange.first, krange.second);
+            sigma_of_M[i] = sigma_of_R(R_of_M(M));
+            const double sp = sigma_of_R(R_of_M(M * std::exp(eps)));
+            const double sm = sigma_of_R(R_of_M(M * std::exp(-eps)));
             dlnsigma_dlnM[i] = (std::log(sp) - std::log(sm)) / (2.0 * eps);
         }
     }
@@ -491,7 +473,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         std::vector<double> dndlogM_tinker(nbins, 0.0), dndlogM_watson(nbins, 0.0);
         if (have_fits)
             for (int i = 0; i < nbins; i++) {
-                dndlogM_tinker[i] = fit(i, SIMCODE::f_tinker2008(sigma_of_M[i], redshift));
+                dndlogM_tinker[i] = fit(i, SIMCODE::f_tinker2008_delta(sigma_of_M[i], redshift, 200.0));
                 dndlogM_watson[i] = fit(i, SIMCODE::f_watson2013_fof(sigma_of_M[i]));
             }
         if (FML::ThisTask == 0) {

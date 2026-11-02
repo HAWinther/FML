@@ -1,6 +1,7 @@
 #ifndef SIMCODE_NEUTRINOS_HEADER
 #define SIMCODE_NEUTRINOS_HEADER
 
+#include <FML/Cosmology/Background/Species.h>
 #include <FML/Units/Units.h>
 
 #include <algorithm>
@@ -32,19 +33,12 @@ namespace SIMCODE {
 
         /// The mean energy per mass of the unperturbed neutrinos, <E/m> = <sqrt(1 + u^2)> over the Fermi-Dirac
         /// distribution y^2 / (e^y + 1) with u = y T_nu0 / (a m_nu). The energy density is <E/m> times the mass
-        /// density (-> 1 when non-relativistic)
+        /// density (-> 1 when non-relativistic). From the Fermi-Dirac integral of the background (the same energy
+        /// density as there): <E/m> = I_rho(M) / ((3/2) zeta(3) M) with M = a m_nu / T_nu0
         inline double mean_energy_factor(double a, double mnu_eV, double Tnu0_eV) {
-            const double s = Tnu0_eV / (a * mnu_eV);
-            const int n = 20000;
-            const double ymax = 50.0;
-            double num = 0.0, den = 0.0;
-            for (int i = 1; i < n; i++) {
-                const double y = ymax * i / double(n);
-                const double f = y * y * fermi_dirac(y);
-                num += f * std::sqrt(1.0 + (y * s) * (y * s));
-                den += f;
-            }
-            return num / den;
+            constexpr double zeta3 = 1.2020569031595942;
+            const double M = a * mnu_eV / Tnu0_eV;
+            return FML::COSMOLOGY::BACKGROUND::FermiDiracIntegrals::get().I_rho(M) / (1.5 * zeta3 * M);
         }
 
         /// The mean energy per mass of several species of the same temperature and number density with the masses

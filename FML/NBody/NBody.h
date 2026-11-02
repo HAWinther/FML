@@ -1838,17 +1838,20 @@ namespace FML {
         /// dimensionless scale \f$ kB \f$ where \f$B\f$ is the boxsize and \f$V = B^3\f$ is the box volume.
         /// @param[in] R_mpch R in units of Mpc/h
         /// @param[in] boxsize_mpch Boxsize in units of Mpc/h
+        /// @param[in] kmin_hmpc, kmax_hmpc The range of the integral in h/Mpc (e.g. the range of a P(k) table)
         ///
         //===================================================================================
-        inline double
-        compute_sigma_of_R(std::function<double(double)> Pofk_of_kBox_over_volume, double R_mpch, double boxsize_mpch) {
+        inline double compute_sigma_of_R(std::function<double(double)> Pofk_of_kBox_over_volume,
+                                         double R_mpch,
+                                         double boxsize_mpch,
+                                         double kmin_hmpc = 1e-5,
+                                         double kmax_hmpc = 1e2) {
             using ODEFunction = FML::SOLVERS::ODESOLVER::ODEFunction;
             using DVector = FML::SOLVERS::ODESOLVER::DVector;
             using ODESolver = FML::SOLVERS::ODESOLVER::ODESolver;
 
-            // We integrate from k = 1e-5 h/Mpc to k = 100 h/Mpc
-            const double kBoxmin = 1e-5 * boxsize_mpch;
-            const double kBoxmax = 1e2 * boxsize_mpch;
+            const double kBoxmin = kmin_hmpc * boxsize_mpch;
+            const double kBoxmax = kmax_hmpc * boxsize_mpch;
 
             ODEFunction deriv = [&](double logkBox, [[maybe_unused]] const double * sigma2, double * dsigma2dlogk) {
                 const double kBox = std::exp(logkBox);
