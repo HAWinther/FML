@@ -517,7 +517,7 @@ void NBodySimulation<NDIM, T>::init() {
     // Set up the lightcone
     std::vector<std::string> particle_types_lightcone{"cb"};
     lightcone = std::make_shared<Lightcone<NDIM, T>>(cosmo);
-    lightcone->read_parameters(*parameters);
+    lightcone->set_parameters(params);
     lightcone->init(particle_types_lightcone);
 }
 

@@ -55,13 +55,6 @@ namespace SIMCODE {
         return std::get<T>(*def);
     }
 
-    /// Read a parameter that must be in param (a required parameter, or one whose condition holds)
-    template <class T>
-    T get_required_parameter(const FML::UTILS::ParameterMap & param, const std::string & name) {
-        check_parameter_name(name);
-        return param.get<T>(name);
-    }
-
 } // namespace SIMCODE
 
 #endif

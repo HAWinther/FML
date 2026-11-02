@@ -694,20 +694,13 @@ class OnionSlices {
         astart = aend = 0.0;
     }
 
-    void read_parameters(FML::UTILS::ParameterMap & param) {
-        use_chunkpix = param.get<bool>("plc_use_chunkpix");
+    /// The settings (plc_use_chunkpix, plc_nside_chunks, plc_nside, plc_da_maps)
+    void set_parameters(bool _use_chunkpix, long _nside_chunks, long _nside, double _da) {
+        use_chunkpix = _use_chunkpix;
         if (use_chunkpix)
-            nside_chunks = param.get<int>("plc_nside_chunks");
-        nside = param.get<int>("plc_nside");
-        da = param.get<double>("plc_da_maps");
-        if (FML::ThisTask == 0) {
-            std::cout << "# Read in Lightcone_Healpix.h:\n";
-            std::cout << "# plc_use_chunkpix                         : " << use_chunkpix << "\n";
-            if (use_chunkpix)
-                std::cout << "# plc_nside_chunks                         : " << nside_chunks << "\n";
-            std::cout << "# plc_nside                                : " << nside << "\n";
-            std::cout << "# plc_da_maps                              : " << da << "\n";
-        }
+            nside_chunks = _nside_chunks;
+        nside = _nside;
+        da = _da;
     }
 
     /// r_of_loga_spline: the comoving distance (in units of the box) as a function of log a

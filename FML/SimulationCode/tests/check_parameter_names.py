@@ -22,8 +22,8 @@ table = set(re.findall(r'(?:b\.optional|b\.required|always_optional)\(\s*"([A-Za
 # Names read by the code (also through ParameterMap::contains and the conditions of the table itself)
 read_patterns = [
     r'\.get<(?:[^<>()]|<[^<>]*>)*>\(\s*"([A-Za-z0-9_]+)"',
-    r'get_(?:required_)?parameter<(?:[^<>()]|<[^<>]*>)*>\(\s*param\s*,\s*"([A-Za-z0-9_]+)"',
-    r'\br\.get(?:_optional|_choice)?\(\s*"([A-Za-z0-9_]+)"',
+    r'get_parameter<(?:[^<>()]|<[^<>]*>)*>\(\s*param\s*,\s*"([A-Za-z0-9_]+)"',
+    r'\br\.get(?:_choice)?\(\s*"([A-Za-z0-9_]+)"',
     r'\.contains\(\s*"([A-Za-z0-9_]+)"',
     r'\b(?:is_true|is_one_of|if_true)\(\s*"([A-Za-z0-9_]+)"',
     r'spec\.name == "([A-Za-z0-9_]+)"',

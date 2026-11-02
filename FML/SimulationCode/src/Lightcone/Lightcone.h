@@ -1,7 +1,7 @@
 #ifndef LIGHTCONE_HEADER
 #define LIGHTCONE_HEADER
 
-#include "../ParameterDefaults.h"
+#include "../SimulationParameters.h"
 
 #include "Lightcone_Healpix.h"
 #include "Lightcone_Replicas.h"
@@ -144,7 +144,7 @@ class Lightcone {
     Lightcone() = default;
     ~Lightcone() = default;
 
-    void read_parameters(ParameterMap & param);
+    void set_parameters(const SIMCODE::SimulationParameters & params);
 
     void init(std::vector<std::string> & particle_types);
 
@@ -234,66 +234,34 @@ class Lightcone {
     void free();
 };
 
-// Read all the parameters we need for the lightcone
-// This also calls the read_parameter function for the maps and replicas
+// The settings of the lightcone (read and checked in SimulationParameters), also for the maps and replicas
 template <int NDIM, class T, class U>
-void Lightcone<NDIM, T, U>::read_parameters(ParameterMap & param) {
+void Lightcone<NDIM, T, U>::set_parameters(const SIMCODE::SimulationParameters & params) {
+    const auto & plc = params.lightcone;
+    lightcone_on = plc.enabled;
+    if (not lightcone_on)
+        return;
+    simulation_name = params.simulation.name;
+    output_folder = params.output.folder;
+    boxsize = params.simulation.boxsize;
+    FML::assert_mpi(plc.pos_observer.size() >= NDIM, "Position of observer much have NDIM components");
+    for (int idim = 0; idim < NDIM; idim++)
+        pos_observer[idim] = plc.pos_observer[idim];
+    output_in_batches = plc.output_in_batches;
+    plc_a_init = 1.0 / (1.0 + plc.z_init);
+    plc_a_finish = 1.0 / (1.0 + plc.z_finish);
+    output_gadgetfile = plc.output_gadgetfile;
+    output_asciifile = plc.output_asciifile;
+    output_hdf5file = plc.output_hdf5file;
+    make_onion_density_maps = plc.make_onion_density_maps;
+    relativistic_effects = plc.relativistic_effects;
+    if (FML::ThisTask == 0 and relativistic_effects and output_gadgetfile)
+        std::cout << "# NB: the potential and observed redshift are only written to the HDF5 and ascii files\n";
+    replicas.set_parameters(plc.use_replicas, plc.boundary_mpch, boxsize, plc.pos_observer, plc.ndim_rep);
 
-    lightcone_on = param.get<bool>("lightcone");
-    if (lightcone_on) {
-        simulation_name = param.get<std::string>("simulation_name");
-        output_folder = param.get<std::string>("output_folder");
-        boxsize = param.get<double>("simulation_boxsize");
-        auto origin = param.get<std::vector<double>>("plc_pos_observer");
-        FML::assert_mpi(origin.size() >= NDIM, "Position of observer much have NDIM components");
-        for (int idim = 0; idim < NDIM; idim++)
-            pos_observer[idim] = origin[idim];
-        output_in_batches = param.get<bool>("plc_output_in_batches");
-        double plc_z_init = param.get<double>("plc_z_init");
-        plc_a_init = 1.0 / (1.0 + plc_z_init);
-        double plc_z_finish = param.get<double>("plc_z_finish");
-        plc_a_finish = 1.0 / (1.0 + plc_z_finish);
-        output_gadgetfile = param.get<bool>("plc_output_gadgetfile");
-        output_asciifile = param.get<bool>("plc_output_asciifile");
-        output_hdf5file = SIMCODE::get_parameter<bool>(param, "plc_output_hdf5file");
-#ifndef USE_HDF5
-        if (output_hdf5file)
-            throw std::runtime_error("Invalid parameters: plc_output_hdf5file = true needs HDF5: compile with "
-                                     "USE_HDF5=true (make USE_HDF5=true)");
-#endif
-        make_onion_density_maps = param.get<bool>("plc_make_onion_density_maps");
-#ifndef USE_HEALPIX
-        // Check this here and not at the first lightcone step
-        if (make_onion_density_maps and NDIM == 3)
-            throw std::runtime_error(
-                "Invalid parameters: plc_make_onion_density_maps = true needs Healpix: compile with "
-                "USE_HEALPIX=true (make USE_HEALPIX=true)");
-#endif
-        relativistic_effects = SIMCODE::get_parameter<bool>(param, "plc_relativistic_effects");
-        if (FML::ThisTask == 0) {
-            std::cout << "\n# Read in Lightcone.h:\n";
-            std::cout << "# lightcone                                : " << lightcone_on << "\n";
-            std::cout << "# plc_pos_observer                         : ";
-            for (auto & p : pos_observer)
-                std::cout << p << " , ";
-            std::cout << "\n";
-            std::cout << "# plc_z_init                               : " << plc_z_init << "\n";
-            std::cout << "# plc_z_finish                             : " << plc_z_finish << "\n";
-            std::cout << "# plc_output_gadgetfile                    : " << output_gadgetfile << "\n";
-            std::cout << "# plc_output_asciifile                     : " << output_asciifile << "\n";
-            std::cout << "# plc_output_hdf5file                      : " << output_hdf5file << "\n";
-            std::cout << "# output_in_batches                        : " << output_in_batches << "\n";
-            std::cout << "# plc_make_onion_density_maps                        : " << make_onion_density_maps << "\n";
-            std::cout << "# plc_relativistic_effects                 : " << relativistic_effects << "\n";
-            if (relativistic_effects and output_gadgetfile)
-                std::cout << "# NB: the potential and observed redshift are only written to the HDF5 and ascii files\n";
-        }
-        replicas.read_parameters(param);
-
-        // Only allocate for cb now
-        if (make_onion_density_maps)
-            onionslices_of_type["cb"].read_parameters(param);
-    }
+    // Only allocate for cb now
+    if (make_onion_density_maps)
+        onionslices_of_type["cb"].set_parameters(plc.use_chunkpix, plc.nside_chunks, plc.nside, plc.da_maps);
 }
 
 // Initialize the lightcone

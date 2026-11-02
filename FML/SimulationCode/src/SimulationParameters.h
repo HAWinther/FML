@@ -48,18 +48,13 @@ namespace SIMCODE {
       public:
         explicit ParameterReader(const ParameterMap & param) : param(param) {}
 
-        /// Read a parameter that must be in the map (required, or its condition in the table holds)
+        /// Read a parameter: its value in the map (a parameter is in the map if its condition in the table holds)
+        /// or else the default value of the parameter table. Only the parameters in the map are printed
         template <class V>
         void get(const std::string & name, V & value) {
-            value = get_required_parameter<V>(param, name);
-            record(name, value);
-        }
-
-        /// Read a parameter that might not be in the map: then the default value from the parameter table
-        template <class V>
-        void get_optional(const std::string & name, V & value) {
             value = get_parameter<V>(param, name);
-            record(name, value);
+            if (param.contains(name))
+                record(name, value);
         }
 
         /// Read an optional parameter whose default is defined next to the setting (the parameter table takes the
@@ -74,8 +69,9 @@ namespace SIMCODE {
         /// Read a string parameter that must be one of the given options
         template <class E>
         void get_choice(const std::string & name, E & value, const std::vector<std::pair<std::string, E>> & options) {
-            const auto str = get_required_parameter<std::string>(param, name);
-            record(name, str);
+            const auto str = get_parameter<std::string>(param, name);
+            if (param.contains(name))
+                record(name, str);
             for (auto & option : options) {
                 if (option.first == str) {
                     value = option.second;
@@ -127,54 +123,54 @@ namespace SIMCODE {
     //=============================================================================
 
     struct SimulationSettings {
-        std::string name;                     // The name of sim used for outputs
-        double boxsize;                       // The boxsize in Mpc/h
-        bool use_cola;                        // Use the cola method?
-        bool use_scaledependent_cola;         // If cola, use cola with scaledependent growth?
-        bool enforce_LPT_trajectories{false}; // No PM force, particles follow LPT trajectories (requires COLA)
-        int cola_LPT_order{2};                // The LPT order for COLA
-        std::string fftw_planner{"estimate"}; // FFTW planner flag: estimate, measure, patient or exhaustive
-        std::string fftw_wisdom_file;         // FFTW wisdom (plans) to read at the start ("" = none)
+        std::string name;              // The name of sim used for outputs
+        double boxsize;                // The boxsize in Mpc/h
+        bool use_cola;                 // Use the cola method?
+        bool use_scaledependent_cola;  // If cola, use cola with scaledependent growth?
+        bool enforce_LPT_trajectories; // No PM force, particles follow LPT trajectories (requires COLA)
+        int cola_LPT_order;            // The LPT order for COLA
+        std::string fftw_planner;      // FFTW planner flag: estimate, measure, patient or exhaustive
+        std::string fftw_wisdom_file;  // FFTW wisdom (plans) to read at the start ("" = none)
     };
 
     struct ForceSettings {
-        int nmesh;                                // The gridsize to bin particles to and compute PM forces
-        std::string density_assignment_method;    // Density assignment (NGP,CIC,TSC,PCS,PQS)
-        bool linear_massive_neutrinos;            // Include the effects of massive neutrinos using linear theory
-        bool neutrino_energy_density{false};      // Source the Poisson equation with the neutrino energy density
-        bool nbody_gauge{false};                  // Add the linear N-body gauge source (radiation, neutrinos, GR)
-        std::string nbody_gauge_filename;         // The table T_extra(k,z) (from scripts/make_nbody_gauge_transfer.py)
-        std::string greens_function_kernel;       // Kernel used for the Greens function of the Poisson equation
-        std::string gradient_kernel;              // Kernel used for computing the gradient of the potential
-        std::string density_method{"assignment"}; // assignment, nufft, sheet or sheet_nufft
-        double nufft_epsilon{1e-5};               // Accuracy of the NUFFT (density_method = nufft)
-        int sheet_refinement{2};                  // R: R^NDIM tracers per particle (density_method = sheet)
-        std::string interpolation_method{"assignment"}; // Force to particles: assignment (kernel) or nufft
-        int interlacing_order{1};      // Average the force over this many shifted copies of the particles
-        bool deconvolve_window{false}; // Divide the force by W(k)^2 of the assignment kernel
+        int nmesh;                             // The gridsize to bin particles to and compute PM forces
+        std::string density_assignment_method; // Density assignment (NGP,CIC,TSC,PCS,PQS)
+        bool linear_massive_neutrinos;         // Include the effects of massive neutrinos using linear theory
+        bool neutrino_energy_density;          // Source the Poisson equation with the neutrino energy density
+        bool nbody_gauge;                      // Add the linear N-body gauge source (radiation, neutrinos, GR)
+        std::string nbody_gauge_filename;      // The table T_extra(k,z) (from scripts/make_nbody_gauge_transfer.py)
+        std::string greens_function_kernel;    // Kernel used for the Greens function of the Poisson equation
+        std::string gradient_kernel;           // Kernel used for computing the gradient of the potential
+        std::string density_method;            // assignment, nufft, sheet or sheet_nufft
+        double nufft_epsilon;                  // Accuracy of the NUFFT (density_method = nufft)
+        int sheet_refinement;                  // R: R^NDIM tracers per particle (density_method = sheet)
+        std::string interpolation_method;      // Force to particles: assignment (kernel) or nufft
+        int interlacing_order;                 // Average the force over this many shifted copies of the particles
+        bool deconvolve_window;                // Divide the force by W(k)^2 of the assignment kernel
         // Early-time force: a more accurate (and expensive) force before force_early_until_redshift
-        std::string early_method{"none"};                   // none, nufft or interlaced
-        double early_until_redshift{10.0};                  // Use the early force for steps with z > this
-        int early_interlacing_order{2};                     // early_method = interlaced: number of shifted grids
-        std::string early_density_assignment_method{"TSC"}; // early_method = interlaced: assignment kernel
+        std::string early_method;                    // none, nufft or interlaced
+        double early_until_redshift;                 // Use the early force for steps with z > this
+        int early_interlacing_order;                 // early_method = interlaced: number of shifted grids
+        std::string early_density_assignment_method; // early_method = interlaced: assignment kernel
     };
 
     struct ICSettings {
-        ICRandomFieldType random_field_type;    // gaussian, nongaussian, read_particles, read_phases
-        double initial_redshift;                // The initial redshift of the sim
-        int nmesh;                              // The Nmesh used to generate the IC (use particle_Npart_1D)
-        std::string lattice_offset{"fiducial"}; // Offset of the particle lattice from the force grid nodes
-        int random_seed;                        // The random seed
-        RandomFieldBackend random_field_backend{RandomFieldBackend::NGenIC};
+        ICRandomFieldType random_field_type; // gaussian, nongaussian, read_particles, read_phases
+        double initial_redshift;             // The initial redshift of the sim
+        int nmesh;                           // The Nmesh used to generate the IC (use particle_Npart_1D)
+        std::string lattice_offset;          // Offset of the particle lattice from the force grid nodes
+        int random_seed;                     // The random seed
+        RandomFieldBackend random_field_backend;
         RandomGeneratorType random_generator; // The generator: GSL or MT19937
         int LPT_order;                        // The LPT order to use to make IC (1,2,3)
 
         // Input file (power-spectrum / transfer functions)
-        ICInputType type_of_input; // powerspectrum, transferfunction, camb, class or internal
+        ICInputType type_of_input;  // powerspectrum, transferfunction, camb, class or internal
         std::string input_filename; // The filename (class: the root of the CLASS run)
-        std::string input_gauge{"synchronous"}; // class: the gauge CLASS was run in (synchronous or newtonian)
-        double input_redshift;                // The redshift of P(k,z) / T(k,z) that we read in
-        bool use_gravity_model_GR;            // Input power-spectrum is for LCDM so if MG use LCDM to set the IC
+        std::string input_gauge;    // class: the gauge CLASS was run in (synchronous or newtonian)
+        double input_redshift;      // The redshift of P(k,z) / T(k,z) that we read in
+        bool use_gravity_model_GR;  // Input power-spectrum is for LCDM so if MG use LCDM to set the IC
 
         // Amplitude fixed / paired IC
         bool fix_amplitude;  // Fix amplitude of delta(k,zini) to that of P(k)
@@ -182,13 +178,13 @@ namespace SIMCODE {
 
         // Non-gaussianity (random_field_type = nongaussian)
         std::string fnl_type; // local, equilateral, orthogonal
-        double fnl{0.0};      // fNL
+        double fnl;           // fNL
         double fnl_redshift;  // Redshift of which to generate the primordial potential
 
         // Normalization using sigma8
-        bool sigma8_normalization;   // Normalize wrt to a sigma8 value?
-        double sigma8_redshift{0.0}; // The redshift of which to normalize
-        double sigma8;               // The value of sigma8 at this redshift we want
+        bool sigma8_normalization; // Normalize wrt to a sigma8 value?
+        double sigma8_redshift;    // The redshift of which to normalize
+        double sigma8;             // The value of sigma8 at this redshift we want
 
         // Read IC from file (and reconstruct the LPT fields if COLA)
         std::string reconstruct_gadgetfilepath;     // /path/to/gadget
@@ -227,15 +223,15 @@ namespace SIMCODE {
     };
 
     struct ParticleSettings {
-        int Npart_1D;                       // Number of particles per dimension (total is N^NDIM)
-        double allocation_factor;           // Allocate this many more particles
-        bool baryons{false};                // CDM and baryons as two sets of particles (otherwise one set "cb")
-        std::string baryon_lattice{"same"}; // same: the baryons start from the CDM lattice, offset: half a spacing
-        std::string baryon_relative_mode{"displacement"}; // displacement, mass or mass_ini (see ParameterSchema.h)
-        bool neutrinos{false};                            // Massive neutrinos as particles (delta-f method)
-        int neutrino_Npart_1D{0};   // Number of neutrino particles per dimension (0: particle_Npart_1D)
-        bool neutrino_deltaf{true}; // Use the delta-f weights (false: plain particles, for testing)
-        int sort_every_nsteps{0};   // Reorder the particles in memory by position every this many steps (0: never)
+        int Npart_1D;                     // Number of particles per dimension (total is N^NDIM)
+        double allocation_factor;         // Allocate this many more particles
+        bool baryons;                     // CDM and baryons as two sets of particles (otherwise one set "cb")
+        std::string baryon_lattice;       // same: the baryons start from the CDM lattice, offset: half a spacing
+        std::string baryon_relative_mode; // displacement, mass or mass_ini (see ParameterSchema.h)
+        bool neutrinos;                   // Massive neutrinos as particles (delta-f method)
+        int neutrino_Npart_1D;            // Number of neutrino particles per dimension (0: particle_Npart_1D)
+        bool neutrino_deltaf;             // Use the delta-f weights (false: plain particles, for testing)
+        int sort_every_nsteps; // Reorder the particles in memory by position every this many steps (0: never)
     };
 
     struct TimestepSettings {
@@ -244,19 +240,19 @@ namespace SIMCODE {
         std::string algorithm;      // KDK - Kick-Drift-Kick is the main method we use
         double cola_nLPT;           // nLPT. For method = Tassev
         ScaleFactorSpacing spacing; // linear, logarithmic, powerlaw, growthfactor
-        double spacing_power{1.0};  // For spacing = powerlaw
+        double spacing_power;       // For spacing = powerlaw
     };
 
     struct FoFSettings {
-        bool enabled;              // Locate halos when we output
-        int nmin_per_halo;         // Minimum particles per halo
-        int nmesh_max;             // For speeding it up: the maximum gridsize to bin particle to
-        double linking_length;     // The linking length in units of the mean partice separation (i.e. ~0.2)
-        double buffer_length_mpch; // The buffer region (from nbor tasks) we use in the FoF finding
-        std::string output_fileformat{"ascii"}; // The halo catalogue: ascii or HDF5
-        int massfunction_nbins{30};             // The mass function: number of bins...
-        double massfunction_Mmin{1e10};         // ...and the range (Msun/h)
-        double massfunction_Mmax{1e16};
+        bool enabled;                  // Locate halos when we output
+        int nmin_per_halo;             // Minimum particles per halo
+        int nmesh_max;                 // For speeding it up: the maximum gridsize to bin particle to
+        double linking_length;         // The linking length in units of the mean partice separation (i.e. ~0.2)
+        double buffer_length_mpch;     // The buffer region (from nbor tasks) we use in the FoF finding
+        std::string output_fileformat; // The halo catalogue: ascii or HDF5
+        int massfunction_nbins;        // The mass function: number of bins...
+        double massfunction_Mmin;      // ...and the range (Msun/h)
+        double massfunction_Mmax;
         std::vector<std::string> so_definitions; // Spherical overdensity masses around the halos (e.g. 200m, 500c, vir)
     };
 
@@ -264,8 +260,8 @@ namespace SIMCODE {
         bool enabled;                          // Compute power-spectrum when we output
         int nmesh;                             // The grid size to use for this
         bool interlacing;                      // Use interlacing for alias reduction?
-        bool subtract_shotnoise{false};        // Subtract shotnoise? (also used for P(k) every step)
-        bool every_step{true};                 // P(k) of the force density field at every step
+        bool subtract_shotnoise;               // Subtract shotnoise? (also used for P(k) every step)
+        bool every_step;                       // P(k) of the force density field at every step
         std::string density_assignment_method; // Density assignment method (NGP, CIC, ...)
     };
 
@@ -299,21 +295,37 @@ namespace SIMCODE {
         double kcut_over_nyquist;              // Spherical cut of the linear field at this times the lattice Nyquist
         bool zeldovich;                        // Also output the Zel'dovich prediction
         bool oneloop;                          // Also output the one-loop LPT prediction
-        std::string oneloop_kernels{"EdS"};    // EdS or model (the scale-dependent kernels of the gravity model)
+        std::string oneloop_kernels;           // EdS or model (the scale-dependent kernels of the gravity model)
     };
 
     struct OutputSettings {
-        std::vector<double> redshifts;                             // List of output redshift from large to small
-        bool particles;                                            // Output particles?
-        ParticleFileFormat fileformat{ParticleFileFormat::GADGET}; // Fileformat for particles
-        std::string folder;                                        // Folder to store output ("" is the current folder)
-        bool lightcone{false}; // Make a lightcone (the settings are read by the Lightcone class)
-        // plc_nside and plc_nside_chunks of the lightcone maps (read here only to validate them; 0: not used)
-        int lightcone_maps_nside{0};
-        int lightcone_maps_nside_chunks{0};
+        std::vector<double> redshifts; // List of output redshift from large to small
+        bool particles;                // Output particles?
+        ParticleFileFormat fileformat; // Fileformat for particles
+        std::string folder;            // Folder to store output ("" is the current folder)
 
         /// Path for a file in the output folder
         std::string path(const std::string & filename) const { return folder + (folder == "" ? "" : "/") + filename; }
+    };
+
+    struct LightconeSettings {
+        bool enabled;                     // Make a lightcone
+        std::vector<double> pos_observer; // Position of the observer in units of the boxsize
+        double z_init;                    // The redshift we start recording the lightcone
+        double z_finish;                  // The redshift we stop recording the lightcone
+        double boundary_mpch;             // Boundary around the shell to get all the particles (Mpc/h)
+        bool use_replicas;                // Replicate the box
+        int ndim_rep;                     // Number of dimensions with replicas in both directions
+        bool output_gadgetfile;           // Output the lightcone particles (GADGET, ascii, HDF5)
+        bool output_asciifile;
+        bool output_hdf5file;
+        bool output_in_batches;       // Output in batches to save memory
+        bool relativistic_effects;    // The potential and observed redshift at the particles
+        bool make_onion_density_maps; // (Healpix) density maps delta(z, theta)
+        int nside;                    // Healpix nside of the maps
+        double da_maps;               // Roughly the size of the bins in a for the maps
+        bool use_chunkpix;            // Store the maps with chunkpix
+        int nside_chunks;             // Healpix nside of the chunks
     };
 
     struct SimulationParameters;
@@ -347,10 +359,15 @@ namespace SIMCODE {
         BispectrumSettings bispectrum;
         HybridBiasSettings hybridbias;
         OutputSettings output;
+        LightconeSettings lightcone;
 
         /// Read all the parameters, check them and print them
         void read(const ParameterMap & param) {
             ParameterReader r(param);
+
+            // Every parameter is read with r.get: its value in the parameterfile (or its default if its condition in
+            // the table holds) or else the default of the table (ParameterSchema.h), so the conditions and the
+            // defaults are only in the table
 
             // General parameters and COLA
             r.get("simulation_name", simulation.name);
@@ -359,10 +376,8 @@ namespace SIMCODE {
             r.get("simulation_use_scaledependent_cola", simulation.use_scaledependent_cola);
             r.get("simulation_fftw_planner", simulation.fftw_planner);
             r.get("simulation_fftw_wisdom_file", simulation.fftw_wisdom_file);
-            if (simulation.use_cola) {
-                r.get_optional("simulation_enforce_LPT_trajectories", simulation.enforce_LPT_trajectories);
-                r.get_optional("simulation_cola_LPT_order", simulation.cola_LPT_order);
-            }
+            r.get("simulation_enforce_LPT_trajectories", simulation.enforce_LPT_trajectories);
+            r.get("simulation_cola_LPT_order", simulation.cola_LPT_order);
 
             // Computing forces
             r.get("force_nmesh", force.nmesh);
@@ -370,30 +385,21 @@ namespace SIMCODE {
             r.get("force_linear_massive_neutrinos", force.linear_massive_neutrinos);
             r.get("force_neutrino_energy_density", force.neutrino_energy_density);
             r.get("force_nbody_gauge", force.nbody_gauge);
-            if (force.nbody_gauge)
-                r.get("force_nbody_gauge_filename", force.nbody_gauge_filename);
+            r.get("force_nbody_gauge_filename", force.nbody_gauge_filename);
             r.get("force_greens_function_kernel", force.greens_function_kernel);
             r.get("force_gradient_kernel", force.gradient_kernel);
-            r.get_optional("force_density_method", force.density_method);
-            if (force.density_method == "nufft" or force.density_method == "sheet_nufft")
-                r.get_optional("force_nufft_epsilon", force.nufft_epsilon);
-            if (force.density_method == "sheet" or force.density_method == "sheet_nufft")
-                r.get_optional("force_sheet_refinement", force.sheet_refinement);
-            r.get_optional("force_interlacing_order", force.interlacing_order);
-            r.get_optional("force_deconvolve_window", force.deconvolve_window);
-            r.get_optional("force_early_method", force.early_method);
-            if (force.early_method != "none") {
-                r.get_optional("force_early_until_redshift", force.early_until_redshift);
-                if (force.early_method == "interlaced") {
-                    r.get_optional("force_early_interlacing_order", force.early_interlacing_order);
-                    r.get_optional("force_early_density_assignment_method", force.early_density_assignment_method);
-                }
-            }
-            r.get_optional("force_interpolation_method", force.interpolation_method);
+            r.get("force_density_method", force.density_method);
+            r.get("force_nufft_epsilon", force.nufft_epsilon);
+            r.get("force_sheet_refinement", force.sheet_refinement);
+            r.get("force_interlacing_order", force.interlacing_order);
+            r.get("force_deconvolve_window", force.deconvolve_window);
+            r.get("force_early_method", force.early_method);
+            r.get("force_early_until_redshift", force.early_until_redshift);
+            r.get("force_early_interlacing_order", force.early_interlacing_order);
+            r.get("force_early_density_assignment_method", force.early_density_assignment_method);
+            r.get("force_interpolation_method", force.interpolation_method);
             if (force.interpolation_method == "fiducial")
                 force.interpolation_method = force.density_method == "nufft" ? "nufft" : "assignment";
-            if (force.interpolation_method == "nufft" or force.early_method == "nufft")
-                r.get_optional("force_nufft_epsilon", force.nufft_epsilon);
 
             // Initial conditions
             r.get_choice("ic_type_of_input",
@@ -406,9 +412,10 @@ namespace SIMCODE {
                           {"internal", ICInputType::InternalTransfer},
                           {"internal_transfer", ICInputType::InternalTransfer}}); // the old name of internal
             if (param.get<std::string>("ic_type_of_input") == "transferinfofile" and FML::ThisTask == 0)
-                std::cout << "WARNING: ic_type_of_input = transferinfofile is the old name of ic_type_of_input = camb\n";
-            r.get_optional("ic_input_gauge", ic.input_gauge);
-            r.get_optional("ic_input_filename", ic.input_filename);
+                std::cout
+                    << "WARNING: ic_type_of_input = transferinfofile is the old name of ic_type_of_input = camb\n";
+            r.get("ic_input_gauge", ic.input_gauge);
+            r.get("ic_input_filename", ic.input_filename);
             r.get_choice("ic_random_field_type",
                          ic.random_field_type,
                          {{"gaussian", ICRandomFieldType::Gaussian},
@@ -430,41 +437,31 @@ namespace SIMCODE {
             r.get("ic_LPT_order", ic.LPT_order);
             r.get("ic_fix_amplitude", ic.fix_amplitude);
             r.get("ic_reverse_phases", ic.reverse_phases);
-            if (ic.random_field_type == ICRandomFieldType::NonGaussian) {
-                r.get("ic_fnl_type", ic.fnl_type);
-                r.get("ic_fnl", ic.fnl);
-                r.get("ic_fnl_redshift", ic.fnl_redshift);
-            }
+            r.get("ic_fnl_type", ic.fnl_type);
+            r.get("ic_fnl", ic.fnl);
+            r.get("ic_fnl_redshift", ic.fnl_redshift);
             r.get("ic_sigma8_normalization", ic.sigma8_normalization);
-            if (ic.sigma8_normalization) {
-                r.get("ic_sigma8_redshift", ic.sigma8_redshift);
-                r.get("ic_sigma8", ic.sigma8);
-            }
-            if (ic.reads_particles()) {
-                r.get("ic_reconstruct_gadgetfilepath", ic.reconstruct_gadgetfilepath);
-                r.get("ic_reconstruct_assigment_method", ic.reconstruct_assigment_method);
-                r.get("ic_reconstruct_smoothing_filter", ic.reconstruct_smoothing_filter);
-                r.get("ic_reconstruct_dimless_smoothing_scale", ic.reconstruct_dimless_smoothing_scale);
-                r.get("ic_reconstruct_interlacing", ic.reconstruct_interlacing);
-                r.get("ic_reconstruct_exact", ic.reconstruct_exact);
-            }
+            r.get("ic_sigma8_redshift", ic.sigma8_redshift);
+            r.get("ic_sigma8", ic.sigma8);
+            r.get("ic_reconstruct_gadgetfilepath", ic.reconstruct_gadgetfilepath);
+            r.get("ic_reconstruct_assigment_method", ic.reconstruct_assigment_method);
+            r.get("ic_reconstruct_smoothing_filter", ic.reconstruct_smoothing_filter);
+            r.get("ic_reconstruct_dimless_smoothing_scale", ic.reconstruct_dimless_smoothing_scale);
+            r.get("ic_reconstruct_interlacing", ic.reconstruct_interlacing);
+            r.get("ic_reconstruct_exact", ic.reconstruct_exact);
 
             // Particles
             r.get("particle_Npart_1D", particle.Npart_1D);
             r.get("particle_allocation_factor", particle.allocation_factor);
             r.get("particle_sort_every_nsteps", particle.sort_every_nsteps);
             r.get("particle_baryons", particle.baryons);
-            if (particle.baryons) {
-                r.get("particle_baryon_lattice", particle.baryon_lattice);
-                r.get("particle_baryon_relative_mode", particle.baryon_relative_mode);
-            }
+            r.get("particle_baryon_lattice", particle.baryon_lattice);
+            r.get("particle_baryon_relative_mode", particle.baryon_relative_mode);
             r.get("particle_neutrinos", particle.neutrinos);
-            if (particle.neutrinos) {
-                r.get("particle_neutrino_Npart_1D", particle.neutrino_Npart_1D);
-                r.get("particle_neutrino_deltaf", particle.neutrino_deltaf);
-                if (particle.neutrino_Npart_1D <= 0)
-                    particle.neutrino_Npart_1D = particle.Npart_1D;
-            }
+            r.get("particle_neutrino_Npart_1D", particle.neutrino_Npart_1D);
+            r.get("particle_neutrino_deltaf", particle.neutrino_deltaf);
+            if (particle.neutrinos and particle.neutrino_Npart_1D <= 0)
+                particle.neutrino_Npart_1D = particle.Npart_1D;
 
             // Time-stepping
             r.get("timestep_nsteps", timestep.nsteps);
@@ -482,88 +479,86 @@ namespace SIMCODE {
                           {"logarithmic", ScaleFactorSpacing::Logarithmic},
                           {"powerlaw", ScaleFactorSpacing::Powerlaw},
                           {"growthfactor", ScaleFactorSpacing::GrowthFactor}});
-            if (timestep.spacing == ScaleFactorSpacing::Powerlaw)
-                r.get("timestep_spacing_power", timestep.spacing_power);
+            r.get("timestep_spacing_power", timestep.spacing_power);
 
             // FoF halofinding
             r.get("fof", fof.enabled);
-            if (fof.enabled) {
-                r.get("fof_nmin_per_halo", fof.nmin_per_halo);
-                r.get("fof_linking_length", fof.linking_length);
-                r.get("fof_nmesh_max", fof.nmesh_max);
-                r.get("fof_buffer_length_mpch", fof.buffer_length_mpch);
-                r.get_optional("fof_output_fileformat", fof.output_fileformat);
-                r.get_optional("fof_massfunction_nbins", fof.massfunction_nbins);
-                r.get_optional("fof_massfunction_Mmin", fof.massfunction_Mmin);
-                r.get_optional("fof_massfunction_Mmax", fof.massfunction_Mmax);
-                r.get_optional("fof_so_definitions", fof.so_definitions);
-            }
+            r.get("fof_nmin_per_halo", fof.nmin_per_halo);
+            r.get("fof_linking_length", fof.linking_length);
+            r.get("fof_nmesh_max", fof.nmesh_max);
+            r.get("fof_buffer_length_mpch", fof.buffer_length_mpch);
+            r.get("fof_output_fileformat", fof.output_fileformat);
+            r.get("fof_massfunction_nbins", fof.massfunction_nbins);
+            r.get("fof_massfunction_Mmin", fof.massfunction_Mmin);
+            r.get("fof_massfunction_Mmax", fof.massfunction_Mmax);
+            r.get("fof_so_definitions", fof.so_definitions);
 
             baryonification.read(r);
 
             // Power-spectrum
             r.get("pofk", pofk.enabled);
             r.get("pofk_every_step", pofk.every_step);
-            if (pofk.enabled or pofk.every_step)
-                r.get("pofk_subtract_shotnoise", pofk.subtract_shotnoise);
-            if (pofk.enabled) {
-                r.get("pofk_nmesh", pofk.nmesh);
-                r.get("pofk_interlacing", pofk.interlacing);
-                r.get("pofk_density_assignment_method", pofk.density_assignment_method);
-            }
+            r.get("pofk_subtract_shotnoise", pofk.subtract_shotnoise);
+            r.get("pofk_nmesh", pofk.nmesh);
+            r.get("pofk_interlacing", pofk.interlacing);
+            r.get("pofk_density_assignment_method", pofk.density_assignment_method);
 
             // Power-spectrum multipoles
             r.get("pofk_multipole", pofk_multipole.enabled);
-            if (pofk_multipole.enabled) {
-                r.get("pofk_multipole_nmesh", pofk_multipole.nmesh);
-                r.get("pofk_multipole_interlacing", pofk_multipole.interlacing);
-                r.get("pofk_multipole_subtract_shotnoise", pofk_multipole.subtract_shotnoise);
-                r.get("pofk_multipole_ellmax", pofk_multipole.ellmax);
-                r.get("pofk_multipole_density_assignment_method", pofk_multipole.density_assignment_method);
-            }
+            r.get("pofk_multipole_nmesh", pofk_multipole.nmesh);
+            r.get("pofk_multipole_interlacing", pofk_multipole.interlacing);
+            r.get("pofk_multipole_subtract_shotnoise", pofk_multipole.subtract_shotnoise);
+            r.get("pofk_multipole_ellmax", pofk_multipole.ellmax);
+            r.get("pofk_multipole_density_assignment_method", pofk_multipole.density_assignment_method);
 
             // Bispectrum
             r.get("bispectrum", bispectrum.enabled);
-            if (bispectrum.enabled) {
-                r.get("bispectrum_nmesh", bispectrum.nmesh);
-                r.get("bispectrum_nbins", bispectrum.nbins);
-                r.get("bispectrum_density_assignment_method", bispectrum.density_assignment_method);
-                r.get("bispectrum_interlacing", bispectrum.interlacing);
-                r.get("bispectrum_subtract_shotnoise", bispectrum.subtract_shotnoise);
-            }
+            r.get("bispectrum_nmesh", bispectrum.nmesh);
+            r.get("bispectrum_nbins", bispectrum.nbins);
+            r.get("bispectrum_density_assignment_method", bispectrum.density_assignment_method);
+            r.get("bispectrum_interlacing", bispectrum.interlacing);
+            r.get("bispectrum_subtract_shotnoise", bispectrum.subtract_shotnoise);
 
             // Hybrid bias spectra
             r.get("hybridbias", hybridbias.enabled);
-            if (hybridbias.enabled) {
-                r.get("hybridbias_nmesh", hybridbias.nmesh);
-                r.get("hybridbias_noperators", hybridbias.noperators);
-                r.get("hybridbias_density_assignment_method", hybridbias.density_assignment_method);
-                r.get("hybridbias_interlacing", hybridbias.interlacing);
-                r.get("hybridbias_subtract_shotnoise", hybridbias.subtract_shotnoise);
-                r.get("hybridbias_smoothing_scale", hybridbias.smoothing_scale);
-                r.get("hybridbias_smoothing_filter", hybridbias.smoothing_filter);
-                r.get("hybridbias_kcut_over_nyquist", hybridbias.kcut_over_nyquist);
-                r.get("hybridbias_zeldovich", hybridbias.zeldovich);
-                r.get("hybridbias_oneloop", hybridbias.oneloop);
-                r.get("hybridbias_oneloop_kernels", hybridbias.oneloop_kernels);
-            }
+            r.get("hybridbias_nmesh", hybridbias.nmesh);
+            r.get("hybridbias_noperators", hybridbias.noperators);
+            r.get("hybridbias_density_assignment_method", hybridbias.density_assignment_method);
+            r.get("hybridbias_interlacing", hybridbias.interlacing);
+            r.get("hybridbias_subtract_shotnoise", hybridbias.subtract_shotnoise);
+            r.get("hybridbias_smoothing_scale", hybridbias.smoothing_scale);
+            r.get("hybridbias_smoothing_filter", hybridbias.smoothing_filter);
+            r.get("hybridbias_kcut_over_nyquist", hybridbias.kcut_over_nyquist);
+            r.get("hybridbias_zeldovich", hybridbias.zeldovich);
+            r.get("hybridbias_oneloop", hybridbias.oneloop);
+            r.get("hybridbias_oneloop_kernels", hybridbias.oneloop_kernels);
 
             // Output
             r.get("output_redshifts", output.redshifts);
             r.get("output_particles", output.particles);
-            // (also used for the baryonified particles, which can be written without the ordinary particles)
-            if (output.particles or (baryonification.enabled and baryonification.output_particles)) {
-                r.get_choice("output_fileformat",
-                             output.fileformat,
-                             {{"GADGET", ParticleFileFormat::GADGET}, {"HDF5", ParticleFileFormat::HDF5}});
-            }
+            r.get_choice("output_fileformat",
+                         output.fileformat,
+                         {{"GADGET", ParticleFileFormat::GADGET}, {"HDF5", ParticleFileFormat::HDF5}});
             r.get("output_folder", output.folder);
-            r.get_optional("lightcone", output.lightcone);
-            if (output.lightcone and get_parameter<bool>(param, "plc_make_onion_density_maps")) {
-                r.get_optional("plc_nside", output.lightcone_maps_nside);
-                if (get_parameter<bool>(param, "plc_use_chunkpix"))
-                    r.get_optional("plc_nside_chunks", output.lightcone_maps_nside_chunks);
-            }
+
+            // Lightcone
+            r.get("lightcone", lightcone.enabled);
+            r.get("plc_pos_observer", lightcone.pos_observer);
+            r.get("plc_z_init", lightcone.z_init);
+            r.get("plc_z_finish", lightcone.z_finish);
+            r.get("plc_boundary_mpch", lightcone.boundary_mpch);
+            r.get("plc_use_replicas", lightcone.use_replicas);
+            r.get("plc_ndim_rep", lightcone.ndim_rep);
+            r.get("plc_output_gadgetfile", lightcone.output_gadgetfile);
+            r.get("plc_output_asciifile", lightcone.output_asciifile);
+            r.get("plc_output_hdf5file", lightcone.output_hdf5file);
+            r.get("plc_output_in_batches", lightcone.output_in_batches);
+            r.get("plc_relativistic_effects", lightcone.relativistic_effects);
+            r.get("plc_make_onion_density_maps", lightcone.make_onion_density_maps);
+            r.get("plc_nside", lightcone.nside);
+            r.get("plc_da_maps", lightcone.da_maps);
+            r.get("plc_use_chunkpix", lightcone.use_chunkpix);
+            r.get("plc_nside_chunks", lightcone.nside_chunks);
 
             validate();
             r.print("NBodySimulation::read_parameters");
@@ -710,12 +705,23 @@ namespace SIMCODE {
             // was allocated at the first lightcone step). Checked here, before the check for Healpix (in 2D the maps
             // are not Healpix maps and nside is the number of angular bins)
             const int nside_max = 8192;
+            const bool maps = lightcone.enabled and lightcone.make_onion_density_maps;
             for (auto [name, nside] :
-                 {std::pair<std::string, int>{"plc_nside", output.lightcone_maps_nside},
-                  std::pair<std::string, int>{"plc_nside_chunks", output.lightcone_maps_nside_chunks}})
+                 {std::pair<std::string, int>{"plc_nside", maps ? lightcone.nside : 0},
+                  std::pair<std::string, int>{"plc_nside_chunks",
+                                              maps and lightcone.use_chunkpix ? lightcone.nside_chunks : 0}})
                 if (nside > nside_max)
                     fail(name + " = " + std::to_string(nside) + " must be <= " + std::to_string(nside_max) +
                          " (the Healpix maps use int pixel indices: npix = 12 nside^2)");
+#ifndef USE_HEALPIX
+            if (maps)
+                fail("plc_make_onion_density_maps = true needs Healpix: compile with USE_HEALPIX=true (make "
+                     "USE_HEALPIX=true)");
+#endif
+#endif
+#ifndef USE_HDF5
+            if (lightcone.enabled and lightcone.output_hdf5file)
+                fail("plc_output_hdf5file = true needs HDF5: compile with USE_HDF5=true (make USE_HDF5=true)");
 #endif
 
             // Output redshifts: decreasing and not before the start of the simulation
@@ -820,7 +826,7 @@ namespace SIMCODE {
             {"`force_interlacing_order = 1`", true, true, [](P p) { return p.force.interlacing_order <= 1; }},
             {"`force_early_method = none`", true, true, [](P p) { return p.force.early_method == "none"; }},
             {"`force_nbody_gauge = false`", true, true, [](P p) { return not p.force.nbody_gauge; }},
-            {"`lightcone = false`", true, true, [](P p) { return not p.output.lightcone; }},
+            {"`lightcone = false`", true, true, [](P p) { return not p.lightcone.enabled; }},
             {"`pofk_multipole = false`", true, true, [](P p) { return not p.pofk_multipole.enabled; }},
             {"`bispectrum = false`", true, true, [](P p) { return not p.bispectrum.enabled; }},
             {"`hybridbias = false`", true, false, [](P p) { return not p.hybridbias.enabled; }},

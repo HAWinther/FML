@@ -436,34 +436,38 @@ namespace SIMCODE {
                               "Fermi-Dirac velocities, relativistic equations of motion, the particles only carry the "
                               "perturbation. Replaces force_linear_massive_neutrinos (needs cosmology_OmegaMNu > 0, "
                               "camb or class, timestep_method = Quinn, no COLA)");
-            b.always_optional("particle_neutrino_Npart_1D",
-                              0,
-                              "particle_neutrinos: number of neutrino particles per dimension (0: particle_Npart_1D)");
-            b.always_optional("particle_neutrino_deltaf",
-                              true,
-                              "particle_neutrinos: use the delta-f weights (false: plain particles, much noisier; for "
-                              "testing)");
-            b.always_optional(
-                "particle_baryon_lattice",
-                "same",
-                "particle_baryons: start the baryons from the same lattice as the CDM (same, recommended: "
-                "the baryon-CDM difference then follows linear theory on all scales) or from a lattice "
-                "offset by half a particle spacing (offset: gives a spurious baryon-CDM difference on "
-                "small scales)",
-                {"same", "offset"});
-            b.always_optional(
-                "particle_baryon_relative_mode",
-                "displacement",
-                "particle_baryons: how the baryon-CDM relative density is set up. displacement: each "
-                "species is displaced by its own linear field (T_i/T_cb) and has its own velocity. mass: "
-                "both species follow the total CDM+baryon flow (same displacements and velocities) and the "
-                "relative density is carried by the particle masses m_i = 1 + eps_i(q) with eps_i = "
-                "delta_cb(zini) (T_i - T_cb)(z=0) / T_cb(zini), the linear relative mode today "
-                "(Hahn, Rampf & Uhlemann 2021; exact at z = 0 in linear theory, the relative mode is then "
-                "constant in time). mass_ini: common displacements, masses with eps_i = T_i / T_cb - 1 at "
-                "zini and each species keeps its own velocity (the relative mode then grows from zini). "
-                "The mass modes need particle_baryon_lattice = same",
-                {"displacement", "mass", "mass_ini"});
+            if_true("particle_neutrinos", [&]() {
+                b.always_optional("particle_neutrino_Npart_1D",
+                                  0,
+                                  "particle_neutrinos: number of neutrino particles per dimension (0: particle_Npart_1D)");
+                b.always_optional("particle_neutrino_deltaf",
+                                  true,
+                                  "particle_neutrinos: use the delta-f weights (false: plain particles, much noisier; for "
+                                  "testing)");
+            });
+            if_true("particle_baryons", [&]() {
+                b.always_optional(
+                    "particle_baryon_lattice",
+                    "same",
+                    "particle_baryons: start the baryons from the same lattice as the CDM (same, recommended: "
+                    "the baryon-CDM difference then follows linear theory on all scales) or from a lattice "
+                    "offset by half a particle spacing (offset: gives a spurious baryon-CDM difference on "
+                    "small scales)",
+                    {"same", "offset"});
+                b.always_optional(
+                    "particle_baryon_relative_mode",
+                    "displacement",
+                    "particle_baryons: how the baryon-CDM relative density is set up. displacement: each "
+                    "species is displaced by its own linear field (T_i/T_cb) and has its own velocity. mass: "
+                    "both species follow the total CDM+baryon flow (same displacements and velocities) and the "
+                    "relative density is carried by the particle masses m_i = 1 + eps_i(q) with eps_i = "
+                    "delta_cb(zini) (T_i - T_cb)(z=0) / T_cb(zini), the linear relative mode today "
+                    "(Hahn, Rampf & Uhlemann 2021; exact at z = 0 in linear theory, the relative mode is then "
+                    "constant in time). mass_ini: common displacements, masses with eps_i = T_i / T_cb - 1 at "
+                    "zini and each species keeps its own velocity (the relative mode then grows from zini). "
+                    "The mass modes need particle_baryon_lattice = same",
+                    {"displacement", "mass", "mass_ini"});
+            });
             b.optional("particle_allocation_factor",
                        1.5,
                        "Allocate this factor more particles than the average per task (particles move between "
@@ -668,10 +672,21 @@ namespace SIMCODE {
                               "force_density_method = nufft (then assignment and interpolation are both exact, so "
                               "there is no self-force), otherwise assignment",
                               {"fiducial", "assignment", "nufft"});
-            b.always_optional("force_nufft_epsilon",
-                              1e-5,
-                              "Relative accuracy of the NUFFT (force_density_method = nufft or sheet_nufft, or "
-                              "force_interpolation_method = nufft)");
+            b.when(
+                [](const ParameterMap & p) {
+                    const auto d = p.get<std::string>("force_density_method");
+                    return d == "nufft" or d == "sheet_nufft" or
+                           p.get<std::string>("force_interpolation_method") == "nufft" or
+                           p.get<std::string>("force_early_method") == "nufft";
+                },
+                "force_density_method in {nufft, sheet_nufft} or force_interpolation_method = nufft or "
+                "force_early_method = nufft",
+                [&]() {
+                    b.always_optional("force_nufft_epsilon",
+                                      1e-5,
+                                      "Relative accuracy of the NUFFT (force_density_method = nufft or sheet_nufft, "
+                                      "force_interpolation_method = nufft or force_early_method = nufft)");
+                });
             b.when(is_one_of("force_density_method", {"sheet", "sheet_nufft"}),
                    one_of_text("force_density_method", {"sheet", "sheet_nufft"}),
                    [&]() {
@@ -791,21 +806,21 @@ namespace SIMCODE {
                     3.0,
                     "Buffer region (larger than the largest halo) from neighbor tasks (Mpc/h). The code warns if "
                     "halos reach its edge (they might then be cut off and found twice)");
+                b.always_optional("fof_output_fileformat",
+                                  "ascii",
+                                  "fof: the halo catalogue halos_z<z>.txt (ascii, one row per halo) or halos_z<z>.hdf5 "
+                                  "(HDF5, compile with USE_HDF5=true)",
+                                  {"ascii", "HDF5"});
+                b.always_optional("fof_massfunction_nbins", 30, "fof: number of logarithmic bins of the mass function");
+                b.always_optional("fof_massfunction_Mmin", 1e10, "fof: smallest mass of the mass function (Msun/h)");
+                b.always_optional("fof_massfunction_Mmax", 1e16, "fof: largest mass of the mass function (Msun/h)");
+                b.always_optional("fof_so_definitions",
+                                  std::vector<std::string>{},
+                                  "fof: spherical overdensity masses around the FoF halos, e.g. {\"200m\", \"500c\", "
+                                  "\"vir\"} (<Delta>m: Delta times the mean CDM+baryon density, <Delta>c: the critical "
+                                  "density, vir: Bryan & Norman 1998). Empty: none. The spheres must fit in "
+                                  "fof_buffer_length_mpch");
             });
-            b.always_optional("fof_output_fileformat",
-                              "ascii",
-                              "fof: the halo catalogue halos_z<z>.txt (ascii, one row per halo) or halos_z<z>.hdf5 "
-                              "(HDF5, compile with USE_HDF5=true)",
-                              {"ascii", "HDF5"});
-            b.always_optional("fof_massfunction_nbins", 30, "fof: number of logarithmic bins of the mass function");
-            b.always_optional("fof_massfunction_Mmin", 1e10, "fof: smallest mass of the mass function (Msun/h)");
-            b.always_optional("fof_massfunction_Mmax", 1e16, "fof: largest mass of the mass function (Msun/h)");
-            b.always_optional("fof_so_definitions",
-                              std::vector<std::string>{},
-                              "fof: spherical overdensity masses around the FoF halos, e.g. {\"200m\", \"500c\", "
-                              "\"vir\"} (<Delta>m: Delta times the mean CDM+baryon density, <Delta>c: the critical "
-                              "density, vir: Bryan & Norman 1998). Empty: none. The spheres must fit in "
-                              "fof_buffer_length_mpch");
 
             b.section("Power-spectrum");
             b.optional("pofk", false, "Compute the power-spectrum at every output");

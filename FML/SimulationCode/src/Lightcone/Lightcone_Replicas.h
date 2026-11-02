@@ -46,32 +46,19 @@ class BoxReplicas {
     /// The number of replicas in the negative and positive direction along idim (currently in use)
     std::pair<int, int> get_replica_range(int idim) const { return {n_per_dim_left[idim], n_per_dim_right[idim]}; }
 
-    void read_parameters(FML::UTILS::ParameterMap & param) {
-        use_replicas = param.get<bool>("plc_use_replicas");
-        if (FML::ThisTask == 0) {
-            std::cout << "# Read in Lightcone_Replicas.h:\n";
-            std::cout << "# plc_use_replicas                         : " << use_replicas << "\n";
-        }
+    /// The settings (plc_use_replicas, plc_boundary_mpch, plc_pos_observer, plc_ndim_rep)
+    void set_parameters(bool _use_replicas,
+                        double boundary_mpch,
+                        double boxsize,
+                        const std::vector<double> & observer,
+                        int _ndim_rep) {
+        use_replicas = _use_replicas;
         if (use_replicas) {
-            double boxsize = param.get<double>("simulation_boxsize");
-            double boundary_in_mpch = param.get<double>("plc_boundary_mpch");
-            boundary_over_boxsize = boundary_in_mpch / boxsize;
-            auto origin = param.get<std::vector<double>>("plc_pos_observer");
-            FML::assert_mpi(origin.size() >= NDIM, "Position of observer much have NDIM components");
+            boundary_over_boxsize = boundary_mpch / boxsize;
+            FML::assert_mpi(observer.size() >= NDIM, "Position of observer much have NDIM components");
             for (int idim = 0; idim < NDIM; idim++)
-                pos_observer[idim] = origin[idim];
-
-            ndim_rep = param.get<int>("plc_ndim_rep");
-            ndim_rep = std::min(ndim_rep, NDIM);
-
-            if (FML::ThisTask == 0) {
-                std::cout << "# plc_pos_observer                         : ";
-                for (auto & p : pos_observer)
-                    std::cout << p << " , ";
-                std::cout << "\n";
-                std::cout << "# plc_ndim_rep                             : " << ndim_rep << "\n";
-                std::cout << "# plc_boundary_mpch                        : " << boundary_in_mpch << " Mpc/h\n";
-            }
+                pos_observer[idim] = observer[idim];
+            ndim_rep = std::min(_ndim_rep, NDIM);
         } else {
             ndim_rep = 0;
             pos_observer = {};

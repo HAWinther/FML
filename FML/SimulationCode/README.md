@@ -23,6 +23,12 @@ All the parameters, with their type, default value, when they are used and the a
 example. String parameters are checked against the allowed values, and names in the parameterfile that are not
 parameters (e.g. misspelled ones) give a warning with a suggestion for what was meant.
 
+A new parameter of the simulation is one entry in the table in `src/ParameterSchema.h` (name, default, the condition
+for when it is used, description), a field in its settings struct and one `r.get(...)` line in
+`SimulationParameters::read` (`src/SimulationParameters.h`): the value is that of the parameterfile or else the
+default of the table, so the default and the condition are only in the table. Then regenerate `PARAMETERS.md` with
+`./nbody --parameters PARAMETERS.md` (CI checks that it is up to date).
+
 The particle type is chosen automatically to use as little memory as possible: 56 bytes per particle without COLA,
 80 bytes with scale-independent COLA and 104 bytes with scale-dependent COLA (in 3D, see `src/Particles.h`).
 Scale-dependent COLA is only used when the growth is scale-dependent (see [COLA](#cola)).
