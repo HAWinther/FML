@@ -29,7 +29,8 @@ Parameters marked *optional* take the default value if they are not in the param
 |---|---|---|---|---|
 | `cosmology_model` | string | `"LCDM"` | always | The cosmology (background evolution). Options: `LCDM`, `w0waCDM`, `DGP`, `JBD`, `Quintessence`, `EDE`, `Tabulated` |
 | `cosmology_Omegab` | double | *required* | always | Baryon density parameter |
-| `cosmology_OmegaMNu` | double | `0` | always | Massive neutrino density parameter |
+| `cosmology_OmegaMNu` | double | `0` | always | Massive neutrino density parameter (3 equal masses; or use cosmology_neutrino_masses_eV) |
+| `cosmology_neutrino_masses_eV` | double list | `{}` | always | The masses of the (up to 3) neutrinos in eV, e.g. {0.0, 0.0086, 0.05} (0 or not listed: massless). Instead of cosmology_OmegaMNu (which then follows from the masses) |
 | `cosmology_OmegaCDM` | double | *required* | always | CDM density parameter |
 | `cosmology_OmegaK` | double | *required* | always | Curvature density parameter (-k/H0^2) |
 | `cosmology_Neffective` | double | *required* | always | Effective number of relativistic species |
@@ -86,6 +87,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `multigrid_nsweeps` | int | `3` | solving the exact equation of the gravity model | Multigrid solver: Newton-Gauss-Seidel sweeps on every level |
 | `multigrid_nsweeps_first_step` | int | `20` | solving the exact equation of the gravity model | Multigrid solver: sweeps on the first step (increase if the solver fails to converge) |
 | `multigrid_solver_residual_convergence` | double | `1e-06` | solving the exact equation of the gravity model | Multigrid solver: converged when the residual is below this |
+| `multigrid_coarse_factor` | int | `1` | solving the exact equation of the gravity model | Multigrid solver: solve the field equation on a grid coarser by this factor than the force grid (the density and the solution go between the grids as their Fourier modes below the coarse Nyquist frequency). 1: on the force grid |
 
 ## Primordial power-spectrum
 
@@ -130,9 +132,9 @@ Parameters marked *optional* take the default value if they are not in the param
 | `ic_random_field_backend` | string | `"ngenic"` | always | Fourier mode sampling: ngenic preserves legacy line seeds and IC; philox uses independent mode counters. Options: `ngenic`, `philox` |
 | `ic_nmesh` | int | *required* | always | The grid size used to generate the IC |
 | `ic_lattice_offset` | string | `"fiducial"` | always | Offset of the initial particle lattice from the nodes of the force grid. fiducial: half a force grid cell if force_nmesh > particle_Npart_1D, otherwise none. With particles exactly on the nodes of a finer grid, CIC responds to the size of the displacement and gives large spurious forces (see the force grid section of README.md). Options: `fiducial`, `none`, `half_force_cell` |
-| `ic_type_of_input` | string | *required* | always | The input: powerspectrum (file with [k (h/Mpc), P(k) (Mpc/h)^3]), transferfunction (file with [k (h/Mpc), T(k) Mpc^2]), camb (a transfer info file listing T(k,z) files from CAMB; the old name transferinfofile is also accepted; the columns are read by name from the header, or by position: 13 CAMB, 9 AxionCAMB, 7 old CAMB / CLASS with format=camb), class (native CLASS output: ic_input_filename is the root of the run, with format = class, output = mTk,vTk, write_background = yes) or internal_transfer (FML solver .ini; optional compiled feature). See FML/TransferProviders. Options: `powerspectrum`, `transferfunction`, `camb`, `class`, `internal_transfer`, `transferinfofile` |
+| `ic_type_of_input` | string | *required* | always | The input: powerspectrum (file with [k (h/Mpc), P(k) (Mpc/h)^3]), transferfunction (file with [k (h/Mpc), T(k) Mpc^2]), camb (a transfer info file listing T(k,z) files from CAMB; the old name transferinfofile is also accepted; the columns are read by name from the header, or by position: 13 CAMB, 9 AxionCAMB, 7 old CAMB / CLASS with format=camb), class (native CLASS output: ic_input_filename is the root of the run, with format = class, output = mTk,vTk, write_background = yes) or internal (FML's Einstein-Boltzmann solver run with the cosmology of the simulation, cosmology_model included; needs a build with USE_INTERNAL_COSMOLOGY=true; the old name internal_transfer is also accepted). See FML/TransferProviders and README.md. Options: `powerspectrum`, `transferfunction`, `camb`, `class`, `internal`, `internal_transfer`, `transferinfofile` |
 | `ic_input_gauge` | string | `"synchronous"` | ic_type_of_input = class | The gauge CLASS was run in (newtonian is converted to the CDM-synchronous gauge the IC need; it needs output = mTk,vTk). Options: `synchronous`, `newtonian` |
-| `ic_input_filename` | string | *required* | always | The input file |
+| `ic_input_filename` | string | `""` | always | The input file (needed except for ic_type_of_input = internal, where it is an optional .ini file of the Einstein-Boltzmann solver with its precision, recombination and reionization settings; its cosmology and k-range are replaced by those of the simulation) |
 | `ic_input_redshift` | double | *required* | always | The redshift of the input P(k) / T(k) |
 | `ic_fix_amplitude` | bool | `true` | always | Fix the amplitude of the modes when generating the random field |
 | `ic_reverse_phases` | bool | `false` | always | Reverse the phases (for paired simulations) |
@@ -317,7 +319,7 @@ Not everything is implemented yet for CDM and baryons as separate particles (`pa
 | `timestep_method` other than `Tassev` with COLA (the modified Tassev operators get the baryon-CDM relative velocity wrong: +30% in P_b-c with 20 linear steps) | yes |  |
 | `simulation_cola_LPT_order` <= `ic_LPT_order` (with COLA) | yes |  |
 | `simulation_enforce_LPT_trajectories = false` | yes | yes |
-| `ic_type_of_input = camb`, `class` or `internal_transfer` (species transfers at zini) | yes | yes |
+| `ic_type_of_input = camb`, `class` or `internal` (species transfers at zini) | yes | yes |
 | `ic_random_field_type = gaussian` or `nongaussian` | yes | yes |
 | `ic_LPT_order = 1` or `2` | yes |  |
 | `force_linear_massive_neutrinos = false` (the particles replace the linear neutrinos) |  | yes |

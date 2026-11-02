@@ -415,8 +415,8 @@ namespace SIMCODE {
                 b.optional("multigrid_coarse_factor",
                            1,
                            "Multigrid solver: solve the field equation on a grid coarser by this factor than the "
-                           "force grid (the density averaged over factor^NDIM cells, the solution interpolated back "
-                           "in Fourier space). 1: on the force grid");
+                           "force grid (the density and the solution go between the grids as their Fourier modes below "
+                           "the coarse Nyquist frequency). 1: on the force grid");
             });
 
             b.section("Primordial power-spectrum");
