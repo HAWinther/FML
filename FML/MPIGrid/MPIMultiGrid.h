@@ -7,6 +7,7 @@
 #include <complex>
 #include <functional>
 #include <iostream>
+#include <string>
 #include <vector>
 
 #include <FML/Global/Global.h>
@@ -18,6 +19,12 @@ namespace FML {
         //===========================================================================================
         ///
         /// A stack of _Nlevel MPIGrids with \f$ (N / 2^{\rm Level})^{\rm NDIM} \f$ cells in each level
+        ///
+        /// N does not have to be a power of 2: a level is halved while N is even (each coarse cell is 2^NDIM fine
+        /// cells), so N = m 2^L (m odd) has at most L + 1 levels with m cells on the coarsest (e.g. 96 -> 48 -> 24 ->
+        /// 12 -> 6 -> 3). With MPI every level must have the same number of slices on every task (the cells of a
+        /// coarse cell are then on the same task), so a level is only halved while N / 2 is divisible by NTasks
+        /// (N a power of 2 and NTasks a power of 2: the coarsest level has one slice per task, as before)
         ///
         /// Compile time defines:
         ///
@@ -70,6 +77,9 @@ namespace FML {
             // Set the value of y at given level and index (save way to define value)
             void set_y(int level, const std::array<int, NDIM> & coord, const T & value);
             void set_y(int level, IndexInt index, const T & value);
+
+            /// The largest number of levels for N cells per dim with the current number of tasks
+            static int max_levels(int N);
 
             // Fetch info about the grid
             IndexInt get_NtotLocal(int level = 0) const;
@@ -179,6 +189,20 @@ namespace FML {
         }
 
         template <int NDIM, class T>
+        int MPIMultiGrid<NDIM, T>::max_levels(int N) {
+            // Halve while the coarse level has whole cells: N even, the coarse level not below 2 cells (serial) or
+            // with the same number of slices (>= 1) on every task (MPI)
+            int nlevel = 1;
+            for (int n = N; n % 2 == 0; n /= 2) {
+                const int ncoarse = n / 2;
+                if (FML::NTasks > 1 ? ncoarse % FML::NTasks != 0 : ncoarse < 2)
+                    break;
+                nlevel++;
+            }
+            return nlevel;
+        }
+
+        template <int NDIM, class T>
         MPIMultiGrid<NDIM, T>::MPIMultiGrid(MPIGrid<NDIM, T> & y,
                                             int Nlevel,
                                             bool periodic,
@@ -197,43 +221,33 @@ namespace FML {
             : _N(N), _periodic(periodic), _n_extra_slices_left(n_extra_slices_left),
               _n_extra_slices_right(n_extra_slices_right) {
 
-            //==================================================================================
-            // Check that FML::NTasks is a power of 2 if we have more than 1 task
-            // If its not then the parallelization becomes much harder
-            // Also check that N is a power of 2
-            //==================================================================================
-            assert_mpi(N > 0 and FML::power(2, intlog2(N)) == N,
-                       "[MPIMultiGrid] N must be positive and a power of 2 for this class to work\n");
-            if (FML::NTasks > 1) {
-                assert_mpi(FML::power(2, intlog2(FML::NTasks)) == FML::NTasks,
-                           "[MPIMultiGrid] FML::NTasks must be a power of 2 for this class to work with MPI\n");
-            }
-
-            //==================================================================================
-            // The smallest level we allow is one where we have one cell per CPU on the coarsest level
-            // just makes the algorithms easier as not all tasks will have cells and right/left tasks
-            // might lie several CPUs apart
-            //==================================================================================
-            if (Nlevel < 0) {
-                if (FML::NTasks > 1) {
-                    Nlevel = intlog2(_N) - intlog2(FML::NTasks) + 1;
-                } else {
-                    Nlevel = intlog2(_N);
-                }
-            }
+            assert_mpi(N > 0, "[MPIMultiGrid] N must be positive\n");
+            const int Nlevel_max = max_levels(N);
+            if (Nlevel < 0)
+                Nlevel = Nlevel_max;
             _Nlevel = Nlevel;
             _NinLevel = std::vector<int>(_Nlevel, _N);
             _y.resize(_Nlevel);
 
             // Check that _Nlevel is OK
             assert_mpi(_Nlevel > 0, "[MPIMultiGrid] Nlevel must be >= 1\n");
-            if (FML::NTasks > 1) {
-                assert_mpi(_Nlevel <= intlog2(N) - intlog2(FML::NTasks) + 1,
-                           "[MPIMultiGrid] Nlevel is too large. With MPI the smallest level corresponds to each task "
-                           "having just 1 slice each\n");
-            } else {
-                assert_mpi(_Nlevel <= intlog2(_N),
-                           "[MPIMultiGrid] Nlevel is too large. Coarsest level will have less than 1 cell\n");
+            assert_mpi(_Nlevel <= Nlevel_max,
+                       ("[MPIMultiGrid] Nlevel = " + std::to_string(_Nlevel) + " is too large for N = " +
+                        std::to_string(N) + " and " + std::to_string(FML::NTasks) + " tasks (at most " +
+                        std::to_string(Nlevel_max) +
+                        "): a level is halved while N is even (and with MPI N / 2 is divisible by the number of "
+                        "tasks)\n")
+                           .c_str());
+
+            // A large coarsest level makes the multigrid solvers converge slowly (it is solved by sweeps)
+            const int Ncoarsest = N >> (_Nlevel - 1);
+            static int warned_N = -1; // (once per N: a solver makes several grids)
+            if (Nlevel_max == _Nlevel and Ncoarsest > 16 and FML::ThisTask == 0 and warned_N != N) {
+                warned_N = N;
+                std::cout << "[MPIMultiGrid] Warning: N = " << N << " with " << FML::NTasks << " tasks gives only "
+                          << _Nlevel << " level(s), the coarsest with " << Ncoarsest
+                          << " cells per dim: slow convergence (use N = m 2^L with m small"
+                          << (FML::NTasks > 1 ? " and N / 2^l divisible by the number of tasks" : "") << ")\n";
             }
 
             //==================================================================================

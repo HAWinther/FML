@@ -377,9 +377,9 @@ namespace FML {
                                                       int n_extra_slices_left,
                                                       int n_extra_slices_right)
                 : _N(N), _periodic(periodic), _verbose(verbose) {
-                // The maximum number of levels is log2(N)
+                // The maximum number of levels (log2(N) for N a power of 2, see MPIMultiGrid::max_levels)
                 if (Nlevels > -1) {
-                    if (FML::power(2, Nlevels) > N) {
+                    if (Nlevels > MPIMultiGrid<NDIM, T>::max_levels(N)) {
                         Nlevels = -1;
                         if (FML::ThisTask == 0)
                             std::cout
@@ -993,9 +993,13 @@ namespace FML {
                 const int rowlength = NDIM == 1 ? 1 : N;
                 const int rowstep = NDIM == 1 ? 1 : 2;
                 const IndexInt nrows = get_NtotLocal(level) / rowlength;
+                // With N odd (only possible on the coarsest level) the colours do not alternate across the periodic
+                // boundary (cells 0 and N - 1 have the same colour), so rows of the same colour can be neighbors:
+                // sweep without threads (a Gauss-Seidel sweep in the row order; the coarsest level is small)
+                [[maybe_unused]] const bool threads = N % 2 == 0;
 
 #ifdef USE_OMP
-#pragma omp parallel for
+#pragma omp parallel for if (threads)
 #endif
                 for (IndexInt row = 0; row < nrows; row++) {
                     // The coordinates of the row (all but the last direction)

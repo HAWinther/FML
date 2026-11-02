@@ -221,6 +221,75 @@ int main() {
                     "Poisson: residual reduced by a factor " + num(factor, 3) + " per V-cycle (2+2 sweeps)");
     }
 
+    // 2b. N not a power of 2: the number of levels, and Poisson's equation for two cosines (eigenfunctions of the
+    //     discrete Laplacian, so the exact discrete solution is known) on 48^3 (3 2^4) and 40^3 (5 2^3)
+    {
+        const int T = FML::NTasks;
+        auto expected_levels = [&](int n) {
+            int l = 1;
+            while (n % 2 == 0 and (T > 1 ? (n / 2) % T == 0 : n / 2 >= 2)) {
+                n /= 2;
+                l++;
+            }
+            return l;
+        };
+        // (32 and a power-of-2 number of tasks: the levels as before, one slice per task on the coarsest)
+        bool levels_ok = (T & (T - 1)) != 0 or
+                         MPIMultiGrid<NDIM, double>::max_levels(32) == (T == 1 ? 5 : 5 - FML::GRID::intlog2(T) + 1);
+        for (int n : {48, 40, 96, 6})
+            levels_ok = levels_ok and MPIMultiGrid<NDIM, double>::max_levels(n) == expected_levels(n);
+        if (T == 1)
+            levels_ok = levels_ok and MPIMultiGrid<NDIM, double>::max_levels(48) == 5 and
+                        MPIMultiGrid<NDIM, double>::max_levels(40) == 4 and
+                        MPIMultiGrid<NDIM, double>::max_levels(7) == 1;
+        check_local(levels_ok, "MPIMultiGrid::max_levels: halve while N is even (and N / 2 divisible by NTasks)");
+
+        for (int n : {48, 40}) {
+            if (n % T != 0)
+                continue;
+            auto mode = [&](const std::array<int, NDIM> & c) {
+                return std::cos(2 * M_PI * (c[0] + 0.5) / n) + 0.5 * std::cos(2 * M_PI * 2 * (c[1] + 0.5) / n);
+            };
+            // The eigenvalues of the 7-point Laplacian (h = 1/n): -4 n^2 sin^2(pi m / n)
+            auto lambda = [&](int m) { return -4.0 * n * n * std::pow(std::sin(M_PI * m / n), 2); };
+            MPIMultiGrid<NDIM, double> rho(n, -1, true, 1, 1);
+            auto & g = rho.get_grid(0);
+            for (IndexInt i = 0; i < g.get_NtotLocal(); i++)
+                g[i] = mode(g.globalcoord_from_index(i));
+            rho.restrict_down_all();
+            Solver s(n, -1, false, true, 1, 1);
+            s.set_ngs_sweeps(2, 2, 2);
+            s.set_epsilon(1e-10);
+            s.set_maxsteps(40);
+            s.set_initial_guess(0.0);
+            MultiGridFunction<NDIM, double> eq = [&](Solver * sol, int level, IndexInt index) {
+                auto il = sol->get_neighbor_gridindex(level, index);
+                return std::pair<double, double>{sol->get_Laplacian(level, il) - rho.get_y(level, index),
+                                                 sol->get_derivLaplacian(level, il)};
+            };
+            const auto result = s.solve(eq, s.ConvergenceCriterionResidual);
+            // (periodic: the solution is determined up to a constant, so compare without the mean)
+            auto & f = s.get_grid(0);
+            double mean = 0.0;
+            for (IndexInt i = 0; i < f.get_NtotLocal(); i++)
+                mean += f[i];
+            FML::SumOverTasks(&mean);
+            mean /= std::pow(double(n), NDIM);
+            double err = 0.0;
+            for (IndexInt i = 0; i < f.get_NtotLocal(); i++) {
+                const auto c = f.globalcoord_from_index(i);
+                const double exact = std::cos(2 * M_PI * (c[0] + 0.5) / n) / lambda(1) +
+                                     0.5 * std::cos(2 * M_PI * 2 * (c[1] + 0.5) / n) / lambda(2);
+                err = std::max(err, std::abs(f[i] - mean - exact) * std::abs(lambda(1)));
+            }
+            FML::MaxOverTasks(&err);
+            check_local(result.converged() and err < 1e-8,
+                        "Poisson on " + std::to_string(n) + "^3 (" + std::to_string(rho.get_Nlevel()) +
+                            " levels, coarsest " + std::to_string(rho.get_N(rho.get_Nlevel() - 1)) + "^3): " +
+                            std::to_string(result.iterations) + " V-cycles, error " + num(err, 2));
+        }
+    }
+
     // 3. DGP-type equation: D^2 phi - 0.5 alpha (sqrt(1 + 4 (2/3) sigma / alpha^2) - 1) / (2/3) = 0
     //    with sigma = (traceless part of phi_ij)^2 + alpha delta
     {

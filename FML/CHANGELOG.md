@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### MultigridSolver / MPIMultiGrid: N and the number of tasks no longer have to be powers of 2
+- A level is halved while N is even (and, with MPI, while N / 2 is divisible by the number of tasks so every task has
+  the same number of slices on every level): N = m 2^L has up to L + 1 levels with m cells per dim on the coarsest
+  (96 -> 48 -> 24 -> 12 -> 6 -> 3). Powers of 2 give the same levels as before. `MPIMultiGrid::max_levels(N)` gives the
+  number; a warning is printed when the coarsest level is large (> 16 cells per dim, slow convergence).
+- An odd coarsest level is swept without OpenMP threads (its colours do not alternate across the periodic boundary).
+
 ### Cosmology: the background and perturbation modules move into Cosmology/; the old model classes are removed
 - `Background/` is now `Cosmology/Background/` and `Perturbations/` is now `Cosmology/Perturbations/` (namespaces
   `FML::COSMOLOGY::BACKGROUND` and `FML::COSMOLOGY::PERTURBATIONS` unchanged; includes `<FML/Cosmology/Background/...>`,
