@@ -257,7 +257,7 @@ class GravityModel {
     // Factors in the LPT equations
     virtual double source_factor_1LPT([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
         double factor = 1.0;
-        const double fnu = this->cosmo->get_fMNu();
+        const double fnu = this->cosmo->f_nu(a);
         if (fnu > 0.0 and koverH0 > 0.0) {
             if (transfers) {
                 const double T_nu = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, koverH0 * H0_hmpc, a);
@@ -268,7 +268,7 @@ class GravityModel {
         return factor;
     };
     virtual double source_factor_2LPT([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
-        return 1.0 - this->cosmo->get_fMNu();
+        return 1.0 - this->cosmo->f_nu(a);
     };
     // The D1^2 source of the 2LPT equation relative to the D2 term (1 in GR):
     //   D2'' + (2 + dlogH/dloga) D2' = rhs source_factor_2LPT (D2 - nonlinear_source_factor_2LPT D1^2)
@@ -278,10 +278,10 @@ class GravityModel {
         return 1.0;
     };
     virtual double source_factor_3LPTa([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
-        return 1.0 - this->cosmo->get_fMNu();
+        return 1.0 - this->cosmo->f_nu(a);
     };
     virtual double source_factor_3LPTb([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
-        return 1.0 - this->cosmo->get_fMNu();
+        return 1.0 - this->cosmo->f_nu(a);
     };
 
     // This computes the force DPhi from the density field
@@ -329,9 +329,11 @@ class GravityModel {
     //========================================================================
     // Compute the growth factors: the LPT growth equations with G_eff/G = GeffOverG, the source factors and the
     // nonlinear 2LPT factor of the model (FML/Cosmology/Growth/LPTGrowthFactors.h). The matter density in the
-    // source is OmegaM / a^3 (SimulationCode's matter, massive neutrinos included); with massive neutrinos the
-    // CDM+baryon source is (1 - fnu) + fnu T_nu/T_cb (source_factor_1LPT) from the transfer functions, and the
-    // initial growth rate is the CDM+baryon one of the transfer functions. Normalized to D1 = 1 at aini.
+    // source is the actual rho_m(a) of the background (massive neutrinos with their energy density, relativistic at
+    // early times); with massive neutrinos the CDM+baryon source is (1 - f_nu(a)) + f_nu(a) T_nu/T_cb
+    // (source_factor_1LPT, f_nu(a) = rho_nu(a)/rho_m(a)) from the transfer functions, so (1 - f_nu(a)) rho_m(a) is the
+    // CDM+baryon density, and the initial growth rate is the CDM+baryon one of the transfer functions. Normalized to
+    // D1 = 1 at aini.
     //========================================================================
     virtual void compute_growth_factors() {
         // With massive neutrinos the transfer functions are needed: we cannot start earlier than they go
@@ -352,8 +354,6 @@ class GravityModel {
 
         namespace GROWTH = FML::COSMOLOGY::GROWTH;
         auto eq = GROWTH::LPTGrowthEquations::from_background(cosmo->background());
-        const double OmegaM = cosmo->get_OmegaM();
-        eq.matter_density = [OmegaM](double x) { return OmegaM * std::exp(-3.0 * x); };
         eq.mu = [this](double x, double k) { return GeffOverG(std::exp(x), k); };
         eq.second_order_source = [this](double x, double k) { return nonlinear_source_factor_2LPT(std::exp(x), k); };
         eq.source_1 = [this](double x, double k) { return source_factor_1LPT(std::exp(x), k); };

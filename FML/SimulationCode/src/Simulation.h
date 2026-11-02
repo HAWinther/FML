@@ -106,10 +106,7 @@ class NBodySimulation {
     /// The baryon particles (only if particle_baryons)
     MPIParticles part_baryon;
     /// The massive neutrino particles (only if particle_neutrinos; delta-f method)
-    SIMCODE::NeutrinoParticles<NDIM> neutrinos;
-
-    /// Phi/c^2 for the lightcone (plc_relativistic_effects) from the density field of the step (kept by the lightcone)
-    void compute_lightcone_potential(const FFTWGrid<NDIM> & density_grid_fourier, double a);
+    SIMCODE::NeutrinoParticles<NDIM> part_neutrinos;
 
     /// The initial density field delta_cb(zini,k) computed with the same Nmesh
     /// as the forces (used for linear massive neutrinos and the N-body gauge - not allocated otherwise)
@@ -197,8 +194,10 @@ class NBodySimulation {
     MPIParticles & get_baryon_particles() { return part_baryon; }
     /// Massive neutrinos as particles (delta-f method)?
     bool has_neutrino_particles() const { return params.particle.neutrinos; }
-    SIMCODE::NeutrinoParticles<NDIM> & get_neutrinos() { return neutrinos; }
-    typename SIMCODE::NeutrinoParticles<NDIM>::Container & get_neutrino_particles() { return neutrinos.particles(); }
+    SIMCODE::NeutrinoParticles<NDIM> & get_neutrinos() { return part_neutrinos; }
+    typename SIMCODE::NeutrinoParticles<NDIM>::Container & get_neutrino_particles() {
+        return part_neutrinos.particles();
+    }
 
     /// The particle species (in the order of the IDs)
     const std::vector<SIMCODE::SpeciesInfo> & get_species() const { return species; }
@@ -218,13 +217,13 @@ class NBodySimulation {
         for_each_cb_species(f);
         for (auto & info : species)
             if (info.name == "nu")
-                f(neutrinos.particles(), info);
+                f(part_neutrinos.particles(), info);
     }
     /// The shot noise of the density field of a species (in units of the box volume): 1/N (sum w^2 / N^2 for the
     /// delta-f neutrinos). Collective
     double species_shotnoise(const SIMCODE::SpeciesInfo & info) {
         if (info.name == "nu")
-            return neutrinos.shotnoise();
+            return part_neutrinos.shotnoise();
         return 1.0 / double((info.name == "baryon" ? part_baryon : part).get_npart_total());
     }
     /// The shot noise of delta_cb = sum_i w_i delta_i: sum_i w_i^2 / N_i
@@ -241,11 +240,11 @@ class NBodySimulation {
     double total_shotnoise(double a = -1.0) {
         const double fnu = cosmo->get_fMNu();
         if (params.force.neutrino_energy_density and a > 0.0) {
-            typename SIMCODE::NeutrinoParticles<NDIM>::ScopedEnergyWeights energy_weights(neutrinos, a, true);
+            typename SIMCODE::NeutrinoParticles<NDIM>::ScopedEnergyWeights energy_weights(part_neutrinos, a, true);
             const double fnu_eff = fnu * neutrino_energy_factor(a);
-            return (1.0 - fnu) * (1.0 - fnu) * cb_shotnoise() + fnu_eff * fnu_eff * neutrinos.shotnoise();
+            return (1.0 - fnu) * (1.0 - fnu) * cb_shotnoise() + fnu_eff * fnu_eff * part_neutrinos.shotnoise();
         }
-        return (1.0 - fnu) * (1.0 - fnu) * cb_shotnoise() + fnu * fnu * neutrinos.shotnoise();
+        return (1.0 - fnu) * (1.0 - fnu) * cb_shotnoise() + fnu * fnu * part_neutrinos.shotnoise();
     }
     /// The mean energy per mass of the neutrinos <E/m>(a) with force_neutrino_energy_density, otherwise 1
     double neutrino_energy_factor(double a) const {
@@ -466,7 +465,7 @@ void NBodySimulation<NDIM, T>::init() {
     if (has_neutrino_particles()) {
         const double mnu_eV = cosmo->get_Mnu_eV() / cosmo->get_N_nu();
         const double Tnu0_eV = cosmo->get_neutrino_temperature_eV(1.0);
-        neutrinos.init(mnu_eV, Tnu0_eV, params.simulation.boxsize, params.particle.neutrino_deltaf);
+        part_neutrinos.init(mnu_eV, Tnu0_eV, params.simulation.boxsize, params.particle.neutrino_deltaf);
         if (FML::ThisTask == 0)
             std::cout << "# Massive neutrinos as particles (delta-f weights: " << std::boolalpha
                       << params.particle.neutrino_deltaf << "). m_nu = " << mnu_eV << " eV (x" << cosmo->get_N_nu()
@@ -679,7 +678,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
         timer.StartTiming("InitialConditionsNeutrinos");
         FML::assert_mpi(transfers != nullptr, "particle_neutrinos needs the transfer functions (camb or class)");
         const auto & nu = species.back();
-        neutrinos.generate(delta_ini_fourier,
+        part_neutrinos.generate(delta_ini_fourier,
                            *transfers,
                            ic.initial_redshift,
                            cosmo->HoverH0_of_a(ic.a_initial()),
@@ -711,19 +710,15 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
                                        fac * grav_ic->get_f_3LPTb(aini)};
     timer.StartTiming("InitialConditions");
 
-    // Which LPT potentials we need to keep for scale-dependent COLA (max 3LPT)
+    // Which LPT potentials we need to keep for scale-dependent COLA (1LPT and 2LPT)
     const bool store_potentials = cola.enabled and cola.scaledependent;
     const bool store_1LPT = store_potentials and FML::PARTICLE::has_get_D_1LPT<T>() and cola.LPT_order >= 1;
     const bool store_2LPT = store_potentials and FML::PARTICLE::has_get_D_2LPT<T>() and cola.LPT_order >= 2;
-    const bool store_3LPT = store_potentials and FML::PARTICLE::has_get_D_3LPTa<T>() and
-                            FML::PARTICLE::has_get_D_3LPTb<T>() and cola.LPT_order >= 3;
 
-    // We get 2LPT, 3LPTa, 3LPTb depending on the size of the vector we send in
+    // The IC generator returns the 2LPT potential if the vector has room for it
     std::vector<FFTWGrid<NDIM>> phi_nLPT_potentials;
     if (store_2LPT)
         phi_nLPT_potentials.resize(1);
-    if (store_3LPT)
-        phi_nLPT_potentials.resize(3);
 
     // In the N-body gauge the growth rate (and so the 1LPT velocity) is scale-dependent on large scales.
     // We take it from the (N-body gauge) transfer functions
@@ -857,7 +852,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
 
     // Store the potentials
     if (store_1LPT) {
-        cola.phi_1LPT_ini_fourier = SIMCODE::compute_phi_1LPT_from_delta<NDIM>(delta_ini_fourier);
+        cola.phi_1LPT_ini_fourier = FFTWGrid<NDIM>();
+        FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier<NDIM>(delta_ini_fourier, cola.phi_1LPT_ini_fourier);
         cola.phi_1LPT_ini_fourier.add_memory_label("phi_1LPT(k,zini)");
     }
     if (store_2LPT) {
@@ -865,14 +861,6 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
             std::cout << "Storing phi_2LPT(k,zini) for scale-dependent COLA\n";
         cola.phi_2LPT_ini_fourier = phi_nLPT_potentials[0];
         cola.phi_2LPT_ini_fourier.add_memory_label("phi_2LPT(k,zini)");
-    }
-    if (store_3LPT) {
-        if (FML::ThisTask == 0)
-            std::cout << "Storing phi_3LPTa(k,zini) and phi_3LPTb(k,zini) for scale-dependent COLA\n";
-        cola.phi_3LPTa_ini_fourier = phi_nLPT_potentials[1];
-        cola.phi_3LPTb_ini_fourier = phi_nLPT_potentials[2];
-        cola.phi_3LPTa_ini_fourier.add_memory_label("phi_3LPTa(k,zini)");
-        cola.phi_3LPTb_ini_fourier.add_memory_label("phi_3LPTb(k,zini)");
     }
 
     timer.EndTiming("InitialConditions");
@@ -1051,7 +1039,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     // Scale-dependent COLA: the LPT potentials of the total CDM+baryon field (the shared COLA frame)
     if (cola.enabled and cola.scaledependent) {
         if (FML::PARTICLE::has_get_D_1LPT<T>() and cola.LPT_order >= 1) {
-            cola.phi_1LPT_ini_fourier = SIMCODE::compute_phi_1LPT_from_delta<NDIM>(delta_cb_fourier);
+            cola.phi_1LPT_ini_fourier = FFTWGrid<NDIM>();
+            FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier<NDIM>(delta_cb_fourier, cola.phi_1LPT_ini_fourier);
             cola.phi_1LPT_ini_fourier.add_memory_label("phi_1LPT(k,zini)");
         }
         if (FML::PARTICLE::has_get_D_2LPT<T>() and cola.LPT_order >= 2 and ic.LPT_order >= 2) {
@@ -1071,7 +1060,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
             shift_vec.fill(baryon_shift);
             FML::GRID::shift_grid_fourier<NDIM>(delta_shifted, shift_vec, +1.0);
             if (cola.phi_1LPT_ini_fourier) {
-                sp.phi_1LPT_ini_fourier = SIMCODE::compute_phi_1LPT_from_delta<NDIM>(delta_shifted);
+                sp.phi_1LPT_ini_fourier = FFTWGrid<NDIM>();
+                FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier<NDIM>(delta_shifted, sp.phi_1LPT_ini_fourier);
                 sp.phi_1LPT_ini_fourier.add_memory_label("phi_1LPT(k,zini) baryons");
             }
             if (cola.phi_2LPT_ini_fourier) {
@@ -1083,7 +1073,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     }
 }
 
-/// Read the N-body gauge source, check it and store the initial density field of the particles
+/// Read the N-body gauge source and check it
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::setup_nbody_gauge() {
     const auto & force = params.force;
@@ -1110,16 +1100,8 @@ void NBodySimulation<NDIM, T>::setup_nbody_gauge() {
         }
     }
 
-    // delta_cb(k,zini) of the particles on the force grid
-    const auto nleftright = FML::INTERPOLATION::get_extra_slices(force.density_assignment_method);
-    initial_density_field_fourier = FFTWGrid<NDIM>(force.nmesh, nleftright.first, nleftright.second);
-    initial_density_field_fourier.add_memory_label("density(k,zini)");
-    FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
-                                          part.get_npart(),
-                                          part.get_npart_total(),
-                                          initial_density_field_fourier,
-                                          force.density_assignment_method);
-    initial_density_field_fourier.fftw_r2c();
+    // delta_cb(k,zini) is stored from the density field of the first force evaluation (add_nbody_gauge_source) so that
+    // it has the same window as the density fields it is added to
 }
 
 /// Compute delta(k) from particles in gadget files (used to take the phases from them)
@@ -1369,8 +1351,14 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
         compute_density_field_fourier(density_grid_fourier, s.apos);
         timer.EndTiming("ComputeDensityField");
         // The potential for the lightcone (from the same density field as the force)
-        if (lightcone->needs_potential(s.apos, s.apos_new))
-            compute_lightcone_potential(density_grid_fourier, s.apos);
+        if (lightcone->needs_potential(s.apos, s.apos_new)) {
+            timer.StartTiming("LightconePotential");
+            lightcone->compute_potential(density_grid_fourier,
+                                         s.apos,
+                                         current_force.density_assignment_method,
+                                         current_force.deconvolve_window);
+            timer.EndTiming("LightconePotential");
+        }
     }
 
     // Compute forces and kick particles (updates velocity)
@@ -1424,7 +1412,7 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
         }
         // The delta-f weights depend on the momenta
         if (has_neutrino_particles())
-            neutrinos.update_weights();
+            part_neutrinos.update_weights();
         timer.EndTiming("Kick");
     }
     drift_and_lightcone(s);
@@ -1470,7 +1458,10 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
             const auto nleftright = FML::INTERPOLATION::get_extra_slices(current_force.density_assignment_method);
             FFTWGrid<NDIM> density(current_force.nmesh, nleftright.first, nleftright.second);
             assign_cb_particles_to_grid(density, s.apos);
-            compute_lightcone_potential(density, s.apos);
+            timer.StartTiming("LightconePotential");
+            lightcone->compute_potential(
+                density, s.apos, current_force.density_assignment_method, current_force.deconvolve_window);
+            timer.EndTiming("LightconePotential");
         }
         lightcone->create_lightcone(
             part, s.apos, s.apos_new, s.avel_new, s.delta_time_drift, current_force.density_assignment_method);
@@ -1662,7 +1653,7 @@ template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::free() {
     part.free();
     part_baryon.free();
-    neutrinos.free();
+    part_neutrinos.free();
     initial_density_field_fourier.free();
     initial_density_field_early.free();
     hybridbias_linear_field_fourier.free();
@@ -1671,15 +1662,5 @@ void NBodySimulation<NDIM, T>::free() {
 
 // The density field the force is computed from (member functions of NBodySimulation)
 #include "SimulationDensity.h"
-
-/// Phi/c^2 for the lightcone from the density contrast delta(k) of the step (see Lightcone::compute_potential), with
-/// the same window deconvolution as the force
-template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::compute_lightcone_potential(const FFTWGrid<NDIM> & density_grid_fourier, double a) {
-    timer.StartTiming("LightconePotential");
-    lightcone->compute_potential(
-        density_grid_fourier, a, current_force.density_assignment_method, current_force.deconvolve_window);
-    timer.EndTiming("LightconePotential");
-}
 
 #endif

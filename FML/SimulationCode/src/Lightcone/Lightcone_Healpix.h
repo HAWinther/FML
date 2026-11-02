@@ -388,13 +388,16 @@ class OnionSlice {
     // at the mid-radius of the shell) are used: the others (also those cut by the boundary, so the particles in
     // them are not used) are set to delta = 0, and the mean is subtracted over the observed pixels only.
     // Otherwise all pixels are observed
+    // The map must have been reduced over tasks first (reduce_over_tasks)
     void normalize_map(double mean_density, const IsObserved & is_observed = nullptr) {
         if (is_normalized)
             return;
+        if (not is_reduced)
+            throw std::logic_error("[OnionSlice::normalize_map] reduce the map over tasks first");
 
         // If there are no particles in the map then we do not
         // do anything
-        if (is_reduced and n_in_map == 0) {
+        if (n_in_map == 0) {
             return;
         }
 
@@ -431,13 +434,15 @@ class OnionSlice {
         double count_observed = 0.0;
         double minval = std::numeric_limits<double>::max();
         double maxval = -std::numeric_limits<double>::max();
+        long nnegative = 0;
 #ifdef USE_OMP
-#pragma omp parallel for reduction(+ : mean, nobserved, count_observed) reduction(max : maxval) reduction(min : minval)
+#pragma omp parallel for reduction(+ : mean, nobserved, count_observed, nnegative) reduction(max : maxval)               \
+    reduction(min : minval)
 #endif
         for (long ipix = 0; ipix < npix; ipix++) {
             if (map[ipix] < 0.0) {
-                std::cout << "# WARNING: Negative pixel " << ipix << " / " << npix << " has " << map[ipix] << "\n";
-                throw std::runtime_error("Negative pixels. This should never happen!");
+                nnegative++;
+                continue;
             }
             if (not observed[ipix]) {
                 map[ipix] = 0.0;
@@ -451,13 +456,10 @@ class OnionSlice {
             maxval = std::max(maxval, double(map[ipix]));
         }
 
-        // If reduced then task 0 has all the data it needs
-        if (not is_reduced) {
-            FML::MinOverTasks(&minval);
-            FML::MaxOverTasks(&maxval);
-            FML::SumOverTasks(&mean);
-            FML::SumOverTasks(&count_observed);
-        }
+        // (an exception thrown inside the OpenMP loop would terminate the program)
+        if (nnegative > 0)
+            throw std::runtime_error("[OnionSlice::normalize_map] " + std::to_string(nnegative) +
+                                     " negative pixels. This should never happen!");
         mean = nobserved > 0.0 ? mean / nobserved : 0.0;
         fsky_observed = nobserved / double(npix);
         n_in_observed_pixels = count_observed;
@@ -473,8 +475,6 @@ class OnionSlice {
         if (FML::ThisTask == 0) {
             std::cout << "# Normalized map has delta_min = " << minval << " delta_mean = " << mean
                       << " delta_max = " << maxval << "\n";
-            if (not is_reduced)
-                std::cout << "# NB: The min/max values are not accurate as we have not reduced over tasks yet\n";
             std::cout << "# We have subtracted the monopole corresponding to delta_mean != 0 from the map\n";
             if (fsky_observed < 1.0)
                 std::cout << "# Only the observed fsky = " << fsky_observed
@@ -753,7 +753,12 @@ class OnionSlices {
         }
     }
 
-    void init_current_step(double astart, double aend, Spline & r_of_loga_spline, double boxsize, std::string folder) {
+    /// r_of_loga_spline: the comoving distance (in units of the box) as a function of log a
+    void init_current_step(double astart,
+                           double aend,
+                           const std::function<double(double)> & r_of_loga_spline,
+                           double boxsize,
+                           std::string folder) {
         this->astart = astart;
         this->aend = aend;
 

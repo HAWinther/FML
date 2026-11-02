@@ -8,7 +8,6 @@
 #include <FML/GadgetUtils/GadgetUtils.h>
 #include <FML/GadgetUtils/GadgetUtilsHDF5.h>
 #include <FML/Global/Global.h>
-#include <FML/ODESolver/ODESolver.h>
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
@@ -64,8 +63,6 @@ template <int NDIM, class T, class U = LightConeParticle<float, NDIM>>
 class Lightcone {
   protected:
     using ParameterMap = FML::UTILS::ParameterMap;
-    using Spline = FML::INTERPOLATION::SPLINE::Spline;
-    using DVector = FML::INTERPOLATION::SPLINE::DVector;
     using Point = std::array<double, NDIM>;
     using MapRealType = double;
     template <class T1>
@@ -120,23 +117,15 @@ class Lightcone {
     // so basically just n_part
     std::map<std::string, double> mean_density;
 
-    // Ranges for splines for distances
-    Spline dist_spline, dist_inv_spline;
-    const int npts_loga = 200;
-    const double alow = 1e-4;
-    const double ahigh = 1.0;
-    double dist_low, dist_high;
-
     // For allocating memory for particles
     // We allow for a 20% buffer. If it overshoots then push_back
     // will realloc which is expensive memory-wise!
     const double particle_allocation_factor{1.2};
 
   private:
-    // Comoving distance
-    void compute_comoving_distance();
-    double get_distance(double a);
-    double get_distance_inv(double dist);
+    // Comoving distance (in units of the box) from the background and its inverse
+    double get_distance(double a) const;
+    double get_distance_inv(double dist) const;
 
     // Output methods
     void output_particles(FML::Vector<U> & part_lc, double astart, double aend, std::string label, int ibatch = 0);
@@ -340,9 +329,6 @@ void Lightcone<NDIM, T, U>::init(std::vector<std::string> & particle_types) {
     // The lightcone has to end today or earlier
     plc_a_finish = std::min(plc_a_finish, 1.0);
 
-    // Set up interpolation to compute distances
-    compute_comoving_distance();
-
     // Init step number
     plc_step = -1;
 
@@ -422,9 +408,7 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
         return;
 
     // Select the right map for the given particle type
-    auto & onionslices_curtype = onionslices_of_type["cb"];
-    if (make_onion_density_maps)
-        onionslices_curtype = onionslices_of_type[particle_type];
+    auto & onionslices_curtype = onionslices_of_type[particle_type];
 
     // Mean density in units where boxsize is unity
     mean_density[particle_type] = part.get_npart_total();
@@ -520,7 +504,8 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
 
     // Allocate and initialize the maps we need for the current time-step
     if (make_onion_density_maps)
-        onionslices_curtype.init_current_step(a_old, a_new, dist_spline, boxsize, plc_folder);
+        onionslices_curtype.init_current_step(
+            a_old, a_new, [this](double loga) { return get_distance(std::exp(loga)); }, boxsize, plc_folder);
 
     // Allocate lightcone particles
     FML::Vector<U> part_lc;
@@ -867,67 +852,16 @@ void Lightcone<NDIM, T, U>::make_potential_maps([[maybe_unused]] const FML::GRID
 #endif
 }
 
-// Compute comoving distance to redshift relation and set up spline interpolation
-// This gives us a spline of chi(loga) in (Mpc/h)
+// Comoving distance to a in units of the box (the background's chi(x), tabulated once when it is built)
 template <int NDIM, class T, class U>
-void Lightcone<NDIM, T, U>::compute_comoving_distance() {
-    const double H0_hmpc = cosmo->get_H0_hmpc();
-    const double H0Box = H0_hmpc * boxsize;
-
-    if (FML::ThisTask == 0) {
-        std::cout << "# Lightcone - Setting up distance interpolation\n";
-    }
-
-    DVector loga_arr(npts_loga);
-    for (int i = 0; i < npts_loga; i++) {
-        // From ahigh to alow (the grid used to stop at 1.047 alow)
-        loga_arr[i] = std::log(ahigh) + std::log(alow / ahigh) * i / double(npts_loga - 1);
-    }
-
-    // integrate dz/H0/E(z) from 0 to z
-    // or -dlna/H0/(a*E(z)) from 0 to ln(a)
-    FML::SOLVERS::ODESOLVER::ODEFunction deriv = [&](double x, [[maybe_unused]] const double * y, double * dydx) {
-        const double a = std::exp(x);
-        dydx[0] = -1.0 / (H0Box * a * cosmo->HoverH0_of_a(a));
-        return GSL_SUCCESS;
-    };
-
-    FML::SOLVERS::ODESOLVER::ODESolver ode;
-    std::vector<double> yini{0.0};
-    ode.solve(deriv, loga_arr, yini);
-
-    auto dist = ode.get_data_by_component(0);
-    dist_spline.create(loga_arr, dist, "dist_spline");
-    dist_inv_spline.create(dist, loga_arr, "dist_inv_spline");
-
-    // Get ranges we need to respect
-    dist_low = get_distance(ahigh);
-    dist_high = get_distance(alow);
+double Lightcone<NDIM, T, U>::get_distance(double a) const {
+    return cosmo->background().chi(std::log(a)) / boxsize;
 }
 
-// Convert scale factor to comoving distance
+// The scale factor at comoving distance dist (in units of the box)
 template <int NDIM, class T, class U>
-double Lightcone<NDIM, T, U>::get_distance(double a) {
-    if (a < alow || a > ahigh) {
-        if (FML::ThisTask == 0) {
-            std::cout << "WARNING! Scale factor outside spline range. a " << a << " [" << alow << ", " << ahigh
-                      << "]\n";
-        }
-    }
-    double loga = std::log(a);
-    return dist_spline(loga);
-}
-
-// Convert comoving distance to scale factor
-template <int NDIM, class T, class U>
-double Lightcone<NDIM, T, U>::get_distance_inv(double dist) {
-    if (dist < dist_low || dist > dist_high) {
-        if (FML::ThisTask == 0) {
-            std::cout << "WARNING! Distance outside spline range. dist " << dist * boxsize << " Mpc/h ["
-                      << dist_low * boxsize << ", " << dist_high * boxsize << "]\n";
-        }
-    }
-    return std::exp(dist_inv_spline(dist));
+double Lightcone<NDIM, T, U>::get_distance_inv(double dist) const {
+    return std::exp(cosmo->background().x_of_chi(dist * boxsize));
 }
 
 // Output the lightcone-particles as a gadget file

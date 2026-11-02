@@ -137,7 +137,7 @@ double buffered_pgd(std::vector<T> & particles, const std::string & method, doub
             const double disp = -force[d][i] * alpha;
             maximum = std::max(maximum, std::abs(disp));
             particles[i].pos[d] += disp;
-            NBODY::periodic_wrap_unit_box(particles[i].pos[d]);
+            particles[i].pos[d] = FML::PARTICLE::wrap_coordinate_periodic(particles[i].pos[d]);
         }
     FML::MaxOverTasks(&maximum);
     return maximum;

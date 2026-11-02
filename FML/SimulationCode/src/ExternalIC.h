@@ -120,12 +120,7 @@ namespace SIMCODE {
     }
 
     /// Wrap a coordinate (in units of the box) back into [0,1)
-    inline void wrap_periodic(double & x) {
-        if (x < 0.0)
-            x += 1.0;
-        if (x >= 1.0)
-            x -= 1.0;
-    }
+    inline void wrap_periodic(double & x) { x = FML::PARTICLE::wrap_coordinate_periodic(x); }
 
     /// The displacement field Psi = D phi (from an LPT potential in fourier space) at the
     /// (Eulerian) positions of the particles. The interpolation with the assignment kernel multiplies each mode by
@@ -235,11 +230,7 @@ namespace SIMCODE {
             std::array<double, NDIM> disp{}, disp2{}, q_vec{};
             for (int idim = 0; idim < NDIM; idim++) {
                 disp[idim] = v[idim] * disp_factor;
-                q_vec[idim] = pos[idim] - disp[idim];
-                if (q_vec[idim] >= 1.0)
-                    q_vec[idim] -= 1.0;
-                if (q_vec[idim] < 0.0)
-                    q_vec[idim] += 1.0;
+                q_vec[idim] = FML::PARTICLE::wrap_coordinate_periodic(pos[idim] - disp[idim]);
             }
 
             // At this point we have:
@@ -265,10 +256,7 @@ namespace SIMCODE {
                     if (disp[idim] < -0.5)
                         disp[idim] += 1.0;
                     // ...and finally wrap q_exact
-                    if (q_exact[idim] >= 1.0)
-                        q_exact[idim] -= 1.0;
-                    if (q_exact[idim] < 0.0)
-                        q_exact[idim] += 1.0;
+                    q_exact[idim] = FML::PARTICLE::wrap_coordinate_periodic(q_exact[idim]);
                 }
                 q_vec = q_exact;
             }

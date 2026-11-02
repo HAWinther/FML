@@ -1,6 +1,7 @@
 #ifndef PARTICLEREFLECTION_HEADER
 #define PARTICLEREFLECTION_HEADER
 
+#include <cmath>
 #include <array>
 #include <cassert>
 #include <cstring>
@@ -507,17 +508,21 @@ namespace FML {
             }
         }
 
-        /// @brief Wrap a coordinate periodically into [0,1) assuming it is in [-1,2) (i.e. it has been shifted by
-        /// less than the boxsize). The result is always in [0,1): x + 1 can round to exactly 1.0 for tiny negative
-        /// x (e.g. -1e-17) and then we use 0.0 (the closest point of [0,1) in the periodic sense).
+        /// @brief Wrap a coordinate (in units of the box) periodically into [0,1). The result is always in [0,1):
+        /// x + 1 can round to exactly 1.0 for tiny negative x (e.g. -1e-17) and then we use 0.0 (the closest point of
+        /// [0,1) in the periodic sense); coordinates more than a boxsize outside are wrapped with floor. NaN stays NaN.
         template <class U>
         inline U wrap_coordinate_periodic(U x) {
             if (x >= U(1.0))
                 x -= U(1.0);
             if (x < U(0.0))
                 x += U(1.0);
-            if (x == U(1.0))
-                x = U(0.0);
+            // Rounded to exactly 1, or more than a boxsize outside (NaN is left as it is)
+            if (x >= U(1.0) or x < U(0.0)) {
+                x -= std::floor(x);
+                if (x >= U(1.0) or x < U(0.0))
+                    x = U(0.0);
+            }
             return x;
         }
 

@@ -52,15 +52,9 @@ class ParticleCOLA : public ParticleBasic<NDIM> {
     float Psi_1LPT[NDIM];
     float * get_D_1LPT() { return Psi_1LPT; }
 
-    // 2LPT displacement field Psi (needed for >= 2LPT COLA)
+    // 2LPT displacement field Psi (needed for 2LPT COLA)
     float Psi_2LPT[NDIM];
     float * get_D_2LPT() { return Psi_2LPT; }
-
-    // 3LPT displacement fields (needed for 3LPT COLA)
-    // float Psi_3LPTa[NDIM];
-    // float Psi_3LPTb[NDIM];
-    // float * get_D_3LPTa() { return Psi_3LPTa; }
-    // float * get_D_3LPTb() { return Psi_3LPTb; }
 };
 
 /// Massive neutrino particles (particle_neutrinos = true, delta-f method of Elbers et al. 2021). The velocity is the

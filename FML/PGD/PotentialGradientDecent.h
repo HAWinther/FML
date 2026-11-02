@@ -132,7 +132,7 @@ namespace FML {
                     pos[idim] += disp;
 
                     // Periodic wrap (to [0,1) also for displacements larger than the box)
-                    FML::NBODY::periodic_wrap_unit_box(pos[idim]);
+                    pos[idim] = FML::PARTICLE::wrap_coordinate_periodic(pos[idim]);
                 }
                 return max_disp;
             };

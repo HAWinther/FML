@@ -587,10 +587,10 @@ namespace SIMCODE {
             if (simulation.use_cola and simulation.cola_LPT_order > ic.LPT_order)
                 fail("The highest COLA LPT order is ic_LPT_order (i.e. simulation_cola_LPT_order must be <= "
                      "ic_LPT_order)");
-            // The COLA particle types only store the 1LPT and 2LPT displacements
+            // COLA has the 1LPT and 2LPT frames (the IC can still be 3LPT)
             if (simulation.use_cola and simulation.cola_LPT_order > 2)
-                fail("simulation_cola_LPT_order = 3 is not implemented (the COLA particles store the 1LPT and 2LPT "
-                     "displacements only): use 1 or 2");
+                fail("simulation_cola_LPT_order must be 1 or 2 (COLA is implemented with the 1LPT and 2LPT frames; "
+                     "the IC can be 3LPT)");
             if (simulation.use_cola and simulation.cola_LPT_order < 1) {
                 // Without COLA nothing would move the particles (no PM force and no LPT trajectories)
                 if (simulation.enforce_LPT_trajectories)

@@ -156,7 +156,8 @@ void NBodySimulation<NDIM, T>::add_nbody_gauge_source(FFTWGrid<NDIM> & density_g
 
     // The force is normalized to OmegaM = OmegaCB + OmegaMNu so the source is (1-fMNu)(delta_cb + delta_extra)
     const double fMNu = cosmo->get_fMNu();
-    if (early_force and not initial_density_field_early)
+    // The first time (at zini): store delta_cb(k,zini) (as for the linear neutrinos)
+    if (not initial_density_field_fourier or (early_force and not initial_density_field_early))
         store_initial_density_field(density_grid_fourier, a);
     const auto & delta_ini_grid = initial_density_in_particle_frame();
     FML::GRID::for_each_fourier_mode<NDIM>(density_grid_fourier, [&](size_t fourier_index, double kmag) {
@@ -180,14 +181,14 @@ void NBodySimulation<NDIM, T>::add_neutrino_particles(FFTWGrid<NDIM> & density_g
     {
         // With force_neutrino_energy_density the field is the energy-density contrast (weights w E / (m <E/m>))
         typename SIMCODE::NeutrinoParticles<NDIM>::ScopedEnergyWeights energy_weights(
-            neutrinos,
+            part_neutrinos,
             a,
             params.force.neutrino_energy_density);
-        neutrinos.density_fourier(density_nu, current_force.density_assignment_method);
+        part_neutrinos.density_fourier(density_nu, current_force.density_assignment_method);
         if (params.pofk.every_step and not particles_shifted())
             bin_up_power_spectrum_every_step(density_nu,
                                              true,
-                                             params.pofk.subtract_shotnoise ? neutrinos.shotnoise() : 0.0,
+                                             params.pofk.subtract_shotnoise ? part_neutrinos.shotnoise() : 0.0,
                                              a,
                                              pofk_species_every_step["nu"]);
     }

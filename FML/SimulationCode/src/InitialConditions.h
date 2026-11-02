@@ -154,32 +154,6 @@ namespace SIMCODE {
         });
     }
 
-    /// The 1LPT potential phi_1LPT(k) = delta(k) / k^2  (i.e. D^2 phi_1LPT = -delta)
-    template <int NDIM>
-    FFTWGrid<NDIM> compute_phi_1LPT_from_delta(const FFTWGrid<NDIM> & delta_fourier) {
-        FFTWGrid<NDIM> phi_1LPT_fourier = delta_fourier;
-        auto Local_x_start = phi_1LPT_fourier.get_local_x_start();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-        for (FML::IndexIntType irow = 0; irow < phi_1LPT_fourier.get_local_nrows(); irow++) {
-            double kmag2;
-            std::array<double, NDIM> kvec;
-            for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
-                if (Local_x_start == 0 and fourier_index == 0)
-                    continue; // DC mode k = 0
-                phi_1LPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
-                auto value = phi_1LPT_fourier.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
-                phi_1LPT_fourier.set_fourier_from_index(fourier_index, value);
-            }
-        }
-        // Deal with DC mode
-        if (Local_x_start == 0)
-            phi_1LPT_fourier.set_fourier_from_index(0, 0.0);
-        return phi_1LPT_fourier;
-    }
-
-
     //=============================================================================
     /// Make the particles of a species i from the CDM+baryon density field delta_cb(k,zini): delta_i(k) =
     /// delta_cb(k) ratio(kB) with ratio = T_i / T_cb, LPT displacements and velocities (1LPT velocity
@@ -255,15 +229,13 @@ namespace SIMCODE {
             auto * pos = FML::PARTICLE::GetPos(p);
             for (int idim = 0; idim < NDIM; idim++) {
                 pos[idim] += lattice_shift;
-                if (pos[idim] >= 1.0)
-                    pos[idim] -= 1.0;
+                pos[idim] = FML::PARTICLE::wrap_coordinate_periodic(pos[idim]);
             }
             if constexpr (FML::PARTICLE::has_get_q<P>()) {
                 auto * q = FML::PARTICLE::GetLagrangianPos(p);
                 for (int idim = 0; idim < NDIM; idim++) {
                     q[idim] += lattice_shift;
-                    if (q[idim] >= 1.0)
-                        q[idim] -= 1.0;
+                    q[idim] = FML::PARTICLE::wrap_coordinate_periodic(q[idim]);
                 }
             }
             if constexpr (FML::PARTICLE::has_set_id<P>())

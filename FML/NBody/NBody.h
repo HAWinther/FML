@@ -81,22 +81,6 @@ namespace FML {
         double
         greens_function_laplace_operator_fourier(double kmag2, std::array<double, NDIM> & kvec, int Nmesh, int KERNEL);
 
-        /// Periodic wrap of a coordinate to [0,1). For positions in [-1,2) (except when the result would round to
-        /// exactly 1.0) this does exactly the same operations as x -= 1 if x >= 1, x += 1 if x < 0 (so the results
-        /// are bit-identical). Larger shifts are wrapped with floor and the (rounding) result 1.0 is mapped to 0.0
-        template <class F>
-        inline void periodic_wrap_unit_box(F & x) {
-            if (x >= 1.0)
-                x -= 1.0;
-            if (x < 0.0)
-                x += 1.0;
-            if (x >= 1.0 or x < 0.0) {
-                x -= std::floor(x);
-                if (x >= 1.0 or x < 0.0)
-                    x = 0.0;
-            }
-        }
-
         /// The finite difference stencils implemented in compute_force_from_potential_real
         inline bool is_valid_finite_difference_stencil_order(int stencil_order) {
             return stencil_order == 2 or stencil_order == 4 or stencil_order == 6;
@@ -553,7 +537,7 @@ namespace FML {
 
                     // Periodic wrap (to [0,1) also for displacements larger than the box)
                     if (periodic_box)
-                        periodic_wrap_unit_box(pos[idim]);
+                        pos[idim] = FML::PARTICLE::wrap_coordinate_periodic(pos[idim]);
                 }
             }
             FML::MaxOverTasks(&max_disp);
@@ -1000,7 +984,7 @@ namespace FML {
                         pos[idim] += dpos_nLPT;
 
                         // Periodic BC
-                        periodic_wrap_unit_box(pos[idim]);
+                        pos[idim] = FML::PARTICLE::wrap_coordinate_periodic(pos[idim]);
 
                         // Compute maximum displacement
                         if (std::fabs(dpos_nLPT) > max_disp_nLPT)

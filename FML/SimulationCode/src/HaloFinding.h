@@ -144,9 +144,9 @@ namespace SIMCODE {
     /// The overdensity of a SO definition in units of the mean CDM+baryon density at scale factor a: "<Delta>m"
     /// (or b: mean CDM+baryon density), "<Delta>c" (critical density) or "vir" (Bryan & Norman 1998)
     inline double so_overdensity(const std::string & definition, const Cosmology & cosmo, double a) {
-        const double OmegaCB_a = cosmo.get_Omegab(a) + cosmo.get_OmegaCDM(a);
+        const double OmegaCB_a = cosmo.Omega_cb(a);
         if (definition == "vir") {
-            const double x = cosmo.get_OmegaM(a) - 1.0;
+            const double x = cosmo.Omega_m(a) - 1.0;
             const double Delta_c = 18.0 * M_PI * M_PI + 82.0 * x - 39.0 * x * x;
             return Delta_c / OmegaCB_a;
         }

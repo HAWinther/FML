@@ -242,6 +242,18 @@ void test_dump() {
 // 4. Custom (variable size) serialisation
 //==========================================================
 void test_custom_serialisation() {
+    // Periodic wrap into [0,1): the rounding case (tiny negative x + 1 = 1), more than a box outside, NaN kept
+    {
+        using FML::PARTICLE::wrap_coordinate_periodic;
+        const float wf = wrap_coordinate_periodic(-1e-9f);
+        const double wd = wrap_coordinate_periodic(-1e-17);
+        check_local(wf >= 0.0f and wf < 1.0f and wd == 0.0 and wrap_coordinate_periodic(0.25) == 0.25 and
+                        wrap_coordinate_periodic(1.25) == 0.25 and wrap_coordinate_periodic(-0.25) == 0.75 and
+                        wrap_coordinate_periodic(3.5) == 0.5 and wrap_coordinate_periodic(-2.75) == 0.25 and
+                        wrap_coordinate_periodic(1.0) == 0.0 and std::isnan(wrap_coordinate_periodic(std::nan(""))),
+                    "wrap_coordinate_periodic: always in [0,1) (rounding to 1, several boxes away), NaN kept");
+    }
+
 #ifndef TEST_PARTICLES_OLD_API
     // Direct use of AppendToBuffer / AssignFromBuffer (was ambiguous)
     {

@@ -29,6 +29,17 @@ using Spline = FML::INTERPOLATION::SPLINE::Spline;
 // frame to the standard frame
 //========================================================================
 
+/// The highest LPT order whose COLA frame a particle type can store (the displacement fields D_1LPT, D_2LPT)
+template <class T>
+constexpr int cola_LPT_order_of() {
+    if constexpr (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>())
+        return 2;
+    else if constexpr (FML::PARTICLE::has_get_D_1LPT<T>())
+        return 1;
+    else
+        return 0;
+}
+
 template <int NDIM, class T>
 void cola_initialize_velocities(FML::PARTICLE::MPIParticles<T> & part) {
     auto np = part.get_npart();
@@ -57,8 +68,6 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
                                              int LPT_order,
                                              FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
                                              FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
-                                             FML::GRID::FFTWGrid<NDIM> & phi_3LPTa_ini_fourier,
-                                             FML::GRID::FFTWGrid<NDIM> & phi_3LPTb_ini_fourier,
                                              double H0Box,
                                              double aini,
                                              double a,
@@ -71,8 +80,6 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                     int LPT_order,
                                     FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
                                     FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
-                                    FML::GRID::FFTWGrid<NDIM> & phi_3LPTa_ini_fourier,
-                                    FML::GRID::FFTWGrid<NDIM> & phi_3LPTb_ini_fourier,
                                     double H0Box,
                                     double aini,
                                     double aold,
@@ -131,22 +138,6 @@ void cola_add_on_LPT_velocity(FML::PARTICLE::MPIParticles<T> & part,
     if (LPT_order < 2)
         vfac_2LPT = 0.0;
 
-    // 3LPTa
-    [[maybe_unused]] const double D3a = grav->get_D_3LPTa(a);
-    [[maybe_unused]] const double D3aini = grav->get_D_3LPTa(aini);
-    [[maybe_unused]] const double f3a = grav->get_f_3LPTa(a);
-    [[maybe_unused]] double vfac_3LPTa = sign * D3a / D3aini * f3a * a * a * cosmo->HoverH0_of_a(a);
-    if (LPT_order < 3)
-        vfac_3LPTa = 0.0;
-
-    // 3LPTb
-    [[maybe_unused]] const double D3b = grav->get_D_3LPTb(a);
-    [[maybe_unused]] const double D3bini = grav->get_D_3LPTb(aini);
-    [[maybe_unused]] const double f3b = grav->get_f_3LPTb(a);
-    [[maybe_unused]] double vfac_3LPTb = sign * D3b / D3bini * f3b * a * a * cosmo->HoverH0_of_a(a);
-    if (LPT_order < 3)
-        vfac_3LPTb = 0.0;
-
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -165,20 +156,6 @@ void cola_add_on_LPT_velocity(FML::PARTICLE::MPIParticles<T> & part,
             auto * D2 = FML::PARTICLE::GetD_2LPT(p);
             for (int idim = 0; idim < NDIM; idim++) {
                 vel[idim] += D2[idim] * vfac_2LPT;
-            }
-        }
-
-        if constexpr (FML::PARTICLE::has_get_D_3LPTa<T>()) {
-            auto * D3a = FML::PARTICLE::GetD_3LPTa(p);
-            for (int idim = 0; idim < NDIM; idim++) {
-                vel[idim] += D3a[idim] * vfac_3LPTa;
-            }
-        }
-
-        if constexpr (FML::PARTICLE::has_get_D_3LPTb<T>()) {
-            auto * D3b = FML::PARTICLE::GetD_3LPTb(p);
-            for (int idim = 0; idim < NDIM; idim++) {
-                vel[idim] += D3b[idim] * vfac_3LPTb;
             }
         }
     }
@@ -204,12 +181,7 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
     if (LPT_order < 1)
         return;
 
-    constexpr int LPT_order_particle = (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() and
-                                        FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>()) ?
-                                           3 :
-                                           (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() ?
-                                                2 :
-                                                (FML::PARTICLE::has_get_D_1LPT<T>() ? 1 : 0));
+    constexpr int LPT_order_particle = cola_LPT_order_of<T>();
 
     if (LPT_order_particle < LPT_order) {
         std::string error = "The particle type is compatible with " + std::to_string(LPT_order_particle) + "LPT, ";
@@ -223,7 +195,8 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
     }
 
     auto cosmo = grav->get_cosmo();
-    const double norm_poisson = 1.5 * cosmo->get_OmegaM() * aold * grav->GeffOverG(aold);
+    // The LPT force as in the growth equations: rho_m(a) a^3 of the background (Omega_m_a3)
+    const double norm_poisson = 1.5 * cosmo->Omega_m_a3(aold) * aold * grav->GeffOverG(aold);
 
     // The LPT force of each order as in the growth equations (GravityModel::compute_growth_factors), with the
     // source factors at k = 0 (e.g. 1 - f_nu for >= 2LPT with massive neutrinos and the nonlinear DGP source).
@@ -231,8 +204,6 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
     const double source_1LPT = grav->source_factor_1LPT(aold);
     const double source_2LPT = grav->source_factor_2LPT(aold);
     const double nonlinear_2LPT = grav->nonlinear_source_factor_2LPT(aold);
-    const double source_3LPTa = grav->source_factor_3LPTa(aold);
-    const double source_3LPTb = grav->source_factor_3LPTb(aold);
 
     const double D1 = grav->get_D_1LPT(a);
     const double D1old = grav->get_D_1LPT(aold);
@@ -250,24 +221,6 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
         -norm_poisson * source_2LPT * (D2old - nonlinear_2LPT * D1old * D1old) / D2ini * delta_time_kick;
     if (LPT_order < 2)
         fac2_pos = fac2_vel = 0.0;
-
-    [[maybe_unused]] const double D3a = grav->get_D_3LPTa(a);
-    [[maybe_unused]] const double D3aold = grav->get_D_3LPTa(aold);
-    [[maybe_unused]] const double D3aini = grav->get_D_3LPTa(aini);
-    [[maybe_unused]] double fac3a_pos = (D3a - D3aold) / D3aini;
-    [[maybe_unused]] double fac3a_vel =
-        -norm_poisson * source_3LPTa * (D3aold - 2.0 * D1old * D1old * D1old) / D3aini * delta_time_kick;
-    if (LPT_order < 3)
-        fac3a_pos = fac3a_vel = 0.0;
-
-    [[maybe_unused]] const double D3b = grav->get_D_3LPTb(a);
-    [[maybe_unused]] const double D3bold = grav->get_D_3LPTb(aold);
-    [[maybe_unused]] const double D3bini = grav->get_D_3LPTb(aini);
-    [[maybe_unused]] double fac3b_pos = (D3b - D3bold) / D3bini;
-    [[maybe_unused]] double fac3b_vel =
-        -norm_poisson * source_3LPTb * (D3bold + D1old * D1old * D1old - D1old * D2old) / D3bini * delta_time_kick;
-    if (LPT_order < 3)
-        fac3b_pos = fac3b_vel = 0.0;
 
     // Loop over all active particles
     const size_t np = part.get_npart();
@@ -299,28 +252,9 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
             }
         }
 
-        if (LPT_order >= 3) {
-            auto * D3a = FML::PARTICLE::GetD_3LPTa(p);
-            auto * D3b = FML::PARTICLE::GetD_3LPTb(p);
-            for (int idim = 0; idim < NDIM; idim++) {
-                if (do_drift) {
-                    pos[idim] += D3a[idim] * fac3a_pos;
-                    pos[idim] += D3b[idim] * fac3b_pos;
-                }
-                if (do_kick) {
-                    vel[idim] += D3a[idim] * fac3a_vel;
-                    vel[idim] += D3b[idim] * fac3b_vel;
-                }
-            }
-        }
-
         // Periodic wrap
-        for (int idim = 0; idim < NDIM; idim++) {
-            if (pos[idim] >= 1.0)
-                pos[idim] -= 1.0;
-            if (pos[idim] < 0.0)
-                pos[idim] += 1.0;
-        }
+        for (int idim = 0; idim < NDIM; idim++)
+            pos[idim] = FML::PARTICLE::wrap_coordinate_periodic(pos[idim]);
     }
 }
 
@@ -328,31 +262,21 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
 // Scaledependent methods
 //====================================================================================
 
-/// grid(k) = phi_1LPT(k) f_1(k) + phi_2LPT(k) f_2(k) + phi_3LPTa(k) f_3a(k) + phi_3LPTb(k) f_3b(k) up to LPT_order
+/// grid(k) = phi_1LPT(k) f_1(k) + phi_2LPT(k) f_2(k) up to LPT_order
 /// (the grid must have the same layout as the potentials; k in units of 1/boxsize)
 template <int NDIM>
 void sum_of_LPT_potentials(FML::GRID::FFTWGrid<NDIM> & grid,
                            int LPT_order,
                            const FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
                            const FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
-                           const FML::GRID::FFTWGrid<NDIM> & phi_3LPTa_ini_fourier,
-                           const FML::GRID::FFTWGrid<NDIM> & phi_3LPTb_ini_fourier,
                            const Spline & f_1LPT,
-                           const Spline & f_2LPT,
-                           const Spline & f_3LPTa,
-                           const Spline & f_3LPTb) {
+                           const Spline & f_2LPT) {
     FML::GRID::for_each_fourier_mode<NDIM>(grid, [&](size_t fourier_index, double kmag) {
         auto phi_1LPT = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index);
         auto value = phi_1LPT * FML::GRID::FloatType(f_1LPT(kmag));
         if (LPT_order >= 2) {
             auto phi_2LPT = phi_2LPT_ini_fourier.get_fourier_from_index(fourier_index);
             value += phi_2LPT * FML::GRID::FloatType(f_2LPT(kmag));
-        }
-        if (LPT_order >= 3) {
-            auto phi_3LPTa = phi_3LPTa_ini_fourier.get_fourier_from_index(fourier_index);
-            auto phi_3LPTb = phi_3LPTb_ini_fourier.get_fourier_from_index(fourier_index);
-            value += phi_3LPTa * FML::GRID::FloatType(f_3LPTa(kmag));
-            value += phi_3LPTb * FML::GRID::FloatType(f_3LPTb(kmag));
         }
         grid.set_fourier_from_index(fourier_index, value);
     });
@@ -392,12 +316,7 @@ void interpolate_LPT_grid_to_lagrangian_positions(const std::array<FML::GRID::FF
     for (size_t i = 0; i < points.size(); i++) {
         const auto * q = FML::PARTICLE::GetPos(p[i]);
         for (int idim = 0; idim < NDIM; idim++) {
-            double x = q[idim] - lattice_offset;
-            if (x < 0.0)
-                x += 1.0;
-            if (x >= 1.0)
-                x -= 1.0;
-            points[i].pos[idim] = x;
+            points[i].pos[idim] = FML::PARTICLE::wrap_coordinate_periodic(double(q[idim] - lattice_offset));
         }
     }
     FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, Point>(grid_vector_real,
@@ -428,12 +347,7 @@ template <int NDIM, class T>
 void cola_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part, int LPT_order) {
     if (LPT_order < 1)
         return;
-    constexpr int LPT_order_particle = (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() and
-                                        FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>()) ?
-                                           3 :
-                                           (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() ?
-                                                2 :
-                                                (FML::PARTICLE::has_get_D_1LPT<T>() ? 1 : 0));
+    constexpr int LPT_order_particle = cola_LPT_order_of<T>();
     const size_t np = part.get_npart();
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -446,17 +360,12 @@ void cola_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part, int LPT_or
             pos[idim] += D_pos[idim];
 
         // Periodic wrap
-        for (int idim = 0; idim < NDIM; idim++) {
-            if (pos[idim] >= 1.0)
-                pos[idim] -= 1.0;
-            if (pos[idim] < 0.0)
-                pos[idim] += 1.0;
-        }
+        for (int idim = 0; idim < NDIM; idim++)
+            pos[idim] = FML::PARTICLE::wrap_coordinate_periodic(pos[idim]);
     }
 }
 
-// This method kick's and drift's the particles one time-step (the 1LPT and 2LPT frames; the 3LPT branches are kept
-// but not reachable: simulation_cola_LPT_order > 2 is rejected because the particle types have no 3LPT fields)
+// This method kick's and drift's the particles one time-step (the 1LPT and 2LPT frames)
 // With do_drift = false only the velocities are updated and the position displacement is stored in the particles
 // (see cola_drift_scaledependent, which completes the step)
 template <int NDIM, class T>
@@ -465,8 +374,6 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                     int LPT_order,
                                     FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
                                     FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
-                                    FML::GRID::FFTWGrid<NDIM> & phi_3LPTa_ini_fourier,
-                                    FML::GRID::FFTWGrid<NDIM> & phi_3LPTb_ini_fourier,
                                     double H0Box,
                                     double aini,
                                     double aold,
@@ -482,12 +389,7 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
     FML::UTILS::Timings timer;
     timer.StartTiming("Scaledependent COLA");
 
-    constexpr int LPT_order_particle = (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() and
-                                        FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>()) ?
-                                           3 :
-                                           (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() ?
-                                                2 :
-                                                (FML::PARTICLE::has_get_D_1LPT<T>() ? 1 : 0));
+    constexpr int LPT_order_particle = cola_LPT_order_of<T>();
 
     if (FML::ThisTask == 0) {
         std::cout << "[Kick] + [Drift] Scaledependent COLA " << LPT_order << "LPT\n";
@@ -504,10 +406,6 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
         FML::assert_mpi(phi_2LPT_ini_fourier.get_nmesh() > 0,
                         "Error in cola_kick_drift_scaledependent. Initial 2LPT potential is not allocated\n");
     }
-    if (LPT_order >= 3) {
-        FML::assert_mpi(phi_3LPTa_ini_fourier.get_nmesh() > 0 and phi_3LPTb_ini_fourier.get_nmesh() > 0,
-                        "Error in cola_kick_drift_scaledependent. Initial 3LPT potentials are not allocated\n");
-    }
 
     if (LPT_order_particle < LPT_order) {
         std::string error = "The particle type is compatible with " + std::to_string(LPT_order_particle) + "LPT, ";
@@ -517,7 +415,8 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
     }
 
     auto cosmo = grav->get_cosmo();
-    const double OmegaM = cosmo->get_OmegaM();
+    // The LPT force as in the growth equations: rho_m(a) a^3 of the background
+    const double OmegaM = cosmo->Omega_m_a3(aold);
     const std::string interpolation_method = "CIC";
 
     //======================================================================================
@@ -587,37 +486,6 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
         return (grav->get_D_2LPT(a, koverH0) - grav->get_D_2LPT(aold, koverH0)) / grav->get_D_2LPT(aini, koverH0);
     };
 
-    // For 3LPT kick step
-    [[maybe_unused]] auto function_vel_3LPTa = [&](double kBox) {
-        double koverH0 = kBox / H0Box;
-        double factor = -1.5 * OmegaM * aold * grav->GeffOverG(aold, koverH0) * delta_time_kick;
-        double D_1LPT = grav->get_D_1LPT(aold, koverH0);
-        double D_3LPTa = grav->get_D_3LPTa(aold, koverH0);
-        double D_3LPTa_ini = grav->get_D_3LPTa(aini, koverH0);
-        return factor * grav->source_factor_3LPTa(aold, koverH0) * (D_3LPTa - 2.0 * D_1LPT * D_1LPT * D_1LPT) /
-               D_3LPTa_ini;
-    };
-    [[maybe_unused]] auto function_vel_3LPTb = [&](double kBox) {
-        double koverH0 = kBox / H0Box;
-        double factor = -1.5 * OmegaM * aold * grav->GeffOverG(aold, koverH0) * delta_time_kick;
-        double D_1LPT = grav->get_D_1LPT(aold, koverH0);
-        double D_2LPT = grav->get_D_2LPT(aold, koverH0);
-        double D_3LPTb = grav->get_D_3LPTb(aold, koverH0);
-        double D_3LPTb_ini = grav->get_D_3LPTb(aini, koverH0);
-        return factor * grav->source_factor_3LPTb(aold, koverH0) *
-               (D_3LPTb + D_1LPT * D_1LPT * D_1LPT - D_1LPT * D_2LPT) / D_3LPTb_ini;
-    };
-
-    // For 3LPT drift step
-    [[maybe_unused]] auto function_pos_3LPTa = [&](double kBox) {
-        double koverH0 = kBox / H0Box;
-        return (grav->get_D_3LPTa(a, koverH0) - grav->get_D_3LPTa(aold, koverH0)) / grav->get_D_3LPTa(aini, koverH0);
-    };
-    [[maybe_unused]] auto function_pos_3LPTb = [&](double kBox) {
-        double koverH0 = kBox / H0Box;
-        return (grav->get_D_3LPTb(a, koverH0) - grav->get_D_3LPTb(aold, koverH0)) / grav->get_D_3LPTb(aini, koverH0);
-    };
-
     //======================================================================================
     // std::function is slow, make splines
     //======================================================================================
@@ -628,8 +496,6 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
     std::vector<double> k_vec(npts);
     std::vector<double> vel1(npts), pos1(npts);
     std::vector<double> vel2(npts), pos2(npts);
-    std::vector<double> vel3a(npts), pos3a(npts);
-    std::vector<double> vel3b(npts), pos3b(npts);
 
     for (int i = 0; i < npts; i++) {
         k_vec[i] = kmin + (kmax - kmin) * i / double(npts - 1);
@@ -640,12 +506,6 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
         if (LPT_order >= 2) {
             pos2[i] = function_pos_2LPT(k_vec[i]);
             vel2[i] = function_vel_2LPT(k_vec[i]);
-        }
-        if (LPT_order >= 3) {
-            pos3a[i] = function_pos_3LPTa(k_vec[i]);
-            vel3a[i] = function_vel_3LPTa(k_vec[i]);
-            pos3b[i] = function_pos_3LPTb(k_vec[i]);
-            vel3b[i] = function_vel_3LPTb(k_vec[i]);
         }
     }
 
@@ -663,17 +523,6 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
         function_vel_2LPT_spline.create(k_vec, vel2);
     }
 
-    Spline function_pos_3LPTa_spline;
-    Spline function_pos_3LPTb_spline;
-    Spline function_vel_3LPTa_spline;
-    Spline function_vel_3LPTb_spline;
-    if (LPT_order >= 3) {
-        function_pos_3LPTa_spline.create(k_vec, pos3a);
-        function_vel_3LPTa_spline.create(k_vec, vel3a);
-        function_pos_3LPTb_spline.create(k_vec, pos3b);
-        function_vel_3LPTb_spline.create(k_vec, vel3b);
-    }
-
     //======================================================================================
     // Compute the full LPT force kick and velocity drift
     // We use D_1LPT and dD_1LPT_dloga as temporary storage for the kicks in 1LPT
@@ -685,12 +534,8 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                 LPT_order,
                                 phi_1LPT_ini_fourier,
                                 phi_2LPT_ini_fourier,
-                                phi_3LPTa_ini_fourier,
-                                phi_3LPTb_ini_fourier,
                                 function_pos_1LPT_spline,
-                                function_pos_2LPT_spline,
-                                function_pos_3LPTa_spline,
-                                function_pos_3LPTb_spline);
+                                function_pos_2LPT_spline);
 
     std::array<std::vector<FML::GRID::FloatType>, NDIM> displacements;
     auto multiply_by_one = []([[maybe_unused]] double kBox) { return 1.0; };
@@ -711,12 +556,8 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                 LPT_order,
                                 phi_1LPT_ini_fourier,
                                 phi_2LPT_ini_fourier,
-                                phi_3LPTa_ini_fourier,
-                                phi_3LPTb_ini_fourier,
                                 function_vel_1LPT_spline,
-                                function_vel_2LPT_spline,
-                                function_vel_3LPTa_spline,
-                                function_vel_3LPTb_spline);
+                                function_vel_2LPT_spline);
     generate_displacements(temp_grid, displacements, multiply_by_one);
     temp_grid.free();
 
@@ -773,12 +614,8 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
         }
 
         // Periodic wrap
-        for (int idim = 0; idim < NDIM; idim++) {
-            if (pos[idim] >= 1.0)
-                pos[idim] -= 1.0;
-            if (pos[idim] < 0.0)
-                pos[idim] += 1.0;
-        }
+        for (int idim = 0; idim < NDIM; idim++)
+            pos[idim] = FML::PARTICLE::wrap_coordinate_periodic(pos[idim]);
     }
 
     timer.EndTiming("Scaledependent COLA");
@@ -792,8 +629,6 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
                                              int LPT_order,
                                              FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
                                              FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
-                                             FML::GRID::FFTWGrid<NDIM> & phi_3LPTa_ini_fourier,
-                                             FML::GRID::FFTWGrid<NDIM> & phi_3LPTb_ini_fourier,
                                              double H0Box,
                                              double aini,
                                              double a,
@@ -803,12 +638,7 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
     if (LPT_order < 1)
         return;
 
-    constexpr int LPT_order_particle = (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() and
-                                        FML::PARTICLE::has_get_D_3LPTa<T>() and FML::PARTICLE::has_get_D_3LPTb<T>()) ?
-                                           3 :
-                                           (FML::PARTICLE::has_get_D_1LPT<T>() and FML::PARTICLE::has_get_D_2LPT<T>() ?
-                                                2 :
-                                                (FML::PARTICLE::has_get_D_1LPT<T>() ? 1 : 0));
+    constexpr int LPT_order_particle = cola_LPT_order_of<T>();
 
     if (FML::ThisTask == 0) {
         std::cout << "Adding on the LPT velocity to particles (COLA " << LPT_order << "LPT scaledependent)\n";
@@ -877,18 +707,6 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
         return vfactor * grav->get_f_2LPT(a, koverH0) * grav->get_D_2LPT(a, koverH0) / grav->get_D_2LPT(aini, koverH0);
     };
 
-    [[maybe_unused]] auto function_vel_3LPTa = [&](double kBox) {
-        const double koverH0 = kBox / H0Box;
-        return vfactor * grav->get_f_3LPTa(a, koverH0) * grav->get_D_3LPTa(a, koverH0) /
-               grav->get_D_3LPTa(aini, koverH0);
-    };
-
-    [[maybe_unused]] auto function_vel_3LPTb = [&](double kBox) {
-        const double koverH0 = kBox / H0Box;
-        return vfactor * grav->get_f_3LPTb(a, koverH0) * grav->get_D_3LPTb(a, koverH0) /
-               grav->get_D_3LPTb(aini, koverH0);
-    };
-
     //======================================================================================
     // std::function is slow, make splines
     //======================================================================================
@@ -898,17 +716,13 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
     const double kmin = M_PI;
     const double kmax = 2.0 * M_PI * Nmesh / 2.0 * std::sqrt(double(NDIM));
     std::vector<double> k_vec(npts);
-    std::vector<double> vel1(npts), vel2(npts), vel3a(npts), vel3b(npts);
+    std::vector<double> vel1(npts), vel2(npts);
 
     for (int i = 0; i < npts; i++) {
         k_vec[i] = kmin + (kmax - kmin) * i / double(npts - 1);
         vel1[i] = function_vel_1LPT(k_vec[i]);
         if (LPT_order >= 2) {
             vel2[i] = function_vel_2LPT(k_vec[i]);
-        }
-        if (LPT_order >= 3) {
-            vel3a[i] = function_vel_3LPTa(k_vec[i]);
-            vel3b[i] = function_vel_3LPTb(k_vec[i]);
         }
     }
 
@@ -919,12 +733,6 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
     if (LPT_order >= 2) {
         function_vel_2LPT_spline.create(k_vec, vel2);
     }
-    Spline function_vel_3LPTa_spline;
-    Spline function_vel_3LPTb_spline;
-    if (LPT_order >= 3) {
-        function_vel_3LPTa_spline.create(k_vec, vel3a);
-        function_vel_3LPTb_spline.create(k_vec, vel3b);
-    }
 
     //======================================================================================
     // Compute the total LPT potential
@@ -934,12 +742,8 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
                                 LPT_order,
                                 phi_1LPT_ini_fourier,
                                 phi_2LPT_ini_fourier,
-                                phi_3LPTa_ini_fourier,
-                                phi_3LPTb_ini_fourier,
                                 function_vel_1LPT_spline,
-                                function_vel_2LPT_spline,
-                                function_vel_3LPTa_spline,
-                                function_vel_3LPTb_spline);
+                                function_vel_2LPT_spline);
 
     std::array<std::vector<FML::GRID::FloatType>, NDIM> displacements;
     auto multiply_by_one = []([[maybe_unused]] double kBox) { return 1.0; };
@@ -998,8 +802,6 @@ class ColaState {
     // The LPT potentials at the initial time (only allocated for scale-dependent COLA)
     FML::GRID::FFTWGrid<NDIM> phi_1LPT_ini_fourier;
     FML::GRID::FFTWGrid<NDIM> phi_2LPT_ini_fourier;
-    FML::GRID::FFTWGrid<NDIM> phi_3LPTa_ini_fourier;
-    FML::GRID::FFTWGrid<NDIM> phi_3LPTb_ini_fourier;
 
     /// A species on its own lattice, offset by shift (in each direction) from the lattice of the potentials above
     /// (the baryons with particle_baryon_lattice = offset). Its frame is computed from its own potentials: those of
@@ -1025,8 +827,6 @@ class ColaState {
                                                              LPT_order,
                                                              sp ? sp->phi_1LPT_ini_fourier : phi_1LPT_ini_fourier,
                                                              sp ? sp->phi_2LPT_ini_fourier : phi_2LPT_ini_fourier,
-                                                             phi_3LPTa_ini_fourier,
-                                                             phi_3LPTb_ini_fourier,
                                                              H0Box,
                                                              aini,
                                                              a,
@@ -1050,8 +850,6 @@ class ColaState {
                                                     LPT_order,
                                                     sp ? sp->phi_1LPT_ini_fourier : phi_1LPT_ini_fourier,
                                                     sp ? sp->phi_2LPT_ini_fourier : phi_2LPT_ini_fourier,
-                                                    phi_3LPTa_ini_fourier,
-                                                    phi_3LPTb_ini_fourier,
                                                     H0Box,
                                                     aini,
                                                     aold,
@@ -1076,8 +874,6 @@ class ColaState {
                                                     LPT_order,
                                                     sp ? sp->phi_1LPT_ini_fourier : phi_1LPT_ini_fourier,
                                                     sp ? sp->phi_2LPT_ini_fourier : phi_2LPT_ini_fourier,
-                                                    phi_3LPTa_ini_fourier,
-                                                    phi_3LPTb_ini_fourier,
                                                     H0Box,
                                                     aini,
                                                     aold,
@@ -1101,8 +897,6 @@ class ColaState {
     void free() {
         phi_1LPT_ini_fourier.free();
         phi_2LPT_ini_fourier.free();
-        phi_3LPTa_ini_fourier.free();
-        phi_3LPTb_ini_fourier.free();
         shifted_species.clear();
     }
 

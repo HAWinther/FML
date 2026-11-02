@@ -44,10 +44,19 @@
 /// with the total mass Mnu (from cosmology_OmegaMNu with the non-relativistic relation) when OmegaMNu > 0, otherwise
 /// massless.
 ///
-/// The Omega getters keep SimulationCode's definitions: at a = 1 the parameter (OmegaM = Omegab + OmegaCDM +
-/// OmegaMNu, OmegaR the photons, OmegaNu the neutrinos as if massless), otherwise the parameter scaled as matter
-/// (a^-3), radiation (a^-4) or curvature (a^-2) over E^2(a). get_OmegaNu_exact and get_OmegaLambda (all the dark
-/// energy) are the actual densities of the background. background() gives the background itself.
+/// Density parameters, two kinds:
+///   get_OmegaM(), get_Omegab(), get_OmegaCDM(), get_OmegaMNu(), get_fMNu(), get_OmegaK(), get_OmegaR(),
+///   get_OmegaLambda(): today, the input definitions used by the N-body part (Poisson normalization 1.5 OmegaM a,
+///   particle masses, f_nu, the transfer-function inputs): OmegaM = Omegab + OmegaCDM + OmegaMNu with OmegaMNu the
+///   input (the neutrino mass from it with the non-relativistic relation), OmegaR the photons, OmegaLambda all the
+///   dark energy of the background today
+///   Omega_m(a), Omega_cb(a), Omega_b(a), Omega_cdm(a), Omega_nu(a), Omega_r(a), Omega_k(a), Omega_de(a), f_nu(a):
+///   functions of time, the actual densities of the background (rho_i(a) / rho_crit(a); the massive neutrinos with
+///   their Fermi-Dirac energy density, relativistic at early times)
+/// Nothing is stored besides the background: the parameters (h, the Omegas today, T_CMB, Neff, the neutrino masses)
+/// are those of background().parameters(), OmegaMNu from the masses with the non-relativistic relation, OmegaLambda the
+/// dark energy of the background today. The getters need init().
+/// background() gives the background itself.
 //=============================================================================
 class Cosmology {
   public:
@@ -66,34 +75,31 @@ class Cosmology {
     // Read the parameters (the ones of all models, then those of the model)
     //========================================================================
     void read_parameters(ParameterMap & param) {
+        namespace BG = FML::COSMOLOGY::BACKGROUND;
         using namespace FML::UTILS::SI;
-        OmegaMNu = param.get<double>("cosmology_OmegaMNu");
-        Omegab = param.get<double>("cosmology_Omegab");
-        OmegaCDM = param.get<double>("cosmology_OmegaCDM");
-        OmegaM = Omegab + OmegaCDM + OmegaMNu;
-        OmegaK = SIMCODE::get_parameter<double>(param, "cosmology_OmegaK");
-        h = param.get<double>("cosmology_h");
+        // The background parameters (used by init(); afterwards everything comes from the background)
+        BG::BackgroundParameters p;
+        p.h = param.get<double>("cosmology_h");
+        p.Omega_b = param.get<double>("cosmology_Omegab");
+        p.Omega_cdm = param.get<double>("cosmology_OmegaCDM");
+        p.Omega_k = SIMCODE::get_parameter<double>(param, "cosmology_OmegaK");
+        p.T_CMB = param.get<double>("cosmology_TCMB_kelvin");
+        p.N_eff = param.get<double>("cosmology_Neffective");
         As = param.get<double>("cosmology_As");
         ns = param.get<double>("cosmology_ns");
         kpivot_mpc = param.get<double>("cosmology_kpivot_mpc");
-        Neff = param.get<double>("cosmology_Neffective");
-        TCMB_kelvin = param.get<double>("cosmology_TCMB_kelvin");
 
-        // Neutrino to photon temperature today
-        Tnu_kelvin = TCMB_kelvin * std::pow(Neff / 3.0, 0.25) * std::pow(4.0 / 11.0, 1.0 / 3.0);
-
-        // Photons and (massless) neutrinos
-        const double rho_critical_today_over_h2 = 3.0 * H0_over_h * H0_over_h / (8.0 * M_PI * G);
-        const double OmegaRh2 = 2.0 * sixzeta4 / (2.0 * M_PI * M_PI) * std::pow(k_b * TCMB_kelvin / hbar, 4) * hbar /
-                                std::pow(c, 5) / rho_critical_today_over_h2;
-        OmegaR = OmegaRh2 / (h * h);
-        OmegaNu = (7.0 / 8.0) * N_nu * std::pow(Tnu_kelvin / TCMB_kelvin, 4) * OmegaR;
-        OmegaRtot = OmegaR + OmegaNu;
-
-        // The sum of the neutrino masses (non-relativistic relation; no neutrinos, Neff = 0, needs OmegaMNu = 0)
-        FML::assert_mpi(OmegaNu > 0.0 or OmegaMNu == 0.0,
+        // N_nu degenerate massive neutrinos with the total mass from OmegaMNu (non-relativistic relation; no
+        // neutrinos, Neff = 0, needs OmegaMNu = 0)
+        const double OmegaMNu = param.get<double>("cosmology_OmegaMNu");
+        const double OmegaMNu_per_eV = OmegaMNu_per_Mnu_eV(p);
+        FML::assert_mpi(OmegaMNu_per_eV > 0.0 or OmegaMNu == 0.0,
                         "cosmology_Neffective = 0 (no neutrinos) needs cosmology_OmegaMNu = 0");
-        Mnu_eV = OmegaNu > 0.0 ? (OmegaMNu / OmegaNu) / twoeta3 * sixeta4 * N_nu * (k_b * Tnu_kelvin / eV) : 0.0;
+        if (OmegaMNu > 0.0) {
+            p.m_nu_eV.assign(int(N_nu), OmegaMNu / OmegaMNu_per_eV / N_nu);
+            p.T_ncdm_over_TCMB = neutrino_temperature_kelvin(p) / p.T_CMB;
+        }
+        input_parameters = p;
 
         // The parameters of the model
         model_parameters.clear();
@@ -178,17 +184,7 @@ class Cosmology {
     //========================================================================
     void init() {
         namespace BG = FML::COSMOLOGY::BACKGROUND;
-        BG::BackgroundParameters p;
-        p.h = h;
-        p.Omega_b = Omegab;
-        p.Omega_cdm = OmegaCDM;
-        p.Omega_k = OmegaK;
-        p.T_CMB = TCMB_kelvin;
-        p.N_eff = Neff;
-        if (OmegaMNu > 0.0) {
-            p.m_nu_eV.assign(int(N_nu), Mnu_eV / N_nu);
-            p.T_ncdm_over_TCMB = Tnu_kelvin / TCMB_kelvin;
-        }
+        const BG::BackgroundParameters & p = input_parameters;
         const BG::BackgroundRange range{std::log(1e-10), std::log(100.0), 200};
 
         if (name == "DGP") {
@@ -204,9 +200,6 @@ class Cosmology {
             bg = make_tabulated(p, range);
         else
             bg = BG::make_background(registry_name, p, model_parameters, range);
-
-        // All the dark energy today (OmegaM, OmegaR, OmegaNu, OmegaK are the parameters)
-        OmegaLambda = bg->Omega(BG::Component::DarkEnergy, 0.0);
     }
 
     //========================================================================
@@ -217,21 +210,22 @@ class Cosmology {
             std::cout << "\n";
             std::cout << "#=====================================================\n";
             std::cout << "# Cosmology [" << name << "]\n";
-            std::cout << "# Omegab                  : " << Omegab << "\n";
-            std::cout << "# OmegaM                  : " << OmegaM << "\n";
-            std::cout << "# OmegaMNu                : " << OmegaMNu << "\n";
-            std::cout << "# OmegaCDM                : " << OmegaCDM << "\n";
-            std::cout << "# OmegaLambda             : " << OmegaLambda << "\n";
-            std::cout << "# OmegaR                  : " << OmegaR << "\n";
-            std::cout << "# OmegaNu                 : " << OmegaNu << "\n";
-            std::cout << "# OmegaRtot               : " << OmegaRtot << "\n";
-            std::cout << "# OmegaK                  : " << OmegaK << "\n";
-            std::cout << "# h                       : " << h << "\n";
-            std::cout << "# N_nu                    : " << N_nu << "\n";
-            std::cout << "# Neff                    : " << Neff << "\n";
-            std::cout << "# Mnu                     : " << Mnu_eV << " eV\n";
-            std::cout << "# TCMB                    : " << TCMB_kelvin << " K\n";
-            std::cout << "# Tnu                     : " << Tnu_kelvin << " K\n";
+            if (bg) {
+                std::cout << "# Omegab                  : " << get_Omegab() << "\n";
+                std::cout << "# OmegaM                  : " << get_OmegaM() << "\n";
+                std::cout << "# OmegaMNu                : " << get_OmegaMNu() << "\n";
+                std::cout << "# OmegaCDM                : " << get_OmegaCDM() << "\n";
+                std::cout << "# OmegaLambda             : " << get_OmegaLambda() << "\n";
+                std::cout << "# OmegaR                  : " << get_OmegaR() << "\n";
+                std::cout << "# OmegaNu (as if massless): " << OmegaNu_massless_equivalent(params()) << "\n";
+                std::cout << "# OmegaK                  : " << get_OmegaK() << "\n";
+                std::cout << "# h                       : " << get_h() << "\n";
+                std::cout << "# N_nu                    : " << N_nu << "\n";
+                std::cout << "# Neff                    : " << get_Neff() << "\n";
+                std::cout << "# Mnu                     : " << get_Mnu_eV() << " eV\n";
+                std::cout << "# TCMB                    : " << get_TCMB_kelvin() << " K\n";
+                std::cout << "# Tnu                     : " << neutrino_temperature_kelvin(params()) << " K\n";
+            }
             std::cout << "# As                      : " << As << "\n";
             std::cout << "# ns                      : " << ns << "\n";
             std::cout << "# kpivot                  : " << kpivot_mpc << " 1/Mpc\n";
@@ -254,8 +248,9 @@ class Cosmology {
             std::cout << "Cosmology:: Error opening file " << filename << " for output\n";
             return;
         }
+        // (the columns of OmegaM(a) and OmegaDE(a) as before: 4 and 9)
         const std::vector<std::string> columns{
-            "a", "H/H0", "dlogH/dloga", "OmegaM", "OmegaR", "OmegaNu", "OmegaMNu", "OmegaNu_exact", "OmegaLambda"};
+            "a", "H/H0", "dlogH/dloga", "Omega_m", "Omega_r", "Omega_nu", "Omega_cb", "Omega_k", "Omega_de"};
         fp << "#";
         for (size_t i = 0; i < columns.size(); i++)
             fp << (i > 0 ? " " : "") << std::setw(15) << columns[i];
@@ -265,12 +260,12 @@ class Cosmology {
             const double values[] = {a,
                                      HoverH0_of_a(a),
                                      dlogHdloga_of_a(a),
-                                     get_OmegaM(a),
-                                     get_OmegaR(a),
-                                     get_OmegaNu(a),
-                                     get_OmegaMNu(a),
-                                     get_OmegaNu_exact(a),
-                                     get_OmegaLambda(a)};
+                                     Omega_m(a),
+                                     Omega_r(a),
+                                     Omega_nu(a),
+                                     Omega_cb(a),
+                                     Omega_k(a),
+                                     Omega_de(a)};
             for (double v : values)
                 fp << " " << std::setw(15) << v;
             fp << "\n";
@@ -286,32 +281,60 @@ class Cosmology {
     const Background & background() const { return *bg; }
 
     //========================================================================
-    // Density parameters (see the class comment)
+    // Density parameters today: the input definitions (see the class comment)
     //========================================================================
-    double get_fMNu() const { return OmegaMNu / OmegaM; }
-    double get_OmegaMNu(double a = 1.0) const { return a == 1.0 ? OmegaMNu : OmegaMNu / (a * a * a * E2(a)); }
-    double get_Omegab(double a = 1.0) const { return a == 1.0 ? Omegab : Omegab / (a * a * a * E2(a)); }
-    double get_OmegaM(double a = 1.0) const { return a == 1.0 ? OmegaM : OmegaM / (a * a * a * E2(a)); }
-    double get_OmegaCDM(double a = 1.0) const { return a == 1.0 ? OmegaCDM : OmegaCDM / (a * a * a * E2(a)); }
-    double get_OmegaR(double a = 1.0) const { return a == 1.0 ? OmegaR : OmegaR / (a * a * a * a * E2(a)); }
-    double get_OmegaNu(double a = 1.0) const { return a == 1.0 ? OmegaNu : OmegaNu / (a * a * a * a * E2(a)); }
-    double get_OmegaRtot(double a = 1.0) const { return a == 1.0 ? OmegaRtot : OmegaRtot / (a * a * a * a * E2(a)); }
-    double get_OmegaK(double a = 1.0) const { return a == 1.0 ? OmegaK : OmegaK / (a * a * E2(a)); }
-    /// All the neutrinos (massive and massless), the actual density
-    double get_OmegaNu_exact(double a = 1.0) const {
-        namespace BG = FML::COSMOLOGY::BACKGROUND;
-        const double x = std::log(a);
-        return bg->Omega(BG::Component::MassiveNeutrinos, x) + bg->Omega(BG::Component::MasslessNeutrinos, x);
+    double get_OmegaM() const { return get_Omegab() + get_OmegaCDM() + get_OmegaMNu(); }
+    double get_Omegab() const { return params().Omega_b; }
+    double get_OmegaCDM() const { return params().Omega_cdm; }
+    /// The massive neutrinos with the non-relativistic relation (the input cosmology_OmegaMNu)
+    double get_OmegaMNu() const {
+        const auto & p = params();
+        return p.m_nu_eV.empty() ? 0.0 : p.sum_m_nu_eV() * OmegaMNu_per_Mnu_eV(p);
     }
-    /// All the dark energy (cosmological constant, fluid or field), the actual density
-    double get_OmegaLambda(double a = 1.0) const {
-        return a == 1.0 ? OmegaLambda : bg->Omega(FML::COSMOLOGY::BACKGROUND::Component::DarkEnergy, std::log(a));
+    double get_fMNu() const { return get_OmegaMNu() / get_OmegaM(); }
+    double get_OmegaK() const { return params().Omega_k; }
+    /// The photons
+    double get_OmegaR() const { return params().Omega_gamma(); }
+    /// All the dark energy (cosmological constant, fluid or field) today
+    double get_OmegaLambda() const { return Omega_de(1.0); }
+
+    //========================================================================
+    // Density parameters as functions of time: the actual densities of the background (rho_i(a) / rho_crit(a))
+    //========================================================================
+    /// Matter: baryons + CDM + massive neutrinos
+    double Omega_m(double a) const { return bg->Omega_m(std::log(a)); }
+    /// Baryons + CDM
+    double Omega_cb(double a) const { return Omega_b(a) + Omega_cdm(a); }
+    double Omega_b(double a) const { return Omega(FML::COSMOLOGY::BACKGROUND::Component::Baryons, a); }
+    double Omega_cdm(double a) const { return Omega(FML::COSMOLOGY::BACKGROUND::Component::CDM, a); }
+    /// All the neutrinos (massive and massless)
+    double Omega_nu(double a) const {
+        namespace BG = FML::COSMOLOGY::BACKGROUND;
+        return Omega(BG::Component::MassiveNeutrinos, a) + Omega(BG::Component::MasslessNeutrinos, a);
+    }
+    /// Radiation: photons + massless neutrinos
+    double Omega_r(double a) const { return bg->Omega_r(std::log(a)); }
+    double Omega_k(double a) const { return Omega(FML::COSMOLOGY::BACKGROUND::Component::Curvature, a); }
+    /// All the dark energy
+    double Omega_de(double a) const { return Omega(FML::COSMOLOGY::BACKGROUND::Component::DarkEnergy, a); }
+    /// rho_m(a) a^3 / rho_c0: the OmegaM of the growth equations and the COLA frame at a (OmegaM without massive
+    /// neutrinos; larger than get_OmegaM() while they are relativistic)
+    double Omega_m_a3(double a) const {
+        const double E = HoverH0_of_a(a);
+        return Omega_m(a) * E * E * a * a * a;
+    }
+    /// The massive neutrino fraction of the matter rho_nu(a) / rho_m(a) (its energy density: larger than get_fMNu()
+    /// while the neutrinos are relativistic)
+    double f_nu(double a) const {
+        namespace BG = FML::COSMOLOGY::BACKGROUND;
+        return params().m_nu_eV.empty() ? 0.0 : Omega(BG::Component::MassiveNeutrinos, a) / Omega_m(a);
     }
 
     /// The growth suppression of the large-scale potential today, g = D(a = 1) / D_EdS(a = 1) with D normalized to a in
     /// the matter era (Heath 1977: D(a) = 5/2 OmegaM E(a) int_0^a da / (a E)^3 for matter, curvature and a cosmological
     /// constant; radiation and the equation of state of the dark energy are ignored here, sub-percent for g)
     double get_potential_growth_suppression_today() const {
+        const double OmegaM = get_OmegaM(), OmegaK = get_OmegaK();
         const double OmegaL = 1.0 - OmegaM - OmegaK;
         auto E = [&](double a) { return std::sqrt(OmegaM / (a * a * a) + OmegaK / (a * a) + OmegaL); };
         // Simpson in a: the integrand (a E)^-3 goes as a^(3/2) / OmegaM^(3/2) for a -> 0
@@ -333,22 +356,22 @@ class Cosmology {
     /// Neutrino temperature in eV
     double get_neutrino_temperature_eV(double a) const {
         using namespace FML::UTILS::SI;
-        return (Tnu_kelvin * k_b / eV) / a;
+        return (neutrino_temperature_kelvin(params()) * k_b / eV) / a;
     }
     /// Sound speed over c in the non-relativistic limit (1408.2995), at most that of radiation (mass of one neutrino)
     double get_neutrino_sound_speed_cs_over_c(double a) const {
-        return std::min(nu_sound_speed_factor * get_neutrino_temperature_eV(a) / (Mnu_eV / N_nu), 1.0 / std::sqrt(3.0));
+        return std::min(nu_sound_speed_factor * get_neutrino_temperature_eV(a) / (get_Mnu_eV() / N_nu), 1.0 / std::sqrt(3.0));
     }
     /// Free streaming scale for the neutrinos (1408.2995)
     double get_neutrino_free_streaming_scale_hmpc(double a) const {
-        return std::sqrt(1.5 * OmegaM / a) / get_neutrino_sound_speed_cs_over_c(a) * H0_hmpc;
+        return std::sqrt(1.5 * get_OmegaM() / a) / get_neutrino_sound_speed_cs_over_c(a) * H0_hmpc;
     }
 
     //========================================================================
     // Primordial power spectrum and the nonlinear boost
     //========================================================================
     double get_primordial_pofk(double k_hmpc) const {
-        return 2.0 * M_PI * M_PI / (k_hmpc * k_hmpc * k_hmpc) * As * std::pow(h * k_hmpc / kpivot_mpc, ns - 1.0);
+        return 2.0 * M_PI * M_PI / (k_hmpc * k_hmpc * k_hmpc) * As * std::pow(get_h() * k_hmpc / kpivot_mpc, ns - 1.0);
     }
 
     /// Pnl/Plinear from the EuclidEmulator2 for LCDM and w0waCDM (empty spline for the other models)
@@ -357,19 +380,19 @@ class Cosmology {
             return Spline();
         // EuclidEmulator2 takes A_s at the pivot 0.05/Mpc: convert from our pivot (the factor is 1 for kpivot = 0.05)
         const double As_ee2 = As * std::pow(0.05 / kpivot_mpc, ns - 1.0);
-        return ee2_boost.boost(Omegab, OmegaM, Mnu_eV, ns, h, w0, wa, As_ee2, redshift);
+        return ee2_boost.boost(get_Omegab(), get_OmegaM(), get_Mnu_eV(), ns, get_h(), w0, wa, As_ee2, redshift);
     }
 
     //========================================================================
     // Parameters
     //========================================================================
-    double get_h() const { return h; }
-    double get_Mnu_eV() const { return Mnu_eV; }
+    double get_h() const { return params().h; }
+    double get_Mnu_eV() const { return params().sum_m_nu_eV(); }
     double get_N_nu() const { return N_nu; }
     double get_As() const { return As; }
     double get_ns() const { return ns; }
-    double get_TCMB_kelvin() const { return TCMB_kelvin; }
-    double get_Neff() const { return Neff; }
+    double get_TCMB_kelvin() const { return params().T_CMB; }
+    double get_Neff() const { return params().N_eff; }
     double get_kpivot_mpc() const { return kpivot_mpc; }
     std::string get_name() const { return name; }
     double get_H0_hmpc() const { return H0_hmpc; }
@@ -379,26 +402,36 @@ class Cosmology {
     void set_kpivot_mpc(double _kpivot_mpc) { kpivot_mpc = _kpivot_mpc; }
 
   private:
+    double Omega(FML::COSMOLOGY::BACKGROUND::Component c, double a) const { return bg->Omega(c, std::log(a)); }
+    /// The parameters of the background (init() must have been called)
+    const FML::COSMOLOGY::BACKGROUND::BackgroundParameters & params() const {
+        if (not bg)
+            throw std::runtime_error("Cosmology: init() has not been called");
+        return bg->parameters();
+    }
+    /// The neutrino temperature today, T_CMB (Neff/3)^(1/4) (4/11)^(1/3)
+    static double neutrino_temperature_kelvin(const FML::COSMOLOGY::BACKGROUND::BackgroundParameters & p) {
+        return p.T_CMB * std::pow(p.N_eff / 3.0, 0.25) * std::pow(4.0 / 11.0, 1.0 / 3.0);
+    }
+    /// The N_nu neutrinos as if massless (density set by Neff)
+    double OmegaNu_massless_equivalent(const FML::COSMOLOGY::BACKGROUND::BackgroundParameters & p) const {
+        return (7.0 / 8.0) * N_nu * std::pow(neutrino_temperature_kelvin(p) / p.T_CMB, 4) * p.Omega_gamma();
+    }
+    /// The non-relativistic relation OmegaMNu = Mnu * OmegaMNu_per_Mnu_eV (0 without neutrinos)
+    double OmegaMNu_per_Mnu_eV(const FML::COSMOLOGY::BACKGROUND::BackgroundParameters & p) const {
+        using namespace FML::UTILS::SI;
+        const double Tnu_eV = k_b * neutrino_temperature_kelvin(p) / eV;
+        return Tnu_eV > 0.0 ? OmegaNu_massless_equivalent(p) * twoeta3 / sixeta4 / (N_nu * Tnu_eV) : 0.0;
+    }
+
     std::string name;
     std::string registry_name;
     std::map<std::string, double> model_parameters;
     std::shared_ptr<const Background> bg;
 
     const double H0_hmpc = 1.0 / FML::UTILS::SI::c_over_H0_mpch;
-    double h;                 // Hubble parameter (little h)
-    double OmegaMNu;          // Massive neutrinos (in the matter era)
-    double Omegab;            // Baryons
-    double OmegaM;            // Total matter (in the matter era)
-    double OmegaCDM;          // Cold dark matter
-    double OmegaLambda{0.0};  // All the dark energy today
-    double OmegaR;            // Photons
-    double OmegaNu;           // Neutrinos (as if massless; density set by Neff)
-    double OmegaRtot;         // Total relativistic (in the radiation era)
-    double OmegaK;            // Curvature
-    double Neff;              // Effective number of non-photon relativistic species (3.046)
-    double TCMB_kelvin;       // Temperature of the CMB today in Kelvin
-    double Tnu_kelvin;        // Temperature of the neutrinos today in Kelvin. Derived from Neff and TCMB
-    double Mnu_eV;            // Sum of the neutrino masses in eV. Derived from OmegaMNu and h
+    // The parameters read by read_parameters() for init(); after that all of them come from the background
+    FML::COSMOLOGY::BACKGROUND::BackgroundParameters input_parameters;
     const double N_nu{3};     // Number of neutrinos (3)
     double w0{-1.0}, wa{0.0}; // w0waCDM (for the nonlinear boost)
     std::string tabulated_filename, tabulated_format;
@@ -422,11 +455,6 @@ class Cosmology {
     double alow = 1e-4;
     const double ahigh = 1e1;
     const int npts_loga = 1000;
-
-    double E2(double a) const {
-        const double E = HoverH0_of_a(a);
-        return E * E;
-    }
 
     //========================================================================
     // Tabulated: read the table (format H: z, H/H0; CLASS: the columns z and H [1/Mpc] of a CLASS background file,
