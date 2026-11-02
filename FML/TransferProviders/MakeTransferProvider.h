@@ -5,9 +5,7 @@
 #include <FML/TransferProviders/CAMBFileTransferProvider.h>
 #include <FML/TransferProviders/CLASSTransferProvider.h>
 #include <FML/TransferProviders/GaugeView.h>
-#ifdef USE_INTERNAL_COSMOLOGY
 #include <FML/InitialConditions/InternalTransferProvider.h>
-#endif
 
 #include <algorithm>
 #include <cmath>
@@ -25,10 +23,10 @@
 //   source = "class":    native CLASS output (CLASSTransferProvider.h), gauge = synchronous or newtonian: declare it
 //                        in input_gauge. Newtonian input is converted (at the tabulated redshifts) when output_gauge
 //                        is SynchronousCDM.
-//   source = "internal": FML's Einstein-Boltzmann solver (needs USE_INTERNAL_COSMOLOGY and linking the Cosmology
-//                        modules, see tests/Makefile). It computes both gauges itself. By default the cosmology is
-//                        taken from h, Omegab, OmegaCDM, OmegaMNu, A_s, n_s and k_pivot_mpc below (the same fields as
-//                        for the other sources). InternalTransferProvider supports any model of the solver (with
+//   source = "internal": FML's Einstein-Boltzmann solver (link the Cosmology modules with
+//                        Cosmology/EinsteinBoltzmannSolver/Cosmology.mk, see tests/Makefile). It computes both gauges
+//                        itself. By default the cosmology is taken from h, Omegab, OmegaCDM, OmegaMNu, A_s, n_s and
+//                        k_pivot_mpc below (the same fields as for the other sources). InternalTransferProvider supports any model of the solver (with
 //                        curvature) and its massive neutrinos: OmegaMNu > 0 is internal_settings.cosmo.deg_ncdm
 //                        (default 1) degenerate species (their mass is found from OmegaMNu, with the solver's Neff =
 //                        3.046 in total and T_ncdm/TCMB = 0.71611, as CLASS with N_ur = 2.0328).
@@ -75,11 +73,9 @@ namespace FML::INITIALCONDITIONS {
         /// internal: take the cosmology (h, Omegab, OmegaCDM, OmegaMNu, A_s, n_s, k_pivot_mpc) from the fields above.
         /// false: use internal_settings.cosmo as it is
         bool internal_cosmology_from_settings{true};
-#ifdef USE_INTERNAL_COSMOLOGY
         /// internal: the settings of the solver (precision, recombination, ...; the cosmology and k-range are set
         /// from the fields above unless switched off)
         FML::COSMOLOGY::RunSettings internal_settings;
-#endif
     };
 
     inline std::shared_ptr<TransferProvider> make_transfer_provider(const TransferSourceSettings & s) {
@@ -134,7 +130,6 @@ namespace FML::INITIALCONDITIONS {
         }
 
         if (s.source == "internal") {
-#ifdef USE_INTERNAL_COSMOLOGY
             auto settings = s.internal_settings;
             if (s.internal_cosmology_from_settings) {
                 if (not(s.OmegaMNu >= 0.0))
@@ -178,9 +173,6 @@ namespace FML::INITIALCONDITIONS {
                 settings.bg_x_end = std::max(settings.bg_x_end, settings.pert.x_end);
             }
             return std::make_shared<InternalTransferProvider>(settings, s.output_gauge);
-#else
-            throw std::invalid_argument("[make_transfer_provider] source = internal needs USE_INTERNAL_COSMOLOGY");
-#endif
         }
 
         throw std::invalid_argument("[make_transfer_provider] Unknown source [" + s.source +

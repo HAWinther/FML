@@ -555,8 +555,7 @@ namespace SIMCODE {
                        "CLASS with format=camb), class (native CLASS output: ic_input_filename is the root of the run, "
                        "with format = class, output = mTk,vTk, write_background = yes) or internal (FML's "
                        "Einstein-Boltzmann solver run with the cosmology of the simulation, cosmology_model included; "
-                       "needs a build with USE_INTERNAL_COSMOLOGY=true; the old name internal_transfer is also "
-                       "accepted). See FML/TransferProviders and README.md",
+                       "the old name internal_transfer is also accepted). See FML/TransferProviders and README.md",
                        {"powerspectrum",
                         "transferfunction",
                         "camb",

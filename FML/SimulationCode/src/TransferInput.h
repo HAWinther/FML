@@ -19,8 +19,8 @@
 // The transfer functions of the simulation (ic_type_of_input = camb, class or internal), made with
 // FML/TransferProviders (make_transfer_provider) or, for internal, FML's Einstein-Boltzmann solver run with the
 // cosmology of the simulation. The provider is shared by the gravity model (scale-dependent growth with massive
-// neutrinos), the initial conditions and the analysis. Only TransferInput.cpp includes MakeTransferProvider.h (and
-// with USE_INTERNAL_COSMOLOGY the Einstein-Boltzmann solver).
+// neutrinos), the initial conditions and the analysis. Only TransferInput.cpp includes MakeTransferProvider.h and
+// the Einstein-Boltzmann solver.
 //=============================================================================
 
 namespace SIMCODE {

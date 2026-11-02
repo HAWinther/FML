@@ -57,14 +57,13 @@ particle coordinate system with a different velocity convention.
 ## Ranges, ownership and normalization
 
 The internal provider rejects extrapolation and owns the background, recombination
-and perturbation solutions for its lifetime. It supports flat GR LCDM, unit
-adiabatic initial perturbations, CDM, baryons, massless radiation and at most one
-massive neutrino species (the solver's `m_nu`: then `MassiveNeutrino` is available and
-`TotalMatter` includes it, combinations weighted by rho_i for densities and
-rho_i + p_i for velocities). Curved backgrounds, isocurvature mixtures, running and
-modified gravity are rejected before solving. Independent gauge views share the
-solved state. SimulationCode's `internal_transfer` loader still runs it without
-massive neutrinos.
+and perturbation solutions for its lifetime. It supports any model of the solver
+(`settings.cosmo.model`, curvature allowed) with unit adiabatic initial perturbations
+and its massive neutrinos (`deg_ncdm` degenerate species of mass `m_nu`, or
+`m_nu_list`): `MassiveNeutrino` (all of them) is then available and `TotalMatter`
+includes it. Combinations are weighted by the background densities rho_i(a) of the
+model. Isocurvature modes and running (`alpha_s`) are rejected before solving.
+Independent gauge views share the solved state.
 
 The table providers of TransferProviders own their tables. Their `SourceExtrapolation`
 policy extrapolates above k_max as a power law and uses the end values elsewhere.
@@ -80,64 +79,27 @@ The legacy IC table retains its historical normalization behavior for compatibil
 
 ## SimulationCode
 
-SimulationCode reads its transfer functions with TransferProviders (`camb`, `class`,
-`internal_transfer`; see its README). A simple P(k,z=0) input requires neither species transfers nor a
-Boltzmann solve. Ordinary builds do not compile/link the internal solver.
-
-To enable the optional internal source, rebuild with
-
-```
-make clean
-make USE_INTERNAL_COSMOLOGY=true
-```
-
-then select
+SimulationCode reads its transfer functions with TransferProviders (`camb`, `class` or
+`internal`; a simple P(k,z=0) input needs neither species transfers nor a Boltzmann solve).
+With `ic_type_of_input = "internal"` it runs FML's Einstein-Boltzmann solver when the
+simulation starts, with the cosmology of the simulation (background, massive neutrinos,
+`cosmology_model` and the primordial spectrum), so no input file is needed:
 
 ```lua
-ic_type_of_input = "internal_transfer"
-ic_input_filename = "solver.ini"
-ic_input_redshift = 0.0  -- backscale from today; use zini for transfers evaluated at zini
+ic_type_of_input = "internal"
+ic_input_filename = ""   -- optional: a solver .ini with precision/recombination settings
+ic_input_redshift = ic_initial_redshift
 ```
 
-`solver.ini` is an FML Einstein–Boltzmann parameter file. Its h, OmegaB, OmegaCDM,
-TCMB, Neff, As, ns and pivot must match SimulationCode, and `alpha_s` must be 0 (SimulationCode's primordial
-spectrum has no running). It must cover the IC mesh's
-fundamental through its conservative corner wavenumber, the input/initial epochs,
-and today. Cosmology and coverage mismatches fail before the expensive solve.
-For example, matching SimulationCode's standard LCDM parameters:
-
-```ini
-model = lcdm
-h = .671
-OmegaB = .049
-OmegaCDM = .2685
-OmegaK = 0
-m_nu = 0
-Neff = 3.046
-TCMB = 2.7255
-A_s = 2.215e-9
-n_s = .966
-k_pivot = .05
-pert_k_min = .00001
-pert_k_max = 2.0
-pert_n_k = 200
-```
-
-`pert_k_min/max` are in 1/Mpc. Choose their extent and resolution for the actual
-box, mesh and desired precision; these numbers are an example, not an accuracy
-promise. Native nonlinear evolution, COLA and the existing LPT orders are unchanged.
-The internal scalar solve runs on each MPI rank; distributed/shared transfer
-initialization is not implemented here.
-
-The existing sigma8 routine integrates over [1e-5,100] h/Mpc. With strict internal
-transfers, sigma8 normalization requires that full range; otherwise it fails
-before solving and the sigma8 diagnostic is skipped. Use As normalization for
-ordinary finite-range internal runs, or supply sufficiently wide transfers.
-Existing P(k)/table normalization behavior is unchanged.
+The solver runs on task 0 and its tables are sent to the other tasks; they are
+extrapolated outside their k-range as the CAMB and CLASS tables, so
+`ic_sigma8_normalization` works as with the other inputs. See the SimulationCode
+README for the k-grid, the cost and the accuracy tests.
 
 Tests: `FML/tests/test_transfers.cpp` covers the lightweight/table paths (`LinearInput`, `SpeciesIC` and the
 conventions of a table provider); `FML/tests/test_camb.cpp` the CAMB reader against CAMB;
 `Cosmology/EinsteinBoltzmannSolver/tests/test_transfer_provider.cpp` checks the
 converted densities/velocities against stored CAMB 1.5.4 values and tests the
-internal adapter. `SimulationCode/tests/check_internal_transfers.py` exercises the
-optional executable, two-species ICs, backscaling, normalization coverage and simple P(k).
+internal adapter. `SimulationCode/tests/check_internal_transfers.py` runs `nbody` with
+`ic_type_of_input = internal`: two-species ICs, backscaling, sigma8 normalization, a solver
+.ini, neutrino particles, w0waCDM with curvature and simple P(k).

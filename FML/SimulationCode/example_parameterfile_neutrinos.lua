@@ -294,7 +294,7 @@ ic_LPT_order = 2
 -- camb             (a transfer info file listing T(k,z) files from CAMB; the old name transferinfofile also works)
 -- class            (native CLASS output: ic_input_filename is the root, e.g. "output/run_" for run_z1_tk.dat, ...,
 --                   run_background.dat; CLASS run with format = class, output = mTk,vTk, write_background = yes)
--- internal_transfer (an .ini file of FML's Einstein-Boltzmann solver; needs USE_INTERNAL_COSMOLOGY=true)
+-- internal_transfer (an .ini file of FML's Einstein-Boltzmann solver)
 ic_type_of_input = "camb"
 ic_input_gauge = "synchronous" -- class: the gauge CLASS was run in (synchronous or newtonian; converted to CDM-synchronous)
 -- Path to the input (NB: for using the example files update the path at the top of the file below)

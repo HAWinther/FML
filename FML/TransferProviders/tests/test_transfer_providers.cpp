@@ -1,8 +1,8 @@
 //=====================================================================================================================
 // Tests of the CLASS provider, the gauge conversion and make_transfer_provider against reference runs of CLASS (in
-// the synchronous and the Newtonian gauge) and CAMB with the same cosmology (make_test_data.sh writes them), and with
-// USE_INTERNAL_COSMOLOGY of source = internal (FML's Einstein-Boltzmann solver) against CLASS, with and without a
-// massive neutrino (two solves, a few minutes).
+// the synchronous and the Newtonian gauge) and CAMB with the same cosmology (make_test_data.sh writes them), and of
+// source = internal (FML's Einstein-Boltzmann solver) against CLASS, with and without a massive neutrino (two solves,
+// a few minutes).
 //
 //   ./test_transfer_providers [data folder (default: data)]
 //
@@ -291,18 +291,9 @@ int main(int argc, char ** argv) {
               make_transfer_provider(s);
           }),
           "an unknown source is an error");
-#ifndef USE_INTERNAL_COSMOLOGY
-    check(throws([&] {
-              auto s = cmb;
-              s.source = "internal";
-              make_transfer_provider(s);
-          }),
-          "source = internal without USE_INTERNAL_COSMOLOGY is an error");
-#endif
     check(throws([&] { sync->density_transfer(Species::CDM, 1e-3, 1.0 / 100.0); }),
           "a query outside the range is an error (RangePolicy::Reject)");
 
-#ifdef USE_INTERNAL_COSMOLOGY
     // 7.-8. FML's Einstein-Boltzmann solver (source = internal) against CLASS for the same cosmology, without (7) and
     // with (8) a massive neutrino. The solver runs once per cosmology: the Newtonian view shares the solved state
     {
@@ -442,7 +433,6 @@ int main(int argc, char ** argv) {
               }),
               "internal with OmegaMNu < 0 is an error");
     }
-#endif
 
     return FML::TESTS::summary("test_transfer_providers");
 }

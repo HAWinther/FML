@@ -639,7 +639,7 @@ remains supported without a Boltzmann solve.
   the CDM-synchronous gauge at the tabulated redshifts). h and the presence of massive neutrinos are checked against
   the simulation. `tests/check_class_input.py` runs a simulation with massive neutrinos from CLASS in both gauges and
   from CAMB for the same cosmology: P_cb and P_total agree to 1.4e-3 (synchronous) and 7e-4 (Newtonian) at all outputs.
-- `internal` (needs a build with `USE_INTERNAL_COSMOLOGY=true`; the old name `internal_transfer` also works): FML's
+- `internal` (the old name `internal_transfer` also works): FML's
   Einstein-Boltzmann solver ([Cosmology/EinsteinBoltzmannSolver](../Cosmology/EinsteinBoltzmannSolver/README.md)) is
   run when the simulation starts, with the cosmology of the simulation, so no input file is needed:
   - the background parameters (h, Omegab, OmegaCDM, OmegaK, TCMB, Neff) and the massive neutrinos as the simulation

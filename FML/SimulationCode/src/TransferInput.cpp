@@ -3,10 +3,8 @@
 #include <FML/TransferProviders/MakeTransferProvider.h>
 #include <FML/Global/Global.h>
 #include <FML/TransferProviders/TabulatedTransferProvider.h>
-#ifdef USE_INTERNAL_COSMOLOGY
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
 #include <FML/InitialConditions/InternalTransferProvider.h>
-#endif
 
 #include <algorithm>
 #include <chrono>
@@ -59,7 +57,6 @@ namespace SIMCODE {
         }
 #endif
 
-#ifdef USE_INTERNAL_COSMOLOGY
         /// The settings of the solver: those of the .ini file r.filename (or the defaults) with the cosmology of the
         /// simulation (its background parameters, model and model parameters, the primordial spectrum) and a k- and
         /// a-range that covers the request
@@ -176,7 +173,6 @@ namespace SIMCODE {
                       << "#=====================================================\n";
             return tables;
         }
-#endif
 
         /// internal: FML's Einstein-Boltzmann solver run with the cosmology of the simulation: its background
         ///   parameters (its massive neutrino species; equal masses solved as one), cosmology_model with its parameters
@@ -185,7 +181,6 @@ namespace SIMCODE {
         ///   solver runs on task 0 and its tables (CDM-synchronous densities, Newtonian velocities; all species it has)
         ///   are sent to the other tasks. They are extrapolated outside their range as the CAMB and CLASS tables.
         std::shared_ptr<TransferProvider> internal_transfers(const TransferInputRequest & r) {
-#ifdef USE_INTERNAL_COSMOLOGY
             TransferTables tables;
             std::string error;
             if (FML::ThisTask == 0) {
@@ -210,11 +205,6 @@ namespace SIMCODE {
                 throw std::runtime_error("[ic_type_of_input = internal] " + error);
 #endif
             return std::make_shared<FML::INITIALCONDITIONS::TransferTablesProvider>(tables);
-#else
-            (void)r;
-            throw std::runtime_error("ic_type_of_input = internal needs a SimulationCode build with "
-                                     "USE_INTERNAL_COSMOLOGY=true");
-#endif
         }
     } // namespace
 
@@ -225,7 +215,7 @@ namespace SIMCODE {
     ///   ic_input_filename, run in the gauge ic_input_gauge (Newtonian is converted to CDM-synchronous). h and
     ///   whether there are massive neutrinos are checked against the simulation.
     /// internal: FML's Einstein-Boltzmann solver run with the cosmology of the simulation (see internal_transfers
-    ///   above; needs a build with USE_INTERNAL_COSMOLOGY=true).
+    ///   above).
     /// The tables are extrapolated outside their range as the old CAMB reader did (RangePolicy::SourceExtrapolation:
     /// a power law above k_max, the end values elsewhere)
     //=============================================================================

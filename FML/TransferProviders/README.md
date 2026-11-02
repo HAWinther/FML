@@ -8,7 +8,7 @@ user declares the gauge of the input, and the provider returns densities in the 
 | --- | --- | --- | --- |
 | `camb` | A CAMB transfer info file (`CAMBFileTransferProvider`) | Always CDM-synchronous (CAMB's density columns) | None needed |
 | `class` | Native CLASS output (`format = class`, `output = mTk[, vTk]`, `write_background = yes`) | Declared: `gauge = synchronous` (the default in CLASS) or `newtonian` | Newtonian → CDM-synchronous, at the tabulated redshifts |
-| `internal` | FML's Einstein–Boltzmann solver (`USE_INTERNAL_COSMOLOGY`, through `InternalTransferProvider`): any model of the solver, curvature, massive neutrinos (`deg_ncdm` x `m_nu`, or any masses with `m_nu_list`) | Computes both gauges itself | By the solver |
+| `internal` | FML's Einstein–Boltzmann solver (through `InternalTransferProvider`): any model of the solver, curvature, massive neutrinos (`deg_ncdm` x `m_nu`, or any masses with `m_nu_list`) | Computes both gauges itself | By the solver |
 
 This folder replaces the old CAMB reader (`CAMBUtils/CAMBReader.h`, `LinearTransferData`) and
 `InitialConditions/CAMBTransferProvider.h`, which have been removed. SimulationCode reads its transfer functions with it
@@ -169,7 +169,6 @@ CLASS=/path/to/class ./make_test_data.sh     # needs the CLASS executable and pi
 make run                                     # without data/ it prints SKIP and exits 0
 ```
 
-With `USE_INTERNAL_COSMOLOGY=true` (the default) the test also runs the internal solver twice (with and without the
-massive neutrino) and compares it with CLASS; this takes about 5 minutes on 2 cores. `USE_INTERNAL_COSMOLOGY=false`
-skips it. `InternalTransferProvider` itself is also tested in
+The test also runs the internal solver twice (with and without the massive neutrino) and compares it with CLASS; this
+takes about 5 minutes on 2 cores. `InternalTransferProvider` itself is also tested in
 [`Cosmology/EinsteinBoltzmannSolver/tests/test_transfer_provider.cpp`](../Cosmology/EinsteinBoltzmannSolver/tests/test_transfer_provider.cpp).

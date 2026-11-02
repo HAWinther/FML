@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Small end-to-end tests of ic_type_of_input = internal (each runs the solver, ~30 s); build nbody with
-USE_INTERNAL_COSMOLOGY=true.
+"""Small end-to-end tests of ic_type_of_input = internal (each runs the solver, ~30 s).
 Usage: python3 check_internal_transfers.py /path/to/nbody /path/to/scratch-output
 """
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -15,9 +15,6 @@ exe = str(Path(sys.argv[1]).resolve())
 root = Path(sys.argv[2]).resolve()
 root.mkdir(parents=True, exist_ok=True)
 env = dict(os.environ, OMP_NUM_THREADS="2", OMP_WAIT_POLICY="passive")
-features = subprocess.check_output([exe, "--features"], text=True, env=env)
-if "internal_cosmology" not in features:
-    raise SystemExit("Build with USE_INTERNAL_COSMOLOGY=true to run this test")
 # A solver .ini with other settings: its cosmology and k-range are replaced by those of the simulation
 ini = """model=lcdm
 h=.7
@@ -64,7 +61,8 @@ log = run("solver_ini", solver=ini)
 assert "Model: lcdm (solver settings:" in log and "Massive neutrinos: none" in log, "solver_ini: see its log.txt"
 log = run("neutrino_particles", {"cosmology_OmegaMNu": 0.0095, "cosmology_OmegaCDM": 0.259, "particle_neutrinos": True,
                                  "force_linear_massive_neutrinos": False, "timestep_method": "Quinn"})
-assert "Massive neutrinos: 3 x" in log, "neutrino_particles: see its log.txt"
+# 3 degenerate species (as in the simulation)
+assert re.search(r"# Massive neutrinos: ([0-9.]+), \1, \1 eV", log), "neutrino_particles: see its log.txt"
 run("w0wa_curved", {"cosmology_model": "w0waCDM", "cosmology_w0": -0.9, "cosmology_wa": 0.1, "cosmology_OmegaK": 0.02})
 run("tabulated", {"cosmology_model": "Tabulated", "cosmology_tabulated_filename": cases.INPUT + "/class_background_w0wa.dat",
                   "cosmology_tabulated_format": "CLASS"}, error="has no model of the solver")
