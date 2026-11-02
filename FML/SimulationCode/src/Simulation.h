@@ -323,7 +323,15 @@ class NBodySimulation {
     void output_background_and_growth_functions();
     void setup_initial_power_spectrum();
     void generate_initial_conditions();
+    FFTWGrid<NDIM> make_initial_density_field();
+    void generate_neutrino_particles(const FFTWGrid<NDIM> & delta_ini_fourier);
+    void generate_initial_conditions_one_species(const FFTWGrid<NDIM> & delta_cb_fourier);
     void generate_initial_conditions_two_species(const FFTWGrid<NDIM> & delta_cb_fourier);
+    std::vector<double> ic_velocity_norms(double fac) const;
+    bool cola_frame_growth_differs() const;
+    std::function<double(double)> ic_velocity_norm_1LPT_of_kBox(double fac);
+    std::function<double(double)> ic_velocity_norm_2LPT_of_kBox(double fac) const;
+    void store_cola_potentials(const FFTWGrid<NDIM> & delta_cb_fourier, FFTWGrid<NDIM> * phi_2LPT_ini_fourier);
     void apply_lattice_offset();
     void read_ic();
     void read_phases(FFTWGrid<NDIM> & delta_fourier);
@@ -640,18 +648,33 @@ void NBodySimulation<NDIM, T>::setup_initial_power_spectrum() {
 //=============================================================================
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::generate_initial_conditions() {
-    const auto & ic = params.ic;
-    const double boxsize = params.simulation.boxsize;
-
     // If we simply read IC from file (useful for testing)
-    if (ic.random_field_type == SIMCODE::ICRandomFieldType::ReadParticles) {
+    if (params.ic.random_field_type == SIMCODE::ICRandomFieldType::ReadParticles) {
         read_ic();
         return;
     }
 
-    //=============================================================
-    // Make the initial density field delta(k,zini)
-    //=============================================================
+    const FFTWGrid<NDIM> delta_ini_fourier = make_initial_density_field();
+
+    // Massive neutrino particles (made from the same random field)
+    if (has_neutrino_particles())
+        generate_neutrino_particles(delta_ini_fourier);
+
+    timer.StartTiming("InitialConditions");
+    if (has_baryons())
+        generate_initial_conditions_two_species(delta_ini_fourier);
+    else
+        generate_initial_conditions_one_species(delta_ini_fourier);
+    apply_lattice_offset();
+    timer.EndTiming("InitialConditions");
+}
+
+/// The initial CDM+baryon density field delta(k, zini) (and the linear field for the hybrid bias spectra)
+template <int NDIM, class T>
+FML::GRID::FFTWGrid<NDIM> NBodySimulation<NDIM, T>::make_initial_density_field() {
+    const auto & ic = params.ic;
+    const double boxsize = params.simulation.boxsize;
+
     auto nextra = FML::INTERPOLATION::get_extra_slices("CIC");
     if (ic.random_field_type == SIMCODE::ICRandomFieldType::ReadPhases) {
         // If read_phases then delta_ini is computed from particles
@@ -693,58 +716,106 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
                                              hybridbias_linear_field_fourier,
                                              [](const std::array<int, NDIM> &) { return 1.0; });
     }
+    return delta_ini_fourier;
+}
 
-    // Massive neutrino particles (made from the same random field)
-    if (has_neutrino_particles()) {
-        timer.StartTiming("InitialConditionsNeutrinos");
-        FML::assert_mpi(transfers != nullptr, "particle_neutrinos needs the transfer functions (camb or class)");
-        const auto & nu = species.back();
-        part_neutrinos.generate(delta_ini_fourier,
-                           *transfers,
-                           ic.initial_redshift,
-                           cosmo->HoverH0_of_a(ic.a_initial()),
-                           nu.Npart_1D,
-                           params.particle.allocation_factor,
-                           ic.random_seed,
-                           nu.id_offset);
-        timer.EndTiming("InitialConditionsNeutrinos");
-    }
+/// The massive neutrino particles from the initial density field (and the transfer functions)
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::generate_neutrino_particles(const FFTWGrid<NDIM> & delta_ini_fourier) {
+    const auto & ic = params.ic;
+    timer.StartTiming("InitialConditionsNeutrinos");
+    FML::assert_mpi(transfers != nullptr, "particle_neutrinos needs the transfer functions (camb or class)");
+    const auto & nu = species.back();
+    part_neutrinos.generate(delta_ini_fourier,
+                            *transfers,
+                            ic.initial_redshift,
+                            cosmo->HoverH0_of_a(ic.a_initial()),
+                            nu.Npart_1D,
+                            params.particle.allocation_factor,
+                            ic.random_seed,
+                            nu.id_offset);
+    timer.EndTiming("InitialConditionsNeutrinos");
+}
 
-    // Separate CDM and baryon particles
-    if (has_baryons()) {
-        timer.StartTiming("InitialConditions");
-        generate_initial_conditions_two_species(delta_ini_fourier);
-        apply_lattice_offset();
-        timer.EndTiming("InitialConditions");
-        return;
-    }
+//=============================================================================
+// The IC velocities. The velocity of LPT order n is fac f_n Psi_n with fac = a^2 H / H0 at zini and f_n the growth
+// rate of the IC (grav_ic). With COLA the velocities in the particles are relative to the COLA frame, which has the
+// growth rates of the gravity model (grav): at k = 0 for scale-independent COLA, f(k) for scale-dependent COLA, and
+// only the LPT orders up to simulation_cola_LPT_order. With ic_use_gravity_model_GR and a modified gravity model the
+// IC have the growth rate of GR (grav_ic) but the COLA frame that of the gravity model (grav).
+//=============================================================================
 
-    //=============================================================
-    // Displace particles from a regular grid using LPT
-    // The growth rate is used to generate the velocities
-    //=============================================================
+/// fac {f_1LPT, f_2LPT, f_3LPTa, f_3LPTb} of the IC at k = 0
+template <int NDIM, class T>
+std::vector<double> NBodySimulation<NDIM, T>::ic_velocity_norms(double fac) const {
+    const double aini = params.ic.a_initial();
+    return {fac * grav_ic->get_f_1LPT(aini),
+            fac * grav_ic->get_f_2LPT(aini),
+            fac * grav_ic->get_f_3LPTa(aini),
+            fac * grav_ic->get_f_3LPTb(aini)};
+}
+
+/// The IC have the growth of GR (ic_use_gravity_model_GR) and the COLA frame that of the modified gravity model
+template <int NDIM, class T>
+bool NBodySimulation<NDIM, T>::cola_frame_growth_differs() const {
+    return cola.enabled and grav_ic != grav and grav_ic->get_name() != grav->get_name();
+}
+
+/// The scale-dependent 2LPT velocity norm (nullptr if it is that of k = 0): f_2LPT(k, zini) Psi_2LPT with k the
+/// wavenumber of the 2LPT field (as in the COLA frame of scale-dependent COLA, which therefore needs nothing extra).
+/// Using f_2LPT(k = 0) for all k gave velocities that differed from those of scale-dependent COLA by 4.3e-4 rms for
+/// 0.4 eV neutrinos. With scale-independent COLA the frame has f_2LPT(0) Psi_2LPT and the particles get the residual.
+/// In the N-body gauge only the 1LPT growth rate differs from that of the gravity model (on horizon scales, from the
+/// transfer functions); the 2LPT velocity is that of the gravity model in both cases (as in the COLA frame). With
+/// simulation_cola_LPT_order = 1 the frame has no 2LPT velocity and the particles get all of it. With
+/// ic_use_gravity_model_GR and modified gravity the residual relative to the frame of the gravity model. The same for
+/// all species (the 2LPT displacement is that of the total CDM+baryon field)
+template <int NDIM, class T>
+std::function<double(double)> NBodySimulation<NDIM, T>::ic_velocity_norm_2LPT_of_kBox(double fac) const {
+    const auto & ic = params.ic;
+    const double boxsize = params.simulation.boxsize;
     const double aini = ic.a_initial();
-    const double fac = aini * aini * cosmo->HoverH0_of_a(std::exp(std::log(aini)));
-    std::vector<double> velocity_norms{fac * grav_ic->get_f_1LPT(aini),
-                                       fac * grav_ic->get_f_2LPT(aini),
-                                       fac * grav_ic->get_f_3LPTa(aini),
-                                       fac * grav_ic->get_f_3LPTb(aini)};
-    timer.StartTiming("InitialConditions");
+    const bool cola_frame_has_2LPT = cola.enabled and cola.LPT_order >= 2;
+    if (not(ic.LPT_order >= 2 and
+            ((grav_ic->is_growth_scaledependent() and (not cola_frame_has_2LPT or not cola.scaledependent)) or
+             (cola_frame_has_2LPT and cola_frame_growth_differs()))))
+        return nullptr;
+    if (FML::ThisTask == 0 and grav_ic->is_growth_scaledependent())
+        std::cout << "# Scale-dependent 2LPT growth rate at zini f_2(k) = "
+                  << grav_ic->get_f_2LPT(aini, 0.01 / grav_ic->H0_hmpc) << " (k = 0.01 h/Mpc), "
+                  << grav_ic->get_f_2LPT(aini, 0.1 / grav_ic->H0_hmpc) << " (k = 0.1 h/Mpc), "
+                  << grav_ic->get_f_2LPT(aini, 1.0 / grav_ic->H0_hmpc) << " (k = 1 h/Mpc). Scale-independent value "
+                  << grav_ic->get_f_2LPT(aini) << "\n";
+    const double f2_frame0 = cola_frame_has_2LPT ? grav->get_f_2LPT(aini) : 0.0;
+    const bool frame_scaledependent = cola_frame_has_2LPT and cola.scaledependent;
+    auto g = grav;
+    auto g_ic = grav_ic;
+    return [g, g_ic, fac, aini, boxsize, f2_frame0, frame_scaledependent](double kBox) {
+        const double f2_frame = frame_scaledependent ? g->get_f_2LPT(aini, kBox / boxsize / g->H0_hmpc) : f2_frame0;
+        return fac * (g_ic->get_f_2LPT(aini, kBox / boxsize / g_ic->H0_hmpc) - f2_frame);
+    };
+}
 
-    // Which LPT potentials we need to keep for scale-dependent COLA (1LPT and 2LPT)
-    const bool store_potentials = cola.enabled and cola.scaledependent;
-    const bool store_1LPT = store_potentials and FML::PARTICLE::has_get_D_1LPT<T>() and cola.LPT_order >= 1;
-    const bool store_2LPT = store_potentials and FML::PARTICLE::has_get_D_2LPT<T>() and cola.LPT_order >= 2;
+/// The scale-dependent 1LPT velocity norm of one species (nullptr if it is that of k = 0). Sets
+/// ic_velocities_relative_to_cola_frame when the velocities it gives are relative to the COLA frame.
+/// N-body gauge: the growth rate (and so the 1LPT velocity) is scale-dependent on large scales; we take it from the
+/// (N-body gauge) transfer functions.
+/// Scale-dependent growth (massive neutrinos with the transfer functions, modified gravity): the 1LPT velocity is
+/// f(k, zini) Psi (the growth rate at k = 0 for all k overestimated the velocity: for 0.4 eV neutrinos f = 0.998
+/// instead of f_cb = 0.976 for k >> k_fs, which gave +1.7% in P_cb(z = 0) on linear scales). With scale-dependent COLA
+/// the COLA frame already has this velocity; with scale-independent COLA it has f(k = 0) Psi and the particles get the
+/// residual (f(k) - f(0)) Psi. With ic_use_gravity_model_GR the particles get the residual (f_IC(k) - f_frame(k)) Psi
+/// for the orders the frame has. Zeroing the velocities (or taking the frame growth rate to be that of the IC) started
+/// COLA with the velocity of the gravity model and the run without COLA with that of GR
+template <int NDIM, class T>
+std::function<double(double)> NBodySimulation<NDIM, T>::ic_velocity_norm_1LPT_of_kBox(double fac) {
+    const double boxsize = params.simulation.boxsize;
+    const double aini = params.ic.a_initial();
+    auto g = grav;
+    auto g_ic = grav_ic;
+    const bool cola_enabled = cola.enabled;
+    const bool cola_scaledependent = cola.scaledependent;
 
-    // The IC generator returns the 2LPT potential if the vector has room for it
-    std::vector<FFTWGrid<NDIM>> phi_nLPT_potentials;
-    if (store_2LPT)
-        phi_nLPT_potentials.resize(1);
-
-    // In the N-body gauge the growth rate (and so the 1LPT velocity) is scale-dependent on large scales.
-    // We take it from the (N-body gauge) transfer functions
-    std::function<double(double)> velocity_norm_1LPT_of_kBox = nullptr;
-    Spline growth_rate_of_logk{"f_cb(k,zini)"};
     if (params.force.nbody_gauge) {
         FML::assert_mpi(transfers != nullptr, "force_nbody_gauge needs the transfer functions");
         const double kmin = transfers->range().kmin_hmpc;
@@ -755,61 +826,91 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
             logk[i] = std::log(kmin) + std::log(kmax / kmin) * i / double(nk - 1);
             f[i] = transfers->density_growth_rate(SIMCODE::TransferSpecies::CDMBaryon, std::exp(logk[i]), aini);
         }
-        growth_rate_of_logk.create(logk, f, "f_cb(k,zini)");
-        // With COLA the velocities are relative to the COLA frame, which has the growth rate of the gravity model
-        // (at k = 0 for scale-independent COLA) for 1LPT and all of the 2LPT velocity. Zeroing the velocities (as for
-        // scale-independent growth) would replace f_nbg(k) by f(0) (0.75% too large velocity on the largest scales)
-        const bool relative_to_cola_frame = cola.enabled;
-        velocity_norm_1LPT_of_kBox = [&, kmin, kmax, relative_to_cola_frame](double kBox) {
-            const double k = std::min(std::max(kBox / boxsize, kmin), kmax);
-            const double f_frame = not relative_to_cola_frame ? 0.0 :
-                                   cola.scaledependent        ? grav->get_f_1LPT(aini, kBox / boxsize / grav->H0_hmpc) :
-                                                                grav->get_f_1LPT(aini);
-            return fac * (growth_rate_of_logk(std::log(k)) - f_frame);
-        };
-        if (relative_to_cola_frame)
-            ic_velocities_relative_to_cola_frame = true;
+        Spline growth_rate_of_logk(logk, f, "f_cb(k,zini)");
         if (FML::ThisTask == 0)
             std::cout << "# N-body gauge: growth rate at zini f(k) = " << growth_rate_of_logk(std::log(kmin))
                       << " (k = " << kmin << " h/Mpc), " << growth_rate_of_logk(std::log(0.1)) << " (k = 0.1 h/Mpc). "
                       << "Scale-independent value " << grav_ic->get_f_1LPT(aini) << "\n";
+        // With COLA the velocities are relative to the COLA frame, which has the growth rate of the gravity model
+        // (at k = 0 for scale-independent COLA) for 1LPT and all of the 2LPT velocity. Zeroing the velocities (as for
+        // scale-independent growth) would replace f_nbg(k) by f(0) (0.75% too large velocity on the largest scales)
+        if (cola_enabled)
+            ic_velocities_relative_to_cola_frame = true;
+        return
+            [g, growth_rate_of_logk, fac, aini, boxsize, kmin, kmax, cola_enabled, cola_scaledependent](double kBox) {
+                const double k = std::min(std::max(kBox / boxsize, kmin), kmax);
+                const double f_frame = not cola_enabled    ? 0.0 :
+                                       cola_scaledependent ? g->get_f_1LPT(aini, kBox / boxsize / g->H0_hmpc) :
+                                                             g->get_f_1LPT(aini);
+                return fac * (growth_rate_of_logk(std::log(k)) - f_frame);
+            };
     }
 
-    // Scale-dependent growth (massive neutrinos with the transfer functions, modified gravity): the 1LPT velocity
-    // is f(k, zini) Psi (the growth rate at k = 0 for all k overestimated the velocity: for 0.4 eV neutrinos
-    // f = 0.998 instead of f_cb = 0.976 for k >> k_fs, which gave +1.7% in P_cb(z = 0) on linear scales). With
-    // scale-dependent COLA the COLA frame already has this velocity; with scale-independent COLA it has f(k = 0) Psi
-    // and the particles get the residual (f(k) - f(0)) Psi.
-    // With ic_use_gravity_model_GR and a modified gravity model the IC have the growth rate of GR (grav_ic) but the
-    // COLA frame that of the gravity model (grav): f(k = 0) for scale-independent COLA, f(k) for scale-dependent COLA.
-    // The particles get the residual (f_IC(k) - f_frame(k)) Psi for the orders the frame has. Zeroing the velocities
-    // (or taking the frame growth rate to be that of the IC) started COLA with the velocity of the gravity model and
-    // the run without COLA with that of GR
-    const bool cola_frame_growth_differs = cola.enabled and grav_ic != grav and grav_ic->get_name() != grav->get_name();
-    if (not params.force.nbody_gauge and
-        ((grav_ic->is_growth_scaledependent() and not(cola.enabled and cola.scaledependent)) or
-         cola_frame_growth_differs)) {
-        const double f0 = cola.enabled ? grav->get_f_1LPT(aini) : 0.0;
-        velocity_norm_1LPT_of_kBox = [&, f0](double kBox) {
-            const double f_frame =
-                cola.enabled and cola.scaledependent ? grav->get_f_1LPT(aini, kBox / boxsize / grav->H0_hmpc) : f0;
-            return fac * (grav_ic->get_f_1LPT(aini, kBox / boxsize / grav_ic->H0_hmpc) - f_frame);
-        };
-        if (cola.enabled)
-            ic_velocities_relative_to_cola_frame = true;
-        if (FML::ThisTask == 0 and cola_frame_growth_differs)
-            std::cout << "# The IC have the growth rate of GR at zini f = " << grav_ic->get_f_1LPT(aini)
-                      << ", the COLA frame that of " << grav->get_name()
-                      << " f(k) = " << grav->get_f_1LPT(aini, 0.01 / grav->H0_hmpc) << " (k = 0.01 h/Mpc), "
-                      << grav->get_f_1LPT(aini, 1.0 / grav->H0_hmpc) << " (k = 1 h/Mpc): the particles get the "
-                      << "difference\n";
-        if (FML::ThisTask == 0 and grav_ic->is_growth_scaledependent())
-            std::cout << "# Scale-dependent growth rate at zini f(k) = "
-                      << grav_ic->get_f_1LPT(aini, 0.01 / grav_ic->H0_hmpc) << " (k = 0.01 h/Mpc), "
-                      << grav_ic->get_f_1LPT(aini, 0.1 / grav_ic->H0_hmpc) << " (k = 0.1 h/Mpc), "
-                      << grav_ic->get_f_1LPT(aini, 1.0 / grav_ic->H0_hmpc) << " (k = 1 h/Mpc). Scale-independent value "
-                      << grav_ic->get_f_1LPT(aini) << "\n";
+    if (not((grav_ic->is_growth_scaledependent() and not(cola_enabled and cola_scaledependent)) or
+            cola_frame_growth_differs()))
+        return nullptr;
+    if (cola_enabled)
+        ic_velocities_relative_to_cola_frame = true;
+    if (FML::ThisTask == 0 and cola_frame_growth_differs())
+        std::cout << "# The IC have the growth rate of GR at zini f = " << grav_ic->get_f_1LPT(aini)
+                  << ", the COLA frame that of " << grav->get_name()
+                  << " f(k) = " << grav->get_f_1LPT(aini, 0.01 / grav->H0_hmpc) << " (k = 0.01 h/Mpc), "
+                  << grav->get_f_1LPT(aini, 1.0 / grav->H0_hmpc) << " (k = 1 h/Mpc): the particles get the "
+                  << "difference\n";
+    if (FML::ThisTask == 0 and grav_ic->is_growth_scaledependent())
+        std::cout << "# Scale-dependent growth rate at zini f(k) = "
+                  << grav_ic->get_f_1LPT(aini, 0.01 / grav_ic->H0_hmpc) << " (k = 0.01 h/Mpc), "
+                  << grav_ic->get_f_1LPT(aini, 0.1 / grav_ic->H0_hmpc) << " (k = 0.1 h/Mpc), "
+                  << grav_ic->get_f_1LPT(aini, 1.0 / grav_ic->H0_hmpc) << " (k = 1 h/Mpc). Scale-independent value "
+                  << grav_ic->get_f_1LPT(aini) << "\n";
+    const double f0 = cola_enabled ? grav->get_f_1LPT(aini) : 0.0;
+    const bool frame_scaledependent = cola_enabled and cola_scaledependent;
+    return [g, g_ic, fac, aini, boxsize, f0, frame_scaledependent](double kBox) {
+        const double f_frame = frame_scaledependent ? g->get_f_1LPT(aini, kBox / boxsize / g->H0_hmpc) : f0;
+        return fac * (g_ic->get_f_1LPT(aini, kBox / boxsize / g_ic->H0_hmpc) - f_frame);
+    };
+}
+
+/// Scale-dependent COLA: the LPT potentials phi_1LPT and phi_2LPT (k, zini) of the CDM+baryon field (the COLA
+/// frame). phi_2LPT_ini_fourier: the 2LPT potential if the IC generator returned it (else it is computed here)
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::store_cola_potentials(const FFTWGrid<NDIM> & delta_cb_fourier,
+                                                     FFTWGrid<NDIM> * phi_2LPT_ini_fourier) {
+    if (not(cola.enabled and cola.scaledependent))
+        return;
+    if (FML::PARTICLE::has_get_D_1LPT<T>() and cola.LPT_order >= 1) {
+        cola.phi_1LPT_ini_fourier = FFTWGrid<NDIM>();
+        FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier<NDIM>(delta_cb_fourier, cola.phi_1LPT_ini_fourier);
+        cola.phi_1LPT_ini_fourier.add_memory_label("phi_1LPT(k,zini)");
     }
+    if (FML::PARTICLE::has_get_D_2LPT<T>() and cola.LPT_order >= 2 and params.ic.LPT_order >= 2) {
+        if (FML::ThisTask == 0)
+            std::cout << "Storing phi_2LPT(k,zini) for scale-dependent COLA\n";
+        if (phi_2LPT_ini_fourier)
+            cola.phi_2LPT_ini_fourier = std::move(*phi_2LPT_ini_fourier);
+        else
+            FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_cb_fourier, cola.phi_2LPT_ini_fourier);
+        cola.phi_2LPT_ini_fourier.add_memory_label("phi_2LPT(k,zini)");
+    }
+}
+
+/// The initial conditions with one CDM+baryon species: the particles displaced from a regular grid with LPT, the
+/// velocities from the growth rates (see ic_velocity_norm_1LPT_of_kBox and ic_velocity_norm_2LPT_of_kBox)
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::generate_initial_conditions_one_species(const FFTWGrid<NDIM> & delta_cb_fourier) {
+    const auto & ic = params.ic;
+    const double aini = ic.a_initial();
+    const double fac = aini * aini * cosmo->HoverH0_of_a(std::exp(std::log(aini)));
+    std::vector<double> velocity_norms = ic_velocity_norms(fac);
+
+    // The IC generator returns the 2LPT potential if the vector has room for it (for scale-dependent COLA)
+    const bool store_2LPT = cola.enabled and cola.scaledependent and FML::PARTICLE::has_get_D_2LPT<T>() and
+                            cola.LPT_order >= 2 and ic.LPT_order >= 2;
+    std::vector<FFTWGrid<NDIM>> phi_nLPT_potentials;
+    if (store_2LPT)
+        phi_nLPT_potentials.resize(1);
+
+    const auto velocity_norm_1LPT_of_kBox = ic_velocity_norm_1LPT_of_kBox(fac);
 
     // With COLA the velocities in the particles are relative to the COLA frame, which only has the LPT orders up to
     // simulation_cola_LPT_order (1LPT, 2LPT). The higher orders (2LPT with simulation_cola_LPT_order = 1, 3LPT) keep
@@ -823,44 +924,18 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
             velocity_norms[i] = 0.0;
     }
 
-    // The same for the 2LPT velocity: f_2LPT(k, zini) Psi_2LPT with k the wavenumber of the 2LPT field (as in the
-    // COLA frame of scale-dependent COLA, which therefore needs nothing extra). Using f_2LPT(k = 0) for all k gave
-    // velocities that differed from those of scale-dependent COLA by 4.3e-4 rms for 0.4 eV neutrinos. With
-    // scale-independent COLA the frame has f_2LPT(0) Psi_2LPT and the particles get the residual. In the N-body gauge
-    // (above) only the 1LPT growth rate differs from that of the gravity model (on horizon scales, from the transfer
-    // functions); the 2LPT velocity is that of the gravity model in both cases (as in the COLA frame).
-    // With simulation_cola_LPT_order = 1 the frame has no 2LPT velocity and the particles get all of it. With
-    // ic_use_gravity_model_GR and modified gravity the residual relative to the frame of the gravity model (see above)
-    std::function<double(double)> velocity_norm_2LPT_of_kBox = nullptr;
-    const bool cola_frame_has_2LPT = cola.enabled and cola.LPT_order >= 2;
-    if (ic.LPT_order >= 2 and
-        ((grav_ic->is_growth_scaledependent() and (not cola_frame_has_2LPT or not cola.scaledependent)) or
-         (cola_frame_has_2LPT and cola_frame_growth_differs))) {
-        const double f2_frame0 = cola_frame_has_2LPT ? grav->get_f_2LPT(aini) : 0.0;
-        velocity_norm_2LPT_of_kBox = [&, f2_frame0, cola_frame_has_2LPT](double kBox) {
-            const double f2_frame = cola_frame_has_2LPT and cola.scaledependent ?
-                                        grav->get_f_2LPT(aini, kBox / boxsize / grav->H0_hmpc) :
-                                        f2_frame0;
-            return fac * (grav_ic->get_f_2LPT(aini, kBox / boxsize / grav_ic->H0_hmpc) - f2_frame);
-        };
-        // (with COLA the velocities are already relative to the frame, see above)
-        FML::assert_mpi(not cola.enabled or ic_velocities_relative_to_cola_frame,
-                        "Internal error: scale-dependent 2LPT velocity with COLA must be relative to the COLA frame");
-        if (FML::ThisTask == 0 and grav_ic->is_growth_scaledependent())
-            std::cout << "# Scale-dependent 2LPT growth rate at zini f_2(k) = "
-                      << grav_ic->get_f_2LPT(aini, 0.01 / grav_ic->H0_hmpc) << " (k = 0.01 h/Mpc), "
-                      << grav_ic->get_f_2LPT(aini, 0.1 / grav_ic->H0_hmpc) << " (k = 0.1 h/Mpc), "
-                      << grav_ic->get_f_2LPT(aini, 1.0 / grav_ic->H0_hmpc) << " (k = 1 h/Mpc). Scale-independent value "
-                      << grav_ic->get_f_2LPT(aini) << "\n";
-    }
+    const auto velocity_norm_2LPT_of_kBox = ic_velocity_norm_2LPT_of_kBox(fac);
+    // (with COLA the velocities are already relative to the frame, see above)
+    FML::assert_mpi(not velocity_norm_2LPT_of_kBox or not cola.enabled or ic_velocities_relative_to_cola_frame,
+                    "Internal error: scale-dependent 2LPT velocity with COLA must be relative to the COLA frame");
 
     FML::NBODY::NBodyInitialConditions<NDIM, T>(part,
                                                 params.particle.Npart_1D,
                                                 params.particle.allocation_factor,
-                                                delta_ini_fourier,
+                                                delta_cb_fourier,
                                                 phi_nLPT_potentials,
                                                 ic.LPT_order,
-                                                boxsize,
+                                                params.simulation.boxsize,
                                                 ic.initial_redshift,
                                                 velocity_norms,
                                                 velocity_norm_1LPT_of_kBox,
@@ -869,22 +944,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
                                                 nullptr,
                                                 velocity_norm_2LPT_of_kBox);
 
-    apply_lattice_offset();
-
-    // Store the potentials
-    if (store_1LPT) {
-        cola.phi_1LPT_ini_fourier = FFTWGrid<NDIM>();
-        FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier<NDIM>(delta_ini_fourier, cola.phi_1LPT_ini_fourier);
-        cola.phi_1LPT_ini_fourier.add_memory_label("phi_1LPT(k,zini)");
-    }
-    if (store_2LPT) {
-        if (FML::ThisTask == 0)
-            std::cout << "Storing phi_2LPT(k,zini) for scale-dependent COLA\n";
-        cola.phi_2LPT_ini_fourier = phi_nLPT_potentials[0];
-        cola.phi_2LPT_ini_fourier.add_memory_label("phi_2LPT(k,zini)");
-    }
-
-    timer.EndTiming("InitialConditions");
+    store_cola_potentials(delta_cb_fourier, store_2LPT ? &phi_nLPT_potentials[0] : nullptr);
 }
 
 /// Offset the particle lattice from the nodes of the force grid. With a force grid finer than the particle
@@ -950,10 +1010,9 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
                                                                baryon.weight_cb);
 
     const double fac = aini * aini * cosmo->HoverH0_of_a(aini);
-    const std::vector<double> velocity_norms{fac * grav_ic->get_f_1LPT(aini),
-                                             fac * grav_ic->get_f_2LPT(aini),
-                                             fac * grav_ic->get_f_3LPTa(aini),
-                                             fac * grav_ic->get_f_3LPTb(aini)};
+    const std::vector<double> velocity_norms = ic_velocity_norms(fac);
+    // The 2LPT velocity with scale-dependent growth (the same for both species, see ic_velocity_norm_2LPT_of_kBox)
+    const auto velocity_norm_2LPT = ic_velocity_norm_2LPT_of_kBox(fac);
     const double kmin = transfers->range().kmin_hmpc;
     const double kmax = transfers->range().kmax_hmpc;
     auto clamp_logk = [&](double kBox) { return std::log(std::min(std::max(kBox / boxsize, kmin), kmax)); };
@@ -983,11 +1042,12 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
         // With COLA the species share the COLA frame of the total CDM+baryon field and the velocities we set are
         // relative to it: v_i - v_frame = a^2 H [(f_i - f_frame / R_i) Psi_i] for 1LPT (Psi_i = R_i Psi_cb) and zero
         // for 2LPT (the same for all species; all of the 2LPT velocity with simulation_cola_LPT_order = 1 as the frame
-        // then has none, see generate_initial_conditions). The frame velocity is f_frame Psi_cb with f_frame = f_cb(k)
-        // for scale-dependent COLA, but the growth rate at k = 0 for scale-independent COLA (the frame adds back
-        // grav->get_f_1LPT(a), as for one species). Using f_cb(k) there with scale-dependent growth gave the
-        // velocities (f_cb(k) - f(0)) Psi_cb too little (-1.75% rms for 0.4 eV neutrinos). The frame has the growth
-        // rate of the gravity model (grav), also with ic_use_gravity_model_GR where the IC have that of GR (grav_ic)
+        // then has none, see ic_velocity_norm_2LPT_of_kBox). The frame velocity is f_frame Psi_cb with
+        // f_frame = f_cb(k) for scale-dependent COLA, but the growth rate at k = 0 for scale-independent COLA (the
+        // frame adds back grav->get_f_1LPT(a), as for one species). Using f_cb(k) there with scale-dependent growth
+        // gave the velocities (f_cb(k) - f(0)) Psi_cb too little (-1.75% rms for 0.4 eV neutrinos). The frame has the
+        // growth rate of the gravity model (grav), also with ic_use_gravity_model_GR where the IC have that of GR
+        // (grav_ic)
         std::vector<double> residual_velocity_norms = velocity_norms;
         for (int i = 0; i < cola.LPT_order; i++)
             residual_velocity_norms[i] = 0.0;
@@ -1001,25 +1061,6 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
                 return fac * growth_rate(logk);
             return fac * (growth_rate(logk) - f_frame(logk) / ratio(logk));
         };
-        // The 2LPT velocity with scale-dependent growth: f_2LPT(k) Psi_2LPT (relative to the frame with f_2LPT(0) for
-        // scale-independent COLA, nothing for scale-dependent COLA whose frame has f_2LPT(k); see
-        // generate_initial_conditions; all of it with simulation_cola_LPT_order = 1 where the frame has no 2LPT). With
-        // ic_use_gravity_model_GR and modified gravity (f_2LPT,GR - f_2LPT,frame(k)) Psi_2LPT
-        std::function<double(double)> velocity_norm_2LPT = nullptr;
-        const bool cola_frame_has_2LPT = cola.enabled and cola.LPT_order >= 2;
-        const bool cola_frame_growth_differs =
-            cola.enabled and grav_ic != grav and grav_ic->get_name() != grav->get_name();
-        if (ic.LPT_order >= 2 and
-            ((grav_ic->is_growth_scaledependent() and (not cola_frame_has_2LPT or not cola.scaledependent)) or
-             (cola_frame_has_2LPT and cola_frame_growth_differs))) {
-            const double f2_frame0 = cola_frame_has_2LPT ? grav->get_f_2LPT(aini) : 0.0;
-            velocity_norm_2LPT = [&, f2_frame0, cola_frame_has_2LPT](double kBox) {
-                const double f2_frame = cola_frame_has_2LPT and cola.scaledependent ?
-                                            grav->get_f_2LPT(aini, kBox / boxsize / grav->H0_hmpc) :
-                                            f2_frame0;
-                return fac * (grav_ic->get_f_2LPT(aini, kBox / boxsize / grav_ic->H0_hmpc) - f2_frame);
-            };
-        }
         std::function<double(double)> displacement_ratio = [&](double kBox) { return ratio(clamp_logk(kBox)); };
         std::function<double(double)> mass_contrast = nullptr;
         if (mass_mode) {
@@ -1058,16 +1099,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     make_species(part_baryon, baryon, splines.ratio_baryon, splines.f_baryon, &eps_today.second, baryon_shift);
 
     // Scale-dependent COLA: the LPT potentials of the total CDM+baryon field (the shared COLA frame)
+    store_cola_potentials(delta_cb_fourier, nullptr);
     if (cola.enabled and cola.scaledependent) {
-        if (FML::PARTICLE::has_get_D_1LPT<T>() and cola.LPT_order >= 1) {
-            cola.phi_1LPT_ini_fourier = FFTWGrid<NDIM>();
-            FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier<NDIM>(delta_cb_fourier, cola.phi_1LPT_ini_fourier);
-            cola.phi_1LPT_ini_fourier.add_memory_label("phi_1LPT(k,zini)");
-        }
-        if (FML::PARTICLE::has_get_D_2LPT<T>() and cola.LPT_order >= 2 and ic.LPT_order >= 2) {
-            FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_cb_fourier, cola.phi_2LPT_ini_fourier);
-            cola.phi_2LPT_ini_fourier.add_memory_label("phi_2LPT(k,zini)");
-        }
         // The baryons on the offset lattice: the potentials of the shifted field, as for their IC (see
         // ColaState::ShiftedSpecies)
         if (baryon_shift != 0.0) {
