@@ -40,6 +40,7 @@ namespace {
     ParameterMap cosmology_parameters(double OmegaCDM, double OmegaK = 0.0) {
         ParameterMap p;
         p["cosmology_OmegaMNu"] = 0.0;
+        p["cosmology_neutrino_masses_eV"] = std::vector<double>{}; // (the parameter table is not loaded here)
         p["cosmology_Omegab"] = 0.05;
         p["cosmology_OmegaCDM"] = OmegaCDM;
         p["cosmology_OmegaK"] = OmegaK;
