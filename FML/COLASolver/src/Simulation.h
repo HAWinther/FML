@@ -791,7 +791,7 @@ void NBodySimulation<NDIM, T>::init() {
         const int col_k = 0;
         const int col_pofk = 1;
         std::vector<int> cols_to_keep{col_k, col_pofk};
-        const int nheaderlines = 1;
+        const int nheaderlines = -1; // skip header comments
         auto pofkdata = FML::FILEUTILS::read_regular_ascii(ic_input_filename, ncols, cols_to_keep, nheaderlines);
 
         karr.resize(pofkdata.size());
@@ -838,7 +838,7 @@ void NBodySimulation<NDIM, T>::init() {
         const int col_k = 0;
         const int col_tofk = 1;
         std::vector<int> cols_to_keep{col_k, col_tofk};
-        const int nheaderlines = 1;
+        const int nheaderlines = -1; // skip header comments
         auto tofkdata = FML::FILEUTILS::read_regular_ascii(ic_input_filename, ncols, cols_to_keep, nheaderlines);
 
         karr.resize(tofkdata.size());
