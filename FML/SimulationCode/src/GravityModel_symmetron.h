@@ -55,11 +55,6 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
         GravityModelScreened<NDIM>::init();
     }
 
-    /// phi/phi0
-    double phi_background(double a) const { return symmetron().phi(std::log(a)); }
-    /// m^2(a) / H0^2
-    double mass_over_H0_squared(double a) const { return symmetron().mass2(std::log(a)); }
-
     void solve_exact_fifth_force(double a,
                                  double H0Box,
                                  FFTWGrid<NDIM> & density_real,

@@ -894,12 +894,6 @@ class ColaState {
         }
     }
 
-    void free() {
-        phi_1LPT_ini_fourier.free();
-        phi_2LPT_ini_fourier.free();
-        shifted_species.clear();
-    }
-
   private:
     ShiftedSpecies * shifted_species_of(const FML::PARTICLE::MPIParticles<T> & part) {
         for (auto & sp : shifted_species)

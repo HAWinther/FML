@@ -470,7 +470,7 @@ class GravityModel {
     // Does it have scaledependent growth?
     bool scaledependent_growth{false};
 
-    // Experimental option (only for GR so far)
+    // Experimental: the force from finite differences of the potential (in compute_force_from_total_density)
     bool force_use_finite_difference_force{false};
     int force_finite_difference_stencil_order{4};
 };

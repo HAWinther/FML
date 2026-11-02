@@ -641,7 +641,7 @@ namespace SIMCODE {
             // The multipoles are stored for ell = 0, ..., ellmax: a negative ellmax would write out of bounds
             if (pofk_multipole.enabled and pofk_multipole.ellmax < 0)
                 fail("pofk_multipole_ellmax must be >= 0");
-            // N-body gauge: the IC must be the N-body gauge transfer functions at the initial redshift
+            // The sheet density needs the particles on their lattice (the Lagrangian coordinates)
             if (force.density_method == "sheet" or force.density_method == "sheet_nufft") {
                 if (ic.random_field_type == ICRandomFieldType::ReadParticles)
                     fail("force_density_method = sheet needs particles that start on a regular lattice (not "
@@ -686,6 +686,7 @@ namespace SIMCODE {
             if (ic.input_filename.empty() and ic.type_of_input != ICInputType::InternalTransfer and
                 not ic.reads_particles())
                 fail("ic_input_filename is needed for ic_type_of_input = " + ic.type_of_input_name());
+            // N-body gauge: the IC must be the N-body gauge transfer functions at the initial redshift
             if (force.nbody_gauge) {
                 if (ic.type_of_input != ICInputType::CambFiles)
                     fail("force_nbody_gauge = true needs ic_type_of_input = camb (the N-body gauge "

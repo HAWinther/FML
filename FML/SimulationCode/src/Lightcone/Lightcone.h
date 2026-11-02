@@ -1099,12 +1099,6 @@ void Lightcone<NDIM, T, U>::output_ascii(FML::Vector<U> & part_lc,
         fp << "\n";
     }
 
-    // An option here is to save memory is to just output the radial velocity (needed for RSD)
-    // E.g. double vr = 0.0, r_squared = 0.0;
-    // for (int idim = 0; idim < NDIM; idim++) {
-    // vr += vel[idim]*pos[idim]; r_squared += pos[idim]*pos[idim];
-    // }
-    // vr /= std::sqrt(r2);
 }
 
 // Volume of a spherical shell bounded by rlow and rhigh in NDIM dimension
@@ -1205,7 +1199,6 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
 
         // The r of the delta-map
         const double r_delta_map = get_r_of_delta_map(delta_map);
-        [[maybe_unused]] double a_delta_map = (amin + amax) / 2.0;
 
         // Allocate all the kappa-maps
         if (i == int(maps.size()) - 1) {
@@ -1246,11 +1239,6 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
             }
 
             integral *= prefactor_kappa;
-
-            // An alternative way of doing this (approximate the full integral Int delta g dchi as a discrete sum):
-            // Mostly gives the same result up to a few percent
-            // integral = prefactor / a_delta_map * ((r_kappa_map - r_delta_map) / r_kappa_map) * r_delta_map * (rmax -
-            // rmin) * std::pow(H0Box, 2);
 
             std::cout << "# Adding delta i = " << i << " ";
             std::cout << "[" << rmin * boxsize << " -> " << rmax * boxsize << " Mpc/h] ";

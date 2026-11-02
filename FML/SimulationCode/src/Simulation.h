@@ -157,13 +157,8 @@ class NBodySimulation {
     std::vector<std::pair<double, PowerSpectrumBinning>> pofk_total_every_step;
     // ...and of the species separately when there are several (cdm, baryon, nu)
     std::map<std::string, std::vector<std::pair<double, PowerSpectrumBinning>>> pofk_species_every_step;
-    // A list of (z, P(k)) for the particles that we compute if pofk = true
-    std::vector<std::pair<double, PowerSpectrumBinning>> pofk_every_output;
-    // A list of (z, P_ell(k)) for the particles that we compute every output if pofk_multipoles = true
-    std::vector<std::pair<double, std::vector<PowerSpectrumBinning>>> pofk_multipoles_every_output;
 
   public:
-    NBodySimulation() = default;
     NBodySimulation(std::shared_ptr<Cosmology> cosmo, std::shared_ptr<GravityModel<NDIM>> grav)
         : cosmo(cosmo), grav(grav) {
         timer.StartTiming("The whole simulation");
@@ -185,7 +180,6 @@ class NBodySimulation {
     void run();
 
     /// Free all memory
-    void free();
 
     //=============================================================================
     // Access to the state of the simulation (used by the analysis in AnalyzeOutput.h)
@@ -285,8 +279,6 @@ class NBodySimulation {
     const auto & get_pofk_cb_every_step() const { return pofk_cb_every_step; }
     const auto & get_pofk_total_every_step() const { return pofk_total_every_step; }
     const auto & get_pofk_species_every_step() const { return pofk_species_every_step; }
-    const auto & get_pofk_every_output() const { return pofk_every_output; }
-    const auto & get_pofk_multipoles_every_output() const { return pofk_multipoles_every_output; }
     /// The linear density field delta_cb(zini,k) of the initial conditions (only if hybridbias)
     const FFTWGrid<NDIM> & get_hybridbias_linear_field() const { return hybridbias_linear_field_fourier; }
     auto & get_hybridbias_mg_tables() { return hybridbias_mg_tables; }
@@ -294,15 +286,6 @@ class NBodySimulation {
     /// The time-stepping (where the steps are and their sizes)
     SIMCODE::TimeStepping<NDIM> time_stepping() const { return {params.timestep, cosmo, grav}; }
 
-    /// The scale factors of positions and velocities after each step from amin to amax
-    std::pair<std::vector<double>, std::vector<double>> compute_scalefactors_KDK(double amin, double amax, int nsteps) {
-        return time_stepping().scalefactors_KDK(amin, amax, nsteps);
-    }
-
-    /// The size of the drift and kick steps from amin to amax
-    std::pair<std::vector<double>, std::vector<double>> compute_deltatime_KDK(double amin, double amax, int nsteps) {
-        return time_stepping().deltatime_KDK(amin, amax, nsteps);
-    }
 
   protected:
     // FFTW planner flag and wisdom (plans): read at the start, written to the output folder when new plans are made
@@ -334,7 +317,6 @@ class NBodySimulation {
     void store_cola_potentials(const FFTWGrid<NDIM> & delta_cb_fourier, FFTWGrid<NDIM> * phi_2LPT_ini_fourier);
     void apply_lattice_offset();
     void read_ic();
-    void read_phases(FFTWGrid<NDIM> & delta_fourier);
     void setup_nbody_gauge();
 
     // The parts of run()
@@ -699,7 +681,7 @@ FML::GRID::FFTWGrid<NDIM> NBodySimulation<NDIM, T>::make_initial_density_field()
 
     // Take the phases from the particles in a file, but use our P(k) for the amplitudes
     if (ic.random_field_type == SIMCODE::ICRandomFieldType::ReadPhases) {
-        read_phases(delta_ini_fourier);
+        SIMCODE::delta_from_gadget_particles<NDIM, T>(delta_ini_fourier, params, *cosmo);
         SIMCODE::whiten_and_set_power_spectrum<NDIM>(delta_ini_fourier, power_initial_spline, boxsize);
     }
 
@@ -951,7 +933,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_one_species(const FFT
 
 /// Offset the particle lattice from the nodes of the force grid. With a force grid finer than the particle
 /// grid the particles would otherwise start exactly on grid nodes where CIC responds to |displacement|
-/// (a rectified response) and this gives large spurious forces (see notes/force_grid_and_lattice.md).
+/// (a rectified response) and this gives large spurious forces.
 /// This is a uniform translation of all the particles (all species) so it does not change the physics
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::apply_lattice_offset() {
@@ -1158,12 +1140,6 @@ void NBodySimulation<NDIM, T>::setup_nbody_gauge() {
 
     // delta_cb(k,zini) is stored from the density field of the first force evaluation (add_nbody_gauge_source) so that
     // it has the same window as the density fields it is added to
-}
-
-/// Compute delta(k) from particles in gadget files (used to take the phases from them)
-template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::read_phases(FFTWGrid<NDIM> & delta_fourier) {
-    SIMCODE::delta_from_gadget_particles<NDIM, T>(delta_fourier, params, *cosmo);
 }
 
 /// Read the particles from gadget files. With COLA we also reconstruct the LPT displacement fields
@@ -1675,13 +1651,10 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
          }},
         {"Power-spectrum",
          params.pofk.enabled,
-         [&]() { pofk_every_output.push_back({redshift, compute_power_spectrum(*this, redshift, snapshot_folder)}); }},
+         [&]() { compute_power_spectrum(*this, redshift, snapshot_folder); }},
         {"Power-spectrum multipoles",
          params.pofk_multipole.enabled,
-         [&]() {
-             pofk_multipoles_every_output.push_back(
-                 {redshift, compute_power_spectrum_multipoles(*this, redshift, snapshot_folder)});
-         }},
+         [&]() { compute_power_spectrum_multipoles(*this, redshift, snapshot_folder); }},
         {"FOF", params.fof.enabled, [&]() { compute_fof_halos(*this, redshift, snapshot_folder); }},
         {"Bispectrum", params.bispectrum.enabled, [&]() { compute_bispectrum(*this, redshift, snapshot_folder); }},
         {"Hybrid bias spectra",
@@ -1703,17 +1676,6 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
         analysis.run();
         timer.EndTiming(analysis.name);
     }
-}
-
-template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::free() {
-    part.free();
-    part_baryon.free();
-    part_neutrinos.free();
-    initial_density_field_fourier.free();
-    initial_density_field_early.free();
-    hybridbias_linear_field_fourier.free();
-    cola.free();
 }
 
 // The density field the force is computed from (member functions of NBodySimulation)

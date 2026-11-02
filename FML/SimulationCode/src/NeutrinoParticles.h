@@ -77,7 +77,6 @@ namespace SIMCODE {
 
         Container & particles() { return part; }
         const Container & particles() const { return part; }
-        void free() { part.free(); }
 
         /// The initial conditions. The bulk part is made like the CDM: delta_nu(k) = delta_cb(k) T_nu(k,zini) /
         /// T_cb(k,zini) from the same random field, 1LPT displacements and velocities v = a^2 H f_nu(k) Psi with f_nu

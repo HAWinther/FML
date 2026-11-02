@@ -600,33 +600,6 @@ class OnionSlice {
 
         // Not implemented in 2D
         if constexpr (NDIM == 2) {
-            /* Do a fftw of delta(theta) and
-            int N = vmap.size();
-            fftw_complex *in, *out;
-            fftw_plan p;
-            in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
-            for(int i = 0; i < N; i++) {
-              // Divide by N to deal with FFTW normalization after the transform
-              in[i][0] = vmap[i] / double(N);
-              in[i][1] = 0.0:
-            }
-            out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
-            p = fftw_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
-            fftw_execute(p);
-            std::vector<T> Cell(N/2+1, 0.0);
-            std::vector<T> count(N/2+1, 0.0);
-            for(int i = 0; i < N; i++) {
-              int ell = std::abs(i <= N/2 ? i : i - N);
-              Cell[ell] += (out[i][0]*out[i][0] + out[i][1]*out[i][1]);
-              count[ell] += 1;
-            }
-            for(int i = 0; i <= N/2; i++)
-              if(count[i] > 0) Cell[i] /= count[i];
-            fftw_destroy_plan(p);
-            fftw_free(in);
-            fftw_free(out);
-            return Cell;
-            */
             return {};
         }
 
@@ -651,22 +624,6 @@ class OnionSlice {
         std::vector<T> Cell(nlmax);
         for (int l = 0; l < nlmax; l++)
             Cell[l] = mySpec.tt(l) / (fsky_observed > 0.0 ? fsky_observed : 1.0);
-
-        //// Compute it for a given binning of ells
-        // std::vector<T> Cell_output(ells.size(), 0.0);
-        // Cell_output[0] = Cell[int(ells[0])];
-        // Cell_output[ells.size()-1] = Cell[int(ells[ells.size()-1])];
-        // for(size_t i = 1; i < ells.size()-1; i++) {
-        //   double ell_prev = ells[i-1];
-        //   double ell_current = ells[i];
-        //   double ell_next = ells[i+1];
-        //   int ell_start = (ell_prev + ell_current) / 2.0;
-        //   int ell_end = (ell_next + ell_current) / 2.0;
-        //   Cell_output[i] = 0.0;
-        //   for(int ell = ell_start; ell <= ell_end; ell++)
-        //     Cell_output[i] += Cell[ell];
-        //   Cell_output[i] /= (ell_start - ell_end + 1);
-        // }
 
         return Cell;
 #endif
@@ -711,7 +668,7 @@ class OnionSlices {
     int index_maps_current_step_end;
     double astart;
     double aend;
-    double da, da_used;
+    double da;
 
     bool bininfo_written{false};
 
@@ -772,7 +729,6 @@ class OnionSlices {
         // Compute how many maps we can fit inside current step
         // We have 1 map at minimum
         int nmaps = std::max(1, int(round((aend - astart) / da)));
-        da_used = (aend - astart) / nmaps;
 
         // Make a-array of start-end of all the maps
         std::vector<double> aarr(nmaps + 1);

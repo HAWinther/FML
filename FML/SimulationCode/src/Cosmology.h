@@ -383,10 +383,6 @@ class Cosmology {
         const double m_mean = get_Mnu_eV() / double(get_neutrino_masses_eV().size());
         return std::min(nu_sound_speed_factor * get_neutrino_temperature_eV(a) / m_mean, 1.0 / std::sqrt(3.0));
     }
-    /// Free streaming scale for the neutrinos (1408.2995)
-    double get_neutrino_free_streaming_scale_hmpc(double a) const {
-        return std::sqrt(1.5 * get_OmegaM() / a) / get_neutrino_sound_speed_cs_over_c(a) * H0_hmpc;
-    }
 
     //========================================================================
     // Primordial power spectrum and the nonlinear boost
@@ -424,8 +420,6 @@ class Cosmology {
     double get_H0_hmpc() const { return H0_hmpc; }
 
     void set_As(double _As) { As = _As; }
-    void set_ns(double _ns) { ns = _ns; }
-    void set_kpivot_mpc(double _kpivot_mpc) { kpivot_mpc = _kpivot_mpc; }
 
   private:
     double Omega(FML::COSMOLOGY::BACKGROUND::Component c, double a) const { return bg->Omega(c, std::log(a)); }

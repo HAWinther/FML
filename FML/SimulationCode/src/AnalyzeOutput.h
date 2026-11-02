@@ -870,21 +870,6 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         }
     }
 
-    /* ...or do it this way for which we can compute the total power-spectrum by adding on the neutrinos
-    const auto nleftright =
-    FML::INTERPOLATION::get_extra_slices(pofk_density_assignment_method); const int nleft
-    = nleftright.first; const int nright = nleftright.second + (pofk_interlacing ? 1 : 0); FML::GRID::FFTWGrid<NDIM>
-    density_grid_fourier(pofk_nmesh, nleft, nright);
-    FML::INTERPOLATION::particles_to_fourier_grid(part.get_particles_ptr(),
-                                                  part.get_npart(),
-                                                  part.get_npart_total(),
-                                                  density_grid_fourier,
-                                                  pofk_density_assignment_method,
-                                                  pofk_interlacing);
-    FML::INTERPOLATION::deconvolve_window_function_fourier<NDIM>(density_grid_fourier, pofk_density_assignment_method);
-    FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(density_grid_fourier, pofk_cb_binning);
-    pofk_cb_binning.scale(simulation_boxsize);
-    */
 
     //=============================================================
     // Compute linear predictions

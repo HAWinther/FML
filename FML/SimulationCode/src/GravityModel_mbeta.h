@@ -45,9 +45,6 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     using QuasiStaticGravity_MBeta = FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_MBeta;
     const QuasiStaticGravity_MBeta & mbeta() const { return static_cast<const QuasiStaticGravity_MBeta &>(this->qs()); }
     double phi_over_mpl_of_a(double a) const { return mbeta().phi_over_Mpl(a); }
-    double m_over_H0_of_a(double a) const { return std::sqrt(mbeta().mass2_of_a(a)); }
-    double beta_of_a(double a) const { return mbeta().beta_of_a(a); }
-    double mass_over_H0_squared(double a) const { return mbeta().mass2_of_a(a); }
 
     std::string fifth_force_label() const override { return "(m(a),beta(a)) models"; }
 

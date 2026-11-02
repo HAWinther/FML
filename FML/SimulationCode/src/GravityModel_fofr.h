@@ -32,10 +32,6 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
     explicit GravityModelFofR(std::shared_ptr<Cosmology> cosmo)
         : GravityModelScreened<NDIM>(cosmo, "f(R)", "gravity_model_fofr_exact_solution") {}
 
-    /// The model parameters (for the LPT predictions of the hybrid bias spectra)
-    double get_fofr0() const { return fofr0; }
-    double get_nfofr() const { return nfofr; }
-
     //========================================================================
     // Print some info
     //========================================================================
@@ -58,9 +54,6 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
         this->quasi_static = std::make_shared<const QuasiStaticGravity_HuSawicky>(this->cosmo->background(), fofr0, nfofr);
         GravityModelScreened<NDIM>::init();
     }
-
-    /// m^2(a) / H0^2 (the scalaron mass, c = 1)
-    double mass_over_H0_squared(double a) const { return hu_sawicky().mass2(std::log(a)); }
 
     void solve_exact_fifth_force(double a,
                                  double H0Box,
