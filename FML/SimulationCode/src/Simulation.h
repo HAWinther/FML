@@ -252,8 +252,7 @@ class NBodySimulation {
     double neutrino_energy_factor(double a) const {
         if (not params.force.neutrino_energy_density)
             return 1.0;
-        return SIMCODE::NEUTRINOS::mean_energy_factor(
-            a, cosmo->get_neutrino_masses_eV(), cosmo->get_neutrino_temperature_eV(1.0));
+        return cosmo->get_neutrino_mean_energy_factor(a);
     }
     /// Use the energy density of the neutrinos (force_neutrino_energy_density)
     bool neutrino_energy_density() const { return params.force.neutrino_energy_density; }
@@ -474,7 +473,8 @@ void NBodySimulation<NDIM, T>::init() {
     if (has_neutrino_particles()) {
         const auto & masses = cosmo->get_neutrino_masses_eV();
         const double Tnu0_eV = cosmo->get_neutrino_temperature_eV(1.0);
-        part_neutrinos.init(masses, Tnu0_eV, params.simulation.boxsize, params.particle.neutrino_deltaf);
+        part_neutrinos.init(
+            cosmo->get_massive_neutrino_species(), Tnu0_eV, params.simulation.boxsize, params.particle.neutrino_deltaf);
         if (FML::ThisTask == 0) {
             std::cout << "# Massive neutrinos as particles (delta-f weights: " << std::boolalpha
                       << params.particle.neutrino_deltaf << "). m_nu =";

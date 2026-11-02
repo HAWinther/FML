@@ -202,6 +202,19 @@ void test_species() {
         std::abs(nu.prefactor() - p.Omega_gamma() * std::pow(p.T_ncdm_over_TCMB, 4) * 15.0 / std::pow(M_PI, 4)) < 1e-18,
         "massive neutrinos: prefactor = Omega_gamma (15/pi^4) (T_ncdm/T_CMB)^4");
 
+    // <E/m> = rho / (prefactor a^-4 (3/2) zeta(3) M): 1 + (15/2) zeta(5)/zeta(3) / M^2 when non-relativistic,
+    // (7 pi^4 / 180) / zeta(3) / M when relativistic
+    const double zeta3 = 1.2020569031595942, zeta5 = 1.0369277551433699;
+    double err_E = 0.0;
+    for (double x : {-20.0, -8.0, -3.0, 0.0})
+        err_E = std::max(err_E,
+                         rel(nu.mean_energy_per_mass(x),
+                             nu.rho(x) / (nu.prefactor() * std::exp(-4.0 * x) * 1.5 * zeta3 * nu.M_of_x(x))));
+    const double Mnr = nu.M_of_x(3.0), Mr = nu.M_of_x(-20.0);
+    check_local(err_E < 1e-14 and rel(nu.mean_energy_per_mass(3.0), 1.0 + 7.5 * zeta5 / zeta3 / (Mnr * Mnr)) < 1e-6 and
+                    rel(nu.mean_energy_per_mass(-20.0), 7.0 * std::pow(M_PI, 4) / 180.0 / zeta3 / Mr) < 1e-6,
+                "massive neutrinos: mean_energy_per_mass = rho / rho_nonrelativistic (and its limits)");
+
     // p_total
     auto bg = make_lcdm(p);
     double err_p = 0.0;

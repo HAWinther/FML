@@ -45,13 +45,16 @@ namespace SIMCODE {
         using Spline = FML::INTERPOLATION::SPLINE::Spline;
         using DVector = FML::INTERPOLATION::SPLINE::DVector;
 
-        /// masses_eV: the masses of the massive neutrino species (equal or not), Tnu0_eV: the temperature today,
-        /// boxsize in Mpc/h, deltaf: use the delta-f weights (otherwise the weights are m_i / <m>, 1 for one mass, and
-        /// the density is 1 + delta)
-        void init(const std::vector<double> & masses_eV, double _Tnu0_eV, double _boxsize, bool _deltaf) {
-            if (masses_eV.empty())
+        /// species: the massive neutrino species of the background (their masses, equal or not), Tnu0_eV: the
+        /// temperature today, boxsize in Mpc/h, deltaf: use the delta-f weights (otherwise the weights are m_i / <m>,
+        /// 1 for one mass, and the density is 1 + delta)
+        void init(const NEUTRINOS::MassiveNeutrinoList & species, double _Tnu0_eV, double _boxsize, bool _deltaf) {
+            if (species.empty())
                 throw std::invalid_argument("NeutrinoParticles: no massive neutrinos");
-            masses = masses_eV;
+            nu_species = species;
+            masses.clear();
+            for (auto & nu : species)
+                masses.push_back(nu.mass_eV());
             mean_mass = 0.0;
             for (double m : masses) {
                 if (not(m > 0.0))
@@ -103,7 +106,7 @@ namespace SIMCODE {
 
         /// The mean energy per mass <E/m>(a) of the unperturbed neutrinos (all species; see
         /// NEUTRINOS::mean_energy_factor)
-        double mean_energy_factor(double a) const { return SIMCODE::NEUTRINOS::mean_energy_factor(a, masses, Tnu0_eV); }
+        double mean_energy_factor(double a) const { return SIMCODE::NEUTRINOS::mean_energy_factor(nu_species, a); }
 
         /// While this object lives the weights of the particles are w_i E_i / (m <E/m>(a)) with E_i / m =
         /// sqrt(1 + u_i^2) (several masses: w_i m_i/<m> E_i / (m_i <E/m>(a)) with the <E/m> of all species, so that
@@ -153,6 +156,7 @@ namespace SIMCODE {
 
       private:
         Container part;
+        NEUTRINOS::MassiveNeutrinoList nu_species;
         std::vector<double> masses;
         double mean_mass{0.0};
         bool single_mass{true};

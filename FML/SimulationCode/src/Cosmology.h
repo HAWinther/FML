@@ -2,6 +2,7 @@
 #define COSMOLOGY_HEADER
 
 #include "EE2Boost.h"
+#include "Neutrinos.h"
 #include "ParameterDefaults.h"
 
 #include <FML/Cosmology/Background/BackgroundModel_Tabulated.h>
@@ -212,6 +213,9 @@ class Cosmology {
             bg = make_tabulated(p, range);
         else
             bg = BG::make_background(registry_name, p, model_parameters, range);
+        massive_neutrinos.clear();
+        for (double m : params().m_nu_eV)
+            massive_neutrinos.emplace_back(m, params());
     }
 
     //========================================================================
@@ -377,6 +381,16 @@ class Cosmology {
         using namespace FML::UTILS::SI;
         return (neutrino_temperature_kelvin(params()) * k_b / eV) / a;
     }
+    /// The massive neutrino species of the background (one per mass; empty without massive neutrinos)
+    const SIMCODE::NEUTRINOS::MassiveNeutrinoList & get_massive_neutrino_species() const {
+        params(); // (throws if init() has not been called)
+        return massive_neutrinos;
+    }
+    /// The mean energy per mass <E/m>(a) of the massive neutrinos: their energy density over their mass density in
+    /// the background (-> 1 when non-relativistic; 1 without massive neutrinos)
+    double get_neutrino_mean_energy_factor(double a) const {
+        return SIMCODE::NEUTRINOS::mean_energy_factor(get_massive_neutrino_species(), a);
+    }
     /// Sound speed over c in the non-relativistic limit (1408.2995), at most that of radiation (for the mean mass of
     /// the massive species)
     double get_neutrino_sound_speed_cs_over_c(double a) const {
@@ -448,6 +462,7 @@ class Cosmology {
     std::string registry_name;
     std::map<std::string, double> model_parameters;
     std::shared_ptr<const Background> bg;
+    SIMCODE::NEUTRINOS::MassiveNeutrinoList massive_neutrinos;
 
     const double H0_hmpc = 1.0 / FML::UTILS::SI::c_over_H0_mpch;
     // The parameters read by read_parameters() for init(); after that all of them come from the background

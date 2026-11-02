@@ -241,6 +241,13 @@ namespace FML::COSMOLOGY::BACKGROUND {
         double M_of_x(double x) const { return M0 * std::exp(x); }
         double M_today() const { return M0; }
         double mass_eV() const { return m_eV; }
+        /// The mean energy per mass <E/m> = rho / rho_nonrelativistic = I_rho(M) / ((3/2) zeta(3) M) (-> 1 when
+        /// non-relativistic)
+        double mean_energy_per_mass(double x) const {
+            constexpr double zeta3 = 1.2020569031595942;
+            const double M = M_of_x(x);
+            return FermiDiracIntegrals::get().I_rho(M) / (1.5 * zeta3 * M);
+        }
         std::string info() const override {
             std::ostringstream s;
             s << "massive neutrino: m = " << m_eV << " eV, Omega0 = " << rho(0.0);

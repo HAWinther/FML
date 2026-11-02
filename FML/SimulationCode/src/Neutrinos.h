@@ -31,25 +31,23 @@ namespace SIMCODE {
         /// The unperturbed (relativistic) Fermi-Dirac occupation number
         inline double fermi_dirac(double y) { return 1.0 / (std::exp(y) + 1.0); }
 
-        /// The mean energy per mass of the unperturbed neutrinos, <E/m> = <sqrt(1 + u^2)> over the Fermi-Dirac
-        /// distribution y^2 / (e^y + 1) with u = y T_nu0 / (a m_nu). The energy density is <E/m> times the mass
-        /// density (-> 1 when non-relativistic). From the Fermi-Dirac integral of the background (the same energy
-        /// density as there): <E/m> = I_rho(M) / ((3/2) zeta(3) M) with M = a m_nu / T_nu0
-        inline double mean_energy_factor(double a, double mnu_eV, double Tnu0_eV) {
-            constexpr double zeta3 = 1.2020569031595942;
-            const double M = a * mnu_eV / Tnu0_eV;
-            return FML::COSMOLOGY::BACKGROUND::FermiDiracIntegrals::get().I_rho(M) / (1.5 * zeta3 * M);
-        }
+        /// The massive neutrino species of the background (Background/Species.h)
+        using MassiveNeutrinoList = std::vector<FML::COSMOLOGY::BACKGROUND::MassiveNeutrinoSpecies>;
 
-        /// The mean energy per mass of several species of the same temperature and number density with the masses
-        /// mnu_eV (energy density / mass density: sum_i m_i <E/m>_i / sum_i m_i)
-        inline double mean_energy_factor(double a, const std::vector<double> & mnu_eV, double Tnu0_eV) {
-            if (std::all_of(mnu_eV.begin(), mnu_eV.end(), [&](double m) { return m == mnu_eV.front(); }))
-                return mean_energy_factor(a, mnu_eV.front(), Tnu0_eV);
+        /// The mean energy per mass <E/m>(a) of the unperturbed massive neutrinos (all species): their energy density
+        /// over their mass density, sum_i m_i <E/m>_i / sum_i m_i with <E/m>_i = <sqrt(1 + u^2)> over the
+        /// Fermi-Dirac distribution (u = y T_nu0 / (a m_i); -> 1 when non-relativistic). The same energy density as
+        /// the background (MassiveNeutrinoSpecies::mean_energy_per_mass)
+        inline double mean_energy_factor(const MassiveNeutrinoList & nus, double a) {
+            if (nus.empty())
+                return 1.0;
+            const double x = std::log(a);
+            if (std::all_of(nus.begin(), nus.end(), [&](auto & nu) { return nu.mass_eV() == nus.front().mass_eV(); }))
+                return nus.front().mean_energy_per_mass(x);
             double num = 0.0, den = 0.0;
-            for (double m : mnu_eV) {
-                num += m * mean_energy_factor(a, m, Tnu0_eV);
-                den += m;
+            for (auto & nu : nus) {
+                num += nu.mass_eV() * nu.mean_energy_per_mass(x);
+                den += nu.mass_eV();
             }
             return num / den;
         }
