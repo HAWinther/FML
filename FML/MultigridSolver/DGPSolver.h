@@ -5,6 +5,7 @@
 #include <FML/MPIGrid/ConvertMPIGridFFTWGrid.h>
 #include <FML/MultigridSolver/MultiGridSolver.h>
 
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -191,6 +192,39 @@ class DGPSolverCosmology {
         //======================================================================
         bool count_negative_discriminant = false;
         long long n_negative_discriminant = 0;
+
+        // The indices of the 3^NDIM cells around a cell in the order of get_cube_gridindex (the first coordinate
+        // varies fastest). On a periodic power-of-2 grid (the usual case) from shifts and masks: get_cube_gridindex
+        // converts the coordinates of all 27 cells and was most of the cost of the solve. The x-neighbors are in the
+        // extra slices with several tasks (the local index is then out of [0, NtotLocal)), the grid wraps in x on one
+        // task
+        const bool single_task = (FML::NTasks == 1);
+        auto cube_gridindex = [&](MultiGridSolver<NDIM, SolverType> * sol, int level, IndexInt index) {
+            const int N = sol->get_N(level);
+            if constexpr (NDIM == 3) {
+                if (periodic and N >= 2 and (N & (N - 1)) == 0) {
+                    const int p = __builtin_ctz(unsigned(N));
+                    const IndexInt m = N - 1;
+                    const IndexInt iz = index & m, iy = (index >> p) & m, ix = index >> (2 * p);
+                    const IndexInt N2 = IndexInt(N) * N;
+                    IndexInt xb[3], yb[3], zb[3];
+                    for (int d = 0; d < 3; d++) {
+                        const IndexInt jx = single_task ? ((ix + d - 1) & m) : ix + d - 1;
+                        xb[d] = jx * N2;
+                        yb[d] = ((iy + d - 1) & m) << p;
+                        zb[d] = (iz + d - 1) & m;
+                    }
+                    std::array<IndexInt, FML::power(3, NDIM)> list;
+                    for (int dz = 0; dz < 3; dz++)
+                        for (int dy = 0; dy < 3; dy++)
+                            for (int dx = 0; dx < 3; dx++)
+                                list[dx + 3 * dy + 9 * dz] = xb[dx] + yb[dy] + zb[dz];
+                    return list;
+                }
+            }
+            return sol->get_cube_gridindex(level, index);
+        };
+
         MultiGridFunction<NDIM, double> Equation =
             [&](MultiGridSolver<NDIM, SolverType> * sol, int level, IndexInt index) {
                 const auto h = sol->get_Gridspacing(level);
@@ -203,7 +237,7 @@ class DGPSolverCosmology {
                 //======================================================================
                 // Get a list of the index of the closest 27 cells
                 //======================================================================
-                auto cube_index_list = sol->get_cube_gridindex(level, index);
+                auto cube_index_list = cube_gridindex(sol, level, index);
                 double phi = sol->get_Field(level, index);
 
                 //======================================================================
