@@ -502,13 +502,23 @@ namespace FML::COSMOLOGY {
         // not far below k_min (sqrt|K| > 0.1 k_min) we add 10 extra points, log-spaced in q from
         // 0.01 sqrt|K| up to k_min.
         {
-            double q_min = options.k_min;
+            double q_min = options.k_values.empty() ? options.k_min : options.k_values.front();
             if (K > 0.0)
                 q_min = std::max(q_min, 3.0 * std::sqrt(K));
-            if (!(options.k_max > q_min))
+            if (!options.k_values.empty()) {
+                for (size_t i = 0; i < options.k_values.size(); i++)
+                    if (!(options.k_values[i] > 0.0) || (i > 0 && !(options.k_values[i] > options.k_values[i - 1])))
+                        throw std::invalid_argument("Perturbations: k_values must be positive and increasing");
+                for (double q : options.k_values)
+                    if (q >= q_min)
+                        k_array.push_back(q);
+                if (k_array.size() < 4)
+                    throw std::invalid_argument("Perturbations: fewer than 4 k_values above the curvature scale");
+            } else if (!(options.k_max > q_min))
                 throw std::invalid_argument("Perturbations: k_max too small for this curvature");
-            k_array = Utils::logspace(q_min, options.k_max, options.n_k);
-            if (options.dk_max > 0.0) { // log-linear: step min(q dlnk, dk_max), the last step stretched to end at k_max
+            else
+                k_array = Utils::logspace(q_min, options.k_max, options.n_k);
+            if (options.k_values.empty() && options.dk_max > 0.0) { // log-linear: step min(q dlnk, dk_max), the last step stretched to end at k_max
                 const double dlnk = std::log(options.k_max / q_min) / (options.n_k - 1);
                 std::vector<double> qs{q_min};
                 while (qs.back() < options.k_max)

@@ -395,6 +395,9 @@ class Cosmology {
     double get_Neff() const { return params().N_eff; }
     double get_kpivot_mpc() const { return kpivot_mpc; }
     std::string get_name() const { return name; }
+    /// The name of the model in the background (and perturbation) registry ("" for Tabulated) and its parameters
+    const std::string & get_registry_name() const { return registry_name; }
+    const std::map<std::string, double> & get_model_parameters() const { return model_parameters; }
     double get_H0_hmpc() const { return H0_hmpc; }
 
     void set_As(double _As) { As = _As; }

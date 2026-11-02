@@ -9,10 +9,11 @@
 // with the free parameters. Omega_Lambda is fixed by
 //   Omega_b + Omega_cdm + Omega_gamma + Omega_nu + Omega_k + Omega_Lambda = 1.
 //
-// Massive neutrinos: one massive species of mass m_nu (eV) with temperature T_ncdm_over_TCMB * TCMB
-// (CLASS default 0.71611, which gives m_nu / (93.14 eV h^2) for Omega_ncdm today and contributes
-// N_ncdm = (0.71611 / (4/11)^(1/3))^4 = 1.0132 to Neff). Neff is the total; the remaining
-// Neff - N_ncdm species are massless. m_nu = 0 means all Neff species are massless.
+// Massive neutrinos: deg_ncdm degenerate massive species of mass m_nu (eV) each (CLASS's deg_ncdm; default 1) with
+// temperature T_ncdm_over_TCMB * TCMB (CLASS default 0.71611, which gives m_nu / (93.14 eV h^2) for Omega_ncdm today
+// per species and contributes N_ncdm = (0.71611 / (4/11)^(1/3))^4 = 1.0132 per species to Neff). Neff is the total;
+// the remaining Neff - N_ncdm species are massless. m_nu = 0 means all Neff species are massless. The degenerate
+// species have the same perturbations: they are solved as one (with deg_ncdm times the density).
 //
 // Model: the name of a model in the model registry (Cosmology/Perturbations/Presets.h, default lcdm) and its own
 // parameters (model_params, name -> value; parameters that are not given take the registry default).
@@ -32,7 +33,8 @@ namespace FML::COSMOLOGY {
         double OmegaCDM = 0.267;           // Cold dark matter today
         double OmegaK = 0.0;               // Curvature today (0 = flat)
         double Neff = 3.046;               // Effective number of neutrinos, massless + massive (0 = no neutrinos)
-        double m_nu = 0.0;                 // Mass of the single massive neutrino species [eV] (0 = all massless)
+        double m_nu = 0.0;                 // Mass of each massive neutrino species [eV] (0 = all massless)
+        int deg_ncdm = 1;                  // Number of degenerate massive species of mass m_nu
         double T_ncdm_over_TCMB = 0.71611; // Temperature of the massive species today / TCMB
         double TCMB = 2.7255;              // CMB temperature today [K]
 
@@ -76,10 +78,10 @@ namespace FML::COSMOLOGY {
         double OmegaNu() const;    // Massless neutrinos (from Neff - N_ncdm and OmegaGamma)
         double OmegaR() const { return OmegaGamma() + OmegaNu(); } // Photons + massless neutrinos
         bool has_massive_nu() const { return m_nu > 0.0; }
-        double N_ncdm() const; // Contribution of the massive species to Neff (0 if m_nu = 0)
+        double N_ncdm() const; // Contribution of the massive species to Neff (all deg_ncdm; 0 if m_nu = 0)
         double T_ncdm() const { return T_ncdm_over_TCMB * TCMB; } // [K]
         double M_ncdm() const;    // m_nu c^2 / (k_B T_ncdm), the mass in units of the temperature today
-        double OmegaNcdm() const; // Massive neutrinos today (Fermi-Dirac momentum integral)
+        double OmegaNcdm() const; // Massive neutrinos today, all deg_ncdm species (Fermi-Dirac momentum integral)
         double OmegaM() const { return OmegaB + OmegaCDM; }
         double OmegaLambda() const; // Fixed by the closure relation
 

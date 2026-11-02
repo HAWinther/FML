@@ -28,9 +28,10 @@
 //   source = "internal": FML's Einstein-Boltzmann solver (needs USE_INTERNAL_COSMOLOGY and linking the Cosmology
 //                        modules, see tests/Makefile). It computes both gauges itself. By default the cosmology is
 //                        taken from h, Omegab, OmegaCDM, OmegaMNu, A_s, n_s and k_pivot_mpc below (the same fields as
-//                        for the other sources). InternalTransferProvider supports flat LCDM with at most one massive
-//                        neutrino species: OmegaMNu > 0 is that species (its mass is found from OmegaMNu, with the
-//                        solver's Neff = 3.046 in total and T_ncdm/TCMB = 0.71611, as CLASS with N_ur = 2.0328).
+//                        for the other sources). InternalTransferProvider supports any model of the solver (with
+//                        curvature) and its massive neutrinos: OmegaMNu > 0 is internal_settings.cosmo.deg_ncdm
+//                        (default 1) degenerate species (their mass is found from OmegaMNu, with the solver's Neff =
+//                        3.046 in total and T_ncdm/TCMB = 0.71611, as CLASS with N_ur = 2.0328).
 //=====================================================================================================================
 
 namespace FML::INITIALCONDITIONS {

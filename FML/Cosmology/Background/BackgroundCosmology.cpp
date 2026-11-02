@@ -14,7 +14,7 @@ namespace FML::COSMOLOGY {
     using namespace Constants;
 
     namespace {
-        // The parameters of the background of a run: one massive species of mass m_nu
+        // The parameters of the background of a run: deg_ncdm massive species of mass m_nu
         BACKGROUND::BackgroundParameters background_parameters(const CosmologyParameters & p) {
             BACKGROUND::BackgroundParameters b;
             b.h = p.h;
@@ -24,7 +24,7 @@ namespace FML::COSMOLOGY {
             b.T_CMB = p.TCMB;
             b.N_eff = p.Neff;
             if (p.has_massive_nu())
-                b.m_nu_eV = {p.m_nu};
+                b.m_nu_eV.assign(p.deg_ncdm, p.m_nu);
             b.T_ncdm_over_TCMB = p.T_ncdm_over_TCMB;
             return b;
         }
@@ -94,25 +94,24 @@ namespace FML::COSMOLOGY {
     }
 
     void BackgroundCosmology::find_massive_neutrinos() {
+        // Degenerate species (the same mass and temperature) count as one with the sum of their factors
         ncdm = nullptr;
-        ncdm_factor = 1.0;
+        ncdm_factor = 0.0;
         for (const auto & s : bg->species()) {
             if (s->component() != BACKGROUND::Component::MassiveNeutrinos)
                 continue;
-            const BACKGROUND::Species * inner = s.get();
             double factor = 1.0;
-            if (const auto * scaled = dynamic_cast<const BACKGROUND::ScaledSpecies *>(inner)) {
-                factor = scaled->factor();
-                inner = &scaled->species();
-            }
-            const auto * typed = dynamic_cast<const BACKGROUND::MassiveNeutrinoSpecies *>(inner);
+            const auto * typed = BACKGROUND::as_massive_neutrinos(*s, factor);
             if (!typed)
                 throw std::invalid_argument("BackgroundCosmology: massive neutrinos must be a MassiveNeutrinoSpecies");
-            if (ncdm)
-                throw std::invalid_argument("BackgroundCosmology: only one massive neutrino species is supported");
+            if (ncdm && !BACKGROUND::degenerate(*ncdm, *typed))
+                throw std::invalid_argument("BackgroundCosmology: only one massive neutrino species (or several "
+                                            "degenerate ones) is supported");
             ncdm = typed;
-            ncdm_factor = factor;
+            ncdm_factor += factor;
         }
+        if (!ncdm)
+            ncdm_factor = 1.0;
     }
 
     std::string BackgroundCosmology::gravity_name() const { return tensor_fe->name(); }

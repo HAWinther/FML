@@ -515,9 +515,17 @@ namespace SIMCODE {
                        "transferinfofile is also accepted; the "
                        "columns are read by name from the header, or by position: 13 CAMB, 9 AxionCAMB, 7 old CAMB / "
                        "CLASS with format=camb), class (native CLASS output: ic_input_filename is the root of the run, "
-                       "with format = class, output = mTk,vTk, write_background = yes) or internal_transfer (FML solver "
-                       ".ini; optional compiled feature). See FML/TransferProviders",
-                       {"powerspectrum", "transferfunction", "camb", "class", "internal_transfer", "transferinfofile"});
+                       "with format = class, output = mTk,vTk, write_background = yes) or internal (FML's "
+                       "Einstein-Boltzmann solver run with the cosmology of the simulation, cosmology_model included; "
+                       "needs a build with USE_INTERNAL_COSMOLOGY=true; the old name internal_transfer is also "
+                       "accepted). See FML/TransferProviders and README.md",
+                       {"powerspectrum",
+                        "transferfunction",
+                        "camb",
+                        "class",
+                        "internal",
+                        "internal_transfer",
+                        "transferinfofile"});
             b.when(is_one_of("ic_type_of_input", {"class"}), "ic_type_of_input = class", [&]() {
                 b.optional("ic_input_gauge",
                            "synchronous",
@@ -525,7 +533,11 @@ namespace SIMCODE {
                            "need; it needs output = mTk,vTk)",
                            {"synchronous", "newtonian"});
             });
-            b.required("ic_input_filename", "", "The input file");
+            b.optional("ic_input_filename",
+                       "",
+                       "The input file (needed except for ic_type_of_input = internal, where it is an optional .ini "
+                       "file of the Einstein-Boltzmann solver with its precision, recombination and reionization "
+                       "settings; its cosmology and k-range are replaced by those of the simulation)");
             b.required("ic_input_redshift", 0.0, "The redshift of the input P(k) / T(k)");
             b.optional("ic_fix_amplitude", true, "Fix the amplitude of the modes when generating the random field");
             b.optional("ic_reverse_phases", false, "Reverse the phases (for paired simulations)");

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Small end-to-end tests; build nbody with USE_INTERNAL_COSMOLOGY=true.
+"""Small end-to-end tests of ic_type_of_input = internal (each runs the solver, ~30 s); build nbody with
+USE_INTERNAL_COSMOLOGY=true.
 Usage: python3 check_internal_transfers.py /path/to/nbody /path/to/scratch-output
 """
 import os
@@ -17,34 +18,30 @@ env = dict(os.environ, OMP_NUM_THREADS="2", OMP_WAIT_POLICY="passive")
 features = subprocess.check_output([exe, "--features"], text=True, env=env)
 if "internal_cosmology" not in features:
     raise SystemExit("Build with USE_INTERNAL_COSMOLOGY=true to run this test")
+# A solver .ini with other settings: its cosmology and k-range are replaced by those of the simulation
 ini = """model=lcdm
-h=.671
-OmegaB=.049
-OmegaCDM=.2685
-OmegaK=0
-m_nu=0
-Neff=3.046
-TCMB=2.7255
-A_s=2.215e-9
-n_s=.966
-k_pivot=.05
+h=.7
+OmegaB=.05
+m_nu=0.06
 Yp=.245
-pert_k_min=.00001
+z_reion=8
 pert_k_max=.12
 pert_n_k=100
 """
 
-def run(name, overrides=None, solver=ini, error=None):
+def run(name, overrides=None, solver=None, error=None):
     folder = root / name
     folder.mkdir(exist_ok=True)
-    (folder / "solver.ini").write_text(solver)
     values = dict(cases.BASE)
     values.update(all_parameters_must_be_in_file=False, particle_Npart_1D=8, ic_nmesh=8,
                   force_nmesh=8, pofk_nmesh=8, simulation_boxsize=1000.0,
                   simulation_use_cola=False, output_redshifts=[49.0], timestep_nsteps=[0],
                   ic_initial_redshift=49.0, ic_input_redshift=49.0,
-                  ic_type_of_input="internal_transfer", ic_input_filename=str(folder / "solver.ini"),
+                  ic_type_of_input="internal", ic_input_filename="",
                   output_folder=str(folder / "output"), pofk=True)
+    if solver is not None:
+        (folder / "solver.ini").write_text(solver)
+        values["ic_input_filename"] = str(folder / "solver.ini")
     values.update(overrides or {})
     (folder / "params.lua").write_text("\n".join(f"{k} = {cases.lua_value(v)}" for k, v in values.items()))
     with (folder / "log.txt").open("w") as log:
@@ -56,11 +53,20 @@ def run(name, overrides=None, solver=ini, error=None):
         assert result.returncode == 0, f"{name}: see {folder}/log.txt"
         assert list((folder / "output").rglob("*")), f"{name}: no output"
     print(f"[PASS] {name}", flush=True)
+    return text
 
 run("converted_ic")
 run("converted_two_species", {"particle_baryons": True})
 run("converted_backscaled", {"ic_input_redshift": 0.0})
-run("short_sigma8_range", {"ic_sigma8_normalization": True}, error="sigma8 normalization requires transfer coverage")
+run("sigma8_normalization", {"ic_sigma8_normalization": True})
+run("old_name", {"ic_type_of_input": "internal_transfer"})
+log = run("solver_ini", solver=ini)
+assert "Model: lcdm (solver settings:" in log and "Massive neutrinos: none" in log, "solver_ini: see its log.txt"
+log = run("neutrino_particles", {"cosmology_OmegaMNu": 0.0095, "cosmology_OmegaCDM": 0.259, "particle_neutrinos": True,
+                                 "force_linear_massive_neutrinos": False, "timestep_method": "Quinn"})
+assert "Massive neutrinos: 3 x" in log, "neutrino_particles: see its log.txt"
+run("w0wa_curved", {"cosmology_model": "w0waCDM", "cosmology_w0": -0.9, "cosmology_wa": 0.1, "cosmology_OmegaK": 0.02})
+run("tabulated", {"cosmology_model": "Tabulated", "cosmology_tabulated_filename": cases.INPUT + "/class_background_w0wa.dat",
+                  "cosmology_tabulated_format": "CLASS"}, error="has no model of the solver")
 run("simple_pk", {"ic_type_of_input": "powerspectrum", "ic_input_filename": cases.INPUT + "/example_power_spectrum_cb_z0.000.txt", "ic_input_redshift": 0.0})
-run("wrong_cosmology", solver=ini.replace("h=.671", "h=.7"), error="parameters differ")
-run("short_k_range", solver=ini.replace("pert_k_max=.12", "pert_k_max=.001"), error="range does not cover")
+run("no_input_file", {"ic_type_of_input": "powerspectrum"}, error="ic_input_filename is needed")

@@ -27,7 +27,7 @@ namespace FML::COSMOLOGY {
     }
 
     double CosmologyParameters::N_ncdm() const {
-        return has_massive_nu() ? std::pow(T_ncdm_over_TCMB / std::cbrt(4.0 / 11.0), 4) : 0.0;
+        return has_massive_nu() ? deg_ncdm * std::pow(T_ncdm_over_TCMB / std::cbrt(4.0 / 11.0), 4) : 0.0;
     }
 
     double CosmologyParameters::M_ncdm() const { return m_nu * Constants::eV / (Constants::k_b * T_ncdm()); }
@@ -36,7 +36,7 @@ namespace FML::COSMOLOGY {
         if (!has_massive_nu())
             return 0.0;
         // rho_ncdm / rho_gamma = (15/pi^4) (T_ncdm/TCMB)^4 I_rho(M) (the Fermi-Dirac integral of the background)
-        return OmegaGamma() * 15.0 / std::pow(M_PI, 4) * std::pow(T_ncdm_over_TCMB, 4) *
+        return deg_ncdm * OmegaGamma() * 15.0 / std::pow(M_PI, 4) * std::pow(T_ncdm_over_TCMB, 4) *
                BACKGROUND::FermiDiracIntegrals::get().I_rho(M_ncdm());
     }
 
@@ -54,6 +54,7 @@ namespace FML::COSMOLOGY {
         require(OmegaCDM >= 0.0, "OmegaCDM must be >= 0");
         require(Neff >= 0.0, "Neff must be >= 0");
         require(m_nu >= 0.0, "m_nu must be >= 0");
+        require(deg_ncdm >= 1, "deg_ncdm must be >= 1");
         require(!has_massive_nu() || Neff >= N_ncdm(), "Neff must include the massive species (Neff >= N_ncdm)");
         require(TCMB > 0.0, "TCMB must be > 0");
         require(Yp >= 0.0 && Yp < 1.0, "Yp must be in [0,1)");
@@ -118,8 +119,8 @@ namespace FML::COSMOLOGY {
            << "  OmegaGamma   = " << OmegaGamma() << "\n"
            << "  OmegaNu      = " << OmegaNu() << "  (Neff = " << Neff << ", massless " << Neff - N_ncdm() << ")\n";
         if (has_massive_nu())
-            os << "  OmegaNcdm    = " << OmegaNcdm() << "  (m_nu = " << m_nu
-               << " eV, T_ncdm/TCMB = " << T_ncdm_over_TCMB << ", m/T today = " << M_ncdm() << ")\n";
+            os << "  OmegaNcdm    = " << OmegaNcdm() << "  (" << (deg_ncdm > 1 ? std::to_string(deg_ncdm) + " x " : "")
+               << "m_nu = " << m_nu << " eV, T_ncdm/TCMB = " << T_ncdm_over_TCMB << ", m/T today = " << M_ncdm() << ")\n";
         os << "  OmegaK       = " << OmegaK << "\n"
            << "  OmegaLambda  = " << OmegaLambda()
            << "  (closure in GR; some models set their own, see BackgroundCosmology)\n"
@@ -157,7 +158,7 @@ namespace FML::COSMOLOGY {
             throw std::runtime_error("CosmologyParameters::write: cannot open " + filename);
         fp << std::setprecision(17);
         fp << "h = " << h << "\nOmegaB = " << OmegaB << "\nOmegaCDM = " << OmegaCDM << "\nOmegaK = " << OmegaK
-           << "\nNeff = " << Neff << "\nm_nu = " << m_nu << "\nT_ncdm_over_TCMB = " << T_ncdm_over_TCMB
+           << "\nNeff = " << Neff << "\nm_nu = " << m_nu << "\ndeg_ncdm = " << deg_ncdm << "\nT_ncdm_over_TCMB = " << T_ncdm_over_TCMB
            << "\nTCMB = " << TCMB << "\nYp = " << helium_fraction() << "\nreionization = " << (reionization ? 1 : 0)
            << "\nz_reion = " << z_reion << "\ndelta_z_reion = " << delta_z_reion << "\nz_He_reion = " << z_He_reion
            << "\ndelta_z_He_reion = " << delta_z_He_reion << "\nA_s = " << A_s << "\nn_s = " << n_s

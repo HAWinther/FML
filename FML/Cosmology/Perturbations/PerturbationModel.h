@@ -92,18 +92,21 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
                 else if (s->component() == Component::MasslessNeutrinos)
                     entries.push_back({Kind::Massless, s.get(), nullptr, 0.0});
                 else if (s->component() == Component::MassiveNeutrinos) {
-                    // A MassiveNeutrinoSpecies, or one wrapped in a ScaledSpecies (rescaled densities)
+                    // A MassiveNeutrinoSpecies, or one wrapped in ScaledSpecies (rescaled densities). Degenerate
+                    // species (the same mass and temperature) have the same perturbations: one hierarchy with the
+                    // sum of their factors
                     double factor = 1.0;
-                    const BACKGROUND::Species * inner = s.get();
-                    if (const auto * scaled = dynamic_cast<const BACKGROUND::ScaledSpecies *>(inner)) {
-                        factor = scaled->factor();
-                        inner = &scaled->species();
-                    }
-                    const auto * typed = dynamic_cast<const BACKGROUND::MassiveNeutrinoSpecies *>(inner);
+                    const auto * typed = BACKGROUND::as_massive_neutrinos(*s, factor);
                     if (not typed)
                         throw std::invalid_argument("[StandardSpeciesPerturbations] A massive neutrino species that "
                                                     "is not a (scaled) MassiveNeutrinoSpecies");
-                    entries.push_back({Kind::Massive, s.get(), typed, factor});
+                    auto same = std::find_if(entries.begin(), entries.end(), [&](const Entry & e) {
+                        return e.kind == Kind::Massive and BACKGROUND::degenerate(*e.massive, *typed);
+                    });
+                    if (same != entries.end())
+                        same->factor += factor;
+                    else
+                        entries.push_back({Kind::Massive, s.get(), typed, factor});
                 }
             }
         }

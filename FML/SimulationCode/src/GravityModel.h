@@ -227,19 +227,16 @@ class GravityModel {
         aini = 1.0 / (1.0 + param.get<double>("ic_initial_redshift"));
         // The growth factor splines must start before the simulation (e.g. when starting at very high redshift)
         alow = std::min(alow, aini / 10.0);
-        // The transfer tables (CAMB or CLASS): needed for the growth factors with massive neutrinos
-        const auto type_of_input = param.get<std::string>("ic_type_of_input");
-        if (SIMCODE::input_has_transfer_tables(type_of_input))
-            transfers = SIMCODE::load_transfers(
-                SIMCODE::make_transfer_request(type_of_input,
-                                               param.get<std::string>("ic_input_filename"),
-                                               SIMCODE::get_parameter<std::string>(param, "ic_input_gauge"),
-                                               *cosmo));
+        // The transfer functions (CAMB, CLASS or the internal solver): needed for the growth factors with massive
+        // neutrinos (the initial conditions use the same object). Not again if they are set already (set_transfers:
+        // another gravity model of the same simulation has them)
+        if (not transfers and SIMCODE::input_has_transfer_tables(param.get<std::string>("ic_type_of_input")))
+            transfers = SIMCODE::load_transfers(SIMCODE::make_transfer_request(param, *cosmo, NDIM));
         this->scaledependent_growth = this->cosmo->get_fMNu() > 0.0;
         // The growth factors with massive neutrinos are computed from the transfer functions (and start at their
         // highest redshift). Without them we would dereference a null pointer in compute_growth_factors
         FML::assert_mpi(not(this->cosmo->get_OmegaMNu() > 0.0 and not transfers),
-                        "cosmology_OmegaMNu > 0 needs ic_type_of_input = camb or class (the growth factors "
+                        "cosmology_OmegaMNu > 0 needs ic_type_of_input = camb, class or internal (the growth factors "
                         "with massive neutrinos are computed from the transfer functions)");
 
         // Experimental option with finite-difference forces (instead of fourier)

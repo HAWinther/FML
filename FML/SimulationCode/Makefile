@@ -38,6 +38,7 @@ include ../Cosmology/EinsteinBoltzmannSolver/Cosmology.mk
 OPTIONS += -DUSE_INTERNAL_COSMOLOGY
 FML_MODULES += $(filter-out Cosmology/EinsteinBoltzmannSolver,$(COSMO_MODULES)) $(COSMO_FML_MODULES)
 vpath ParameterFile.cpp $(FML_ROOT)/Cosmology/EinsteinBoltzmannSolver
+vpath EinsteinBoltzmannSolver.cpp $(FML_ROOT)/Cosmology/EinsteinBoltzmannSolver
 INTERNAL_COSMO_OBJS := $(filter-out Spline.o ODESolver.o,$(COSMO_OBJS))
 endif
 

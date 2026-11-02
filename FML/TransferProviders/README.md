@@ -8,11 +8,12 @@ user declares the gauge of the input, and the provider returns densities in the 
 | --- | --- | --- | --- |
 | `camb` | A CAMB transfer info file (`CAMBFileTransferProvider`) | Always CDM-synchronous (CAMB's density columns) | None needed |
 | `class` | Native CLASS output (`format = class`, `output = mTk[, vTk]`, `write_background = yes`) | Declared: `gauge = synchronous` (the default in CLASS) or `newtonian` | Newtonian → CDM-synchronous, at the tabulated redshifts |
-| `internal` | FML's Einstein–Boltzmann solver (`USE_INTERNAL_COSMOLOGY`, through `InternalTransferProvider`): flat ΛCDM, at most one massive neutrino | Computes both gauges itself | By the solver |
+| `internal` | FML's Einstein–Boltzmann solver (`USE_INTERNAL_COSMOLOGY`, through `InternalTransferProvider`): any model of the solver, curvature, massive neutrinos (`deg_ncdm` degenerate species of mass `m_nu`) | Computes both gauges itself | By the solver |
 
 This folder replaces the old CAMB reader (`CAMBUtils/CAMBReader.h`, `LinearTransferData`) and
 `InitialConditions/CAMBTransferProvider.h`, which have been removed. SimulationCode reads its transfer functions with it
-(`SimulationCode/src/TransferInput.cpp`: `ic_type_of_input = camb`, `class` or `internal_transfer`).
+(`SimulationCode/src/TransferInput.cpp`: `ic_type_of_input = camb`, `class` or `internal`; for `internal` it runs the
+solver with the simulation's cosmology and model and tabulates it with `tabulate_transfers`, below).
 
 ```cpp
 #include <FML/TransferProviders/MakeTransferProvider.h>
@@ -47,6 +48,10 @@ double f = provider->density_growth_rate(Species::CDMBaryon, 0.1, 1.0 / 50.0);
 - `GaugeView.h`: the gauge conversion as a wrapper around any provider that has the Newtonian CDM velocity, for
   sources that cannot convert at their own tabulated redshifts. Also `GaugeBackground`, the H(a) and (ρ + p)/ρ it needs.
 - `MakeTransferProvider.h`: `TransferSourceSettings` and `make_transfer_provider`.
+- `TabulatedTransferProvider.h` also has `tabulate_transfers(provider, a, k, A_s, n_s, k_pivot, range_policy)`: the
+  tables of any provider (e.g. the internal solver) at given scale factors and k, and `TransferTablesProvider` that
+  makes a provider of them (SimulationCode uses it so that the solver's output behaves as CAMB and CLASS tables:
+  extrapolated outside the tables, and cheap to evaluate).
 
 ## source = internal
 
@@ -55,9 +60,13 @@ the provider owns the solution. The cosmology comes from the same fields as for 
 `OmegaCDM`, `OmegaMNu`, `A_s`, `n_s`, `k_pivot_mpc`); everything else (precision, recombination, `Yp`, `TCMB`, ...)
 from `internal_settings` (`internal_cosmology_from_settings = false` uses `internal_settings.cosmo` as it is).
 
-- **Massive neutrinos**: `OmegaMNu > 0` is one massive species whose mass gives Ω_ncdm = `OmegaMNu` today, with
-  N_eff = 3.046 in total and T_ncdm/T_CMB = 0.71611 (as CLASS with `N_ur = 2.0328`, `N_ncdm = 1`). Then
-  `MassiveNeutrino` is available and `TotalMatter` includes it. Several species are not supported.
+- **Massive neutrinos**: `OmegaMNu > 0` is `internal_settings.cosmo.deg_ncdm` (default 1) degenerate species whose
+  mass gives Ω_ncdm = `OmegaMNu` today, with N_eff = 3.046 in total and T_ncdm/T_CMB = 0.71611 (as CLASS with
+  `N_ur = 2.0328`, `N_ncdm = 1`). Then `MassiveNeutrino` is available and `TotalMatter` includes it. Species of
+  different masses are not supported.
+- **Models**: any model of the solver's registry (`internal_settings.cosmo.model`, with
+  `internal_cosmology_from_settings = false` or set in `internal_settings` before), with curvature. The weights of
+  `CDMBaryon` and `TotalMatter` are the background densities of the model (e.g. a coupled CDM).
 - **Both gauges from one solve**: `make_transfer_provider` returns the `output_gauge` view; the other is
   `std::dynamic_pointer_cast<InternalTransferProvider>(p)->with_density_gauge(...)`, which shares the solution.
 - **The table runs past a = 1** (`internal_amax = 1.1`): with the table ending at a = 1 the spline end distorted the

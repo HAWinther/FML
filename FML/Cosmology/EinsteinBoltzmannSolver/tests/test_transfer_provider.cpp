@@ -114,18 +114,10 @@ int main(int argc, char ** argv) {
     check_local(std::abs(synchronous.power(Species::CDMBaryon, .01, 1.) / before - 4.) < 1e-12 &&
                     synchronous.density_transfer(Species::CDMBaryon, .01, 1.) == density_before,
                 "primordial rescaling changes power without changing unit-curvature transfers");
-    // Massive neutrinos are supported (tested against CLASS in TransferProviders/tests); a curved background is not
-    settings.cosmo.OmegaK = 0.01;
-    bool rejected = false;
-    try {
-        InternalTransferProvider bad(settings);
-    } catch (const std::invalid_argument &) {
-        rejected = true;
-    }
-    check_local(rejected, "unsupported cosmologies fail before solving");
-    settings.cosmo.OmegaK = 0.0;
+    // Massive neutrinos (tested against CLASS in TransferProviders/tests), curvature and the models of the solver are
+    // supported; running of the spectral index is not
     settings.cosmo.alpha_s = -0.01;
-    rejected = false;
+    bool rejected = false;
     try {
         InternalTransferProvider bad(settings);
     } catch (const std::invalid_argument &) {

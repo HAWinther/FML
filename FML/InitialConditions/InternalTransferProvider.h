@@ -10,8 +10,9 @@
 namespace FML::INITIALCONDITIONS {
     /// Owning solver adapter. The converted density uses the CDM rest frame, not each
     /// species' own comoving frame. Velocity transfers remain explicitly Newtonian.
-    /// Flat LCDM with at most one massive neutrino species (the solver's m_nu): MassiveNeutrino is then available and
-    /// TotalMatter includes it.
+    /// Any model of the solver's registry (settings.cosmo.model; curvature allowed) with its massive neutrinos (deg_ncdm
+    /// degenerate species of mass m_nu): MassiveNeutrino is then available and TotalMatter includes it. The weights of
+    /// the combinations are the background densities rho_i(a) of the model (e.g. a coupled CDM).
     class InternalTransferProvider final : public TransferProvider {
         struct State {
             FML::COSMOLOGY::RunSettings settings;
@@ -49,12 +50,13 @@ namespace FML::INITIALCONDITIONS {
                 return 0.0;
             return state->background.pNcdm(x) / state->background.rhoNcdm(x);
         }
-        /// rho_s a^3 in units of rho_c0 (the weights of the combinations; Omega for CDM and baryons)
+        /// rho_s a^3 in units of rho_c0 (the weights of the combinations; Omega for CDM and baryons in LCDM)
         double rho_a3_of(Species species, double x) const {
-            const auto & p = state->settings.cosmo;
-            return species == Species::CDM    ? p.OmegaCDM :
-                   species == Species::Baryon ? p.OmegaB :
-                                                state->background.rhoNcdm(x) * std::exp(3.0 * x);
+            const auto & bg = state->background;
+            const double rho = species == Species::CDM    ? bg.rhoCDM(x) :
+                               species == Species::Baryon ? bg.rhoB(x) :
+                                                            bg.rhoNcdm(x);
+            return rho * std::exp(3.0 * x);
         }
         /// The species a combination is made of
         std::vector<Species> components(Species s) const {
@@ -74,13 +76,13 @@ namespace FML::INITIALCONDITIONS {
             : gauge(gauge) {
             const auto & p = settings.cosmo;
             // alpha_s: primordial_power() and SimulationCode's primordial spectrum have no running
-            if (p.model != "lcdm" || p.OmegaK != 0.0 || p.alpha_s != 0.0 ||
+            if (p.alpha_s != 0.0 ||
                 settings.pert.ic_adiabatic != 1.0 ||
                 std::any_of(settings.pert.iso_amplitude.begin(), settings.pert.iso_amplitude.end(), [](double v) {
                     return v != 0;
                 }))
-                throw std::invalid_argument("[InternalTransferProvider] Requires flat LCDM (with at most one massive "
-                                            "neutrino species), no running alpha_s and a unit adiabatic mode");
+                throw std::invalid_argument("[InternalTransferProvider] Requires no running alpha_s and a unit "
+                                            "adiabatic mode (no isocurvature)");
             if (!(p.h > 0) || !std::isfinite(p.h) || !(p.A_s > 0) || !std::isfinite(p.A_s) || !(p.k_pivot > 0) ||
                 !std::isfinite(p.k_pivot) || !std::isfinite(p.n_s) || !(p.OmegaB > 0) || !(p.OmegaCDM > 0) || !(p.m_nu >= 0) ||
                 (gauge != Gauge::Newtonian && gauge != Gauge::SynchronousCDM))

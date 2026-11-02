@@ -170,7 +170,7 @@ namespace SIMCODE {
         int LPT_order;                        // The LPT order to use to make IC (1,2,3)
 
         // Input file (power-spectrum / transfer functions)
-        ICInputType type_of_input; // powerspectrum, transferfunction, camb, class or internal_transfer
+        ICInputType type_of_input; // powerspectrum, transferfunction, camb, class or internal
         std::string input_filename; // The filename (class: the root of the CLASS run)
         std::string input_gauge{"synchronous"}; // class: the gauge CLASS was run in (synchronous or newtonian)
         double input_redshift;                // The redshift of P(k,z) / T(k,z) that we read in
@@ -211,13 +211,14 @@ namespace SIMCODE {
                 case ICInputType::ClassFiles:
                     return "class";
                 case ICInputType::InternalTransfer:
-                    return "internal_transfer";
+                    return "internal";
             }
             return "";
         }
-        /// The input has transfer tables of all species at many redshifts (CAMB or CLASS)
+        /// The input has transfer functions of all species at all redshifts (CAMB, CLASS or the internal solver)
         bool has_transfer_tables() const {
-            return type_of_input == ICInputType::CambFiles or type_of_input == ICInputType::ClassFiles;
+            return type_of_input == ICInputType::CambFiles or type_of_input == ICInputType::ClassFiles or
+                   type_of_input == ICInputType::InternalTransfer;
         }
         bool reads_particles() const {
             return random_field_type == ICRandomFieldType::ReadParticles or
@@ -402,11 +403,12 @@ namespace SIMCODE {
                           {"camb", ICInputType::CambFiles},
                           {"transferinfofile", ICInputType::CambFiles}, // the old name of camb
                           {"class", ICInputType::ClassFiles},
-                          {"internal_transfer", ICInputType::InternalTransfer}});
+                          {"internal", ICInputType::InternalTransfer},
+                          {"internal_transfer", ICInputType::InternalTransfer}}); // the old name of internal
             if (param.get<std::string>("ic_type_of_input") == "transferinfofile" and FML::ThisTask == 0)
                 std::cout << "WARNING: ic_type_of_input = transferinfofile is the old name of ic_type_of_input = camb\n";
             r.get_optional("ic_input_gauge", ic.input_gauge);
-            r.get("ic_input_filename", ic.input_filename);
+            r.get_optional("ic_input_filename", ic.input_filename);
             r.get_choice("ic_random_field_type",
                          ic.random_field_type,
                          {{"gaussian", ICRandomFieldType::Gaussian},
@@ -681,6 +683,9 @@ namespace SIMCODE {
             }
             if (not(force.nufft_epsilon > 0.0 and force.nufft_epsilon < 0.1))
                 fail("force_nufft_epsilon must be in (0, 0.1)");
+            if (ic.input_filename.empty() and ic.type_of_input != ICInputType::InternalTransfer and
+                not ic.reads_particles())
+                fail("ic_input_filename is needed for ic_type_of_input = " + ic.type_of_input_name());
             if (force.nbody_gauge) {
                 if (ic.type_of_input != ICInputType::CambFiles)
                     fail("force_nbody_gauge = true needs ic_type_of_input = camb (the N-body gauge "
@@ -749,8 +754,6 @@ namespace SIMCODE {
             if (timestep.spacing == ScaleFactorSpacing::Powerlaw and timestep.spacing_power == 0.0)
                 fail("timestep_spacing_power cannot be 0 (use logarithmic spacing)");
 
-            if (particle.neutrinos && ic.type_of_input == ICInputType::InternalTransfer)
-                fail("internal_transfer does not yet support massive-neutrino particle ICs");
             // The mass-encoded relative mode: CDM and baryons start from the same lattice (the masses compensate)
             if (particle.baryons and particle.baryon_relative_mode != "displacement" and
                 particle.baryon_lattice != "same")
@@ -789,10 +792,10 @@ namespace SIMCODE {
              true,
              true,
              [](P p) { return not p.simulation.enforce_LPT_trajectories; }},
-            {"`ic_type_of_input = camb`, `class` or `internal_transfer` (species transfers at zini)",
+            {"`ic_type_of_input = camb`, `class` or `internal` (species transfers at zini)",
              true,
              true,
-             [](P p) { return p.ic.has_transfer_tables() || p.ic.type_of_input == ICInputType::InternalTransfer; }},
+             [](P p) { return p.ic.has_transfer_tables(); }},
             {"`ic_random_field_type = gaussian` or `nongaussian`",
              true,
              true,

@@ -114,7 +114,7 @@ If your particle has dynamically allocated memory then you must implement a func
 
 ## CDM and baryons as separate particles
 
-By default CDM and baryons are one set of particles ("cb"). With `particle_baryons = true` they are two sets (one MPIParticles container each, `particle_Npart_1D^3` of each) with masses in the ratio Omegab / OmegaCDM. Both feel the gravity of the total CDM+baryon density delta_cb = (OmegaCDM delta_cdm + Omegab delta_b) / OmegaCB (plus linear massive neutrinos), so the baryons are collisionless (no hydrodynamics). What this gets right is the difference between baryons and CDM left over from before decoupling (the baryons lag behind the CDM and catch up). The initial conditions are made from the CDM and baryon transfer functions at zini (`ic_type_of_input = camb`, `class` or `internal_transfer`):
+By default CDM and baryons are one set of particles ("cb"). With `particle_baryons = true` they are two sets (one MPIParticles container each, `particle_Npart_1D^3` of each) with masses in the ratio Omegab / OmegaCDM. Both feel the gravity of the total CDM+baryon density delta_cb = (OmegaCDM delta_cdm + Omegab delta_b) / OmegaCB (plus linear massive neutrinos), so the baryons are collisionless (no hydrodynamics). What this gets right is the difference between baryons and CDM left over from before decoupling (the baryons lag behind the CDM and catch up). The initial conditions are made from the CDM and baryon transfer functions at zini (`ic_type_of_input = camb`, `class` or `internal`):
 
 - delta_i(k) = delta_cb(k) T_i(k,zini) / T_cb(k,zini) from the same random field;
 - 1LPT velocities with f_i = f_cb + dlog(T_i/T_cb)/dlna, where f_cb is the growth rate of the gravity model. The total CDM+baryon velocity is then exactly the growing mode, and the relative velocity comes from the transfer functions. (The growth rates computed directly from the CAMB transfer functions are inaccurate near the ends of the redshift range of the table: from z = 49 they gave 0.8% too much CDM+baryon power.)
@@ -585,7 +585,7 @@ passed explicitly to the gravity calculation, including early-time force switchi
 
 ## Transfer function input
 
-The transfer functions (`ic_type_of_input = camb`, `class` or `internal_transfer`) are read with
+The transfer functions (`ic_type_of_input = camb`, `class` or `internal`) are read with
 [FML/TransferProviders](../TransferProviders/README.md) (`src/TransferInput.cpp`): one `TransferProvider`, shared by the
 gravity model (the growth factors with massive neutrinos), the initial conditions (species ratios, two species,
 neutrino particles, the N-body gauge) and the linear predictions in the outputs. Power/transfer preparation and the
@@ -603,10 +603,33 @@ remains supported without a Boltzmann solve.
   the CDM-synchronous gauge at the tabulated redshifts). h and the presence of massive neutrinos are checked against
   the simulation. `tests/check_class_input.py` runs a simulation with massive neutrinos from CLASS in both gauges and
   from CAMB for the same cosmology: P_cb and P_total agree to 1.4e-3 (synchronous) and 7e-4 (Newtonian) at all outputs.
-- `internal_transfer` (builds with `USE_INTERNAL_COSMOLOGY=true`): FML's Einstein-Boltzmann solver with a matching
-  solver .ini file, CDM-synchronous density transfers. Flat GR LCDM without massive neutrinos here (the provider
-  supports one massive species; the gravity model would need it before the IC are made). The solver's table is run to
-  a = 1.1 (or the .ini's x_end if later) so that a = 1 is not at the end of the table.
+- `internal` (needs a build with `USE_INTERNAL_COSMOLOGY=true`; the old name `internal_transfer` also works): FML's
+  Einstein-Boltzmann solver ([Cosmology/EinsteinBoltzmannSolver](../Cosmology/EinsteinBoltzmannSolver/README.md)) is
+  run when the simulation starts, with the cosmology of the simulation, so no input file is needed:
+  - the background parameters (h, Omegab, OmegaCDM, OmegaK, TCMB, Neff) and the massive neutrinos as the simulation
+    has them: N_nu = 3 degenerate species of mass Mnu/3 (the solver's `deg_ncdm`; the degenerate species are solved as
+    one), the primordial spectrum (As, ns, kpivot; rescaled with `ic_sigma8_normalization`);
+  - `cosmology_model` with its parameters: the solver has the same models (LCDM, w0waCDM, DGP, JBD, Quintessence,
+    EDE), with their perturbations (smooth dark energy for w0waCDM, the scalar field of quintessence and EDE, the
+    modified gravity of DGP and JBD). Not `Tabulated` (no perturbations). The gravity model of the simulation
+    (`gravity_model`) is separate: the IC are those of the cosmology model at zini.
+  - `ic_input_filename` is optional: a solver .ini file with its precision, recombination and reionization settings
+    (`Yp`, `z_reion`, `ode_abserr`, `lmax_nu`, ...; see the solver's README). Its cosmology is replaced by that of the
+    simulation and its k-grid by the one below. Empty: the solver's defaults.
+  - Use `ic_input_redshift = ic_initial_redshift` (the transfer functions are then taken at zini, with no scaling by
+    the growth factor).
+
+  The solver runs on task 0 (with OpenMP) and its tables are sent to the other tasks. k: 15 points per decade from
+  1e-4 h/Mpc (or half the box fundamental mode) and 50 per decade in [0.01, 0.6] h/Mpc where the BAO are (the
+  interpolation is then good to ~1e-4) up to max(5 h/Mpc, 1.5 x the largest mode of the IC grid); above that the
+  tables are extrapolated as the CAMB and CLASS tables. The perturbations are solved to a = 1.1 and tabulated at 128
+  scale factors from zini (half the scale factor) to then. Time: ~30 s on 2 cores (kmax = 5 h/Mpc, with or without
+  massive neutrinos); the cost grows with kmax (the photon and neutrino hierarchies are solved until today).
+  Test (the regression cases with CAMB input, 32^3 particles, same seed): P(k) at z = 0 and 1 for k < 0.5 h/Mpc agrees
+  with the CAMB runs to 3e-4 without neutrinos and to 0.4% with 0.4 eV (3 degenerate species in both) and with
+  neutrino particles; the 0.2 eV CAMB input has one massive species and two massless (1-1.5% different, as expected).
+  The solver's neutrino velocities near its fluid switch differ from CLASS at high redshift (see
+  [TransferProviders](../TransferProviders/README.md)).
 
 The CAMB and CLASS tables are interpolated in (log a, log k) and extrapolated above their k_max as a power law, as
 before. Compared with the old reader (`LinearTransferData`, interpolation in z) the regression outputs of the runs with

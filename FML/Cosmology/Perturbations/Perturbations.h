@@ -78,6 +78,8 @@ namespace FML::COSMOLOGY {
         double dk_max = 0.0; // > 0: log-linear grid, spacing min(k dlnk, dk_max) with dlnk = ln(k_max/k_min)/(n_k-1)
                              // (the sources oscillate in k with period ~2 pi/r_s, so a linear spacing at large
                              //  k needs far fewer modes than a log grid; n_k then only sets the low-k spacing)
+        std::vector<double> k_values; // Not empty: these q-values [1/m] (increasing) instead of k_min, k_max, n_k,
+                                      // dk_max (e.g. denser where the transfer functions have the BAO)
 
         // x-grid on which results are stored: coarse before recombination, fine around it
         double x_start = -18.0;

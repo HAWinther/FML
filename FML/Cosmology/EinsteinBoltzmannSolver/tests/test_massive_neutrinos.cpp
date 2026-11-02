@@ -5,6 +5,8 @@
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
 #include <FML/Cosmology/Background/Species.h>
+#include <FML/Cosmology/Background/Presets.h>
+#include <FML/Cosmology/Perturbations/PerturbationModel.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Perturbations/SpeciesPerturbation_MassiveNeutrinos.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
@@ -133,6 +135,45 @@ int main() {
                     0.0,
                     1e-15,
                     "m_nu = 0 reproduces the massless model (Omega_Lambda)");
+    }
+
+    std::cout << "Degenerate species\n";
+    {
+        // deg_ncdm = 3 species of mass m: three times the density of one, and one hierarchy (factor 3) in the
+        // perturbations
+        CosmologyParameters p1, p3;
+        p1.m_nu = p3.m_nu = 0.05;
+        p3.deg_ncdm = 3;
+        check_rel(p3.OmegaNcdm(), 3.0 * p1.OmegaNcdm(), 1e-14, "deg_ncdm = 3: Omega_ncdm three times that of one");
+        check_rel(p3.N_ncdm(), 3.0 * p1.N_ncdm(), 1e-14, "deg_ncdm = 3: N_ncdm three times that of one");
+        BackgroundCosmology c1(p1), c3(p3);
+        c1.solve();
+        c3.solve();
+        check_rel(c3.rhoNcdm(-3.0), 3.0 * c1.rhoNcdm(-3.0), 1e-12, "background: rho_ncdm of 3 species");
+        check_rel(c3.ncdm_prefactor(), 3.0 * c1.ncdm_prefactor(), 1e-14, "background: one species with factor 3");
+        check_rel(c3.pseudo_pNcdm(-3.0), 3.0 * c1.pseudo_pNcdm(-3.0), 1e-12, "background: pseudo-pressure x 3");
+        // The background has three MassiveNeutrinoSpecies; the perturbations one hierarchy with factor 3
+        const auto & bg = c3.perturbation_model()->background();
+        int n_bg = 0;
+        for (const auto & sp : bg.species())
+            n_bg += sp->component() == BACKGROUND::Component::MassiveNeutrinos;
+        check(n_bg == 3, "background: three massive neutrino species");
+        PERTURBATIONS::SpeciesPerturbationList list;
+        PERTURBATIONS::StandardSpeciesPerturbations(bg).add_to(PERTURBATIONS::PerturbationContext(bg), list);
+        int n_pert = 0;
+        for (const auto & sp : list)
+            n_pert += sp->name() == "massive neutrinos";
+        check(n_pert == 1, "perturbations: one massive neutrino hierarchy for degenerate species");
+        // Different masses: not merged
+        BACKGROUND::BackgroundParameters q;
+        q.m_nu_eV = {0.05, 0.06};
+        auto bg2 = BACKGROUND::make_background("lcdm", q);
+        PERTURBATIONS::SpeciesPerturbationList list2;
+        PERTURBATIONS::StandardSpeciesPerturbations(*bg2).add_to(PERTURBATIONS::PerturbationContext(*bg2), list2);
+        n_pert = 0;
+        for (const auto & sp : list2)
+            n_pert += sp->name() == "massive neutrinos";
+        check(n_pert == 2, "perturbations: two hierarchies for two different masses");
     }
 
     std::cout << "Perturbations\n";

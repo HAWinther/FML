@@ -37,8 +37,8 @@ namespace SIMCODE {
     /// Read the input power-spectrum / transfer function (as given by ic.type_of_input)
     /// and bring it to the initial redshift with the growth factors of grav_ic.
     ///
-    /// For ic.type_of_input = camb, class or internal_transfer the transfer functions T_i(k,z) are
-    /// returned in transfers (the same object as in the gravity model)
+    /// For ic.type_of_input = camb, class or internal the transfer functions T_i(k,z) are returned in transfers (the
+    /// object the gravity model loaded)
     //=============================================================================
     template <int NDIM>
     LinearPowerSpectrumTable
@@ -46,8 +46,7 @@ namespace SIMCODE {
                                 std::shared_ptr<Cosmology> cosmo,
                                 std::shared_ptr<GravityModel<NDIM>> grav,
                                 std::shared_ptr<GravityModel<NDIM>> grav_ic,
-                                std::shared_ptr<TransferProvider> & transfers,
-                                double boxsize_mpch = 0.0) {
+                                std::shared_ptr<TransferProvider> & transfers) {
 
         const double ainput = 1.0 / (1.0 + ic.input_redshift);
         const double aini = 1.0 / (1.0 + ic.initial_redshift);
@@ -58,32 +57,14 @@ namespace SIMCODE {
                    grav_ic->get_D_1LPT(ainput, k_hmpc / grav_ic->H0_hmpc);
         };
 
-        // The transfer functions: shared with the gravity model, which reads the CAMB/CLASS tables already (it needs
-        // them for the growth factors with massive neutrinos)
+        // The transfer functions: the ones the gravity model loaded (GravityModel::read_parameters; it needs them for
+        // the growth factors with massive neutrinos)
         transfers = nullptr;
         if (ic.has_transfer_tables()) {
             transfers = grav->get_transfers();
-            if (not transfers) {
-                transfers = load_transfers(
-                    make_transfer_request(ic.type_of_input_name(), ic.input_filename, ic.input_gauge, *cosmo));
-                grav->set_transfers(transfers);
-            }
-        }
-        if (ic.type_of_input == ICInputType::InternalTransfer) {
-            if (cosmo->get_name() != "LCDM" || grav->get_name() != "GR" || cosmo->get_OmegaK() != 0 ||
-                cosmo->get_OmegaMNu() != 0)
-                throw std::invalid_argument(
-                    "internal_transfer currently requires flat LCDM, GR and no massive neutrinos");
-            if (!(boxsize_mpch > 0))
-                throw std::invalid_argument("internal_transfer needs a positive box size");
-            auto request = make_transfer_request(ic.type_of_input_name(), ic.input_filename, ic.input_gauge, *cosmo);
-            request.required = {2 * M_PI / boxsize_mpch,
-                                std::sqrt(double(NDIM)) * M_PI * ic.nmesh / boxsize_mpch,
-                                std::min(aini, ainput),
-                                std::max({1.0, aini, ainput})};
-            request.require_sigma8_coverage = ic.sigma8_normalization;
-            transfers = load_transfers(request);
-            grav->set_transfers(transfers);
+            if (not transfers)
+                throw std::runtime_error("read_initial_power_spectrum: the gravity model has not loaded the transfer "
+                                         "functions of ic_type_of_input = " + ic.type_of_input_name());
         }
         auto type = ic.type_of_input == ICInputType::PowerSpectrum ?
                         FML::INITIALCONDITIONS::LinearInputType::PowerSpectrum :

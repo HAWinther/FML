@@ -213,5 +213,52 @@ namespace FML::INITIALCONDITIONS {
         }
     };
 
+    /// A TabulatedTransferProvider from given tables
+    class TransferTablesProvider final : public TabulatedTransferProvider {
+      public:
+        explicit TransferTablesProvider(const TransferTables & tables) { set_tables(tables); }
+    };
+
+    /// The tables of another provider (e.g. the internal solver) at the scale factors a and the k-values k_hmpc (inside
+    /// its range): every species it has, in its gauges. The primordial spectrum A_s (k / k_pivot)^(n_s - 1) is given
+    /// (the source's own rescaling is not carried over). With range_policy the result behaves outside the tables as
+    /// the CAMB and CLASS tables do.
+    inline TransferTables tabulate_transfers(const TransferProvider & source,
+                                             const std::vector<double> & a,
+                                             const std::vector<double> & k_hmpc,
+                                             double A_s,
+                                             double n_s,
+                                             double k_pivot_mpc,
+                                             RangePolicy range_policy,
+                                             const std::string & name = "TabulatedTransferProvider") {
+        TransferTables t;
+        t.name = name;
+        t.h = source.h();
+        t.a = a;
+        t.k_hmpc = k_hmpc;
+        t.density_gauge = source.density_gauge();
+        t.velocity_gauge = source.velocity_gauge();
+        t.range_policy = range_policy;
+        t.A_s = A_s;
+        t.n_s = n_s;
+        t.k_pivot_mpc = k_pivot_mpc;
+        for (auto s : {Species::CDM, Species::Baryon, Species::CDMBaryon, Species::TotalMatter, Species::MassiveNeutrino}) {
+            const int i = TransferTables::index(s);
+            const bool dens = source.has_density(s), vel = source.has_velocity(s);
+            if (dens)
+                t.density[i].assign(a.size(), TransferTables::DVector(k_hmpc.size()));
+            if (vel)
+                t.velocity[i].assign(a.size(), TransferTables::DVector(k_hmpc.size()));
+            for (size_t ia = 0; ia < a.size(); ia++)
+                for (size_t ik = 0; ik < k_hmpc.size(); ik++) {
+                    if (dens)
+                        t.density[i][ia][ik] = source.density_transfer(s, k_hmpc[ik], a[ia]);
+                    if (vel)
+                        t.velocity[i][ia][ik] = source.velocity_divergence_transfer(s, k_hmpc[ik], a[ia]);
+                }
+        }
+        return t;
+    }
+
 } // namespace FML::INITIALCONDITIONS
 #endif

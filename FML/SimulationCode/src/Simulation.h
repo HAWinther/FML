@@ -89,7 +89,7 @@ class NBodySimulation {
     /// The gravity model used to make the IC (GR if ic_use_gravity_model_GR, otherwise grav)
     std::shared_ptr<GravityModel<NDIM>> grav_ic;
 
-    /// The transfer functions (ic_type_of_input = camb, class or internal_transfer; see TransferInput.h).
+    /// The transfer functions (ic_type_of_input = camb, class or internal; see TransferInput.h).
     /// The same object as in the gravity model (grav)
     std::shared_ptr<TransferProvider> transfers;
 
@@ -476,6 +476,7 @@ void NBodySimulation<NDIM, T>::init() {
     // we can supply LCDM P(k) and use the GR growth factors to scale it back
     if (params.ic.use_gravity_model_GR) {
         grav_ic = std::make_shared<GravityModelGR<NDIM>>(cosmo);
+        grav_ic->set_transfers(grav->get_transfers()); // (not loaded again)
         grav_ic->read_parameters(*parameters);
         grav_ic->init();
     } else {
@@ -532,8 +533,7 @@ void NBodySimulation<NDIM, T>::setup_initial_power_spectrum() {
                                                             cosmo,
                                                             grav,
                                                             grav_ic,
-                                                            transfers,
-                                                            params.simulation.boxsize);
+                                                            transfers);
     auto make_splines = [&](std::string label) {
         power_initial_spline.create(table.k, table.power, "P(k,zini)" + label);
         power_primordial_spline.create(table.k, table.power_primordial, "P_primordial(k)" + label);
@@ -563,9 +563,7 @@ void NBodySimulation<NDIM, T>::setup_initial_power_spectrum() {
     auto sigma_of_R = [&](double R_mpch, double redshift) {
         return SIMCODE::sigma_of_R<NDIM>(power_initial_spline, grav_ic, boxsize, ic.initial_redshift, redshift, R_mpch);
     };
-    const bool sigma8_covered = ic.type_of_input != SIMCODE::ICInputType::InternalTransfer ||
-                                (table.k.front() <= 1e-5 && table.k.back() >= 100.0);
-    const double sigma8_today = sigma8_covered ? sigma_of_R(8.0, 0.0) : 0.0;
+    const double sigma8_today = sigma_of_R(8.0, 0.0);
 
     // Normalize P(k) to a given sigma8 value. We then need to update the splines,
     // the transfer data and the cosmology
@@ -596,11 +594,7 @@ void NBodySimulation<NDIM, T>::setup_initial_power_spectrum() {
     if (FML::ThisTask == 0) {
         std::cout << "\n";
         std::cout << "#=====================================================\n";
-        if (sigma8_covered)
-            std::cout << "# Sigma(R = 8 Mpc/h, z = 0.0 ) : " << std::setw(15) << sigma8_today << "\n";
-        else
-            std::cout << "# Sigma8 not evaluated: strict transfer input does not cover the integration range "
-                         "[1e-5,100] h/Mpc\n";
+        std::cout << "# Sigma(R = 8 Mpc/h, z = 0.0 ) : " << std::setw(15) << sigma8_today << "\n";
         if (ic.sigma8_normalization) {
             std::cout << "# We will normalize to Sigma8 = " << std::setw(15) << ic.sigma8 << " at z = " << std::setw(15)
                       << ic.sigma8_redshift << "\n";
@@ -919,7 +913,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     const double boxsize = params.simulation.boxsize;
     const double aini = ic.a_initial();
     FML::assert_mpi(transfers != nullptr,
-                    "particle_baryons needs the transfer functions (camb, class or internal_transfer)");
+                    "particle_baryons needs the transfer functions (camb, class or internal)");
     const auto & cdm = species[0];
     const auto & baryon = species[1];
     const auto splines = SIMCODE::two_species_ic_splines<NDIM>(*transfers,

@@ -280,6 +280,21 @@ namespace FML::COSMOLOGY::BACKGROUND {
         double f;
     };
 
+    /// The MassiveNeutrinoSpecies of s, unwrapped from (nested) ScaledSpecies (nullptr if s is not one); factor is
+    /// multiplied by their factors
+    inline const MassiveNeutrinoSpecies * as_massive_neutrinos(const Species & s, double & factor) {
+        const Species * inner = &s;
+        while (const auto * scaled = dynamic_cast<const ScaledSpecies *>(inner)) {
+            factor *= scaled->factor();
+            inner = &scaled->species();
+        }
+        return dynamic_cast<const MassiveNeutrinoSpecies *>(inner);
+    }
+    /// Degenerate massive neutrino species: the same mass and temperature (identical perturbations)
+    inline bool degenerate(const MassiveNeutrinoSpecies & a, const MassiveNeutrinoSpecies & b) {
+        return a.M_today() == b.M_today() and a.prefactor() == b.prefactor();
+    }
+
     // -----------------------------------------------------------------------------------------------------------------
     // Scalar fields
     // -----------------------------------------------------------------------------------------------------------------
