@@ -48,6 +48,8 @@ class GravityModelScreened : public GravityModel<NDIM> {
     // between the grids in Fourier space (the modes below the coarse Nyquist frequency; the solution is zero above
     // it on the force grid). Cf. Barreira, Bose & Li 2015 (arXiv:1511.08200) for nDGP
     int multigrid_coarse_factor{1};
+    // How the density goes to the coarse grid: sharpk or cic (see restrict_to_coarse_grid)
+    std::string multigrid_coarse_restriction{"sharpk"};
     // The last exact (multigrid) solution in real space and its scale factor: the starting point of the next solve
     mutable FML::GRID::FFTWGrid<NDIM> multigrid_previous_solution;
     mutable double multigrid_previous_a{-1.0};
@@ -157,12 +159,17 @@ class GravityModelScreened : public GravityModel<NDIM> {
         }
     }
 
-    /// The density on the grid coarser by factor (Nmesh / factor) in real space: the Fourier modes below its Nyquist
-    /// frequency (a sharp-k filter). Not the mean of the factor^NDIM cells: with the particles on a lattice aligned
-    /// with the coarse cells (half a force cell offset, particle_Npart_1D = Nmesh / 2) the mean of a block is the
-    /// mass of the one particle in it until it leaves the block, so the linear density is lost. Cells with delta < -1
-    /// (from the truncation) are set to -1
-    static FFTWGrid<NDIM> restrict_to_coarse_grid(const FFTWGrid<NDIM> & density_fourier, int factor) {
+    /// The density on the grid coarser by factor (Nmesh / factor) in real space.
+    ///  sharpk: the Fourier modes below its Nyquist frequency (a sharp-k filter). Not the mean of the factor^NDIM
+    ///          cells: with the particles on a lattice aligned with the coarse cells (half a force cell offset,
+    ///          particle_Npart_1D = Nmesh / 2) the mean of a block is the mass of the one particle in it until it
+    ///          leaves the block, so the linear density is lost. Cells with delta < -1 (from the truncation) are
+    ///          set to -1
+    ///  cic:    every force-grid cell deposits its mass on the coarse grid with CIC weights (coarse cell j is at fine
+    ///          cell factor j): delta_c(j) = sum_o prod_d (1 - |o_d| / factor) / factor delta(factor j + o),
+    ///          |o_d| < factor. The weights are >= 0 and sum to 1, so the mass is conserved and delta_c >= -1
+    static FFTWGrid<NDIM>
+    restrict_to_coarse_grid(const FFTWGrid<NDIM> & density_fourier, int factor, const std::string & method = "sharpk") {
         const int nfine = density_fourier.get_nmesh();
         const int ncoarse = nfine / factor;
         FML::assert_mpi(ncoarse * factor == nfine and ncoarse % FML::NTasks == 0,
@@ -170,6 +177,45 @@ class GravityModelScreened : public GravityModel<NDIM> {
                         "of MPI tasks");
         FFTWGrid<NDIM> coarse(
             ncoarse, density_fourier.get_n_extra_slices_left(), density_fourier.get_n_extra_slices_right());
+        if (method == "cic") {
+            // The fine density in real space with factor - 1 extra slices on each side (the x-slabs of the two grids
+            // line up as both sizes are divisible by the number of tasks)
+            FFTWGrid<NDIM> fine(nfine, factor - 1, factor - 1);
+            FML::NUFFT::copy_fourier_modes<NDIM>(
+                density_fourier, fine, [](const std::array<int, NDIM> &) { return 1.0; });
+            fine.fftw_c2r();
+            fine.communicate_boundaries();
+            std::vector<double> w(2 * factor - 1);
+            for (int o = -(factor - 1); o <= factor - 1; o++)
+                w[o + factor - 1] = (1.0 - std::abs(o) / double(factor)) / double(factor);
+            const int noff = FML::power(2 * factor - 1, NDIM);
+            coarse.set_grid_status_real(true);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (FML::IndexIntType irow = 0; irow < coarse.get_local_nrows(); irow++) {
+                for (auto && index : coarse.get_real_range_of_rows(irow, irow + 1)) {
+                    const auto c = coarse.get_coord_from_index(index);
+                    double sum = 0.0;
+                    for (int ioff = 0; ioff < noff; ioff++) {
+                        std::array<int, NDIM> fc;
+                        double weight = 1.0;
+                        int rest = ioff;
+                        for (int idim = 0; idim < NDIM; idim++) {
+                            const int o = rest % (2 * factor - 1) - (factor - 1);
+                            rest /= 2 * factor - 1;
+                            weight *= w[o + factor - 1];
+                            // x: local (the extra slices hold the neighbors), the others periodic
+                            fc[idim] = idim == 0 ? factor * c[0] + o : ((factor * c[idim] + o) % nfine + nfine) % nfine;
+                        }
+                        sum += weight * fine.get_real(fc);
+                    }
+                    coarse.set_real_from_index(index, FML::GRID::FloatType(sum));
+                }
+            }
+            return coarse;
+        }
+        FML::assert_mpi(method == "sharpk", "multigrid_coarse_restriction must be sharpk or cic");
         // (A Gaussian filter with R = 0.5 or 1 coarse cells instead of the sharp cut avoids the delta < -1 but was
         // less accurate in a test with nDGP and f(R))
         FML::NUFFT::copy_fourier_modes<NDIM>(
@@ -201,6 +247,8 @@ class GravityModelScreened : public GravityModel<NDIM> {
                 SIMCODE::get_parameter<std::string>(param, "multigrid_convergence_criterion") == "relative";
             multigrid_coarse_factor = SIMCODE::get_parameter<int>(param, "multigrid_coarse_factor");
             FML::assert_mpi(multigrid_coarse_factor >= 1, "multigrid_coarse_factor must be >= 1");
+            multigrid_coarse_restriction =
+                SIMCODE::get_parameter<std::string>(param, "multigrid_coarse_restriction");
         }
     }
 
@@ -218,7 +266,8 @@ class GravityModelScreened : public GravityModel<NDIM> {
         // The real-space density field
         FFTWGrid<NDIM> density_real;
         if (multigrid_coarse_factor > 1) {
-            density_real = restrict_to_coarse_grid(density_fourier, multigrid_coarse_factor);
+            density_real =
+                restrict_to_coarse_grid(density_fourier, multigrid_coarse_factor, multigrid_coarse_restriction);
         } else {
             density_real = density_fourier;
             density_real.fftw_c2r();

@@ -419,6 +419,12 @@ namespace SIMCODE {
                                   "linear source of the equation (relative; the residual scale changes by orders of "
                                   "magnitude over a simulation)",
                                   {"residual", "relative"});
+                b.always_optional("multigrid_coarse_restriction",
+                                  "sharpk",
+                                  "Multigrid solver with multigrid_coarse_factor > 1: the density on the coarse grid "
+                                  "is its Fourier modes below the coarse Nyquist frequency (sharpk; delta < -1 set to "
+                                  "-1) or a CIC deposit of the force-grid cells (cic; conserves the mass, delta >= -1)",
+                                  {"sharpk", "cic"});
                 b.optional("multigrid_coarse_factor",
                            1,
                            "Multigrid solver: solve the field equation on a grid coarser by this factor than the "
