@@ -7,7 +7,7 @@
 #   make benchmark-check  Check counters and benchmark reports
 #   make python-analysis   Install the small analysis package into $(PYTHON)
 #   make test-python-analysis  Test the installed analysis package
-#   make clean      Clean all examples and tests
+#   make clean      Clean all examples and tests (also the module tests */tests)
 #
 # Build options and library paths are in Makefile.config. Put your
 # machine specific settings in Makefile.local (not tracked by git).
@@ -26,6 +26,9 @@ EXTRA_DIRS   := LuaFileParser/example/ Triangulation/example/ VoidFinders/exampl
 PYTHON_DIRS  := MakePythonWrapper/ HaloModel/PythonWrapper/
 
 EXAMPLE_DIRS := $(filter-out $(EXTRA_DIRS),$(EXAMPLE_DIRS))
+
+# The unit tests of the modules (cleaned with make clean; tests/ is the main test suite)
+MODULE_TEST_DIRS := $(sort $(dir $(wildcard */tests/Makefile */*/tests/Makefile)))
 
 .PHONY: help examples examples-extra python python-analysis test-python-analysis benchmark benchmark-check test clean
 
@@ -65,4 +68,4 @@ test:
 	@$(MAKE) --no-print-directory -C tests run
 
 clean:
-	@for d in $(EXAMPLE_DIRS) $(EXTRA_DIRS) $(PYTHON_DIRS) Performance/ tests/; do $(MAKE) --no-print-directory -C $$d clean > /dev/null; done
+	@for d in $(EXAMPLE_DIRS) $(EXTRA_DIRS) $(PYTHON_DIRS) $(MODULE_TEST_DIRS) Performance/ tests/; do $(MAKE) --no-print-directory -C $$d clean > /dev/null; done

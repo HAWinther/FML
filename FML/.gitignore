@@ -184,3 +184,14 @@ PhaseSpaceHaloFinder/tests/rockstar_fixture
 tests/test_so_multislab
 
 tests/test_mpi_counts
+
+# More example and module-test executables
+ComputePowerSpectra/example/hybridbias
+CosmicWeb/example/cosmicweb
+HOD/example/mock_statistics
+Cosmology/Growth/tests/test_growth
+CountsInCells/tests/test_spatial
+HOD/tests/test_hod
+Survey/tests/test_mocks
+Survey/tests/test_workflow
+VoidFinders/tests/test_spherical
