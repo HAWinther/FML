@@ -660,11 +660,9 @@ namespace FML::COSMOLOGY {
             throw std::invalid_argument("precision must be default or fast, not '" + name + "'");
         }
 
-        RunSettings read(const std::string & filename, const std::vector<std::string> & overrides) {
-            // Collect (name, value, location); the preset is applied first, then everything else in order
-            struct Entry {
-                std::string name, value, where;
-            };
+        std::vector<Entry> entries(const std::string & filename,
+                                   const std::vector<std::string> & overrides,
+                                   const std::string & overrides_where) {
             std::vector<Entry> entries;
             if (!filename.empty()) {
                 std::ifstream fp(filename);
@@ -689,9 +687,17 @@ namespace FML::COSMOLOGY {
             for (const auto & o : overrides) {
                 const auto eq = o.find('=');
                 if (eq == std::string::npos)
-                    throw std::invalid_argument("command line: expected name=value, got '" + o + "'");
-                entries.push_back({trim(o.substr(0, eq)), trim(o.substr(eq + 1)), "command line"});
+                    throw std::invalid_argument(overrides_where + ": expected name=value, got '" + o + "'");
+                entries.push_back({trim(o.substr(0, eq)), trim(o.substr(eq + 1)), overrides_where});
             }
+            return entries;
+        }
+
+        RunSettings read(const std::string & filename,
+                         const std::vector<std::string> & overrides,
+                         const std::string & overrides_where) {
+            // Collect (name, value, location); the preset is applied first, then everything else in order
+            const auto entries = ParameterFile::entries(filename, overrides, overrides_where);
             // The preset first, then the model (its parameters are only known once it is set), then the rest in order
             RunSettings s;
             std::map<std::string, std::string> seen;
@@ -720,7 +726,7 @@ namespace FML::COSMOLOGY {
             for (const auto & e : entries) {
                 if (e.name == "preset" || e.name == "precision")
                     continue;
-                if (seen.count(e.name) && e.where != "command line" && seen[e.name] != "command line")
+                if (seen.count(e.name) && e.where != overrides_where && seen[e.name] != overrides_where)
                     throw std::invalid_argument(e.where + ": parameter " + e.name + " already set at " + seen[e.name]);
                 seen[e.name] = e.where;
                 apply(s, e.name, e.value, e.where);

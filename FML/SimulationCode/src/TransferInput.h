@@ -14,6 +14,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 //=============================================================================
 // The transfer functions of the simulation (ic_type_of_input = camb, class or internal), made with
@@ -34,6 +35,8 @@ namespace SIMCODE {
         /// precision, recombination and reionization settings, empty for the defaults)
         std::string type;
         std::string filename;
+        /// internal: settings of the solver as "name=value" (applied after those of the .ini file)
+        std::vector<std::string> solver_parameters;
         /// class: the gauge CLASS was run in (synchronous or newtonian; converted to CDM-synchronous)
         std::string gauge{"synchronous"};
         /// The cosmology of the simulation (CAMB: the weights and h; CLASS: h and the massive neutrinos checked)
@@ -86,6 +89,8 @@ namespace SIMCODE {
         r.ns = cosmo.get_ns();
         r.kpivot_mpc = cosmo.get_kpivot_mpc();
         if (r.type == "internal") {
+            r.solver_parameters =
+                SIMCODE::get_parameter<std::vector<std::string>>(param, "ic_internal_solver_parameters");
             r.background = cosmo.background().parameters();
             r.model = cosmo.get_registry_name();
             r.model_parameters = cosmo.get_model_parameters();

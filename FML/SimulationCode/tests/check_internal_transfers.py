@@ -15,15 +15,9 @@ exe = str(Path(sys.argv[1]).resolve())
 root = Path(sys.argv[2]).resolve()
 root.mkdir(parents=True, exist_ok=True)
 env = dict(os.environ, OMP_NUM_THREADS="2", OMP_WAIT_POLICY="passive")
-# A solver .ini with other settings: its cosmology and k-range are replaced by those of the simulation
-ini = """model=lcdm
-h=.7
-OmegaB=.05
-m_nu=0.06
-Yp=.245
+# A solver .ini with settings that are not the simulation's (its cosmology and k-range are; setting them is an error)
+ini = """Yp=.245
 z_reion=8
-pert_k_max=.12
-pert_n_k=100
 """
 
 def run(name, overrides=None, solver=None, error=None):
@@ -59,6 +53,19 @@ run("sigma8_normalization", {"ic_sigma8_normalization": True})
 run("old_name", {"ic_type_of_input": "internal_transfer"})
 log = run("solver_ini", solver=ini)
 assert "Model: lcdm (solver settings:" in log and "Massive neutrinos: none" in log, "solver_ini: see its log.txt"
+# Settings in the parameter file, after those of the .ini (z_reion set in both: the parameter file wins)
+log = run("solver_parameters", {"ic_internal_solver_parameters": ["z_reion=7", "precision=fast"]}, solver=ini)
+assert "# Solver parameters: z_reion=7, precision=fast" in log, "solver_parameters: see its log.txt"
+# The parameters the simulation sets are errors, in the .ini file and in the parameter file
+run("solver_ini_cosmology", solver=ini + "h=.7\n", error="solver parameter h is set by the simulation (cosmology_h)")
+run("solver_parameters_k", {"ic_internal_solver_parameters": ["pert_k_max=1"]},
+    error="solver parameter pert_k_max is set by the simulation")
+run("solver_parameters_model", {"cosmology_model": "w0waCDM", "cosmology_w0": -0.9, "cosmology_wa": 0.1,
+                                "ic_internal_solver_parameters": ["w0=-0.8"]},
+    error="solver parameter w0 is set by the simulation (the parameters of cosmology_model)")
+run("solver_parameters_syntax", {"ic_internal_solver_parameters": ["Yp"]},
+    error="ic_internal_solver_parameters: expected name=value")
+run("solver_parameters_unknown", {"ic_internal_solver_parameters": ["Yp_typo=1"]}, error="Yp_typo")
 log = run("neutrino_particles", {"cosmology_OmegaMNu": 0.0095, "cosmology_OmegaCDM": 0.259, "particle_neutrinos": True,
                                  "force_linear_massive_neutrinos": False, "timestep_method": "Quinn"})
 # 3 degenerate species (as in the simulation)

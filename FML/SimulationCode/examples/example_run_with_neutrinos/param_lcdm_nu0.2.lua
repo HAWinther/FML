@@ -176,7 +176,8 @@ ic_LPT_order = 2
 -- transferfunction (file with [k (h/Mph) , T(k)  Mpc^2)]
 -- camb             (a transfer info file listing T(k,z) files from CAMB; the old name transferinfofile also works)
 -- class            (native CLASS output: ic_input_filename is the root of the run; see README)
--- internal_transfer (an .ini file of FML's Einstein-Boltzmann solver)
+-- internal         (FML's Einstein-Boltzmann solver run with the cosmology of the simulation; ic_input_filename:
+--                   an optional .ini of the solver; see also ic_internal_solver_parameters)
 -- reconstruct_from_particles (see below)
 -- read_particles   (if not COLA read GADGET file and use that for sim) 
 ic_type_of_input = "camb"

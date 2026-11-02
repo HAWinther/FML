@@ -574,7 +574,20 @@ namespace SIMCODE {
                        "",
                        "The input file (needed except for ic_type_of_input = internal, where it is an optional .ini "
                        "file of the Einstein-Boltzmann solver with its precision, recombination and reionization "
-                       "settings; its cosmology and k-range are replaced by those of the simulation)");
+                       "settings: see ic_internal_solver_parameters)");
+            b.when(is_one_of("ic_type_of_input", {"internal", "internal_transfer"}),
+                   "ic_type_of_input = internal",
+                   [&]() {
+                       b.optional("ic_internal_solver_parameters",
+                                  std::vector<std::string>{},
+                                  "Settings of the Einstein-Boltzmann solver as \"name=value\", e.g. {\"Yp=0.245\", "
+                                  "\"z_reion=8\", \"precision=fast\"}, applied after those of the .ini file "
+                                  "ic_input_filename (the names of Cosmology/EinsteinBoltzmannSolver/params/default.ini). "
+                                  "The cosmology (h, OmegaB, ..., model and its parameters, A_s, n_s, k_pivot, the "
+                                  "neutrino masses, preset), alpha_s and the k-grid (pert_k_min, pert_k_max, pert_n_k, "
+                                  "pert_dk_max) are set by the simulation and are an error here and in the .ini file. "
+                                  "See README.md");
+                   });
             b.required("ic_input_redshift", 0.0, "The redshift of the input P(k) / T(k)");
             b.optional("ic_fix_amplitude", true, "Fix the amplitude of the modes when generating the random field");
             b.optional("ic_reverse_phases", false, "Reverse the phases (for paired simulations)");

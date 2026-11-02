@@ -356,9 +356,13 @@ ic_LPT_order = 2
 -- camb             (a transfer info file listing T(k,z) files from CAMB; the old name transferinfofile also works)
 -- class            (native CLASS output: ic_input_filename is the root, e.g. "output/run_" for run_z1_tk.dat, ...,
 --                   run_background.dat; CLASS run with format = class, output = mTk,vTk, write_background = yes)
--- internal_transfer (an .ini file of FML's Einstein-Boltzmann solver)
+-- internal         (FML's Einstein-Boltzmann solver run with the cosmology of the simulation; ic_input_filename:
+--                   an optional .ini of the solver; see also ic_internal_solver_parameters)
 ic_type_of_input = "powerspectrum"
 ic_input_gauge = "synchronous" -- class: the gauge CLASS was run in (synchronous or newtonian; converted to CDM-synchronous)
+-- internal: settings of the solver as "name=value", e.g. {"Yp=0.245", "z_reion=8", "precision=fast"}
+-- (not the cosmology or the k-range, which are the simulation's; see README.md)
+ic_internal_solver_parameters = {}
 -- Path to the input (NB: for using the example files update the path at the top of the file below)
 ic_input_filename = "input/example_power_spectrum_cb_z0.000.txt"
 -- The redshift of the P(k), T(k) we give as input

@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -57,15 +58,56 @@ namespace SIMCODE {
         }
 #endif
 
-        /// The settings of the solver: those of the .ini file r.filename (or the defaults) with the cosmology of the
-        /// simulation (its background parameters, model and model parameters, the primordial spectrum) and a k- and
-        /// a-range that covers the request
+        /// The parameters of the solver that the simulation sets, with what sets them (an error in the .ini file and
+        /// in ic_internal_solver_parameters). Model parameters: those of the model of the simulation (the parameters
+        /// of another model are unknown names for the solver)
+        std::string set_by_simulation(const std::string & name, const std::string & model) {
+            static const std::map<std::string, std::string> fixed{
+                {"preset", "the cosmology_* parameters"},
+                {"h", "cosmology_h"},
+                {"OmegaB", "cosmology_Omegab"},
+                {"OmegaCDM", "cosmology_OmegaCDM"},
+                {"OmegaK", "cosmology_OmegaK"},
+                {"TCMB", "cosmology_TCMB_kelvin"},
+                {"Neff", "cosmology_Neffective"},
+                {"m_nu", "cosmology_OmegaMNu or cosmology_neutrino_masses_eV"},
+                {"deg_ncdm", "cosmology_OmegaMNu or cosmology_neutrino_masses_eV"},
+                {"m_nu_list", "cosmology_OmegaMNu or cosmology_neutrino_masses_eV"},
+                {"T_ncdm_over_TCMB", "the neutrino background of the simulation"},
+                {"model", "cosmology_model"},
+                {"A_s", "cosmology_As"},
+                {"n_s", "cosmology_ns"},
+                {"k_pivot", "cosmology_kpivot_mpc"},
+                {"alpha_s", "the primordial spectrum of the simulation, which has no running"},
+                {"pert_k_min", "the k-range of the IC grid"},
+                {"pert_k_max", "the k-range of the IC grid"},
+                {"pert_n_k", "the k-range of the IC grid"},
+                {"pert_dk_max", "the k-range of the IC grid"}};
+            const auto it = fixed.find(name);
+            if (it != fixed.end())
+                return it->second;
+            const auto model_parameters = FML::COSMOLOGY::ParameterFile::model_parameter_names(model);
+            if (std::find(model_parameters.begin(), model_parameters.end(), name) != model_parameters.end())
+                return "the parameters of cosmology_model";
+            return "";
+        }
+
+        /// The settings of the solver: those of the .ini file r.filename (or the defaults) and of
+        /// ic_internal_solver_parameters, with the cosmology of the simulation (its background parameters, model and
+        /// model parameters, the primordial spectrum) and a k- and a-range that covers the request
         FML::COSMOLOGY::RunSettings internal_settings(const TransferInputRequest & r) {
             using FML::COSMOLOGY::Constants::Mpc;
-            const std::string msg = "[ic_type_of_input = internal] ";
+            // (internal_transfers prefixes the errors with [ic_type_of_input = internal])
             if (r.model.empty())
-                throw std::invalid_argument(msg + "the cosmology_model has no model of the solver (Tabulated)");
-            auto settings = FML::COSMOLOGY::ParameterFile::read(r.filename);
+                throw std::invalid_argument("the cosmology_model has no model of the solver (Tabulated)");
+            const std::string where = "ic_internal_solver_parameters";
+            for (const auto & e : FML::COSMOLOGY::ParameterFile::entries(r.filename, r.solver_parameters, where)) {
+                const auto by = set_by_simulation(e.name, r.model);
+                if (not by.empty())
+                    throw std::invalid_argument(e.where + ": the solver parameter " + e.name +
+                                                " is set by the simulation (" + by + "): remove it");
+            }
+            auto settings = FML::COSMOLOGY::ParameterFile::read(r.filename, r.solver_parameters, where);
             const auto & b = r.background;
             auto & c = settings.cosmo;
             c.h = b.h;
@@ -116,7 +158,7 @@ namespace SIMCODE {
             settings.pert.x_end = std::log(std::max(1.1, 1.1 * r.required.amax));
             settings.bg_x_end = std::max(settings.bg_x_end, settings.pert.x_end);
             if (not(std::exp(settings.pert.x_start) < 0.5 * r.required.amin))
-                throw std::invalid_argument(msg + "the initial redshift is earlier than pert_x_start of the solver");
+                throw std::invalid_argument("the initial redshift is earlier than pert_x_start of the solver");
             return settings;
         }
 
@@ -161,6 +203,12 @@ namespace SIMCODE {
                       << "# Transfer functions from the internal Einstein-Boltzmann solver\n"
                       << "# Model: " << c.model << (r.filename.empty() ? "" : " (solver settings: " + r.filename + ")")
                       << "\n"
+                      << "# Solver parameters: " << [&] {
+                             std::string o;
+                             for (const auto & p : r.solver_parameters)
+                                 o += (o.empty() ? "" : ", ") + p;
+                             return o.empty() ? std::string("none") : o;
+                         }() << "\n"
                       << "# Massive neutrinos: " << [&] {
                              std::string o;
                              for (double m : c.neutrino_masses())

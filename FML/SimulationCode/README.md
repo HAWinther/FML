@@ -652,9 +652,32 @@ remains supported without a Boltzmann solve.
     EDE), with their perturbations (smooth dark energy for w0waCDM, the scalar field of quintessence and EDE, the
     modified gravity of DGP and JBD). Not `Tabulated` (no perturbations). The gravity model of the simulation
     (`gravity_model`) is separate: the IC are those of the cosmology model at zini.
-  - `ic_input_filename` is optional: a solver .ini file with its precision, recombination and reionization settings
-    (`Yp`, `z_reion`, `ode_abserr`, `lmax_nu`, ...; see the solver's README). Its cosmology is replaced by that of the
-    simulation and its k-grid by the one below. Empty: the solver's defaults.
+  - The other settings of the solver are its defaults unless given in a solver .ini file (`ic_input_filename`,
+    optional) or as `ic_internal_solver_parameters = {"name=value", ...}` in the parameter file (applied after the
+    .ini, so they override it):
+
+    ```lua
+    ic_type_of_input = "internal"
+    ic_input_filename = ""   -- or "solver.ini" with "name = value" lines
+    ic_internal_solver_parameters = {"Yp=0.245", "z_reion=8", "precision=fast"}
+    ```
+
+    The names are those of the solver (all of them, with their defaults and descriptions, are in
+    [`params/default.ini`](../Cosmology/EinsteinBoltzmannSolver/params/default.ini); `./cmb --write-defaults` writes
+    it). What is whose:
+
+    | Solver parameters | |
+    |---|---|
+    | `h`, `OmegaB`, `OmegaCDM`, `OmegaK`, `TCMB`, `Neff`, `m_nu`, `deg_ncdm`, `m_nu_list`, `T_ncdm_over_TCMB`, `model` and its parameters, `A_s`, `n_s`, `k_pivot`, `preset` | Set by the simulation (`cosmology_*`): an error if given |
+    | `alpha_s` | 0 (the primordial spectrum of the simulation has no running): an error if given |
+    | `pert_k_min`, `pert_k_max`, `pert_n_k`, `pert_dk_max` | The k-grid below, set from the IC grid: an error if given |
+    | Recombination and reionization (`Yp`, `Yp_bbn`, `reionization`, `z_reion`, `recombination`, `rec_*`, ...) | Yours |
+    | Precision (`precision = fast`, `ode_abserr`, `ode_relerr`, `lmax`, `lmax_nu`, `lmax_ncdm`, `n_q_ncdm`, `ncdm_fluid_trigger`, `tc_*`, `method_*`, `pert_x_start`, `pert_n_x_*`, `bg_*`, ...) | Yours (`bg_x_end` is raised past the last output if needed) |
+    | Isocurvature (`f_cdi`, ...) | An error when the solver starts (adiabatic IC only) |
+    | Tensors, line of sight, lensing, outputs (`r`, `lensing`, `ells`, `los_*`, `output_dir`, `write_*`, ...) | Accepted but unused (only the perturbations are solved) |
+
+    The log prints the solver parameters given. A model of the solver that `cosmology_model` does not have (f(R),
+    Horndeski, ...) cannot be used: the model is always that of the simulation.
   - Use `ic_input_redshift = ic_initial_redshift` (the transfer functions are then taken at zini, with no scaling by
     the growth factor).
 

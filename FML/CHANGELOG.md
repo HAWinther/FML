@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: the settings of the internal Einstein-Boltzmann solver in the parameter file
+- New `ic_internal_solver_parameters = {"name=value", ...}` (with `ic_type_of_input = internal`): settings of the solver
+  (recombination, reionization, precision, ...; the names of `Cosmology/EinsteinBoltzmannSolver/params/default.ini`),
+  applied after those of the optional .ini file `ic_input_filename`. The log lists them.
+- The solver parameters that the simulation sets (the cosmology, `model` and its parameters, the primordial spectrum,
+  `preset`, `alpha_s`, the k-grid `pert_k_min`/`pert_k_max`/`pert_n_k`/`pert_dk_max`) are now an error in the .ini file
+  and in `ic_internal_solver_parameters`; they were silently replaced. The README lists which parameters are whose.
+- `ParameterFile::read` takes the name of the overrides for its error messages, and `ParameterFile::entries` gives the
+  (name, value, location) of every parameter set without applying them.
+
 ### SimulationCode: one particle type by default (USE_MINIMAL_PARTICLES for the smallest type per run)
 - The simulation is compiled for `ParticleFiducial` (= `ParticleWithMass<ParticleCOLAScaleDep>`: COLA, q, mass;
   112 bytes per particle in 3D), which runs every configuration: one `RunSimulation` object instead of 7 (a full

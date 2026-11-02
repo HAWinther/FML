@@ -61,8 +61,19 @@ namespace FML::COSMOLOGY {
     };
 
     namespace ParameterFile {
-        // Read a parameter file (empty name: defaults only) and apply "name=value" overrides
-        RunSettings read(const std::string & filename, const std::vector<std::string> & overrides = {});
+        // Read a parameter file (empty name: defaults only) and apply "name=value" overrides (overrides_where: what
+        // they are called in error messages)
+        RunSettings read(const std::string & filename,
+                         const std::vector<std::string> & overrides = {},
+                         const std::string & overrides_where = "command line");
+        // The (name, value, location) of every parameter set in the file and the overrides, in order, without
+        // applying them (e.g. to check which parameters a caller sets)
+        struct Entry {
+            std::string name, value, where;
+        };
+        std::vector<Entry> entries(const std::string & filename,
+                                   const std::vector<std::string> & overrides = {},
+                                   const std::string & overrides_where = "command line");
         // Write every parameter with its current value and description (a complete, re-readable file)
         void write(const RunSettings & s, const std::string & filename);
         // Names of all general parameters (for documentation and tests), and those of one model
