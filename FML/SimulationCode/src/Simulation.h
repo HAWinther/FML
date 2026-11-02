@@ -118,6 +118,9 @@ class NBodySimulation {
     /// The linear density field delta_cb(zini,k) the particles were displaced with, on a grid of the size of the
     /// particle lattice (only if hybridbias)
     FFTWGrid<NDIM> hybridbias_linear_field_fourier;
+    /// The loop functions of the one-loop hybrid-bias prediction with the model's kernels at all the outputs
+    /// (computed at the first output: the kernels are integrated from early times once)
+    std::shared_ptr<const FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::MGLoopTables> hybridbias_mg_tables;
     // Shift of the particles relative to the grid when computing the density (force interlacing)
     std::array<double, NDIM> density_shift{};
     // The force settings used in the current step (params.force or the early-time settings)
@@ -260,6 +263,25 @@ class NBodySimulation {
     std::shared_ptr<GravityModel<NDIM>> get_gravity_model_ic() const { return grav_ic; }
     std::shared_ptr<TransferProvider> get_transfers() const { return transfers; }
     const Spline & get_power_initial_spline() const { return power_initial_spline; }
+    /// The linear CDM+baryon P(k, a) (k in h/Mpc, P in (Mpc/h)^3): P(k, zini) (D(k, a) / D(k, aini))^2 with the
+    /// growth of the gravity model; without P(k, zini) the transfer functions' P_cb(k, a) (0 without them)
+    double linear_pofk_cb(double k, double a) const {
+        if (power_initial_spline) {
+            const double D = grav->get_D_1LPT(a, k / grav->H0_hmpc);
+            const double Dini = grav->get_D_1LPT(1.0 / (1.0 + params.ic.initial_redshift), k / grav->H0_hmpc);
+            return power_initial_spline(k) * std::pow(D / Dini, 2);
+        }
+        if (transfers)
+            return transfers->power(SIMCODE::TransferSpecies::CDMBaryon, k, a);
+        return 0.0;
+    }
+    /// (T_species(k, a) / T_cb(k, a))^2 from the transfer functions (1 without them): P_species = P_cb times this
+    double species_linear_ratio(const std::string & species, double k, double a) const {
+        if (not transfers)
+            return 1.0;
+        const double Ti = SIMCODE::species_transfer_function(species, *transfers, k, a);
+        return std::pow(Ti / transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, a), 2);
+    }
     const auto & get_pofk_cb_every_step() const { return pofk_cb_every_step; }
     const auto & get_pofk_total_every_step() const { return pofk_total_every_step; }
     const auto & get_pofk_species_every_step() const { return pofk_species_every_step; }
@@ -267,6 +289,7 @@ class NBodySimulation {
     const auto & get_pofk_multipoles_every_output() const { return pofk_multipoles_every_output; }
     /// The linear density field delta_cb(zini,k) of the initial conditions (only if hybridbias)
     const FFTWGrid<NDIM> & get_hybridbias_linear_field() const { return hybridbias_linear_field_fourier; }
+    auto & get_hybridbias_mg_tables() { return hybridbias_mg_tables; }
 
     /// The time-stepping (where the steps are and their sizes)
     SIMCODE::TimeStepping<NDIM> time_stepping() const { return {params.timestep, cosmo, grav}; }

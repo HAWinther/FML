@@ -466,12 +466,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     // rho_cb in Msun/h / (Mpc/h)^3
     const double rho = 3.0 * OmegaCB * MplMpl_over_H0Msunh * std::pow(H0_hmpc, 3);
     if (have_fits) {
-        const double zini = sim.get_parameters().ic.initial_redshift;
-        auto pofk = [&](double k) {
-            const double D = grav->get_D_1LPT(1.0 / (1.0 + redshift), k / grav->H0_hmpc);
-            const double Dini = grav->get_D_1LPT(1.0 / (1.0 + zini), k / grav->H0_hmpc);
-            return power_initial_spline(k) * std::pow(D / Dini, 2);
-        };
+        auto pofk = [&](double k) { return sim.linear_pofk_cb(k, 1.0 / (1.0 + redshift)); };
         const auto krange = power_initial_spline.get_xrange();
         auto R_of_M = [&](double M) { return std::cbrt(3.0 * M / (4.0 * M_PI * rho)); };
         if (FML::ThisTask == 0)
