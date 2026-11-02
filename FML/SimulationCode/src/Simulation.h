@@ -611,7 +611,8 @@ void NBodySimulation<NDIM, T>::setup_initial_power_spectrum() {
         table.scale(pofk_norm_factor);
         make_splines(" sigma8 normalized");
 
-        // Update transfer data. This also updates data in gravity model (as its the same object)
+        // Update the transfer functions: the one object (loaded in Main.cpp) of the gravity models (grav and grav_ic),
+        // the initial conditions and the analysis
         if (transfers)
             transfers->rescale_primordial_power(pofk_norm_factor);
         cosmo->set_As(cosmo->get_As() * pofk_norm_factor);

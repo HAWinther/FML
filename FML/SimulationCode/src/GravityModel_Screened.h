@@ -201,6 +201,122 @@ class GravityModelScreened : public GravityModel<NDIM> {
     }
 
     //========================================================================
+    // The three ways of computing the fifth-force density delta_FF (Fourier space)
+    //========================================================================
+
+    /// Exact: solve the field equation with the multigrid solver (slow; intended mainly for testing) on the force grid
+    /// or a grid coarser by multigrid_coarse_factor (its modes below the coarse Nyquist frequency; the others zero)
+    void compute_exact_fifth_force(double a,
+                                   double H0Box,
+                                   double norm_poisson_equation,
+                                   const FFTWGrid<NDIM> & density_fourier,
+                                   FFTWGrid<NDIM> & density_fifth_force) const {
+        // The real-space density field
+        FFTWGrid<NDIM> density_real;
+        if (multigrid_coarse_factor > 1) {
+            density_real = restrict_to_coarse_grid(density_fourier, multigrid_coarse_factor);
+        } else {
+            density_real = density_fourier;
+            density_real.fftw_c2r();
+        }
+        solve_exact_fifth_force(a, H0Box, density_real, density_fifth_force);
+        // The starting point of the next solve
+        multigrid_previous_solution = density_fifth_force;
+        multigrid_previous_a = a;
+        // It returns it in real-space so go back to fourier space
+        density_fifth_force.fftw_r2c();
+        // From the coarse grid: the modes below its Nyquist frequency on the force grid (the others zero)
+        if (multigrid_coarse_factor > 1) {
+            FFTWGrid<NDIM> fine(density_fourier.get_nmesh(),
+                                density_fourier.get_n_extra_slices_left(),
+                                density_fourier.get_n_extra_slices_right());
+            FML::NUFFT::copy_fourier_modes<NDIM>(
+                density_fifth_force, fine, [](const std::array<int, NDIM> &) { return 1.0; });
+            density_fifth_force = std::move(fine);
+        }
+
+        // Multiply by -k^2 / (1.5 OmegaM a) to go from the potential to "force density"
+        // (defined such that the total force is 1.5 OmegaM a * D( 1/D^2 delta_FF + 1/D^2 delta) )
+        const auto Local_x_start = density_fifth_force.get_local_x_start();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+        for (FML::IndexIntType irow = 0; irow < density_fifth_force.get_local_nrows(); irow++) {
+            [[maybe_unused]] std::array<double, NDIM> kvec;
+            double kmag2;
+            for (auto && fourier_index : density_fifth_force.get_fourier_range_of_rows(irow, irow + 1)) {
+                if (Local_x_start == 0 and fourier_index == 0)
+                    continue; // DC mode (k=0)
+                density_fifth_force.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                auto value = density_fifth_force.get_fourier_from_index(fourier_index);
+                value *= -kmag2 / norm_poisson_equation;
+                density_fifth_force.set_fourier_from_index(fourier_index, value);
+            }
+        }
+        // DC mode
+        if (Local_x_start == 0)
+            density_fifth_force.set_fourier_from_index(0, 0.0);
+    }
+
+    /// The screening approximation, with (gravity_model_screening_enforce_largescale_linear) the linear solution on
+    /// large scales: delta_FF -> linear * f + screened * (1 - f) with the low-pass filter f = exp(-k^2 / 2 k_cut^2)
+    void compute_screened_fifth_force_blended(double a,
+                                              double H0Box,
+                                              double norm_poisson_equation,
+                                              const CouplingFunction & coupling,
+                                              FFTWGrid<NDIM> & density_fourier,
+                                              FFTWGrid<NDIM> & density_fifth_force) const {
+        compute_screened_fifth_force(a, H0Box, norm_poisson_equation, coupling, density_fourier, density_fifth_force);
+        if (not(screening_enforce_largescale_linear and screening_linear_scale_hmpc > 0.0))
+            return;
+
+        if (FML::ThisTask == 0) {
+            std::cout << "Combining screened solution with linear solution\n";
+            std::cout << "We use linear solution for k < " << screening_linear_scale_hmpc << " h/Mpc\n";
+        }
+
+        // Make a spline of the low-pass filter we use
+        const int npts = 1000;
+        const double kBoxmin = M_PI;
+        const double kBoxmax = M_PI * std::sqrt(NDIM) * density_fourier.get_nmesh();
+        const double kcutBox = screening_linear_scale_hmpc / this->H0_hmpc * H0Box;
+        std::vector<double> kBox(npts);
+        std::vector<double> f(npts);
+        for (int i = 0; i < npts; i++) {
+            kBox[i] = kBoxmin + (kBoxmax - kBoxmin) * i / double(npts - 1);
+            f[i] = std::exp(-0.5 * kBox[i] * kBox[i] / (kcutBox * kcutBox));
+        }
+        Spline f_spline(kBox, f, "Low-pass filter");
+
+        // Combine the screened and the linear solution together
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+        for (FML::IndexIntType irow = 0; irow < density_fourier.get_local_nrows(); irow++) {
+            [[maybe_unused]] std::array<double, NDIM> kvec;
+            double kmag;
+            for (auto && fourier_index : density_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
+                density_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                auto delta = density_fourier.get_fourier_from_index(fourier_index);
+                auto delta_fifth_force = density_fifth_force.get_fourier_from_index(fourier_index);
+                auto delta_fifth_force_linear = delta * FML::GRID::FloatType(this->GeffOverG(a, kmag / H0Box) - 1.0);
+                FML::GRID::FloatType filter = f_spline(kmag);
+                auto value = delta_fifth_force_linear * filter + delta_fifth_force * FML::GRID::FloatType(1.0 - filter);
+                density_fifth_force.set_fourier_from_index(fourier_index, value);
+            }
+        }
+    }
+
+    /// No screening (linear evolution): delta_FF(k) = (GeffOverG(a, k) - 1) delta(k)
+    void compute_linear_fifth_force(const CouplingFunction & coupling,
+                                    const FFTWGrid<NDIM> & density_fourier,
+                                    FFTWGrid<NDIM> & density_fifth_force) const {
+        if (FML::ThisTask == 0 and not fifth_force_label().empty())
+            std::cout << "Adding fifth-force " << fifth_force_label() << " (linear)\n";
+        FML::NBODY::compute_delta_fifth_force<NDIM>(density_fourier, density_fifth_force, coupling);
+    }
+
+    //========================================================================
     // Compute the force DPhi from the density field delta in fourier space
     // We compute this from D^2 Phi_GR = norm_poisson_equation * delta and the fifth force delta_FF
     //========================================================================
@@ -210,123 +326,17 @@ class GravityModelScreened : public GravityModel<NDIM> {
                        std::string density_assignment_method_used,
                        std::array<FFTWGrid<NDIM>, NDIM> & force_real,
                        const FML::NBODY::ForceOptions & options = {}) const override {
-
-        // Compute fifth-force
         const double norm_poisson_equation = 1.5 * this->cosmo->get_OmegaM() * a;
         auto coupling = [&](double kBox) { return this->GeffOverG(a, kBox / H0Box) - 1.0; };
+
         FFTWGrid<NDIM> density_fifth_force;
-
-        if (solve_exact_equation) {
-
-            // Solve the exact equation using the multigridsolver (this is slow)
-            // Intended mainly to be used for testing things so not super optimized
-            // Get back the real-space density field (on a coarser grid: its modes below the coarse Nyquist frequency)
-            FFTWGrid<NDIM> density_real;
-            if (multigrid_coarse_factor > 1) {
-                density_real = restrict_to_coarse_grid(density_fourier, multigrid_coarse_factor);
-            } else {
-                density_real = density_fourier;
-                density_real.fftw_c2r();
-            }
-            solve_exact_fifth_force(a, H0Box, density_real, density_fifth_force);
-            multigrid_previous_solution = density_fifth_force;
-            multigrid_previous_a = a;
-            // It returns it in real-space so go back to fourier space
-            density_fifth_force.fftw_r2c();
-            // From the coarse grid: the modes below its Nyquist frequency on the force grid (the others zero)
-            if (multigrid_coarse_factor > 1) {
-                FFTWGrid<NDIM> fine(density_fourier.get_nmesh(),
-                                    density_fourier.get_n_extra_slices_left(),
-                                    density_fourier.get_n_extra_slices_right());
-                FML::NUFFT::copy_fourier_modes<NDIM>(
-                    density_fifth_force, fine, [](const std::array<int, NDIM> &) { return 1.0; });
-                density_fifth_force = std::move(fine);
-            }
-
-            // Multiply by -k^2 / (1.5 OmegaM a) to go from the potential to "force density"
-            // (defined such that the total force is 1.5 OmegaM a * D( 1/D^2 delta_FF + 1/D^2 delta) )
-            const auto Local_x_start = density_fifth_force.get_local_x_start();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-            for (FML::IndexIntType irow = 0; irow < density_fifth_force.get_local_nrows(); irow++) {
-                [[maybe_unused]] std::array<double, NDIM> kvec;
-                double kmag2;
-                for (auto && fourier_index : density_fifth_force.get_fourier_range_of_rows(irow, irow + 1)) {
-                    if (Local_x_start == 0 and fourier_index == 0)
-                        continue; // DC mode (k=0)
-                    density_fifth_force.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
-                    auto value = density_fifth_force.get_fourier_from_index(fourier_index);
-                    value *= -kmag2 / norm_poisson_equation;
-                    density_fifth_force.set_fourier_from_index(fourier_index, value);
-                }
-            }
-            // DC mode
-            if (Local_x_start == 0)
-                density_fifth_force.set_fourier_from_index(0, 0.0);
-
-        } else if (use_screening_method) {
-
-            // Approximate screening method
-            compute_screened_fifth_force(a,
-                                         H0Box,
-                                         norm_poisson_equation,
-                                         coupling,
-                                         density_fourier,
-                                         density_fifth_force);
-
-            // Ensure that the large scales are behaving correctly
-            // We set delta_fifth_force => A * (1-f) + B * f
-            // i.e. we use the linear prediction on large sales and the
-            // screened prediction on small scales
-            if (screening_enforce_largescale_linear and screening_linear_scale_hmpc > 0.0) {
-
-                if (FML::ThisTask == 0) {
-                    std::cout << "Combining screened solution with linear solution\n";
-                    std::cout << "We use linear solution for k < " << screening_linear_scale_hmpc << " h/Mpc\n";
-                }
-
-                // Make a spline of the low-pass filter we use
-                const int npts = 1000;
-                const double kBoxmin = M_PI;
-                const double kBoxmax = M_PI * std::sqrt(NDIM) * density_fourier.get_nmesh();
-                const double kcutBox = screening_linear_scale_hmpc / this->H0_hmpc * H0Box;
-                std::vector<double> kBox(npts);
-                std::vector<double> f(npts);
-                for (int i = 0; i < npts; i++) {
-                    kBox[i] = kBoxmin + (kBoxmax - kBoxmin) * i / double(npts - 1);
-                    f[i] = std::exp(-0.5 * kBox[i] * kBox[i] / (kcutBox * kcutBox));
-                }
-                Spline f_spline(kBox, f, "Low-pass filter");
-
-                // Combine the screened and the linear solution together
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-                for (FML::IndexIntType irow = 0; irow < density_fourier.get_local_nrows(); irow++) {
-                    [[maybe_unused]] std::array<double, NDIM> kvec;
-                    double kmag;
-                    for (auto && fourier_index : density_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
-                        density_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
-                        auto delta = density_fourier.get_fourier_from_index(fourier_index);
-                        auto delta_fifth_force = density_fifth_force.get_fourier_from_index(fourier_index);
-                        auto delta_fifth_force_linear =
-                            delta * FML::GRID::FloatType(this->GeffOverG(a, kmag / H0Box) - 1.0);
-                        FML::GRID::FloatType filter = f_spline(kmag);
-                        auto value =
-                            delta_fifth_force_linear * filter + delta_fifth_force * FML::GRID::FloatType(1.0 - filter);
-                        density_fifth_force.set_fourier_from_index(fourier_index, value);
-                    }
-                }
-            }
-
-        } else {
-
-            // No screening - linear evolution
-            if (FML::ThisTask == 0 and not fifth_force_label().empty())
-                std::cout << "Adding fifth-force " << fifth_force_label() << " (linear)\n";
-            FML::NBODY::compute_delta_fifth_force<NDIM>(density_fourier, density_fifth_force, coupling);
-        }
+        if (solve_exact_equation)
+            compute_exact_fifth_force(a, H0Box, norm_poisson_equation, density_fourier, density_fifth_force);
+        else if (use_screening_method)
+            compute_screened_fifth_force_blended(
+                a, H0Box, norm_poisson_equation, coupling, density_fourier, density_fifth_force);
+        else
+            compute_linear_fifth_force(coupling, density_fourier, density_fifth_force);
 
         // Add on density corresponding to the gravitational force to get total force
 #ifdef USE_OMP
@@ -341,11 +351,8 @@ class GravityModelScreened : public GravityModel<NDIM> {
         }
 
         // Compute total force
-        this->compute_force_from_total_density(density_fifth_force,
-                                               norm_poisson_equation,
-                                               density_assignment_method_used,
-                                               force_real,
-                                               options);
+        this->compute_force_from_total_density(
+            density_fifth_force, norm_poisson_equation, density_assignment_method_used, force_real, options);
     }
 };
 

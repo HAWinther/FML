@@ -69,6 +69,8 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
         SymmetronSolverCosmology<NDIM, double> mgsolver(this->cosmo->get_OmegaM(), assb, beta, L_mpch, H0Box, verbose);
         mgsolver.set_ngs_steps(this->multigrid_nsweeps, this->multigrid_nsweeps, this->multigrid_nsweeps_first_step);
         mgsolver.set_epsilon(this->multigrid_solver_residual_convergence);
+        // (No warm start from the previous solution as for f(R) and DGP: it gave the same number of V-cycles in a test
+        // with 64^3 cells, Nov 2026, and the sign of phi is lost in the returned potential)
         mgsolver.solve(a, density_real, potential_real);
         if (FML::ThisTask == 0)
             std::cout << "Symmetron multigrid solve at a = " << a << ": " << mgsolver.get_number_of_vcycles()
