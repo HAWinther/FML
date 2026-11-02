@@ -900,7 +900,7 @@ template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::generate_initial_conditions_one_species(const FFTWGrid<NDIM> & delta_cb_fourier) {
     const auto & ic = params.ic;
     const double aini = ic.a_initial();
-    const double fac = aini * aini * cosmo->HoverH0_of_a(std::exp(std::log(aini)));
+    const double fac = aini * aini * cosmo->HoverH0_of_a(aini);
     std::vector<double> velocity_norms = ic_velocity_norms(fac);
 
     // The IC generator returns the 2LPT potential if the vector has room for it (for scale-dependent COLA)
