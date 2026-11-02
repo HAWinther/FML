@@ -26,6 +26,7 @@
 #include "GravityModel.h"
 #include "GravityModel_GR.h"
 #include "InitialConditions.h"
+#include "InitialDensityField.h"
 #include "InitialPowerSpectrum.h"
 #include "KickDrift.h"
 #include "Lightcone/Lightcone.h"
@@ -111,13 +112,9 @@ class NBodySimulation {
     /// The massive neutrino particles (only if particle_neutrinos; delta-f method)
     SIMCODE::NeutrinoParticles<NDIM> part_neutrinos;
 
-    /// The initial density field delta_cb(zini,k) computed with the same Nmesh
-    /// as the forces (used for linear massive neutrinos and the N-body gauge - not allocated otherwise)
-    FFTWGrid<NDIM> initial_density_field_fourier;
-    // ...with the density assignment of the early-time force (force_early_method; only while it is used)
-    FFTWGrid<NDIM> initial_density_field_early;
-    // ...and in the frame of the particles when they are shifted (only during compute_density_field_fourier)
-    FFTWGrid<NDIM> initial_density_field_shifted;
+    /// The initial density field delta_cb(zini,k) on the force grid (for linear massive neutrinos and the N-body
+    /// gauge; see InitialDensityField.h)
+    SIMCODE::InitialDensityField<NDIM> initial_density_field;
     /// The linear density field delta_cb(zini,k) the particles were displaced with, on a grid of the size of the
     /// particle lattice (only if hybridbias)
     FFTWGrid<NDIM> hybridbias_linear_field_fourier;
@@ -138,7 +135,8 @@ class NBodySimulation {
     /// COLA settings and the LPT potentials at the initial time
     ColaState<NDIM, T> cola;
     // The initial velocities are already relative to the COLA frame (scale-dependent growth with scale-independent
-    // COLA: the residual 1LPT velocity (f(k) - f(0)) Psi), so they are not reset to zero
+    // COLA: the residual 1LPT velocity (f(k) - f(0)) Psi; IC orders the frame does not have; velocities read from
+    // file), so they are not reset to zero. Set by generate_initial_conditions_one_species and read_ic
     bool ic_velocities_relative_to_cola_frame{false};
 
     /// The lightcone construction
@@ -337,15 +335,18 @@ class NBodySimulation {
     void kick_with_interlaced_force(const StepInfo & s);
     // The density field (SimulationDensity.h)
     void compute_density_field_fourier(FFTWGrid<NDIM> & density_grid_fourier, double a);
-    void assign_cb_particles_to_grid(FFTWGrid<NDIM> & density_grid_fourier, double a, bool bin_pofk = true);
+    void assign_cb_particles_to_grid(FFTWGrid<NDIM> & density_grid_fourier,
+                                     double a,
+                                     const SIMCODE::ForceSettings & force,
+                                     bool bin_pofk = true);
     void store_initial_density_field(const FFTWGrid<NDIM> & density_grid_fourier, double a);
     void add_nbody_gauge_source(FFTWGrid<NDIM> & density_grid_fourier, double a);
     void add_neutrino_particles(FFTWGrid<NDIM> & density_grid_fourier, double a);
     void add_linear_neutrinos(FFTWGrid<NDIM> & density_grid_fourier, double a);
-    const FFTWGrid<NDIM> & initial_density_in_particle_frame();
-    bool particles_shifted() const {
-        return std::any_of(density_shift.begin(), density_shift.end(), [](double x) { return x != 0.0; });
+    const FFTWGrid<NDIM> & initial_density_in_particle_frame() {
+        return initial_density_field.in_particle_frame(early_force, density_shift);
     }
+    bool particles_shifted() const { return SIMCODE::InitialDensityField<NDIM>::is_shifted(density_shift); }
     void bin_up_power_spectrum_every_step(const FFTWGrid<NDIM> & grid,
                                           bool deconvolve,
                                           double shotnoise,
@@ -775,8 +776,8 @@ std::function<double(double)> NBodySimulation<NDIM, T>::ic_velocity_norm_2LPT_of
     };
 }
 
-/// The scale-dependent 1LPT velocity norm of one species (nullptr if it is that of k = 0). Sets
-/// ic_velocities_relative_to_cola_frame when the velocities it gives are relative to the COLA frame.
+/// The scale-dependent 1LPT velocity norm of one species (nullptr if it is that of k = 0). With COLA the velocities
+/// it gives are relative to the COLA frame.
 /// N-body gauge: the growth rate (and so the 1LPT velocity) is scale-dependent on large scales; we take it from the
 /// (N-body gauge) transfer functions.
 /// Scale-dependent growth (massive neutrinos with the transfer functions, modified gravity): the 1LPT velocity is
@@ -814,8 +815,6 @@ std::function<double(double)> NBodySimulation<NDIM, T>::ic_velocity_norm_1LPT_of
         // With COLA the velocities are relative to the COLA frame, which has the growth rate of the gravity model
         // (at k = 0 for scale-independent COLA) for 1LPT and all of the 2LPT velocity. Zeroing the velocities (as for
         // scale-independent growth) would replace f_nbg(k) by f(0) (0.75% too large velocity on the largest scales)
-        if (cola_enabled)
-            ic_velocities_relative_to_cola_frame = true;
         return
             [g, growth_rate_of_logk, fac, aini, boxsize, kmin, kmax, cola_enabled, cola_scaledependent](double kBox) {
                 const double logk = SIMCODE::clamped_logk(kBox / boxsize, kmin, kmax);
@@ -829,8 +828,6 @@ std::function<double(double)> NBodySimulation<NDIM, T>::ic_velocity_norm_1LPT_of
     if (not((grav_ic->is_growth_scaledependent() and not(cola_enabled and cola_scaledependent)) or
             cola_frame_growth_differs()))
         return nullptr;
-    if (cola_enabled)
-        ic_velocities_relative_to_cola_frame = true;
     if (FML::ThisTask == 0 and cola_frame_growth_differs())
         std::cout << "# The IC have the growth rate of GR at zini f = " << grav_ic->get_f_1LPT(aini)
                   << ", the COLA frame that of " << grav->get_name()
@@ -892,11 +889,13 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_one_species(const FFT
 
     const auto velocity_norm_1LPT_of_kBox = ic_velocity_norm_1LPT_of_kBox(fac);
 
-    // With COLA the velocities in the particles are relative to the COLA frame, which only has the LPT orders up to
-    // simulation_cola_LPT_order (1LPT, 2LPT). The higher orders (2LPT with simulation_cola_LPT_order = 1, 3LPT) keep
-    // their full IC velocity: zeroing all the velocities (cola_initialize_velocities) dropped them (1.7% rms in the
-    // velocity at z = 20 with ic_LPT_order = 2 and simulation_cola_LPT_order = 1)
-    if (cola.enabled and ic.LPT_order > cola.LPT_order)
+    // With COLA the velocities are set relative to the COLA frame (instead of zeroing them after the IC, see init())
+    // if the scale-dependent 1LPT velocity differs from the frame's (velocity_norm_1LPT_of_kBox), or if the IC have
+    // LPT orders the frame does not have (simulation_cola_LPT_order: 1LPT, 2LPT). Those (2LPT with
+    // simulation_cola_LPT_order = 1, 3LPT) keep their full IC velocity: zeroing all the velocities
+    // (cola_initialize_velocities) dropped them (1.7% rms in the velocity at z = 20 with ic_LPT_order = 2 and
+    // simulation_cola_LPT_order = 1)
+    if (cola.enabled and (velocity_norm_1LPT_of_kBox or ic.LPT_order > cola.LPT_order))
         ic_velocities_relative_to_cola_frame = true;
     if (ic_velocities_relative_to_cola_frame) {
         // velocity_norms = {1LPT, 2LPT, 3LPTa, 3LPTb}: the frame has the first cola.LPT_order (<= 2) of them
@@ -1329,7 +1328,7 @@ void NBodySimulation<NDIM, T>::set_force_settings_for_step(double a) {
     force_options.deconvolve = current_force.deconvolve_window;
     early_force = early;
     if (not early)
-        initial_density_field_early.free();
+        initial_density_field.end_of_early_force();
     if (early and FML::ThisTask == 0)
         std::cout << "Using the early-time force (" << f.early_method << ") at z = " << 1.0 / a - 1.0 << "\n";
 }
@@ -1483,7 +1482,7 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
         if (lightcone->needs_potential(s.apos, s.apos_new) and not lightcone->has_potential(s.apos)) {
             const auto nleftright = FML::INTERPOLATION::get_extra_slices(current_force.density_assignment_method);
             FFTWGrid<NDIM> density(current_force.nmesh, nleftright.first, nleftright.second);
-            assign_cb_particles_to_grid(density, s.apos);
+            assign_cb_particles_to_grid(density, s.apos, current_force);
             timer.StartTiming("LightconePotential");
             lightcone->compute_potential(
                 density, s.apos, current_force.density_assignment_method, current_force.deconvolve_window);
