@@ -219,6 +219,7 @@ class GravityModelScreened : public GravityModel<NDIM> {
             density_real = density_fourier;
             density_real.fftw_c2r();
         }
+        const int nmesh_solver = density_real.get_nmesh();
         solve_exact_fifth_force(a, H0Box, density_real, density_fifth_force);
         // The starting point of the next solve
         multigrid_previous_solution = density_fifth_force;
@@ -235,21 +236,31 @@ class GravityModelScreened : public GravityModel<NDIM> {
             density_fifth_force = std::move(fine);
         }
 
-        // Multiply by -k^2 / (1.5 OmegaM a) to go from the potential to "force density"
-        // (defined such that the total force is 1.5 OmegaM a * D( 1/D^2 delta_FF + 1/D^2 delta) )
+        // Multiply by -lambda(k) / (1.5 OmegaM a) to go from the potential to "force density" (defined such that the
+        // total force is 1.5 OmegaM a * D( 1/D^2 delta_FF + 1/D^2 delta) ). lambda(k) = sum_i 4 N^2 sin^2(k_i / 2N) is
+        // the eigenvalue of the (2 NDIM + 1)-point Laplacian the solver inverted on its N^NDIM grid, so in the linear
+        // regime delta_FF is exactly (GeffOverG - 1) delta for every mode. The continuum k^2 over-estimated it by
+        // k^2 / lambda (+3% at a quarter and +13% at half the Nyquist frequency of the solver grid)
+        const double nmesh2x4 = 4.0 * double(nmesh_solver) * double(nmesh_solver);
+        const double half_h = 0.5 / double(nmesh_solver);
         const auto Local_x_start = density_fifth_force.get_local_x_start();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
         for (FML::IndexIntType irow = 0; irow < density_fifth_force.get_local_nrows(); irow++) {
-            [[maybe_unused]] std::array<double, NDIM> kvec;
-            double kmag2;
+            std::array<double, NDIM> kvec;
+            [[maybe_unused]] double kmag2;
             for (auto && fourier_index : density_fifth_force.get_fourier_range_of_rows(irow, irow + 1)) {
                 if (Local_x_start == 0 and fourier_index == 0)
                     continue; // DC mode (k=0)
                 density_fifth_force.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
+                double lambda = 0.0;
+                for (int idim = 0; idim < NDIM; idim++) {
+                    const double sn = std::sin(kvec[idim] * half_h);
+                    lambda += nmesh2x4 * sn * sn;
+                }
                 auto value = density_fifth_force.get_fourier_from_index(fourier_index);
-                value *= -kmag2 / norm_poisson_equation;
+                value *= -lambda / norm_poisson_equation;
                 density_fifth_force.set_fourier_from_index(fourier_index, value);
             }
         }
