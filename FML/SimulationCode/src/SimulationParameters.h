@@ -85,6 +85,16 @@ namespace SIMCODE {
                                      ". Valid options are:" + valid);
         }
 
+        /// Change the value printed for a parameter that was read (if it was in the parameterfile)
+        template <class V>
+        void update(const std::string & name, const V & value) {
+            std::ostringstream os;
+            os << std::boolalpha << value;
+            for (auto & entry : entries)
+                if (entry.first == name)
+                    entry.second = os.str();
+        }
+
         /// Record a value that was not read directly from the parameterfile
         template <class V>
         void record(const std::string & name, const V & value) {
@@ -361,8 +371,10 @@ namespace SIMCODE {
         OutputSettings output;
         LightconeSettings lightcone;
 
-        /// Read all the parameters, check them and print them
-        void read(const ParameterMap & param) {
+        /// Read all the parameters, check them and print them. growth_is_scaledependent: of the gravity model (for
+        /// simulation_use_scaledependent_cola). The checks that depend on the models: check_parameters_against_models
+        /// (ModelCompatibility.h)
+        void read(const ParameterMap & param, bool growth_is_scaledependent) {
             ParameterReader r(param);
 
             // Every parameter is read with r.get: its value in the parameterfile (or its default if its condition in
@@ -561,6 +573,18 @@ namespace SIMCODE {
             r.get("plc_nside_chunks", lightcone.nside_chunks);
 
             validate();
+
+            // Scale-dependent COLA only when the growth is scale-dependent (massive neutrinos, k-dependent gravity):
+            // otherwise it gives the same result as standard COLA at a much higher cost (4x the time and 40% more
+            // memory for 64^3 in GR)
+            if (simulation.use_scaledependent_cola and not(simulation.use_cola and growth_is_scaledependent)) {
+                simulation.use_scaledependent_cola = false;
+                r.update("simulation_use_scaledependent_cola", false);
+                if (FML::ThisTask == 0 and simulation.use_cola)
+                    std::cout << "NB: simulation_use_scaledependent_cola = true, but the growth is scale-independent: "
+                                 "using standard COLA (simulation_use_scaledependent_cola = false)\n";
+            }
+
             r.print("NBodySimulation::read_parameters");
         }
 

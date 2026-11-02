@@ -52,10 +52,13 @@
 /// A particle-mesh N-body simulation (optionally with COLA).
 ///
 /// Usage: construct with a cosmology and a gravity model, then call
-/// read_parameters(param), init() (creates the initial conditions) and run().
+/// read_parameters(param, params), init() (creates the initial conditions) and run().
+/// The parameters are read once in Main.cpp (SimulationParameters::read and
+/// check_parameters_against_models in ModelCompatibility.h)
 ///
 /// The pieces live in separate headers:
 ///   SimulationParameters.h : all the parameters (read, printed and validated)
+///   ModelCompatibility.h   : the checks of the parameters against the cosmology and gravity model
 ///   TimeStepping.h         : where the steps are and the size of the kick/drift steps
 ///   InitialPowerSpectrum.h : P(k,zini) / T(k,zini) the initial conditions are made from
 ///   InitialConditions.h    : the initial density field and making the particles of a species from it
@@ -170,8 +173,8 @@ class NBodySimulation {
         part = std::move(_part);
     }
 
-    /// Read (and check) the parameters
-    void read_parameters(ParameterMap & param);
+    /// Set the parameters: params read (and checked) from param in Main.cpp. Sets up what follows from them
+    void read_parameters(const ParameterMap & param, const Parameters & params);
 
     /// Generate the initial conditions
     void init();
@@ -351,15 +354,9 @@ class NBodySimulation {
 };
 
 template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
+void NBodySimulation<NDIM, T>::read_parameters(const ParameterMap & param, const Parameters & _params) {
     parameters = std::make_shared<ParameterMap>(param);
-    params.read(param);
-    if (params.baryonification.enabled) {
-        if (NDIM != 3 || grav->get_name() != "GR" || cosmo->get_OmegaMNu() != 0.0)
-            throw std::runtime_error(
-                "baryonification currently requires NDIM=3, gravity_model=GR and cosmology_OmegaMNu=0");
-        params.baryonification.profile_model(cosmo->get_Omegab() / cosmo->get_OmegaM()).validate();
-    }
+    params = _params;
 
     // We cannot use COLA if the particle type is not compatible with it
     if (params.simulation.use_cola and not FML::PARTICLE::has_get_D_1LPT<T>()) {
@@ -465,9 +462,6 @@ void NBodySimulation<NDIM, T>::init() {
     output_background_and_growth_functions();
 
     // The particle species (CDM+baryons as one, or CDM and baryons, and massive neutrinos)
-    if (has_neutrino_particles() and not(cosmo->get_OmegaMNu() > 0.0 and cosmo->get_Mnu_eV() > 0.0))
-        throw std::runtime_error("particle_neutrinos = true needs massive neutrinos (cosmology_OmegaMNu > 0 or "
-                                 "cosmology_neutrino_masses_eV)");
     species = SIMCODE::make_species_list(params.particle, *cosmo, NDIM);
     if (FML::ThisTask == 0 and species.size() > 1) {
         std::cout << "# Particle species (name, Npart_1D, GADGET type, Omega_i / OmegaM, weight in delta_cb):\n";
@@ -1115,9 +1109,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::setup_nbody_gauge() {
     const auto & force = params.force;
-    if (grav->get_name() != "GR" or cosmo->get_name() != "LCDM")
-        throw std::runtime_error("force_nbody_gauge is only implemented for cosmology_model = LCDM and gravity_model "
-                                 "= GR (the source is computed with CLASS)");
+    // (the models are checked in check_parameters_against_models)
     FML::assert_mpi(transfers != nullptr, "force_nbody_gauge needs the transfer functions");
 
     if (FML::ThisTask == 0)

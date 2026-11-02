@@ -12,18 +12,19 @@
 
 template <class T>
 void run_simulation(const FML::UTILS::ParameterMap & param,
+                    const SIMCODE::SimulationParameters & params,
                     std::shared_ptr<Cosmology> cosmo,
                     std::shared_ptr<GravityModel<NDIM_SPACE>> grav) {
     FML::PARTICLE::info<T>();
     NBodySimulation<NDIM_SPACE, T> sim(cosmo, grav);
-    FML::UTILS::ParameterMap p = param;
-    sim.read_parameters(p);
+    sim.read_parameters(param, params);
     sim.init();
     sim.run();
 }
 
 #define SIMCODE_INSTANTIATE_RUN_SIMULATION(T)                                                                          \
     template void run_simulation<T>(const FML::UTILS::ParameterMap &,                                                  \
+                                    const SIMCODE::SimulationParameters &,                                             \
                                     std::shared_ptr<Cosmology>,                                                        \
                                     std::shared_ptr<GravityModel<NDIM_SPACE>>);
 

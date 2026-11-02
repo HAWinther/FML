@@ -10,6 +10,7 @@
 #include "Cosmology.h"
 #include "GravityModel.h"
 #include "Particles.h"
+#include "SimulationParameters.h"
 
 #include <FML/ParameterMap/ParameterMap.h>
 
@@ -19,9 +20,10 @@
 #define NDIM_SPACE 3
 #endif
 
-/// Read the parameters, initialize and run the simulation with particles of type T
+/// Initialize and run the simulation with particles of type T. params: the parameters read from param (in Main.cpp)
 template <class T>
 void run_simulation(const FML::UTILS::ParameterMap & param,
+                    const SIMCODE::SimulationParameters & params,
                     std::shared_ptr<Cosmology> cosmo,
                     std::shared_ptr<GravityModel<NDIM_SPACE>> grav);
 
@@ -37,6 +39,7 @@ void run_simulation(const FML::UTILS::ParameterMap & param,
 
 #define SIMCODE_DECLARE_RUN_SIMULATION(T)                                                                              \
     extern template void run_simulation<T>(const FML::UTILS::ParameterMap &,                                           \
+                                           const SIMCODE::SimulationParameters &,                                      \
                                            std::shared_ptr<Cosmology>,                                                 \
                                            std::shared_ptr<GravityModel<NDIM_SPACE>>);
 SIMCODE_PARTICLE_TYPES(SIMCODE_DECLARE_RUN_SIMULATION)

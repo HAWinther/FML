@@ -1,3 +1,4 @@
+#include "ModelCompatibility.h"
 #include "Models.h"
 #include "ParameterSchema.h"
 #include "Particles.h"
@@ -119,44 +120,42 @@ int run(int argc, char ** argv) {
     grav->info();
 
     //=============================================================
+    // The parameters of the simulation: read and checked once here,
+    // also against the cosmology and gravity model
+    //=============================================================
+    SIMCODE::SimulationParameters params;
+    params.read(param, grav->is_growth_scaledependent());
+    SIMCODE::check_parameters_against_models<NDIM>(params, *cosmo, *grav, transfers != nullptr);
+    // The value of simulation_use_scaledependent_cola that is used (see SimulationParameters::read), so that the rest
+    // of the code (and the output) sees it
+    if (param.contains("simulation_use_scaledependent_cola"))
+        param["simulation_use_scaledependent_cola"] = params.simulation.use_scaledependent_cola;
+
+    //=============================================================
     // Run the simulation with the smallest particle type that has
     // what we need (see Particles.h). COLA with LPT order < 1 is
     // turned off (see SimulationParameters.h)
     //=============================================================
-    const bool use_cola =
-        param.get<bool>("simulation_use_cola") and SIMCODE::get_parameter<int>(param, "simulation_cola_LPT_order") >= 1;
-    // Scale-dependent COLA only when the growth is scale-dependent (massive neutrinos, k-dependent gravity): otherwise
-    // it gives the same result as standard COLA at a much higher cost (4x the time and 40% more memory for 64^3 in
-    // GR). The parameter is set to the value used so that the rest of the code (and the output) sees it
-    const bool scaledependent_cola_requested = param.get<bool>("simulation_use_scaledependent_cola");
-    const bool scaledependent_cola = use_cola and scaledependent_cola_requested and grav->is_growth_scaledependent();
-    if (scaledependent_cola_requested and not scaledependent_cola) {
-        param["simulation_use_scaledependent_cola"] = false;
-        if (FML::ThisTask == 0 and use_cola)
-            std::cout << "NB: simulation_use_scaledependent_cola = true, but the growth is scale-independent: using "
-                         "standard COLA (simulation_use_scaledependent_cola = false)\n";
-    }
+    const bool use_cola = params.simulation.use_cola;
+    const bool scaledependent_cola = params.simulation.use_scaledependent_cola;
     // Sheet interpolation needs the Lagrangian position q
-    const std::string density_method = SIMCODE::get_parameter<std::string>(param, "force_density_method");
-    const bool need_q = density_method == "sheet" or density_method == "sheet_nufft";
+    const bool need_q = params.force.density_method == "sheet" or params.force.density_method == "sheet_nufft";
     // The mass-encoded baryon-CDM relative mode needs a mass in the particles (density assignment only, so no q)
-    const bool need_mass =
-        SIMCODE::get_parameter<bool>(param, "particle_baryons") and
-        SIMCODE::get_parameter<std::string>(param, "particle_baryon_relative_mode") != "displacement";
+    const bool need_mass = params.particle.baryons and params.particle.baryon_relative_mode != "displacement";
     if (need_mass) {
         if (scaledependent_cola)
-            run_simulation<ParticleWithMass<ParticleCOLAScaleDep<NDIM>>>(param, cosmo, grav);
+            run_simulation<ParticleWithMass<ParticleCOLAScaleDep<NDIM>>>(param, params, cosmo, grav);
         else if (use_cola)
-            run_simulation<ParticleWithMass<ParticleCOLA<NDIM>>>(param, cosmo, grav);
+            run_simulation<ParticleWithMass<ParticleCOLA<NDIM>>>(param, params, cosmo, grav);
         else
-            run_simulation<ParticleWithMass<ParticleBasic<NDIM>>>(param, cosmo, grav);
+            run_simulation<ParticleWithMass<ParticleBasic<NDIM>>>(param, params, cosmo, grav);
     } else if (scaledependent_cola or (use_cola and need_q))
-        run_simulation<ParticleCOLAScaleDep<NDIM>>(param, cosmo, grav);
+        run_simulation<ParticleCOLAScaleDep<NDIM>>(param, params, cosmo, grav);
     else if (use_cola)
-        run_simulation<ParticleCOLA<NDIM>>(param, cosmo, grav);
+        run_simulation<ParticleCOLA<NDIM>>(param, params, cosmo, grav);
     else if (need_q)
-        run_simulation<ParticleBasicQ<NDIM>>(param, cosmo, grav);
+        run_simulation<ParticleBasicQ<NDIM>>(param, params, cosmo, grav);
     else
-        run_simulation<ParticleBasic<NDIM>>(param, cosmo, grav);
+        run_simulation<ParticleBasic<NDIM>>(param, params, cosmo, grav);
     return 0;
 }
