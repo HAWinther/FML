@@ -22,6 +22,7 @@
 #include "GravityModel_fofr.h"
 #include "Species.h"
 #include "OutputUtils.h"
+#include "SnapshotOutput.h"
 #include "SnapshotPowerSpectrum.h"
 
 #include <fstream>
@@ -185,119 +186,32 @@ std::vector<FML::FILEUTILS::GADGET::GadgetSpecies> gadget_species(NBodySimulatio
     return species;
 }
 
+/// Output the particles as GADGET files (output_fileformat = GADGET or HDF5, one file per task; see
+/// SnapshotOutput.h): all the species with their types when there are several, else the particles as type 1
 template <int NDIM, class T>
-void output_gadget(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
-
-    const std::string redshiftstring = redshift_to_string(redshift);
-    const auto simulation_boxsize = sim.get_parameters().simulation.boxsize;
-    const auto cosmo = sim.get_cosmology();
-    auto & part = sim.get_particles();
-
-    const double scale_factor = 1.0 / (1.0 + redshift);
-    const int nfiles = FML::NTasks;
-    const double pos_norm = simulation_boxsize;
-    const double vel_norm = 100 * simulation_boxsize / std::pow(scale_factor, 1.5);
-    const std::string fileprefix = snapshot_folder + "/" + "gadget_z" + redshiftstring;
+void output_particles(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
+    const auto & params = sim.get_parameters();
+    const auto format = params.output.fileformat;
+    const std::string fileprefix = snapshot_folder + "/" + "gadget_z" + redshift_to_string(redshift);
+    const auto header = SIMCODE::snapshot_header(*sim.get_cosmology(), 1.0 / (1.0 + redshift), params.simulation.boxsize);
 
     if (FML::ThisTask == 0) {
         std::cout << "\n";
         std::cout << "#=====================================================\n";
-        std::cout << "# Output in gadget format\n";
+        std::cout << "# Output in gadget " << (format == SIMCODE::ParticleFileFormat::HDF5 ? "HDF5 " : "") << "format\n";
         std::cout << "# fileprefix  : " << fileprefix << "\n";
         std::cout << "#=====================================================\n";
     }
 
-    FML::FILEUTILS::GADGET::GadgetWriter gw;
+    // Several species: CDM (or CDM+baryons) as type 1, baryons as type 2 and neutrinos as type 3 (collisionless
+    // types: type 0 is SPH gas in GADGET; in HDF5 the neutrinos have their delta-f weights as PartType3/Weights)
     if (sim.get_species().size() > 1) {
-        // CDM (or CDM+baryons) as type 1, baryons as type 2 and neutrinos as type 3 (collisionless types: type 0 is
-        // SPH gas in GADGET)
-        const double OmegaM = cosmo->get_OmegaM();
-        gw.write_gadget_species(fileprefix + "." + std::to_string(FML::ThisTask),
-                                gadget_species(sim),
-                                nfiles,
-                                scale_factor,
-                                simulation_boxsize,
-                                OmegaM,
-                                cosmo->get_OmegaLambda(),
-                                cosmo->get_h(),
-                                pos_norm,
-                                vel_norm);
+        SIMCODE::write_snapshot_species<NDIM>(format, fileprefix, gadget_species(sim), header);
         return;
     }
-    gw.write_gadget_single(fileprefix + "." + std::to_string(FML::ThisTask),
-                           part.get_particles_ptr(),
-                           part.get_npart(),
-                           part.get_npart_total(),
-                           nfiles,
-                           scale_factor,
-                           simulation_boxsize,
-                           cosmo->get_OmegaM(),
-                           cosmo->get_OmegaLambda(),
-                           cosmo->get_h(),
-                           pos_norm,
-                           vel_norm);
-}
-
-/// Output the particles as GADGET HDF5 files: one file per task, <prefix>.<task>.hdf5
-/// (or <prefix>.hdf5 if we only have one task)
-template <int NDIM, class T>
-void output_gadget_hdf5([[maybe_unused]] NBodySimulation<NDIM, T> & sim,
-                        [[maybe_unused]] double redshift,
-                        [[maybe_unused]] std::string snapshot_folder) {
-#ifdef USE_HDF5
-    const std::string redshiftstring = redshift_to_string(redshift);
-    const auto simulation_boxsize = sim.get_parameters().simulation.boxsize;
-    const auto cosmo = sim.get_cosmology();
     auto & part = sim.get_particles();
-
-    const double scale_factor = 1.0 / (1.0 + redshift);
-    const int nfiles = FML::NTasks;
-    const double pos_norm = simulation_boxsize;
-    const double vel_norm = 100 * simulation_boxsize / std::pow(scale_factor, 1.5);
-    const std::string fileprefix = snapshot_folder + "/" + "gadget_z" + redshiftstring;
-    const std::string filename =
-        nfiles == 1 ? fileprefix + ".hdf5" : fileprefix + "." + std::to_string(FML::ThisTask) + ".hdf5";
-
-    if (FML::ThisTask == 0) {
-        std::cout << "\n";
-        std::cout << "#=====================================================\n";
-        std::cout << "# Output in gadget HDF5 format\n";
-        std::cout << "# fileprefix  : " << fileprefix << "\n";
-        std::cout << "#=====================================================\n";
-    }
-
-    FML::FILEUTILS::GADGET::GadgetHDF5Writer gw(NDIM);
-    if (sim.get_species().size() > 1) {
-        // CDM (or CDM+baryons) as PartType1, baryons as PartType2 and neutrinos as PartType3 (with their delta-f
-        // weights as PartType3/Weights)
-        const double OmegaM = cosmo->get_OmegaM();
-        gw.write_gadget_species(filename,
-                                gadget_species(sim),
-                                nfiles,
-                                scale_factor,
-                                simulation_boxsize,
-                                OmegaM,
-                                cosmo->get_OmegaLambda(),
-                                cosmo->get_h(),
-                                pos_norm,
-                                vel_norm);
-        return;
-    }
-    gw.write_gadget_single(filename,
-                           part.get_particles_ptr(),
-                           part.get_npart(),
-                           part.get_npart_total(),
-                           nfiles,
-                           scale_factor,
-                           simulation_boxsize,
-                           cosmo->get_OmegaM(),
-                           cosmo->get_OmegaLambda(),
-                           cosmo->get_h(),
-                           pos_norm,
-                           vel_norm);
-#else
-    throw std::runtime_error("output_gadget_hdf5: compile with USE_HDF5=true to write HDF5 files");
-#endif
+    SIMCODE::write_snapshot<NDIM>(
+        format, fileprefix, part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), header);
 }
 
 template <int NDIM, class T>

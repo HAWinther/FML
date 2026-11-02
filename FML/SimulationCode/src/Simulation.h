@@ -1656,12 +1656,7 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
          [&]() { compute_hybrid_bias_spectra(*this, redshift, snapshot_folder); }},
         {"Output particles",
          params.output.particles,
-         [&]() {
-             if (params.output.fileformat == SIMCODE::ParticleFileFormat::GADGET)
-                 output_gadget(*this, redshift, snapshot_folder);
-             else
-                 output_gadget_hdf5(*this, redshift, snapshot_folder);
-         }},
+         [&]() { output_particles(*this, redshift, snapshot_folder); }},
     };
     for (auto & analysis : analyses) {
         if (not analysis.enabled)

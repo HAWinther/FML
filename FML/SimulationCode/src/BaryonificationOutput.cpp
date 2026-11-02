@@ -2,6 +2,7 @@
 #include "Cosmology.h"
 #include "HaloFinding.h"
 #include "OutputUtils.h"
+#include "SnapshotOutput.h"
 #include "SnapshotPowerSpectrum.h"
 #include <FML/Baryonification/Baryonification.h>
 #include <FML/GadgetUtils/GadgetUtils.h>
@@ -223,42 +224,12 @@ namespace SIMCODE {
 
         if (s.output_particles) {
             const std::string prefix = folder + "/gadget_baryonified_z" + z;
-            const double vel_norm = 100.0 * box / std::pow(a, 1.5);
-            if (params.output.fileformat == ParticleFileFormat::GADGET) {
-                FML::FILEUTILS::GADGET::GadgetWriter writer(3);
-                writer.write_gadget_single(prefix + "." + std::to_string(FML::ThisTask),
-                                           particles.get_particles_ptr(),
-                                           particles.get_npart(),
-                                           total,
-                                           FML::NTasks,
-                                           a,
-                                           box,
-                                           cosmo->get_OmegaM(),
-                                           cosmo->get_OmegaLambda(),
-                                           cosmo->get_h(),
-                                           box,
-                                           vel_norm);
-            } else {
-#ifdef USE_HDF5
-                FML::FILEUTILS::GADGET::GadgetHDF5Writer writer(3);
-                const std::string filename =
-                    FML::NTasks == 1 ? prefix + ".hdf5" : prefix + "." + std::to_string(FML::ThisTask) + ".hdf5";
-                writer.write_gadget_single(filename,
-                                           particles.get_particles_ptr(),
-                                           particles.get_npart(),
-                                           total,
-                                           FML::NTasks,
-                                           a,
-                                           box,
-                                           cosmo->get_OmegaM(),
-                                           cosmo->get_OmegaLambda(),
-                                           cosmo->get_h(),
-                                           box,
-                                           vel_norm);
-#else
-                throw std::runtime_error("Baryonified HDF5 output needs USE_HDF5=true");
-#endif
-            }
+            write_snapshot<3>(params.output.fileformat,
+                              prefix,
+                              particles.get_particles_ptr(),
+                              particles.get_npart(),
+                              total,
+                              snapshot_header(*cosmo, a, box));
         }
         if (FML::ThisTask == 0)
             std::cout << "Baryonification at z=" << redshift << ": " << hosts.size() << " hosts; rejected " << truncated
