@@ -3,6 +3,7 @@
 
 #include "../SimulationParameters.h"
 
+#include "LightconeCrossing.h"
 #include "Lightcone_Healpix.h"
 #include "Lightcone_Replicas.h"
 #include <FML/GadgetUtils/GadgetUtils.h>
@@ -138,6 +139,31 @@ class Lightcone {
 
     // The fraction of the lightcone shell rlow < r < rhigh that is in the x-domain of this task
     double local_fraction_of_shell(double rlow, double rhigh);
+
+    // The parts of create_lightcone
+    struct CrossingStats {
+        double mean_error, mean_error_count, max_error, max_disp;
+        int nproblem;
+    };
+    // Sets store_particles and batches_this_step and returns how many particles to allocate on this task
+    size_t plan_allocation(const LightconeStep & s,
+                           const std::string & particle_type,
+                           size_t npart_local,
+                           size_t npart_per_batch);
+    void report_crossing_stats(CrossingStats stats) const;
+    // Write the particles left after the loop (and the empty batches so that all tasks write the same number)
+    void flush_particles(FML::Vector<U> & part_lc,
+                         const LightconeStep & s,
+                         const std::string & particle_type,
+                         int ibatch,
+                         size_t npart_in_written_batches,
+                         size_t npart_total,
+                         size_t num_particles_allocated);
+    // Reduce, normalize and output the onion maps of the step (and the potential maps) and free them
+    void finish_onion_maps(OnionSlices<MapRealType, NDIM> & onionslices,
+                           const std::string & particle_type,
+                           bool use_potential,
+                           const std::string & interpolation_method);
 
   public:
     Lightcone(std::shared_ptr<Cosmology> cosmo) : cosmo(cosmo) {};
@@ -344,6 +370,140 @@ void Lightcone<NDIM, T, U>::compute_potential(const FML::GRID::FFTWGrid<NDIM> & 
 }
 
 template <int NDIM, class T, class U>
+size_t Lightcone<NDIM, T, U>::plan_allocation(const LightconeStep & s,
+                                              const std::string & particle_type,
+                                              size_t npart_local,
+                                              size_t npart_per_batch) {
+    // Estimate how many particles we should reserve based on the volume and the average number density
+    // (the global number times the fraction of the shell in the domain of this task)
+    // If no output method is picked then we don't save anything
+    store_particles = output_asciifile or output_gadgetfile or output_hdf5file;
+    const double num_particles_expected = mean_density[particle_type] * fsky * volume_shell(s.r_lc_new, s.r_lc_old);
+    size_t num_particles_to_allocate =
+        ceil(num_particles_expected * local_fraction_of_shell(s.r_lc_new, s.r_lc_old) * particle_allocation_factor);
+    // Output in batches in this step only if the particles may not fit in one batch on some task. This is decided
+    // for each step (and the same on all tasks as the filenames depend on it)
+    batches_this_step = false;
+    if (store_particles and output_in_batches) {
+        int need_batches = num_particles_to_allocate >= npart_per_batch ? 1 : 0;
+        FML::MaxOverTasks(&need_batches);
+        batches_this_step = need_batches == 1;
+        if (batches_this_step)
+            num_particles_to_allocate = std::min(num_particles_to_allocate, npart_per_batch);
+    }
+    if (FML::ThisTask == 0) {
+        if (store_particles) {
+            std::cout << "# We will allocate storage for " << num_particles_to_allocate / double(npart_local)
+                      << " times the number of particles we have (task 0)\n";
+            if (batches_this_step)
+                std::cout << "# We output in batches of " << npart_per_batch << " (task 0)\n";
+            std::cout << "# Memory consumption for particles: "
+                      << num_particles_to_allocate * sizeof(U) / double(1024. * 1024.)
+                      << " MB on task 0. The particle-size is " << sizeof(U) << " bytes\n";
+        } else {
+            std::cout << "# We expect roughly ~ " << size_t(num_particles_expected) << " particles in the slice\n";
+            std::cout << "# NB: No output picked so we will not store and output any particles\n";
+        }
+        if (make_onion_density_maps)
+            std::cout << "# We will make and output onion slices for the density-contrast\n";
+    }
+    return num_particles_to_allocate;
+}
+
+template <int NDIM, class T, class U>
+void Lightcone<NDIM, T, U>::report_crossing_stats(CrossingStats stats) const {
+    FML::SumOverTasks(&stats.nproblem);
+    FML::SumOverTasks(&stats.mean_error);
+    FML::SumOverTasks(&stats.mean_error_count);
+    FML::MaxOverTasks(&stats.max_error);
+    FML::MaxOverTasks(&stats.max_disp);
+    if (FML::ThisTask == 0) {
+        std::cout << "# Error in |r_cross/r_lc-1|:  " << stats.max_error * 100 << " % (max) "
+                  << stats.mean_error / stats.mean_error_count * 100.0 << " % (mean)\n";
+        std::cout << "# Maximum displacement in a step: " << stats.max_disp * boxsize << " Mpc/h\n";
+        std::cout << "# Number of particles that we had to snap to the boundary: " << stats.nproblem << " = "
+                  << stats.nproblem / double(stats.mean_error_count) * 100 << " %\n";
+    }
+}
+
+template <int NDIM, class T, class U>
+void Lightcone<NDIM, T, U>::flush_particles(FML::Vector<U> & part_lc,
+                                            const LightconeStep & s,
+                                            const std::string & particle_type,
+                                            int ibatch,
+                                            size_t npart_in_written_batches,
+                                            size_t npart_total,
+                                            size_t num_particles_allocated) {
+    // Get number of particles across all procs
+    size_t npart_lc_global = part_lc.size() + npart_in_written_batches;
+    size_t npart_remaining_to_be_output = part_lc.size();
+    FML::SumOverTasks(&npart_lc_global);
+    FML::SumOverTasks(&npart_remaining_to_be_output);
+
+    // Print stats about particles and mean overdensity and usage of memory
+    if (FML::ThisTask == 0 and store_particles) {
+        const double volume = fsky * volume_shell(s.r_lc_new, s.r_lc_old);
+        const double density = npart_lc_global / volume;
+        const double delta = density / mean_density[particle_type] - 1.0;
+        std::cout << "# We have " << npart_lc_global << " global particles = " << npart_lc_global / double(npart_total)
+                  << " x NpartTotal in the lightcone\n";
+        std::cout << "# Delta_shell = " << delta << "\n";
+        std::cout << "# Fraction of allocated particles used: " << part_lc.size() / double(num_particles_allocated)
+                  << "\n";
+    }
+
+    // Write to file if there are particles in the lightcone
+    if (batches_this_step) {
+        // The tasks have written different numbers of batches: all tasks write the same number (empty if
+        // needed) so that each batch has NTasks files (as the headers say)
+        int nbatches = ibatch + (part_lc.size() > 0 ? 1 : 0);
+        FML::MaxOverTasks(&nbatches);
+        while (ibatch < nbatches) {
+            output_particles(part_lc, s.a_old, s.a_new, particle_type, ibatch++);
+            part_lc.resize(0);
+        }
+    } else if (npart_remaining_to_be_output > 0) {
+        output_particles(part_lc, s.a_old, s.a_new, particle_type, ibatch++);
+    }
+    if (FML::ThisTask == 0)
+        std::cout << "# Done outputting particles" << std::endl;
+}
+
+template <int NDIM, class T, class U>
+void Lightcone<NDIM, T, U>::finish_onion_maps(OnionSlices<MapRealType, NDIM> & onionslices,
+                                              const std::string & particle_type,
+                                              bool use_potential,
+                                              const std::string & interpolation_method) {
+    // Reduce over tasks so that task 0 have a complete map
+    onionslices.reduce_over_tasks();
+
+    // Normalize map so that it becomes a density contrast (over the observed part of the sky, zero outside)
+    onionslices.normalize_maps(mean_density[particle_type],
+                               [this](const std::array<double, NDIM> & n, double r) { return is_observed(n, r); });
+
+    if (FML::ThisTask == 0) {
+
+        // Output the map(s)
+        const bool output_only_new_maps = true;
+        const bool only_one_task_outputs = true;
+        onionslices.output(plc_folder, "delta_" + particle_type, not output_only_new_maps, only_one_task_outputs);
+
+        // Compute angular power-spectra (divided by the observed fsky) and output it with and without shot-noise
+        const bool subtract_shotnoise = true;
+        onionslices.compute_and_output_angular_powerspectrum(
+            plc_folder, "delta_" + particle_type, not output_only_new_maps, subtract_shotnoise);
+    }
+
+    // Maps of the potential at the same shells
+    if (use_potential)
+        make_potential_maps(phi_grid, interpolation_method);
+
+    // To reduce memory overhead we can free the map
+    // We can easily just read it from file if we need it again
+    onionslices.free();
+}
+
+template <int NDIM, class T, class U>
 void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
                                              double apos,
                                              double apos_new,
@@ -394,22 +554,9 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
     // Increase step-number
     plc_step++;
 
-    // The comoving distance to the start and end of the step
-    const double r_lc_apos = get_distance(apos);
-    const double r_lc_apos_new = get_distance(apos_new);
-
-    // The comoving distance to the lightcone. We have old,new = apos,apos_new
-    // except if a_init/a_finish is in the middle of the step
-    const double a_old = std::max(apos, plc_a_init);
-    const double r_lc_old = get_distance(a_old);
-    const double r_lc_old_squared = r_lc_old * r_lc_old;
-    const double a_new = std::min(apos_new, plc_a_finish);
-    const double r_lc_new = get_distance(a_new);
-    const double r_lc_new_squared = r_lc_new * r_lc_new;
-    // The same as fractions of the step (the particles move linearly in a over the step). A particle is in the
-    // lightcone if it is inside r_lc_old at a_old and outside r_lc_new at a_new
-    const double frac_old = a_old > apos ? (a_old - apos) / (apos_new - apos) : 0.0;
-    const double frac_new = a_new < apos_new ? (a_new - apos) / (apos_new - apos) : 1.0;
+    // The comoving distances to the start and end of the step and to the part a_old -> a_new of it that is recorded
+    const auto r_lc_of_a = [this](double a) { return get_distance(a); };
+    const LightconeStep s = make_lightcone_step(apos, apos_new, plc_a_init, plc_a_finish, r_lc_of_a);
 
     if (FML::ThisTask == 0) {
         std::cout << "\n";
@@ -422,12 +569,12 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
         std::cout << "#         \\/ /_____/      \\/          \\/           \\/     \\/  \n";
         std::cout << "#=====================================================\n";
         std::cout << "# Drifting particles from a = " << apos << " -> " << apos_new << "\n";
-        std::cout << "# We will output particles with a = " << a_old << " -> " << a_new << "\n";
-        std::cout << "# Size of the slice: " << r_lc_new * boxsize << " -> " << r_lc_old * boxsize << " Mpc/h\n";
+        std::cout << "# We will output particles with a = " << s.a_old << " -> " << s.a_new << "\n";
+        std::cout << "# Size of the slice: " << s.r_lc_new * boxsize << " -> " << s.r_lc_old * boxsize << " Mpc/h\n";
     }
 
     // Flag the replicates that don't need looping over
-    replicas.flag(r_lc_old, r_lc_new);
+    replicas.flag(s.r_lc_old, s.r_lc_new);
 
     // If we output in batches, set the maximum number to store
     // We just use the number of particles we have on the task for simplicity
@@ -435,45 +582,12 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
     const size_t npart_per_batch = std::max(part.get_npart(), size_t(1));
     int ibatch = 0;
     size_t npart_in_written_batches = 0;
-
-    // Estimate how many particles we should reserve based on the volume and the average number density
-    // (the global number times the fraction of the shell in the domain of this task)
-    // If no output method is picked then we don't save anything
-    store_particles = output_asciifile or output_gadgetfile or output_hdf5file;
-    const double num_particles_expected = mean_density[particle_type] * fsky * volume_shell(r_lc_new, r_lc_old);
-    size_t num_particles_to_allocate =
-        ceil(num_particles_expected * local_fraction_of_shell(r_lc_new, r_lc_old) * particle_allocation_factor);
-    // Output in batches in this step only if the particles may not fit in one batch on some task. This is decided
-    // for each step (and the same on all tasks as the filenames depend on it)
-    batches_this_step = false;
-    if (store_particles and output_in_batches) {
-        int need_batches = num_particles_to_allocate >= npart_per_batch ? 1 : 0;
-        FML::MaxOverTasks(&need_batches);
-        batches_this_step = need_batches == 1;
-        if (batches_this_step)
-            num_particles_to_allocate = std::min(num_particles_to_allocate, npart_per_batch);
-    }
-    if (FML::ThisTask == 0) {
-        if (store_particles) {
-            std::cout << "# We will allocate storage for " << num_particles_to_allocate / double(part.get_npart())
-                      << " times the number of particles we have (task 0)\n";
-            if (batches_this_step)
-                std::cout << "# We output in batches of " << npart_per_batch << " (task 0)\n";
-            std::cout << "# Memory consumption for particles: "
-                      << num_particles_to_allocate * sizeof(U) / double(1024. * 1024.)
-                      << " MB on task 0. The particle-size is " << sizeof(U) << " bytes\n";
-        } else {
-            std::cout << "# We expect roughly ~ " << size_t(num_particles_expected) << " particles in the slice\n";
-            std::cout << "# NB: No output picked so we will not store and output any particles\n";
-        }
-        if (make_onion_density_maps)
-            std::cout << "# We will make and output onion slices for the density-contrast\n";
-    }
+    const size_t num_particles_to_allocate = plan_allocation(s, particle_type, part.get_npart(), npart_per_batch);
 
     // Allocate and initialize the maps we need for the current time-step
     if (make_onion_density_maps)
         onionslices_curtype.init_current_step(
-            a_old, a_new, [this](double loga) { return get_distance(std::exp(loga)); }, boxsize, plc_folder);
+            s.a_old, s.a_new, [this](double loga) { return get_distance(std::exp(loga)); }, boxsize, plc_folder);
 
     // Allocate lightcone particles
     FML::Vector<U> part_lc;
@@ -522,231 +636,110 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
             auto coord = replicas.get_coord_of_replica(replica_shift);
 
             // If replica is in use then process particle
-            if (replicas.is_flagged_in_use(coord)) {
+            if (not replicas.is_flagged_in_use(coord))
+                continue;
 
-                // Take a copy of the particle
-                auto p_current = p_bare;
-                auto * pos = FML::PARTICLE::GetPos(p_current);
-                auto * vel = FML::PARTICLE::GetVel(p_current);
+            // Take a copy of the particle
+            auto p_current = p_bare;
+            auto * pos = FML::PARTICLE::GetPos(p_current);
+            auto * vel = FML::PARTICLE::GetVel(p_current);
 
-                // Add on the replica-shift
-                for (int idim = 0; idim < NDIM; idim++)
-                    pos[idim] += replica_shift[idim];
+            // Add on the replica-shift
+            Point pos_rel;
+            for (int idim = 0; idim < NDIM; idim++) {
+                pos[idim] += replica_shift[idim];
+                pos_rel[idim] = pos[idim];
+            }
 
-                // Compute radial comoving distance to the particle before the step (at a_old)
-                double r_old_squared = 0.0;
+            // Does it cross the lightcone in this step: the crossing time and the fraction of a step to take to it
+            double a_cross{};
+            double fraction_of_step_to_take{};
+            if (not lightcone_crossing<NDIM>(pos_rel, delta_pos, s, r_lc_of_a, fraction_of_step_to_take, a_cross))
+                continue;
+
+            // Take a fraction of a step and get the crossing distance
+            double r_crossing_squared = 0.0;
+            for (int idim = 0; idim < NDIM; idim++) {
+                pos[idim] += delta_pos[idim] * fraction_of_step_to_take;
+                r_crossing_squared += pos[idim] * pos[idim];
+            }
+
+            // If the particle starts off very close to the boundary it might
+            // slightly overshoot so cap r_crossing to boundary
+            // Only for a very small fraction of particles, but lets record how many
+            if (r_crossing_squared > s.r_lc_old_squared and (r_crossing_squared / s.r_lc_old_squared - 1) < 1e-2) {
+                r_crossing_squared = s.r_lc_old_squared;
+                nproblem++;
+            } else if (r_crossing_squared < s.r_lc_new_squared and
+                       (s.r_lc_new_squared / r_crossing_squared - 1) < 1e-2) {
+                r_crossing_squared = s.r_lc_new_squared;
+                nproblem++;
+            }
+
+            // Compute the error we do with the approximation above
+            const double r_crossing = std::sqrt(r_crossing_squared);
+            const double r_crossing_expected = get_distance(a_cross);
+            const double error = std::abs(r_crossing / r_crossing_expected - 1.0);
+            mean_error += error;
+            mean_error_count += 1.0;
+            max_error = std::max(max_error, error);
+
+            // Add in units to the velocities (to get peculiar in km/s)
+            // as this is not possible to know just from pos and vel data
+            if (store_particles) {
                 for (int idim = 0; idim < NDIM; idim++) {
-                    double dx = frac_old == 0.0 ? pos[idim] : pos[idim] + delta_pos[idim] * frac_old;
-                    r_old_squared += dx * dx;
+                    pos[idim] *= boxsize;
+                    vel[idim] *= vel_norm;
                 }
+            }
 
-                // Do not process particle if comoving distance is larger than the size of the lightcone
-                if (r_old_squared > r_lc_old_squared)
-                    continue;
-
-                // Compute radial comoving distance to the particle after the step (at a_new)
-                double r_new_squared = 0.0;
-                for (int idim = 0; idim < NDIM; idim++) {
-                    double dx = frac_new == 1.0 ? pos[idim] + delta_pos[idim] : pos[idim] + delta_pos[idim] * frac_new;
-                    r_new_squared += dx * dx;
-                }
-
-                // Do not process particle if comoving distance is smaller than the size of the lightcone after the step
-                if (r_new_squared <= r_lc_new_squared)
-                    continue;
-
-                // Determine the crossing time and the fraction of
-                // a step to take to the crossing
-                double a_cross{};
-                double fraction_of_step_to_take{};
-
-                // METHOD 1 - The L-PICOLA method. Approximative, but much less operations
-                // (r_lc(a) is approximated by the chord over the step [apos, apos_new])
-                const double r_old = std::sqrt(r_old_squared);
-                const double r_new = std::sqrt(r_new_squared);
-                a_cross =
-                    apos + (apos_new - apos) * (r_lc_apos - r_old) / ((r_new - r_old) - (r_lc_apos_new - r_lc_apos));
-                fraction_of_step_to_take = (a_cross - apos) / (apos_new - apos);
-
-                // If the lightcone starts or ends inside the step we know from the tests above that the particle
-                // crosses the lightcone in [a_old, a_new], but the chord can put the crossing outside it (and
-                // rejecting those particles loses particles). Then solve |x + f dx| = r_lc(apos + f (apos_new - apos))
-                // for f in [frac_old, frac_new] by bisection
-                const bool partial_step = frac_old > 0.0 or frac_new < 1.0;
-                if (partial_step and (fraction_of_step_to_take < frac_old or fraction_of_step_to_take > frac_new)) {
-                    double flow = frac_old, fhigh = frac_new;
-                    for (int iter = 0; iter < 40; iter++) {
-                        const double f = 0.5 * (flow + fhigh);
-                        double r2 = 0.0;
-                        for (int idim = 0; idim < NDIM; idim++) {
-                            const double dx = pos[idim] + delta_pos[idim] * f;
-                            r2 += dx * dx;
-                        }
-                        const double r_lc = get_distance(apos + (apos_new - apos) * f);
-                        if (r2 > r_lc * r_lc)
-                            fhigh = f;
-                        else
-                            flow = f;
-                    }
-                    fraction_of_step_to_take = 0.5 * (flow + fhigh);
-                    a_cross = apos + (apos_new - apos) * fraction_of_step_to_take;
-                }
-
-                // Take a fraction of a step and get the crossing distance
-                double r_crossing_squared = 0.0;
-                for (int idim = 0; idim < NDIM; idim++) {
-                    pos[idim] += delta_pos[idim] * fraction_of_step_to_take;
-                    r_crossing_squared += pos[idim] * pos[idim];
-                }
-
-                // If the particle starts off very close to the boundary it might
-                // slightly overshoot so cap r_crossing to boundary
-                // Only for a very small fraction of particles, but lets record how many
-                if (r_crossing_squared > r_lc_old_squared and (r_crossing_squared / r_lc_old_squared - 1) < 1e-2) {
-                    r_crossing_squared = r_lc_old_squared;
-                    nproblem++;
-                } else if (r_crossing_squared < r_lc_new_squared and
-                           (r_lc_new_squared / r_crossing_squared - 1) < 1e-2) {
-                    r_crossing_squared = r_lc_new_squared;
-                    nproblem++;
-                }
-
-                // Compute the error we do with the approximation above
-                const double r_crossing = std::sqrt(r_crossing_squared);
-                const double r_crossing_expected = get_distance(a_cross);
-                const double error = std::abs(r_crossing / r_crossing_expected - 1.0);
-                mean_error += error;
-                mean_error_count += 1.0;
-                max_error = std::max(max_error, error);
-
-                // Add in units to the velocities (to get peculiar in km/s)
-                // as this is not possible to know just from pos and vel data
-                if (store_particles) {
-                    for (int idim = 0; idim < NDIM; idim++) {
-                        pos[idim] *= boxsize;
-                        vel[idim] *= vel_norm;
-                    }
-                }
-
-                // Add particle to container
+            // Add particle to container
 #ifdef USE_OMP
 #pragma omp critical
 #endif
-                {
-                    if (store_particles)
-                        part_lc.push_back(p_current);
+            {
+                if (store_particles)
+                    part_lc.push_back(p_current);
 
-                    // Check if we should output
-                    // Note: the way we do it is not great as other treads have to pause while we output
-                    // Can be improved, but requires a lot of work
-                    // (only with batches: then the output does no MPI communication)
-                    if (batches_this_step and part_lc.size() >= npart_per_batch) {
-                        output_particles(part_lc, a_old, a_new, particle_type, ibatch);
-                        npart_in_written_batches += part_lc.size();
-                        part_lc.resize(0);
-                        ibatch++;
-                    }
+                // Check if we should output
+                // Note: the way we do it is not great as other treads have to pause while we output
+                // Can be improved, but requires a lot of work
+                // (only with batches: then the output does no MPI communication)
+                if (batches_this_step and part_lc.size() >= npart_per_batch) {
+                    output_particles(part_lc, s.a_old, s.a_new, particle_type, ibatch);
+                    npart_in_written_batches += part_lc.size();
+                    part_lc.resize(0);
+                    ibatch++;
                 }
+            }
 
-                // Add the particle to the desired map
-                if (make_onion_density_maps) {
-                    auto & map = onionslices_curtype.get_map(r_crossing);
-                    long int ipix = map.get_pixel_index(pos);
+            // Add the particle to the desired map
+            if (make_onion_density_maps) {
+                auto & map = onionslices_curtype.get_map(r_crossing);
+                long int ipix = map.get_pixel_index(pos);
 #ifdef USE_OMP
 #pragma omp critical
 #endif
-                    map.add_particle_to_map(ipix);
-                }
+                map.add_particle_to_map(ipix);
             }
         }
     } // End loop over particles
 
     // Compute some global info
-    FML::SumOverTasks(&nproblem);
-    FML::SumOverTasks(&mean_error);
-    FML::SumOverTasks(&mean_error_count);
-    FML::MaxOverTasks(&max_error);
-    FML::MaxOverTasks(&max_disp);
-    if (FML::ThisTask == 0) {
-        std::cout << "# Error in |r_cross/r_lc-1|:  " << max_error * 100 << " % (max) "
-                  << mean_error / mean_error_count * 100.0 << " % (mean)\n";
-        std::cout << "# Maximum displacement in a step: " << max_disp * boxsize << " Mpc/h\n";
-        std::cout << "# Number of particles that we had to snap to the boundary: " << nproblem << " = "
-                  << nproblem / double(mean_error_count) * 100 << " %\n";
-    }
+    report_crossing_stats({mean_error, mean_error_count, max_error, max_disp, nproblem});
 
-    // Get number of particles and err_rmse across all procs
-    size_t npart_lc_global = part_lc.size() + npart_in_written_batches;
-    size_t npart_remaining_to_be_output = part_lc.size();
-    FML::SumOverTasks(&npart_lc_global);
-    FML::SumOverTasks(&npart_remaining_to_be_output);
-
-    // Print stats about particles and mean overdensity and usage of memory
-    if (FML::ThisTask == 0 and store_particles) {
-        const double volume = fsky * volume_shell(r_lc_new, r_lc_old);
-        const double density = npart_lc_global / volume;
-        const double delta = density / mean_density[particle_type] - 1.0;
-        std::cout << "# We have " << npart_lc_global
-                  << " global particles = " << npart_lc_global / double(part.get_npart_total())
-                  << " x NpartTotal in the lightcone\n";
-        std::cout << "# Delta_shell = " << delta << "\n";
-        std::cout << "# Fraction of allocated particles used: " << part_lc.size() / double(num_particles_to_allocate)
-                  << "\n";
-    }
-
-    // Write to file if there are particles in the lightcone
-    if (batches_this_step) {
-        // The tasks have written different numbers of batches: all tasks write the same number (empty if
-        // needed) so that each batch has NTasks files (as the headers say)
-        int nbatches = ibatch + (part_lc.size() > 0 ? 1 : 0);
-        FML::MaxOverTasks(&nbatches);
-        while (ibatch < nbatches) {
-            output_particles(part_lc, a_old, a_new, particle_type, ibatch++);
-            part_lc.resize(0);
-        }
-    } else if (npart_remaining_to_be_output > 0) {
-        output_particles(part_lc, a_old, a_new, particle_type, ibatch++);
-    }
-    if (FML::ThisTask == 0)
-        std::cout << "# Done outputting particles" << std::endl;
+    // Write the particles that are left
+    flush_particles(part_lc,
+                    s,
+                    particle_type,
+                    ibatch,
+                    npart_in_written_batches,
+                    part.get_npart_total(),
+                    num_particles_to_allocate);
 
     // Gather map data from across tasks and write files
-    if (make_onion_density_maps) {
-
-        // Reduce over tasks so that task 0 have a complete map
-        onionslices_curtype.reduce_over_tasks();
-
-        // Normalize map so that it becomes a density contrast (over the observed part of the sky, zero outside)
-        onionslices_curtype.normalize_maps(
-            mean_density[particle_type],
-            [this](const std::array<double, NDIM> & n, double r) { return is_observed(n, r); });
-
-        if (FML::ThisTask == 0) {
-
-            // Output the map(s)
-            const bool output_only_new_maps = true;
-            const bool only_one_task_outputs = true;
-            onionslices_curtype.output(plc_folder,
-                                       "delta_" + particle_type,
-                                       not output_only_new_maps,
-                                       only_one_task_outputs);
-
-            // Compute angular power-spectra (divided by the observed fsky) and output it with and without shot-noise
-            const bool subtract_shotnoise = true;
-            onionslices_curtype.compute_and_output_angular_powerspectrum(plc_folder,
-                                                                         "delta_" + particle_type,
-                                                                         not output_only_new_maps,
-                                                                         subtract_shotnoise);
-        }
-
-        // Maps of the potential at the same shells
-        if (use_potential)
-            make_potential_maps(phi_grid, interpolation_method);
-
-        // To reduce memory overhead we can free the map
-        // We can easily just read it from file if we need it again
-        onionslices_curtype.free();
-    }
+    if (make_onion_density_maps)
+        finish_onion_maps(onionslices_curtype, particle_type, use_potential, interpolation_method);
 
     if (FML::ThisTask == 0) {
         std::cout << "# Lightcone finished for current step!\n";
