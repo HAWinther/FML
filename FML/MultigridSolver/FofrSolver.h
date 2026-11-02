@@ -71,6 +71,8 @@ class FofrSolverCosmology {
 
     /// Convergence criterion: residual < epsilon
     double epsilon{1e-6};
+    /// Converged when residual < epsilon * rms(linear source) instead of residual < epsilon
+    bool relative_criterion{false};
 
     /// The field we solve for: "sqrt" (PhiF = u^2) or "log" (PhiF = e^f)
     std::string method{"sqrt"};
@@ -113,6 +115,10 @@ class FofrSolverCosmology {
 
     /// Set convergence criterion
     void set_epsilon(double _epsilon) { epsilon = _epsilon; }
+    /// Converged when the rms residual is below epsilon (fiducial) or, with relative = true, below epsilon times the
+    /// rms of the linear source of the equation (the residual scale changes by orders of magnitude over a simulation,
+    /// so a fixed tolerance is either met trivially or not at all)
+    void set_relative_criterion(bool relative) { relative_criterion = relative; }
 
     /// Set the maximum number of V-cycles
     void set_maxsteps(int _maxsteps) { maxsteps = _maxsteps; }
@@ -305,9 +311,13 @@ class FofrSolverCosmology {
         // Set the convergence criterion
         // (ConvergenceCriterionResidual is rms-residual < epsilon; stop if it is not finite)
         //======================================================================
+        // The linear source of the equation ((1/3) 1.5 OmegaM a delta)
+        const double source_rms = poisson_norm * density_multigrid.get_grid(0).norm();
         MultiGridConvCrit ConvergenceCriterion = [&](double rms_residual, double rms_residual_ini, int step_number) {
             if (not std::isfinite(rms_residual))
                 return true;
+            if (relative_criterion and source_rms > 0.0)
+                return rms_residual < epsilon * source_rms;
             return g.ConvergenceCriterionResidual(rms_residual, rms_residual_ini, step_number);
         };
 

@@ -67,6 +67,7 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
         mgsolver.set_background_ricci([&hs](double aa) { return hs.R(std::log(aa)); });
         mgsolver.set_ngs_steps(this->multigrid_nsweeps, this->multigrid_nsweeps, this->multigrid_nsweeps_first_step);
         mgsolver.set_epsilon(this->multigrid_solver_residual_convergence);
+        mgsolver.set_relative_criterion(this->multigrid_relative_criterion);
         mgsolver.set_method(multigrid_method);
         // Start from the previous solution (rescaled to the new background)
         if (this->multigrid_previous_a > 0.0)

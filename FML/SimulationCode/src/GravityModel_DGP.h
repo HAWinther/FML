@@ -91,6 +91,7 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
         DGPSolverCosmology<NDIM, double> mgsolver(this->cosmo->get_OmegaM(), rcH0_DGP, get_beta_dgp(a), H0Box, verbose);
         mgsolver.set_ngs_steps(this->multigrid_nsweeps, this->multigrid_nsweeps, this->multigrid_nsweeps_first_step);
         mgsolver.set_epsilon(this->multigrid_solver_residual_convergence);
+        mgsolver.set_relative_criterion(this->multigrid_relative_criterion);
         // Start from the previous solution
         if (this->multigrid_previous_a > 0.0)
             mgsolver.set_previous_solution(this->multigrid_previous_solution);

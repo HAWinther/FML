@@ -87,6 +87,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `multigrid_nsweeps` | int | `3` | solving the exact equation of the gravity model | Multigrid solver: Newton-Gauss-Seidel sweeps on every level |
 | `multigrid_nsweeps_first_step` | int | `20` | solving the exact equation of the gravity model | Multigrid solver: sweeps on the first step (increase if the solver fails to converge) |
 | `multigrid_solver_residual_convergence` | double | `1e-06` | solving the exact equation of the gravity model | Multigrid solver: converged when the residual is below this |
+| `multigrid_convergence_criterion` | string | `"residual"` | solving the exact equation of the gravity model | Multigrid solver: converged when the rms residual is below multigrid_solver_residual_convergence (residual) or below it times the rms of the linear source of the equation (relative; the residual scale changes by orders of magnitude over a simulation). Options: `residual`, `relative` |
 | `multigrid_coarse_factor` | int | `1` | solving the exact equation of the gravity model | Multigrid solver: solve the field equation on a grid coarser by this factor than the force grid (the density and the solution go between the grids as their Fourier modes below the coarse Nyquist frequency). 1: on the force grid |
 
 ## Primordial power-spectrum

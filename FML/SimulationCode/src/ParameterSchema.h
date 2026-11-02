@@ -412,6 +412,13 @@ namespace SIMCODE {
                 b.optional("multigrid_solver_residual_convergence",
                            1e-6,
                            "Multigrid solver: converged when the residual is below this");
+                b.always_optional("multigrid_convergence_criterion",
+                                  "residual",
+                                  "Multigrid solver: converged when the rms residual is below "
+                                  "multigrid_solver_residual_convergence (residual) or below it times the rms of the "
+                                  "linear source of the equation (relative; the residual scale changes by orders of "
+                                  "magnitude over a simulation)",
+                                  {"residual", "relative"});
                 b.optional("multigrid_coarse_factor",
                            1,
                            "Multigrid solver: solve the field equation on a grid coarser by this factor than the "

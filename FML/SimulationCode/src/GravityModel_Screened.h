@@ -42,6 +42,8 @@ class GravityModelScreened : public GravityModel<NDIM> {
     int multigrid_nsweeps_first_step{10};
     int multigrid_nsweeps{3};
     double multigrid_solver_residual_convergence{1e-7};
+    // The residual relative to the rms of the linear source (multigrid_convergence_criterion = relative)
+    bool multigrid_relative_criterion{false};
     // Solve the field equation on a grid coarser by this factor (1: the force grid): the density and the solution go
     // between the grids in Fourier space (the modes below the coarse Nyquist frequency; the solution is zero above
     // it on the force grid). Cf. Barreira, Bose & Li 2015 (arXiv:1511.08200) for nDGP
@@ -195,6 +197,8 @@ class GravityModelScreened : public GravityModel<NDIM> {
             multigrid_nsweeps_first_step = param.get<int>("multigrid_nsweeps_first_step");
             multigrid_nsweeps = param.get<int>("multigrid_nsweeps");
             multigrid_solver_residual_convergence = param.get<double>("multigrid_solver_residual_convergence");
+            multigrid_relative_criterion =
+                SIMCODE::get_parameter<std::string>(param, "multigrid_convergence_criterion") == "relative";
             multigrid_coarse_factor = SIMCODE::get_parameter<int>(param, "multigrid_coarse_factor");
             FML::assert_mpi(multigrid_coarse_factor >= 1, "multigrid_coarse_factor must be >= 1");
         }
