@@ -428,8 +428,13 @@ namespace SIMCODE {
                 b.always_optional("multigrid_start_redshift",
                                   -1.0,
                                   "Multigrid solver: solve the field equation only below this redshift; above it the "
-                                  "force is that of GR (no fifth force; the growth factors, IC and COLA frame still "
-                                  "have the modified gravity). < 0: at all redshifts");
+                                  "fifth force is set by multigrid_force_before_start. < 0: at all redshifts");
+                b.always_optional("multigrid_force_before_start",
+                                  "linear",
+                                  "Multigrid solver with multigrid_start_redshift >= 0: the fifth force above that "
+                                  "redshift is the linear one (linear; no screening) or none (GR; the growth factors, "
+                                  "IC and COLA frame still have the modified gravity)",
+                                  {"linear", "GR"});
                 b.optional("multigrid_coarse_factor",
                            1,
                            "Multigrid solver: solve the field equation on a grid coarser by this factor than the "
