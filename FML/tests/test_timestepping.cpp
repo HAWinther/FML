@@ -96,25 +96,32 @@ void test_growing_modes() {
         check_local(normalization_independent, "growth normalization is consistent across all timestep spacings");
     }
 }
-class TestCosmology : public Cosmology {
-  public:
-    TestCosmology() { OmegaM = 0.3; }
-    double HoverH0_of_a(double a) const override { return std::sqrt(0.3 / (a * a * a) + 0.7); }
-    double dlogHdloga_of_a(double a) const override { return -1.5 * 0.3 / (0.3 + 0.7 * a * a * a); }
-};
+/// Flat LCDM with OmegaM = 0.3 (the cosmology is a model of FML's background module, made from parameters)
+std::shared_ptr<Cosmology> make_test_cosmology() {
+    FML::UTILS::ParameterMap p;
+    p["cosmology_Omegab"] = 0.05;
+    p["cosmology_OmegaCDM"] = 0.25;
+    p["cosmology_OmegaMNu"] = 0.0;
+    p["cosmology_neutrino_masses_eV"] = std::vector<double>{};
+    p["cosmology_OmegaK"] = 0.0;
+    p["cosmology_h"] = 0.7;
+    p["cosmology_As"] = 2.1e-9;
+    p["cosmology_ns"] = 0.965;
+    p["cosmology_kpivot_mpc"] = 0.05;
+    p["cosmology_Neffective"] = 3.046;
+    p["cosmology_TCMB_kelvin"] = 2.7255;
+    auto cosmo = std::make_shared<Cosmology>("LCDM");
+    cosmo->read_parameters(p);
+    cosmo->init();
+    return cosmo;
+}
 class TestGravity : public GravityModel<3> {
   public:
+    /// The growth factors with G_eff/G = 1 + 0.1 a (a D(a) that is not a power law)
     explicit TestGravity(std::shared_ptr<Cosmology> cosmo) : GravityModel<3>(cosmo, "time-step test") {
-        std::vector<double> x(600), d1(600), d2(600);
         scaledependent_growth = false;
-        for (size_t i = 0; i < x.size(); i++) {
-            x[i] = std::log(0.01) + (std::log(1.1) - std::log(0.01)) * i / (x.size() - 1);
-            const double a = std::exp(x[i]);
-            d1[i] = a / (1 + 0.2 * a);
-            d2[i] = -3.0 / 7.0 * d1[i] * d1[i] * (1 + 0.01 * a);
-        }
-        D_1LPT_of_loga.create(x, d1);
-        D_2LPT_of_loga.create(x, d2);
+        aini = 0.05;
+        compute_growth_factors();
     }
     double GeffOverG(double a, double = 0) const override { return 1 + 0.1 * a; }
     void use_finite_difference(bool enabled) { force_use_finite_difference_force = enabled; }
@@ -163,7 +170,7 @@ void test_schedules() {
     check_local(synchronized, "staggered schedules are continuous and synchronize at the output epoch");
 }
 void test_cola_force_options() {
-    auto cosmo = std::make_shared<TestCosmology>();
+    auto cosmo = make_test_cosmology();
     auto grav = std::make_shared<TestGravity>(cosmo);
     FML::GRID::FFTWGrid<3> density(16);
     density.fill_real_grid([](const std::array<double, 3> & x) { return std::cos(6 * M_PI * x[0]); });
@@ -185,7 +192,7 @@ void test_cola_force_options() {
                 "SimulationCode forwards explicit options through Fourier and finite-difference gravity paths");
 }
 void test_cola_adapter() {
-    auto cosmo = std::make_shared<TestCosmology>();
+    auto cosmo = make_test_cosmology();
     auto grav = std::make_shared<TestGravity>(cosmo);
     bool same = true, ownership = true;
     for (auto method :

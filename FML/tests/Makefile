@@ -40,7 +40,7 @@ endif
 test_transfers: test_transfers.o Global.o Spline.o FileUtils.o
 	$(LINK_EXE)
 
-test_timestepping: test_timestepping.o TransferInput.o Global.o Spline.o ODESolver.o ParameterMap.o
+test_timestepping: test_timestepping.o TransferInput.o Global.o Spline.o ODESolver.o ParameterMap.o Math.o NumericalMethods.o FileUtils.o
 	$(LINK_EXE)
 
 test_fourier_resampling: test_fourier_resampling.o Global.o
