@@ -98,7 +98,7 @@ int main() {
         auto D = [&](double a) { return gr->get_D_1LPT(a); };
         auto v_linear = [&](double a) { return a * a * cosmo->HoverH0_of_a(a) * gr->get_f_1LPT(a) * D(a); };
         auto integrate = [&](SIMCODE::TimestepMethod method, SIMCODE::ScaleFactorSpacing spacing) {
-            SIMCODE::TimestepSettings settings;
+            SIMCODE::TimestepSettings settings{};
             settings.method = method;
             settings.spacing = spacing;
             settings.spacing_power = 0.5;
@@ -156,9 +156,12 @@ int main() {
         FML::PARTICLE::MPIParticles<Particle> part;
         part.create(p.data(), 1, 1, 0.0, 1.0, false);
 
-        SIMCODE::TimestepSettings settings;
+        // The settings structs have no in-class defaults (they are in the parameter table): set every field used
+        SIMCODE::TimestepSettings settings{};
         settings.method = SIMCODE::TimestepMethod::Quinn;
         settings.spacing = SIMCODE::ScaleFactorSpacing::Linear;
+        settings.spacing_power = 1.0;
+        settings.cola_nLPT = -2.5;
         SIMCODE::TimeStepping<NDIM> ts(settings, cosmo, grav);
         std::shared_ptr<GravityModel<NDIM>> g = grav;
         quietly([&]() {
