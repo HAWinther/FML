@@ -7,6 +7,7 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/NBody/NBody.h>
+#include <FML/NUFFT/NUFFT.h>
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
 
@@ -41,6 +42,10 @@ class GravityModelScreened : public GravityModel<NDIM> {
     int multigrid_nsweeps_first_step{10};
     int multigrid_nsweeps{3};
     double multigrid_solver_residual_convergence{1e-7};
+    // Solve the field equation on a grid coarser by this factor (1: the force grid): the density and the solution go
+    // between the grids in Fourier space (the modes below the coarse Nyquist frequency; the solution is zero above
+    // it on the force grid). Cf. Barreira, Bose & Li 2015 (arXiv:1511.08200) for nDGP
+    int multigrid_coarse_factor{1};
     // The last exact (multigrid) solution in real space and its scale factor: the starting point of the next solve
     mutable FML::GRID::FFTWGrid<NDIM> multigrid_previous_solution;
     mutable double multigrid_previous_a{-1.0};
@@ -138,6 +143,38 @@ class GravityModelScreened : public GravityModel<NDIM> {
         }
     }
 
+    /// The density on the grid coarser by factor (Nmesh / factor) in real space: the Fourier modes below its Nyquist
+    /// frequency (a sharp-k filter). Not the mean of the factor^NDIM cells: with the particles on a lattice aligned
+    /// with the coarse cells (half a force cell offset, particle_Npart_1D = Nmesh / 2) the mean of a block is the
+    /// mass of the one particle in it until it leaves the block, so the linear density is lost. Cells with delta < -1
+    /// (from the truncation) are set to -1
+    static FFTWGrid<NDIM> restrict_to_coarse_grid(const FFTWGrid<NDIM> & density_fourier, int factor) {
+        const int nfine = density_fourier.get_nmesh();
+        const int ncoarse = nfine / factor;
+        FML::assert_mpi(ncoarse * factor == nfine and ncoarse % FML::NTasks == 0,
+                        "multigrid_coarse_factor: the force grid / factor must be an integer divisible by the number "
+                        "of MPI tasks");
+        FFTWGrid<NDIM> coarse(
+            ncoarse, density_fourier.get_n_extra_slices_left(), density_fourier.get_n_extra_slices_right());
+        // (A Gaussian filter with R = 0.5 or 1 coarse cells instead of the sharp cut avoids the delta < -1 but was
+        // less accurate in a test with nDGP and f(R))
+        FML::NUFFT::copy_fourier_modes<NDIM>(
+            density_fourier, coarse, [](const std::array<int, NDIM> &) { return 1.0; });
+        coarse.fftw_c2r();
+        // The truncation rings: delta < -1 in a few cells (no solution of the DGP equation there). Set to -1
+        long long nclamped = 0;
+        for (auto && index : coarse.get_real_range()) {
+            if (coarse.get_real_from_index(index) < -1.0) {
+                coarse.set_real_from_index(index, -1.0);
+                nclamped++;
+            }
+        }
+        FML::SumOverTasks(&nclamped);
+        if (nclamped > 0 and FML::ThisTask == 0)
+            std::cout << "multigrid_coarse_factor: delta < -1 set to -1 in " << nclamped << " coarse cells\n";
+        return coarse;
+    }
+
     /// Read the multigrid parameters if the exact equation is to be solved (exact_solution_parameter is the name of
     /// the model's switch, e.g. gravity_model_fofr_exact_solution)
     void read_multigrid_parameters(ParameterMap & param, const std::string & exact_solution_parameter) {
@@ -146,6 +183,8 @@ class GravityModelScreened : public GravityModel<NDIM> {
             multigrid_nsweeps_first_step = param.get<int>("multigrid_nsweeps_first_step");
             multigrid_nsweeps = param.get<int>("multigrid_nsweeps");
             multigrid_solver_residual_convergence = param.get<double>("multigrid_solver_residual_convergence");
+            multigrid_coarse_factor = SIMCODE::get_parameter<int>(param, "multigrid_coarse_factor");
+            FML::assert_mpi(multigrid_coarse_factor >= 1, "multigrid_coarse_factor must be >= 1");
         }
     }
 
@@ -169,14 +208,28 @@ class GravityModelScreened : public GravityModel<NDIM> {
 
             // Solve the exact equation using the multigridsolver (this is slow)
             // Intended mainly to be used for testing things so not super optimized
-            FFTWGrid<NDIM> density_real = density_fourier;
-            // Get back the real-space density field
-            density_real.fftw_c2r();
+            // Get back the real-space density field (on a coarser grid: its modes below the coarse Nyquist frequency)
+            FFTWGrid<NDIM> density_real;
+            if (multigrid_coarse_factor > 1) {
+                density_real = restrict_to_coarse_grid(density_fourier, multigrid_coarse_factor);
+            } else {
+                density_real = density_fourier;
+                density_real.fftw_c2r();
+            }
             solve_exact_fifth_force(a, H0Box, density_real, density_fifth_force);
             multigrid_previous_solution = density_fifth_force;
             multigrid_previous_a = a;
             // It returns it in real-space so go back to fourier space
             density_fifth_force.fftw_r2c();
+            // From the coarse grid: the modes below its Nyquist frequency on the force grid (the others zero)
+            if (multigrid_coarse_factor > 1) {
+                FFTWGrid<NDIM> fine(density_fourier.get_nmesh(),
+                                    density_fourier.get_n_extra_slices_left(),
+                                    density_fourier.get_n_extra_slices_right());
+                FML::NUFFT::copy_fourier_modes<NDIM>(
+                    density_fifth_force, fine, [](const std::array<int, NDIM> &) { return 1.0; });
+                density_fifth_force = std::move(fine);
+            }
 
             // Multiply by -k^2 / (1.5 OmegaM a) to go from the potential to "force density"
             // (defined such that the total force is 1.5 OmegaM a * D( 1/D^2 delta_FF + 1/D^2 delta) )

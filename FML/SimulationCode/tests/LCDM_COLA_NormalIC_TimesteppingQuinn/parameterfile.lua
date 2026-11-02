@@ -119,6 +119,8 @@ if gravity_model == "f(R)" then
   -- In some cases the multigrid solver fails if we are not close to the
   -- solution before starting multigrid. Increase this if so
   multigrid_nsweeps_first_step = 5
+  -- Solve the field equation on a grid coarser by this factor than the force grid (1: the force grid)
+  multigrid_coarse_factor = 1
 end
 
 -- Symmetron model

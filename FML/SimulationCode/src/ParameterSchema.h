@@ -412,6 +412,11 @@ namespace SIMCODE {
                 b.optional("multigrid_solver_residual_convergence",
                            1e-6,
                            "Multigrid solver: converged when the residual is below this");
+                b.optional("multigrid_coarse_factor",
+                           1,
+                           "Multigrid solver: solve the field equation on a grid coarser by this factor than the "
+                           "force grid (the density averaged over factor^NDIM cells, the solution interpolated back "
+                           "in Fourier space). 1: on the force grid");
             });
 
             b.section("Primordial power-spectrum");

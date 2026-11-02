@@ -153,6 +153,7 @@ CASES = {
         multigrid_solver_residual_convergence=1e-7,
         multigrid_nsweeps=5,
         multigrid_nsweeps_first_step=5,
+        multigrid_coarse_factor=1,
         simulation_cola_LPT_order=1,
         force_density_assignment_method="TSC",
     ),
@@ -169,6 +170,7 @@ CASES = {
         multigrid_solver_residual_convergence=1e-7,
         multigrid_nsweeps=5,
         multigrid_nsweeps_first_step=10,
+        multigrid_coarse_factor=1,
     ),
     "symmetron_exact_multigrid": dict(
         gravity_model="Symmetron",
@@ -182,6 +184,7 @@ CASES = {
         multigrid_solver_residual_convergence=1e-7,
         multigrid_nsweeps=5,
         multigrid_nsweeps_first_step=10,
+        multigrid_coarse_factor=1,
     ),
     "dgp_exact_multigrid": dict(
         gravity_model="DGP",
@@ -195,6 +198,7 @@ CASES = {
         multigrid_solver_residual_convergence=1e-7,
         multigrid_nsweeps=5,
         multigrid_nsweeps_first_step=10,
+        multigrid_coarse_factor=1,
     ),
     # Non-gaussian (local fNL) initial conditions
     "nongaussian": dict(
@@ -221,6 +225,7 @@ CASES = {
         multigrid_solver_residual_convergence=1e-4,
         multigrid_nsweeps=2,
         multigrid_nsweeps_first_step=2,
+        multigrid_coarse_factor=1,
         lightcone=True,
         plc_pos_observer=[0.0, 0.0, 0.0],
         plc_boundary_mpch=20.0,
