@@ -94,7 +94,8 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
     // The species when there are several (cdm, baryon, nu): P(k) of each, with linear theory from the transfer
     // functions P_i(k,z) = P_cb(k,z) (T_i(k,z) / T_cb(k,z))^2
     //=============================================================
-    for (auto & [label, list] : sim.get_pofk_species_every_step()) {
+    for (auto & [species, list] : sim.get_pofk_species_every_step()) {
+        const std::string label = SIMCODE::species_name(species);
         for (auto & p : list) {
             const double redshift = p.first;
             const auto & binning = p.second;
@@ -108,7 +109,7 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
                 const double k = binning.kbin[i];
                 double plin = 0.0;
                 if (transfers)
-                    plin = sim.linear_pofk_cb(k, a) * sim.species_linear_ratio(label, k, a);
+                    plin = sim.linear_pofk_cb(k, a) * sim.species_linear_ratio(SIMCODE::species_transfer(species), k, a);
                 fp << std::setw(15) << k << " " << std::setw(15) << binning.pofk[i] << " " << std::setw(15) << plin
                    << "\n";
             }
@@ -781,7 +782,13 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> pofk_cb_binning(pofk_nmesh / 2);
     pofk_cb_binning.subtract_shotnoise = pofk_subtract_shotnoise;
     // Separate CDM and baryon particles: P(k) of each and of delta_cb = w_c delta_c + w_b delta_b
-    std::vector<std::pair<std::string, FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM>>> pofk_species;
+    // The P(k) of the species (their name, transfer functions for linear theory and the binning)
+    struct SpeciesPofk {
+        std::string name;
+        SIMCODE::TransferSpecies transfer;
+        FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> binning;
+    };
+    std::vector<SpeciesPofk> pofk_species;
     if (sim.get_species().size() == 1) {
         pofk_cb_binning = SIMCODE::measure_snapshot_power_spectrum<NDIM>(part.get_particles_ptr(),
                                                                          part.get_npart(),
@@ -827,7 +834,8 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         sim.for_each_cb_species([&](auto & particles, const SIMCODE::SpeciesInfo & info) {
             auto delta = delta_of(particles);
             if (sim.has_baryons())
-                pofk_species.push_back({info.name, bin(delta, sim.species_shotnoise(info))});
+                pofk_species.push_back(
+                    {info.name, SIMCODE::species_transfer(info.species), bin(delta, sim.species_shotnoise(info))});
             if (icb == 0) {
                 delta_cb = std::move(delta);
                 weight_first = info.weight_cb;
@@ -855,17 +863,20 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
                 delta_nu.set_fourier_from_index(0, 0.0);
             const double fnu = cosmo->get_fMNu();
             const double nu_shot = sim.get_neutrinos().shotnoise();
-            pofk_species.push_back({"nu", bin(delta_nu, nu_shot)});
+            pofk_species.push_back({SIMCODE::species_name(SIMCODE::ParticleSpecies::MassiveNeutrino),
+                                    SIMCODE::TransferSpecies::MassiveNeutrino,
+                                    bin(delta_nu, nu_shot)});
             if (sim.neutrino_energy_density()) {
                 const double e = sim.neutrino_energy_factor(a);
                 const double norm = 1.0 / (1.0 - fnu + fnu * e);
                 FML::GRID::linear_combination_fourier<NDIM>(delta_cb, delta_nu, (1.0 - fnu) * norm, fnu * e * norm);
                 const double shot =
                     ((1.0 - fnu) * (1.0 - fnu) * sim.cb_shotnoise() + fnu * fnu * e * e * nu_shot) * norm * norm;
-                pofk_species.push_back({"total", bin(delta_cb, shot)});
+                pofk_species.push_back({"total", SIMCODE::TransferSpecies::TotalMatter, bin(delta_cb, shot)});
             } else {
                 FML::GRID::linear_combination_fourier<NDIM>(delta_cb, delta_nu, 1.0 - fnu, fnu);
-                pofk_species.push_back({"total", bin(delta_cb, sim.total_shotnoise())});
+                pofk_species.push_back(
+                    {"total", SIMCODE::TransferSpecies::TotalMatter, bin(delta_cb, sim.total_shotnoise())});
             }
         }
     }
@@ -920,17 +931,17 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         // The species (linear theory: P_cb (T_i / T_cb)^2 from the transfer functions)
         const double a = 1.0 / (1.0 + redshift);
         for (auto & sp : pofk_species) {
-            std::string fname = snapshot_folder + "/pofk_" + sp.first + "_z" + redshiftstring + ".txt";
+            std::string fname = snapshot_folder + "/pofk_" + sp.name + "_z" + redshiftstring + ".txt";
             std::ofstream fps(fname.c_str());
-            fps << "#  k  (h/Mpc)          P_" << sp.first << "(k)  (Mpc/h)^3     P_" << sp.first << "_linear(k)";
-            if (sp.first == "nu")
+            fps << "#  k  (h/Mpc)          P_" << sp.name << "(k)  (Mpc/h)^3     P_" << sp.name << "_linear(k)";
+            if (sp.transfer == SIMCODE::TransferSpecies::MassiveNeutrino)
                 fps << "   [shot noise of the neutrino particles sum w^2/N^2 V = " << nu_shotnoise
                     << " (Mpc/h)^3, subtracted: " << std::boolalpha << pofk_subtract_shotnoise << "]";
             fps << "\n";
-            for (int i = 0; i < sp.second.n; i++) {
-                const double k = sp.second.kbin[i];
-                const double ratio = sim.species_linear_ratio(sp.first, k, a);
-                fps << std::setw(15) << k << " " << std::setw(15) << sp.second.pofk[i] << " " << std::setw(15)
+            for (int i = 0; i < sp.binning.n; i++) {
+                const double k = sp.binning.kbin[i];
+                const double ratio = sim.species_linear_ratio(sp.transfer, k, a);
+                fps << std::setw(15) << k << " " << std::setw(15) << sp.binning.pofk[i] << " " << std::setw(15)
                     << pofk_cb_linear_spline(k) * ratio << "\n";
             }
         }

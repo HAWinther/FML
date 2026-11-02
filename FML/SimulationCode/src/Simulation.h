@@ -102,7 +102,7 @@ class NBodySimulation {
     /// The parameters of the simulation
     Parameters params;
 
-    /// The particle species (see Species.h): "cb", or "cdm" and "baryon", and "nu"
+    /// The particle species (see Species.h): CDMBaryon, or CDM and Baryon, and MassiveNeutrino
     std::vector<SIMCODE::SpeciesInfo> species;
     /// All the particles (CDM+baryons as one species "cb", or the CDM particles if particle_baryons)
     MPIParticles part;
@@ -159,7 +159,7 @@ class NBodySimulation {
     std::vector<std::pair<double, PowerSpectrumBinning>> pofk_cb_every_step;
     std::vector<std::pair<double, PowerSpectrumBinning>> pofk_total_every_step;
     // ...and of the species separately when there are several (cdm, baryon, nu)
-    std::map<std::string, std::vector<std::pair<double, PowerSpectrumBinning>>> pofk_species_every_step;
+    std::map<SIMCODE::ParticleSpecies, std::vector<std::pair<double, PowerSpectrumBinning>>> pofk_species_every_step;
 
   public:
     NBodySimulation(std::shared_ptr<Cosmology> cosmo, std::shared_ptr<GravityModel<NDIM>> grav)
@@ -201,30 +201,32 @@ class NBodySimulation {
 
     /// The particle species (in the order of the IDs)
     const std::vector<SIMCODE::SpeciesInfo> & get_species() const { return species; }
-    /// Call f(particles, info) for the CDM+baryon species ("cb", or "cdm" and "baryon"; all of type T)
+    /// The CDM+baryon particles of a species (CDMBaryon and CDM: part, Baryon: part_baryon; all of type T)
+    MPIParticles & cb_particles_of(const SIMCODE::SpeciesInfo & info) {
+        FML::assert_mpi(info.in_cb(), "cb_particles_of: not a CDM+baryon species");
+        return info.is(SIMCODE::ParticleSpecies::Baryon) ? part_baryon : part;
+    }
+    /// Call f(particles, info) for the CDM+baryon species (CDMBaryon, or CDM and Baryon; all of type T)
     template <class F>
     void for_each_cb_species(F && f) {
-        for (auto & info : species) {
-            if (info.name == "cb" or info.name == "cdm")
-                f(part, info);
-            else if (info.name == "baryon")
-                f(part_baryon, info);
-        }
+        for (auto & info : species)
+            if (info.in_cb())
+                f(cb_particles_of(info), info);
     }
     /// Call f(particles, info) for all the species (the particle types differ, so use a generic lambda)
     template <class F>
     void for_each_species(F && f) {
         for_each_cb_species(f);
         for (auto & info : species)
-            if (info.name == "nu")
+            if (info.is(SIMCODE::ParticleSpecies::MassiveNeutrino))
                 f(part_neutrinos.particles(), info);
     }
     /// The shot noise of the density field of a species (in units of the box volume): 1/N (sum w^2 / N^2 for the
     /// delta-f neutrinos). Collective
     double species_shotnoise(const SIMCODE::SpeciesInfo & info) {
-        if (info.name == "nu")
+        if (info.is(SIMCODE::ParticleSpecies::MassiveNeutrino))
             return part_neutrinos.shotnoise();
-        return 1.0 / double((info.name == "baryon" ? part_baryon : part).get_npart_total());
+        return 1.0 / double(cb_particles_of(info).get_npart_total());
     }
     /// The shot noise of delta_cb = sum_i w_i delta_i: sum_i w_i^2 / N_i
     double cb_shotnoise() {
@@ -273,10 +275,10 @@ class NBodySimulation {
         return 0.0;
     }
     /// (T_species(k, a) / T_cb(k, a))^2 from the transfer functions (1 without them): P_species = P_cb times this
-    double species_linear_ratio(const std::string & species, double k, double a) const {
+    double species_linear_ratio(SIMCODE::TransferSpecies species, double k, double a) const {
         if (not transfers)
             return 1.0;
-        const double Ti = SIMCODE::species_transfer_function(species, *transfers, k, a);
+        const double Ti = transfers->density_over_k_mpc2(species, k, a);
         return std::pow(Ti / transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, a), 2);
     }
     const auto & get_pofk_cb_every_step() const { return pofk_cb_every_step; }
@@ -702,7 +704,7 @@ void NBodySimulation<NDIM, T>::generate_neutrino_particles(const FFTWGrid<NDIM> 
     const auto & ic = params.ic;
     timer.StartTiming("InitialConditionsNeutrinos");
     FML::assert_mpi(transfers != nullptr, "particle_neutrinos needs the transfer functions (camb or class)");
-    const auto & nu = species.back();
+    const auto & nu = SIMCODE::find_species(species, SIMCODE::ParticleSpecies::MassiveNeutrino);
     part_neutrinos.generate(delta_ini_fourier,
                             *transfers,
                             ic.initial_redshift,
@@ -979,8 +981,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     const double aini = ic.a_initial();
     FML::assert_mpi(transfers != nullptr,
                     "particle_baryons needs the transfer functions (camb, class or internal)");
-    const auto & cdm = species[0];
-    const auto & baryon = species[1];
+    const auto & cdm = SIMCODE::find_species(species, SIMCODE::ParticleSpecies::CDM);
+    const auto & baryon = SIMCODE::find_species(species, SIMCODE::ParticleSpecies::Baryon);
     const auto splines = SIMCODE::two_species_ic_splines<NDIM>(*transfers,
                                                                *grav_ic,
                                                                ic.initial_redshift,

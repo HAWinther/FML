@@ -123,7 +123,7 @@ void NBodySimulation<NDIM, T>::assign_cb_particles_to_grid(FFTWGrid<NDIM> & dens
                                                  true,
                                                  params.pofk.subtract_shotnoise ? species_shotnoise(info) : 0.0,
                                                  a,
-                                                 pofk_species_every_step[info.name]);
+                                                 pofk_species_every_step[info.species]);
         };
         if (icb == 0) {
             assign(density_grid_fourier);
@@ -189,7 +189,7 @@ void NBodySimulation<NDIM, T>::add_neutrino_particles(FFTWGrid<NDIM> & density_g
                                              true,
                                              params.pofk.subtract_shotnoise ? part_neutrinos.shotnoise() : 0.0,
                                              a,
-                                             pofk_species_every_step["nu"]);
+                                             pofk_species_every_step[SIMCODE::ParticleSpecies::MassiveNeutrino]);
     }
     // The source of the Poisson equation (normalized to the non-relativistic matter density Omega_M a^-3):
     // (1 - f_nu) delta_cb + f_nu <E/m>(a) delta_nu
