@@ -48,6 +48,9 @@ class GravityModelScreened : public GravityModel<NDIM> {
     // between the grids in Fourier space (the modes below the coarse Nyquist frequency; the solution is zero above
     // it on the force grid). Cf. Barreira, Bose & Li 2015 (arXiv:1511.08200) for nDGP
     int multigrid_coarse_factor{1};
+    // Solve the exact equation only below this redshift; above it the force is that of GR (no fifth force). < 0: at
+    // all redshifts
+    double multigrid_start_redshift{-1.0};
     // How the density goes to the coarse grid: sharpk or cic (see restrict_to_coarse_grid)
     std::string multigrid_coarse_restriction{"sharpk"};
     // The last exact (multigrid) solution in real space and its scale factor: the starting point of the next solve
@@ -249,6 +252,7 @@ class GravityModelScreened : public GravityModel<NDIM> {
             FML::assert_mpi(multigrid_coarse_factor >= 1, "multigrid_coarse_factor must be >= 1");
             multigrid_coarse_restriction =
                 SIMCODE::get_parameter<std::string>(param, "multigrid_coarse_restriction");
+            multigrid_start_redshift = SIMCODE::get_parameter<double>(param, "multigrid_start_redshift");
         }
     }
 
@@ -392,6 +396,16 @@ class GravityModelScreened : public GravityModel<NDIM> {
                        const FML::NBODY::ForceOptions & options = {}) const override {
         const double norm_poisson_equation = 1.5 * this->cosmo->get_OmegaM() * a;
         auto coupling = [&](double kBox) { return this->GeffOverG(a, kBox / H0Box) - 1.0; };
+
+        // Before multigrid_start_redshift: no fifth force (the force of GR), the field equation is not solved
+        if (solve_exact_equation and multigrid_start_redshift >= 0.0 and 1.0 / a - 1.0 > multigrid_start_redshift) {
+            if (FML::ThisTask == 0)
+                std::cout << "No fifth force (" << this->get_name() << ") at z = " << 1.0 / a - 1.0
+                          << " > multigrid_start_redshift = " << multigrid_start_redshift << " (GR force)\n";
+            this->compute_force_from_total_density(
+                density_fourier, norm_poisson_equation, density_assignment_method_used, force_real, options);
+            return;
+        }
 
         FFTWGrid<NDIM> density_fifth_force;
         if (solve_exact_equation)

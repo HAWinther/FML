@@ -425,6 +425,11 @@ namespace SIMCODE {
                                   "is its Fourier modes below the coarse Nyquist frequency (sharpk; delta < -1 set to "
                                   "-1) or a CIC deposit of the force-grid cells (cic; conserves the mass, delta >= -1)",
                                   {"sharpk", "cic"});
+                b.always_optional("multigrid_start_redshift",
+                                  -1.0,
+                                  "Multigrid solver: solve the field equation only below this redshift; above it the "
+                                  "force is that of GR (no fifth force; the growth factors, IC and COLA frame still "
+                                  "have the modified gravity). < 0: at all redshifts");
                 b.optional("multigrid_coarse_factor",
                            1,
                            "Multigrid solver: solve the field equation on a grid coarser by this factor than the "
