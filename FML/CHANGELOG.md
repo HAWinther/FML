@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Initial conditions: the generic parts of SimulationCode's InitialConditions.h move to the library
+- `FML::NBODY::generate_species_from_delta_cb` (NBody/NBody.h): the particles of one species from the CDM+baryon
+  field (transfer ratio, lattice offset, ID offset, shared COLA frame, mass contrast), next to `NBodyInitialConditions`.
+- `FML::RANDOM::GAUSSIAN::whiten_and_set_power_spectrum` and `reverse_phases` (RandomFields/GaussianRandomField.h):
+  fixed-amplitude fields and the partner of a paired simulation.
+- SimulationCode: `src/InitialConditions.h` and `src/InitialPowerSpectrum.h` are merged into `src/ICFromParameters.h`
+  (the linear input and the initial density field from the `ic_*` parameters).
+
 ### MultigridSolver / MPIMultiGrid: N and the number of tasks no longer have to be powers of 2
 - A level is halved while N is even (and, with MPI, while N / 2 is divisible by the number of tasks so every task has
   the same number of slices on every level): N = m 2^L has up to L + 1 levels with m cells per dim on the coarsest

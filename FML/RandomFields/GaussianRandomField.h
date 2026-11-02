@@ -16,6 +16,7 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/RandomGenerator/RandomGenerator.h>
 #include <FML/RandomFields/CounterBasedRandomField.h>
+#include <FML/Smoothing/SmoothingFourier.h>
 
 namespace FML {
     namespace RANDOM {
@@ -502,6 +503,37 @@ namespace FML {
                 generate_gaussian_random_field_fourier<N>(grid, rng, power, fixed, options);
                 grid.fftw_c2r();
             }
+        //=================================================================================
+        /// @brief Keep the phases of a field in Fourier space and set its amplitudes to |delta(k)| =
+        /// sqrt(P(k)/V) (a "fixed amplitude" field, Angulo & Pontzen 2016). Modes that are zero stay zero.
+        ///
+        /// @tparam N The dimension of the grid
+        /// @param[out] grid The field in Fourier space
+        /// @param[in] Pofk_of_kBox_over_volume P(k)/V as a function of kBox = k B (the same as for
+        /// generate_gaussian_random_field_fourier)
+        //=================================================================================
+        template <int N>
+        void whiten_and_set_power_spectrum(FFTWGrid<N> & grid,
+                                           const std::function<double(double)> & Pofk_of_kBox_over_volume) {
+            FML::GRID::transform_fourier_modes<N>(grid, [&](double kmag, std::complex<FML::GRID::FloatType> value) {
+                // Whiten the field
+                auto absvalue = std::abs(value);
+                if (absvalue > 0.0)
+                    value /= absvalue;
+                // Multiply by the amplitude
+                value *= std::sqrt(Pofk_of_kBox_over_volume(kmag));
+                return value;
+            });
+        }
+
+        /// @brief delta(k) -> -delta(k): the field with all phases shifted by pi (the partner of a paired simulation)
+        template <int N>
+        void reverse_phases(FFTWGrid<N> & grid) {
+            FML::GRID::transform_fourier_modes<N>(grid, [](double, std::complex<FML::GRID::FloatType> value) {
+                return FML::GRID::FloatType(-1.0) * value;
+            });
+        }
+
         } // namespace GAUSSIAN
     } // namespace RANDOM
 } // namespace FML

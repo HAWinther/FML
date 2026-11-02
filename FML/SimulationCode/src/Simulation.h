@@ -25,9 +25,8 @@
 #include "ExternalIC.h"
 #include "GravityModel.h"
 #include "GravityModel_GR.h"
-#include "InitialConditions.h"
+#include "ICFromParameters.h"
 #include "InitialDensityField.h"
-#include "InitialPowerSpectrum.h"
 #include "KickDrift.h"
 #include "Lightcone/Lightcone.h"
 #include "NBodyGauge.h"
@@ -61,8 +60,8 @@
 ///   SimulationParameters.h : all the parameters (read, printed and validated)
 ///   ModelCompatibility.h   : the checks of the parameters against the cosmology and gravity model
 ///   TimeStepping.h         : where the steps are and the size of the kick/drift steps
-///   InitialPowerSpectrum.h : P(k,zini) / T(k,zini) the initial conditions are made from
-///   InitialConditions.h    : the initial density field and making the particles of a species from it
+///   ICFromParameters.h     : P(k,zini) / T(k,zini) and the initial density field from the ic_* parameters (the
+///                            particles of a species from it: FML::NBODY::generate_species_from_delta_cb)
 ///   ExternalIC.h           : starting from particles read from file
 ///   COLA.h                 : the COLA method (ColaState)
 ///   Species.h              : the particle species (CDM+baryons, or CDM and baryons, and neutrinos)

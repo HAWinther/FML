@@ -44,7 +44,7 @@ How the code is organised:
 | `src/Simulation.h` | The simulation class; its members are in `src/SimulationInit.h` (parameters, initial conditions), `src/SimulationStep.h` (time-stepping loop, output) and `src/SimulationDensity.h` (the density field of the force) |
 | `src/SimulationParameters.h` | The parameters of the simulation itself, grouped and validated |
 | `src/TimeStepping.h` | Where the steps are and the size of the kick/drift steps |
-| `src/InitialPowerSpectrum.h`, `src/InitialConditions.h`, `src/ExternalIC.h` | Making the initial conditions |
+| `src/ICFromParameters.h`, `src/ExternalIC.h` | Making the initial conditions |
 | `src/COLA.h` | The COLA method |
 | `src/AnalyzeOutput.h`, `src/HaloFinding.h` | On the fly analysis (P(k), multipoles, bispectrum, hybrid bias spectra, halos) and output |
 | `src/SnapshotOutput.h` | Writing the particles as GADGET / HDF5 snapshots |

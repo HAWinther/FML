@@ -1875,6 +1875,100 @@ namespace FML {
         }
 #endif
 
+        //=================================================================================
+        // Several particle species from one density field (e.g. CDM and baryons, massive neutrinos)
+        //=================================================================================
+
+        /// Make the particles of a species i from the CDM+baryon density field delta_cb(k,zini): delta_i(k) =
+        /// delta_cb(k) ratio(kB) with ratio = T_i / T_cb, LPT displacements and velocities (1LPT velocity
+        /// velocity_norm_1LPT(kB) Psi, the rest from velocity_norms; see FML::NBODY::NBodyInitialConditions). With
+        /// LPT_order >= 2 the 2LPT term is that of the total field delta_cb. The particles start from the lattice
+        /// offset by lattice_shift (in units of the box) in each direction: the fields are evaluated at the offset
+        /// positions and the particles moved there. id_offset is added to the IDs. With store_cb_LPT_fields the LPT
+        /// displacement fields stored in the particles (for COLA) are those of delta_cb, i.e. all the species share the
+        /// COLA frame of the total CDM+baryon field. With mass_contrast_of_kBox the particles get the masses
+        /// m = 1 + eps(q) with eps(k) = delta_cb(k) mass_contrast(kB) (the mass-encoded baryon-CDM relative mode).
+        /// With velocity_norm_2LPT_of_kBox the 2LPT velocity is velocity_norm_2LPT(kB) Psi_2LPT (instead of
+        /// velocity_norms[1] Psi_2LPT). Returns delta_i(k) (shifted).
+        //=============================================================================
+        template <int NDIM, class P>
+        FFTWGrid<NDIM> generate_species_from_delta_cb(MPIParticles<P> & particles,
+                                                      const FFTWGrid<NDIM> & delta_cb_fourier,
+                                                      const std::function<double(double)> & ratio_of_kBox,
+                                                      std::function<double(double)> velocity_norm_1LPT_of_kBox,
+                                                      const std::vector<double> & velocity_norms,
+                                                      int LPT_order,
+                                                      int Npart_1D,
+                                                      double allocation_factor,
+                                                      double boxsize,
+                                                      double zini,
+                                                      double lattice_shift,
+                                                      long long int id_offset,
+                                                      bool store_cb_LPT_fields = false,
+                                                      std::function<double(double)> mass_contrast_of_kBox = nullptr,
+                                                      std::function<double(double)> velocity_norm_2LPT_of_kBox = nullptr) {
+            std::array<double, NDIM> shift_vec;
+            shift_vec.fill(lattice_shift);
+
+            // delta_i(k) on the (offset) lattice: f(q) -> f(q + shift) so that the particle created at q gets the
+            // displacement at q + shift (and is then moved there)
+            FFTWGrid<NDIM> delta = delta_cb_fourier;
+            const bool need_total = LPT_order >= 2 or store_cb_LPT_fields;
+            FFTWGrid<NDIM> delta_total;
+            if (need_total)
+                delta_total = delta_cb_fourier;
+            FML::GRID::multiply_fourier_by_function_of_k<NDIM>(delta, ratio_of_kBox);
+            if (lattice_shift != 0.0) {
+                FML::GRID::shift_grid_fourier<NDIM>(delta, shift_vec, +1.0);
+                if (need_total)
+                    FML::GRID::shift_grid_fourier<NDIM>(delta_total, shift_vec, +1.0);
+            }
+
+            // The mass contrast eps(k) = delta_cb(k) mass_contrast(kB) (on the same offset lattice)
+            FFTWGrid<NDIM> mass_contrast;
+            if (mass_contrast_of_kBox) {
+                mass_contrast = delta_cb_fourier;
+                FML::GRID::multiply_fourier_by_function_of_k<NDIM>(mass_contrast, mass_contrast_of_kBox);
+                if (lattice_shift != 0.0)
+                    FML::GRID::shift_grid_fourier<NDIM>(mass_contrast, shift_vec, +1.0);
+            }
+
+            std::vector<FFTWGrid<NDIM>> no_potentials;
+            NBodyInitialConditions<NDIM, P>(particles,
+                                                        Npart_1D,
+                                                        allocation_factor,
+                                                        delta,
+                                                        no_potentials,
+                                                        LPT_order,
+                                                        boxsize,
+                                                        zini,
+                                                        velocity_norms,
+                                                        velocity_norm_1LPT_of_kBox,
+                                                        LPT_order >= 2 ? &delta_total : nullptr,
+                                                        store_cb_LPT_fields ? &delta_total : nullptr,
+                                                        mass_contrast_of_kBox ? &mass_contrast : nullptr,
+                                                        velocity_norm_2LPT_of_kBox);
+
+            for (auto & p : particles) {
+                auto * pos = FML::PARTICLE::GetPos(p);
+                for (int idim = 0; idim < NDIM; idim++) {
+                    pos[idim] += lattice_shift;
+                    pos[idim] = FML::PARTICLE::wrap_coordinate_periodic(pos[idim]);
+                }
+                if constexpr (FML::PARTICLE::has_get_q<P>()) {
+                    auto * q = FML::PARTICLE::GetLagrangianPos(p);
+                    for (int idim = 0; idim < NDIM; idim++) {
+                        q[idim] += lattice_shift;
+                        q[idim] = FML::PARTICLE::wrap_coordinate_periodic(q[idim]);
+                    }
+                }
+                if constexpr (FML::PARTICLE::has_set_id<P>())
+                    FML::PARTICLE::SetID(p, FML::PARTICLE::GetID(p) + id_offset);
+            }
+            particles.communicate_particles();
+            return delta;
+        }
+
     } // namespace NBODY
 } // namespace FML
 #endif

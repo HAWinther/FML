@@ -2,7 +2,7 @@
 #include <FML/FFTWGrid/FourierResampling.h>
 #include <FML/RandomFields/NonLocalGaussianRandomField.h>
 #include <FML/SimulationCode/src/ParameterSchema.h>
-#include <FML/SimulationCode/src/InitialConditions.h>
+#include <FML/SimulationCode/src/ICFromParameters.h>
 #include <algorithm>
 #include <cstring>
 #include <iostream>
@@ -189,6 +189,43 @@ int main() {
         generate_gaussian_random_field_fourier<3>(g, &legacy_two, power, true);
         check_local(difference(ng, g) == 0, "SimulationCode explicit legacy IC path retains the original realization");
     }
+    // whiten_and_set_power_spectrum: the phases kept, |delta(k)| = sqrt(P(k)/V); reverse_phases: delta -> -delta
+    {
+        using namespace GAUSSIAN;
+        Grid<3> field(16), copy;
+        auto power = [](double k) { return k > 0 ? 1e-3 / (1.0 + k * k) : 0.0; };
+        RandomFieldOptions options;
+        options.backend = RandomFieldBackend::Philox;
+        options.seed = 7;
+        generate_gaussian_random_field_fourier<3>(field, nullptr, power, false, options);
+        copy = field;
+        auto amplitude = [](double k) { return 2e-4 * (1.0 + k); };
+        whiten_and_set_power_spectrum<3>(field, amplitude);
+        double err_amp = 0.0, err_phase = 0.0;
+        FML::GRID::for_each_fourier_mode<3>(field, [&](size_t i, double kmag) {
+            const auto v = field.get_fourier_from_index(i), v0 = copy.get_fourier_from_index(i);
+            if (std::abs(v0) == 0.0) {
+                err_amp = std::max(err_amp, double(std::abs(v)));
+                return;
+            }
+            err_amp = std::max(err_amp, std::abs(double(std::abs(v)) / std::sqrt(amplitude(kmag)) - 1.0));
+            err_phase = std::max(err_phase, double(std::abs(v / std::abs(v) - v0 / std::abs(v0))));
+        });
+        FML::MaxOverTasks(&err_amp);
+        FML::MaxOverTasks(&err_phase);
+        check_local(err_amp < 1e-6 and err_phase < 1e-6,
+                    "whiten_and_set_power_spectrum: |delta(k)| = sqrt(P(k)/V) (error " + std::to_string(err_amp) +
+                        ") with the phases kept (error " + std::to_string(err_phase) + ")");
+        copy = field;
+        reverse_phases<3>(field);
+        double err_rev = 0.0;
+        for (auto i : field.get_fourier_range())
+            err_rev = std::max(err_rev,
+                               double(std::abs(field.get_fourier_from_index(i) + copy.get_fourier_from_index(i))));
+        FML::MaxOverTasks(&err_rev);
+        check_local(err_rev == 0.0, "reverse_phases: delta(k) -> -delta(k)");
+    }
+
     const auto & schema = SIMCODE::parameter_schema<3>();
     auto option =
         std::find_if(schema.begin(), schema.end(), [](const auto & s) { return s.name == "ic_random_field_backend"; });

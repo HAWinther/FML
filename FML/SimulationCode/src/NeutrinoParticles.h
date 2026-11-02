@@ -8,7 +8,7 @@
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Spline/Spline.h>
 
-#include "InitialConditions.h"
+#include "ICFromParameters.h"
 #include "Neutrinos.h"
 #include "Particles.h"
 
@@ -211,7 +211,7 @@ namespace SIMCODE {
         // The bulk part (1LPT) from delta_nu(k, zini)
         const double fac = aini * aini * HoverH0_ini;
         const std::vector<double> velocity_norms{fac * f_nu_spline(std::log(0.1)), 0.0, 0.0, 0.0};
-        auto delta_nu = generate_species_from_delta_cb<NDIM, Particle>(
+        auto delta_nu = FML::NBODY::generate_species_from_delta_cb<NDIM, Particle>(
             part,
             delta_cb_fourier,
             [&](double kBox) { return ratio_spline(clamp_logk(kBox)); },

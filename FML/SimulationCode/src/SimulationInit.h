@@ -331,12 +331,14 @@ FML::GRID::FFTWGrid<NDIM> NBodySimulation<NDIM, T>::make_initial_density_field()
     // Take the phases from the particles in a file, but use our P(k) for the amplitudes
     if (ic.random_field_type == SIMCODE::ICRandomFieldType::ReadPhases) {
         SIMCODE::delta_from_gadget_particles<NDIM, T>(delta_ini_fourier, params, *cosmo);
-        SIMCODE::whiten_and_set_power_spectrum<NDIM>(delta_ini_fourier, power_initial_spline, boxsize);
+        FML::RANDOM::GAUSSIAN::whiten_and_set_power_spectrum<NDIM>(delta_ini_fourier, [&](double kBox) {
+            return power_initial_spline(kBox / boxsize) / std::pow(boxsize, NDIM);
+        });
     }
 
     // Reverse the phases? For doing pair-fixed simulations
     if (ic.reverse_phases) {
-        SIMCODE::reverse_phases<NDIM>(delta_ini_fourier);
+        FML::RANDOM::GAUSSIAN::reverse_phases<NDIM>(delta_ini_fourier);
     }
 
     // Keep the linear field for the hybrid bias spectra (the Lagrangian operators are formed at the lattice points so
@@ -618,7 +620,7 @@ void NBodySimulation<NDIM, T>::apply_lattice_offset() {
 }
 
 /// The initial conditions with separate CDM and baryon particles (see two_species_ic_splines and
-/// generate_species_from_delta_cb in InitialConditions.h). The 2LPT displacement is that of the total (CDM+baryon)
+/// FML::NBODY::generate_species_from_delta_cb). The 2LPT displacement is that of the total (CDM+baryon)
 /// field for both. By default (particle_baryon_lattice = same) the baryons start from the same lattice as the CDM.
 /// With "offset" their lattice is offset by half a particle spacing in each direction. Their IDs follow those of the
 /// CDM.
@@ -709,7 +711,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
             else
                 mass_contrast = [&](double kBox) { return ratio(clamp_logk(kBox)) - 1.0; };
         }
-        SIMCODE::generate_species_from_delta_cb<NDIM, T>(particles,
+        FML::NBODY::generate_species_from_delta_cb<NDIM, T>(particles,
                                                          delta_cb_fourier,
                                                          displacement_ratio,
                                                          velocity_norm_1LPT,

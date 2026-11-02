@@ -9,6 +9,7 @@
 //   - PGD with tasks without particles (aborted) and the size of the PGD displacement
 //   - NBody.h and PotentialGradientDecent.h can be included in several translation units (test_nbody_odr.cpp)
 //   - NBodyInitialConditions applies the optional scale-dependent 2LPT velocity norm(k) at the k of the 2LPT field
+//   - generate_species_from_delta_cb: NBodyInitialConditions for one species (ratio, lattice shift, ID offset)
 //   - the force of the reflection of a density field is the reflection of the force on an even mesh (the continuous
 //     gradient used +k_Ny for the Nyquist modes)
 // Bad input that must stop with a clear message:
@@ -23,6 +24,7 @@
 #include <FML/PGD/PotentialGradientDecent.h>
 
 #include <array>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -53,6 +55,18 @@ struct Particle {
     double expected[3]; // Where the particle should end up
     double * get_pos() { return pos; }
     double * get_vel() { return vel; }
+    constexpr int get_ndim() const { return 3; }
+};
+
+// A particle with an ID (for generate_species_from_delta_cb)
+struct IDParticle {
+    double pos[3];
+    double vel[3];
+    long long int id{0};
+    double * get_pos() { return pos; }
+    double * get_vel() { return vel; }
+    long long int get_id() const { return id; }
+    void set_id(long long int _id) { id = _id; }
     constexpr int get_ndim() const { return 3; }
 };
 
@@ -770,6 +784,92 @@ int main(int argc, char ** argv) {
         check_local(maxerr < 1e-6,
                     "NBodyInitialConditions: a constant 2LPT velocity norm(k) = velocity_norms[1] (rel. diff " +
                         num(maxerr) + ")");
+    }
+
+    //=====================================================
+    // 8b. generate_species_from_delta_cb: with ratio 1 and no lattice shift it is NBodyInitialConditions (bitwise),
+    // the displacement and velocity scale with the ratio, the lattice shift moves the (undisplaced) lattice and
+    // id_offset shifts the IDs. delta = A cos(2 pi x) (1LPT)
+    //=====================================================
+    {
+        const int Np = 16;
+        const double A = 0.02;
+        FFTWGrid delta_cb(Np, 1, 1);
+        delta_cb.fill_real_grid([&](std::array<double, 3> & x) -> FloatType { return A * std::cos(2.0 * M_PI * x[0]); });
+        delta_cb.fftw_r2c();
+        const std::vector<double> norms{0.7};
+        auto species = [&](double ratio, double shift, long long int id_offset, MPIParticles<IDParticle> & mp) {
+            return NBODY::generate_species_from_delta_cb<3, IDParticle>(
+                mp, delta_cb, [ratio](double) { return ratio; }, nullptr, norms, 1, Np, 2.0, 1.0, 10.0, shift, id_offset);
+        };
+        MPIParticles<IDParticle> ref, one, two, zero, shifted;
+        {
+            FFTWGrid delta = delta_cb;
+            std::vector<FFTWGrid> potentials;
+            NBODY::NBodyInitialConditions<3, IDParticle>(ref, Np, 2.0, delta, potentials, 1, 1.0, 10.0, norms);
+        }
+        species(1.0, 0.0, 0, one);
+        auto delta_two = species(2.0, 0.0, 0, two);
+        species(0.0, 0.0, 0, zero);
+        const double shift = 0.5 / Np;
+        const long long int offset = 1000000;
+        species(0.0, shift, offset, shifted);
+
+        // ratio 1: the same particles as NBodyInitialConditions
+        bool same = ref.get_npart() == one.get_npart();
+        for (size_t i = 0; same and i < ref.get_npart(); i++)
+            for (int j = 0; j < 3; j++)
+                same = same and ref[i].pos[j] == one[i].pos[j] and ref[i].vel[j] == one[i].vel[j] and
+                       ref[i].id == one[i].id;
+        int ok = same ? 1 : 0;
+        FML::MinOverTasks(&ok);
+        check_local(ok == 1, "generate_species_from_delta_cb: ratio 1, no shift = NBodyInitialConditions (bitwise)");
+
+        // ratio 2: twice the displacement (from the lattice, the ratio 0 positions) and velocity
+        double err = 0.0, maxdisp = 0.0;
+        for (size_t i = 0; i < one.get_npart(); i++) {
+            double d1 = one[i].pos[0] - zero[i].pos[0], d2 = two[i].pos[0] - zero[i].pos[0];
+            d1 -= std::round(d1);
+            d2 -= std::round(d2);
+            err = std::max({err, std::fabs(d2 - 2.0 * d1), std::fabs(two[i].vel[0] - 2.0 * one[i].vel[0])});
+            maxdisp = std::max(maxdisp, std::fabs(d1));
+        }
+        FML::MaxOverTasks(&err);
+        FML::MaxOverTasks(&maxdisp);
+        double derr = 0.0;
+        for (auto && index : delta_cb.get_fourier_range())
+            derr = std::max(derr,
+                            double(std::abs(delta_two.get_fourier_from_index(index) -
+                                            FloatType(2.0) * delta_cb.get_fourier_from_index(index))));
+        FML::MaxOverTasks(&derr);
+        check_local(err < 1e-12 * std::max(1.0, maxdisp) and maxdisp > 1e-4 and derr < 1e-12,
+                    "generate_species_from_delta_cb: ratio 2 doubles the displacement and velocity (max diff " +
+                        num(err) + ", displacement " + num(maxdisp) + ") and returns 2 delta_cb");
+
+        // The shifted lattice (no displacement): the particles at (i + 1/2) / Np, the IDs offset
+        double lattice_err = 0.0;
+        long long int idsum = 0, idsum_zero = 0, idmin = LLONG_MAX;
+        for (auto & p : shifted) {
+            for (int j = 0; j < 3; j++) {
+                const double x = p.pos[j] * Np - 0.5;
+                lattice_err = std::max(lattice_err, std::fabs(x - std::round(x)));
+            }
+            idsum += p.id;
+            idmin = std::min(idmin, p.id);
+        }
+        for (auto & p : zero)
+            idsum_zero += p.id;
+        FML::MaxOverTasks(&lattice_err);
+        FML::SumOverTasks(&idsum);
+        FML::SumOverTasks(&idsum_zero);
+        FML::MinOverTasks(&idmin);
+        size_t n_shifted = shifted.get_npart(), n_zero = zero.get_npart();
+        FML::SumOverTasks(&n_shifted);
+        FML::SumOverTasks(&n_zero);
+        check_local(lattice_err < 1e-10 and n_shifted == n_zero and idmin >= offset and
+                        idsum == idsum_zero + offset * (long long int)n_zero,
+                    "generate_species_from_delta_cb: lattice shifted by half a cell (max error " + num(lattice_err) +
+                        ") and the IDs offset by id_offset");
     }
 
     //=====================================================
