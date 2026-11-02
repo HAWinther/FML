@@ -320,6 +320,154 @@ namespace SIMCODE {
     }
 
     //=============================================================================
+    /// Read the particles of the GADGET files of ic_reconstruct_gadgetfilepath into part (velocities in code units).
+    /// Returns the scale factor of the files
+    //=============================================================================
+    template <int NDIM, class T>
+    double read_gadget_ic_particles(FML::PARTICLE::MPIParticles<T> & part,
+                                    const SimulationParameters & params,
+                                    const Cosmology & cosmo) {
+        const auto & ic = params.ic;
+        const auto & sim = params.simulation;
+        auto gadget = read_gadget_particles<T>(ic.reconstruct_gadgetfilepath,
+                                               params.particle.allocation_factor,
+                                               expected_gadget_header(params, cosmo),
+                                               "read_ic");
+        auto & externalpart = gadget.first;
+        const double scale_factor = gadget.second.time;
+
+        // Velocities we get from the gadget reader is peculiar km/s so scale to code units
+        const double vel_norm = scale_factor / (100 * sim.boxsize);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+        for (size_t i = 0; i < externalpart.size(); i++) {
+            auto * vel = FML::PARTICLE::GetVel(externalpart[i]);
+            for (int idim = 0; idim < NDIM; idim++)
+                vel[idim] *= vel_norm;
+        }
+
+        // Move them into MPIParticles
+        part.move_from(std::move(externalpart));
+        return scale_factor;
+    }
+
+    //=============================================================================
+    /// The density field delta(k) of the particles on the IC grid (ic_nmesh) for the LPT reconstruction: the window
+    /// deconvolved and the modes beyond those of the grid the IC were made with filtered out
+    //=============================================================================
+    template <int NDIM, class T>
+    FML::GRID::FFTWGrid<NDIM> reconstruction_density_field(FML::PARTICLE::MPIParticles<T> & part, const ICSettings & ic) {
+        // Assign particles to grid
+        const auto nleftright = FML::INTERPOLATION::get_extra_slices(ic.reconstruct_assigment_method);
+        FML::GRID::FFTWGrid<NDIM> delta_fourier(ic.nmesh, nleftright.first, nleftright.second);
+        FML::INTERPOLATION::particles_to_fourier_grid(part.get_particles_ptr(),
+                                                      part.get_npart(),
+                                                      part.get_npart_total(),
+                                                      delta_fourier,
+                                                      ic.reconstruct_assigment_method,
+                                                      ic.reconstruct_interlacing);
+
+        // Deconvolve window function
+        FML::INTERPOLATION::deconvolve_window_function_fourier<NDIM>(delta_fourier, ic.reconstruct_assigment_method);
+
+        // Smoothing (should just use a sharpk filter to set modes beyond Nmesh used to generate the IC to zero)
+        // If we use a larger grid then the highest frequency modes, beyond knyuist of the grid used to
+        // generate the IC, will just be noise and will lead to problems so these modes needs to be killed
+        FML::GRID::smoothing_filter_fourier_space(delta_fourier,
+                                                  ic.reconstruct_dimless_smoothing_scale,
+                                                  ic.reconstruct_smoothing_filter);
+        return delta_fourier;
+    }
+
+    //=============================================================================
+    /// 1LPT displacement fields. We also set the (approximate) Lagrangian position q = x - Psi_1LPT
+    /// For scale-dependent COLA we store the potential
+    //=============================================================================
+    template <int NDIM, class T>
+    void reconstruct_1LPT_from_density(const FML::GRID::FFTWGrid<NDIM> & delta_fourier,
+                                       FML::PARTICLE::MPIParticles<T> & part,
+                                       const SimulationParameters & params,
+                                       FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier) {
+        const auto & ic = params.ic;
+        const auto & sim = params.simulation;
+        if (FML::ThisTask == 0)
+            std::cout << "Reconstructing 1LPT displacement field from the density field\n";
+
+        FML::GRID::FFTWGrid<NDIM> temp;
+        FML::GRID::FFTWGrid<NDIM> & phi_1LPT_fourier = sim.use_scaledependent_cola ? phi_1LPT_ini_fourier : temp;
+        FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier(delta_fourier, phi_1LPT_fourier);
+
+        auto displacements =
+            displacement_field_at_particles<NDIM, T>(phi_1LPT_fourier, part, ic.reconstruct_assigment_method);
+
+        auto * part_ptr = part.get_particles_ptr();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+        for (size_t ind = 0; ind < part.get_npart(); ind++) {
+            auto * pos = FML::PARTICLE::GetPos(part_ptr[ind]);
+            auto * D = FML::PARTICLE::GetD_1LPT(part_ptr[ind]);
+            for (int idim = 0; idim < NDIM; idim++) {
+                D[idim] = displacements[idim][ind];
+            }
+            if constexpr (FML::PARTICLE::has_get_q<T>()) {
+                auto * q = FML::PARTICLE::GetLagrangianPos(part_ptr[ind]);
+                for (int idim = 0; idim < NDIM; idim++) {
+                    q[idim] = pos[idim] - D[idim];
+                    wrap_periodic(q[idim]);
+                }
+            }
+        }
+    }
+
+    //=============================================================================
+    /// 2LPT displacement fields. Scale-independent COLA needs the displacement field in the particles
+    /// (NB: we should interpolate it to the Lagrangian positions, but we use the Eulerian position)
+    /// and we update the Lagrangian position q -= Psi_2LPT. For scale-dependent COLA we store the potential
+    /// (and also update q: it was left at x - Psi_1LPT)
+    //=============================================================================
+    template <int NDIM, class T>
+    void reconstruct_2LPT_from_density(const FML::GRID::FFTWGrid<NDIM> & delta_fourier,
+                                       FML::PARTICLE::MPIParticles<T> & part,
+                                       const SimulationParameters & params,
+                                       FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier) {
+        const auto & ic = params.ic;
+        const auto & sim = params.simulation;
+        if (FML::ThisTask == 0)
+            std::cout << "Reconstructing 2LPT displacement field from the density field\n";
+
+        FML::GRID::FFTWGrid<NDIM> temp;
+        FML::GRID::FFTWGrid<NDIM> & phi_2LPT_fourier = sim.use_scaledependent_cola ? phi_2LPT_ini_fourier : temp;
+        FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_fourier, phi_2LPT_fourier);
+
+        if (not sim.use_scaledependent_cola or FML::PARTICLE::has_get_q<T>()) {
+            auto displacements =
+                displacement_field_at_particles<NDIM, T>(phi_2LPT_fourier, part, ic.reconstruct_assigment_method);
+
+            auto * part_ptr = part.get_particles_ptr();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (size_t ind = 0; ind < part.get_npart(); ind++) {
+                if (not sim.use_scaledependent_cola) {
+                    auto * D = FML::PARTICLE::GetD_2LPT(part_ptr[ind]);
+                    for (int idim = 0; idim < NDIM; idim++) {
+                        D[idim] = displacements[idim][ind];
+                    }
+                }
+                if constexpr (FML::PARTICLE::has_get_q<T>()) {
+                    auto * q = FML::PARTICLE::GetLagrangianPos(part_ptr[ind]);
+                    for (int idim = 0; idim < NDIM; idim++) {
+                        q[idim] -= displacements[idim][ind];
+                        wrap_periodic(q[idim]);
+                    }
+                }
+            }
+        }
+    }
+
+    //=============================================================================
     /// Read the particles from gadget files into part. With COLA we also reconstruct
     /// the LPT displacement fields (stored in the particles, or for scale-dependent
     /// COLA the LPT potentials phi_1LPT_ini_fourier and phi_2LPT_ini_fourier)
@@ -339,27 +487,7 @@ namespace SIMCODE {
             std::cout << "# Reading initial conditions from GADGET files [" + ic.reconstruct_gadgetfilepath + "]\n";
             std::cout << "#=====================================================\n";
         }
-
-        auto gadget = read_gadget_particles<T>(ic.reconstruct_gadgetfilepath,
-                                               params.particle.allocation_factor,
-                                               expected_gadget_header(params, *cosmo),
-                                               "read_ic");
-        auto & externalpart = gadget.first;
-        const double scale_factor = gadget.second.time;
-
-        // Velocities we get from the gadget reader is peculiar km/s so scale to code units
-        const double vel_norm = scale_factor / (100 * sim.boxsize);
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-        for (size_t i = 0; i < externalpart.size(); i++) {
-            auto * vel = FML::PARTICLE::GetVel(externalpart[i]);
-            for (int idim = 0; idim < NDIM; idim++)
-                vel[idim] *= vel_norm;
-        }
-
-        // Move them into MPIParticles
-        part.move_from(std::move(externalpart));
+        const double scale_factor = read_gadget_ic_particles<NDIM, T>(part, params, *cosmo);
 
         // Reconstruct the LPT fields exactly using the data in the gadget-files.
         // For 1LPT IC this always works. For 2LPT IC this assumes the q-grid the IC
@@ -390,25 +518,7 @@ namespace SIMCODE {
             return;
         }
 
-        // Assign particles to grid
-        const auto nleftright = FML::INTERPOLATION::get_extra_slices(ic.reconstruct_assigment_method);
-        FML::GRID::FFTWGrid<NDIM> delta_fourier(ic.nmesh, nleftright.first, nleftright.second);
-        FML::INTERPOLATION::particles_to_fourier_grid(part.get_particles_ptr(),
-                                                      part.get_npart(),
-                                                      part.get_npart_total(),
-                                                      delta_fourier,
-                                                      ic.reconstruct_assigment_method,
-                                                      ic.reconstruct_interlacing);
-
-        // Deconvolve window function
-        FML::INTERPOLATION::deconvolve_window_function_fourier<NDIM>(delta_fourier, ic.reconstruct_assigment_method);
-
-        // Smoothing (should just use a sharpk filter to set modes beyond Nmesh used to generate the IC to zero)
-        // If we use a larger grid then the highest frequency modes, beyond knyuist of the grid used to
-        // generate the IC, will just be noise and will lead to problems so these modes needs to be killed
-        FML::GRID::smoothing_filter_fourier_space(delta_fourier,
-                                                  ic.reconstruct_dimless_smoothing_scale,
-                                                  ic.reconstruct_smoothing_filter);
+        const auto delta_fourier = reconstruction_density_field<NDIM, T>(part, ic);
 
         // In case of COLA we need to assign displacement fields to particles
         if (not sim.use_cola)
@@ -418,76 +528,12 @@ namespace SIMCODE {
         FML::assert_mpi(FML::PARTICLE::has_get_D_3LPTa<T>() == false and FML::PARTICLE::has_get_D_3LPTb<T>() == false,
                         "3LPT not implemented for read_ic");
 
-        // 1LPT displacement fields. We also set the (approximate) Lagrangian position q = x - Psi_1LPT
-        // For scale-dependent COLA we store the potential
-        if (FML::PARTICLE::has_get_D_1LPT<T>() and sim.cola_LPT_order >= 1) {
-            if (FML::ThisTask == 0)
-                std::cout << "Reconstructing 1LPT displacement field from the density field\n";
-
-            FML::GRID::FFTWGrid<NDIM> temp;
-            FML::GRID::FFTWGrid<NDIM> & phi_1LPT_fourier = sim.use_scaledependent_cola ? phi_1LPT_ini_fourier : temp;
-            FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier(delta_fourier, phi_1LPT_fourier);
-
-            auto displacements =
-                displacement_field_at_particles<NDIM, T>(phi_1LPT_fourier, part, ic.reconstruct_assigment_method);
-
-            auto * part_ptr = part.get_particles_ptr();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-            for (size_t ind = 0; ind < part.get_npart(); ind++) {
-                auto * pos = FML::PARTICLE::GetPos(part_ptr[ind]);
-                auto * D = FML::PARTICLE::GetD_1LPT(part_ptr[ind]);
-                for (int idim = 0; idim < NDIM; idim++) {
-                    D[idim] = displacements[idim][ind];
-                }
-                if constexpr (FML::PARTICLE::has_get_q<T>()) {
-                    auto * q = FML::PARTICLE::GetLagrangianPos(part_ptr[ind]);
-                    for (int idim = 0; idim < NDIM; idim++) {
-                        q[idim] = pos[idim] - D[idim];
-                        wrap_periodic(q[idim]);
-                    }
-                }
-            }
-        }
-
-        // 2LPT displacement fields. Scale-independent COLA needs the displacement field in the particles
-        // (NB: we should interpolate it to the Lagrangian positions, but we use the Eulerian position)
-        // and we update the Lagrangian position q -= Psi_2LPT. For scale-dependent COLA we store the potential
-        // (and also update q: it was left at x - Psi_1LPT)
-        if (FML::PARTICLE::has_get_D_2LPT<T>() and sim.cola_LPT_order >= 2) {
-            if (FML::ThisTask == 0)
-                std::cout << "Reconstructing 2LPT displacement field from the density field\n";
-
-            FML::GRID::FFTWGrid<NDIM> temp;
-            FML::GRID::FFTWGrid<NDIM> & phi_2LPT_fourier = sim.use_scaledependent_cola ? phi_2LPT_ini_fourier : temp;
-            FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_fourier, phi_2LPT_fourier);
-
-            if (not sim.use_scaledependent_cola or FML::PARTICLE::has_get_q<T>()) {
-                auto displacements =
-                    displacement_field_at_particles<NDIM, T>(phi_2LPT_fourier, part, ic.reconstruct_assigment_method);
-
-                auto * part_ptr = part.get_particles_ptr();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-                for (size_t ind = 0; ind < part.get_npart(); ind++) {
-                    if (not sim.use_scaledependent_cola) {
-                        auto * D = FML::PARTICLE::GetD_2LPT(part_ptr[ind]);
-                        for (int idim = 0; idim < NDIM; idim++) {
-                            D[idim] = displacements[idim][ind];
-                        }
-                    }
-                    if constexpr (FML::PARTICLE::has_get_q<T>()) {
-                        auto * q = FML::PARTICLE::GetLagrangianPos(part_ptr[ind]);
-                        for (int idim = 0; idim < NDIM; idim++) {
-                            q[idim] -= displacements[idim][ind];
-                            wrap_periodic(q[idim]);
-                        }
-                    }
-                }
-            }
-        }
+        // The 1LPT and 2LPT displacement fields (and the Lagrangian positions q), or for scale-dependent COLA the LPT
+        // potentials
+        if (FML::PARTICLE::has_get_D_1LPT<T>() and sim.cola_LPT_order >= 1)
+            reconstruct_1LPT_from_density<NDIM, T>(delta_fourier, part, params, phi_1LPT_ini_fourier);
+        if (FML::PARTICLE::has_get_D_2LPT<T>() and sim.cola_LPT_order >= 2)
+            reconstruct_2LPT_from_density<NDIM, T>(delta_fourier, part, params, phi_2LPT_ini_fourier);
     }
 
 } // namespace SIMCODE

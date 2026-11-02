@@ -285,38 +285,17 @@ namespace SIMCODE {
 
 } // namespace SIMCODE
 
-/// Locate FoF halos (and their spherical overdensity masses), write the halo catalogue and the mass functions
+/// The FoF halos (and their SO masses) of the CDM+baryon particles in code units (masses in units of the mean
+/// particle mass, positions in [0,1)). npart_total: the total number of CDM+baryon particles
 template <int NDIM, class T>
-void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
+std::vector<SIMCODE::HaloRecord<NDIM>> find_cb_halos(NBodySimulation<NDIM, T> & sim,
+                                                    const std::vector<double> & so_thresholds,
+                                                    long long int & npart_total) {
     using Halo = SIMCODE::HaloRecord<NDIM>;
-
-    const std::string redshiftstring = redshift_to_string(redshift);
     const auto & settings = sim.get_parameters().fof;
-    const double H0_hmpc = sim.get_gravity_model()->H0_hmpc;
     const double boxsize = sim.get_parameters().simulation.boxsize;
-    const auto cosmo = sim.get_cosmology();
-    const double OmegaCB = cosmo->get_Omegab() + cosmo->get_OmegaCDM();
-    const double a = 1.0 / (1.0 + redshift);
-
-    // The spherical overdensities in units of the mean CDM+baryon density
-    const auto & so_definitions = settings.so_definitions;
-    std::vector<double> so_thresholds;
-    for (auto & def : so_definitions)
-        so_thresholds.push_back(SIMCODE::so_overdensity(def, *cosmo, a));
-    const bool do_so = not so_thresholds.empty();
-    if (do_so and FML::ThisTask == 0) {
-        std::cout << "# Spherical overdensity masses around the FoF halos (Delta in units of the mean CDM+baryon "
-                     "density):";
-        for (size_t i = 0; i < so_definitions.size(); i++)
-            std::cout << " " << so_definitions[i] << ": " << so_thresholds[i];
-        std::cout << "\n";
-    }
-
-    //=============================================================
-    // Halo finding with the CDM+baryon particles
-    //=============================================================
     std::vector<Halo> halos;
-    long long int npart_total = 0;
+    npart_total = 0;
     if (not sim.has_baryons()) {
         auto & part = sim.get_particles();
         npart_total = (long long int)part.get_npart_total();
@@ -366,14 +345,19 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
                                                  so_thresholds,
                                                  double(npart_total));
     }
-    if (do_so)
+    if (not so_thresholds.empty())
         SIMCODE::flag_overlapping_so_halos<NDIM>(halos);
+    return halos;
+}
 
-    // Convert to physical units
-    // Code masses are in units of the mean mass -> Msun/h
-    const double MplMpl_over_H0Msunh = FML::UTILS::SI::MplMpl_over_H0_msunh;
-    const double mass_norm = SIMCODE::halo_particle_mass_msunh(OmegaCB, boxsize, H0_hmpc, size_t(npart_total));
-    // Code positions are in [0,1) -> Mpc/h
+/// Convert the halos to physical units: masses Msun/h (mass_norm: the mean particle mass), positions Mpc/h and
+/// peculiar velocities km/s
+template <int NDIM>
+void halos_to_physical_units(std::vector<SIMCODE::HaloRecord<NDIM>> & halos,
+                             double mass_norm,
+                             double boxsize,
+                             double redshift) {
+    // Code masses are in units of the mean mass -> Msun/h (mass_norm), code positions are in [0,1) -> Mpc/h
     const double pos_norm = boxsize;
     // Code velocities are a^2 dx/dt / (H0 Box) -> peculiar km/s
     const double vel_norm = 100.0 * boxsize * (1.0 + redshift);
@@ -392,10 +376,25 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         for (auto & r : g.so_radius)
             r *= pos_norm;
     }
+}
 
-    //=============================================================
-    // The mass functions and the fits
-    //=============================================================
+/// The FoF mass function (with the Tinker (Delta = 200 mean) and Watson (FoF) fits) and the SO mass functions (with
+/// the Tinker fit for the same Delta), written to snapshot_folder (task 0)
+template <int NDIM, class T>
+void write_mass_functions(NBodySimulation<NDIM, T> & sim,
+                          const std::vector<SIMCODE::HaloRecord<NDIM>> & halos,
+                          const std::vector<std::string> & so_definitions,
+                          const std::vector<double> & so_thresholds,
+                          double redshift,
+                          const std::string & snapshot_folder) {
+    using Halo = SIMCODE::HaloRecord<NDIM>;
+    const std::string redshiftstring = redshift_to_string(redshift);
+    const auto & settings = sim.get_parameters().fof;
+    const double H0_hmpc = sim.get_gravity_model()->H0_hmpc;
+    const double boxsize = sim.get_parameters().simulation.boxsize;
+    const auto cosmo = sim.get_cosmology();
+    const double OmegaCB = cosmo->get_Omegab() + cosmo->get_OmegaCDM();
+    const double MplMpl_over_H0Msunh = FML::UTILS::SI::MplMpl_over_H0_msunh;
     const int nbins = settings.massfunction_nbins;
     const double massmin = settings.massfunction_Mmin;
     const double massmax = settings.massfunction_Mmax;
@@ -521,109 +520,126 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
             }
         }
     }
+}
 
-    //=============================================================
-    // The halo catalogue
-    //=============================================================
-    const int nso = int(so_definitions.size());
-    if (settings.output_fileformat == "HDF5") {
+/// The halo catalogue as one HDF5 file (gathered on task 0; mass_norm: the mean particle mass in Msun/h)
 #ifdef USE_HDF5
-        // Gather all the halos on task 0 and write one file
-        std::vector<double> local;
-        for (auto & g : halos) {
-            local.push_back(double(g.id));
-            local.push_back(double(g.np));
-            local.push_back(g.mass);
+template <int NDIM>
+void write_halo_catalogue_hdf5(const std::vector<SIMCODE::HaloRecord<NDIM>> & halos,
+                               const SIMCODE::FoFSettings & settings,
+                               const std::vector<double> & so_thresholds,
+                               double mass_norm,
+                               double boxsize,
+                               double redshift,
+                               const std::string & snapshot_folder) {
+    const std::string redshiftstring = redshift_to_string(redshift);
+    const auto & so_definitions = settings.so_definitions;
+    const bool do_so = not so_thresholds.empty();
+    const int nso = int(so_definitions.size());
+    // Gather all the halos on task 0 and write one file
+    std::vector<double> local;
+    for (auto & g : halos) {
+        local.push_back(double(g.id));
+        local.push_back(double(g.np));
+        local.push_back(g.mass);
+        for (int idim = 0; idim < NDIM; idim++)
+            local.push_back(g.pos[idim]);
+        for (int idim = 0; idim < NDIM; idim++)
+            local.push_back(g.vel[idim]);
+        for (int idim = 0; idim < NDIM; idim++)
+            local.push_back(g.vel_rms[idim]);
+        if (do_so) {
             for (int idim = 0; idim < NDIM; idim++)
-                local.push_back(g.pos[idim]);
+                local.push_back(g.so_pos[idim]);
             for (int idim = 0; idim < NDIM; idim++)
-                local.push_back(g.vel[idim]);
+                local.push_back(g.so_vel[idim]);
             for (int idim = 0; idim < NDIM; idim++)
-                local.push_back(g.vel_rms[idim]);
-            if (do_so) {
-                for (int idim = 0; idim < NDIM; idim++)
-                    local.push_back(g.so_pos[idim]);
-                for (int idim = 0; idim < NDIM; idim++)
-                    local.push_back(g.so_vel[idim]);
-                for (int idim = 0; idim < NDIM; idim++)
-                    local.push_back(g.so_vel_rms[idim]);
-                local.push_back(g.so_truncated ? 1.0 : 0.0);
-                local.push_back(g.so_overlap ? 1.0 : 0.0);
-                for (int id = 0; id < nso; id++) {
-                    local.push_back(g.so_mass[id]);
-                    local.push_back(g.so_radius[id]);
-                    local.push_back(double(g.so_npart[id]));
-                }
+                local.push_back(g.so_vel_rms[idim]);
+            local.push_back(g.so_truncated ? 1.0 : 0.0);
+            local.push_back(g.so_overlap ? 1.0 : 0.0);
+            for (int id = 0; id < nso; id++) {
+                local.push_back(g.so_mass[id]);
+                local.push_back(g.so_radius[id]);
+                local.push_back(double(g.so_npart[id]));
             }
         }
-        const int stride = 3 + 3 * NDIM + (do_so ? 3 * NDIM + 2 + 3 * nso : 0);
-        std::vector<double> all = FML::COMMUNICATION::gather_records_checked(local);
-        if (FML::ThisTask == 0) {
-            namespace H5 = FML::FILEUTILS::GADGET::HDF5;
-            const size_t nhalos = all.size() / stride;
-            // Column c of all halos (ncols consecutive values)
-            auto column = [&](int c, int ncols) {
-                std::vector<double> v(nhalos * ncols);
-                for (size_t i = 0; i < nhalos; i++)
-                    for (int j = 0; j < ncols; j++)
-                        v[i * ncols + j] = all[i * stride + c + j];
-                return v;
-            };
-            auto to_ll = [](const std::vector<double> & v) {
-                std::vector<long long int> r(v.size());
-                for (size_t i = 0; i < v.size(); i++)
-                    r[i] = (long long int)v[i];
-                return r;
-            };
-            const std::string filename = snapshot_folder + "/halos_z" + redshiftstring + ".hdf5";
-            H5::Handle file(H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT), H5Fclose, filename);
-            H5::Handle header(H5Gcreate2(file, "Header", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose, "Header");
-            const double attrs_d[] = {redshift, boxsize, settings.linking_length, mass_norm};
-            const char * names_d[] = {"Redshift", "BoxSize", "LinkingLength", "MeanParticleMass"};
-            for (int i = 0; i < 4; i++)
-                H5::write_attribute(header, names_d[i], H5T_NATIVE_DOUBLE, H5T_NATIVE_DOUBLE, &attrs_d[i], 1);
-            const long long int nh = (long long int)nhalos, nmin = settings.nmin_per_halo;
-            H5::write_attribute(header, "NumHalos", H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, &nh, 1);
-            H5::write_attribute(header, "MinParticlesPerHalo", H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, &nmin, 1);
-            auto write_d = [&](hid_t loc, const std::string & name, int c, int ncols) {
-                auto v = column(c, ncols);
-                H5::write_dataset(loc, name, H5T_NATIVE_DOUBLE, H5T_NATIVE_DOUBLE, v.data(), nhalos, ncols);
-            };
-            auto write_ll = [&](hid_t loc, const std::string & name, int c) {
-                auto v = to_ll(column(c, 1));
-                H5::write_dataset(loc, name, H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, v.data(), nhalos, 1);
-            };
-            write_ll(file, "ID", 0);
-            write_ll(file, "NumParticles", 1);
-            write_d(file, "Mass", 2, 1);
-            write_d(file, "Position", 3, NDIM);
-            write_d(file, "Velocity", 3 + NDIM, NDIM);
-            write_d(file, "VelocityDispersion", 3 + 2 * NDIM, NDIM);
-            if (do_so) {
-                const int c0 = 3 + 3 * NDIM;
-                H5::Handle so(H5Gcreate2(file, "SO", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose, "SO");
-                write_d(so, "Position", c0, NDIM);
-                write_d(so, "Velocity", c0 + NDIM, NDIM);
-                write_d(so, "VelocityDispersion", c0 + 2 * NDIM, NDIM);
-                write_ll(so, "Truncated", c0 + 3 * NDIM);
-                write_ll(so, "Overlap", c0 + 3 * NDIM + 1);
-                for (int id = 0; id < nso; id++) {
-                    const int c = c0 + 3 * NDIM + 2 + 3 * id;
-                    H5::Handle g(H5Gcreate2(so, so_definitions[id].c_str(), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT),
-                                 H5Gclose,
-                                 "SO/" + so_definitions[id]);
-                    H5::write_attribute(g, "Delta", H5T_NATIVE_DOUBLE, H5T_NATIVE_DOUBLE, &so_thresholds[id], 1);
-                    write_d(g, "Mass", c, 1);
-                    write_d(g, "Radius", c + 1, 1);
-                    write_ll(g, "NumParticles", c + 2);
-                }
-            }
-            std::cout << "Wrote " << nhalos << " halos to " << filename << "\n";
-        }
-        return;
-#endif
     }
+    const int stride = 3 + 3 * NDIM + (do_so ? 3 * NDIM + 2 + 3 * nso : 0);
+    std::vector<double> all = FML::COMMUNICATION::gather_records_checked(local);
+    if (FML::ThisTask == 0) {
+        namespace H5 = FML::FILEUTILS::GADGET::HDF5;
+        const size_t nhalos = all.size() / stride;
+        // Column c of all halos (ncols consecutive values)
+        auto column = [&](int c, int ncols) {
+            std::vector<double> v(nhalos * ncols);
+            for (size_t i = 0; i < nhalos; i++)
+                for (int j = 0; j < ncols; j++)
+                    v[i * ncols + j] = all[i * stride + c + j];
+            return v;
+        };
+        auto to_ll = [](const std::vector<double> & v) {
+            std::vector<long long int> r(v.size());
+            for (size_t i = 0; i < v.size(); i++)
+                r[i] = (long long int)v[i];
+            return r;
+        };
+        const std::string filename = snapshot_folder + "/halos_z" + redshiftstring + ".hdf5";
+        H5::Handle file(H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT), H5Fclose, filename);
+        H5::Handle header(H5Gcreate2(file, "Header", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose, "Header");
+        const double attrs_d[] = {redshift, boxsize, settings.linking_length, mass_norm};
+        const char * names_d[] = {"Redshift", "BoxSize", "LinkingLength", "MeanParticleMass"};
+        for (int i = 0; i < 4; i++)
+            H5::write_attribute(header, names_d[i], H5T_NATIVE_DOUBLE, H5T_NATIVE_DOUBLE, &attrs_d[i], 1);
+        const long long int nh = (long long int)nhalos, nmin = settings.nmin_per_halo;
+        H5::write_attribute(header, "NumHalos", H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, &nh, 1);
+        H5::write_attribute(header, "MinParticlesPerHalo", H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, &nmin, 1);
+        auto write_d = [&](hid_t loc, const std::string & name, int c, int ncols) {
+            auto v = column(c, ncols);
+            H5::write_dataset(loc, name, H5T_NATIVE_DOUBLE, H5T_NATIVE_DOUBLE, v.data(), nhalos, ncols);
+        };
+        auto write_ll = [&](hid_t loc, const std::string & name, int c) {
+            auto v = to_ll(column(c, 1));
+            H5::write_dataset(loc, name, H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, v.data(), nhalos, 1);
+        };
+        write_ll(file, "ID", 0);
+        write_ll(file, "NumParticles", 1);
+        write_d(file, "Mass", 2, 1);
+        write_d(file, "Position", 3, NDIM);
+        write_d(file, "Velocity", 3 + NDIM, NDIM);
+        write_d(file, "VelocityDispersion", 3 + 2 * NDIM, NDIM);
+        if (do_so) {
+            const int c0 = 3 + 3 * NDIM;
+            H5::Handle so(H5Gcreate2(file, "SO", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose, "SO");
+            write_d(so, "Position", c0, NDIM);
+            write_d(so, "Velocity", c0 + NDIM, NDIM);
+            write_d(so, "VelocityDispersion", c0 + 2 * NDIM, NDIM);
+            write_ll(so, "Truncated", c0 + 3 * NDIM);
+            write_ll(so, "Overlap", c0 + 3 * NDIM + 1);
+            for (int id = 0; id < nso; id++) {
+                const int c = c0 + 3 * NDIM + 2 + 3 * id;
+                H5::Handle g(H5Gcreate2(so, so_definitions[id].c_str(), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT),
+                             H5Gclose,
+                             "SO/" + so_definitions[id]);
+                H5::write_attribute(g, "Delta", H5T_NATIVE_DOUBLE, H5T_NATIVE_DOUBLE, &so_thresholds[id], 1);
+                write_d(g, "Mass", c, 1);
+                write_d(g, "Radius", c + 1, 1);
+                write_ll(g, "NumParticles", c + 2);
+            }
+        }
+        std::cout << "Wrote " << nhalos << " halos to " << filename << "\n";
+    }
+}
+#endif
 
+/// The halo catalogue as a text file (the tasks append to the same file in turn)
+template <int NDIM>
+void write_halo_catalogue_ascii(const std::vector<SIMCODE::HaloRecord<NDIM>> & halos,
+                                const std::vector<std::string> & so_definitions,
+                                double redshift,
+                                const std::string & snapshot_folder) {
+    const std::string redshiftstring = redshift_to_string(redshift);
+    const bool do_so = not so_definitions.empty();
+    const int nso = int(so_definitions.size());
     // Text catalogue: append to the same file task by task
     for (int i = 0; i < FML::NTasks; i++) {
         if (i == FML::ThisTask) {
@@ -679,6 +695,46 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         MPI_Barrier(FML::communicator);
 #endif
     }
+}
+
+/// Locate FoF halos (and their spherical overdensity masses), write the halo catalogue and the mass functions
+template <int NDIM, class T>
+void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
+    const auto & settings = sim.get_parameters().fof;
+    const double H0_hmpc = sim.get_gravity_model()->H0_hmpc;
+    const double boxsize = sim.get_parameters().simulation.boxsize;
+    const auto cosmo = sim.get_cosmology();
+    const double OmegaCB = cosmo->get_Omegab() + cosmo->get_OmegaCDM();
+    const double a = 1.0 / (1.0 + redshift);
+
+    // The spherical overdensities in units of the mean CDM+baryon density
+    const auto & so_definitions = settings.so_definitions;
+    std::vector<double> so_thresholds;
+    for (auto & def : so_definitions)
+        so_thresholds.push_back(SIMCODE::so_overdensity(def, *cosmo, a));
+    if (not so_thresholds.empty() and FML::ThisTask == 0) {
+        std::cout << "# Spherical overdensity masses around the FoF halos (Delta in units of the mean CDM+baryon "
+                     "density):";
+        for (size_t i = 0; i < so_definitions.size(); i++)
+            std::cout << " " << so_definitions[i] << ": " << so_thresholds[i];
+        std::cout << "\n";
+    }
+
+    // Halo finding with the CDM+baryon particles, in physical units
+    long long int npart_total = 0;
+    auto halos = find_cb_halos(sim, so_thresholds, npart_total);
+    const double mass_norm = SIMCODE::halo_particle_mass_msunh(OmegaCB, boxsize, H0_hmpc, size_t(npart_total));
+    halos_to_physical_units<NDIM>(halos, mass_norm, boxsize, redshift);
+
+    write_mass_functions(sim, halos, so_definitions, so_thresholds, redshift, snapshot_folder);
+
+#ifdef USE_HDF5
+    if (settings.output_fileformat == "HDF5") {
+        write_halo_catalogue_hdf5<NDIM>(halos, settings, so_thresholds, mass_norm, boxsize, redshift, snapshot_folder);
+        return;
+    }
+#endif
+    write_halo_catalogue_ascii<NDIM>(halos, so_definitions, redshift, snapshot_folder);
 }
 
 #endif
