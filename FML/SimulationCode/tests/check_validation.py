@@ -5,7 +5,7 @@
 #  - pofk = true without pofk_nmesh (was optional with default 0: SIGFPE at the first output); a grid size or bin
 #    count of 0; an unknown fof_so_definitions entry and bad fof_massfunction_* settings (this validation was
 #    compiled out with USE_HDF5=true)
-#  - simulation_cola_LPT_order = 3 (not implemented: aborted after the IC); simulation_enforce_LPT_trajectories
+#  - simulation_cola_LPT_order = 3 (COLA has the 1LPT and 2LPT frames: aborted after the IC); simulation_enforce_LPT_trajectories
 #    with COLA turned off by cola_LPT_order = 0 (the particles never moved); Tassev with timestep_cola_nLPT = 0
 #    (0/0); an unknown timestep_algorithm (was ignored); an output with 0 steps after the first (wrote the
 #    previous snapshot at another redshift), also when splitting the total number of steps
@@ -25,6 +25,7 @@
 #   MPIRUN : how to launch (default "mpirun -np 2"; MPIRUN="" for a serial build)
 #==========================================================================
 import os
+import signal
 import struct
 import subprocess
 import sys
@@ -72,8 +73,10 @@ def check(ok, what, out=""):
 
 def rejected(name, overrides, message, remove=(), before_ic=True):
     rc, out = run(name, overrides, remove)
-    # The run must stop with the message (before the initial conditions are made if it is a parameter check)
-    ok = rc > 0 and message in out and (not before_ic or "# Create initial conditions" not in out)
+    # The run must stop with the message (before the initial conditions are made if it is a parameter check). A
+    # failed assert_mpi aborts: SIGABRT (returncode -6) when run without mpirun, a positive exit code with mpirun
+    stopped = rc > 0 or rc == -signal.SIGABRT
+    ok = stopped and message in out and (not before_ic or "# Create initial conditions" not in out)
     check(ok, f"{name}: stops with [{message}]", out)
 
 
@@ -89,7 +92,7 @@ rejected("fof_massfunction_bins", dict(fof=True, fof_massfunction_nbins=0, fof_m
 
 # COLA and time stepping
 rejected("cola_3LPT", dict(simulation_use_cola=True, simulation_cola_LPT_order=3, ic_LPT_order=3),
-         "simulation_cola_LPT_order = 3 is not implemented")
+         "simulation_cola_LPT_order must be 1 or 2")
 rejected("enforce_LPT_without_cola", dict(simulation_use_cola=True, simulation_cola_LPT_order=0,
                                           simulation_enforce_LPT_trajectories=True), "needs COLA")
 rejected("tassev_nLPT_zero", dict(timestep_method="Tassev", timestep_cola_nLPT=0.0),

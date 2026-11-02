@@ -47,6 +47,11 @@ jobs:
           mpirun --oversubscribe -np 1 ./nbody --parameters /tmp/PARAMETERS.md
           diff -u PARAMETERS.md /tmp/PARAMETERS.md
 
+      - name: SimulationCode stops with a clear message on invalid parameters
+        run: |
+          MPIRUN="mpirun --oversubscribe -np 2" python3 FML/SimulationCode/tests/check_validation.py \
+            FML/SimulationCode/nbody "$RUNNER_TEMP/validation"
+
       - name: Python analysis installed-wheel regressions
         run: |
           python3 -m venv "$RUNNER_TEMP/fml-analysis-env"
