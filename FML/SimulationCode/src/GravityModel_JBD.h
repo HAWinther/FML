@@ -1,85 +1,31 @@
 #ifndef GRAVITYMODEL_JBD_HEADER
 #define GRAVITYMODEL_JBD_HEADER
 
-#include <FML/FFTWGrid/FFTWGrid.h>
-#include <FML/Global/Global.h>
-#include <FML/LPT/DisplacementFields.h>
-#include <FML/NBody/NBody.h>
-#include <FML/ODESolver/ODESolver.h>
-#include <FML/ParameterMap/ParameterMap.h>
-#include <FML/Spline/Spline.h>
-
 #include "Cosmology.h"
-
-#include <FML/Cosmology/Perturbations/QuasiStaticGravity_BransDicke.h>
 #include "GravityModel.h"
 
-/// Jordan-Brans-Dicke: G_eff/G = g phi_*/phi(a) from the shared quasi-static theory
-/// (FML/Cosmology/Perturbations/QuasiStaticGravity_BransDicke.h, phi(a) of the JBD background)
-template <int NDIM>
-class GravityModelJBD : public GravityModel<NDIM> {
-  public:
-    template <int N>
-    using FFTWGrid = FML::GRID::FFTWGrid<N>;
-    using ParameterMap = FML::UTILS::ParameterMap;
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_BransDicke.h>
+#include <FML/Global/Global.h>
 
-    GravityModelJBD() : GravityModel<NDIM>("JBD") {}
-    GravityModelJBD(std::shared_ptr<Cosmology> cosmo) : GravityModel<NDIM>(cosmo, "JBD") {
+#include <memory>
+
+/// Jordan-Brans-Dicke: G_eff/G = g phi_*/phi(a) from the shared quasi-static theory
+/// (FML/Cosmology/Perturbations/QuasiStaticGravity_BransDicke.h, phi(a) of the JBD background). The parameter
+/// cosmology_JBD_GeffG_today = phi_*/phi(a = 1) sets the strength of gravity today (1 for the Newtonian limit). The
+/// force and the growth are the defaults of GravityModel
+template <int NDIM>
+class GravityModelJBD final : public GravityModel<NDIM> {
+  public:
+    explicit GravityModelJBD(std::shared_ptr<Cosmology> cosmo) : GravityModel<NDIM>(cosmo, "JBD") {
         FML::assert_mpi(
             cosmo->get_name() == "JBD",
             "As currently written the JBD gravity model requires a JBD cosmology as we need phi(a) from there");
     }
 
-    //========================================================================
-    // Compute the force DPhi from the density field delta in fourier space
-    // We compute this from D^2 Phi = norm_poisson_equation * delta
-    //========================================================================
-    void compute_force(double a,
-                       [[maybe_unused]] double H0Box,
-                       FFTWGrid<NDIM> & density_fourier,
-                       std::string density_assignment_method_used,
-                       std::array<FFTWGrid<NDIM>, NDIM> & force_real,
-                       const FML::NBODY::ForceOptions & options = {}) const override {
-        const double norm_poisson_equation = 1.5 * this->cosmo->get_OmegaM() * a * GeffOverG(a);
-        this->compute_force_from_total_density(density_fourier,
-                                               norm_poisson_equation,
-                                               density_assignment_method_used,
-                                               force_real,
-                                               options);
-    }
-
-    //========================================================================
-    // In JBD Geff = G phi_*/phi(a) where the parameter GeffG_today = phi_*/phi(0) is a free
-    // parameter that sets the strength of gravity today (we need GeffG_today = 1 to have
-    // the correct Newtonian limit)
-    //========================================================================
-    double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0) const override {
-        return this->qs().mu(std::log(a), koverH0);
-    }
-
     void init() override {
-        this->quasi_static =
-            std::make_shared<const FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_BransDicke>(this->cosmo->background());
+        this->quasi_static = std::make_shared<const FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_BransDicke>(
+            this->cosmo->background());
         GravityModel<NDIM>::init();
-    }
-
-    //========================================================================
-    // Read parameters
-    //========================================================================
-    void read_parameters(ParameterMap & param) override {
-        GravityModel<NDIM>::read_parameters(param);
-        this->scaledependent_growth = this->cosmo->get_OmegaMNu() > 0.0;
-    }
-
-    //========================================================================
-    // Show some info
-    //========================================================================
-    void info() const override {
-        GravityModel<NDIM>::info();
-        if (FML::ThisTask == 0) {
-            std::cout << "#=====================================================\n";
-            std::cout << "\n";
-        }
     }
 };
 

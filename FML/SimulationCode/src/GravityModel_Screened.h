@@ -49,6 +49,7 @@ class GravityModelScreened : public GravityModel<NDIM> {
     // The last exact (multigrid) solution in real space and its scale factor: the starting point of the next solve
     mutable FML::GRID::FFTWGrid<NDIM> multigrid_previous_solution;
     mutable double multigrid_previous_a{-1.0};
+    std::string exact_solution_parameter;
 
   public:
     template <int N>
@@ -57,7 +58,18 @@ class GravityModelScreened : public GravityModel<NDIM> {
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
     using CouplingFunction = std::function<double(double)>;
 
-    using GravityModel<NDIM>::GravityModel;
+    /// exact_solution_parameter: the name of the model's switch for the exact (multigrid) solution, e.g.
+    /// gravity_model_fofr_exact_solution ("" if the model has no multigrid solver)
+    GravityModelScreened(std::shared_ptr<Cosmology> cosmo, std::string name, std::string exact_solution_parameter = "")
+        : GravityModel<NDIM>(cosmo, name), exact_solution_parameter(exact_solution_parameter) {}
+
+    /// The base parameters, the screening parameters and (if the model has a multigrid solver) the multigrid ones
+    void read_parameters(ParameterMap & param) override {
+        GravityModel<NDIM>::read_parameters(param);
+        read_screening_parameters(param);
+        if (not exact_solution_parameter.empty())
+            read_multigrid_parameters(param, exact_solution_parameter);
+    }
 
     bool get_use_screening() const { return use_screening_method or solve_exact_equation; }
 

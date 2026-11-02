@@ -29,13 +29,8 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
     using ParameterMap = FML::UTILS::ParameterMap;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
-    GravityModelFofR() : GravityModelScreened<NDIM>("f(R)") {}
-    GravityModelFofR(std::shared_ptr<Cosmology> cosmo)
-        : GravityModelScreened<NDIM>(cosmo, "f(R)")
-
-    {
-        assert(this->get_name() == "f(R)");
-    }
+    explicit GravityModelFofR(std::shared_ptr<Cosmology> cosmo)
+        : GravityModelScreened<NDIM>(cosmo, "f(R)", "gravity_model_fofr_exact_solution") {}
 
     /// The model parameters (for the LPT predictions of the hybrid bias spectra)
     double get_fofr0() const { return fofr0; }
@@ -44,17 +39,12 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
     //========================================================================
     // Print some info
     //========================================================================
-    void info() const override {
-        GravityModelScreened<NDIM>::info();
+    void info_model() const override {
         if (FML::ThisTask == 0) {
             std::cout << "# fofr0            : " << fofr0 << "\n";
             std::cout << "# nfofr            : " << nfofr << "\n";
         }
         this->info_screening();
-        if (FML::ThisTask == 0) {
-            std::cout << "#=====================================================\n";
-            std::cout << "\n";
-        }
     }
 
     //========================================================================
@@ -71,13 +61,6 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
 
     /// m^2(a) / H0^2 (the scalaron mass, c = 1)
     double mass_over_H0_squared(double a) const { return hu_sawicky().mass2(std::log(a)); }
-
-    //========================================================================
-    // Effective newtonian constant: [1 + (1/3) k^2 / (k^2 + a^2 m^2)] / (1 + f_R)
-    //========================================================================
-    double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0.0) const override {
-        return this->qs().mu(std::log(a), koverH0);
-    }
 
     void solve_exact_fifth_force(double a,
                                  double H0Box,
@@ -112,11 +95,8 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
         nfofr = param.get<double>("gravity_model_fofr_nfofr");
         // |f_R0| (a negative value gives m^2 < 0 and a singular Geff)
         FML::assert_mpi(fofr0 > 0.0, "gravity_model_fofr_fofr0 must be > 0 (it is |f_R0|, e.g. 1e-5)");
-        this->read_screening_parameters(param);
-        this->read_multigrid_parameters(param, "gravity_model_fofr_exact_solution");
         if (this->solve_exact_equation)
             multigrid_method = param.get<std::string>("gravity_model_fofr_multigrid_method");
-        this->scaledependent_growth = true;
     }
 };
 

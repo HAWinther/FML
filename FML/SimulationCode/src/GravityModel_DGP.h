@@ -35,22 +35,17 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
     /// The model parameters (for the LPT predictions of the hybrid bias spectra)
     double get_rcH0() const { return rcH0_DGP; }
 
-    GravityModelDGP() : GravityModelScreened<NDIM>("DGP") {}
-    GravityModelDGP(std::shared_ptr<Cosmology> cosmo) : GravityModelScreened<NDIM>(cosmo, "DGP") {}
+    explicit GravityModelDGP(std::shared_ptr<Cosmology> cosmo)
+        : GravityModelScreened<NDIM>(cosmo, "DGP", "gravity_model_dgp_exact_solution") {}
 
     //========================================================================
     // Print some info
     //========================================================================
-    void info() const override {
-        GravityModelScreened<NDIM>::info();
+    void info_model() const override {
         if (FML::ThisTask == 0) {
             std::cout << "# rcH0             : " << rcH0_DGP << "\n";
         }
         this->info_screening();
-        if (FML::ThisTask == 0) {
-            std::cout << "#=====================================================\n";
-            std::cout << "\n";
-        }
     }
 
     //========================================================================
@@ -65,13 +60,6 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
 
     /// beta(a) = 1 + 2 rcH0 E (1 + dlogH/dloga / 3)
     double get_beta_dgp(double a) const { return dgp().beta(std::log(a)); }
-
-    //========================================================================
-    // Effective newtonian constant 1 + 1/(3 beta)
-    //========================================================================
-    double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0.0) const override {
-        return this->qs().mu(std::log(a), koverH0);
-    }
 
     //========================================================================
     // For the 2LPT equation: the nonlinear (brane-bending) term of the field equation adds a source -eps D1^2 with
@@ -118,13 +106,10 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
     void read_parameters(ParameterMap & param) override {
         GravityModelScreened<NDIM>::read_parameters(param);
         rcH0_DGP = param.get<double>("gravity_model_dgp_rcH0overc");
-        this->read_screening_parameters(param);
         if (this->use_screening_method) {
             smoothing_scale_over_boxsize = param.get<double>("gravity_model_dgp_smoothing_scale_over_boxsize");
             smoothing_filter = param.get<std::string>("gravity_model_dgp_smoothing_filter");
         }
-        this->read_multigrid_parameters(param, "gravity_model_dgp_exact_solution");
-        this->scaledependent_growth = this->cosmo->get_OmegaMNu() > 0.0;
     }
 };
 

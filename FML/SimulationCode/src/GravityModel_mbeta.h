@@ -25,28 +25,18 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     using ParameterMap = FML::UTILS::ParameterMap;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
-    GravityModelmbeta() : GravityModelScreened<NDIM>("mbeta") {}
-    GravityModelmbeta(std::shared_ptr<Cosmology> cosmo)
-        : GravityModelScreened<NDIM>(cosmo, "mbeta")
-
-    {
-        assert(this->get_name() == "mbeta");
-    }
+    explicit GravityModelmbeta(std::shared_ptr<Cosmology> cosmo)
+        : GravityModelScreened<NDIM>(cosmo, "mbeta") {}
 
     //========================================================================
     // Print some info
     //========================================================================
-    void info() const override {
-        GravityModelScreened<NDIM>::info();
+    void info_model() const override {
         if (FML::ThisTask == 0) {
             for (size_t i = 0; i < mbeta_params.size(); i++)
                 std::cout << "# Params[" << i << "]        : " << mbeta_params[i] << "\n";
         }
         this->info_screening();
-        if (FML::ThisTask == 0) {
-            std::cout << "#=====================================================\n";
-            std::cout << "\n";
-        }
     }
 
     //========================================================================
@@ -58,13 +48,6 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     double m_over_H0_of_a(double a) const { return std::sqrt(mbeta().mass2_of_a(a)); }
     double beta_of_a(double a) const { return mbeta().beta_of_a(a); }
     double mass_over_H0_squared(double a) const { return mbeta().mass2_of_a(a); }
-
-    //========================================================================
-    // Effective newtonian constant 1 + 2 beta^2 k^2 / (k^2 + a^2 m^2)
-    //========================================================================
-    double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0.0) const override {
-        return this->qs().mu(std::log(a), koverH0);
-    }
 
     std::string fifth_force_label() const override { return "(m(a),beta(a)) models"; }
 
@@ -93,8 +76,6 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
         mbeta_params = param.get<std::vector<double>>("gravity_model_mbeta_params");
         FML::assert_mpi(mbeta_params.size() == 4,
                         "gravity_model_mbeta_params must have 4 numbers (beta0, beta power, m0, m power)");
-        this->read_screening_parameters(param);
-        this->scaledependent_growth = true;
     }
 };
 

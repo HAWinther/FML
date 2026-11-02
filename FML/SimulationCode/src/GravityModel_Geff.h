@@ -19,7 +19,7 @@ using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
 /// Geff(a)-models
 template <int NDIM>
-class GravityModelGeff : public GravityModel<NDIM> {
+class GravityModelGeff final : public GravityModel<NDIM> {
   private:
     std::string geffofa_filename;
     Spline geffofa_spline;
@@ -29,30 +29,10 @@ class GravityModelGeff : public GravityModel<NDIM> {
     using FFTWGrid = FML::GRID::FFTWGrid<N>;
     using ParameterMap = FML::UTILS::ParameterMap;
 
-    GravityModelGeff() : GravityModel<NDIM>("Geff(a)") {}
-    GravityModelGeff(std::shared_ptr<Cosmology> cosmo) : GravityModel<NDIM>(cosmo, "Geff(a)") {}
+    explicit GravityModelGeff(std::shared_ptr<Cosmology> cosmo) : GravityModel<NDIM>(cosmo, "Geff(a)") {}
 
     //========================================================================
-    // Compute the force DPhi from the density field delta in fourier space
-    // We compute this from D^2 Phi = norm_poisson_equation * delta
-    //========================================================================
-    void compute_force(double a,
-                       [[maybe_unused]] double H0Box,
-                       FFTWGrid<NDIM> & density_fourier,
-                       std::string density_assignment_method_used,
-                       std::array<FFTWGrid<NDIM>, NDIM> & force_real,
-                       const FML::NBODY::ForceOptions & options = {}) const override {
-        const double norm_poisson_equation = 1.5 * this->cosmo->get_OmegaM() * a * GeffOverG(a);
-        this->compute_force_from_total_density(density_fourier,
-                                               norm_poisson_equation,
-                                               density_assignment_method_used,
-                                               force_real,
-                                               options);
-    }
-
-    //========================================================================
-    // In JBD GeffOverG = 1/phi. The value at 1/phi(a=1) is the parameter
-    // cosmology_JBD_GeffG_today
+    // G_eff/G(a) from the table (the force and the growth are the defaults of GravityModel)
     //========================================================================
     double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0) const override { return geffofa_spline(a); }
 
@@ -64,8 +44,6 @@ class GravityModelGeff : public GravityModel<NDIM> {
 
         // The file containing [a,Geff/G(a)]
         geffofa_filename = param.get<std::string>("gravity_model_geff_geffofa_filename");
-
-        this->scaledependent_growth = this->cosmo->get_OmegaMNu() > 0.0;
     }
 
     virtual void init() override {
@@ -96,16 +74,13 @@ class GravityModelGeff : public GravityModel<NDIM> {
     //========================================================================
     // Show some info
     //========================================================================
-    void info() const override {
-        GravityModel<NDIM>::info();
+    void info_model() const override {
         if (FML::ThisTask == 0) {
             std::cout << "GeffG(a=1.00) = " << GeffOverG(1.00) << "\n";
             std::cout << "GeffG(a=0.66) = " << GeffOverG(0.66) << "\n";
             std::cout << "GeffG(a=0.50) = " << GeffOverG(0.50) << "\n";
             std::cout << "GeffG(a=0.33) = " << GeffOverG(0.33) << "\n";
             std::cout << "GeffG(a=0.25) = " << GeffOverG(0.25) << "\n";
-            std::cout << "#=====================================================\n";
-            std::cout << "\n";
         }
     }
 };

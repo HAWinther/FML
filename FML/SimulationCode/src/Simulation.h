@@ -480,7 +480,7 @@ void NBodySimulation<NDIM, T>::init() {
     // we can supply LCDM P(k) and use the GR growth factors to scale it back
     if (params.ic.use_gravity_model_GR) {
         grav_ic = std::make_shared<GravityModelGR<NDIM>>(cosmo);
-        grav_ic->set_transfers(grav->get_transfers()); // (not loaded again)
+        grav_ic->set_transfers(grav->get_transfers()); // (loaded once in Main.cpp)
         grav_ic->read_parameters(*parameters);
         grav_ic->init();
     } else {

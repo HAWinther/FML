@@ -2,6 +2,7 @@
 #include "ParameterSchema.h"
 #include "Particles.h"
 #include "RunSimulation.h"
+#include "TransferInput.h"
 
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
@@ -105,7 +106,14 @@ int run(int argc, char ** argv) {
     cosmo->init();
     cosmo->info();
 
+    // The transfer functions of the input (CAMB, CLASS or the internal Einstein-Boltzmann solver), loaded once here:
+    // the gravity model (growth with massive neutrinos), the initial conditions and the analysis share them
+    std::shared_ptr<SIMCODE::TransferProvider> transfers;
+    if (SIMCODE::input_has_transfer_tables(param.get<std::string>("ic_type_of_input")))
+        transfers = SIMCODE::load_transfers(SIMCODE::make_transfer_request(param, *cosmo, NDIM));
+
     auto grav = SIMCODE::make_gravity_model<NDIM>(param.get<std::string>("gravity_model"), cosmo);
+    grav->set_transfers(transfers);
     grav->read_parameters(param);
     grav->init();
     grav->info();

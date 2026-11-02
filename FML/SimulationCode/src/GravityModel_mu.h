@@ -56,8 +56,7 @@ class GravityModelMu final : public GravityModel<NDIM> {
     Spline2D mu_of_loga_logk_spline;
 
   public:
-    GravityModelMu() : GravityModel<NDIM>("mu") {}
-    GravityModelMu(std::shared_ptr<Cosmology> cosmo) : GravityModel<NDIM>(cosmo, "mu") {}
+    explicit GravityModelMu(std::shared_ptr<Cosmology> cosmo) : GravityModel<NDIM>(cosmo, "mu") {}
 
     bool scale_dependent() const { return parametrization == "BZ" or (parametrization == "table" and table_has_k); }
 
@@ -77,36 +76,9 @@ class GravityModelMu final : public GravityModel<NDIM> {
         return mu_of_loga_spline(std::log(a));
     }
 
+    /// The force (mu(a, k) delta(k) if it depends on k) and the growth are the defaults of GravityModel
     double GeffOverG(double a, double koverH0 = 0) const override { return mu_of_a_k(a, koverH0 * this->H0_hmpc); }
-
-    //========================================================================
-    // The force from mu(a,k) delta(k)
-    //========================================================================
-    void compute_force(double a,
-                       double H0Box,
-                       FFTWGrid<NDIM> & density_fourier,
-                       std::string density_assignment_method_used,
-                       std::array<FFTWGrid<NDIM>, NDIM> & force_real,
-                       const FML::NBODY::ForceOptions & options = {}) const override {
-        const double OmegaM_a = 1.5 * this->cosmo->get_OmegaM() * a;
-        auto force_from = [&](FFTWGrid<NDIM> & source, double norm_poisson_equation) {
-            this->compute_force_from_total_density(source,
-                                                   norm_poisson_equation,
-                                                   density_assignment_method_used,
-                                                   force_real,
-                                                   options);
-        };
-        if (not scale_dependent()) {
-            force_from(density_fourier, OmegaM_a * mu_of_a_k(a, 0.0));
-            return;
-        }
-        // mu(a,k) delta(k) (kBox = k * Box, k in h/Mpc = kBox / H0Box * H0_hmpc)
-        FFTWGrid<NDIM> density_mu;
-        FML::NBODY::compute_delta_fifth_force<NDIM>(density_fourier, density_mu, [&](double kBox) {
-            return GeffOverG(a, kBox / H0Box);
-        });
-        force_from(density_mu, OmegaM_a);
-    }
+    bool geff_scale_dependent() const override { return scale_dependent(); }
 
     //========================================================================
     // Read the parameters and the table
@@ -129,9 +101,6 @@ class GravityModelMu final : public GravityModel<NDIM> {
             throw std::runtime_error("Unknown gravity_model_mu_parametrization [" + parametrization +
                                      "]. Options: DE, BZ, table");
         }
-        // The growth factors depend on k for a k-dependent mu (or with massive neutrinos, set in the base class)
-        if (scale_dependent())
-            this->scaledependent_growth = true;
     }
 
     void init() override {
@@ -211,8 +180,7 @@ class GravityModelMu final : public GravityModel<NDIM> {
         mu_of_loga_logk_spline.create(loga, logk, mu, "mu(log a, log k)");
     }
 
-    void info() const override {
-        GravityModel<NDIM>::info();
+    void info_model() const override {
         if (FML::ThisTask == 0) {
             std::cout << "# Parametrization  : " << parametrization << "\n";
             if (parametrization == "DE")
@@ -229,8 +197,6 @@ class GravityModelMu final : public GravityModel<NDIM> {
                     std::cout << mu_of_a_k(a, k) << " ";
                 std::cout << "\n";
             }
-            std::cout << "#=====================================================\n";
-            std::cout << "\n";
         }
     }
 };

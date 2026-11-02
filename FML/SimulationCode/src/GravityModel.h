@@ -26,7 +26,10 @@
 #include <memory>
 #include <vector>
 
-/// Base class for gravity models
+/// Base class for gravity models. A model provides its quasi-static theory (QuasiStaticGravity, built in init()) or
+/// overrides GeffOverG; the defaults here then give G_eff/G = mu(a, k) of the theory (1 without one: GR), the force
+/// from 1.5 OmegaM a G_eff/G delta (k-dependent if the theory is) and scale-dependent growth if mu depends on k or
+/// there are massive neutrinos. Screened models (GravityModel_Screened.h) override compute_force.
 template <int NDIM>
 class GravityModel {
   public:
@@ -44,7 +47,6 @@ class GravityModel {
     //========================================================================
     // Constructors
     //========================================================================
-    GravityModel(std::string name) : name(name) {}
     GravityModel(std::shared_ptr<Cosmology> cosmo, std::string name) : cosmo(cosmo), name(name) {}
 
     //========================================================================
@@ -197,12 +199,16 @@ class GravityModel {
     // In derived class remember to also call the base class (this) unless
     // you solve for the growth factors independently
     //========================================================================
-    virtual void init() { compute_growth_factors(); }
+    virtual void init() {
+        if (geff_scale_dependent())
+            scaledependent_growth = true;
+        compute_growth_factors();
+    }
 
     //========================================================================
     // Show some info
     //========================================================================
-    virtual void info() const {
+    void info() const {
         if (FML::ThisTask == 0) {
             std::cout << "#=====================================================\n";
             std::cout << "# GravityModel is [" << name << "] and has the cosmology: [" << this->cosmo->get_name()
@@ -211,7 +217,14 @@ class GravityModel {
             std::cout << "# Starting integrating growth factors from z = " << 1.0 / alow - 1.0 << "\n";
             std::cout << "# scaledependent_growth : " << scaledependent_growth << "\n";
         }
+        info_model();
+        if (FML::ThisTask == 0) {
+            std::cout << "#=====================================================\n";
+            std::cout << "\n";
+        }
     }
+    /// The model's own lines of info() (its parameters; print on task 0 only)
+    virtual void info_model() const {}
 
     //========================================================================
     // The transfer functions (shared with the simulation: see TransferInput.h)
@@ -227,14 +240,10 @@ class GravityModel {
         aini = 1.0 / (1.0 + param.get<double>("ic_initial_redshift"));
         // The growth factor splines must start before the simulation (e.g. when starting at very high redshift)
         alow = std::min(alow, aini / 10.0);
-        // The transfer functions (CAMB, CLASS or the internal solver): needed for the growth factors with massive
-        // neutrinos (the initial conditions use the same object). Not again if they are set already (set_transfers:
-        // another gravity model of the same simulation has them)
-        if (not transfers and SIMCODE::input_has_transfer_tables(param.get<std::string>("ic_type_of_input")))
-            transfers = SIMCODE::load_transfers(SIMCODE::make_transfer_request(param, *cosmo, NDIM));
+        // The transfer functions (CAMB, CLASS or the internal solver) are loaded once by the caller and given with
+        // set_transfers before this (Main.cpp; the same object is used by the initial conditions and the analysis).
+        // The growth factors with massive neutrinos are computed from them (and start at their highest redshift)
         this->scaledependent_growth = this->cosmo->get_fMNu() > 0.0;
-        // The growth factors with massive neutrinos are computed from the transfer functions (and start at their
-        // highest redshift). Without them we would dereference a null pointer in compute_growth_factors
         FML::assert_mpi(not(this->cosmo->get_OmegaMNu() > 0.0 and not transfers),
                         "Massive neutrinos need ic_type_of_input = camb, class or internal (the growth factors "
                         "with massive neutrinos are computed from the transfer functions)");
@@ -249,7 +258,12 @@ class GravityModel {
     // Effective gravitational constant and equivalent factors appearing
     // in the LPT growth equations
     //========================================================================
-    virtual double GeffOverG([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const = 0;
+    /// G_eff/G = mu(a, k) of the theory (koverH0 = c k / H0), 1 without one (GR)
+    virtual double GeffOverG(double a, double koverH0 = 0) const {
+        return quasi_static ? quasi_static->mu(std::log(a), koverH0) : 1.0;
+    }
+    /// Whether G_eff/G depends on k (then the force and the growth do too)
+    virtual bool geff_scale_dependent() const { return quasi_static and quasi_static->scale_dependent(); }
 
     // Factors in the LPT equations
     virtual double source_factor_1LPT([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
@@ -281,13 +295,30 @@ class GravityModel {
         return 1.0 - this->cosmo->f_nu(a);
     };
 
-    // This computes the force DPhi from the density field
+    /// The force D Phi from the density field (Fourier space): D^2 Phi = 1.5 OmegaM a G_eff/G(a, k) delta, with
+    /// G_eff/G(a, k) multiplying delta(k) if it depends on k. Screened models override it
     virtual void compute_force(double a,
                                double H0Box,
                                FFTWGrid<NDIM> & density_fourier,
                                std::string density_assignment_method_used,
                                std::array<FFTWGrid<NDIM>, NDIM> & force_real,
-                               const FML::NBODY::ForceOptions & options = {}) const = 0;
+                               const FML::NBODY::ForceOptions & options = {}) const {
+        const double norm_poisson_equation = 1.5 * this->cosmo->get_OmegaM() * a;
+        if (not geff_scale_dependent()) {
+            compute_force_from_total_density(density_fourier,
+                                             norm_poisson_equation * GeffOverG(a),
+                                             density_assignment_method_used,
+                                             force_real,
+                                             options);
+            return;
+        }
+        // G_eff/G(a, k) delta(k) (kBox = k Box, koverH0 = kBox / H0Box)
+        FFTWGrid<NDIM> density_geff;
+        FML::NBODY::compute_delta_fifth_force<NDIM>(
+            density_fourier, density_geff, [&](double kBox) { return GeffOverG(a, kBox / H0Box); });
+        compute_force_from_total_density(
+            density_geff, norm_poisson_equation, density_assignment_method_used, force_real, options);
+    }
 
     //========================================================================
     // The force D Phi from the (total) density that sources it, D^2 Phi = norm_poisson_equation * density:

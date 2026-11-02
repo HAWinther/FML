@@ -27,29 +27,19 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
     using ParameterMap = FML::UTILS::ParameterMap;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
-    GravityModelSymmetron() : GravityModelScreened<NDIM>("Symmetron") {}
-    GravityModelSymmetron(std::shared_ptr<Cosmology> cosmo)
-        : GravityModelScreened<NDIM>(cosmo, "Symmetron")
-
-    {
-        assert(this->get_name() == "Symmetron");
-    }
+    explicit GravityModelSymmetron(std::shared_ptr<Cosmology> cosmo)
+        : GravityModelScreened<NDIM>(cosmo, "Symmetron", "gravity_model_symmetron_exact_solution") {}
 
     //========================================================================
     // Print some info
     //========================================================================
-    void info() const override {
-        GravityModelScreened<NDIM>::info();
+    void info_model() const override {
         if (FML::ThisTask == 0) {
             std::cout << "# assb             : " << assb << "\n";
             std::cout << "# beta             : " << beta << "\n";
             std::cout << "# L_mpch           : " << L_mpch << "\n";
         }
         this->info_screening();
-        if (FML::ThisTask == 0) {
-            std::cout << "#=====================================================\n";
-            std::cout << "\n";
-        }
     }
 
     //========================================================================
@@ -69,13 +59,6 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
     double phi_background(double a) const { return symmetron().phi(std::log(a)); }
     /// m^2(a) / H0^2
     double mass_over_H0_squared(double a) const { return symmetron().mass2(std::log(a)); }
-
-    //========================================================================
-    // Effective newtonian constant 1 + 2 beta^2 (phi/phi0)^2 k^2 / (k^2 + a^2 m^2)
-    //========================================================================
-    double GeffOverG(double a, [[maybe_unused]] double koverH0 = 0.0) const override {
-        return this->qs().mu(std::log(a), koverH0);
-    }
 
     void solve_exact_fifth_force(double a,
                                  double H0Box,
@@ -102,9 +85,6 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
         assb = param.get<double>("gravity_model_symmetron_assb");
         beta = param.get<double>("gravity_model_symmetron_beta");
         L_mpch = param.get<double>("gravity_model_symmetron_L_mpch");
-        this->read_screening_parameters(param);
-        this->read_multigrid_parameters(param, "gravity_model_symmetron_exact_solution");
-        this->scaledependent_growth = true;
     }
 };
 
