@@ -12,6 +12,7 @@
 #include "Neutrinos.h"
 #include "Particles.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <functional>
@@ -27,6 +28,13 @@ namespace SIMCODE {
     /// particles and does what is specific to them: the initial conditions (bulk LPT motion plus Fermi-Dirac
     /// thermal momenta), the delta-f weights (update_weights after every kick) and the (weighted) density field.
     /// The relativistic kick and drift are in KickDrift.h, the units and equations in Neutrinos.h.
+    ///
+    /// Neutrinos of different masses are one set of particles: all species have the same temperature and number
+    /// density, so each particle is one of the species at random (species_of: from its ID only, the same for every
+    /// number of tasks), with that mass in its thermal velocity (y = q c / (k_B T_nu0) is drawn as for one mass) and in
+    /// its delta-f weight. Its weight also carries its mass relative to the mean mass, m_i / <m>, so the weighted
+    /// density field is the mass-density contrast of all of them. The bulk part (the linear delta_nu and velocity)
+    /// is that of all the neutrinos together for every particle (the transfer functions of their sum).
     //=============================================================================
     template <int NDIM>
     class NeutrinoParticles {
@@ -37,14 +45,35 @@ namespace SIMCODE {
         using Spline = FML::INTERPOLATION::SPLINE::Spline;
         using DVector = FML::INTERPOLATION::SPLINE::DVector;
 
-        /// mnu_eV: the mass of one neutrino, Tnu0_eV: the temperature today, boxsize in Mpc/h, deltaf: use the
-        /// delta-f weights (otherwise all weights are 1 and the density is 1 + delta)
-        void init(double _mnu_eV, double _Tnu0_eV, double _boxsize, bool _deltaf) {
-            mnu_eV = _mnu_eV;
+        /// masses_eV: the masses of the massive neutrino species (equal or not), Tnu0_eV: the temperature today,
+        /// boxsize in Mpc/h, deltaf: use the delta-f weights (otherwise the weights are m_i / <m>, 1 for one mass, and
+        /// the density is 1 + delta)
+        void init(const std::vector<double> & masses_eV, double _Tnu0_eV, double _boxsize, bool _deltaf) {
+            if (masses_eV.empty())
+                throw std::invalid_argument("NeutrinoParticles: no massive neutrinos");
+            masses = masses_eV;
+            mean_mass = 0.0;
+            for (double m : masses) {
+                if (not(m > 0.0))
+                    throw std::invalid_argument("NeutrinoParticles: the masses must be > 0");
+                mean_mass += m / double(masses.size());
+            }
+            single_mass = std::all_of(masses.begin(), masses.end(), [&](double m) { return m == masses.front(); });
+            if (single_mass)
+                mean_mass = masses.front();
             Tnu0_eV = _Tnu0_eV;
             boxsize = _boxsize;
             deltaf = _deltaf;
         }
+
+        /// The species (index in the masses) of the particle with this ID, and its mass
+        int species_of(long long int id) const {
+            if (single_mass)
+                return 0;
+            return int(SIMCODE::NEUTRINOS::splitmix64(uint64_t(id) ^ 0x6E657574726E6FULL) % uint64_t(masses.size()));
+        }
+        double mass_of(long long int id) const { return masses[species_of(id)]; }
+        const std::vector<double> & get_masses_eV() const { return masses; }
 
         Container & particles() { return part; }
         const Container & particles() const { return part; }
@@ -73,13 +102,15 @@ namespace SIMCODE {
         /// the weights). Collective (all tasks must call it)
         double shotnoise();
 
-        /// The mean energy per mass <E/m>(a) of the unperturbed neutrinos (see NEUTRINOS::mean_energy_factor)
-        double mean_energy_factor(double a) const { return SIMCODE::NEUTRINOS::mean_energy_factor(a, mnu_eV, Tnu0_eV); }
+        /// The mean energy per mass <E/m>(a) of the unperturbed neutrinos (all species; see
+        /// NEUTRINOS::mean_energy_factor)
+        double mean_energy_factor(double a) const { return SIMCODE::NEUTRINOS::mean_energy_factor(a, masses, Tnu0_eV); }
 
         /// While this object lives the weights of the particles are w_i E_i / (m <E/m>(a)) with E_i / m =
-        /// sqrt(1 + u_i^2), so the (weighted) density field is the energy-density contrast delta_nu = delta rho_nu /
-        /// rho_nu (as in CAMB/CLASS) instead of the mass-density contrast; also its shot noise. The original weights
-        /// are restored (exactly) when it goes out of scope. Does nothing if enabled = false
+        /// sqrt(1 + u_i^2) (several masses: w_i m_i/<m> E_i / (m_i <E/m>(a)) with the <E/m> of all species, so that
+        /// the mass ratio carries over), so the (weighted) density field is the energy-density contrast
+        /// delta_nu = delta rho_nu / rho_nu (as in CAMB/CLASS) instead of the mass-density contrast; also its shot
+        /// noise. The original weights are restored (exactly) when it goes out of scope. Nothing if enabled = false
         class ScopedEnergyWeights {
           public:
             ScopedEnergyWeights(NeutrinoParticles & nu, double a, bool enabled) : nu(nu), enabled(enabled) {
@@ -123,7 +154,9 @@ namespace SIMCODE {
 
       private:
         Container part;
-        double mnu_eV{0.0};
+        std::vector<double> masses;
+        double mean_mass{0.0};
+        bool single_mass{true};
         double Tnu0_eV{0.0};
         double boxsize{1.0};
         bool deltaf{true};
@@ -195,8 +228,8 @@ namespace SIMCODE {
                                                                                    "CIC");
         delta_nu.free();
 
-        // The thermal momenta
-        const double vth_norm = Tnu0_eV / mnu_eV * NU::c_code(boxsize);
+        // The thermal momenta (the velocity scale (T_nu0 / m_i) c of the particle's species)
+        const double vth_norm = Tnu0_eV / mean_mass * NU::c_code(boxsize);
         const NU::FermiDiracSampler sampler;
         auto * p = part.get_particles_ptr();
         double min_delta = 1e100;
@@ -213,15 +246,16 @@ namespace SIMCODE {
             const double phi = 2.0 * M_PI * rng.uniform();
             const double sin_theta = std::sqrt(std::max(0.0, 1.0 - cos_theta * cos_theta));
             const double dir[3] = {sin_theta * std::cos(phi), sin_theta * std::sin(phi), cos_theta};
+            const double vth = single_mass ? vth_norm : Tnu0_eV / mass_of(p[i].id) * NU::c_code(boxsize);
             for (int idim = 0; idim < NDIM; idim++)
-                p[i].vel[idim] += y * vth_norm * (NDIM == 3 ? dir[idim] : (idim == 0 ? 1.0 : 0.0));
+                p[i].vel[idim] += y * vth * (NDIM == 3 ? dir[idim] : (idim == 0 ? 1.0 : 0.0));
         }
         FML::MinOverTasks(&min_delta);
         if (min_delta <= -1.0)
             throw std::runtime_error("particle_neutrinos: delta_nu <= -1 in the initial conditions (start earlier)");
         update_weights();
         if (FML::ThisTask == 0)
-            std::cout << "# Neutrino thermal velocity scale (T_nu0 / m_nu) c = " << vth_norm << " (code units), "
+            std::cout << "# Neutrino thermal velocity scale (T_nu0 / <m_nu>) c = " << vth_norm << " (code units), "
                       << vth_norm * 100.0 * boxsize
                       << " km/s today. Min delta_nu(zini) at the particles = " << min_delta << "\n";
     }
@@ -231,12 +265,13 @@ namespace SIMCODE {
         namespace NU = SIMCODE::NEUTRINOS;
         auto * p = part.get_particles_ptr();
         const size_t npart = part.get_npart();
+        // Several masses: the weights carry m_i / <m>
         if (not deltaf) {
             for (size_t i = 0; i < npart; i++)
-                p[i].weight = 1.0f;
+                p[i].weight = single_mass ? 1.0f : float(mass_of(p[i].id) / mean_mass);
             return;
         }
-        const double y_over_v = 1.0 / NU::c_code(boxsize) * mnu_eV / Tnu0_eV;
+        const double y_over_v = 1.0 / NU::c_code(boxsize) * mean_mass / Tnu0_eV;
         double sum_w = 0.0, sum_w2 = 0.0;
 #ifdef USE_OMP
 #pragma omp parallel for reduction(+ : sum_w, sum_w2)
@@ -245,9 +280,10 @@ namespace SIMCODE {
             double v2 = 0.0;
             for (int idim = 0; idim < NDIM; idim++)
                 v2 += p[i].vel[idim] * p[i].vel[idim];
-            const double y = std::sqrt(v2) * y_over_v;
+            const double mass_ratio = single_mass ? 1.0 : mass_of(p[i].id) / mean_mass;
+            const double y = std::sqrt(v2) * y_over_v * mass_ratio;
             const double fi = NU::fermi_dirac(p[i].y_ini) * (1.0 + p[i].delta_ini);
-            const double w = 1.0 - NU::fermi_dirac(y) / fi;
+            const double w = single_mass ? 1.0 - NU::fermi_dirac(y) / fi : (1.0 - NU::fermi_dirac(y) / fi) * mass_ratio;
             p[i].weight = float(w);
             sum_w += w;
             sum_w2 += w * w;
@@ -262,7 +298,7 @@ namespace SIMCODE {
     template <int NDIM>
     double NeutrinoParticles<NDIM>::shotnoise() {
         const double N = double(part.get_npart_total());
-        if (not deltaf)
+        if (not deltaf and single_mass)
             return 1.0 / N;
         double sum_w2 = 0.0;
         auto * p = part.get_particles_ptr();

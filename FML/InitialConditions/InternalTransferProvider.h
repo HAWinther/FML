@@ -10,8 +10,9 @@
 namespace FML::INITIALCONDITIONS {
     /// Owning solver adapter. The converted density uses the CDM rest frame, not each
     /// species' own comoving frame. Velocity transfers remain explicitly Newtonian.
-    /// Any model of the solver's registry (settings.cosmo.model; curvature allowed) with its massive neutrinos (deg_ncdm
-    /// degenerate species of mass m_nu): MassiveNeutrino is then available and TotalMatter includes it. The weights of
+    /// Any model of the solver's registry (settings.cosmo.model; curvature allowed) with its massive neutrinos
+    /// (deg_ncdm degenerate species of mass m_nu, or m_nu_list): MassiveNeutrino (all of them) is then available and
+    /// TotalMatter includes it. The weights of
     /// the combinations are the background densities rho_i(a) of the model (e.g. a coupled CDM).
     class InternalTransferProvider final : public TransferProvider {
         struct State {
@@ -32,7 +33,7 @@ namespace FML::INITIALCONDITIONS {
         std::shared_ptr<const State> state;
         Gauge gauge;
         double primordial_scale{1.0};
-        bool massive_nu() const { return state->settings.cosmo.m_nu > 0.0; }
+        bool massive_nu() const { return state->settings.cosmo.has_massive_nu(); }
         // delta of one species in the requested gauge. Newtonian -> CDM-synchronous is the time shift that brings CDM
         // to rest: delta_s += 3 (1 + w_s) Hp theta_cdm / (c k)^2 = -3 (1 + w_s) Hp v_cdm / (c k)
         double density_one(Species species, double x, double k_si) const {

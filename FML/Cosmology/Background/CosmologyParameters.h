@@ -14,6 +14,8 @@
 // per species and contributes N_ncdm = (0.71611 / (4/11)^(1/3))^4 = 1.0132 per species to Neff). Neff is the total;
 // the remaining Neff - N_ncdm species are massless. m_nu = 0 means all Neff species are massless. The degenerate
 // species have the same perturbations: they are solved as one (with deg_ncdm times the density).
+// Species of different masses: m_nu_list (one entry per species; 0 = massless, equal masses are degenerate) instead
+// of m_nu and deg_ncdm. Each distinct mass has its own hierarchy; delta_ncdm, v_ncdm are then those of all of them.
 //
 // Model: the name of a model in the model registry (Cosmology/Perturbations/Presets.h, default lcdm) and its own
 // parameters (model_params, name -> value; parameters that are not given take the registry default).
@@ -23,6 +25,7 @@
 #include <array>
 #include <map>
 #include <string>
+#include <vector>
 
 namespace FML::COSMOLOGY {
 
@@ -35,6 +38,7 @@ namespace FML::COSMOLOGY {
         double Neff = 3.046;               // Effective number of neutrinos, massless + massive (0 = no neutrinos)
         double m_nu = 0.0;                 // Mass of each massive neutrino species [eV] (0 = all massless)
         int deg_ncdm = 1;                  // Number of degenerate massive species of mass m_nu
+        std::vector<double> m_nu_list;     // Masses of the species [eV] (not empty: instead of m_nu, deg_ncdm)
         double T_ncdm_over_TCMB = 0.71611; // Temperature of the massive species today / TCMB
         double TCMB = 2.7255;              // CMB temperature today [K]
 
@@ -77,11 +81,13 @@ namespace FML::COSMOLOGY {
         double OmegaGamma() const; // Photons (from TCMB)
         double OmegaNu() const;    // Massless neutrinos (from Neff - N_ncdm and OmegaGamma)
         double OmegaR() const { return OmegaGamma() + OmegaNu(); } // Photons + massless neutrinos
-        bool has_massive_nu() const { return m_nu > 0.0; }
-        double N_ncdm() const; // Contribution of the massive species to Neff (all deg_ncdm; 0 if m_nu = 0)
+        bool has_massive_nu() const { return not neutrino_masses().empty(); }
+        /// The masses of the massive species [eV]: m_nu_list without its zeros, or deg_ncdm times m_nu
+        std::vector<double> neutrino_masses() const;
+        double N_ncdm() const; // Contribution of the massive species to Neff (all of them; 0 without)
         double T_ncdm() const { return T_ncdm_over_TCMB * TCMB; } // [K]
-        double M_ncdm() const;    // m_nu c^2 / (k_B T_ncdm), the mass in units of the temperature today
-        double OmegaNcdm() const; // Massive neutrinos today, all deg_ncdm species (Fermi-Dirac momentum integral)
+        double M_ncdm() const; // m_nu c^2 / (k_B T_ncdm), the mass in units of the temperature today (one species)
+        double OmegaNcdm() const; // Massive neutrinos today, all species (Fermi-Dirac momentum integral)
         double OmegaM() const { return OmegaB + OmegaCDM; }
         double OmegaLambda() const; // Fixed by the closure relation
 

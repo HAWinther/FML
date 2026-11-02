@@ -169,6 +169,25 @@ Output: P(k) of CDM (`pofk_cdm_zX.txt`), baryons (`pofk_baryon_zX.txt`) and CDM+
 
 Not implemented for two species yet (the code stops with a message): COLA with the Tassev operators, reading the IC from file, NUFFT / sheet densities, force interlacing and the early-time force, the N-body gauge, the lightcone, multipoles and the bispectrum (the full list is the table at the end of [PARAMETERS.md](PARAMETERS.md)). Use `ic_input_redshift = ic_initial_redshift` (the two species are made from the transfer functions at zini).
 
+## Neutrino masses
+
+There are N_nu = 3 neutrino species with the temperature T_nu = T_CMB (Neff/3)^(1/4) (4/11)^(1/3). Their masses are
+given in one of two ways:
+
+- `cosmology_OmegaMNu > 0`: 3 equal masses, with the total Mnu from OmegaMNu (the non-relativistic relation), as before.
+- `cosmology_neutrino_masses_eV = {m1, m2, m3}` (up to 3 entries in eV; 0 or not listed: massless), e.g.
+  `{0.0, 0.0086, 0.05}` for the normal hierarchy with a massless lightest neutrino. `cosmology_OmegaMNu` must then be
+  0; OmegaMNu (the particle masses, f_nu, the Poisson normalization) follows from the masses with the same
+  non-relativistic relation.
+
+The background (`Cosmology`, FML/Cosmology/Background) has each massive species with its own Fermi-Dirac density.
+The linear neutrinos (`force_linear_massive_neutrinos`) and the scale-dependent growth use the transfer functions of
+all the neutrinos together, so they work for any masses as long as the transfer functions are those of the same masses
+(`ic_type_of_input = internal` runs the solver with them; equal masses are one hierarchy there, so 2 or 3 distinct
+masses cost more: an estimated 1.3-2x the solver time of one mass). CAMB and CLASS input must be made with the same
+masses (the code only checks that both have massive neutrinos). The nonlinear EuclidEmulator2 boost takes the total mass.
+Neutrino particles with different masses: see below.
+
 ## Massive neutrinos as particles (delta-f method)
 
 By default massive neutrinos are included with linear theory (`force_linear_massive_neutrinos`). With `particle_neutrinos = true` they are particles instead (`particle_neutrino_Npart_1D^3` of them, default `particle_Npart_1D`), evolved with the delta-f method of Elbers et al. 2021 ([arXiv:2010.07321](https://arxiv.org/abs/2010.07321)):
@@ -178,7 +197,7 @@ By default massive neutrinos are included with linear theory (`force_linear_mass
 - delta-f weights w = 1 - f0(y) / f_i, where f_i = f0(y_ini) (1 + delta_ini) is the phase-space density the particle carries (conserved along its path) and f0(y) the unperturbed distribution at its current momentum. The weighted density (N_grid^3 / N_nu) Sum w_i W(x - x_i) is delta_nu: the particles only carry the perturbation, so the shot noise is that of w (Sum w^2 / N^2 instead of 1 / N). `particle_neutrino_deltaf = false` uses plain particles (w = 1), for testing.
 - The force is computed from delta_m = (1 - f_nu) delta_cb + f_nu delta_nu with f_nu = OmegaMNu / OmegaM (the same non-relativistic mass weighting as the linear option; the neutrino energy density is larger than the rest mass density at early times: by 33% at z = 50 and 7% at z = 20 for 0.1 eV, 3% at z = 50 for 0.4 eV).
 
-Needs `ic_type_of_input = camb` or `class` with tables up to zini, accurate massive neutrino transfer functions and N_nu = 3 degenerate neutrinos. `scripts/make_camb_transfer_tables.py` makes them with CAMB; `input/transfer_infofile_lcdm_nu0.1_zmax200.txt` and `..._nu0.4_zmax200.txt` are examples (OmegaM = 0.3175, OmegaMNu = 0.0024 and 0.0095, `cosmology_OmegaCDM = 0.2661` and `0.259`). Use a CAMB accuracy boost: with the default accuracy CAMB underestimates P_nu below the free-streaming scale (for 0.1 eV by 3 / 13 / 16% at k = 0.014 / 0.05 / 0.1 h/Mpc at z = 0, relative to CAMB with AccuracyBoost = 3 and to CLASS without the fluid approximation). The older tables in `input/camb_data_lcdm_nu*` are made with one massive neutrino and the approximate neutrino transfer functions, so they should not be used for neutrino particles.
+Needs `ic_type_of_input = camb`, `class` or `internal` with tables up to zini and accurate massive neutrino transfer functions (of the same masses as the simulation). `scripts/make_camb_transfer_tables.py` makes them with CAMB; `input/transfer_infofile_lcdm_nu0.1_zmax200.txt` and `..._nu0.4_zmax200.txt` are examples (OmegaM = 0.3175, OmegaMNu = 0.0024 and 0.0095, `cosmology_OmegaCDM = 0.2661` and `0.259`). Use a CAMB accuracy boost: with the default accuracy CAMB underestimates P_nu below the free-streaming scale (for 0.1 eV by 3 / 13 / 16% at k = 0.014 / 0.05 / 0.1 h/Mpc at z = 0, relative to CAMB with AccuracyBoost = 3 and to CLASS without the fluid approximation). The older tables in `input/camb_data_lcdm_nu*` are made with one massive neutrino and the approximate neutrino transfer functions, so they should not be used for neutrino particles.
 
 Tests: 1024 Mpc/h, 128^3 CDM+baryon and 128^3 neutrino particles, 256^3 force grid, z_ini = 50, 40 logarithmic Quinn steps, fixed amplitude IC. P_nu at z = 0 (shot noise subtracted) relative to linear theory (CAMB, from the measured P_cb at z_ini), and P_cb / P_total compared with the same simulation with linear neutrinos:
 
@@ -194,6 +213,16 @@ Tests: 1024 Mpc/h, 128^3 CDM+baryon and 128^3 neutrino particles, 256^3 force gr
 (P_cb / P_cb,lin of the simulation itself is 0.95-1.05 on these scales because of the time stepping and the force resolution, and P_nu follows it; relative to that P_nu agrees with linear theory to 2% for 0.4 eV and to 7% for 0.1 eV; the difference for 0.1 eV does not change with the number of steps or z_ini.) The shot noise of the neutrinos at z = 0 is 136 (Mpc/h)^3 for 0.4 eV (rms weight 0.52) and 4.2 (Mpc/h)^3 for 0.1 eV (rms weight 0.09), compared with V / N = 512 (Mpc/h)^3 for plain particles; it equals P_nu,lin at k = 0.12 h/Mpc in both cases. The weights grow as gravity changes the neutrino momenta, so the gain is largest at high redshift and for light neutrinos (the rms weight is 0.14 for 0.4 eV and 0.02 for 0.1 eV at z = 2). For heavy neutrinos the bulk velocities at late times are comparable to the thermal velocities and the weights become of order one. The relativistic corrections change P_nu by about 2% for 0.1 eV. The neutrinos add about 15% to the run time with as many neutrino as CDM particles.
 
 Output: P(k) of the neutrinos (`pofk_nu_zX.txt`, with the shot noise in the header) and of the total matter (`pofk_total_zX.txt`) at the outputs and every step. GADGET (binary and HDF5) files have the neutrinos as type 3 (HDF5: with their weights in `PartType3/Weights`; the particle mass is that of a plain particle, the effective mass is mass * weight). Their velocities are q / (a m), which differs from the peculiar velocity by the factor sqrt(1 + u^2). Neutrino IDs follow the CDM (and baryon) IDs.
+
+Different masses (`cosmology_neutrino_masses_eV`) are one set of particles: all species have the same temperature and
+number density, so each particle is one of the massive species at random (from a hash of its ID: the same split for
+every number of tasks and every seed, equal numbers of each on average). Its thermal velocity uses its own mass (y is
+drawn as for one mass, v = y (T_nu0 / m_i) c), and so does its delta-f weight; the weight also carries m_i / <m> (the
+mean mass of the massive species), so the weighted density is the mass-density contrast of all the neutrinos (the
+GADGET `Weights` then include this factor). The bulk part of the initial conditions (delta_nu and the growth rate) is
+that of all the neutrinos together (the transfer functions of their sum) for every particle; with very different
+masses the heavier ones cluster more already at zini, which this misses (small at high zini). With equal masses
+nothing changes (bitwise the same as before). Not run with unequal masses yet.
 
 Not implemented for neutrino particles yet (the code stops with a message): time stepping other than Quinn, COLA, reading the IC from file, NUFFT / sheet densities, force interlacing and the early-time force, the N-body gauge, the lightcone, multipoles and the bispectrum (see the table at the end of [PARAMETERS.md](PARAMETERS.md)). The initial conditions use the same density perturbation for all momenta (Elbers et al. use momentum-dependent initial conditions from integrating linear geodesics, which is more accurate for light neutrinos at high redshift).
 

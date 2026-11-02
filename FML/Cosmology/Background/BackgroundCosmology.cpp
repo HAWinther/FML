@@ -2,6 +2,7 @@
 #include <FML/Cosmology/Common.h>
 #include <FML/Cosmology/Perturbations/Presets.h>
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -14,7 +15,7 @@ namespace FML::COSMOLOGY {
     using namespace Constants;
 
     namespace {
-        // The parameters of the background of a run: deg_ncdm massive species of mass m_nu
+        // The parameters of the background of a run: its massive neutrino species (m_nu_list, or deg_ncdm x m_nu)
         BACKGROUND::BackgroundParameters background_parameters(const CosmologyParameters & p) {
             BACKGROUND::BackgroundParameters b;
             b.h = p.h;
@@ -23,8 +24,7 @@ namespace FML::COSMOLOGY {
             b.Omega_k = p.OmegaK;
             b.T_CMB = p.TCMB;
             b.N_eff = p.Neff;
-            if (p.has_massive_nu())
-                b.m_nu_eV.assign(p.deg_ncdm, p.m_nu);
+            b.m_nu_eV = p.neutrino_masses();
             b.T_ncdm_over_TCMB = p.T_ncdm_over_TCMB;
             return b;
         }
@@ -95,8 +95,7 @@ namespace FML::COSMOLOGY {
 
     void BackgroundCosmology::find_massive_neutrinos() {
         // Degenerate species (the same mass and temperature) count as one with the sum of their factors
-        ncdm = nullptr;
-        ncdm_factor = 0.0;
+        ncdm.clear();
         for (const auto & s : bg->species()) {
             if (s->component() != BACKGROUND::Component::MassiveNeutrinos)
                 continue;
@@ -104,14 +103,14 @@ namespace FML::COSMOLOGY {
             const auto * typed = BACKGROUND::as_massive_neutrinos(*s, factor);
             if (!typed)
                 throw std::invalid_argument("BackgroundCosmology: massive neutrinos must be a MassiveNeutrinoSpecies");
-            if (ncdm && !BACKGROUND::degenerate(*ncdm, *typed))
-                throw std::invalid_argument("BackgroundCosmology: only one massive neutrino species (or several "
-                                            "degenerate ones) is supported");
-            ncdm = typed;
-            ncdm_factor += factor;
+            auto same = std::find_if(ncdm.begin(), ncdm.end(), [&](const auto & g) {
+                return BACKGROUND::degenerate(*g.first, *typed);
+            });
+            if (same != ncdm.end())
+                same->second += factor;
+            else
+                ncdm.push_back({typed, factor});
         }
-        if (!ncdm)
-            ncdm_factor = 1.0;
     }
 
     std::string BackgroundCosmology::gravity_name() const { return tensor_fe->name(); }
@@ -137,10 +136,32 @@ namespace FML::COSMOLOGY {
     double BackgroundCosmology::pNcdm(double x) const {
         return has_massive_nu() ? p_of(BACKGROUND::Component::MassiveNeutrinos, x) : 0.0;
     }
-    double BackgroundCosmology::dpNcdmdx(double x) const { return ncdm ? ncdm_factor * ncdm->dpdx(x) : 0.0; }
-    double BackgroundCosmology::pseudo_pNcdm(double x) const { return ncdm ? ncdm_factor * ncdm->pseudo_p(x) : 0.0; }
-    double BackgroundCosmology::M_ncdm_of_x(double x) const { return ncdm ? ncdm->M_of_x(x) : 0.0; }
-    double BackgroundCosmology::ncdm_prefactor() const { return ncdm ? ncdm_factor * ncdm->prefactor() : 0.0; }
+    double BackgroundCosmology::dpNcdmdx(double x) const {
+        double sum = 0.0;
+        for (const auto & g : ncdm)
+            sum += g.second * g.first->dpdx(x);
+        return sum;
+    }
+    double BackgroundCosmology::pseudo_pNcdm(double x) const {
+        double sum = 0.0;
+        for (const auto & g : ncdm)
+            sum += g.second * g.first->pseudo_p(x);
+        return sum;
+    }
+    const BACKGROUND::MassiveNeutrinoSpecies * BackgroundCosmology::single_ncdm(const char * func) const {
+        if (ncdm.size() > 1)
+            throw std::logic_error(std::string("BackgroundCosmology::") + func +
+                                   ": defined for one massive neutrino mass, there are several");
+        return ncdm.empty() ? nullptr : ncdm.front().first;
+    }
+    double BackgroundCosmology::M_ncdm_of_x(double x) const {
+        const auto * s = single_ncdm("M_ncdm_of_x");
+        return s ? s->M_of_x(x) : 0.0;
+    }
+    double BackgroundCosmology::ncdm_prefactor() const {
+        const auto * s = single_ncdm("ncdm_prefactor");
+        return s ? ncdm.front().second * s->prefactor() : 0.0;
+    }
 
     // =============================================================================
     // Expansion rate, from the ComponentBackground: E and dlnE/dx analytic (species and field equations),

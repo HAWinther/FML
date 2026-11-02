@@ -75,11 +75,14 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
 
     class SpeciesPerturbation_MassiveNeutrinos : public SpeciesPerturbation {
       public:
-        /// nu: the background species; factor: its densities are multiplied by this (a ScaledSpecies wrapping it)
+        /// nu: the background species; factor: its densities are multiplied by this (a ScaledSpecies wrapping it, or
+        /// degenerate species); label: appended to the output names (several species of different masses)
         SpeciesPerturbation_MassiveNeutrinos(const BACKGROUND::MassiveNeutrinoSpecies & nu,
                                              const PerturbationContext & ctx,
-                                             double factor = 1.0)
-            : species(nu), ctx(ctx), f(factor), L(ctx.settings.lmax_ncdm), nq(ctx.settings.n_q_ncdm) {
+                                             double factor = 1.0,
+                                             std::string label = "")
+            : species(nu), ctx(ctx), f(factor), L(ctx.settings.lmax_ncdm), nq(ctx.settings.n_q_ncdm),
+              label(std::move(label)) {
             if (L < 3 or nq < 1)
                 throw std::invalid_argument(
                     "[SpeciesPerturbation_MassiveNeutrinos] Need lmax_ncdm >= 3 and n_q_ncdm >= 1");
@@ -93,6 +96,9 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
         }
 
         std::string name() const override { return "massive neutrinos"; }
+        /// The (scaled) background density and pressure of the species [rho_c0]
+        double rho(double x) const { return f * species.rho(x); }
+        double p(double x) const { return f * species.p(x); }
         std::string info() const override {
             return "massive neutrinos (" + std::to_string(nq) + " momenta, lmax_ncdm = " + std::to_string(L) + ")";
         }
@@ -195,7 +201,7 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
             }
         }
 
-        std::vector<std::string> output_names() const override { return {"delta_ncdm", "v_ncdm"}; }
+        std::vector<std::string> output_names() const override { return {"delta_ncdm" + label, "v_ncdm" + label}; }
         void outputs(const ModeAtX & b, const double * cc, int mode, const double * P, double * out) const override {
             const Moments m = moments(b, cc, mode, P);
             out[0] = m.drho / cc[RHO];
@@ -208,6 +214,7 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
         PerturbationContext ctx;
         double f;
         int L, nq;
+        std::string label;
         std::vector<double> q, wq, dlnf0; ///< momentum nodes, weights (incl. f0), dln f0/dln q
     };
 

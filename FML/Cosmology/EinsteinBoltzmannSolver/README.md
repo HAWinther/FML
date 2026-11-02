@@ -103,7 +103,7 @@ Each run writes `<output_dir>/params_used.ini` (re-readable) and `params.txt` (r
 | `params/default.ini` | All parameters at their defaults (the fiducial model) |
 | `params/planck2018.ini` | Planck 2018 (preset `planck2018`, massless neutrinos), lensed spectra to ℓ = 2500 |
 | `params/curvature.ini` | Curved universe (`OmegaK=...`), as in the report |
-| `params/neutrinos.ini` | One massive neutrino with lensing (`m_nu=...`), as in the report (`deg_ncdm=3`: three degenerate species of mass `m_nu` each, solved as one) |
+| `params/neutrinos.ini` | One massive neutrino with lensing (`m_nu=...`), as in the report (`deg_ncdm=3`: three degenerate species of mass `m_nu` each, solved as one; `m_nu_list=0.0086, 0.05`: species of different masses, each its own hierarchy) |
 | `params/twopoint.ini` | All two-point functions (perturbations to k = 1/Mpc), as in the report |
 | `params/isocurvature.ini` | Planck 2018 with a correlated CDM isocurvature mode (f = 0.3, c_ad = −0.2) |
 | `params/tensors.ini` | Planck 2018 with tensor modes, r = 0.05: lensed BB with the primordial B modes |

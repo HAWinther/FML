@@ -47,6 +47,19 @@ namespace SIMCODE {
             return num / den;
         }
 
+        /// The mean energy per mass of several species of the same temperature and number density with the masses
+        /// mnu_eV (energy density / mass density: sum_i m_i <E/m>_i / sum_i m_i)
+        inline double mean_energy_factor(double a, const std::vector<double> & mnu_eV, double Tnu0_eV) {
+            if (std::all_of(mnu_eV.begin(), mnu_eV.end(), [&](double m) { return m == mnu_eV.front(); }))
+                return mean_energy_factor(a, mnu_eV.front(), Tnu0_eV);
+            double num = 0.0, den = 0.0;
+            for (double m : mnu_eV) {
+                num += m * mean_energy_factor(a, m, Tnu0_eV);
+                den += m;
+            }
+            return num / den;
+        }
+
         /// The drift and kick factors for u = q / (a m c)
         inline double drift_factor(double u2) { return 1.0 / std::sqrt(1.0 + u2); }
         inline double kick_factor(double u2) { return (1.0 + 2.0 * u2) / std::sqrt(1.0 + u2); }

@@ -211,7 +211,13 @@ namespace SIMCODE {
                        "The cosmology (background evolution)",
                        model_names(cosmology_models()));
             b.required("cosmology_Omegab", 0.0, "Baryon density parameter");
-            b.optional("cosmology_OmegaMNu", 0.0, "Massive neutrino density parameter");
+            b.optional("cosmology_OmegaMNu",
+                       0.0,
+                       "Massive neutrino density parameter (3 equal masses; or use cosmology_neutrino_masses_eV)");
+            b.optional("cosmology_neutrino_masses_eV",
+                       std::vector<double>{},
+                       "The masses of the (up to 3) neutrinos in eV, e.g. {0.0, 0.0086, 0.05} (0 or not listed: "
+                       "massless). Instead of cosmology_OmegaMNu (which then follows from the masses)");
             b.required("cosmology_OmegaCDM", 0.0, "CDM density parameter");
             b.required("cosmology_OmegaK", 0.0, "Curvature density parameter (-k/H0^2)");
             b.required("cosmology_Neffective", 3.046, "Effective number of relativistic species");

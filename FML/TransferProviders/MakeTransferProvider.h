@@ -146,6 +146,7 @@ namespace FML::INITIALCONDITIONS {
                 settings.cosmo.OmegaB = s.Omegab;
                 settings.cosmo.OmegaCDM = s.OmegaCDM;
                 settings.cosmo.m_nu = 0.0;
+                settings.cosmo.m_nu_list.clear();
                 if (s.OmegaMNu > 0.0) {
                     // The mass of the one massive species with Omega_ncdm = OmegaMNu (increasing in m_nu: bisect in
                     // log m_nu)

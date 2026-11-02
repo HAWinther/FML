@@ -113,6 +113,10 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
 
         /// Append the perturbations of the standard species (in the order of the background's species) to list
         void add_to(const PerturbationContext & ctx, SpeciesPerturbationList & list) const {
+            const auto n_massive = std::count_if(entries.begin(), entries.end(), [](const Entry & e) {
+                return e.kind == Kind::Massive;
+            });
+            int i_massive = 0;
             for (const auto & e : entries) {
                 switch (e.kind) {
                     case Kind::CDM:
@@ -128,10 +132,13 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
                         }
                         list.push_back(std::make_unique<SpeciesPerturbation_MasslessNeutrinos>(*e.species, ctx));
                         break;
-                    case Kind::Massive:
+                    case Kind::Massive: {
+                        // Several masses: outputs delta_ncdm_1, v_ncdm_1, ... (Perturbations adds their sum)
+                        const std::string label = n_massive > 1 ? "_" + std::to_string(++i_massive) : "";
                         list.push_back(
-                            std::make_unique<SpeciesPerturbation_MassiveNeutrinos>(*e.massive, ctx, e.factor));
+                            std::make_unique<SpeciesPerturbation_MassiveNeutrinos>(*e.massive, ctx, e.factor, label));
                         break;
+                    }
                 }
             }
         }
@@ -152,7 +159,8 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
     class PerturbationModel_Assembled : public PerturbationModel {
       public:
         using SpeciesFactory = std::function<SpeciesPerturbationList(const PerturbationContext &)>;
-        using FieldEquationFactory = std::function<std::unique_ptr<PerturbedFieldEquation>(const PerturbationContext &)>;
+        using FieldEquationFactory =
+            std::function<std::unique_ptr<PerturbedFieldEquation>(const PerturbationContext &)>;
         PerturbationModel_Assembled(std::string name,
                                     BACKGROUND::ComponentBackgroundPtr background,
                                     SpeciesFactory species,

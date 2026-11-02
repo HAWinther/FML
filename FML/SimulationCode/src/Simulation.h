@@ -250,9 +250,8 @@ class NBodySimulation {
     double neutrino_energy_factor(double a) const {
         if (not params.force.neutrino_energy_density)
             return 1.0;
-        return SIMCODE::NEUTRINOS::mean_energy_factor(a,
-                                                      cosmo->get_Mnu_eV() / cosmo->get_N_nu(),
-                                                      cosmo->get_neutrino_temperature_eV(1.0));
+        return SIMCODE::NEUTRINOS::mean_energy_factor(
+            a, cosmo->get_neutrino_masses_eV(), cosmo->get_neutrino_temperature_eV(1.0));
     }
     /// Use the energy density of the neutrinos (force_neutrino_energy_density)
     bool neutrino_energy_density() const { return params.force.neutrino_energy_density; }
@@ -454,7 +453,8 @@ void NBodySimulation<NDIM, T>::init() {
 
     // The particle species (CDM+baryons as one, or CDM and baryons, and massive neutrinos)
     if (has_neutrino_particles() and not(cosmo->get_OmegaMNu() > 0.0 and cosmo->get_Mnu_eV() > 0.0))
-        throw std::runtime_error("particle_neutrinos = true needs massive neutrinos (cosmology_OmegaMNu > 0)");
+        throw std::runtime_error("particle_neutrinos = true needs massive neutrinos (cosmology_OmegaMNu > 0 or "
+                                 "cosmology_neutrino_masses_eV)");
     species = SIMCODE::make_species_list(params.particle, *cosmo, NDIM);
     if (FML::ThisTask == 0 and species.size() > 1) {
         std::cout << "# Particle species (name, Npart_1D, GADGET type, Omega_i / OmegaM, weight in delta_cb):\n";
@@ -463,13 +463,17 @@ void NBodySimulation<NDIM, T>::init() {
                       << info.mass_fraction << " " << info.weight_cb << "\n";
     }
     if (has_neutrino_particles()) {
-        const double mnu_eV = cosmo->get_Mnu_eV() / cosmo->get_N_nu();
+        const auto & masses = cosmo->get_neutrino_masses_eV();
         const double Tnu0_eV = cosmo->get_neutrino_temperature_eV(1.0);
-        part_neutrinos.init(mnu_eV, Tnu0_eV, params.simulation.boxsize, params.particle.neutrino_deltaf);
-        if (FML::ThisTask == 0)
+        part_neutrinos.init(masses, Tnu0_eV, params.simulation.boxsize, params.particle.neutrino_deltaf);
+        if (FML::ThisTask == 0) {
             std::cout << "# Massive neutrinos as particles (delta-f weights: " << std::boolalpha
-                      << params.particle.neutrino_deltaf << "). m_nu = " << mnu_eV << " eV (x" << cosmo->get_N_nu()
-                      << "), T_nu0 = " << Tnu0_eV << " eV, f_nu = " << cosmo->get_fMNu() << "\n";
+                      << params.particle.neutrino_deltaf << "). m_nu =";
+            for (double m : masses)
+                std::cout << " " << m;
+            std::cout << " eV (one set of particles for all species), T_nu0 = " << Tnu0_eV
+                      << " eV, f_nu = " << cosmo->get_fMNu() << "\n";
+        }
     }
 
     // If we have a MG model and want exactly the same IC as for LCDM

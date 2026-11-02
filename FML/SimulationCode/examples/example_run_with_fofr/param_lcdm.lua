@@ -41,6 +41,9 @@ cosmology_OmegaCDM = 0.2685
 cosmology_Omegab = 0.049
 -- Massive neutrino density
 cosmology_OmegaMNu = 0.0
+-- Or the masses of the (up to 3) neutrinos in eV, e.g. {0.0, 0.0086, 0.05} (instead of cosmology_OmegaMNu,
+-- which must then be 0; 0 or not listed: massless). Empty: 3 equal masses from cosmology_OmegaMNu
+cosmology_neutrino_masses_eV = {}
 -- Dark energy density (a CC)
 -- (OmegaLambda is now derived from the other density parameters; this example is flat)
 cosmology_OmegaK = 0.0

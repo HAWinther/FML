@@ -115,11 +115,12 @@ namespace FML::COSMOLOGY {
         double ddrhoKddx(double x) const { return 4.0 * rhoK(x); }
 
         // Massive neutrinos (all 0 without): pressure (units of rho_c0) and dp/dx, w = p/rho goes from 1/3 to 0
-        bool has_massive_nu() const { return ncdm != nullptr; }
+        bool has_massive_nu() const { return not ncdm.empty(); }
         double pNcdm(double x) const;
         double dpNcdmdx(double x) const;
         double pseudo_pNcdm(double x) const; // pseudo-pressure, dp/dx = -(5p - pseudo_p)
-        double M_ncdm_of_x(double x) const;  // m_nu c^2 a / (k_B T_ncdm(a)): mass over temperature at x
+        // One mass only (throw with several distinct masses):
+        double M_ncdm_of_x(double x) const; // m_nu c^2 a / (k_B T_ncdm(a)): mass over temperature at x
         // rho_ncdm a^4 / I_rho(M) in units of rho_c0, so that rho_ncdm = ncdm_prefactor() e^{-4x} I_rho(M)
         double ncdm_prefactor() const;
 
@@ -203,9 +204,10 @@ namespace FML::COSMOLOGY {
         PERTURBATIONS::PerturbationModelPtr pmodel;
         std::unique_ptr<PERTURBATIONS::PerturbedFieldEquation> tensor_fe; // tensor coefficients of pmodel
         BACKGROUND::BackgroundRange range;
-        // Massive neutrinos of the background (possibly rescaled: ncdm_factor)
-        const BACKGROUND::MassiveNeutrinoSpecies * ncdm = nullptr;
-        double ncdm_factor = 1.0;
+        // Massive neutrinos of the background: one entry per distinct mass, with the factor of its (rescaled,
+        // degenerate) species
+        std::vector<std::pair<const BACKGROUND::MassiveNeutrinoSpecies *, double>> ncdm;
+        const BACKGROUND::MassiveNeutrinoSpecies * single_ncdm(const char * func) const;
 
         // An explicit perturbation model (its background is not rebuilt)
         bool explicit_pmodel = false;

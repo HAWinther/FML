@@ -40,9 +40,10 @@
 ///   Tabulated     -> a tabulated dark energy (BackgroundModel_Tabulated.h; cosmology_tabulated_filename, _format
 ///                    = H (z, H/H0), CLASS (a CLASS background file) or w (a, w))
 ///
-/// Neutrinos: N_nu = 3 degenerate species with the temperature T_nu = T_CMB (Neff/3)^(1/4) (4/11)^(1/3), all massive
-/// with the total mass Mnu (from cosmology_OmegaMNu with the non-relativistic relation) when OmegaMNu > 0, otherwise
-/// massless.
+/// Neutrinos: N_nu = 3 species with the temperature T_nu = T_CMB (Neff/3)^(1/4) (4/11)^(1/3). Their masses are
+/// either cosmology_neutrino_masses_eV (up to 3 masses, 0 = massless; the species not listed are massless) or, with
+/// cosmology_OmegaMNu > 0, 3 equal masses with the total Mnu from OmegaMNu (non-relativistic relation); otherwise all
+/// are massless. get_OmegaMNu() follows from the masses with the non-relativistic relation in both cases.
 ///
 /// Density parameters, two kinds:
 ///   get_OmegaM(), get_Omegab(), get_OmegaCDM(), get_OmegaMNu(), get_fMNu(), get_OmegaK(), get_OmegaR(),
@@ -89,16 +90,27 @@ class Cosmology {
         ns = param.get<double>("cosmology_ns");
         kpivot_mpc = param.get<double>("cosmology_kpivot_mpc");
 
-        // N_nu degenerate massive neutrinos with the total mass from OmegaMNu (non-relativistic relation; no
-        // neutrinos, Neff = 0, needs OmegaMNu = 0)
+        // The neutrino masses: cosmology_neutrino_masses_eV (up to N_nu, 0 = massless), or N_nu equal masses with the
+        // total mass from OmegaMNu (non-relativistic relation). No neutrinos (Neff = 0) needs no masses
         const double OmegaMNu = param.get<double>("cosmology_OmegaMNu");
+        const auto masses = SIMCODE::get_parameter<std::vector<double>>(param, "cosmology_neutrino_masses_eV");
         const double OmegaMNu_per_eV = OmegaMNu_per_Mnu_eV(p);
-        FML::assert_mpi(OmegaMNu_per_eV > 0.0 or OmegaMNu == 0.0,
-                        "cosmology_Neffective = 0 (no neutrinos) needs cosmology_OmegaMNu = 0");
-        if (OmegaMNu > 0.0) {
+        FML::assert_mpi(masses.size() <= size_t(N_nu), "cosmology_neutrino_masses_eV: at most 3 masses");
+        FML::assert_mpi(masses.empty() or OmegaMNu == 0.0,
+                        "Give either cosmology_neutrino_masses_eV or cosmology_OmegaMNu (the masses give OmegaMNu)");
+        if (not masses.empty()) {
+            for (double m : masses) {
+                FML::assert_mpi(m >= 0.0, "cosmology_neutrino_masses_eV: the masses must be >= 0");
+                if (m > 0.0)
+                    p.m_nu_eV.push_back(m);
+            }
+        } else if (OmegaMNu > 0.0) {
             p.m_nu_eV.assign(int(N_nu), OmegaMNu / OmegaMNu_per_eV / N_nu);
-            p.T_ncdm_over_TCMB = neutrino_temperature_kelvin(p) / p.T_CMB;
         }
+        FML::assert_mpi(OmegaMNu_per_eV > 0.0 or p.m_nu_eV.empty(),
+                        "cosmology_Neffective = 0 (no neutrinos) cannot have massive neutrinos");
+        if (not p.m_nu_eV.empty())
+            p.T_ncdm_over_TCMB = neutrino_temperature_kelvin(p) / p.T_CMB;
         input_parameters = p;
 
         // The parameters of the model
@@ -222,7 +234,14 @@ class Cosmology {
                 std::cout << "# h                       : " << get_h() << "\n";
                 std::cout << "# N_nu                    : " << N_nu << "\n";
                 std::cout << "# Neff                    : " << get_Neff() << "\n";
-                std::cout << "# Mnu                     : " << get_Mnu_eV() << " eV\n";
+                std::cout << "# Mnu                     : " << get_Mnu_eV() << " eV";
+                if (not get_neutrino_masses_eV().empty()) {
+                    std::cout << " (masses";
+                    for (double m : get_neutrino_masses_eV())
+                        std::cout << " " << m;
+                    std::cout << " eV)";
+                }
+                std::cout << "\n";
                 std::cout << "# TCMB                    : " << get_TCMB_kelvin() << " K\n";
                 std::cout << "# Tnu                     : " << neutrino_temperature_kelvin(params()) << " K\n";
             }
@@ -358,9 +377,11 @@ class Cosmology {
         using namespace FML::UTILS::SI;
         return (neutrino_temperature_kelvin(params()) * k_b / eV) / a;
     }
-    /// Sound speed over c in the non-relativistic limit (1408.2995), at most that of radiation (mass of one neutrino)
+    /// Sound speed over c in the non-relativistic limit (1408.2995), at most that of radiation (for the mean mass of
+    /// the massive species)
     double get_neutrino_sound_speed_cs_over_c(double a) const {
-        return std::min(nu_sound_speed_factor * get_neutrino_temperature_eV(a) / (get_Mnu_eV() / N_nu), 1.0 / std::sqrt(3.0));
+        const double m_mean = get_Mnu_eV() / double(get_neutrino_masses_eV().size());
+        return std::min(nu_sound_speed_factor * get_neutrino_temperature_eV(a) / m_mean, 1.0 / std::sqrt(3.0));
     }
     /// Free streaming scale for the neutrinos (1408.2995)
     double get_neutrino_free_streaming_scale_hmpc(double a) const {
@@ -388,6 +409,8 @@ class Cosmology {
     //========================================================================
     double get_h() const { return params().h; }
     double get_Mnu_eV() const { return params().sum_m_nu_eV(); }
+    /// The masses of the massive species (equal or not; the other N_nu - size() are massless)
+    const std::vector<double> & get_neutrino_masses_eV() const { return params().m_nu_eV; }
     double get_N_nu() const { return N_nu; }
     double get_As() const { return As; }
     double get_ns() const { return ns; }

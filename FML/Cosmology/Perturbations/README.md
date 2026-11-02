@@ -36,7 +36,8 @@ PerturbedFieldEquation_<name>.h  GeneralRelativity, BransDicke (quasi_static(): 
 PerturbationModel.h          the base: which background species get which perturbation, and the field equations;
                              StandardSpeciesPerturbations (CDM, massless and massive neutrinos, except species to skip;
                              degenerate massive species, the same mass and temperature, are one hierarchy with the
-                             sum of their densities)
+                             sum of their densities; several masses: outputs delta_ncdm_<i>, v_ncdm_<i>, and
+                             Perturbations adds delta_ncdm, v_ncdm of all of them)
                              for the models to reuse; PerturbationModel_Assembled (a model from given parts)
 PerturbationModel_<name>.h   LCDM, w0wa, MuSigma, DGP, HuSawicky, Horndeski, Quintessence, EDE, BransDicke,
                              CoupledQuintessence, CubicGalileon, DarkScattering, IDE, each with its make_..._perturbations

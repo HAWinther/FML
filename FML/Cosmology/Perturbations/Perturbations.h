@@ -224,6 +224,10 @@ namespace FML::COSMOLOGY {
         std::vector<std::string> output_names; // of the species, then of the field equations
         std::map<std::string, int> output_index;
         int n_gravity_outputs = 0;
+        // Massive neutrinos of several masses (outputs delta_ncdm_<i>, v_ncdm_<i>): the species, and the index of
+        // their sum delta_ncdm, v_ncdm in the outputs (-1 with one mass)
+        std::vector<size_t> ncdm_species;
+        int ncdm_sum = -1;
 
         // Layout of the ODE state vector: the core (delta_b, v_b, the variables of the gravity (GR: Phi),
         // Theta_0.., Theta^P_0..), then one block per species in the given mode

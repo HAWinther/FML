@@ -52,6 +52,19 @@ namespace FML::COSMOLOGY {
                 output_names.push_back(name);
             }
         }
+        // Several massive neutrino masses: also delta_ncdm, v_ncdm of all of them (weighted by rho_i and rho_i + p_i)
+        for (size_t is = 0; is < species.size(); is++)
+            if (dynamic_cast<const PERTURBATIONS::SpeciesPerturbation_MassiveNeutrinos *>(species[is].get()))
+                ncdm_species.push_back(is);
+        if (ncdm_species.size() > 1) {
+            if (output_index.count("delta_ncdm") || output_index.count("v_ncdm"))
+                throw std::invalid_argument("Perturbations: output delta_ncdm defined twice");
+            ncdm_sum = int(output_names.size());
+            for (const std::string name : {"delta_ncdm", "v_ncdm"}) {
+                output_index[name] = int(output_names.size());
+                output_names.push_back(name);
+            }
+        }
         for (const auto & name : field_eq->output_names()) {
             if (output_index.count(name))
                 throw std::invalid_argument("Perturbations: output " + name + " defined twice");
@@ -518,7 +531,8 @@ namespace FML::COSMOLOGY {
                 throw std::invalid_argument("Perturbations: k_max too small for this curvature");
             else
                 k_array = Utils::logspace(q_min, options.k_max, options.n_k);
-            if (options.k_values.empty() && options.dk_max > 0.0) { // log-linear: step min(q dlnk, dk_max), the last step stretched to end at k_max
+            // log-linear: step min(q dlnk, dk_max), the last step stretched to end at k_max
+            if (options.k_values.empty() && options.dk_max > 0.0) {
                 const double dlnk = std::log(options.k_max / q_min) / (options.n_k - 1);
                 std::vector<double> qs{q_min};
                 while (qs.back() < options.k_max)
@@ -697,6 +711,21 @@ namespace FML::COSMOLOGY {
                         species[is]->outputs(st.b, st.cache[is].data(), lay.mode[is], yx + lay.offset[is], o.data());
                         for (size_t io = 0; io < o.size(); io++)
                             out[i0 + io][j] = o[io];
+                    }
+                    if (ncdm_sum >= 0) {
+                        double rho_delta = 0.0, rho = 0.0, rho_p_v = 0.0, rho_p = 0.0;
+                        for (size_t is : ncdm_species) {
+                            const auto & nu =
+                                static_cast<const PERTURBATIONS::SpeciesPerturbation_MassiveNeutrinos &>(*species[is]);
+                            const int i0 = output_index.at(nu.output_names().front());
+                            const double r = nu.rho(x), rp = r + nu.p(x);
+                            rho_delta += r * out[i0][j];
+                            rho += r;
+                            rho_p_v += rp * out[i0 + 1][j];
+                            rho_p += rp;
+                        }
+                        out[ncdm_sum][j] = rho_delta / rho;
+                        out[ncdm_sum + 1][j] = rho_p_v / rho_p;
                     }
                     if (n_gravity_outputs > 0) {
                         const int i0 = int(output_names.size()) - n_gravity_outputs;

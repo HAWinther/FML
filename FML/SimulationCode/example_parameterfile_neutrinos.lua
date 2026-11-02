@@ -47,6 +47,9 @@ cosmology_OmegaCDM = 0.2637
 cosmology_Omegab = 0.049
 -- Massive neutrino density
 cosmology_OmegaMNu = 0.0048
+-- Or the masses of the (up to 3) neutrinos in eV, e.g. {0.0, 0.0086, 0.05} (instead of cosmology_OmegaMNu,
+-- which must then be 0; 0 or not listed: massless). Empty: 3 equal masses from cosmology_OmegaMNu
+cosmology_neutrino_masses_eV = {}
 -- Curvature parameter (-k/H0^2)
 cosmology_OmegaK = 0.0
 -- Effective number of relativistic species

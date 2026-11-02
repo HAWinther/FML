@@ -29,6 +29,7 @@ BASE = dict(
     cosmology_OmegaCDM=0.2685,
     cosmology_Omegab=0.049,
     cosmology_OmegaMNu=0.0,
+    cosmology_neutrino_masses_eV=[],
     cosmology_OmegaK=0.0,
     cosmology_Neffective=3.046,
     cosmology_TCMB_kelvin=2.7255,

@@ -77,15 +77,11 @@ namespace SIMCODE {
             c.OmegaK = b.Omega_k;
             c.TCMB = b.T_CMB;
             c.Neff = b.N_eff;
+            // The massive species (equal masses are solved as one)
             c.m_nu = 0.0;
             c.deg_ncdm = 1;
+            c.m_nu_list = b.m_nu_eV;
             if (not b.m_nu_eV.empty()) {
-                // N degenerate species of mass m (the solver has one mass)
-                for (double m : b.m_nu_eV)
-                    if (m != b.m_nu_eV.front())
-                        throw std::invalid_argument(msg + "the neutrino masses must be degenerate");
-                c.m_nu = b.m_nu_eV.front();
-                c.deg_ncdm = int(b.m_nu_eV.size());
                 c.T_ncdm_over_TCMB = b.T_ncdm_over_TCMB;
                 // All the neutrinos massive (Neff = N_ncdm up to roundoff)
                 if (c.N_ncdm() > c.Neff and matches(c.N_ncdm(), c.Neff, 1e-12))
@@ -168,9 +164,12 @@ namespace SIMCODE {
                       << "# Transfer functions from the internal Einstein-Boltzmann solver\n"
                       << "# Model: " << c.model << (r.filename.empty() ? "" : " (solver settings: " + r.filename + ")")
                       << "\n"
-                      << "# Massive neutrinos: "
-                      << (c.m_nu > 0.0 ? std::to_string(c.deg_ncdm) + " x " + std::to_string(c.m_nu) + " eV" : "none")
-                      << "\n"
+                      << "# Massive neutrinos: " << [&] {
+                             std::string o;
+                             for (double m : c.neutrino_masses())
+                                 o += (o.empty() ? "" : ", ") + std::to_string(m);
+                             return o.empty() ? std::string("none") : o + " eV";
+                         }() << "\n"
                       << "# k = " << k_hmpc.front() << " - " << k_hmpc.back() << " h/Mpc (" << nk
                       << "), tables for z = " << 1.0 / ahigh - 1.0 << " - " << 1.0 / alow - 1.0 << " (" << na
                       << "), " << seconds << " s\n"
@@ -180,11 +179,11 @@ namespace SIMCODE {
 #endif
 
         /// internal: FML's Einstein-Boltzmann solver run with the cosmology of the simulation: its background
-        ///   parameters (the massive neutrinos as N degenerate species), cosmology_model with its parameters and the
-        ///   primordial spectrum. ic_input_filename: an optional .ini of the solver with its precision, recombination
-        ///   and reionization settings (its cosmology is replaced; its k-range is widened if needed). The solver runs on
-        ///   task 0 and its tables (CDM-synchronous densities, Newtonian velocities; all species it has) are sent to
-        ///   the other tasks. They are extrapolated outside their range as the CAMB and CLASS tables.
+        ///   parameters (its massive neutrino species; equal masses solved as one), cosmology_model with its parameters
+        ///   and the primordial spectrum. ic_input_filename: an optional .ini of the solver with its precision,
+        ///   recombination and reionization settings (its cosmology is replaced; its k-range is widened if needed). The
+        ///   solver runs on task 0 and its tables (CDM-synchronous densities, Newtonian velocities; all species it has)
+        ///   are sent to the other tasks. They are extrapolated outside their range as the CAMB and CLASS tables.
         std::shared_ptr<TransferProvider> internal_transfers(const TransferInputRequest & r) {
 #ifdef USE_INTERNAL_COSMOLOGY
             TransferTables tables;

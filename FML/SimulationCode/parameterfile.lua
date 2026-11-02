@@ -58,6 +58,9 @@ cosmology_OmegaCDM = 0.2685
 cosmology_Omegab = 0.049
 -- Massive neutrino density
 cosmology_OmegaMNu = 0.0
+-- Or the masses of the (up to 3) neutrinos in eV, e.g. {0.0, 0.0086, 0.05} (instead of cosmology_OmegaMNu,
+-- which must then be 0; 0 or not listed: massless). Empty: 3 equal masses from cosmology_OmegaMNu
+cosmology_neutrino_masses_eV = {}
 -- Curvature parameter (-k/H0^2)
 cosmology_OmegaK = 0.0
 -- Effective number of relativistic species
@@ -278,7 +281,7 @@ particle_allocation_factor = 1.25
 particle_baryons = false
 -- Start the baryons from the same lattice as the CDM (same, recommended) or offset by half a particle spacing (offset)
 particle_baryon_lattice = "same"
--- Massive neutrinos as particles with the delta-f method? Needs cosmology_OmegaMNu > 0, ic_type_of_input = camb or class
+-- Massive neutrinos as particles with the delta-f method? Needs massive neutrinos, ic_type_of_input = camb, class or internal
 -- (accurate neutrino transfer functions up to zini, see scripts/make_camb_transfer_tables.py), timestep_method = Quinn
 -- and force_linear_massive_neutrinos = false
 particle_neutrinos = false

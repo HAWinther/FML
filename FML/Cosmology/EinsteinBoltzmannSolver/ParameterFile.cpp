@@ -238,6 +238,11 @@ namespace FML::COSMOLOGY {
                   "deg_ncdm",
                   "number of degenerate massive species of mass m_nu (solved as one)",
                   REF(int, cosmo.deg_ncdm)),
+                DL("Cosmology",
+                   "m_nu_list",
+                   "masses of the neutrino species [eV], e.g. 0.01, 0.05 (instead of m_nu and deg_ncdm; 0 = massless; "
+                   "equal masses are solved as one)",
+                   REF(std::vector<double>, cosmo.m_nu_list)),
                 D("Cosmology",
                   "T_ncdm_over_TCMB",
                   "temperature of the massive species / TCMB (CLASS default)",
