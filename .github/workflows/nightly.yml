@@ -72,6 +72,17 @@ jobs:
         if: always()
         run: python3 FML/SimulationCode/tests/check_baryonification.py FML/SimulationCode/nbody "$OUT/baryonification"
 
+      # The default build has one particle type with all the fields; USE_MINIMAL_PARTICLES compiles the 7 smaller types
+      # and picks the one a run needs: the results must be identical
+      - name: USE_MINIMAL_PARTICLES gives the same regression results as the fiducial particle
+        if: always()
+        run: |
+          make -C FML/SimulationCode clean
+          make -C FML/SimulationCode -j4 USE_HDF5=true USE_MINIMAL_PARTICLES=true
+          cd FML/SimulationCode/tests/regression
+          ./run.sh ../../nbody "$OUT/regression_minimal"
+          python3 compare.py "$OUT/regression1" "$OUT/regression_minimal" --rtol 0 --atol 0
+
       - name: Keep the logs
         if: always()
         uses: actions/upload-artifact@v4

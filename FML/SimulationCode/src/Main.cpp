@@ -129,10 +129,12 @@ int run(int argc, char ** argv) {
         param["simulation_use_scaledependent_cola"] = params.simulation.use_scaledependent_cola;
 
     //=============================================================
-    // Run the simulation with the smallest particle type that has
-    // what we need (see Particles.h). COLA with LPT order < 1 is
-    // turned off (see SimulationParameters.h)
+    // Run the simulation. By default with ParticleFiducial (all the
+    // fields: COLA, q, mass). With USE_MINIMAL_PARTICLES with the
+    // smallest particle type that has what we need (see Particles.h).
+    // COLA with LPT order < 1 is turned off (see SimulationParameters.h)
     //=============================================================
+#ifdef USE_MINIMAL_PARTICLES
     const bool use_cola = params.simulation.use_cola;
     const bool scaledependent_cola = params.simulation.use_scaledependent_cola;
     // Sheet interpolation needs the Lagrangian position q
@@ -154,5 +156,8 @@ int run(int argc, char ** argv) {
         run_simulation<ParticleBasicQ<NDIM>>(param, params, cosmo, grav);
     else
         run_simulation<ParticleBasic<NDIM>>(param, params, cosmo, grav);
+#else
+    run_simulation<ParticleFiducial<NDIM>>(param, params, cosmo, grav);
+#endif
     return 0;
 }

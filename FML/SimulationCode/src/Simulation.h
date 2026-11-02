@@ -193,6 +193,11 @@ class NBodySimulation {
     /// Separate CDM and baryon particles? Then get_particles() are the CDM particles
     bool has_baryons() const { return params.particle.baryons; }
     MPIParticles & get_baryon_particles() { return part_baryon; }
+    /// Do the CDM+baryon particles carry masses (the mass-encoded relative mode, particle_baryon_relative_mode = mass
+    /// or mass_ini)? Otherwise their masses (if the particle type has them) are 1
+    bool particles_have_masses() const {
+        return params.particle.baryons and params.particle.baryon_relative_mode != "displacement";
+    }
     /// Massive neutrinos as particles (delta-f method)?
     bool has_neutrino_particles() const { return params.particle.neutrinos; }
     SIMCODE::NeutrinoParticles<NDIM> & get_neutrinos() { return part_neutrinos; }

@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: one particle type by default (USE_MINIMAL_PARTICLES for the smallest type per run)
+- The simulation is compiled for `ParticleFiducial` (= `ParticleWithMass<ParticleCOLAScaleDep>`: COLA, q, mass;
+  112 bytes per particle in 3D), which runs every configuration: one `RunSimulation` object instead of 7 (a full
+  build in 1.5 instead of ~5 minutes). `make USE_MINIMAL_PARTICLES=true` keeps the old choice of the smallest type.
+  The results are identical (the regression is bitwise the same with both; checked nightly).
+- `ParticleWithMass` masses are 1 unless set, and per-particle masses are only written to GADGET files with the
+  mass-encoded relative mode (`NBodySimulation::particles_have_masses`).
+
 ### Initial conditions: the generic parts of SimulationCode's InitialConditions.h move to the library
 - `FML::NBODY::generate_species_from_delta_cb` (NBody/NBody.h): the particles of one species from the CDM+baryon
   field (transfer ratio, lattice offset, ID offset, shared COLA frame, mass contrast), next to `NBodyInitialConditions`.

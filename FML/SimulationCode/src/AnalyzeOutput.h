@@ -178,9 +178,11 @@ std::vector<FML::FILEUTILS::GADGET::GadgetSpecies> gadget_species(NBodySimulatio
                                                               info.mass_fraction);
         if constexpr (FML::PARTICLE::has_get_deltaf_weight<P>())
             sp.extra_scalars.push_back({"Weights", [p](size_t i) { return double(p[i].get_deltaf_weight()); }});
-        // The mass-encoded baryon-CDM relative mode: per-particle masses (MassTable 0 for these types)
+        // The mass-encoded baryon-CDM relative mode: per-particle masses (MassTable 0 for these types). The particle
+        // type can have a mass without using it (ParticleFiducial): then all masses are 1 and are not written
         if constexpr (FML::PARTICLE::has_get_mass<P>())
-            sp.get_mass = [p](size_t i) { return double(FML::PARTICLE::GetMass(p[i])); };
+            if (sim.particles_have_masses())
+                sp.get_mass = [p](size_t i) { return double(FML::PARTICLE::GetMass(p[i])); };
         species.push_back(sp);
     });
     return species;

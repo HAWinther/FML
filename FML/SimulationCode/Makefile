@@ -20,6 +20,10 @@ USE_GSL             ?= true
 USE_LUA             ?= true
 USE_HEALPIX         ?= false
 USE_CHUNKPIX        ?= false
+# Compile the simulation for the 7 particle types and pick the smallest that has what a run needs (less memory per
+# particle, 7 times the compile time). Otherwise one particle type with all the fields (see src/Particles.h)
+# (make clean when changing it)
+USE_MINIMAL_PARTICLES ?= false
 
 TARGETS := nbody
 
@@ -36,8 +40,13 @@ vpath ParameterFile.cpp $(FML_ROOT)/Cosmology/EinsteinBoltzmannSolver
 vpath EinsteinBoltzmannSolver.cpp $(FML_ROOT)/Cosmology/EinsteinBoltzmannSolver
 INTERNAL_COSMO_OBJS := $(filter-out Spline.o ODESolver.o,$(COSMO_OBJS))
 
-# The simulation is compiled once per particle type, each in its own file (use make -j to compile them in parallel)
-RUN_SIMULATION_OBJS := RunSimulation_COLAScaleDepWithMass.o RunSimulation_COLAWithMass.o RunSimulation_BasicWithMass.o RunSimulation_COLAScaleDep.o RunSimulation_COLA.o RunSimulation_BasicQ.o RunSimulation_Basic.o
+# The simulation is compiled once per particle type, each in its own file (use make -j to compile them in parallel).
+# By default only for ParticleFiducial = ParticleWithMass<ParticleCOLAScaleDep> (RunSimulation_COLAScaleDepWithMass)
+RUN_SIMULATION_OBJS := RunSimulation_COLAScaleDepWithMass.o
+ifeq ($(USE_MINIMAL_PARTICLES),true)
+OPTIONS += -DUSE_MINIMAL_PARTICLES
+RUN_SIMULATION_OBJS += RunSimulation_COLAWithMass.o RunSimulation_BasicWithMass.o RunSimulation_COLAScaleDep.o RunSimulation_COLA.o RunSimulation_BasicQ.o RunSimulation_Basic.o
+endif
 
 # The transfer functions (FML/TransferProviders and the Einstein-Boltzmann solver) are made in TransferInput.o
 nbody: $(INTERNAL_COSMO_OBJS) Main.o $(RUN_SIMULATION_OBJS) TransferInput.o BaryonificationOutput.o Global.o Spline.o ODESolver.o GadgetUtils.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o

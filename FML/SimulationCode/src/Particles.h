@@ -4,8 +4,10 @@
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 
 //=============================================================================
-// The particle types the simulation can use. Main.cpp picks the smallest one
-// that has what the simulation needs:
+// The particle types the simulation can use. By default the simulation is compiled for one type, ParticleFiducial
+// (all the fields below: 112 bytes in 3D), which can run every configuration. With USE_MINIMAL_PARTICLES (make
+// USE_MINIMAL_PARTICLES=true) it is compiled for all of them and Main.cpp picks the smallest one that has what the
+// simulation needs (less memory, 7 times the compile time):
 //
 //   ParticleBasic         (pos, vel, id)               no COLA
 //   ParticleCOLA          (+ 1LPT and 2LPT Psi)        scale-independent COLA
@@ -98,9 +100,14 @@ class ParticleCOLAScaleDep : public ParticleCOLA<NDIM> {
 template <class P>
 class ParticleWithMass : public P {
   public:
-    double mass;
+    double mass{1.0}; // (1 unless set: the IC with a mass-encoded relative mode, or read from a file)
     double get_mass() const { return mass; }
     void set_mass(double _mass) { mass = _mass; }
 };
+
+/// The particle type that can do everything (COLA of all kinds, q for the sheet density, a mass for the
+/// mass-encoded relative mode): the one the simulation is compiled for without USE_MINIMAL_PARTICLES
+template <int NDIM>
+using ParticleFiducial = ParticleWithMass<ParticleCOLAScaleDep<NDIM>>;
 
 #endif

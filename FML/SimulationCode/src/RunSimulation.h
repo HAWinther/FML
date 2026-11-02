@@ -27,7 +27,9 @@ void run_simulation(const FML::UTILS::ParameterMap & param,
                     std::shared_ptr<Cosmology> cosmo,
                     std::shared_ptr<GravityModel<NDIM_SPACE>> grav);
 
-/// The particle types the simulation is compiled for (see Particles.h and the choice in Main.cpp)
+/// The particle types the simulation is compiled for (see Particles.h and the choice in Main.cpp): only
+/// ParticleFiducial (= ParticleWithMass<ParticleCOLAScaleDep>), or with USE_MINIMAL_PARTICLES all of them
+#ifdef USE_MINIMAL_PARTICLES
 #define SIMCODE_PARTICLE_TYPES(X)                                                                                      \
     X(ParticleWithMass<ParticleCOLAScaleDep<NDIM_SPACE>>)                                                              \
     X(ParticleWithMass<ParticleCOLA<NDIM_SPACE>>)                                                                      \
@@ -36,6 +38,9 @@ void run_simulation(const FML::UTILS::ParameterMap & param,
     X(ParticleCOLA<NDIM_SPACE>)                                                                                        \
     X(ParticleBasicQ<NDIM_SPACE>)                                                                                      \
     X(ParticleBasic<NDIM_SPACE>)
+#else
+#define SIMCODE_PARTICLE_TYPES(X) X(ParticleWithMass<ParticleCOLAScaleDep<NDIM_SPACE>>)
+#endif
 
 #define SIMCODE_DECLARE_RUN_SIMULATION(T)                                                                              \
     extern template void run_simulation<T>(const FML::UTILS::ParameterMap &,                                           \

@@ -29,8 +29,11 @@ for when it is used, description), a field in its settings struct and one `r.get
 default of the table, so the default and the condition are only in the table. Then regenerate `PARAMETERS.md` with
 `./nbody --parameters PARAMETERS.md` (CI checks that it is up to date).
 
-The particle type is chosen automatically to use as little memory as possible: 56 bytes per particle without COLA,
-80 bytes with scale-independent COLA and 104 bytes with scale-dependent COLA (in 3D, see `src/Particles.h`).
+By default the simulation is compiled for one particle type that can run every configuration (position, velocity,
+ID, the 1LPT and 2LPT displacements for COLA, the Lagrangian position and a mass: 112 bytes per particle in 3D, see
+`src/Particles.h`). Compile with `make clean && make USE_MINIMAL_PARTICLES=true` to compile it for all the particle
+types and use the smallest one a run needs (56 bytes per particle without COLA, 80 bytes with scale-independent COLA
+and 104 bytes with scale-dependent COLA; 7 times the compile time). The results are the same.
 Scale-dependent COLA is only used when the growth is scale-dependent (see [COLA](#cola)).
 
 How the code is organised:
