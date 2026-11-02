@@ -477,6 +477,118 @@ void compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std
 }
 
 template <int NDIM, class T>
+void compute_power_spectrum_bias(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
+
+    std::stringstream stream;
+    stream << std::fixed << std::setprecision(3) << redshift;
+    std::string redshiftstring = stream.str();
+
+    //=============================================================
+    // Fetch parameters
+    //=============================================================
+    const double simulation_boxsize = sim.simulation_boxsize;
+    const int pofk_nmesh = sim.pofk_nmesh;
+    const std::string pofk_density_assignment_method = sim.pofk_density_assignment_method;
+    const bool pofk_interlacing = sim.pofk_interlacing;
+    const bool pofk_subtract_shotnoise = sim.pofk_subtract_shotnoise;
+    auto & part = sim.part;
+
+    // TODO: New pofk_bias_... input file parameters
+    if (FML::ThisTask == 0) {
+        std::cout << "\n";
+        std::cout << "#=====================================================\n";
+        std::cout << "# Computing power-spectrum of bias operators\n";
+        std::cout << "# pofk_nmesh                     : " << pofk_nmesh << "\n";
+        std::cout << "# pofk_density_assignment_method : " << pofk_density_assignment_method << "\n";
+        std::cout << "# pofk_interlacing               : " << pofk_interlacing << "\n";
+        std::cout << "# pofk_subtract_shotnoise        : " << pofk_subtract_shotnoise << "\n";
+        std::cout << "#=====================================================\n";
+    }
+
+    // TODO: neutrinos accounted for?
+    const auto nleftright = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(pofk_density_assignment_method);
+    const int nleft = nleftright.first;
+    const int nright = nleftright.second + (pofk_interlacing ? 1 : 0);
+
+    // grids for 1(x), delta(x), delta^2(x)
+    std::vector<FFTWGrid<NDIM>> grids;
+    grids.reserve(3);
+    const std::vector<std::string> grid_labels = {"1", "d", "d2"}; // 1(x), delta(x), delta^2(x)
+    for (int i = 0; i < 3; i++) {
+        auto & grid = grids.emplace_back(pofk_nmesh, nleft, nright);
+        grid.set_grid_status_real(true);
+    }
+
+    // Save original masses, then restore them below
+    std::vector<double> original_masses(part.get_npart());
+    for (size_t i = 0; i < part.get_npart(); i++) {
+        original_masses[i] = part[i].mass;
+    }
+
+    // Grid 0: 1(q) -> 1(x)
+    for (auto & p : part) {
+        p.mass = 1.0;
+    }
+    FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), grids[0], pofk_density_assignment_method);
+
+    // Grid 1: delta(q) -> delta(x)
+    for (auto & p : part) {
+        p.mass = p.delta_q;
+    }
+    FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), grids[1], pofk_density_assignment_method);
+
+    // Grid 2: delta^2(q) -> delta^2(x)
+    for (auto & p : part) {
+        p.mass = p.delta2_q;
+    }
+    FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), grids[2], pofk_density_assignment_method);
+
+    // Restore original particle masses
+    for (size_t i = 0; i < part.get_npart(); i++) {
+        part[i].mass = original_masses[i];
+    }
+
+    // Compute spectra
+    std::vector<FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM>> Ps;
+    std::vector<std::string> P_labels;
+    for (size_t i = 0; i < grids.size(); i++) {
+        double mean = grids[i].mean();
+        grids[i].fill_real_grid([mean](std::array<double, 3> &, FML::GRID::FloatType val) { return val - mean; }); // subtract mean, so mean is zero
+        grids[i].fftw_r2c();
+        FML::INTERPOLATION::deconvolve_window_function_fourier<NDIM>(grids[i], pofk_density_assignment_method);
+        for (size_t j = 0; j <= i; j++) {
+            // grids j <= i have already been transformed and deconvolved
+            auto & P = Ps.emplace_back(pofk_nmesh / 2);
+            if (i == j) {
+                FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum(grids[i], P); // auto-spectra
+            } else {
+                FML::CORRELATIONFUNCTIONS::bin_up_cross_power_spectrum(grids[i], grids[j], P); // cross-spectra
+            }
+            P.scale(simulation_boxsize);
+            P_labels.emplace_back(grid_labels[i] + grid_labels[j]); // e.g. "d1"
+        }
+    }
+
+    // Output to file
+    if (FML::ThisTask == 0) {
+        std::string filename = snapshot_folder + "/pofk_bias_z" + redshiftstring + ".txt";
+        std::ofstream fp(filename.c_str());
+        if (not fp.is_open()) {
+            std::cout << "Warning: Cannot write power-spectrum of bias operators to file, failed to open [" << filename << "]\n";
+        } else {
+            fp << "#" << std::setw(16-1) << "k/(h/Mpc)";
+            for (auto & P_label : P_labels) fp << " " << std::setw(16) << ("P_" + P_label + "/(Mpc/h)^3");
+            fp << std::endl;
+            for (int i = 0; i < Ps[0].n; i++) {
+                fp << std::setw(16) << Ps[0].kbin[i]; // k-values are common
+                for (auto & P : Ps) fp << " "  << std::setw(16) << P.pofk[i];
+                fp << std::endl;
+            }
+        }
+    }
+}
+
+template <int NDIM, class T>
 void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
 
     std::stringstream stream;
