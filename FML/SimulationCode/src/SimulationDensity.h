@@ -250,6 +250,10 @@ template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::store_initial_density_field(const FFTWGrid<NDIM> & density_grid_fourier, double a) {
     FML::assert_mpi(std::fabs(1.0 / a - 1.0 - params.ic.initial_redshift) < 1e-3,
                     "The initial density field must be stored at the initial redshift");
+    // It is the field of the unshifted particles (with force interlacing the first shift is 0; the other shifts get
+    // it shifted in initial_density_in_particle_frame)
+    FML::assert_mpi(not particles_shifted(),
+                    "The initial density field must be stored from the particles without the interlacing shift");
     if (not early_force) {
         if (not initial_density_field_fourier) {
             initial_density_field_fourier = density_grid_fourier;
