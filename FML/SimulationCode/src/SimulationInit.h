@@ -603,7 +603,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     const double boxsize = params.simulation.boxsize;
     const double aini = ic.a_initial();
     FML::assert_mpi(transfers != nullptr,
-                    "particle_baryons needs the transfer functions (camb, class or internal)");
+                    "particle_baryons needs the transfer functions (camb, class, internal or tables)");
     const auto & cdm = SIMCODE::find_species(species, SIMCODE::ParticleSpecies::CDM);
     const auto & baryon = SIMCODE::find_species(species, SIMCODE::ParticleSpecies::Baryon);
     const auto splines = SIMCODE::two_species_ic_splines<NDIM>(*transfers,
@@ -738,7 +738,7 @@ void NBodySimulation<NDIM, T>::setup_nbody_gauge() {
     FML::assert_mpi(transfers != nullptr, "force_nbody_gauge needs the transfer functions");
 
     nbody_gauge = std::make_shared<SIMCODE::NBodyGaugeSource>();
-    if (params.ic.type_of_input == SIMCODE::ICInputType::InternalTransfer) {
+    if (params.ic.from_internal_solver()) {
         if (FML::ThisTask == 0)
             std::cout << "# Running in the N-body gauge. The linear source from the Einstein-Boltzmann solver\n";
         nbody_gauge->from_transfers(*transfers);

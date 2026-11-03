@@ -3,6 +3,7 @@
 #include <FML/TransferProviders/MakeTransferProvider.h>
 #include <FML/Global/Global.h>
 #include <FML/TransferProviders/TabulatedTransferProvider.h>
+#include <FML/TransferProviders/TransferTablesFile.h>
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
 #include <FML/InitialConditions/InternalTransferProvider.h>
 
@@ -11,6 +12,7 @@
 #include <cmath>
 #include <iostream>
 #include <map>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -227,6 +229,106 @@ namespace SIMCODE {
             return tables;
         }
 
+        /// The cosmology of the request as metadata of a tables file (the values with 17 digits): written with the
+        /// tables and compared when they are read
+        std::vector<std::pair<std::string, std::string>> cosmology_metadata(const TransferInputRequest & r) {
+            const auto exact = [](double x) {
+                std::ostringstream o;
+                o.precision(17);
+                o << x;
+                return o.str();
+            };
+            const auto & b = r.background;
+            std::string masses;
+            for (double m : b.m_nu_eV)
+                masses += (masses.empty() ? "" : " ") + exact(m);
+            std::vector<std::pair<std::string, std::string>> m{
+                {"cosmology_model", r.model},
+                {"cosmology_h", exact(b.h)},
+                {"cosmology_Omega_b", exact(b.Omega_b)},
+                {"cosmology_Omega_cdm", exact(b.Omega_cdm)},
+                {"cosmology_Omega_k", exact(b.Omega_k)},
+                {"cosmology_T_CMB", exact(b.T_CMB)},
+                {"cosmology_N_eff", exact(b.N_eff)},
+                {"cosmology_m_nu_eV", masses.empty() ? "none" : masses},
+                {"cosmology_T_ncdm_over_TCMB", exact(b.T_ncdm_over_TCMB)}};
+            for (const auto & [name, value] : r.model_parameters)
+                m.push_back({"cosmology_model_" + name, exact(value)});
+            return m;
+        }
+
+        /// tables: the file ic_input_filename, checked against the cosmology and the gauge of the simulation and the
+        ///   redshifts it needs
+        std::shared_ptr<TransferProvider> tables_transfers(const TransferInputRequest & r) {
+            using namespace FML::INITIALCONDITIONS;
+            const std::string msg = "[ic_type_of_input = tables] [" + r.filename + "] ";
+            const std::string remake = " (make the tables for this parameterfile with ./nbody --write-transfers "
+                                       "parameterfile.lua file, with ic_type_of_input = internal in it)";
+            auto file = read_transfer_tables(r.filename);
+            // The cosmology (the background, model and its parameters, the primordial spectrum)
+            for (const auto & [key, value] : cosmology_metadata(r)) {
+                if (not file.contains(key))
+                    throw std::runtime_error(msg + "The file has no " + key + remake);
+                if (file.get(key) != value) {
+                    // The same number written differently (an older writer): compare the values
+                    std::istringstream a(file.get(key)), b(value);
+                    double x, y;
+                    bool same = true, any = false;
+                    while (true) {
+                        const bool ga = bool(a >> x), gb = bool(b >> y);
+                        if (ga != gb or (ga and not matches(x, y, 1e-12))) {
+                            same = false;
+                            break;
+                        }
+                        if (not ga)
+                            break;
+                        any = true;
+                    }
+                    if (not same or not any)
+                        throw std::runtime_error(msg + "Made for " + key + " = " + file.get(key) +
+                                                 ", the simulation has " + value + remake);
+                }
+            }
+            for (const auto & [key, value] : file.metadata)
+                if (key.rfind("cosmology_model_", 0) == 0 and
+                    r.model_parameters.count(key.substr(std::string("cosmology_model_").size())) == 0)
+                    throw std::runtime_error(msg + "Made with the model parameter " + key +
+                                             ", which the simulation does not have" + remake);
+            const auto & t = file.tables;
+            if (not matches(t.A_s, r.As, 1e-12) or not matches(t.n_s, r.ns, 1e-12) or
+                not matches(t.k_pivot_mpc, r.kpivot_mpc, 1e-12))
+                throw std::runtime_error(msg + "Made for another primordial spectrum (A_s, n_s, k_pivot)" + remake);
+            // The gauge
+            if (r.nbody_gauge and (t.density_gauge != Gauge::NBody or t.nbody_gauge_source.empty()))
+                throw std::runtime_error(msg +
+                                         "force_nbody_gauge = true needs N-body gauge tables with the source "
+                                         "(made with force_nbody_gauge = true)" +
+                                         remake);
+            if (not r.nbody_gauge and t.density_gauge != Gauge::SynchronousCDM)
+                throw std::runtime_error(msg +
+                                         "The tables are in the N-body gauge: use them with force_nbody_gauge "
+                                         "= true, or make CDM-synchronous ones" +
+                                         remake);
+            // The redshifts: up to the initial (and input) redshift
+            if (t.a.front() > r.required.amin * (1.0 + 1e-10))
+                throw std::runtime_error(msg + "The tables start at z = " + std::to_string(1.0 / t.a.front() - 1.0) +
+                                         ", the simulation needs z = " + std::to_string(1.0 / r.required.amin - 1.0) +
+                                         remake);
+            if (FML::ThisTask == 0) {
+                std::cout << "\n#=====================================================\n"
+                          << "# Transfer functions from the tables " << r.filename << "\n"
+                          << "# Model: " << r.model << ", density gauge: "
+                          << (t.density_gauge == Gauge::NBody ? "N-body (with the N-body gauge source)" :
+                                                                "CDM-synchronous")
+                          << "\n"
+                          << "# k = " << t.k_hmpc.front() << " - " << t.k_hmpc.back() << " h/Mpc (" << t.k_hmpc.size()
+                          << "), z = " << 1.0 / t.a.back() - 1.0 << " - " << 1.0 / t.a.front() - 1.0 << " ("
+                          << t.a.size() << ")\n"
+                          << "#=====================================================\n";
+            }
+            return std::make_shared<TransferTablesProvider>(t);
+        }
+
         /// internal: FML's Einstein-Boltzmann solver run with the cosmology of the simulation: its background
         ///   parameters (its massive neutrino species; equal masses solved as one), cosmology_model with its parameters
         ///   and the primordial spectrum. ic_input_filename: an optional .ini of the solver with its precision,
@@ -313,8 +415,52 @@ namespace SIMCODE {
         if (r.type == "internal")
             return internal_transfers(r);
 
+        if (r.type == "tables")
+            return tables_transfers(r);
+
         throw std::invalid_argument("[load_transfers] Unknown ic_type_of_input [" + r.type +
-                                    "] (camb, class or internal)");
+                                    "] (camb, class, internal or tables)");
+    }
+
+    //=============================================================================
+    /// The tables of the internal solver (as for ic_type_of_input = internal) written to filename on task 0, with
+    /// the cosmology (see cosmology_metadata) and the settings of the solver
+    //=============================================================================
+    void write_internal_transfer_tables(const TransferInputRequest & r, const std::string & filename) {
+        if (r.type != "internal")
+            throw std::invalid_argument("--write-transfers needs ic_type_of_input = internal in the parameterfile "
+                                        "(it has " +
+                                        r.type + ")");
+        std::string error;
+        if (FML::ThisTask == 0) {
+            try {
+                const auto tables = internal_tables(r);
+                auto metadata = cosmology_metadata(r);
+                std::string solver_parameters;
+                for (const auto & p : r.solver_parameters)
+                    solver_parameters += (solver_parameters.empty() ? "" : " ") + p;
+                metadata.insert(metadata.begin(),
+                                {{"written_by",
+                                  "FML SimulationCode: nbody --write-transfers (the internal "
+                                  "Einstein-Boltzmann solver)"},
+                                 {"solver_ini_file", r.filename.empty() ? "none" : r.filename},
+                                 {"solver_parameters", solver_parameters.empty() ? "none" : solver_parameters}});
+                FML::INITIALCONDITIONS::write_transfer_tables(filename, tables, metadata);
+                std::cout << "Wrote the transfer tables to " << filename << "\n";
+            } catch (const std::exception & e) {
+                error = e.what();
+            }
+        }
+#ifdef USE_MPI
+        int failed = error.empty() ? 0 : 1;
+        MPI_Bcast(&failed, 1, MPI_INT, 0, FML::communicator);
+        if (failed)
+            throw std::runtime_error("[--write-transfers] " +
+                                     (error.empty() ? std::string("failed on task 0") : error));
+#else
+        if (not error.empty())
+            throw std::runtime_error("[--write-transfers] " + error);
+#endif
     }
 
 } // namespace SIMCODE

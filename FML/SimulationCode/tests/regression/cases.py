@@ -131,13 +131,13 @@ CASES = {
         ic_use_gravity_model_GR=True,
         ic_random_generator="MT19937",
     ),
-    # Scale-dependent COLA with massive neutrinos from transfer info file
+    # Scale-dependent COLA with massive neutrinos from transfer tables (input/transfer_tables, tests/make_transfer_tables.py)
     "scaledep_cola_neutrinos": dict(
         simulation_use_scaledependent_cola=True,
         cosmology_OmegaMNu=0.0048,
         cosmology_OmegaCDM=0.2637,
-        ic_type_of_input="camb",
-        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.2.txt",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.2.txt",
         ic_input_redshift=20.0,
     ),
     # f(R) gravity (approximate screening), 1LPT COLA, TSC assignment
@@ -241,13 +241,12 @@ CASES = {
         timestep_nsteps=[6],
     ),
     # N-body gauge: IC from the N-body gauge transfer functions and the linear source from radiation,
-    # neutrinos and GR (input made with scripts/make_nbody_gauge_transfer.py)
+    # neutrinos and GR (the tables of the internal solver in the N-body gauge)
     "nbody_gauge": dict(
-        ic_type_of_input="camb",
-        ic_input_filename=INPUT + "/nbody_gauge_lcdm/nbgauge_transferinfo.txt",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nbody_gauge.txt",
         ic_input_redshift=20.0,
         force_nbody_gauge=True,
-        force_nbody_gauge_filename=INPUT + "/nbody_gauge_lcdm/nbgauge_extra.txt",
     ),
     # Force grid finer than the particle grid (the fiducial gradient kernel is then discrete_4pt and the lattice is offset), PCS
     "fine_force_grid": dict(
@@ -374,8 +373,8 @@ CASES = {
         particle_baryon_lattice="same",
         simulation_use_cola=False,
         timestep_method="BullFrog",
-        ic_type_of_input="camb",
-        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.0.txt",
         ic_input_redshift=20.0,
         pofk_subtract_shotnoise=True,
     ),
@@ -386,8 +385,8 @@ CASES = {
         simulation_use_cola=False,
         cosmology_OmegaMNu=0.0048,
         cosmology_OmegaCDM=0.2637,
-        ic_type_of_input="camb",
-        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.2.txt",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.2.txt",
         ic_input_redshift=20.0,
         output_fileformat="HDF5",
     ),
@@ -396,8 +395,8 @@ CASES = {
         particle_baryons=True,
         simulation_use_cola=True,
         timestep_method="Quinn",
-        ic_type_of_input="camb",
-        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.0.txt",
         ic_input_redshift=20.0,
     ),
     # CDM and baryons with scale-dependent COLA and linear massive neutrinos
@@ -410,8 +409,8 @@ CASES = {
         cosmology_OmegaMNu=0.0095,
         cosmology_OmegaCDM=0.259,
         force_linear_massive_neutrinos=True,
-        ic_type_of_input="camb",
-        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.4_zmax200.txt",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.4.txt",
         ic_input_redshift=20.0,
     ),
     # FoF halos with CDM and baryons as separate particles (linked together), HDF5 halo catalogue (needs USE_HDF5)
@@ -419,8 +418,8 @@ CASES = {
         particle_baryons=True,
         simulation_use_cola=False,
         timestep_method="Quinn",
-        ic_type_of_input="camb",
-        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.0.txt",
         ic_input_redshift=20.0,
         fof=True,
         fof_nmin_per_halo=10,
@@ -435,8 +434,8 @@ CASES = {
         particle_baryon_relative_mode="mass",
         simulation_use_cola=True,
         timestep_method="Quinn",
-        ic_type_of_input="camb",
-        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.0.txt",
         ic_input_redshift=20.0,
         output_fileformat="HDF5",
         fof=True,
@@ -451,8 +450,8 @@ CASES = {
         particle_baryon_relative_mode="mass_ini",
         simulation_use_cola=False,
         timestep_method="Quinn",
-        ic_type_of_input="camb",
-        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.0.txt",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.0.txt",
         ic_input_redshift=20.0,
     ),
     # Phenomenological modified gravity mu(a) = 1 + mu0 Omega_DE(a)/Omega_DE (no screening), COLA
@@ -493,8 +492,8 @@ CASES = {
         cosmology_OmegaMNu=0.0095,
         cosmology_OmegaCDM=0.259,
         force_linear_massive_neutrinos=False,
-        ic_type_of_input="camb",
-        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.4_zmax200.txt",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.4.txt",
         ic_input_redshift=20.0,
     ),
     # Light neutrinos (0.1 eV in total) as particles with the energy density in the Poisson equation
@@ -506,8 +505,8 @@ CASES = {
         cosmology_OmegaMNu=0.0024,
         cosmology_OmegaCDM=0.2661,
         force_linear_massive_neutrinos=False,
-        ic_type_of_input="camb",
-        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.1_zmax200.txt",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.1.txt",
         ic_input_redshift=20.0,
     ),
     # CDM, baryons and (fewer) neutrino particles without delta-f weights, HDF5 output (needs USE_HDF5)
@@ -521,8 +520,8 @@ CASES = {
         cosmology_OmegaMNu=0.0024,
         cosmology_OmegaCDM=0.2661,
         force_linear_massive_neutrinos=False,
-        ic_type_of_input="camb",
-        ic_input_filename=INPUT + "/transfer_infofile_lcdm_nu0.1_zmax200.txt",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.1.txt",
         ic_input_redshift=20.0,
         output_fileformat="HDF5",
     ),
@@ -661,17 +660,6 @@ def write_case(outdir, name):
     d = os.path.join(outdir, name)
     os.makedirs(d, exist_ok=True)
 
-    # A transfer info file starts with the folder holding the transfer files. Write a copy
-    # pointing to the folder in this repository so the case runs on any machine
-    if params["ic_type_of_input"] == "camb":
-        with open(params["ic_input_filename"]) as f:
-            lines = f.read().split("\n")
-        folder = os.path.basename(lines[0].split()[0].rstrip("/"))
-        lines[0] = os.path.join(INPUT, folder) + " " + " ".join(lines[0].split()[1:])
-        infofile = os.path.join(d, "transfer_infofile.txt")
-        with open(infofile, "w") as f:
-            f.write("\n".join(lines))
-        params["ic_input_filename"] = infofile
     with open(os.path.join(d, "parameterfile.lua"), "w") as f:
         f.write(f"-- Regression case '{name}' (generated by cases.py)\n")
         for k, v in params.items():

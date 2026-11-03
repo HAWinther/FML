@@ -209,7 +209,7 @@ class GravityModel {
         // The growth factors with massive neutrinos are computed from them (and start at their highest redshift)
         this->scaledependent_growth = this->cosmo->get_fMNu() > 0.0;
         FML::assert_mpi(not(this->cosmo->get_OmegaMNu() > 0.0 and not transfers),
-                        "Massive neutrinos need ic_type_of_input = camb, class or internal (the growth factors "
+                        "Massive neutrinos need ic_type_of_input = camb, class, internal or tables (the growth factors "
                         "with massive neutrinos are computed from the transfer functions)");
 
         // Experimental option with finite-difference forces (instead of fourier)

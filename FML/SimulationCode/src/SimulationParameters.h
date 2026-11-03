@@ -35,7 +35,7 @@ namespace SIMCODE {
     // Options that are given as strings in the parameterfile
     //=============================================================================
     enum class ICRandomFieldType { Gaussian, NonGaussian, ReadParticles, ReadPhases };
-    enum class ICInputType { PowerSpectrum, TransferFunction, CambFiles, ClassFiles, InternalTransfer };
+    enum class ICInputType { PowerSpectrum, TransferFunction, CambFiles, ClassFiles, InternalTransfer, TransferTables };
     enum class RandomGeneratorType { GSL, MT19937 };
     enum class RandomFieldBackend { NGenIC, Philox };
     using TimestepMethod = FML::NBODY::TimestepMethod;
@@ -380,7 +380,7 @@ namespace SIMCODE {
                        linear_massive_neutrinos,
                        false,
                        "Include massive neutrinos in the density field using linear theory (requires "
-                       "ic_type_of_input = camb or class)");
+                       "ic_type_of_input = camb, class, internal or tables)");
             f.always_optional(
                 "force_neutrino_energy_density",
                 neutrino_energy_density,
@@ -425,7 +425,7 @@ namespace SIMCODE {
         int LPT_order;                        // The LPT order to use to make IC (1,2,3)
 
         // Input file (power-spectrum / transfer functions)
-        ICInputType type_of_input;  // powerspectrum, transferfunction, camb, class or internal
+        ICInputType type_of_input;  // powerspectrum, transferfunction, camb, class, internal or tables
         std::string input_filename; // The filename (class: the root of the CLASS run)
         std::string input_gauge;    // class: the gauge CLASS was run in (synchronous or newtonian)
         double input_redshift;      // The redshift of P(k,z) / T(k,z) that we read in
@@ -470,13 +470,19 @@ namespace SIMCODE {
                     return "class";
                 case ICInputType::InternalTransfer:
                     return "internal";
+                case ICInputType::TransferTables:
+                    return "tables";
             }
             return "";
         }
         /// The input has transfer functions of all species at all redshifts (CAMB, CLASS or the internal solver)
         bool has_transfer_tables() const {
             return type_of_input == ICInputType::CambFiles or type_of_input == ICInputType::ClassFiles or
-                   type_of_input == ICInputType::InternalTransfer;
+                   from_internal_solver();
+        }
+        /// The tables come from the internal solver (internal, or tables written by ./nbody --write-transfers)
+        bool from_internal_solver() const {
+            return type_of_input == ICInputType::InternalTransfer or type_of_input == ICInputType::TransferTables;
         }
         bool reads_particles() const {
             return random_field_type == ICRandomFieldType::ReadParticles or
@@ -521,14 +527,17 @@ namespace SIMCODE {
                      "transferinfofile is also accepted; the "
                      "columns are read by name from the header, or by position: 13 CAMB, 9 AxionCAMB, 7 old CAMB / "
                      "CLASS with format=camb), class (native CLASS output: ic_input_filename is the root of the run, "
-                     "with format = class, output = mTk,vTk, write_background = yes) or internal (FML's "
+                     "with format = class, output = mTk,vTk, write_background = yes), internal (FML's "
                      "Einstein-Boltzmann solver run with the cosmology of the simulation, cosmology_model included; "
-                     "the old name internal_transfer is also accepted). See FML/TransferProviders and README.md",
+                     "the old name internal_transfer is also accepted) or tables (the tables of the internal solver "
+                     "in one file, made with ./nbody --write-transfers parameterfile.lua file; checked against the "
+                     "cosmology of the simulation). See FML/TransferProviders and README.md",
                      {{"powerspectrum", ICInputType::PowerSpectrum},
                       {"transferfunction", ICInputType::TransferFunction},
                       {"camb", ICInputType::CambFiles},
                       {"class", ICInputType::ClassFiles},
                       {"internal", ICInputType::InternalTransfer},
+                      {"tables", ICInputType::TransferTables},
                       {"internal_transfer", ICInputType::InternalTransfer},
                       {"transferinfofile", ICInputType::CambFiles}});
             f.when(is_one_of("ic_type_of_input", {"class"}), "ic_type_of_input = class", [&]() {
@@ -665,7 +674,7 @@ namespace SIMCODE {
                               "Massive neutrinos as particles with the delta-f method (Elbers et al. 2021): thermal "
                               "Fermi-Dirac velocities, relativistic equations of motion, the particles only carry the "
                               "perturbation. Replaces force_linear_massive_neutrinos (needs cosmology_OmegaMNu > 0, "
-                              "camb or class, timestep_method = Quinn, no COLA)");
+                              "ic_type_of_input = camb, class, internal or tables, timestep_method = Quinn, no COLA)");
             f.if_true("particle_neutrinos", [&]() {
                 f.always_optional(
                     "particle_neutrino_Npart_1D",
@@ -1386,9 +1395,9 @@ namespace SIMCODE {
             // N-body gauge: the IC must be the N-body gauge transfer functions at the initial redshift (internal: the
             // solver gives them; camb: the tables of scripts/make_nbody_gauge_transfer.py)
             if (force.nbody_gauge) {
-                if (ic.type_of_input != ICInputType::CambFiles and ic.type_of_input != ICInputType::InternalTransfer)
-                    fail("force_nbody_gauge = true needs ic_type_of_input = internal (the N-body gauge from the "
-                         "Einstein-Boltzmann solver) or camb (the N-body gauge transfer functions made by "
+                if (ic.type_of_input != ICInputType::CambFiles and not ic.from_internal_solver())
+                    fail("force_nbody_gauge = true needs ic_type_of_input = internal or tables (the N-body gauge "
+                         "from the Einstein-Boltzmann solver) or camb (the N-body gauge transfer functions made by "
                          "scripts/make_nbody_gauge_transfer.py)");
                 if (ic.type_of_input == ICInputType::CambFiles and
                     std::fabs(ic.input_redshift - ic.initial_redshift) > 1e-6)
@@ -1504,7 +1513,7 @@ namespace SIMCODE {
              true,
              true,
              [](P p) { return not p.simulation.enforce_LPT_trajectories; }},
-            {"`ic_type_of_input = camb`, `class` or `internal` (species transfers at zini)",
+            {"`ic_type_of_input = camb`, `class`, `internal` or `tables` (species transfers at zini)",
              true,
              true,
              [](P p) { return p.ic.has_transfer_tables(); }},

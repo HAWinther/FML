@@ -12,8 +12,8 @@ the massive neutrino transfer function below the free-streaming scale: for 3 x 0
 16% too low at k = 0.014 / 0.05 / 0.1 h/Mpc (relative to AccuracyBoost = 3, which agrees with CLASS without the ncdm
 fluid approximation), so we use --accuracy 3 by default (CDM and baryons are unaffected).
 
-Example (the tables in input/camb_data_lcdm_nu0.4_zmax200):
-  python3 make_camb_transfer_tables.py --OmegaMNu 0.0095 --prefix lcdm_nu0.4_zmax200 --outdir ../input
+Example (0.4 eV, 60 redshifts up to z = 200):
+  python3 make_camb_transfer_tables.py --OmegaMNu 0.0095 --prefix lcdm_nu0.4_zmax200 --outdir camb_input
 
 Writes <outdir>/camb_data_<prefix>/<prefix>_transfer_z*.dat and <outdir>/transfer_infofile_<prefix>.txt.
 Use cosmology_OmegaCDM = OmegaM - Omegab - OmegaMNu, cosmology_Omegab, cosmology_OmegaMNu, cosmology_h, ... with

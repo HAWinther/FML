@@ -5,6 +5,31 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: the transfer tables of the internal solver in one file; the old CAMB tables are removed
+- `./nbody --write-transfers parameterfile.lua file` runs the internal Einstein-Boltzmann solver for the parameterfile
+  (with `ic_type_of_input = internal`) and writes its tables to one self-describing text file
+  (`FML/TransferProviders/TransferTablesFile.h`: a header with the cosmology, the primordial spectrum, the gauge, the
+  solver settings and the column names, then one row per (a, k) with every species, and the N-body gauge source in the
+  N-body gauge). New `ic_type_of_input = tables` reads it and checks the cosmology, the primordial spectrum, the gauge
+  and the redshift range against the simulation. A run from the file gives the results of `internal` (particles and
+  P(k) identical in the test) without running the solver.
+- The tests use `input/transfer_tables` (LCDM with 0, 0.1, 0.2 and 0.4 eV and in the N-body gauge, for zini = 20; made by
+  `tests/make_transfer_tables.py`) instead of the CAMB tables `input/camb_data_*`, the transfer info files and the
+  CLASS-made `input/nbody_gauge_lcdm` (30 MB), which are removed. The regression reference changes (the solver instead
+  of CAMB/CLASS; 3 degenerate neutrino species for 0.2 eV, where the CAMB tables had one).
+- `tests/test_camb.cpp` tests the CAMB reader with synthetic CAMB files it writes (values at and between the nodes,
+  the weights, the growth rate, the extrapolation, the infofile variants and the column layouts) and the tables file
+  (round trip, metadata, errors). `check_internal_transfers.py` checks `--write-transfers` and `tables` end to end.
+
+### SimulationCode: the N-body gauge from the internal Einstein-Boltzmann solver
+- With `ic_type_of_input = internal` and `force_nbody_gauge = true` the solver gives the N-body gauge transfer
+  functions and the source delta_extra(k, a) (no CLASS script or table; LCDM, w0waCDM, quintessence and EDE with GR).
+  The source is computed from the comoving Poisson equation as a sum of small terms with smoothed time derivatives.
+  The linear growth z = 49 -> 0 with it reproduces the solver's N-body gauge delta_cb to < 1e-5 (LCDM, with and without
+  massive neutrinos; up to 3.4% without the source with 0.2 eV) and 1e-3 at k = 2e-4 h/Mpc for w0wa.
+- `force_nbody_gauge_filename` is only needed with `ic_type_of_input = camb` (the tables of
+  `scripts/make_nbody_gauge_transfer.py`).
+
 ### SimulationCode: `gravity_model = Geff` is removed
 - It is covered by `gravity_model = mu` with `gravity_model_mu_parametrization = "table"` and a file with rows
   `a mu` (G_eff/G = mu(a); splined in log a, the closest value outside the table, and mu(a,k) with rows `a k mu`).

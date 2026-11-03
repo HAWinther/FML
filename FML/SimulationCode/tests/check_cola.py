@@ -52,15 +52,6 @@ def run(name, overrides):
     os.makedirs(d, exist_ok=True)
     p = dict(cases.BASE)
     p.update(overrides)
-    # A transfer info file starts with the folder of the transfer files (as in cases.write_case)
-    if p["ic_type_of_input"] == "camb":
-        with open(p["ic_input_filename"]) as f:
-            lines = f.read().split("\n")
-        folder = os.path.basename(lines[0].split()[0].rstrip("/"))
-        lines[0] = os.path.join(cases.INPUT, folder) + " " + " ".join(lines[0].split()[1:])
-        p["ic_input_filename"] = os.path.join(d, "transfer_infofile.txt")
-        with open(p["ic_input_filename"], "w") as f:
-            f.write("\n".join(lines))
     with open(os.path.join(d, "parameterfile.lua"), "w") as f:
         for k, v in p.items():
             f.write(f"{k} = {cases.lua_value(v)}\n")
@@ -126,8 +117,8 @@ pk_on, pk_off = (np.loadtxt(os.path.join(d, "output", "pofk_Reg_cb_z0.000.txt"))
 check(np.array_equal(pk_on, pk_off), "GR: simulation_use_scaledependent_cola = true gives the same P(k) as false")
 nu04 = dict(cosmology_OmegaMNu=0.0095,
             cosmology_OmegaCDM=0.259,
-            ic_type_of_input="camb",
-            ic_input_filename=cases.INPUT + "/transfer_infofile_lcdm_nu0.4_zmax200.txt",
+            ic_type_of_input="tables",
+            ic_input_filename=cases.INPUT + "/transfer_tables/lcdm_nu0.4.txt",
             ic_input_redshift=ZINI)
 _, text = run("nu_scaledep_true", dict(short, simulation_use_scaledependent_cola=True, **nu04))
 check("Scaledependent COLA" in text and "using standard COLA" not in text,

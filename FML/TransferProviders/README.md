@@ -12,8 +12,9 @@ user declares the gauge of the input, and the provider returns densities in the 
 
 This folder replaces the old CAMB reader (`CAMBUtils/CAMBReader.h`, `LinearTransferData`) and
 `InitialConditions/CAMBTransferProvider.h`, which have been removed. SimulationCode reads its transfer functions with it
-(`SimulationCode/src/TransferInput.cpp`: `ic_type_of_input = camb`, `class` or `internal`; for `internal` it runs the
-solver with the simulation's cosmology and model and tabulates it with `tabulate_transfers`, below).
+(`SimulationCode/src/TransferInput.cpp`: `ic_type_of_input = camb`, `class`, `internal` or `tables`; for `internal` it
+runs the solver with the simulation's cosmology and model and tabulates it with `tabulate_transfers`, below, and
+`tables` reads those tables from a file of `TransferTablesFile.h`).
 
 ```cpp
 #include <FML/TransferProviders/MakeTransferProvider.h>
@@ -33,6 +34,10 @@ double f = provider->density_growth_rate(Species::CDMBaryon, 0.1, 1.0 / 50.0);
 
 ## Files
 
+- `TransferTablesFile.h`: `TransferTables` in one self-describing text file (`write_transfer_tables`,
+  `read_transfer_tables`, `TransferTablesFileProvider`): a header of `# key = value` lines (the parameters of the tables,
+  the gauges and any metadata of the writer, e.g. the cosmology) and the column names, then one row per (a, k) with
+  `d_<s>` = delta/R and `t_<s>` = theta/(aH R) for s = cdm, b, cb, ncdm, m and the N-body gauge source.
 - `TabulatedTransferProvider.h`: what the CAMB and CLASS readers share. A reader fills `TransferTables` (every
   species it has, including CDMBaryon and TotalMatter, at each redshift of its files, in the FML convention) and the
   base class does the interpolation, growth rates, extrapolation and primordial spectrum.

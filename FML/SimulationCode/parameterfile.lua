@@ -316,7 +316,7 @@ particle_allocation_factor = 1.25
 -- Reorder the particles in memory by position every this many steps (faster density assignment and
 -- force interpolation once the particles have moved far from the lattice; 0: never)
 particle_sort_every_nsteps = 0
--- CDM and baryons as two sets of particles (particle_Npart_1D^3 of each)? Needs ic_type_of_input = camb, class or internal
+-- CDM and baryons as two sets of particles (particle_Npart_1D^3 of each)? Needs ic_type_of_input = camb, class, internal or tables
 particle_baryons = false
 -- Start the baryons from the same lattice as the CDM (same, recommended) or offset by half a particle spacing (offset)
 particle_baryon_lattice = "same"
@@ -324,7 +324,7 @@ particle_baryon_lattice = "same"
 -- mass (common displacements and velocities, the relative mode in the particle masses; exact at z = 0 in linear
 -- theory) or mass_ini (common displacements, masses from zini, own velocities). The mass modes need lattice = same
 particle_baryon_relative_mode = "displacement"
--- Massive neutrinos as particles with the delta-f method? Needs massive neutrinos, ic_type_of_input = camb, class or internal
+-- Massive neutrinos as particles with the delta-f method? Needs massive neutrinos, ic_type_of_input = camb, class, internal or tables
 -- (accurate neutrino transfer functions up to zini, see scripts/make_camb_transfer_tables.py), timestep_method = Quinn
 -- and force_linear_massive_neutrinos = false
 particle_neutrinos = false
@@ -401,13 +401,16 @@ ic_LPT_order = 2
 --                   run_background.dat; CLASS run with format = class, output = mTk,vTk, write_background = yes)
 -- internal         (FML's Einstein-Boltzmann solver run with the cosmology of the simulation; ic_input_filename:
 --                   an optional .ini of the solver; see also ic_internal_solver_parameters)
+-- tables           (the tables of the internal solver in one file, written once with
+--                   ./nbody --write-transfers parameterfile.lua file (with ic_type_of_input = "internal" in it);
+--                   checked against the cosmology here. The tests use input/transfer_tables)
 ic_type_of_input = "powerspectrum"
 ic_input_gauge = "synchronous" -- class: the gauge CLASS was run in (synchronous or newtonian; converted to CDM-synchronous)
 -- internal: settings of the solver as "name=value", e.g. {"Yp=0.245", "z_reion=8", "precision=fast"}
 -- (not the cosmology or the k-range, which are the simulation's; see README.md)
 ic_internal_solver_parameters = {}
 -- Path to the input (NB: for using the example files update the path at the top of the file below;
--- internal: an optional .ini file of the solver, "" for its defaults)
+-- internal: an optional .ini file of the solver, "" for its defaults; tables: the file)
 ic_input_filename = "input/example_power_spectrum_cb_z0.000.txt"
 -- The redshift of the P(k), T(k) we give as input
 ic_input_redshift = 0.0
@@ -503,7 +506,7 @@ end
 force_nufft_epsilon = 1e-5
 -- Include the effects of massive neutrinos when computing
 -- the density field (density of mnu is the linear prediction)
--- Requires: ic_type_of_input = camb, class or internal above (we need all T(k,z)); not used without
+-- Requires: ic_type_of_input = camb, class, internal or tables above (we need all T(k,z)); not used without
 -- massive neutrinos
 force_linear_massive_neutrinos = true
 -- Source the Poisson equation with the energy density of the massive neutrinos instead of their mass

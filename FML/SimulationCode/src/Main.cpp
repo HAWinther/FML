@@ -19,6 +19,10 @@
 //   ./nbody parameterfile.lua    Run a simulation
 //   ./nbody --parameters [file]  Print the reference of all parameters (markdown) [to file]
 //   ./nbody --features           Print the optional features compiled in (hdf5, healpix)
+//   ./nbody --write-transfers parameterfile.lua file
+//                                Run the internal Einstein-Boltzmann solver for the parameterfile (with
+//                                ic_type_of_input = internal) and write its transfer tables to file (read them with
+//                                ic_type_of_input = tables)
 //
 // The cosmologies and gravity models are listed in Models.h, the parameters in
 // ParameterSchema.h and the particle types in Particles.h
@@ -81,10 +85,16 @@ int run(int argc, char ** argv) {
         }
         return 0;
     }
-    if (std::strncmp(argv[1], "--", 2) == 0) {
+    const bool write_transfers = std::strcmp(argv[1], "--write-transfers") == 0;
+    if (write_transfers and argc != 4) {
+        if (FML::ThisTask == 0)
+            std::cerr << "Run as: ./nbody --write-transfers parameterfile.lua file\n";
+        return 1;
+    }
+    if (std::strncmp(argv[1], "--", 2) == 0 and not write_transfers) {
         if (FML::ThisTask == 0)
             std::cerr << "Unknown option " << argv[1] << ". Run as: ./nbody parameterfile.lua, ./nbody --parameters "
-                      << "[file] or ./nbody --features\n";
+                      << "[file], ./nbody --features or ./nbody --write-transfers parameterfile.lua file\n";
         return 1;
     }
 
@@ -92,7 +102,7 @@ int run(int argc, char ** argv) {
     // Parse the parameterfile
     //=============================================================
     ParameterMap param;
-    SIMCODE::read_parameterfile<NDIM>(param, argv[1]);
+    SIMCODE::read_parameterfile<NDIM>(param, argv[write_transfers ? 2 : 1]);
     if (FML::ThisTask == 0)
         param.info();
 
@@ -103,6 +113,11 @@ int run(int argc, char ** argv) {
     cosmo->read_parameters(param);
     cosmo->init();
     cosmo->info();
+
+    if (write_transfers) {
+        SIMCODE::write_internal_transfer_tables(SIMCODE::make_transfer_request(param, *cosmo, NDIM), argv[3]);
+        return 0;
+    }
 
     // The transfer functions of the input (CAMB, CLASS or the internal Einstein-Boltzmann solver), loaded once here:
     // the gravity model (growth with massive neutrinos), the initial conditions and the analysis share them

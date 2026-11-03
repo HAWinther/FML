@@ -49,8 +49,8 @@ namespace SIMCODE {
     /// Read the input power-spectrum / transfer function (as given by ic.type_of_input)
     /// and bring it to the initial redshift with the growth factors of grav_ic.
     ///
-    /// For ic.type_of_input = camb, class or internal the transfer functions T_i(k,z) are returned in transfers (the
-    /// object the gravity model loaded)
+    /// For ic.type_of_input = camb, class, internal or tables the transfer functions T_i(k,z) are returned in transfers
+    /// (the object the gravity model loaded)
     //=============================================================================
     template <int NDIM>
     LinearPowerSpectrumTable

@@ -38,12 +38,12 @@ namespace SIMCODE {
         // that is a fluid or a scalar field); the tables of scripts/make_nbody_gauge_transfer.py are for LCDM
         if (params.force.nbody_gauge) {
             const auto model = cosmo.get_name();
-            const bool internal = params.ic.type_of_input == ICInputType::InternalTransfer;
+            const bool internal = params.ic.from_internal_solver();
             if (grav.get_name() != "GR")
                 fail("force_nbody_gauge needs gravity_model = GR");
             if (internal and not(model == "LCDM" or model == "w0waCDM" or model == "Quintessence" or model == "EDE"))
-                fail("force_nbody_gauge with ic_type_of_input = internal needs a cosmology with the GR field equations "
-                     "(LCDM, w0waCDM, Quintessence or EDE), not " +
+                fail("force_nbody_gauge with ic_type_of_input = internal or tables needs a cosmology with the GR field "
+                     "equations (LCDM, w0waCDM, Quintessence or EDE), not " +
                      model);
             if (not internal and model != "LCDM")
                 fail("force_nbody_gauge with ic_type_of_input = camb is only implemented for cosmology_model = LCDM "

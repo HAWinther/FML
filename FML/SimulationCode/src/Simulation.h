@@ -95,7 +95,7 @@ class NBodySimulation {
     /// The gravity model used to make the IC (GR if ic_use_gravity_model_GR, otherwise grav)
     std::shared_ptr<GravityModel<NDIM>> grav_ic;
 
-    /// The transfer functions (ic_type_of_input = camb, class or internal; see TransferInput.h).
+    /// The transfer functions (ic_type_of_input = camb, class, internal or tables; see TransferInput.h).
     /// The same object as in the gravity model (grav)
     std::shared_ptr<TransferProvider> transfers;
 

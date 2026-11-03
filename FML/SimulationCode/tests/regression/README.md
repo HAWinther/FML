@@ -7,11 +7,11 @@ all the main code paths of the solver:
 |---|---|
 | `cola_quinn_all` | COLA, Quinn time-stepping, output at the initial redshift, sigma8 normalization, P(k), multipoles, bispectrum, FoF, Gadget output |
 | `nocola_tassev_log` | No COLA, Tassev time-stepping, logarithmic spacing, total number of steps split over outputs, transfer function input, IC from GR growth, fixed amplitude + reversed phases, MT19937, FML output |
-| `scaledep_cola_neutrinos` | Scale-dependent COLA, massive neutrinos, transfer info file input |
+| `scaledep_cola_neutrinos` | Scale-dependent COLA, massive neutrinos, transfer tables input (`ic_type_of_input = tables`) |
 | `fofr_cola1_tsc` | f(R) gravity with screening, 1LPT COLA, TSC assignment |
 | `powerlaw_spacing` | Power-law spacing of the time steps |
 | `lightcone_dgp` | Lightcone (ascii output), DGP gravity |
-| `nbody_gauge` | N-body gauge: IC from N-body gauge transfer functions plus the linear source from radiation, neutrinos and GR |
+| `nbody_gauge` | N-body gauge: IC from N-body gauge transfer functions plus the linear source from radiation, neutrinos and GR (tables of the internal solver) |
 | `fine_force_grid` | Force grid twice the particle grid (fiducial gradient kernel becomes discrete_2pt), PCS assignment |
 | `scaledep_cola_fine_force_grid` | `simulation_use_scaledependent_cola = true` in GR with the force grid twice the particle grid: standard COLA is used (scale-independent growth), identical to `fine_force_grid` |
 | `hybridbias_zeldovich` | Hybrid bias spectra with the Zel'dovich prediction |
@@ -27,7 +27,9 @@ all the main code paths of the solver:
 | `read_particles_hdf5` | Reading the HDF5 particles from `hdf5_output` (only run if compiled with `USE_HDF5=true`) |
 | `nongaussian` | Non-gaussian (local fNL) IC |
 
-The cases are defined in `cases.py`.
+The cases are defined in `cases.py`. The transfer functions of the cases with massive neutrinos, two species and the
+N-body gauge are the tables in `input/transfer_tables` (made by `tests/make_transfer_tables.py` with the internal
+Einstein-Boltzmann solver).
 
 ## Usage
 

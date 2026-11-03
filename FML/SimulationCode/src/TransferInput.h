@@ -17,11 +17,11 @@
 #include <vector>
 
 //=============================================================================
-// The transfer functions of the simulation (ic_type_of_input = camb, class or internal), made with
+// The transfer functions of the simulation (ic_type_of_input = camb, class, internal or tables), made with
 // FML/TransferProviders (make_transfer_provider) or, for internal, FML's Einstein-Boltzmann solver run with the
-// cosmology of the simulation. The provider is shared by the gravity model (scale-dependent growth with massive
-// neutrinos), the initial conditions and the analysis. Only TransferInput.cpp includes MakeTransferProvider.h and
-// the Einstein-Boltzmann solver.
+// cosmology of the simulation (tables: its tables written to a file by ./nbody --write-transfers). The provider is
+// shared by the gravity model (scale-dependent growth with massive neutrinos), the initial conditions and the analysis.
+// Only TransferInput.cpp includes MakeTransferProvider.h and the Einstein-Boltzmann solver.
 //=============================================================================
 
 namespace SIMCODE {
@@ -30,27 +30,28 @@ namespace SIMCODE {
     using TransferSpecies = FML::INITIALCONDITIONS::Species;
 
     struct TransferInputRequest {
-        /// camb (a CAMB transfer info file), class (the root of a native CLASS run) or internal (FML's
+        /// camb (a CAMB transfer info file), class (the root of a native CLASS run), internal (FML's
         /// Einstein-Boltzmann solver with the cosmology below; filename: an optional .ini of the solver with its
-        /// precision, recombination and reionization settings, empty for the defaults)
+        /// precision, recombination and reionization settings, empty for the defaults) or tables (a file of
+        /// write_transfer_tables, checked against the cosmology below)
         std::string type;
         std::string filename;
         /// internal: settings of the solver as "name=value" (applied after those of the .ini file)
         std::vector<std::string> solver_parameters;
         /// class: the gauge CLASS was run in (synchronous or newtonian; converted to CDM-synchronous)
         std::string gauge{"synchronous"};
-        /// internal: the densities in the N-body gauge and its source (force_nbody_gauge)
+        /// internal and tables: the densities in the N-body gauge and its source (force_nbody_gauge)
         bool nbody_gauge{false};
         /// The cosmology of the simulation (CAMB: the weights and h; CLASS: h and the massive neutrinos checked)
         double h{0.0}, Omegab{0.0}, OmegaCDM{0.0}, OmegaMNu{0.0}, TCMB{0.0}, Neff{0.0};
         double As{0.0}, ns{1.0}, kpivot_mpc{0.05};
-        /// internal: the background of the simulation (all its parameters, with the neutrino masses) and its model
-        /// in the background/perturbation registry with the model parameters
+        /// internal and tables: the background of the simulation (all its parameters, with the neutrino masses) and its
+        /// model in the background/perturbation registry with the model parameters
         FML::COSMOLOGY::BACKGROUND::BackgroundParameters background;
         std::string model;
         std::map<std::string, double> model_parameters;
-        /// internal: the k-range (h/Mpc) and scale factors the tables must cover (the solver is run on a wider range;
-        /// outside the tables the values are extrapolated as for CAMB and CLASS)
+        /// internal and tables: the k-range (h/Mpc) and scale factors the tables must cover (the solver is run on a
+        /// wider range; outside the tables the values are extrapolated as for CAMB and CLASS)
         FML::INITIALCONDITIONS::TransferRange required{0.0, 0.0, 0.0, 0.0};
     };
 
@@ -67,11 +68,15 @@ namespace SIMCODE {
     /// them with massive neutrinos, and so do neutrino particles)
     inline bool input_has_transfer_tables(const std::string & type) {
         const auto t = canonical_input_type(type);
-        return t == "camb" or t == "class" or t == "internal";
+        return t == "camb" or t == "class" or t == "internal" or t == "tables";
     }
 
     /// The transfer functions of the input (see TransferInput.cpp)
     std::shared_ptr<TransferProvider> load_transfers(const TransferInputRequest & request);
+
+    /// Run the internal solver for the request (ic_type_of_input = internal) and write its tables, with the cosmology,
+    /// to filename (on task 0; ic_type_of_input = tables reads it). See TransferInput.cpp
+    void write_internal_transfer_tables(const TransferInputRequest & request, const std::string & filename);
 
     /// The request of the simulation from its parameters (ic_*, simulation_boxsize) and cosmology
     template <class CosmologyType>
@@ -90,10 +95,11 @@ namespace SIMCODE {
         r.As = cosmo.get_As();
         r.ns = cosmo.get_ns();
         r.kpivot_mpc = cosmo.get_kpivot_mpc();
-        if (r.type == "internal") {
+        if (r.type == "internal" or r.type == "tables") {
             r.nbody_gauge = SIMCODE::get_parameter<bool>(param, "force_nbody_gauge");
-            r.solver_parameters =
-                SIMCODE::get_parameter<std::vector<std::string>>(param, "ic_internal_solver_parameters");
+            if (r.type == "internal")
+                r.solver_parameters =
+                    SIMCODE::get_parameter<std::vector<std::string>>(param, "ic_internal_solver_parameters");
             r.background = cosmo.background().parameters();
             r.model = cosmo.get_registry_name();
             r.model_parameters = cosmo.get_model_parameters();
