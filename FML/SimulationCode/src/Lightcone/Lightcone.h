@@ -985,20 +985,8 @@ void Lightcone<NDIM, T, U>::output_ascii(FML::Vector<U> & part_lc,
     else
         fp.open(filename, std::ios_base::app);
 
-    // What to output
-    const bool output_mass = false and FML::PARTICLE::has_get_mass<T>();
-    const bool output_pos = true;
-    const bool output_vel = false;
-    const bool output_vr = false;
-    std::string what_we_output = "# The column below are ";
-    if (output_mass)
-        what_we_output += " mass (in number of particles) ";
-    if (output_pos)
-        what_we_output += " pos_vec (Mpc/h) ";
-    if (output_vel)
-        what_we_output += " vel_vec (km/s) ";
-    if (output_vr)
-        what_we_output += " LOS_velocity (km/s) ";
+    // What to output: the position (and with relativistic effects the potential, v_r and the redshifts)
+    std::string what_we_output = "# The column below are  pos_vec (Mpc/h) ";
     if (relativistic_effects)
         what_we_output += " Phi/c^2 v_r (km/s) z_cos z_obs ";
 
@@ -1018,38 +1006,10 @@ void Lightcone<NDIM, T, U>::output_ascii(FML::Vector<U> & part_lc,
     }
 
     for (auto & p : part_lc) {
+        // The position
         auto * pos = FML::PARTICLE::GetPos(p);
-        auto * vel = FML::PARTICLE::GetVel(p);
-
-        // Output the mass
-        if (output_mass) {
-            if constexpr (FML::PARTICLE::has_get_mass<T>()) {
-                fp << std::setw(10) << FML::PARTICLE::GetMass(p) << " ";
-            }
-        }
-
-        // Output the position
-        if (output_pos) {
-            for (int idim = 0; idim < NDIM; idim++)
-                fp << std::setw(10) << pos[idim] << " ";
-        }
-
-        // Output the velocity
-        if (output_vel) {
-            for (int idim = 0; idim < NDIM; idim++)
-                fp << std::setw(10) << vel[idim] << " ";
-        }
-
-        // Output the radial velocity
-        if (output_vr) {
-            double vr = 0.0, r_squared = 0.0;
-            for (int idim = 0; idim < NDIM; idim++) {
-                vr += vel[idim] * pos[idim];
-                r_squared += pos[idim] * pos[idim];
-            }
-            vr /= std::sqrt(r_squared);
-            fp << std::setw(10) << vr << " ";
-        }
+        for (int idim = 0; idim < NDIM; idim++)
+            fp << std::setw(10) << pos[idim] << " ";
 
         // The potential, radial velocity and the cosmological and observed redshift
         if (relativistic_effects) {

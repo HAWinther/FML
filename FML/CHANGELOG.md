@@ -5,6 +5,11 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: dead code
+- `OnionSlices::init()` (never called) and the unused `npix` member removed; the members it set are
+  default-initialised. The always-false mass / velocity / v_r columns of the ascii lightcone output removed (the
+  output is unchanged).
+
 ### Massive neutrino particles: thermal velocities from the background's species
 - The Fermi-Dirac momentum sampler and occupation number move from SimulationCode to the library
   (`BACKGROUND::FermiDiracMomentumSampler`, `fermi_dirac_occupation` in `Cosmology/Background/Species.h`).

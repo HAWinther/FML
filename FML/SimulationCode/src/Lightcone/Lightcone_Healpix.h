@@ -658,17 +658,16 @@ class OnionSlices {
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
     std::vector<OnionSlice<T, NDIM>> maps;
-    long nside;
-    long npix;
-    bool use_chunkpix;
-    long nside_chunks;
+    long nside{0};
+    bool use_chunkpix{false};
+    long nside_chunks{0};
 
     // Variables set by init_current_step
-    int index_maps_current_step_start;
-    int index_maps_current_step_end;
-    double astart;
-    double aend;
-    double da;
+    int index_maps_current_step_start{0};
+    int index_maps_current_step_end{0};
+    double astart{0.0};
+    double aend{0.0};
+    double da{0.0};
 
     bool bininfo_written{false};
 
@@ -678,21 +677,6 @@ class OnionSlices {
     OnionSlices(const OnionSlices &) = default;
 
     auto & get_maps() { return maps; }
-
-    void init() {
-#ifndef USE_HEALPIX
-        throw std::runtime_error("Cannot use healpix maps without healpix being installed");
-#endif
-
-        maps = std::vector<OnionSlice<T, NDIM>>{};
-        // We want to avoid reallocation when doing push-back
-        // so we make room for more maps than we need
-        // (this does not require much memory as maps themselves are not allocated)
-        maps.reserve(1000);
-        index_maps_current_step_start = 0;
-        index_maps_current_step_end = 0;
-        astart = aend = 0.0;
-    }
 
     /// The settings (plc_use_chunkpix, plc_nside_chunks, plc_nside, plc_da_maps)
     void set_parameters(bool _use_chunkpix, long _nside_chunks, long _nside, double _da) {
