@@ -13,9 +13,7 @@
 #include "Particles.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
-#include <functional>
 #include <iostream>
 #include <stdexcept>
 #include <string>

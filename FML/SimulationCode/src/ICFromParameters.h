@@ -19,11 +19,7 @@
 #include "SimulationParameters.h"
 #include "TransferInput.h"
 
-#include <array>
 #include <cmath>
-#include <complex>
-#include <functional>
-#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <stdexcept>

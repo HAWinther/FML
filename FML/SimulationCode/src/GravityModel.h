@@ -21,6 +21,7 @@
 
 #include <cmath>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -43,7 +44,7 @@ class GravityModel {
     using DVector = FML::INTERPOLATION::SPLINE::DVector;
     using DVector2D = FML::INTERPOLATION::SPLINE::DVector2D;
     using TransferProvider = SIMCODE::TransferProvider;
-    const double H0_hmpc = 1.0 / FML::UTILS::SI::c_over_H0_mpch;
+    static constexpr double H0_hmpc = 1.0 / FML::UTILS::SI::c_over_H0_mpch;
 
     //========================================================================
     // Constructors
@@ -101,83 +102,41 @@ class GravityModel {
         return *growth;
     }
 
-    // Output an element (e.g. string/double) in a header/row with a desired alignment width
-    template <typename T>
-    void output_element(std::ofstream & fp, const T & element, int width = 15) const {
-        fp << std::setw(width) << element;
-    }
-
     //========================================================================
-    // Output the stuff we compute
+    // Output the stuff we compute: the columns (name and value at (a, k c / H0)) of the table of output()
     //========================================================================
-    virtual void output_header(std::ofstream & fp) {
-        fp << "#";
-        output_element(fp, "a");
-        fp << " ";
-        output_element(fp, "GeffG(a,k)");
-        fp << " ";
-        output_element(fp, "D1(a,k)");
-        fp << " ";
-        output_element(fp, "D1mnu(a,k)");
+    struct OutputColumn {
+        std::string name;
+        std::function<double(double, double)> value;
+    };
+    virtual std::vector<OutputColumn> output_columns() const {
+        std::vector<OutputColumn> columns{{"a", [](double a, double) { return a; }},
+                                          {"GeffG(a,k)", [this](double a, double k) { return GeffOverG(a, k); }},
+                                          {"D1(a,k)", [this](double a, double k) { return get_D_1LPT(a, k); }},
+                                          {"D1mnu(a,k)", [this](double a, double k) { return get_Dmnu_1LPT(a, k); }}};
         if (transfers) {
-            fp << " ";
-            output_element(fp, "D1_Tk(a,k)");
-            fp << " ";
-            output_element(fp, "D1mnu_Tk(a,k)");
+            // D1_Tk = T_cb(k, a) / T_cb(k, aini); D1mnu_Tk the same for the neutrinos (NaN without massive neutrinos)
+            auto transfer_growth = [this](SIMCODE::TransferSpecies s, double a, double koverH0) {
+                const double k = koverH0 * H0_hmpc;
+                return transfers->density_over_k_mpc2(s, k, a) / transfers->density_over_k_mpc2(s, k, aini);
+            };
+            columns.push_back({"D1_Tk(a,k)", [transfer_growth](double a, double k) {
+                                   return transfer_growth(SIMCODE::TransferSpecies::CDMBaryon, a, k);
+                               }});
+            columns.push_back({"D1mnu_Tk(a,k)", [this, transfer_growth](double a, double k) {
+                                   return has_neutrino_transfers() ?
+                                              transfer_growth(SIMCODE::TransferSpecies::MassiveNeutrino, a, k) :
+                                              std::numeric_limits<double>::quiet_NaN();
+                               }});
         }
-        fp << " ";
-        output_element(fp, "D2(a,k)");
-        fp << " ";
-        output_element(fp, "D3a(a,k)");
-        fp << " ";
-        output_element(fp, "D3b(a,k)");
-        fp << " ";
-        output_element(fp, "source_1LPT");
-        fp << " ";
-        output_element(fp, "source_2LPT");
-        fp << " ";
-        output_element(fp, "source_3LPTa");
-        fp << " ";
-        output_element(fp, "source_3LPTb");
-    }
-
-    virtual void output_row(std::ofstream & fp, double a, double koverH0) const {
-        fp << " ";
-        output_element(fp, a);
-        fp << " ";
-        output_element(fp, GeffOverG(a, koverH0));
-        fp << " ";
-        output_element(fp, get_D_1LPT(a, koverH0));
-        fp << " ";
-        output_element(fp, get_Dmnu_1LPT(a, koverH0));
-        if (transfers) {
-            // (D1mnu_Tk: NaN without massive neutrinos)
-            const double k = koverH0 * H0_hmpc;
-            fp << " ";
-            output_element(fp,
-                           transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, a) /
-                               transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, aini));
-            fp << " ";
-            output_element(fp,
-                           has_neutrino_transfers() ?
-                               transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k, a) /
-                                   transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k, aini) :
-                               std::numeric_limits<double>::quiet_NaN());
-        }
-        fp << " ";
-        output_element(fp, get_D_2LPT(a, koverH0));
-        fp << " ";
-        output_element(fp, get_D_3LPTa(a, koverH0));
-        fp << " ";
-        output_element(fp, get_D_3LPTb(a, koverH0));
-        fp << " ";
-        output_element(fp, source_factor_1LPT(a, koverH0));
-        fp << " ";
-        output_element(fp, source_factor_2LPT(a, koverH0));
-        fp << " ";
-        output_element(fp, source_factor_3LPTa(a, koverH0));
-        fp << " ";
-        output_element(fp, source_factor_3LPTb(a, koverH0));
+        columns.push_back({"D2(a,k)", [this](double a, double k) { return get_D_2LPT(a, k); }});
+        columns.push_back({"D3a(a,k)", [this](double a, double k) { return get_D_3LPTa(a, k); }});
+        columns.push_back({"D3b(a,k)", [this](double a, double k) { return get_D_3LPTb(a, k); }});
+        columns.push_back({"source_1LPT", [this](double a, double k) { return source_factor_1LPT(a, k); }});
+        columns.push_back({"source_2LPT", [this](double a, double k) { return source_factor_2LPT(a, k); }});
+        columns.push_back({"source_3LPTa", [this](double a, double k) { return source_factor_3LPTa(a, k); }});
+        columns.push_back({"source_3LPTb", [this](double a, double k) { return source_factor_3LPTb(a, k); }});
+        return columns;
     }
 
     virtual void output(std::string filename, double koverH0) {
@@ -185,12 +144,16 @@ class GravityModel {
         if (not fp.is_open())
             return;
 
-        output_header(fp);
+        const auto columns = output_columns();
+        fp << "#";
+        for (size_t i = 0; i < columns.size(); i++)
+            fp << (i > 0 ? " " : "") << std::setw(15) << columns[i].name;
         fp << "\n";
         for (int i = 0; i < npts_loga; i++) {
             double loga = std::log(alow) + std::log(ahigh / alow) * i / double(npts_loga - 1);
             double a = std::exp(loga);
-            output_row(fp, a, koverH0);
+            for (auto & column : columns)
+                fp << " " << std::setw(15) << column.value(a, koverH0);
             fp << "\n";
         }
     }

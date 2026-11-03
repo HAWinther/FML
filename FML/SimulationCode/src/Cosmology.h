@@ -21,10 +21,8 @@
 #include <iostream>
 #include <map>
 #include <memory>
-#include <sstream>
 #include <stdexcept>
 #include <string>
-#include <tuple>
 #include <vector>
 
 //=============================================================================
@@ -516,7 +514,7 @@ class Cosmology {
     std::shared_ptr<const Background> bg;
     SIMCODE::NEUTRINOS::MassiveNeutrinoList massive_neutrinos;
 
-    const double H0_hmpc = 1.0 / FML::UTILS::SI::c_over_H0_mpch;
+    static constexpr double H0_hmpc = 1.0 / FML::UTILS::SI::c_over_H0_mpch;
     // The parameters read by read_parameters() for init(); after that all of them come from the background
     FML::COSMOLOGY::BACKGROUND::BackgroundParameters input_parameters;
     const double N_nu{3};     // Number of neutrinos (3)
