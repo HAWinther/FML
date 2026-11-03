@@ -1,6 +1,7 @@
 #ifndef GRAVITYMODEL_HEADER
 #define GRAVITYMODEL_HEADER
 
+#include "Cosmology.h"
 #include "ParameterDefaults.h"
 
 #include "TransferInput.h"

@@ -146,23 +146,13 @@ namespace SIMCODE {
     /// (or b: mean CDM+baryon density), "<Delta>c" (critical density) or "vir" (Bryan & Norman 1998)
     inline double so_overdensity(const std::string & definition, const Cosmology & cosmo, double a) {
         const double OmegaCB_a = cosmo.Omega_cb(a);
-        if (definition == "vir") {
+        const auto def = parse_so_definition(definition);
+        if (def.virial) {
             const double x = cosmo.Omega_m(a) - 1.0;
             const double Delta_c = 18.0 * M_PI * M_PI + 82.0 * x - 39.0 * x * x;
             return Delta_c / OmegaCB_a;
         }
-        if (definition.size() < 2)
-            throw std::runtime_error("Unknown SO definition [" + definition + "] (examples: 200m, 500c, vir)");
-        const char type = definition.back();
-        double Delta = 0.0;
-        try {
-            Delta = std::stod(definition.substr(0, definition.size() - 1));
-        } catch (...) {
-            throw std::runtime_error("Unknown SO definition [" + definition + "] (examples: 200m, 500c, vir)");
-        }
-        if (not(Delta > 0.0) or (type != 'm' and type != 'b' and type != 'c'))
-            throw std::runtime_error("Unknown SO definition [" + definition + "] (examples: 200m, 500c, vir)");
-        return type == 'c' ? Delta / OmegaCB_a : Delta;
+        return def.reference == 'c' ? def.Delta / OmegaCB_a : def.Delta;
     }
 
     /// The Tinker et al. 2008 multiplicity function for an overdensity Delta (with respect to the mean density) in

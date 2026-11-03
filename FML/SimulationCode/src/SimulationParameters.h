@@ -341,6 +341,38 @@ namespace SIMCODE {
     struct SimulationParameters;
 
     //=============================================================================
+    /// A spherical overdensity definition of fof_so_definitions: "vir" (Bryan & Norman 1998) or <Delta><reference>
+    /// with reference m or b (the mean CDM+baryon density) or c (the critical density), e.g. 200m, 500c. Throws for
+    /// anything else
+    //=============================================================================
+    struct SODefinition {
+        bool virial{false};
+        double Delta{0.0};
+        char reference{'m'};
+    };
+    inline SODefinition parse_so_definition(const std::string & definition) {
+        auto unknown = [&]() {
+            return std::runtime_error("fof_so_definitions: unknown definition [" + definition +
+                                      "] (<Delta>m or <Delta>b: mean CDM+baryon density, <Delta>c: critical density, "
+                                      "vir)");
+        };
+        if (definition == "vir")
+            return {true, 0.0, 'm'};
+        if (definition.size() < 2)
+            throw unknown();
+        SODefinition def;
+        def.reference = definition.back();
+        try {
+            def.Delta = std::stod(definition.substr(0, definition.size() - 1));
+        } catch (...) {
+            throw unknown();
+        }
+        if (not(def.Delta > 0.0) or (def.reference != 'm' and def.reference != 'b' and def.reference != 'c'))
+            throw unknown();
+        return def;
+    }
+
+    //=============================================================================
     /// What the separate particle species need (particle_baryons, particle_neutrinos): one row per requirement,
     /// whether it applies to the baryon and to the neutrino particles and a test of a set of parameters. Used to
     /// validate the parameters and for the table in PARAMETERS.md
@@ -586,6 +618,40 @@ namespace SIMCODE {
             }
 
             r.print("NBodySimulation::read_parameters");
+            print_warnings();
+        }
+
+        /// Warnings about settings that are allowed but probably not what is wanted (task 0)
+        void print_warnings() const {
+            // The accurate force options (NUFFT, deconvolution, early-time force) remove the smoothing of the force
+            // near the grid Nyquist frequency. With a grid finer than the particle grid the modes between the particle
+            // and the grid Nyquist frequency are dominated by the discreteness of the particles and these options then
+            // give far too much small-scale power (+15-60% at k = 0.2 h/Mpc in tests with a 2x grid)
+            const bool exact_force = force.density_method != "assignment" or force.deconvolve_window or
+                                     force.interpolation_method == "nufft" or force.early_method != "none";
+            if (exact_force and force.nmesh > particle.Npart_1D and FML::ThisTask == 0)
+                std::cout << "WARNING: force_density_method / force_deconvolve_window / force_early_method are meant for "
+                             "force_nmesh = particle_Npart_1D. With a finer force grid they amplify the discreteness of the "
+                             "particles (see README)\n";
+
+            // Starting from the Big Bang the force at early times (particles close to the lattice) has to be accurate: the
+            // CIC and interlaced forces make the modes with k > ~k_Ny/8 grow wrongly there (see README)
+            if (ic.initial_redshift > 100.0 and force.early_method == "none" and
+                force.density_method == "assignment" and force.interpolation_method != "nufft" and
+                FML::ThisTask == 0)
+                std::cout << "WARNING: starting at z = " << ic.initial_redshift
+                          << " without force_early_method: use force_early_method = nufft (force_early_until_redshift ~ 10) "
+                             "for an accurate force while the particles are close to the lattice (see README)\n";
+
+            // The baryon-CDM relative mode in the displacements of the particles (a ~50 kpc/h CDM-baryon offset per pair)
+            // gets a spurious discrete-mode growth once the force grid resolves it, and is partly lost in collapsed regions
+            // (P(delta_c - delta_b) ~ 0.5 of linear theory at z = 0 on large scales). See README
+            // (also the part of it that grows after zini with mass_ini)
+            if (particle.baryons and particle.baryon_relative_mode != "mass" and
+                force.nmesh > 2 * particle.Npart_1D and FML::ThisTask == 0)
+                std::cout << "WARNING: particle_baryon_relative_mode = " << particle.baryon_relative_mode
+                          << " with force_nmesh > 2 particle_Npart_1D: the baryon-CDM relative mode is not reliable (use "
+                             "particle_baryon_relative_mode = mass, see README)\n";
         }
 
         /// Check that the parameters are consistent. Throws if not
@@ -628,17 +694,11 @@ namespace SIMCODE {
                     fail("fof_output_fileformat = HDF5 needs the code compiled with USE_HDF5=true");
 #endif
                 for (auto & def : fof.so_definitions) {
-                    bool ok = def == "vir";
-                    if (not ok and def.size() >= 2 and (def.back() == 'm' or def.back() == 'b' or def.back() == 'c')) {
-                        try {
-                            ok = std::stod(def.substr(0, def.size() - 1)) > 0.0;
-                        } catch (...) {
-                            ok = false;
-                        }
+                    try {
+                        parse_so_definition(def);
+                    } catch (std::exception & e) {
+                        fail(e.what());
                     }
-                    if (not ok)
-                        fail("fof_so_definitions: unknown definition [" + def +
-                             "] (<Delta>m or <Delta>b: mean CDM+baryon density, <Delta>c: critical density, vir)");
                 }
                 if (not(fof.massfunction_nbins > 0 and fof.massfunction_Mmin > 0.0 and
                         fof.massfunction_Mmax > fof.massfunction_Mmin))

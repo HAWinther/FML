@@ -36,7 +36,18 @@ FML_MODULES += $(filter-out Cosmology/EinsteinBoltzmannSolver,$(COSMO_MODULES)) 
 vpath ParameterFile.cpp $(FML_ROOT)/Cosmology/EinsteinBoltzmannSolver
 vpath EinsteinBoltzmannSolver.cpp $(FML_ROOT)/Cosmology/EinsteinBoltzmannSolver
 INTERNAL_COSMO_OBJS := $(filter-out Spline.o ODESolver.o,$(COSMO_OBJS))
-EXTRA_VPATH += $(FML_ROOT)/Baryonification/tests $(FML_ROOT)/ShortRangeGravity/tests $(FML_ROOT)/PhaseSpaceHaloFinder/tests $(FML_ROOT)/EnsembleStatistics/tests $(FML_ROOT)/Morphology/tests
+# The tests of the modules that are also run here: compiled from their sources explicitly instead of through VPATH.
+# The module folders have their own objects and executables (built with other options by their own Makefiles), which
+# VPATH would find and use instead (an executable found there is taken as up to date and never built here)
+MODULE_TEST_SOURCES := Baryonification/tests/test_baryonification Baryonification/tests/test_baryonification_odr \
+                       ShortRangeGravity/tests/test_short_range ShortRangeGravity/tests/test_yukawa \
+                       PhaseSpaceHaloFinder/tests/test_phase_space_halos EnsembleStatistics/tests/test_control \
+                       EnsembleStatistics/tests/test_spectra Morphology/tests/test_morphology
+define module_test_object
+$(notdir $(1)).o: $(FML_ROOT)/$(1).cpp
+	$$(CC) $$(DEPFLAGS) -c -o $$@ $$< $$(OPTIONS) $$(INC)
+endef
+$(foreach src,$(MODULE_TEST_SOURCES),$(eval $(call module_test_object,$(src))))
 
 TEST_OBJS = test_core.o Global.o
 ifeq ($(USE_GSL),true)

@@ -52,36 +52,6 @@ void NBodySimulation<NDIM, T>::read_parameters(const ParameterMap & param, const
                                      "Use force_gradient_kernel = fiducial");
     }
 
-    // The accurate force options (NUFFT, deconvolution, early-time force) remove the smoothing of the force
-    // near the grid Nyquist frequency. With a grid finer than the particle grid the modes between the particle
-    // and the grid Nyquist frequency are dominated by the discreteness of the particles and these options then
-    // give far too much small-scale power (+15-60% at k = 0.2 h/Mpc in tests with a 2x grid)
-    const bool exact_force = params.force.density_method != "assignment" or params.force.deconvolve_window or
-                             params.force.interpolation_method == "nufft" or params.force.early_method != "none";
-    if (exact_force and params.force.nmesh > params.particle.Npart_1D and FML::ThisTask == 0)
-        std::cout << "WARNING: force_density_method / force_deconvolve_window / force_early_method are meant for "
-                     "force_nmesh = particle_Npart_1D. With a finer force grid they amplify the discreteness of the "
-                     "particles (see README)\n";
-
-    // Starting from the Big Bang the force at early times (particles close to the lattice) has to be accurate: the
-    // CIC and interlaced forces make the modes with k > ~k_Ny/8 grow wrongly there (see README)
-    if (params.ic.initial_redshift > 100.0 and params.force.early_method == "none" and
-        params.force.density_method == "assignment" and params.force.interpolation_method != "nufft" and
-        FML::ThisTask == 0)
-        std::cout << "WARNING: starting at z = " << params.ic.initial_redshift
-                  << " without force_early_method: use force_early_method = nufft (force_early_until_redshift ~ 10) "
-                     "for an accurate force while the particles are close to the lattice (see README)\n";
-
-    // The baryon-CDM relative mode in the displacements of the particles (a ~50 kpc/h CDM-baryon offset per pair)
-    // gets a spurious discrete-mode growth once the force grid resolves it, and is partly lost in collapsed regions
-    // (P(delta_c - delta_b) ~ 0.5 of linear theory at z = 0 on large scales). See README
-    // (also the part of it that grows after zini with mass_ini)
-    if (params.particle.baryons and params.particle.baryon_relative_mode != "mass" and
-        params.force.nmesh > 2 * params.particle.Npart_1D and FML::ThisTask == 0)
-        std::cout << "WARNING: particle_baryon_relative_mode = " << params.particle.baryon_relative_mode
-                  << " with force_nmesh > 2 particle_Npart_1D: the baryon-CDM relative mode is not reliable (use "
-                     "particle_baryon_relative_mode = mass, see README)\n";
-
     cola.enabled = params.simulation.use_cola;
     cola.scaledependent = params.simulation.use_scaledependent_cola;
     cola.LPT_order = params.simulation.cola_LPT_order;
