@@ -33,9 +33,10 @@ f.optional("fof_linking_length", linking_length, 0.2, "The linking length in uni
 ```
 
 (name, member, default, description, and the allowed values for a string; `f.if_true("fof", ...)` / `f.when(...)`
-for when it is used, `f.choice(...)` for a string read into an enum, see `src/ParameterFields.h`). The parameter
-table (`src/ParameterSchema.h`, which also has the gravity model parameters; the cosmology parameters are the `fields()` of `Cosmology::Settings` in `src/Cosmology.h`) and the reading both
-come from it. Then regenerate `PARAMETERS.md` with `./nbody --parameters PARAMETERS.md` (CI checks that it is up to
+for when it is used, `f.choice(...)` for a string read into an enum, see `src/ParameterFields.h`). The cosmology
+parameters are the `fields()` of `Cosmology::Settings` (`src/Cosmology.h`) and the gravity model parameters those of
+`GravityModelSettings` (`src/GravityModelSettings.h`; `f.for_cosmology` / `f.for_gravity` for the parameters of one
+model). The parameter table (`src/ParameterSchema.h`) and the reading both come from them. Then regenerate `PARAMETERS.md` with `./nbody --parameters PARAMETERS.md` (CI checks that it is up to
 date).
 
 By default the simulation is compiled for one particle type that can run every configuration (position, velocity,
@@ -50,7 +51,7 @@ How the code is organised:
 | File | Contents |
 |---|---|
 | `src/Main.cpp` | Reads the parameterfile, creates the models and runs the simulation |
-| `src/ParameterSchema.h` | All the parameters (read, checked and documented from one table; the simulation settings from the `fields()` in `src/SimulationParameters.h`) |
+| `src/ParameterSchema.h` | All the parameters (read, checked and documented from one table; the simulation, cosmology and gravity model settings from the `fields()` in `src/SimulationParameters.h`, `src/Cosmology.h` and `src/GravityModelSettings.h`) |
 | `src/Models.h` | The list of cosmologies and gravity models that can be selected |
 | `src/Particles.h` | The particle types |
 | `src/Simulation.h` | The simulation class; its members are in `src/SimulationInit.h` (parameters, initial conditions), `src/SimulationStep.h` (time-stepping loop, output) and `src/SimulationDensity.h` (the density field of the force) |

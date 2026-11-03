@@ -28,7 +28,7 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
     explicit GravityModelSymmetron(std::shared_ptr<Cosmology> cosmo)
-        : GravityModelScreened<NDIM>(cosmo, "Symmetron", "gravity_model_symmetron_exact_solution") {}
+        : GravityModelScreened<NDIM>(cosmo, "Symmetron", &SIMCODE::GravityModelSettings::symmetron_exact_solution) {}
 
     //========================================================================
     // Print some info
@@ -80,9 +80,9 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
     //========================================================================
     void read_parameters(ParameterMap & param) override {
         GravityModelScreened<NDIM>::read_parameters(param);
-        assb = param.get<double>("gravity_model_symmetron_assb");
-        beta = param.get<double>("gravity_model_symmetron_beta");
-        L_mpch = param.get<double>("gravity_model_symmetron_L_mpch");
+        assb = this->settings.symmetron_assb;
+        beta = this->settings.symmetron_beta;
+        L_mpch = this->settings.symmetron_L_mpch;
     }
 };
 

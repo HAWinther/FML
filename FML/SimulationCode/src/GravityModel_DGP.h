@@ -36,7 +36,7 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
     double get_rcH0() const { return rcH0_DGP; }
 
     explicit GravityModelDGP(std::shared_ptr<Cosmology> cosmo)
-        : GravityModelScreened<NDIM>(cosmo, "DGP", "gravity_model_dgp_exact_solution") {}
+        : GravityModelScreened<NDIM>(cosmo, "DGP", &SIMCODE::GravityModelSettings::dgp_exact_solution) {}
 
     //========================================================================
     // Print some info
@@ -106,10 +106,10 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
     //========================================================================
     void read_parameters(ParameterMap & param) override {
         GravityModelScreened<NDIM>::read_parameters(param);
-        rcH0_DGP = param.get<double>("gravity_model_dgp_rcH0overc");
+        rcH0_DGP = this->settings.dgp_rcH0overc;
         if (this->use_screening_method) {
-            smoothing_scale_over_boxsize = param.get<double>("gravity_model_dgp_smoothing_scale_over_boxsize");
-            smoothing_filter = param.get<std::string>("gravity_model_dgp_smoothing_filter");
+            smoothing_scale_over_boxsize = this->settings.dgp_smoothing_scale_over_boxsize;
+            smoothing_filter = this->settings.dgp_smoothing_filter;
         }
     }
 };

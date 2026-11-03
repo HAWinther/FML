@@ -2,6 +2,7 @@
 #define GRAVITYMODEL_HEADER
 
 #include "Cosmology.h"
+#include "GravityModelSettings.h"
 #include "ParameterDefaults.h"
 
 #include "TransferInput.h"
@@ -201,6 +202,9 @@ class GravityModel {
     // In derived class remember to also call the base class (this)
     //========================================================================
     virtual void read_parameters(ParameterMap & param) {
+        // The gravity_model_* and multigrid_* parameters (GravityModelSettings::fields)
+        SIMCODE::SettingsReader reader{param, "", SIMCODE::get_parameter<std::string>(param, "gravity_model")};
+        settings.fields(reader);
         aini = 1.0 / (1.0 + param.get<double>("ic_initial_redshift"));
         // The growth factor splines must start before the simulation (e.g. when starting at very high redshift)
         alow = std::min(alow, aini / 10.0);
@@ -392,6 +396,9 @@ class GravityModel {
     virtual ~GravityModel() = default;
 
   protected:
+    /// The parameters of the gravity models (read in read_parameters; those of other models keep their defaults)
+    SIMCODE::GravityModelSettings settings;
+
     // For massive neutrinos we need transfer functions
     std::shared_ptr<TransferProvider> transfers;
     bool has_neutrino_transfers() const {

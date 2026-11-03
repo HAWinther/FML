@@ -57,7 +57,7 @@ class GravityModelScreened : public GravityModel<NDIM> {
     // The last exact (multigrid) solution in real space and its scale factor: the starting point of the next solve
     mutable FML::GRID::FFTWGrid<NDIM> multigrid_previous_solution;
     mutable double multigrid_previous_a{-1.0};
-    std::string exact_solution_parameter;
+    bool SIMCODE::GravityModelSettings::*exact_solution_flag;
 
   public:
     template <int N>
@@ -66,17 +66,19 @@ class GravityModelScreened : public GravityModel<NDIM> {
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
     using CouplingFunction = std::function<double(double)>;
 
-    /// exact_solution_parameter: the name of the model's switch for the exact (multigrid) solution, e.g.
-    /// gravity_model_fofr_exact_solution ("" if the model has no multigrid solver)
-    GravityModelScreened(std::shared_ptr<Cosmology> cosmo, std::string name, std::string exact_solution_parameter = "")
-        : GravityModel<NDIM>(cosmo, name), exact_solution_parameter(exact_solution_parameter) {}
+    /// exact_solution_flag: the model's switch for the exact (multigrid) solution in GravityModelSettings, e.g.
+    /// &GravityModelSettings::fofr_exact_solution (nullptr if the model has no multigrid solver)
+    GravityModelScreened(std::shared_ptr<Cosmology> cosmo,
+                         std::string name,
+                         bool SIMCODE::GravityModelSettings::*exact_solution_flag = nullptr)
+        : GravityModel<NDIM>(cosmo, name), exact_solution_flag(exact_solution_flag) {}
 
     /// The base parameters, the screening parameters and (if the model has a multigrid solver) the multigrid ones
     void read_parameters(ParameterMap & param) override {
         GravityModel<NDIM>::read_parameters(param);
-        read_screening_parameters(param);
-        if (not exact_solution_parameter.empty())
-            read_multigrid_parameters(param, exact_solution_parameter);
+        read_screening_parameters();
+        if (exact_solution_flag != nullptr)
+            read_multigrid_parameters();
     }
 
     bool get_use_screening() const { return use_screening_method or solve_exact_equation; }
@@ -153,13 +155,14 @@ class GravityModelScreened : public GravityModel<NDIM> {
         }
     }
 
-    /// Read the screening parameters (if gravity_model_screening is true)
-    void read_screening_parameters(ParameterMap & param) {
-        use_screening_method = param.get<bool>("gravity_model_screening");
+    /// The screening parameters (if gravity_model_screening is true)
+    void read_screening_parameters() {
+        const auto & s = this->settings;
+        use_screening_method = s.screening;
         if (use_screening_method) {
-            screening_enforce_largescale_linear = param.get<bool>("gravity_model_screening_enforce_largescale_linear");
-            screening_linear_scale_hmpc = param.get<double>("gravity_model_screening_linear_scale_hmpc");
-            screening_efficiency = SIMCODE::get_parameter<double>(param, "gravity_model_screening_efficiency");
+            screening_enforce_largescale_linear = s.screening_enforce_largescale_linear;
+            screening_linear_scale_hmpc = s.screening_linear_scale_hmpc;
+            screening_efficiency = s.screening_efficiency;
         }
     }
 
@@ -239,23 +242,20 @@ class GravityModelScreened : public GravityModel<NDIM> {
         return coarse;
     }
 
-    /// Read the multigrid parameters if the exact equation is to be solved (exact_solution_parameter is the name of
-    /// the model's switch, e.g. gravity_model_fofr_exact_solution)
-    void read_multigrid_parameters(ParameterMap & param, const std::string & exact_solution_parameter) {
-        solve_exact_equation = param.get<bool>(exact_solution_parameter);
+    /// The multigrid parameters if the exact equation is to be solved (the model's switch exact_solution_flag)
+    void read_multigrid_parameters() {
+        const auto & s = this->settings;
+        solve_exact_equation = s.*exact_solution_flag;
         if (solve_exact_equation) {
-            multigrid_nsweeps_first_step = param.get<int>("multigrid_nsweeps_first_step");
-            multigrid_nsweeps = param.get<int>("multigrid_nsweeps");
-            multigrid_solver_residual_convergence = param.get<double>("multigrid_solver_residual_convergence");
-            multigrid_relative_criterion =
-                SIMCODE::get_parameter<std::string>(param, "multigrid_convergence_criterion") == "relative";
-            multigrid_coarse_factor = SIMCODE::get_parameter<int>(param, "multigrid_coarse_factor");
+            multigrid_nsweeps_first_step = s.multigrid_nsweeps_first_step;
+            multigrid_nsweeps = s.multigrid_nsweeps;
+            multigrid_solver_residual_convergence = s.multigrid_solver_residual_convergence;
+            multigrid_relative_criterion = s.multigrid_convergence_criterion == "relative";
+            multigrid_coarse_factor = s.multigrid_coarse_factor;
             FML::assert_mpi(multigrid_coarse_factor >= 1, "multigrid_coarse_factor must be >= 1");
-            multigrid_coarse_restriction =
-                SIMCODE::get_parameter<std::string>(param, "multigrid_coarse_restriction");
-            multigrid_start_redshift = SIMCODE::get_parameter<double>(param, "multigrid_start_redshift");
-            multigrid_linear_before_start =
-                SIMCODE::get_parameter<std::string>(param, "multigrid_force_before_start") == "linear";
+            multigrid_coarse_restriction = s.multigrid_coarse_restriction;
+            multigrid_start_redshift = s.multigrid_start_redshift;
+            multigrid_linear_before_start = s.multigrid_force_before_start == "linear";
         }
     }
 

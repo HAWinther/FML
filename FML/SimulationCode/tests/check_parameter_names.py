@@ -17,12 +17,12 @@ import sys
 root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 src = os.path.join(root, "src")
 
-# The table: the entries of ParameterSchema.h and the fields() of the settings (SimulationParameters.h, Cosmology.h),
-# which are both table entries and read by the code
+# The table: the entries of ParameterSchema.h and the fields() of the settings (SimulationParameters.h, Cosmology.h,
+# GravityModelSettings.h), which are both table entries and read by the code
 schema = open(os.path.join(src, "ParameterSchema.h")).read()
 table = set(re.findall(r'(?:b\.optional|b\.required|always_optional)\(\s*"([A-Za-z0-9_]+)"', schema))
 field_pattern = r'\bf\.(?:optional|required|always_optional|choice\(\s*Need::\w+\s*,)\(?\s*"([A-Za-z0-9_]+)"'
-field_files = ["SimulationParameters.h", "Cosmology.h"]
+field_files = ["SimulationParameters.h", "Cosmology.h", "GravityModelSettings.h"]
 fields = set()
 for name in field_files:
     fields |= set(re.findall(field_pattern, open(os.path.join(src, name)).read()))

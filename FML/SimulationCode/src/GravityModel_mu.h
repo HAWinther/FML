@@ -84,17 +84,18 @@ class GravityModelMu final : public GravityModel<NDIM> {
     //========================================================================
     void read_parameters(ParameterMap & param) override {
         GravityModel<NDIM>::read_parameters(param);
-        parametrization = param.get<std::string>("gravity_model_mu_parametrization");
+        const auto & s = this->settings;
+        parametrization = s.mu_parametrization;
         if (parametrization == "DE") {
-            mu0 = param.get<double>("gravity_model_mu_mu0");
+            mu0 = s.mu_mu0;
         } else if (parametrization == "BZ") {
-            auto p = param.get<std::vector<double>>("gravity_model_mu_BZ_params");
+            const auto & p = s.mu_BZ_params;
             FML::assert_mpi(p.size() == 3, "gravity_model_mu_BZ_params must be {beta1, lambda1 (Mpc/h), s}");
             BZ_beta1 = p[0];
             BZ_lambda1_mpch = p[1];
             BZ_s = p[2];
         } else if (parametrization == "table") {
-            table_filename = param.get<std::string>("gravity_model_mu_filename");
+            table_filename = s.mu_filename;
             read_table();
         } else {
             throw std::runtime_error("Unknown gravity_model_mu_parametrization [" + parametrization +

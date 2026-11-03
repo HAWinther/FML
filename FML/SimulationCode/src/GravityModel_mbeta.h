@@ -70,7 +70,7 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     //========================================================================
     void read_parameters(ParameterMap & param) override {
         GravityModelScreened<NDIM>::read_parameters(param);
-        mbeta_params = param.get<std::vector<double>>("gravity_model_mbeta_params");
+        mbeta_params = this->settings.mbeta_params;
         FML::assert_mpi(mbeta_params.size() == 4,
                         "gravity_model_mbeta_params must have 4 numbers (beta0, beta power, m0, m power)");
     }

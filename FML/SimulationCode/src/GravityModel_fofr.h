@@ -30,7 +30,7 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
     explicit GravityModelFofR(std::shared_ptr<Cosmology> cosmo)
-        : GravityModelScreened<NDIM>(cosmo, "f(R)", "gravity_model_fofr_exact_solution") {}
+        : GravityModelScreened<NDIM>(cosmo, "f(R)", &SIMCODE::GravityModelSettings::fofr_exact_solution) {}
 
     //========================================================================
     // Print some info
@@ -85,12 +85,12 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
     //========================================================================
     void read_parameters(ParameterMap & param) override {
         GravityModelScreened<NDIM>::read_parameters(param);
-        fofr0 = param.get<double>("gravity_model_fofr_fofr0");
-        nfofr = param.get<double>("gravity_model_fofr_nfofr");
+        fofr0 = this->settings.fofr_fofr0;
+        nfofr = this->settings.fofr_nfofr;
         // |f_R0| (a negative value gives m^2 < 0 and a singular Geff)
         FML::assert_mpi(fofr0 > 0.0, "gravity_model_fofr_fofr0 must be > 0 (it is |f_R0|, e.g. 1e-5)");
         if (this->solve_exact_equation)
-            multigrid_method = param.get<std::string>("gravity_model_fofr_multigrid_method");
+            multigrid_method = this->settings.fofr_multigrid_method;
     }
 };
 

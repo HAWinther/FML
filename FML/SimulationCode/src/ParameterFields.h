@@ -3,6 +3,8 @@
 
 #include <FML/ParameterMap/ParameterMap.h>
 
+#include "ParameterDefaults.h"
+
 #include <algorithm>
 #include <functional>
 #include <string>
@@ -16,10 +18,13 @@
 //   f.if_true("fof", [&]() { ... });                               // only used if fof = true
 //   f.choice(Need::Optional, "timestep_method", method, "Quinn", "...", {{"Quinn", TimestepMethod::Quinn}, ...});
 //   f.for_cosmology({"JBD"}, [&]() { ... });                    // Cosmology::Settings: only for cosmology_model = JBD
+//   f.for_gravity({"f(R)"}, [&]() { ... });                     // GravityModelSettings: only for gravity_model = f(R)
 //
-// (in the settings structs of SimulationParameters.h and Cosmology::Settings) with the name, the member it is read into, the default, the description and the allowed values. The visitors:
+// (in the settings structs of SimulationParameters.h and Cosmology::Settings) with the name, the member it is read
+// into, the default, the description and the allowed values. The visitors:
 //   SchemaFields (ParameterSchema.h): the parameter table (reading the parameterfile, PARAMETERS.md, the defaults)
 //   FieldReader (SimulationParameters.h): reads the members from the ParameterMap (and records them for printing)
+//   SettingsReader (below): reads the members of Cosmology::Settings and GravityModelSettings
 // Adding a parameter is one member and one line in fields().
 //=============================================================================
 
@@ -62,6 +67,71 @@ namespace SIMCODE {
     /// The options of a parameter read into an enum
     template <class E>
     using EnumOptions = std::vector<std::pair<std::string, E>>;
+
+    /// Reads the parameters listed in a fields() (Cosmology::Settings, GravityModelSettings): the value in the map, or
+    /// its default in the parameter table (get_parameter). The parameters of another model (for_cosmology,
+    /// for_gravity) or under a condition that does not hold get the default of the table (their conditions are not
+    /// evaluated: the parameters they test need not be in the map)
+    struct SettingsReader {
+        const ParameterMap & param;
+        std::string cosmology_model;
+        std::string gravity_model;
+        bool active{true};
+
+        template <class V, class D>
+        void required(const std::string & n,
+                      V & v,
+                      const D & d,
+                      const std::string &,
+                      const std::vector<std::string> & = {}) {
+            read(n, v, d);
+        }
+        template <class V, class D>
+        void optional(const std::string & n,
+                      V & v,
+                      const D & d,
+                      const std::string &,
+                      const std::vector<std::string> & = {}) {
+            read(n, v, d);
+        }
+        template <class V, class D>
+        void always_optional(const std::string & n,
+                             V & v,
+                             const D & d,
+                             const std::string &,
+                             const std::vector<std::string> & = {}) {
+            read(n, v, d);
+        }
+        template <class B>
+        void when(const Condition & cond, const std::string &, B && body) {
+            only_if(active and cond(param), body);
+        }
+        template <class B>
+        void if_true(const std::string & flag, B && body) {
+            only_if(active and SIMCODE::get_parameter<bool>(param, flag), body);
+        }
+        template <class B>
+        void for_cosmology(const std::vector<std::string> & models, B && body) {
+            only_if(std::find(models.begin(), models.end(), cosmology_model) != models.end(), body);
+        }
+        template <class B>
+        void for_gravity(const std::vector<std::string> & models, B && body) {
+            only_if(std::find(models.begin(), models.end(), gravity_model) != models.end(), body);
+        }
+
+      private:
+        template <class V, class D>
+        void read(const std::string & n, V & v, const D & d) {
+            v = active ? SIMCODE::get_parameter<V>(param, n) : V(d);
+        }
+        template <class B>
+        void only_if(bool holds, B && body) {
+            const bool was_active = active;
+            active = active and holds;
+            body();
+            active = was_active;
+        }
+    };
 
 } // namespace SIMCODE
 

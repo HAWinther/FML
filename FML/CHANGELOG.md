@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: the gravity model parameters listed once (GravityModelSettings)
+- The `gravity_model_*` and `multigrid_*` parameters are the `fields()` of `GravityModelSettings`
+  (`src/GravityModelSettings.h`), as the cosmology parameters are those of `Cosmology::Settings`: the parameter table and
+  the reading come from it, and the gravity models take their values from `settings` instead of `param.get`.
+  PARAMETERS.md and the regression outputs are unchanged.
+- `SettingsReader` (`src/ParameterFields.h`) reads both; the parameters of another model or under a condition that does
+  not hold get the default of the table.
+
 ### SimulationCode: a default .ini of the internal solver
 - `SimulationCode/internal_solver_default.ini`: the settings of the internal Einstein-Boltzmann solver that are the
   user's in SimulationCode (recombination, reionization, the background range, the precision of the perturbations)

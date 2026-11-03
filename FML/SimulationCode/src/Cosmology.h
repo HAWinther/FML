@@ -223,7 +223,7 @@ class Cosmology {
     void read_parameters(ParameterMap & param) {
         namespace BG = FML::COSMOLOGY::BACKGROUND;
         using namespace FML::UTILS::SI;
-        SettingsReader reader{param, name};
+        SIMCODE::SettingsReader reader{param, name, ""};
         settings.fields(reader);
         settings.primordial_fields(reader);
         const auto & s = settings;
@@ -546,41 +546,6 @@ class Cosmology {
             available += " " + m.name;
         throw std::runtime_error("Unknown cosmology [" + model + "]. Available:" + available);
     }
-
-    /// Reads the parameters of Settings::fields: the value in the map, or its default in the parameter table
-    /// (get_parameter); the parameters of a model only for that model and those under a condition only if it holds
-    struct SettingsReader {
-        const ParameterMap & param;
-        const std::string & model;
-        template <class V, class D>
-        void
-        required(const std::string & n, V & v, const D &, const std::string &, const std::vector<std::string> & = {}) {
-            v = SIMCODE::get_parameter<V>(param, n);
-        }
-        template <class V, class D>
-        void
-        optional(const std::string & n, V & v, const D &, const std::string &, const std::vector<std::string> & = {}) {
-            v = SIMCODE::get_parameter<V>(param, n);
-        }
-        template <class V, class D>
-        void always_optional(const std::string & n,
-                             V & v,
-                             const D &,
-                             const std::string &,
-                             const std::vector<std::string> & = {}) {
-            v = SIMCODE::get_parameter<V>(param, n);
-        }
-        template <class B>
-        void when(const SIMCODE::Condition & cond, const std::string &, B && body) {
-            if (cond(param))
-                body();
-        }
-        template <class B>
-        void for_cosmology(const std::vector<std::string> & models, B && body) {
-            if (std::find(models.begin(), models.end(), model) != models.end())
-                body();
-        }
-    };
 
     // The setup of each model from its parameters (settings)
     void read_lcdm() { registry_name = "lcdm"; }
