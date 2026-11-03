@@ -571,18 +571,13 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
     const double kcut = options.kcut / boxsize;
     const double smoothing_scale = settings.smoothing_scale;
     const std::string filter = settings.smoothing_filter;
+    // The filter of the smoothing of the operators (FML::GRID::smoothing_filter_fourier_space) as a function of k^2
+    const std::function<double(double)> W_of_k2 =
+        smoothing_scale > 0.0 ? FML::GRID::smoothing_filter_of_k2<NDIM>(smoothing_scale, filter) : nullptr;
     auto W_operators = [&](double k) {
         if (k >= kcut)
             return 0.0;
-        if (smoothing_scale <= 0.0)
-            return 1.0;
-        const double kR = k * smoothing_scale;
-        if (filter == "gaussian")
-            return std::exp(-0.5 * kR * kR);
-        if (filter == "sharpk")
-            return kR < 1.0 ? 1.0 : 0.0;
-        // tophat
-        return kR < 1e-4 ? 1.0 : 3.0 * (std::sin(kR) - kR * std::cos(kR)) / (kR * kR * kR);
+        return W_of_k2 ? W_of_k2(k * k) : 1.0;
     };
     // The displacement field of the IC has the modes of the IC grid (we approximate this by a spherical cut)
     const double kcut_displacement = M_PI * sim.get_parameters().ic.nmesh / boxsize;

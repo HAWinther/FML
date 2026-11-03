@@ -6,6 +6,7 @@
 #include <FML/GadgetUtils/GadgetUtilsHDF5.h>
 #include <FML/Global/Global.h>
 #include <FML/Global/MPICounts.h>
+#include <FML/HaloModel/MassFunctionFits.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/NBody/NBody.h>
 #include <FML/Spline/Spline.h>
@@ -155,30 +156,6 @@ namespace SIMCODE {
         return def.reference == 'c' ? def.Delta / OmegaCB_a : def.Delta;
     }
 
-    /// The Tinker et al. 2008 multiplicity function for an overdensity Delta (with respect to the mean density) in
-    /// 200 <= Delta <= 3200: the parameters of their Table 2 interpolated in log(Delta) and their redshift
-    /// dependence (eqs. 5-8). Returns 0 outside this range
-    inline double f_tinker2008_delta(double sigma, double z, double Delta) {
-        static const double table_Delta[9] = {200, 300, 400, 600, 800, 1200, 1600, 2400, 3200};
-        static const double table_A[9] = {0.186, 0.200, 0.212, 0.218, 0.248, 0.255, 0.260, 0.260, 0.260};
-        static const double table_a[9] = {1.47, 1.52, 1.56, 1.61, 1.87, 2.13, 2.30, 2.53, 2.66};
-        static const double table_b[9] = {2.57, 2.25, 2.05, 1.87, 1.59, 1.51, 1.46, 1.44, 1.41};
-        static const double table_c[9] = {1.19, 1.27, 1.34, 1.45, 1.58, 1.80, 1.97, 2.24, 2.44};
-        if (Delta < 200.0 * (1.0 - 1e-10) or Delta > 3200.0 * (1.0 + 1e-10))
-            return 0.0;
-        int i = 0;
-        while (i < 7 and Delta > table_Delta[i + 1])
-            i++;
-        const double t = std::log(Delta / table_Delta[i]) / std::log(table_Delta[i + 1] / table_Delta[i]);
-        auto interp = [&](const double * v) { return v[i] + t * (v[i + 1] - v[i]); };
-        const double alpha = std::pow(10.0, -std::pow(0.75 / std::log10(Delta / 75.0), 1.2));
-        const double A = interp(table_A) * std::pow(1.0 + z, -0.14);
-        const double a = interp(table_a) * std::pow(1.0 + z, -0.06);
-        const double b = interp(table_b) * std::pow(1.0 + z, -alpha);
-        const double c = interp(table_c);
-        return A * (std::pow(sigma / b, -a) + 1.0) * std::exp(-c / (sigma * sigma));
-    }
-
     /// Flag the halos whose SO center lies inside the radius (of the first definition) of a more massive halo (on
     /// any task). Positions and radii in box units
     template <int NDIM>
@@ -264,13 +241,6 @@ namespace SIMCODE {
                 done = idim == NDIM;
             }
         }
-    }
-
-    /// The universal FoF (b = 0.2) multiplicity function f(sigma) of Watson et al. 2013 (eq. 12) with
-    /// dn/dlnM = f(sigma) rho / M |dln sigma / dln M| (Tinker et al. 2008: f_tinker2008_delta)
-    inline double f_watson2013_fof(double sigma) {
-        const double A = 0.282, alpha = 2.163, beta = 1.406, gamma = 1.210;
-        return A * (std::pow(beta / sigma, alpha) + 1.0) * std::exp(-gamma / (sigma * sigma));
     }
 
 } // namespace SIMCODE
@@ -378,6 +348,7 @@ void write_mass_functions(NBodySimulation<NDIM, T> & sim,
                           double redshift,
                           const std::string & snapshot_folder) {
     using Halo = SIMCODE::HaloRecord<NDIM>;
+    namespace HM = FML::COSMOLOGY::HALOMODEL; // The mass function fits
     const std::string redshiftstring = redshift_to_string(redshift);
     const auto & settings = sim.get_parameters().fof;
     const double H0_hmpc = sim.get_gravity_model()->H0_hmpc;
@@ -462,8 +433,8 @@ void write_mass_functions(NBodySimulation<NDIM, T> & sim,
         std::vector<double> dndlogM_tinker(nbins, 0.0), dndlogM_watson(nbins, 0.0);
         if (have_fits)
             for (int i = 0; i < nbins; i++) {
-                dndlogM_tinker[i] = fit(i, SIMCODE::f_tinker2008_delta(sigma_of_M[i], redshift, 200.0));
-                dndlogM_watson[i] = fit(i, SIMCODE::f_watson2013_fof(sigma_of_M[i]));
+                dndlogM_tinker[i] = fit(i, HM::f_tinker2008_delta(sigma_of_M[i], redshift, 200.0));
+                dndlogM_watson[i] = fit(i, HM::f_watson2013_fof(sigma_of_M[i]));
             }
         if (FML::ThisTask == 0) {
             std::string filename = snapshot_folder + "/massfunc_z" + redshiftstring + ".txt";
@@ -492,7 +463,7 @@ void write_mass_functions(NBodySimulation<NDIM, T> & sim,
         std::vector<double> dndlogM_tinker(nbins, 0.0);
         if (have_fits)
             for (int i = 0; i < nbins; i++)
-                dndlogM_tinker[i] = fit(i, SIMCODE::f_tinker2008_delta(sigma_of_M[i], redshift, so_thresholds[id]));
+                dndlogM_tinker[i] = fit(i, HM::f_tinker2008_delta(sigma_of_M[i], redshift, so_thresholds[id]));
         if (FML::ThisTask == 0) {
             std::string filename =
                 snapshot_folder + "/massfunc_so" + so_definitions[id] + "_z" + redshiftstring + ".txt";

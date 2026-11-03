@@ -7,6 +7,7 @@
 
 #include <FML/Cosmology/Background/BackgroundModel_Tabulated.h>
 #include <FML/Cosmology/Background/Presets.h>
+#include <FML/Cosmology/Background/TabulatedBackground.h>
 #include <FML/FileUtils/FileUtils.h>
 #include <FML/Global/Global.h>
 #include <FML/ParameterMap/ParameterMap.h>
@@ -14,7 +15,6 @@
 #include <FML/Units/Units.h>
 
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -550,10 +550,7 @@ class Cosmology {
     std::shared_ptr<const Background> make_tabulated(const FML::COSMOLOGY::BACKGROUND::BackgroundParameters & p,
                                                      const FML::COSMOLOGY::BACKGROUND::BackgroundRange & range) const {
         namespace BG = FML::COSMOLOGY::BACKGROUND;
-        int icol_x = 0, icol_y = 1;
-        if (tabulated_format == "CLASS")
-            std::tie(icol_x, icol_y) = class_columns();
-        auto data = read_columns(icol_x, icol_y);
+        auto data = read_columns();
         std::sort(data.begin(), data.end());
         data.erase(std::unique(data.begin(),
                                data.end(),
@@ -603,57 +600,30 @@ class Cosmology {
         return b;
     }
 
-    std::vector<std::pair<double, double>> read_columns(int icol_x, int icol_y) const {
+    /// The rows (x, y) of the table: the columns z and H [1/Mpc] of a CLASS background file, else the first two
+    std::vector<std::pair<double, double>> read_columns() const {
         std::vector<std::pair<double, double>> data;
-        for (auto & values : FML::FILEUTILS::loadtxt(tabulated_filename)) {
-            if (int(values.size()) <= std::max(icol_x, icol_y))
-                throw std::runtime_error("Tabulated cosmology: too few columns in " + tabulated_filename + " (" +
-                                         std::to_string(values.size()) + " in row " + std::to_string(data.size()) +
-                                         ")");
-            data.push_back({values[icol_x], values[icol_y]});
+        if (tabulated_format == "CLASS") {
+            const auto table = FML::COSMOLOGY::BACKGROUND::read_class_table(tabulated_filename);
+            if (table.find("z") < 0 or table.find("H [1/Mpc]") < 0)
+                throw std::runtime_error("Tabulated cosmology: did not find the columns 'z' and 'H [1/Mpc]' in the "
+                                         "CLASS file " +
+                                         tabulated_filename);
+            const auto z = table.column("z"), H = table.column("H [1/Mpc]");
+            for (size_t i = 0; i < z.size(); i++)
+                data.push_back({z[i], H[i]});
+        } else {
+            for (auto & values : FML::FILEUTILS::loadtxt(tabulated_filename)) {
+                if (values.size() < 2)
+                    throw std::runtime_error("Tabulated cosmology: too few columns in " + tabulated_filename + " (" +
+                                             std::to_string(values.size()) + " in row " + std::to_string(data.size()) +
+                                             ")");
+                data.push_back({values[0], values[1]});
+            }
         }
         if (data.size() < 4)
             throw std::runtime_error("Tabulated cosmology: need at least 4 rows in " + tabulated_filename);
         return data;
-    }
-
-    /// The columns z and H [1/Mpc] of a CLASS background file (from its header)
-    std::pair<int, int> class_columns() const {
-        std::ifstream fp(tabulated_filename);
-        if (not fp.is_open())
-            throw std::runtime_error("Tabulated cosmology: cannot open " + tabulated_filename);
-        std::string line;
-        int iz = -1, iH = -1;
-        while (std::getline(fp, line)) {
-            if (line.find("1:z") == std::string::npos)
-                continue;
-            std::size_t pos = 0;
-            while ((pos = line.find(':', pos)) != std::string::npos) {
-                std::size_t start = pos;
-                while (start > 0 and std::isdigit(static_cast<unsigned char>(line[start - 1])))
-                    start--;
-                if (start == pos) {
-                    pos++;
-                    continue;
-                }
-                const int icol = std::stoi(line.substr(start, pos - start)) - 1;
-                std::size_t end = line.find(':', pos + 1);
-                std::string label = line.substr(pos + 1, (end == std::string::npos ? line.size() : end) - pos - 1);
-                while (not label.empty() and
-                       (std::isdigit(static_cast<unsigned char>(label.back())) or label.back() == ' '))
-                    label.pop_back();
-                if (label == "z")
-                    iz = icol;
-                if (label == "H [1/Mpc]")
-                    iH = icol;
-                pos++;
-            }
-        }
-        if (iz < 0 or iH < 0)
-            throw std::runtime_error("Tabulated cosmology: did not find the columns 'z' and 'H [1/Mpc]' in the "
-                                     "CLASS file " +
-                                     tabulated_filename);
-        return {iz, iH};
     }
 };
 

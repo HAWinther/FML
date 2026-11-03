@@ -28,6 +28,73 @@
 
 namespace FML::COSMOLOGY::BACKGROUND {
 
+    /// A CLASS output table (e.g. <root>background.dat): the rows of numbers and the column labels of the last
+    /// header line ("# 1:z   2:proper time [Gyr]   3:conf. time [Mpc]   4:H [1/Mpc] ...")
+    struct ClassTable {
+        std::string filename;
+        std::vector<std::string> labels;
+        std::vector<std::vector<double>> rows;
+        /// The column with label key (or starting with "key "), -1 if there is none
+        int find(const std::string & key) const {
+            for (size_t i = 0; i < labels.size(); i++)
+                if (labels[i] == key or labels[i].rfind(key + " ", 0) == 0)
+                    return int(i);
+            return -1;
+        }
+        /// The column with label key (throws if there is none)
+        std::vector<double> column(const std::string & key) const {
+            const int i = find(key);
+            if (i < 0)
+                throw std::runtime_error("[ClassTable] No column [" + key + "] in [" + filename + "]");
+            std::vector<double> c(rows.size());
+            for (size_t j = 0; j < rows.size(); j++)
+                c[j] = rows[j][i];
+            return c;
+        }
+    };
+
+    /// Read a CLASS output table (every row must have one number per label)
+    inline ClassTable read_class_table(const std::string & filename) {
+        const std::string msg = "[read_class_table] ";
+        std::ifstream in(filename);
+        if (not in)
+            throw std::runtime_error(msg + "Cannot open [" + filename + "]");
+        ClassTable t;
+        t.filename = filename;
+        std::string line, header;
+        while (std::getline(in, line)) {
+            if (line.empty())
+                continue;
+            if (line[0] == '#') {
+                header = line;
+                continue;
+            }
+            std::istringstream s(line);
+            std::vector<double> row;
+            double v;
+            while (s >> v)
+                row.push_back(v);
+            if (not row.empty())
+                t.rows.push_back(row);
+        }
+        const std::regex number(R"((^|\s)(\d+):)");
+        std::vector<std::pair<size_t, size_t>> pos; // start of the label, start of the match
+        for (auto it = std::sregex_iterator(header.begin(), header.end(), number); it != std::sregex_iterator(); ++it)
+            pos.push_back({size_t(it->position(0) + it->length(0)), size_t(it->position(0))});
+        for (size_t i = 0; i < pos.size(); i++) {
+            const size_t end = i + 1 < pos.size() ? pos[i + 1].second : header.size();
+            std::string l = header.substr(pos[i].first, end - pos[i].first);
+            l.erase(l.find_last_not_of(" \t") + 1);
+            t.labels.push_back(l);
+        }
+        if (t.labels.empty() or t.rows.empty())
+            throw std::runtime_error(msg + "No columns in [" + filename + "]");
+        for (auto & r : t.rows)
+            if (r.size() != t.labels.size())
+                throw std::runtime_error(msg + "Rows and header of [" + filename + "] differ in length");
+        return t;
+    }
+
     class TabulatedBackground : public Background {
       public:
         struct Tables {
@@ -94,61 +161,11 @@ namespace FML::COSMOLOGY::BACKGROUND {
         static std::shared_ptr<const TabulatedBackground> from_class(const std::string & filename,
                                                                      int points_per_unit_x = 200) {
             const std::string msg = "[TabulatedBackground::from_class] ";
-            std::ifstream in(filename);
-            if (not in)
-                throw std::runtime_error(msg + "Cannot open [" + filename + "]");
-            std::string line, header;
-            std::vector<std::vector<double>> rows;
-            while (std::getline(in, line)) {
-                if (line.empty())
-                    continue;
-                if (line[0] == '#') {
-                    header = line;
-                    continue;
-                }
-                std::istringstream s(line);
-                std::vector<double> row;
-                double v;
-                while (s >> v)
-                    row.push_back(v);
-                if (not row.empty())
-                    rows.push_back(row);
-            }
-            // The last header line: "1:z   2:proper time [Gyr]   3:conf. time [Mpc]   4:H [1/Mpc] ..."
-            std::vector<std::string> labels;
-            const std::regex number(R"((^|\s)(\d+):)");
-            std::vector<std::pair<size_t, size_t>> pos; // start of the label, start of the match
-            for (auto it = std::sregex_iterator(header.begin(), header.end(), number); it != std::sregex_iterator();
-                 ++it)
-                pos.push_back({size_t(it->position(0) + it->length(0)), size_t(it->position(0))});
-            for (size_t i = 0; i < pos.size(); i++) {
-                const size_t end = i + 1 < pos.size() ? pos[i + 1].second : header.size();
-                std::string l = header.substr(pos[i].first, end - pos[i].first);
-                l.erase(l.find_last_not_of(" \t") + 1);
-                labels.push_back(l);
-            }
-            if (labels.empty() or rows.empty())
-                throw std::runtime_error(msg + "No columns in [" + filename + "]");
-            for (auto & r : rows)
-                if (r.size() != labels.size())
-                    throw std::runtime_error(msg + "Rows and header of [" + filename + "] differ in length");
-            const auto find = [&](const std::string & key) -> int {
-                for (size_t i = 0; i < labels.size(); i++)
-                    if (labels[i] == key or labels[i].rfind(key + " ", 0) == 0)
-                        return int(i);
-                return -1;
-            };
-            const auto column = [&](const std::string & key) {
-                const int i = find(key);
-                if (i < 0)
-                    throw std::runtime_error(msg + "No column [" + key + "] in [" + filename + "]");
-                std::vector<double> c(rows.size());
-                for (size_t j = 0; j < rows.size(); j++)
-                    c[j] = rows[j][i];
-                return c;
-            };
+            const auto table = read_class_table(filename);
+            const auto find = [&](const std::string & key) { return table.find(key); };
+            const auto column = [&](const std::string & key) { return table.column(key); };
             const auto optional = [&](const std::string & key) {
-                return find(key) >= 0 ? column(key) : std::vector<double>(rows.size(), 0.0);
+                return find(key) >= 0 ? column(key) : std::vector<double>(table.rows.size(), 0.0);
             };
 
             // The file runs from high z to z = 0

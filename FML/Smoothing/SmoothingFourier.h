@@ -12,6 +12,9 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 
+#include <functional>
+#include <string>
+
 namespace FML {
     namespace GRID {
 
@@ -207,11 +210,11 @@ namespace FML {
             return f1 * std::cos(theta1) / std::sqrt(x);
         }
 
+        /// The smoothing filter W(k^2) of smoothing_filter_fourier_space: sharpk (kR < 1), gaussian (exp(-(kR)^2/2)) or
+        /// tophat (the Fourier transform of a ball (3D) or disk (2D) of radius R)
         template <int N>
-        void smoothing_filter_fourier_space(FFTWGrid<N> & fourier_grid,
-                                            double smoothing_scale,
-                                            std::string smoothing_method) {
-
+        std::function<double(double)> smoothing_filter_of_k2(double smoothing_scale,
+                                                             const std::string & smoothing_method) {
             // Sharp cut off kR = 1
             std::function<double(double)> filter_sharpk = [=](double k2) -> double {
                 double kR2 = k2 * smoothing_scale * smoothing_scale;
@@ -242,21 +245,24 @@ namespace FML {
             };
 
             // Select the filter
-            std::function<double(double)> filter;
-            if (smoothing_method == "sharpk") {
-                filter = filter_sharpk;
-            } else if (smoothing_method == "gaussian") {
-                filter = filter_gaussian;
-            } else if (smoothing_method == "tophat") {
+            if (smoothing_method == "sharpk")
+                return filter_sharpk;
+            if (smoothing_method == "gaussian")
+                return filter_gaussian;
+            if (smoothing_method == "tophat") {
                 assert_mpi(N == 2 or N == 3,
                            "[smoothing_filter_fourier_space] Tophat filter only implemented in 2D and 3D");
-                if (N == 2)
-                    filter = filter_tophat_2D;
-                if (N == 3)
-                    filter = filter_tophat_3D;
-            } else {
-                throw std::runtime_error("Unknown filter " + smoothing_method + " Options: sharpk, gaussian, tophat");
+                return N == 2 ? filter_tophat_2D : filter_tophat_3D;
             }
+            throw std::runtime_error("Unknown filter " + smoothing_method + " Options: sharpk, gaussian, tophat");
+        }
+
+
+        template <int N>
+        void smoothing_filter_fourier_space(FFTWGrid<N> & fourier_grid,
+                                            double smoothing_scale,
+                                            std::string smoothing_method) {
+            const auto filter = smoothing_filter_of_k2<N>(smoothing_scale, smoothing_method);
 
             // Do the smoothing
 #ifdef USE_OMP
