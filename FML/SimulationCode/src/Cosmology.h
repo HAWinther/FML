@@ -7,6 +7,7 @@
 
 #include <FML/Cosmology/Background/BackgroundModel_Tabulated.h>
 #include <FML/Cosmology/Background/Presets.h>
+#include <FML/FileUtils/FileUtils.h>
 #include <FML/Global/Global.h>
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
@@ -603,22 +604,12 @@ class Cosmology {
     }
 
     std::vector<std::pair<double, double>> read_columns(int icol_x, int icol_y) const {
-        std::ifstream fp(tabulated_filename);
-        if (not fp.is_open())
-            throw std::runtime_error("Tabulated cosmology: cannot open " + tabulated_filename);
         std::vector<std::pair<double, double>> data;
-        std::string line;
-        while (std::getline(fp, line)) {
-            const auto first = line.find_first_not_of(" \t");
-            if (first == std::string::npos or line[first] == '#')
-                continue;
-            std::istringstream ss(line);
-            std::vector<double> values;
-            double v;
-            while (ss >> v)
-                values.push_back(v);
+        for (auto & values : FML::FILEUTILS::loadtxt(tabulated_filename)) {
             if (int(values.size()) <= std::max(icol_x, icol_y))
-                throw std::runtime_error("Tabulated cosmology: too few columns in " + tabulated_filename + ": " + line);
+                throw std::runtime_error("Tabulated cosmology: too few columns in " + tabulated_filename + " (" +
+                                         std::to_string(values.size()) + " in row " + std::to_string(data.size()) +
+                                         ")");
             data.push_back({values[icol_x], values[icol_y]});
         }
         if (data.size() < 4)

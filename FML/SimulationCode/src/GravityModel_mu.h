@@ -2,6 +2,7 @@
 #define GRAVITYMODEL_MU_HEADER
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FileUtils/FileUtils.h>
 #include <FML/Global/Global.h>
 #include <FML/NBody/NBody.h>
 #include <FML/ParameterMap/ParameterMap.h>
@@ -15,7 +16,6 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -115,27 +115,11 @@ class GravityModelMu final : public GravityModel<NDIM> {
 
     /// Read a table with rows "a mu" or "a k mu" (regular grid in a and k, any order)
     void read_table() {
-        std::ifstream fp(table_filename);
-        if (not fp.good())
-            throw std::runtime_error("gravity_model_mu_filename [" + table_filename + "] could not be opened");
-        std::vector<std::vector<double>> rows;
-        std::string line;
-        size_t ncol = 0;
-        while (std::getline(fp, line)) {
-            const auto first = line.find_first_not_of(" \t");
-            if (first == std::string::npos or line[first] == '#')
-                continue;
-            std::istringstream is(line);
-            std::vector<double> row;
-            double x;
-            while (is >> x)
-                row.push_back(x);
-            if (ncol == 0)
-                ncol = row.size();
+        const auto rows = FML::FILEUTILS::loadtxt(table_filename);
+        const size_t ncol = rows.empty() ? 0 : rows[0].size();
+        for (auto & row : rows)
             FML::assert_mpi(row.size() == ncol and (ncol == 2 or ncol == 3),
                             "gravity_model_mu_filename: every row must be 'a mu' or 'a k mu'");
-            rows.push_back(row);
-        }
         FML::assert_mpi(rows.size() >= 2, "gravity_model_mu_filename: too few rows");
         table_has_k = ncol == 3;
         auto unique_sorted = [&](int col) {

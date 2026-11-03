@@ -2,6 +2,7 @@
 #define GRAVITYMODEL_GEFF_HEADER
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FileUtils/FileUtils.h>
 #include <FML/Global/Global.h>
 #include <FML/LPT/DisplacementFields.h>
 #include <FML/NBody/NBody.h>
@@ -12,7 +13,6 @@
 #include "Cosmology.h"
 #include "GravityModel.h"
 #include <iostream>
-#include <sstream>
 #include <string>
 
 using Spline = FML::INTERPOLATION::SPLINE::Spline;
@@ -47,23 +47,12 @@ class GravityModelGeff final : public GravityModel<NDIM> {
     }
 
     virtual void init() override {
-        // Read file with [a,Geff/G(a)] and spline it
-        std::ifstream fp(geffofa_filename.c_str());
-        FML::assert_mpi(fp.good(), "GeffG file count not be opened\n");
+        // Read file with rows "a GeffG" (comment lines starting with #) and spline it
         std::vector<double> aarr, geffarr;
-        // Rows "a GeffG"; empty lines and lines starting with # are skipped (a header line used to make the
-        // reader loop forever: >> failed without reaching eof)
-        std::string line;
-        while (std::getline(fp, line)) {
-            const auto first = line.find_first_not_of(" \t\r");
-            if (first == std::string::npos or line[first] == '#')
-                continue;
-            std::istringstream is(line);
-            double newa, newgeff;
-            FML::assert_mpi(static_cast<bool>(is >> newa >> newgeff),
-                            ("GeffG file: could not read the row [" + line + "] (expected 'a GeffG')").c_str());
-            aarr.push_back(newa);
-            geffarr.push_back(newgeff);
+        for (auto & row : FML::FILEUTILS::loadtxt(geffofa_filename)) {
+            FML::assert_mpi(row.size() >= 2, "GeffG file: every row must be 'a GeffG'");
+            aarr.push_back(row[0]);
+            geffarr.push_back(row[1]);
         }
         FML::assert_mpi(aarr.size() >= 2, "GeffG file: needs at least 2 rows");
         geffofa_spline.create(aarr, geffarr, "Geff/G(a)");
