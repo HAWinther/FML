@@ -70,7 +70,8 @@ namespace SIMCODE {
                                       mu_BZ_params,
                                       std::vector<double>{1.0, 0.0, 4.0},
                                       "{beta1, lambda1 (Mpc/h), s} in mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + "
-                                      "lambda1^2 k^2 a^s) (k in h/Mpc)");
+                                      "lambda1^2 k^2 a^s) (k in h/Mpc)",
+                                      check::list_of(3));
                        });
                 f.when(is_one_of("gravity_model_mu_parametrization", {"table"}),
                        "gravity_model_mu_parametrization = table",
@@ -86,10 +87,11 @@ namespace SIMCODE {
                 f.required("gravity_model_mbeta_params",
                            mbeta_params,
                            std::vector<double>{},
-                           "The parameters (beta0, n, m0, m) of beta(a) = beta0 a^n and m(a) = m0 H0 a^m");
+                           "The parameters (beta0, n, m0, m) of beta(a) = beta0 a^n and m(a) = m0 H0 a^m",
+                           check::list_of(4));
             });
             f.for_gravity({"f(R)"}, [&]() {
-                f.required("gravity_model_fofr_fofr0", fofr_fofr0, 1e-5, "The value of f_R today");
+                f.required("gravity_model_fofr_fofr0", fofr_fofr0, 1e-5, "The value of f_R today", check::positive());
                 f.optional("gravity_model_fofr_nfofr", fofr_nfofr, 1.0, "The index n of the Hu-Sawicky model");
             });
             f.for_gravity({"Symmetron"}, [&]() {
@@ -226,7 +228,8 @@ namespace SIMCODE {
                            1,
                            "Multigrid solver: solve the field equation on a grid coarser by this factor than the "
                            "force grid (the density and the solution go between the grids as their Fourier modes below "
-                           "the coarse Nyquist frequency). 1: on the force grid");
+                           "the coarse Nyquist frequency). 1: on the force grid",
+                           check::at_least(1));
             });
         }
     };

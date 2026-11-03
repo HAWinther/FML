@@ -5,6 +5,18 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: checks of the parameter values in fields(); the gravity model parameters printed from the table
+- A field of `fields()` can take a check as its last argument (`check::positive()`, `non_negative()`, `at_least(x)`,
+  `in_range(a, b)`, `in_open_range(a, b)`, `list_of(n)`; `src/ParameterFields.h`), applied when the parameter is in use.
+  The single-parameter checks of `validate()` and of the gravity models (grid sizes and bin counts, ellmax,
+  hybrid-bias operators and scales, interlacing order, NUFFT epsilon, sheet refinement, f_R0 > 0, the mbeta and BZ
+  lists, multigrid_coarse_factor) moved there. Errors read `<name> must be > 0 (it is 0)`.
+- The visitors of `fields()` (the schema, the simulation reader and `SettingsReader`) share `FieldVisitor`, so each
+  implements one `field()`.
+- The gravity model's parameters in use are printed by `GravityModel::info()` from the reader instead of hand-written
+  lines in each model.
+- The warning for the old name `ic_type_of_input = transferinfofile` is printed with the other warnings.
+
 ### SimulationCode: the gravity model parameters listed once (GravityModelSettings)
 - The `gravity_model_*` and `multigrid_*` parameters are the `fields()` of `GravityModelSettings`
   (`src/GravityModelSettings.h`), as the cosmology parameters are those of `Cosmology::Settings`: the parameter table and

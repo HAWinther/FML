@@ -39,16 +39,6 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
         : GravityModelScreened<NDIM>(cosmo, "DGP", &SIMCODE::GravityModelSettings::dgp_exact_solution) {}
 
     //========================================================================
-    // Print some info
-    //========================================================================
-    void info_model() const override {
-        if (FML::ThisTask == 0) {
-            std::cout << "# rcH0             : " << rcH0_DGP << "\n";
-        }
-        this->info_screening();
-    }
-
-    //========================================================================
     // The shared theory (built in init)
     //========================================================================
     using QuasiStaticGravity_DGP = FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_DGP;

@@ -126,33 +126,20 @@ namespace SIMCODE {
     /// The visitor of the fields(f) of the settings structs (ParameterFields.h) that adds their parameters to the
     /// table
     //=============================================================================
-    class SchemaFields {
+    class SchemaFields : public FieldVisitor<SchemaFields> {
       public:
         explicit SchemaFields(SchemaBuilder & b) : b(b) {}
 
+        /// A parameter of the table (the check is applied by the readers)
         template <class V, class D>
-        void required(const std::string & name,
-                      V &,
-                      const D & default_value,
-                      const std::string & description,
-                      std::vector<std::string> choices = {}) {
-            add<V>(Need::Required, name, default_value, description, choices);
-        }
-        template <class V, class D>
-        void optional(const std::string & name,
-                      V &,
-                      const D & default_value,
-                      const std::string & description,
-                      std::vector<std::string> choices = {}) {
-            add<V>(Need::Optional, name, default_value, description, choices);
-        }
-        template <class V, class D>
-        void always_optional(const std::string & name,
-                             V &,
-                             const D & default_value,
-                             const std::string & description,
-                             std::vector<std::string> choices = {}) {
-            add<V>(Need::AlwaysOptional, name, default_value, description, choices);
+        void field(Need need,
+                   const std::string & name,
+                   V &,
+                   const D & default_value,
+                   const std::string & description,
+                   const std::vector<std::string> & choices,
+                   const Check &) {
+            add<V>(need, name, default_value, description, choices);
         }
         /// A string parameter read into an enum: the allowed values are the names of the options
         template <class E, class D>

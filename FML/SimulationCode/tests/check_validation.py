@@ -85,7 +85,7 @@ rejected("pofk_without_nmesh", dict(pofk=True), "pofk_nmesh", remove=["pofk_nmes
 rejected("pofk_nmesh_zero", dict(pofk=True, pofk_nmesh=0), "pofk_nmesh must be > 0")
 rejected("bispectrum_nbins_zero", dict(bispectrum=True, bispectrum_nmesh=16, bispectrum_nbins=0,
                                        bispectrum_kmin=0.01, bispectrum_kmax=0.1),
-         "bispectrum_nmesh and bispectrum_nbins must be > 0")
+         "bispectrum_nbins must be > 0")
 rejected("fof_so_unknown", dict(fof=True, fof_so_definitions=["200x"]), "unknown definition")
 rejected("fof_massfunction_bins", dict(fof=True, fof_massfunction_nbins=0, fof_massfunction_Mmin=1e16,
                                        fof_massfunction_Mmax=1e10), "fof_massfunction_nbins must be > 0")

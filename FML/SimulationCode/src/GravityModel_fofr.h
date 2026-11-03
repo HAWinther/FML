@@ -33,17 +33,6 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
         : GravityModelScreened<NDIM>(cosmo, "f(R)", &SIMCODE::GravityModelSettings::fofr_exact_solution) {}
 
     //========================================================================
-    // Print some info
-    //========================================================================
-    void info_model() const override {
-        if (FML::ThisTask == 0) {
-            std::cout << "# fofr0            : " << fofr0 << "\n";
-            std::cout << "# nfofr            : " << nfofr << "\n";
-        }
-        this->info_screening();
-    }
-
-    //========================================================================
     // The shared theory (built in init)
     //========================================================================
     using QuasiStaticGravity_HuSawicky = FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_HuSawicky;
@@ -87,8 +76,6 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
         GravityModelScreened<NDIM>::read_parameters(param);
         fofr0 = this->settings.fofr_fofr0;
         nfofr = this->settings.fofr_nfofr;
-        // |f_R0| (a negative value gives m^2 < 0 and a singular Geff)
-        FML::assert_mpi(fofr0 > 0.0, "gravity_model_fofr_fofr0 must be > 0 (it is |f_R0|, e.g. 1e-5)");
         if (this->solve_exact_equation)
             multigrid_method = this->settings.fofr_multigrid_method;
     }

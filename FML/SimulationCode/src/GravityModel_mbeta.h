@@ -29,17 +29,6 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
         : GravityModelScreened<NDIM>(cosmo, "mbeta") {}
 
     //========================================================================
-    // Print some info
-    //========================================================================
-    void info_model() const override {
-        if (FML::ThisTask == 0) {
-            for (size_t i = 0; i < mbeta_params.size(); i++)
-                std::cout << "# Params[" << i << "]        : " << mbeta_params[i] << "\n";
-        }
-        this->info_screening();
-    }
-
-    //========================================================================
     // The shared theory (built in init): beta(a), m(a), phi(a), mu(k, a) and the screening
     //========================================================================
     using QuasiStaticGravity_MBeta = FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_MBeta;
@@ -70,9 +59,7 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     //========================================================================
     void read_parameters(ParameterMap & param) override {
         GravityModelScreened<NDIM>::read_parameters(param);
-        mbeta_params = this->settings.mbeta_params;
-        FML::assert_mpi(mbeta_params.size() == 4,
-                        "gravity_model_mbeta_params must have 4 numbers (beta0, beta power, m0, m power)");
+        mbeta_params = this->settings.mbeta_params; // (4 numbers: checked in GravityModelSettings)
     }
 };
 

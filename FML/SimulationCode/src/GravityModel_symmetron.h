@@ -31,18 +31,6 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
         : GravityModelScreened<NDIM>(cosmo, "Symmetron", &SIMCODE::GravityModelSettings::symmetron_exact_solution) {}
 
     //========================================================================
-    // Print some info
-    //========================================================================
-    void info_model() const override {
-        if (FML::ThisTask == 0) {
-            std::cout << "# assb             : " << assb << "\n";
-            std::cout << "# beta             : " << beta << "\n";
-            std::cout << "# L_mpch           : " << L_mpch << "\n";
-        }
-        this->info_screening();
-    }
-
-    //========================================================================
     // The shared theory (built in init): mu(k, a), phi(a), the mass and the screening
     //========================================================================
     using QuasiStaticGravity_Symmetron = FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_Symmetron;

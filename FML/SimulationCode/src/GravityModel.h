@@ -181,6 +181,8 @@ class GravityModel {
             std::cout << "# Growth factors unity at zini = " << 1.0 / aini - 1.0 << "\n";
             std::cout << "# Starting integrating growth factors from z = " << 1.0 / alow - 1.0 << "\n";
             std::cout << "# scaledependent_growth : " << scaledependent_growth << "\n";
+            for (const auto & [name, value] : settings_printed)
+                std::cout << "# " << std::left << std::setw(49) << name << ": " << value << "\n" << std::right;
         }
         info_model();
         if (FML::ThisTask == 0) {
@@ -188,7 +190,7 @@ class GravityModel {
             std::cout << "\n";
         }
     }
-    /// The model's own lines of info() (its parameters; print on task 0 only)
+    /// The model's own lines of info() (what follows from its parameters, which info() prints; task 0 only)
     virtual void info_model() const {}
 
     //========================================================================
@@ -205,6 +207,7 @@ class GravityModel {
         // The gravity_model_* and multigrid_* parameters (GravityModelSettings::fields)
         SIMCODE::SettingsReader reader{param, "", SIMCODE::get_parameter<std::string>(param, "gravity_model")};
         settings.fields(reader);
+        settings_printed = reader.printed;
         aini = 1.0 / (1.0 + param.get<double>("ic_initial_redshift"));
         // The growth factor splines must start before the simulation (e.g. when starting at very high redshift)
         alow = std::min(alow, aini / 10.0);
@@ -398,6 +401,8 @@ class GravityModel {
   protected:
     /// The parameters of the gravity models (read in read_parameters; those of other models keep their defaults)
     SIMCODE::GravityModelSettings settings;
+    /// (name, value) of the parameters in settings that are used (printed by info())
+    std::vector<std::pair<std::string, std::string>> settings_printed;
 
     // For massive neutrinos we need transfer functions
     std::shared_ptr<TransferProvider> transfers;

@@ -143,18 +143,6 @@ class GravityModelScreened : public GravityModel<NDIM> {
     // Shared parts
     //========================================================================
 
-    /// Print the screening parameters (part of info())
-    void info_screening() const {
-        if (FML::ThisTask == 0) {
-            std::cout << "# Screening method : " << use_screening_method << "\n";
-            if (use_screening_method) {
-                std::cout << "# Enforce correct linear evolution : " << screening_enforce_largescale_linear << "\n";
-                std::cout << "# Scale for which we enforce this  : " << screening_linear_scale_hmpc << " h/Mpc\n";
-                std::cout << "# Screening efficiency             : " << screening_efficiency << "\n";
-            }
-        }
-    }
-
     /// The screening parameters (if gravity_model_screening is true)
     void read_screening_parameters() {
         const auto & s = this->settings;
@@ -252,7 +240,6 @@ class GravityModelScreened : public GravityModel<NDIM> {
             multigrid_solver_residual_convergence = s.multigrid_solver_residual_convergence;
             multigrid_relative_criterion = s.multigrid_convergence_criterion == "relative";
             multigrid_coarse_factor = s.multigrid_coarse_factor;
-            FML::assert_mpi(multigrid_coarse_factor >= 1, "multigrid_coarse_factor must be >= 1");
             multigrid_coarse_restriction = s.multigrid_coarse_restriction;
             multigrid_start_redshift = s.multigrid_start_redshift;
             multigrid_linear_before_start = s.multigrid_force_before_start == "linear";

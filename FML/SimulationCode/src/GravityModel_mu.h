@@ -89,8 +89,7 @@ class GravityModelMu final : public GravityModel<NDIM> {
         if (parametrization == "DE") {
             mu0 = s.mu_mu0;
         } else if (parametrization == "BZ") {
-            const auto & p = s.mu_BZ_params;
-            FML::assert_mpi(p.size() == 3, "gravity_model_mu_BZ_params must be {beta1, lambda1 (Mpc/h), s}");
+            const auto & p = s.mu_BZ_params; // (3 numbers: checked in GravityModelSettings)
             BZ_beta1 = p[0];
             BZ_lambda1_mpch = p[1];
             BZ_s = p[2];
@@ -166,15 +165,8 @@ class GravityModelMu final : public GravityModel<NDIM> {
 
     void info_model() const override {
         if (FML::ThisTask == 0) {
-            std::cout << "# Parametrization  : " << parametrization << "\n";
-            if (parametrization == "DE")
-                std::cout << "# mu0              : " << mu0 << "\n";
-            if (parametrization == "BZ")
-                std::cout << "# beta1, lambda1 (Mpc/h), s : " << BZ_beta1 << " " << BZ_lambda1_mpch << " " << BZ_s
-                          << "\n";
             if (parametrization == "table")
-                std::cout << "# Table            : " << table_filename << (table_has_k ? " (a, k, mu)" : " (a, mu)")
-                          << "\n";
+                std::cout << "# The table has columns " << (table_has_k ? "a, k, mu" : "a, mu") << "\n";
             for (double a : {1.0, 0.5, 0.25}) {
                 std::cout << "# mu(a = " << a << ") at k = 0.01 / 0.1 / 1 h/Mpc: ";
                 for (double k : {0.01, 0.1, 1.0})

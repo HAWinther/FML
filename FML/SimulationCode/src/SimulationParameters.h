@@ -87,6 +87,13 @@ namespace SIMCODE {
                                      ". Valid options are:" + valid);
         }
 
+        /// Check the value of a parameter that is in use (in the map: its conditions hold)
+        template <class V>
+        void check(const std::string & name, const V & value, const Check & c) const {
+            if (param.contains(name))
+                c.apply(name, value);
+        }
+
         /// Change the value printed for a parameter that was read (if it was in the parameterfile)
         template <class V>
         void update(const std::string & name, const V & value) {
@@ -133,32 +140,20 @@ namespace SIMCODE {
     //=============================================================================
     /// The visitor of the fields(f) of the settings structs that reads them (ParameterFields.h)
     //=============================================================================
-    class FieldReader {
+    class FieldReader : public FieldVisitor<FieldReader> {
       public:
         explicit FieldReader(ParameterReader & r) : r(r) {}
+        /// Read the member and check it (if the parameter is in use)
         template <class V, class D>
-        void required(const std::string & name,
-                      V & value,
-                      const D &,
-                      const std::string &,
-                      const std::vector<std::string> & = {}) {
+        void field(Need,
+                   const std::string & name,
+                   V & value,
+                   const D &,
+                   const std::string &,
+                   const std::vector<std::string> &,
+                   const Check & c) {
             r.get(name, value);
-        }
-        template <class V, class D>
-        void optional(const std::string & name,
-                      V & value,
-                      const D &,
-                      const std::string &,
-                      const std::vector<std::string> & = {}) {
-            r.get(name, value);
-        }
-        template <class V, class D>
-        void always_optional(const std::string & name,
-                             V & value,
-                             const D &,
-                             const std::string &,
-                             const std::vector<std::string> & = {}) {
-            r.get(name, value);
+            r.check(name, value, c);
         }
         template <class E, class D>
         void choice(Need,
@@ -269,7 +264,7 @@ namespace SIMCODE {
         /// The parameters (see ParameterFields.h)
         template <class F>
         void fields(F && f) {
-            f.required("force_nmesh", nmesh, 0, "Grid size used to compute the PM forces");
+            f.required("force_nmesh", nmesh, 0, "Grid size used to compute the PM forces", check::positive());
             f.optional("force_density_assignment_method",
                        density_assignment_method,
                        "CIC",
@@ -336,7 +331,8 @@ namespace SIMCODE {
                 f.always_optional("force_early_interlacing_order",
                                   early_interlacing_order,
                                   2,
-                                  "Number of shifted grids at early times");
+                                  "Number of shifted grids at early times",
+                                  check::at_least(2));
                 f.always_optional("force_early_density_assignment_method",
                                   early_density_assignment_method,
                                   "TSC",
@@ -366,7 +362,8 @@ namespace SIMCODE {
                                       nufft_epsilon,
                                       1e-5,
                                       "Relative accuracy of the NUFFT (force_density_method = nufft or sheet_nufft, "
-                                      "force_interpolation_method = nufft or force_early_method = nufft)");
+                                      "force_interpolation_method = nufft or force_early_method = nufft)",
+                                      check::in_open_range(0, 0.1));
                 });
             f.when(is_one_of("force_density_method", {"sheet", "sheet_nufft"}),
                    one_of_text("force_density_method", {"sheet", "sheet_nufft"}),
@@ -374,7 +371,8 @@ namespace SIMCODE {
                        f.always_optional("force_sheet_refinement",
                                          sheet_refinement,
                                          2,
-                                         "R: the number of tracers per particle per dimension for sheet interpolation");
+                                         "R: the number of tracers per particle per dimension for sheet interpolation",
+                                         check::at_least(1));
                    });
             f.optional("force_linear_massive_neutrinos",
                        linear_massive_neutrinos,
@@ -507,7 +505,7 @@ namespace SIMCODE {
                      "Fourier mode sampling: ngenic preserves legacy line seeds and IC; philox uses "
                      "independent mode counters",
                      {{"ngenic", RandomFieldBackend::NGenIC}, {"philox", RandomFieldBackend::Philox}});
-            f.required("ic_nmesh", nmesh, 0, "The grid size used to generate the IC");
+            f.required("ic_nmesh", nmesh, 0, "The grid size used to generate the IC", check::positive());
             f.always_optional(
                 "ic_lattice_offset",
                 lattice_offset,
@@ -662,7 +660,11 @@ namespace SIMCODE {
         /// The parameters (see ParameterFields.h)
         template <class F>
         void fields(F && f) {
-            f.required("particle_Npart_1D", Npart_1D, 0, "Number of CDM+baryon particles per dimension");
+            f.required("particle_Npart_1D",
+                       Npart_1D,
+                       0,
+                       "Number of CDM+baryon particles per dimension",
+                       check::positive());
             f.always_optional("particle_baryons",
                               baryons,
                               false,
@@ -825,7 +827,8 @@ namespace SIMCODE {
                 f.always_optional("fof_massfunction_nbins",
                                   massfunction_nbins,
                                   30,
-                                  "fof: number of logarithmic bins of the mass function");
+                                  "fof: number of logarithmic bins of the mass function",
+                                  check::positive());
                 f.always_optional("fof_massfunction_Mmin",
                                   massfunction_Mmin,
                                   1e10,
@@ -872,7 +875,7 @@ namespace SIMCODE {
                                   "Subtract shot-noise (pofk and pofk_every_step)");
                    });
             f.if_true("pofk", [&]() {
-                f.required("pofk_nmesh", nmesh, 0, "Grid size");
+                f.required("pofk_nmesh", nmesh, 0, "Grid size", check::positive());
                 f.optional("pofk_interlacing", interlacing, false, "Use interlaced grids to reduce aliasing");
                 f.optional("pofk_density_assignment_method",
                            density_assignment_method,
@@ -899,13 +902,17 @@ namespace SIMCODE {
                        false,
                        "Compute the redshift space multipoles P_ell(k) at every output");
             f.if_true("pofk_multipole", [&]() {
-                f.required("pofk_multipole_nmesh", nmesh, 0, "Grid size");
+                f.required("pofk_multipole_nmesh", nmesh, 0, "Grid size", check::positive());
                 f.optional("pofk_multipole_interlacing", interlacing, false, "Use interlaced grids to reduce aliasing");
                 f.optional("pofk_multipole_subtract_shotnoise",
                            subtract_shotnoise,
                            false,
                            "Subtract shot-noise from P0");
-                f.optional("pofk_multipole_ellmax", ellmax, 4, "Compute P_ell for ell = 0, 2, ..., ellmax");
+                f.optional("pofk_multipole_ellmax",
+                           ellmax,
+                           4,
+                           "Compute P_ell for ell = 0, 2, ..., ellmax",
+                           check::non_negative());
                 f.optional("pofk_multipole_density_assignment_method",
                            density_assignment_method,
                            "CIC",
@@ -928,11 +935,12 @@ namespace SIMCODE {
         void fields(F && f) {
             f.optional("bispectrum", enabled, false, "Compute the bispectrum at every output");
             f.if_true("bispectrum", [&]() {
-                f.required("bispectrum_nmesh", nmesh, 0, "Grid size");
+                f.required("bispectrum_nmesh", nmesh, 0, "Grid size", check::positive());
                 f.required("bispectrum_nbins",
                            nbins,
                            0,
-                           "Number of k-bins (memory and time scale as nbins grids and nbins^3 integrals)");
+                           "Number of k-bins (memory and time scale as nbins grids and nbins^3 integrals)",
+                           check::positive());
                 f.optional("bispectrum_density_assignment_method",
                            density_assignment_method,
                            "CIC",
@@ -969,11 +977,12 @@ namespace SIMCODE {
                               "with the particles (Modi et al. 2020, Kokron et al. 2021). delta_L is the linear field "
                               "of the IC scaled to the output redshift with the growth factor of the gravity model");
             f.if_true("hybridbias", [&]() {
-                f.required("hybridbias_nmesh", nmesh, 0, "Grid size for the advected fields");
+                f.required("hybridbias_nmesh", nmesh, 0, "Grid size for the advected fields", check::positive());
                 f.optional("hybridbias_noperators",
                            noperators,
                            5,
-                           "Use the first noperators of (1, delta, delta^2, s^2, nabla^2 delta): 15 spectra for 5");
+                           "Use the first noperators of (1, delta, delta^2, s^2, nabla^2 delta): 15 spectra for 5",
+                           check::in_range(1, 5));
                 f.optional("hybridbias_density_assignment_method",
                            density_assignment_method,
                            "CIC",
@@ -987,7 +996,8 @@ namespace SIMCODE {
                 f.optional("hybridbias_smoothing_scale",
                            smoothing_scale,
                            0.0,
-                           "Smooth the linear field with this scale (Mpc/h) before forming the operators (0: none)");
+                           "Smooth the linear field with this scale (Mpc/h) before forming the operators (0: none)",
+                           check::non_negative());
                 f.optional("hybridbias_smoothing_filter",
                            smoothing_filter,
                            "gaussian",
@@ -999,7 +1009,8 @@ namespace SIMCODE {
                     1.0,
                     "Keep only the modes with k < this times the Nyquist frequency of the particle lattice in the "
                     "linear field (a spherical cut, so the operators are isotropic as assumed in the LPT "
-                    "prediction). 0: keep all the modes of the lattice grid (a cube)");
+                    "prediction). 0: keep all the modes of the lattice grid (a cube)",
+                    check::non_negative());
                 f.optional("hybridbias_zeldovich",
                            zeldovich,
                            false,
@@ -1195,6 +1206,7 @@ namespace SIMCODE {
         HybridBiasSettings hybridbias;
         OutputSettings output;
         LightconeSettings lightcone;
+        bool old_input_type_name{false}; // ic_type_of_input = transferinfofile (the old name of camb)
 
         /// Read all the parameters, check them and print them. growth_is_scaledependent: of the gravity model (for
         /// simulation_use_scaledependent_cola). The checks that depend on the models: check_parameters_against_models
@@ -1213,9 +1225,7 @@ namespace SIMCODE {
                 force.interpolation_method = force.density_method == "nufft" ? "nufft" : "assignment";
 
             ic.fields(f);
-            if (param.get<std::string>("ic_type_of_input") == "transferinfofile" and FML::ThisTask == 0)
-                std::cout
-                    << "WARNING: ic_type_of_input = transferinfofile is the old name of ic_type_of_input = camb\n";
+            old_input_type_name = param.get<std::string>("ic_type_of_input") == "transferinfofile";
 
             particle.fields(f);
             if (particle.neutrinos and particle.neutrino_Npart_1D <= 0)
@@ -1250,6 +1260,9 @@ namespace SIMCODE {
 
         /// Warnings about settings that are allowed but probably not what is wanted (task 0)
         void print_warnings() const {
+            if (old_input_type_name and FML::ThisTask == 0)
+                std::cout << "WARNING: ic_type_of_input = transferinfofile is the old name of ic_type_of_input = camb\n";
+
             // The accurate force options (NUFFT, deconvolution, early-time force) remove the smoothing of the force
             // near the grid Nyquist frequency. With a grid finer than the particle grid the modes between the particle
             // and the grid Nyquist frequency are dominated by the discreteness of the particles and these options then
@@ -1327,46 +1340,25 @@ namespace SIMCODE {
                         fail(e.what());
                     }
                 }
-                if (not(fof.massfunction_nbins > 0 and fof.massfunction_Mmin > 0.0 and
-                        fof.massfunction_Mmax > fof.massfunction_Mmin))
-                    fail("fof_massfunction_nbins must be > 0 and 0 < fof_massfunction_Mmin < fof_massfunction_Mmax");
+                if (not(fof.massfunction_Mmin > 0.0 and fof.massfunction_Mmax > fof.massfunction_Mmin))
+                    fail("fof_massfunction_Mmin and fof_massfunction_Mmax must be 0 < fof_massfunction_Mmin < "
+                         "fof_massfunction_Mmax");
             }
 #ifndef USE_HDF5
             if (output.particles and output.fileformat == ParticleFileFormat::HDF5)
                 fail("output_fileformat = HDF5 needs HDF5: compile with USE_HDF5=true (make USE_HDF5=true)");
 #endif
-            // Grid sizes and bin counts (0 would divide by zero or allocate nothing when the analysis runs)
-            if (force.nmesh <= 0 or ic.nmesh <= 0 or particle.Npart_1D <= 0)
-                fail("force_nmesh, ic_nmesh and particle_Npart_1D must be > 0");
-            if (pofk.enabled and pofk.nmesh <= 0)
-                fail("pofk_nmesh must be > 0");
-            if (pofk_multipole.enabled and pofk_multipole.nmesh <= 0)
-                fail("pofk_multipole_nmesh must be > 0");
-            if (bispectrum.enabled and (bispectrum.nmesh <= 0 or bispectrum.nbins <= 0))
-                fail("bispectrum_nmesh and bispectrum_nbins must be > 0");
-            // The multipoles are stored for ell = 0, ..., ellmax: a negative ellmax would write out of bounds
-            if (pofk_multipole.enabled and pofk_multipole.ellmax < 0)
-                fail("pofk_multipole_ellmax must be >= 0");
+            // (the grid sizes and bin counts, ellmax, ... are checked in fields())
             // The sheet density needs the particles on their lattice (the Lagrangian coordinates)
             if (force.density_method == "sheet" or force.density_method == "sheet_nufft") {
                 if (ic.random_field_type == ICRandomFieldType::ReadParticles)
                     fail("force_density_method = sheet needs particles that start on a regular lattice (not "
                          "ic_random_field_type = read_particles)");
-                if (force.sheet_refinement < 1)
-                    fail("force_sheet_refinement must be >= 1");
             }
             if (hybridbias.enabled) {
                 if (ic.random_field_type == ICRandomFieldType::ReadParticles)
                     fail("hybridbias needs the linear density field of the initial conditions and particles that start "
                          "on a regular lattice (not ic_random_field_type = read_particles)");
-                if (hybridbias.noperators < 1 or hybridbias.noperators > 5)
-                    fail("hybridbias_noperators must be 1, ..., 5 (1, delta, delta^2, s^2, nabla^2 delta)");
-                if (hybridbias.nmesh <= 0)
-                    fail("hybridbias_nmesh must be > 0");
-                if (hybridbias.smoothing_scale < 0.0)
-                    fail("hybridbias_smoothing_scale must be >= 0");
-                if (hybridbias.kcut_over_nyquist < 0.0)
-                    fail("hybridbias_kcut_over_nyquist must be >= 0");
                 if ((hybridbias.zeldovich or hybridbias.oneloop) and hybridbias.kcut_over_nyquist <= 0.0)
                     fail("hybridbias_zeldovich and hybridbias_oneloop need an isotropic cut of the operators "
                          "(hybridbias_kcut_over_nyquist > 0)");
@@ -1374,8 +1366,6 @@ namespace SIMCODE {
                     fail("hybridbias_oneloop uses the same filter for the operators and the displacement, so it cannot "
                          "be used with hybridbias_smoothing_scale > 0");
             }
-            if (force.early_method == "interlaced" and force.early_interlacing_order < 2)
-                fail("force_early_interlacing_order must be >= 2");
             if (force.interlacing_order > 1) {
                 if (force.density_method != "assignment" or force.interpolation_method != "assignment")
                     fail("force_interlacing_order > 1 needs force_density_method = assignment and "
@@ -1387,8 +1377,6 @@ namespace SIMCODE {
                          " is not supported (use 1, 2, 4, 8, 16, 27, 32, 64, ...)");
                 }
             }
-            if (not(force.nufft_epsilon > 0.0 and force.nufft_epsilon < 0.1))
-                fail("force_nufft_epsilon must be in (0, 0.1)");
             if (ic.input_filename.empty() and ic.type_of_input != ICInputType::InternalTransfer and
                 not ic.reads_particles())
                 fail("ic_input_filename is needed for ic_type_of_input = " + ic.type_of_input_name());

@@ -32,8 +32,9 @@ the `fields(f)` of that struct, e.g.
 f.optional("fof_linking_length", linking_length, 0.2, "The linking length in units of the mean particle separation");
 ```
 
-(name, member, default, description, and the allowed values for a string; `f.if_true("fof", ...)` / `f.when(...)`
-for when it is used, `f.choice(...)` for a string read into an enum, see `src/ParameterFields.h`). The cosmology
+(name, member, default, description, and the allowed values for a string; a check of the value as the last argument,
+e.g. `check::positive()`; `f.if_true("fof", ...)` / `f.when(...)` for when it is used, `f.choice(...)` for a string read
+into an enum, see `src/ParameterFields.h`). The cosmology
 parameters are the `fields()` of `Cosmology::Settings` (`src/Cosmology.h`) and the gravity model parameters those of
 `GravityModelSettings` (`src/GravityModelSettings.h`; `f.for_cosmology` / `f.for_gravity` for the parameters of one
 model). The parameter table (`src/ParameterSchema.h`) and the reading both come from them. Then regenerate `PARAMETERS.md` with `./nbody --parameters PARAMETERS.md` (CI checks that it is up to
