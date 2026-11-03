@@ -39,6 +39,8 @@ namespace SIMCODE {
         std::vector<std::string> solver_parameters;
         /// class: the gauge CLASS was run in (synchronous or newtonian; converted to CDM-synchronous)
         std::string gauge{"synchronous"};
+        /// internal: the densities in the N-body gauge and its source (force_nbody_gauge)
+        bool nbody_gauge{false};
         /// The cosmology of the simulation (CAMB: the weights and h; CLASS: h and the massive neutrinos checked)
         double h{0.0}, Omegab{0.0}, OmegaCDM{0.0}, OmegaMNu{0.0}, TCMB{0.0}, Neff{0.0};
         double As{0.0}, ns{1.0}, kpivot_mpc{0.05};
@@ -89,6 +91,7 @@ namespace SIMCODE {
         r.ns = cosmo.get_ns();
         r.kpivot_mpc = cosmo.get_kpivot_mpc();
         if (r.type == "internal") {
+            r.nbody_gauge = SIMCODE::get_parameter<bool>(param, "force_nbody_gauge");
             r.solver_parameters =
                 SIMCODE::get_parameter<std::vector<std::string>>(param, "ic_internal_solver_parameters");
             r.background = cosmo.background().parameters();

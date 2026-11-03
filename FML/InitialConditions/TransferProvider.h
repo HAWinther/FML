@@ -6,7 +6,9 @@
 #include <string>
 namespace FML::INITIALCONDITIONS {
     enum class Species { CDM, Baryon, CDMBaryon, MassiveNeutrino, TotalMatter };
-    enum class Gauge { Newtonian, SynchronousCDM };
+    /// NBody: the N-body gauge (Fidler et al. 2015, 2016): the CDM+baryon particles follow the Newtonian equations
+    /// of motion to linear order in GR, with the extra source nbody_gauge_source in the Poisson equation
+    enum class Gauge { Newtonian, SynchronousCDM, NBody };
     enum class RangePolicy { Reject, SourceExtrapolation };
     struct TransferRange {
         double kmin_hmpc, kmax_hmpc, amin, amax;
@@ -42,6 +44,12 @@ namespace FML::INITIALCONDITIONS {
         virtual double velocity_divergence_transfer(Species, double, double) const {
             throw std::runtime_error("[TransferProvider] Direct velocity transfer is unavailable");
         }
+        /// The N-body gauge source delta_extra(k, a) (per unit R, as density_transfer): the CDM+baryon density obeys
+        /// delta_cb'' + calH delta_cb' = 4 pi G a^2 rho_cb (delta_cb + delta_extra) in the N-body gauge
+        virtual bool has_nbody_gauge_source() const { return false; }
+        virtual double nbody_gauge_source(double, double) const {
+            throw std::runtime_error("[TransferProvider] The N-body gauge source is unavailable");
+        }
         virtual double primordial_power(double k_hmpc) const = 0;
         virtual void rescale_primordial_power(double) {
             throw std::runtime_error("[TransferProvider] This source owns its primordial normalization externally");
@@ -58,10 +66,12 @@ namespace FML::INITIALCONDITIONS {
             if (range_policy() == RangePolicy::Reject && !range().contains(k_hmpc, a))
                 throw std::out_of_range("[TransferProvider] Query outside the supported k/a range");
         }
+        /// The particle initial conditions need CDM-synchronous densities (or the N-body gauge, whose densities the
+        /// particles then follow with the N-body gauge source)
         void require_ic_density_gauge() const {
-            if (density_gauge() != Gauge::SynchronousCDM)
+            if (density_gauge() != Gauge::SynchronousCDM and density_gauge() != Gauge::NBody)
                 throw std::invalid_argument(
-                    "[TransferProvider] Legacy particle ICs require CDM-synchronous density transfers");
+                    "[TransferProvider] Particle ICs require CDM-synchronous or N-body gauge density transfers");
         }
     };
 } // namespace FML::INITIALCONDITIONS

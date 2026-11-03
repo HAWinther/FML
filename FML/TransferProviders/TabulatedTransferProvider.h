@@ -45,6 +45,8 @@ namespace FML::INITIALCONDITIONS {
         /// density[species][ia][ik] = delta/R and velocity[species][ia][ik] = theta/(aH R) (empty: not available)
         std::array<DVector2D, nspecies> density;
         std::array<DVector2D, nspecies> velocity;
+        /// The N-body gauge source delta_extra/R [ia][ik] (empty: not available; see TransferProvider)
+        DVector2D nbody_gauge_source;
         Gauge density_gauge{Gauge::SynchronousCDM};
         Gauge velocity_gauge{Gauge::Newtonian};
         RangePolicy range_policy{RangePolicy::Reject};
@@ -70,6 +72,8 @@ namespace FML::INITIALCONDITIONS {
         DVector loga_nodes;
         std::array<Spline2D, TransferTables::nspecies> d, v;
         std::array<bool, TransferTables::nspecies> have_d{}, have_v{};
+        Spline2D nbody_source;
+        bool have_nbody_source{false};
 
         /// The spline at (log a, log k), with the power-law extrapolation above k_max (SourceExtrapolation)
         double eval(const Spline2D & spline, double x, double y) const {
@@ -139,6 +143,9 @@ namespace FML::INITIALCONDITIONS {
                 if (have_v[s])
                     make(t.velocity[s], v[s], "velocity " + std::to_string(s));
             }
+            have_nbody_source = not t.nbody_gauge_source.empty();
+            if (have_nbody_source)
+                make(t.nbody_gauge_source, nbody_source, "N-body gauge source");
         }
 
       public:
@@ -200,6 +207,17 @@ namespace FML::INITIALCONDITIONS {
             return eval(v[TransferTables::index(s)], std::log(a), std::log(k));
         }
 
+        bool has_nbody_gauge_source() const override { return have_nbody_source; }
+        double nbody_gauge_source(double k, double a) const override {
+            if (not have_nbody_source)
+                return TransferProvider::nbody_gauge_source(k, a);
+            if (not(k > 0) or not(a > 0))
+                throw std::invalid_argument("[" + name + "] k_hmpc and a must be positive");
+            if (policy == RangePolicy::Reject and not krange.contains(k, a))
+                throw std::out_of_range("[" + name + "] Query outside the supported k/a range");
+            return eval(nbody_source, std::log(a), std::log(k));
+        }
+
         double primordial_power(double k) const override {
             if (not(k > 0) or not std::isfinite(k))
                 throw std::invalid_argument("[" + name + "] Invalid k_hmpc");
@@ -256,6 +274,12 @@ namespace FML::INITIALCONDITIONS {
                     if (vel)
                         t.velocity[i][ia][ik] = source.velocity_divergence_transfer(s, k_hmpc[ik], a[ia]);
                 }
+        }
+        if (source.has_nbody_gauge_source()) {
+            t.nbody_gauge_source.assign(a.size(), TransferTables::DVector(k_hmpc.size()));
+            for (size_t ia = 0; ia < a.size(); ia++)
+                for (size_t ik = 0; ik < k_hmpc.size(); ik++)
+                    t.nbody_gauge_source[ia][ik] = source.nbody_gauge_source(k_hmpc[ik], a[ia]);
         }
         return t;
     }

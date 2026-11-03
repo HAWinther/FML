@@ -55,6 +55,7 @@ namespace SIMCODE {
                 bcast_table(t.density[s]);
                 bcast_table(t.velocity[s]);
             }
+            bcast_table(t.nbody_gauge_source);
         }
 #endif
 
@@ -168,7 +169,7 @@ namespace SIMCODE {
             using FML::COSMOLOGY::Constants::Mpc;
             const auto t0 = std::chrono::steady_clock::now();
             const auto settings = internal_settings(r);
-            const InternalTransferProvider solver(settings, Gauge::SynchronousCDM);
+            const InternalTransferProvider solver(settings, r.nbody_gauge ? Gauge::NBody : Gauge::SynchronousCDM);
 
             // The k of the solver and the scale factors from half the earliest requested to the end
             // (with curvature the solver's k = sqrt(q^2 - K) differ from these q: the k inside its range)
@@ -203,21 +204,25 @@ namespace SIMCODE {
                       << "# Transfer functions from the internal Einstein-Boltzmann solver\n"
                       << "# Model: " << c.model << (r.filename.empty() ? "" : " (solver settings: " + r.filename + ")")
                       << "\n"
-                      << "# Solver parameters: " << [&] {
-                             std::string o;
-                             for (const auto & p : r.solver_parameters)
-                                 o += (o.empty() ? "" : ", ") + p;
-                             return o.empty() ? std::string("none") : o;
-                         }() << "\n"
-                      << "# Massive neutrinos: " << [&] {
-                             std::string o;
-                             for (double m : c.neutrino_masses())
-                                 o += (o.empty() ? "" : ", ") + std::to_string(m);
-                             return o.empty() ? std::string("none") : o + " eV";
-                         }() << "\n"
+                      << "# Density gauge: "
+                      << (r.nbody_gauge ? "N-body (with the N-body gauge source)" : "CDM-synchronous") << "\n"
+                      << "# Solver parameters: " <<
+                [&] {
+                    std::string o;
+                    for (const auto & p : r.solver_parameters)
+                        o += (o.empty() ? "" : ", ") + p;
+                    return o.empty() ? std::string("none") : o;
+                }() << "\n"
+                      << "# Massive neutrinos: " <<
+                [&] {
+                    std::string o;
+                    for (double m : c.neutrino_masses())
+                        o += (o.empty() ? "" : ", ") + std::to_string(m);
+                    return o.empty() ? std::string("none") : o + " eV";
+                }() << "\n"
                       << "# k = " << k_hmpc.front() << " - " << k_hmpc.back() << " h/Mpc (" << nk
-                      << "), tables for z = " << 1.0 / ahigh - 1.0 << " - " << 1.0 / alow - 1.0 << " (" << na
-                      << "), " << seconds << " s\n"
+                      << "), tables for z = " << 1.0 / ahigh - 1.0 << " - " << 1.0 / alow - 1.0 << " (" << na << "), "
+                      << seconds << " s\n"
                       << "#=====================================================\n";
             return tables;
         }

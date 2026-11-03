@@ -25,8 +25,9 @@
 //     rho_cb (delta_cb + delta_extra)
 //
 // where delta_extra(k,z) is the (linear) contribution from photons, massless and
-// massive neutrinos and a metric term. We read T_extra(k,z) = -delta_extra/k^2
-// made by scripts/make_nbody_gauge_transfer.py (with CLASS) and add
+// massive neutrinos and a metric term. With ic_type_of_input = internal it comes from the Einstein-Boltzmann solver
+// (TransferProvider::nbody_gauge_source); with camb we read T_extra(k,z) = -delta_extra/k^2
+// made by scripts/make_nbody_gauge_transfer.py (with CLASS). We add
 //
 //     delta_extra(k,a) = delta_cb(k,a_ini) * T_extra(k,a) / T_cb(k,a_ini)
 //
@@ -103,6 +104,16 @@ namespace SIMCODE {
             filename_read = filename;
         }
 
+        /// The source from the transfer functions (TransferProvider::nbody_gauge_source, e.g. the internal solver in
+        /// the N-body gauge) instead of a file
+        void from_transfers(const TransferProvider & transfers) {
+            if (not transfers.has_nbody_gauge_source())
+                throw std::runtime_error("[NBodyGaugeSource] The transfer functions have no N-body gauge source");
+            provider = &transfers;
+            kmin_hmpc = transfers.range().kmin_hmpc;
+            kmax_hmpc = transfers.range().kmax_hmpc;
+        }
+
         /// Check that the table was made for the cosmology we run with (throws if not) and
         /// that the expansion history agrees
         void check_cosmology(const Cosmology & cosmo, double zini, double boxsize, int nmesh) const {
@@ -149,6 +160,16 @@ namespace SIMCODE {
         /// delta_extra(k,a) / delta_cb(k,a_ini) as a spline in log(k) [k in h/Mpc] at the scale factor a
         Spline ratio_spline(double a, double aini, const TransferProvider & transfers) const {
             const double zz = 1.0 / a - 1.0;
+            if (provider)
+                return SIMCODE::spline_of_logk(
+                    kmin_hmpc,
+                    kmax_hmpc,
+                    [&](double logk) {
+                        const double k = std::exp(logk);
+                        return provider->nbody_gauge_source(k, a) /
+                               transfers.density_transfer(SIMCODE::TransferSpecies::CDMBaryon, k, aini);
+                    },
+                    "delta_extra(k,a) / delta_cb(k,aini)");
             return SIMCODE::spline_of_logk(
                 kmin_hmpc,
                 kmax_hmpc,
@@ -163,6 +184,7 @@ namespace SIMCODE {
         double get_kmax_hmpc() const { return kmax_hmpc; }
 
       private:
+        const TransferProvider * provider{nullptr};
         std::string filename_read;
         std::map<std::string, double> cosmology;
         DVector z;

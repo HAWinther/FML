@@ -395,14 +395,22 @@ namespace SIMCODE {
             f.always_optional("force_nbody_gauge",
                               nbody_gauge,
                               false,
-                              "Run in the N-body gauge: add the linear source from radiation, neutrinos and GR "
-                              "(made with CLASS by scripts/make_nbody_gauge_transfer.py) to the density field");
-            f.when(is_true("force_nbody_gauge"), "force_nbody_gauge = true", [&]() {
-                f.required("force_nbody_gauge_filename",
-                           nbody_gauge_filename,
-                           "",
-                           "The table T_extra(k,z) (nbgauge_extra.txt from scripts/make_nbody_gauge_transfer.py)");
-            });
+                              "Run in the N-body gauge: the initial conditions in the N-body gauge and the linear "
+                              "source from radiation, neutrinos and GR added to the density field. With "
+                              "ic_type_of_input = internal both come from the Einstein-Boltzmann solver; with camb "
+                              "from the tables made with CLASS by scripts/make_nbody_gauge_transfer.py");
+            f.when(
+                [](const ParameterMap & p) {
+                    const auto type = p.get<std::string>("ic_type_of_input");
+                    return p.get<bool>("force_nbody_gauge") and (type == "camb" or type == "transferinfofile");
+                },
+                "force_nbody_gauge = true and ic_type_of_input = camb",
+                [&]() {
+                    f.required("force_nbody_gauge_filename",
+                               nbody_gauge_filename,
+                               "",
+                               "The table T_extra(k,z) (nbgauge_extra.txt from scripts/make_nbody_gauge_transfer.py)");
+                });
         }
     };
 
@@ -1375,12 +1383,15 @@ namespace SIMCODE {
             if (ic.input_filename.empty() and ic.type_of_input != ICInputType::InternalTransfer and
                 not ic.reads_particles())
                 fail("ic_input_filename is needed for ic_type_of_input = " + ic.type_of_input_name());
-            // N-body gauge: the IC must be the N-body gauge transfer functions at the initial redshift
+            // N-body gauge: the IC must be the N-body gauge transfer functions at the initial redshift (internal: the
+            // solver gives them; camb: the tables of scripts/make_nbody_gauge_transfer.py)
             if (force.nbody_gauge) {
-                if (ic.type_of_input != ICInputType::CambFiles)
-                    fail("force_nbody_gauge = true needs ic_type_of_input = camb (the N-body gauge "
-                         "transfer functions made by scripts/make_nbody_gauge_transfer.py)");
-                if (std::fabs(ic.input_redshift - ic.initial_redshift) > 1e-6)
+                if (ic.type_of_input != ICInputType::CambFiles and ic.type_of_input != ICInputType::InternalTransfer)
+                    fail("force_nbody_gauge = true needs ic_type_of_input = internal (the N-body gauge from the "
+                         "Einstein-Boltzmann solver) or camb (the N-body gauge transfer functions made by "
+                         "scripts/make_nbody_gauge_transfer.py)");
+                if (ic.type_of_input == ICInputType::CambFiles and
+                    std::fabs(ic.input_redshift - ic.initial_redshift) > 1e-6)
                     fail("force_nbody_gauge = true needs ic_input_redshift = ic_initial_redshift (scaling the "
                          "transfer functions with the growth factor would not be in the N-body gauge)");
                 if (force.linear_massive_neutrinos) {

@@ -737,12 +737,18 @@ void NBodySimulation<NDIM, T>::setup_nbody_gauge() {
     // (the models are checked in check_parameters_against_models)
     FML::assert_mpi(transfers != nullptr, "force_nbody_gauge needs the transfer functions");
 
-    if (FML::ThisTask == 0)
-        std::cout << "# Running in the N-body gauge. Reading the linear source [" << force.nbody_gauge_filename
-                  << "]\n";
     nbody_gauge = std::make_shared<SIMCODE::NBodyGaugeSource>();
-    nbody_gauge->read(force.nbody_gauge_filename);
-    nbody_gauge->check_cosmology(*cosmo, params.ic.initial_redshift, params.simulation.boxsize, force.nmesh);
+    if (params.ic.type_of_input == SIMCODE::ICInputType::InternalTransfer) {
+        if (FML::ThisTask == 0)
+            std::cout << "# Running in the N-body gauge. The linear source from the Einstein-Boltzmann solver\n";
+        nbody_gauge->from_transfers(*transfers);
+    } else {
+        if (FML::ThisTask == 0)
+            std::cout << "# Running in the N-body gauge. Reading the linear source [" << force.nbody_gauge_filename
+                      << "]\n";
+        nbody_gauge->read(force.nbody_gauge_filename);
+        nbody_gauge->check_cosmology(*cosmo, params.ic.initial_redshift, params.simulation.boxsize, force.nmesh);
+    }
 
     if (FML::ThisTask == 0) {
         const double aini = params.ic.a_initial();

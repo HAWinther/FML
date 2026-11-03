@@ -34,11 +34,20 @@ namespace SIMCODE {
             fail("particle_neutrinos = true needs massive neutrinos (cosmology_OmegaMNu > 0 or "
                  "cosmology_neutrino_masses_eV)");
 
-        // The N-body gauge source is computed with CLASS for LCDM and GR (scripts/make_nbody_gauge_transfer.py)
+        // The N-body gauge needs GR: with the internal solver any cosmology with the GR field equations (dark energy
+        // that is a fluid or a scalar field); the tables of scripts/make_nbody_gauge_transfer.py are for LCDM
         if (params.force.nbody_gauge) {
-            if (grav.get_name() != "GR" or cosmo.get_name() != "LCDM")
-                fail("force_nbody_gauge is only implemented for cosmology_model = LCDM and gravity_model = GR (the "
-                     "source is computed with CLASS)");
+            const auto model = cosmo.get_name();
+            const bool internal = params.ic.type_of_input == ICInputType::InternalTransfer;
+            if (grav.get_name() != "GR")
+                fail("force_nbody_gauge needs gravity_model = GR");
+            if (internal and not(model == "LCDM" or model == "w0waCDM" or model == "Quintessence" or model == "EDE"))
+                fail("force_nbody_gauge with ic_type_of_input = internal needs a cosmology with the GR field equations "
+                     "(LCDM, w0waCDM, Quintessence or EDE), not " +
+                     model);
+            if (not internal and model != "LCDM")
+                fail("force_nbody_gauge with ic_type_of_input = camb is only implemented for cosmology_model = LCDM "
+                     "(the source is computed with CLASS)");
             if (not has_transfers)
                 fail("force_nbody_gauge needs the transfer functions");
         }

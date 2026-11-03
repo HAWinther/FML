@@ -465,16 +465,23 @@ rho_cb (delta_cb + delta_extra), where delta_extra(k,z) is a linear field that c
 field every time we compute the force, and the initial conditions are made from the N-body gauge transfer
 functions (with the scale-dependent growth rate for the velocities).
 
-The input is made with CLASS (`pip install classy`) for the cosmology in the parameterfile:
+With `ic_type_of_input = "internal"` nothing else is needed: the Einstein-Boltzmann solver gives the N-body
+gauge transfer functions and the source directly, for LCDM, w0waCDM, quintessence and EDE (with GR). The
+source is computed from the comoving Poisson equation as a sum of small terms, with smoothed time
+derivatives; integrating the linear growth with it reproduces the solver's N-body gauge delta_cb to
+about 1e-5 (LCDM, with and without massive neutrinos) and 1e-3 at k = 2e-4 h/Mpc for w0wa.
+
+With `ic_type_of_input = "camb"` the input is made with CLASS (`pip install classy`) for the cosmology in
+the parameterfile:
 
 ```bash
 python3 scripts/make_nbody_gauge_transfer.py parameterfile.lua --outdir nbgauge_input
 ```
 
 This writes the N-body gauge transfer functions (CAMB format, with a transfer info file) and the table
-T_extra(k,z), checks the gauge transformation against CLASS, shows how big the effect is for your initial
-redshift and prints the lines to put in the parameterfile. Only for LCDM with GR; the code checks that the
-table was made for the same cosmology and that H(z) agrees.
+T_extra(k,z) (`force_nbody_gauge_filename`), checks the gauge transformation against CLASS, shows how big
+the effect is for your initial redshift and prints the lines to put in the parameterfile. Only for LCDM
+with GR; the code checks that the table was made for the same cosmology and that H(z) agrees.
 
 For a start at z = 49 the effect on P(k) at z = 0 is about 2% at k = 1e-3 h/Mpc (radiation, without
 massive neutrinos) and much less than 0.1% for k > 0.01 h/Mpc. `tests/check_nbody_gauge.py` checks that the
