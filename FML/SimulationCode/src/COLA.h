@@ -13,6 +13,8 @@
 
 #include "GravityModel.h"
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -52,6 +54,42 @@ void cola_initialize_velocities(FML::PARTICLE::MPIParticles<T> & part) {
             vel[idim] = 0.0;
         }
     }
+}
+
+//========================================================================
+// The COLA frame of LPT order n (1 or 2) from the growth factors and the source factors of the LPT equations
+// (GravityModel::compute_growth_factors) at koverH0 = k c / H0 (0 for the scale-independent frame)
+//========================================================================
+template <int NDIM>
+double cola_D(const GravityModel<NDIM> & grav, int n, double a, double koverH0 = 0.0) {
+    return n == 1 ? grav.get_D_1LPT(a, koverH0) : grav.get_D_2LPT(a, koverH0);
+}
+template <int NDIM>
+double cola_f(const GravityModel<NDIM> & grav, int n, double a, double koverH0 = 0.0) {
+    return n == 1 ? grav.get_f_1LPT(a, koverH0) : grav.get_f_2LPT(a, koverH0);
+}
+
+/// The drift of the frame from aold to a: (D_n(a) - D_n(aold)) / D_n(aini)
+template <int NDIM>
+double
+cola_drift_factor(const GravityModel<NDIM> & grav, int n, double aini, double aold, double a, double koverH0 = 0.0) {
+    return (cola_D(grav, n, a, koverH0) - cola_D(grav, n, aold, koverH0)) / cola_D(grav, n, aini, koverH0);
+}
+
+/// The LPT force of the frame at aold: norm S_n D_n(aold) / D_n(aini) for 1LPT and
+/// norm S_n (D_2(aold) - nonlinear D_1(aold)^2) / D_2(aini) for 2LPT, with S_n the source factor of the LPT equation
+/// (e.g. 1 - f_nu for >= 2LPT with massive neutrinos and the nonlinear DGP source) and norm the force normalization
+/// (-1.5 OmegaM a GeffOverG, times the kick step)
+template <int NDIM>
+double
+cola_kick_factor(const GravityModel<NDIM> & grav, int n, double aini, double aold, double norm, double koverH0 = 0.0) {
+    if (n == 1)
+        return norm * grav.source_factor_1LPT(aold, koverH0) * grav.get_D_1LPT(aold, koverH0) /
+               grav.get_D_1LPT(aini, koverH0);
+    const double D1 = grav.get_D_1LPT(aold, koverH0);
+    const double nonlinear = grav.nonlinear_source_factor_2LPT(aold, koverH0);
+    return norm * grav.source_factor_2LPT(aold, koverH0) * (grav.get_D_2LPT(aold, koverH0) - nonlinear * D1 * D1) /
+           grav.get_D_2LPT(aini, koverH0);
 }
 
 template <int NDIM, class T>
@@ -120,23 +158,11 @@ void cola_add_on_LPT_velocity(FML::PARTICLE::MPIParticles<T> & part,
         std::cout << "Adding on the LPT velocity to particles (COLA)\n";
     }
 
-    auto cosmo = grav->get_cosmo();
-
-    // 1LPT
-    const double D1 = grav->get_D_1LPT(a);
-    const double D1ini = grav->get_D_1LPT(aini);
-    const double f1 = grav->get_f_1LPT(a);
-    double vfac_1LPT = sign * D1 / D1ini * f1 * a * a * cosmo->HoverH0_of_a(a);
-    if (LPT_order < 1)
-        vfac_1LPT = 0.0;
-
-    // 2LPT
-    [[maybe_unused]] const double D2 = grav->get_D_2LPT(a);
-    [[maybe_unused]] const double D2ini = grav->get_D_2LPT(aini);
-    [[maybe_unused]] const double f2 = grav->get_f_2LPT(a);
-    [[maybe_unused]] double vfac_2LPT = sign * D2 / D2ini * f2 * a * a * cosmo->HoverH0_of_a(a);
-    if (LPT_order < 2)
-        vfac_2LPT = 0.0;
+    // The LPT velocity a^2 H/H0 f_n D_n / D_n,ini of the orders n <= LPT_order (0 for the others)
+    const double HoverH0 = grav->get_cosmo()->HoverH0_of_a(a);
+    std::array<double, 2> vfac{0.0, 0.0};
+    for (int n = 1; n <= std::min(LPT_order, 2); n++)
+        vfac[n - 1] = sign * cola_D(*grav, n, a) / cola_D(*grav, n, aini) * cola_f(*grav, n, a) * a * a * HoverH0;
 
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -148,14 +174,14 @@ void cola_add_on_LPT_velocity(FML::PARTICLE::MPIParticles<T> & part,
         if constexpr (FML::PARTICLE::has_get_D_1LPT<T>()) {
             auto * D1 = FML::PARTICLE::GetD_1LPT(p);
             for (int idim = 0; idim < NDIM; idim++) {
-                vel[idim] += D1[idim] * vfac_1LPT;
+                vel[idim] += D1[idim] * vfac[0];
             }
         }
 
         if constexpr (FML::PARTICLE::has_get_D_2LPT<T>()) {
             auto * D2 = FML::PARTICLE::GetD_2LPT(p);
             for (int idim = 0; idim < NDIM; idim++) {
-                vel[idim] += D2[idim] * vfac_2LPT;
+                vel[idim] += D2[idim] * vfac[1];
             }
         }
     }
@@ -198,29 +224,13 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
     // The LPT force as in the growth equations: rho_m(a) a^3 of the background (Omega_m_a3)
     const double norm_poisson = 1.5 * cosmo->Omega_m_a3(aold) * aold * grav->GeffOverG(aold);
 
-    // The LPT force of each order as in the growth equations (GravityModel::compute_growth_factors), with the
-    // source factors at k = 0 (e.g. 1 - f_nu for >= 2LPT with massive neutrinos and the nonlinear DGP source).
-    // Without them the frame kick did not follow the LPT growth factors used for the drift
-    const double source_1LPT = grav->source_factor_1LPT(aold);
-    const double source_2LPT = grav->source_factor_2LPT(aold);
-    const double nonlinear_2LPT = grav->nonlinear_source_factor_2LPT(aold);
-
-    const double D1 = grav->get_D_1LPT(a);
-    const double D1old = grav->get_D_1LPT(aold);
-    const double D1ini = grav->get_D_1LPT(aini);
-    double fac1_pos = (D1 - D1old) / D1ini;
-    double fac1_vel = -norm_poisson * source_1LPT * D1old / D1ini * delta_time_kick;
-    if (LPT_order < 1)
-        fac1_pos = fac1_vel = 0.0;
-
-    [[maybe_unused]] const double D2 = grav->get_D_2LPT(a);
-    [[maybe_unused]] const double D2old = grav->get_D_2LPT(aold);
-    [[maybe_unused]] const double D2ini = grav->get_D_2LPT(aini);
-    [[maybe_unused]] double fac2_pos = (D2 - D2old) / D2ini;
-    [[maybe_unused]] double fac2_vel =
-        -norm_poisson * source_2LPT * (D2old - nonlinear_2LPT * D1old * D1old) / D2ini * delta_time_kick;
-    if (LPT_order < 2)
-        fac2_pos = fac2_vel = 0.0;
+    // The drift and kick of the frame of each order (the LPT force as in the growth equations with the source factors
+    // at k = 0: without them the frame kick did not follow the LPT growth factors used for the drift)
+    std::array<double, 2> fac_pos{0.0, 0.0}, fac_vel{0.0, 0.0};
+    for (int n = 1; n <= std::min(LPT_order, 2); n++) {
+        fac_pos[n - 1] = cola_drift_factor(*grav, n, aini, aold, a);
+        fac_vel[n - 1] = cola_kick_factor(*grav, n, aini, aold, -norm_poisson) * delta_time_kick;
+    }
 
     // Loop over all active particles
     const size_t np = part.get_npart();
@@ -236,9 +246,9 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
             auto * D1 = FML::PARTICLE::GetD_1LPT(p);
             for (int idim = 0; idim < NDIM; idim++) {
                 if (do_drift)
-                    pos[idim] += D1[idim] * fac1_pos;
+                    pos[idim] += D1[idim] * fac_pos[0];
                 if (do_kick)
-                    vel[idim] += D1[idim] * fac1_vel;
+                    vel[idim] += D1[idim] * fac_vel[0];
             }
         }
 
@@ -246,9 +256,9 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
             auto * D2 = FML::PARTICLE::GetD_2LPT(p);
             for (int idim = 0; idim < NDIM; idim++) {
                 if (do_drift)
-                    pos[idim] += D2[idim] * fac2_pos;
+                    pos[idim] += D2[idim] * fac_pos[1];
                 if (do_kick)
-                    vel[idim] += D2[idim] * fac2_vel;
+                    vel[idim] += D2[idim] * fac_vel[1];
             }
         }
 
@@ -262,105 +272,24 @@ void cola_kick_drift(FML::PARTICLE::MPIParticles<T> & part,
 // Scaledependent methods
 //====================================================================================
 
-/// grid(k) = phi_1LPT(k) f_1(k) + phi_2LPT(k) f_2(k) up to LPT_order
-/// (the grid must have the same layout as the potentials; k in units of 1/boxsize)
-template <int NDIM>
-void sum_of_LPT_potentials(FML::GRID::FFTWGrid<NDIM> & grid,
-                           int LPT_order,
-                           const FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
-                           const FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
-                           const Spline & f_1LPT,
-                           const Spline & f_2LPT) {
-    FML::GRID::for_each_fourier_mode<NDIM>(grid, [&](size_t fourier_index, double kmag) {
-        auto phi_1LPT = phi_1LPT_ini_fourier.get_fourier_from_index(fourier_index);
-        auto value = phi_1LPT * FML::GRID::FloatType(f_1LPT(kmag));
-        if (LPT_order >= 2) {
-            auto phi_2LPT = phi_2LPT_ini_fourier.get_fourier_from_index(fourier_index);
-            value += phi_2LPT * FML::GRID::FloatType(f_2LPT(kmag));
-        }
-        grid.set_fourier_from_index(fourier_index, value);
-    });
-}
-
-//========================================================================
-/// Interpolate the LPT displacement grids of scale-dependent COLA to the Lagrangian positions q of the particles
-/// (stored as the positions while they are swapped). The particle lattice may have been offset from the nodes of the
-/// grids (ic_lattice_offset): the potentials are those of the lattice before the offset, so we interpolate at
-/// q - lattice_offset, i.e. at the grid nodes when the IC grid has Npart_1D cells (exact with CIC; at the offset
-/// positions CIC would smooth the displacements and the COLA frame would miss growth on small scales)
-//========================================================================
-template <int NDIM, class T>
-void interpolate_LPT_grid_to_lagrangian_positions(const std::array<FML::GRID::FFTWGrid<NDIM>, NDIM> & grid_vector_real,
-                                                  FML::PARTICLE::MPIParticles<T> & part,
-                                                  std::array<std::vector<FML::GRID::FloatType>, NDIM> & result,
-                                                  const std::string & interpolation_method,
-                                                  double lattice_offset) {
-    if (lattice_offset == 0.0) {
-        FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, T>(grid_vector_real,
-                                                                                   part.get_particles_ptr(),
-                                                                                   part.get_npart(),
-                                                                                   result,
-                                                                                   interpolation_method);
-        return;
-    }
-    struct Point {
-        double pos[NDIM];
-        double * get_pos() { return pos; }
-        constexpr int get_ndim() const { return NDIM; }
-    };
-    std::vector<Point> points(part.get_npart());
-    auto * p = part.get_particles_ptr();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-    for (size_t i = 0; i < points.size(); i++) {
-        const auto * q = FML::PARTICLE::GetPos(p[i]);
-        for (int idim = 0; idim < NDIM; idim++) {
-            points[i].pos[idim] = FML::PARTICLE::wrap_coordinate_periodic(double(q[idim] - lattice_offset));
-        }
-    }
-    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, Point>(grid_vector_real,
-                                                                                   points.data(),
-                                                                                   points.size(),
-                                                                                   result,
-                                                                                   interpolation_method);
-}
-
-/// Run f with the particles at their Lagrangian positions (q swapped into the positions and the particles
-/// communicated to the tasks of q), then swap back
-template <class T, class F>
-void with_particles_at_lagrangian_positions(FML::PARTICLE::MPIParticles<T> & part, F && f) {
-    FML::PARTICLE::swap_eulerian_and_lagrangian_positions(part.get_particles_ptr(), part.get_npart());
-    part.communicate_particles();
-    f();
-    FML::PARTICLE::swap_eulerian_and_lagrangian_positions(part.get_particles_ptr(), part.get_npart());
-    part.communicate_particles();
-}
-
-/// The displacement field of sum_n f_n(k) phi_nLPT(k, zini) (n = 1, ..., LPT_order) at the Lagrangian positions of the
-/// particles (they must be swapped: with_particles_at_lagrangian_positions)
+/// The displacement field of sum_n f_n(k) phi_nLPT(k, zini) (n = 1, ..., LPT_order; f_n = factors[n - 1] of kBox) at
+/// the Lagrangian positions of the particles (they must be swapped: with_particles_at_lagrangian_positions)
 template <int NDIM, class T>
 std::array<std::vector<FML::GRID::FloatType>, NDIM>
-lpt_displacement_at_lagrangian_positions(FML::PARTICLE::MPIParticles<T> & part,
-                                         int LPT_order,
-                                         const FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
-                                         const FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
-                                         const Spline & f_1LPT,
-                                         const Spline & f_2LPT,
-                                         double lattice_offset) {
-    auto potential = phi_1LPT_ini_fourier;
-    sum_of_LPT_potentials<NDIM>(potential, LPT_order, phi_1LPT_ini_fourier, phi_2LPT_ini_fourier, f_1LPT, f_2LPT);
-    std::array<FML::GRID::FFTWGrid<NDIM>, NDIM> grid_vector_real;
-    std::function<double(double)> multiply_by_one = []([[maybe_unused]] double kBox) { return 1.0; };
-    FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector_scaledependent<NDIM>(potential,
-                                                                                        grid_vector_real,
-                                                                                        multiply_by_one);
-    potential.free();
-    for (int idim = 0; idim < NDIM; idim++)
-        grid_vector_real[idim].communicate_boundaries();
-    std::array<std::vector<FML::GRID::FloatType>, NDIM> result;
-    interpolate_LPT_grid_to_lagrangian_positions<NDIM, T>(grid_vector_real, part, result, "CIC", lattice_offset);
-    return result;
+cola_displacement_at_lagrangian_positions(FML::PARTICLE::MPIParticles<T> & part,
+                                          int LPT_order,
+                                          const FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
+                                          const FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
+                                          const std::array<Spline, 2> & factors,
+                                          double lattice_offset) {
+    std::vector<const FML::GRID::FFTWGrid<NDIM> *> potentials{&phi_1LPT_ini_fourier};
+    if (LPT_order >= 2)
+        potentials.push_back(&phi_2LPT_ini_fourier);
+    return FML::COSMOLOGY::LPT::displacement_at_lagrangian_positions<NDIM, T>(
+        part,
+        potentials,
+        [&](size_t n, double kBox) { return factors[n](kBox); },
+        lattice_offset);
 }
 
 /// A factor f(kBox) of the scale-dependent COLA step as a spline on 4 Nmesh points over the modes of the LPT grids
@@ -499,31 +428,18 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
     //   kick:  -1.5 OmegaM a GeffOverG(k,a) dt_kick S_n (D_1 / D_1,ini for 1LPT, (D_2 - nonlinear D_1^2) / D_2,ini
     //          for 2LPT) with S_n the source factor of the LPT equation
     //======================================================================================
-    auto kick_factor = [&](double koverH0) {
+    auto kick_norm = [&](double koverH0) {
         return -1.5 * OmegaM * aold * grav->GeffOverG(aold, koverH0) * delta_time_kick;
     };
     const int Nmesh = phi_1LPT_ini_fourier.get_nmesh();
-    const Spline drift_1LPT = cola_factor_spline<NDIM>(Nmesh, [&](double kBox) {
-        const double koverH0 = kBox / H0Box;
-        return (grav->get_D_1LPT(a, koverH0) - grav->get_D_1LPT(aold, koverH0)) / grav->get_D_1LPT(aini, koverH0);
-    });
-    const Spline kick_1LPT = cola_factor_spline<NDIM>(Nmesh, [&](double kBox) {
-        const double koverH0 = kBox / H0Box;
-        return kick_factor(koverH0) * grav->source_factor_1LPT(aold, koverH0) * grav->get_D_1LPT(aold, koverH0) /
-               grav->get_D_1LPT(aini, koverH0);
-    });
-    Spline drift_2LPT, kick_2LPT;
-    if (LPT_order >= 2) {
-        drift_2LPT = cola_factor_spline<NDIM>(Nmesh, [&](double kBox) {
-            const double koverH0 = kBox / H0Box;
-            return (grav->get_D_2LPT(a, koverH0) - grav->get_D_2LPT(aold, koverH0)) / grav->get_D_2LPT(aini, koverH0);
+    std::array<Spline, 2> drift, kick;
+    for (int n = 1; n <= std::min(LPT_order, 2); n++) {
+        drift[n - 1] = cola_factor_spline<NDIM>(Nmesh, [&](double kBox) {
+            return cola_drift_factor(*grav, n, aini, aold, a, kBox / H0Box);
         });
-        kick_2LPT = cola_factor_spline<NDIM>(Nmesh, [&](double kBox) {
+        kick[n - 1] = cola_factor_spline<NDIM>(Nmesh, [&](double kBox) {
             const double koverH0 = kBox / H0Box;
-            const double D_1LPT = grav->get_D_1LPT(aold, koverH0);
-            const double nonlinear = grav->nonlinear_source_factor_2LPT(aold, koverH0);
-            return kick_factor(koverH0) * grav->source_factor_2LPT(aold, koverH0) *
-                   (grav->get_D_2LPT(aold, koverH0) - nonlinear * D_1LPT * D_1LPT) / grav->get_D_2LPT(aini, koverH0);
+            return cola_kick_factor(*grav, n, aini, aold, kick_norm(koverH0), koverH0);
         });
     }
 
@@ -531,25 +447,23 @@ void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
     // The drift and kick displacements at the Lagrangian positions, stored in the particles: the drift in D_1LPT,
     // the kick in dDdloga_1LPT (1LPT particles) or D_2LPT
     //======================================================================================
-    with_particles_at_lagrangian_positions(part, [&]() {
+    FML::COSMOLOGY::LPT::with_particles_at_lagrangian_positions(part, [&]() {
         cola_store_in_particles<NDIM, T>(part,
-                                         lpt_displacement_at_lagrangian_positions<NDIM, T>(part,
-                                                                                           LPT_order,
-                                                                                           phi_1LPT_ini_fourier,
-                                                                                           phi_2LPT_ini_fourier,
-                                                                                           drift_1LPT,
-                                                                                           drift_2LPT,
-                                                                                           lattice_offset),
+                                         cola_displacement_at_lagrangian_positions<NDIM, T>(part,
+                                                                                            LPT_order,
+                                                                                            phi_1LPT_ini_fourier,
+                                                                                            phi_2LPT_ini_fourier,
+                                                                                            drift,
+                                                                                            lattice_offset),
                                          [](T & p) { return FML::PARTICLE::GetD_1LPT(p); });
         cola_store_in_particles<NDIM, T>(
             part,
-            lpt_displacement_at_lagrangian_positions<NDIM, T>(part,
-                                                              LPT_order,
-                                                              phi_1LPT_ini_fourier,
-                                                              phi_2LPT_ini_fourier,
-                                                              kick_1LPT,
-                                                              kick_2LPT,
-                                                              lattice_offset),
+            cola_displacement_at_lagrangian_positions<NDIM, T>(part,
+                                                               LPT_order,
+                                                               phi_1LPT_ini_fourier,
+                                                               phi_2LPT_ini_fourier,
+                                                               kick,
+                                                               lattice_offset),
             [](T & p) { return cola_scaledependent_vel_storage<T>(p, LPT_order_particle); });
     });
 
@@ -609,28 +523,23 @@ void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & pa
 
     const double vfactor = sign * a * a * grav->get_cosmo()->HoverH0_of_a(a);
     const int Nmesh = phi_1LPT_ini_fourier.get_nmesh();
-    const Spline vel_1LPT = cola_factor_spline<NDIM>(Nmesh, [&](double kBox) {
-        const double koverH0 = kBox / H0Box;
-        return vfactor * grav->get_f_1LPT(a, koverH0) * grav->get_D_1LPT(a, koverH0) / grav->get_D_1LPT(aini, koverH0);
-    });
-    Spline vel_2LPT;
-    if (LPT_order >= 2)
-        vel_2LPT = cola_factor_spline<NDIM>(Nmesh, [&](double kBox) {
+    std::array<Spline, 2> velocity;
+    for (int n = 1; n <= std::min(LPT_order, 2); n++)
+        velocity[n - 1] = cola_factor_spline<NDIM>(Nmesh, [&](double kBox) {
             const double koverH0 = kBox / H0Box;
-            return vfactor * grav->get_f_2LPT(a, koverH0) * grav->get_D_2LPT(a, koverH0) /
-                   grav->get_D_2LPT(aini, koverH0);
+            return vfactor * cola_f(*grav, n, a, koverH0) * cola_D(*grav, n, a, koverH0) /
+                   cola_D(*grav, n, aini, koverH0);
         });
 
     // The velocity at the Lagrangian positions, stored in D_1LPT
-    with_particles_at_lagrangian_positions(part, [&]() {
+    FML::COSMOLOGY::LPT::with_particles_at_lagrangian_positions(part, [&]() {
         cola_store_in_particles<NDIM, T>(part,
-                                         lpt_displacement_at_lagrangian_positions<NDIM, T>(part,
-                                                                                           LPT_order,
-                                                                                           phi_1LPT_ini_fourier,
-                                                                                           phi_2LPT_ini_fourier,
-                                                                                           vel_1LPT,
-                                                                                           vel_2LPT,
-                                                                                           lattice_offset),
+                                         cola_displacement_at_lagrangian_positions<NDIM, T>(part,
+                                                                                            LPT_order,
+                                                                                            phi_1LPT_ini_fourier,
+                                                                                            phi_2LPT_ini_fourier,
+                                                                                            velocity,
+                                                                                            lattice_offset),
                                          [](T & p) { return FML::PARTICLE::GetD_1LPT(p); });
     });
 

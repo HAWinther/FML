@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <functional>
 #include <numeric>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -1408,6 +1409,83 @@ namespace FML {
 #endif
 
             //===================================================================================
+            /// Run f() with the particles at their Lagrangian positions: q is swapped into the positions and the
+            /// particles are communicated to the tasks of q. Afterwards they are swapped back and communicated
+            //===================================================================================
+            template <class T, class F>
+            void with_particles_at_lagrangian_positions(MPIParticles<T> & part, F && f) {
+                FML::PARTICLE::swap_eulerian_and_lagrangian_positions(part.get_particles_ptr(), part.get_npart());
+                part.communicate_particles();
+                f();
+                FML::PARTICLE::swap_eulerian_and_lagrangian_positions(part.get_particles_ptr(), part.get_npart());
+                part.communicate_particles();
+            }
+
+            //===================================================================================
+            /// The displacement field of the LPT potential sum_n weight(n, k) phi_n(k) (n = 0, 1, ...; k = |k| in
+            /// units of 1/box; all the potentials have the same layout) interpolated to the particles, which must be
+            /// at their Lagrangian positions (with_particles_at_lagrangian_positions). lattice_offset: the particle
+            /// lattice is offset from the lattice of the potentials by this in every direction (in units of the box):
+            /// the field is interpolated at q - lattice_offset (the grid nodes when the grid has one cell per
+            /// particle, exact with CIC)
+            //===================================================================================
+            template <int N, class T, class W>
+            std::array<std::vector<FML::GRID::FloatType>, N>
+            displacement_at_lagrangian_positions(MPIParticles<T> & part,
+                                                 const std::vector<const FFTWGrid<N> *> & potentials,
+                                                 W && weight,
+                                                 double lattice_offset = 0.0,
+                                                 const std::string & interpolation_method = "CIC") {
+                assert_mpi(not potentials.empty(), "[displacement_at_lagrangian_positions] No potentials");
+                auto potential = *potentials[0];
+                FML::GRID::for_each_fourier_mode<N>(potential, [&](size_t fourier_index, double kmag) {
+                    auto value =
+                        potentials[0]->get_fourier_from_index(fourier_index) * FML::GRID::FloatType(weight(0, kmag));
+                    for (size_t n = 1; n < potentials.size(); n++)
+                        value += potentials[n]->get_fourier_from_index(fourier_index) *
+                                 FML::GRID::FloatType(weight(n, kmag));
+                    potential.set_fourier_from_index(fourier_index, value);
+                });
+                std::array<FFTWGrid<N>, N> psi;
+                std::function<double(double)> multiply_by_one = []([[maybe_unused]] double kBox) { return 1.0; };
+                from_LPT_potential_to_displacement_vector_scaledependent<N>(potential, psi, multiply_by_one);
+                potential.free();
+                for (int idim = 0; idim < N; idim++)
+                    psi[idim].communicate_boundaries();
+
+                std::array<std::vector<FML::GRID::FloatType>, N> result;
+                if (lattice_offset == 0.0) {
+                    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N, T>(psi,
+                                                                                            part.get_particles_ptr(),
+                                                                                            part.get_npart(),
+                                                                                            result,
+                                                                                            interpolation_method);
+                    return result;
+                }
+                struct Point {
+                    double pos[N];
+                    double * get_pos() { return pos; }
+                    constexpr int get_ndim() const { return N; }
+                };
+                std::vector<Point> points(part.get_npart());
+                auto * p = part.get_particles_ptr();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (size_t i = 0; i < points.size(); i++) {
+                    const auto * q = FML::PARTICLE::GetPos(p[i]);
+                    for (int idim = 0; idim < N; idim++)
+                        points[i].pos[idim] = FML::PARTICLE::wrap_coordinate_periodic(double(q[idim] - lattice_offset));
+                }
+                FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<N, Point>(psi,
+                                                                                            points.data(),
+                                                                                            points.size(),
+                                                                                            result,
+                                                                                            interpolation_method);
+                return result;
+            }
+
+            //===================================================================================
             /// This method assigns the displacement fields to particles for the case where we have scaledependent
             /// growth. This is involved: we take phi_iLPT(zini,k) and use growth factors to go to phi_iLPT(z,k) and FFT
             /// to get phi_iLPT(z,q). Then we transport the particles back to their original CPU given by the particles
@@ -1465,60 +1543,52 @@ namespace FML {
                                "1LPT,2LPT,3LPTa,3LPTb");
                 }
 
-                // Swap positions with Lagrangian position
-                // Bring particles to the task they started off from
-                FML::PARTICLE::swap_eulerian_and_lagrangian_positions(part.get_particles_ptr(), part.get_npart());
-                part.communicate_particles();
+                // With the particles at their Lagrangian positions (on the task they started off from)
+                with_particles_at_lagrangian_positions(part, [&]() {
+                    // Use initial LPT potential + growth factor to compute displacement field at present time
+                    std::array<FFTWGrid<N>, N> psi_LPT_vector;
+                    FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector_scaledependent(LPT_potential_fourier,
+                                                                                                  psi_LPT_vector,
+                                                                                                  DoverDini_of_k);
+                    for (int idim = 0; idim < N; idim++) {
+                        psi_LPT_vector[idim].communicate_boundaries();
+                    }
+                    // Interpolate to particle positions after which we have Psi(q,t) in displacements
+                    std::array<std::vector<FML::GRID::FloatType>, N> displacements;
+                    FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions(psi_LPT_vector,
+                                                                                      part.get_particles_ptr(),
+                                                                                      part.get_npart(),
+                                                                                      displacements,
+                                                                                      interpolation_method);
+                    for (int idim = 0; idim < N; idim++) {
+                        psi_LPT_vector[idim].free();
+                    }
 
-                // Use initial LPT potential + growth factor to compute displacement field at present time
-                std::array<FFTWGrid<N>, N> psi_LPT_vector;
-                FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector_scaledependent(LPT_potential_fourier,
-                                                                                              psi_LPT_vector,
-                                                                                              DoverDini_of_k);
-                for (int idim = 0; idim < N; idim++) {
-                    psi_LPT_vector[idim].communicate_boundaries();
-                }
-                // Interpolate to particle positions after which we have Psi(q,t) in displacements
-                std::array<std::vector<FML::GRID::FloatType>, N> displacements;
-                FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions(psi_LPT_vector,
-                                                                                  part.get_particles_ptr(),
-                                                                                  part.get_npart(),
-                                                                                  displacements,
-                                                                                  interpolation_method);
-                for (int idim = 0; idim < N; idim++) {
-                    psi_LPT_vector[idim].free();
-                }
-
-                // Assign displacement field to particles
-                auto np = part.get_npart();
+                    // Assign displacement field to particles
+                    auto np = part.get_npart();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (size_t ind = 0; ind < np; ind++) {
-                    if (LPT_order == _1LPT) {
-                        auto * D = FML::PARTICLE::GetD_1LPT(part[ind]);
-                        for (int idim = 0; idim < N; idim++)
-                            D[idim] = displacements[idim][ind];
-                    } else if (LPT_order == _2LPT) {
-                        auto * D = FML::PARTICLE::GetD_2LPT(part[ind]);
-                        for (int idim = 0; idim < N; idim++)
-                            D[idim] = displacements[idim][ind];
-                    } else if (LPT_order == _3LPTA) {
-                        auto * D = FML::PARTICLE::GetD_3LPTa(part[ind]);
-                        for (int idim = 0; idim < N; idim++)
-                            D[idim] = displacements[idim][ind];
-                    } else if (LPT_order == _3LPTB) {
-                        auto * D = FML::PARTICLE::GetD_3LPTb(part[ind]);
-                        for (int idim = 0; idim < N; idim++)
-                            D[idim] = displacements[idim][ind];
+                    for (size_t ind = 0; ind < np; ind++) {
+                        if (LPT_order == _1LPT) {
+                            auto * D = FML::PARTICLE::GetD_1LPT(part[ind]);
+                            for (int idim = 0; idim < N; idim++)
+                                D[idim] = displacements[idim][ind];
+                        } else if (LPT_order == _2LPT) {
+                            auto * D = FML::PARTICLE::GetD_2LPT(part[ind]);
+                            for (int idim = 0; idim < N; idim++)
+                                D[idim] = displacements[idim][ind];
+                        } else if (LPT_order == _3LPTA) {
+                            auto * D = FML::PARTICLE::GetD_3LPTa(part[ind]);
+                            for (int idim = 0; idim < N; idim++)
+                                D[idim] = displacements[idim][ind];
+                        } else if (LPT_order == _3LPTB) {
+                            auto * D = FML::PARTICLE::GetD_3LPTb(part[ind]);
+                            for (int idim = 0; idim < N; idim++)
+                                D[idim] = displacements[idim][ind];
+                        }
                     }
-                }
-
-                // Swap back positions
-                // Bring particles back to the task the eulerian position belongs to
-                // The particles are now as they were just with the displacement field assigned
-                FML::PARTICLE::swap_eulerian_and_lagrangian_positions(part.get_particles_ptr(), part.get_npart());
-                part.communicate_particles();
+                });
             }
 
         } // namespace LPT
