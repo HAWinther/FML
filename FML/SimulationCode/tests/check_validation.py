@@ -18,7 +18,7 @@
 #  - command line: no parameterfile, an unknown option and --parameters to a file that cannot be written give
 #    a non-zero exit code
 # and that these now work:
-#  - a GeffG(a) file with a header line (the reader looped forever)
+#  - a mu(a) table with a header line (the reader looped forever)
 #  - the JBD cosmology leaves the format of std::cout alone (As was printed as 0.00000000)
 #
 # Usage: python3 check_validation.py <path/to/nbody> <outdir>
@@ -176,14 +176,15 @@ if "healpix" not in features:
              "plc_make_onion_density_maps = true needs Healpix", before_ic=False)
 
 # Now working
-geff = os.path.join(outdir, "geff_with_header.txt")
-with open(geff, "w") as f:
-    f.write("# a GeffG\n\n")
+mu_table = os.path.join(outdir, "mu_with_header.txt")
+with open(mu_table, "w") as f:
+    f.write("# a mu\n\n")
     for i in range(100):
         f.write(f"{0.001 + i / 99.0} 1.0\n")
-rc, out = run("geff_header", dict(gravity_model="Geff", gravity_model_geff_geffofa_filename=geff,
-                                  output_redshifts=[19.0], timestep_nsteps=[1]))
-check(rc == 0, "Geff file with a header line is read (the reader looped forever)", out)
+rc, out = run("mu_table_header", dict(gravity_model="mu", gravity_model_mu_parametrization="table",
+                                      gravity_model_mu_filename=mu_table, output_redshifts=[19.0],
+                                      timestep_nsteps=[1]))
+check(rc == 0, "a mu(a) table with a header line is read (the reader looped forever)", out)
 rc, out = run("jbd_cout", dict(cosmology_model="JBD", cosmology_JBD_wBD=1000.0, output_redshifts=[19.0],
                                timestep_nsteps=[1]))
 as_lines = [l for l in out.splitlines() if l.startswith("# As ")]

@@ -5,6 +5,12 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: `gravity_model = Geff` is removed
+- It is covered by `gravity_model = mu` with `gravity_model_mu_parametrization = "table"` and a file with rows
+  `a mu` (G_eff/G = mu(a); splined in log a, the closest value outside the table, and mu(a,k) with rows `a k mu`).
+  Replace `gravity_model = "Geff"` and `gravity_model_geff_geffofa_filename = "file"` by `gravity_model = "mu"`,
+  `gravity_model_mu_parametrization = "table"` and `gravity_model_mu_filename = "file"`.
+
 ### SimulationCode: the settings of the internal Einstein-Boltzmann solver in the parameter file
 - New `ic_internal_solver_parameters = {"name=value", ...}` (with `ic_type_of_input = internal`): settings of the solver
   (recombination, reionization, precision, ...; the names of `Cosmology/EinsteinBoltzmannSolver/params/default.ini`),

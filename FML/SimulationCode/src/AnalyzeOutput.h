@@ -378,7 +378,7 @@ struct HybridBiasPredictionGrid {
 
 /// The model of the one-loop LPT kernels of the gravity model (hybridbias_oneloop_kernels = model): its theory (f(R)
 /// and DGP with their screening if the simulation has it, other theories through their mu(k, a)) on the run's
-/// background; models without a shared theory (Geff, mu BZ/table) through GeffOverG
+/// background; models without a shared theory (mu BZ/table) through GeffOverG
 template <int NDIM, class T>
 FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::MGModel hybrid_bias_mg_model(NBodySimulation<NDIM, T> & sim) {
     using namespace FML::CORRELATIONFUNCTIONS::HYBRIDBIAS;

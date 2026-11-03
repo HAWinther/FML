@@ -236,9 +236,6 @@ namespace SIMCODE {
                        "GR",
                        "The gravity model (growth of perturbations and forces)",
                        model_names(gravity_models<NDIM>()));
-            gravity_is({"Geff"}, [&]() {
-                b.required("gravity_model_geff_geffofa_filename", "", "File with the format [a, Geff/G(a)]");
-            });
             gravity_is({"mu"}, [&]() {
                 b.required("gravity_model_mu_parametrization",
                            "DE",

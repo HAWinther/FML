@@ -147,15 +147,9 @@ end
 ------------------------------------------------------------
 -- Choose the gravity model
 ------------------------------------------------------------
--- Gravity model: GR, f(R), DGP, JBD, Symmetron, Geff, mbeta, mu ... add your own ...
+-- Gravity model: GR, f(R), DGP, JBD, Symmetron, mbeta, mu ... add your own ...
 -- (JBD needs cosmology_model = "JBD": it takes phi(a) from the background)
 gravity_model = "GR"
-
--- General Geff/G(a) models (mu-parametrization)
-if gravity_model == "Geff" then 
-  -- File with the format [a, Geff/G(a)]
-  gravity_model_geff_geffofa_filename = "GeffoverG_of_a.txt"
-end
 
 -- Poisson equation with G_eff/G = mu(a,k), no screening
 if gravity_model == "mu" then
