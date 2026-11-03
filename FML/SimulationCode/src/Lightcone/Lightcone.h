@@ -491,8 +491,10 @@ void Lightcone<NDIM, T, U>::finish_onion_maps(OnionSlices<MapRealType, NDIM> & o
 
         // Compute angular power-spectra (divided by the observed fsky) and output it with and without shot-noise
         const bool subtract_shotnoise = true;
-        onionslices.compute_and_output_angular_powerspectrum(
-            plc_folder, "delta_" + particle_type, not output_only_new_maps, subtract_shotnoise);
+        onionslices.compute_and_output_angular_powerspectrum(plc_folder,
+                                                             "delta_" + particle_type,
+                                                             not output_only_new_maps,
+                                                             subtract_shotnoise);
     }
 
     // Maps of the potential at the same shells
@@ -519,8 +521,11 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
                                  "was not computed (call compute_potential first)");
     std::vector<FML::GRID::FloatType> potential_at_particles;
     if (use_potential)
-        FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, T>(
-            phi_grid, part.get_particles_ptr(), part.get_npart(), potential_at_particles, interpolation_method);
+        FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, T>(phi_grid,
+                                                                            part.get_particles_ptr(),
+                                                                            part.get_npart(),
+                                                                            potential_at_particles,
+                                                                            interpolation_method);
     struct FreePotentialAtEnd {
         Lightcone & lc;
         ~FreePotentialAtEnd() { lc.free_potential(); }
@@ -588,7 +593,11 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
     // Allocate and initialize the maps we need for the current time-step
     if (make_onion_density_maps)
         onionslices_curtype.init_current_step(
-            s.a_old, s.a_new, [this](double loga) { return get_distance(std::exp(loga)); }, boxsize, plc_folder);
+            s.a_old,
+            s.a_new,
+            [this](double loga) { return get_distance(std::exp(loga)); },
+            boxsize,
+            plc_folder);
 
     // Allocate lightcone particles
     FML::Vector<U> part_lc;
@@ -1020,7 +1029,6 @@ void Lightcone<NDIM, T, U>::output_ascii(FML::Vector<U> & part_lc,
         }
         fp << "\n";
     }
-
 }
 
 // Volume of a spherical shell bounded by rlow and rhigh in NDIM dimension

@@ -107,7 +107,8 @@ class GravityModelMu final : public GravityModel<NDIM> {
             FML::assert_mpi(this->cosmo->get_OmegaLambda() > 0.0,
                             "gravity_model_mu_parametrization = DE needs Omega_DE > 0");
             this->quasi_static = std::make_shared<const FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_MuSigma>(
-                this->cosmo->background(), mu0);
+                this->cosmo->background(),
+                mu0);
         }
         GravityModel<NDIM>::init();
     }

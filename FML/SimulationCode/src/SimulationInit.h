@@ -96,8 +96,9 @@ void NBodySimulation<NDIM, T>::init() {
     if (has_neutrino_particles()) {
         const auto & masses = cosmo->get_neutrino_masses_eV();
         const double Tnu0_eV = cosmo->get_neutrino_temperature_eV(1.0);
-        part_neutrinos.init(
-            cosmo->get_massive_neutrino_species(), params.simulation.boxsize, params.particle.neutrino_deltaf);
+        part_neutrinos.init(cosmo->get_massive_neutrino_species(),
+                            params.simulation.boxsize,
+                            params.particle.neutrino_deltaf);
         if (FML::ThisTask == 0) {
             std::cout << "# Massive neutrinos as particles (delta-f weights: " << std::boolalpha
                       << params.particle.neutrino_deltaf << "). m_nu =";
@@ -165,11 +166,7 @@ void NBodySimulation<NDIM, T>::setup_initial_power_spectrum() {
     const auto & ic = params.ic;
     const double boxsize = params.simulation.boxsize;
 
-    auto table = SIMCODE::read_initial_power_spectrum<NDIM>(ic,
-                                                            cosmo,
-                                                            grav,
-                                                            grav_ic,
-                                                            transfers);
+    auto table = SIMCODE::read_initial_power_spectrum<NDIM>(ic, cosmo, grav, grav_ic, transfers);
     auto make_splines = [&](std::string label) {
         power_initial_spline.create(table.k, table.power, "P(k,zini)" + label);
         power_primordial_spline.create(table.k, table.power_primordial, "P_primordial(k)" + label);
@@ -682,20 +679,20 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
                 mass_contrast = [&](double kBox) { return ratio(clamp_logk(kBox)) - 1.0; };
         }
         FML::NBODY::generate_species_from_delta_cb<NDIM, T>(particles,
-                                                         delta_cb_fourier,
-                                                         displacement_ratio,
-                                                         velocity_norm_1LPT,
-                                                         cola.enabled ? residual_velocity_norms : velocity_norms,
-                                                         ic.LPT_order,
-                                                         info.Npart_1D,
-                                                         params.particle.allocation_factor,
-                                                         boxsize,
-                                                         ic.initial_redshift,
-                                                         shift,
-                                                         info.id_offset,
-                                                         cola.enabled,
-                                                         mass_contrast,
-                                                         velocity_norm_2LPT);
+                                                            delta_cb_fourier,
+                                                            displacement_ratio,
+                                                            velocity_norm_1LPT,
+                                                            cola.enabled ? residual_velocity_norms : velocity_norms,
+                                                            ic.LPT_order,
+                                                            info.Npart_1D,
+                                                            params.particle.allocation_factor,
+                                                            boxsize,
+                                                            ic.initial_redshift,
+                                                            shift,
+                                                            info.id_offset,
+                                                            cola.enabled,
+                                                            mass_contrast,
+                                                            velocity_norm_2LPT);
     };
     make_species(part, cdm, splines.ratio_cdm, splines.f_cdm, &eps_today.first, 0.0);
     const double baryon_shift = params.particle.baryon_lattice == "offset" ? 0.5 / double(baryon.Npart_1D) : 0.0;

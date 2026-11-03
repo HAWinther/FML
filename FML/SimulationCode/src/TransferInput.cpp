@@ -200,8 +200,7 @@ namespace SIMCODE {
                                              r.kpivot_mpc,
                                              RangePolicy::SourceExtrapolation,
                                              "InternalTransfers");
-            const double seconds =
-                std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+            const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
             const auto & c = settings.cosmo;
             std::cout << "\n#=====================================================\n"
                       << "# Transfer functions from the internal Einstein-Boltzmann solver\n"
@@ -397,7 +396,8 @@ namespace SIMCODE {
         if (r.type == "class") {
             if (r.gauge != "synchronous" and r.gauge != "newtonian")
                 throw std::invalid_argument("ic_input_gauge must be synchronous or newtonian (the gauge of the CLASS "
-                                            "run), not [" + r.gauge + "]");
+                                            "run), not [" +
+                                            r.gauge + "]");
             s.source = "class";
             s.class_root = r.filename;
             s.input_gauge = r.gauge == "newtonian" ? Gauge::Newtonian : Gauge::SynchronousCDM;
@@ -406,10 +406,9 @@ namespace SIMCODE {
                 throw std::invalid_argument("The CLASS run [" + r.filename + "] has h = " +
                                             std::to_string(provider->h()) + ", the simulation " + std::to_string(r.h));
             if (provider->has_density(Species::MassiveNeutrino) != (r.OmegaMNu > 0.0))
-                throw std::invalid_argument("The CLASS run [" + r.filename + "] " +
-                                            (r.OmegaMNu > 0.0 ? "has no" : "has") +
-                                            " massive neutrinos, the simulation has cosmology_OmegaMNu = " +
-                                            std::to_string(r.OmegaMNu));
+                throw std::invalid_argument(
+                    "The CLASS run [" + r.filename + "] " + (r.OmegaMNu > 0.0 ? "has no" : "has") +
+                    " massive neutrinos, the simulation has cosmology_OmegaMNu = " + std::to_string(r.OmegaMNu));
             return provider;
         }
 

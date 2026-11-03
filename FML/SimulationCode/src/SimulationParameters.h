@@ -1261,7 +1261,8 @@ namespace SIMCODE {
         /// Warnings about settings that are allowed but probably not what is wanted (task 0)
         void print_warnings() const {
             if (old_input_type_name and FML::ThisTask == 0)
-                std::cout << "WARNING: ic_type_of_input = transferinfofile is the old name of ic_type_of_input = camb\n";
+                std::cout
+                    << "WARNING: ic_type_of_input = transferinfofile is the old name of ic_type_of_input = camb\n";
 
             // The accurate force options (NUFFT, deconvolution, early-time force) remove the smoothing of the force
             // near the grid Nyquist frequency. With a grid finer than the particle grid the modes between the particle
@@ -1270,28 +1271,30 @@ namespace SIMCODE {
             const bool exact_force = force.density_method != "assignment" or force.deconvolve_window or
                                      force.interpolation_method == "nufft" or force.early_method != "none";
             if (exact_force and force.nmesh > particle.Npart_1D and FML::ThisTask == 0)
-                std::cout << "WARNING: force_density_method / force_deconvolve_window / force_early_method are meant for "
-                             "force_nmesh = particle_Npart_1D. With a finer force grid they amplify the discreteness of the "
-                             "particles (see README)\n";
+                std::cout
+                    << "WARNING: force_density_method / force_deconvolve_window / force_early_method are meant for "
+                       "force_nmesh = particle_Npart_1D. With a finer force grid they amplify the discreteness of the "
+                       "particles (see README)\n";
 
-            // Starting from the Big Bang the force at early times (particles close to the lattice) has to be accurate: the
-            // CIC and interlaced forces make the modes with k > ~k_Ny/8 grow wrongly there (see README)
+            // Starting from the Big Bang the force at early times (particles close to the lattice) has to be accurate:
+            // the CIC and interlaced forces make the modes with k > ~k_Ny/8 grow wrongly there (see README)
             if (ic.initial_redshift > 100.0 and force.early_method == "none" and
-                force.density_method == "assignment" and force.interpolation_method != "nufft" and
-                FML::ThisTask == 0)
-                std::cout << "WARNING: starting at z = " << ic.initial_redshift
-                          << " without force_early_method: use force_early_method = nufft (force_early_until_redshift ~ 10) "
-                             "for an accurate force while the particles are close to the lattice (see README)\n";
+                force.density_method == "assignment" and force.interpolation_method != "nufft" and FML::ThisTask == 0)
+                std::cout
+                    << "WARNING: starting at z = " << ic.initial_redshift
+                    << " without force_early_method: use force_early_method = nufft (force_early_until_redshift ~ 10) "
+                       "for an accurate force while the particles are close to the lattice (see README)\n";
 
-            // The baryon-CDM relative mode in the displacements of the particles (a ~50 kpc/h CDM-baryon offset per pair)
-            // gets a spurious discrete-mode growth once the force grid resolves it, and is partly lost in collapsed regions
-            // (P(delta_c - delta_b) ~ 0.5 of linear theory at z = 0 on large scales). See README
+            // The baryon-CDM relative mode in the displacements of the particles (a ~50 kpc/h CDM-baryon offset per
+            // pair) gets a spurious discrete-mode growth once the force grid resolves it, and is partly lost in
+            // collapsed regions (P(delta_c - delta_b) ~ 0.5 of linear theory at z = 0 on large scales). See README
             // (also the part of it that grows after zini with mass_ini)
-            if (particle.baryons and particle.baryon_relative_mode != "mass" and
-                force.nmesh > 2 * particle.Npart_1D and FML::ThisTask == 0)
-                std::cout << "WARNING: particle_baryon_relative_mode = " << particle.baryon_relative_mode
-                          << " with force_nmesh > 2 particle_Npart_1D: the baryon-CDM relative mode is not reliable (use "
-                             "particle_baryon_relative_mode = mass, see README)\n";
+            if (particle.baryons and particle.baryon_relative_mode != "mass" and force.nmesh > 2 * particle.Npart_1D and
+                FML::ThisTask == 0)
+                std::cout
+                    << "WARNING: particle_baryon_relative_mode = " << particle.baryon_relative_mode
+                    << " with force_nmesh > 2 particle_Npart_1D: the baryon-CDM relative mode is not reliable (use "
+                       "particle_baryon_relative_mode = mass, see README)\n";
         }
 
         /// Check that the parameters are consistent. Throws if not

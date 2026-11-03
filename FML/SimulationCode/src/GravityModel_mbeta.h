@@ -25,8 +25,7 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     using ParameterMap = FML::UTILS::ParameterMap;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
-    explicit GravityModelmbeta(std::shared_ptr<Cosmology> cosmo)
-        : GravityModelScreened<NDIM>(cosmo, "mbeta") {}
+    explicit GravityModelmbeta(std::shared_ptr<Cosmology> cosmo) : GravityModelScreened<NDIM>(cosmo, "mbeta") {}
 
     //========================================================================
     // The shared theory (built in init): beta(a), m(a), phi(a), mu(k, a) and the screening
@@ -45,11 +44,11 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
                 mbeta_params[1] - 3.0 - 2.0 * mbeta_params[3] > 0.0,
                 "Error in m(a) = m0H0a^m beta(a) = beta0 a^n models: n-4-2m <= -1.0 => phi(a) integral diverges");
         this->quasi_static = std::make_shared<const QuasiStaticGravity_MBeta>(this->cosmo->background(),
-                                                                             mbeta_params[0],
-                                                                             mbeta_params[1],
-                                                                             mbeta_params[2],
-                                                                             mbeta_params[3],
-                                                                             this->ahigh);
+                                                                              mbeta_params[0],
+                                                                              mbeta_params[1],
+                                                                              mbeta_params[2],
+                                                                              mbeta_params[3],
+                                                                              this->ahigh);
         // Important: call base-call initializer in the end
         GravityModelScreened<NDIM>::init();
     }

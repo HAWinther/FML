@@ -436,7 +436,7 @@ class OnionSlice {
         double maxval = -std::numeric_limits<double>::max();
         long nnegative = 0;
 #ifdef USE_OMP
-#pragma omp parallel for reduction(+ : mean, nobserved, count_observed, nnegative) reduction(max : maxval)               \
+#pragma omp parallel for reduction(+ : mean, nobserved, count_observed, nnegative) reduction(max : maxval)             \
     reduction(min : minval)
 #endif
         for (long ipix = 0; ipix < npix; ipix++) {

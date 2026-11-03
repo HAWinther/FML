@@ -242,8 +242,10 @@ class GravityModel {
         const double fnu = this->cosmo->f_nu(a);
         if (fnu > 0.0 and koverH0 > 0.0) {
             if (transfers) {
-                const double T_nu = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, koverH0 * H0_hmpc, a);
-                const double T_cb = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, koverH0 * H0_hmpc, a);
+                const double T_nu =
+                    transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, koverH0 * H0_hmpc, a);
+                const double T_cb =
+                    transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, koverH0 * H0_hmpc, a);
                 factor = (1.0 - fnu) + fnu * T_nu / T_cb;
             }
         }
@@ -285,10 +287,14 @@ class GravityModel {
         }
         // G_eff/G(a, k) delta(k) (kBox = k Box, koverH0 = kBox / H0Box)
         FFTWGrid<NDIM> density_geff;
-        FML::NBODY::compute_delta_fifth_force<NDIM>(
-            density_fourier, density_geff, [&](double kBox) { return GeffOverG(a, kBox / H0Box); });
-        compute_force_from_total_density(
-            density_geff, norm_poisson_equation, density_assignment_method_used, force_real, options);
+        FML::NBODY::compute_delta_fifth_force<NDIM>(density_fourier, density_geff, [&](double kBox) {
+            return GeffOverG(a, kBox / H0Box);
+        });
+        compute_force_from_total_density(density_geff,
+                                         norm_poisson_equation,
+                                         density_assignment_method_used,
+                                         force_real,
+                                         options);
     }
 
     //========================================================================
@@ -417,7 +423,8 @@ class GravityModel {
     std::shared_ptr<const QuasiStaticGravity> quasi_static;
     const QuasiStaticGravity & qs() const {
         if (not quasi_static)
-            throw std::runtime_error("GravityModel [" + name + "]: call init() first (the quasi-static theory is built "
+            throw std::runtime_error("GravityModel [" + name +
+                                     "]: call init() first (the quasi-static theory is built "
                                      "there)");
         return *quasi_static;
     }

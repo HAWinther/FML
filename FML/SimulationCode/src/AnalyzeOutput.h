@@ -110,7 +110,8 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
                 const double k = binning.kbin[i];
                 double plin = 0.0;
                 if (transfers)
-                    plin = sim.linear_pofk_cb(k, a) * sim.species_linear_ratio(SIMCODE::species_transfer(species), k, a);
+                    plin =
+                        sim.linear_pofk_cb(k, a) * sim.species_linear_ratio(SIMCODE::species_transfer(species), k, a);
                 fp << std::setw(15) << k << " " << std::setw(15) << binning.pofk[i] << " " << std::setw(15) << plin
                    << "\n";
             }
@@ -195,12 +196,14 @@ void output_particles(NBodySimulation<NDIM, T> & sim, double redshift, std::stri
     const auto & params = sim.get_parameters();
     const auto format = params.output.fileformat;
     const std::string fileprefix = snapshot_folder + "/" + "gadget_z" + redshift_to_string(redshift);
-    const auto header = SIMCODE::snapshot_header(*sim.get_cosmology(), 1.0 / (1.0 + redshift), params.simulation.boxsize);
+    const auto header =
+        SIMCODE::snapshot_header(*sim.get_cosmology(), 1.0 / (1.0 + redshift), params.simulation.boxsize);
 
     if (FML::ThisTask == 0) {
         std::cout << "\n";
         std::cout << "#=====================================================\n";
-        std::cout << "# Output in gadget " << (format == SIMCODE::ParticleFileFormat::HDF5 ? "HDF5 " : "") << "format\n";
+        std::cout << "# Output in gadget " << (format == SIMCODE::ParticleFileFormat::HDF5 ? "HDF5 " : "")
+                  << "format\n";
         std::cout << "# fileprefix  : " << fileprefix << "\n";
         std::cout << "#=====================================================\n";
     }
@@ -212,8 +215,12 @@ void output_particles(NBodySimulation<NDIM, T> & sim, double redshift, std::stri
         return;
     }
     auto & part = sim.get_particles();
-    SIMCODE::write_snapshot<NDIM>(
-        format, fileprefix, part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), header);
+    SIMCODE::write_snapshot<NDIM>(format,
+                                  fileprefix,
+                                  part.get_particles_ptr(),
+                                  part.get_npart(),
+                                  part.get_npart_total(),
+                                  header);
 }
 
 template <int NDIM, class T>
@@ -519,12 +526,8 @@ hybrid_bias_oneloop_mg(NBodySimulation<NDIM, T> & sim,
             io = int(i);
     std::vector<std::vector<double>> oneloop;
     if (io >= 0)
-        oneloop = oneloop_hybrid_bias_spectra_mg_from_tables(*mg_tables,
-                                                             io,
-                                                             pofk_linear_of_k,
-                                                             W_operators,
-                                                             klocal,
-                                                             zoptions);
+        oneloop =
+            oneloop_hybrid_bias_spectra_mg_from_tables(*mg_tables, io, pofk_linear_of_k, W_operators, klocal, zoptions);
     else
         oneloop = oneloop_hybrid_bias_spectra_mg(model,
                                                  {1.0 / (1.0 + redshift)},
@@ -613,7 +616,8 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
     zoptions.kmin_integration = std::max(1e-5, krange.first);
     if (settings.zeldovich) {
         zoptions.kmax_integration = std::min(std::max(kcut, kcut_displacement), krange.second);
-        auto zeldovich = zeldovich_hybrid_bias_spectra(pofk_linear_of_k, W_operators, W_displacement, grid.klocal, zoptions);
+        auto zeldovich =
+            zeldovich_hybrid_bias_spectra(pofk_linear_of_k, W_operators, W_displacement, grid.klocal, zoptions);
         write_prediction(zeldovich, "zeldovich", "Zel'dovich prediction", kcut_displacement);
     }
     if (settings.oneloop) {
@@ -628,8 +632,14 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
             const std::string description = model.name();
             if (FML::ThisTask == 0)
                 std::cout << "One-loop prediction with the LPT kernels of " << description << "\n";
-            const auto oneloop =
-                hybrid_bias_oneloop_mg(sim, model, redshift, krange, pofk_linear_of_k, W_operators, grid.klocal, zoptions);
+            const auto oneloop = hybrid_bias_oneloop_mg(sim,
+                                                        model,
+                                                        redshift,
+                                                        krange,
+                                                        pofk_linear_of_k,
+                                                        W_operators,
+                                                        grid.klocal,
+                                                        zoptions);
             write_prediction(oneloop,
                              "oneloop",
                              "One-loop LPT (CLEFT, no counterterms; the LPT kernels of " + description + ") prediction",
@@ -739,7 +749,9 @@ struct SpeciesPofk {
 /// the species: CDM and baryons (separate particles), the neutrino particles and the total matter
 template <int NDIM, class T>
 FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM>
-measure_species_power_spectra(NBodySimulation<NDIM, T> & sim, double redshift, std::vector<SpeciesPofk<NDIM>> & pofk_species) {
+measure_species_power_spectra(NBodySimulation<NDIM, T> & sim,
+                              double redshift,
+                              std::vector<SpeciesPofk<NDIM>> & pofk_species) {
     const auto & settings = sim.get_parameters().pofk;
     const double simulation_boxsize = sim.get_parameters().simulation.boxsize;
     const int pofk_nmesh = settings.nmesh;
@@ -750,9 +762,7 @@ measure_species_power_spectra(NBodySimulation<NDIM, T> & sim, double redshift, s
     FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> pofk_cb_binning(pofk_nmesh / 2);
     const auto nleftright = FML::INTERPOLATION::get_extra_slices(pofk_density_assignment_method);
     auto delta_of = [&](auto & particles) {
-        FML::GRID::FFTWGrid<NDIM> grid(pofk_nmesh,
-                                       nleftright.first,
-                                       nleftright.second + (pofk_interlacing ? 1 : 0));
+        FML::GRID::FFTWGrid<NDIM> grid(pofk_nmesh, nleftright.first, nleftright.second + (pofk_interlacing ? 1 : 0));
         if (pofk_interlacing) {
             FML::INTERPOLATION::particles_to_fourier_grid_interlacing(particles.get_particles_ptr(),
                                                                       particles.get_npart(),
@@ -792,10 +802,7 @@ measure_species_power_spectra(NBodySimulation<NDIM, T> & sim, double redshift, s
             delta_cb = std::move(delta);
             weight_first = info.weight_cb;
         } else {
-            FML::GRID::linear_combination_fourier<NDIM>(delta_cb,
-                                                        delta,
-                                                        icb == 1 ? weight_first : 1.0,
-                                                        info.weight_cb);
+            FML::GRID::linear_combination_fourier<NDIM>(delta_cb, delta, icb == 1 ? weight_first : 1.0, info.weight_cb);
         }
         icb++;
     });

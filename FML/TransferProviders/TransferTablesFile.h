@@ -221,9 +221,8 @@ namespace FML::INITIALCONDITIONS {
                 p = end;
             }
             if (row.size() != columns.size() or not trim(p).empty())
-                throw std::runtime_error(msg + "Line " + std::to_string(lineno) + " has " +
-                                         std::to_string(row.size()) + " numbers, the header " +
-                                         std::to_string(columns.size()) + " columns");
+                throw std::runtime_error(msg + "Line " + std::to_string(lineno) + " has " + std::to_string(row.size()) +
+                                         " numbers, the header " + std::to_string(columns.size()) + " columns");
             rows.push_back(std::move(row));
         }
         if (first)

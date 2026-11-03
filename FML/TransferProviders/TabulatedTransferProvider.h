@@ -127,14 +127,15 @@ namespace FML::INITIALCONDITIONS {
             krange = {t.k_hmpc.front(), t.k_hmpc.back(), t.a.front(), t.a.back()};
 
             const gsl_interp2d_type * type = na >= 4 ? gsl_interp2d_bicubic : gsl_interp2d_bilinear;
-            const auto make = [&](const TransferTables::DVector2D & table, Spline2D & spline, const std::string & what) {
-                if (table.size() != na)
-                    throw std::invalid_argument(msg + what + ": one table per redshift needed");
-                for (auto & row : table)
-                    if (row.size() != nk)
-                        throw std::invalid_argument(msg + what + ": one value per k needed");
-                spline.create(loga_nodes, logk, table, t.name + " " + what, type);
-            };
+            const auto make =
+                [&](const TransferTables::DVector2D & table, Spline2D & spline, const std::string & what) {
+                    if (table.size() != na)
+                        throw std::invalid_argument(msg + what + ": one table per redshift needed");
+                    for (auto & row : table)
+                        if (row.size() != nk)
+                            throw std::invalid_argument(msg + what + ": one value per k needed");
+                    spline.create(loga_nodes, logk, table, t.name + " " + what, type);
+                };
             for (int s = 0; s < TransferTables::nspecies; s++) {
                 have_d[s] = not t.density[s].empty();
                 have_v[s] = not t.velocity[s].empty();
@@ -260,7 +261,8 @@ namespace FML::INITIALCONDITIONS {
         t.A_s = A_s;
         t.n_s = n_s;
         t.k_pivot_mpc = k_pivot_mpc;
-        for (auto s : {Species::CDM, Species::Baryon, Species::CDMBaryon, Species::TotalMatter, Species::MassiveNeutrino}) {
+        for (auto s :
+             {Species::CDM, Species::Baryon, Species::CDMBaryon, Species::TotalMatter, Species::MassiveNeutrino}) {
             const int i = TransferTables::index(s);
             const bool dens = source.has_density(s), vel = source.has_velocity(s);
             if (dens)

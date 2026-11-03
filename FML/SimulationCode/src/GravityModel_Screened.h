@@ -57,7 +57,7 @@ class GravityModelScreened : public GravityModel<NDIM> {
     // The last exact (multigrid) solution in real space and its scale factor: the starting point of the next solve
     mutable FML::GRID::FFTWGrid<NDIM> multigrid_previous_solution;
     mutable double multigrid_previous_a{-1.0};
-    bool SIMCODE::GravityModelSettings::*exact_solution_flag;
+    bool SIMCODE::GravityModelSettings::* exact_solution_flag;
 
   public:
     template <int N>
@@ -70,7 +70,7 @@ class GravityModelScreened : public GravityModel<NDIM> {
     /// &GravityModelSettings::fofr_exact_solution (nullptr if the model has no multigrid solver)
     GravityModelScreened(std::shared_ptr<Cosmology> cosmo,
                          std::string name,
-                         bool SIMCODE::GravityModelSettings::*exact_solution_flag = nullptr)
+                         bool SIMCODE::GravityModelSettings::* exact_solution_flag = nullptr)
         : GravityModel<NDIM>(cosmo, name), exact_solution_flag(exact_solution_flag) {}
 
     /// The base parameters, the screening parameters and (if the model has a multigrid solver) the multigrid ones
@@ -106,8 +106,12 @@ class GravityModelScreened : public GravityModel<NDIM> {
             std::cout << "Adding fifth-force " << fifth_force_label() << " (screening)\n";
         switch (screening.type) {
             case ScreeningType::Potential:
-                FML::NBODY::compute_delta_fifth_force_potential_screening(
-                    density_fourier, density_fifth_force, coupling, factor, norm_poisson_equation * std::pow(H0Box / a, 2));
+                FML::NBODY::compute_delta_fifth_force_potential_screening(density_fourier,
+                                                                          density_fifth_force,
+                                                                          coupling,
+                                                                          factor,
+                                                                          norm_poisson_equation *
+                                                                              std::pow(H0Box / a, 2));
                 return;
             case ScreeningType::Density:
                 FML::NBODY::compute_delta_fifth_force_density_screening(density_fourier,
@@ -170,14 +174,16 @@ class GravityModelScreened : public GravityModel<NDIM> {
         FML::assert_mpi(ncoarse * factor == nfine and ncoarse % FML::NTasks == 0,
                         "multigrid_coarse_factor: the force grid / factor must be an integer divisible by the number "
                         "of MPI tasks");
-        FFTWGrid<NDIM> coarse(
-            ncoarse, density_fourier.get_n_extra_slices_left(), density_fourier.get_n_extra_slices_right());
+        FFTWGrid<NDIM> coarse(ncoarse,
+                              density_fourier.get_n_extra_slices_left(),
+                              density_fourier.get_n_extra_slices_right());
         if (method == "cic") {
             // The fine density in real space with factor - 1 extra slices on each side (the x-slabs of the two grids
             // line up as both sizes are divisible by the number of tasks)
             FFTWGrid<NDIM> fine(nfine, factor - 1, factor - 1);
-            FML::NUFFT::copy_fourier_modes<NDIM>(
-                density_fourier, fine, [](const std::array<int, NDIM> &) { return 1.0; });
+            FML::NUFFT::copy_fourier_modes<NDIM>(density_fourier, fine, [](const std::array<int, NDIM> &) {
+                return 1.0;
+            });
             fine.fftw_c2r();
             fine.communicate_boundaries();
             std::vector<double> w(2 * factor - 1);
@@ -213,8 +219,9 @@ class GravityModelScreened : public GravityModel<NDIM> {
         FML::assert_mpi(method == "sharpk", "multigrid_coarse_restriction must be sharpk or cic");
         // (A Gaussian filter with R = 0.5 or 1 coarse cells instead of the sharp cut avoids the delta < -1 but was
         // less accurate in a test with nDGP and f(R))
-        FML::NUFFT::copy_fourier_modes<NDIM>(
-            density_fourier, coarse, [](const std::array<int, NDIM> &) { return 1.0; });
+        FML::NUFFT::copy_fourier_modes<NDIM>(density_fourier, coarse, [](const std::array<int, NDIM> &) {
+            return 1.0;
+        });
         coarse.fftw_c2r();
         // The truncation rings: delta < -1 in a few cells (no solution of the DGP equation there). Set to -1
         long long nclamped = 0;
@@ -278,8 +285,9 @@ class GravityModelScreened : public GravityModel<NDIM> {
             FFTWGrid<NDIM> fine(density_fourier.get_nmesh(),
                                 density_fourier.get_n_extra_slices_left(),
                                 density_fourier.get_n_extra_slices_right());
-            FML::NUFFT::copy_fourier_modes<NDIM>(
-                density_fifth_force, fine, [](const std::array<int, NDIM> &) { return 1.0; });
+            FML::NUFFT::copy_fourier_modes<NDIM>(density_fifth_force, fine, [](const std::array<int, NDIM> &) {
+                return 1.0;
+            });
             density_fifth_force = std::move(fine);
         }
 
@@ -394,8 +402,11 @@ class GravityModelScreened : public GravityModel<NDIM> {
             if (FML::ThisTask == 0)
                 std::cout << "No fifth force (" << this->get_name() << ") at z = " << 1.0 / a - 1.0
                           << " > multigrid_start_redshift = " << multigrid_start_redshift << " (GR force)\n";
-            this->compute_force_from_total_density(
-                density_fourier, norm_poisson_equation, density_assignment_method_used, force_real, options);
+            this->compute_force_from_total_density(density_fourier,
+                                                   norm_poisson_equation,
+                                                   density_assignment_method_used,
+                                                   force_real,
+                                                   options);
             return;
         }
         if (before_start and FML::ThisTask == 0)
@@ -408,8 +419,12 @@ class GravityModelScreened : public GravityModel<NDIM> {
         else if (solve_exact_equation)
             compute_exact_fifth_force(a, H0Box, norm_poisson_equation, density_fourier, density_fifth_force);
         else if (use_screening_method)
-            compute_screened_fifth_force_blended(
-                a, H0Box, norm_poisson_equation, coupling, density_fourier, density_fifth_force);
+            compute_screened_fifth_force_blended(a,
+                                                 H0Box,
+                                                 norm_poisson_equation,
+                                                 coupling,
+                                                 density_fourier,
+                                                 density_fifth_force);
         else
             compute_linear_fifth_force(coupling, density_fourier, density_fifth_force);
 
@@ -426,8 +441,11 @@ class GravityModelScreened : public GravityModel<NDIM> {
         }
 
         // Compute total force
-        this->compute_force_from_total_density(
-            density_fifth_force, norm_poisson_equation, density_assignment_method_used, force_real, options);
+        this->compute_force_from_total_density(density_fifth_force,
+                                               norm_poisson_equation,
+                                               density_assignment_method_used,
+                                               force_real,
+                                               options);
     }
 };
 

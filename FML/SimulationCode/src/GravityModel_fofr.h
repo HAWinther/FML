@@ -40,7 +40,8 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
         return static_cast<const QuasiStaticGravity_HuSawicky &>(this->qs());
     }
     void init() override {
-        this->quasi_static = std::make_shared<const QuasiStaticGravity_HuSawicky>(this->cosmo->background(), fofr0, nfofr);
+        this->quasi_static =
+            std::make_shared<const QuasiStaticGravity_HuSawicky>(this->cosmo->background(), fofr0, nfofr);
         GravityModelScreened<NDIM>::init();
     }
 

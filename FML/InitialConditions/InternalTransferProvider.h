@@ -210,8 +210,7 @@ namespace FML::INITIALCONDITIONS {
             : gauge(gauge) {
             const auto & p = settings.cosmo;
             // alpha_s: primordial_power() and SimulationCode's primordial spectrum have no running
-            if (p.alpha_s != 0.0 ||
-                settings.pert.ic_adiabatic != 1.0 ||
+            if (p.alpha_s != 0.0 || settings.pert.ic_adiabatic != 1.0 ||
                 std::any_of(settings.pert.iso_amplitude.begin(), settings.pert.iso_amplitude.end(), [](double v) {
                     return v != 0;
                 }))

@@ -348,8 +348,8 @@ class Cosmology {
             return;
         }
         // (the columns of OmegaM(a) and OmegaDE(a) as before: 4 and 9)
-        const std::vector<std::string> columns{
-            "a", "H/H0", "dlogH/dloga", "Omega_m", "Omega_r", "Omega_nu", "Omega_cb", "Omega_k", "Omega_de"};
+        const std::vector<std::string>
+            columns{"a", "H/H0", "dlogH/dloga", "Omega_m", "Omega_r", "Omega_nu", "Omega_cb", "Omega_k", "Omega_de"};
         fp << "#";
         for (size_t i = 0; i < columns.size(); i++)
             fp << (i > 0 ? " " : "") << std::setw(15) << columns[i];
@@ -518,12 +518,12 @@ class Cosmology {
     // To add a model: a line here, its read function below and its parameters in Settings::fields (for_cosmology)
     //========================================================================
     struct ModelInfo {
-        std::string name;                          // cosmology_model
-        void (Cosmology::*read)();                 // sets up the model from its parameters (settings)
-        bool early_dark_energy{false};             // the output table goes to a = 1e-9
-        bool nonlinear_boost{false};               // has the EuclidEmulator2 nonlinear P(k) boost
-        bool tabulated{false};                     // the background is read from a table (no registry model)
-        bool dgp_crossover{false};                 // the DGP crossover scale (a check of E(0) = 1 in init)
+        std::string name;              // cosmology_model
+        void (Cosmology::*read)();     // sets up the model from its parameters (settings)
+        bool early_dark_energy{false}; // the output table goes to a = 1e-9
+        bool nonlinear_boost{false};   // has the EuclidEmulator2 nonlinear P(k) boost
+        bool tabulated{false};         // the background is read from a table (no registry model)
+        bool dgp_crossover{false};     // the DGP crossover scale (a check of E(0) = 1 in init)
     };
     static const std::vector<ModelInfo> & models() {
         static const std::vector<ModelInfo> list{
@@ -621,8 +621,8 @@ class Cosmology {
         tabulated_filename = settings.tabulated_filename;
         tabulated_format = settings.tabulated_format;
         if (tabulated_format != "H" and tabulated_format != "CLASS" and tabulated_format != "w")
-            throw std::runtime_error("Tabulated cosmology: unknown cosmology_tabulated_format = " +
-                                     tabulated_format + " (H, CLASS, w)");
+            throw std::runtime_error("Tabulated cosmology: unknown cosmology_tabulated_format = " + tabulated_format +
+                                     " (H, CLASS, w)");
     }
 
     double Omega(FML::COSMOLOGY::BACKGROUND::Component c, double a) const { return bg->Omega(c, std::log(a)); }
@@ -690,10 +690,9 @@ class Cosmology {
         namespace BG = FML::COSMOLOGY::BACKGROUND;
         auto data = read_columns();
         std::sort(data.begin(), data.end());
-        data.erase(std::unique(data.begin(),
-                               data.end(),
-                               [](const auto & l, const auto & r) { return l.first == r.first; }),
-                   data.end());
+        data.erase(
+            std::unique(data.begin(), data.end(), [](const auto & l, const auto & r) { return l.first == r.first; }),
+            data.end());
         std::vector<double> x, y;
         for (auto & d : data) {
             x.push_back(d.first);

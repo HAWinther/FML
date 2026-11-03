@@ -53,12 +53,11 @@ namespace SIMCODE {
     /// (the object the gravity model loaded)
     //=============================================================================
     template <int NDIM>
-    LinearPowerSpectrumTable
-    read_initial_power_spectrum(const ICSettings & ic,
-                                std::shared_ptr<Cosmology> cosmo,
-                                std::shared_ptr<GravityModel<NDIM>> grav,
-                                std::shared_ptr<GravityModel<NDIM>> grav_ic,
-                                std::shared_ptr<TransferProvider> & transfers) {
+    LinearPowerSpectrumTable read_initial_power_spectrum(const ICSettings & ic,
+                                                         std::shared_ptr<Cosmology> cosmo,
+                                                         std::shared_ptr<GravityModel<NDIM>> grav,
+                                                         std::shared_ptr<GravityModel<NDIM>> grav_ic,
+                                                         std::shared_ptr<TransferProvider> & transfers) {
 
         const double ainput = 1.0 / (1.0 + ic.input_redshift);
         const double aini = 1.0 / (1.0 + ic.initial_redshift);
@@ -76,7 +75,8 @@ namespace SIMCODE {
             transfers = grav->get_transfers();
             if (not transfers)
                 throw std::runtime_error("read_initial_power_spectrum: the gravity model has not loaded the transfer "
-                                         "functions of ic_type_of_input = " + ic.type_of_input_name());
+                                         "functions of ic_type_of_input = " +
+                                         ic.type_of_input_name());
         }
         auto type = ic.type_of_input == ICInputType::PowerSpectrum ?
                         FML::INITIALCONDITIONS::LinearInputType::PowerSpectrum :
