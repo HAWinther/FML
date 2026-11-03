@@ -63,7 +63,7 @@ test_timestepping: test_timestepping.o TransferInput.o $(INTERNAL_COSMO_OBJS) Gl
 test_fourier_resampling: test_fourier_resampling.o Global.o
 	$(LINK_EXE)
 
-test_random_fields: test_random_fields.o TransferInput.o $(INTERNAL_COSMO_OBJS) Global.o Spline.o ODESolver.o ParameterMap.o
+test_random_fields: test_random_fields.o TransferInput.o $(INTERNAL_COSMO_OBJS) Global.o Spline.o ODESolver.o ParameterMap.o FileUtils.o
 	$(LINK_EXE)
 
 test_lightcone: test_lightcone.o Global.o Spline.o ParameterMap.o
