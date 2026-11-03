@@ -209,6 +209,42 @@ namespace FML::COSMOLOGY::BACKGROUND {
         }
     };
 
+    /// The relativistic Fermi-Dirac occupation number f0(q) = 1/(e^q + 1) of the unperturbed neutrinos (q the momentum
+    /// in units of k_B T_nu0 / c)
+    inline double fermi_dirac_occupation(double q) { return 1.0 / (std::exp(q) + 1.0); }
+
+    /// Draws momenta q (units of k_B T_nu0 / c) from the Fermi-Dirac momentum distribution q^2 f0(q) on [0, qmax] by
+    /// inverting its CDF (trapezoidal on n points): sampler(u) with u uniform in (0, 1). For thermal velocities of
+    /// neutrino particles: v = q c / M_today (MassiveNeutrinoSpecies::M_today) today
+    class FermiDiracMomentumSampler {
+      public:
+        explicit FermiDiracMomentumSampler(int n = 8192, double qmax = 30.0) : q(n), cdf(n) {
+            for (int i = 0; i < n; i++)
+                q[i] = qmax * i / double(n - 1);
+            cdf[0] = 0.0;
+            for (int i = 1; i < n; i++) {
+                const double f0 = q[i - 1] * q[i - 1] * fermi_dirac_occupation(q[i - 1]);
+                const double f1 = q[i] * q[i] * fermi_dirac_occupation(q[i]);
+                cdf[i] = cdf[i - 1] + 0.5 * (f0 + f1) * (q[i] - q[i - 1]);
+            }
+            for (auto & c : cdf)
+                c /= cdf.back();
+        }
+        double operator()(double u) const {
+            const auto it = std::lower_bound(cdf.begin(), cdf.end(), u);
+            if (it == cdf.begin())
+                return 0.0;
+            if (it == cdf.end())
+                return q.back();
+            const size_t i = it - cdf.begin();
+            const double t = (u - cdf[i - 1]) / (cdf[i] - cdf[i - 1]);
+            return q[i - 1] + t * (q[i] - q[i - 1]);
+        }
+
+      private:
+        std::vector<double> q, cdf;
+    };
+
     /// One massive neutrino species of mass m [eV] with temperature T_ncdm_over_TCMB * T_CMB today:
     ///   rho = C a^-4 I_rho(M(x)), p = C a^-4 I_p(M), pseudo_p = C a^-4 I_pp(M),  M(x) = M_today e^x,
     ///   C = Omega_gamma (15/pi^4) (T_ncdm/T_CMB)^4,   dp/dx = -(5p - pseudo_p)

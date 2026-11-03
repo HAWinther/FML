@@ -97,7 +97,7 @@ void NBodySimulation<NDIM, T>::init() {
         const auto & masses = cosmo->get_neutrino_masses_eV();
         const double Tnu0_eV = cosmo->get_neutrino_temperature_eV(1.0);
         part_neutrinos.init(
-            cosmo->get_massive_neutrino_species(), Tnu0_eV, params.simulation.boxsize, params.particle.neutrino_deltaf);
+            cosmo->get_massive_neutrino_species(), params.simulation.boxsize, params.particle.neutrino_deltaf);
         if (FML::ThisTask == 0) {
             std::cout << "# Massive neutrinos as particles (delta-f weights: " << std::boolalpha
                       << params.particle.neutrino_deltaf << "). m_nu =";

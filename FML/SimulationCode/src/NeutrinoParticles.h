@@ -43,10 +43,10 @@ namespace SIMCODE {
         using Spline = FML::INTERPOLATION::SPLINE::Spline;
         using DVector = FML::INTERPOLATION::SPLINE::DVector;
 
-        /// species: the massive neutrino species of the background (their masses, equal or not), Tnu0_eV: the
-        /// temperature today, boxsize in Mpc/h, deltaf: use the delta-f weights (otherwise the weights are m_i / <m>,
-        /// 1 for one mass, and the density is 1 + delta)
-        void init(const NEUTRINOS::MassiveNeutrinoList & species, double _Tnu0_eV, double _boxsize, bool _deltaf) {
+        /// species: the massive neutrino species of the background (their masses, equal or not, and temperature),
+        /// boxsize in Mpc/h, deltaf: use the delta-f weights (otherwise the weights are m_i / <m>, 1 for one mass, and
+        /// the density is 1 + delta)
+        void init(const NEUTRINOS::MassiveNeutrinoList & species, double _boxsize, bool _deltaf) {
             if (species.empty())
                 throw std::invalid_argument("NeutrinoParticles: no massive neutrinos");
             nu_species = species;
@@ -60,9 +60,17 @@ namespace SIMCODE {
                 mean_mass += m / double(masses.size());
             }
             single_mass = std::all_of(masses.begin(), masses.end(), [&](double m) { return m == masses.front(); });
-            if (single_mass)
+            // m c^2 / (k_B T_nu0) of the species and of the mean mass (the temperature is the same for all)
+            M_today.clear();
+            for (auto & nu : species)
+                M_today.push_back(nu.M_today());
+            M_today_mean = 0.0;
+            for (double M : M_today)
+                M_today_mean += M / double(M_today.size());
+            if (single_mass) {
                 mean_mass = masses.front();
-            Tnu0_eV = _Tnu0_eV;
+                M_today_mean = M_today.front();
+            }
             boxsize = _boxsize;
             deltaf = _deltaf;
         }
@@ -158,7 +166,8 @@ namespace SIMCODE {
         std::vector<double> masses;
         double mean_mass{0.0};
         bool single_mass{true};
-        double Tnu0_eV{0.0};
+        std::vector<double> M_today; // m_i c^2 / (k_B T_nu0) of the species
+        double M_today_mean{0.0};    // the same for the mean mass
         double boxsize{1.0};
         bool deltaf{true};
     };
@@ -173,6 +182,7 @@ namespace SIMCODE {
                                            int random_seed,
                                            long long int id_offset) {
         namespace NU = SIMCODE::NEUTRINOS;
+        namespace BG = FML::COSMOLOGY::BACKGROUND;
         const double aini = 1.0 / (1.0 + zini);
         if (aini < 1.0 / (1.0 + SIMCODE::transfer_zmax(transfers)) * (1.0 - 1e-10))
             throw std::runtime_error("particle_neutrinos: the transfer functions only go up to z = " +
@@ -234,9 +244,9 @@ namespace SIMCODE {
                                                                                    "CIC");
         delta_nu.free();
 
-        // The thermal momenta (the velocity scale (T_nu0 / m_i) c of the particle's species)
-        const double vth_norm = Tnu0_eV / mean_mass * NU::c_code(boxsize);
-        const NU::FermiDiracSampler sampler;
+        // The thermal momenta (the velocity scale c k_B T_nu0 / (m_i c^2) = c / M_today of the particle's species)
+        const double vth_norm = NU::c_code(boxsize) / M_today_mean;
+        const BG::FermiDiracMomentumSampler sampler;
         auto * p = part.get_particles_ptr();
         double min_delta = 1e100;
 #ifdef USE_OMP
@@ -252,7 +262,7 @@ namespace SIMCODE {
             const double phi = 2.0 * M_PI * rng.uniform();
             const double sin_theta = std::sqrt(std::max(0.0, 1.0 - cos_theta * cos_theta));
             const double dir[3] = {sin_theta * std::cos(phi), sin_theta * std::sin(phi), cos_theta};
-            const double vth = single_mass ? vth_norm : Tnu0_eV / mass_of(p[i].id) * NU::c_code(boxsize);
+            const double vth = single_mass ? vth_norm : NU::c_code(boxsize) / M_today[species_of(p[i].id)];
             for (int idim = 0; idim < NDIM; idim++)
                 p[i].vel[idim] += y * vth * (NDIM == 3 ? dir[idim] : (idim == 0 ? 1.0 : 0.0));
         }
@@ -269,6 +279,7 @@ namespace SIMCODE {
     template <int NDIM>
     void NeutrinoParticles<NDIM>::update_weights() {
         namespace NU = SIMCODE::NEUTRINOS;
+        namespace BG = FML::COSMOLOGY::BACKGROUND;
         auto * p = part.get_particles_ptr();
         const size_t npart = part.get_npart();
         // Several masses: the weights carry m_i / <m>
@@ -277,7 +288,7 @@ namespace SIMCODE {
                 p[i].weight = single_mass ? 1.0f : float(mass_of(p[i].id) / mean_mass);
             return;
         }
-        const double y_over_v = 1.0 / NU::c_code(boxsize) * mean_mass / Tnu0_eV;
+        const double y_over_v = M_today_mean / NU::c_code(boxsize);
         double sum_w = 0.0, sum_w2 = 0.0;
 #ifdef USE_OMP
 #pragma omp parallel for reduction(+ : sum_w, sum_w2)
@@ -288,8 +299,8 @@ namespace SIMCODE {
                 v2 += p[i].vel[idim] * p[i].vel[idim];
             const double mass_ratio = single_mass ? 1.0 : mass_of(p[i].id) / mean_mass;
             const double y = std::sqrt(v2) * y_over_v * mass_ratio;
-            const double fi = NU::fermi_dirac(p[i].y_ini) * (1.0 + p[i].delta_ini);
-            const double w = single_mass ? 1.0 - NU::fermi_dirac(y) / fi : (1.0 - NU::fermi_dirac(y) / fi) * mass_ratio;
+            const double fi = BG::fermi_dirac_occupation(p[i].y_ini) * (1.0 + p[i].delta_ini);
+            const double w = (1.0 - BG::fermi_dirac_occupation(y) / fi) * (single_mass ? 1.0 : mass_ratio);
             p[i].weight = float(w);
             sum_w += w;
             sum_w2 += w * w;
