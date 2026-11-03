@@ -526,6 +526,16 @@ fof_linking_length = 0.2
 fof_nmesh_max = 0
 -- The size of the buffer region larger than largest halo, 2-3Mpc/h should be fine)
 fof_buffer_length_mpch = 3.0
+-- The halo catalogue halos_z<z>.txt (ascii) or halos_z<z>.hdf5 (HDF5, needs USE_HDF5=true)
+fof_output_fileformat = "ascii"
+-- The mass function massfunc_z<z>.txt: number of logarithmic bins and the mass range (Msun/h)
+fof_massfunction_nbins = 30
+fof_massfunction_Mmin = 1e10
+fof_massfunction_Mmax = 1e16
+-- Spherical overdensity (SO) masses around the FoF halos, e.g. {"200m", "500c", "vir"}
+-- (<Delta>m: Delta times the mean CDM+baryon density, <Delta>c: times the critical density,
+-- vir: Bryan & Norman 1998). Empty: none. The spheres must fit in fof_buffer_length_mpch
+fof_so_definitions = {}
 
 ------------------------------------------------------------
 -- Power-spectrum evaluation
