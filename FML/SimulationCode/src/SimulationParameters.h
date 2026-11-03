@@ -4,6 +4,7 @@
 
 #include "BaryonificationParameters.h"
 #include "ParameterDefaults.h"
+#include "ParameterFields.h"
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/ParameterMap/ParameterMap.h>
@@ -20,9 +21,10 @@
 
 //=============================================================================
 // The parameters of an N-body simulation, grouped by what they are used for.
-// Every setting is read (and printed) in one place: SimulationParameters::read
-// and the parameters are checked for consistency in SimulationParameters::validate
-// so that mistakes in the parameterfile are caught before the simulation starts
+// Every settings struct lists its parameters once in fields(f) (name, member, default, description, allowed
+// values and when they are used; see ParameterFields.h): the parameter table (ParameterSchema.h) and the reading
+// (SimulationParameters::read) both come from it. The parameters are checked for consistency in
+// SimulationParameters::validate so that mistakes in the parameterfile are caught before the simulation starts
 //=============================================================================
 
 namespace SIMCODE {
@@ -129,6 +131,60 @@ namespace SIMCODE {
     };
 
     //=============================================================================
+    /// The visitor of the fields(f) of the settings structs that reads them (ParameterFields.h)
+    //=============================================================================
+    class FieldReader {
+      public:
+        explicit FieldReader(ParameterReader & r) : r(r) {}
+        template <class V, class D>
+        void required(const std::string & name,
+                      V & value,
+                      const D &,
+                      const std::string &,
+                      const std::vector<std::string> & = {}) {
+            r.get(name, value);
+        }
+        template <class V, class D>
+        void optional(const std::string & name,
+                      V & value,
+                      const D &,
+                      const std::string &,
+                      const std::vector<std::string> & = {}) {
+            r.get(name, value);
+        }
+        template <class V, class D>
+        void always_optional(const std::string & name,
+                             V & value,
+                             const D &,
+                             const std::string &,
+                             const std::vector<std::string> & = {}) {
+            r.get(name, value);
+        }
+        template <class E, class D>
+        void choice(Need,
+                    const std::string & name,
+                    E & value,
+                    const D &,
+                    const std::string &,
+                    const EnumOptions<E> & options) {
+            r.get_choice(name, value, options);
+        }
+        /// (a parameter is read from the map if it is there, otherwise it gets its default: the conditions only
+        /// matter for the table)
+        template <class B>
+        void when(const Condition &, const std::string &, B && body) {
+            body();
+        }
+        template <class B>
+        void if_true(const std::string &, B && body) {
+            body();
+        }
+
+      private:
+        ParameterReader & r;
+    };
+
+    //=============================================================================
     // The groups of parameters
     //=============================================================================
 
@@ -141,6 +197,52 @@ namespace SIMCODE {
         int cola_LPT_order;            // The LPT order for COLA
         std::string fftw_planner;      // FFTW planner flag: estimate, measure, patient or exhaustive
         std::string fftw_wisdom_file;  // FFTW wisdom (plans) to read at the start ("" = none)
+
+        /// The parameters (see ParameterFields.h)
+        template <class F>
+        void fields(F && f) {
+            f.required("simulation_boxsize", boxsize, 0.0, "Boxsize of the simulation (Mpc/h)");
+            f.required("simulation_name", name, "", "Label used in the output filenames");
+            f.optional("simulation_use_cola", use_cola, false, "Use the COLA method");
+            f.optional("simulation_use_scaledependent_cola",
+                       use_scaledependent_cola,
+                       true,
+                       "If the growth is scale-dependent (massive neutrinos, k-dependent gravity models): use "
+                       "scale-dependent COLA. If false we use the k = 0 limit of the growth factors when doing COLA. "
+                       "With scale-independent growth (or without COLA) it is set to false (standard COLA gives the "
+                       "same result at a much lower cost)");
+            f.if_true("simulation_use_cola", [&]() {
+                f.optional("simulation_enforce_LPT_trajectories",
+                           enforce_LPT_trajectories,
+                           false,
+                           "Do not compute the PM force, just let particles follow the LPT trajectories");
+                f.optional("simulation_cola_LPT_order",
+                           cola_LPT_order,
+                           2,
+                           "The LPT order of COLA (1 or 2). Has to be <= ic_LPT_order. If < 1 COLA is turned off");
+            });
+
+            f.always_optional(
+                "simulation_fftw_planner",
+                fftw_planner,
+                "estimate",
+                "How FFTW makes its plans. estimate: no measuring (fast to start, slower transforms). "
+                "measure, patient, exhaustive: time candidate algorithms the first time each grid size is "
+                "transformed (faster transforms, often 1.5-2x for large grids, but planning can take "
+                "seconds to minutes). The plans made are written to fftw_wisdom_[simulation_name].txt in "
+                "the output folder (not for estimate): give that file as simulation_fftw_wisdom_file to "
+                "skip the planning in later runs",
+                {"estimate", "measure", "patient", "exhaustive"});
+            f.always_optional(
+                "simulation_fftw_wisdom_file",
+                fftw_wisdom_file,
+                "",
+                "FFTW wisdom (plans) to read at the start, e.g. the fftw_wisdom_[simulation_name].txt "
+                "written by an earlier run (\"\": none). Plans in it are used for the transforms they "
+                "match (same FFTW version, precision, grid size and number of threads; a different machine "
+                "or thread count gives plans that are valid but possibly slow). Other transforms are "
+                "planned with simulation_fftw_planner");
+        }
     };
 
     struct ForceSettings {
@@ -163,6 +265,145 @@ namespace SIMCODE {
         double early_until_redshift;                 // Use the early force for steps with z > this
         int early_interlacing_order;                 // early_method = interlaced: number of shifted grids
         std::string early_density_assignment_method; // early_method = interlaced: assignment kernel
+
+        /// The parameters (see ParameterFields.h)
+        template <class F>
+        void fields(F && f) {
+            f.required("force_nmesh", nmesh, 0, "Grid size used to compute the PM forces");
+            f.optional("force_density_assignment_method",
+                       density_assignment_method,
+                       "CIC",
+                       "Density assignment method",
+                       choices::assignment_methods);
+            f.optional("force_greens_function_kernel",
+                       greens_function_kernel,
+                       "fiducial",
+                       "Kernel for D^2 when solving the Poisson equation (fiducial = continuous)",
+                       choices::kernels);
+            f.optional(
+                "force_gradient_kernel",
+                gradient_kernel,
+                "fiducial",
+                "Kernel for D when computing the forces. fiducial = continuous if force_nmesh = "
+                "particle_Npart_1D, discrete_4pt if force_nmesh is up to 3x larger and discrete_2pt if it is even "
+                "larger (the continuous kernel gives "
+                "spurious forces from the particle lattice when the force grid is finer than it)",
+                choices::kernels);
+            f.always_optional("force_density_method",
+                              density_method,
+                              "assignment",
+                              "How the density field for the force is computed. assignment: particles to grid with "
+                              "force_density_assignment_method. nufft: the exact Fourier modes of the particle "
+                              "distribution (non-uniform FFT; no window function or aliasing). sheet: spectral sheet "
+                              "interpolation, R^NDIM tracers per particle placed by Fourier interpolating the "
+                              "displacement field x - q, assigned with force_density_assignment_method. sheet_nufft: "
+                              "sheet interpolation with the exact Fourier modes of the tracers (NUFFT). The force is "
+                              "always interpolated back to the particles with force_density_assignment_method",
+                              {"assignment", "nufft", "sheet", "sheet_nufft"});
+            f.always_optional("force_interlacing_order",
+                              interlacing_order,
+                              1,
+                              "Force interlacing: compute the force for this many copies of the particles shifted "
+                              "by a fraction of a cell relative to the grid and average (at the particles). 1: off, "
+                              "2: shift (1/2,1/2,1/2), 4: the half-cell face diagonals, 8: all half-cell corners, "
+                              "64: quarter cells. Cancels the leading aliasing of the density assignment and the force "
+                              "interpolation at the cost of this many force calculations");
+            f.always_optional("force_deconvolve_window",
+                              deconvolve_window,
+                              false,
+                              "Divide the force by W(k)^2 where W is the window function of "
+                              "force_density_assignment_method (corrects for the smoothing of the assignment and the "
+                              "interpolation). Unstable unless the aliasing is suppressed (force_interlacing_order "
+                              "> 1, see README)");
+            f.always_optional("force_early_method",
+                              early_method,
+                              "none",
+                              "A more accurate force at early times (when the particles are still close to the "
+                              "lattice and CIC is inaccurate): nufft (NUFFT density and interpolation) or interlaced "
+                              "(force_early_interlacing_order shifted grids with force_early_density_assignment_method "
+                              "and window deconvolution) for steps at z > force_early_until_redshift, then the "
+                              "normal force settings. none: off",
+                              {"none", "nufft", "interlaced"});
+            f.when(is_one_of("force_early_method", {"nufft", "interlaced"}),
+                   one_of_text("force_early_method", {"nufft", "interlaced"}),
+                   [&]() {
+                       f.always_optional("force_early_until_redshift",
+                                         early_until_redshift,
+                                         10.0,
+                                         "Use the early force for z > this");
+                   });
+            f.when(is_one_of("force_early_method", {"interlaced"}), "force_early_method = interlaced", [&]() {
+                f.always_optional("force_early_interlacing_order",
+                                  early_interlacing_order,
+                                  2,
+                                  "Number of shifted grids at early times");
+                f.always_optional("force_early_density_assignment_method",
+                                  early_density_assignment_method,
+                                  "TSC",
+                                  "Assignment kernel at early times",
+                                  choices::assignment_methods);
+            });
+            f.always_optional("force_interpolation_method",
+                              interpolation_method,
+                              "fiducial",
+                              "How the force is interpolated to the particles. assignment: with the "
+                              "force_density_assignment_method kernel. nufft: exact evaluation of the Fourier series "
+                              "of the force at the particles (non-uniform FFT). fiducial: nufft if "
+                              "force_density_method = nufft (then assignment and interpolation are both exact, so "
+                              "there is no self-force), otherwise assignment",
+                              {"fiducial", "assignment", "nufft"});
+            f.when(
+                [](const ParameterMap & p) {
+                    const auto d = p.get<std::string>("force_density_method");
+                    return d == "nufft" or d == "sheet_nufft" or
+                           p.get<std::string>("force_interpolation_method") == "nufft" or
+                           p.get<std::string>("force_early_method") == "nufft";
+                },
+                "force_density_method in {nufft, sheet_nufft} or force_interpolation_method = nufft or "
+                "force_early_method = nufft",
+                [&]() {
+                    f.always_optional("force_nufft_epsilon",
+                                      nufft_epsilon,
+                                      1e-5,
+                                      "Relative accuracy of the NUFFT (force_density_method = nufft or sheet_nufft, "
+                                      "force_interpolation_method = nufft or force_early_method = nufft)");
+                });
+            f.when(is_one_of("force_density_method", {"sheet", "sheet_nufft"}),
+                   one_of_text("force_density_method", {"sheet", "sheet_nufft"}),
+                   [&]() {
+                       f.always_optional("force_sheet_refinement",
+                                         sheet_refinement,
+                                         2,
+                                         "R: the number of tracers per particle per dimension for sheet interpolation");
+                   });
+            f.optional("force_linear_massive_neutrinos",
+                       linear_massive_neutrinos,
+                       false,
+                       "Include massive neutrinos in the density field using linear theory (requires "
+                       "ic_type_of_input = camb or class)");
+            f.always_optional(
+                "force_neutrino_energy_density",
+                neutrino_energy_density,
+                false,
+                "Source the Poisson equation with the energy density of the massive neutrinos instead of "
+                "their mass density: f_nu <E/m>(a) delta_nu with <E/m> = <sqrt(1 + (q/am)^2)> over the "
+                "Fermi-Dirac distribution (both for force_linear_massive_neutrinos, where delta_nu from "
+                "CAMB/CLASS is already the energy-density contrast, and for particle_neutrinos, where each "
+                "particle is weighted by its E/m and the neutrino P(k) is then the energy-density "
+                "contrast). Matters at high redshift for light neutrinos (<E/m> = 1.33 at z = 50 for "
+                "0.033 eV)");
+            f.always_optional("force_nbody_gauge",
+                              nbody_gauge,
+                              false,
+                              "Run in the N-body gauge: add the linear source from radiation, neutrinos and GR "
+                              "(made with CLASS by scripts/make_nbody_gauge_transfer.py) to the density field");
+            f.when(is_true("force_nbody_gauge"), "force_nbody_gauge = true", [&]() {
+                f.required("force_nbody_gauge_filename",
+                           nbody_gauge_filename,
+                           "",
+                           "The table T_extra(k,z) (nbgauge_extra.txt from scripts/make_nbody_gauge_transfer.py)");
+            });
+        }
     };
 
     struct ICSettings {
@@ -204,6 +445,9 @@ namespace SIMCODE {
         bool reconstruct_interlacing;               // Use interlacing (probably not)?
         bool reconstruct_exact;                     // Reconstruct the LPT fields exactly from pos+vel
 
+        // ic_type_of_input = internal: the settings of the Einstein-Boltzmann solver (read by TransferInput.h)
+        std::vector<std::string> internal_solver_parameters;
+
         double a_initial() const { return 1.0 / (1.0 + initial_redshift); }
         /// The value of ic_type_of_input
         std::string type_of_input_name() const {
@@ -230,6 +474,161 @@ namespace SIMCODE {
             return random_field_type == ICRandomFieldType::ReadParticles or
                    random_field_type == ICRandomFieldType::ReadPhases;
         }
+
+        /// The parameters (see ParameterFields.h)
+        template <class F>
+        void fields(F && f) {
+            f.required("ic_initial_redshift", initial_redshift, 0.0, "The initial redshift of the simulation");
+            f.required("ic_random_seed", random_seed, 1234, "The random seed");
+            f.choice(Need::Optional,
+                     "ic_random_generator",
+                     random_generator,
+                     "MT19937",
+                     "The random number generator (GSL is gsl_rng_ranlxd1 as used in 2LPTic, for comparisons)",
+                     {{"GSL", RandomGeneratorType::GSL}, {"MT19937", RandomGeneratorType::MT19937}});
+            f.choice(Need::AlwaysOptional,
+                     "ic_random_field_backend",
+                     random_field_backend,
+                     "ngenic",
+                     "Fourier mode sampling: ngenic preserves legacy line seeds and IC; philox uses "
+                     "independent mode counters",
+                     {{"ngenic", RandomFieldBackend::NGenIC}, {"philox", RandomFieldBackend::Philox}});
+            f.required("ic_nmesh", nmesh, 0, "The grid size used to generate the IC");
+            f.always_optional(
+                "ic_lattice_offset",
+                lattice_offset,
+                "fiducial",
+                "Offset of the initial particle lattice from the nodes of the force grid. fiducial: half a "
+                "force grid cell if force_nmesh > particle_Npart_1D, otherwise none. With particles "
+                "exactly on the nodes of a finer grid, CIC responds to the size of the displacement and gives large "
+                "spurious forces (see the force grid section of README.md)",
+                {"fiducial", "none", "half_force_cell"});
+            f.choice(Need::Required,
+                     "ic_type_of_input",
+                     type_of_input,
+                     "powerspectrum",
+                     "The input: powerspectrum (file with [k (h/Mpc), P(k) (Mpc/h)^3]), transferfunction (file "
+                     "with [k (h/Mpc), T(k) Mpc^2]), camb (a transfer info file listing T(k,z) files from CAMB; the "
+                     "old name "
+                     "transferinfofile is also accepted; the "
+                     "columns are read by name from the header, or by position: 13 CAMB, 9 AxionCAMB, 7 old CAMB / "
+                     "CLASS with format=camb), class (native CLASS output: ic_input_filename is the root of the run, "
+                     "with format = class, output = mTk,vTk, write_background = yes) or internal (FML's "
+                     "Einstein-Boltzmann solver run with the cosmology of the simulation, cosmology_model included; "
+                     "the old name internal_transfer is also accepted). See FML/TransferProviders and README.md",
+                     {{"powerspectrum", ICInputType::PowerSpectrum},
+                      {"transferfunction", ICInputType::TransferFunction},
+                      {"camb", ICInputType::CambFiles},
+                      {"class", ICInputType::ClassFiles},
+                      {"internal", ICInputType::InternalTransfer},
+                      {"internal_transfer", ICInputType::InternalTransfer},
+                      {"transferinfofile", ICInputType::CambFiles}});
+            f.when(is_one_of("ic_type_of_input", {"class"}), "ic_type_of_input = class", [&]() {
+                f.optional("ic_input_gauge",
+                           input_gauge,
+                           "synchronous",
+                           "The gauge CLASS was run in (newtonian is converted to the CDM-synchronous gauge the IC "
+                           "need; it needs output = mTk,vTk)",
+                           {"synchronous", "newtonian"});
+            });
+            f.optional("ic_input_filename",
+                       input_filename,
+                       "",
+                       "The input file (needed except for ic_type_of_input = internal, where it is an optional .ini "
+                       "file of the Einstein-Boltzmann solver with its precision, recombination and reionization "
+                       "settings: see ic_internal_solver_parameters)");
+            f.when(is_one_of("ic_type_of_input", {"internal", "internal_transfer"}),
+                   "ic_type_of_input = internal",
+                   [&]() {
+                       f.optional(
+                           "ic_internal_solver_parameters",
+                           internal_solver_parameters,
+                           std::vector<std::string>{},
+                           "Settings of the Einstein-Boltzmann solver as \"name=value\", e.g. {\"Yp=0.245\", "
+                           "\"z_reion=8\", \"precision=fast\"}, applied after those of the .ini file "
+                           "ic_input_filename (the names of Cosmology/EinsteinBoltzmannSolver/params/default.ini). "
+                           "The cosmology (h, OmegaB, ..., model and its parameters, A_s, n_s, k_pivot, the "
+                           "neutrino masses, preset), alpha_s and the k-grid (pert_k_min, pert_k_max, pert_n_k, "
+                           "pert_dk_max) are set by the simulation and are an error here and in the .ini file. "
+                           "See README.md");
+                   });
+            f.required("ic_input_redshift", input_redshift, 0.0, "The redshift of the input P(k) / T(k)");
+            f.optional("ic_fix_amplitude",
+                       fix_amplitude,
+                       true,
+                       "Fix the amplitude of the modes when generating the random field");
+            f.optional("ic_reverse_phases", reverse_phases, false, "Reverse the phases (for paired simulations)");
+            f.choice(Need::Optional,
+                     "ic_random_field_type",
+                     random_field_type,
+                     "gaussian",
+                     "Type of IC: gaussian, nongaussian, read_particles (read a GADGET file and use that, "
+                     "reconstructing the LPT fields if COLA) or read_phases (take the phases from a GADGET file)",
+                     {{"gaussian", ICRandomFieldType::Gaussian},
+                      {"nongaussian", ICRandomFieldType::NonGaussian},
+                      {"read_particles", ICRandomFieldType::ReadParticles},
+                      {"read_phases", ICRandomFieldType::ReadPhases}});
+            f.optional("ic_LPT_order", LPT_order, 2, "The LPT order used to make the IC");
+            f.optional("ic_sigma8_normalization",
+                       sigma8_normalization,
+                       false,
+                       "Normalize P(k) to a given sigma8 (otherwise use the input)");
+            f.if_true("ic_sigma8_normalization", [&]() {
+                f.optional("ic_sigma8_redshift", sigma8_redshift, 0.0, "The redshift of the sigma8 value");
+                f.optional("ic_sigma8", sigma8, 0.8, "The sigma8 value to normalize to");
+            });
+            f.optional("ic_use_gravity_model_GR",
+                       use_gravity_model_GR,
+                       false,
+                       "For modified gravity: the input P(k) is for LCDM, use GR growth factors to scale it to the "
+                       "initial redshift (same IC as the LCDM simulation)");
+            f.when(is_one_of("ic_random_field_type", {"nongaussian"}), "ic_random_field_type = nongaussian", [&]() {
+                f.required("ic_fnl_type",
+                           fnl_type,
+                           "local",
+                           "Type of non-gaussianity",
+                           {"local", "equilateral", "orthogonal"});
+                f.required("ic_fnl", fnl, 100.0, "The value of fNL");
+                f.required(
+                    "ic_fnl_redshift",
+                    fnl_redshift,
+                    0.0,
+                    "The redshift of the potential Phi = (3/5) g(z) zeta (g = D/a) that fNL multiplies: 0 is the "
+                    "usual large-scale-structure convention, a matter-era redshift (e.g. 30) the CMB convention");
+            });
+            f.when(is_one_of("ic_random_field_type", {"read_particles", "read_phases"}),
+                   "ic_random_field_type in {read_particles, read_phases}",
+                   [&]() {
+                       f.required("ic_reconstruct_gadgetfilepath",
+                                  reconstruct_gadgetfilepath,
+                                  "",
+                                  "Path to the GADGET files without the file number: binary (path.0, path.1, ...) "
+                                  "or HDF5 (path.hdf5 or path.0.hdf5, ...), detected automatically");
+                       f.optional("ic_reconstruct_assigment_method",
+                                  reconstruct_assigment_method,
+                                  "CIC",
+                                  "Density assignment method used to reconstruct the density field",
+                                  choices::assignment_methods);
+                       f.optional("ic_reconstruct_smoothing_filter",
+                                  reconstruct_smoothing_filter,
+                                  "sharpk",
+                                  "Filter used to remove small-scale modes from the reconstructed density field",
+                                  choices::smoothing_filters);
+                       f.optional("ic_reconstruct_dimless_smoothing_scale",
+                                  reconstruct_dimless_smoothing_scale,
+                                  0.0,
+                                  "Smoothing scale R/boxsize of the reconstructed density field");
+                       f.optional("ic_reconstruct_interlacing",
+                                  reconstruct_interlacing,
+                                  false,
+                                  "Use interlacing when reconstructing the density field");
+                       f.optional("ic_reconstruct_exact",
+                                  reconstruct_exact,
+                                  false,
+                                  "Reconstruct the LPT fields exactly from the positions and velocities (always works "
+                                  "for 1LPT IC; for 2LPT IC the particles must come from a regular grid)");
+                   });
+        }
     };
 
     struct ParticleSettings {
@@ -242,6 +641,75 @@ namespace SIMCODE {
         int neutrino_Npart_1D;            // Number of neutrino particles per dimension (0: particle_Npart_1D)
         bool neutrino_deltaf;             // Use the delta-f weights (false: plain particles, for testing)
         int sort_every_nsteps; // Reorder the particles in memory by position every this many steps (0: never)
+
+        /// The parameters (see ParameterFields.h)
+        template <class F>
+        void fields(F && f) {
+            f.required("particle_Npart_1D", Npart_1D, 0, "Number of CDM+baryon particles per dimension");
+            f.always_optional("particle_baryons",
+                              baryons,
+                              false,
+                              "Evolve CDM and baryons as two sets of particles (particle_Npart_1D^3 of each, IC from "
+                              "the CDM and baryon transfer functions at zini). false: one set of CDM+baryon particles");
+            f.always_optional("particle_neutrinos",
+                              neutrinos,
+                              false,
+                              "Massive neutrinos as particles with the delta-f method (Elbers et al. 2021): thermal "
+                              "Fermi-Dirac velocities, relativistic equations of motion, the particles only carry the "
+                              "perturbation. Replaces force_linear_massive_neutrinos (needs cosmology_OmegaMNu > 0, "
+                              "camb or class, timestep_method = Quinn, no COLA)");
+            f.if_true("particle_neutrinos", [&]() {
+                f.always_optional(
+                    "particle_neutrino_Npart_1D",
+                    neutrino_Npart_1D,
+                    0,
+                    "particle_neutrinos: number of neutrino particles per dimension (0: particle_Npart_1D)");
+                f.always_optional(
+                    "particle_neutrino_deltaf",
+                    neutrino_deltaf,
+                    true,
+                    "particle_neutrinos: use the delta-f weights (false: plain particles, much noisier; for "
+                    "testing)");
+            });
+            f.if_true("particle_baryons", [&]() {
+                f.always_optional(
+                    "particle_baryon_lattice",
+                    baryon_lattice,
+                    "same",
+                    "particle_baryons: start the baryons from the same lattice as the CDM (same, recommended: "
+                    "the baryon-CDM difference then follows linear theory on all scales) or from a lattice "
+                    "offset by half a particle spacing (offset: gives a spurious baryon-CDM difference on "
+                    "small scales)",
+                    {"same", "offset"});
+                f.always_optional(
+                    "particle_baryon_relative_mode",
+                    baryon_relative_mode,
+                    "displacement",
+                    "particle_baryons: how the baryon-CDM relative density is set up. displacement: each "
+                    "species is displaced by its own linear field (T_i/T_cb) and has its own velocity. mass: "
+                    "both species follow the total CDM+baryon flow (same displacements and velocities) and the "
+                    "relative density is carried by the particle masses m_i = 1 + eps_i(q) with eps_i = "
+                    "delta_cb(zini) (T_i - T_cb)(z=0) / T_cb(zini), the linear relative mode today "
+                    "(Hahn, Rampf & Uhlemann 2021; exact at z = 0 in linear theory, the relative mode is then "
+                    "constant in time). mass_ini: common displacements, masses with eps_i = T_i / T_cb - 1 at "
+                    "zini and each species keeps its own velocity (the relative mode then grows from zini). "
+                    "The mass modes need particle_baryon_lattice = same",
+                    {"displacement", "mass", "mass_ini"});
+            });
+            f.optional("particle_allocation_factor",
+                       allocation_factor,
+                       1.5,
+                       "Allocate this factor more particles than the average per task (particles move between "
+                       "tasks)");
+            f.always_optional("particle_sort_every_nsteps",
+                              sort_every_nsteps,
+                              0,
+                              "Reorder the particles in memory by position (blocks of 4^3 force-grid cells) every this "
+                              "many steps, which makes the density assignment and the force interpolation faster when "
+                              "the particles have moved far from their initial (lattice) order. 0: never. Changes the "
+                              "results only by round-off (the order of the sums) and the order of the particles in "
+                              "the output");
+        }
     };
 
     struct TimestepSettings {
@@ -251,6 +719,48 @@ namespace SIMCODE {
         double cola_nLPT;           // nLPT. For method = Tassev
         ScaleFactorSpacing spacing; // linear, logarithmic, powerlaw, growthfactor
         double spacing_power;       // For spacing = powerlaw
+
+        /// The parameters (see ParameterFields.h)
+        template <class F>
+        void fields(F && f) {
+            f.required("timestep_nsteps",
+                       nsteps,
+                       std::vector<int>{0},
+                       "Number of steps between the outputs (one per output redshift). If only one number it is the "
+                       "total number of steps");
+            f.optional("timestep_algorithm",
+                       algorithm,
+                       "KDK",
+                       "The time-stepping algorithm (only KDK is implemented)",
+                       {"KDK"});
+            f.choice(Need::Optional,
+                     "timestep_method",
+                     method,
+                     "Quinn",
+                     "The time-stepping method. Quinn: standard leapfrog. Tassev: modified leapfrog for COLA. "
+                     "FastPM: leapfrog that follows linear growth exactly (Feng et al. 2016). BullFrog: follows "
+                     "2LPT growth after every step (Rampf, List & Hahn 2024), not for COLA",
+                     {{"Quinn", TimestepMethod::Quinn},
+                      {"Tassev", TimestepMethod::Tassev},
+                      {"FastPM", TimestepMethod::FastPM},
+                      {"BullFrog", TimestepMethod::BullFrog}});
+            f.optional("timestep_cola_nLPT", cola_nLPT, -2.5, "The nLPT parameter of the Tassev time-stepping");
+            f.choice(Need::Optional,
+                     "timestep_scalefactor_spacing",
+                     spacing,
+                     "linear",
+                     "Spacing of the steps in the scale factor (powerlaw: uniform in a^timestep_spacing_power, "
+                     "growthfactor: uniform in the linear growth factor D(a), as in Rampf, List & Hahn 2024)",
+                     {{"linear", ScaleFactorSpacing::Linear},
+                      {"logarithmic", ScaleFactorSpacing::Logarithmic},
+                      {"powerlaw", ScaleFactorSpacing::Powerlaw},
+                      {"growthfactor", ScaleFactorSpacing::GrowthFactor}});
+            f.when(is_one_of("timestep_scalefactor_spacing", {"powerlaw"}),
+                   "timestep_scalefactor_spacing = powerlaw",
+                   [&]() {
+                       f.optional("timestep_spacing_power", spacing_power, 1.0, "The steps are uniform in a^power");
+                   });
+        }
     };
 
     struct FoFSettings {
@@ -264,6 +774,58 @@ namespace SIMCODE {
         double massfunction_Mmin;      // ...and the range (Msun/h)
         double massfunction_Mmax;
         std::vector<std::string> so_definitions; // Spherical overdensity masses around the halos (e.g. 200m, 500c, vir)
+
+        /// The parameters (see ParameterFields.h)
+        template <class F>
+        void fields(F && f) {
+            f.optional("fof", enabled, false, "Locate friends-of-friends halos at every output");
+            f.if_true("fof", [&]() {
+                f.optional("fof_nmin_per_halo",
+                           nmin_per_halo,
+                           20,
+                           "Minimum number of particles per halo (of one species with particle_baryons)");
+                f.optional("fof_linking_length",
+                           linking_length,
+                           0.2,
+                           "The linking length in units of the mean particle separation (of one species with "
+                           "particle_baryons)");
+                f.optional("fof_nmesh_max",
+                           nmesh_max,
+                           0,
+                           "Maximum grid size used to bin particles to speed up the linking (0: the code chooses)");
+                f.optional(
+                    "fof_buffer_length_mpch",
+                    buffer_length_mpch,
+                    3.0,
+                    "Buffer region (larger than the largest halo) from neighbor tasks (Mpc/h). The code warns if "
+                    "halos reach its edge (they might then be cut off and found twice)");
+                f.always_optional("fof_output_fileformat",
+                                  output_fileformat,
+                                  "ascii",
+                                  "fof: the halo catalogue halos_z<z>.txt (ascii, one row per halo) or halos_z<z>.hdf5 "
+                                  "(HDF5, compile with USE_HDF5=true)",
+                                  {"ascii", "HDF5"});
+                f.always_optional("fof_massfunction_nbins",
+                                  massfunction_nbins,
+                                  30,
+                                  "fof: number of logarithmic bins of the mass function");
+                f.always_optional("fof_massfunction_Mmin",
+                                  massfunction_Mmin,
+                                  1e10,
+                                  "fof: smallest mass of the mass function (Msun/h)");
+                f.always_optional("fof_massfunction_Mmax",
+                                  massfunction_Mmax,
+                                  1e16,
+                                  "fof: largest mass of the mass function (Msun/h)");
+                f.always_optional("fof_so_definitions",
+                                  so_definitions,
+                                  std::vector<std::string>{},
+                                  "fof: spherical overdensity masses around the FoF halos, e.g. {\"200m\", \"500c\", "
+                                  "\"vir\"} (<Delta>m: Delta times the mean CDM+baryon density, <Delta>c: the critical "
+                                  "density, vir: Bryan & Norman 1998). Empty: none. The spheres must fit in "
+                                  "fof_buffer_length_mpch");
+            });
+        }
     };
 
     struct PofkSettings {
@@ -273,6 +835,35 @@ namespace SIMCODE {
         bool subtract_shotnoise;               // Subtract shotnoise? (also used for P(k) every step)
         bool every_step;                       // P(k) of the force density field at every step
         std::string density_assignment_method; // Density assignment method (NGP, CIC, ...)
+
+        /// The parameters (see ParameterFields.h)
+        template <class F>
+        void fields(F && f) {
+            f.optional("pofk", enabled, false, "Compute the power-spectrum at every output");
+            f.always_optional("pofk_every_step",
+                              every_step,
+                              true,
+                              "Write P(k) of the density field used for the force at every step (cheap; same grid "
+                              "and assignment as the force, the window is deconvolved): pofk_<name>_cb_z<z>.txt in "
+                              "output_folder");
+            f.when([](const ParameterMap & p) { return p.get<bool>("pofk") or p.get<bool>("pofk_every_step"); },
+                   "pofk = true or pofk_every_step = true",
+                   [&]() {
+                       f.optional("pofk_subtract_shotnoise",
+                                  subtract_shotnoise,
+                                  false,
+                                  "Subtract shot-noise (pofk and pofk_every_step)");
+                   });
+            f.if_true("pofk", [&]() {
+                f.required("pofk_nmesh", nmesh, 0, "Grid size");
+                f.optional("pofk_interlacing", interlacing, false, "Use interlaced grids to reduce aliasing");
+                f.optional("pofk_density_assignment_method",
+                           density_assignment_method,
+                           "CIC",
+                           "Density assignment method",
+                           choices::assignment_methods);
+            });
+        }
     };
 
     struct PofkMultipoleSettings {
@@ -282,6 +873,29 @@ namespace SIMCODE {
         bool subtract_shotnoise;               // Subtract shotnoise for P0?
         int ellmax;                            // Compute P_ell for ell=0,2,4,...,ellmax
         std::string density_assignment_method; // Density assignment method (NGP, CIC, ...)
+
+        /// The parameters (see ParameterFields.h)
+        template <class F>
+        void fields(F && f) {
+            f.optional("pofk_multipole",
+                       enabled,
+                       false,
+                       "Compute the redshift space multipoles P_ell(k) at every output");
+            f.if_true("pofk_multipole", [&]() {
+                f.required("pofk_multipole_nmesh", nmesh, 0, "Grid size");
+                f.optional("pofk_multipole_interlacing", interlacing, false, "Use interlaced grids to reduce aliasing");
+                f.optional("pofk_multipole_subtract_shotnoise",
+                           subtract_shotnoise,
+                           false,
+                           "Subtract shot-noise from P0");
+                f.optional("pofk_multipole_ellmax", ellmax, 4, "Compute P_ell for ell = 0, 2, ..., ellmax");
+                f.optional("pofk_multipole_density_assignment_method",
+                           density_assignment_method,
+                           "CIC",
+                           "Density assignment method",
+                           choices::assignment_methods);
+            });
+        }
     };
 
     struct BispectrumSettings {
@@ -291,6 +905,26 @@ namespace SIMCODE {
         std::string density_assignment_method; // Density assignment method (NGP, CIC, ...)
         bool interlacing;                      // Use interlacing for alias reduction?
         bool subtract_shotnoise;               // Subtract shotnoise?
+
+        /// The parameters (see ParameterFields.h)
+        template <class F>
+        void fields(F && f) {
+            f.optional("bispectrum", enabled, false, "Compute the bispectrum at every output");
+            f.if_true("bispectrum", [&]() {
+                f.required("bispectrum_nmesh", nmesh, 0, "Grid size");
+                f.required("bispectrum_nbins",
+                           nbins,
+                           0,
+                           "Number of k-bins (memory and time scale as nbins grids and nbins^3 integrals)");
+                f.optional("bispectrum_density_assignment_method",
+                           density_assignment_method,
+                           "CIC",
+                           "Density assignment method",
+                           choices::assignment_methods);
+                f.optional("bispectrum_interlacing", interlacing, true, "Use interlaced grids to reduce aliasing");
+                f.optional("bispectrum_subtract_shotnoise", subtract_shotnoise, false, "Subtract shot-noise");
+            });
+        }
     };
 
     struct HybridBiasSettings {
@@ -306,6 +940,70 @@ namespace SIMCODE {
         bool zeldovich;                        // Also output the Zel'dovich prediction
         bool oneloop;                          // Also output the one-loop LPT prediction
         std::string oneloop_kernels;           // EdS or model (the scale-dependent kernels of the gravity model)
+
+        /// The parameters (see ParameterFields.h)
+        template <class F>
+        void fields(F && f) {
+            f.always_optional("hybridbias",
+                              enabled,
+                              false,
+                              "Compute the hybrid bias (Lagrangian bias basis) spectra P_ab(k) at every output: the "
+                              "cross spectra of the operators 1, delta_L, delta_L^2, s^2, nabla^2 delta_L advected "
+                              "with the particles (Modi et al. 2020, Kokron et al. 2021). delta_L is the linear field "
+                              "of the IC scaled to the output redshift with the growth factor of the gravity model");
+            f.if_true("hybridbias", [&]() {
+                f.required("hybridbias_nmesh", nmesh, 0, "Grid size for the advected fields");
+                f.optional("hybridbias_noperators",
+                           noperators,
+                           5,
+                           "Use the first noperators of (1, delta, delta^2, s^2, nabla^2 delta): 15 spectra for 5");
+                f.optional("hybridbias_density_assignment_method",
+                           density_assignment_method,
+                           "CIC",
+                           "Density assignment method",
+                           choices::assignment_methods);
+                f.optional("hybridbias_interlacing", interlacing, true, "Use interlaced grids to reduce aliasing");
+                f.optional("hybridbias_subtract_shotnoise",
+                           subtract_shotnoise,
+                           false,
+                           "Subtract the Poisson shot noise mean(w_a w_b)/Npart (the usual basis spectra keep it)");
+                f.optional("hybridbias_smoothing_scale",
+                           smoothing_scale,
+                           0.0,
+                           "Smooth the linear field with this scale (Mpc/h) before forming the operators (0: none)");
+                f.optional("hybridbias_smoothing_filter",
+                           smoothing_filter,
+                           "gaussian",
+                           "The smoothing filter",
+                           choices::smoothing_filters);
+                f.optional(
+                    "hybridbias_kcut_over_nyquist",
+                    kcut_over_nyquist,
+                    1.0,
+                    "Keep only the modes with k < this times the Nyquist frequency of the particle lattice in the "
+                    "linear field (a spherical cut, so the operators are isotropic as assumed in the LPT "
+                    "prediction). 0: keep all the modes of the lattice grid (a cube)");
+                f.optional("hybridbias_zeldovich",
+                           zeldovich,
+                           false,
+                           "Also write the Zel'dovich (resummed 1LPT) prediction of the spectra with the same cut and "
+                           "smoothing of the operators: hybridbias_zeldovich_z<z>.txt");
+                f.optional("hybridbias_oneloop",
+                           oneloop,
+                           false,
+                           "Also write the one-loop LPT (CLEFT) prediction of the spectra (no counterterms): "
+                           "hybridbias_oneloop_z<z>.txt");
+                f.always_optional(
+                    "hybridbias_oneloop_kernels",
+                    oneloop_kernels,
+                    "EdS",
+                    "The kernels of the one-loop prediction. EdS: the Einstein-de Sitter kernels with the "
+                    "linear P(k) of the gravity model. model: the scale- and time-dependent LPT kernels "
+                    "of the gravity model (f(R) and DGP with their screening if gravity_model_screening, "
+                    "the other models from G_eff(k,a) without screening, LCDM for GR)",
+                    {"EdS", "model"});
+            });
+        }
     };
 
     struct OutputSettings {
@@ -316,6 +1014,21 @@ namespace SIMCODE {
 
         /// Path for a file in the output folder
         std::string path(const std::string & filename) const { return folder + (folder == "" ? "" : "/") + filename; }
+
+        /// The parameters (see ParameterFields.h)
+        template <class F>
+        void fields(F && f) {
+            f.required("output_folder", folder, "", "Folder to put the output in (\"\" is the current folder)");
+            f.required("output_redshifts", redshifts, std::vector<double>{}, "The output redshifts (decreasing)");
+            f.optional("output_particles", particles, true, "Write the particles at the output redshifts");
+            f.choice(Need::Optional,
+                     "output_fileformat",
+                     fileformat,
+                     "GADGET",
+                     "File format for the particles. GADGET: binary GADGET files. HDF5: GADGET HDF5 files "
+                     "(compile with USE_HDF5=true)",
+                     {{"GADGET", ParticleFileFormat::GADGET}, {"HDF5", ParticleFileFormat::HDF5}});
+        }
     };
 
     struct LightconeSettings {
@@ -336,6 +1049,69 @@ namespace SIMCODE {
         double da_maps;               // Roughly the size of the bins in a for the maps
         bool use_chunkpix;            // Store the maps with chunkpix
         int nside_chunks;             // Healpix nside of the chunks
+
+        /// The parameters (see ParameterFields.h)
+        template <class F>
+        void fields(F && f) {
+            f.optional("lightcone", enabled, false, "Make a lightcone");
+            f.if_true("lightcone", [&]() {
+                f.optional("plc_pos_observer",
+                           pos_observer,
+                           std::vector<double>{0.0, 0.0, 0.0},
+                           "Position of the observer in units of the boxsize");
+                f.optional("plc_z_init", z_init, 0.0, "The redshift we start recording the lightcone");
+                f.optional("plc_z_finish", z_finish, 0.0, "The redshift we stop recording the lightcone");
+                f.optional("plc_boundary_mpch",
+                           boundary_mpch,
+                           20.0,
+                           "Boundary region around the shell to make sure we get all particles (Mpc/h)");
+                f.optional("plc_use_replicas",
+                           use_replicas,
+                           false,
+                           "Replicate the box to get the sky coverage we want");
+                f.optional("plc_ndim_rep",
+                           ndim_rep,
+                           0,
+                           "Number of dimensions with replicas in both directions (3D: 0 = octant, 3 = full sky)");
+                f.optional("plc_output_gadgetfile",
+                           output_gadgetfile,
+                           false,
+                           "Output the lightcone particles in GADGET format");
+                f.optional("plc_output_asciifile", output_asciifile, false, "Output the lightcone particles in ascii");
+                f.always_optional("plc_output_hdf5file",
+                                  output_hdf5file,
+                                  false,
+                                  "Output the lightcone particles as GADGET HDF5 files (needs USE_HDF5; positions in "
+                                  "Mpc/h, peculiar velocities in km/s)");
+                f.optional("plc_output_in_batches", output_in_batches, false, "Output in batches to save memory");
+                f.always_optional(
+                    "plc_relativistic_effects",
+                    relativistic_effects,
+                    false,
+                    "Store the potential Phi/c^2 at the lightcone particles and write it with the radial "
+                    "velocity, the cosmological redshift and the observed redshift 1 + z_obs = (1 + z)(1 + "
+                    "v_r/c - Phi/c^2) (Doppler + gravitational redshift; observer at rest with Phi = 0) to "
+                    "the HDF5 and ascii lightcone files. With plc_make_onion_density_maps also Healpix maps "
+                    "of Phi/c^2 at the shells. Phi from the Poisson equation with the density used for the "
+                    "force (the GR potential also for modified gravity models). Costs one extra FFT per "
+                    "step while recording the lightcone");
+                f.optional("plc_make_onion_density_maps",
+                           make_onion_density_maps,
+                           false,
+                           "Make (Healpix) density maps delta(z, theta)");
+                f.if_true("plc_make_onion_density_maps", [&]() {
+                    f.optional("plc_nside", nside, 256, "Healpix nside of the maps (npix = 12 nside^2; at most 8192)");
+                    f.optional("plc_da_maps", da_maps, 0.02, "Roughly the size of the bins in a for the maps");
+                    f.optional("plc_use_chunkpix",
+                               use_chunkpix,
+                               false,
+                               "Store the maps with chunkpix (useful for sparse maps)");
+                    f.if_true("plc_use_chunkpix", [&]() {
+                        f.optional("plc_nside_chunks", nside_chunks, 8, "Healpix nside of the chunks (at most 8192)");
+                    });
+                });
+            });
+        }
     };
 
     struct SimulationParameters;
@@ -409,200 +1185,34 @@ namespace SIMCODE {
         void read(const ParameterMap & param, bool growth_is_scaledependent) {
             ParameterReader r(param);
 
-            // Every parameter is read with r.get: its value in the parameterfile (or its default if its condition in
-            // the table holds) or else the default of the table (ParameterSchema.h), so the conditions and the
-            // defaults are only in the table
+            // Every parameter is read by the fields() of its settings: its value in the parameterfile (or its default
+            // if its condition in the table holds) or else the default of the table, so the conditions and the defaults
+            // are only in fields()
+            FieldReader f(r);
+            simulation.fields(f);
 
-            // General parameters and COLA
-            r.get("simulation_name", simulation.name);
-            r.get("simulation_boxsize", simulation.boxsize);
-            r.get("simulation_use_cola", simulation.use_cola);
-            r.get("simulation_use_scaledependent_cola", simulation.use_scaledependent_cola);
-            r.get("simulation_fftw_planner", simulation.fftw_planner);
-            r.get("simulation_fftw_wisdom_file", simulation.fftw_wisdom_file);
-            r.get("simulation_enforce_LPT_trajectories", simulation.enforce_LPT_trajectories);
-            r.get("simulation_cola_LPT_order", simulation.cola_LPT_order);
-
-            // Computing forces
-            r.get("force_nmesh", force.nmesh);
-            r.get("force_density_assignment_method", force.density_assignment_method);
-            r.get("force_linear_massive_neutrinos", force.linear_massive_neutrinos);
-            r.get("force_neutrino_energy_density", force.neutrino_energy_density);
-            r.get("force_nbody_gauge", force.nbody_gauge);
-            r.get("force_nbody_gauge_filename", force.nbody_gauge_filename);
-            r.get("force_greens_function_kernel", force.greens_function_kernel);
-            r.get("force_gradient_kernel", force.gradient_kernel);
-            r.get("force_density_method", force.density_method);
-            r.get("force_nufft_epsilon", force.nufft_epsilon);
-            r.get("force_sheet_refinement", force.sheet_refinement);
-            r.get("force_interlacing_order", force.interlacing_order);
-            r.get("force_deconvolve_window", force.deconvolve_window);
-            r.get("force_early_method", force.early_method);
-            r.get("force_early_until_redshift", force.early_until_redshift);
-            r.get("force_early_interlacing_order", force.early_interlacing_order);
-            r.get("force_early_density_assignment_method", force.early_density_assignment_method);
-            r.get("force_interpolation_method", force.interpolation_method);
+            force.fields(f);
             if (force.interpolation_method == "fiducial")
                 force.interpolation_method = force.density_method == "nufft" ? "nufft" : "assignment";
 
-            // Initial conditions
-            r.get_choice("ic_type_of_input",
-                         ic.type_of_input,
-                         {{"powerspectrum", ICInputType::PowerSpectrum},
-                          {"transferfunction", ICInputType::TransferFunction},
-                          {"camb", ICInputType::CambFiles},
-                          {"transferinfofile", ICInputType::CambFiles}, // the old name of camb
-                          {"class", ICInputType::ClassFiles},
-                          {"internal", ICInputType::InternalTransfer},
-                          {"internal_transfer", ICInputType::InternalTransfer}}); // the old name of internal
+            ic.fields(f);
             if (param.get<std::string>("ic_type_of_input") == "transferinfofile" and FML::ThisTask == 0)
                 std::cout
                     << "WARNING: ic_type_of_input = transferinfofile is the old name of ic_type_of_input = camb\n";
-            r.get("ic_input_gauge", ic.input_gauge);
-            r.get("ic_input_filename", ic.input_filename);
-            r.get_choice("ic_random_field_type",
-                         ic.random_field_type,
-                         {{"gaussian", ICRandomFieldType::Gaussian},
-                          {"nongaussian", ICRandomFieldType::NonGaussian},
-                          {"read_particles", ICRandomFieldType::ReadParticles},
-                          {"read_phases", ICRandomFieldType::ReadPhases}});
-            r.get("ic_input_redshift", ic.input_redshift);
-            r.get("ic_use_gravity_model_GR", ic.use_gravity_model_GR);
-            r.get("ic_initial_redshift", ic.initial_redshift);
-            r.get("ic_nmesh", ic.nmesh);
-            r.get("ic_lattice_offset", ic.lattice_offset);
-            r.get("ic_random_seed", ic.random_seed);
-            r.get_choice("ic_random_generator",
-                         ic.random_generator,
-                         {{"GSL", RandomGeneratorType::GSL}, {"MT19937", RandomGeneratorType::MT19937}});
-            r.get_choice("ic_random_field_backend",
-                         ic.random_field_backend,
-                         {{"ngenic", RandomFieldBackend::NGenIC}, {"philox", RandomFieldBackend::Philox}});
-            r.get("ic_LPT_order", ic.LPT_order);
-            r.get("ic_fix_amplitude", ic.fix_amplitude);
-            r.get("ic_reverse_phases", ic.reverse_phases);
-            r.get("ic_fnl_type", ic.fnl_type);
-            r.get("ic_fnl", ic.fnl);
-            r.get("ic_fnl_redshift", ic.fnl_redshift);
-            r.get("ic_sigma8_normalization", ic.sigma8_normalization);
-            r.get("ic_sigma8_redshift", ic.sigma8_redshift);
-            r.get("ic_sigma8", ic.sigma8);
-            r.get("ic_reconstruct_gadgetfilepath", ic.reconstruct_gadgetfilepath);
-            r.get("ic_reconstruct_assigment_method", ic.reconstruct_assigment_method);
-            r.get("ic_reconstruct_smoothing_filter", ic.reconstruct_smoothing_filter);
-            r.get("ic_reconstruct_dimless_smoothing_scale", ic.reconstruct_dimless_smoothing_scale);
-            r.get("ic_reconstruct_interlacing", ic.reconstruct_interlacing);
-            r.get("ic_reconstruct_exact", ic.reconstruct_exact);
 
-            // Particles
-            r.get("particle_Npart_1D", particle.Npart_1D);
-            r.get("particle_allocation_factor", particle.allocation_factor);
-            r.get("particle_sort_every_nsteps", particle.sort_every_nsteps);
-            r.get("particle_baryons", particle.baryons);
-            r.get("particle_baryon_lattice", particle.baryon_lattice);
-            r.get("particle_baryon_relative_mode", particle.baryon_relative_mode);
-            r.get("particle_neutrinos", particle.neutrinos);
-            r.get("particle_neutrino_Npart_1D", particle.neutrino_Npart_1D);
-            r.get("particle_neutrino_deltaf", particle.neutrino_deltaf);
+            particle.fields(f);
             if (particle.neutrinos and particle.neutrino_Npart_1D <= 0)
                 particle.neutrino_Npart_1D = particle.Npart_1D;
 
-            // Time-stepping
-            r.get("timestep_nsteps", timestep.nsteps);
-            r.get_choice("timestep_method",
-                         timestep.method,
-                         {{"Quinn", TimestepMethod::Quinn},
-                          {"Tassev", TimestepMethod::Tassev},
-                          {"FastPM", TimestepMethod::FastPM},
-                          {"BullFrog", TimestepMethod::BullFrog}});
-            r.get("timestep_algorithm", timestep.algorithm);
-            r.get("timestep_cola_nLPT", timestep.cola_nLPT);
-            r.get_choice("timestep_scalefactor_spacing",
-                         timestep.spacing,
-                         {{"linear", ScaleFactorSpacing::Linear},
-                          {"logarithmic", ScaleFactorSpacing::Logarithmic},
-                          {"powerlaw", ScaleFactorSpacing::Powerlaw},
-                          {"growthfactor", ScaleFactorSpacing::GrowthFactor}});
-            r.get("timestep_spacing_power", timestep.spacing_power);
-
-            // FoF halofinding
-            r.get("fof", fof.enabled);
-            r.get("fof_nmin_per_halo", fof.nmin_per_halo);
-            r.get("fof_linking_length", fof.linking_length);
-            r.get("fof_nmesh_max", fof.nmesh_max);
-            r.get("fof_buffer_length_mpch", fof.buffer_length_mpch);
-            r.get("fof_output_fileformat", fof.output_fileformat);
-            r.get("fof_massfunction_nbins", fof.massfunction_nbins);
-            r.get("fof_massfunction_Mmin", fof.massfunction_Mmin);
-            r.get("fof_massfunction_Mmax", fof.massfunction_Mmax);
-            r.get("fof_so_definitions", fof.so_definitions);
-
+            timestep.fields(f);
+            fof.fields(f);
             baryonification.read(r);
-
-            // Power-spectrum
-            r.get("pofk", pofk.enabled);
-            r.get("pofk_every_step", pofk.every_step);
-            r.get("pofk_subtract_shotnoise", pofk.subtract_shotnoise);
-            r.get("pofk_nmesh", pofk.nmesh);
-            r.get("pofk_interlacing", pofk.interlacing);
-            r.get("pofk_density_assignment_method", pofk.density_assignment_method);
-
-            // Power-spectrum multipoles
-            r.get("pofk_multipole", pofk_multipole.enabled);
-            r.get("pofk_multipole_nmesh", pofk_multipole.nmesh);
-            r.get("pofk_multipole_interlacing", pofk_multipole.interlacing);
-            r.get("pofk_multipole_subtract_shotnoise", pofk_multipole.subtract_shotnoise);
-            r.get("pofk_multipole_ellmax", pofk_multipole.ellmax);
-            r.get("pofk_multipole_density_assignment_method", pofk_multipole.density_assignment_method);
-
-            // Bispectrum
-            r.get("bispectrum", bispectrum.enabled);
-            r.get("bispectrum_nmesh", bispectrum.nmesh);
-            r.get("bispectrum_nbins", bispectrum.nbins);
-            r.get("bispectrum_density_assignment_method", bispectrum.density_assignment_method);
-            r.get("bispectrum_interlacing", bispectrum.interlacing);
-            r.get("bispectrum_subtract_shotnoise", bispectrum.subtract_shotnoise);
-
-            // Hybrid bias spectra
-            r.get("hybridbias", hybridbias.enabled);
-            r.get("hybridbias_nmesh", hybridbias.nmesh);
-            r.get("hybridbias_noperators", hybridbias.noperators);
-            r.get("hybridbias_density_assignment_method", hybridbias.density_assignment_method);
-            r.get("hybridbias_interlacing", hybridbias.interlacing);
-            r.get("hybridbias_subtract_shotnoise", hybridbias.subtract_shotnoise);
-            r.get("hybridbias_smoothing_scale", hybridbias.smoothing_scale);
-            r.get("hybridbias_smoothing_filter", hybridbias.smoothing_filter);
-            r.get("hybridbias_kcut_over_nyquist", hybridbias.kcut_over_nyquist);
-            r.get("hybridbias_zeldovich", hybridbias.zeldovich);
-            r.get("hybridbias_oneloop", hybridbias.oneloop);
-            r.get("hybridbias_oneloop_kernels", hybridbias.oneloop_kernels);
-
-            // Output
-            r.get("output_redshifts", output.redshifts);
-            r.get("output_particles", output.particles);
-            r.get_choice("output_fileformat",
-                         output.fileformat,
-                         {{"GADGET", ParticleFileFormat::GADGET}, {"HDF5", ParticleFileFormat::HDF5}});
-            r.get("output_folder", output.folder);
-
-            // Lightcone
-            r.get("lightcone", lightcone.enabled);
-            r.get("plc_pos_observer", lightcone.pos_observer);
-            r.get("plc_z_init", lightcone.z_init);
-            r.get("plc_z_finish", lightcone.z_finish);
-            r.get("plc_boundary_mpch", lightcone.boundary_mpch);
-            r.get("plc_use_replicas", lightcone.use_replicas);
-            r.get("plc_ndim_rep", lightcone.ndim_rep);
-            r.get("plc_output_gadgetfile", lightcone.output_gadgetfile);
-            r.get("plc_output_asciifile", lightcone.output_asciifile);
-            r.get("plc_output_hdf5file", lightcone.output_hdf5file);
-            r.get("plc_output_in_batches", lightcone.output_in_batches);
-            r.get("plc_relativistic_effects", lightcone.relativistic_effects);
-            r.get("plc_make_onion_density_maps", lightcone.make_onion_density_maps);
-            r.get("plc_nside", lightcone.nside);
-            r.get("plc_da_maps", lightcone.da_maps);
-            r.get("plc_use_chunkpix", lightcone.use_chunkpix);
-            r.get("plc_nside_chunks", lightcone.nside_chunks);
+            pofk.fields(f);
+            pofk_multipole.fields(f);
+            bispectrum.fields(f);
+            hybridbias.fields(f);
+            output.fields(f);
+            lightcone.fields(f);
 
             validate();
 

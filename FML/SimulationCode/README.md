@@ -23,11 +23,18 @@ All the parameters, with their type, default value, when they are used and the a
 example. String parameters are checked against the allowed values, and names in the parameterfile that are not
 parameters (e.g. misspelled ones) give a warning with a suggestion for what was meant.
 
-A new parameter of the simulation is one entry in the table in `src/ParameterSchema.h` (name, default, the condition
-for when it is used, description), a field in its settings struct and one `r.get(...)` line in
-`SimulationParameters::read` (`src/SimulationParameters.h`): the value is that of the parameterfile or else the
-default of the table, so the default and the condition are only in the table. Then regenerate `PARAMETERS.md` with
-`./nbody --parameters PARAMETERS.md` (CI checks that it is up to date).
+A new parameter of the simulation is a member of its settings struct in `src/SimulationParameters.h` and one line in
+the `fields(f)` of that struct, e.g.
+
+```cpp
+f.optional("fof_linking_length", linking_length, 0.2, "The linking length in units of the mean particle separation");
+```
+
+(name, member, default, description, and the allowed values for a string; `f.if_true("fof", ...)` / `f.when(...)`
+for when it is used, `f.choice(...)` for a string read into an enum, see `src/ParameterFields.h`). The parameter
+table (`src/ParameterSchema.h`, which also has the gravity model parameters; the cosmology parameters are the `fields()` of `Cosmology::Settings` in `src/Cosmology.h`) and the reading both
+come from it. Then regenerate `PARAMETERS.md` with `./nbody --parameters PARAMETERS.md` (CI checks that it is up to
+date).
 
 By default the simulation is compiled for one particle type that can run every configuration (position, velocity,
 ID, the 1LPT and 2LPT displacements for COLA, the Lagrangian position and a mass: 112 bytes per particle in 3D, see
@@ -41,7 +48,7 @@ How the code is organised:
 | File | Contents |
 |---|---|
 | `src/Main.cpp` | Reads the parameterfile, creates the models and runs the simulation |
-| `src/ParameterSchema.h` | All the parameters (read, checked and documented from one table) |
+| `src/ParameterSchema.h` | All the parameters (read, checked and documented from one table; the simulation settings from the `fields()` in `src/SimulationParameters.h`) |
 | `src/Models.h` | The list of cosmologies and gravity models that can be selected |
 | `src/Particles.h` | The particle types |
 | `src/Simulation.h` | The simulation class; its members are in `src/SimulationInit.h` (parameters, initial conditions), `src/SimulationStep.h` (time-stepping loop, output) and `src/SimulationDensity.h` (the density field of the force) |
@@ -56,7 +63,7 @@ How the code is organised:
 
 # Models
 
-The two main concepts in the code is that of a Cosmology and a GravityModel. The former contains all of the background evolution quantities (Hubble function etc.) and the latter everything related to growth of perturbations: LPT growth factors and how to compute forces from the density field. The reason these things are separate is that it makes it possible to combine different thing while keeping the rest fixed. The background expansion comes from FML's background module (`FML/Cosmology/Background`, shared with the Einstein-Boltzmann solver): `src/Cosmology.h` maps `cosmology_model` and its parameters to a model of that module's registry (LCDM, w0waCDM, DGP, JBD, Quintessence, EDE, Tabulated). A new cosmology is a new background model there plus its mapping in `src/Cosmology.h`; a new gravity model is a class that inherits from GravityModel. Add either to the list in `src/Models.h` and the parameters it reads to `src/ParameterSchema.h`.
+The two main concepts in the code is that of a Cosmology and a GravityModel. The former contains all of the background evolution quantities (Hubble function etc.) and the latter everything related to growth of perturbations: LPT growth factors and how to compute forces from the density field. The reason these things are separate is that it makes it possible to combine different thing while keeping the rest fixed. The background expansion comes from FML's background module (`FML/Cosmology/Background`, shared with the Einstein-Boltzmann solver): `src/Cosmology.h` maps `cosmology_model` and its parameters to a model of that module's registry (LCDM, w0waCDM, DGP, JBD, Quintessence, EDE, Tabulated). A new cosmology is a new background model there plus its mapping in `src/Cosmology.h`; a new gravity model is a class that inherits from GravityModel. Add either to the list in `src/Models.h`; the parameters of a cosmology go in `Cosmology::Settings::fields` (`src/Cosmology.h`, under `f.for_cosmology({"<model>"}, ...)`), those of a gravity model in `src/ParameterSchema.h`.
 
 The models that are currently implemented are
 

@@ -22,7 +22,9 @@
 
 //=============================================================================
 // All the parameters of the SimulationCode in one table: name, type, default value,
-// when it is used, allowed values and a description. This table is used to
+// when it is used, allowed values and a description. The parameters of the simulation settings come from the
+// fields() of their structs (SimulationParameters.h, see ParameterFields.h); the cosmology and gravity model
+// parameters are listed here. This table is used to
 //  - read the parameterfile (read_parameterfile)
 //  - check string parameters against the allowed values
 //  - warn about names in the parameterfile that are not parameters (typos)
@@ -36,15 +38,7 @@
 
 namespace SIMCODE {
 
-    using ParameterMap = FML::UTILS::ParameterMap;
     using ParameterValue = FML::UTILS::ParameterTypes;
-    using Condition = std::function<bool(const ParameterMap &)>;
-
-    enum class Need {
-        Required,      // Must be in the parameterfile
-        Optional,      // Takes the default value if not in the file (unless all_parameters_must_be_in_file)
-        AlwaysOptional // Takes the default value if not in the file (experimental options)
-    };
 
     struct ParameterSpec {
         std::string name;
@@ -95,10 +89,6 @@ namespace SIMCODE {
 
         std::vector<ParameterSpec> specs;
 
-      private:
-        std::string current_section;
-        std::vector<std::pair<Condition, std::string>> conditions;
-
         template <class V>
         static ParameterValue to_value(V v) {
             if constexpr (std::is_convertible_v<V, std::string> and not std::is_same_v<V, bool>)
@@ -106,6 +96,10 @@ namespace SIMCODE {
             else
                 return ParameterValue(v);
         }
+
+      private:
+        std::string current_section;
+        std::vector<std::pair<Condition, std::string>> conditions;
 
         void add(const std::string & name,
                  ParameterValue default_value,
@@ -128,23 +122,83 @@ namespace SIMCODE {
         }
     };
 
-    // Conditions on earlier parameters
-    inline Condition is_true(const std::string & name) {
-        return [name](const ParameterMap & p) { return p.get<bool>(name); };
-    }
-    inline Condition is_one_of(const std::string & name, const std::vector<std::string> & values) {
-        return [name, values](const ParameterMap & p) {
-            return std::find(values.begin(), values.end(), p.get<std::string>(name)) != values.end();
-        };
-    }
-    inline std::string one_of_text(const std::string & name, const std::vector<std::string> & values) {
-        if (values.size() == 1)
-            return name + " = " + values[0];
-        std::string text = name + " in {";
-        for (size_t i = 0; i < values.size(); i++)
-            text += (i ? ", " : "") + values[i];
-        return text + "}";
-    }
+    //=============================================================================
+    /// The visitor of the fields(f) of the settings structs (ParameterFields.h) that adds their parameters to the
+    /// table
+    //=============================================================================
+    class SchemaFields {
+      public:
+        explicit SchemaFields(SchemaBuilder & b) : b(b) {}
+
+        template <class V, class D>
+        void required(const std::string & name,
+                      V &,
+                      const D & default_value,
+                      const std::string & description,
+                      std::vector<std::string> choices = {}) {
+            add<V>(Need::Required, name, default_value, description, choices);
+        }
+        template <class V, class D>
+        void optional(const std::string & name,
+                      V &,
+                      const D & default_value,
+                      const std::string & description,
+                      std::vector<std::string> choices = {}) {
+            add<V>(Need::Optional, name, default_value, description, choices);
+        }
+        template <class V, class D>
+        void always_optional(const std::string & name,
+                             V &,
+                             const D & default_value,
+                             const std::string & description,
+                             std::vector<std::string> choices = {}) {
+            add<V>(Need::AlwaysOptional, name, default_value, description, choices);
+        }
+        /// A string parameter read into an enum: the allowed values are the names of the options
+        template <class E, class D>
+        void choice(Need need,
+                    const std::string & name,
+                    E &,
+                    const D & default_value,
+                    const std::string & description,
+                    const EnumOptions<E> & options) {
+            std::vector<std::string> names;
+            for (auto & option : options)
+                names.push_back(option.first);
+            add<std::string>(need, name, default_value, description, names);
+        }
+        void when(Condition cond, const std::string & text, const std::function<void()> & body) {
+            b.when(cond, text, body);
+        }
+        void if_true(const std::string & flag, const std::function<void()> & body) {
+            b.when(is_true(flag), flag + " = true", body);
+        }
+        /// The parameters of these cosmology_model (Cosmology::Settings)
+        void for_cosmology(const std::vector<std::string> & models, const std::function<void()> & body) {
+            b.when(is_one_of("cosmology_model", models), one_of_text("cosmology_model", models), body);
+        }
+
+      private:
+        SchemaBuilder & b;
+
+        template <class V, class D>
+        void add(Need need,
+                 const std::string & name,
+                 const D & default_value,
+                 const std::string & description,
+                 const std::vector<std::string> & choices) {
+            // The default is read with the type of the member (get_parameter<V>)
+            if (not std::holds_alternative<V>(SchemaBuilder::to_value(default_value)))
+                throw std::logic_error("[parameter table] the default value of " + name +
+                                       " does not have the type of its member");
+            if (need == Need::Required)
+                b.required(name, default_value, description, choices);
+            else if (need == Need::Optional)
+                b.optional(name, default_value, description, choices);
+            else
+                b.always_optional(name, default_value, description, choices);
+        }
+    };
 
     //=============================================================================
     /// The table of all parameters
@@ -153,9 +207,8 @@ namespace SIMCODE {
     const std::vector<ParameterSpec> & parameter_schema() {
         static const std::vector<ParameterSpec> schema = []() {
             SchemaBuilder b;
-            const std::vector<std::string> assignment_methods{"NGP", "CIC", "TSC", "PCS", "PQS"};
-            const std::vector<std::string> kernels{"fiducial", "continuous", "discrete_2pt", "discrete_4pt"};
-            const std::vector<std::string> smoothing_filters{"tophat", "sharpk", "gaussian"};
+            // The parameters of the settings structs (SimulationParameters.h) come from their fields()
+            SchemaFields fields(b);
             auto gravity_is = [&](std::vector<std::string> models, std::function<void()> body) {
                 b.when(is_one_of("gravity_model", models), one_of_text("gravity_model", models), body);
             };
@@ -170,122 +223,13 @@ namespace SIMCODE {
                        "used)");
 
             b.section("Simulation");
-            b.required("simulation_boxsize", 0.0, "Boxsize of the simulation (Mpc/h)");
-            b.required("simulation_name", "", "Label used in the output filenames");
-            b.optional("simulation_use_cola", false, "Use the COLA method");
-            b.optional("simulation_use_scaledependent_cola",
-                       true,
-                       "If the growth is scale-dependent (massive neutrinos, k-dependent gravity models): use "
-                       "scale-dependent COLA. If false we use the k = 0 limit of the growth factors when doing COLA. "
-                       "With scale-independent growth (or without COLA) it is set to false (standard COLA gives the "
-                       "same result at a much lower cost)");
-            if_true("simulation_use_cola", [&]() {
-                b.optional("simulation_enforce_LPT_trajectories",
-                           false,
-                           "Do not compute the PM force, just let particles follow the LPT trajectories");
-                b.optional("simulation_cola_LPT_order",
-                           2,
-                           "The LPT order of COLA (1 or 2). Has to be <= ic_LPT_order. If < 1 COLA is turned off");
-            });
-
-            b.always_optional("simulation_fftw_planner",
-                       "estimate",
-                       "How FFTW makes its plans. estimate: no measuring (fast to start, slower transforms). "
-                       "measure, patient, exhaustive: time candidate algorithms the first time each grid size is "
-                       "transformed (faster transforms, often 1.5-2x for large grids, but planning can take "
-                       "seconds to minutes). The plans made are written to fftw_wisdom_[simulation_name].txt in "
-                       "the output folder (not for estimate): give that file as simulation_fftw_wisdom_file to "
-                       "skip the planning in later runs",
-                       {"estimate", "measure", "patient", "exhaustive"});
-            b.always_optional("simulation_fftw_wisdom_file",
-                       "",
-                       "FFTW wisdom (plans) to read at the start, e.g. the fftw_wisdom_[simulation_name].txt "
-                       "written by an earlier run (\"\": none). Plans in it are used for the transforms they "
-                       "match (same FFTW version, precision, grid size and number of threads; a different machine "
-                       "or thread count gives plans that are valid but possibly slow). Other transforms are "
-                       "planned with simulation_fftw_planner");
-
+            SimulationSettings{}.fields(fields);
             b.section("Cosmology");
             b.optional("cosmology_model",
                        "LCDM",
                        "The cosmology (background evolution)",
                        model_names(cosmology_models()));
-            b.required("cosmology_Omegab", 0.0, "Baryon density parameter");
-            b.optional("cosmology_OmegaMNu",
-                       0.0,
-                       "Massive neutrino density parameter (3 equal masses; or use cosmology_neutrino_masses_eV)");
-            b.optional("cosmology_neutrino_masses_eV",
-                       std::vector<double>{},
-                       "The masses of the (up to 3) neutrinos in eV, e.g. {0.0, 0.0086, 0.05} (0 or not listed: "
-                       "massless). Instead of cosmology_OmegaMNu (which then follows from the masses)");
-            b.required("cosmology_OmegaCDM", 0.0, "CDM density parameter");
-            b.required("cosmology_OmegaK", 0.0, "Curvature density parameter (-k/H0^2)");
-            b.required("cosmology_Neffective", 3.046, "Effective number of relativistic species");
-            b.required("cosmology_TCMB_kelvin", 2.7255, "Temperature of the CMB today (Kelvin)");
-            b.required("cosmology_h", 0.0, "Hubble parameter H0 = 100h km/s/Mpc");
-            b.when(is_one_of("cosmology_model", {"JBD"}), "cosmology_model = JBD", [&]() {
-                b.required("cosmology_JBD_wBD", 10000.0, "The JBD parameter (wBD -> infinity gives GR)");
-                b.optional("cosmology_JBD_GeffG_today",
-                           1.0,
-                           "The value of G today relative to Newtons constant (GeffG_today != 1 effectively gives a "
-                           "different Newtons constant)");
-                b.optional("cosmology_JBD_density_parameter_definition",
-                           "hi-class",
-                           "Definition of the density parameters Omega = 8pi G_* rho / 3H0^2 (which G_* to use)",
-                           {"Gbare", "Gnewton", "Gtoday", "hi-class"});
-            });
-            b.when(is_one_of("cosmology_model", {"w0waCDM"}), "cosmology_model = w0waCDM", [&]() {
-                b.required("cosmology_w0", -1.0, "Dark energy equation of state w(a) = w0 + wa(1-a): w0");
-                b.required("cosmology_wa", 0.0, "Dark energy equation of state w(a) = w0 + wa(1-a): wa");
-            });
-            b.when(is_one_of("cosmology_model", {"Quintessence"}), "cosmology_model = Quintessence", [&]() {
-                b.required("cosmology_quintessence_potential",
-                           "exponential",
-                           "The potential V = V0 u(phi), phi in units of Mpl: exponential u = exp(-lambda phi), "
-                           "inverse_power_law u = phi^-alpha, pngb u = 1 + cos(phi/f), hilltop u = (1 - (phi/mu)^p)^2. "
-                           "V0 is found so that OmegaDE today = 1 - OmegaM - OmegaR - OmegaK",
-                           {"exponential", "inverse_power_law", "pngb", "hilltop"});
-                b.optional("cosmology_quintessence_phi_ini",
-                           0.0,
-                           "The initial value of the field (units of Mpl; deep in the radiation era)");
-                b.optional("cosmology_quintessence_dphidlna_ini", 0.0, "The initial dphi/dlna (0: frozen)");
-                b.when(is_one_of("cosmology_quintessence_potential", {"exponential"}),
-                       "cosmology_quintessence_potential = exponential",
-                       [&]() { b.required("cosmology_quintessence_lambda", 1.0, "The slope lambda"); });
-                b.when(is_one_of("cosmology_quintessence_potential", {"inverse_power_law"}),
-                       "cosmology_quintessence_potential = inverse_power_law",
-                       [&]() { b.required("cosmology_quintessence_alpha", 1.0, "The power alpha"); });
-                b.when(is_one_of("cosmology_quintessence_potential", {"pngb"}),
-                       "cosmology_quintessence_potential = pngb",
-                       [&]() { b.required("cosmology_quintessence_f", 1.0, "The scale f (units of Mpl)"); });
-                b.when(
-                    is_one_of("cosmology_quintessence_potential", {"hilltop"}),
-                    "cosmology_quintessence_potential = hilltop",
-                    [&]() {
-                        b.required("cosmology_quintessence_mu", 1.0, "The position of the minimum mu (units of Mpl)");
-                        b.required("cosmology_quintessence_p", 2.0, "The power p");
-                    });
-            });
-            b.when(is_one_of("cosmology_model", {"EDE"}), "cosmology_model = EDE", [&]() {
-                b.required("cosmology_ede_fEDE", 0.1, "Early dark energy: the maximum of rho_EDE / rho_total");
-                b.required("cosmology_ede_zc", 3500.0, "Early dark energy: the redshift of the maximum");
-                b.optional("cosmology_ede_theta_ini", 2.8, "Early dark energy: the initial angle phi_ini / f");
-                b.optional("cosmology_ede_n", 3.0, "Early dark energy: V = m^2 f^2 (1 - cos(phi/f))^n");
-            });
-            b.when(is_one_of("cosmology_model", {"Tabulated"}), "cosmology_model = Tabulated", [&]() {
-                b.required("cosmology_tabulated_filename", std::string(""), "The file with the background");
-                b.required("cosmology_tabulated_format",
-                           "H",
-                           "H: columns z, H/H0. CLASS: a CLASS background file. w: columns a, w(a) of the dark energy",
-                           {"H", "CLASS", "w"});
-            });
-            b.when(is_one_of("cosmology_model", {"DGP"}), "cosmology_model = DGP", [&]() {
-                b.required("cosmology_dgp_OmegaRC",
-                           0.0,
-                           "The cross-over scale of the self-accelerating DGP model "
-                           "(Omega_rc = 1/(4 rc^2 H0^2)). A cosmological constant makes up E(0) = 1 (a warning if "
-                           "it is not zero; no dark energy for Omega_rc = (1 - Omega_matter - Omega_radiation)^2/4)");
-            });
+            Cosmology::Settings{}.fields(fields);
 
             b.section("Gravity model");
             b.optional("gravity_model",
@@ -352,7 +296,7 @@ namespace SIMCODE {
                         b.optional("gravity_model_dgp_smoothing_filter",
                                    "tophat",
                                    "Screening approximation: the filter used to smooth the density field",
-                                   smoothing_filters);
+                                   choices::smoothing_filters);
                         b.optional("gravity_model_dgp_smoothing_scale_over_boxsize",
                                    0.0,
                                    "Screening approximation: the smoothing scale R/boxsize (0: no smoothing; 1 smooths "
@@ -443,315 +387,16 @@ namespace SIMCODE {
             });
 
             b.section("Primordial power-spectrum");
-            b.optional("cosmology_As", 2e-9, "Primordial amplitude");
-            b.optional("cosmology_ns", 1.0, "Spectral index");
-            b.optional("cosmology_kpivot_mpc", 0.05, "Pivot scale (1/Mpc)");
+            Cosmology::Settings{}.primordial_fields(fields);
 
             b.section("Particles");
-            b.required("particle_Npart_1D", 0, "Number of CDM+baryon particles per dimension");
-            b.always_optional("particle_baryons",
-                              false,
-                              "Evolve CDM and baryons as two sets of particles (particle_Npart_1D^3 of each, IC from "
-                              "the CDM and baryon transfer functions at zini). false: one set of CDM+baryon particles");
-            b.always_optional("particle_neutrinos",
-                              false,
-                              "Massive neutrinos as particles with the delta-f method (Elbers et al. 2021): thermal "
-                              "Fermi-Dirac velocities, relativistic equations of motion, the particles only carry the "
-                              "perturbation. Replaces force_linear_massive_neutrinos (needs cosmology_OmegaMNu > 0, "
-                              "camb or class, timestep_method = Quinn, no COLA)");
-            if_true("particle_neutrinos", [&]() {
-                b.always_optional("particle_neutrino_Npart_1D",
-                                  0,
-                                  "particle_neutrinos: number of neutrino particles per dimension (0: particle_Npart_1D)");
-                b.always_optional("particle_neutrino_deltaf",
-                                  true,
-                                  "particle_neutrinos: use the delta-f weights (false: plain particles, much noisier; for "
-                                  "testing)");
-            });
-            if_true("particle_baryons", [&]() {
-                b.always_optional(
-                    "particle_baryon_lattice",
-                    "same",
-                    "particle_baryons: start the baryons from the same lattice as the CDM (same, recommended: "
-                    "the baryon-CDM difference then follows linear theory on all scales) or from a lattice "
-                    "offset by half a particle spacing (offset: gives a spurious baryon-CDM difference on "
-                    "small scales)",
-                    {"same", "offset"});
-                b.always_optional(
-                    "particle_baryon_relative_mode",
-                    "displacement",
-                    "particle_baryons: how the baryon-CDM relative density is set up. displacement: each "
-                    "species is displaced by its own linear field (T_i/T_cb) and has its own velocity. mass: "
-                    "both species follow the total CDM+baryon flow (same displacements and velocities) and the "
-                    "relative density is carried by the particle masses m_i = 1 + eps_i(q) with eps_i = "
-                    "delta_cb(zini) (T_i - T_cb)(z=0) / T_cb(zini), the linear relative mode today "
-                    "(Hahn, Rampf & Uhlemann 2021; exact at z = 0 in linear theory, the relative mode is then "
-                    "constant in time). mass_ini: common displacements, masses with eps_i = T_i / T_cb - 1 at "
-                    "zini and each species keeps its own velocity (the relative mode then grows from zini). "
-                    "The mass modes need particle_baryon_lattice = same",
-                    {"displacement", "mass", "mass_ini"});
-            });
-            b.optional("particle_allocation_factor",
-                       1.5,
-                       "Allocate this factor more particles than the average per task (particles move between "
-                       "tasks)");
-            b.always_optional("particle_sort_every_nsteps",
-                              0,
-                              "Reorder the particles in memory by position (blocks of 4^3 force-grid cells) every this "
-                              "many steps, which makes the density assignment and the force interpolation faster when "
-                              "the particles have moved far from their initial (lattice) order. 0: never. Changes the "
-                              "results only by round-off (the order of the sums) and the order of the particles in "
-                              "the output");
-
+            ParticleSettings{}.fields(fields);
             b.section("Time-stepping");
-            b.required("timestep_nsteps",
-                       std::vector<int>{0},
-                       "Number of steps between the outputs (one per output redshift). If only one number it is the "
-                       "total number of steps");
-            b.optional("timestep_algorithm", "KDK", "The time-stepping algorithm (only KDK is implemented)", {"KDK"});
-            b.optional("timestep_method",
-                       "Quinn",
-                       "The time-stepping method. Quinn: standard leapfrog. Tassev: modified leapfrog for COLA. "
-                       "FastPM: leapfrog that follows linear growth exactly (Feng et al. 2016). BullFrog: follows "
-                       "2LPT growth after every step (Rampf, List & Hahn 2024), not for COLA",
-                       {"Quinn", "Tassev", "FastPM", "BullFrog"});
-            b.optional("timestep_cola_nLPT", -2.5, "The nLPT parameter of the Tassev time-stepping");
-            b.optional("timestep_scalefactor_spacing",
-                       "linear",
-                       "Spacing of the steps in the scale factor (powerlaw: uniform in a^timestep_spacing_power, "
-                       "growthfactor: uniform in the linear growth factor D(a), as in Rampf, List & Hahn 2024)",
-                       {"linear", "logarithmic", "powerlaw", "growthfactor"});
-            b.when(is_one_of("timestep_scalefactor_spacing", {"powerlaw"}),
-                   "timestep_scalefactor_spacing = powerlaw",
-                   [&]() { b.optional("timestep_spacing_power", 1.0, "The steps are uniform in a^power"); });
-
+            TimestepSettings{}.fields(fields);
             b.section("Initial conditions");
-            b.required("ic_initial_redshift", 0.0, "The initial redshift of the simulation");
-            b.required("ic_random_seed", 1234, "The random seed");
-            b.optional("ic_random_generator",
-                       "MT19937",
-                       "The random number generator (GSL is gsl_rng_ranlxd1 as used in 2LPTic, for comparisons)",
-                       {"GSL", "MT19937"});
-            b.always_optional("ic_random_field_backend",
-                              "ngenic",
-                              "Fourier mode sampling: ngenic preserves legacy line seeds and IC; philox uses "
-                              "independent mode counters",
-                              {"ngenic", "philox"});
-            b.required("ic_nmesh", 0, "The grid size used to generate the IC");
-            b.always_optional(
-                "ic_lattice_offset",
-                "fiducial",
-                "Offset of the initial particle lattice from the nodes of the force grid. fiducial: half a "
-                "force grid cell if force_nmesh > particle_Npart_1D, otherwise none. With particles "
-                "exactly on the nodes of a finer grid, CIC responds to the size of the displacement and gives large "
-                "spurious forces (see the force grid section of README.md)",
-                {"fiducial", "none", "half_force_cell"});
-            b.required("ic_type_of_input",
-                       "powerspectrum",
-                       "The input: powerspectrum (file with [k (h/Mpc), P(k) (Mpc/h)^3]), transferfunction (file "
-                       "with [k (h/Mpc), T(k) Mpc^2]), camb (a transfer info file listing T(k,z) files from CAMB; the old name "
-                       "transferinfofile is also accepted; the "
-                       "columns are read by name from the header, or by position: 13 CAMB, 9 AxionCAMB, 7 old CAMB / "
-                       "CLASS with format=camb), class (native CLASS output: ic_input_filename is the root of the run, "
-                       "with format = class, output = mTk,vTk, write_background = yes) or internal (FML's "
-                       "Einstein-Boltzmann solver run with the cosmology of the simulation, cosmology_model included; "
-                       "the old name internal_transfer is also accepted). See FML/TransferProviders and README.md",
-                       {"powerspectrum",
-                        "transferfunction",
-                        "camb",
-                        "class",
-                        "internal",
-                        "internal_transfer",
-                        "transferinfofile"});
-            b.when(is_one_of("ic_type_of_input", {"class"}), "ic_type_of_input = class", [&]() {
-                b.optional("ic_input_gauge",
-                           "synchronous",
-                           "The gauge CLASS was run in (newtonian is converted to the CDM-synchronous gauge the IC "
-                           "need; it needs output = mTk,vTk)",
-                           {"synchronous", "newtonian"});
-            });
-            b.optional("ic_input_filename",
-                       "",
-                       "The input file (needed except for ic_type_of_input = internal, where it is an optional .ini "
-                       "file of the Einstein-Boltzmann solver with its precision, recombination and reionization "
-                       "settings: see ic_internal_solver_parameters)");
-            b.when(is_one_of("ic_type_of_input", {"internal", "internal_transfer"}),
-                   "ic_type_of_input = internal",
-                   [&]() {
-                       b.optional("ic_internal_solver_parameters",
-                                  std::vector<std::string>{},
-                                  "Settings of the Einstein-Boltzmann solver as \"name=value\", e.g. {\"Yp=0.245\", "
-                                  "\"z_reion=8\", \"precision=fast\"}, applied after those of the .ini file "
-                                  "ic_input_filename (the names of Cosmology/EinsteinBoltzmannSolver/params/default.ini). "
-                                  "The cosmology (h, OmegaB, ..., model and its parameters, A_s, n_s, k_pivot, the "
-                                  "neutrino masses, preset), alpha_s and the k-grid (pert_k_min, pert_k_max, pert_n_k, "
-                                  "pert_dk_max) are set by the simulation and are an error here and in the .ini file. "
-                                  "See README.md");
-                   });
-            b.required("ic_input_redshift", 0.0, "The redshift of the input P(k) / T(k)");
-            b.optional("ic_fix_amplitude", true, "Fix the amplitude of the modes when generating the random field");
-            b.optional("ic_reverse_phases", false, "Reverse the phases (for paired simulations)");
-            b.optional("ic_random_field_type",
-                       "gaussian",
-                       "Type of IC: gaussian, nongaussian, read_particles (read a GADGET file and use that, "
-                       "reconstructing the LPT fields if COLA) or read_phases (take the phases from a GADGET file)",
-                       {"gaussian", "nongaussian", "read_particles", "read_phases"});
-            b.optional("ic_LPT_order", 2, "The LPT order used to make the IC");
-            b.optional("ic_sigma8_normalization", false, "Normalize P(k) to a given sigma8 (otherwise use the input)");
-            if_true("ic_sigma8_normalization", [&]() {
-                b.optional("ic_sigma8_redshift", 0.0, "The redshift of the sigma8 value");
-                b.optional("ic_sigma8", 0.8, "The sigma8 value to normalize to");
-            });
-            b.optional("ic_use_gravity_model_GR",
-                       false,
-                       "For modified gravity: the input P(k) is for LCDM, use GR growth factors to scale it to the "
-                       "initial redshift (same IC as the LCDM simulation)");
-            b.when(is_one_of("ic_random_field_type", {"nongaussian"}), "ic_random_field_type = nongaussian", [&]() {
-                b.required("ic_fnl_type", "local", "Type of non-gaussianity", {"local", "equilateral", "orthogonal"});
-                b.required("ic_fnl", 100.0, "The value of fNL");
-                b.required(
-                    "ic_fnl_redshift",
-                    0.0,
-                    "The redshift of the potential Phi = (3/5) g(z) zeta (g = D/a) that fNL multiplies: 0 is the "
-                    "usual large-scale-structure convention, a matter-era redshift (e.g. 30) the CMB convention");
-            });
-            b.when(is_one_of("ic_random_field_type", {"read_particles", "read_phases"}),
-                   "ic_random_field_type in {read_particles, read_phases}",
-                   [&]() {
-                       b.required("ic_reconstruct_gadgetfilepath",
-                                  "",
-                                  "Path to the GADGET files without the file number: binary (path.0, path.1, ...) "
-                                  "or HDF5 (path.hdf5 or path.0.hdf5, ...), detected automatically");
-                       b.optional("ic_reconstruct_assigment_method",
-                                  "CIC",
-                                  "Density assignment method used to reconstruct the density field",
-                                  assignment_methods);
-                       b.optional("ic_reconstruct_smoothing_filter",
-                                  "sharpk",
-                                  "Filter used to remove small-scale modes from the reconstructed density field",
-                                  smoothing_filters);
-                       b.optional("ic_reconstruct_dimless_smoothing_scale",
-                                  0.0,
-                                  "Smoothing scale R/boxsize of the reconstructed density field");
-                       b.optional("ic_reconstruct_interlacing",
-                                  false,
-                                  "Use interlacing when reconstructing the density field");
-                       b.optional("ic_reconstruct_exact",
-                                  false,
-                                  "Reconstruct the LPT fields exactly from the positions and velocities (always works "
-                                  "for 1LPT IC; for 2LPT IC the particles must come from a regular grid)");
-                   });
-
+            ICSettings{}.fields(fields);
             b.section("Forces");
-            b.required("force_nmesh", 0, "Grid size used to compute the PM forces");
-            b.optional("force_density_assignment_method", "CIC", "Density assignment method", assignment_methods);
-            b.optional("force_greens_function_kernel",
-                       "fiducial",
-                       "Kernel for D^2 when solving the Poisson equation (fiducial = continuous)",
-                       kernels);
-            b.optional(
-                "force_gradient_kernel",
-                "fiducial",
-                "Kernel for D when computing the forces. fiducial = continuous if force_nmesh = "
-                "particle_Npart_1D, discrete_4pt if force_nmesh is up to 3x larger and discrete_2pt if it is even "
-                "larger (the continuous kernel gives "
-                "spurious forces from the particle lattice when the force grid is finer than it)",
-                kernels);
-            b.always_optional("force_density_method",
-                              "assignment",
-                              "How the density field for the force is computed. assignment: particles to grid with "
-                              "force_density_assignment_method. nufft: the exact Fourier modes of the particle "
-                              "distribution (non-uniform FFT; no window function or aliasing). sheet: spectral sheet "
-                              "interpolation, R^NDIM tracers per particle placed by Fourier interpolating the "
-                              "displacement field x - q, assigned with force_density_assignment_method. sheet_nufft: "
-                              "sheet interpolation with the exact Fourier modes of the tracers (NUFFT). The force is "
-                              "always interpolated back to the particles with force_density_assignment_method",
-                              {"assignment", "nufft", "sheet", "sheet_nufft"});
-            b.always_optional("force_interlacing_order",
-                              1,
-                              "Force interlacing: compute the force for this many copies of the particles shifted "
-                              "by a fraction of a cell relative to the grid and average (at the particles). 1: off, "
-                              "2: shift (1/2,1/2,1/2), 4: the half-cell face diagonals, 8: all half-cell corners, "
-                              "64: quarter cells. Cancels the leading aliasing of the density assignment and the force "
-                              "interpolation at the cost of this many force calculations");
-            b.always_optional("force_deconvolve_window",
-                              false,
-                              "Divide the force by W(k)^2 where W is the window function of "
-                              "force_density_assignment_method (corrects for the smoothing of the assignment and the "
-                              "interpolation). Unstable unless the aliasing is suppressed (force_interlacing_order "
-                              "> 1, see README)");
-            b.always_optional("force_early_method",
-                              "none",
-                              "A more accurate force at early times (when the particles are still close to the "
-                              "lattice and CIC is inaccurate): nufft (NUFFT density and interpolation) or interlaced "
-                              "(force_early_interlacing_order shifted grids with force_early_density_assignment_method "
-                              "and window deconvolution) for steps at z > force_early_until_redshift, then the "
-                              "normal force settings. none: off",
-                              {"none", "nufft", "interlaced"});
-            b.when(
-                is_one_of("force_early_method", {"nufft", "interlaced"}),
-                one_of_text("force_early_method", {"nufft", "interlaced"}),
-                [&]() { b.always_optional("force_early_until_redshift", 10.0, "Use the early force for z > this"); });
-            b.when(is_one_of("force_early_method", {"interlaced"}), "force_early_method = interlaced", [&]() {
-                b.always_optional("force_early_interlacing_order", 2, "Number of shifted grids at early times");
-                b.always_optional("force_early_density_assignment_method",
-                                  "TSC",
-                                  "Assignment kernel at early times",
-                                  assignment_methods);
-            });
-            b.always_optional("force_interpolation_method",
-                              "fiducial",
-                              "How the force is interpolated to the particles. assignment: with the "
-                              "force_density_assignment_method kernel. nufft: exact evaluation of the Fourier series "
-                              "of the force at the particles (non-uniform FFT). fiducial: nufft if "
-                              "force_density_method = nufft (then assignment and interpolation are both exact, so "
-                              "there is no self-force), otherwise assignment",
-                              {"fiducial", "assignment", "nufft"});
-            b.when(
-                [](const ParameterMap & p) {
-                    const auto d = p.get<std::string>("force_density_method");
-                    return d == "nufft" or d == "sheet_nufft" or
-                           p.get<std::string>("force_interpolation_method") == "nufft" or
-                           p.get<std::string>("force_early_method") == "nufft";
-                },
-                "force_density_method in {nufft, sheet_nufft} or force_interpolation_method = nufft or "
-                "force_early_method = nufft",
-                [&]() {
-                    b.always_optional("force_nufft_epsilon",
-                                      1e-5,
-                                      "Relative accuracy of the NUFFT (force_density_method = nufft or sheet_nufft, "
-                                      "force_interpolation_method = nufft or force_early_method = nufft)");
-                });
-            b.when(is_one_of("force_density_method", {"sheet", "sheet_nufft"}),
-                   one_of_text("force_density_method", {"sheet", "sheet_nufft"}),
-                   [&]() {
-                       b.always_optional("force_sheet_refinement",
-                                         2,
-                                         "R: the number of tracers per particle per dimension for sheet interpolation");
-                   });
-            b.optional("force_linear_massive_neutrinos",
-                       false,
-                       "Include massive neutrinos in the density field using linear theory (requires "
-                       "ic_type_of_input = camb or class)");
-            b.always_optional(
-                "force_neutrino_energy_density",
-                false,
-                "Source the Poisson equation with the energy density of the massive neutrinos instead of "
-                "their mass density: f_nu <E/m>(a) delta_nu with <E/m> = <sqrt(1 + (q/am)^2)> over the "
-                "Fermi-Dirac distribution (both for force_linear_massive_neutrinos, where delta_nu from "
-                "CAMB/CLASS is already the energy-density contrast, and for particle_neutrinos, where each "
-                "particle is weighted by its E/m and the neutrino P(k) is then the energy-density "
-                "contrast). Matters at high redshift for light neutrinos (<E/m> = 1.33 at z = 50 for "
-                "0.033 eV)");
-            b.always_optional("force_nbody_gauge",
-                              false,
-                              "Run in the N-body gauge: add the linear source from radiation, neutrinos and GR "
-                              "(made with CLASS by scripts/make_nbody_gauge_transfer.py) to the density field");
-            b.when(is_true("force_nbody_gauge"), "force_nbody_gauge = true", [&]() {
-                b.required("force_nbody_gauge_filename",
-                           "",
-                           "The table T_extra(k,z) (nbgauge_extra.txt from scripts/make_nbody_gauge_transfer.py)");
-            });
+            ForceSettings{}.fields(fields);
             b.always_optional("force_use_finite_difference_force",
                               false,
                               "Experimental: compute forces with finite differences of the potential");
@@ -760,57 +405,9 @@ namespace SIMCODE {
                               "Experimental: order of the finite difference stencil");
 
             b.section("Lightcone");
-            b.optional("lightcone", false, "Make a lightcone");
-            if_true("lightcone", [&]() {
-                b.optional("plc_pos_observer",
-                           std::vector<double>{0.0, 0.0, 0.0},
-                           "Position of the observer in units of the boxsize");
-                b.optional("plc_z_init", 0.0, "The redshift we start recording the lightcone");
-                b.optional("plc_z_finish", 0.0, "The redshift we stop recording the lightcone");
-                b.optional("plc_boundary_mpch",
-                           20.0,
-                           "Boundary region around the shell to make sure we get all particles (Mpc/h)");
-                b.optional("plc_use_replicas", false, "Replicate the box to get the sky coverage we want");
-                b.optional("plc_ndim_rep",
-                           0,
-                           "Number of dimensions with replicas in both directions (3D: 0 = octant, 3 = full sky)");
-                b.optional("plc_output_gadgetfile", false, "Output the lightcone particles in GADGET format");
-                b.optional("plc_output_asciifile", false, "Output the lightcone particles in ascii");
-                b.always_optional("plc_output_hdf5file",
-                                  false,
-                                  "Output the lightcone particles as GADGET HDF5 files (needs USE_HDF5; positions in "
-                                  "Mpc/h, peculiar velocities in km/s)");
-                b.optional("plc_output_in_batches", false, "Output in batches to save memory");
-                b.always_optional(
-                    "plc_relativistic_effects",
-                    false,
-                    "Store the potential Phi/c^2 at the lightcone particles and write it with the radial "
-                    "velocity, the cosmological redshift and the observed redshift 1 + z_obs = (1 + z)(1 + "
-                    "v_r/c - Phi/c^2) (Doppler + gravitational redshift; observer at rest with Phi = 0) to "
-                    "the HDF5 and ascii lightcone files. With plc_make_onion_density_maps also Healpix maps "
-                    "of Phi/c^2 at the shells. Phi from the Poisson equation with the density used for the "
-                    "force (the GR potential also for modified gravity models). Costs one extra FFT per "
-                    "step while recording the lightcone");
-                b.optional("plc_make_onion_density_maps", false, "Make (Healpix) density maps delta(z, theta)");
-                if_true("plc_make_onion_density_maps", [&]() {
-                    b.optional("plc_nside", 256, "Healpix nside of the maps (npix = 12 nside^2; at most 8192)");
-                    b.optional("plc_da_maps", 0.02, "Roughly the size of the bins in a for the maps");
-                    b.optional("plc_use_chunkpix", false, "Store the maps with chunkpix (useful for sparse maps)");
-                    if_true("plc_use_chunkpix",
-                            [&]() { b.optional("plc_nside_chunks", 8, "Healpix nside of the chunks (at most 8192)"); });
-                });
-            });
-
+            LightconeSettings{}.fields(fields);
             b.section("Output");
-            b.required("output_folder", "", "Folder to put the output in (\"\" is the current folder)");
-            b.required("output_redshifts", std::vector<double>{}, "The output redshifts (decreasing)");
-            b.optional("output_particles", true, "Write the particles at the output redshifts");
-            b.optional("output_fileformat",
-                       "GADGET",
-                       "File format for the particles. GADGET: binary GADGET files. HDF5: GADGET HDF5 files "
-                       "(compile with USE_HDF5=true)",
-                       {"GADGET", "HDF5"});
-
+            OutputSettings{}.fields(fields);
             b.section("Baryonification (snapshot post-processing)");
             b.always_optional("baryonification",
                               false,
@@ -824,132 +421,15 @@ namespace SIMCODE {
             });
 
             b.section("Halo finding");
-            b.optional("fof", false, "Locate friends-of-friends halos at every output");
-            if_true("fof", [&]() {
-                b.optional("fof_nmin_per_halo",
-                           20,
-                           "Minimum number of particles per halo (of one species with particle_baryons)");
-                b.optional("fof_linking_length",
-                           0.2,
-                           "The linking length in units of the mean particle separation (of one species with "
-                           "particle_baryons)");
-                b.optional("fof_nmesh_max",
-                           0,
-                           "Maximum grid size used to bin particles to speed up the linking (0: the code chooses)");
-                b.optional(
-                    "fof_buffer_length_mpch",
-                    3.0,
-                    "Buffer region (larger than the largest halo) from neighbor tasks (Mpc/h). The code warns if "
-                    "halos reach its edge (they might then be cut off and found twice)");
-                b.always_optional("fof_output_fileformat",
-                                  "ascii",
-                                  "fof: the halo catalogue halos_z<z>.txt (ascii, one row per halo) or halos_z<z>.hdf5 "
-                                  "(HDF5, compile with USE_HDF5=true)",
-                                  {"ascii", "HDF5"});
-                b.always_optional("fof_massfunction_nbins", 30, "fof: number of logarithmic bins of the mass function");
-                b.always_optional("fof_massfunction_Mmin", 1e10, "fof: smallest mass of the mass function (Msun/h)");
-                b.always_optional("fof_massfunction_Mmax", 1e16, "fof: largest mass of the mass function (Msun/h)");
-                b.always_optional("fof_so_definitions",
-                                  std::vector<std::string>{},
-                                  "fof: spherical overdensity masses around the FoF halos, e.g. {\"200m\", \"500c\", "
-                                  "\"vir\"} (<Delta>m: Delta times the mean CDM+baryon density, <Delta>c: the critical "
-                                  "density, vir: Bryan & Norman 1998). Empty: none. The spheres must fit in "
-                                  "fof_buffer_length_mpch");
-            });
-
+            FoFSettings{}.fields(fields);
             b.section("Power-spectrum");
-            b.optional("pofk", false, "Compute the power-spectrum at every output");
-            b.always_optional("pofk_every_step",
-                              true,
-                              "Write P(k) of the density field used for the force at every step (cheap; same grid "
-                              "and assignment as the force, the window is deconvolved): pofk_<name>_cb_z<z>.txt in "
-                              "output_folder");
-            b.when([](const ParameterMap & p) { return p.get<bool>("pofk") or p.get<bool>("pofk_every_step"); },
-                   "pofk = true or pofk_every_step = true",
-                   [&]() {
-                       b.optional("pofk_subtract_shotnoise", false, "Subtract shot-noise (pofk and pofk_every_step)");
-                   });
-            if_true("pofk", [&]() {
-                b.required("pofk_nmesh", 0, "Grid size");
-                b.optional("pofk_interlacing", false, "Use interlaced grids to reduce aliasing");
-                b.optional("pofk_density_assignment_method", "CIC", "Density assignment method", assignment_methods);
-            });
-
+            PofkSettings{}.fields(fields);
             b.section("Power-spectrum multipoles");
-            b.optional("pofk_multipole", false, "Compute the redshift space multipoles P_ell(k) at every output");
-            if_true("pofk_multipole", [&]() {
-                b.required("pofk_multipole_nmesh", 0, "Grid size");
-                b.optional("pofk_multipole_interlacing", false, "Use interlaced grids to reduce aliasing");
-                b.optional("pofk_multipole_subtract_shotnoise", false, "Subtract shot-noise from P0");
-                b.optional("pofk_multipole_ellmax", 4, "Compute P_ell for ell = 0, 2, ..., ellmax");
-                b.optional("pofk_multipole_density_assignment_method",
-                           "CIC",
-                           "Density assignment method",
-                           assignment_methods);
-            });
-
+            PofkMultipoleSettings{}.fields(fields);
             b.section("Bispectrum");
-            b.optional("bispectrum", false, "Compute the bispectrum at every output");
-            if_true("bispectrum", [&]() {
-                b.required("bispectrum_nmesh", 0, "Grid size");
-                b.required("bispectrum_nbins",
-                           0,
-                           "Number of k-bins (memory and time scale as nbins grids and nbins^3 integrals)");
-                b.optional("bispectrum_density_assignment_method",
-                           "CIC",
-                           "Density assignment method",
-                           assignment_methods);
-                b.optional("bispectrum_interlacing", true, "Use interlaced grids to reduce aliasing");
-                b.optional("bispectrum_subtract_shotnoise", false, "Subtract shot-noise");
-            });
-
+            BispectrumSettings{}.fields(fields);
             b.section("Hybrid bias spectra");
-            b.always_optional("hybridbias",
-                              false,
-                              "Compute the hybrid bias (Lagrangian bias basis) spectra P_ab(k) at every output: the "
-                              "cross spectra of the operators 1, delta_L, delta_L^2, s^2, nabla^2 delta_L advected "
-                              "with the particles (Modi et al. 2020, Kokron et al. 2021). delta_L is the linear field "
-                              "of the IC scaled to the output redshift with the growth factor of the gravity model");
-            if_true("hybridbias", [&]() {
-                b.required("hybridbias_nmesh", 0, "Grid size for the advected fields");
-                b.optional("hybridbias_noperators",
-                           5,
-                           "Use the first noperators of (1, delta, delta^2, s^2, nabla^2 delta): 15 spectra for 5");
-                b.optional("hybridbias_density_assignment_method",
-                           "CIC",
-                           "Density assignment method",
-                           assignment_methods);
-                b.optional("hybridbias_interlacing", true, "Use interlaced grids to reduce aliasing");
-                b.optional("hybridbias_subtract_shotnoise",
-                           false,
-                           "Subtract the Poisson shot noise mean(w_a w_b)/Npart (the usual basis spectra keep it)");
-                b.optional("hybridbias_smoothing_scale",
-                           0.0,
-                           "Smooth the linear field with this scale (Mpc/h) before forming the operators (0: none)");
-                b.optional("hybridbias_smoothing_filter", "gaussian", "The smoothing filter", smoothing_filters);
-                b.optional(
-                    "hybridbias_kcut_over_nyquist",
-                    1.0,
-                    "Keep only the modes with k < this times the Nyquist frequency of the particle lattice in the "
-                    "linear field (a spherical cut, so the operators are isotropic as assumed in the LPT "
-                    "prediction). 0: keep all the modes of the lattice grid (a cube)");
-                b.optional("hybridbias_zeldovich",
-                           false,
-                           "Also write the Zel'dovich (resummed 1LPT) prediction of the spectra with the same cut and "
-                           "smoothing of the operators: hybridbias_zeldovich_z<z>.txt");
-                b.optional("hybridbias_oneloop",
-                           false,
-                           "Also write the one-loop LPT (CLEFT) prediction of the spectra (no counterterms): "
-                           "hybridbias_oneloop_z<z>.txt");
-                b.always_optional(
-                    "hybridbias_oneloop_kernels",
-                    "EdS",
-                    "The kernels of the one-loop prediction. EdS: the Einstein-de Sitter kernels with the "
-                    "linear P(k) of the gravity model. model: the scale- and time-dependent LPT kernels "
-                    "of the gravity model (f(R) and DGP with their screening if gravity_model_screening, "
-                    "the other models from G_eff(k,a) without screening, LCDM for GR)",
-                    {"EdS", "model"});
-            });
+            HybridBiasSettings{}.fields(fields);
             return b.specs;
         }();
         return schema;
