@@ -19,6 +19,9 @@
 //   ./nbody parameterfile.lua    Run a simulation
 //   ./nbody --parameters [file]  Print the reference of all parameters (markdown) [to file]
 //   ./nbody --features           Print the optional features compiled in (hdf5, healpix)
+//   ./nbody --write-solver-defaults [file]
+//                                Write the settings of the internal Einstein-Boltzmann solver that are yours in
+//                                SimulationCode, with their defaults (internal_solver_default.ini)
 //   ./nbody --write-transfers parameterfile.lua file
 //                                Run the internal Einstein-Boltzmann solver for the parameterfile (with
 //                                ic_type_of_input = internal) and write its transfer tables to file (read them with
@@ -85,6 +88,23 @@ int run(int argc, char ** argv) {
         }
         return 0;
     }
+    if (std::strcmp(argv[1], "--write-solver-defaults") == 0) {
+        if (FML::ThisTask == 0) {
+            if (argc > 2) {
+                std::ofstream file(argv[2]);
+                SIMCODE::write_internal_solver_defaults(file);
+                file.close();
+                if (not file) {
+                    std::cerr << "ERROR: could not write the solver defaults to " << argv[2] << "\n";
+                    return 1;
+                }
+                std::cout << "Wrote the defaults of the internal solver to " << argv[2] << "\n";
+            } else {
+                SIMCODE::write_internal_solver_defaults(std::cout);
+            }
+        }
+        return 0;
+    }
     const bool write_transfers = std::strcmp(argv[1], "--write-transfers") == 0;
     if (write_transfers and argc != 4) {
         if (FML::ThisTask == 0)
@@ -93,8 +113,10 @@ int run(int argc, char ** argv) {
     }
     if (std::strncmp(argv[1], "--", 2) == 0 and not write_transfers) {
         if (FML::ThisTask == 0)
-            std::cerr << "Unknown option " << argv[1] << ". Run as: ./nbody parameterfile.lua, ./nbody --parameters "
-                      << "[file], ./nbody --features or ./nbody --write-transfers parameterfile.lua file\n";
+            std::cerr
+                << "Unknown option " << argv[1] << ". Run as: ./nbody parameterfile.lua, ./nbody --parameters "
+                << "[file], ./nbody --features, ./nbody --write-solver-defaults [file] or ./nbody --write-transfers "
+                << "parameterfile.lua file\n";
         return 1;
     }
 

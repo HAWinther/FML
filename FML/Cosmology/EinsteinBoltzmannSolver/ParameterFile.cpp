@@ -770,6 +770,13 @@ namespace FML::COSMOLOGY {
             }
         }
 
+        std::vector<Description> describe(const RunSettings & s) {
+            std::vector<Description> d;
+            for (const auto & p : table())
+                d.push_back({p.section, p.name, p.get(s), p.description});
+            return d;
+        }
+
         std::vector<std::string> names() {
             std::vector<std::string> n;
             for (const auto & p : table())

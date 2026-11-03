@@ -13,6 +13,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <ostream>
 #include <string>
 #include <vector>
 
@@ -77,6 +78,11 @@ namespace SIMCODE {
     /// Run the internal solver for the request (ic_type_of_input = internal) and write its tables, with the cosmology,
     /// to filename (on task 0; ic_type_of_input = tables reads it). See TransferInput.cpp
     void write_internal_transfer_tables(const TransferInputRequest & request, const std::string & filename);
+
+    /// The settings of the internal solver that are the user's in SimulationCode (recombination, reionization, the
+    /// background range and the precision of the perturbations), with their defaults and descriptions, as a .ini file
+    /// for ic_input_filename (./nbody --write-solver-defaults; internal_solver_default.ini). See TransferInput.cpp
+    void write_internal_solver_defaults(std::ostream & os);
 
     /// The request of the simulation from its parameters (ic_*, simulation_boxsize) and cosmology
     template <class CosmologyType>

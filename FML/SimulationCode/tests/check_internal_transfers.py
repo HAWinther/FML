@@ -83,6 +83,14 @@ run("tabulated", {"cosmology_model": "Tabulated", "cosmology_tabulated_filename"
 run("simple_pk", {"ic_type_of_input": "powerspectrum", "ic_input_filename": cases.INPUT + "/example_power_spectrum_cb_z0.000.txt", "ic_input_redshift": 0.0})
 run("no_input_file", {"ic_type_of_input": "powerspectrum"}, error="ic_input_filename is needed")
 
+# internal_solver_default.ini (./nbody --write-solver-defaults) is the solver's defaults: the same P(k) as no .ini
+default_ini = str(Path(__file__).resolve().parent.parent / "internal_solver_default.ini")
+run("default_ini", {"ic_input_filename": default_ini})
+import numpy as np  # noqa: E402
+pk = [np.loadtxt(root / n / "output" / "snapshot_Reg_z49.000" / "pofk_z49.000.txt") for n in ["converted_ic", "default_ini"]]
+assert np.array_equal(pk[0], pk[1]), "default_ini: P(k) differs from the run without a .ini"
+print("[PASS] default_ini: P(k) = that of the run without a .ini", flush=True)
+
 # The tables of the solver in a file (--write-transfers) and a run from them (ic_type_of_input = tables): the same
 # P(k) as the run with the solver (converted_ic); a file for another cosmology, gauge or initial redshift is an error
 tables = str(root / "tables_lcdm.txt")
@@ -92,7 +100,6 @@ assert "# cosmology_model = lcdm" in header and "# columns = a k_hmpc d_cdm d_b 
     "write_transfers: the header of " + tables
 from_file = {"ic_type_of_input": "tables", "ic_input_filename": tables}
 run("tables", from_file)
-import numpy as np  # noqa: E402
 pk = [np.loadtxt(root / n / "output" / "snapshot_Reg_z49.000" / "pofk_z49.000.txt") for n in ["converted_ic", "tables"]]
 assert np.allclose(pk[0], pk[1], rtol=1e-8, atol=0), "tables: P(k) differs from the run with the solver"
 print("[PASS] tables: P(k) = that of the run with the solver", flush=True)

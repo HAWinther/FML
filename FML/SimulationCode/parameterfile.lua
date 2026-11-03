@@ -410,7 +410,8 @@ ic_input_gauge = "synchronous" -- class: the gauge CLASS was run in (synchronous
 -- (not the cosmology or the k-range, which are the simulation's; see README.md)
 ic_internal_solver_parameters = {}
 -- Path to the input (NB: for using the example files update the path at the top of the file below;
--- internal: an optional .ini file of the solver, "" for its defaults; tables: the file)
+-- internal: an optional .ini file of the solver, "" for its defaults (internal_solver_default.ini lists the
+-- settings that are yours, with their defaults: copy it and change what you need); tables: the file)
 ic_input_filename = "input/example_power_spectrum_cb_z0.000.txt"
 -- The redshift of the P(k), T(k) we give as input
 ic_input_redshift = 0.0

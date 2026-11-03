@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: a default .ini of the internal solver
+- `SimulationCode/internal_solver_default.ini`: the settings of the internal Einstein-Boltzmann solver that are the
+  user's in SimulationCode (recombination, reionization, the background range, the precision of the perturbations)
+  with their defaults and descriptions, for `ic_input_filename` with `ic_type_of_input = internal` (as it is it gives
+  the same results as no file). Generated from the solver's parameter table with
+  `./nbody --write-solver-defaults internal_solver_default.ini`; CI checks that it is up to date.
+- `ParameterFile::describe` gives every solver parameter with its section, value and description.
+
 ### SimulationCode: the transfer tables of the internal solver in one file; the old CAMB tables are removed
 - `./nbody --write-transfers parameterfile.lua file` runs the internal Einstein-Boltzmann solver for the parameterfile
   (with `ic_type_of_input = internal`) and writes its tables to one self-describing text file

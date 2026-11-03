@@ -47,6 +47,12 @@ jobs:
           mpirun --oversubscribe -np 1 ./nbody --parameters /tmp/PARAMETERS.md
           diff -u PARAMETERS.md /tmp/PARAMETERS.md
 
+      - name: internal_solver_default.ini is up to date with the solver's parameters
+        run: |
+          cd FML/SimulationCode
+          mpirun --oversubscribe -np 1 ./nbody --write-solver-defaults /tmp/internal_solver_default.ini
+          diff -u internal_solver_default.ini /tmp/internal_solver_default.ini
+
       - name: SimulationCode stops with a clear message on invalid parameters
         run: |
           MPIRUN="mpirun --oversubscribe -np 2" python3 FML/SimulationCode/tests/check_validation.py \

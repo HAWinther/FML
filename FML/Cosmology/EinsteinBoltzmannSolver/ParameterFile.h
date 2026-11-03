@@ -76,6 +76,12 @@ namespace FML::COSMOLOGY {
                                    const std::string & overrides_where = "command line");
         // Write every parameter with its current value and description (a complete, re-readable file)
         void write(const RunSettings & s, const std::string & filename);
+        // Every general parameter (in the order of the file) with its section, its current value and description (to
+        // write a file of a subset of the parameters, e.g. SimulationCode's internal_solver_default.ini)
+        struct Description {
+            std::string section, name, value, description;
+        };
+        std::vector<Description> describe(const RunSettings & s);
         // Names of all general parameters (for documentation and tests), and those of one model
         std::vector<std::string> names();
         // Precision presets ("default": none, "fast": for parameter fits): the (name, value) pairs they set

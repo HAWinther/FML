@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <sstream>
@@ -420,6 +421,48 @@ namespace SIMCODE {
 
         throw std::invalid_argument("[load_transfers] Unknown ic_type_of_input [" + r.type +
                                     "] (camb, class, internal or tables)");
+    }
+
+    //=============================================================================
+    /// The solver parameters a SimulationCode user sets (with their defaults): those of the sections Recombination,
+    /// Background and Perturbations that the simulation does not set (set_by_simulation: the cosmology and the k-grid).
+    /// Not written: the cosmology (set by the simulation), isocurvature (an error: adiabatic IC only), the tensors, the
+    /// CMB spectra / line of sight and the output (unused: only the perturbations are solved) and
+    /// store_source_components (CMB sources only). Reading the file gives the solver's defaults
+    //=============================================================================
+    void write_internal_solver_defaults(std::ostream & os) {
+        using FML::COSMOLOGY::ParameterFile::describe;
+        const auto defaults = FML::COSMOLOGY::ParameterFile::read("");
+        std::vector<FML::COSMOLOGY::ParameterFile::Description> params;
+        for (const auto & p : describe(defaults))
+            if ((p.section == "Recombination" or p.section == "Background" or p.section == "Perturbations") and
+                p.name != "store_source_components" and set_by_simulation(p.name, defaults.cosmo.model).empty())
+                params.push_back(p);
+        size_t w = 0;
+        for (const auto & p : params)
+            w = std::max(w, p.name.size() + 3 + p.value.size());
+        os << "# Settings of FML's Einstein-Boltzmann solver for SimulationCode (ic_type_of_input = \"internal\"):\n"
+           << "#   ic_input_filename = \"internal_solver_default.ini\" (or a copy of it)\n"
+           << "# These are the solver's defaults (the same as ic_input_filename = \"\"): change the ones you need and "
+              "remove\n"
+           << "# the rest. ic_internal_solver_parameters = {\"name=value\", ...} in the parameter file is applied "
+              "after this.\n"
+           << "# The cosmology, the primordial spectrum, the model and its parameters and the k-grid (pert_k_*) are "
+              "set by\n"
+           << "# the simulation and are an error here; the tensors, CMB spectra and output settings are not used (see\n"
+           << "# Cosmology/EinsteinBoltzmannSolver/params/default.ini for all the parameters).\n"
+           << "# bg_x_end is raised past the end of the perturbations (a = 1.1) if needed.\n"
+           << "# Generated with ./nbody --write-solver-defaults internal_solver_default.ini\n"
+           << "#\n"
+           << "# precision = default    # or fast: a faster set of precision parameters (explicit ones override it)\n";
+        std::string section;
+        for (const auto & p : params) {
+            if (p.section != section) {
+                section = p.section;
+                os << "\n# --- " << section << " " << std::string(70 - section.size(), '-') << "\n";
+            }
+            os << std::left << std::setw(int(w)) << (p.name + " = " + p.value) << "  # " << p.description << "\n";
+        }
     }
 
     //=============================================================================

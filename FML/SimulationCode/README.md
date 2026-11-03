@@ -10,6 +10,8 @@ You can find some documentation [on this page](https://fml.wintherscoming.no/nbo
 make                                   # settings in ../Makefile.config (or ../Makefile.local)
 mpirun -np 4 ./nbody parameterfile.lua
 ./nbody --parameters PARAMETERS.md     # write the reference of all parameters
+./nbody --write-solver-defaults internal_solver_default.ini   # the settings of the internal solver (ic_input_filename)
+./nbody --write-transfers parameterfile.lua tables.txt        # the tables of the internal solver (ic_type_of_input = tables)
 ```
 
 With MPI and OpenMP together, make sure the threads of a task get their own cores: OpenMPI binds each task to one
@@ -674,8 +676,13 @@ remains supported without a Boltzmann solve.
     ic_internal_solver_parameters = {"Yp=0.245", "z_reion=8", "precision=fast"}
     ```
 
-    The names are those of the solver (all of them, with their defaults and descriptions, are in
-    [`params/default.ini`](../Cosmology/EinsteinBoltzmannSolver/params/default.ini); `./cmb --write-defaults` writes
+    [`internal_solver_default.ini`](internal_solver_default.ini) has the settings that are yours here
+    (recombination, reionization, the background range and the precision of the perturbations) with their defaults
+    and descriptions: copy it, change what you need and give it as `ic_input_filename` (as it is, it gives the same
+    results as no file). It is generated from the solver's parameter table with
+    `./nbody --write-solver-defaults internal_solver_default.ini` (CI checks that it is up to date). All the
+    parameters of the solver are in
+    [`params/default.ini`](../Cosmology/EinsteinBoltzmannSolver/params/default.ini) (`./cmb --write-defaults` writes
     it). What is whose:
 
     | Solver parameters | |
