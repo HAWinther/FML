@@ -3,14 +3,16 @@
 -- This is a LUA script so you can write simple code
 -- and use parameter names to set other parameters
 -- See PARAMETERS.md (or run ./nbody --parameters) for all the parameters
--- and what the standard value is
+-- and what the standard value is. Every parameter is listed below (with its
+-- default value unless the comment says otherwise); a parameter inside an
+-- "if" block is only read when that condition holds
 -- Include other paramfile into this: dofile("param.lua")
 ------------------------------------------------------------
 
 -- Don't allow any parameters to take optional values?
--- If so we have to provide everything. If not most of the
--- parameters below don't have to be provided and fiduicial values
--- are used instead (see PARAMETERS.md for the default values)
+-- If so we have to provide every parameter that is used (except the experimental
+-- ones, which always take their default). If not most of the parameters below
+-- don't have to be provided and the default values are used instead (see PARAMETERS.md)
 all_parameters_must_be_in_file = true
 
 ------------------------------------------------------------
@@ -26,8 +28,9 @@ simulation_boxsize = 512.0
 ------------------------------------------------------------
 -- Use the COLA method
 simulation_use_cola = true
--- If gravity model has scaledependent growth. If this is false
--- then we use the k=0 limit of the growth factors when doing COLA
+-- If the growth is scale-dependent (massive neutrinos, k-dependent gravity models): use
+-- scale-dependent COLA. If false we use the k=0 limit of the growth factors when doing COLA.
+-- With scale-independent growth it is set to false (standard COLA gives the same result, faster)
 simulation_use_scaledependent_cola = false
 -- How FFTW plans the transforms: estimate (no planning), measure, patient
 -- or exhaustive (time the candidate algorithms: faster transforms, slower start).
@@ -56,7 +59,7 @@ cosmology_model = "LCDM"
 cosmology_OmegaCDM = 0.2685
 --- Baryon density
 cosmology_Omegab = 0.049
--- Massive neutrino density
+-- Massive neutrino density (3 equal masses)
 cosmology_OmegaMNu = 0.0
 -- Or the masses of the (up to 3) neutrinos in eV, e.g. {0.0, 0.0086, 0.05} (instead of cosmology_OmegaMNu,
 -- which must then be 0; 0 or not listed: massless). Empty: 3 equal masses from cosmology_OmegaMNu
@@ -67,9 +70,9 @@ cosmology_OmegaK = 0.0
 cosmology_Neffective = 3.046
 -- Temperature of CMB today
 cosmology_TCMB_kelvin = 2.7255
--- Hubble paramster
+-- Hubble parameter
 cosmology_h = 0.671
--- Primodial amplitude
+-- Primordial amplitude
 cosmology_As = 2.215e-9 
 -- Spectral index
 cosmology_ns = 0.966
@@ -82,7 +85,7 @@ if cosmology_model == "w0waCDM" then
   cosmology_wa = 0.0
 end
 
--- DGP self-accelerating model
+-- Quintessence
 if cosmology_model == "Quintessence" then
   -- V = V0 u(phi) with phi in units of Mpl: exponential, inverse_power_law, pngb, hilltop
   -- (V0 is found so that we get the dark energy density today)
@@ -114,6 +117,8 @@ if cosmology_model == "Tabulated" then
   cosmology_tabulated_filename = "input/class_background_w0wa.dat"
   cosmology_tabulated_format = "CLASS"
 end
+-- DGP self-accelerating background: Omega_rc = 1/(4 rc^2 H0^2). A cosmological constant makes up E(0) = 1
+-- (a warning if it is not zero; no dark energy for Omega_rc = (1 - Omega_matter - Omega_radiation)^2/4)
 if cosmology_model == "DGP" then 
   cosmology_dgp_OmegaRC = 0.11642
 end
@@ -142,13 +147,33 @@ end
 ------------------------------------------------------------
 -- Choose the gravity model
 ------------------------------------------------------------
--- Gravity model: GR, DGP, f(R), JBD, Symmetron, Geff, ... add your own ...
+-- Gravity model: GR, f(R), DGP, JBD, Symmetron, Geff, mbeta, mu ... add your own ...
+-- (JBD needs cosmology_model = "JBD": it takes phi(a) from the background)
 gravity_model = "GR"
 
 -- General Geff/G(a) models (mu-parametrization)
 if gravity_model == "Geff" then 
   -- File with the format [a, Geff/G(a)]
   gravity_model_geff_geffofa_filename = "GeffoverG_of_a.txt"
+end
+
+-- Poisson equation with G_eff/G = mu(a,k), no screening
+if gravity_model == "mu" then
+  -- DE: mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1)
+  -- BZ: mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 a^s) (Bertschinger & Zukin 2008)
+  -- table: mu(a) or mu(a,k) from a file
+  gravity_model_mu_parametrization = "DE"
+  if gravity_model_mu_parametrization == "DE" then
+    gravity_model_mu_mu0 = 0.0
+  end
+  if gravity_model_mu_parametrization == "BZ" then
+    -- {beta1, lambda1 (Mpc/h), s} (k in h/Mpc)
+    gravity_model_mu_BZ_params = {1.0, 0.0, 4.0}
+  end
+  if gravity_model_mu_parametrization == "table" then
+    -- Rows "a mu" or "a k mu" (k in h/Mpc, a regular grid in a and k; e.g. from hi_class)
+    gravity_model_mu_filename = "mu_of_a_k.txt"
+  end
 end
 
 -- (m(a),beta(a)) models
@@ -164,7 +189,7 @@ if gravity_model == "mbeta" then
   -- Screening efficiency (1.0 is standard)
   -- This can be used to increase or decrease the amount of screening if using gravity_model_screening
   gravity_model_screening_efficiency = 1.0
-  -- Combine screeneed solution with linear solution to enforce correct
+  -- Combine screened solution with linear solution to enforce correct
   -- linear evolution on large scales
   gravity_model_screening_enforce_largescale_linear = true
   -- The fourier scale for which we use the linear solution for k < k*
@@ -190,7 +215,7 @@ if gravity_model == "f(R)" then
   -- Screening efficiency (1.0 is standard)
   -- This can be used to increase or decrease the amount of screening if using gravity_model_screening
   gravity_model_screening_efficiency = 1.0
-  -- Combine screeneed solution with linear solution to enforce correct
+  -- Combine screened solution with linear solution to enforce correct
   -- linear evolution on large scales
   gravity_model_screening_enforce_largescale_linear = true
   -- The fourier scale for which we use the linear solution for k < k*
@@ -204,8 +229,6 @@ if gravity_model == "f(R)" then
   -- In some cases the multigrid solver fails if we are not close to the
   -- solution before starting multigrid. Increase this if so
   multigrid_nsweeps_first_step = 5
-  -- Solve the field equation on a grid coarser by this factor than the force grid (1: the force grid)
-  multigrid_coarse_factor = 1
 end
 
 -- Symmetron model
@@ -224,7 +247,7 @@ if gravity_model == "Symmetron" then
   -- Screening efficiency (1.0 is standard)
   -- This can be used to increase or decrease the amount of screening if using gravity_model_screening
   gravity_model_screening_efficiency = 1.0
-  -- Combine screeneed solution with linear solution to enforce correct
+  -- Combine screened solution with linear solution to enforce correct
   -- linear evolution on large scales
   gravity_model_screening_enforce_largescale_linear = false
   -- The fourier scale for which we use the linear solution for k < k*
@@ -240,8 +263,8 @@ if gravity_model == "Symmetron" then
   multigrid_nsweeps_first_step = 5
 end
 
--- DGP model (pick LCDM as the cosmology to get the normal branch)
--- For the self accelerating branch rcH0 must have a negative sign
+-- The normal branch of DGP (nDGP), on any background (e.g. LCDM). The self-accelerating
+-- background is cosmology_model = "DGP"
 if gravity_model == "DGP" then 
   -- The cross-over scale rc*H0/c
   gravity_model_dgp_rcH0overc = 1.0
@@ -254,9 +277,10 @@ if gravity_model == "DGP" then
   gravity_model_screening = true
   -- For screening approx: smoothing filter for density (tophat, gaussian, sharpk)
   gravity_model_dgp_smoothing_filter = "tophat"
-  -- For screening approx: smoothing scale R/boxsize
-  gravity_model_dgp_smoothing_scale_over_boxsize = 0.0 / simulation_boxsize
-  -- Combine screeneed solution with linear solution to enforce correct
+  -- For screening approx: smoothing scale R/boxsize (0: no smoothing; 1 smooths over the whole box,
+  -- which makes the screening very weak), e.g. 1.0 / simulation_boxsize for R = 1 Mpc/h
+  gravity_model_dgp_smoothing_scale_over_boxsize = 0.0
+  -- Combine screened solution with linear solution to enforce correct
   -- linear evolution on large scales
   gravity_model_screening_enforce_largescale_linear = true
   -- The fourier scale for which we use the linear solution for k < k*
@@ -272,6 +296,22 @@ if gravity_model == "DGP" then
   multigrid_nsweeps_first_step = 2
 end
 
+-- The multigrid solver of the exact equations (f(R), Symmetron, DGP with *_exact_solution = true)
+if gravity_model_fofr_exact_solution or gravity_model_symmetron_exact_solution or gravity_model_dgp_exact_solution then
+  -- Converged when the rms residual is below multigrid_solver_residual_convergence (residual) or below it times
+  -- the rms of the linear source of the equation (relative; the residual scale changes a lot during a simulation)
+  multigrid_convergence_criterion = "residual"
+  -- Solve the field equation on a grid coarser by this factor than the force grid (1: the force grid)
+  multigrid_coarse_factor = 1
+  -- With multigrid_coarse_factor > 1: the density on the coarse grid is its Fourier modes below the coarse
+  -- Nyquist frequency (sharpk) or a CIC deposit of the force-grid cells (cic; conserves the mass)
+  multigrid_coarse_restriction = "sharpk"
+  -- Solve the field equation only below this redshift (< 0: at all redshifts)...
+  multigrid_start_redshift = -1.0
+  -- ...and above it use the linear fifth force (linear) or none (GR)
+  multigrid_force_before_start = "linear"
+end
+
 ------------------------------------------------------------
 -- Particles
 ------------------------------------------------------------
@@ -279,10 +319,17 @@ end
 particle_Npart_1D = 128
 -- Factor of how many more particles to allocate space
 particle_allocation_factor = 1.25
--- CDM and baryons as two sets of particles (particle_Npart_1D^3 of each)? Needs ic_type_of_input = camb, class or internal_transfer
+-- Reorder the particles in memory by position every this many steps (faster density assignment and
+-- force interpolation once the particles have moved far from the lattice; 0: never)
+particle_sort_every_nsteps = 0
+-- CDM and baryons as two sets of particles (particle_Npart_1D^3 of each)? Needs ic_type_of_input = camb, class or internal
 particle_baryons = false
 -- Start the baryons from the same lattice as the CDM (same, recommended) or offset by half a particle spacing (offset)
 particle_baryon_lattice = "same"
+-- How the baryon-CDM relative density is set up: displacement (each species displaced by its own linear field),
+-- mass (common displacements and velocities, the relative mode in the particle masses; exact at z = 0 in linear
+-- theory) or mass_ini (common displacements, masses from zini, own velocities). The mass modes need lattice = same
+particle_baryon_relative_mode = "displacement"
 -- Massive neutrinos as particles with the delta-f method? Needs massive neutrinos, ic_type_of_input = camb, class or internal
 -- (accurate neutrino transfer functions up to zini, see scripts/make_camb_transfer_tables.py), timestep_method = Quinn
 -- and force_linear_massive_neutrinos = false
@@ -330,8 +377,10 @@ end
 ------------------------------------------------------------
 -- The random seed
 ic_random_seed = 1234
--- The random generator (GSL or MT19937). Fiducial GSL is gsl_rng_ranlxd1 (as used in the 2LPTIC code for comparison)
+-- The random generator: MT19937 (the default) or GSL (gsl_rng_ranlxd1 as used in 2LPTic, for comparisons)
 ic_random_generator = "GSL"
+-- Fourier mode sampling: ngenic (the legacy line seeds, the same IC as before) or philox (independent mode counters)
+ic_random_field_backend = "ngenic"
 -- Fix amplitude when generating the gaussian random field
 ic_fix_amplitude = true
 -- Mirror the phases (for amplitude-fixed simulations)
@@ -351,8 +400,8 @@ ic_use_gravity_model_GR = false
 -- The LPT order to use for the IC
 ic_LPT_order = 2
 -- The type of input: 
--- powerspectrum    (file with [k (h/Mph) , P(k) (Mpc/h)^3)])
--- transferfunction (file with [k (h/Mph) , T(k)  Mpc^2)]
+-- powerspectrum    (file with [k (h/Mpc), P(k) (Mpc/h)^3])
+-- transferfunction (file with [k (h/Mpc), T(k) Mpc^2])
 -- camb             (a transfer info file listing T(k,z) files from CAMB; the old name transferinfofile also works)
 -- class            (native CLASS output: ic_input_filename is the root, e.g. "output/run_" for run_z1_tk.dat, ...,
 --                   run_background.dat; CLASS run with format = class, output = mTk,vTk, write_background = yes)
@@ -363,7 +412,8 @@ ic_input_gauge = "synchronous" -- class: the gauge CLASS was run in (synchronous
 -- internal: settings of the solver as "name=value", e.g. {"Yp=0.245", "z_reion=8", "precision=fast"}
 -- (not the cosmology or the k-range, which are the simulation's; see README.md)
 ic_internal_solver_parameters = {}
--- Path to the input (NB: for using the example files update the path at the top of the file below)
+-- Path to the input (NB: for using the example files update the path at the top of the file below;
+-- internal: an optional .ini file of the solver, "" for its defaults)
 ic_input_filename = "input/example_power_spectrum_cb_z0.000.txt"
 -- The redshift of the P(k), T(k) we give as input
 ic_input_redshift = 0.0
@@ -382,7 +432,8 @@ if ic_random_field_type == "nongaussian" then
   ic_fnl_type = "local"
   -- The fNL value
   ic_fnl = 100.0
-  -- The redshift of which to apply the non-gaussian potential
+  -- The redshift of the potential Phi = (3/5) g(z) zeta (g = D/a) that fNL multiplies: 0 is the usual
+  -- large-scale-structure convention, a matter-era redshift (e.g. 30) the CMB convention
   ic_fnl_redshift = ic_initial_redshift
 end
 
@@ -430,6 +481,14 @@ force_gradient_kernel = "fiducial"
 -- modes, no window/aliasing; then the force is also evaluated exactly at the particles), sheet or
 -- sheet_nufft (spectral sheet interpolation with force_sheet_refinement^3 tracers per particle). See README
 force_density_method = "assignment"
+if force_density_method == "sheet" or force_density_method == "sheet_nufft" then
+  -- The number of tracers per particle per dimension
+  force_sheet_refinement = 2
+end
+-- How the force is interpolated to the particles: assignment (the force_density_assignment_method kernel),
+-- nufft (exact evaluation of the Fourier series at the particles) or fiducial (nufft if force_density_method =
+-- nufft, otherwise assignment)
+force_interpolation_method = "fiducial"
 -- Experimental: force interlacing (average the force over this many shifted grids; 1 = off) and deconvolution
 -- of the assignment window W(k)^2 (only stable with interlacing). See README
 force_interlacing_order = 1
@@ -437,10 +496,25 @@ force_deconvolve_window = false
 -- Experimental: a more accurate force at early times (nufft or interlaced) for z > force_early_until_redshift
 -- (only for force_nmesh = particle_Npart_1D). See README
 force_early_method = "none"
+if force_early_method == "nufft" or force_early_method == "interlaced" then
+  force_early_until_redshift = 10.0
+end
+if force_early_method == "interlaced" then
+  -- Number of shifted grids and the assignment kernel at early times
+  force_early_interlacing_order = 2
+  force_early_density_assignment_method = "TSC"
+end
+-- Relative accuracy of the NUFFT (used by force_density_method = nufft or sheet_nufft,
+-- force_interpolation_method = nufft or force_early_method = nufft)
+force_nufft_epsilon = 1e-5
 -- Include the effects of massive neutrinos when computing
 -- the density field (density of mnu is the linear prediction)
--- Requires: ic_type_of_input = camb or class above (we need all T(k,z))
+-- Requires: ic_type_of_input = camb, class or internal above (we need all T(k,z)); not used without
+-- massive neutrinos
 force_linear_massive_neutrinos = true
+-- Source the Poisson equation with the energy density of the massive neutrinos instead of their mass
+-- density (f_nu <E/m>(a) delta_nu; matters at high redshift for light neutrinos)
+force_neutrino_energy_density = false
 
 -- Run in the N-body gauge (Fidler et al. 2015, 2016): add the linear source from photons,
 -- massless and massive neutrinos and GR to the density field. This makes the simulation
@@ -487,16 +561,20 @@ if lightcone then
   plc_output_hdf5file = false
   -- To save memory output in batches (we only alloc as many particles as we already have to reduce memory consumption)
   plc_output_in_batches = true
+  -- Store the potential Phi/c^2 at the lightcone particles and write it with the radial velocity, the
+  -- cosmological and the observed redshift (Doppler + gravitational) to the HDF5 and ascii files (and Phi
+  -- maps with plc_make_onion_density_maps). Costs one extra FFT per step while recording
+  plc_relativistic_effects = false
 
-  -- Make delta(z, theta) maps? This is Healpix maps in 3D where we always use the RING scheme for the maps
-  -- For 2D we use output textfiles with the binning
-  plc_make_onion_density_maps = true
+  -- Make delta(z, theta) maps? This is Healpix maps in 3D (needs USE_HEALPIX=true) where we always use the
+  -- RING scheme for the maps. For 2D we use output textfiles with the binning
+  plc_make_onion_density_maps = false
   if plc_make_onion_density_maps then
     -- Roughly the size of the size of the bins you want in a
     -- The exact value we use will depend on the time-steps (but not bigger than 2x this value)
     -- At minimum we make one map per timestep
     plc_da_maps = 0.025
-    -- Number of pixels (npix = 4*nside^2). The largest lmax we can get from
+    -- Healpix nside of the maps (npix = 12 nside^2, at most 8192). The largest lmax we can get from
     -- the maps is lmax ~ 2nside
     plc_nside = 512
     -- Use chunkpix. Only useful for very sparse maps
@@ -509,7 +587,7 @@ end
 
 
 ------------------------------------------------------------
--- On the fly analysis
+-- On the fly analysis (at every output)
 ------------------------------------------------------------
 
 ------------------------------------------------------------
@@ -524,7 +602,7 @@ fof_linking_length = 0.2
 -- Limit the maximum grid to use to bin particles to
 -- to speed up the fof linking. 0 means we let the code choose this
 fof_nmesh_max = 0
--- The size of the buffer region larger than largest halo, 2-3Mpc/h should be fine)
+-- The size of the buffer region (larger than the largest halo; 2-3 Mpc/h should be fine)
 fof_buffer_length_mpch = 3.0
 -- The halo catalogue halos_z<z>.txt (ascii) or halos_z<z>.hdf5 (HDF5, needs USE_HDF5=true)
 fof_output_fileformat = "ascii"
@@ -536,6 +614,56 @@ fof_massfunction_Mmax = 1e16
 -- (<Delta>m: Delta times the mean CDM+baryon density, <Delta>c: times the critical density,
 -- vir: Bryan & Norman 1998). Empty: none. The spheres must fit in fof_buffer_length_mpch
 fof_so_definitions = {}
+
+------------------------------------------------------------
+-- Baryonification (snapshot post-processing)
+-- Correct a temporary copy of the snapshot (3D GR, no massive neutrinos, one CDM+baryon species;
+-- needs pofk = true, whose mesh, assignment and shot-noise settings it uses). The defaults are
+-- illustrative and not calibrated
+------------------------------------------------------------
+baryonification = false
+if baryonification then
+  -- The profile family
+  baryonification_model = "schneider2019"
+  -- Write a separate corrected snapshot (the velocities are unchanged)
+  baryonification_output_particles = false
+  -- Minimum host M200c (Msun/h)
+  baryonification_min_halo_mass_msunh = 1e12
+  -- Gas: the slope mass scale M_c (Msun/h) and exponent mu in beta = 3 - (M_c/M200c)^mu, the core and
+  -- ejection radius / R200c
+  baryonification_gas_mass_scale_msunh = 1e14
+  baryonification_gas_mass_exponent = 0.3
+  baryonification_gas_core_radius_over_r200 = 0.1
+  baryonification_gas_ejection_radius_over_r200 = 4.0
+  -- NFW truncation radius / R200c
+  baryonification_truncation_radius_over_r200 = 4.0
+  -- Stars: the fraction pivot M1 (Msun/h), the central scale R_h / R200c, the fraction at M1 and the
+  -- power-law exponents of the total and central fractions
+  baryonification_stellar_mass_scale_msunh = 2.5e11
+  baryonification_stellar_radius_over_r200 = 0.015
+  baryonification_stellar_amplitude = 0.09
+  baryonification_stellar_total_exponent = 0.32
+  baryonification_stellar_central_exponent = 0.6
+  -- Collisionless contraction/expansion and its amplitude and exponent
+  baryonification_relax_collisionless = true
+  baryonification_relaxation_amplitude = 0.3
+  baryonification_relaxation_exponent = 2.0
+  -- c200c = c0 (M200c/Mpivot)^slope (1+z)^redshift_power (illustrative, not a fitted relation)
+  baryonification_concentration_norm = 5.0
+  baryonification_concentration_pivot_mass_msunh = 1e14
+  baryonification_concentration_mass_slope = -0.1
+  baryonification_concentration_redshift_power = -1.0
+  -- The FoF seed halos: linking length / mean particle separation, minimum particles, maximum search mesh
+  -- (0: automatic) and the halo/SO search buffer (comoving Mpc/h, larger than the halo radii)
+  baryonification_fof_linking_length = 0.2
+  baryonification_fof_min_particles = 20
+  baryonification_fof_nmesh_max = 0
+  baryonification_fof_buffer_mpch = 3.0
+  -- The profile table: number of radii, the first radius / R200c and the support / R200c (less than half the box)
+  baryonification_profile_radial_bins = 2048
+  baryonification_min_radius_over_r200 = 1e-6
+  baryonification_max_radius_over_r200 = 30.0
+end
 
 ------------------------------------------------------------
 -- Power-spectrum evaluation
