@@ -23,7 +23,7 @@
 //=============================================================================
 // The cosmologies and gravity models that can be selected in the parameterfile
 // (cosmology_model and gravity_model). A cosmology is a model of FML's background registry
-// (FML/Cosmology/Background): to add one, add its mapping to Cosmology.h and a line to the list below. To add a
+// (FML/Cosmology/Background): to add one, add it to the list in Cosmology.h (Cosmology::models()). To add a
 // gravity model: write the class (inheriting from GravityModel), include its header above and add a line to the
 // list below. The parameters they read go in ParameterSchema.h
 //=============================================================================
@@ -34,17 +34,15 @@ namespace SIMCODE {
     template <int NDIM>
     using GravityModelFactory = std::function<std::shared_ptr<GravityModel<NDIM>>(std::shared_ptr<Cosmology>)>;
 
-    /// All the cosmologies: (name in the parameterfile, how to create it)
+    /// All the cosmologies: (name in the parameterfile, how to create it). The list of the models is in Cosmology.h
+    /// (Cosmology::models())
     inline const std::vector<std::pair<std::string, CosmologyFactory>> & cosmology_models() {
-        static const std::vector<std::pair<std::string, CosmologyFactory>> models{
-            {"LCDM", []() { return std::make_shared<Cosmology>("LCDM"); }},
-            {"w0waCDM", []() { return std::make_shared<Cosmology>("w0waCDM"); }},
-            {"DGP", []() { return std::make_shared<Cosmology>("DGP"); }},
-            {"JBD", []() { return std::make_shared<Cosmology>("JBD"); }},
-            {"Quintessence", []() { return std::make_shared<Cosmology>("Quintessence"); }},
-            {"EDE", []() { return std::make_shared<Cosmology>("EDE"); }},
-            {"Tabulated", []() { return std::make_shared<Cosmology>("Tabulated"); }},
-        };
+        static const std::vector<std::pair<std::string, CosmologyFactory>> models = []() {
+            std::vector<std::pair<std::string, CosmologyFactory>> list;
+            for (const auto & name : Cosmology::model_names())
+                list.push_back({name, [name]() { return std::make_shared<Cosmology>(name); }});
+            return list;
+        }();
         return models;
     }
 

@@ -69,8 +69,17 @@ class Cosmology {
 
     /// model: the name of the cosmology_model
     explicit Cosmology(std::string model = "LCDM") : name(std::move(model)) {
-        if (name == "Quintessence" or name == "EDE" or name == "Tabulated")
+        // (throws for an unknown model)
+        if (model_info(name).early_dark_energy)
             alow = 1e-9; // the output table (output()) covers the early times where the dark energy can matter
+    }
+
+    /// The names of the cosmologies (cosmology_model) in the order of models()
+    static std::vector<std::string> model_names() {
+        std::vector<std::string> names;
+        for (auto & m : models())
+            names.push_back(m.name);
+        return names;
     }
 
     //========================================================================
@@ -114,82 +123,9 @@ class Cosmology {
             p.T_ncdm_over_TCMB = neutrino_temperature_kelvin(p) / p.T_CMB;
         input_parameters = p;
 
-        // The parameters of the model
+        // The parameters of the model (the read function of the model in models())
         model_parameters.clear();
-        if (name == "LCDM") {
-            registry_name = "lcdm";
-        } else if (name == "w0waCDM") {
-            registry_name = "w0wa";
-            w0 = param.get<double>("cosmology_w0");
-            wa = param.get<double>("cosmology_wa");
-            model_parameters = {{"w0", w0}, {"wa", wa}};
-        } else if (name == "DGP") {
-            registry_name = "dgp";
-            model_parameters = {{"Omega_rc", param.get<double>("cosmology_dgp_OmegaRC")}, {"dgp_branch", 1.0}};
-        } else if (name == "JBD") {
-            registry_name = "jbd";
-            const auto def = param.get<std::string>("cosmology_JBD_density_parameter_definition");
-            const std::vector<std::string> defs{"hi-class", "Gtoday", "Gnewton", "Gbare"};
-            const auto it = std::find(defs.begin(), defs.end(), def);
-            if (it == defs.end())
-                throw std::runtime_error("JBD: unknown cosmology_JBD_density_parameter_definition = " + def +
-                                         " (hi-class, Gtoday, Gnewton, Gbare)");
-            model_parameters = {{"bd_omega", param.get<double>("cosmology_JBD_wBD")},
-                                {"bd_GeffG_today", param.get<double>("cosmology_JBD_GeffG_today")},
-                                {"bd_density_parameter_definition", double(it - defs.begin())}};
-        } else if (name == "Quintessence") {
-            const auto potential = param.get<std::string>("cosmology_quintessence_potential");
-            const double phi_ini = SIMCODE::get_parameter<double>(param, "cosmology_quintessence_phi_ini");
-            const double dphi_ini = SIMCODE::get_parameter<double>(param, "cosmology_quintessence_dphidlna_ini");
-            model_parameters = {{"quint_phi_ini", phi_ini}, {"quint_dphidlna_ini", dphi_ini}};
-            if (potential == "exponential") {
-                registry_name = "quintessence";
-                model_parameters["quint_lambda"] = param.get<double>("cosmology_quintessence_lambda");
-            } else if (potential == "inverse_power_law") {
-                registry_name = "quintessence_inverse_power_law";
-                model_parameters["quint_alpha"] = param.get<double>("cosmology_quintessence_alpha");
-                if (not(phi_ini > 0.0))
-                    throw std::runtime_error("Quintessence: inverse_power_law needs cosmology_quintessence_phi_ini > 0");
-            } else if (potential == "pngb") {
-                registry_name = "quintessence_pngb";
-                model_parameters["quint_f"] = param.get<double>("cosmology_quintessence_f");
-                if (not(model_parameters["quint_f"] > 0.0))
-                    throw std::runtime_error("Quintessence: pngb needs cosmology_quintessence_f > 0");
-            } else if (potential == "hilltop") {
-                registry_name = "quintessence_hilltop";
-                model_parameters["quint_mu"] = param.get<double>("cosmology_quintessence_mu");
-                model_parameters["quint_p"] = param.get<double>("cosmology_quintessence_p");
-                if (not(model_parameters["quint_mu"] > 0.0) or not(model_parameters["quint_p"] > 0.0))
-                    throw std::runtime_error("Quintessence: hilltop needs cosmology_quintessence_mu > 0 and _p > 0");
-            } else {
-                throw std::runtime_error("Quintessence: unknown cosmology_quintessence_potential = " + potential +
-                                         " (exponential, inverse_power_law, pngb, hilltop)");
-            }
-            if (dphi_ini * dphi_ini >= 6.0)
-                throw std::runtime_error("Quintessence: need |cosmology_quintessence_dphidlna_ini| < sqrt(6)");
-        } else if (name == "EDE") {
-            registry_name = "ede_zc";
-            const double fEDE = param.get<double>("cosmology_ede_fEDE"), zc = param.get<double>("cosmology_ede_zc");
-            const double theta = param.get<double>("cosmology_ede_theta_ini"), n = param.get<double>("cosmology_ede_n");
-            if (not(fEDE > 0.0 and fEDE < 0.5))
-                throw std::runtime_error("EDE: need 0 < cosmology_ede_fEDE < 0.5");
-            if (not(zc > 10.0 and zc < 1e7))
-                throw std::runtime_error("EDE: need 10 < cosmology_ede_zc < 1e7");
-            if (not(theta > 0.0 and theta < M_PI))
-                throw std::runtime_error("EDE: need 0 < cosmology_ede_theta_ini < pi");
-            if (not(n > 1.0))
-                throw std::runtime_error("EDE: need cosmology_ede_n > 1");
-            model_parameters = {{"ede_fEDE", fEDE}, {"ede_zc", zc}, {"ede_theta_i", theta}, {"ede_n", n}};
-        } else if (name == "Tabulated") {
-            registry_name = "";
-            tabulated_filename = param.get<std::string>("cosmology_tabulated_filename");
-            tabulated_format = param.get<std::string>("cosmology_tabulated_format");
-            if (tabulated_format != "H" and tabulated_format != "CLASS" and tabulated_format != "w")
-                throw std::runtime_error("Tabulated cosmology: unknown cosmology_tabulated_format = " +
-                                         tabulated_format + " (H, CLASS, w)");
-        } else {
-            throw std::runtime_error("Unknown cosmology_model [" + name + "]");
-        }
+        (this->*model_info(name).read)(param);
     }
 
     //========================================================================
@@ -200,7 +136,7 @@ class Cosmology {
         const BG::BackgroundParameters & p = input_parameters;
         const BG::BackgroundRange range{std::log(1e-10), std::log(100.0), 200};
 
-        if (name == "DGP") {
+        if (model_info(name).dgp_crossover) {
             const double rho0 = BG::density_today(BG::standard_species(p));
             const double OmegaL = BG::DGPFieldEquations::OmegaLambda(model_parameters.at("Omega_rc"), 1, rho0);
             if (std::fabs(OmegaL) > 1e-6 and FML::ThisTask == 0)
@@ -209,7 +145,7 @@ class Cosmology {
                           << OmegaL << " is added (cosmology_dgp_OmegaRC = " << 0.25 * (1.0 - rho0) * (1.0 - rho0)
                           << " would need none)\n";
         }
-        if (name == "Tabulated")
+        if (model_info(name).tabulated)
             bg = make_tabulated(p, range);
         else
             bg = BG::make_background(registry_name, p, model_parameters, range);
@@ -254,7 +190,7 @@ class Cosmology {
             std::cout << "# kpivot                  : " << kpivot_mpc << " 1/Mpc\n";
             for (const auto & [key, value] : model_parameters)
                 std::cout << "# " << std::left << std::setw(24) << key << ": " << value << "\n" << std::right;
-            if (name == "Tabulated")
+            if (model_info(name).tabulated)
                 std::cout << "# Table                   : " << tabulated_filename << " (format " << tabulated_format
                           << ")\n";
             if (bg)
@@ -407,7 +343,7 @@ class Cosmology {
 
     /// Pnl/Plinear from the EuclidEmulator2 for LCDM and w0waCDM (empty spline for the other models)
     Spline get_nonlinear_matter_power_spectrum_boost(double redshift) const {
-        if (name != "LCDM" and name != "w0waCDM")
+        if (not model_info(name).nonlinear_boost)
             return Spline();
         // EuclidEmulator2 takes A_s at the pivot 0.05/Mpc: convert from our pivot (the factor is 1 for kpivot = 0.05)
         const double As_ee2 = As * std::pow(0.05 / kpivot_mpc, ns - 1.0);
@@ -436,6 +372,121 @@ class Cosmology {
     void set_As(double _As) { As = _As; }
 
   private:
+    //========================================================================
+    // The cosmologies (cosmology_model): the one list of the models, with how their parameters are read (each sets
+    // registry_name, the model of FML's background registry, and model_parameters) and what is special about them.
+    // To add a model: a line here and its read function below (and its parameters in ParameterSchema.h)
+    //========================================================================
+    struct ModelInfo {
+        std::string name;                          // cosmology_model
+        void (Cosmology::*read)(ParameterMap &);   // reads the parameters of the model
+        bool early_dark_energy{false};             // the output table goes to a = 1e-9
+        bool nonlinear_boost{false};               // has the EuclidEmulator2 nonlinear P(k) boost
+        bool tabulated{false};                     // the background is read from a table (no registry model)
+        bool dgp_crossover{false};                 // the DGP crossover scale (a check of E(0) = 1 in init)
+    };
+    static const std::vector<ModelInfo> & models() {
+        static const std::vector<ModelInfo> list{
+            {"LCDM", &Cosmology::read_lcdm, false, true},
+            {"w0waCDM", &Cosmology::read_w0wa, false, true},
+            {"DGP", &Cosmology::read_dgp, false, false, false, true},
+            {"JBD", &Cosmology::read_jbd},
+            {"Quintessence", &Cosmology::read_quintessence, true},
+            {"EDE", &Cosmology::read_ede, true},
+            {"Tabulated", &Cosmology::read_tabulated, true, false, true},
+        };
+        return list;
+    }
+    static const ModelInfo & model_info(const std::string & model) {
+        for (auto & m : models())
+            if (m.name == model)
+                return m;
+        std::string available;
+        for (auto & m : models())
+            available += " " + m.name;
+        throw std::runtime_error("Unknown cosmology [" + model + "]. Available:" + available);
+    }
+
+    // The parameters of each model
+    void read_lcdm([[maybe_unused]] ParameterMap & param) {
+        registry_name = "lcdm";
+    }
+    void read_w0wa([[maybe_unused]] ParameterMap & param) {
+        registry_name = "w0wa";
+        w0 = param.get<double>("cosmology_w0");
+        wa = param.get<double>("cosmology_wa");
+        model_parameters = {{"w0", w0}, {"wa", wa}};
+    }
+    void read_dgp([[maybe_unused]] ParameterMap & param) {
+        registry_name = "dgp";
+        model_parameters = {{"Omega_rc", param.get<double>("cosmology_dgp_OmegaRC")}, {"dgp_branch", 1.0}};
+    }
+    void read_jbd([[maybe_unused]] ParameterMap & param) {
+        registry_name = "jbd";
+        const auto def = param.get<std::string>("cosmology_JBD_density_parameter_definition");
+        const std::vector<std::string> defs{"hi-class", "Gtoday", "Gnewton", "Gbare"};
+        const auto it = std::find(defs.begin(), defs.end(), def);
+        if (it == defs.end())
+            throw std::runtime_error("JBD: unknown cosmology_JBD_density_parameter_definition = " + def +
+                                     " (hi-class, Gtoday, Gnewton, Gbare)");
+        model_parameters = {{"bd_omega", param.get<double>("cosmology_JBD_wBD")},
+                            {"bd_GeffG_today", param.get<double>("cosmology_JBD_GeffG_today")},
+                            {"bd_density_parameter_definition", double(it - defs.begin())}};
+    }
+    void read_quintessence([[maybe_unused]] ParameterMap & param) {
+        const auto potential = param.get<std::string>("cosmology_quintessence_potential");
+        const double phi_ini = SIMCODE::get_parameter<double>(param, "cosmology_quintessence_phi_ini");
+        const double dphi_ini = SIMCODE::get_parameter<double>(param, "cosmology_quintessence_dphidlna_ini");
+        model_parameters = {{"quint_phi_ini", phi_ini}, {"quint_dphidlna_ini", dphi_ini}};
+        if (potential == "exponential") {
+            registry_name = "quintessence";
+            model_parameters["quint_lambda"] = param.get<double>("cosmology_quintessence_lambda");
+        } else if (potential == "inverse_power_law") {
+            registry_name = "quintessence_inverse_power_law";
+            model_parameters["quint_alpha"] = param.get<double>("cosmology_quintessence_alpha");
+            if (not(phi_ini > 0.0))
+                throw std::runtime_error("Quintessence: inverse_power_law needs cosmology_quintessence_phi_ini > 0");
+        } else if (potential == "pngb") {
+            registry_name = "quintessence_pngb";
+            model_parameters["quint_f"] = param.get<double>("cosmology_quintessence_f");
+            if (not(model_parameters["quint_f"] > 0.0))
+                throw std::runtime_error("Quintessence: pngb needs cosmology_quintessence_f > 0");
+        } else if (potential == "hilltop") {
+            registry_name = "quintessence_hilltop";
+            model_parameters["quint_mu"] = param.get<double>("cosmology_quintessence_mu");
+            model_parameters["quint_p"] = param.get<double>("cosmology_quintessence_p");
+            if (not(model_parameters["quint_mu"] > 0.0) or not(model_parameters["quint_p"] > 0.0))
+                throw std::runtime_error("Quintessence: hilltop needs cosmology_quintessence_mu > 0 and _p > 0");
+        } else {
+            throw std::runtime_error("Quintessence: unknown cosmology_quintessence_potential = " + potential +
+                                     " (exponential, inverse_power_law, pngb, hilltop)");
+        }
+        if (dphi_ini * dphi_ini >= 6.0)
+            throw std::runtime_error("Quintessence: need |cosmology_quintessence_dphidlna_ini| < sqrt(6)");
+    }
+    void read_ede([[maybe_unused]] ParameterMap & param) {
+        registry_name = "ede_zc";
+        const double fEDE = param.get<double>("cosmology_ede_fEDE"), zc = param.get<double>("cosmology_ede_zc");
+        const double theta = param.get<double>("cosmology_ede_theta_ini"), n = param.get<double>("cosmology_ede_n");
+        if (not(fEDE > 0.0 and fEDE < 0.5))
+            throw std::runtime_error("EDE: need 0 < cosmology_ede_fEDE < 0.5");
+        if (not(zc > 10.0 and zc < 1e7))
+            throw std::runtime_error("EDE: need 10 < cosmology_ede_zc < 1e7");
+        if (not(theta > 0.0 and theta < M_PI))
+            throw std::runtime_error("EDE: need 0 < cosmology_ede_theta_ini < pi");
+        if (not(n > 1.0))
+            throw std::runtime_error("EDE: need cosmology_ede_n > 1");
+        model_parameters = {{"ede_fEDE", fEDE}, {"ede_zc", zc}, {"ede_theta_i", theta}, {"ede_n", n}};
+    }
+    void read_tabulated([[maybe_unused]] ParameterMap & param) {
+        registry_name = "";
+        tabulated_filename = param.get<std::string>("cosmology_tabulated_filename");
+        tabulated_format = param.get<std::string>("cosmology_tabulated_format");
+        if (tabulated_format != "H" and tabulated_format != "CLASS" and tabulated_format != "w")
+            throw std::runtime_error("Tabulated cosmology: unknown cosmology_tabulated_format = " +
+                                     tabulated_format + " (H, CLASS, w)");
+    }
+
     double Omega(FML::COSMOLOGY::BACKGROUND::Component c, double a) const { return bg->Omega(c, std::log(a)); }
     /// The parameters of the background (init() must have been called)
     const FML::COSMOLOGY::BACKGROUND::BackgroundParameters & params() const {
