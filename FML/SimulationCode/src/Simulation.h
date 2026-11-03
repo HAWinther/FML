@@ -329,18 +329,11 @@ class NBodySimulation {
     void read_ic();
     void setup_nbody_gauge();
 
-    // The parts of run()
-    struct StepInfo {
-        double apos;             // Scale factor of the positions at the start of the step
-        double apos_new;         // ...and at the end of the step
-        double avel_new;         // Scale factor of the velocities at the end of the step
-        double delta_time_drift; // The size of the drift step
-        double delta_time_kick;  // The size of the kick step
-        double velocity_scale;   // Multiply the velocities by this before the kick
-    };
-    void step(const StepInfo & s);
-    void drift_and_lightcone(const StepInfo & s);
-    void kick_with_interlaced_force(const StepInfo & s);
+    // The parts of run() (a step: where the positions and velocities are, and the kick/drift sizes)
+    using Step = FML::NBODY::TimeStepping::Step;
+    void step(const Step & s);
+    void drift_and_lightcone(const Step & s);
+    void kick_with_interlaced_force(const Step & s);
     // The density field (SimulationDensity.h)
     void compute_density_field_fourier(FFTWGrid<NDIM> & density_grid_fourier, double a);
     void assign_cb_particles_to_grid(FFTWGrid<NDIM> & density_grid_fourier,

@@ -79,12 +79,18 @@ uint64_t grid_hash(const std::array<FML::GRID::FFTWGrid<N>, N> & force) {
     return hash;
 }
 
-// The old two-pass kick is retained here as the reference. It uses the public buffered gather API.
+// The old two-pass kick is retained here as the reference. It uses the public buffered gather API. The velocities
+// are first scaled by velocity_scale in a separate pass (as the SimulationCode did before the kick)
 template <int N, class P>
 double buffered_kick(std::array<FML::GRID::FFTWGrid<N>, N> & force,
                      std::vector<P> & p,
                      double dt,
-                     const std::string & method) {
+                     const std::string & method,
+                     double velocity_scale = 1.0) {
+    if (velocity_scale != 1.0)
+        for (auto & particle : p)
+            for (int d = 0; d < N; d++)
+                particle.vel[d] *= velocity_scale;
     if (dt == 0)
         return 0;
     for (auto & grid : force)
@@ -113,29 +119,30 @@ void run_case(const std::string & label, bool empty_rank = false, bool all_empty
     for (const std::string method : {"NGP", "CIC", "TSC", "PCS", "PQS"}) {
         auto force = make_force<N>(method);
         const uint64_t before = grid_hash<N>(force);
-        for (double dt : {0.0, 0.125, -0.333, 1e-12}) {
-            auto expected = original, actual = original;
-            const double max_change = buffered_kick<N>(force, expected, dt, method);
-            std::ostringstream output, expected_output;
-            expected_output.copyfmt(std::cout);
-            if (dt != 0 && FML::ThisTask == 0)
-                expected_output << "[Kick] Max delta_vel : " << max_change << '\n';
-            auto * previous = std::cout.rdbuf(output.rdbuf());
-            FML::NBODY::KickParticles<N, P>(force, actual.data(), actual.size(), dt, method);
-            std::cout.rdbuf(previous);
-            diagnostics = diagnostics && output.str() == expected_output.str();
-            for (size_t i = 0; i < actual.size(); i++) {
-                velocities = velocities && std::memcmp(actual[i].vel, expected[i].vel, sizeof(actual[i].vel)) == 0;
-                positions = positions && std::memcmp(actual[i].pos, original[i].pos, sizeof(actual[i].pos)) == 0 &&
-                            actual[i].tag == original[i].tag;
-                for (int d = 0; d < N; d++)
-                    worst = std::max(worst, std::abs(double(actual[i].vel[d]) - expected[i].vel[d]));
+        for (double dt : {0.0, 0.125, -0.333, 1e-12})
+            for (double velocity_scale : {1.0, 0.7}) {
+                auto expected = original, actual = original;
+                const double max_change = buffered_kick<N>(force, expected, dt, method, velocity_scale);
+                std::ostringstream output, expected_output;
+                expected_output.copyfmt(std::cout);
+                if (dt != 0 && FML::ThisTask == 0)
+                    expected_output << "[Kick] Max delta_vel : " << max_change << '\n';
+                auto * previous = std::cout.rdbuf(output.rdbuf());
+                FML::NBODY::KickParticles<N, P>(force, actual.data(), actual.size(), dt, method, velocity_scale);
+                std::cout.rdbuf(previous);
+                diagnostics = diagnostics && output.str() == expected_output.str();
+                for (size_t i = 0; i < actual.size(); i++) {
+                    velocities = velocities && std::memcmp(actual[i].vel, expected[i].vel, sizeof(actual[i].vel)) == 0;
+                    positions = positions && std::memcmp(actual[i].pos, original[i].pos, sizeof(actual[i].pos)) == 0 &&
+                                actual[i].tag == original[i].tag;
+                    for (int d = 0; d < N; d++)
+                        worst = std::max(worst, std::abs(double(actual[i].vel[d]) - expected[i].vel[d]));
+                }
+                grids = grids && grid_hash<N>(force) == before;
             }
-            grids = grids && grid_hash<N>(force) == before;
-        }
     }
     FML::MaxOverTasks(&worst);
-    check(velocities, label + " velocities match buffered kicks bit-for-bit");
+    check(velocities, label + " velocities match buffered kicks bit-for-bit (also with a velocity scaling)");
     check(positions, label + " positions and metadata preserved bit-for-bit");
     check(diagnostics, label + " maximum-velocity-change diagnostics unchanged");
     check(grids, label + " force-grid interiors unchanged");

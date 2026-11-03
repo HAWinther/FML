@@ -72,8 +72,7 @@ void NBodySimulation<NDIM, T>::run() {
                     timer.EndTiming("SortParticles");
                 }
 
-                const auto & s = steps[istep];
-                step({s.apos, s.apos_new, s.avel_new, s.delta_time_drift, s.delta_time_kick, s.velocity_scale});
+                step(steps[istep]);
 
                 // Most plans are made by now (initial conditions and the first step): save them already so that
                 // they are kept also if the run does not finish
@@ -156,7 +155,7 @@ void NBodySimulation<NDIM, T>::release_pm_workspace() {
 
 /// One kick-drift step: density -> force -> kick -> COLA kick -> lightcone -> COLA drift -> drift
 template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
+void NBodySimulation<NDIM, T>::step(const Step & s) {
     const auto & sim = params.simulation;
     set_force_settings_for_step(s.apos);
     const auto & force = current_force;
@@ -200,28 +199,11 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
         timer.StartTiming("Kick");
         if (force.interpolation_method == "nufft") {
             // Exact evaluation of the Fourier series of the force at the particle positions (one species)
-            auto * p = part.get_particles_ptr();
-            if (s.velocity_scale != 1.0) {
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-                for (size_t i = 0; i < part.get_npart(); i++) {
-                    auto * vel = FML::PARTICLE::GetVel(p[i]);
-                    for (int idim = 0; idim < NDIM; idim++)
-                        vel[idim] *= s.velocity_scale;
-                }
-            }
-            FML::NUFFT::ESKernel kernel(force.nufft_epsilon);
-            std::vector<FML::GRID::FloatType> force_particle;
-            for (int idim = 0; idim < NDIM; idim++) {
-                force_real[idim].fftw_r2c();
-                FML::NUFFT::nufft_type2<NDIM>(force_real[idim], p, part.get_npart(), force_particle, kernel);
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-                for (size_t i = 0; i < part.get_npart(); i++)
-                    FML::PARTICLE::GetVel(p[i])[idim] -= force_particle[i] * s.delta_time_kick;
-            }
+            SIMCODE::kick_particles_nufft<NDIM>(part,
+                                                force_real,
+                                                s.delta_time_kick,
+                                                s.velocity_scale,
+                                                force.nufft_epsilon);
         } else {
             for_each_species([&](auto & particles, const SIMCODE::SpeciesInfo & info) {
                 SIMCODE::kick_particles<NDIM>(particles,
@@ -244,7 +226,7 @@ void NBodySimulation<NDIM, T>::step(const StepInfo & s) {
 
 /// The rest of a step after the (PM) kick: COLA kick-drift, lightcone and drift
 template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
+void NBodySimulation<NDIM, T>::drift_and_lightcone(const Step & s) {
     const auto & sim = params.simulation;
     if (sim.enforce_LPT_trajectories and FML::ThisTask == 0) {
         std::cout << "Enforcing LPT trajectories so we do not compute forces and apply (non COLA) KICK/DRIFT "
@@ -319,7 +301,7 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const StepInfo & s) {
 /// interpolated to the shifted particles and averaged. This cancels the leading aliasing terms of both the
 /// density assignment and the force interpolation
 template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const StepInfo & s) {
+void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const Step & s) {
     const auto & sim = params.simulation;
     const auto & force = current_force;
     const auto nleftright = FML::INTERPOLATION::get_extra_slices(force.density_assignment_method);
@@ -359,16 +341,18 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const StepInfo & s) {
         timer.StartTiming("Kick");
         for (int idim = 0; idim < NDIM; idim++)
             force_real[idim].communicate_boundaries();
-        std::array<std::vector<FML::GRID::FloatType>, NDIM> force_particle;
-        FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, T>(force_real,
-                                                                                   p,
-                                                                                   npart,
-                                                                                   force_particle,
-                                                                                   force.density_assignment_method);
         const double norm = 1.0 / double(shifts.size());
-        for (int idim = 0; idim < NDIM; idim++)
-            for (size_t i = 0; i < npart; i++)
-                force_sum[idim][i] += force_particle[idim][i] * norm;
+        auto add_force = [&](size_t i, const std::array<FML::GRID::FloatType, NDIM> & f) {
+            for (int idim = 0; idim < NDIM; idim++)
+                force_sum[idim][i] += f[idim] * norm;
+            return 0.0;
+        };
+        FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions_apply<NDIM, T>(
+            force_real,
+            p,
+            npart,
+            force.density_assignment_method,
+            add_force);
         timer.EndTiming("Kick");
 
         FML::PARTICLE::restore_particle_positions<T, NDIM>(p, npart, saved_pos);

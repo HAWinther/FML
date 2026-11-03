@@ -6,6 +6,7 @@
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/NBody/NBody.h>
+#include <FML/NUFFT/NUFFT.h>
 
 #include "Neutrinos.h"
 #include "Species.h"
@@ -37,40 +38,18 @@ namespace SIMCODE {
                         double velocity_scale,
                         const std::string & interpolation_method,
                         double boxsize) {
-        auto * p = part.get_particles_ptr();
-        const size_t npart = part.get_npart();
-
         if (not info.relativistic) {
-            if (velocity_scale != 1.0) {
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-                for (size_t i = 0; i < npart; i++) {
-                    auto * vel = FML::PARTICLE::GetVel(p[i]);
-                    for (int idim = 0; idim < NDIM; idim++)
-                        vel[idim] *= velocity_scale;
-                }
-            }
-            FML::NBODY::KickParticles<NDIM>(force_real, part, delta_time, interpolation_method);
+            FML::NBODY::KickParticles<NDIM>(force_real, part, delta_time, interpolation_method, velocity_scale);
             return;
         }
 
         // Relativistic species
         namespace NU = SIMCODE::NEUTRINOS;
+        auto * p = part.get_particles_ptr();
         for (int idim = 0; idim < NDIM; idim++)
             force_real[idim].communicate_boundaries();
-        std::array<std::vector<FML::GRID::FloatType>, NDIM> force;
-        FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<NDIM, P>(force_real,
-                                                                                   p,
-                                                                                   npart,
-                                                                                   force,
-                                                                                   interpolation_method);
         const double inv_ac = 1.0 / (apos * NU::c_code(boxsize));
-        double max_u = 0.0;
-#ifdef USE_OMP
-#pragma omp parallel for reduction(max : max_u)
-#endif
-        for (size_t i = 0; i < npart; i++) {
+        auto kick = [&](size_t i, const std::array<FML::GRID::FloatType, NDIM> & force) {
             auto * vel = FML::PARTICLE::GetVel(p[i]);
             double v2 = 0.0;
             for (int idim = 0; idim < NDIM; idim++) {
@@ -78,14 +57,44 @@ namespace SIMCODE {
                 v2 += vel[idim] * vel[idim];
             }
             const double u2 = v2 * inv_ac * inv_ac;
-            max_u = std::max(max_u, u2);
             const double R = NU::kick_factor(u2);
             for (int idim = 0; idim < NDIM; idim++)
-                vel[idim] -= force[idim][i] * delta_time * R;
-        }
+                vel[idim] -= force[idim] * delta_time * R;
+            return u2;
+        };
+        double max_u =
+            FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions_apply<NDIM, P>(force_real,
+                                                                                             p,
+                                                                                             part.get_npart(),
+                                                                                             interpolation_method,
+                                                                                             kick);
         FML::MaxOverTasks(&max_u);
         if (FML::ThisTask == 0)
             std::cout << "[Kick " << info.name << "] max u = q/(amc) = " << std::sqrt(max_u) << "\n";
+    }
+
+    /// The kick v -> velocity_scale v - F dt with the force evaluated exactly at the particle positions (the
+    /// Fourier series of the force grid, see FML::NUFFT::nufft_type2; non-relativistic particles)
+    template <int NDIM, class P>
+    void kick_particles_nufft(FML::PARTICLE::MPIParticles<P> & part,
+                              std::array<FML::GRID::FFTWGrid<NDIM>, NDIM> & force_real,
+                              double delta_time,
+                              double velocity_scale,
+                              double nufft_epsilon) {
+        auto * p = part.get_particles_ptr();
+        const size_t npart = part.get_npart();
+        FML::NBODY::ScaleVelocities<NDIM>(p, npart, velocity_scale);
+        FML::NUFFT::ESKernel kernel(nufft_epsilon);
+        std::vector<FML::GRID::FloatType> force_particle;
+        for (int idim = 0; idim < NDIM; idim++) {
+            force_real[idim].fftw_r2c();
+            FML::NUFFT::nufft_type2<NDIM>(force_real[idim], p, npart, force_particle, kernel);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (size_t i = 0; i < npart; i++)
+                FML::PARTICLE::GetVel(p[i])[idim] -= force_particle[i] * delta_time;
+        }
     }
 
     /// The drift of a species: x -> x + v dt (times 1 / sqrt(1 + u^2) with u at the middle of the drift for

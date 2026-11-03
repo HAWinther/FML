@@ -52,14 +52,20 @@ namespace FML {
         void KickParticles(std::array<FFTWGrid<N>, N> & force_grid,
                            MPIParticles<T> & part,
                            double delta_time,
-                           std::string interpolation_method);
+                           std::string interpolation_method,
+                           double velocity_scale = 1.0);
 
         template <int N, class T>
         void KickParticles(std::array<FFTWGrid<N>, N> & force_grid,
                            T * p,
                            size_t NumPart,
                            double delta_time,
-                           std::string interpolation_method);
+                           std::string interpolation_method,
+                           double velocity_scale = 1.0);
+
+        /// v -> velocity_scale * v for all the particles
+        template <int N, class T>
+        void ScaleVelocities(T * p, size_t NumPart, double velocity_scale);
 
         template <int N>
         void compute_force_from_density_real(const FFTWGrid<N> & density_grid_real,
@@ -560,20 +566,35 @@ namespace FML {
         /// @param[in] delta_time The size of the timestep.
         /// @param[in] interpolation_method The interpolation method for interpolating the force to the particle
         /// positions.
+        /// @param[in] velocity_scale Multiply the velocities by this before the kick (default 1)
         ///
         //===================================================================================
         template <int N, class T>
         void KickParticles(std::array<FFTWGrid<N>, N> & force_grid,
                            MPIParticles<T> & part,
                            double delta_time,
-                           std::string interpolation_method) {
-            if (delta_time == 0.0)
-                return;
+                           std::string interpolation_method,
+                           double velocity_scale) {
             KickParticles<N, T>(force_grid,
                                 part.get_particles_ptr(),
                                 part.get_npart(),
                                 delta_time,
-                                interpolation_method);
+                                interpolation_method,
+                                velocity_scale);
+        }
+
+        template <int N, class T>
+        void ScaleVelocities(T * p, size_t NumPart, double velocity_scale) {
+            if (velocity_scale == 1.0)
+                return;
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (size_t i = 0; i < NumPart; i++) {
+                auto * vel = FML::PARTICLE::GetVel(p[i]);
+                for (int idim = 0; idim < N; idim++)
+                    vel[idim] *= velocity_scale;
+            }
         }
 
         //===================================================================================
@@ -591,6 +612,7 @@ namespace FML {
         /// @param[in] delta_time The size of the timestep.
         /// @param[in] interpolation_method The interpolation method for interpolating the force to the particle
         /// positions.
+        /// @param[in] velocity_scale Multiply the velocities by this before the kick (default 1)
         ///
         //===================================================================================
         template <int N, class T>
@@ -598,11 +620,12 @@ namespace FML {
                            T * p,
                            size_t NumPart,
                            double delta_time,
-                           std::string interpolation_method) {
+                           std::string interpolation_method,
+                           double velocity_scale) {
 
-            // Nothing to do if delta_time = 0.0
+            // Only the velocity scaling if delta_time = 0.0
             if (delta_time == 0.0)
-                return;
+                return ScaleVelocities<N, T>(p, NumPart, velocity_scale);
 
             // Sanity check on particle
             assert_mpi(FML::PARTICLE::GetNDIM(T()) == N, "[KickParticles] Dimension of particle and grid do not match");
@@ -625,6 +648,8 @@ namespace FML {
                 for (int idim = 0; idim < N; idim++) {
                     const double dvel = -force[idim] * delta_time;
                     max_change = std::max(max_change, std::abs(dvel));
+                    if (velocity_scale != 1.0)
+                        vel[idim] *= velocity_scale;
                     vel[idim] += dvel;
                 }
                 return max_change;
