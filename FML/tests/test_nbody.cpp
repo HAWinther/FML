@@ -825,17 +825,31 @@ int main(int argc, char ** argv) {
         FML::MinOverTasks(&ok);
         check_local(ok == 1, "generate_species_from_delta_cb: ratio 1, no shift = NBodyInitialConditions (bitwise)");
 
-        // ratio 2: twice the displacement (from the lattice, the ratio 0 positions) and velocity
+        // ratio 2: twice the displacement (from the lattice, the ratio 0 positions) and velocity. The particles are
+        // compared by ID (with several tasks they end up on different tasks in the three runs): x and v_x of each
+        // run in global arrays indexed by the ID
+        const size_t Ntot = size_t(Np) * Np * Np;
+        auto by_id = [&](MPIParticles<IDParticle> & mp) {
+            std::vector<double> x(Ntot, 0.0), v(Ntot, 0.0);
+            for (auto & p : mp) {
+                x[size_t(p.id)] = p.pos[0];
+                v[size_t(p.id)] = p.vel[0];
+            }
+            FML::SumArrayOverTasks(x.data(), Ntot);
+            FML::SumArrayOverTasks(v.data(), Ntot);
+            return std::make_pair(x, v);
+        };
+        const auto [x1, v1] = by_id(one);
+        const auto [x2, v2] = by_id(two);
+        const auto [x0, v0] = by_id(zero);
         double err = 0.0, maxdisp = 0.0;
-        for (size_t i = 0; i < one.get_npart(); i++) {
-            double d1 = one[i].pos[0] - zero[i].pos[0], d2 = two[i].pos[0] - zero[i].pos[0];
+        for (size_t i = 0; i < Ntot; i++) {
+            double d1 = x1[i] - x0[i], d2 = x2[i] - x0[i];
             d1 -= std::round(d1);
             d2 -= std::round(d2);
-            err = std::max({err, std::fabs(d2 - 2.0 * d1), std::fabs(two[i].vel[0] - 2.0 * one[i].vel[0])});
+            err = std::max({err, std::fabs(d2 - 2.0 * d1), std::fabs(v2[i] - 2.0 * v1[i])});
             maxdisp = std::max(maxdisp, std::fabs(d1));
         }
-        FML::MaxOverTasks(&err);
-        FML::MaxOverTasks(&maxdisp);
         double derr = 0.0;
         for (auto && index : delta_cb.get_fourier_range())
             derr = std::max(derr,

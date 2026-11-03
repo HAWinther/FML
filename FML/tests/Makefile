@@ -28,8 +28,14 @@ TARGETS += test_lua
 endif
 
 FML_MODULES := Global Spline ODESolver Math SphericalCollapse HaloModel FileUtils GadgetUtils FFTLog ParameterMap
-# SimulationCode/src: TransferInput.cpp (the transfer functions the SimulationCode gravity models read)
+# SimulationCode/src: TransferInput.cpp (the transfer functions the SimulationCode gravity models read). It links
+# FML's Einstein-Boltzmann solver (ic_type_of_input = internal), as in SimulationCode/Makefile
 EXTRA_VPATH += $(FML_ROOT)/SimulationCode/src
+include ../Cosmology/EinsteinBoltzmannSolver/Cosmology.mk
+FML_MODULES += $(filter-out Cosmology/EinsteinBoltzmannSolver,$(COSMO_MODULES)) $(COSMO_FML_MODULES)
+vpath ParameterFile.cpp $(FML_ROOT)/Cosmology/EinsteinBoltzmannSolver
+vpath EinsteinBoltzmannSolver.cpp $(FML_ROOT)/Cosmology/EinsteinBoltzmannSolver
+INTERNAL_COSMO_OBJS := $(filter-out Spline.o ODESolver.o,$(COSMO_OBJS))
 EXTRA_VPATH += $(FML_ROOT)/Baryonification/tests $(FML_ROOT)/ShortRangeGravity/tests $(FML_ROOT)/PhaseSpaceHaloFinder/tests $(FML_ROOT)/EnsembleStatistics/tests $(FML_ROOT)/Morphology/tests
 
 TEST_OBJS = test_core.o Global.o
@@ -40,13 +46,13 @@ endif
 test_transfers: test_transfers.o Global.o Spline.o FileUtils.o
 	$(LINK_EXE)
 
-test_timestepping: test_timestepping.o TransferInput.o Global.o Spline.o ODESolver.o ParameterMap.o Math.o NumericalMethods.o FileUtils.o
+test_timestepping: test_timestepping.o TransferInput.o $(INTERNAL_COSMO_OBJS) Global.o Spline.o ODESolver.o ParameterMap.o Math.o NumericalMethods.o FileUtils.o
 	$(LINK_EXE)
 
 test_fourier_resampling: test_fourier_resampling.o Global.o
 	$(LINK_EXE)
 
-test_random_fields: test_random_fields.o TransferInput.o Global.o Spline.o ODESolver.o ParameterMap.o
+test_random_fields: test_random_fields.o TransferInput.o $(INTERNAL_COSMO_OBJS) Global.o Spline.o ODESolver.o ParameterMap.o
 	$(LINK_EXE)
 
 test_lightcone: test_lightcone.o Global.o Spline.o ParameterMap.o
