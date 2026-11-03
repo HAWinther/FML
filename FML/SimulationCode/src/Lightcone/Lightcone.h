@@ -14,6 +14,7 @@
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Units/Units.h>
+#include <FML/WeakLensing/WeakLensing.h>
 
 #include <cmath>
 #include <iostream>
@@ -1125,10 +1126,12 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
     if (maps.size() == 0)
         return;
 
-    // Normalization factor for distances (which are in units of box)
-    const double H0_hmpc = cosmo->get_H0_hmpc();
-    const double H0Box = H0_hmpc * boxsize;
-    const double prefactor_kappa = 1.5 * cosmo->get_OmegaM();
+    // The Born weights of a shell for the kappa-maps (FML::WEAKLENSING::BornPlan: the integral over the shell of the
+    // lensing kernel 3/2 OmegaM chi (1+z) (1 - chi/chi_s) / D_H^2 with a source plane at the distance of each map)
+    FML::WEAKLENSING::FlatGeometry geometry;
+    geometry.omega_m = cosmo->get_OmegaM();
+    geometry.hubble_distance = 1.0 / cosmo->get_H0_hmpc();
+    geometry.z_of_chi = [this](double chi) { return 1.0 / get_distance_inv(chi / boxsize) - 1.0; };
 
     // Define what we mean by the "r" of a delta-map over the range [rmin,rmax]
     // We put this to be the middle of the map
@@ -1151,9 +1154,6 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
         const auto npix = delta_map.get_npix();
         // The raw data (a vector of floats from 0 -> npix)
         const auto delta_map_data = delta_map.get_map_data();
-        // The a-range for the map
-        const double amin = delta_map.get_amin();
-        const double amax = delta_map.get_amax();
         // The r-range for the map
         const double rmin = delta_map.get_rmin();
         const double rmax = delta_map.get_rmax();
@@ -1178,28 +1178,16 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
         std::cout << "r_map = " << r_delta_map * boxsize << " Mpc/h ";
         std::cout << "[rmin = " << rmin * boxsize << " -> rmax = " << rmax * boxsize << " Mpc/h]\n";
 
-        // Lopp over all kappa-maps and with j <= i and add the contribution to the
-        // integral from the current slice
+        // The kappa-maps with j <= i (sources behind or at the end of the shell) get the contribution of the shell
+        std::vector<FML::WEAKLENSING::Sources> sources;
+        for (int j = 0; j <= i; j++)
+            sources.push_back(FML::WEAKLENSING::Sources::plane(kappa_maps[j].get_rmax() * boxsize));
+        const FML::WEAKLENSING::BornPlan born({rmin * boxsize, rmax * boxsize}, sources, geometry);
         for (int j = 0; j <= i; j++) {
             auto & kappa_map = kappa_maps[j];
             auto * kappa_map_data = kappa_map.get_map_data();
             const double r_kappa_map = kappa_map.get_rmax();
-
-            // Integrate from amin -> amax
-            const int npts = 100;
-            const double xmin = std::log(amin);
-            const double xmax = std::log(amax);
-            const double dx = (xmax - xmin) / double(npts);
-            double integral = 0.0;
-            for (int k = 0; k < npts; k++) {
-                const double x = xmin + k * dx;
-                const double a = std::exp(x);
-                const double r = get_distance(a);
-                const double g = (r_kappa_map - r) / r_kappa_map;
-                integral += g * (r * (H0Box)) / a * (dx / (a * cosmo->HoverH0_of_a(a)));
-            }
-
-            integral *= prefactor_kappa;
+            const double integral = born.weight(j, 0);
 
             std::cout << "# Adding delta i = " << i << " ";
             std::cout << "[" << rmin * boxsize << " -> " << rmax * boxsize << " Mpc/h] ";
