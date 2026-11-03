@@ -177,7 +177,10 @@ namespace SIMCODE {
                            "Solve the exact DGP equation with the multigrid solver (slow, mainly for testing; can "
                            "be hard to get to converge)");
             });
+            // (a map without gravity_model, e.g. of a unit test: no exact solution)
             auto exact_solution = [](const ParameterMap & p) {
+                if (not p.contains("gravity_model"))
+                    return false;
                 auto model = p.get<std::string>("gravity_model");
                 return (model == "f(R)" and p.get<bool>("gravity_model_fofr_exact_solution")) or
                        (model == "Symmetron" and p.get<bool>("gravity_model_symmetron_exact_solution")) or

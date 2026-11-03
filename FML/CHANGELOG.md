@@ -17,7 +17,7 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   `MassiveNeutrinoSpecies` of the background instead of a separate T_nu0 and the masses; `init()` no longer takes the
   temperature. The regression is bitwise identical.
 
-### SimulationCode: checks of the parameter values in fields(); the gravity model parameters printed from the table
+### SimulationCode: checks of the parameter values in fields(); the gravity model parameters printed from the reader
 - A field of `fields()` can take a check as its last argument (`check::positive()`, `non_negative()`, `at_least(x)`,
   `in_range(a, b)`, `in_open_range(a, b)`, `list_of(n)`; `src/ParameterFields.h`), applied when the parameter is in use.
   The single-parameter checks of `validate()` and of the gravity models (grid sizes and bin counts, ellmax,

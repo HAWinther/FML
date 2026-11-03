@@ -205,7 +205,8 @@ class GravityModel {
     //========================================================================
     virtual void read_parameters(ParameterMap & param) {
         // The gravity_model_* and multigrid_* parameters (GravityModelSettings::fields)
-        SIMCODE::SettingsReader reader{param, "", SIMCODE::get_parameter<std::string>(param, "gravity_model")};
+        // (name is the model's name in gravity_models(), Models.h: the value of gravity_model)
+        SIMCODE::SettingsReader reader{param, "", name};
         settings.fields(reader);
         settings_printed = reader.printed;
         aini = 1.0 / (1.0 + param.get<double>("ic_initial_redshift"));
