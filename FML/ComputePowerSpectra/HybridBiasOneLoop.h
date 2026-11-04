@@ -115,9 +115,10 @@ namespace FML {
                 /// With a weight F(p) on one leg (for an operator F(k) delta_L(k), e.g. F = -k^2 for nabla^2 delta):
                 /// Q5F = Q5 with F on the leg of the operator, R1F, R2F = R1, R2 with F on the internal leg
                 /// The legs that end on an operator also carry the leg factor Wl = W_operators / W_displacement (1 if
-                /// not given): Q5 (on the operator leg p, with the integrand of Q5F), Q8 and Qs2 (on both legs), Q5F, R1F, R2F (F Wl) and R1W,
-                /// R2W (R1, R2 with Wl on the internal leg). Q1, Q2, R1, R2 are those of the displacement alone.
-                /// kbreak: a discontinuity of Wl (e.g. a sharper cut of the operators) the integrals are split at
+                /// not given): Q5 (on the operator leg p, with the integrand of Q5F), Q8 and Qs2 (on both legs), Q5F,
+                /// R1F, R2F (F Wl) and R1W, R2W (R1, R2 with Wl on the internal leg). Q1, Q2, R1, R2 are those of the
+                /// displacement alone. kbreak: a discontinuity of Wl (e.g. a sharper cut of the operators) the
+                /// integrals are split at
                 struct LoopSpectra {
                     double Q1, Q2, Q5, Q8, Qs2, R1, R2, Q5F, R1F, R2F, R1W, R2W;
                 };
@@ -186,7 +187,8 @@ namespace FML {
                                 res.Q2 += fac * omx2 * r * x * (1.0 - r * x) / (y2 * y2);
                                 // Q5 with the operator on the leg p: the form of Q5F (Q5 itself is symmetrized in
                                 // the two legs, equal after the integration only for Wl = 1)
-                                res.Q5 += fac * (Wl ? wlp * r * r * (1.0 - mu2) * (1.0 - r * x) / y2 : r * x * omx2 / y2);
+                                res.Q5 +=
+                                    fac * (Wl ? wlp * r * r * (1.0 - mu2) * (1.0 - r * x) / y2 : r * x * omx2 / y2);
                                 res.Q8 += fac * wl2 * r * r * omx2 / y2;
                                 res.Qs2 += fac * wl2 * r * r * (-3.0 * mu2 * mu2 + 4.0 * mu2 - 1.0);
                                 // A10 with p the leg of the operator and |k - p| that of Psi^(1): equals Q5 for F = 1
@@ -329,7 +331,8 @@ namespace FML {
                             last = i;
                     if (last < 0 or last == n)
                         return 0.0;
-                    double lo = kmin * std::pow(kmax / kmin, last / double(n)), hi = kmin * std::pow(kmax / kmin, (last + 1) / double(n));
+                    double lo = kmin * std::pow(kmax / kmin, last / double(n)),
+                           hi = kmin * std::pow(kmax / kmin, (last + 1) / double(n));
                     for (int it = 0; it < 60; it++) {
                         const double mid = 0.5 * (lo + hi);
                         (W_op(mid) != 0.0 ? lo : hi) = mid;
@@ -456,7 +459,8 @@ namespace FML {
                     // G10B = (3 R1 + 4 R2 + 2 Q5) / 14
                     auto a10 = [&](double Ak, double Q5A, double R1A, double R2A, double & GA, double & GB) {
                         const double k2a = 3.0 / 7.0 * Ak * L.R1;
-                        const double k2b = -3.0 / 7.0 * Ak * (L.R1 + 2.0 * L.R2) - 6.0 / 7.0 * Q5A - 6.0 / 7.0 * (R1A + R2A);
+                        const double k2b =
+                            -3.0 / 7.0 * Ak * (L.R1 + 2.0 * L.R2) - 6.0 / 7.0 * Q5A - 6.0 / 7.0 * (R1A + R2A);
                         GA = -0.5 * (k2a + k2b / 3.0);
                         GB = -k2b / 6.0;
                     };
@@ -477,8 +481,14 @@ namespace FML {
                     // the same for W_operators = W_displacement)
                     zerolag_integrand = G[G10A];
                 };
-                return detail::oneloop_from_loop_functions(
-                    pofk, W_operators, W_displacement, kvalues, options, fill, names, pairs);
+                return detail::oneloop_from_loop_functions(pofk,
+                                                           W_operators,
+                                                           W_displacement,
+                                                           kvalues,
+                                                           options,
+                                                           fill,
+                                                           names,
+                                                           pairs);
             }
 
             /// The one-loop prediction with the same filter W for the operators and the displacement

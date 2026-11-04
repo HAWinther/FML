@@ -541,8 +541,8 @@ namespace FML {
                                 if (b <= a)
                                     return;
                                 std::vector<double> xs, ws;
-                                const int nseg = std::min(set.max_segs,
-                                                          std::max(1, int(set.segs_per_efold * std::log(b / a)) + 1));
+                                const int nseg =
+                                    std::min(set.max_segs, std::max(1, int(set.segs_per_efold * std::log(b / a)) + 1));
                                 composite_gl(a, b, nseg, set.order, true, xs, ws);
                                 qx.insert(qx.end(), xs.begin(), xs.end());
                                 qw.insert(qw.end(), ws.begin(), ws.end());
@@ -985,7 +985,14 @@ namespace FML {
                     // X10(q = 0) = 0
                     zerolag_integrand = G[G10A];
                 };
-                return oneloop_from_loop_functions(pofk, W_operators, W_displacement, kvalues, options, fill, names, pairs);
+                return oneloop_from_loop_functions(pofk,
+                                                   W_operators,
+                                                   W_displacement,
+                                                   kvalues,
+                                                   options,
+                                                   fill,
+                                                   names,
+                                                   pairs);
             }
 
             /// The prediction from the tables with the same filter W for the operators and the displacement
@@ -1061,7 +1068,16 @@ namespace FML {
                                            const MGOneLoopSettings & settings = {},
                                            std::vector<std::string> * names = nullptr,
                                            std::vector<std::array<int, 2>> * pairs = nullptr) {
-                return oneloop_hybrid_bias_spectra_mg(model, aout, pofk, W, W, kvalues, options, settings, names, pairs);
+                return oneloop_hybrid_bias_spectra_mg(model,
+                                                      aout,
+                                                      pofk,
+                                                      W,
+                                                      W,
+                                                      kvalues,
+                                                      options,
+                                                      settings,
+                                                      names,
+                                                      pairs);
             }
 
         } // namespace HYBRIDBIAS

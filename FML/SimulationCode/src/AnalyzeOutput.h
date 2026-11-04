@@ -436,9 +436,19 @@ std::function<double(double)> hybrid_bias_growth_factor(NBodySimulation<NDIM, T>
     };
 }
 
+/// The spherical cut (units of 1/box) of the displacement field in the LPT predictions and the Zel'dovich field: the
+/// IC have the modes of the IC grid, and the linear field kept for the hybrid bias spectra (and so the Zel'dovich
+/// field) those of the lattice, so pi min(ic_nmesh, particle_Npart_1D) (the field and its mean, the Zel'dovich
+/// prediction, must have the same cut for the control variate to be unbiased)
+template <int NDIM, class T>
+double hybrid_bias_kcut_displacement(NBodySimulation<NDIM, T> & sim) {
+    return M_PI * std::min(sim.get_parameters().ic.nmesh, sim.get_parameters().particle.Npart_1D);
+}
+
 /// The hybrid bias spectra of the Zel'dovich field of the same initial conditions (the control variate, see
 /// compute_zeldovich_hybrid_bias_spectra), written to hybridbias_zeldovichfield_z<z>.txt. The displacement has the
-/// modes of the IC grid (a spherical cut, as W_displacement of the LPT predictions)
+/// modes of the lattice with the spherical cut hybrid_bias_kcut_displacement (as W_displacement of the LPT
+/// predictions). The shot noise is not subtracted (the Zel'dovich prediction has none)
 template <int NDIM, class T>
 FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::HybridBiasSpectra<NDIM>
 compute_hybrid_bias_zeldovich_field(NBodySimulation<NDIM, T> & sim,
@@ -449,7 +459,7 @@ compute_hybrid_bias_zeldovich_field(NBodySimulation<NDIM, T> & sim,
     const auto & settings = sim.get_parameters().hybridbias;
     const double boxsize = sim.get_parameters().simulation.boxsize;
     const int Npart_1D = sim.get_parameters().particle.Npart_1D;
-    const double kcut_displacement = M_PI * sim.get_parameters().ic.nmesh;
+    const double kcut_displacement = hybrid_bias_kcut_displacement(sim);
     HybridBiasSpectra<NDIM> zfield;
     compute_zeldovich_hybrid_bias_spectra<NDIM>(sim.get_hybridbias_linear_field(),
                                                 Npart_1D,
@@ -468,7 +478,8 @@ compute_hybrid_bias_zeldovich_field(NBodySimulation<NDIM, T> & sim,
            << kcut_displacement / boxsize
            << " h/Mpc, with the operator weights of the particles; the same grid, assignment and binning as "
               "hybridbias_z"
-           << redshift_to_string(redshift) << ".txt). Its mean is the Zel'dovich prediction (hybridbias_zeldovich)\n";
+           << redshift_to_string(redshift)
+           << ".txt; the shot noise is not subtracted). Its mean is the Zel'dovich prediction (hybridbias_zeldovich)\n";
     zfield.write(snapshot_folder + "/hybridbias_zeldovichfield_z" + redshift_to_string(redshift) + ".txt",
                  header.str(),
                  {{"Pcb_linear(k)", pofk_linear}});
@@ -485,7 +496,8 @@ measure_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim,
                             double redshift,
                             const std::string & snapshot_folder,
                             FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::HybridBiasOptions & options,
-                            std::vector<double> & pofk_linear) {
+                            std::vector<double> & pofk_linear,
+                            FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::HybridBiasSpectra<NDIM> * zfield_out = nullptr) {
     using namespace FML::CORRELATIONFUNCTIONS::HYBRIDBIAS;
     const auto & settings = sim.get_parameters().hybridbias;
     const double boxsize = sim.get_parameters().simulation.boxsize;
@@ -546,8 +558,11 @@ measure_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim,
                   {{"Pcb_linear(k)", pofk_linear}});
 
     // The spectra of the Zel'dovich field of the same IC (the control variate)
-    if (settings.zeldovich_field)
-        compute_hybrid_bias_zeldovich_field(sim, redshift, snapshot_folder);
+    if (settings.zeldovich_field) {
+        auto zfield = compute_hybrid_bias_zeldovich_field(sim, redshift, snapshot_folder);
+        if (zfield_out)
+            *zfield_out = std::move(zfield);
+    }
     return spectra;
 }
 
@@ -582,7 +597,8 @@ hybrid_bias_oneloop_mg(NBodySimulation<NDIM, T> & sim,
                 return sim.linear_pofk_cb(k, aa);
             });
         }
-        mg_tables = std::make_shared<MGLoopTables>(mg_loop_tables(model, aouts, pofks, W_operators, W_displacement, zoptions));
+        mg_tables =
+            std::make_shared<MGLoopTables>(mg_loop_tables(model, aouts, pofks, W_operators, W_displacement, zoptions));
     }
     int io = -1;
     for (size_t i = 0; i < mg_tables_redshifts.size(); i++)
@@ -590,8 +606,13 @@ hybrid_bias_oneloop_mg(NBodySimulation<NDIM, T> & sim,
             io = int(i);
     std::vector<std::vector<double>> oneloop;
     if (io >= 0)
-        oneloop = oneloop_hybrid_bias_spectra_mg_from_tables(
-            *mg_tables, io, pofk_linear_of_k, W_operators, W_displacement, klocal, zoptions);
+        oneloop = oneloop_hybrid_bias_spectra_mg_from_tables(*mg_tables,
+                                                             io,
+                                                             pofk_linear_of_k,
+                                                             W_operators,
+                                                             W_displacement,
+                                                             klocal,
+                                                             zoptions);
     else
         oneloop = oneloop_hybrid_bias_spectra_mg(model,
                                                  {1.0 / (1.0 + redshift)},
@@ -607,13 +628,15 @@ hybrid_bias_oneloop_mg(NBodySimulation<NDIM, T> & sim,
 /// P(k,z) and the same cut and smoothing of the operators, in the bins of spectra (written to file). delta_L is the
 /// linear field of the IC scaled to the output redshift with the 1LPT growth factor of the gravity model
 template <int NDIM, class T>
-void write_hybrid_bias_predictions(NBodySimulation<NDIM, T> & sim,
-                                   double redshift,
-                                   const std::string & snapshot_folder,
-                                   const FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::HybridBiasSpectra<NDIM> & spectra,
-                                   const FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::HybridBiasOptions & options,
-                                   const std::vector<double> & pofk_linear,
-                                   bool with_oneloop = true) {
+void write_hybrid_bias_predictions(
+    NBodySimulation<NDIM, T> & sim,
+    double redshift,
+    const std::string & snapshot_folder,
+    const FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::HybridBiasSpectra<NDIM> & spectra,
+    const FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::HybridBiasOptions & options,
+    const std::vector<double> & pofk_linear,
+    bool with_oneloop = true,
+    const FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::HybridBiasSpectra<NDIM> * zfield = nullptr) {
     using namespace FML::CORRELATIONFUNCTIONS::HYBRIDBIAS;
     const auto & settings = sim.get_parameters().hybridbias;
     const double boxsize = sim.get_parameters().simulation.boxsize;
@@ -645,8 +668,8 @@ void write_hybrid_bias_predictions(NBodySimulation<NDIM, T> & sim,
             return 0.0;
         return W_of_k2 ? W_of_k2(k * k) : 1.0;
     };
-    // The displacement field of the IC has the modes of the IC grid (we approximate this by a spherical cut)
-    const double kcut_displacement = M_PI * sim.get_parameters().ic.nmesh / boxsize;
+    // The displacement field has the modes of the IC grid and of the lattice (we approximate this by a spherical cut)
+    const double kcut_displacement = hybrid_bias_kcut_displacement(sim) / boxsize;
     auto W_displacement = [&](double k) { return k < kcut_displacement ? 1.0 : 0.0; };
 
     // The k-values the predictions are computed at (each task a part of them) and their binning
@@ -672,6 +695,7 @@ void write_hybrid_bias_predictions(NBodySimulation<NDIM, T> & sim,
         theory.write(snapshot_folder + "/hybridbias_" + label + "_z" + redshift_to_string(redshift) + ".txt",
                      header.str(),
                      {{"Pcb_linear(k)", pofk_linear}});
+        return theory;
     };
 
     ZeldovichOptions zoptions;
@@ -681,7 +705,33 @@ void write_hybrid_bias_predictions(NBodySimulation<NDIM, T> & sim,
         zoptions.kmax_integration = std::min(std::max(kcut, kcut_displacement), krange.second);
         auto zeldovich =
             zeldovich_hybrid_bias_spectra(pofk_linear_of_k, W_operators, W_displacement, grid.klocal, zoptions);
-        write_prediction(zeldovich, "zeldovich", "Zel'dovich prediction", kcut_displacement);
+        const auto zprediction = write_prediction(zeldovich, "zeldovich", "Zel'dovich prediction", kcut_displacement);
+
+        // The control variate P_cv = P - beta(k) (P_zeldovichfield - P_zeldovich) (Kokron et al. 2022)
+        if (zfield) {
+            const double k0 = settings.cv_beta_k0, dk = settings.cv_beta_dk;
+            auto beta = [&](double k, [[maybe_unused]] int pair) {
+                return zeldovich_control_variate_beta_fiducial(k, k0, dk);
+            };
+            const auto cv = zeldovich_control_variate(spectra, *zfield, zprediction, beta);
+            std::vector<double> betas(spectra.pofk[0].n);
+            for (int i = 0; i < spectra.pofk[0].n; i++)
+                betas[i] = beta(spectra.pofk[0].kbin[i], 0);
+            std::ostringstream header;
+            header << "# Zel'dovich control variate (Kokron et al. 2022) of the hybrid bias spectra at z = " << redshift
+                   << ": P_cv = P - beta(k) (P_zeldovichfield - P_zeldovich) with P from hybridbias_z"
+                   << redshift_to_string(redshift) << ".txt, P_zeldovichfield from hybridbias_zeldovichfield_z"
+                   << redshift_to_string(redshift) << ".txt and P_zeldovich from hybridbias_zeldovich_z"
+                   << redshift_to_string(redshift) << ".txt. "
+                   << (k0 > 0.0 ? "beta(k) = [1 - tanh((k - " + std::to_string(k0) + ") / " + std::to_string(dk) +
+                                      ")] / 2 (the column beta(k))" :
+                                  std::string("beta = 1"))
+                   << ". Same mean as P with less sample variance where the simulation and the Zel'dovich field are "
+                      "correlated (large scales)\n";
+            cv.write(snapshot_folder + "/hybridbias_cv_z" + redshift_to_string(redshift) + ".txt",
+                     header.str(),
+                     {{"beta(k)", betas}, {"Pcb_linear(k)", pofk_linear}});
+        }
     }
     if (with_oneloop) {
         // One-loop LPT: the operators with their cut and smoothing, the displacement with the modes of the IC
@@ -721,8 +771,16 @@ template <int NDIM, class T>
 void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift, std::string snapshot_folder) {
     FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::HybridBiasOptions options;
     std::vector<double> pofk_linear;
-    const auto spectra = measure_hybrid_bias_spectra(sim, redshift, snapshot_folder, options, pofk_linear);
-    write_hybrid_bias_predictions(sim, redshift, snapshot_folder, spectra, options, pofk_linear);
+    FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::HybridBiasSpectra<NDIM> zfield;
+    const auto spectra = measure_hybrid_bias_spectra(sim, redshift, snapshot_folder, options, pofk_linear, &zfield);
+    write_hybrid_bias_predictions(sim,
+                                  redshift,
+                                  snapshot_folder,
+                                  spectra,
+                                  options,
+                                  pofk_linear,
+                                  true,
+                                  sim.get_parameters().hybridbias.zeldovich_field ? &zfield : nullptr);
 }
 
 /// Returns P_ell(k) for ell = 0,1,...,ellmax (also written to file)

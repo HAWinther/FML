@@ -968,6 +968,8 @@ namespace SIMCODE {
         bool oneloop;                          // Also output the one-loop LPT prediction
         std::string oneloop_kernels;           // EdS or model (the scale-dependent kernels of the gravity model)
         double lpt_kmin;                       // Lower limit of the k-integrals of the LPT predictions (h/Mpc)
+        double cv_beta_k0;                     // beta(k) of the control variate: [1 - tanh((k - k0) / dk)] / 2
+        double cv_beta_dk;                     // (k0 <= 0: beta = 1)
 
         /// The parameters (see ParameterFields.h)
         template <class F>
@@ -1019,33 +1021,49 @@ namespace SIMCODE {
                            false,
                            "Also write the Zel'dovich (resummed 1LPT) prediction of the spectra with the same cut and "
                            "smoothing of the operators: hybridbias_zeldovich_z<z>.txt");
-                f.always_optional("hybridbias_zeldovich_field",
-                           zeldovich_field,
-                           false,
-                           "Also write the spectra of the Zel'dovich field of the same initial conditions (the lattice "
-                           "moved with the 1LPT displacement of the linear field at the output, with the same operator "
-                           "weights): hybridbias_zeldovichfield_z<z>.txt. With the Zel'dovich prediction "
-                           "(hybridbias_zeldovich, the mean of these spectra) this is the control variate of Kokron et "
-                           "al. 2022: P_cv = P - beta (P_zeldovichfield - P_zeldovich) has the same mean as P and much "
-                           "less sample variance on large scales");
-                f.always_optional("hybridbias_zeldovich_field_only",
-                           zeldovich_field_only,
-                           false,
-                           "No time stepping: generate the initial conditions and write only the spectra of their "
-                           "Zel'dovich field at the output redshifts (as hybridbias_zeldovich_field). Cheap: for the "
-                           "mean of the control variate over many realizations in the same box, or for adding the "
-                           "control variate to existing runs (same seed and IC settings)");
+                f.always_optional(
+                    "hybridbias_zeldovich_field",
+                    zeldovich_field,
+                    false,
+                    "Also write the spectra of the Zel'dovich field of the same initial conditions (the lattice "
+                    "moved with the 1LPT displacement of the linear field at the output, with the same operator "
+                    "weights): hybridbias_zeldovichfield_z<z>.txt. With the Zel'dovich prediction "
+                    "(hybridbias_zeldovich, the mean of these spectra) this is the control variate of Kokron et "
+                    "al. 2022: P_cv = P - beta (P_zeldovichfield - P_zeldovich) has the same mean as P and much "
+                    "less sample variance on large scales");
+                f.always_optional(
+                    "hybridbias_zeldovich_field_only",
+                    zeldovich_field_only,
+                    false,
+                    "No time stepping: generate the initial conditions and write only the spectra of their "
+                    "Zel'dovich field at the output redshifts (as hybridbias_zeldovich_field). Cheap: for the "
+                    "mean of the control variate over many realizations in the same box, or for adding the "
+                    "control variate to existing runs (same seed and IC settings)");
                 f.optional("hybridbias_oneloop",
                            oneloop,
                            false,
                            "Also write the one-loop LPT (CLEFT) prediction of the spectra (no counterterms): "
                            "hybridbias_oneloop_z<z>.txt");
-                f.always_optional("hybridbias_lpt_kmin",
-                           lpt_kmin,
-                           0.0,
-                           "Lower limit (h/Mpc) of the k-integrals of the LPT predictions (0: the start of the linear "
-                           "P(k) table, or 1e-5). The box has no modes below its fundamental mode",
-                           check::non_negative());
+                f.always_optional(
+                    "hybridbias_lpt_kmin",
+                    lpt_kmin,
+                    0.0,
+                    "Lower limit (h/Mpc) of the k-integrals of the LPT predictions (0: the start of the linear "
+                    "P(k) table, or 1e-5). The box has no modes below its fundamental mode",
+                    check::non_negative());
+                f.always_optional(
+                    "hybridbias_zeldovich_cv_beta_k0",
+                    cv_beta_k0,
+                    0.618,
+                    "The coefficient of the Zel'dovich control variate written to hybridbias_cv_z<z>.txt "
+                    "(with hybridbias_zeldovich_field and hybridbias_zeldovich): beta(k) = [1 - tanh((k - "
+                    "k0) / dk)] / 2 (Kokron et al. 2022, Eq. 4.7) with k0 (h/Mpc) this. 0: beta = 1");
+                f.always_optional("hybridbias_zeldovich_cv_beta_dk",
+                                  cv_beta_dk,
+                                  0.167,
+                                  "The width dk (h/Mpc) of beta(k) of the Zel'dovich control variate (see "
+                                  "hybridbias_zeldovich_cv_beta_k0)",
+                                  check::positive());
                 f.always_optional(
                     "hybridbias_oneloop_kernels",
                     oneloop_kernels,
@@ -1390,6 +1408,12 @@ namespace SIMCODE {
                 if ((hybridbias.zeldovich or hybridbias.oneloop) and hybridbias.kcut_over_nyquist <= 0.0)
                     fail("hybridbias_zeldovich and hybridbias_oneloop need an isotropic cut of the operators "
                          "(hybridbias_kcut_over_nyquist > 0)");
+                // The one-loop prediction needs the operators to be zero where the displacement is (its modes are
+                // those of the lattice up to the IC grid: a spherical cut at pi min(ic_nmesh, particle_Npart_1D))
+                if (hybridbias.oneloop and hybridbias.kcut_over_nyquist * particle.Npart_1D >
+                                               (1.0 + 1e-12) * std::min(ic.nmesh, particle.Npart_1D))
+                    fail("hybridbias_oneloop needs the operator cut inside the cut of the displacement: "
+                         "hybridbias_kcut_over_nyquist * particle_Npart_1D <= min(ic_nmesh, particle_Npart_1D)");
             }
             if (force.interlacing_order > 1) {
                 if (force.density_method != "assignment" or force.interpolation_method != "assignment")

@@ -746,8 +746,13 @@ namespace FML {
             /// No particles are needed: the points are made from the lattice of the operators (Nlattice^N points, as
             /// the particles of the simulation) and communicated to the tasks of their positions. The operators use
             /// options (cut, smoothing) as in compute_hybrid_bias_spectra; the displacement uses the linear field
-            /// with only the spherical cut kcut_displacement (in units of 1/box; 0: all modes of the lattice grid),
-            /// which should be the cut of the displacement field of the initial conditions (pi ic_nmesh).
+            /// with only the spherical cut kcut_displacement (in units of 1/box; 0: all modes of the lattice grid).
+            /// The displacement only has the modes of the lattice grid, so the Zel'dovich prediction it is compared
+            /// with must use the cut min(kcut_displacement, pi Nlattice).
+            ///
+            /// The shot noise is never subtracted (options.subtract_shotnoise is ignored): the Zel'dovich prediction
+            /// has none and the displaced lattice has far less than Poisson noise on large scales, so subtracting it
+            /// would bias P_ab^cv. spectra.shotnoise holds the Poisson value mean(w_a w_b) / Npart for reference.
             ///
             /// @param[in] delta_linear_fourier The linear density field in Fourier space (as for
             /// compute_hybrid_bias_spectra)
@@ -781,8 +786,11 @@ namespace FML {
                     doptions.kcut = kcut_displacement;
                     doptions.smoothing_scale = 0.0;
                     std::vector<FFTWGrid<N>> delta;
-                    compute_lagrangian_fields<N>(
-                        delta_linear_fourier, Nlattice, delta, doptions, growth_factor_of_kBox);
+                    compute_lagrangian_fields<N>(delta_linear_fourier,
+                                                 Nlattice,
+                                                 delta,
+                                                 doptions,
+                                                 growth_factor_of_kBox);
                     delta[0].fftw_r2c();
                     FFTWGrid<N> phi;
                     FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier<N>(delta[0], phi);
@@ -825,7 +833,73 @@ namespace FML {
                 std::vector<FFTWGrid<N>> advected;
                 compute_advected_fields<N, Point>(p, NumPart, NumPartTot, values, nfields, Nmesh, advected, options);
                 cross_spectra_of_grids<N>(advected, spectra, options.nbins);
-                detail::set_shotnoise(values, nfields, NumPart, NumPartTot, options.subtract_shotnoise, spectra);
+                detail::set_shotnoise(values, nfields, NumPart, NumPartTot, false, spectra);
+            }
+
+            //=====================================================================================================
+            /// @brief A fiducial control-variate coefficient beta(k) for the Zel'dovich control variate: the filter
+            /// F(k) = [1 - tanh((k - k0) / dk)] / 2 of Kokron et al. 2022 (2205.15327, Eq. 4.7; k0 = 0.618 h/Mpc,
+            /// dk = 0.167 h/Mpc, calibrated on the matter spectrum of the Quijote boxes at z = 0). It is ~1 on large
+            /// scales, where the simulation and its Zel'dovich field are almost perfectly correlated, and goes to 0
+            /// where they decorrelate. Kokron et al. multiply it with the disconnected estimate of the optimal beta
+            /// (their Eq. 4.4, from the cross spectra of the simulation and the Zel'dovich field), which is ~1 on
+            /// large scales and is not included here. Any beta gives an unbiased estimator; this only sets how much
+            /// the variance is reduced. k0 <= 0: beta = 1 everywhere.
+            ///
+            /// @param[in] k The wavenumber (h/Mpc)
+            /// @param[in] k0 The scale where beta = 1/2 (h/Mpc)
+            /// @param[in] dk The width of the transition (h/Mpc)
+            //=====================================================================================================
+            inline double zeldovich_control_variate_beta_fiducial(double k, double k0 = 0.618, double dk = 0.167) {
+                if (k0 <= 0.0)
+                    return 1.0;
+                return 0.5 * (1.0 - std::tanh((k - k0) / dk));
+            }
+
+            //=====================================================================================================
+            /// @brief The control-variate spectra P_ab^cv(k) = P_ab(k) - beta_ab(k) (P_ab^Zel'dovich field(k) -
+            /// <P_ab^Zel'dovich>(k)) (Kokron et al. 2022): spectra the measured spectra, zeldovich_field those of the
+            /// Zel'dovich field of the same initial conditions (compute_zeldovich_hybrid_bias_spectra) and
+            /// zeldovich_prediction its mean (zeldovich_hybrid_bias_spectra, binned in the same bins). All three
+            /// must have the same pairs, bins and units. The shot noise of the result is that of spectra.
+            ///
+            /// @param[in] spectra The measured spectra
+            /// @param[in] zeldovich_field The spectra of the Zel'dovich field
+            /// @param[in] zeldovich_prediction The Zel'dovich prediction
+            /// @param[in] beta beta(k, pair index) (k in the units of the spectra); nullptr: beta = 1
+            ///
+            /// @return The control-variate spectra
+            //=====================================================================================================
+            template <int N>
+            HybridBiasSpectra<N> zeldovich_control_variate(const HybridBiasSpectra<N> & spectra,
+                                                           const HybridBiasSpectra<N> & zeldovich_field,
+                                                           const HybridBiasSpectra<N> & zeldovich_prediction,
+                                                           std::function<double(double, int)> beta = nullptr) {
+                auto same = [&](const HybridBiasSpectra<N> & other) {
+                    if (other.pairs != spectra.pairs or other.scaled != spectra.scaled)
+                        return false;
+                    for (size_t i = 0; i < spectra.pairs.size(); i++) {
+                        if (other.pofk[i].n != spectra.pofk[i].n)
+                            return false;
+                        for (int k = 0; k < spectra.pofk[i].n; k++) {
+                            const double k1 = spectra.pofk[i].kbin[k], k2 = other.pofk[i].kbin[k];
+                            if (std::abs(k1 - k2) > 1e-6 * std::max(std::abs(k1), std::abs(k2)))
+                                return false;
+                        }
+                    }
+                    return true;
+                };
+                assert_mpi(same(zeldovich_field) and same(zeldovich_prediction),
+                           "[zeldovich_control_variate] The spectra must have the same pairs, bins and units");
+                auto result = spectra;
+                for (size_t i = 0; i < spectra.pairs.size(); i++) {
+                    for (int k = 0; k < spectra.pofk[i].n; k++) {
+                        const double b = beta ? beta(spectra.pofk[i].kbin[k], int(i)) : 1.0;
+                        result.pofk[i].pofk[k] -=
+                            b * (zeldovich_field.pofk[i].pofk[k] - zeldovich_prediction.pofk[i].pofk[k]);
+                    }
+                }
+                return result;
             }
 
             //=====================================================================================================

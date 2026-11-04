@@ -31,8 +31,13 @@ void NBodySimulation<NDIM, T>::run() {
             std::vector<double> pofk_linear;
             const auto zfield = compute_hybrid_bias_zeldovich_field(*this, redshift, snapshot_folder, &pofk_linear);
             // The Zel'dovich prediction (hybridbias_zeldovich; no one-loop here) in the same bins
-            write_hybrid_bias_predictions(
-                *this, redshift, snapshot_folder, zfield, hybrid_bias_options(*this), pofk_linear, false);
+            write_hybrid_bias_predictions(*this,
+                                          redshift,
+                                          snapshot_folder,
+                                          zfield,
+                                          hybrid_bias_options(*this),
+                                          pofk_linear,
+                                          false);
             timer.EndTiming("Hybrid bias spectra");
         }
         timer.EndTiming("Timestepping");

@@ -752,6 +752,11 @@ hybridbias_zeldovich = false
 -- P - (P_zeldovichfield - P_zeldovich) is a control variate (Kokron et al. 2022) with much less
 -- sample variance on large scales
 hybridbias_zeldovich_field = false
+-- With hybridbias_zeldovich_field and hybridbias_zeldovich also write the control variate
+-- P_cv = P - beta(k) (P_zeldovichfield - P_zeldovich): hybridbias_cv_z<z>.txt, with
+-- beta(k) = [1 - tanh((k - k0) / dk)] / 2 (Kokron et al. 2022; k0, dk in h/Mpc; k0 = 0: beta = 1)
+hybridbias_zeldovich_cv_beta_k0 = 0.618
+hybridbias_zeldovich_cv_beta_dk = 0.167
 -- No time stepping: write only the Zel'dovich-field spectra of the IC (and the Zel'dovich prediction
 -- if hybridbias_zeldovich) at the output redshifts. For adding the control variate to existing runs
 -- (same seed and IC settings) or for testing its mean over many realizations
