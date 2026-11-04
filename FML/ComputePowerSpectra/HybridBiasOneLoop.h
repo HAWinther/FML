@@ -34,8 +34,13 @@ namespace FML {
             /// and P_dd. No counterterms are included (the usual alpha k^2 P counterterm is degenerate with the
             /// nabla^2 delta operator).
             ///
-            /// The filter W(k) (e.g. a sharp cut at the Nyquist frequency of the particle lattice) is applied to the
-            /// linear field, so the same filter is used for the operators and the displacement. Units: those of P(k).
+            /// The operators are built from W_operators(k) delta_L(k) (e.g. a cut at the Nyquist frequency of the
+            /// particle lattice, possibly with a smoothing) and the displacement from W_displacement(k) delta_L(k)
+            /// (the modes of the initial conditions). Every term is a product of linear correlators between two of
+            /// the fields (operator or displacement), so each power spectrum in the loop integrals is P W_a W_b: we
+            /// use P_disp = P W_displacement^2 and give the legs that end on an operator the factor W_operators /
+            /// W_displacement (W_operators must be zero where W_displacement is). Every loop term has a leg on the
+            /// displacement, so this is exact. Units: those of P(k).
             ///
             //=====================================================================================================
 
@@ -106,18 +111,26 @@ namespace FML {
                 }
 
                 /// The one-loop spectra Q1, Q2, Q5, Q8, Qs2, R1, R2 (Matsubara 2008; Qs2 from the shear terms of
-                /// CLEFT) at k for a power spectrum that is zero above kmax
+                /// CLEFT) at k for a power spectrum P (that of the displacement) that is zero above kmax
                 /// With a weight F(p) on one leg (for an operator F(k) delta_L(k), e.g. F = -k^2 for nabla^2 delta):
                 /// Q5F = Q5 with F on the leg of the operator, R1F, R2F = R1, R2 with F on the internal leg
+                /// The legs that end on an operator also carry the leg factor Wl = W_operators / W_displacement (1 if
+                /// not given): Q5 (on the operator leg p, with the integrand of Q5F), Q8 and Qs2 (on both legs), Q5F, R1F, R2F (F Wl) and R1W,
+                /// R2W (R1, R2 with Wl on the internal leg). Q1, Q2, R1, R2 are those of the displacement alone.
+                /// kbreak: a discontinuity of Wl (e.g. a sharper cut of the operators) the integrals are split at
                 struct LoopSpectra {
-                    double Q1, Q2, Q5, Q8, Qs2, R1, R2, Q5F, R1F, R2F;
+                    double Q1, Q2, Q5, Q8, Qs2, R1, R2, Q5F, R1F, R2F, R1W, R2W;
                 };
                 inline LoopSpectra loop_spectra(double k,
                                                 const std::function<double(double)> & P,
                                                 double kmin,
                                                 double kmax,
-                                                const std::function<double(double)> & F) {
-                    LoopSpectra res{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+                                                const std::function<double(double)> & F,
+                                                const std::function<double(double)> & Wl = nullptr,
+                                                double kbreak = 0.0) {
+                    LoopSpectra res{};
+                    auto wl = [&](double p) { return Wl ? Wl(p) : 1.0; };
+                    const bool has_break = kbreak > kmin and kbreak < kmax;
                     std::vector<double> px, pw, qx, qw;
                     // Q_n = k/(4 pi^2) int dp int dp' (p'/p) P(p) P(p') Q~_n(r = p/k, x) with p' = |k - p|
                     // The p-integral is split at k (where the lower limit of p' is zero)
@@ -127,6 +140,12 @@ namespace FML {
                     if (std::abs(kmax - k) > kmin and std::abs(kmax - k) < kmax and std::abs(kmax - k) != k)
                         breaks.push_back(std::abs(kmax - k));
                     breaks.push_back(kmax);
+                    if (has_break) {
+                        // Wl jumps at p = kbreak and at |k - p| = kbreak
+                        for (double b : {kbreak, std::abs(kbreak - k), kbreak + k})
+                            if (b > kmin and b < kmax)
+                                breaks.push_back(b);
+                    }
                     std::sort(breaks.begin(), breaks.end());
                     for (size_t b = 0; b + 1 < breaks.size(); b++) {
                         const double lo = breaks[b], hi = breaks[b + 1];
@@ -143,7 +162,16 @@ namespace FML {
                             if (c <= a)
                                 continue;
                             const int nseg2 = std::max(2, int(4 * std::log(c / a)));
-                            composite_gl(a, c, std::min(nseg2, 40), 8, true, qx, qw);
+                            if (has_break and kbreak > a and kbreak < c) {
+                                std::vector<double> qx2, qw2;
+                                composite_gl(a, kbreak, std::min(nseg2, 40), 8, true, qx, qw);
+                                composite_gl(kbreak, c, std::min(nseg2, 40), 8, true, qx2, qw2);
+                                qx.insert(qx.end(), qx2.begin(), qx2.end());
+                                qw.insert(qw.end(), qw2.begin(), qw2.end());
+                            } else {
+                                composite_gl(a, c, std::min(nseg2, 40), 8, true, qx, qw);
+                            }
+                            const double wlp = wl(p);
                             const double r = p / k;
                             for (size_t j = 0; j < qx.size(); j++) {
                                 const double pp = qx[j];
@@ -153,13 +181,16 @@ namespace FML {
                                 const double mu = (x - r) / y;
                                 const double mu2 = mu * mu;
                                 const double fac = pw[i] * qw[j] * (pp / p) * Pp * P(pp);
+                                const double wl2 = wlp * wl(pp);
                                 res.Q1 += fac * r * r * omx2 * omx2 / (y2 * y2);
                                 res.Q2 += fac * omx2 * r * x * (1.0 - r * x) / (y2 * y2);
-                                res.Q5 += fac * r * x * omx2 / y2;
-                                res.Q8 += fac * r * r * omx2 / y2;
-                                res.Qs2 += fac * r * r * (-3.0 * mu2 * mu2 + 4.0 * mu2 - 1.0);
+                                // Q5 with the operator on the leg p: the form of Q5F (Q5 itself is symmetrized in
+                                // the two legs, equal after the integration only for Wl = 1)
+                                res.Q5 += fac * (Wl ? wlp * r * r * (1.0 - mu2) * (1.0 - r * x) / y2 : r * x * omx2 / y2);
+                                res.Q8 += fac * wl2 * r * r * omx2 / y2;
+                                res.Qs2 += fac * wl2 * r * r * (-3.0 * mu2 * mu2 + 4.0 * mu2 - 1.0);
                                 // A10 with p the leg of the operator and |k - p| that of Psi^(1): equals Q5 for F = 1
-                                res.Q5F += fac * F(p) * r * r * (1.0 - mu2) * (1.0 - r * x) / y2;
+                                res.Q5F += fac * F(p) * wlp * r * r * (1.0 - mu2) * (1.0 - r * x) / y2;
                             }
                         }
                     }
@@ -174,18 +205,26 @@ namespace FML {
                     // R_n = k^2 / (4 pi^2) P(k) int dp P(p) R~_n(p / k) (log singularity at p = k: refine towards it)
                     const double Pk = P(k);
                     if (Pk != 0.0) {
-                        double s1 = 0.0, s2 = 0.0, s1F = 0.0, s2F = 0.0;
-                        auto add = [&](double lo, double hi, int nseg) {
+                        double s1 = 0.0, s2 = 0.0, s1F = 0.0, s2F = 0.0, s1W = 0.0, s2W = 0.0;
+                        std::function<void(double, double, int)> add = [&](double lo, double hi, int nseg) {
+                            if (has_break and kbreak > lo and kbreak < hi) {
+                                add(lo, kbreak, nseg);
+                                add(kbreak, hi, nseg);
+                                return;
+                            }
                             composite_gl(lo, hi, nseg, 8, true, px, pw);
                             for (size_t i = 0; i < px.size(); i++) {
                                 double R1, R2;
                                 R_kernels(px[i] / k, R1, R2);
                                 const double Pp = P(px[i]);
-                                const double Fp = F(px[i]);
+                                const double Wp = wl(px[i]);
+                                const double Fp = F(px[i]) * Wp;
                                 s1 += pw[i] * Pp * R1;
                                 s2 += pw[i] * Pp * R2;
                                 s1F += pw[i] * Pp * Fp * R1;
                                 s2F += pw[i] * Pp * Fp * R2;
+                                s1W += pw[i] * Pp * Wp * R1;
+                                s2W += pw[i] * Pp * Wp * R2;
                             }
                         };
                         auto add_refined = [&](double lo, double hi, bool towards_hi) {
@@ -227,6 +266,8 @@ namespace FML {
                         res.R2 = k * k / (4.0 * M_PI * M_PI) * Pk * s2;
                         res.R1F = k * k / (4.0 * M_PI * M_PI) * Pk * s1F;
                         res.R2F = k * k / (4.0 * M_PI * M_PI) * Pk * s2F;
+                        res.R1W = k * k / (4.0 * M_PI * M_PI) * Pk * s1W;
+                        res.R2W = k * k / (4.0 * M_PI * M_PI) * Pk * s2W;
                     }
                     return res;
                 }
@@ -235,7 +276,9 @@ namespace FML {
                 /// for the nabla^2 delta spectra: A10 = <delta_1 Delta_i Delta_j> and U3 = <delta_1 Psi^(3)> with the
                 /// operator F delta (P_1n), U11 = <a_1 b_2 Delta_i> for (a,b) = (delta, F delta) and (F delta, F delta)
                 enum LoopSpec {
-                    LIN,
+                    LIN,   // P W_disp^2 (displacement - displacement)
+                    LINOD, // P W_op W_disp (operator - displacement)
+                    LINOO, // P W_op^2 (operator - operator)
                     G13,
                     G22,
                     GT,
@@ -254,12 +297,53 @@ namespace FML {
                     G22A,
                     NSPEC
                 };
-                /// Fills G[s] (s != LIN) at k and the integrand Z(k) of zerolag_10 = int dk Z(k) / (2 pi^2)
+                /// Fills G[s] (s != LIN*) at k and the integrand Z(k) of zerolag_10 = int dk Z(k) / (2 pi^2)
                 using LoopFill = std::function<void(double k, double * G, double & zerolag_integrand)>;
+
+                /// The leg factor W_operators / W_displacement of the legs that end on an operator (zero where
+                /// W_displacement is; we check that W_operators is zero there too)
+                inline std::function<double(double)> operator_leg_factor(const std::function<double(double)> & W_op,
+                                                                         const std::function<double(double)> & W_disp,
+                                                                         double kmin,
+                                                                         double kmax) {
+                    for (int i = 0; i <= 4000; i++) {
+                        const double k = kmin * std::pow(kmax / kmin, i / 4000.0) * (1.0 - 1e-12);
+                        if (W_disp(k) == 0.0 and W_op(k) != 0.0)
+                            throw std::runtime_error("[hybrid bias one-loop] W_operators must be zero where "
+                                                     "W_displacement is (k = " +
+                                                     std::to_string(k) + ")");
+                    }
+                    return [W_op, W_disp](double k) {
+                        const double wd = W_disp(k);
+                        return wd == 0.0 ? 0.0 : W_op(k) / wd;
+                    };
+                }
+
+                /// The largest k below kmax where W_operators is nonzero, if it is below kmax (a sharper cut of the
+                /// operators than of the displacement: the loop integrals are split there), else 0
+                inline double operator_cut(const std::function<double(double)> & W_op, double kmin, double kmax) {
+                    const int n = 4000;
+                    int last = -1;
+                    for (int i = 0; i <= n; i++)
+                        if (W_op(kmin * std::pow(kmax / kmin, i / double(n)) * (1.0 - 1e-12)) != 0.0)
+                            last = i;
+                    if (last < 0 or last == n)
+                        return 0.0;
+                    double lo = kmin * std::pow(kmax / kmin, last / double(n)), hi = kmin * std::pow(kmax / kmin, (last + 1) / double(n));
+                    for (int it = 0; it < 60; it++) {
+                        const double mid = 0.5 * (lo + hi);
+                        (W_op(mid) != 0.0 ? lo : hi) = mid;
+                    }
+                    // a smooth filter that underflows to zero is not a cut
+                    if (std::abs(W_op(lo * (1.0 - 1e-9))) < 1e-8)
+                        return 0.0;
+                    return hi;
+                }
 
                 inline std::vector<std::vector<double>>
                 oneloop_from_loop_functions(const std::function<double(double)> & pofk,
-                                            const std::function<double(double)> & W,
+                                            const std::function<double(double)> & W_operators,
+                                            const std::function<double(double)> & W_displacement,
                                             const std::vector<double> & kvalues,
                                             const ZeldovichOptions & options,
                                             const LoopFill & fill,
@@ -271,16 +355,18 @@ namespace FML {
             /// @brief The one-loop (CLEFT) prediction for the hybrid bias spectra
             ///
             /// @param[in] pofk The linear power spectrum P(k)
-            /// @param[in] W The filter of the linear field (operators and displacement)
+            /// @param[in] W_operators The filter of the linear field the operators are built from
+            /// @param[in] W_displacement The filter of the linear field of the displacement
             /// @param[in] kvalues The k-values to compute the spectra at
-            /// @param[in] options The options (kmax_integration must be set; W must be zero above it)
+            /// @param[in] options The options (kmax_integration must be set; the filters must be zero above it)
             /// @param[out] names, pairs As for zeldovich_hybrid_bias_spectra
             ///
             /// @return result[pair][ik]
             //=====================================================================================================
             inline std::vector<std::vector<double>>
             oneloop_hybrid_bias_spectra(const std::function<double(double)> & pofk,
-                                        const std::function<double(double)> & W,
+                                        const std::function<double(double)> & W_operators,
+                                        const std::function<double(double)> & W_displacement,
                                         const std::vector<double> & kvalues,
                                         const ZeldovichOptions & options,
                                         std::vector<std::string> * names = nullptr,
@@ -299,12 +385,15 @@ namespace FML {
 
                 const double kmin_int = options.kmin_integration;
                 const double kcut = options.kmax_integration;
+                // The power spectrum of the displacement and the leg factor of the operators
                 auto PW = [&](double k) {
                     if (k < kmin_int or k > kcut)
                         return 0.0;
-                    const double w = W(k);
+                    const double w = W_displacement(k);
                     return pofk(k) * w * w;
                 };
+                const auto Wl = operator_leg_factor(W_operators, W_displacement, kmin_int, kcut);
+                const double kop = operator_cut(W_operators, kmin_int, kcut);
 
                 // The loop spectra on a grid in k up to 2 kcut: log spaced below the cut and above it (the R-type
                 // spectra contain P(k) and stop at the cut, so we do not interpolate across it)
@@ -321,9 +410,9 @@ namespace FML {
 #pragma omp parallel for schedule(dynamic, 4)
 #endif
                 for (int i = 0; i < nloop; i++)
-                    loops[i] = loop_spectra(kloop[i], PW, kmin_int, kcut, Fop);
+                    loops[i] = loop_spectra(kloop[i], PW, kmin_int, kcut, Fop, Wl, kop);
                 auto loop_at = [&](double k) {
-                    LoopSpectra res{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+                    LoopSpectra res{};
                     if (k <= kl_min or k >= kl_max)
                         return res;
                     const int i =
@@ -341,7 +430,9 @@ namespace FML {
                                    &LoopSpectra::R2,
                                    &LoopSpectra::Q5F,
                                    &LoopSpectra::R1F,
-                                   &LoopSpectra::R2F})
+                                   &LoopSpectra::R2F,
+                                   &LoopSpectra::R1W,
+                                   &LoopSpectra::R2W})
                         res.*m = interp(m);
                     return res;
                 };
@@ -349,32 +440,56 @@ namespace FML {
                 // The spectra the q-functions are made from
                 detail::LoopFill fill = [&](double k, double * G, double & zerolag_integrand) {
                     const auto L = loop_at(k);
+                    // The displacement alone
                     G[G13] = 5.0 / 21.0 * L.R1;
                     G[G22] = 9.0 / 98.0 * L.Q1;
                     G[GT] = -3.0 / 7.0 * (2 * L.R1 + 4 * L.R2 + L.Q1 + 2 * L.Q2);
                     // 2 GV1 + GV3 with GV1 = 3/35 (-3 R1 + 4 R2 + Q1 + 2 Q2), GV3 = 3/35 (2 R1 + 4 R2 - 4 Q1 + 2 Q2)
                     G[GVS] = 3.0 / 35.0 * (-4 * L.R1 + 12 * L.R2 - 2 * L.Q1 + 6 * L.Q2);
-                    G[G10A] = (4 * L.R2 + 2 * L.Q5) / 14.0;
-                    G[G10B] = (3 * L.R1 + 4 * L.R2 + 2 * L.Q5) / 14.0;
-                    G[GU3] = -5.0 / 21.0 * L.R1;
-                    G[GU11] = -6.0 / 7.0 * (L.R1 + L.R2);
+                    // With operators: the leg factor wk of the external leg k when it ends on an operator; Q5, Q8,
+                    // Qs2, R1W, R2W, Q5F, R1F, R2F carry it on their internal legs
+                    const double wk = Wl(k), Fk = Fop(k);
+                    // A10 = int d^3k e^(ikq) (a delta_ij + b k_i k_j / k^2) (in units of velocileptors' A10, which
+                    // is half of <delta_1 Delta_i Delta_j>) for the operator A(k) delta_L: A(k) on the external leg
+                    // (A R1), on the internal leg (R1A, R2A) or on the leg p of the Q-term (Q5A). For A = 1 this is
+                    // a = 3/7 R1, b = -9/7 R1 - 12/7 R2 - 6/7 Q5, i.e. G10A = (4 R2 + 2 Q5) / 14 and
+                    // G10B = (3 R1 + 4 R2 + 2 Q5) / 14
+                    auto a10 = [&](double Ak, double Q5A, double R1A, double R2A, double & GA, double & GB) {
+                        const double k2a = 3.0 / 7.0 * Ak * L.R1;
+                        const double k2b = -3.0 / 7.0 * Ak * (L.R1 + 2.0 * L.R2) - 6.0 / 7.0 * Q5A - 6.0 / 7.0 * (R1A + R2A);
+                        GA = -0.5 * (k2a + k2b / 3.0);
+                        GB = -k2b / 6.0;
+                    };
+                    a10(wk, L.Q5, L.R1W, L.R2W, G[G10A], G[G10B]);
+                    a10(Fk * wk, L.Q5F, L.R1F, L.R2F, G[G10AN], G[G10BN]);
+                    // U3 = <A delta_L Psi^(3)>: the operator on the external leg
+                    G[GU3] = -5.0 / 21.0 * wk * L.R1;
+                    G[GU3N] = Fk * G[GU3];
+                    // U11 = <a_1 b_2 Delta_i> for the operators A delta_L, B delta_L: -3/7 [A(k) (R1B + R2B) + B(k)
+                    // (R1A + R2A)]
+                    G[GU11] = -6.0 / 7.0 * wk * (L.R1W + L.R2W);
+                    G[GU11DN] = -3.0 / 7.0 * (wk * (L.R1F + L.R2F) + Fk * wk * (L.R1W + L.R2W));
+                    G[GU11NN] = -6.0 / 7.0 * Fk * wk * (L.R1F + L.R2F);
+                    // U20, Us2: both legs on the operator
                     G[GU20] = -3.0 / 7.0 * L.Q8;
                     G[GUS2] = -1.0 / 7.0 * L.Qs2;
-                    const double Fk = Fop(k);
-                    // A10 = int d^3k e^(ikq) (a delta_ij + b k_i k_j / k^2) (in units of velocileptors' A10, which
-                    // is half of <delta_1 Delta_i Delta_j>); for F = 1 these are G10A and G10B
-                    const double k2a = 3.0 / 7.0 * Fk * L.R1;
-                    const double k2b =
-                        -3.0 / 7.0 * Fk * (L.R1 + 2.0 * L.R2) - 6.0 / 7.0 * L.Q5F - 6.0 / 7.0 * (L.R1F + L.R2F);
-                    G[G10AN] = -0.5 * (k2a + k2b / 3.0);
-                    G[G10BN] = -k2b / 6.0;
-                    G[GU3N] = -5.0 / 21.0 * Fk * L.R1;
-                    G[GU11DN] = -3.0 / 7.0 * ((L.R1F + L.R2F) + Fk * (L.R1 + L.R2));
-                    G[GU11NN] = -6.0 / 7.0 * Fk * (L.R1F + L.R2F);
-                    // velocileptors: zerolag_10 = int dk (R1 - R2) / 7 / (2 pi^2)
-                    zerolag_integrand = (L.R1 - L.R2) / 7.0;
+                    // X10(q = 0) = 0: zerolag_10 = xi_{0,-2}[G10A](0) (velocileptors: int dk (R1 - R2) / 7 / (2 pi^2),
+                    // the same for W_operators = W_displacement)
+                    zerolag_integrand = G[G10A];
                 };
-                return detail::oneloop_from_loop_functions(pofk, W, kvalues, options, fill, names, pairs);
+                return detail::oneloop_from_loop_functions(
+                    pofk, W_operators, W_displacement, kvalues, options, fill, names, pairs);
+            }
+
+            /// The one-loop prediction with the same filter W for the operators and the displacement
+            inline std::vector<std::vector<double>>
+            oneloop_hybrid_bias_spectra(const std::function<double(double)> & pofk,
+                                        const std::function<double(double)> & W,
+                                        const std::vector<double> & kvalues,
+                                        const ZeldovichOptions & options,
+                                        std::vector<std::string> * names = nullptr,
+                                        std::vector<std::array<int, 2>> * pairs = nullptr) {
+                return oneloop_hybrid_bias_spectra(pofk, W, W, kvalues, options, names, pairs);
             }
 
             //=====================================================================================================
@@ -382,7 +497,8 @@ namespace FML {
             //=====================================================================================================
             inline std::vector<std::vector<double>>
             detail::oneloop_from_loop_functions(const std::function<double(double)> & pofk,
-                                                const std::function<double(double)> & W,
+                                                const std::function<double(double)> & W_operators,
+                                                const std::function<double(double)> & W_displacement,
                                                 const std::vector<double> & kvalues,
                                                 const ZeldovichOptions & options,
                                                 const LoopFill & fill,
@@ -396,15 +512,16 @@ namespace FML {
                 // The Zel'dovich part of the spectra with nabla^2 delta (the loop corrections are added below)
                 std::vector<std::vector<double>> zeldovich;
                 if (nop == 5)
-                    zeldovich = zeldovich_hybrid_bias_spectra(pofk, W, W, kvalues, options);
+                    zeldovich = zeldovich_hybrid_bias_spectra(pofk, W_operators, W_displacement, kvalues, options);
 
                 const double kmin_int = options.kmin_integration;
                 const double kcut = options.kmax_integration;
-                auto PW = [&](double k) {
+                // The linear spectra between the displacement (D) and the operators (O)
+                auto PL = [&](double k, int which) {
                     if (k < kmin_int or k > kcut)
                         return 0.0;
-                    const double w = W(k);
-                    return pofk(k) * w * w;
+                    const double wd = W_displacement(k), wo = W_operators(k);
+                    return pofk(k) * (which == LIN ? wd * wd : (which == LINOD ? wo * wd : wo * wo));
                 };
                 double kout_min = 1e100, kout_max = 0.0;
                 for (auto k : kvalues) {
@@ -461,7 +578,8 @@ namespace FML {
                     fill(kint[i], g, zl[i]);
                     for (int sp = 0; sp < NSPEC; sp++)
                         G[sp][i] = g[sp];
-                    G[LIN][i] = PW(kint[i]);
+                    for (int sp : {LIN, LINOD, LINOO})
+                        G[sp][i] = PL(kint[i], sp);
                 }
                 // zerolag_10 (and for the nabla^2 version A10(q = 0) = 0 gives zerolag = xi_{0,-2}[G10AN](0))
                 double zerolag10 = 0.0, zerolag10N = 0.0;
@@ -475,8 +593,8 @@ namespace FML {
                     int spec, l, n;
                 };
                 const std::vector<XiSpec> xis{
-                    {LIN, 0, -2},   {LIN, 2, -2},   {LIN, 1, -1},    {LIN, 0, 0},     {LIN, 2, 0},
-                    {LIN, 4, 0},    {LIN, 3, -1},   {G13, 0, -2},    {G13, 2, -2},    {G22, 0, -2},
+                    {LIN, 0, -2},   {LIN, 2, -2},   {LINOD, 1, -1},  {LINOO, 0, 0},   {LINOO, 2, 0},
+                    {LINOO, 4, 0},  {LINOD, 3, -1}, {G13, 0, -2},    {G13, 2, -2},    {G22, 0, -2},
                     {G22, 2, -2},   {GT, 3, -3},    {GVS, 1, -3},    {G10A, 0, -2},   {G10B, 2, -2},
                     {GU3, 1, -1},   {GU11, 1, -1},  {GU20, 1, -1},   {GUS2, 1, -1},   {GU3N, 1, -1},
                     {G10AN, 0, -2}, {G10BN, 2, -2}, {GU11DN, 1, -1}, {GU11NN, 1, -1}, {G22A, 0, -2}};
@@ -658,12 +776,11 @@ namespace FML {
                     }
                     for (int c = 0; c < NC; c++)
                         sum[c] *= 4.0 * M_PI * dq / 3.0;
-                    // The analytic part: FT[eps] = P(k), FT[2 i k U mu] = 2 P(k), FT[xi] = P(k)
-                    const double P = PW(k);
+                    // The analytic part: FT[eps] = P_DD(k), FT[2 i k U mu] = 2 P_OD(k), FT[xi] = P_OO(k)
                     for (int c = 0; c < NC; c++)
-                        sum[c] += expinf * Finf[c] * P;
-                    sum[1] += expinf * 2.0 * P;
-                    sum[2] += expinf * P;
+                        sum[c] += expinf * Finf[c] * PL(k, LIN);
+                    sum[1] += expinf * 2.0 * PL(k, LINOD);
+                    sum[2] += expinf * PL(k, LINOO);
                     comp[ik] = sum;
                 }
 

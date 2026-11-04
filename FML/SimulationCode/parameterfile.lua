@@ -747,7 +747,7 @@ hybridbias_kcut_over_nyquist = 1.0
 -- Also write the Zel'dovich prediction (same cut and smoothing): hybridbias_zeldovich_z<z>.txt
 hybridbias_zeldovich = false
 -- Also write the one-loop LPT (CLEFT) prediction of all 15 spectra (no counterterms;
--- needs hybridbias_smoothing_scale = 0): hybridbias_oneloop_z<z>.txt
+-- same cut and smoothing of the operators): hybridbias_oneloop_z<z>.txt
 hybridbias_oneloop = false
 -- The kernels of the one-loop prediction: EdS (Einstein-de Sitter kernels with the linear P(k) of
 -- the gravity model) or model (the scale- and time-dependent LPT kernels of the gravity model:

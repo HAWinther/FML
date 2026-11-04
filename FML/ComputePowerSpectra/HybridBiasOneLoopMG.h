@@ -457,6 +457,9 @@ namespace FML {
                 };
 
                 /// The loop functions for all output times at one k (k in h/Mpc)
+                /// PL: the power spectrum of the displacement; the legs that end on an operator carry the leg factor
+                /// Wl = W_operators / W_displacement (1 if not given; see oneloop_hybrid_bias_spectra), and kbreak is
+                /// a discontinuity of Wl the integrals are split at (0: none)
                 inline std::vector<MGLoopFunctions>
                 mg_loop_functions_at_k(const MGModel & model,
                                        double k,
@@ -464,7 +467,11 @@ namespace FML {
                                        const std::vector<std::function<double(double)>> & PL, // P_L(k, a_out) cut
                                        double kmin,
                                        double kcut,
-                                       const MGIntegrationSettings & set) {
+                                       const MGIntegrationSettings & set,
+                                       const std::function<double(double)> & Wl = nullptr,
+                                       double kbreak = 0.0) {
+                    auto wl = [&](double p) { return Wl ? Wl(p) : 1.0; };
+                    const bool has_break = kbreak > kmin and kbreak < kcut;
                     const int nout = int(aout.size());
                     std::vector<MGLoopFunctions> res(nout);
                     const double kH = k * c_over_H0_mpch; // units of H0
@@ -488,6 +495,10 @@ namespace FML {
                             br.push_back(k);
                         if (std::abs(kcut - k) > kmin and std::abs(kcut - k) < kcut)
                             br.push_back(std::abs(kcut - k));
+                        if (has_break)
+                            for (double b : {kbreak, std::abs(kbreak - k), kbreak + k})
+                                if (b > kmin and b < kcut and std::abs(b - k) > 1e-12 * k)
+                                    br.push_back(b);
                         std::sort(br.begin(), br.end());
                         for (size_t b = 0; b + 1 < br.size(); b++) {
                             const double lo = br[b], hi = br[b + 1];
@@ -526,10 +537,21 @@ namespace FML {
                         std::vector<double> qx, qw, rx, rw;
                         {
                             const double lo = std::max(std::abs(k - p), kmin), hi = std::min(k + p, kcut);
-                            if (hi > lo) {
+                            auto add_q = [&](double a, double b) {
+                                if (b <= a)
+                                    return;
+                                std::vector<double> xs, ws;
                                 const int nseg = std::min(set.max_segs,
-                                                          std::max(1, int(set.segs_per_efold * std::log(hi / lo)) + 1));
-                                composite_gl(lo, hi, nseg, set.order, true, qx, qw);
+                                                          std::max(1, int(set.segs_per_efold * std::log(b / a)) + 1));
+                                composite_gl(a, b, nseg, set.order, true, xs, ws);
+                                qx.insert(qx.end(), xs.begin(), xs.end());
+                                qw.insert(qw.end(), ws.begin(), ws.end());
+                            };
+                            if (has_break and kbreak > lo and kbreak < hi) {
+                                add_q(lo, kbreak);
+                                add_q(kbreak, hi);
+                            } else {
+                                add_q(lo, hi);
                             }
                         }
                         if (do_R) {
@@ -675,6 +697,7 @@ namespace FML {
                                 continue;
                             const double Dk = y[iDk], Dp = y[iDp];
                             const double wp = pw[ip] * p / k / (4.0 * M_PI * M_PI);
+                            const double wlp = wl(p); // the leg factor of p when it ends on an operator
                             const double Fp = -p * p;
                             const double c2u = c_over_H0_mpch * c_over_H0_mpch; // w in units of (Mpc/h)^2
                             const Vec3 kh{0.0, 0.0, k};
@@ -703,15 +726,17 @@ namespace FML {
                                 L.G22A += w * k * k * 0.5 * (t22 - kk22);
                                 // U20, Us2: only khat.L2 survives the angular average
                                 const double l2eff = k * L2[2];
-                                L.U20 += w * l2eff;
-                                L.Us2 += w * l2eff * (mu12 * mu12 - 1.0 / 3.0);
+                                // (both legs on the operator)
+                                const double wl2 = wlp * wl(s);
+                                L.U20 += w * wl2 * l2eff;
+                                L.Us2 += w * wl2 * l2eff * (mu12 * mu12 - 1.0 / 3.0);
                                 // A10 with the delta leg p1 and the Psi1 leg p2: [p2_i L2_j + p2_j L2_i] / p2^2
                                 const double t = 2.0 * dot3(p2, L2) / (s * s) * k * k;
                                 const double kk = 2.0 * p2[2] * L2[2] / (s * s) * k * k;
-                                L.A10Qt += w * t;
-                                L.A10Qkk += w * kk;
-                                L.A10QtF += w * Fp * t;
-                                L.A10QkkF += w * Fp * kk;
+                                L.A10Qt += w * wlp * t;
+                                L.A10Qkk += w * wlp * kk;
+                                L.A10QtF += w * Fp * wlp * t;
+                                L.A10QkkF += w * Fp * wlp * kk;
                                 // W: p1_i p2_j L2_k / (p1^2 p2^2): khat khat khat and the symmetrized khat delta (times
                                 // k^3)
                                 const double k3 = k * k * k / (p * p * s * s);
@@ -735,11 +760,13 @@ namespace FML {
                                 // Psi1 leg k): [k_i L2_j + k_j L2_i] / k^2 (trace = khat khat)
                                 L.A10R1t += w * 2.0 * dot3(pv, L2) / (p * p) * k * k;
                                 L.A10R1kk += w * 2.0 * pv[2] * L2[2] / (p * p) * k * k;
-                                L.A10R2t += w * 2.0 * dot3(kh, L2);
-                                L.A10R2tF += w * Fp * 2.0 * dot3(kh, L2);
+                                // (R1: the operator on the external leg k, its factor is applied with the tables; R2,
+                                // g: on the internal leg p)
+                                L.A10R2t += w * wlp * 2.0 * dot3(kh, L2);
+                                L.A10R2tF += w * Fp * wlp * 2.0 * dot3(kh, L2);
                                 // U11: g = int P(p) khat.L2
-                                L.g += w * L2[2];
-                                L.gF += w * Fp * L2[2];
+                                L.g += w * wlp * L2[2];
+                                L.gF += w * Fp * wlp * L2[2];
                                 // W: k_i p_j L2_k / (k^2 p^2) (times k^3)
                                 const double k3 = k / (p * p);
                                 L.WRa += w * k * pv[2] * L2[2] * k3;
@@ -810,7 +837,8 @@ namespace FML {
             inline MGLoopTables mg_loop_tables(const MGModel & model,
                                                const std::vector<double> & aout,
                                                const std::vector<std::function<double(double)>> & pofk,
-                                               const std::function<double(double)> & W,
+                                               const std::function<double(double)> & W_operators,
+                                               const std::function<double(double)> & W_displacement,
                                                const ZeldovichOptions & options,
                                                const MGOneLoopSettings & settings = {}) {
                 using namespace detail;
@@ -825,10 +853,12 @@ namespace FML {
                     PW[io] = [&, io](double k) {
                         if (k < kmin or k > kcut)
                             return 0.0;
-                        const double w = W(k);
+                        const double w = W_displacement(k);
                         return pofk[io](k) * w * w;
                     };
                 }
+                const auto Wl = operator_leg_factor(W_operators, W_displacement, kmin, kcut);
+                const double kop = operator_cut(W_operators, kmin, kcut);
                 MGLoopTables tab;
                 tab.aout = aout;
                 const int n1 = std::max(8, int(settings.nk_loop * 0.75)), n2 = std::max(4, settings.nk_loop - n1);
@@ -844,19 +874,30 @@ namespace FML {
 #pragma omp parallel for schedule(dynamic, 1)
 #endif
                 for (int i = 0; i < ng; i++)
-                    tab.lf[i] = mg_loop_functions_at_k(model, tab.kgrid[i], aout, PW, kmin, kcut, settings);
+                    tab.lf[i] = mg_loop_functions_at_k(model, tab.kgrid[i], aout, PW, kmin, kcut, settings, Wl, kop);
                 return tab;
+            }
+
+            /// The tables with the same filter W for the operators and the displacement
+            inline MGLoopTables mg_loop_tables(const MGModel & model,
+                                               const std::vector<double> & aout,
+                                               const std::vector<std::function<double(double)>> & pofk,
+                                               const std::function<double(double)> & W,
+                                               const ZeldovichOptions & options,
+                                               const MGOneLoopSettings & settings = {}) {
+                return mg_loop_tables(model, aout, pofk, W, W, options, settings);
             }
 
             //=====================================================================================================
             /// @brief The one-loop prediction for output number io of the tables (pofk the linear P(k) at that output,
-            /// the same as given to mg_loop_tables)
+            /// the same as given to mg_loop_tables, and the same filters)
             //=====================================================================================================
             inline std::vector<std::vector<double>>
             oneloop_hybrid_bias_spectra_mg_from_tables(const MGLoopTables & tab,
                                                        int io,
                                                        const std::function<double(double)> & pofk,
-                                                       const std::function<double(double)> & W,
+                                                       const std::function<double(double)> & W_operators,
+                                                       const std::function<double(double)> & W_displacement,
                                                        const std::vector<double> & kvalues,
                                                        const ZeldovichOptions & options,
                                                        std::vector<std::string> * names = nullptr,
@@ -870,9 +911,10 @@ namespace FML {
                 auto P = [&](double k) {
                     if (k < kmin or k > kcut)
                         return 0.0;
-                    const double w = W(k);
+                    const double w = W_displacement(k);
                     return pofk(k) * w * w;
                 };
+                const auto Wl = operator_leg_factor(W_operators, W_displacement, kmin, kcut);
                 const auto & kgrid = tab.kgrid;
                 const auto & lf = tab.lf;
                 const int ng = int(kgrid.size()), n1 = tab.n1;
@@ -903,9 +945,11 @@ namespace FML {
                             v += wl[a] * (lf[i0 + a][io].*m);
                         return v;
                     };
-                    const double Pk = P(k), Fk = -k * k;
+                    // wk: the leg factor of the external leg k when it ends on an operator (the loop functions
+                    // carry it on their internal legs)
+                    const double Pk = P(k), Fk = -k * k, wk = Wl(k);
                     G[G13] = 0.5 * Pk * I(&MGLoopFunctions::I3);
-                    G[GU3] = -G[G13];
+                    G[GU3] = -wk * G[G13];
                     G[GU3N] = Fk * G[GU3];
                     G[G22] = I(&MGLoopFunctions::G22);
                     G[G22A] = I(&MGLoopFunctions::G22A);
@@ -925,23 +969,36 @@ namespace FML {
                     };
                     const double R1t = I(&MGLoopFunctions::A10R1t), R1kk = I(&MGLoopFunctions::A10R1kk);
                     const double R2t = I(&MGLoopFunctions::A10R2t), R2tF = I(&MGLoopFunctions::A10R2tF);
-                    a10(Pk * (R1t - R2t) - I(&MGLoopFunctions::A10Qt),
-                        Pk * (R1kk - R2t) - I(&MGLoopFunctions::A10Qkk),
+                    a10(wk * Pk * R1t - Pk * R2t - I(&MGLoopFunctions::A10Qt),
+                        wk * Pk * R1kk - Pk * R2t - I(&MGLoopFunctions::A10Qkk),
                         G[G10A],
                         G[G10B]);
-                    a10(Fk * Pk * R1t - Pk * R2tF - I(&MGLoopFunctions::A10QtF),
-                        Fk * Pk * R1kk - Pk * R2tF - I(&MGLoopFunctions::A10QkkF),
+                    a10(Fk * wk * Pk * R1t - Pk * R2tF - I(&MGLoopFunctions::A10QtF),
+                        Fk * wk * Pk * R1kk - Pk * R2tF - I(&MGLoopFunctions::A10QkkF),
                         G[G10AN],
                         G[G10BN]);
-                    // U11
+                    // U11 (one operator on the external leg, the other on the internal one)
                     const double g = I(&MGLoopFunctions::g), gF = I(&MGLoopFunctions::gF);
-                    G[GU11] = -2.0 * k * Pk * g;
-                    G[GU11DN] = -k * (Pk * gF + Fk * Pk * g);
-                    G[GU11NN] = -2.0 * k * Fk * Pk * gF;
+                    G[GU11] = -2.0 * k * wk * Pk * g;
+                    G[GU11DN] = -k * wk * (Pk * gF + Fk * Pk * g);
+                    G[GU11NN] = -2.0 * k * Fk * wk * Pk * gF;
                     // X10(q = 0) = 0
                     zerolag_integrand = G[G10A];
                 };
-                return oneloop_from_loop_functions(pofk, W, kvalues, options, fill, names, pairs);
+                return oneloop_from_loop_functions(pofk, W_operators, W_displacement, kvalues, options, fill, names, pairs);
+            }
+
+            /// The prediction from the tables with the same filter W for the operators and the displacement
+            inline std::vector<std::vector<double>>
+            oneloop_hybrid_bias_spectra_mg_from_tables(const MGLoopTables & tab,
+                                                       int io,
+                                                       const std::function<double(double)> & pofk,
+                                                       const std::function<double(double)> & W,
+                                                       const std::vector<double> & kvalues,
+                                                       const ZeldovichOptions & options,
+                                                       std::vector<std::string> * names = nullptr,
+                                                       std::vector<std::array<int, 2>> * pairs = nullptr) {
+                return oneloop_hybrid_bias_spectra_mg_from_tables(tab, io, pofk, W, W, kvalues, options, names, pairs);
             }
 
             //=====================================================================================================
@@ -953,7 +1010,10 @@ namespace FML {
             /// @param[in] pofk The linear power spectrum P(k, a) of the model at each output (k in h/Mpc). The
             /// Lagrangian operators are built from this field (as in a simulation that uses the linear field of the
             /// model)
-            /// @param[in] W The filter of the linear field (operators and displacement), e.g. a sharp cut
+            /// @param[in] W_operators The filter of the linear field the operators are built from (e.g. a sharp cut,
+            /// possibly times a smoothing)
+            /// @param[in] W_displacement The filter of the linear field of the displacement (W_operators must be zero
+            /// where it is)
             /// @param[in] kvalues The k-values to compute the spectra at
             /// @param[in] options As for oneloop_hybrid_bias_spectra (kmax_integration = the cut must be set)
             /// @param[in] settings The accuracy settings of the loop integrals
@@ -965,7 +1025,8 @@ namespace FML {
             oneloop_hybrid_bias_spectra_mg(const MGModel & model,
                                            const std::vector<double> & aout,
                                            const std::vector<std::function<double(double)>> & pofk,
-                                           const std::function<double(double)> & W,
+                                           const std::function<double(double)> & W_operators,
+                                           const std::function<double(double)> & W_displacement,
                                            const std::vector<double> & kvalues,
                                            const ZeldovichOptions & options,
                                            const MGOneLoopSettings & settings = {},
@@ -974,18 +1035,33 @@ namespace FML {
                 const int nout = int(aout.size());
                 if (nout == 0 or kvalues.empty())
                     return std::vector<std::vector<std::vector<double>>>(nout);
-                const auto tab = mg_loop_tables(model, aout, pofk, W, options, settings);
+                const auto tab = mg_loop_tables(model, aout, pofk, W_operators, W_displacement, options, settings);
                 std::vector<std::vector<std::vector<double>>> result(nout);
                 for (int io = 0; io < nout; io++)
                     result[io] = oneloop_hybrid_bias_spectra_mg_from_tables(tab,
                                                                             io,
                                                                             pofk[io],
-                                                                            W,
+                                                                            W_operators,
+                                                                            W_displacement,
                                                                             kvalues,
                                                                             options,
                                                                             names,
                                                                             pairs);
                 return result;
+            }
+
+            /// The prediction with the same filter W for the operators and the displacement
+            inline std::vector<std::vector<std::vector<double>>>
+            oneloop_hybrid_bias_spectra_mg(const MGModel & model,
+                                           const std::vector<double> & aout,
+                                           const std::vector<std::function<double(double)>> & pofk,
+                                           const std::function<double(double)> & W,
+                                           const std::vector<double> & kvalues,
+                                           const ZeldovichOptions & options,
+                                           const MGOneLoopSettings & settings = {},
+                                           std::vector<std::string> * names = nullptr,
+                                           std::vector<std::array<int, 2>> * pairs = nullptr) {
+                return oneloop_hybrid_bias_spectra_mg(model, aout, pofk, W, W, kvalues, options, settings, names, pairs);
             }
 
         } // namespace HYBRIDBIAS

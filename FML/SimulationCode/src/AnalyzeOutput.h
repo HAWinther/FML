@@ -491,7 +491,7 @@ measure_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim,
 /// The one-loop LPT prediction of the hybrid bias spectra at the k-values klocal with the kernels of model (the loop
 /// functions for all the outputs are computed at the first output, as the kernels are integrated from early times,
 /// and kept by the simulation)
-template <int NDIM, class T, class FP, class FW>
+template <int NDIM, class T, class FP, class FW, class FD>
 std::vector<std::vector<double>>
 hybrid_bias_oneloop_mg(NBodySimulation<NDIM, T> & sim,
                        const FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::MGModel & model,
@@ -499,6 +499,7 @@ hybrid_bias_oneloop_mg(NBodySimulation<NDIM, T> & sim,
                        std::pair<double, double> krange,
                        FP && pofk_linear_of_k,
                        FW && W_operators,
+                       FD && W_displacement,
                        const std::vector<double> & klocal,
                        const FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::ZeldovichOptions & zoptions) {
     using namespace FML::CORRELATIONFUNCTIONS::HYBRIDBIAS;
@@ -518,7 +519,7 @@ hybrid_bias_oneloop_mg(NBodySimulation<NDIM, T> & sim,
                 return sim.linear_pofk_cb(k, aa);
             });
         }
-        mg_tables = std::make_shared<MGLoopTables>(mg_loop_tables(model, aouts, pofks, W_operators, zoptions));
+        mg_tables = std::make_shared<MGLoopTables>(mg_loop_tables(model, aouts, pofks, W_operators, W_displacement, zoptions));
     }
     int io = -1;
     for (size_t i = 0; i < mg_tables_redshifts.size(); i++)
@@ -526,13 +527,14 @@ hybrid_bias_oneloop_mg(NBodySimulation<NDIM, T> & sim,
             io = int(i);
     std::vector<std::vector<double>> oneloop;
     if (io >= 0)
-        oneloop =
-            oneloop_hybrid_bias_spectra_mg_from_tables(*mg_tables, io, pofk_linear_of_k, W_operators, klocal, zoptions);
+        oneloop = oneloop_hybrid_bias_spectra_mg_from_tables(
+            *mg_tables, io, pofk_linear_of_k, W_operators, W_displacement, klocal, zoptions);
     else
         oneloop = oneloop_hybrid_bias_spectra_mg(model,
                                                  {1.0 / (1.0 + redshift)},
                                                  {pofk_linear_of_k},
                                                  W_operators,
+                                                 W_displacement,
                                                  klocal,
                                                  zoptions)[0];
     return oneloop;
@@ -621,12 +623,8 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
         write_prediction(zeldovich, "zeldovich", "Zel'dovich prediction", kcut_displacement);
     }
     if (settings.oneloop) {
-        // One-loop LPT: the same filter for the operators and the displacement (the operator cut)
-        if (FML::ThisTask == 0 and kcut_displacement > kcut * 1.0001)
-            std::cout << "Note: the one-loop prediction uses the operator cut k = " << kcut
-                      << " h/Mpc also for the displacement field (the IC have modes up to " << kcut_displacement
-                      << " h/Mpc)\n";
-        zoptions.kmax_integration = std::min(kcut, krange.second);
+        // One-loop LPT: the operators with their cut and smoothing, the displacement with the modes of the IC
+        zoptions.kmax_integration = std::min(std::max(kcut, kcut_displacement), krange.second);
         if (settings.oneloop_kernels == "model") {
             const MGModel model = hybrid_bias_mg_model(sim);
             const std::string description = model.name();
@@ -638,15 +636,20 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
                                                         krange,
                                                         pofk_linear_of_k,
                                                         W_operators,
+                                                        W_displacement,
                                                         grid.klocal,
                                                         zoptions);
             write_prediction(oneloop,
                              "oneloop",
                              "One-loop LPT (CLEFT, no counterterms; the LPT kernels of " + description + ") prediction",
-                             kcut);
+                             kcut_displacement);
         } else {
-            auto oneloop = oneloop_hybrid_bias_spectra(pofk_linear_of_k, W_operators, grid.klocal, zoptions);
-            write_prediction(oneloop, "oneloop", "One-loop LPT (CLEFT, no counterterms; EdS kernels) prediction", kcut);
+            auto oneloop =
+                oneloop_hybrid_bias_spectra(pofk_linear_of_k, W_operators, W_displacement, grid.klocal, zoptions);
+            write_prediction(oneloop,
+                             "oneloop",
+                             "One-loop LPT (CLEFT, no counterterms; EdS kernels) prediction",
+                             kcut_displacement);
         }
     }
 }

@@ -6,6 +6,9 @@
 //     independent computation from the Eulerian fluid equations (the same quasi-static equations, the Eulerian
 //     F2, F3 solved as ODEs and mapped to LPT kinematically; computed with scipy, values below) for f(R) with and
 //     without screening, DGP and a mu(k,a) model
+//   - separate filters for the operators and the displacement: the loop functions with an operator leg factor
+//     (Gaussian smoothing) agree between the MG (GR in EdS) and the EdS code, and W_operators = c W_displacement
+//     scales P_ab by c^(n_a + n_b) (n = 0 for 1, 1 for delta and nabla^2 delta, 2 for delta^2 and s^2)
 // Run with: make run (in this folder) or make test (from the top folder)
 //==========================================================
 #include <FML/ComputePowerSpectra/HybridBiasOneLoopMG.h>
@@ -128,6 +131,62 @@ int main() {
         check_local(maxdev < 1e-3,
                     "GR (EdS): second order loop functions = EdS ones (max deviation " + num(maxdev, 3) + ")");
         check_local(i3dev < 1e-3, "GR (EdS): third order (A13) = 5/21 R1 (max deviation " + num(i3dev, 3) + ")");
+
+        // 1b. The same with an operator leg factor (Gaussian smoothing of the operators, R = 2 Mpc/h): the terms
+        // with one operator leg (A10, U11 for delta and nabla^2 delta) and two (U20, Us2)
+        {
+            std::function<double(double)> Wl = [](double k) { return std::exp(-0.5 * k * k * 4.0); };
+            double dev_w = 0.0;
+            for (double k : {0.05, 0.15, 0.3}) {
+                const auto L = detail::loop_spectra(k, P, kmin, kcut, F, Wl);
+                const auto M = detail::mg_loop_functions_at_k(mgmodel_gr(1.0), k, {1.0}, {P}, kmin, kcut, {}, Wl)[0];
+                const double Pk = P(k), wk = Wl(k), Fk = -k * k;
+                auto dev = [&](double mg, double gr) { dev_w = std::max(dev_w, std::abs(mg / gr - 1.0)); };
+                for (int nabla = 0; nabla < 2; nabla++) {
+                    const double Ak = nabla ? Fk * wk : wk;
+                    const double Q5A = nabla ? L.Q5F : L.Q5, R1A = nabla ? L.R1F : L.R1W, R2A = nabla ? L.R2F : L.R2W;
+                    const double k2a = 3.0 / 7 * Ak * L.R1;
+                    const double k2b = -3.0 / 7 * Ak * (L.R1 + 2 * L.R2) - 6.0 / 7 * Q5A - 6.0 / 7 * (R1A + R2A);
+                    const double R2t = nabla ? M.A10R2tF : M.A10R2t;
+                    const double t = Ak * Pk * M.A10R1t - Pk * R2t - (nabla ? M.A10QtF : M.A10Qt);
+                    const double kk = Ak * Pk * M.A10R1kk - Pk * R2t - (nabla ? M.A10QkkF : M.A10Qkk);
+                    const double a = 0.5 * (t - kk), b = 0.5 * (3 * kk - t);
+                    dev(-0.5 * (a + b / 3), -0.5 * (k2a + k2b / 3));
+                    dev(-b / 6, -k2b / 6);
+                }
+                dev(-2 * k * wk * Pk * M.g, -6.0 / 7 * wk * (L.R1W + L.R2W));
+                dev(-k * wk * Pk * (M.gF + Fk * M.g), -3.0 / 7 * wk * ((L.R1F + L.R2F) + Fk * (L.R1W + L.R2W)));
+                dev(M.U20, 3.0 / 7 * L.Q8);
+                dev(M.Us2, 1.0 / 7 * L.Qs2);
+            }
+            check_local(dev_w < 1e-3,
+                        "GR (EdS), smoothed operators: loop functions with operator legs = EdS ones (max deviation " +
+                            num(dev_w, 3) + ")");
+        }
+
+        // 1c. W_operators = c W_displacement: P_ab -> c^(n_a + n_b) P_ab
+        {
+            const double c = 0.7;
+            std::function<double(double)> Wd = [&](double k) { return k < kcut ? 1.0 : 0.0; };
+            std::function<double(double)> Wo = [&](double k) { return k < kcut ? c : 0.0; };
+            ZeldovichOptions opt;
+            opt.kmin_integration = kmin;
+            opt.kmax_integration = kcut;
+            const std::vector<double> kv{0.02, 0.1, 0.2};
+            std::vector<std::array<int, 2>> pairs;
+            const auto P1 = oneloop_hybrid_bias_spectra(pofk_bbks, Wd, Wd, kv, opt, nullptr, &pairs);
+            const auto Pc = oneloop_hybrid_bias_spectra(pofk_bbks, Wo, Wd, kv, opt);
+            const int order[5] = {0, 1, 2, 2, 1};
+            double dev_c = 0.0;
+            for (size_t p = 0; p < pairs.size(); p++)
+                for (size_t i = 0; i < kv.size(); i++)
+                    dev_c = std::max(
+                        dev_c,
+                        std::abs(Pc[p][i] / (std::pow(c, order[pairs[p][0]] + order[pairs[p][1]]) * P1[p][i]) - 1.0));
+            check_local(dev_c < 1e-8,
+                        "W_operators = 0.7 W_displacement: P_ab scales as 0.7^(n_a + n_b) (max deviation " +
+                            num(dev_c, 3) + ")");
+        }
 
         // 2. The kernels vs the Eulerian fluid equations (Omega_M = 0.281)
         struct Ref {

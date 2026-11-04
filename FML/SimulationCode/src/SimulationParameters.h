@@ -1365,9 +1365,6 @@ namespace SIMCODE {
                 if ((hybridbias.zeldovich or hybridbias.oneloop) and hybridbias.kcut_over_nyquist <= 0.0)
                     fail("hybridbias_zeldovich and hybridbias_oneloop need an isotropic cut of the operators "
                          "(hybridbias_kcut_over_nyquist > 0)");
-                if (hybridbias.oneloop and hybridbias.smoothing_scale > 0.0)
-                    fail("hybridbias_oneloop uses the same filter for the operators and the displacement, so it cannot "
-                         "be used with hybridbias_smoothing_scale > 0");
             }
             if (force.interlacing_order > 1) {
                 if (force.density_method != "assignment" or force.interpolation_method != "assignment")
