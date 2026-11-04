@@ -963,8 +963,11 @@ namespace SIMCODE {
         std::string smoothing_filter;          // gaussian, sharpk or tophat
         double kcut_over_nyquist;              // Spherical cut of the linear field at this times the lattice Nyquist
         bool zeldovich;                        // Also output the Zel'dovich prediction
+        bool zeldovich_field;                  // Also output the spectra of the Zel'dovich field of the same IC
+        bool zeldovich_field_only;             // No time stepping: only the Zel'dovich-field spectra
         bool oneloop;                          // Also output the one-loop LPT prediction
         std::string oneloop_kernels;           // EdS or model (the scale-dependent kernels of the gravity model)
+        double lpt_kmin;                       // Lower limit of the k-integrals of the LPT predictions (h/Mpc)
 
         /// The parameters (see ParameterFields.h)
         template <class F>
@@ -1016,11 +1019,33 @@ namespace SIMCODE {
                            false,
                            "Also write the Zel'dovich (resummed 1LPT) prediction of the spectra with the same cut and "
                            "smoothing of the operators: hybridbias_zeldovich_z<z>.txt");
+                f.always_optional("hybridbias_zeldovich_field",
+                           zeldovich_field,
+                           false,
+                           "Also write the spectra of the Zel'dovich field of the same initial conditions (the lattice "
+                           "moved with the 1LPT displacement of the linear field at the output, with the same operator "
+                           "weights): hybridbias_zeldovichfield_z<z>.txt. With the Zel'dovich prediction "
+                           "(hybridbias_zeldovich, the mean of these spectra) this is the control variate of Kokron et "
+                           "al. 2022: P_cv = P - beta (P_zeldovichfield - P_zeldovich) has the same mean as P and much "
+                           "less sample variance on large scales");
+                f.always_optional("hybridbias_zeldovich_field_only",
+                           zeldovich_field_only,
+                           false,
+                           "No time stepping: generate the initial conditions and write only the spectra of their "
+                           "Zel'dovich field at the output redshifts (as hybridbias_zeldovich_field). Cheap: for the "
+                           "mean of the control variate over many realizations in the same box, or for adding the "
+                           "control variate to existing runs (same seed and IC settings)");
                 f.optional("hybridbias_oneloop",
                            oneloop,
                            false,
                            "Also write the one-loop LPT (CLEFT) prediction of the spectra (no counterterms): "
                            "hybridbias_oneloop_z<z>.txt");
+                f.always_optional("hybridbias_lpt_kmin",
+                           lpt_kmin,
+                           0.0,
+                           "Lower limit (h/Mpc) of the k-integrals of the LPT predictions (0: the start of the linear "
+                           "P(k) table, or 1e-5). The box has no modes below its fundamental mode",
+                           check::non_negative());
                 f.always_optional(
                     "hybridbias_oneloop_kernels",
                     oneloop_kernels,

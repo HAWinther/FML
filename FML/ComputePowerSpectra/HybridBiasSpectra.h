@@ -20,6 +20,8 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
+#include <FML/LPT/DisplacementFields.h>
+#include <FML/MPIParticles/MPIParticles.h>
 #include <FML/NUFFT/NUFFT.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/Smoothing/SmoothingFourier.h>
@@ -250,6 +252,46 @@ namespace FML {
                         return nullptr;
                     }
                 }
+
+                /// The Poisson shot noise mean(w_a w_b) / Npart (in box units) of the weights values[nfields * i + f]
+                /// (w = 1 for the field "1"), stored in spectra.shotnoise and subtracted from P_ab if subtract
+                template <int N>
+                void set_shotnoise(const std::vector<double> & values,
+                                   int nfields,
+                                   size_t NumPart,
+                                   size_t NumPartTot,
+                                   bool subtract,
+                                   HybridBiasSpectra<N> & spectra) {
+                    const int nop = nfields + 1;
+                    std::vector<double> sums(size_t(nop) * nop, 0.0);
+                    for (size_t i = 0; i < NumPart; i++) {
+                        for (int a = 0; a < nop; a++) {
+                            const double wa = a == 0 ? 1.0 : values[i * nfields + a - 1];
+                            for (int b = a; b < nop; b++) {
+                                const double wb = b == 0 ? 1.0 : values[i * nfields + b - 1];
+                                sums[a * nop + b] += wa * wb;
+                            }
+                        }
+                    }
+                    for (auto & s : sums)
+                        FML::SumOverTasks(&s);
+                    for (size_t i = 0; i < spectra.pairs.size(); i++) {
+                        const int a = spectra.pairs[i][0], b = spectra.pairs[i][1];
+                        spectra.shotnoise[i] = sums[a * nop + b] / (double(NumPartTot) * double(NumPartTot));
+                        if (subtract)
+                            for (auto & pk : spectra.pofk[i].pofk)
+                                pk -= spectra.shotnoise[i];
+                    }
+                }
+
+                /// A point of the Zel'dovich field: position and the Lagrangian operator values of its lattice point
+                template <int N>
+                struct ZeldovichPoint {
+                    double pos[N];
+                    double w[max_operators - 1];
+                    double * get_pos() { return pos; }
+                    constexpr int get_ndim() const { return N; }
+                };
             } // namespace detail
 
             //=====================================================================================================
@@ -686,29 +728,104 @@ namespace FML {
                 compute_advected_fields<N, T>(p, NumPart, NumPartTot, values, nfields, Nmesh, advected, options);
                 cross_spectra_of_grids<N>(advected, spectra, options.nbins);
 
-                // The Poisson shot noise mean(w_a w_b) / Npart (in box units)
-                const int nop = nfields + 1;
-                std::vector<double> sums(size_t(nop) * nop, 0.0);
-                for (size_t i = 0; i < NumPart; i++) {
-                    for (int a = 0; a < nop; a++) {
-                        const double wa = a == 0 ? 1.0 : values[i * nfields + a - 1];
-                        for (int b = a; b < nop; b++) {
-                            const double wb = b == 0 ? 1.0 : values[i * nfields + b - 1];
-                            sums[a * nop + b] += wa * wb;
-                        }
-                    }
-                }
-                for (auto & s : sums)
-                    FML::SumOverTasks(&s);
-                for (size_t i = 0; i < spectra.pairs.size(); i++) {
-                    const int a = spectra.pairs[i][0], b = spectra.pairs[i][1];
-                    spectra.shotnoise[i] = sums[a * nop + b] / (double(NumPartTot) * double(NumPartTot));
-                    if (options.subtract_shotnoise)
-                        for (auto & pk : spectra.pofk[i].pofk)
-                            pk -= spectra.shotnoise[i];
-                }
+                detail::set_shotnoise(values, nfields, NumPart, NumPartTot, options.subtract_shotnoise, spectra);
                 if (advected_out)
                     *advected_out = std::move(advected);
+            }
+
+            //=====================================================================================================
+            /// @brief The hybrid bias spectra of the Zel'dovich field of the same initial conditions: the lattice
+            /// points q are moved with the 1LPT displacement x = q + Psi(q), Psi(k) = i k / k^2 delta_L(k), of the
+            /// linear field scaled to the output (growth_factor_of_kBox) and carry the same operator weights as the
+            /// particles of the simulation. This is the control variate of Kokron et al. 2022 (2205.15327): it is
+            /// strongly correlated with the measured spectra on large scales and its mean is known (the Zel'dovich
+            /// prediction, zeldovich_hybrid_bias_spectra, with W_displacement = the cut kcut_displacement), so
+            ///   P_ab^cv = P_ab - beta_ab(k) (P_ab^Zel'dovich field - <P_ab^Zel'dovich>)
+            /// has the same mean as P_ab and much less sample variance where the two are correlated.
+            ///
+            /// No particles are needed: the points are made from the lattice of the operators (Nlattice^N points, as
+            /// the particles of the simulation) and communicated to the tasks of their positions. The operators use
+            /// options (cut, smoothing) as in compute_hybrid_bias_spectra; the displacement uses the linear field
+            /// with only the spherical cut kcut_displacement (in units of 1/box; 0: all modes of the lattice grid),
+            /// which should be the cut of the displacement field of the initial conditions (pi ic_nmesh).
+            ///
+            /// @param[in] delta_linear_fourier The linear density field in Fourier space (as for
+            /// compute_hybrid_bias_spectra)
+            /// @param[in] Nlattice The size of the lattice
+            /// @param[in] Nmesh The grid size for the advected fields
+            /// @param[in] options The options (as for compute_hybrid_bias_spectra)
+            /// @param[out] spectra The result (box units, call spectra.scale(boxsize))
+            /// @param[in] growth_factor_of_kBox Optional: multiply delta_linear by this (e.g. D(k,z) / D(k,zini)),
+            /// for the operators and the displacement
+            /// @param[in] kcut_displacement The spherical cut of the displacement (units of 1/box, 0: none)
+            //=====================================================================================================
+            template <int N>
+            void compute_zeldovich_hybrid_bias_spectra(const FFTWGrid<N> & delta_linear_fourier,
+                                                       int Nlattice,
+                                                       int Nmesh,
+                                                       const HybridBiasOptions & options,
+                                                       HybridBiasSpectra<N> & spectra,
+                                                       std::function<double(double)> growth_factor_of_kBox = nullptr,
+                                                       double kcut_displacement = 0.0) {
+                using Point = detail::ZeldovichPoint<N>;
+                // The operators on the lattice
+                std::vector<FFTWGrid<N>> fields;
+                compute_lagrangian_fields<N>(delta_linear_fourier, Nlattice, fields, options, growth_factor_of_kBox);
+                const int nfields = int(fields.size());
+
+                // The Zel'dovich displacement on the lattice: the linear field with only the displacement cut
+                std::array<FFTWGrid<N>, N> psi;
+                {
+                    HybridBiasOptions doptions;
+                    doptions.noperators = 2;
+                    doptions.kcut = kcut_displacement;
+                    doptions.smoothing_scale = 0.0;
+                    std::vector<FFTWGrid<N>> delta;
+                    compute_lagrangian_fields<N>(
+                        delta_linear_fourier, Nlattice, delta, doptions, growth_factor_of_kBox);
+                    delta[0].fftw_r2c();
+                    FFTWGrid<N> phi;
+                    FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier<N>(delta[0], phi);
+                    delta.clear();
+                    FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector<N>(phi, psi);
+                }
+
+                // The points x = q + Psi(q) with the operator values at q (the lattice points of this task)
+                Vector<Point> points;
+                const size_t nlocal = size_t(psi[0].get_local_nx()) * size_t(std::pow(double(Nlattice), N - 1));
+                points.reserve(size_t(1.5 * double(nlocal)) + 1024);
+                for (FML::IndexIntType irow = 0; irow < psi[0].get_local_nrows(); irow++) {
+                    for (auto && real_index : psi[0].get_real_range_of_rows(irow, irow + 1)) {
+                        const auto coord = psi[0].get_coord_from_index(real_index);
+                        const auto q = psi[0].get_real_position(coord);
+                        Point point;
+                        for (int idim = 0; idim < N; idim++)
+                            point.pos[idim] = FML::PARTICLE::wrap_coordinate_periodic(
+                                q[idim] + double(psi[idim].get_real_from_index(real_index)));
+                        for (int f = 0; f < nfields; f++)
+                            point.w[f] = double(fields[f].get_real(coord));
+                        points.push_back(point);
+                    }
+                }
+                fields.clear();
+                for (auto & g : psi)
+                    g.free();
+                FML::PARTICLE::MPIParticles<Point> part;
+                part.move_from(std::move(points));
+                part.communicate_particles();
+                const size_t NumPart = part.get_npart(), NumPartTot = part.get_npart_total();
+                assert_mpi(double(NumPartTot) == std::pow(double(Nlattice), N),
+                           "[compute_zeldovich_hybrid_bias_spectra] Lost points in the communication");
+
+                std::vector<double> values(NumPart * size_t(nfields));
+                const Point * p = part.get_particles_ptr();
+                for (size_t i = 0; i < NumPart; i++)
+                    for (int f = 0; f < nfields; f++)
+                        values[i * nfields + f] = p[i].w[f];
+                std::vector<FFTWGrid<N>> advected;
+                compute_advected_fields<N, Point>(p, NumPart, NumPartTot, values, nfields, Nmesh, advected, options);
+                cross_spectra_of_grids<N>(advected, spectra, options.nbins);
+                detail::set_shotnoise(values, nfields, NumPart, NumPartTot, options.subtract_shotnoise, spectra);
             }
 
             //=====================================================================================================

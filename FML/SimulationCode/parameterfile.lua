@@ -746,6 +746,18 @@ hybridbias_smoothing_filter = "gaussian"
 hybridbias_kcut_over_nyquist = 1.0
 -- Also write the Zel'dovich prediction (same cut and smoothing): hybridbias_zeldovich_z<z>.txt
 hybridbias_zeldovich = false
+-- Also write the spectra of the Zel'dovich field of the same IC: the particle lattice moved with the
+-- 1LPT displacement of the linear field at the output, with the same operator weights, grid and
+-- binning: hybridbias_zeldovichfield_z<z>.txt. Its mean is the Zel'dovich prediction, so
+-- P - (P_zeldovichfield - P_zeldovich) is a control variate (Kokron et al. 2022) with much less
+-- sample variance on large scales
+hybridbias_zeldovich_field = false
+-- No time stepping: write only the Zel'dovich-field spectra of the IC (and the Zel'dovich prediction
+-- if hybridbias_zeldovich) at the output redshifts. For adding the control variate to existing runs
+-- (same seed and IC settings) or for testing its mean over many realizations
+hybridbias_zeldovich_field_only = false
+-- Lower limit (h/Mpc) of the k-integrals of the LPT predictions (0: the start of the P(k) table)
+hybridbias_lpt_kmin = 0.0
 -- Also write the one-loop LPT (CLEFT) prediction of all 15 spectra (no counterterms;
 -- same cut and smoothing of the operators): hybridbias_oneloop_z<z>.txt
 hybridbias_oneloop = false

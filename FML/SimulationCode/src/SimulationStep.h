@@ -16,6 +16,32 @@ void NBodySimulation<NDIM, T>::run() {
 
     const auto & output_redshifts = params.output.redshifts;
     const double zini = params.ic.initial_redshift;
+
+    // Only the spectra of the Zel'dovich field of the initial conditions (no time stepping)
+    if (params.hybridbias.enabled and params.hybridbias.zeldovich_field_only) {
+        for (double redshift : output_redshifts) {
+            const std::string snapshot_folder =
+                params.output.path("snapshot_" + params.simulation.name + "_z" + redshift_to_string(redshift));
+            if (not FML::create_folder(snapshot_folder))
+                throw std::runtime_error("Failed to create snapshot folder [" + snapshot_folder + "]");
+            if (FML::ThisTask == 0)
+                std::cout << "\n# Zel'dovich field only: hybrid bias spectra of the Zel'dovich field at z = "
+                          << redshift << "\n";
+            timer.StartTiming("Hybrid bias spectra");
+            std::vector<double> pofk_linear;
+            const auto zfield = compute_hybrid_bias_zeldovich_field(*this, redshift, snapshot_folder, &pofk_linear);
+            // The Zel'dovich prediction (hybridbias_zeldovich; no one-loop here) in the same bins
+            write_hybrid_bias_predictions(
+                *this, redshift, snapshot_folder, zfield, hybrid_bias_options(*this), pofk_linear, false);
+            timer.EndTiming("Hybrid bias spectra");
+        }
+        timer.EndTiming("Timestepping");
+        timer.EndTiming("The whole simulation");
+        if (FML::ThisTask == 0)
+            timer.PrintAllTimings();
+        return;
+    }
+
     const auto stepper = time_stepping();
 
     // If we only give the total number of steps then compute how many steps between outputs
