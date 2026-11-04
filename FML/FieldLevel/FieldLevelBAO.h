@@ -16,6 +16,7 @@
 #include <complex>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <random>
 #include <stdexcept>
 #include <vector>
@@ -125,21 +126,8 @@ namespace FML::FIELDLEVEL {
         };
 
         FieldLevelBAO(const Settings & settings, BAOSpectrum spectrum)
-            : s_(settings), spectrum_(std::move(spectrum)), grid_(settings.nmesh) {
-            if (s_.nmesh_density == 0)
-                s_.nmesh_density = 2 * s_.nmesh;
+            : s_(validated_settings(settings, spectrum)), spectrum_(std::move(spectrum)), grid_(s_.nmesh) {
             const double kf = 2 * M_PI / s_.boxsize;
-            if (s_.assignment == Assignment::Smooth &&
-                !(s_.kernel_width >= 4 && s_.kernel_width <= 8 && s_.kernel_width % 2 == 0))
-                throw std::invalid_argument("[FieldLevelBAO] kernel_width must be 4, 6 or 8");
-            if (s_.model == Model::LPT && !(s_.lpt_order == 1 || s_.lpt_order == 2))
-                throw std::invalid_argument("[FieldLevelBAO] lpt_order must be 1 or 2");
-            if (!(s_.nmesh >= 4 && s_.centering <= 1 && s_.beta_ref >= s_.beta_min && s_.beta_ref <= s_.beta_max &&
-                  s_.boxsize > 0 && s_.kmax > 0 && s_.noise_power > 0 && s_.bias != 0 && s_.beta_min < s_.beta_max &&
-                  s_.beta_min > 0 && spectrum_.smooth))
-                throw std::invalid_argument("[FieldLevelBAO] Invalid settings");
-            if (s_.kmax >= kf * (s_.nmesh / 2) || s_.kmax >= kf * (s_.nmesh_density / 2))
-                throw std::invalid_argument("[FieldLevelBAO] kmax must lie below the Nyquist frequency of both grids");
             if (s_.model != Model::Linear)
                 density_ = FML::GRID::FFTWGrid<3>(s_.nmesh_density);
             const int N = s_.nmesh;
@@ -235,12 +223,14 @@ namespace FML::FIELDLEVEL {
 
         /// Conversions between the white noise s and the sampled field x
         Field sampled_from_white(const Field & s, double beta) const {
+            check_field(s);
             std::vector<double> inverse(modes_.size());
             for (std::size_t i = 0; i < modes_.size(); ++i)
                 inverse[i] = 1 / ratio(modes_[i], beta);
             return filter(s, inverse);
         }
         Field white_from_sampled(const Field & x, double beta) const {
+            check_field(x);
             std::vector<double> r(modes_.size());
             for (std::size_t i = 0; i < modes_.size(); ++i)
                 r[i] = ratio(modes_[i], beta);
@@ -297,6 +287,7 @@ namespace FML::FIELDLEVEL {
 
         /// U = -ln posterior (up to a constant); +infinity outside the beta prior
         double potential(const Field & s, double beta) const {
+            check_field(s);
             if (beta < s_.beta_min || beta > s_.beta_max)
                 return HUGE_VAL;
             Workspace w;
@@ -371,6 +362,9 @@ namespace FML::FIELDLEVEL {
 
         /// Apply a Fourier-diagonal filter to a real field: multiply mode i of modes() by per_mode[i], keep all others
         Field filter(const Field & x, const std::vector<double> & per_mode) const {
+            check_field(x);
+            if (per_mode.size() != modes_.size())
+                throw std::invalid_argument("[FieldLevelBAO] Filter must have one entry per mode");
             auto & g = grid_;
             to_grid(x, g);
             g.fftw_r2c();
@@ -407,8 +401,71 @@ namespace FML::FIELDLEVEL {
         std::size_t ncells_{0};
         double volume_{0}, sigma2_{0};
 
+        // Run before grid_ construction: the prototype indexes full grids and is single-rank only.
+        static Settings validated_settings(Settings settings, const BAOSpectrum & spectrum) {
+            int tasks = FML::NTasks;
+#ifdef USE_MPI
+            int initialized = 0, finalized = 0;
+            MPI_Initialized(&initialized);
+            MPI_Finalized(&finalized);
+            if (!initialized || finalized)
+                throw std::logic_error("[FieldLevelBAO] Initialize FML/MPI before constructing a model");
+            MPI_Comm_size(FML::communicator, &tasks);
+#endif
+            if (tasks != 1)
+                throw std::invalid_argument("[FieldLevelBAO] Requires a single-rank FML communicator; distributed "
+                                            "fields/adjoints are not implemented");
+            if (settings.nmesh < 4 || settings.nmesh_density < 0 ||
+                (settings.nmesh_density == 0 && settings.nmesh > std::numeric_limits<int>::max() / 2))
+                throw std::invalid_argument("[FieldLevelBAO] Invalid mesh or overflowing default density mesh");
+            if (settings.nmesh_density == 0)
+                settings.nmesh_density = 2 * settings.nmesh;
+            if (settings.nmesh_density < 4)
+                throw std::invalid_argument("[FieldLevelBAO] Density mesh must be at least 4");
+            for (int mesh : {settings.nmesh, settings.nmesh_density}) {
+                std::size_t cells = 1;
+                for (int d = 0; d < 3; ++d) {
+                    if (cells > Field().max_size() / std::size_t(mesh))
+                        throw std::invalid_argument("[FieldLevelBAO] Mesh exceeds addressable field storage");
+                    cells *= std::size_t(mesh);
+                }
+            }
+            for (double x : {settings.boxsize,
+                             settings.kmax,
+                             settings.bias,
+                             settings.noise_power,
+                             settings.beta_min,
+                             settings.beta_max,
+                             settings.b2,
+                             settings.bG2,
+                             settings.growth_rate,
+                             settings.centering,
+                             settings.beta_ref})
+                if (!std::isfinite(x))
+                    throw std::invalid_argument("[FieldLevelBAO] Settings must be finite");
+            const double kf = 2 * M_PI / settings.boxsize;
+            if (settings.assignment == Assignment::Smooth &&
+                !(settings.kernel_width >= 4 && settings.kernel_width <= 8 && settings.kernel_width % 2 == 0))
+                throw std::invalid_argument("[FieldLevelBAO] kernel_width must be 4, 6 or 8");
+            if (settings.model == Model::LPT && !(settings.lpt_order == 1 || settings.lpt_order == 2))
+                throw std::invalid_argument("[FieldLevelBAO] lpt_order must be 1 or 2");
+            if (!(settings.nmesh >= 4 && settings.centering <= 1 && settings.beta_ref >= settings.beta_min &&
+                  settings.beta_ref <= settings.beta_max && settings.boxsize > 0 && settings.kmax > 0 &&
+                  settings.noise_power > 0 && settings.bias != 0 && settings.beta_min < settings.beta_max &&
+                  settings.beta_min > 0 && spectrum.smooth))
+                throw std::invalid_argument("[FieldLevelBAO] Invalid settings");
+            if (settings.kmax >= kf * (settings.nmesh / 2) || settings.kmax >= kf * (settings.nmesh_density / 2))
+                throw std::invalid_argument("[FieldLevelBAO] kmax must lie below the Nyquist frequency of both grids");
+            return settings;
+        }
+        void check_field(const Field & field) const {
+            if (field.size() != ncells_)
+                throw std::invalid_argument("[FieldLevelBAO] Field has the wrong size");
+        }
+
         std::size_t cell(int ix, int iy, int iz) const { return (std::size_t(ix) * s_.nmesh + iy) * s_.nmesh + iz; }
         void to_grid(const Field & x, FML::GRID::FFTWGrid<3> & g) const {
+            check_field(x);
             auto * r = g.get_real_grid();
             for (std::size_t c = 0; c < ncells_; ++c)
                 r[real_index_[c]] = FML::GRID::FloatType(x[c]);
@@ -444,8 +501,7 @@ namespace FML::FIELDLEVEL {
         }
 
         std::vector<Complex> forward(const Field & s, double beta, Workspace & w) const {
-            if (s.size() != ncells_)
-                throw std::invalid_argument("[FieldLevelBAO] Field has the wrong size");
+            check_field(s);
             auto & g = grid_;
             to_grid(s, g);
             g.fftw_r2c();

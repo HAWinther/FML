@@ -1,17 +1,27 @@
 # FieldLevel review issues and deferred follow-ups
 
-Recorded 29 October 2026. **Remaining work is deferred at the user's request.**
-Resume from this checklist before extending the prototype. This document records
-review findings, not fixes or evidence of production readiness.
+Recorded 29 October 2026; safety status updated 4 November 2026. **FL-1 and FL-2
+were resumed and fixed at the user's request.** FL-4, FL-5 and FL-6 remain deferred.
+The general-framework plan and newly authorized stages 1–3 are recorded in
+[FRAMEWORK_PLAN.md](FRAMEWORK_PLAN.md). Safety fixes do not establish production readiness.
 
 The original review examined commit `6edc763`. Engineering #17 was subsequently
 implemented in `9205c5f`; its diagnostics fix is recorded separately below.
 The relevant code is [FieldLevelBAO.h](FieldLevelBAO.h),
 [the tests](tests/test_field_level.cpp) and [HMC.h](../MCMC/HMC.h).
 
-## Open correctness and verification issues
+## Correctness and verification status
 
-- [ ] **FL-1 (P1): Reject unsupported multi-rank use before serial indexing.**
+- [x] **FL-1 (P1): Reject unsupported multi-rank use before serial indexing.**
+  Resolved 4 November 2026: constructor validation queries the actual FML
+  communicator before constructing the FFT grid. Unsupported multi-rank use
+  throws deliberately, including when cached task metadata is stale. The test,
+  example and calibration executable use the FMLSetup singleton; this works with
+  automatic setup and NO_AUTO_FML_SETUP without a second MPI_Init. Frontends
+  report unsupported rank counts and return failure before model construction.
+  Bounds-checked tests pass on 1/2/4 ranks, with automatic and manual setup.
+  The historical evidence motivating the fix follows:
+
   The constructor enumerates all global cells/modes as local FFTWGrid entries.
   In a multi-rank host application, local slabs are smaller. A two-rank,
   mesh-8 build with `BOUNDSCHECK_FFTWGRID` aborts in `get_index_real`; without
@@ -25,7 +35,17 @@ The relevant code is [FieldLevelBAO.h](FieldLevelBAO.h),
   twice. The class-level reproduction used automatic setup alone to reach the
   independent indexing problem.
 
-- [ ] **FL-2 (P2): Validate public field/filter vector dimensions.**
+- [x] **FL-2 (P2): Validate public field/filter vector dimensions.**
+  Resolved 4 November 2026: public conversions/filter validate dimensions before
+  FFT scratch or mode access; to_grid has a shared field-size guard. Empty, short
+  and oversized fields/filters throw invalid_argument. Valid conversion/filter
+  round trips and posterior gradients are retained. Constructor settings are
+  validated before grid allocation, including nonfinite values, invalid meshes
+  and overflowing default density meshes. The focused suite passes 104 serial
+  checks under Clang, GCC and ASan/UBSan. The existing serial suite also passes
+  all 37 checks, including adjoints and HMC, under Apple Clang.
+  The historical evidence motivating the fix follows:
+
   `forward` validates field length, while `filter`, `sampled_from_white` and
   `white_from_sampled` can reach `to_grid` without that check. `filter` also
   indexes `per_mode` without checking its length. On an otherwise valid model,
@@ -100,7 +120,9 @@ The relevant code is [FieldLevelBAO.h](FieldLevelBAO.h),
 
 ## Resuming the work
 
-Suggested order: FL-1 and FL-2 safety guards, FL-4 numerical verification,
-FL-5 scientific validation, then measured FL-6 workspace changes. Recheck the
-current source before implementing: the evidence above describes the reviewed
-versions and may become stale. Do not treat the open entries as implemented.
+The FL-1/FL-2 prerequisite is resolved. Next authorized work is stages 1–3 of
+[the general-framework plan](FRAMEWORK_PLAN.md). The deferred FL-4 numerical
+verification, FL-5 scientific validation and measured FL-6 workspace work remain
+separate follow-ups. The current Clang suite passes, but FL-4's portable
+step-convergence acceptance criteria have not been completed. Recheck current
+source before implementing the open entries; historical evidence can become stale.

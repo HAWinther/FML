@@ -12,7 +12,14 @@
 using namespace FML::FIELDLEVEL;
 
 int main(int argc, char ** argv) {
-    FML::init_mpi(&argc, &argv);
+    // Singleton initialization works with both automatic and NO_AUTO_FML_SETUP builds.
+    FML::FMLSetup::init(&argc, &argv);
+    if (FML::NTasks != 1) {
+        if (FML::ThisTask == 0)
+            std::cerr << "[FieldLevelBAO] Requires a single-rank FML communicator; distributed fields/adjoints are not "
+                         "implemented\n";
+        return 1;
+    }
     Settings st;
     const std::string model = argc > 1 ? argv[1] : "1lpt";
     st.model = model == "linear" ? Model::Linear : model == "2lpt" ? Model::LPT : Model::LPT1;

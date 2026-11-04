@@ -143,6 +143,16 @@ below half a cell and misses their mode coupling. Hence the `Smooth` default.
 
 ## Known issues and deferred follow-ups
 
-See [the review checklist](KNOWN_ISSUES.md) for the remaining safety, gradient-test,
-scientific-validation and workspace issues. These follow-ups are deferred at the
-user's request. The frozen-chain diagnostics finding was resolved by Engineering #17.
+See [the review checklist](KNOWN_ISSUES.md) for status. FL-1/FL-2 MPI/input safety
+are resolved: multi-rank construction rejects before FFT grid allocation, all public
+field/filter dimensions are checked, and test/example startup uses FMLSetup once.
+MPI-enabled builds are supported with one rank; distributed prediction/adjoints
+remain future work. `make -C FieldLevel/tests USE_MPI=true safety` runs one-rank
+input checks and deliberate rejection on 2/4 ranks; `run` also executes the existing
+inference suite on one rank. Clean/rebuild when changing MPI/precision settings.
+The gradient-portability, scientific-validation and workspace follow-ups remain
+deferred. Engineering #17 resolved the frozen-chain diagnostics finding.
+
+The saved [general-framework plan](FRAMEWORK_PLAN.md) separates prior/evolution,
+tracers, observations, likelihood and inference. Stages 1–3 are authorized as the
+first milestone; backlog #52 remains open until the broader scope is delivered.

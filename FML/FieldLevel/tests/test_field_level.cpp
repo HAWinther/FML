@@ -330,7 +330,14 @@ static void test_lpt_recovery() {
 }
 
 int main(int argc, char ** argv) {
-    FML::init_mpi(&argc, &argv);
+    // Singleton initialization works with both automatic and NO_AUTO_FML_SETUP builds.
+    FML::FMLSetup::init(&argc, &argv);
+    if (FML::NTasks != 1) {
+        if (FML::ThisTask == 0)
+            std::cerr << "[FieldLevelBAO] Requires a single-rank FML communicator; distributed fields/adjoints are not "
+                         "implemented\n";
+        return 1;
+    }
     test_gradient(Model::Linear, 0, "linear, white");
     test_gradient(Model::Linear, 1, "linear, centred");
     test_gradient(Model::Linear, -1, "linear, S/(S+N) centred");
