@@ -1,0 +1,8 @@
+*.o
+*.d
+*.dSYM/
+tests/test_glass_ic
+example/glass_ic_example
+*.glass
+*.manifest
+*.tmp

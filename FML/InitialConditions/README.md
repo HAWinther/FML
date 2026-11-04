@@ -103,3 +103,15 @@ converted densities/velocities against stored CAMB 1.5.4 values and tests the
 internal adapter. `SimulationCode/tests/check_internal_transfers.py` runs `nbody` with
 `ic_type_of_input = internal`: two-species ICs, backscaling, sigma8 normalization, a solver
 .ini, neutrino particles, w0waCDM with curvature and simple P(k).
+
+## Glass particle loads
+
+[GlassIC](../GlassIC/README.md) generates equal-mass periodic glass loads with
+softened repulsive P3M gravity and explicit residual/stopping reports. It supplies
+versioned sharded load IO, a `TransferProvider`-to-Philox Fourier-density bridge,
+and LPT field sampling at the irregular glass positions. The 3LPT adapter reuses
+existing EdS-factorized fields including the transverse term; precombined vector
+fields support other explicitly supplied growth prescriptions. Relaxation velocities
+are replaced when physical IC velocities are assigned. This library API does not
+add SimulationCode parameters or modify the external-IC inversion that assumes a
+regular initial lattice. Multi-species quiet glass construction remains future work.
