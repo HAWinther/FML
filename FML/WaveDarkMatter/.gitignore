@@ -1,0 +1,9 @@
+*.o
+*.d
+*.dSYM/
+tests/test_wave_dm
+tests/test_soliton
+example/wave_dm_example
+*.wave
+*.manifest
+*.tmp
