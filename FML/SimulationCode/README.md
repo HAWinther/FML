@@ -14,6 +14,22 @@ mpirun -np 4 ./nbody parameterfile.lua
 ./nbody --write-transfers parameterfile.lua tables.txt        # the tables of the internal solver (ic_type_of_input = tables)
 ```
 
+Or with CMake (the same executable and options, see the top of [CMakeLists.txt](CMakeLists.txt)):
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release   # e.g. -DFML_USE_HDF5=ON -DCMAKE_PREFIX_PATH=$HOME/local
+cmake --build build -j
+ctest --test-dir build                            # the tests in tests/
+mpirun -np 4 ./build/nbody parameterfile.lua
+```
+
+The options are `FML_USE_MPI`, `FML_USE_OMP`, `FML_USE_FFTW_THREADS`, `FML_USE_MEMORYLOG` (on by default),
+`FML_USE_HDF5`, `FML_USE_HEALPIX`, `FML_USE_CHUNKPIX`, `FML_USE_MINIMAL_PARTICLES` (off), `NDIM_SPACE` (3),
+`FML_FFTW_PRECISION` (double, float or long), `FML_NATIVE_ARCH` (`-march=native`, on) and `FML_BUILD_TESTS` (on).
+Libraries are found with CMake's modules (GSL, Lua, MPI, OpenMP, HDF5) and `CMAKE_PREFIX_PATH`; FFTW with
+`FFTW_ROOT`, HEALPix with `HEALPIX_ROOT` and `CFITSIO_ROOT`. The CMake and Makefile builds give bit-identical results
+on the regression cases (`tests/regression`).
+
 With MPI and OpenMP together, make sure the threads of a task get their own cores: OpenMPI binds each task to one
 core by default when running with 1-2 tasks, so all its threads share that core (the code warns about this at
 startup). Use e.g. `OMP_NUM_THREADS=4 mpirun --map-by slot:PE=4 -np 2 ./nbody parameterfile.lua` or

@@ -52,6 +52,8 @@ mpirun -np 4 FML/tests/test_fourier_resampling
 make -C FML examples -j4
 make -C FML examples-extra -j4
 make -C FML/SimulationCode -j4 USE_HDF5=true
+# The solver also has a CMake build (options in FML/SimulationCode/CMakeLists.txt):
+cmake -S FML/SimulationCode -B build -DFML_USE_HDF5=ON && cmake --build build -j4 && ctest --test-dir build
 ```
 
 Tests use the shared helpers in [`tests/TestHelpers.h`](tests/TestHelpers.h) (`FML::TESTS`): `check(ok, label)` is collective (every task must call it; it fails on every task if it fails on any), `check_local(ok, label)` makes no MPI calls and may be used on some tasks only, `check_close`/`check_rel` print the error, and `return summary("name");` ends `main` with the exit code. The header also has tolerance (`near`) and exception (`throws`, `throws_with`) helpers. Only tests include it, and a test that includes it must link `Global.o`.
